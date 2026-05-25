@@ -1,0 +1,1093 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1.0,maximum-scale=1.0,user-scalable=no,viewport-fit=cover" />
+<meta name="format-detection" content="telephone=no" />
+<title>嘉兴 · 梦里水乡</title>
+<meta name="description" content="嘉兴文旅指南 — 南湖、乌镇、西塘、平湖东湖，江南最本真的模样。" />
+<style>
+/* ===== 基础重置 & 变量 ===== */
+:root {
+  --c-primary: #1a7a5c;
+  --c-primary-light: #e8f5ee;
+  --c-primary-dark: #0f5c44;
+  --c-accent: #f5a623;
+  --c-text: #1a1a2e;
+  --c-text2: #666680;
+  --c-text3: #999;
+  --c-bg: #f8f9fc;
+  --c-card: #fff;
+  --c-nav: rgba(255,255,255,0.94);
+  --safe-top: env(safe-area-inset-top, 10px);
+  --safe-bottom: env(safe-area-inset-bottom, 10px);
+  --tab-h: 52px;
+  --radius: 14px;
+  --radius-lg: 20px;
+  --shadow: 0 2px 12px rgba(0,0,0,0.06);
+  --shadow-lg: 0 8px 30px rgba(0,0,0,0.1);
+  --font: -apple-system, "PingFang SC", "Helvetica Neue", sans-serif;
+  --phone-w: 420px;
+}
+*,*::before,*::after{margin:0;padding:0;box-sizing:border-box;}
+html{scroll-behavior:smooth;-webkit-text-size-adjust:100%;}
+
+/* ===== 桌面端：全屏深色背景 + 手机框居中 ===== */
+body{
+  font-family:var(--font);
+  font-size:14px;
+  line-height:1.6;
+  color:var(--c-text);
+  background:#1a1a2e;
+  -webkit-font-smoothing:antialiased;
+  overflow-x:hidden;
+  min-height:100vh;
+  display:flex;
+  justify-content:center;
+  padding:20px 0;
+}
+
+/* 手机容器：桌面端居中加圆角，移动端全宽 */
+.phone-frame{
+  width:100%;
+  max-width:var(--phone-w);
+  background:var(--c-bg);
+  position:relative;
+  display:flex;
+  flex-direction:column;
+}
+
+/* 滚动内容区（tab-bar 在底部始终可见） */
+.phone-content{
+  flex:1;
+  overflow-y:auto;
+  -webkit-overflow-scrolling:touch;
+  padding-bottom:calc(var(--tab-h) + var(--safe-bottom) + 8px);
+}
+
+/* 桌面端：加圆角和阴影模仿手机 */
+@media (min-width:500px){
+  body{padding:40px 16px;}
+  .phone-frame{
+    border-radius:36px;
+    box-shadow:0 0 0 1px rgba(255,255,255,0.08), 0 20px 60px rgba(0,0,0,0.5);
+    height:calc(100vh - 80px);
+  }
+  .phone-content{scroll-behavior:smooth;}
+  body{overflow:hidden;}
+}
+
+/* 移动端：全屏无圆角 */
+@media (max-width:499px){
+  body{padding:0;background:var(--c-bg);}
+  .phone-frame{
+    border-radius:0;
+    box-shadow:none;
+    min-height:100vh;
+    max-width:100%;
+  }
+}
+
+img{max-width:100%;display:block;}
+a{text-decoration:none;color:inherit;}
+ul{list-style:none;}
+input,button{font:inherit;border:none;outline:none;background:none;}
+
+/* ===== 顶部状态栏 ===== */
+.status-bar{
+  height:calc(44px + var(--safe-top));
+  padding-top:var(--safe-top);
+  background:var(--c-nav);
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  padding-left:16px;
+  padding-right:16px;
+  position:sticky;
+  top:0;
+  z-index:100;
+  border-bottom:0.5px solid rgba(0,0,0,0.05);
+}
+.status-bar .title{
+  font-size:15px;
+  font-weight:600;
+  color:var(--c-text);
+}
+.status-bar .actions{
+  display:flex;
+  gap:12px;
+}
+.status-bar .actions button{
+  width:32px;
+  height:32px;
+  border-radius:50%;
+  background:var(--c-bg);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:16px;
+  cursor:pointer;
+  transition:background .2s;
+}
+.status-bar .actions button:active{background:#e0e0e0;}
+
+/* ===== 搜索条 ===== */
+.search-bar{
+  margin:12px 16px;
+  display:flex;
+  align-items:center;
+  gap:8px;
+  background:var(--c-card);
+  padding:0 14px;
+  border-radius:24px;
+  height:40px;
+  box-shadow:var(--shadow);
+  border:0.5px solid rgba(0,0,0,0.04);
+}
+.search-bar .icon{font-size:15px;color:var(--c-text3);}
+.search-bar input{
+  flex:1;
+  font-size:14px;
+  color:var(--c-text);
+  height:100%;
+}
+.search-bar input::placeholder{color:var(--c-text3);}
+
+/* ===== Hero 区域 ===== */
+.hero{
+  position:relative;
+  height:380px;
+  margin:0 16px;
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+  background:linear-gradient(135deg, #0f5c44 0%, #1a7a5c 40%, #2a9d7a 100%);
+  display:flex;
+  flex-direction:column;
+  justify-content:flex-end;
+  padding:28px 24px;
+}
+.hero::after{
+  content:'';
+  position:absolute;
+  inset:0;
+  background:linear-gradient(0deg, rgba(0,0,0,0.5) 0%, transparent 60%);
+  pointer-events:none;
+}
+.hero > *{position:relative;z-index:1;}
+.hero .badge{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  padding:3px 10px;
+  border-radius:20px;
+  background:rgba(255,255,255,0.2);
+  font-size:11px;
+  color:rgba(255,255,255,0.9);
+  backdrop-filter:blur(4px);
+  margin-bottom:10px;
+  width:fit-content;
+}
+.hero .badge::before{content:'';width:5px;height:5px;border-radius:50%;background:var(--c-accent);}
+.hero h1{
+  font-size:34px;
+  font-weight:700;
+  color:#fff;
+  letter-spacing:-0.02em;
+  line-height:1.1;
+}
+.hero h1 small{
+  font-size:16px;
+  font-weight:400;
+  opacity:0.8;
+  display:block;
+  margin-top:2px;
+}
+.hero p{
+  font-size:13px;
+  color:rgba(255,255,255,0.85);
+  margin-top:6px;
+  line-height:1.5;
+  max-width:280px;
+}
+.hero .btn-group{
+  display:flex;
+  gap:10px;
+  margin-top:14px;
+}
+.hero .btn-primary,
+.hero .btn-outline{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  gap:4px;
+  padding:9px 20px;
+  border-radius:22px;
+  font-size:13px;
+  font-weight:500;
+  cursor:pointer;
+  transition:transform .2s;
+}
+.hero .btn-primary:active,
+.hero .btn-outline:active{transform:scale(0.96);}
+.hero .btn-primary{
+  background:var(--c-accent);
+  color:#fff;
+}
+.hero .btn-outline{
+  background:rgba(255,255,255,0.15);
+  color:#fff;
+  backdrop-filter:blur(4px);
+  border:0.5px solid rgba(255,255,255,0.2);
+}
+
+/* ===== 快捷数据 ===== */
+.quick-stats{
+  display:flex;
+  margin:16px 16px 0;
+  gap:8px;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  padding-bottom:4px;
+}
+.quick-stats::-webkit-scrollbar{display:none;}
+.quick-stats .stat{
+  flex:0 0 auto;
+  min-width:90px;
+  background:var(--c-card);
+  padding:12px 16px;
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  text-align:center;
+}
+.quick-stats .stat .num{
+  font-size:20px;
+  font-weight:700;
+  color:var(--c-primary);
+  line-height:1.2;
+}
+.quick-stats .stat .num .unit{font-size:11px;font-weight:400;color:var(--c-text3);}
+.quick-stats .stat .lbl{font-size:11px;color:var(--c-text2);margin-top:2px;}
+
+/* ===== 通用 Section ===== */
+.section{
+  margin:16px 16px 0;
+}
+.section-header{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  margin-bottom:12px;
+}
+.section-header h2{
+  font-size:18px;
+  font-weight:700;
+  color:var(--c-text);
+  letter-spacing:-0.01em;
+}
+.section-header .more{
+  font-size:12px;
+  color:var(--c-text3);
+  display:flex;
+  align-items:center;
+  gap:2px;
+}
+.section-header .more:active{color:var(--c-primary);}
+
+/* ===== Why 特色卡片 ===== */
+.features{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.feature-card{
+  background:var(--c-card);
+  border-radius:var(--radius);
+  padding:18px 14px;
+  box-shadow:var(--shadow);
+  text-align:center;
+  transition:transform .2s;
+}
+.feature-card:active{transform:scale(0.97);}
+.feature-card .icon{font-size:28px;display:block;margin-bottom:6px;}
+.feature-card h4{font-size:13px;font-weight:600;color:var(--c-text);}
+.feature-card p{font-size:11px;color:var(--c-text2);line-height:1.5;margin-top:4px;}
+
+/* ===== 景点横向滑动 ===== */
+.spot-scroll{
+  display:flex;
+  gap:12px;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  scroll-snap-type:x mandatory;
+  padding:4px 0 8px;
+}
+.spot-scroll::-webkit-scrollbar{display:none;}
+.spot-card{
+  flex:0 0 280px;
+  border-radius:var(--radius-lg);
+  overflow:hidden;
+  background:var(--c-card);
+  box-shadow:var(--shadow);
+  scroll-snap-align:start;
+  transition:transform .2s;
+}
+.spot-card:active{transform:scale(0.98);}
+.spot-card .img{
+  height:160px;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+  color:#fff;
+}
+.spot-card .img .bg{
+  position:absolute;
+  inset:0;
+}
+.spot-card .img .label{
+  position:relative;z-index:1;
+  font-size:22px;
+  font-weight:700;
+  letter-spacing:0.02em;
+  text-shadow:0 2px 12px rgba(0,0,0,0.2);
+}
+.spot-card .img .sub{
+  position:relative;z-index:1;
+  font-size:11px;
+  opacity:0.85;
+  margin-top:2px;
+}
+.spot-card .body{
+  padding:14px 16px 16px;
+}
+.spot-card .body .tag{
+  font-size:10px;
+  font-weight:600;
+  color:var(--c-primary);
+  text-transform:uppercase;
+  letter-spacing:0.06em;
+}
+.spot-card .body h3{
+  font-size:16px;
+  font-weight:700;
+  color:var(--c-text);
+  margin-top:2px;
+}
+.spot-card .body .desc{
+  font-size:12px;
+  color:var(--c-text2);
+  line-height:1.6;
+  margin-top:6px;
+  display:-webkit-box;
+  -webkit-line-clamp:2;
+  -webkit-box-orient:vertical;
+  overflow:hidden;
+}
+.spot-card .body .tags{
+  display:flex;
+  flex-wrap:wrap;
+  gap:4px;
+  margin-top:10px;
+}
+.spot-card .body .tags span{
+  padding:2px 8px;
+  background:var(--c-primary-light);
+  border-radius:10px;
+  font-size:10px;
+  color:var(--c-primary);
+}
+
+/* 景点背景色 */
+.spot-nanhu .bg{background:linear-gradient(135deg,#3d5a6e,#2c4a5e);}
+.spot-wuzhen .bg{background:linear-gradient(135deg,#2d4d42,#1e3a30);}
+.spot-xitang .bg{background:linear-gradient(135deg,#6d5d42,#5a4c34);}
+.spot-pinghu .bg{background:linear-gradient(135deg,#3d4d7a,#2c3d6e);}
+
+/* ===== 美食网格 ===== */
+.food-grid{
+  display:grid;
+  grid-template-columns:1fr 1fr;
+  gap:8px;
+}
+.food-card{
+  background:var(--c-card);
+  border-radius:var(--radius);
+  padding:16px 14px;
+  box-shadow:var(--shadow);
+  transition:transform .2s;
+}
+.food-card:active{transform:scale(0.97);}
+.food-card .icon{font-size:24px;display:block;margin-bottom:6px;}
+.food-card h4{font-size:13px;font-weight:600;color:var(--c-text);}
+.food-card .sub{font-size:10px;color:var(--c-text3);display:block;}
+.food-card p{font-size:11px;color:var(--c-text2);line-height:1.6;margin-top:4px;}
+.food-card .ft{font-size:10px;color:var(--c-accent);font-weight:500;margin-top:6px;display:block;}
+
+/* ===== 文旅文化 ===== */
+.culture-scroll{
+  display:flex;
+  gap:10px;
+  overflow-x:auto;
+  -webkit-overflow-scrolling:touch;
+  scrollbar-width:none;
+  padding:4px 0 8px;
+}
+.culture-scroll::-webkit-scrollbar{display:none;}
+.culture-card{
+  flex:0 0 200px;
+  background:var(--c-card);
+  border-radius:var(--radius);
+  padding:18px 16px;
+  box-shadow:var(--shadow);
+}
+.culture-card .icon{font-size:28px;display:block;margin-bottom:8px;}
+.culture-card h4{font-size:13px;font-weight:600;color:var(--c-text);}
+.culture-card p{font-size:11px;color:var(--c-text2);line-height:1.6;margin-top:4px;}
+.culture-card .badge{
+  display:inline-block;
+  margin-top:8px;
+  padding:1px 8px;
+  border-radius:8px;
+  background:var(--c-primary-light);
+  font-size:10px;
+  color:var(--c-primary);
+}
+
+/* ===== 时间线 ===== */
+.timeline{
+  padding:0 4px;
+}
+.timeline-item{
+  position:relative;
+  padding-left:28px;
+  padding-bottom:20px;
+}
+.timeline-item:last-child{padding-bottom:0;}
+.timeline-item::before{
+  content:'';
+  position:absolute;
+  left:8px;
+  top:6px;
+  bottom:0;
+  width:1.5px;
+  background:var(--c-primary-light);
+}
+.timeline-item:last-child::before{display:none;}
+.timeline-item .dot{
+  position:absolute;
+  left:2px;
+  top:6px;
+  width:14px;
+  height:14px;
+  border-radius:50%;
+  background:var(--c-primary);
+  border:3px solid var(--c-primary-light);
+  z-index:1;
+}
+.timeline-item .year{
+  font-size:11px;
+  font-weight:600;
+  color:var(--c-primary);
+  letter-spacing:0.04em;
+}
+.timeline-item h4{
+  font-size:14px;
+  font-weight:600;
+  color:var(--c-text);
+  margin-top:2px;
+}
+.timeline-item p{
+  font-size:12px;
+  color:var(--c-text2);
+  line-height:1.6;
+  margin-top:2px;
+}
+
+/* ===== 底部 CTA ===== */
+.cta{
+  margin:20px 16px;
+  padding:24px 20px;
+  background:linear-gradient(135deg, var(--c-primary) 0%, var(--c-primary-dark) 100%);
+  border-radius:var(--radius-lg);
+  text-align:center;
+  color:#fff;
+}
+.cta h3{font-size:18px;font-weight:700;}
+.cta p{font-size:12px;opacity:0.85;margin-top:4px;line-height:1.6;}
+.cta .btn{
+  display:inline-flex;
+  align-items:center;
+  gap:4px;
+  margin-top:14px;
+  padding:10px 28px;
+  border-radius:22px;
+  background:var(--c-accent);
+  color:#fff;
+  font-size:14px;
+  font-weight:600;
+  cursor:pointer;
+  transition:transform .2s;
+}
+.cta .btn:active{transform:scale(0.96);}
+
+/* ===== 底部 Tab Bar ===== */
+/* 移动端：fixed 固定在视口底部 */
+.tab-bar{
+  position:fixed;
+  bottom:0;
+  left:0;
+  right:0;
+  height:calc(var(--tab-h) + var(--safe-bottom));
+  padding-bottom:var(--safe-bottom);
+  background:var(--c-nav);
+  backdrop-filter:blur(20px);
+  -webkit-backdrop-filter:blur(20px);
+  border-top:0.5px solid rgba(0,0,0,0.05);
+  display:flex;
+  z-index:200;
+}
+
+/* 桌面端：flex 布局，在 phone-frame 底部 */
+@media (min-width:500px){
+  .tab-bar{
+    position:static;
+    flex-shrink:0;
+  }
+}
+.tab-item{
+  flex:1;
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:1px;
+  font-size:10px;
+  color:var(--c-text3);
+  cursor:pointer;
+  transition:color .2s;
+  -webkit-tap-highlight-color:transparent;
+}
+.tab-item .tab-icon{font-size:20px;line-height:1;}
+.tab-item.active{color:var(--c-primary);}
+.tab-item:active{opacity:0.7;}
+
+/* ===== 底部留白 ===== */
+.footer-bar{
+  text-align:center;
+  padding:12px 16px 8px;
+  font-size:10px;
+  color:var(--c-text3);
+}
+
+/* ===== 动画 ===== */
+@keyframes fadeUp{
+  from{opacity:0;transform:translateY(20px);}
+  to{opacity:1;transform:translateY(0);}
+}
+.anim{animation:fadeUp .5s ease both;}
+.anim-d1{animation-delay:0.1s;}
+.anim-d2{animation-delay:0.2s;}
+.anim-d3{animation-delay:0.3s;}
+.anim-d4{animation-delay:0.4s;}
+
+/* ===== 弹出提示 ===== */
+.toast{
+  position:fixed;
+  top:50%;
+  left:50%;
+  transform:translate(-50%,-50%) scale(0.9);
+  background:rgba(0,0,0,0.75);
+  color:#fff;
+  padding:14px 24px;
+  border-radius:12px;
+  font-size:14px;
+  z-index:999;
+  opacity:0;
+  pointer-events:none;
+  transition:all .25s;
+  text-align:center;
+  backdrop-filter:blur(8px);
+}
+.toast.show{opacity:1;transform:translate(-50%,-50%) scale(1);}
+</style>
+</head>
+<body>
+
+<div class="phone-frame">
+
+  <div class="phone-content">
+
+<!-- 顶部状态栏 -->
+<div class="status-bar">
+  <div class="title">嘉兴 · 梦里水乡</div>
+  <div class="actions">
+    <button onclick="showToast('🌍 定位中...')" aria-label="定位">📍</button>
+    <button onclick="showToast('❤️ 已收藏')" aria-label="收藏">♡</button>
+  </div>
+</div>
+
+<!-- 搜索条 -->
+<div class="search-bar">
+  <span class="icon">🔍</span>
+  <input type="text" placeholder="搜索景点、美食、文化..." readonly onfocus="this.blur()" onclick="showToast('🔍 搜索功能开发中')" />
+</div>
+
+<!-- Hero -->
+<section class="hero anim">
+  <div class="badge">国家历史文化名城</div>
+  <h1>
+    梦里水乡
+    <small>嘉兴 · 杭嘉湖平原</small>
+  </h1>
+  <p>南湖烟雨、乌镇枕水、西塘廊棚、东湖胜景——江南最本真的模样。</p>
+  <div class="btn-group">
+    <a class="btn-primary" href="#spots">🗺️ 探索景点</a>
+    <a class="btn-outline" href="#food">🍜 品味嘉兴</a>
+  </div>
+</section>
+
+<!-- Quick Stats -->
+<div class="quick-stats anim anim-d1">
+  <div class="stat">
+    <div class="num">4,222<span class="unit"> km²</span></div>
+    <div class="lbl">市域面积</div>
+  </div>
+  <div class="stat">
+    <div class="num">558<span class="unit"> 万</span></div>
+    <div class="lbl">常住人口</div>
+  </div>
+  <div class="stat">
+    <div class="num">7,060<span class="unit"> 亿</span></div>
+    <div class="lbl">GDP 2024</div>
+  </div>
+  <div class="stat">
+    <div class="num">7<span class="unit"> 个</span></div>
+    <div class="lbl">AAAA级以上景区</div>
+  </div>
+  <div class="stat">
+    <div class="num">2,500<span class="unit">+年</span></div>
+    <div class="lbl">建城历史</div>
+  </div>
+</div>
+
+<!-- Why Jiaxing -->
+<div class="section anim anim-d2">
+  <div class="section-header">
+    <h2>🌿 为什么是嘉兴</h2>
+    <span class="more" onclick="showToast('展开全部')">更多 →</span>
+  </div>
+  <div class="features">
+    <div class="feature-card">
+      <span class="icon">🏞️</span>
+      <h4>千年水乡</h4>
+      <p>杭嘉湖平原腹地，河网密布，江南水乡活态博物馆</p>
+    </div>
+    <div class="feature-card">
+      <span class="icon">🔴</span>
+      <h4>红色之源</h4>
+      <p>中共一大南湖会议在此闭幕，红色旅游胜地</p>
+    </div>
+    <div class="feature-card">
+      <span class="icon">🏘️</span>
+      <h4>枕水人家</h4>
+      <p>乌镇西塘两大古镇，完整保存明清水乡风貌</p>
+    </div>
+    <div class="feature-card">
+      <span class="icon">🍙</span>
+      <h4>美食之乡</h4>
+      <p>五芳斋粽子、南湖蟹、嘉善黄酒，味道流连忘返</p>
+    </div>
+  </div>
+</div>
+
+<!-- Spots 景点 -->
+<div class="section anim anim-d3" id="spots">
+  <div class="section-header">
+    <h2>🏯 四大景点</h2>
+    <span class="more" onclick="showToast('🏯 查看全部景点')">滑动 →</span>
+  </div>
+  <div class="spot-scroll">
+    <!-- 南湖 -->
+    <div class="spot-card spot-nanhu">
+      <div class="img">
+        <div class="bg"></div>
+        <div class="label">烟雨楼</div>
+        <div class="sub">南湖 · 江南三大名湖</div>
+      </div>
+      <div class="body">
+        <span class="tag">Nanhu</span>
+        <h3>南湖 · 烟雨楼台</h3>
+        <p class="desc">与西湖、玄武湖并称江南三大名湖。湖心岛烟雨楼取杜牧「多少楼台烟雨中」诗意。1921年中共一大在南湖游船闭幕。</p>
+        <div class="tags">
+          <span>南湖区</span>
+          <span>联票60元</span>
+          <span>游船必体验</span>
+        </div>
+      </div>
+    </div>
+    <!-- 乌镇 -->
+    <div class="spot-card spot-wuzhen">
+      <div class="img">
+        <div class="bg"></div>
+        <div class="label">水阁人家</div>
+        <div class="sub">乌镇 · 最后的枕水人家</div>
+      </div>
+      <div class="body">
+        <span class="tag">Wuzhen</span>
+        <h3>乌镇 · 枕水人家</h3>
+        <p class="desc">以河成街，街桥相连。东栅古朴，西栅精致。茅盾故居坐落于此。世界互联网大会永久会址。</p>
+        <div class="tags">
+          <span>桐乡市</span>
+          <span>东栅110元</span>
+          <span>西栅150元</span>
+        </div>
+      </div>
+    </div>
+    <!-- 西塘 -->
+    <div class="spot-card spot-xitang">
+      <div class="img">
+        <div class="bg"></div>
+        <div class="label">廊棚夜月</div>
+        <div class="sub">西塘 · 生活着的千年古镇</div>
+      </div>
+      <div class="body">
+        <span class="tag">Xitang</span>
+        <h3>西塘 · 廊棚夜月</h3>
+        <p class="desc">两千米廊棚雨天不淋脚。入夜红灯笼倒映水中，桨声灯影间韵味无穷。夜景为四大古镇最美之一。</p>
+        <div class="tags">
+          <span>嘉善县</span>
+          <span>门票95元</span>
+          <span>夜景极美</span>
+        </div>
+      </div>
+    </div>
+    <!-- 平湖东湖 -->
+    <div class="spot-card spot-pinghu">
+      <div class="img">
+        <div class="bg"></div>
+        <div class="label">东湖胜景</div>
+        <div class="sub">平湖 · 九水汇心</div>
+      </div>
+      <div class="body">
+        <span class="tag">East Lake</span>
+        <h3>平湖东湖 · 九水汇心</h3>
+        <p class="desc">九条河流汇聚而成。报本塔七层八面，登塔远眺全景。弘一法师李叔同祖籍平湖，人文底蕴深厚。</p>
+        <div class="tags">
+          <span>平湖市</span>
+          <span>免费开放</span>
+          <span>环湖4.5km</span>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 诗句 -->
+<div class="section anim anim-d3" style="margin-top:12px;">
+  <div style="text-align:center;padding:16px 0;background:var(--c-card);border-radius:var(--radius);box-shadow:var(--shadow);">
+    <p style="font-size:14px;color:var(--c-text2);line-height:1.8;letter-spacing:0.02em;">
+      「江南好，风景旧曾谙；<br />日出江花红胜火，春来江水绿如蓝。能不忆江南？」
+    </p>
+    <p style="font-size:11px;color:var(--c-text3);margin-top:6px;">—— 白居易 · 《忆江南》</p>
+  </div>
+</div>
+
+<!-- Food 美食 -->
+<div class="section anim anim-d4" id="food">
+  <div class="section-header">
+    <h2>🍜 嘉禾风味</h2>
+    <span class="more" onclick="showToast('🍜 查看全部美食')">更多 →</span>
+  </div>
+  <div class="food-grid">
+    <div class="food-card">
+      <span class="icon">🍙</span>
+      <h4>嘉兴粽子</h4>
+      <span class="sub">五芳斋 · 中华老字号</span>
+      <p>糯而不烂、肥而不腻、肉嫩味香、咸甜适中。</p>
+      <span class="ft">始于1921</span>
+    </div>
+    <div class="food-card">
+      <span class="icon">🦀</span>
+      <h4>南湖蟹</h4>
+      <span class="sub">秋季时令</span>
+      <p>青背白肚、金爪黄毛，秋风起时膏满黄肥。</p>
+      <span class="ft">9月-11月</span>
+    </div>
+    <div class="food-card">
+      <span class="icon">🍶</span>
+      <h4>嘉善黄酒</h4>
+      <span class="sub">百年老字号</span>
+      <p>色泽澄黄清亮，冬可温饮加姜丝，夏可冰镇。</p>
+      <span class="ft">佐餐佳品</span>
+    </div>
+    <div class="food-card">
+      <span class="icon">🦆</span>
+      <h4>文虎酱鸭</h4>
+      <span class="sub">嘉兴非遗</span>
+      <p>色泽酱红油亮，肉质紧实，酱香浓郁咸中带甜。</p>
+      <span class="ft">非遗美食</span>
+    </div>
+    <div class="food-card">
+      <span class="icon">🍪</span>
+      <h4>姑嫂饼</h4>
+      <span class="sub">乌镇传统名点</span>
+      <p>酥脆可口，甜而不腻，品茶佐酒的上乘茶食。</p>
+      <span class="ft">乌镇特产</span>
+    </div>
+    <div class="food-card">
+      <span class="icon">🍲</span>
+      <h4>桐乡煲</h4>
+      <span class="sub">江南一绝</span>
+      <p>明虾煲、黑鱼煲，汤汁浓郁、鲜辣可口。</p>
+      <span class="ft">夜宵首选</span>
+    </div>
+  </div>
+</div>
+
+<!-- Culture 文化 -->
+<div class="section anim anim-d4" id="culture">
+  <div class="section-header">
+    <h2>📖 千年文脉</h2>
+    <span class="more" onclick="showToast('📖 查看全部文化')">滑动 →</span>
+  </div>
+  <div class="culture-scroll">
+    <div class="culture-card">
+      <span class="icon">📖</span>
+      <h4>茅盾 · 文学巨匠</h4>
+      <p>乌镇人，著有《子夜》《春蚕》。故居在乌镇东栅。</p>
+      <span class="badge">1896</span>
+    </div>
+    <div class="culture-card">
+      <span class="icon">🎭</span>
+      <h4>嘉兴灶头画</h4>
+      <p>画师以灶台为纸、乡情为墨的民间艺术。</p>
+      <span class="badge">非遗</span>
+    </div>
+    <div class="culture-card">
+      <span class="icon">🎵</span>
+      <h4>江南丝竹</h4>
+      <p>二胡、琵琶、笛子为主，曲调悠扬婉转。</p>
+      <span class="badge">明清</span>
+    </div>
+    <div class="culture-card">
+      <span class="icon">🏛️</span>
+      <h4>子城遗址</h4>
+      <p>始建于三国时期，1700余年历史，嘉兴城市之根。</p>
+      <span class="badge">三国</span>
+    </div>
+    <div class="culture-card">
+      <span class="icon">⛵</span>
+      <h4>运河文化</h4>
+      <p>京杭大运河穿城而过，长虹桥见证运河历史。</p>
+      <span class="badge">千年</span>
+    </div>
+  </div>
+</div>
+
+<!-- Timeline 时间线 -->
+<div class="section anim anim-d4" id="timeline" style="margin-top:12px;">
+  <div class="section-header">
+    <h2>📜 历史大事记</h2>
+  </div>
+  <div style="background:var(--c-card);border-radius:var(--radius-lg);padding:20px 16px;box-shadow:var(--shadow);">
+    <div class="timeline">
+      <div class="timeline-item">
+        <div class="dot"></div>
+        <span class="year">三国</span>
+        <h4>子城始建</h4>
+        <p>吴国修筑子城，嘉兴建城之始。</p>
+      </div>
+      <div class="timeline-item">
+        <div class="dot"></div>
+        <span class="year">隋唐</span>
+        <h4>大运河开通</h4>
+        <p>京杭大运河贯通，嘉兴成为运河沿岸重要商埠。</p>
+      </div>
+      <div class="timeline-item">
+        <div class="dot"></div>
+        <span class="year">元代</span>
+        <h4>马可波罗到访</h4>
+        <p>游记中记载嘉兴繁华，称「江南富庶之地」。</p>
+      </div>
+      <div class="timeline-item">
+        <div class="dot"></div>
+        <span class="year">1896</span>
+        <h4>茅盾诞生</h4>
+        <p>文学巨匠茅盾出生于嘉兴乌镇。</p>
+      </div>
+      <div class="timeline-item">
+        <div class="dot"></div>
+        <span class="year">1921</span>
+        <h4>中共一大南湖会议</h4>
+        <p>中国共产党在南湖游船闭幕，红色革命重要地标。</p>
+      </div>
+      <div class="timeline-item">
+        <div class="dot"></div>
+        <span class="year">2014</span>
+        <h4>世界互联网大会</h4>
+        <p>乌镇成为永久会址，古老水乡与现代科技交融。</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- CTA -->
+<div class="cta anim anim-d4">
+  <h3>嘉兴，一座值得慢慢品味的城市</h3>
+  <p>追寻红色足迹、探访江南水乡、寻觅美食文化<br />嘉兴给你一份独特的旅行体验。</p>
+  <div class="btn" onclick="showToast('🚀 出发！')">开启嘉兴之旅 →</div>
+</div>
+
+<!-- Footer -->
+<div class="footer-bar">
+  © 2025 嘉兴旅游 · 水韵江南
+</div>
+
+</div><!-- /.phone-content -->
+
+  <!-- Bottom Tab Bar -->
+  <nav class="tab-bar">
+    <div class="tab-item active" data-tab="home" onclick="scrollToTop();switchTab(this)">
+      <span class="tab-icon">🏠</span>
+      首页
+    </div>
+    <div class="tab-item" data-tab="spots" onclick="scrollToSection('spots');switchTab(this)">
+      <span class="tab-icon">🏯</span>
+      景点
+    </div>
+    <div class="tab-item" data-tab="food" onclick="scrollToSection('food');switchTab(this)">
+      <span class="tab-icon">🍜</span>
+      美食
+    </div>
+    <div class="tab-item" data-tab="culture" onclick="scrollToSection('culture');switchTab(this)">
+      <span class="tab-icon">📖</span>
+      文化
+    </div>
+    <div class="tab-item" data-tab="timeline" onclick="scrollToSection('timeline');switchTab(this)">
+      <span class="tab-icon">📜</span>
+      历史
+    </div>
+  </nav>
+
+</div><!-- /.phone-frame -->
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+(function(){
+  'use strict';
+
+  // Toast 提示
+  window.showToast = function(msg){
+    var t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(function(){ t.classList.remove('show'); }, 1500);
+  };
+
+  // Tab 切换
+  window.switchTab = function(el){
+    document.querySelectorAll('.tab-item').forEach(function(t){ t.classList.remove('active'); });
+    el.classList.add('active');
+  };
+
+  // 滚动时高亮 Tab（兼容桌面端手机框滚动 + 移动端 window 滚动）
+  var sections = [
+    {id:'hero', tab:'home'},
+    {id:'spots', tab:'spots'},
+    {id:'food', tab:'food'},
+    {id:'culture', tab:'culture'},
+    {id:'timeline', tab:'timeline'}
+  ];
+  var content = document.querySelector('.phone-content');
+
+  function getScrollTop(){
+    // 桌面端 phone-content 滚动，移动端 window 滚动
+    if(content && content.scrollTop !== undefined && content.scrollTop > 0){
+      return content.scrollTop;
+    }
+    return window.pageYOffset || document.documentElement.scrollTop || 0;
+  }
+
+  function updateTabOnScroll(){
+    var scrollY = getScrollTop();
+    var currentTab = 'home';
+    for(var i=0;i<sections.length;i++){
+      var el = document.getElementById(sections[i].id);
+      if(el && scrollY >= el.offsetTop - 120){
+        currentTab = sections[i].tab;
+      }
+    }
+    document.querySelectorAll('.tab-item').forEach(function(t){
+      t.classList.toggle('active', t.dataset.tab === currentTab);
+    });
+  }
+
+  // 监听滚动：window + phone-content 都监听
+  var ticking = false;
+  function onScroll(){
+    if(!ticking){
+      window.requestAnimationFrame(function(){
+        updateTabOnScroll();
+        ticking = false;
+      });
+      ticking = true;
+    }
+  }
+  window.addEventListener('scroll', onScroll, {passive:true});
+  if(content){
+    content.addEventListener('scroll', onScroll, {passive:true});
+  }
+
+  // 滚动到区域
+  window.scrollToSection = function(id){
+    var el = document.getElementById(id);
+    if(el){
+      if(content && content.scrollTop !== undefined && content.scrollHeight > content.clientHeight){
+        // 桌面端：滚动 phone-content
+        content.scrollTo({top:el.offsetTop - 60, behavior:'smooth'});
+      } else {
+        // 移动端：滚动 window
+        window.scrollTo({top:el.getBoundingClientRect().top + window.pageYOffset - 80, behavior:'smooth'});
+      }
+    }
+  };
+
+  // 回到顶部
+  window.scrollToTop = function(){
+    if(content && content.scrollTop !== undefined && content.scrollHeight > content.clientHeight){
+      content.scrollTo({top:0, behavior:'smooth'});
+    } else {
+      window.scrollTo({top:0, behavior:'smooth'});
+    }
+  };
+
+  // 滚动渐入（IntersectionObserver 版）
+  if('IntersectionObserver' in window){
+    var animEls = document.querySelectorAll('.anim');
+    var obs = new IntersectionObserver(function(entries){
+      entries.forEach(function(entry){
+        if(entry.isIntersecting){
+          entry.target.classList.add('visible');
+          // 已经在 CSS 里通过 animation 播放了，不需要额外操作
+          obs.unobserve(entry.target);
+        }
+      });
+    }, {threshold:0.1});
+    animEls.forEach(function(el){ obs.observe(el); });
+  } else {
+    // 降级：直接显示
+    document.querySelectorAll('.anim').forEach(function(el){ el.style.opacity = '1'; });
+  }
+
+})();
+</script>
+</body>
+</html>

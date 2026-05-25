@@ -1,0 +1,176 @@
+package site.sorghum.agent4j.bin.tool;
+
+import org.noear.snack4.ONode;
+
+import site.sorghum.agent4j.bin.agent.StormBreaker;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.BiFunction;
+import java.util.function.Function;
+
+/**
+ * 工具调度器 —— 负责分发工具调用，处理 plan mode / storm breaker / hooks / token 截断。
+ * <p>
+ * 从 ToolRegistry 中抽出，遵循单一职责原则。
+ * </p>
+ *
+ * @author Sorghum
+ */
+public class ToolDispatcher {
+
+    private final ToolRegistry registry;
+
+    /** Plan Mode — 开启后仅允许只读工具 */
+    private boolean planMode = false;
+
+    /** 工具调用前拦截器 */
+    private Function<String, String> preDispatchHook = null;
+
+    /** 工具调用后拦截器 */
+    private BiFunction<String, String, String> postDispatchHook = null;
+
+    /** Storm 断路器（每回合重置） */
+    private final StormBreaker stormBreaker = new StormBreaker();
+
+    public ToolDispatcher(ToolRegistry registry) {
+        this.registry = registry;
+    }
+
+    // ---- Plan Mode ----
+
+    public boolean isPlanMode() { return planMode; }
+
+    public void setPlanMode(boolean on) { this.planMode = on; }
+
+    // ---- Hooks ----
+
+    public void setPreDispatchHook(Function<String, String> hook) {
+        this.preDispatchHook = hook;
+    }
+
+    public void setPostDispatchHook(BiFunction<String, String, String> hook) {
+        this.postDispatchHook = hook;
+    }
+
+    // ---- Storm ----
+
+    public void resetStorm() {
+        stormBreaker.reset();
+    }
+
+    public StormBreaker getStormBreaker() {
+        return stormBreaker;
+    }
+
+    // ---- Dispatch ----
+
+    /** 工具结果最大 token 数 */
+    private static final int MAX_RESULT_TOKENS = 8000;
+
+    /** 执行工具调用，返回结果字符串 */
+    public String dispatch(String name, String argumentsJson, int maxResultTokens) {
+        ToolDef tool = registry.get(name);
+        if (tool == null) {
+            return error("unknown tool: " + name);
+        }
+
+        // Pre-dispatch Hook
+        if (preDispatchHook != null) {
+            String intercepted = preDispatchHook.apply(name);
+            if (intercepted != null) return intercepted;
+        }
+
+        // Plan Mode 门控
+        if (planMode && !tool.readOnly) {
+            return "{\"error\":\"" + name
+                    + ": unavailable in plan mode — this is a read-only exploration phase. "
+                    + "Use read_file / glob / grep / tree / get_file_info to investigate. "
+                    + "Call submit_plan with your proposed plan when ready for review."
+                    + "\",\"rejectedReason\":\"plan-mode\"}";
+        }
+
+        // Storm Breaker 检查
+        if (!tool.stormExempt) {
+            StormBreaker.SuppressResult sr = stormBreaker.inspect(name, argumentsJson, tool.readOnly);
+            if (sr.suppressed) {
+                return "{\"error\":\"" + sr.reason + "\",\"rejectedReason\":\"storm\"}";
+            }
+        }
+
+        Map<String, Object> args;
+        try {
+            ONode node = ONode.ofJson(argumentsJson);
+            args = toFlatMap(node);
+        } catch (Exception e) {
+            return error(name + ": invalid arguments JSON — " + e.getMessage());
+        }
+
+        try {
+            String result = tool.fn.call(args);
+            result = result != null ? result : "(ok)";
+
+            // Post-dispatch Hook
+            if (postDispatchHook != null) {
+                result = postDispatchHook.apply(name, result);
+            }
+
+            // Token 截断
+            int estimatedTokens = result.length() / 2;
+            if (estimatedTokens > maxResultTokens) {
+                int maxChars = maxResultTokens * 2;
+                if (result.length() > maxChars) {
+                    result = result.substring(0, maxChars)
+                            + "\n\n[… truncated " + (result.length() - maxChars)
+                            + " chars (~" + (estimatedTokens - maxResultTokens) + " tokens) …]";
+                }
+            }
+            return result;
+        } catch (Exception e) {
+            return error(name + ": " + e.getMessage());
+        }
+    }
+
+    /** 兼容无 token 上限的调用 */
+    public String dispatch(String name, String argumentsJson) {
+        return dispatch(name, argumentsJson, MAX_RESULT_TOKENS);
+    }
+
+    private static String error(String msg) {
+        return "{\"error\":\"" + msg.replace("\"", "\\\"") + "\"}";
+    }
+
+    // ---- ONode 解析 ----
+
+    @SuppressWarnings("unchecked")
+    private static Map<String, Object> toFlatMap(ONode node) {
+        Map<String, Object> result = new LinkedHashMap<>();
+        if (node.isObject()) {
+            for (Map.Entry<String, ONode> e : node.getObject().entrySet()) {
+                ONode val = e.getValue();
+                if (val.isString()) result.put(e.getKey(), val.getString());
+                else if (val.isNumber()) result.put(e.getKey(), val.getNumber());
+                else if (val.isBoolean()) result.put(e.getKey(), val.getBoolean());
+                else if (val.isArray()) result.put(e.getKey(), toList(val));
+                else if (val.isObject()) result.put(e.getKey(), toFlatMap(val));
+                else result.put(e.getKey(), null);
+            }
+        }
+        return result;
+    }
+
+    private static List<Object> toList(ONode node) {
+        List<Object> list = new ArrayList<>();
+        for (ONode item : node.getArray()) {
+            if (item.isString()) list.add(item.getString());
+            else if (item.isNumber()) list.add(item.getNumber());
+            else if (item.isBoolean()) list.add(item.getBoolean());
+            else if (item.isArray()) list.add(toList(item));
+            else if (item.isObject()) list.add(toFlatMap(item));
+            else list.add(item.getString());
+        }
+        return list;
+    }
+}

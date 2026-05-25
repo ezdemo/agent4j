@@ -1,0 +1,52 @@
+package site.sorghum.agent4j.bin.builtin;
+
+import org.noear.solon.annotation.Component;
+import org.noear.solon.annotation.Inject;
+import site.sorghum.agent4j.bin.service.MemoryService;
+import site.sorghum.agent4j.tool.AgentTool;
+import site.sorghum.agent4j.tool.ToolContext;
+import site.sorghum.agent4j.tool.ToolParameter;
+import site.sorghum.agent4j.tool.ToolResult;
+
+import java.io.IOException;
+import java.util.Arrays;
+import java.util.List;
+
+@Component
+public class RememberTool extends AgentTool {
+
+    @Inject
+    private MemoryService memoryService;
+
+    @Override
+    public String getName() { return "remember"; }
+
+    @Override
+    public String getDescription() {
+        return "Save a memory for future sessions.";
+    }
+
+    @Override
+    public List<ToolParameter> getParameters() {
+        return Arrays.asList(
+                new ToolParameter("name", "string", true, "记忆标识"),
+                new ToolParameter("type", "string", true, "类型: user/feedback/project/reference"),
+                new ToolParameter("scope", "string", true, "作用域: global/project"),
+                new ToolParameter("description", "string", true, "简短描述"),
+                new ToolParameter("content", "string", true, "完整内容"),
+                new ToolParameter("priority", "int", false, "优先级: 0=low,1=medium,2=high")
+        );
+    }
+
+    @Override
+    public ToolResult execute(ToolContext ctx) {
+        try {
+            Integer priority = ctx.has("priority") ? ctx.getInt("priority", 0) : null;
+            return ToolResult.ok(memoryService.remember(
+                    ctx.getString("name"), ctx.getString("type"), ctx.getString("scope"),
+                    ctx.getString("description"), ctx.getString("content"), priority));
+        } catch (IOException e) {
+            return ToolResult.fail("IO_ERROR", e.getMessage());
+        }
+    }
+}

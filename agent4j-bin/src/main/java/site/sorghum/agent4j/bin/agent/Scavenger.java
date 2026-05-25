@@ -1,0 +1,134 @@
+package site.sorghum.agent4j.bin.agent;
+
+import org.noear.snack4.ONode;
+
+import java.util.*;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+
+/**
+ * 工具调用回收 —— 从 reasoning_content 中扫描丢失的工具调用。
+ * <p>
+ * DeepSeek-R1/V4 有时把工具调用写在 reasoning_content 中而忘了写入 tool_calls 字段。
+ * 回收器扫描两种格式：
+ * 1. DSML 标记：{@code <invoke name="xxx">...}
+ * 2. 裸 JSON：{@code {"name": "xxx", "arguments": {...}}}
+ * </p>
+ *
+ * @author Sorghum
+ */
+public class Scavenger {
+
+    // DSML invoke 标记
+    private static final Pattern DSML_INVOKE = Pattern.compile(
+            "<invoke\\s+name=\"([^\"]+)\">([\\s\\S]*?)</invoke>", Pattern.CASE_INSENSITIVE);
+
+    // 裸 JSON 工具调用：{name, arguments} 或 {tool_name, tool_args} 或 {function:{name, arguments}}
+    private static final Pattern JSON_CALL = Pattern.compile(
+            "\\{\\s*\"(?:name|tool_name|function)\"\\s*:\\s*\"(\\w+)\"\\s*[,}]");
+
+    /** 从 reasoning_content 和 content 中回收丢失的工具调用 */
+    public static List<ToolCall> scavenge(String reasoningContent, String content,
+                                          List<ToolCall> existingCalls) {
+        Set<String> seenSignatures = new HashSet<>();
+        for (ToolCall tc : existingCalls) {
+            seenSignatures.add(tc.name + "|" + tc.arguments);
+        }
+
+        String combined = (reasoningContent != null ? reasoningContent : "")
+                + "\n" + (content != null ? content : "");
+        List<ToolCall> found = new ArrayList<>();
+
+        // 1. DSML 格式
+        Matcher dm = DSML_INVOKE.matcher(combined);
+        while (dm.find()) {
+            String name = dm.group(1);
+            String body = dm.group(2).trim();
+            String args = extractDsmlArgs(body);
+            String sig = name + "|" + args;
+            if (!seenSignatures.contains(sig)) {
+                ToolCall tc = new ToolCall(null, name, args);
+                found.add(tc);
+                seenSignatures.add(sig);
+            }
+        }
+
+        // 2. 裸 JSON 格式（简化：只找最外层 {name, arguments}）
+        String[] lines = combined.split("\n");
+        for (int i = 0; i < lines.length; i++) {
+            Matcher jm = JSON_CALL.matcher(lines[i]);
+            if (jm.find()) {
+                String name = jm.group(1);
+                // 尝试从附近文本提取 arguments
+                String args = extractLooseArgs(lines, i, name);
+                String sig = name + "|" + args;
+                if (!seenSignatures.contains(sig)) {
+                    ToolCall tc = new ToolCall(null, name, args);
+                    found.add(tc);
+                    seenSignatures.add(sig);
+                }
+            }
+        }
+
+        return found;
+    }
+
+    /** 从 DSML body 中提取参数 JSON */
+    private static String extractDsmlArgs(String body) {
+        Map<String, Object> params = new LinkedHashMap<>();
+        Pattern paramPat = Pattern.compile(
+                "<parameter\\s+name=\"([^\"]+)\"\\s+string=\"([^\"]+)\">([\\s\\S]*?)</parameter>",
+                Pattern.CASE_INSENSITIVE);
+        Matcher m = paramPat.matcher(body);
+        while (m.find()) {
+            String pname = m.group(1);
+            boolean isStr = "true".equalsIgnoreCase(m.group(2));
+            String val = m.group(3).trim();
+            params.put(pname, isStr ? val : val);
+        }
+        if (params.isEmpty()) return "{}";
+        StringBuilder sb = new StringBuilder("{");
+        boolean first = true;
+        for (Map.Entry<String, Object> e : params.entrySet()) {
+            if (!first) sb.append(",");
+            first = false;
+            sb.append("\"").append(escapeJson(e.getKey())).append("\":\"")
+                    .append(escapeJson(String.valueOf(e.getValue()))).append("\"");
+        }
+        sb.append("}");
+        return sb.toString();
+    }
+
+    /** 从文本附近提取 arguments JSON（简化） */
+    private static String extractLooseArgs(String[] lines, int idx, String name) {
+        StringBuilder sb = new StringBuilder();
+        // 从当前行往后找 arguments 字段
+        Pattern argPat = Pattern.compile(
+                "\"(?:arguments|tool_args)\"\\s*:\\s*(\\{[^}]+\\}|\\\"[^\\\"]+\\\")");
+        for (int j = idx; j < Math.min(idx + 5, lines.length); j++) {
+            Matcher m = argPat.matcher(lines[j]);
+            if (m.find()) {
+                return m.group(1);
+            }
+        }
+        return "{}";
+    }
+
+    private static String escapeJson(String s) {
+        return s.replace("\\", "\\\\").replace("\"", "\\\"")
+                .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
+    }
+
+    /** 工具调用数据 */
+    public static class ToolCall {
+        public final String id;
+        public final String name;
+        public final String arguments;
+
+        public ToolCall(String id, String name, String arguments) {
+            this.id = id;
+            this.name = name;
+            this.arguments = arguments;
+        }
+    }
+}

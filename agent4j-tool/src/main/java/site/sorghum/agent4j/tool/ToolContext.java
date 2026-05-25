@@ -1,0 +1,108 @@
+package site.sorghum.agent4j.tool;
+
+import lombok.Getter;
+
+import java.nio.file.Path;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.Map;
+
+/**
+ * 工具执行上下文——封装一次工具调用的全部入参。
+ * <p>
+ * 包含调用参数 Map 和一个可选的根目录路径，
+ * 子类通过 {@link #getParam(String)} 等方法安全取值。
+ * </p>
+ *
+ * @author Sorghum
+ */
+@Getter
+public class ToolContext {
+
+    /** 调用参数 */
+    private final Map<String, Object> params;
+
+    /** 工作区根目录（可选） */
+    private final Path rootDir;
+
+    /** LLM API 地址（可选，供需要 API 调用的工具使用） */
+    private final String apiUrl;
+
+    /** LLM API Key（可选） */
+    private final String apiKey;
+
+    /** 工具注册表引用（可选，供需要创建子代理的工具使用） */
+    private final Object toolRegistry;
+
+    public ToolContext(Map<String, Object> params) {
+        this(params, null, null, null, null);
+    }
+
+    public ToolContext(Map<String, Object> params, Path rootDir) {
+        this(params, rootDir, null, null, null);
+    }
+
+    public ToolContext(Map<String, Object> params, Path rootDir, String apiUrl, String apiKey) {
+        this(params, rootDir, apiUrl, apiKey, null);
+    }
+
+    public ToolContext(Map<String, Object> params, Path rootDir, String apiUrl, String apiKey,
+                       Object toolRegistry) {
+        this.params = params != null ? new HashMap<>(params) : Collections.<String, Object>emptyMap();
+        this.rootDir = rootDir;
+        this.apiUrl = apiUrl;
+        this.apiKey = apiKey;
+        this.toolRegistry = toolRegistry;
+    }
+
+    /** 获取字符串参数。 */
+    public String getString(String key) {
+        Object v = params.get(key);
+        return v != null ? v.toString() : null;
+    }
+
+    /** 获取字符串参数，带默认值。 */
+    public String getString(String key, String defaultValue) {
+        String v = getString(key);
+        return v != null ? v : defaultValue;
+    }
+
+    /** 获取整数参数。 */
+    public int getInt(String key, int defaultValue) {
+        Object v = params.get(key);
+        if (v instanceof Number) return ((Number) v).intValue();
+        if (v instanceof String) {
+            try { return Integer.parseInt((String) v); } catch (NumberFormatException ignored) {}
+        }
+        return defaultValue;
+    }
+
+    /** 获取布尔参数。 */
+    public boolean getBool(String key, boolean defaultValue) {
+        Object v = params.get(key);
+        if (v instanceof Boolean) return (Boolean) v;
+        if (v instanceof String) return Boolean.parseBoolean((String) v);
+        return defaultValue;
+    }
+
+    /** 获取工具注册表（类型安全的调用方应自行转型）。 */
+    @SuppressWarnings("unchecked")
+    public <T> T getToolRegistry() {
+        return (T) toolRegistry;
+    }
+
+    /** 检查参数是否存在。 */
+    public boolean has(String key) {
+        return params.containsKey(key);
+    }
+
+    /** 参数数量。 */
+    public int paramCount() {
+        return params.size();
+    }
+
+    @Override
+    public String toString() {
+        return "ToolContext" + params;
+    }
+}
