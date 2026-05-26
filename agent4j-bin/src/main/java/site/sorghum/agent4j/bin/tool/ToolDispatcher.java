@@ -3,6 +3,7 @@ package site.sorghum.agent4j.bin.tool;
 import org.noear.snack4.ONode;
 
 import site.sorghum.agent4j.bin.agent.StormBreaker;
+import site.sorghum.agent4j.bin.util.ONodeUtil;
 
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -103,7 +104,7 @@ public class ToolDispatcher {
         Map<String, Object> args;
         try {
             ONode node = ONode.ofJson(argumentsJson);
-            args = toFlatMap(node);
+            args = ONodeUtil.toMap(node);
         } catch (Exception e) {
             return error(name + ": invalid arguments JSON — " + e.getMessage());
         }
@@ -142,35 +143,5 @@ public class ToolDispatcher {
         return "{\"error\":\"" + msg.replace("\"", "\\\"") + "\"}";
     }
 
-    // ---- ONode 解析 ----
 
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> toFlatMap(ONode node) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        if (node.isObject()) {
-            for (Map.Entry<String, ONode> e : node.getObject().entrySet()) {
-                ONode val = e.getValue();
-                if (val.isString()) result.put(e.getKey(), val.getString());
-                else if (val.isNumber()) result.put(e.getKey(), val.getNumber());
-                else if (val.isBoolean()) result.put(e.getKey(), val.getBoolean());
-                else if (val.isArray()) result.put(e.getKey(), toList(val));
-                else if (val.isObject()) result.put(e.getKey(), toFlatMap(val));
-                else result.put(e.getKey(), null);
-            }
-        }
-        return result;
-    }
-
-    private static List<Object> toList(ONode node) {
-        List<Object> list = new ArrayList<>();
-        for (ONode item : node.getArray()) {
-            if (item.isString()) list.add(item.getString());
-            else if (item.isNumber()) list.add(item.getNumber());
-            else if (item.isBoolean()) list.add(item.getBoolean());
-            else if (item.isArray()) list.add(toList(item));
-            else if (item.isObject()) list.add(toFlatMap(item));
-            else list.add(item.getString());
-        }
-        return list;
-    }
 }

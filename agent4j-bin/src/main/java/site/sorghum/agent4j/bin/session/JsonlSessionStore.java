@@ -9,6 +9,8 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 
+import site.sorghum.agent4j.bin.util.ONodeUtil;
+
 /**
  * JSONL 格式会话持久化实现。
  * <p>
@@ -200,7 +202,7 @@ public class JsonlSessionStore implements SessionStore {
             if (line.isEmpty() || line.startsWith("//")) continue;
             try {
                 org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson(line);
-                messages.add(nodeToMap(node));
+                messages.add(ONodeUtil.toMap(node));
             } catch (Exception ignored) {}
         }
         return messages;
@@ -315,35 +317,7 @@ public class JsonlSessionStore implements SessionStore {
         return name.replaceAll("[^a-zA-Z0-9_\\-]", "_");
     }
 
-    @SuppressWarnings("unchecked")
-    private static Map<String, Object> nodeToMap(org.noear.snack4.ONode node) {
-        Map<String, Object> result = new LinkedHashMap<>();
-        if (node.isObject()) {
-            for (Map.Entry<String, org.noear.snack4.ONode> e : node.getObject().entrySet()) {
-                org.noear.snack4.ONode val = e.getValue();
-                if (val.isString()) result.put(e.getKey(), val.getString());
-                else if (val.isNumber()) result.put(e.getKey(), val.getNumber());
-                else if (val.isBoolean()) result.put(e.getKey(), val.getBoolean());
-                else if (val.isArray()) result.put(e.getKey(), toList(val));
-                else if (val.isObject()) result.put(e.getKey(), nodeToMap(val));
-                else result.put(e.getKey(), null);
-            }
-        }
-        return result;
-    }
 
-    private static List<Object> toList(org.noear.snack4.ONode node) {
-        List<Object> list = new ArrayList<>();
-        for (org.noear.snack4.ONode item : node.getArray()) {
-            if (item.isString()) list.add(item.getString());
-            else if (item.isNumber()) list.add(item.getNumber());
-            else if (item.isBoolean()) list.add(item.getBoolean());
-            else if (item.isArray()) list.add(toList(item));
-            else if (item.isObject()) list.add(nodeToMap(item));
-            else list.add(item.toString());
-        }
-        return list;
-    }
 
     @SuppressWarnings("unchecked")
     public static String serializeMessage(Map<String, Object> msg) {
