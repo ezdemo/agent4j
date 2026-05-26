@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.agent;
 
+import org.noear.solon.Solon;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
@@ -59,7 +60,10 @@ public class Agent4jAgent {
         toolSpecsBuilder.append("\n\n## 可用工具规范\n\n");
 
         // 通过 getBeansOfType 同步获取所有 AgentTool 子类 Bean
-        for (AgentTool tool : org.noear.solon.Solon.context().getBeansOfType(AgentTool.class)) {
+        List<AgentTool> agentTools = new ArrayList<>(Solon.context().getBeansOfType(AgentTool.class));
+        // 排序保证前缀一致
+        agentTools.sort(Comparator.comparing(it -> it.getClass().hashCode()));
+        for (AgentTool tool : agentTools) {
             // 获取工具的 toToolSpec() 纯文本规范
             String toolSpec = tool.toToolSpec();
             // 注册到 ToolDef，同时传递 toolSpec
@@ -277,12 +281,7 @@ public class Agent4jAgent {
         String apiUrl;
         String apiKey;
         String model = "deepseek-v4-flash";
-        String systemPrompt = "你是一个代码助手，可以搜索、阅读、编辑文件，执行终端命令。\n"
-                + "对于问候或简单对话，直接用文本回复。\n"
-                + "## CRITICAL: 思考语言规则\n\n"
-                + "你的思考过程（reasoning/thinking）必须全程使用中文。\n"
-                + "禁止使用英文进行任何内部思考，只有最终输出代码或特定术语时可以使用英文。\n"
-                + "这是最高优先级规则，覆盖所有其他默认行为。违反此规则意味着你没有遵循用户指令。";
+        String systemPrompt = "你是一个智能体助手，名为Agent4J\n";
         Path workspace = Paths.get(".").toAbsolutePath();
         int maxSteps = 20;
         Set<String> disabledTools;
