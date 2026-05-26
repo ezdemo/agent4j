@@ -79,8 +79,16 @@ public class WorkspaceIndex {
     /** 是否已执行过首次扫描 */
     private boolean initialized = false;
 
+    /** 用户配置的屏蔽目录（相对路径） */
+    private final List<String> blockedPaths;
+
     public WorkspaceIndex(Path root) {
+        this(root, Collections.<String>emptyList());
+    }
+
+    public WorkspaceIndex(Path root, List<String> blockedPaths) {
         this.root = root.toAbsolutePath().normalize();
+        this.blockedPaths = blockedPaths != null ? blockedPaths : Collections.<String>emptyList();
     }
 
     // ==================== 刷新 ====================
@@ -306,7 +314,7 @@ public class WorkspaceIndex {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
                 String name = dir.getFileName().toString();
-                if (BUILTIN_DENY.contains(name) || isGitignored(dir)) {
+                if (BUILTIN_DENY.contains(name) || isGitignored(dir) || isBlockedDir(dir)) {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
                 String rel = relativize(dir);
@@ -366,6 +374,19 @@ public class WorkspaceIndex {
         String rel = relativize(absPath);
         for (Pattern p : gitignorePatterns) {
             if (p.matcher(rel).matches()) return true;
+        }
+        return false;
+    }
+
+    /** 检查目录是否在用户配置的屏蔽目录列表中 */
+    private boolean isBlockedDir(Path dir) {
+        if (blockedPaths.isEmpty()) return false;
+        String rel = relativize(dir);
+        for (String blocked : blockedPaths) {
+            String normalized = blocked.replace('\\', '/');
+            if (rel.equals(normalized) || rel.startsWith(normalized + "/")) {
+                return true;
+            }
         }
         return false;
     }

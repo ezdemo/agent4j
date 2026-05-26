@@ -71,14 +71,13 @@ public class TreeTool extends AgentTool {
     @Override
     public ToolResult execute(ToolContext ctx) {
         try {
-            ensureIndex(ctx);
+            java.nio.file.Path root = ctx.getRootDir() != null ? ctx.getRootDir() : Paths.get(".").toAbsolutePath();
+            List<String> blockedPaths = ctx.getBlockedPaths();
 
             int maxDepth = ctx.getInt("maxDepth", 3);
             if (maxDepth < 0) maxDepth = Integer.MAX_VALUE;
 
-            java.nio.file.Path root = ctx.getRootDir() != null ? ctx.getRootDir() : Paths.get(".").toAbsolutePath();
-            GrepTool.getOrCreateIndex(root);
-            WorkspaceIndex idx = GrepTool.getOrCreateIndex(root);
+            WorkspaceIndex idx = GrepTool.getOrCreateIndex(root, blockedPaths);
             String tree = idx.tree(maxDepth);
             String stats = "\n" + idx.fileCount() + " 个文件，" + formatSize(idx.totalSize());
 
@@ -88,13 +87,6 @@ public class TreeTool extends AgentTool {
         } catch (Exception e) {
             return ToolResult.fail("INTERNAL_ERROR", e.getMessage());
         }
-    }
-
-    private void ensureIndex(ToolContext ctx) throws IOException {
-        java.nio.file.Path root = ctx.getRootDir() != null
-                ? ctx.getRootDir()
-                : Paths.get(".").toAbsolutePath();
-        GrepTool.getOrCreateIndex(root);
     }
 
     private String formatSize(long bytes) {

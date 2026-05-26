@@ -7,6 +7,8 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 从 {@code ~/.agent4j/config.json} 读取 LLM 和工作区配置。
@@ -126,6 +128,64 @@ public class Agent4jConfig {
     public String lang() {
         String l = root.select("$.lang").getString();
         return l != null ? l : "EN";
+    }
+
+    /**
+     * 获取被禁用的工具列表。
+     * 从 config.json 的 disabledTools 数组读取，同时支持 AGENT4J_DISABLED_TOOLS 环境变量（逗号分隔）。
+     * 这些工具不会出现在 LLM 的工具列表中，也无法被调用。
+     */
+    public Set<String> disabledTools() {
+        // 环境变量优先级最高
+        String env = System.getenv("AGENT4J_DISABLED_TOOLS");
+        if (env != null && !env.isEmpty()) {
+            return Arrays.stream(env.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .collect(Collectors.toSet());
+        }
+        // 从配置读取
+        ONode arr = root.select("$.disabledTools");
+        Set<String> result = new LinkedHashSet<>();
+        if (arr != null && arr.isArray()) {
+            for (ONode item : arr.getArray()) {
+                String val = item.getString();
+                if (val != null && !val.isEmpty()) {
+                    result.add(val);
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 获取屏蔽目录列表。
+     * 从 config.json 的 blockedPaths 数组读取，同时支持 AGENT4J_BLOCKED_PATHS 环境变量（逗号分隔）。
+     * 所有文件操作工具（读/写/编辑/搜索）都会跳过这些目录。
+     * 路径为相对路径，相对于工作区根目录。
+     */
+    public List<String> blockedPaths() {
+        // 环境变量优先级最高
+        String env = System.getenv("AGENT4J_BLOCKED_PATHS");
+        if (env != null && !env.isEmpty()) {
+            return Arrays.stream(env.split(","))
+                    .map(String::trim)
+                    .filter(s -> !s.isEmpty())
+                    .map(s -> s.replace('\\', '/'))
+                    .collect(Collectors.toList());
+        }
+        // 从配置读取
+        ONode arr = root.select("$.blockedPaths");
+        List<String> result = new ArrayList<>();
+        if (arr != null && arr.isArray()) {
+            for (ONode item : arr.getArray()) {
+                String val = item.getString();
+                if (val != null && !val.isEmpty()) {
+                    result.add(val.replace('\\', '/'));
+                }
+            }
+        }
+        return result;
     }
 
     @Override

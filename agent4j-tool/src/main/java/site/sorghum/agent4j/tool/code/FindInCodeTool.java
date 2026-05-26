@@ -8,6 +8,7 @@ import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 
@@ -40,8 +41,14 @@ public class FindInCodeTool extends AgentTool {
     @Override
     public ToolResult execute(ToolContext ctx) {
         try {
+            String pathStr = ctx.getString("path");
+            // 检查路径是否被屏蔽
+            Path resolved = ctx.getRootDir().resolve(pathStr).toAbsolutePath().normalize();
+            if (ctx.isPathBlocked(resolved)) {
+                return ToolResult.fail("PATH_BLOCKED", "路径被屏蔽: " + pathStr);
+            }
             return ToolResult.ok(codeQueryService.findInCode(ctx.getRootDir(),
-                    ctx.getString("path"), ctx.getString("name")));
+                    pathStr, ctx.getString("name")));
         } catch (IOException e) {
             return ToolResult.fail("IO_ERROR", e.getMessage());
         }

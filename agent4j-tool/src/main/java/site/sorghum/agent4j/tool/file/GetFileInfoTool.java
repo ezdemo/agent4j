@@ -7,6 +7,7 @@ import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 
@@ -36,7 +37,13 @@ public class GetFileInfoTool extends AgentTool {
     @Override
     public ToolResult execute(ToolContext ctx) {
         try {
-            return ToolResult.ok(FileEdit.getFileInfo(ctx.getRootDir(), ctx.getString("path")));
+            String pathStr = ctx.getString("path");
+            // 检查路径是否被屏蔽
+            Path resolved = ctx.getRootDir().resolve(pathStr).toAbsolutePath().normalize();
+            if (ctx.isPathBlocked(resolved)) {
+                return ToolResult.fail("PATH_BLOCKED", "路径被屏蔽: " + pathStr);
+            }
+            return ToolResult.ok(FileEdit.getFileInfo(ctx.getRootDir(), pathStr));
         } catch (IOException e) {
             return ToolResult.ok("{\"error\":\"" + e.getMessage() + "\"}");
         }

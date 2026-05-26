@@ -15,8 +15,29 @@ public class ToolRegistry {
 
     private final Map<String, ToolDef> tools = new LinkedHashMap<>();
     private final ToolSchemaFlattener flattener = new ToolSchemaFlattener();
+    private Set<String> disabledTools = Collections.emptySet();
+
+    /**
+     * 设置被禁用的工具名称集合。
+     * 被禁用的工具在 register 时会被跳过，不会出现在 LLM 的工具列表中。
+     */
+    public ToolRegistry setDisabledTools(Set<String> disabledTools) {
+        this.disabledTools = disabledTools != null ? disabledTools : Collections.<String>emptySet();
+        return this;
+    }
+
+    /**
+     * 判断指定工具是否已禁用。
+     */
+    public boolean isToolEnabled(String name) {
+        return !disabledTools.contains(name);
+    }
 
     public ToolRegistry register(ToolDef def) {
+        if (disabledTools.contains(def.name)) {
+            System.err.println("[registry] 工具已禁用，跳过注册: " + def.name);
+            return this;
+        }
         tools.put(def.name, def);
         return this;
     }

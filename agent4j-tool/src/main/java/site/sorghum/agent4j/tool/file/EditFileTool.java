@@ -7,6 +7,7 @@ import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.List;
 
@@ -35,7 +36,13 @@ public class EditFileTool extends AgentTool {
     @Override
     public ToolResult execute(ToolContext ctx) {
         try {
-            String result = FileEdit.editFile(ctx.getRootDir(), ctx.getString("path"),
+            String pathStr = ctx.getString("path");
+            // 检查路径是否被屏蔽
+            Path resolved = ctx.getRootDir().resolve(pathStr).toAbsolutePath().normalize();
+            if (ctx.isPathBlocked(resolved)) {
+                return ToolResult.fail("PATH_BLOCKED", "路径被屏蔽: " + pathStr);
+            }
+            String result = FileEdit.editFile(ctx.getRootDir(), pathStr,
                     ctx.getString("search"), ctx.getString("replace"));
             return ToolResult.ok(result);
         } catch (IOException e) {

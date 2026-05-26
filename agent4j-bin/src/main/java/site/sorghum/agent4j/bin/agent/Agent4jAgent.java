@@ -41,6 +41,19 @@ public class Agent4jAgent {
         ModelClient client = new HttpModelClient(b.apiUrl, b.apiKey, b.model);
         ToolRegistry registry = new ToolRegistry();
 
+        // 设置禁用工具（被禁用的工具不会注册到 LLM 工具列表）
+        Set<String> disabledTools = b.disabledTools != null ? b.disabledTools : Collections.<String>emptySet();
+        registry.setDisabledTools(disabledTools);
+        if (!disabledTools.isEmpty()) {
+            System.err.println("[config] 已禁用工具: " + String.join(", ", disabledTools));
+        }
+
+        // 屏蔽目录列表
+        final List<String> blockedPaths = b.blockedPaths != null ? b.blockedPaths : Collections.<String>emptyList();
+        if (!blockedPaths.isEmpty()) {
+            System.err.println("[config] 已屏蔽目录: " + String.join(", ", blockedPaths));
+        }
+
         // 通过 getBeansOfType 同步获取所有 AgentTool 子类 Bean
         for (AgentTool tool : org.noear.solon.Solon.context().getBeansOfType(AgentTool.class)) {
             registry.register(new ToolDef(
@@ -48,7 +61,7 @@ public class Agent4jAgent {
                     tool.getDescription(),
                     toParamDefs(tool.getParameters()),
                     args -> formatResult(tool.execute(
-                            new ToolContext(args, workspace, apiUrl, apiKey, registry))),
+                            new ToolContext(args, workspace, apiUrl, apiKey, registry, blockedPaths))),
                     tool.isReadOnly(),
                     tool.isStormExempt()));
         }
@@ -263,6 +276,8 @@ public class Agent4jAgent {
                 + "用户审批或输入 /execute 退出计划模式后，所有工具恢复正常。";
         Path workspace = Paths.get(".").toAbsolutePath();
         int maxSteps = 20;
+        Set<String> disabledTools;
+        List<String> blockedPaths;
 
         public Builder apiUrl(String v) { this.apiUrl = v; return this; }
         public Builder apiKey(String v) { this.apiKey = v; return this; }
@@ -276,6 +291,8 @@ public class Agent4jAgent {
             if (c.apiKey() != null) this.apiKey = c.apiKey();
             this.model = c.model();
             this.workspace = c.workspaceDir();
+            this.disabledTools = c.disabledTools();
+            this.blockedPaths = c.blockedPaths();
             return this;
         }
 

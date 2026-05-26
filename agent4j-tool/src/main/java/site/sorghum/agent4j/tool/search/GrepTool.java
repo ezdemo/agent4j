@@ -9,6 +9,7 @@ import site.sorghum.agent4j.tool.ToolResult;
 import java.io.IOException;
 import java.nio.file.Paths;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -58,13 +59,20 @@ public class GrepTool extends AgentTool {
 
     /** 获取或创建工作区索引（按 rootDir 隔离）。 */
     public static WorkspaceIndex getOrCreateIndex(java.nio.file.Path rootDir) throws IOException {
-        String key = rootDir.toAbsolutePath().normalize().toString();
+        return getOrCreateIndex(rootDir, Collections.<String>emptyList());
+    }
+
+    /** 获取或创建工作区索引（按 rootDir + blockedPaths 隔离）。 */
+    public static WorkspaceIndex getOrCreateIndex(java.nio.file.Path rootDir, List<String> blockedPaths) throws IOException {
+        String rootKey = rootDir.toAbsolutePath().normalize().toString();
+        String bpKey = blockedPaths != null ? String.join(",", blockedPaths) : "";
+        String key = rootKey + "|" + bpKey;
         WorkspaceIndex idx = INDEX_MAP.get(key);
         if (idx == null) {
             synchronized (GrepTool.class) {
                 idx = INDEX_MAP.get(key);
                 if (idx == null) {
-                    idx = new WorkspaceIndex(rootDir);
+                    idx = new WorkspaceIndex(rootDir, blockedPaths);
                     INDEX_MAP.put(key, idx);
                 }
             }
@@ -112,7 +120,10 @@ public class GrepTool extends AgentTool {
         }
 
         try {
-            ensureIndex(ctx);
+            java.nio.file.Path root = ctx.getRootDir() != null
+                    ? ctx.getRootDir()
+                    : Paths.get(".").toAbsolutePath();
+            List<String> blockedPaths = ctx.getBlockedPaths();
 
             String glob = ctx.getString("glob", "*");
             boolean caseSensitive = ctx.getBool("caseSensitive", true);
@@ -121,10 +132,7 @@ public class GrepTool extends AgentTool {
             // 构建模式（大小写敏感处理）
             String effectivePattern = caseSensitive ? pattern : "(?i)" + pattern;
 
-            java.nio.file.Path root = ctx.getRootDir() != null
-                    ? ctx.getRootDir()
-                    : Paths.get(".").toAbsolutePath();
-            List<SearchMatch> matches = getOrCreateIndex(root).grep(effectivePattern, glob);
+            List<SearchMatch> matches = getOrCreateIndex(root, blockedPaths).grep(effectivePattern, glob);
 
             // 截断到 maxResults
             if (matches.size() > maxResults) {
@@ -159,6 +167,6 @@ public class GrepTool extends AgentTool {
         java.nio.file.Path root = ctx.getRootDir() != null
                 ? ctx.getRootDir()
                 : Paths.get(".").toAbsolutePath();
-        getOrCreateIndex(root);
+        getOrCreateIndex(root, ctx.getBlockedPaths());
     }
 }

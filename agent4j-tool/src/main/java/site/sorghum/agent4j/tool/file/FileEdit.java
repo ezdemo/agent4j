@@ -277,10 +277,32 @@ public class FileEdit {
     // ---- 内部辅助 ----
 
     private static Path resolveSafe(Path root, String raw) throws IOException {
+        return resolveSafe(root, raw, null);
+    }
+
+    /**
+     * 解析路径并检查是否在屏蔽目录中。
+     *
+     * @param root         工作区根目录
+     * @param raw          相对路径
+     * @param blockedPaths 屏蔽目录列表（相对路径），null 或空列表时不检查
+     * @return 已解析的绝对路径
+     * @throws IOException 路径越界或路径被屏蔽时抛出
+     */
+    private static Path resolveSafe(Path root, String raw, List<String> blockedPaths) throws IOException {
         Path normalized = root.resolve(raw).toAbsolutePath().normalize();
         Path rootAbs = root.toAbsolutePath().normalize();
         if (!normalized.startsWith(rootAbs))
             throw new IOException("路径越界: " + raw);
+        // 检查屏蔽目录
+        if (blockedPaths != null && !blockedPaths.isEmpty()) {
+            for (String blocked : blockedPaths) {
+                Path blockedAbs = rootAbs.resolve(blocked).normalize();
+                if (normalized.equals(blockedAbs) || normalized.startsWith(blockedAbs)) {
+                    throw new IOException("路径被屏蔽: " + raw + " (匹配屏蔽目录: " + blocked + ")");
+                }
+            }
+        }
         return normalized;
     }
 

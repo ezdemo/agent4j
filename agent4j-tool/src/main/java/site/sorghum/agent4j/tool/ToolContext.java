@@ -5,6 +5,7 @@ import lombok.Getter;
 import java.nio.file.Path;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -34,25 +35,34 @@ public class ToolContext {
     /** 工具注册表引用（可选，供需要创建子代理的工具使用） */
     private final Object toolRegistry;
 
+    /** 屏蔽目录列表（相对路径，相对于工作区根目录） */
+    private final List<String> blockedPaths;
+
     public ToolContext(Map<String, Object> params) {
-        this(params, null, null, null, null);
+        this(params, null, null, null, null, Collections.<String>emptyList());
     }
 
     public ToolContext(Map<String, Object> params, Path rootDir) {
-        this(params, rootDir, null, null, null);
+        this(params, rootDir, null, null, null, Collections.<String>emptyList());
     }
 
     public ToolContext(Map<String, Object> params, Path rootDir, String apiUrl, String apiKey) {
-        this(params, rootDir, apiUrl, apiKey, null);
+        this(params, rootDir, apiUrl, apiKey, null, Collections.<String>emptyList());
     }
 
     public ToolContext(Map<String, Object> params, Path rootDir, String apiUrl, String apiKey,
                        Object toolRegistry) {
+        this(params, rootDir, apiUrl, apiKey, toolRegistry, Collections.<String>emptyList());
+    }
+
+    public ToolContext(Map<String, Object> params, Path rootDir, String apiUrl, String apiKey,
+                       Object toolRegistry, List<String> blockedPaths) {
         this.params = params != null ? new HashMap<>(params) : Collections.<String, Object>emptyMap();
         this.rootDir = rootDir;
         this.apiUrl = apiUrl;
         this.apiKey = apiKey;
         this.toolRegistry = toolRegistry;
+        this.blockedPaths = blockedPaths != null ? blockedPaths : Collections.<String>emptyList();
     }
 
     /** 获取字符串参数。 */
@@ -99,6 +109,31 @@ public class ToolContext {
     /** 参数数量。 */
     public int paramCount() {
         return params.size();
+    }
+
+    /**
+     * 检查目标路径是否在屏蔽目录列表中。
+     * 目标路径必须是已解析的绝对路径。
+     *
+     * @param target 已解析的绝对路径
+     * @return 如果路径被屏蔽返回 true
+     */
+    public boolean isPathBlocked(Path target) {
+        if (blockedPaths.isEmpty() || rootDir == null || target == null) {
+            return false;
+        }
+        Path rootAbs = rootDir.toAbsolutePath().normalize();
+        Path targetAbs = target.toAbsolutePath().normalize();
+        if (!targetAbs.startsWith(rootAbs)) {
+            return false; // 路径越界由 resolveSafe 处理
+        }
+        for (String blocked : blockedPaths) {
+            Path blockedPath = rootAbs.resolve(blocked).normalize();
+            if (targetAbs.equals(blockedPath) || targetAbs.startsWith(blockedPath)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override

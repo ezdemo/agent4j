@@ -70,13 +70,27 @@ public class FileTool extends AgentTool {
         Path root = ctx.getRootDir() != null ? ctx.getRootDir() : Paths.get(".").toAbsolutePath();
 
         try {
+            // 检查路径是否被屏蔽
+            Path pathResolved = root.resolve(path).toAbsolutePath().normalize();
+            if (ctx.isPathBlocked(pathResolved)) {
+                return ToolResult.fail("PATH_BLOCKED", "路径被屏蔽: " + path);
+            }
+            // 对 move/copy 操作，同时检查目标路径
+            String destination = ctx.getString("destination");
+            if (destination != null) {
+                Path dstResolved = root.resolve(destination).toAbsolutePath().normalize();
+                if (ctx.isPathBlocked(dstResolved)) {
+                    return ToolResult.fail("PATH_BLOCKED", "目标路径被屏蔽: " + destination);
+                }
+            }
+
             switch (action.toLowerCase()) {
                 case "create_dir":  return doCreateDir(root, path);
                 case "create_file": return doCreateFile(root, path, ctx.getString("content", ""));
                 case "delete_file": return doDeleteFile(root, path);
                 case "delete_dir":  return doDeleteDir(root, path);
-                case "move":        return doMove(root, path, ctx.getString("destination"));
-                case "copy":        return doCopy(root, path, ctx.getString("destination"));
+                case "move":        return doMove(root, path, destination);
+                case "copy":        return doCopy(root, path, destination);
                 case "stat":        return doStat(root, path);
                 default:
                     return ToolResult.fail("UNKNOWN_ACTION",

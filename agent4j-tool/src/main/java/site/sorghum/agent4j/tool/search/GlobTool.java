@@ -76,10 +76,13 @@ public class GlobTool extends AgentTool {
         }
 
         try {
-            ensureIndex(ctx);
+            java.nio.file.Path root = ctx.getRootDir() != null
+                    ? ctx.getRootDir()
+                    : Paths.get(".").toAbsolutePath();
+            List<String> blockedPaths = ctx.getBlockedPaths();
 
             int maxResults = Math.min(ctx.getInt("maxResults", 200), 1000);
-            List<String> files = GrepTool.getOrCreateIndex(ctx.getRootDir()).glob(pattern);
+            List<String> files = GrepTool.getOrCreateIndex(root, blockedPaths).glob(pattern);
 
             if (files.size() > maxResults) {
                 files = files.subList(0, maxResults);
@@ -109,6 +112,6 @@ public class GlobTool extends AgentTool {
         java.nio.file.Path root = ctx.getRootDir() != null
                 ? ctx.getRootDir()
                 : Paths.get(".").toAbsolutePath();
-        GrepTool.getOrCreateIndex(root);
+        GrepTool.getOrCreateIndex(root, ctx.getBlockedPaths());
     }
 }
