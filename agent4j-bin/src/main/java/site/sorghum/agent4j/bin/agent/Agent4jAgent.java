@@ -104,7 +104,7 @@ public class Agent4jAgent {
             System.err.println("[session] 初始化失败: " + e.getMessage());
         }
 
-        this.loop = new AgentLoop(client, registry, ctx, 0);
+        this.loop = new AgentLoop(client, registry, ctx);
     }
 
     /**
@@ -284,7 +284,6 @@ public class Agent4jAgent {
         /** 默认系统提示词。如果 ~/.agent4j/agent4j.md 存在则从中读取，否则用此硬编码默认值。 */
         String systemPrompt = DEFAULT_SYSTEM_PROMPT;
         Path workspace = Paths.get(".").toAbsolutePath();
-        int maxSteps = 20;
         Set<String> disabledTools;
         List<String> blockedPaths;
         /** 用户是否显式设置过 systemPrompt */
@@ -298,7 +297,6 @@ public class Agent4jAgent {
         public Builder model(String v) { this.model = v; return this; }
         public Builder systemPrompt(String v) { this.systemPrompt = v; this.systemPromptExplicitlySet = true; return this; }
         public Builder workspace(Path v) { this.workspace = v; return this; }
-        public Builder maxSteps(int v) { this.maxSteps = v; return this; }
 
         public Builder config(Agent4jConfig c) {
             if (c.chatApiUrl() != null) this.apiUrl = c.chatApiUrl();

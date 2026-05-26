@@ -40,7 +40,7 @@ public class AgentLoop {
     /** 最近一次 API 返回的 prompt_tokens（0 = 尚无数据，回退到字符估算） */
     private int lastPromptTokens = 0;
 
-    public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx, int ignored) {
+    public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx) {
         this.client = client;
         this.registry = registry;
         this.dispatcher = new ToolDispatcher(registry);

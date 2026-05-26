@@ -36,7 +36,6 @@ public class SubAgent {
     private final ModelClient client;
     private final ToolRegistry registry;
     private final String systemPrompt;
-    private final int maxSteps;
 
     /** 构造函数（接受 ModelClient 接口，便于 DI） */
     public SubAgent(ModelClient client, ToolRegistry parentRegistry, String systemPrompt) {
@@ -48,7 +47,6 @@ public class SubAgent {
             }
         }
         this.systemPrompt = systemPrompt;
-        this.maxSteps = 15;
     }
 
     /** 构造函数（接受 apiUrl/apiKey/model 字符串，用于非 DI 场景） */
@@ -69,7 +67,7 @@ public class SubAgent {
     public String run(String task, AgentLoopListener listener) throws IOException {
         ConversationContext ctx = new ConversationContext(
                 new PromptPrefix(systemPrompt, registry.toOpenAiTools()));
-        AgentLoop subLoop = new AgentLoop(client, registry, ctx, maxSteps);
+        AgentLoop subLoop = new AgentLoop(client, registry, ctx);
         if (listener != null) subLoop.setListener(listener);
         return subLoop.run(task);
     }
