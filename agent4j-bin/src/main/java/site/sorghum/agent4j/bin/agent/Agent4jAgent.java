@@ -281,16 +281,22 @@ public class Agent4jAgent {
         String apiUrl;
         String apiKey;
         String model = "deepseek-v4-flash";
-        String systemPrompt = "你是一个智能体助手，名为Agent4J\n";
+        /** 默认系统提示词。如果 ~/.agent4j/agent4j.md 存在则从中读取，否则用此硬编码默认值。 */
+        String systemPrompt = DEFAULT_SYSTEM_PROMPT;
         Path workspace = Paths.get(".").toAbsolutePath();
         int maxSteps = 20;
         Set<String> disabledTools;
         List<String> blockedPaths;
+        /** 用户是否显式设置过 systemPrompt */
+        private boolean systemPromptExplicitlySet = false;
+
+        /** 硬编码的默认系统提示词（在 ~/.agent4j/agent4j.md 不存在时使用） */
+        private static final String DEFAULT_SYSTEM_PROMPT = "你是一个智能体助手，名为Agent4J\n";
 
         public Builder apiUrl(String v) { this.apiUrl = v; return this; }
         public Builder apiKey(String v) { this.apiKey = v; return this; }
         public Builder model(String v) { this.model = v; return this; }
-        public Builder systemPrompt(String v) { this.systemPrompt = v; return this; }
+        public Builder systemPrompt(String v) { this.systemPrompt = v; this.systemPromptExplicitlySet = true; return this; }
         public Builder workspace(Path v) { this.workspace = v; return this; }
         public Builder maxSteps(int v) { this.maxSteps = v; return this; }
 
@@ -304,9 +310,35 @@ public class Agent4jAgent {
             return this;
         }
 
+        /**
+         * 加载用户级默认系统提示词。
+         * 优先级：builder.systemPrompt(v) 显式设置 > ~/.agent4j/agent4j.md > 硬编码默认值
+         */
+        private static String loadDefaultSystemPrompt() {
+            // 如果 ~/.agent4j/agent4j.md 存在，以其内容作为默认系统提示词
+            Path homePrompt = Paths.get(System.getProperty("user.home"), ".agent4j", "agent4j.md");
+            if (java.nio.file.Files.exists(homePrompt)) {
+                try {
+                    String content = new String(java.nio.file.Files.readAllBytes(homePrompt),
+                            java.nio.charset.StandardCharsets.UTF_8);
+                    if (content != null && !content.trim().isEmpty()) {
+                        System.err.println("[prompt] 从 ~/.agent4j/agent4j.md 加载默认系统提示词（" + content.length() + " 字符）");
+                        return content.trim();
+                    }
+                } catch (IOException e) {
+                    System.err.println("[prompt] 读取 ~/.agent4j/agent4j.md 失败: " + e.getMessage());
+                }
+            }
+            return DEFAULT_SYSTEM_PROMPT;
+        }
+
         public Agent4jAgent build() {
             Objects.requireNonNull(apiUrl, "apiUrl is required");
             Objects.requireNonNull(apiKey, "apiKey is required");
+            // 如果用户没有显式设置 systemPrompt，则尝试从 ~/.agent4j/agent4j.md 读取默认值
+            if (!systemPromptExplicitlySet) {
+                systemPrompt = loadDefaultSystemPrompt();
+            }
             return new Agent4jAgent(this);
         }
     }
