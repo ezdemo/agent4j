@@ -12,6 +12,15 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * 后台作业启动工具 —— 启动一个长时间运行的 shell 进程并分离。
+ * <p>
+ * 适用于开发服务器、文件监听器、长时间安装等场景。
+ * 返回作业 ID 和启动预览输出。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class RunBackgroundTool extends AgentTool {
 

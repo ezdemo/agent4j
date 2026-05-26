@@ -12,6 +12,15 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * 记忆保存工具 —— 将信息持久化到 ~/.agent4j/memory/。
+ * <p>
+ * 保存的记忆可在后续会话中通过 recall_memory 检索，
+ * 支持作用域（global/project）、类型和优先级标记。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class RememberTool extends AgentTool {
 

@@ -11,6 +11,15 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * 文件信息查询工具 —— 查看工作区内文件或目录的元信息。
+ * <p>
+ * 返回 JSON 格式的信息，包含类型（文件/目录/符号链接）、
+ * 大小（字节）、最后修改时间等。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class GetFileInfoTool extends AgentTool {
 

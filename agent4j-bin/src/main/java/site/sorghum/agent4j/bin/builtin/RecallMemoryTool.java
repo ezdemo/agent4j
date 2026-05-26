@@ -12,6 +12,15 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * 记忆读取工具 —— 通过名称检索持久化的记忆内容。
+ * <p>
+ * 读取之前通过 remember 保存的记忆，返回 JSON 格式的完整内容。
+ * 只读工具，在计划模式下可用。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class RecallMemoryTool extends AgentTool {
 

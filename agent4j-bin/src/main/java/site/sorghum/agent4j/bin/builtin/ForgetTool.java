@@ -12,6 +12,15 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * 记忆删除工具 —— 通过名称删除持久化的记忆。
+ * <p>
+ * 删除 ~/.agent4j/memory/ 下的对应 JSON 文件。
+ * 操作不可逆。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class ForgetTool extends AgentTool {
 

@@ -12,6 +12,15 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * Java 源码定位工具 —— 通过全限定类名查找 Java 源文件。
+ * <p>
+ * 优先在项目内搜索，其次在 Maven 本地仓库（~/.m2/repository）
+ * 的 -sources.jar 中查找。支持 jar 关键字过滤加速搜索。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class JavaSourceTool extends AgentTool {
 

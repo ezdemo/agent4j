@@ -12,6 +12,15 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * 标识符查找工具 —— 在单个文件中查找指定标识符。
+ * <p>
+ * 先去除注释和字符串字面量后搜索，减少误报。
+ * 返回匹配位置和上下文（前后各 40 字符）。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class FindInCodeTool extends AgentTool {
 

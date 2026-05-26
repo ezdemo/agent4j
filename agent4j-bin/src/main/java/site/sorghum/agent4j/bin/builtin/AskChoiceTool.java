@@ -12,6 +12,15 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 用户选择菜单工具 —— 向用户展示多选菜单。
+ * <p>
+ * 渲染 2-6 个选项的箭头选择器，支持自定义输入。
+ * 用于需要用户决策的场景。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class AskChoiceTool extends AgentTool {
 

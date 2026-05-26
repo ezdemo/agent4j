@@ -11,6 +11,15 @@ import site.sorghum.agent4j.tool.ToolResult;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * 作业输出读取工具 —— 读取后台作业的最新输出。
+ * <p>
+ * 支持增量轮询（since 参数指定字节偏移）和尾部行数控制。
+ * 只读工具，在计划模式下可用。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class JobOutputTool extends AgentTool {
 

@@ -19,15 +19,26 @@ import java.util.regex.Pattern;
  */
 public class Scavenger {
 
-    // DSML invoke 标记
+    /** DSML 标记模式：<invoke name="xxx">...参数...</invoke> */
     private static final Pattern DSML_INVOKE = Pattern.compile(
             "<invoke\\s+name=\"([^\"]+)\">([\\s\\S]*?)</invoke>", Pattern.CASE_INSENSITIVE);
 
-    // 裸 JSON 工具调用：{name, arguments} 或 {tool_name, tool_args} 或 {function:{name, arguments}}
+    /**
+     * 裸 JSON 工具调用模式：匹配 {name, arguments}、{tool_name, tool_args}、{function:{name, arguments}} 等格式。
+     */
     private static final Pattern JSON_CALL = Pattern.compile(
             "\\{\\s*\"(?:name|tool_name|function)\"\\s*:\\s*\"(\\w+)\"\\s*[,}]");
 
-    /** 从 reasoning_content 和 content 中回收丢失的工具调用 */
+    /**
+     * 从 reasoning_content 和 content 中回收丢失的工具调用。
+     * DeepSeek R1/V4 有时将工具调用写在 reasoning_content 中却忘了写入 tool_calls 字段。
+     * 回收器扫描两种格式：DSML 标记 和 裸 JSON。
+     *
+     * @param reasoningContent 模型的思考内容
+     * @param content          模型回复内容
+     * @param existingCalls    已存在的工具调用（去重用）
+     * @return 新发现的工具调用列表
+     */
     public static List<ToolCall> scavenge(String reasoningContent, String content,
                                           List<ToolCall> existingCalls) {
         Set<String> seenSignatures = new HashSet<>();
@@ -73,7 +84,10 @@ public class Scavenger {
         return found;
     }
 
-    /** 从 DSML body 中提取参数 JSON */
+    /**
+     * 从 DSML 格式的 body 中提取参数 JSON。
+     * 解析 <parameter name="..." string="...">...</parameter> 标记。
+     */
     private static String extractDsmlArgs(String body) {
         Map<String, Object> params = new LinkedHashMap<>();
         Pattern paramPat = Pattern.compile(
@@ -99,7 +113,10 @@ public class Scavenger {
         return sb.toString();
     }
 
-    /** 从文本附近提取 arguments JSON（简化） */
+    /**
+     * 从文本附近提取 arguments JSON（简化实现）。
+     * 从当前行往后找 arguments 字段，最多 5 行。
+     */
     private static String extractLooseArgs(String[] lines, int idx, String name) {
         StringBuilder sb = new StringBuilder();
         // 从当前行往后找 arguments 字段

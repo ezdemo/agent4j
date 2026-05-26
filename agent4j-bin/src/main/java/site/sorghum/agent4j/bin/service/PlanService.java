@@ -30,7 +30,14 @@ public class PlanService {
         }
     }
 
-    /** 提交计划 */
+    /**
+     * 提交一份新计划，清空当前进行中的计划。
+     *
+     * @param summary   计划标题摘要
+     * @param planBody  计划的 Markdown 内容
+     * @param stepsRaw  步骤列表（[{id, title, action}, ...]）
+     * @return 提交确认消息
+     */
     @SuppressWarnings("unchecked")
     public String submitPlan(String summary, String planBody, List<Map<String, Object>> stepsRaw) {
         if (stepsRaw == null || stepsRaw.isEmpty())
@@ -46,7 +53,14 @@ public class PlanService {
         return "[Plan submitted: " + summary + " (" + currentPlan.size() + " steps)]";
     }
 
-    /** 标记步骤完成 */
+    /**
+     * 标记计划中的一步为已完成。
+     *
+     * @param stepId    步骤 ID
+     * @param result    执行结果描述
+     * @param evidence  验证依据列表
+     * @return 完成确认消息
+     */
     public String markStepComplete(String stepId, String result,
                                     List<Map<String, Object>> evidence) {
         if (currentPlan == null) return "{\"error\":\"no active plan\"}";
@@ -58,7 +72,14 @@ public class PlanService {
                 + (result != null ? result : "");
     }
 
-    /** 修订计划 */
+    /**
+     * 修订进行中的计划，替换剩余步骤。
+     * 已完成的步骤保持不变。
+     *
+     * @param reason         修订原因
+     * @param remainingSteps 新的剩余步骤列表
+     * @return 修订确认消息
+     */
     public String revisePlan(String reason, List<Map<String, Object>> remainingSteps) {
         if (currentPlan == null) return "{\"error\":\"no active plan\"}";
         currentPlan.values().stream().filter(s -> !s.completed).forEach(s -> s.completed = true);

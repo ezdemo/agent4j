@@ -11,6 +11,15 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * 文件写入工具 —— 创建或覆盖文件。
+ * <p>
+ * 自动创建父目录。支持完整文件内容写入，
+ * 与 edit_file（SEARCH/REPLACE）不同，此工具会完全替换文件内容。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class WriteFileTool extends AgentTool {
 

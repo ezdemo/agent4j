@@ -56,7 +56,11 @@ public class PromptPrefix {
         this.fingerprintCache = computeFingerprint();
     }
 
-    /** 指纹 —— 如果 system/tools 变化则值不同 */
+    /**
+     * 获取缓存指纹。
+     * 如果 system prompt 或 tools 发生变化，指纹值也会变化，
+     * 用于检测前缀缓存是否失效。
+     */
     public String fingerprint() {
         return fingerprintCache;
     }

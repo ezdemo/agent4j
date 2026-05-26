@@ -19,7 +19,15 @@ public class InteractionService {
 
     private List<Map<String, Object>> currentTodos = new ArrayList<>();
 
-    /** 选择对话框 */
+    /**
+     * 渲染一个用户选择菜单，展示选项列表供用户选择。
+     * 支持自定义输入选项。
+     *
+     * @param question    问题描述
+     * @param options     选项列表 [{title, summary}, ...]
+     * @param allowCustom 是否允许用户自定义输入
+     * @return 格式化菜单文本
+     */
     public String askChoice(String question, List<Map<String, Object>> options,
                               Boolean allowCustom) {
         if (options == null || options.isEmpty())
@@ -41,7 +49,14 @@ public class InteractionService {
         return sb.toString();
     }
 
-    /** 任务列表更新 */
+    /**
+     * 更新会话内的任务跟踪列表。
+     * 统计各状态（pending/in_progress/completed）的任务数量，
+     * 并格式化输出当前任务状态。
+     *
+     * @param todos 任务列表 [{status, content, activeForm?}, ...]
+     * @return 格式化任务状态文本
+     */
     @SuppressWarnings("unchecked")
     public String todoWrite(List<Map<String, Object>> todos) {
         currentTodos = todos != null ? new ArrayList<>(todos) : new ArrayList<>();

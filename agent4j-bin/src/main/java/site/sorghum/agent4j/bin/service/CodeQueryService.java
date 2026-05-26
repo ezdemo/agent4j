@@ -21,7 +21,14 @@ import java.util.zip.ZipFile;
 @Component
 public class CodeQueryService {
 
-    /** 获取文件的符号大纲（类/方法/字段） */
+    /**
+     * 获取源文件的符号大纲，含类/方法/字段定义。
+     * 使用正则模式匹配提取顶层符号，返回带行号的结构化列表。
+     *
+     * @param root    工作区根目录
+     * @param pathStr 源文件相对路径
+     * @return 符号列表，每行格式 "行号: 类型 名称"
+     */
     public String getSymbols(Path root, String pathStr) throws IOException {
         Path abs = new FileSystemService().resolveSafe(root, pathStr);
         String content = new String(Files.readAllBytes(abs), StandardCharsets.UTF_8);
@@ -54,7 +61,15 @@ public class CodeQueryService {
         return symbols.isEmpty() ? "(no symbols found)" : String.join("\n", symbols);
     }
 
-    /** 在文件中查找标识符 */
+    /**
+     * 在文件中查找标识符，去除注释和字符串字面量后搜索。
+     * 返回匹配位置及上下文（前后各 40 字符），最多 30 条。
+     *
+     * @param root    工作区根目录
+     * @param pathStr 文件相对路径
+     * @param name    要查找的标识符名称
+     * @return 匹配结果列表
+     */
     public String findInCode(Path root, String pathStr, String name) throws IOException {
         Path abs = new FileSystemService().resolveSafe(root, pathStr);
         String content = new String(Files.readAllBytes(abs), StandardCharsets.UTF_8);
@@ -76,7 +91,17 @@ public class CodeQueryService {
                 : String.join("\n", matches.subList(0, Math.min(matches.size(), 30)));
     }
 
-    /** Java 源码查找（项目内 + Maven 仓库 jar） */
+    /**
+     * 通过全限定类名查找 Java 源文件。
+     * 搜索策略：
+     * 1. 项目工作区内直接搜索 .java 文件
+     * 2. Maven 本地仓库的 -sources.jar 中查找（需 jarKeyword 过滤）
+     *
+     * @param root       工作区根目录
+     * @param className  全限定类名，如 "java.util.List"
+     * @param jarKeyword jar 文件名关键字（可选，加速搜索）
+     * @return Java 源码内容（最多 50K 字符）
+     */
     public String javaSource(Path root, String className, String jarKeyword) throws IOException {
         String pathPattern = className.replace('.', '/') + ".java";
         Path start = root;

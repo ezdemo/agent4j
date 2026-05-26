@@ -12,6 +12,15 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * 网页抓取工具 —— 下载 URL 并提取可读文本内容。
+ * <p>
+ * 自动去除 HTML 标签、Script 和 Style 内容，
+ * 返回纯文本（最多 100K 字符）。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class WebFetchTool extends AgentTool {
 

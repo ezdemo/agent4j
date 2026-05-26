@@ -12,6 +12,15 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 计划修订工具 —— 替换进行中计划的剩余步骤。
+ * <p>
+ * 当计划需要调整时使用，保留已完成的步骤，
+ * 替换剩余步骤为新的方案。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class RevisePlanTool extends AgentTool {
 

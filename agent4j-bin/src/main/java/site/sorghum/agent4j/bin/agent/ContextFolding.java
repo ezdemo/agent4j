@@ -152,7 +152,14 @@ public class ContextFolding {
         return clean;
     }
 
-    /** 对 head 消息执行语义摘要。 */
+    /**
+     * 对 head 消息执行语义摘要，通过一次 API 调用将旧消息压缩为一段中文描述。
+     * 截断后清理 tool_calls/tool 对，避免摘要器看到工具调用细节。
+     *
+     * @param head   要摘要的消息子集
+     * @param client API 客户端
+     * @return 摘要文本，失败时返回 null
+     */
     private static String summarize(List<Map<String, Object>> head, ModelClient client) throws IOException {
         String sp = "You are a conversation history summarizer for a coding agent. "
                 + "Output ONE concise Chinese paragraph that preserves:\n"
@@ -240,14 +247,19 @@ public class ContextFolding {
         return new ArrayList<>(msgs.subList(Math.max(0, start), msgs.size()));
     }
 
-    // ---- 估算 ----
+    // ==================== 字符估算 ====================
 
+    /**
+     * 估算消息列表的总字符数，用于判断是否触发折叠。
+     * 注意：这不包含 tools JSON 的大小，实际请求体会更大。
+     */
     public static int estimateChars(List<Map<String, Object>> messages) {
         int total = 0;
         for (Map<String, Object> m : messages) total += estimateChars(m);
         return total;
     }
 
+    /** 估算单条消息的字符数（role + content + tool_calls + reasoning_content）。 */
     public static int estimateChars(Map<String, Object> m) {
         int n = 0;
         if (m.containsKey("role")) n += m.get("role").toString().length();

@@ -20,7 +20,13 @@ import java.util.stream.Stream;
 @Component
 public class FileSystemService {
 
-    /** 列出目录内容 */
+    /**
+     * 列出指定目录的内容。
+     *
+     * @param root    工作区根目录
+     * @param pathStr 相对路径，null 或空表示根目录
+     * @return 目录项列表（目录以 / 结尾）
+     */
     public String listDirectory(Path root, String pathStr) throws IOException {
         Path abs = resolveSafe(root, pathStr != null ? pathStr : ".");
         if (!Files.isDirectory(abs)) return "[NOT_DIR] " + pathStr;
@@ -34,7 +40,15 @@ public class FileSystemService {
         return lines.isEmpty() ? "(empty directory)" : String.join("\n", lines);
     }
 
-    /** 按模式搜索文件 */
+    /**
+     * 按文件名模式搜索文件（大小写不敏感）。
+     *
+     * @param root       工作区根目录
+     * @param pathStr    起始路径
+     * @param pattern    文件名包含模式
+     * @param includeDeps 是否包含依赖目录（node_modules 等）
+     * @return 匹配的文件路径列表
+     */
     public String searchFiles(Path root, String pathStr, String pattern, Boolean includeDeps)
             throws IOException {
         Path start = pathStr != null ? resolveSafe(root, pathStr) : root;
@@ -53,7 +67,10 @@ public class FileSystemService {
         return results.isEmpty() ? "(no matches)" : String.join("\n", results);
     }
 
-    /** 安全解析路径（防止越界） */
+    /**
+     * 安全解析路径，防止路径穿越攻击。
+     * 确保解析后的路径仍处于工作区根目录内。
+     */
     public Path resolveSafe(Path root, String raw) throws IOException {
         if (raw == null || raw.isEmpty()) return root;
         Path resolved = root.resolve(raw).toAbsolutePath().normalize();
@@ -62,12 +79,17 @@ public class FileSystemService {
         return resolved;
     }
 
-    /** 相对路径显示 */
+    /**
+     * 将绝对路径转换为相对于工作区根目录的显示路径。
+     */
     public String displayRel(Path root, Path abs) {
         return root.relativize(abs).toString().replace('\\', '/');
     }
 
-    /** 读取输入流为字符串 */
+    /**
+     * 读取输入流全部内容为 UTF-8 字符串。
+     * 使用 8KB 缓冲，适用于 HTTP 响应等流式读取。
+     */
     public static String readFully(InputStream is) throws IOException {
         StringBuilder sb = new StringBuilder();
         byte[] buf = new byte[8192];
@@ -78,6 +100,7 @@ public class FileSystemService {
         return sb.toString();
     }
 
+    /** 检查路径中是否包含跳过目录。 */
     private static boolean pathContainsSkip(Path p, Set<String> skip) {
         for (int i = 0; i < p.getNameCount(); i++) {
             if (skip.contains(p.getName(i).toString())) return true;

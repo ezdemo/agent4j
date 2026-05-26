@@ -12,6 +12,15 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 计划提交工具 —— 提交一份计划供用户审查。
+ * <p>
+ * 在计划模式下使用，包含摘要、Markdown 计划和步骤列表。
+ * 用户审批后或输入 /execute 后开始执行。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class SubmitPlanTool extends AgentTool {
 

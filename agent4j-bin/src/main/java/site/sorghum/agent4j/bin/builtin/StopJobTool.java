@@ -11,6 +11,15 @@ import site.sorghum.agent4j.tool.ToolResult;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * 作业停止工具 —— 停止后台作业进程。
+ * <p>
+ * 先发送 SIGTERM 优雅终止，宽限期后发送 SIGKILL 强制终止。
+ * 返回作业的最终输出。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class StopJobTool extends AgentTool {
 

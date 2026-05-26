@@ -24,7 +24,14 @@ import java.util.regex.Pattern;
 @Component
 public class WebService {
 
-    /** Web 搜索（DuckDuckGo Lite） */
+    /**
+     * 通过 DuckDuckGo Lite 搜索互联网。
+     * 解析 HTML 响应提取搜索结果标题和链接。
+     *
+     * @param query 搜索关键词
+     * @param topK  返回结果数量（默认 5，上限 10）
+     * @return 格式化搜索结果列表
+     */
     public String webSearch(String query, Integer topK) throws IOException {
         try {
             String encoded = URLEncoder.encode(query, "UTF-8");
@@ -54,7 +61,13 @@ public class WebService {
         }
     }
 
-    /** 网页抓取（提取文本） */
+    /**
+     * 抓取 URL 内容并提取纯文本。
+     * 自动去除 HTML 标签、Script 和 Style 内容。
+     *
+     * @param urlStr 完整 URL（http:// 或 https://）
+     * @return 纯文本内容（最多 100K 字符）
+     */
     public String webFetch(String urlStr) throws IOException {
         try {
             HttpURLConnection conn = (HttpURLConnection) URI.create(urlStr).toURL().openConnection();

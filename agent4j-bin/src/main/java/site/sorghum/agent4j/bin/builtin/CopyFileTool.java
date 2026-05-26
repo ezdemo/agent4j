@@ -11,6 +11,15 @@ import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * 文件复制工具 —— 复制文件或目录。
+ * <p>
+ * 支持文件和目录的递归复制，自动创建目标父目录。
+ * 目标已存在时会被覆盖。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class CopyFileTool extends AgentTool {
 

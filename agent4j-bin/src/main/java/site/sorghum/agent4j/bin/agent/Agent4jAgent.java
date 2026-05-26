@@ -76,6 +76,9 @@ public class Agent4jAgent {
         this.loop = new AgentLoop(client, registry, ctx, 0);
     }
 
+    /**
+     * 将 AgentTool 的参数类型映射为 JSON Schema 类型。
+     */
     private static String toJsonType(String type) {
         if (type == null) return "string";
         switch (type.toLowerCase()) {
@@ -88,6 +91,9 @@ public class Agent4jAgent {
         }
     }
 
+    /**
+     * 将 AgentTool 的参数定义列表转换为 ToolDef.ParamDef 列表。
+     */
     private static List<ToolDef.ParamDef> toParamDefs(List<ToolParameter> params) {
         List<ToolDef.ParamDef> out = new ArrayList<>();
         for (ToolParameter p : params) {
@@ -100,6 +106,10 @@ public class Agent4jAgent {
         return out;
     }
 
+    /**
+     * 将 ToolResult 格式化为工具调用的返回字符串。
+     * 失败结果添加 [FAIL:errorCode] 前缀。
+     */
     private static String formatResult(ToolResult r) {
         if (r.isSuccess()) return r.getText();
         return "[FAIL:" + r.getErrorCode() + "] " + r.getText();
@@ -214,7 +224,11 @@ public class Agent4jAgent {
 
     // ---- 项目文档加载 ----
 
-    /** 加载工作区根目录下的 agent4j.md 和 CLAUDE.md，拼接后返回 */
+    /**
+     * 加载工作区根目录下的 agent4j.md 和 CLAUDE.md，
+     * 将项目文档作为系统提示的补充上下文。
+     * 文件不存在时返回空字符串。
+     */
     private static String loadProjectMd(Path workspace) {
         StringBuilder sb = new StringBuilder();
         for (String name : new String[]{"agent4j.md", "CLAUDE.md"}) {

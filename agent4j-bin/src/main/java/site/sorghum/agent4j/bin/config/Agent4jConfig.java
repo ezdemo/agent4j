@@ -55,30 +55,44 @@ public class Agent4jConfig {
         }
     }
 
-    /** API 基础地址（不含 /chat/completions 后缀） */
+    /**
+     * 获取 API 基础地址，不含 /chat/completions 后缀。
+     * 如 "https://api.deepseek.com/v1"。
+     */
     public String baseUrl() {
         return root.select("$.baseUrl").getString();
     }
 
-    /** 完整的 Chat Completions API URL */
+    /**
+     * 获取完整的 Chat Completions API URL。
+     * 在 baseUrl 后追加 /chat/completions。
+     */
     public String chatApiUrl() {
         String base = baseUrl();
         if (base == null) return null;
         return base.endsWith("/") ? base + "chat/completions" : base + "/chat/completions";
     }
 
-    /** API Key */
+    /**
+     * 获取 API Key。
+     */
     public String apiKey() {
         return root.select("$.apiKey").getString();
     }
 
-    /** 模型名称（config.json 中无此字段时使用默认值） */
+    /**
+     * 获取模型名称。
+     * config.json 中无此字段时返回默认值 "deepseek-v4-flash"。
+     */
     public String model() {
         String m = root.select("$.model").getString();
         return m != null ? m : "deepseek-v4-flash";
     }
 
-    /** 工作区目录 */
+    /**
+     * 获取工作区目录路径。
+     * 未配置时默认返回当前目录。
+     */
     public Path workspaceDir() {
         String dir = root.select("$.workspaceDir").getString();
         if (dir == null || dir.isEmpty()) {
@@ -87,19 +101,28 @@ public class Agent4jConfig {
         return Paths.get(dir).toAbsolutePath();
     }
 
-    /** 编辑模式（auto / yolo） */
+    /**
+     * 获取编辑模式。
+     * auto = 需要用户确认，yolo = 直接执行。默认为 auto。
+     */
     public String editMode() {
         String m = root.select("$.editMode").getString();
         return m != null ? m : "auto";
     }
 
-    /** 推理力度 */
+    /**
+     * 获取推理力度。
+     * 可选：low / medium / high / max。默认为 max。
+     */
     public String reasoningEffort() {
         String r = root.select("$.reasoningEffort").getString();
         return r != null ? r : "max";
     }
 
-    /** 语言 */
+    /**
+     * 获取界面语言。
+     * ZH = 中文，EN = 英文。默认为 EN。
+     */
     public String lang() {
         String l = root.select("$.lang").getString();
         return l != null ? l : "EN";

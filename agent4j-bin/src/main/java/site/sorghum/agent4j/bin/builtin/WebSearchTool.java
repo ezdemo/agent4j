@@ -12,6 +12,15 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * 网络搜索工具 —— 通过 DuckDuckGo Lite 搜索互联网。
+ * <p>
+ * 返回排名结果，包含标题、URL 和摘要片段。
+ * 只读工具，在计划模式下可用。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class WebSearchTool extends AgentTool {
 

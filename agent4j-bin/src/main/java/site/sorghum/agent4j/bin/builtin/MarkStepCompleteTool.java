@@ -12,6 +12,14 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 步骤完成标记工具 —— 标记已审批计划中的一步为完成。
+ * <p>
+ * 记录步骤执行结果和验证依据，推进计划进度。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class MarkStepCompleteTool extends AgentTool {
 

@@ -30,7 +30,11 @@ public class StormBreaker {
 
     private final LinkedList<Entry> recent = new LinkedList<>();
 
-    /** 每回合重置（线程安全） */
+    /**
+     * 重置滑动窗口，每回合开始时调用。
+     * 清除历史记录，使 Storm Breaker 在新回合从头计数。
+     * 使用 synchronized 保证线程安全。
+     */
     public synchronized void reset() {
         recent.clear();
     }
@@ -66,6 +70,10 @@ public class StormBreaker {
         return new SuppressResult(false, null);
     }
 
+    /**
+     * 计算工具调用的指纹，用于检测重复调用。
+     * 使用 ONode 解析参数 JSON 后重新序列化，消除键顺序和空格差异。
+     */
     private static String fingerprint(String name, String args) {
         try {
             // 用 ONode 解析后再序列化，消除键顺序/空格差异

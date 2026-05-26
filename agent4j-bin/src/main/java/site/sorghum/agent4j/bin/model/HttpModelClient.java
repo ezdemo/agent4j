@@ -26,10 +26,16 @@ public class HttpModelClient implements ModelClient {
     private final String apiKey;
     private final String model;
 
-    /** 重试间隔（秒），共 10 次：1,1,1,2,2,2,3,3,6,10 — 总计约 31 秒 */
+    /**
+     * 重试间隔（秒），共 10 次：1,1,1,2,2,2,3,3,6,10 — 总计约 31 秒。
+     * 指数退避策略，应对 API 临时故障。
+     */
     private static final int[] RETRY_DELAYS = {1, 1, 1, 2, 2, 2, 3, 3, 6, 10};
 
-    /** 判断 HTTP 状态码是否应重试（5xx 服务端错误 或 0=连接失败） */
+    /**
+     * 判断 HTTP 状态码是否应重试。
+     * 5xx 服务端错误或 0（连接失败）需要重试，4xx 客户端错误不重试。
+     */
     private static boolean retryable(int status) {
         return status >= 500 || status == 0;
     }
@@ -301,7 +307,11 @@ public class HttpModelClient implements ModelClient {
         }
     }
 
-    /** 构建 HTTP 请求体 JSON */
+    /**
+     * 构建 API 请求体 JSON。
+     * 包含 model、messages、tools 等字段，
+     * 对 tool 消息做防御性检查（缺少 tool_call_id 时跳过）。
+     */
     private String buildBody(List<Map<String, Object>> messages,
                               List<Map<String, Object>> tools) throws IOException {
         ONode body = new ONode(ONode.ofJson("{}").options()).asObject();

@@ -22,6 +22,14 @@ public class MessageHealer {
 
     /**
      * 对消息列表执行全部修复，单次遍历（不创建临时列表）。
+     * 三项修复：
+     * 1. 截断过大的 tool 结果（超过 8000 tokens）
+     * 2. 修复 tool_calls/tool 配对（丢弃孤立的 tool 和未配对的 tool_calls）
+     * 3. 为推理模型补全 reasoning_content 字段
+     *
+     * @param messages       原始消息列表
+     * @param isThinkingMode 是否为推理模型（需要 reasoning_content）
+     * @return 修复后的消息列表
      */
     public static List<Map<String, Object>> heal(List<Map<String, Object>> messages,
                                                   boolean isThinkingMode) {

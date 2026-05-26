@@ -20,7 +20,15 @@ public class JobService {
 
     public static final JobRegistry JOB_REGISTRY = new JobRegistry();
 
-    /** 启动后台作业 */
+    /**
+     * 启动后台 shell 作业，进程在独立线程中运行。
+     *
+     * @param root    工作区根目录
+     * @param cmd     shell 命令
+     * @param cwdStr  工作子目录（可选）
+     * @param waitSec 等待启动的秒数（可选）
+     * @return 作业启动状态和预览输出
+     */
     public String runBackground(Path root, String cmd, String cwdStr, Integer waitSec) throws IOException {
         if (cmd == null || cmd.isEmpty()) throw new IOException("run_background: empty command");
         Path cwd = cwdStr != null ? root.resolve(cwdStr).normalize() : root;
@@ -40,7 +48,14 @@ public class JobService {
         return preview != null ? status + "\n" + preview : status;
     }
 
-    /** 读取作业输出 */
+    /**
+     * 读取后台作业的最新输出。
+     *
+     * @param id         作业 ID
+     * @param since      字节偏移（增量读取）
+     * @param tailLines  返回尾部的行数
+     * @return 作业输出文本
+     */
     public String jobOutput(int id, Integer since, Integer tailLines) {
         JobRegistry.ReadResult r = JOB_REGISTRY.read(id, since != null ? since : 0,
                 tailLines != null ? tailLines : 80);
@@ -50,7 +65,14 @@ public class JobService {
                 + (r.output.isEmpty() ? "" : "\n" + r.output);
     }
 
-    /** 等待作业完成 */
+    /**
+     * 阻塞等待后台作业完成，支持超时控制。
+     *
+     * @param id        作业 ID
+     * @param timeoutMs 超时毫秒数（默认 5000，上限 300000）
+     * @param waitFor   等待策略："exit" 或 "output-or-exit"
+     * @return JSON 格式的作业状态
+     */
     public String waitForJob(int id, Integer timeoutMs, String waitFor) throws InterruptedException {
         long ms = timeoutMs != null ? Math.min(timeoutMs, 300000) : 5000;
         JobRegistry.WaitResult r = JOB_REGISTRY.waitForJob(id, ms, waitFor);
@@ -59,7 +81,12 @@ public class JobService {
                 + ",\"latestOutput\":\"" + r.latestOutput.replace("\\", "\\\\").replace("\"", "\\\"") + "\"}";
     }
 
-    /** 停止作业 */
+    /**
+     * 停止后台作业（先 SIGTERM 再 SIGKILL）。
+     *
+     * @param id 作业 ID
+     * @return 作业停止状态和最终输出
+     */
     public String stopJob(int id) {
         JobRegistry.ReadResult r = JOB_REGISTRY.stop(id);
         if (r == null) return "job " + id + ": not found";
@@ -67,7 +94,11 @@ public class JobService {
                 + (r.output.isEmpty() ? "" : "\n" + r.output);
     }
 
-    /** 列出所有作业 */
+    /**
+     * 列出当前会话的所有后台作业。
+     *
+     * @return 格式化作业列表（ID、状态、运行时间、命令）
+     */
     public String listJobs() {
         java.util.List<JobRegistry.JobEntry> all = JOB_REGISTRY.list();
         if (all.isEmpty()) return "(no background jobs started this session)";

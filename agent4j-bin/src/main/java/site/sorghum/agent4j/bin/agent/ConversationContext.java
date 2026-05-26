@@ -32,7 +32,10 @@ public class ConversationContext {
         this.prefix = prefix;
     }
 
-    /** 绑定会话存储 */
+    /**
+     * 绑定会话存储，所有后续消息将通过此存储持久化。
+     * 传入 null 可解除绑定（停止持久化）。
+     */
     public void setSessionStore(SessionStore store) {
         this.sessionStore = store;
     }
@@ -76,7 +79,10 @@ public class ConversationContext {
         persist(msg);
     }
 
-    /** 追加写到 JSONL 文件 */
+    /**
+     * 将消息追加写入 JSONL 文件。
+     * 如果 sessionStore 未设置或写入失败，静默忽略。
+     */
     private void persist(Map<String, Object> msg) {
         if (sessionStore != null) {
             try {
@@ -99,17 +105,26 @@ public class ConversationContext {
         return msgs;
     }
 
-    /** 替换系统提示词（计划模式切换时用） */
+    /**
+     * 替换系统提示词（计划模式切换时用）。
+     * 注意：这将导致下一次 API 调用缓存 miss。
+     */
     public void replaceSystem(String newSystem) {
         prefix.replaceSystem(newSystem);
     }
 
-    /** 工具定义快照 */
+    /**
+     * 获取工具定义快照（来自 PromptPrefix 的稳定引用）。
+     * 跨 turn 不变，用于 DeepSeek 前缀缓存。
+     */
     public List<Map<String, Object>> tools() {
         return prefix.tools();
     }
 
-    /** 加载时注入历史（不触发持久化） */
+    /**
+     * 加载历史会话时注入消息到上下文，不触发持久化。
+     * 用于 /load 命令从 JSONL 文件恢复会话。
+     */
     public void injectHistory(Map<String, Object> msg) {
         history.add(msg);
     }
@@ -118,13 +133,19 @@ public class ConversationContext {
         return history.size();
     }
 
-    /** 清除历史（新建会话时用） */
+    /**
+     * 清除所有历史消息（新建会话时用）。
+     * 同时触发持久化回写。
+     */
     public void clear() {
         history.clear();
         rewriteStore();
     }
 
-    /** /retry: 撤回最后一条 user 消息及其后续，返回消息内容 */
+    /**
+     * 撤回最后一条用户消息及其后的所有消息，返回被撤回的用户消息内容。
+     * 用于 /retry 命令。同时同步持久化。
+     */
     public String retryLastUser() {
         for (int i = history.size() - 1; i >= 0; i--) {
             if ("user".equals(history.get(i).get("role"))) {
@@ -138,7 +159,10 @@ public class ConversationContext {
         return null;
     }
 
-    /** /rewind N: 回退到第 N 条 user 消息 */
+    /**
+     * 回退到第 N 条用户消息，移除之后的所有消息。
+     * 用于 /rewind N 命令。同时同步持久化。
+     */
     public String rewindToUser(int userIndex) {
         int count = 0;
         for (int i = 0; i < history.size(); i++) {
@@ -178,7 +202,9 @@ public class ConversationContext {
         rewriteStore();
     }
 
-    /** 获取完整历史（用于调试） */
+    /**
+     * 获取完整历史消息列表的副本（用于调试）。
+     */
     public List<Map<String, Object>> getHistory() {
         return new ArrayList<>(history);
     }

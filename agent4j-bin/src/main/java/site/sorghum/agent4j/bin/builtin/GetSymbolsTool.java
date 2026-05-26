@@ -12,6 +12,15 @@ import java.io.IOException;
 import java.util.Collections;
 import java.util.List;
 
+/**
+ * 符号大纲提取工具 —— 获取源文件中的顶层符号（类、方法、字段）。
+ * <p>
+ * 使用正则模式匹配提取 Java 源文件中的类声明、方法签名和字段定义，
+ * 返回带行号的符号列表，帮助模型快速了解文件结构。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class GetSymbolsTool extends AgentTool {
 

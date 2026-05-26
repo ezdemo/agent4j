@@ -11,6 +11,15 @@ import site.sorghum.agent4j.tool.ToolResult;
 import java.util.Arrays;
 import java.util.List;
 
+/**
+ * 作业等待工具 —— 阻塞等待后台作业完成。
+ * <p>
+ * 支持超时控制和等待策略（exit / output-or-exit）。
+ * 返回作业退出状态和最新输出。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class WaitForJobTool extends AgentTool {
 

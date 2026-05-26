@@ -52,6 +52,13 @@ public class JobRegistry {
         }
     }
 
+    /**
+     * 启动一个新后台作业，分配唯一 ID 并创建 daemon 读取线程。
+     *
+     * @param command shell 命令
+     * @param cwd     工作目录
+     * @return 作业条目
+     */
     public synchronized JobEntry start(String command, Path cwd) throws IOException {
         int id = nextId++;
         ProcessBuilder pb;
@@ -79,7 +86,10 @@ public class JobRegistry {
                 .collect(Collectors.toList());
     }
 
-    /** 读取输出，返回 (byteLength, output, running, command) */
+    /**
+     * 作业读取结果 —— 包含输出内容、运行状态和退出码。
+     * 支持按字节偏移增量读取和尾部行数截取。
+     */
     public static class ReadResult {
         public final int byteLength;
         public final String output;
@@ -106,12 +116,23 @@ public class JobRegistry {
         }
     }
 
+    /**
+     * 读取作业输出，支持增量读取和尾部截取。
+     *
+     * @param id        作业 ID
+     * @param since     字节偏移量，从此位置开始读取
+     * @param tailLines 返回最后 N 行
+     * @return 读取结果，作业不存在时返回 null
+     */
     public ReadResult read(int id, int since, int tailLines) {
         JobEntry e = jobs.get(id);
         if (e == null) return null;
         return new ReadResult(e, since, tailLines);
     }
 
+    /**
+     * 等待结果 —— 包含作业是否已退出、退出码和最新输出。
+     */
     public static class WaitResult {
         public final boolean exited;
         public final Integer exitCode;
@@ -130,6 +151,14 @@ public class JobRegistry {
         }
     }
 
+    /**
+     * 等待作业完成（或产生输出），带超时控制。
+     *
+     * @param id        作业 ID
+     * @param timeoutMs 超时毫秒数
+     * @param waitFor   等待策略："exit"（等待退出）或 "output-or-exit"（有输出即返回）
+     * @return 等待结果
+     */
     public WaitResult waitForJob(int id, long timeoutMs, String waitFor) throws InterruptedException {
         JobEntry e = jobs.get(id);
         if (e == null) return null;
@@ -154,6 +183,12 @@ public class JobRegistry {
         return new WaitResult(e, 2000);
     }
 
+    /**
+     * 强制停止作业（destroyForcibly）。
+     *
+     * @param id 作业 ID
+     * @return 停止时的输出快照
+     */
     public ReadResult stop(int id) {
         JobEntry e = jobs.get(id);
         if (e == null) return null;

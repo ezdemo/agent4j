@@ -59,8 +59,12 @@ public class SubAgent {
 
     /**
      * 运行子代理，返回最终回复。
-     * @param task       子代理的任务描述
-     * @param listener   事件监听（可选）
+     * 子代理拥有独立的 ConversationContext 和 AgentLoop，
+     * 继承父级工具集（排除递归 spawn 和用户交互工具）。
+     *
+     * @param task     子代理的任务描述
+     * @param listener 事件监听（可选）
+     * @return 子代理的最终回复文本
      */
     public String run(String task, AgentLoopListener listener) throws IOException {
         ConversationContext ctx = new ConversationContext(

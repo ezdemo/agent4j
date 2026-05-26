@@ -12,6 +12,15 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
+/**
+ * 任务跟踪工具 —— 在会话中管理 3 步以上的任务列表。
+ * <p>
+ * 支持状态标记（pending / in_progress / completed），
+ * 帮助模型在复杂多步工作中保持进度追踪。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Component
 public class TodoWriteTool extends AgentTool {
 
