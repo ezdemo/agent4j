@@ -74,6 +74,26 @@ public class AgentLoop {
         this.listener = listener != null ? listener : new AgentLoopListener() {};
     }
 
+    /**
+     * 构建动态工具使用指引（作为 user 消息注入，不持久化到历史）。
+     * 随 tool definitions 一起注入，避免冗余硬编码在 system prompt 中。
+     * Plan mode 时附加只读约束说明。
+     */
+    private String buildToolInstructions() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("编辑文件时使用 edit_file（SEARCH/REPLACE，search 必须唯一）。\n");
+        sb.append("多文件批量编辑使用 multi_edit。\n");
+        sb.append("不确定文件位置时用 glob/grep 搜索，需要构建/测试时用 run_command。\n");
+        if (dispatcher.isPlanMode()) {
+            sb.append("\n# Plan mode\n\n");
+            sb.append("写入工具（edit_file / multi_edit / write_file / run_command 等）不可用。\n");
+            sb.append("只读工具（read_file / glob / grep / tree / get_file_info / web_search）正常使用。\n");
+            sb.append("先探索代码库，然后用 submit_plan 提交计划。\n");
+            sb.append("用户审批或输入 /execute 退出计划模式后，所有工具恢复正常。\n");
+        }
+        return sb.toString();
+    }
+
     /** 设置输出接口（用于自定义输出处理，如控制台 / WebSocket SSE / 日志） */
     public void setOutput(AgentOutput output) {
         this.output = output != null ? output : AgentOutput.NOOP;
@@ -132,6 +152,20 @@ public class AgentLoop {
 
             output.onLog(AgentOutput.LogLevel.DEBUG, "step=" + step + " messages.size=" + messages.size()
                     + " lastPromptTokens=" + lastPromptTokens + " threshold=" + tokenThreshold);
+
+            // 2e. 注入动态工具使用指引（作为 user 消息，不持久化到历史）
+            // 工具特定说明从 system prompt 移出，改为在此处按需注入，仅在发往 API 前附加
+            String instr = buildToolInstructions();
+            if (!instr.isEmpty()) {
+                List<Map<String, Object>> withInstr = new ArrayList<>(messages.size() + 1);
+                withInstr.add(messages.get(0)); // system prompt
+                Map<String, Object> instrMsg = new LinkedHashMap<>();
+                instrMsg.put("role", "user");
+                instrMsg.put("content", instr);
+                withInstr.add(instrMsg);
+                withInstr.addAll(messages.subList(1, messages.size())); // original history
+                messages = withInstr;
+            }
 
             // 流式调用
             final StringBuilder contentBuf = new StringBuilder();

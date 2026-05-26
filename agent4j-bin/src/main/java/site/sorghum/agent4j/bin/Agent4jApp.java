@@ -115,11 +115,27 @@ public class Agent4jApp {
                     agent.setPlanMode(true);
                     System.out.println("(已进入计划模式 — 仅允许只读操作)");
                     System.out.println("探索完成后使用 submit_plan 提交计划，或输入 /execute 开始执行");
+                    // 自动添加用户消息到对话上下文，让 LLM 感知到计划模式已启用，开始探索
+                    try {
+                        String reply = agent.chat("进入计划模式，等待用户消息输入。");
+                        System.out.println();
+                        System.out.println(reply);
+                    } catch (Exception e) {
+                        System.out.println("(计划模式初始化失败: " + e.getMessage() + ")");
+                    }
                     continue;
                 }
                 if ("/execute".equalsIgnoreCase(input)) {
                     agent.setPlanMode(false);
                     System.out.println("(已退出计划模式 — 允许全部操作)");
+                    // 自动添加用户消息到对话上下文，让 LLM 感知到计划模式已退出，可以开始执行
+                    try {
+                        String reply = agent.chat("退出计划模式，等待用户消息输入。");
+                        System.out.println();
+                        System.out.println(reply);
+                    } catch (Exception e) {
+                        System.out.println("(执行模式初始化失败: " + e.getMessage() + ")");
+                    }
                     continue;
                 }
                 if ("/retry".equalsIgnoreCase(input)) {
