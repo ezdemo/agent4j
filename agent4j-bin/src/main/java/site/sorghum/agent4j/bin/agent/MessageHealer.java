@@ -35,6 +35,7 @@ public class MessageHealer {
                                                   boolean isThinkingMode) {
         List<Map<String, Object>> out = new ArrayList<>();
         int pendingToolCount = 0;
+        int lastAssistantWithTcIdx = -1; // 跟踪最后一个带 tool_calls 的 assistant 在 out 中的位置
 
         for (Map<String, Object> m : messages) {
             String role = (String) m.get("role");
@@ -65,7 +66,8 @@ public class MessageHealer {
             // 2. fix tool_calls/tool pairing
             if ("assistant".equals(role) && msg.containsKey("tool_calls")) {
                 List<?> tcs = (List<?>) msg.get("tool_calls");
-                pendingToolCount = tcs != null ? tcs.size() : 0;
+                pendingToolCount += tcs != null ? tcs.size() : 0; // 累加而非覆盖
+                lastAssistantWithTcIdx = out.size(); // 记录该 assistant 即将写入的位置
             } else if ("tool".equals(role)) {
                 if (pendingToolCount > 0) {
                     pendingToolCount--;
@@ -84,18 +86,20 @@ public class MessageHealer {
             }
         }
 
-        // 末尾未配对的 tool_calls → 剥离
-        if (pendingToolCount > 0) {
-            for (int i = out.size() - 1; i >= 0; i--) {
-                Map<String, Object> m = out.get(i);
-                if ("assistant".equals(m.get("role")) && m.containsKey("tool_calls")) {
-                    Map<String, Object> stripped = new LinkedHashMap<>();
-                    stripped.put("role", "assistant");
-                    if (m.containsKey("content")) stripped.put("content", m.get("content"));
-                    if (m.containsKey("reasoning_content"))
-                        stripped.put("reasoning_content", m.get("reasoning_content"));
-                    out.set(i, stripped);
-                    break;
+        // 末尾未配对的 tool_calls → 剥离 tool_calls 并删除孤儿 tool 结果
+        if (pendingToolCount > 0 && lastAssistantWithTcIdx >= 0) {
+            // 剥离最后一个 assistant 的 tool_calls
+            Map<String, Object> m = out.get(lastAssistantWithTcIdx);
+            Map<String, Object> stripped = new LinkedHashMap<>();
+            stripped.put("role", "assistant");
+            if (m.containsKey("content")) stripped.put("content", m.get("content"));
+            if (m.containsKey("reasoning_content"))
+                stripped.put("reasoning_content", m.get("reasoning_content"));
+            out.set(lastAssistantWithTcIdx, stripped);
+            // 同步删除该 assistant 之后所有孤儿 tool 消息
+            for (int i = out.size() - 1; i > lastAssistantWithTcIdx; i--) {
+                if ("tool".equals(out.get(i).get("role"))) {
+                    out.remove(i);
                 }
             }
         }

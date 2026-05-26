@@ -117,12 +117,14 @@ public class ContextFolding {
         List<Map<String, Object>> clean = new ArrayList<>();
         // 当前未配对的 tool_calls 数量
         int pendingToolCount = 0;
+        int lastAssistantWithTcIdx = -1; // 跟踪最后一个带 tool_calls 的 assistant 在 clean 中的位置
         for (Map<String, Object> m : tail) {
             String role = (String) m.get("role");
             if ("assistant".equals(role) && m.containsKey("tool_calls")) {
                 List<?> tcs = (List<?>) m.get("tool_calls");
                 int tcCount = tcs != null ? tcs.size() : 0;
-                pendingToolCount = tcCount;
+                pendingToolCount += tcCount; // 累加而非覆盖
+                lastAssistantWithTcIdx = clean.size(); // 记录即将写入的位置
                 clean.add(m);
             } else if ("tool".equals(role) && pendingToolCount > 0) {
                 clean.add(m);
@@ -133,19 +135,19 @@ public class ContextFolding {
                 clean.add(m);
             }
         }
-        // 如果 tail 末尾还有未配对的 tool_calls，去掉它们
-        if (pendingToolCount > 0 && !clean.isEmpty()) {
-            // 找到最后一个 assistant 并去掉其 tool_calls
-            for (int i = clean.size() - 1; i >= 0; i--) {
-                Map<String, Object> m = clean.get(i);
-                if ("assistant".equals(m.get("role")) && m.containsKey("tool_calls")) {
-                    // 只保留 content/reasoning
-                    Map<String, Object> stripped = new LinkedHashMap<>();
-                    stripped.put("role", "assistant");
-                    if (m.containsKey("content")) stripped.put("content", m.get("content"));
-                    if (m.containsKey("reasoning_content")) stripped.put("reasoning_content", m.get("reasoning_content"));
-                    clean.set(i, stripped);
-                    break;
+        // 如果 tail 末尾还有未配对的 tool_calls，剥离 tool_calls 并删除孤儿 tool 结果
+        if (pendingToolCount > 0 && lastAssistantWithTcIdx >= 0) {
+            // 剥离最后一个 assistant 的 tool_calls
+            Map<String, Object> m = clean.get(lastAssistantWithTcIdx);
+            Map<String, Object> stripped = new LinkedHashMap<>();
+            stripped.put("role", "assistant");
+            if (m.containsKey("content")) stripped.put("content", m.get("content"));
+            if (m.containsKey("reasoning_content")) stripped.put("reasoning_content", m.get("reasoning_content"));
+            clean.set(lastAssistantWithTcIdx, stripped);
+            // 同步删除该 assistant 之后所有孤儿 tool 消息
+            for (int i = clean.size() - 1; i > lastAssistantWithTcIdx; i--) {
+                if ("tool".equals(clean.get(i).get("role"))) {
+                    clean.remove(i);
                 }
             }
         }
@@ -199,33 +201,57 @@ public class ContextFolding {
 
     /**
      * 清理消息列表用于摘要 API：
-     * - assistant 消息移除 tool_calls（摘要器不需要看工具调用详情）
+     * - 保留 tool_calls 结构（维持 API 所要求的配对约束）
      * - 移除孤立的 tool role 消息（无对应 tool_calls 的）
+     * - 截断过大的 tool 结果
      */
     private static List<Map<String, Object>> sanitizeMessagesForSummary(List<Map<String, Object>> msgs) {
         List<Map<String, Object>> result = new ArrayList<>();
-        // 跟踪当前需要多少个 tool 响应
         int pendingToolCount = 0;
         for (Map<String, Object> m : msgs) {
             String role = (String) m.get("role");
             if ("assistant".equals(role) && m.containsKey("tool_calls")) {
-                // 摘要器不需要看 tool_calls 细节，但保留 content/reasoning
-                Map<String, Object> clean = new LinkedHashMap<>();
-                clean.put("role", "assistant");
-                if (m.containsKey("content")) clean.put("content", m.get("content"));
-                if (m.containsKey("reasoning_content")) clean.put("reasoning_content", m.get("reasoning_content"));
-                result.add(clean);
-                List<?> tcs = (List<?>) m.get("tool_calls");
-                pendingToolCount = tcs != null ? tcs.size() : 0;
-            } else if ("tool".equals(role) && pendingToolCount > 0) {
-                // 保留 tool 结果（包含工具的实质输出）
+                // 保留 tool_calls 以维持 API 配对约束；摘要不需要参数细节，但保留结构
                 result.add(m);
+                List<?> tcs = (List<?>) m.get("tool_calls");
+                pendingToolCount += tcs != null ? tcs.size() : 0;
+            } else if ("tool".equals(role) && pendingToolCount > 0) {
+                // 保留 tool 结果（包含工具的实质输出），但截断过长内容
+                String content = (String) m.getOrDefault("content", "");
+                if (content.length() > 4000) {
+                    Map<String, Object> truncated = new LinkedHashMap<>(m);
+                    truncated.put("content", content.substring(0, 4000)
+                            + "\n\n[… truncated for summary …]");
+                    result.add(truncated);
+                } else {
+                    result.add(m);
+                }
                 pendingToolCount--;
             } else if ("tool".equals(role)) {
-                // 孤立的 tool 消息（无对应 tool_calls 的），丢弃
-                continue;
+                continue; // 孤立 tool，丢弃
             } else {
                 result.add(m);
+            }
+        }
+        // 末尾未配对的 tool_calls → 剥离最后一个 assistant 的 tool_calls
+        // （仅当 tool 结果缺失时此分支触发，历史中很少出现）
+        if (pendingToolCount > 0) {
+            for (int i = result.size() - 1; i >= 0; i--) {
+                Map<String, Object> m = result.get(i);
+                if ("assistant".equals(m.get("role")) && m.containsKey("tool_calls")) {
+                    Map<String, Object> stripped = new LinkedHashMap<>();
+                    stripped.put("role", "assistant");
+                    if (m.containsKey("content")) stripped.put("content", m.get("content"));
+                    if (m.containsKey("reasoning_content")) stripped.put("reasoning_content", m.get("reasoning_content"));
+                    result.set(i, stripped);
+                    // 同步删除该 assistant 之后所有孤儿 tool 消息
+                    for (int j = result.size() - 1; j > i; j--) {
+                        if ("tool".equals(result.get(j).get("role"))) {
+                            result.remove(j);
+                        }
+                    }
+                    break;
+                }
             }
         }
         return result;
