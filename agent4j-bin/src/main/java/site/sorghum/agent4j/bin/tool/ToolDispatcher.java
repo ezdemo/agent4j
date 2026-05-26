@@ -86,9 +86,9 @@ public class ToolDispatcher {
         // Plan Mode 门控
         if (planMode && !tool.readOnly) {
             return "{\"error\":\"" + name
-                    + ": unavailable in plan mode — this is a read-only exploration phase. "
-                    + "Use read_file / glob / grep / tree / get_file_info to investigate. "
-                    + "Call submit_plan with your proposed plan when ready for review."
+                    + ": 计划模式下不可用——当前为只读探索阶段。"
+                    + "请使用 read_file / glob / grep / tree / get_file_info 调查代码。"
+                    + "准备好后调用 submit_plan 提交计划供审批。"
                     + "\",\"rejectedReason\":\"plan-mode\"}";
         }
 

@@ -54,9 +54,9 @@ public class StormBreaker {
         }
         if (count >= THRESHOLD - 1) {
             return new SuppressResult(true,
-                    "storm-guard: " + name + " called with identical args " + (count + 1)
-                            + " times — suppressed. DO NOT retry with identical args. "
-                            + "If the intent is still valid, call with different arguments or pick a different tool.");
+                    "风暴断路器: " + name + " 被相同参数调用了 " + (count + 1)
+                            + " 次——已抑制。请勿使用相同参数重试。"
+                            + "如果意图仍然有效，请换用不同参数或改用其他工具。");
         }
 
         if (!readOnly) {

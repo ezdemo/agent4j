@@ -163,8 +163,8 @@ public class ContextFolding {
      * @return 摘要文本，失败时返回 null
      */
     private static String summarize(List<Map<String, Object>> head, ModelClient client) throws IOException {
-        String sp = "You are a conversation history summarizer for a coding agent. "
-                + "Output ONE concise Chinese paragraph that preserves:\n"
+        String sp = "你是一个编码助手的对话历史摘要器。"
+                + "输出一段简洁的中文段落，包含以下内容：\n"
                 + "- 用户的整体目标\n"
                 + "- 已完成的决策和结论\n"
                 + "- 已检查或修改的文件\n"

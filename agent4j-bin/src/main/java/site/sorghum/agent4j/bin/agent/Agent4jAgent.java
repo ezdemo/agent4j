@@ -273,7 +273,11 @@ public class Agent4jAgent {
                 + "会被 dispatch 拒绝并返回 'unavailable in plan mode'。\n"
                 + "计划模式下只读工具（read_file / glob / grep / tree / get_file_info / web_search）正常使用。\n"
                 + "你需要先探索代码库，然后用 submit_plan 提交计划。\n"
-                + "用户审批或输入 /execute 退出计划模式后，所有工具恢复正常。";
+                + "用户审批或输入 /execute 退出计划模式后，所有工具恢复正常。\n\n"
+                + "## CRITICAL: 思考语言规则\n\n"
+                + "你的思考过程（reasoning/thinking）必须全程使用中文。\n"
+                + "禁止使用英文进行任何内部思考，只有最终输出代码或特定术语时可以使用英文。\n"
+                + "这是最高优先级规则，覆盖所有其他默认行为。违反此规则意味着你没有遵循用户指令。";
         Path workspace = Paths.get(".").toAbsolutePath();
         int maxSteps = 20;
         Set<String> disabledTools;
