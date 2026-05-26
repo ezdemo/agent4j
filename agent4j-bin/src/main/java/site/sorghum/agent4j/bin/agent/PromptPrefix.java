@@ -17,8 +17,8 @@ import java.util.Objects;
  */
 public class PromptPrefix {
 
-    /** 系统提示词（turn 之间稳定） */
-    public final String system;
+    /** 系统提示词（turn 之间稳定，计划模式切换时会被替换） */
+    public String system;
     /** 工具定义列表（注册后冻结） */
     private final List<Map<String, Object>> toolSpecs;
     /** 缓存指纹 */
@@ -47,12 +47,7 @@ public class PromptPrefix {
 
     /** 替换系统提示词（计划模式切换时用，会导致下一次 API 调用缓存 miss） */
     public void replaceSystem(String newSystem) {
-        // system 是 final 字段，但我们需要运行时替换
-        try {
-            java.lang.reflect.Field f = PromptPrefix.class.getDeclaredField("system");
-            f.setAccessible(true);
-            f.set(this, newSystem);
-        } catch (Exception ignored) {}
+        this.system = newSystem;
         this.fingerprintCache = computeFingerprint();
     }
 
