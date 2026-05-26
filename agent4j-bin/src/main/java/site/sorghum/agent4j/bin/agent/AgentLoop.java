@@ -47,18 +47,16 @@ public class AgentLoop {
         this.ctx = ctx;
     }
 
-    /** 手动触发上下文折叠（/compact 命令） */
+    /** 手动触发上下文折叠（/compact 命令）— 保留近20条消息，较早消息摘要 */
     public void compactNow() throws IOException {
         List<Map<String, Object>> messages = ctx.buildMessages();
-        // 50K 触发阈值，让手动 /compact 轻量运作
-        int compactThreshold = Math.max(50_000, KEEP_TAIL_CHARS + 10_000);
-        List<Map<String, Object>> folded = ContextFolding.fold(
-                messages, compactThreshold, KEEP_TAIL_CHARS, client);
-        if (folded.size() < messages.size()) {
+        List<Map<String, Object>> folded = ContextFolding.foldKeepLast(
+                messages, 20, client);
+        if (folded.size() < ctx.size()) {
             ctx.compact(folded);
-            output.onLog(AgentOutput.LogLevel.INFO, "[compact] " + messages.size() + " → " + folded.size() + " 条消息");
+            output.onLog(AgentOutput.LogLevel.INFO, "[compact] " + ctx.size() + " 条消息（保留近20条，较早消息已摘要）");
         } else {
-            output.onLog(AgentOutput.LogLevel.INFO, "[compact] 无需折叠");
+            output.onLog(AgentOutput.LogLevel.INFO, "[compact] 无需折叠（总消息数 ≤ 20）");
         }
     }
 

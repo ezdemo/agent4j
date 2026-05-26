@@ -273,6 +273,88 @@ public class ContextFolding {
         return new ArrayList<>(msgs.subList(Math.max(0, start), msgs.size()));
     }
 
+    /**
+     * 基于消息条数的折叠策略：保留尾部 N 条消息，之前的消息压缩为一段摘要。
+     * 用于 /compact 命令。
+     *
+     * @param messages  当前全部消息（含 system prompt）
+     * @param keepCount 保留的尾部消息条数
+     * @param client    API 客户端
+     * @return 折叠后的消息列表（不含 system prompt，用于替换 history），未触发时返回原 history
+     */
+    public static List<Map<String, Object>> foldKeepLast(
+            List<Map<String, Object>> messages,
+            int keepCount,
+            ModelClient client) throws IOException {
+
+        if (messages.isEmpty()) return new ArrayList<>();
+        if (messages.size() < 2) return new ArrayList<>(messages); // 只有 system prompt
+
+        // 第一条是 system prompt，跳过
+        List<Map<String, Object>> history = messages.subList(1, messages.size());
+
+        if (history.size() <= keepCount) return new ArrayList<>(history);
+
+        // 计算分割点：保留尾部 keepCount 条
+        int split = history.size() - keepCount;
+
+        // 调整边界，避免切在 tool_calls/tool 对中间
+        int adjustedSplit = split;
+        for (int i = split; i < history.size(); i++) {
+            if ("tool".equals(history.get(i).get("role"))) {
+                // 向前退，包含对应的 assistant（含 tool_calls）
+                int back = i;
+                while (back > 0) {
+                    back--;
+                    Map<String, Object> prev = history.get(back);
+                    if ("assistant".equals(prev.get("role")) && prev.containsKey("tool_calls")) {
+                        adjustedSplit = Math.min(adjustedSplit, back);
+                        break;
+                    }
+                }
+            }
+        }
+
+        // 如果调整后分割点 <= 0，放弃折叠（几乎所有消息都是 tool 对）
+        if (adjustedSplit <= 0) return new ArrayList<>(history);
+
+        split = adjustedSplit;
+
+        List<Map<String, Object>> head = new ArrayList<>(history.subList(0, split));
+        List<Map<String, Object>> tail = new ArrayList<>(history.subList(split, history.size()));
+
+        // 确保 tail 没有孤立的 tool 消息
+        tail = ensureTailClean(tail);
+
+        if (head.isEmpty()) return new ArrayList<>(history);
+
+        // 为摘要构建完整消息（含 system prompt）
+        List<Map<String, Object>> headWithSystem = new ArrayList<>();
+        headWithSystem.add(messages.get(0)); // system prompt
+        headWithSystem.addAll(head);
+
+        String summary = summarize(headWithSystem, client);
+        if (summary == null || summary.trim().isEmpty()) {
+            System.err.println("[foldKeepLast] 摘要失败，跳过折叠");
+            return new ArrayList<>(history);
+        }
+
+        int dropped = head.size();
+        Map<String, Object> summaryMsg = new LinkedHashMap<>();
+        summaryMsg.put("role", "user");
+        summaryMsg.put("content", "[历史上下文折叠——以下 " + dropped + " 条较早消息已被摘要]\n" + summary.trim());
+
+        List<Map<String, Object>> result = new ArrayList<>();
+        result.add(summaryMsg);
+        result.addAll(tail);
+
+        int before = estimateChars(messages);
+        int after = estimateChars(result);
+        System.err.println("[foldKeepLast] " + dropped + " 条消息 → " + summary.length() + " 字符摘要（" + before + " → ~" + after + " 字符）");
+
+        return result;
+    }
+
     // ==================== 字符估算 ====================
 
     /**
