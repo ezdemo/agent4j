@@ -28,6 +28,23 @@ public class WriteFileTool extends AgentTool {
     }
 
     @Override
+    public String toToolSpec() {
+        return "### write_file\n\n"
+                + "描述：创建新文件或覆盖已有文件的内容。父目录会自动创建。\n\n"
+                + "## 使用指南\n\n"
+                + "1. **创建新文件**：指定 path 和 content，父目录不存在时会自动创建\n"
+                + "2. **覆盖已有文件**：会直接覆盖，不可恢复——确认文件内容后再使用\n"
+                + "3. **编辑已有文件**：推荐使用 edit_file（SEARCH/REPLACE）而非 write_file，\n"
+                + "   因为 edit_file 更精确且有验证\n"
+                + "4. **大文件创建**：没有大小限制，但过大的文件会影响 LLM 上下文\n\n"
+                + "参数：\n"
+                + "  - path (string, 必填): 文件路径（相对于工作区根目录）\n"
+                + "  - content (string, 必填): 文件内容\n\n"
+                + "只读：否\n"
+                + "风暴豁免：否";
+    }
+
+    @Override
     public List<ToolParameter> getParameters() {
         return Arrays.asList(
                 new ToolParameter("path", "string", true, "文件路径（相对于工作区根目录）"),

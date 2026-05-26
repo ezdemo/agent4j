@@ -23,19 +23,27 @@ public class ToolDef {
     public final boolean readOnly;
     /** true = storm 豁免（廉价检查工具免检） */
     public final boolean stormExempt;
+    /** 纯文本工具规范（用于嵌入 system prompt），为空时自动生成 */
+    public final String toolSpec;
 
     public ToolDef(String name, String description, List<ParamDef> params, ToolFn fn) {
-        this(name, description, params, fn, false, false);
+        this(name, description, params, fn, false, false, null);
     }
 
     public ToolDef(String name, String description, List<ParamDef> params, ToolFn fn,
                    boolean readOnly, boolean stormExempt) {
+        this(name, description, params, fn, readOnly, stormExempt, null);
+    }
+
+    public ToolDef(String name, String description, List<ParamDef> params, ToolFn fn,
+                   boolean readOnly, boolean stormExempt, String toolSpec) {
         this.name = name;
         this.description = description;
         this.params = params;
         this.fn = fn;
         this.readOnly = readOnly;
         this.stormExempt = stormExempt;
+        this.toolSpec = toolSpec != null ? toolSpec : "";
     }
 
     /** 生成 OpenAI function-calling 格式的 parameters schema */
@@ -58,6 +66,14 @@ public class ToolDef {
             schema.put("required", required);
         }
         return schema;
+    }
+
+    /**
+     * 生成纯文本格式的工具规范（用于嵌入 system prompt）。
+     * 返回 toolSpec 字段值，若为空则返回空字符串。
+     */
+    public String toToolSpec() {
+        return toolSpec != null && !toolSpec.isEmpty() ? toolSpec : "";
     }
 
     /** 参数定义 */

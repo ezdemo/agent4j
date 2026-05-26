@@ -47,6 +47,27 @@ public class TerminalTool extends AgentTool {
     public String getDescription() { return DESCRIPTION; }
 
     @Override
+    public String toToolSpec() {
+        return "### run_command\n\n"
+                + "描述：在工作区根目录执行 shell 命令，返回合并的 stdout+stderr。\n\n"
+                + "## 使用指南\n\n"
+                + "1. **构建项目**：使用 `mvn compile -pl <模块名>` 或 `mvn test -pl <模块名>`\n"
+                + "2. **运行测试**：`mvn test -pl <模块名>`\n"
+                + "3. **链式命令**：支持 `&&`（前一个成功后执行）、`||`（前一个失败后执行）、`|`（管道）\n"
+                + "4. **超时控制**：默认 60 秒，可通过 timeoutSec 参数调整（最长 300 秒）\n"
+                + "5. **工作目录**：命令总是在工作区根目录执行\n\n"
+                + "## 注意事项\n\n"
+                + "- 长时间运行的服务器进程请使用 run_background 工具\n"
+                + "- 复杂的多步操作可以用 `&&` 链接\n"
+                + "- 需要管理员权限的命令可能失败\n\n"
+                + "参数：\n"
+                + "  - command (string, 必填): 要执行的命令\n"
+                + "  - timeoutSec (int, 可选): 超时秒数，默认 60，上限 300\n\n"
+                + "只读：否\n"
+                + "风暴豁免：否";
+    }
+
+    @Override
     public List<ToolParameter> getParameters() { return PARAMETERS; }
 
     @Override

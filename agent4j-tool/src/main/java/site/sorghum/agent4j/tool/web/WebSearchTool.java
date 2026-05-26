@@ -31,6 +31,20 @@ public class WebSearchTool extends AgentTool {
     }
 
     @Override
+    public String toToolSpec() {
+        return "### web_search\n\n"
+                + "描述：通过 DuckDuckGo Lite 搜索互联网。返回带有标题、URL 和摘要的排序结果。\n\n"
+                + "## 使用指南\n\n"
+                + "1. **搜索技术问题**：搜索 API 文档、错误信息、最佳实践等\n"
+                + "2. **获取最新信息**：框架/库的版本更新、已知问题等\n"
+                + "3. **搜索限定**：可以通过 query 关键词精确定位搜索结果\n\n"
+                + "参数：\n"
+                + "  - query (string, 必填): 搜索查询语句\n\n"
+                + "只读：是\n"
+                + "风暴豁免：是";
+    }
+
+    @Override
     public List<ToolParameter> getParameters() {
         return Collections.singletonList(
                 new ToolParameter("query", "string", true, "搜索查询")

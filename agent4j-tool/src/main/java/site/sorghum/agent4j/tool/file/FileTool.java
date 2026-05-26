@@ -57,6 +57,34 @@ public class FileTool extends AgentTool {
     public String getDescription() { return DESCRIPTION; }
 
     @Override
+    public String toToolSpec() {
+        return "### file\n\n"
+                + "描述：工作区文件系统操作工具。所有路径限制在工作区根目录内（路径穿越防护）。\n\n"
+                + "## 支持的操作类型\n\n"
+                + "| 操作 | 说明 | 必填参数 |\n"
+                + "|------|------|---------|\n"
+                + "| create_dir | 创建目录（含父目录） | path |\n"
+                + "| create_file | 创建/覆盖文件 | path, content? |\n"
+                + "| delete_file | 删除文件 | path |\n"
+                + "| delete_dir | 递归删除目录 | path |\n"
+                + "| move | 移动/重命名 | path, destination |\n"
+                + "| copy | 复制文件或目录 | path, destination |\n"
+                + "| stat | 查看文件/目录元信息 | path |\n\n"
+                + "## 注意事项\n\n"
+                + "- 所有路径都是相对于工作区根目录的\n"
+                + "- 路径穿越防护：禁止访问工作区根目录之外的路径\n"
+                + "- create_file 如果不传 content，会创建空文件\n"
+                + "- delete_dir 会递归删除目录及其所有子文件和子目录\n\n"
+                + "参数：\n"
+                + "  - action (string, 必填): 操作类型\n"
+                + "  - path (string, 必填): 目标路径\n"
+                + "  - destination (string, 可选): 目标路径（move/copy 时必填）\n"
+                + "  - content (string, 可选): 文件内容（create_file 时使用）\n\n"
+                + "只读：否\n"
+                + "风暴豁免：否";
+    }
+
+    @Override
     public List<ToolParameter> getParameters() { return PARAMETERS; }
 
     @Override

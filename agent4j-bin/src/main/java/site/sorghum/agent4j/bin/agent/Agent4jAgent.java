@@ -54,8 +54,15 @@ public class Agent4jAgent {
             System.err.println("[config] 已屏蔽目录: " + String.join(", ", blockedPaths));
         }
 
+        // 存储所有工具的 toToolSpec 结果，用于追加到 system prompt
+        StringBuilder toolSpecsBuilder = new StringBuilder();
+        toolSpecsBuilder.append("\n\n## 可用工具规范\n\n");
+
         // 通过 getBeansOfType 同步获取所有 AgentTool 子类 Bean
         for (AgentTool tool : org.noear.solon.Solon.context().getBeansOfType(AgentTool.class)) {
+            // 获取工具的 toToolSpec() 纯文本规范
+            String toolSpec = tool.toToolSpec();
+            // 注册到 ToolDef，同时传递 toolSpec
             registry.register(new ToolDef(
                     tool.getName(),
                     tool.getDescription(),
@@ -63,7 +70,12 @@ public class Agent4jAgent {
                     args -> formatResult(tool.execute(
                             new ToolContext(args, workspace, apiUrl, apiKey, registry, blockedPaths))),
                     tool.isReadOnly(),
-                    tool.isStormExempt()));
+                    tool.isStormExempt(),
+                    toolSpec));
+            // 收集工具规范文本
+            if (toolSpec != null && !toolSpec.isEmpty()) {
+                toolSpecsBuilder.append(toolSpec).append("\n\n---\n\n");
+            }
         }
 
         // 加载项目文档（agent4j.md / CLAUDE.md），追加到 system prompt
@@ -72,6 +84,8 @@ public class Agent4jAgent {
         if (!projectMd.isEmpty()) {
             systemPrompt = projectMd + "\n\n---\n\n" + systemPrompt;
         }
+        // 将工具规范追加到 system prompt 末尾
+        systemPrompt = systemPrompt + "\n\n" + toolSpecsBuilder.toString().trim();
 
         // 构建缓存优先前缀：system prompt + 工具定义（注册后冻结，跨 turn 稳定）
         PromptPrefix prefix = new PromptPrefix(systemPrompt, registry.toOpenAiTools());

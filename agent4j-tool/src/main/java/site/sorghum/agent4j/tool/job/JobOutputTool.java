@@ -30,6 +30,27 @@ public class JobOutputTool extends AgentTool {
     }
 
     @Override
+    public String toToolSpec() {
+        return "### job_output\n\n"
+                + "描述：读取后台作业的最新输出。配合 run_background 使用，轮询查看作业进展。\n\n"
+                + "## 使用指南\n\n"
+                + "1. **首次读取**：传入 jobId 获取最近 80 行输出\n"
+                + "2. **增量读取**：用 since 参数指定字节偏移量，只返回新内容\n"
+                + "3. **行数控制**：用 tailLines 控制返回行数\n\n"
+                + "## 相关工具\n\n"
+                + "- run_background — 启动后台作业\n"
+                + "- wait_for_job — 等待作业完成\n"
+                + "- stop_job — 停止作业\n"
+                + "- list_jobs — 列出所有作业\n\n"
+                + "参数：\n"
+                + "  - jobId (int, 必填): 后台作业 ID\n"
+                + "  - since (int, 可选): 字节偏移量，用于增量读取\n"
+                + "  - tailLines (int, 可选): 返回最后 N 行（默认 80）\n\n"
+                + "只读：是\n"
+                + "风暴豁免：是";
+    }
+
+    @Override
     public List<ToolParameter> getParameters() {
         return Arrays.asList(
                 new ToolParameter("jobId", "int", true, "Job id from run_background"),

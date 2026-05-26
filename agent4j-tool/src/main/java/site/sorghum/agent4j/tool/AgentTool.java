@@ -66,19 +66,13 @@ public abstract class AgentTool {
 
     /**
      * 生成给模型看的工具定义摘要（用于系统提示）。
+     * <p>
+     * 默认返回空字符串，不生成自动规范。
+     * 需要提供详细工具说明的子类应重写此方法。
+     * </p>
      */
     public String toToolSpec() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("## ").append(getName()).append("\n");
-        sb.append(getDescription()).append("\n\n");
-        sb.append("参数：\n");
-        for (ToolParameter p : getParameters()) {
-            sb.append("- ").append(p.getName())
-                    .append(" (").append(p.getType())
-                    .append(p.isRequired() ? ", 必填" : ", 可选")
-                    .append("): ").append(p.getDescription()).append("\n");
-        }
-        return sb.toString();
+        return "";
     }
 
     @Override

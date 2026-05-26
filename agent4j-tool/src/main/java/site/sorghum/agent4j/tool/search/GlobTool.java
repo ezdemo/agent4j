@@ -59,6 +59,29 @@ public class GlobTool extends AgentTool {
     }
 
     @Override
+    public String toToolSpec() {
+        return "### glob\n\n"
+                + "描述：按 glob 模式匹配文件名。基于工作区索引缓存，毫秒级响应。\n"
+                + "结果按修改时间倒序排列（最近改动的文件排在最前）。\n\n"
+                + "## 模式语法\n\n"
+                + "| 模式 | 匹配 |\n"
+                + "|------|------|\n"
+                + "| `**` | 任意多级目录 |\n"
+                + "| `*` | 单级内任意字符（不含路径分隔符） |\n"
+                + "| `?` | 单个任意字符 |\n"
+                + "| `{a,b}` | 分支选择 |\n\n"
+                + "## 示例\n\n"
+                + "- `**/*.java` — 所有 Java 文件\n"
+                + "- `src/**/*Test*.ts` — src 目录下所有包含 Test 的 TypeScript 文件\n"
+                + "- `*.{md,mdx}` — 根目录下的 Markdown 文件\n\n"
+                + "参数：\n"
+                + "  - pattern (string, 必填): glob 模式\n"
+                + "  - maxResults (int, 可选): 最大返回条数，默认 200\n\n"
+                + "只读：是\n"
+                + "风暴豁免：是";
+    }
+
+    @Override
     public List<ToolParameter> getParameters() {
         return PARAMETERS;
     }
