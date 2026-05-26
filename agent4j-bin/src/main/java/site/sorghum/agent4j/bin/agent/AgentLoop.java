@@ -115,10 +115,14 @@ public class AgentLoop {
             boolean foldedThisStep = false;
             int maxCtx = client.getMaxContextTokens();
             int tokenThreshold = (int)(maxCtx * 0.8);
-            boolean needFold = (lastPromptTokens > 0 && lastPromptTokens > tokenThreshold)
-                    || (lastPromptTokens == 0 && ContextFolding.estimateChars(messages) > MAX_TOTAL_CHARS);
+
+            // 没有真实 token 数时（加载历史会话 / 首次运行），用字符估算
+            int estimatedPromptTokens = lastPromptTokens > 0
+                    ? lastPromptTokens
+                    : ContextFolding.estimateChars(messages) / 2;
+            boolean needFold = estimatedPromptTokens > tokenThreshold;
             if (needFold) {
-                output.onLog(AgentOutput.LogLevel.INFO, "[fold] 触发折叠: lastPromptTokens=" + lastPromptTokens
+                output.onLog(AgentOutput.LogLevel.INFO, "[fold] 触发折叠: estimatedTokens=" + estimatedPromptTokens
                         + " threshold=" + tokenThreshold + " maxCtx=" + maxCtx);
                 messages = ContextFolding.fold(messages, MAX_TOTAL_CHARS, KEEP_TAIL_CHARS, client);
                 if (messages.size() < ctx.size()) {
