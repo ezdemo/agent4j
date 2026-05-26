@@ -62,7 +62,7 @@ public class Agent4jAgent {
         // 通过 getBeansOfType 同步获取所有 AgentTool 子类 Bean
         List<AgentTool> agentTools = new ArrayList<>(Solon.context().getBeansOfType(AgentTool.class));
         // 排序保证前缀一致
-        agentTools.sort(Comparator.comparing(it -> it.getClass().hashCode()));
+        agentTools.sort(Comparator.comparing(it -> it.getClass().getName()));
         for (AgentTool tool : agentTools) {
             // 获取工具的 toToolSpec() 纯文本规范
             String toolSpec = tool.toToolSpec();
