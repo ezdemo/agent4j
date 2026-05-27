@@ -144,6 +144,9 @@ export const chatAPI = {
 }
 
 // Agent API
+// 注意：retry/rewind/compact/plan/hitl/agree/deny 等命令操作
+// 已由 Agent4jAgent.chat() 通过 ChatCommandRegistry 统一处理。
+// 前端直接发送命令字符串（如 "/retry"）到聊天接口即可。
 export const agentAPI = {
   // 获取Agent状态 - GET /api/agent/status
   getStatus: () => {
@@ -155,54 +158,18 @@ export const agentAPI = {
     return api.get('/agent/history')
   },
   
-  // 撤回并重试 - POST /api/agent/retry
-  retryLast: () => {
-    return api.post('/agent/retry')
-  },
-  
-  // 回退到指定轮次 - POST /api/agent/rewind
-  rewind: (step) => {
-    return api.post('/agent/rewind', { step })
-  },
-  
-  // 折叠上下文 - POST /api/agent/compact
-  compact: () => {
-    return api.post('/agent/compact')
-  },
-  
-  // 进入计划模式 - POST /api/agent/plan/enable
-  enablePlanMode: () => {
-    return api.post('/agent/plan/enable')
-  },
-  
-  // 退出计划模式 - POST /api/agent/plan/disable
-  disablePlanMode: () => {
-    return api.post('/agent/plan/disable')
-  },
-  
-  // 获取HITL状态 - GET /api/agent/hitl/status
-  getHitlStatus: () => {
-    return api.get('/agent/hitl/status')
-  },
-  
-  // 切换HITL模式 - POST /api/agent/hitl/toggle
-  toggleHitl: () => {
-    return api.post('/agent/hitl/toggle')
-  },
-  
-  // 批准HITL - POST /api/agent/hitl/approve
-  approveHitl: () => {
-    return api.post('/agent/hitl/approve')
-  },
-  
-  // 拒绝HITL - POST /api/agent/hitl/deny
-  denyHitl: () => {
-    return api.post('/agent/hitl/deny')
-  },
-  
-  // 获取待审批列表 - GET /api/agent/hitl/pending
-  getPendingHitl: () => {
-    return api.get('/agent/hitl/pending')
+  // 以下命令操作通过聊天接口发送命令字符串实现：
+  //   retryLast:   chatAPI.sendMessage('/retry')
+  //   rewind(N):   chatAPI.sendMessage('/rewind ' + N)
+  //   compact:     chatAPI.sendMessage('/compact')
+  //   enablePlanMode:  chatAPI.sendMessage('/plan')
+  //   disablePlanMode: chatAPI.sendMessage('/execute')
+  //   toggleHitl:  chatAPI.sendMessage('/hitl')
+  //   approveHitl: chatAPI.sendMessage('/agree')
+  //   denyHitl:    chatAPI.sendMessage('/deny')
+  // 直接调用聊天的通用命令方法
+  runCommand: (command) => {
+    return api.post('/chat', { message: command })
   }
 }
 

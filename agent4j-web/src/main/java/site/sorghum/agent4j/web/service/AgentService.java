@@ -3,20 +3,20 @@ package site.sorghum.agent4j.web.service;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
 
+import org.noear.solon.annotation.Inject;
 import site.sorghum.agent4j.bin.agent.Agent4jAgent;
 import site.sorghum.agent4j.bin.agent.AgentLoopListener;
 import site.sorghum.agent4j.bin.agent.AgentOutput;
+import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.bin.session.SessionStore;
 import site.sorghum.agent4j.bin.tool.ToolDef;
-import site.sorghum.agent4j.bin.tool.ToolRegistry;
 
 import org.noear.snack4.ONode;
+import org.noear.solon.Solon;
 
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.locks.ReentrantLock;
 
 /**
  * Agent 单例服务 —— 管理 Agent4jAgent 的生命周期和并发访问。
@@ -25,13 +25,22 @@ import java.util.concurrent.locks.ReentrantLock;
  * 同时提供 SSE 事件桥接：将 AgentOutput 事件实时转发到 SseEmitter。
  * </p>
  *
+ * <p>
+ * <strong>关于命令操作：</strong>retry/rewind/compact/plan/hitl/agree/deny 等命令
+ * 已由 {@link site.sorghum.agent4j.bin.command.ChatCommandRegistry} 在
+ * {@link Agent4jAgent#chat(String)} 中统一处理。前端直接发送命令字符串
+ * （如 {@code "/retry"}、{@code "/compact"}）到聊天接口即可，
+<skilltt> * 无需额外 REST API。</p>
+ *
  * @author Sorghum
  */
 @Component
 public class AgentService {
 
+    @Inject
+    ChatCommandRegistry commandRegistry;
     private volatile Agent4jAgent agent;
-    private final ReentrantLock chatLock = new ReentrantLock();
+    private final java.util.concurrent.locks.ReentrantLock chatLock = new java.util.concurrent.locks.ReentrantLock();
 
     /** 当前 SSE 输出（每次请求创建一个新的） */
     private volatile SseEmitter currentSseEmitter;
@@ -50,12 +59,14 @@ public class AgentService {
                 return;
             }
 
+
             agent = Agent4jAgent.builder()
                     .config(config)
                     .apiUrl(apiUrl)
                     .apiKey(apiKey)
                     .model(model)
                     .workspace(config.workspaceDir())
+                    .commandRegistry(commandRegistry)
                     .build();
 
             // 注册 token 用量追踪
@@ -91,6 +102,10 @@ public class AgentService {
 
     /**
      * 同步聊天 —— 串行执行，返回完整回复。
+     * <p>
+     * 命令字符串（如 "/retry"、"/compact"）会由 Agent4jAgent.chat()
+     * 自动路由到 {@link site.sorghum.agent4j.bin.command.ChatCommandRegistry} 处理。
+     * </p>
      */
     public String chat(String message) throws IOException, InterruptedException {
         chatLock.lock();
@@ -106,6 +121,9 @@ public class AgentService {
 
     /**
      * 流式聊天 —— 通过 AgentOutput 桥接到 SseEmitter。
+     * <p>
+     * 命令字符串同样在此通道处理，命令的输出通过 SSE 事件返回。
+     * </p>
      */
     public void chatStream(String message, SseEmitter emitter) throws IOException, InterruptedException {
         chatLock.lock();
@@ -120,9 +138,7 @@ public class AgentService {
                 }
 
                 @Override
-                public void onContentComplete() {
-                    // 流式内容结束，但整体对话可能还没完
-                }
+                public void onContentComplete() {}
 
                 @Override
                 public void onReasoningDelta(String token) {
@@ -162,14 +178,10 @@ public class AgentService {
                 }
 
                 @Override
-                public void onLog(LogLevel level, String message) {
-                    // 可选：将日志也推送到 SSE
-                }
+                public void onLog(LogLevel level, String message) {}
 
                 @Override
-                public void onMessage(String message) {
-                    // 普通消息
-                }
+                public void onMessage(String message) {}
             });
 
             String reply = agent.chat(message);
@@ -233,7 +245,7 @@ public class AgentService {
         return info;
     }
 
-    // ==================== Agent 状态与控制 ====================
+    // ==================== Agent 状态 ====================
 
     public Map<String, Object> getStatus() {
         requireAgent();
@@ -256,57 +268,13 @@ public class AgentService {
         return status;
     }
 
-    public String retryLast() throws IOException {
-        requireAgent();
-        return agent.retryLast();
-    }
-
-    public String rewind(int step) throws IOException {
-        requireAgent();
-        return agent.rewind(step);
-    }
-
-    public void compact() throws IOException {
-        requireAgent();
-        agent.compact();
-    }
-
     public List<Map<String, Object>> getHistory() {
         requireAgent();
-        // 通过反射或公开 API 获取历史消息
-        // Agent4jAgent 没有直接暴露 getHistory，但可以通过 sessionStore.load() 获取
         try {
             return agent.getSessionStore().load();
         } catch (Exception e) {
             return new ArrayList<>();
         }
-    }
-
-    public void setPlanMode(boolean enabled) {
-        requireAgent();
-        agent.setPlanMode(enabled);
-    }
-
-    // ==================== HITL ====================
-
-    public void toggleHitl() {
-        requireAgent();
-        agent.toggleHitl();
-    }
-
-    public void approveHitl() {
-        requireAgent();
-        agent.approveHITL();
-    }
-
-    public void denyHitl() {
-        requireAgent();
-        agent.denyHITL();
-    }
-
-    public List<Map<String, Object>> getPendingHitl() {
-        requireAgent();
-        return agent.getPendingHITTcList();
     }
 
     // ==================== 工具 ====================
@@ -317,8 +285,8 @@ public class AgentService {
         if (registry == null) return new ArrayList<>();
 
         List<Map<String, Object>> result = new ArrayList<>();
-        for (Map.Entry<String, site.sorghum.agent4j.bin.tool.ToolDef> entry : registry.all().entrySet()) {
-            site.sorghum.agent4j.bin.tool.ToolDef def = entry.getValue();
+        for (Map.Entry<String, ToolDef> entry : registry.all().entrySet()) {
+            ToolDef def = entry.getValue();
             Map<String, Object> m = new LinkedHashMap<>();
             m.put("name", def.name);
             m.put("description", def.description);
@@ -334,7 +302,7 @@ public class AgentService {
         requireAgent();
         site.sorghum.agent4j.bin.tool.ToolRegistry registry = agent.getToolRegistry();
         if (registry == null) return null;
-        site.sorghum.agent4j.bin.tool.ToolDef def = registry.get(name);
+        ToolDef def = registry.get(name);
         if (def == null) return null;
 
         Map<String, Object> m = new LinkedHashMap<>();
@@ -350,7 +318,7 @@ public class AgentService {
         requireAgent();
         site.sorghum.agent4j.bin.tool.ToolRegistry registry = agent.getToolRegistry();
         if (registry == null) throw new IllegalStateException("ToolRegistry 未初始化");
-        site.sorghum.agent4j.bin.tool.ToolDef def = registry.get(name);
+        ToolDef def = registry.get(name);
         if (def == null) throw new IllegalArgumentException("未知工具: " + name);
         return def.fn.call(arguments != null ? arguments : new LinkedHashMap<String, Object>());
     }

@@ -137,8 +137,24 @@ agent4j/
 │           ├── InteractionService.java  # 用户交互服务
 │           └── CodeQueryService.java    # 代码查询服务
 │
-├── agent4j-web/                         # Web 模块（当前为空，待实现）
-│   └── pom.xml
+├── agent4j-web/                         # Web REST API 模块
+│   ├── pom.xml
+│   └── src/main/java/site/sorghum/agent4j/web/
+│       ├── Agent4jWebApp.java           # ★ Web 入口（Solon）
+│       ├── controller/
+│       │   ├── ChatController.java      # 聊天 API（同步+SSE 流式）
+│       │   ├── SessionController.java   # 会话管理 API
+│       │   ├── AgentController.java     # Agent 状态查询 API
+│       │   ├── ToolController.java      # 工具管理 API
+│       │   └── ConfigController.java    # 配置与用量 API
+│       ├── service/
+│       │   ├── AgentService.java        # Agent 单例服务（串行锁保证线程安全）
+│       │   ├── SseEmitter.java          # SSE 流式输出工具类
+│       │   └── ApiAgentOutPut.java      # AgentOutput → SSE 桥接
+│       └── model/
+│           ├── ApiResponse.java         # 统一响应封装
+│           ├── ChatRequest.java         # 聊天请求体
+│           └── ToolExecuteRequest.java  # 工具执行请求体
 │
 ├── demo/                                # 演示 HTML 文件
 │   ├── community_life.html
@@ -252,6 +268,8 @@ AgentLoop.run(message)
 | **并行执行** | `AgentLoop` | CompletableFuture.allOf 并行分发工具调用 |
 | **CAS 替代锁** | `CountDownLatch` / `AtomicBoolean` | 流式等待无忙等待 |
 | **缓冲写入** | `JsonlSessionStore` | BufferedWriter 保持打开 + flush() 显式刷入 + 定时自动刷入，减少 IO 次数 |
+| **命令模式** | `ChatCommandRegistry` + `ChatCommand` | "/" 命令通过 Solon IoC 自动注册和匹配，新增命令只需实现接口并标注 @Component |
+| **单一入口** | `Agent4jAgent.chat()` | 用户输入（普通消息和 "/" 命令）统一经过此入口，由 ChatCommandRegistry 自动路由分发 |
 
 ### 会话生命周期
 
@@ -415,10 +433,14 @@ java -cp agent4j-bin/target/classes:agent4j-tool/target/classes \
   site.sorghum.agent4j.bin.Agent4jApp
 ```
 
-### 交互命令
+### 交互命令（CLI）
+
+所有以 "/" 开头的输入由 `Agent4jAgent.chat()` 自动路由到 `ChatCommandRegistry`，
+通过 Solon IoC 收集的 `ChatCommand` Bean 执行。Web 模式下同样发送命令字符串到聊天接口即可。
 
 | 命令 | 功能 |
 |------|------|
+| `/help` | 显示此帮助信息 |
 | `/new` | 开启新会话 |
 | `/plan` | 进入计划模式（仅只读工具可用） |
 | `/execute` | 退出计划模式 |
@@ -428,7 +450,10 @@ java -cp agent4j-bin/target/classes:agent4j-tool/target/classes \
 | `/sessions` | 列出历史会话 |
 | `/load N` | 加载指定会话 |
 | `/init` | 自动分析项目生成 agent4j.md |
-| `/exit` | 退出 |
+| `/hitl` | 切换 HITL 模式（工具执行前需审批） |
+| `/agree` | 批准 HITL 待执行的工具调用 |
+| `/deny` | 拒绝 HITL 待执行的工具调用 |
+| `/exit` | 退出（别名 `/quit`） |
 
 ### 测试
 
@@ -453,7 +478,9 @@ agent4j (父 POM)
   │     ├── 依赖: agent4j-tool
   │     └── 依赖: solon-web, solon-logging-logback, snack4, snack4-jsonpath
   │
-  └── agent4j-web     (Web 模块，当前为空)
+  └── agent4j-web     (Web REST API 模块)
+        └── 依赖: agent4j-bin
+        └── 依赖: solon-web, solon-logging-logback, snack4, snack4-jsonpath
 ```
 
 ---
@@ -469,6 +496,7 @@ agent4j (父 POM)
 7. **原子编辑与回滚** — `multi_edit` 全验证→全写入→失败回滚，确保数据一致性
 8. **子代理隔离** — `SubAgent` 创建独立循环，排除递归 spawn 和用户交互工具，专注复杂任务
 9. **缓冲写入与会话安全** — `JsonlSessionStore` 使用 `BufferedWriter` 保持打开，避免每次 IO 打开/关闭开销；提供 `flush()` 显式刷入 + `ScheduledExecutorService` 每 30 秒自动刷入，确保数据不丢失；`ReentrantLock` 保证线程安全
+10. **消除冗余** — Web 模块删除重复的命令 REST API，所有命令操作统一由 `Agent4jAgent.chat()` 通过 `ChatCommandRegistry` 处理，避免 Controller 层逻辑重复
 
 ---
 
