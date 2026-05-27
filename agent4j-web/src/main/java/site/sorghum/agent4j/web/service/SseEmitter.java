@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.web.service;
 
+import org.noear.snack4.ONode;
 import org.noear.solon.core.handle.Context;
 
 import java.io.IOException;
@@ -55,39 +56,36 @@ public class SseEmitter {
     }
 
     public void sendToolCall(String name, String args) {
-        StringBuilder sb = new StringBuilder("{");
-        sb.append("\"name\":\"").append(escapeJson(name)).append("\"");
+        ONode node = ONode.ofJson("{}").asObject();
+        node.set("name", name);
         if (args != null && !args.isEmpty()) {
-            sb.append(",\"args\":").append(args.startsWith("{") ? args : escapeJson(args));
+            node.set("args", ONode.ofJson(args));
         }
-        sb.append("}");
-        send("tool_call", sb.toString());
+        send("tool_call", node.toJson());
     }
 
     public void sendToolResult(String name, String result) {
-        StringBuilder sb = new StringBuilder("{");
-        sb.append("\"name\":\"").append(escapeJson(name)).append("\"");
-        sb.append(",\"result\":").append(escapeJson(result != null ? result : ""));
-        sb.append("}");
-        send("tool_result", sb.toString());
+        ONode node = ONode.ofJson("{}").asObject();
+        node.set("name", name);
+        node.set("result", result != null ? result : "");
+        send("tool_result", node.toJson());
     }
 
     public void sendUsage(int promptTokens, int completionTokens, int totalTokens,
                           int cacheHit, int cacheMiss) {
-        StringBuilder sb = new StringBuilder("{");
-        sb.append("\"promptTokens\":").append(promptTokens).append(",");
-        sb.append("\"completionTokens\":").append(completionTokens).append(",");
-        sb.append("\"totalTokens\":").append(totalTokens).append(",");
-        sb.append("\"cacheHit\":").append(cacheHit).append(",");
-        sb.append("\"cacheMiss\":").append(cacheMiss);
-        sb.append("}");
-        send("usage", sb.toString());
+        ONode node = ONode.ofJson("{}").asObject();
+        node.set("promptTokens", promptTokens);
+        node.set("completionTokens", completionTokens);
+        node.set("totalTokens", totalTokens);
+        node.set("cacheHit", cacheHit);
+        node.set("cacheMiss", cacheMiss);
+        send("usage", node.toJson());
     }
 
     public void complete() {
         if (completed.compareAndSet(false, true)) {
             try {
-                send("done", "{\"done\":true}");
+                send("done", "{}" );
                 out.flush();
                 out.close();
             } catch (IOException ignored) {}
@@ -96,12 +94,32 @@ public class SseEmitter {
     }
 
     public void sendError(String message) {
-        send("error", "{\"error\":\"" + escapeJson(message) + "\"}");
+        ONode node = ONode.ofJson("{}").asObject();
+        node.set("error", message != null ? message : "unknown error");
+        send("error", node.toJson());
         complete();
     }
 
     public boolean isCompleted() {
         return completed.get();
+    }
+
+    /**
+     * 阻塞当前线程直到 SSE 流结束（用于保持 handler 线程存活）。
+     */
+    public void awaitCompletion() {
+        try {
+            completionFuture.get();
+        } catch (InterruptedException | ExecutionException ignored) {}
+    }
+
+    /**
+     * 阻塞当前线程直到 SSE 流结束，或超时。
+     */
+    public void awaitCompletion(long timeoutMs) {
+        try {
+            completionFuture.get(timeoutMs, TimeUnit.MILLISECONDS);
+        } catch (InterruptedException | ExecutionException | TimeoutException ignored) {}
     }
 
     static String escapeJson(String s) {

@@ -64,28 +64,82 @@ export const chatAPI = {
   },
   
   // SSE流式聊天 - POST /api/chat/stream
-  sendMessageStream: (message, onMessage, onError) => {
-    return new Promise((resolve, reject) => {
-      const eventSource = new EventSource(`/api/chat/stream?message=${encodeURIComponent(message)}`)
-      
-      eventSource.onmessage = (event) => {
-        try {
-          const data = JSON.parse(event.data)
-          if (onMessage) onMessage(data)
-        } catch (e) {
-          console.error('解析SSE消息失败:', e)
+  sendMessageStream: (message, onMessage, onDone, onError) => {
+    const abortController = new AbortController()
+
+    ;(async () => {
+      try {
+        const res = await fetch('/api/chat/stream', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ message }),
+          signal: abortController.signal
+        })
+
+        if (!res.ok) {
+          const text = await res.text()
+          if (onError) onError(new Error(`HTTP ${res.status}: ${text}`))
+          return
         }
+
+        const reader = res.body.getReader()
+        const decoder = new TextDecoder()
+        let buffer = ''
+        let currentEventType = null // SSE event: 字段
+
+        while (true) {
+          const { done, value } = await reader.read()
+          if (done) break
+
+          buffer += decoder.decode(value, { stream: true })
+          const lines = buffer.split('\n')
+          buffer = lines.pop() // 保留未完成的行
+
+          for (const line of lines) {
+            const trimmed = line.trim()
+
+            if (trimmed === '') {
+              // 空行 = 事件分隔符，重置 eventType
+              currentEventType = null
+              continue
+            }
+            if (trimmed.startsWith(':')) continue // 注释行
+
+            if (trimmed.startsWith('event:')) {
+              currentEventType = trimmed.slice(6).trim()
+            } else if (trimmed.startsWith('data:')) {
+              const payload = trimmed.slice(5).trim()
+              if (payload === '[DONE]') {
+                if (onDone) onDone()
+                return
+              }
+
+              // 发送 { type, ...parsed } 给回调
+              try {
+                const parsed = JSON.parse(payload)
+                if (typeof parsed === 'string') {
+                  // reasoning/content 事件的 data 是 JSON 字符串如 "The"
+                  if (onMessage) onMessage({ type: currentEventType, content: parsed })
+                } else if (parsed && typeof parsed === 'object') {
+                  if (onMessage) onMessage({ type: currentEventType, ...parsed })
+                } else {
+                  if (onMessage) onMessage({ type: currentEventType, content: payload })
+                }
+              } catch (e) {
+                // 非 JSON 或格式异常，作为纯文本
+                if (onMessage) onMessage({ type: currentEventType, content: payload })
+              }
+              currentEventType = null // 重置
+            }
+          }
+        }
+        if (onDone) onDone()
+      } catch (err) {
+        if (err.name !== 'AbortError' && onError) onError(err)
       }
-      
-      eventSource.onerror = (error) => {
-        if (onError) onError(error)
-        eventSource.close()
-        reject(error)
-      }
-      
-      // 返回EventSource以便外部可以关闭
-      resolve(eventSource)
-    })
+    })()
+
+    return { abort: () => abortController.abort() }
   }
 }
 

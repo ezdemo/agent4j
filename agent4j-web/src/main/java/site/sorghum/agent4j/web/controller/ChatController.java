@@ -76,5 +76,8 @@ public class ChatController {
         }, "agent4j-chat-stream");
         chatThread.setDaemon(true);
         chatThread.start();
+
+        // ★ 关键：阻塞 handler 线程直到 SSE 流结束，防止 Solon 提前关闭 OutputStream
+        emitter.awaitCompletion();
     }
 }

@@ -167,8 +167,9 @@ const sendMessage = async () => {
   isTyping.value = true
   streaming.value = true
   
-  // 创建助手消息占位符
-  const assistantMessage = {
+  // 创建助手消息占位符（使用 reactive 保证 Vue 追踪更新）
+  const msgIndex = messages.value.length
+  messages.value.push({
     id: Date.now() + 1,
     role: 'assistant',
     content: '',
@@ -176,62 +177,88 @@ const sendMessage = async () => {
     thinking: '',
     showThinking: false,
     toolCalls: []
-  }
+  })
   
-  messages.value.push(assistantMessage)
+  // ★ 关键：通过 messages.value[index] 访问，确保操作的是 Vue reactive proxy
+  const getMsg = () => messages.value[msgIndex]
   
   try {
-    // 使用SSE流式聊天
-    const eventSource = new EventSource(`/api/chat/stream?message=${encodeURIComponent(text)}`)
-    currentEventSource.value = eventSource
-    
-    eventSource.onmessage = (event) => {
-      try {
-        const data = JSON.parse(event.data)
+    // 使用POST SSE流式聊天
+    const streamHandle = chatAPI.sendMessageStream(
+      text,
+      // onMessage — data.type 来自 SSE event: 字段
+      (data) => {
+        const msg = getMsg()
+        if (!msg) return
         
-        if (data.type === 'thinking') {
-          assistantMessage.thinking += data.content
+        if (data.type === 'reasoning') {
+          msg.thinking += (data.content || '')
+          msg.showThinking = true  // 有思考内容时自动展开
         } else if (data.type === 'content') {
-          assistantMessage.content += data.content
+          msg.content += (data.content || '')
         } else if (data.type === 'tool_call') {
-          assistantMessage.toolCalls.push({
-            name: data.name,
+          let name = data.name || ''
+          let args = data.args || data.arguments || ''
+          if (typeof args === 'string') {
+            try { args = JSON.parse(args) } catch (e) { /* 保持原值 */ }
+          }
+          // 兜底：如果 name 为空，从 content 原始 JSON 提取
+          if (!name && data.content) {
+            try {
+              const parsed = JSON.parse(data.content)
+              name = parsed.name || ''
+              args = parsed.args || parsed.arguments || args
+            } catch (e) {
+              const m = data.content.match(/"name"\s*:\s*"?([^",}\n]+)"?/)
+              if (m) name = m[1]
+            }
+          }
+          msg.toolCalls.push({
+            name: name || 'unknown',
             status: '执行中',
-            arguments: data.arguments,
+            arguments: args,
             result: ''
           })
         } else if (data.type === 'tool_result') {
-          // 更新最后一个工具调用的结果
-          if (assistantMessage.toolCalls.length > 0) {
-            const lastTool = assistantMessage.toolCalls[assistantMessage.toolCalls.length - 1]
-            lastTool.result = data.content
+          if (msg.toolCalls.length > 0) {
+            const lastTool = msg.toolCalls[msg.toolCalls.length - 1]
+            let result = data.result || data.content || ''
+            if (typeof result === 'string' && result.startsWith('"') && result.endsWith('"')) {
+              try { result = JSON.parse(result) } catch (e) { /* 保持原值 */ }
+            }
+            lastTool.result = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
             lastTool.status = '成功'
           }
         } else if (data.type === 'error') {
-          assistantMessage.content = `错误: ${data.content}`
-        } else if (data.type === 'done') {
-          eventSource.close()
-          streaming.value = false
-          isTyping.value = false
+          msg.content = `错误: ${data.error || data.content || '未知错误'}`
+        } else if (data.type === 'usage') {
+          msg.usage = data
+        } else if (data.type === 'reply') {
+          // 最终回复：如果 content 为空则用 reply 内容填充
+          const replyContent = data.content || ''
+          if (!msg.content && replyContent) {
+            msg.content = replyContent
+          }
         }
-        
+        // done 事件不做特殊处理
         scrollToBottom()
-      } catch (e) {
-        console.error('解析SSE消息失败:', e)
+      },
+      // onDone
+      () => {
+        streaming.value = false
+        isTyping.value = false
+      },
+      // onError
+      (error) => {
+        console.error('SSE连接错误:', error)
+        streaming.value = false
+        isTyping.value = false
+        if (!assistantMessage.content) {
+          assistantMessage.content = '连接错误，请检查后端服务是否正常运行。'
+        }
       }
-    }
-    
-    eventSource.onerror = (error) => {
-      console.error('SSE连接错误:', error)
-      eventSource.close()
-      streaming.value = false
-      isTyping.value = false
-      
-      // 如果消息内容为空，显示错误信息
-      if (!assistantMessage.content) {
-        assistantMessage.content = '连接错误，请检查后端服务是否正常运行。'
-      }
-    }
+    )
+    currentEventSource.value = streamHandle
   } catch (error) {
     console.error('发送消息失败:', error)
     isTyping.value = false
@@ -371,7 +398,11 @@ onMounted(() => {
 onBeforeUnmount(() => {
   // 关闭SSE连接
   if (currentEventSource.value) {
-    currentEventSource.value.close()
+    if (typeof currentEventSource.value.abort === 'function') {
+      currentEventSource.value.abort()
+    } else {
+      currentEventSource.value.close()
+    }
   }
   
   // 移除事件监听器

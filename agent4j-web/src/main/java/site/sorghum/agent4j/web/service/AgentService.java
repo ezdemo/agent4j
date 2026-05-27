@@ -11,6 +11,8 @@ import site.sorghum.agent4j.bin.session.SessionStore;
 import site.sorghum.agent4j.bin.tool.ToolDef;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 
+import org.noear.snack4.ONode;
+
 import java.io.IOException;
 import java.nio.file.Path;
 import java.util.*;
@@ -174,7 +176,9 @@ public class AgentService {
 
             // 发送最终回复
             if (reply != null && !reply.isEmpty()) {
-                emitter.send("reply", "{\"content\":" + SseEmitter.class.getName() + "}");
+                ONode replyNode = ONode.ofJson("{}").asObject();
+                replyNode.set("content", reply);
+                emitter.send("reply", replyNode.toJson());
             }
         } catch (Exception e) {
             emitter.sendError(e.getMessage());
