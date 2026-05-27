@@ -1,12 +1,20 @@
 {
   "name": "agent4j-front",
-  "version": "0.1.0",
+  "version": "1.0.0",
   "private": true,
   "type": "module",
+  "description": "Agent4j - 智能AI代码助手前端",
+  "author": "Agent4j Team",
+  "license": "MIT",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix",
+    "format": "prettier --write src/",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage"
   },
   "dependencies": {
     "vue": "^3.4.21",
@@ -16,6 +24,33 @@
   },
   "devDependencies": {
     "@vitejs/plugin-vue": "^5.0.4",
-    "vite": "^5.1.4"
-  }
+    "vite": "^5.1.4",
+    "@vue/test-utils": "^2.4.4",
+    "vitest": "^1.3.1",
+    "jsdom": "^24.0.0",
+    "eslint": "^8.57.0",
+    "eslint-plugin-vue": "^9.22.0",
+    "@vue/eslint-config-prettier": "^9.0.0",
+    "prettier": "^3.2.5",
+    "@vitejs/plugin-vue-jsx": "^3.1.0",
+    "unplugin-auto-import": "^0.17.5",
+    "unplugin-vue-components": "^0.26.0"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead",
+    "not ie 11"
+  ],
+  "keywords": [
+    "ai",
+    "agent",
+    "code-assistant",
+    "vue3",
+    "vite"
+  ]
 }

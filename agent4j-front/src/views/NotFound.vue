@@ -1,23 +1,32 @@
 <template>
   <div class="not-found-view">
     <div class="error-container">
-      <div class="error-code">404</div>
-      <div class="error-message">页面未找到</div>
-      <div class="error-description">
-        您访问的页面不存在或已被移除。
+      <!-- 错误代码 -->
+      <div class="error-code">
+        <span class="digit">4</span>
+        <span class="digit">0</span>
+        <span class="digit">4</span>
       </div>
       
+      <!-- 错误信息 -->
+      <div class="error-message">
+        <h1>页面未找到</h1>
+        <p>您访问的页面不存在或已被移除</p>
+      </div>
+      
+      <!-- 错误详情 -->
       <div class="error-details">
         <div class="detail-item">
-          <span class="label">请求路径:</span>
-          <span class="value">{{ currentPath }}</span>
+          <span class="detail-label">请求路径</span>
+          <span class="detail-value">{{ currentPath }}</span>
         </div>
         <div class="detail-item">
-          <span class="label">时间:</span>
-          <span class="value">{{ currentTime }}</span>
+          <span class="detail-label">时间</span>
+          <span class="detail-value">{{ currentTime }}</span>
         </div>
       </div>
       
+      <!-- ASCII 艺术 -->
       <div class="ascii-art">
         <pre>
    _____ __  __ ____    ____             __ _
@@ -29,39 +38,85 @@
         </pre>
       </div>
       
-      <div class="suggestions">
-        <h3>建议操作:</h3>
-        <ul>
-          <li>
-            <button class="terminal-button" @click="goHome">返回首页</button>
-          </li>
-          <li>
-            <button class="terminal-button" @click="goBack">返回上一页</button>
-          </li>
-          <li>
-            <button class="terminal-button" @click="reportIssue">报告问题</button>
-          </li>
-        </ul>
+      <!-- 操作按钮 -->
+      <div class="error-actions">
+        <button class="btn btn-primary" @click="goHome">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+            <polyline points="9 22 9 12 15 12 15 22"/>
+          </svg>
+          返回首页
+        </button>
+        <button class="btn btn-secondary" @click="goBack">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="19" y1="12" x2="5" y2="12"/>
+            <polyline points="12 19 5 12 12 5"/>
+          </svg>
+          返回上一页
+        </button>
+        <button class="btn btn-ghost" @click="reportIssue">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="12" y1="8" x2="12" y2="12"/>
+            <line x1="12" y1="16" x2="12.01" y2="16"/>
+          </svg>
+          报告问题
+        </button>
       </div>
       
-      <div class="help-links">
-        <h3>您可能需要:</h3>
-        <div class="link-grid">
-          <router-link to="/chat" class="help-link">
-            <span class="link-icon">💬</span>
-            <span class="link-text">开始对话</span>
+      <!-- 推荐链接 -->
+      <div class="suggestions">
+        <h3>您可能需要</h3>
+        <div class="suggestions-grid">
+          <router-link to="/" class="suggestion-card">
+            <div class="suggestion-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
+                <polyline points="9 22 9 12 15 12 15 22"/>
+              </svg>
+            </div>
+            <div class="suggestion-content">
+              <div class="suggestion-title">首页</div>
+              <div class="suggestion-desc">返回主页</div>
+            </div>
           </router-link>
-          <router-link to="/tools" class="help-link">
-            <span class="link-icon">🔧</span>
-            <span class="link-text">查看工具</span>
+          
+          <router-link to="/chat" class="suggestion-card">
+            <div class="suggestion-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+              </svg>
+            </div>
+            <div class="suggestion-content">
+              <div class="suggestion-title">对话</div>
+              <div class="suggestion-desc">开始与 AI 对话</div>
+            </div>
           </router-link>
-          <router-link to="/settings" class="help-link">
-            <span class="link-icon">⚙️</span>
-            <span class="link-text">系统设置</span>
+          
+          <router-link to="/tools" class="suggestion-card">
+            <div class="suggestion-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+              </svg>
+            </div>
+            <div class="suggestion-content">
+              <div class="suggestion-title">工具箱</div>
+              <div class="suggestion-desc">查看可用工具</div>
+            </div>
           </router-link>
-          <router-link to="/help" class="help-link">
-            <span class="link-icon">❓</span>
-            <span class="link-text">帮助文档</span>
+          
+          <router-link to="/help" class="suggestion-card">
+            <div class="suggestion-icon">
+              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="12" cy="12" r="10"/>
+                <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                <line x1="12" y1="17" x2="12.01" y2="17"/>
+              </svg>
+            </div>
+            <div class="suggestion-content">
+              <div class="suggestion-title">帮助中心</div>
+              <div class="suggestion-desc">获取使用帮助</div>
+            </div>
           </router-link>
         </div>
       </div>
@@ -87,12 +142,8 @@ const goBack = () => {
 }
 
 const reportIssue = () => {
-  window.dispatchEvent(new CustomEvent('terminal-output', { 
-    detail: { 
-      type: 'system', 
-      text: `报告 404 错误: ${currentPath.value}` 
-    }
-  }))
+  // 这里可以集成问题报告功能
+  alert(`问题已报告: ${currentPath.value}`)
 }
 
 onMounted(() => {
@@ -107,166 +158,249 @@ onMounted(() => {
   justify-content: center;
   align-items: center;
   min-height: 100%;
-  padding: var(--spacing-lg);
+  padding: var(--space-6);
+  background: var(--bg);
 }
 
 .error-container {
   text-align: center;
-  max-width: 800px;
+  max-width: 600px;
   width: 100%;
 }
 
+/* 错误代码 */
 .error-code {
-  font-size: 8rem;
-  font-weight: bold;
-  color: var(--terminal-red);
-  text-shadow: 0 0 20px var(--terminal-red);
+  display: flex;
+  justify-content: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-6);
+}
+
+.digit {
+  font-size: 6rem;
+  font-weight: var(--font-bold);
   line-height: 1;
-  margin-bottom: var(--spacing-md);
-  animation: glitch 2s infinite;
+  background: var(--gradient-primary);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  animation: bounce 2s ease-in-out infinite;
 }
 
-@keyframes glitch {
-  0%, 100% { transform: translate(0); }
-  20% { transform: translate(-2px, 2px); }
-  40% { transform: translate(-2px, -2px); }
-  60% { transform: translate(2px, 2px); }
-  80% { transform: translate(2px, -2px); }
+.digit:nth-child(2) {
+  animation-delay: 0.2s;
 }
 
+.digit:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+/* 错误信息 */
 .error-message {
-  font-size: var(--font-size-xl);
-  color: var(--terminal-amber);
-  margin-bottom: var(--spacing-md);
-  text-transform: uppercase;
-  letter-spacing: 2px;
+  margin-bottom: var(--space-6);
 }
 
-.error-description {
-  color: var(--terminal-gray);
-  margin-bottom: var(--spacing-lg);
-  font-size: var(--font-size-lg);
+.error-message h1 {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+  color: var(--fg);
+  margin-bottom: var(--space-2);
 }
 
+.error-message p {
+  font-size: var(--text-lg);
+  color: var(--fg-muted);
+}
+
+/* 错误详情 */
 .error-details {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  padding: var(--spacing-md);
-  margin-bottom: var(--spacing-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-6);
   text-align: left;
 }
 
 .detail-item {
   display: flex;
-  margin-bottom: var(--spacing-sm);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-2) 0;
 }
 
-.detail-item:last-child {
-  margin-bottom: 0;
+.detail-item:not(:last-child) {
+  border-bottom: 1px solid var(--border);
 }
 
-.detail-item .label {
-  color: var(--terminal-amber);
-  width: 120px;
-  flex-shrink: 0;
+.detail-label {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--fg-secondary);
+  min-width: 80px;
 }
 
-.detail-item .value {
-  color: var(--terminal-green);
+.detail-value {
+  font-size: var(--text-sm);
   font-family: var(--font-mono);
+  color: var(--fg);
+  word-break: break-all;
 }
 
+/* ASCII 艺术 */
 .ascii-art {
-  margin: var(--spacing-xl) 0;
-  color: var(--terminal-red);
-  text-shadow: 0 0 10px var(--terminal-red);
+  margin: var(--space-8) 0;
+  color: var(--fg-muted);
+  opacity: 0.3;
 }
 
 .ascii-art pre {
   font-family: var(--font-mono);
-  font-size: 0.8rem;
+  font-size: 0.7rem;
   line-height: 1.2;
   white-space: pre;
+  background: none;
+  border: none;
+  padding: 0;
 }
 
-.suggestions {
-  margin-bottom: var(--spacing-xl);
-}
-
-.suggestions h3 {
-  color: var(--terminal-amber);
-  margin-bottom: var(--spacing-md);
-}
-
-.suggestions ul {
-  list-style: none;
+/* 操作按钮 */
+.error-actions {
   display: flex;
   justify-content: center;
-  gap: var(--spacing-md);
+  gap: var(--space-3);
+  margin-bottom: var(--space-8);
   flex-wrap: wrap;
 }
 
-.help-links {
-  margin-bottom: var(--spacing-lg);
+/* 推荐链接 */
+.suggestions {
+  margin-top: var(--space-8);
 }
 
-.help-links h3 {
-  color: var(--terminal-amber);
-  margin-bottom: var(--spacing-md);
+.suggestions h3 {
+  font-size: var(--text-lg);
+  font-weight: var(--font-semibold);
+  color: var(--fg);
+  margin-bottom: var(--space-4);
 }
 
-.link-grid {
+.suggestions-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: var(--spacing-md);
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-4);
 }
 
-.help-link {
+.suggestion-card {
   display: flex;
-  flex-direction: column;
   align-items: center;
-  gap: var(--spacing-sm);
-  padding: var(--spacing-md);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  gap: var(--space-3);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
   text-decoration: none;
-  transition: all 0.2s;
+  transition: all var(--transition-fast);
 }
 
-.help-link:hover {
-  border-color: var(--terminal-green);
+.suggestion-card:hover {
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-md);
   transform: translateY(-2px);
 }
 
-.link-icon {
-  font-size: 2rem;
+.suggestion-icon {
+  width: 40px;
+  height: 40px;
+  background: var(--accent-soft);
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--brand-primary);
+  flex-shrink: 0;
 }
 
-.link-text {
-  color: var(--terminal-green);
-  font-weight: bold;
+.suggestion-content {
+  flex: 1;
+  text-align: left;
 }
 
+.suggestion-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--fg);
+  margin-bottom: 0.25rem;
+}
+
+.suggestion-desc {
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+}
+
+/* 动画 */
+@keyframes bounce {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0);
+  }
+  40% {
+    transform: translateY(-10px);
+  }
+  60% {
+    transform: translateY(-5px);
+  }
+}
+
+/* 响应式设计 */
 @media (max-width: 768px) {
-  .error-code {
-    font-size: 5rem;
+  .not-found-view {
+    padding: var(--space-4);
   }
   
-  .ascii-art pre {
-    font-size: 0.5rem;
+  .digit {
+    font-size: 4rem;
   }
   
-  .suggestions ul {
+  .error-message h1 {
+    font-size: var(--text-xl);
+  }
+  
+  .error-message p {
+    font-size: var(--text-base);
+  }
+  
+  .ascii-art {
+    display: none;
+  }
+  
+  .error-actions {
     flex-direction: column;
     align-items: center;
   }
   
-  .suggestions .terminal-button {
-    width: 200px;
+  .error-actions .btn {
+    width: 100%;
+    max-width: 300px;
+    justify-content: center;
   }
   
-  .link-grid {
-    grid-template-columns: repeat(2, 1fr);
+  .suggestions-grid {
+    grid-template-columns: 1fr;
   }
+}
+
+/* 深色模式调整 */
+[data-theme="dark"] .error-details {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .suggestion-card {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .suggestion-card:hover {
+  border-color: var(--brand-primary-light);
 }
 </style>

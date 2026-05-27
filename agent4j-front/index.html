@@ -1,46 +1,212 @@
 <!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="zh-CN" data-theme="light">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Agent4J - 复古终端界面</title>
+    <meta name="description" content="Agent4j - 智能AI代码助手，提供代码分析、生成、优化等功能" />
+    <meta name="keywords" content="AI, 代码助手, Agent4j, 编程, 开发工具" />
+    <meta name="author" content="Agent4j Team" />
+    
+    <!-- Open Graph / 社交媒体 -->
+    <meta property="og:title" content="Agent4j - 智能AI代码助手" />
+    <meta property="og:description" content="智能AI代码助手，提供代码分析、生成、优化等功能" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="zh_CN" />
+    
+    <!-- Favicon -->
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
+    
+    <!-- 字体预加载 -->
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet" />
+    
+    <title>Agent4j - 智能AI代码助手</title>
+    
+    <!-- 关键CSS内联 -->
     <style>
-      /* 全局复古风格 */
+      /* 初始加载样式 */
       * {
         box-sizing: border-box;
         margin: 0;
         padding: 0;
       }
       
-      body {
-        font-family: 'Courier New', 'Consolas', monospace;
-        background-color: #0a0a0a;
-        color: #33ff33;
-        line-height: 1.5;
+      html, body {
+        height: 100%;
+        overflow: hidden;
       }
       
-      /* 滚动条复古风格 */
+      body {
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+        text-rendering: optimizeLegibility;
+      }
+      
+      /* 加载动画 */
+      #app-loader {
+        position: fixed;
+        inset: 0;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        background: #ffffff;
+        z-index: 9999;
+        transition: opacity 0.3s ease;
+      }
+      
+      [data-theme="dark"] #app-loader {
+        background: #0f172a;
+      }
+      
+      .loader-content {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 24px;
+      }
+      
+      .loader-logo {
+        width: 64px;
+        height: 64px;
+        background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+        border-radius: 16px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
+        animation: pulse 2s ease-in-out infinite;
+      }
+      
+      .loader-logo svg {
+        width: 32px;
+        height: 32px;
+        color: white;
+      }
+      
+      .loader-text {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        gap: 8px;
+      }
+      
+      .loader-title {
+        font-size: 20px;
+        font-weight: 600;
+        color: #0f172a;
+        letter-spacing: -0.02em;
+      }
+      
+      [data-theme="dark"] .loader-title {
+        color: #f8fafc;
+      }
+      
+      .loader-subtitle {
+        font-size: 14px;
+        color: #64748b;
+        font-weight: 400;
+      }
+      
+      .loader-spinner {
+        width: 32px;
+        height: 32px;
+        border: 3px solid #e2e8f0;
+        border-top-color: #6366f1;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+      
+      [data-theme="dark"] .loader-spinner {
+        border-color: #334155;
+        border-top-color: #818cf8;
+      }
+      
+      @keyframes pulse {
+        0%, 100% {
+          transform: scale(1);
+          box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
+        }
+        50% {
+          transform: scale(1.05);
+          box-shadow: 0 12px 32px rgba(99, 102, 241, 0.4);
+        }
+      }
+      
+      @keyframes spin {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(360deg); }
+      }
+      
+      /* 渐入动画 */
+      @keyframes fadeIn {
+        from { opacity: 0; }
+        to { opacity: 1; }
+      }
+      
+      #app {
+        height: 100%;
+        animation: fadeIn 0.5s ease-out;
+      }
+      
+      /* 滚动条样式 */
       ::-webkit-scrollbar {
-        width: 8px;
-        height: 8px;
+        width: 6px;
+        height: 6px;
       }
       
       ::-webkit-scrollbar-track {
-        background: #1a1a1a;
+        background: transparent;
       }
       
       ::-webkit-scrollbar-thumb {
-        background: #333;
-        border-radius: 4px;
+        background: rgba(0, 0, 0, 0.12);
+        border-radius: 99px;
       }
       
       ::-webkit-scrollbar-thumb:hover {
-        background: #555;
+        background: rgba(0, 0, 0, 0.2);
+      }
+      
+      [data-theme="dark"] ::-webkit-scrollbar-thumb {
+        background: rgba(255, 255, 255, 0.12);
+      }
+      
+      [data-theme="dark"] ::-webkit-scrollbar-thumb:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+      
+      /* 选择样式 */
+      ::selection {
+        background: #6366f1;
+        color: white;
       }
     </style>
   </head>
   <body>
+    <!-- 加载动画 -->
+    <div id="app-loader">
+      <div class="loader-content">
+        <div class="loader-logo">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
+          </svg>
+        </div>
+        <div class="loader-text">
+          <div class="loader-title">Agent4j</div>
+          <div class="loader-subtitle">智能AI代码助手</div>
+        </div>
+        <div class="loader-spinner"></div>
+      </div>
+    </div>
+    
+    <!-- 应用挂载点 -->
     <div id="app"></div>
+    
+    <!-- 应用脚本 -->
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

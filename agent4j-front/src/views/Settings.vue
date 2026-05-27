@@ -1,349 +1,477 @@
 <template>
   <div class="settings-view">
+    <!-- 头部 -->
     <div class="settings-header">
-      <h2>设置终端</h2>
-      <div class="settings-controls">
-        <button class="terminal-button" @click="saveSettings">保存设置</button>
-        <button class="terminal-button" @click="resetSettings">重置默认</button>
-        <button class="terminal-button" @click="exportSettings">导出配置</button>
+      <div class="header-left">
+        <div class="header-title">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+          <h2>设置</h2>
+        </div>
+      </div>
+      <div class="header-actions">
+        <button class="btn btn-secondary btn-sm" @click="resetSettings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="1 4 1 10 7 10"/>
+            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+          </svg>
+          重置默认
+        </button>
+        <button class="btn btn-primary btn-sm" @click="saveSettings">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+            <polyline points="17 21 17 13 7 13 7 21"/>
+            <polyline points="7 3 7 8 15 8"/>
+          </svg>
+          保存设置
+        </button>
       </div>
     </div>
     
+    <!-- 标签页 -->
     <div class="settings-tabs">
       <button 
         v-for="tab in tabs" 
         :key="tab.id"
+        class="tab-btn"
+        :class="{ active: activeTab === tab.id }"
         @click="activeTab = tab.id"
-        :class="['tab-button', { active: activeTab === tab.id }]"
       >
-        {{ tab.label }}
+        <span class="tab-icon">{{ tab.icon }}</span>
+        <span class="tab-label">{{ tab.label }}</span>
       </button>
     </div>
     
+    <!-- 设置内容 -->
     <div class="settings-content">
       <!-- 基本设置 -->
       <div v-if="activeTab === 'general'" class="settings-section">
-        <h3>基本设置</h3>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">语言</span>
-            <span class="label-description">界面显示语言</span>
-          </div>
-          <select v-model="settings.language" class="terminal-input">
-            <option value="zh-CN">简体中文</option>
-            <option value="en-US">English</option>
-            <option value="ja-JP">日本語</option>
-          </select>
+        <div class="section-header">
+          <h3>基本设置</h3>
+          <p>配置界面语言、主题和显示选项</p>
         </div>
         
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">主题</span>
-            <span class="label-description">界面主题风格</span>
+        <div class="settings-group">
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">语言</div>
+              <div class="setting-description">界面显示语言</div>
+            </div>
+            <div class="setting-control">
+              <select v-model="settings.language" class="form-select">
+                <option value="zh-CN">简体中文</option>
+                <option value="en-US">English</option>
+                <option value="ja-JP">日本語</option>
+              </select>
+            </div>
           </div>
-          <select v-model="settings.theme" class="terminal-input">
-            <option value="retro-green">复古绿</option>
-            <option value="retro-amber">复古琥珀</option>
-            <option value="retro-blue">复古蓝</option>
-            <option value="dark">深色</option>
-            <option value="light">浅色</option>
-          </select>
-        </div>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">字体大小</span>
-            <span class="label-description">界面字体大小</span>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">主题</div>
+              <div class="setting-description">界面主题风格</div>
+            </div>
+            <div class="setting-control">
+              <div class="theme-selector">
+                <button 
+                  v-for="theme in themes" 
+                  :key="theme.value"
+                  class="theme-btn"
+                  :class="{ active: settings.theme === theme.value }"
+                  @click="settings.theme = theme.value"
+                >
+                  <span class="theme-preview" :style="{ background: theme.color }"></span>
+                  <span class="theme-name">{{ theme.label }}</span>
+                </button>
+              </div>
+            </div>
           </div>
-          <div class="slider-container">
-            <input 
-              type="range" 
-              v-model="settings.fontSize" 
-              min="12" 
-              max="24" 
-              class="slider"
-            />
-            <span class="slider-value">{{ settings.fontSize }}px</span>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">字体大小</div>
+              <div class="setting-description">界面字体大小</div>
+            </div>
+            <div class="setting-control">
+              <div class="slider-control">
+                <input 
+                  type="range" 
+                  v-model="settings.fontSize" 
+                  min="12" 
+                  max="24" 
+                  step="1"
+                  class="form-slider"
+                />
+                <span class="slider-value">{{ settings.fontSize }}px</span>
+              </div>
+            </div>
           </div>
-        </div>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">动画效果</span>
-            <span class="label-description">启用界面动画效果</span>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">动画效果</div>
+              <div class="setting-description">启用界面动画效果</div>
+            </div>
+            <div class="setting-control">
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="settings.animations" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
-          <label class="toggle-switch">
-            <input type="checkbox" v-model="settings.animations" />
-            <span class="slider"></span>
-          </label>
         </div>
       </div>
       
       <!-- AI 设置 -->
       <div v-if="activeTab === 'ai'" class="settings-section">
-        <h3>AI 设置</h3>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">API 地址</span>
-            <span class="label-description">OpenAI 兼容 API 的基础 URL</span>
-          </div>
-          <input 
-            v-model="settings.ai.baseUrl" 
-            class="terminal-input"
-            placeholder="https://api.openai.com/v1"
-          />
+        <div class="section-header">
+          <h3>AI 设置</h3>
+          <p>配置AI模型和API连接参数</p>
         </div>
         
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">API 密钥</span>
-            <span class="label-description">用于身份验证的 API 密钥</span>
+        <div class="settings-group">
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">API 地址</div>
+              <div class="setting-description">OpenAI 兼容 API 的基础 URL</div>
+            </div>
+            <div class="setting-control">
+              <input 
+                v-model="settings.ai.baseUrl" 
+                type="url"
+                class="form-input"
+                placeholder="https://api.openai.com/v1"
+              />
+            </div>
           </div>
-          <div class="password-input">
-            <input 
-              v-model="settings.ai.apiKey" 
-              :type="showApiKey ? 'text' : 'password'"
-              class="terminal-input"
-              placeholder="sk-..."
-            />
-            <button class="toggle-password" @click="showApiKey = !showApiKey">
-              {{ showApiKey ? '🙈' : '👁️' }}
-            </button>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">API 密钥</div>
+              <div class="setting-description">用于身份验证的 API 密钥</div>
+            </div>
+            <div class="setting-control">
+              <div class="password-input">
+                <input 
+                  v-model="settings.ai.apiKey" 
+                  :type="showApiKey ? 'text' : 'password'"
+                  class="form-input"
+                  placeholder="sk-..."
+                />
+                <button class="btn-icon-sm toggle-password" @click="showApiKey = !showApiKey">
+                  <svg v-if="showApiKey" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                  </svg>
+                  <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                    <circle cx="12" cy="12" r="3"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
           </div>
-        </div>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">模型</span>
-            <span class="label-description">使用的 AI 模型</span>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">模型</div>
+              <div class="setting-description">使用的 AI 模型</div>
+            </div>
+            <div class="setting-control">
+              <select v-model="settings.ai.model" class="form-select">
+                <option value="gpt-4">GPT-4</option>
+                <option value="gpt-4-turbo">GPT-4 Turbo</option>
+                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
+                <option value="deepseek-v4-flash">DeepSeek V4 Flash</option>
+                <option value="ollama">Ollama (本地)</option>
+              </select>
+            </div>
           </div>
-          <select v-model="settings.ai.model" class="terminal-input">
-            <option value="gpt-4">GPT-4</option>
-            <option value="gpt-4-turbo">GPT-4 Turbo</option>
-            <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-            <option value="deepseek-v4-flash">DeepSeek V4 Flash</option>
-            <option value="ollama">Ollama (本地)</option>
-          </select>
-        </div>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">推理强度</span>
-            <span class="label-description">AI 推理的详细程度</span>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">推理强度</div>
+              <div class="setting-description">AI 推理的详细程度</div>
+            </div>
+            <div class="setting-control">
+              <select v-model="settings.ai.reasoningEffort" class="form-select">
+                <option value="low">低</option>
+                <option value="medium">中</option>
+                <option value="high">高</option>
+                <option value="max">最大</option>
+              </select>
+            </div>
           </div>
-          <select v-model="settings.ai.reasoningEffort" class="terminal-input">
-            <option value="low">低</option>
-            <option value="medium">中</option>
-            <option value="high">高</option>
-            <option value="max">最大</option>
-          </select>
-        </div>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">温度</span>
-            <span class="label-description">生成随机性控制 (0-2)</span>
-          </div>
-          <div class="slider-container">
-            <input 
-              type="range" 
-              v-model="settings.ai.temperature" 
-              min="0" 
-              max="2" 
-              step="0.1"
-              class="slider"
-            />
-            <span class="slider-value">{{ settings.ai.temperature }}</span>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">温度</div>
+              <div class="setting-description">生成随机性控制 (0-2)</div>
+            </div>
+            <div class="setting-control">
+              <div class="slider-control">
+                <input 
+                  type="range" 
+                  v-model="settings.ai.temperature" 
+                  min="0" 
+                  max="2" 
+                  step="0.1"
+                  class="form-slider"
+                />
+                <span class="slider-value">{{ settings.ai.temperature }}</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
       
       <!-- 工作区设置 -->
       <div v-if="activeTab === 'workspace'" class="settings-section">
-        <h3>工作区设置</h3>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">工作区路径</span>
-            <span class="label-description">默认工作目录</span>
-          </div>
-          <input 
-            v-model="settings.workspace.dir" 
-            class="terminal-input"
-            placeholder="."
-          />
+        <div class="section-header">
+          <h3>工作区设置</h3>
+          <p>配置工作目录和文件编辑选项</p>
         </div>
         
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">编辑模式</span>
-            <span class="label-description">文件编辑的确认方式</span>
+        <div class="settings-group">
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">工作区路径</div>
+              <div class="setting-description">默认工作目录</div>
+            </div>
+            <div class="setting-control">
+              <input 
+                v-model="settings.workspace.dir" 
+                type="text"
+                class="form-input"
+                placeholder="."
+              />
+            </div>
           </div>
-          <select v-model="settings.workspace.editMode" class="terminal-input">
-            <option value="auto">自动应用</option>
-            <option value="confirm">需要确认</option>
-            <option value="preview">预览模式</option>
-          </select>
-        </div>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">排除目录</span>
-            <span class="label-description">搜索和索引时排除的目录</span>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">编辑模式</div>
+              <div class="setting-description">文件编辑的确认方式</div>
+            </div>
+            <div class="setting-control">
+              <select v-model="settings.workspace.editMode" class="form-select">
+                <option value="auto">自动应用</option>
+                <option value="confirm">需要确认</option>
+                <option value="preview">预览模式</option>
+              </select>
+            </div>
           </div>
-          <textarea 
-            v-model="settings.workspace.excludeDirs" 
-            class="terminal-input textarea"
-            placeholder="node_modules, .git, target"
-            rows="3"
-          ></textarea>
-        </div>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">自动刷新索引</span>
-            <span class="label-description">文件变更时自动更新索引</span>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">排除目录</div>
+              <div class="setting-description">搜索和索引时排除的目录</div>
+            </div>
+            <div class="setting-control">
+              <textarea 
+                v-model="settings.workspace.excludeDirs" 
+                class="form-textarea"
+                placeholder="node_modules, .git, target, dist"
+                rows="3"
+              ></textarea>
+            </div>
           </div>
-          <label class="toggle-switch">
-            <input type="checkbox" v-model="settings.workspace.autoRefresh" />
-            <span class="slider"></span>
-          </label>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">自动刷新索引</div>
+              <div class="setting-description">文件变更时自动更新索引</div>
+            </div>
+            <div class="setting-control">
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="settings.workspace.autoRefresh" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
         </div>
       </div>
       
       <!-- 安全设置 -->
       <div v-if="activeTab === 'security'" class="settings-section">
-        <h3>安全设置</h3>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">风暴断路器</span>
-            <span class="label-description">防止重复工具调用死循环</span>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" v-model="settings.security.stormBreaker" />
-            <span class="slider"></span>
-          </label>
+        <div class="section-header">
+          <h3>安全设置</h3>
+          <p>配置安全防护和访问控制</p>
         </div>
         
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">路径穿越防护</span>
-            <span class="label-description">阻止访问工作区外的文件</span>
+        <div class="settings-group">
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">风暴断路器</div>
+              <div class="setting-description">防止重复工具调用死循环</div>
+            </div>
+            <div class="setting-control">
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="settings.security.stormBreaker" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
-          <label class="toggle-switch">
-            <input type="checkbox" v-model="settings.security.pathTraversal" />
-            <span class="slider"></span>
-          </label>
-        </div>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">命令白名单</span>
-            <span class="label-description">只允许执行白名单中的命令</span>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">路径穿越防护</div>
+              <div class="setting-description">阻止访问工作区外的文件</div>
+            </div>
+            <div class="setting-control">
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="settings.security.pathTraversal" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
-          <label class="toggle-switch">
-            <input type="checkbox" v-model="settings.security.commandWhitelist" />
-            <span class="slider"></span>
-          </label>
-        </div>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">操作日志</span>
-            <span class="label-description">记录所有文件和命令操作</span>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">命令白名单</div>
+              <div class="setting-description">只允许执行白名单中的命令</div>
+            </div>
+            <div class="setting-control">
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="settings.security.commandWhitelist" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
-          <label class="toggle-switch">
-            <input type="checkbox" v-model="settings.security.auditLog" />
-            <span class="slider"></span>
-          </label>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">操作日志</div>
+              <div class="setting-description">记录所有文件和命令操作</div>
+            </div>
+            <div class="setting-control">
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="settings.security.auditLog" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
+          </div>
         </div>
       </div>
       
       <!-- 高级设置 -->
       <div v-if="activeTab === 'advanced'" class="settings-section">
-        <h3>高级设置</h3>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">调试模式</span>
-            <span class="label-description">启用详细日志输出</span>
-          </div>
-          <label class="toggle-switch">
-            <input type="checkbox" v-model="settings.advanced.debugMode" />
-            <span class="slider"></span>
-          </label>
+        <div class="section-header">
+          <h3>高级设置</h3>
+          <p>配置高级功能和性能选项</p>
         </div>
         
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">上下文折叠</span>
-            <span class="label-description">长对话时自动压缩历史</span>
+        <div class="settings-group">
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">调试模式</div>
+              <div class="setting-description">启用详细日志输出</div>
+            </div>
+            <div class="setting-control">
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="settings.advanced.debugMode" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
-          <label class="toggle-switch">
-            <input type="checkbox" v-model="settings.advanced.contextFolding" />
-            <span class="slider"></span>
-          </label>
-        </div>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">消息自愈</span>
-            <span class="label-description">发送前自动修复消息格式</span>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">上下文折叠</div>
+              <div class="setting-description">长对话时自动压缩历史</div>
+            </div>
+            <div class="setting-control">
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="settings.advanced.contextFolding" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
-          <label class="toggle-switch">
-            <input type="checkbox" v-model="settings.advanced.messageHealing" />
-            <span class="slider"></span>
-          </label>
-        </div>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">会话自动保存</span>
-            <span class="label-description">定期自动保存会话</span>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">消息自愈</div>
+              <div class="setting-description">发送前自动修复消息格式</div>
+            </div>
+            <div class="setting-control">
+              <label class="toggle-switch">
+                <input type="checkbox" v-model="settings.advanced.messageHealing" />
+                <span class="toggle-slider"></span>
+              </label>
+            </div>
           </div>
-          <div class="slider-container">
-            <input 
-              type="range" 
-              v-model="settings.advanced.autoSaveInterval" 
-              min="30" 
-              max="300" 
-              step="30"
-              class="slider"
-            />
-            <span class="slider-value">{{ settings.advanced.autoSaveInterval }}秒</span>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">会话自动保存</div>
+              <div class="setting-description">定期自动保存会话</div>
+            </div>
+            <div class="setting-control">
+              <div class="slider-control">
+                <input 
+                  type="range" 
+                  v-model="settings.advanced.autoSaveInterval" 
+                  min="30" 
+                  max="300" 
+                  step="30"
+                  class="form-slider"
+                />
+                <span class="slider-value">{{ settings.advanced.autoSaveInterval }}秒</span>
+              </div>
+            </div>
           </div>
-        </div>
-        
-        <div class="setting-item">
-          <div class="setting-label">
-            <span class="label-text">最大历史消息</span>
-            <span class="label-description">保留的历史消息数量</span>
-          </div>
-          <div class="slider-container">
-            <input 
-              type="range" 
-              v-model="settings.advanced.maxHistory" 
-              min="10" 
-              max="100" 
-              step="10"
-              class="slider"
-            />
-            <span class="slider-value">{{ settings.advanced.maxHistory }}条</span>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">最大历史消息</div>
+              <div class="setting-description">保留的历史消息数量</div>
+            </div>
+            <div class="setting-control">
+              <div class="slider-control">
+                <input 
+                  type="range" 
+                  v-model="settings.advanced.maxHistory" 
+                  min="10" 
+                  max="100" 
+                  step="10"
+                  class="form-slider"
+                />
+                <span class="slider-value">{{ settings.advanced.maxHistory }}条</span>
+              </div>
+            </div>
           </div>
         </div>
       </div>
     </div>
     
+    <!-- 底部 -->
     <div class="settings-footer">
-      <div class="settings-info">
+      <div class="footer-info">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="16" x2="12" y2="12"/>
+          <line x1="12" y1="8" x2="12.01" y2="8"/>
+        </svg>
         <span>配置文件位置: ~/.agent4j/config.json</span>
       </div>
-      <div class="settings-actions">
-        <button class="terminal-button" @click="openConfigFile">打开配置文件</button>
-        <button class="terminal-button" @click="validateSettings">验证配置</button>
+      <div class="footer-actions">
+        <button class="btn btn-ghost btn-sm" @click="openConfigFile">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
+            <polyline points="13 2 13 9 20 9"/>
+          </svg>
+          打开配置文件
+        </button>
+        <button class="btn btn-ghost btn-sm" @click="exportSettings">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="7 10 12 15 17 10"/>
+            <line x1="12" y1="15" x2="12" y2="3"/>
+          </svg>
+          导出配置
+        </button>
       </div>
     </div>
   </div>
@@ -353,22 +481,31 @@
 import { ref, reactive, watch, onMounted } from 'vue'
 import { configAPI } from '../services/api'
 
+// 状态
 const activeTab = ref('general')
 const showApiKey = ref(false)
 const loading = ref(false)
 const error = ref('')
 
+// 标签页配置
 const tabs = [
-  { id: 'general', label: '基本设置' },
-  { id: 'ai', label: 'AI 设置' },
-  { id: 'workspace', label: '工作区' },
-  { id: 'security', label: '安全' },
-  { id: 'advanced', label: '高级' }
+  { id: 'general', label: '基本设置', icon: '⚙️' },
+  { id: 'ai', label: 'AI 设置', icon: '🤖' },
+  { id: 'workspace', label: '工作区', icon: '📁' },
+  { id: 'security', label: '安全', icon: '🛡' },
+  { id: 'advanced', label: '高级', icon: '🔧' }
 ]
 
+// 主题配置
+const themes = [
+  { value: 'light', label: '浅色', color: '#ffffff' },
+  { value: 'dark', label: '深色', color: '#0f172a' }
+]
+
+// 设置数据
 const settings = reactive({
   language: 'zh-CN',
-  theme: 'retro-green',
+  theme: 'light',
   fontSize: 14,
   animations: true,
   
@@ -403,6 +540,7 @@ const settings = reactive({
   }
 })
 
+// 方法
 const loadSettings = async () => {
   loading.value = true
   error.value = ''
@@ -450,18 +588,16 @@ const saveSettings = async () => {
   // 保存到本地存储
   localStorage.setItem('agent4j-settings', JSON.stringify(settings))
   
-  // 注意：实际的配置保存需要后端支持
-  // 目前只保存到本地存储，因为后端API是只读的
+  // 应用主题
+  applyTheme(settings.theme)
   
+  // 显示成功消息
   window.dispatchEvent(new CustomEvent('terminal-output', { 
     detail: { 
       type: 'system', 
       text: '设置已保存到本地存储' 
     }
   }))
-  
-  // 应用主题
-  applyTheme(settings.theme)
 }
 
 const resetSettings = () => {
@@ -469,7 +605,7 @@ const resetSettings = () => {
     // 重置为默认值
     Object.assign(settings, {
       language: 'zh-CN',
-      theme: 'retro-green',
+      theme: 'light',
       fontSize: 14,
       animations: true,
       
@@ -504,6 +640,10 @@ const resetSettings = () => {
       }
     })
     
+    // 清除本地存储
+    localStorage.removeItem('agent4j-settings')
+    
+    // 显示消息
     window.dispatchEvent(new CustomEvent('terminal-output', { 
       detail: { 
         type: 'system', 
@@ -517,7 +657,7 @@ const exportSettings = () => {
   const exportData = {
     ...settings,
     exportedAt: new Date().toISOString(),
-    version: '1.0'
+    version: '1.0.0'
   }
   
   const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
@@ -537,6 +677,8 @@ const exportSettings = () => {
 }
 
 const openConfigFile = () => {
+  // 这里可以调用后端API打开配置文件
+  // 目前只是显示提示
   window.dispatchEvent(new CustomEvent('terminal-output', { 
     detail: { 
       type: 'system', 
@@ -545,84 +687,9 @@ const openConfigFile = () => {
   }))
 }
 
-const validateSettings = async () => {
-  // 简单的验证逻辑
-  const errors = []
-  
-  if (!settings.ai.baseUrl) {
-    errors.push('API 地址不能为空')
-  }
-  
-  if (settings.ai.temperature < 0 || settings.ai.temperature > 2) {
-    errors.push('温度值必须在 0-2 之间')
-  }
-  
-  if (errors.length > 0) {
-    window.dispatchEvent(new CustomEvent('terminal-output', { 
-      detail: { 
-        type: 'error', 
-        text: '配置验证失败:\n' + errors.join('\n') 
-      }
-    }))
-  } else {
-    // 尝试从后端验证配置
-    try {
-      const response = await configAPI.getConfig()
-      if (response.success && response.data) {
-        window.dispatchEvent(new CustomEvent('terminal-output', { 
-          detail: { 
-            type: 'system', 
-            text: '配置验证通过 - 后端配置有效' 
-          }
-        }))
-      } else {
-        window.dispatchEvent(new CustomEvent('terminal-output', { 
-          detail: { 
-            type: 'system', 
-            text: '配置验证通过 - 本地配置有效' 
-          }
-        }))
-      }
-    } catch (err) {
-      window.dispatchEvent(new CustomEvent('terminal-output', { 
-        detail: { 
-          type: 'system', 
-          text: '配置验证通过 - 本地配置有效' 
-        }
-      }))
-    }
-  }
-}
-
 const applyTheme = (theme) => {
-  const root = document.documentElement
-  
-  switch (theme) {
-    case 'retro-green':
-      root.style.setProperty('--terminal-green', '#33ff33')
-      root.style.setProperty('--terminal-amber', '#ffb000')
-      break
-    case 'retro-amber':
-      root.style.setProperty('--terminal-green', '#ffb000')
-      root.style.setProperty('--terminal-amber', '#ff8c00')
-      break
-    case 'retro-blue':
-      root.style.setProperty('--terminal-green', '#3399ff')
-      root.style.setProperty('--terminal-amber', '#33ccff')
-      break
-    case 'dark':
-      root.style.setProperty('--terminal-green', '#00ff00')
-      root.style.setProperty('--terminal-amber', '#ffff00')
-      root.style.setProperty('--bg-primary', '#000000')
-      root.style.setProperty('--bg-secondary', '#111111')
-      break
-    case 'light':
-      root.style.setProperty('--terminal-green', '#006600')
-      root.style.setProperty('--terminal-amber', '#cc6600')
-      root.style.setProperty('--bg-primary', '#ffffff')
-      root.style.setProperty('--bg-secondary', '#f5f5f5')
-      break
-  }
+  document.documentElement.setAttribute('data-theme', theme)
+  localStorage.setItem('agent4j-theme', theme)
 }
 
 // 监听设置变化
@@ -630,169 +697,356 @@ watch(() => settings.theme, (newTheme) => {
   applyTheme(newTheme)
 })
 
-// 初始化
+watch(() => settings.fontSize, (newSize) => {
+  document.documentElement.style.fontSize = `${newSize}px`
+})
+
+// 生命周期
 onMounted(() => {
   loadSettings()
+  
+  // 应用保存的主题
+  const savedTheme = localStorage.getItem('agent4j-theme')
+  if (savedTheme) {
+    settings.theme = savedTheme
+    applyTheme(savedTheme)
+  }
+  
+  // 应用保存的字体大小
+  const savedFontSize = localStorage.getItem('agent4j-font-size')
+  if (savedFontSize) {
+    settings.fontSize = parseInt(savedFontSize)
+    document.documentElement.style.fontSize = `${settings.fontSize}px`
+  }
 })
 </script>
 
 <style scoped>
 .settings-view {
-  max-width: 900px;
+  padding: var(--space-6);
+  max-width: 1000px;
   margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 100%;
 }
 
+/* 头部 */
 .settings-header {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  margin-bottom: var(--spacing-lg);
-  padding-bottom: var(--spacing-md);
-  border-bottom: 1px solid var(--border-color);
+  justify-content: space-between;
+  margin-bottom: var(--space-6);
+  padding-bottom: var(--space-4);
+  border-bottom: 1px solid var(--border);
 }
 
-.settings-header h2 {
-  color: var(--terminal-amber);
-  font-size: var(--font-size-xl);
-}
-
-.settings-controls {
+.header-left {
   display: flex;
-  gap: var(--spacing-md);
+  align-items: center;
+  gap: var(--space-4);
 }
 
+.header-title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  color: var(--fg);
+}
+
+.header-title svg {
+  color: var(--brand-primary);
+}
+
+.header-title h2 {
+  font-size: var(--text-2xl);
+  font-weight: var(--font-bold);
+}
+
+.header-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* 标签页 */
 .settings-tabs {
   display: flex;
-  gap: var(--spacing-sm);
-  margin-bottom: var(--spacing-lg);
-  padding: var(--spacing-sm);
+  gap: var(--space-1);
+  margin-bottom: var(--space-6);
+  padding: var(--space-1);
   background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  flex-wrap: wrap;
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
-.tab-button {
-  flex: 1;
-  min-width: 100px;
-  padding: var(--spacing-sm) var(--spacing-md);
-  background: transparent;
-  border: 1px solid transparent;
-  color: var(--terminal-gray);
-  font-family: var(--font-mono);
-  cursor: pointer;
-  transition: all 0.2s;
-  text-align: center;
+.settings-tabs::-webkit-scrollbar {
+  display: none;
 }
 
-.tab-button:hover {
-  color: var(--terminal-green);
-  border-color: var(--border-color);
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--fg-secondary);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
 }
 
-.tab-button.active {
-  background: var(--bg-tertiary);
-  color: var(--terminal-green);
-  border-color: var(--terminal-green);
+.tab-btn:hover {
+  background: var(--surface-hover);
+  color: var(--fg);
 }
 
+.tab-btn.active {
+  background: var(--surface);
+  color: var(--brand-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.tab-icon {
+  font-size: 14px;
+}
+
+/* 设置内容 */
 .settings-content {
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  padding: var(--spacing-lg);
-  margin-bottom: var(--spacing-lg);
+  flex: 1;
+  margin-bottom: var(--space-6);
 }
 
-.settings-section h3 {
-  color: var(--terminal-amber);
-  margin-bottom: var(--spacing-lg);
-  padding-bottom: var(--spacing-sm);
-  border-bottom: 1px solid var(--border-color);
+.settings-section {
+  animation: fadeIn var(--transition-base) ease-out;
+}
+
+.section-header {
+  margin-bottom: var(--space-6);
+}
+
+.section-header h3 {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--fg);
+  margin-bottom: var(--space-1);
+}
+
+.section-header p {
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+
+/* 设置组 */
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
 .setting-item {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-md);
-  margin-bottom: var(--spacing-md);
-  background: var(--bg-tertiary);
-  border-radius: 4px;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-fast);
+}
+
+.setting-item:hover {
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-sm);
+}
+
+.setting-info {
+  flex: 1;
+  min-width: 0;
 }
 
 .setting-label {
-  flex: 1;
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--fg);
+  margin-bottom: 0.25rem;
 }
 
-.label-text {
-  display: block;
-  color: var(--terminal-green);
-  font-weight: bold;
-  margin-bottom: var(--spacing-xs);
+.setting-description {
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  line-height: 1.5;
 }
 
-.label-description {
-  display: block;
-  color: var(--terminal-gray);
-  font-size: var(--font-size-sm);
+.setting-control {
+  flex-shrink: 0;
+  min-width: 200px;
 }
 
-.terminal-input {
-  width: 300px;
-  max-width: 100%;
+/* 表单元素 */
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  padding: var(--space-2) var(--space-3);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  color: var(--fg);
+  transition: all var(--transition-fast);
 }
 
-.textarea {
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  background: var(--surface);
+  border-color: var(--border-focus);
+  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+  outline: none;
+}
+
+.form-textarea {
   resize: vertical;
   min-height: 80px;
 }
 
-.slider-container {
+.form-select {
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right var(--space-3) center;
+  padding-right: var(--space-8);
+}
+
+/* 密码输入 */
+.password-input {
+  position: relative;
   display: flex;
   align-items: center;
-  gap: var(--spacing-md);
-  width: 300px;
-  max-width: 100%;
 }
 
-.slider {
+.password-input .form-input {
+  padding-right: var(--space-10);
+}
+
+.toggle-password {
+  position: absolute;
+  right: var(--space-2);
+  color: var(--fg-muted);
+  transition: color var(--transition-fast);
+}
+
+.toggle-password:hover {
+  color: var(--fg);
+}
+
+/* 滑块控制 */
+.slider-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.form-slider {
   flex: 1;
-  -webkit-appearance: none;
   height: 6px;
-  background: var(--bg-primary);
-  border-radius: 3px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
   outline: none;
-}
-
-.slider::-webkit-slider-thumb {
   -webkit-appearance: none;
-  width: 16px;
-  height: 16px;
-  background: var(--terminal-green);
-  border-radius: 50%;
-  cursor: pointer;
-  border: 2px solid var(--bg-primary);
+  appearance: none;
 }
 
-.slider::-moz-range-thumb {
-  width: 16px;
-  height: 16px;
-  background: var(--terminal-green);
+.form-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--brand-primary);
   border-radius: 50%;
   cursor: pointer;
-  border: 2px solid var(--bg-primary);
+  border: 2px solid var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+}
+
+.form-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: var(--shadow-md);
+}
+
+.form-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: var(--brand-primary);
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid var(--surface);
+  box-shadow: var(--shadow-sm);
 }
 
 .slider-value {
-  color: var(--terminal-green);
-  font-weight: bold;
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--fg);
   min-width: 50px;
   text-align: right;
+  font-family: var(--font-mono);
 }
 
+/* 主题选择器 */
+.theme-selector {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.theme-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-secondary);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-fast);
+  min-width: 80px;
+}
+
+.theme-btn:hover {
+  border-color: var(--fg-muted);
+}
+
+.theme-btn.active {
+  border-color: var(--brand-primary);
+  background: var(--accent-soft);
+}
+
+.theme-preview {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.theme-name {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--fg-secondary);
+}
+
+.theme-btn.active .theme-name {
+  color: var(--brand-primary);
+}
+
+/* 开关 */
 .toggle-switch {
   position: relative;
   display: inline-block;
-  width: 50px;
+  width: 48px;
   height: 24px;
 }
 
@@ -802,118 +1056,154 @@ onMounted(() => {
   height: 0;
 }
 
-.toggle-switch .slider {
+.toggle-slider {
   position: absolute;
   cursor: pointer;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: var(--bg-primary);
-  transition: 0.4s;
-  border-radius: 24px;
-  border: 1px solid var(--border-color);
+  background-color: var(--bg-tertiary);
+  transition: var(--transition-fast);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
 }
 
-.toggle-switch .slider:before {
+.toggle-slider:before {
   position: absolute;
-  content: "";
-  height: 16px;
-  width: 16px;
-  left: 4px;
-  bottom: 3px;
-  background-color: var(--terminal-gray);
-  transition: 0.4s;
+  content: '';
+  height: 18px;
+  width: 18px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--fg-muted);
+  transition: var(--transition-fast);
   border-radius: 50%;
 }
 
-.toggle-switch input:checked + .slider {
-  background-color: var(--bg-tertiary);
-  border-color: var(--terminal-green);
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--accent-soft);
+  border-color: var(--brand-primary);
 }
 
-.toggle-switch input:checked + .slider:before {
-  transform: translateX(26px);
-  background-color: var(--terminal-green);
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(24px);
+  background-color: var(--brand-primary);
 }
 
-.password-input {
-  position: relative;
-  width: 300px;
-  max-width: 100%;
-}
-
-.password-input .terminal-input {
-  width: 100%;
-  padding-right: 40px;
-}
-
-.toggle-password {
-  position: absolute;
-  right: 10px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: none;
-  border: none;
-  cursor: pointer;
-  font-size: 1.2rem;
-}
-
+/* 底部 */
 .settings-footer {
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  padding: var(--spacing-md);
+  justify-content: space-between;
+  padding: var(--space-4);
   background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  margin-top: auto;
 }
 
-.settings-info {
-  color: var(--terminal-gray);
-  font-size: var(--font-size-sm);
-}
-
-.settings-actions {
+.footer-info {
   display: flex;
-  gap: var(--spacing-md);
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
 }
 
+.footer-info svg {
+  color: var(--fg-muted);
+}
+
+.footer-actions {
+  display: flex;
+  gap: var(--space-2);
+}
+
+/* 动画 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 响应式设计 */
 @media (max-width: 768px) {
+  .settings-view {
+    padding: var(--space-4);
+  }
+  
   .settings-header {
     flex-direction: column;
-    gap: var(--spacing-md);
+    gap: var(--space-4);
     align-items: flex-start;
   }
   
-  .settings-tabs {
-    flex-direction: column;
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
   
-  .tab-button {
-    min-width: auto;
+  .settings-tabs {
+    flex-wrap: wrap;
+  }
+  
+  .tab-btn {
+    flex: 1;
+    min-width: calc(50% - var(--space-1));
+    justify-content: center;
   }
   
   .setting-item {
     flex-direction: column;
     align-items: flex-start;
-    gap: var(--spacing-md);
+    gap: var(--space-3);
   }
   
-  .terminal-input,
-  .slider-container,
-  .password-input {
+  .setting-control {
     width: 100%;
+    min-width: auto;
+  }
+  
+  .theme-selector {
+    flex-wrap: wrap;
+  }
+  
+  .theme-btn {
+    min-width: calc(50% - var(--space-1));
   }
   
   .settings-footer {
     flex-direction: column;
-    gap: var(--spacing-md);
+    gap: var(--space-3);
     text-align: center;
   }
   
-  .settings-actions {
+  .footer-actions {
     width: 100%;
     justify-content: center;
   }
+}
+
+/* 深色模式调整 */
+[data-theme="dark"] .setting-item {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .setting-item:hover {
+  border-color: var(--brand-primary-light);
+}
+
+[data-theme="dark"] .settings-tabs {
+  background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .tab-btn.active {
+  background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .settings-footer {
+  background: var(--bg-tertiary);
+  border-color: var(--border);
 }
 </style>

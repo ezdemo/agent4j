@@ -1,76 +1,124 @@
-# Agent4J Frontend
+# Agent4j Frontend
 
-> Agent4J 的复古终端风格前端界面
+> 智能 AI 代码助手前端界面 - 企业级设计，美观大气
 
-## 项目简介
+## 📖 项目简介
 
-Agent4J Frontend 是 Agent4J Java AI Agent 框架的前端界面，采用复古终端风格设计，使用 Vue 3 构建。
+Agent4j Frontend 是 Agent4j Java AI Agent 框架的前端界面，采用现代化的企业级设计，提供流畅的用户体验和强大的功能。
 
-## 特性
+## ✨ 核心特性
 
-- 🖥️ **复古终端风格** - 绿色磷光屏幕效果，扫描线动画
-- 💬 **对话界面** - 与 AI 助手进行多轮对话
-- 🔧 **工具管理** - 查看和管理可用工具
-- 📁 **会话管理** - 管理历史会话记录
-- ⚙️ **系统设置** - 配置 AI 参数和系统选项
-- 📱 **响应式设计** - 支持桌面和移动设备
+### 🎨 设计系统
+- **企业级设计语言** - 基于现代设计系统，提供一致的视觉体验
+- **深色/浅色主题** - 支持主题切换，适应不同环境
+- **响应式布局** - 完美适配桌面、平板和移动设备
+- **流畅动画** - 精心设计的过渡动画，提升交互体验
 
-## 技术栈
+### 💬 智能对话
+- **实时流式输出** - SSE 流式响应，打字机效果
+- **多轮上下文** - 保持对话连贯性
+- **思考过程展示** - 可折叠的 AI 思考过程
+- **工具调用可视化** - 清晰展示工具调用和执行结果
 
-- **框架**: Vue 3 (Composition API)
-- **构建工具**: Vite
-- **状态管理**: Pinia
-- **路由**: Vue Router
-- **HTTP 客户端**: Axios
-- **样式**: CSS3 (复古终端主题)
+### 🔧 工具系统
+- **丰富的工具集** - 文件操作、代码分析、网络搜索等
+- **工具状态管理** - 实时显示工具执行状态
+- **参数展示** - 清晰展示工具参数和返回结果
+- **风暴断路器** - 防止重复调用死循环
 
-## 项目结构
+### 📁 会话管理
+- **多会话支持** - 创建和管理多个对话会话
+- **会话持久化** - 自动保存会话历史
+- **会话搜索** - 快速搜索历史会话
+- **会话导出** - 导出会话为文本文件
+
+### ⚙️ 灵活配置
+- **AI 模型配置** - 支持多种 AI 模型
+- **API 端点配置** - 灵活的 API 配置
+- **工作区设置** - 自定义工作目录和编辑模式
+- **安全设置** - 路径穿越防护、命令白名单等
+
+## 🛠️ 技术栈
+
+| 技术 | 版本 | 用途 |
+|------|------|------|
+| **Vue 3** | ^3.4.21 | 前端框架 |
+| **Vite** | ^5.1.4 | 构建工具 |
+| **Pinia** | ^2.1.7 | 状态管理 |
+| **Vue Router** | ^4.3.0 | 路由管理 |
+| **Axios** | ^1.6.7 | HTTP 客户端 |
+| **CSS3** | - | 样式和动画 |
+
+## 📁 项目结构
 
 ```
 agent4j-front/
-├── public/              # 静态资源
+├── public/                    # 静态资源
+│   ├── favicon.svg           # 网站图标
+│   └── ...
 ├── src/
-│   ├── assets/          # 资源文件
-│   │   ├── styles/      # 全局样式
-│   │   └── logo.svg     # 项目图标
-│   ├── components/      # 组件目录
-│   ├── composables/     # 组合式函数
-│   │   └── useTerminal.js
-│   ├── router/          # 路由配置
+│   ├── assets/               # 资源文件
+│   │   └── styles/
+│   │       └── main.css      # 全局样式和设计系统
+│   ├── components/           # 组件目录
+│   │   ├── Composer.vue      # 输入组件
+│   │   ├── Sidebar.vue       # 侧边栏组件
+│   │   ├── StatusBar.vue     # 状态栏组件
+│   │   ├── TabBar.vue        # 标签栏组件
+│   │   └── TitleBar.vue      # 标题栏组件
+│   ├── composables/          # 组合式函数
+│   │   └── useTerminal.js    # 终端功能
+│   ├── router/               # 路由配置
 │   │   └── index.js
-│   ├── services/        # API 服务
+│   ├── services/             # API 服务
 │   │   └── api.js
-│   ├── stores/          # 状态管理
+│   ├── stores/               # 状态管理
 │   │   └── app.js
-│   ├── utils/           # 工具函数
+│   ├── utils/                # 工具函数
 │   │   └── helpers.js
-│   ├── views/           # 页面视图
-│   │   ├── Home.vue     # 首页
-│   │   ├── Chat.vue     # 对话页面
-│   │   ├── Tools.vue    # 工具页面
-│   │   ├── Sessions.vue # 会话页面
-│   │   ├── Settings.vue # 设置页面
-│   │   ├── Help.vue     # 帮助页面
-│   │   └── NotFound.vue # 404页面
-│   ├── App.vue          # 根组件
-│   └── main.js          # 入口文件
-├── index.html           # HTML 入口
-├── package.json         # 项目配置
-└── vite.config.js       # Vite 配置
+│   ├── views/                # 页面视图
+│   │   ├── Home.vue          # 首页
+│   │   ├── Chat.vue          # 对话页面
+│   │   ├── Tools.vue         # 工具页面
+│   │   ├── Sessions.vue      # 会话页面
+│   │   ├── Settings.vue      # 设置页面
+│   │   ├── Help.vue          # 帮助页面
+│   │   └── NotFound.vue      # 404页面
+│   ├── App.vue               # 根组件
+│   └── main.js               # 入口文件
+├── index.html                # HTML 入口
+├── package.json              # 项目配置
+├── vite.config.js            # Vite 配置
+└── README.md                 # 项目文档
 ```
 
-## 安装与运行
+## 🚀 快速开始
+
+### 环境要求
+
+- **Node.js** >= 18.0.0
+- **pnpm** >= 8.0.0 (推荐) 或 npm/yarn
 
 ### 安装依赖
 
 ```bash
-cd agent4j-front
+# 使用 pnpm (推荐)
+pnpm install
+
+# 或使用 npm
 npm install
+
+# 或使用 yarn
+yarn install
 ```
 
 ### 开发模式
 
 ```bash
+# 启动开发服务器
+pnpm dev
+
+# 或
 npm run dev
 ```
 
@@ -79,6 +127,10 @@ npm run dev
 ### 构建生产版本
 
 ```bash
+# 构建生产版本
+pnpm build
+
+# 或
 npm run build
 ```
 
@@ -87,10 +139,14 @@ npm run build
 ### 预览生产版本
 
 ```bash
+# 预览生产版本
+pnpm preview
+
+# 或
 npm run preview
 ```
 
-## 配置
+## ⚙️ 配置说明
 
 ### API 代理配置
 
@@ -101,54 +157,59 @@ server: {
   port: 3000,
   proxy: {
     '/api': {
-      target: 'http://localhost:8080',
-      changeOrigin: true
+      target: 'http://localhost:8097',
+      changeOrigin: true,
+      ws: true
     }
   }
 }
 ```
 
-确保 Agent4J 后端服务运行在 `http://localhost:8080`。
+确保 Agent4j 后端服务运行在 `http://localhost:8097`。
 
 ### 环境变量
 
 创建 `.env` 文件：
 
 ```env
-VITE_API_BASE_URL=http://localhost:8080
-VITE_APP_TITLE=Agent4J
+VITE_API_BASE_URL=http://localhost:8097
+VITE_APP_TITLE=Agent4j
+VITE_APP_VERSION=1.0.0
 ```
 
-## 页面说明
+## 📱 页面说明
 
 ### 首页 (`/`)
-- 系统状态概览
-- 快速命令入口
-- 最近活动记录
+- 品牌展示和功能介绍
+- 快速开始指南
+- 技术栈展示
+- 行动号召按钮
 
 ### 对话页面 (`/chat`)
 - 与 AI 助手实时对话
-- 支持工具调用展示
-- 思考过程折叠显示
+- 支持流式输出和打字机效果
+- 工具调用可视化展示
+- 思考过程可折叠显示
 - 文件附件支持
 
 ### 工具页面 (`/tools`)
-- 工具列表展示
+- 工具列表展示和搜索
 - 工具详情查看
-- 搜索和筛选功能
-- 使用示例显示
+- 工具分类筛选
+- 使用示例和参数说明
 
 ### 会话页面 (`/sessions`)
 - 历史会话列表
 - 会话统计信息
-- 会话加载和导出
+- 会话加载、导出和删除
+- 会话搜索和分页
 
 ### 设置页面 (`/settings`)
-- 基本设置（语言、主题、字体）
-- AI 设置（API配置、模型选择）
-- 工作区设置
-- 安全设置
-- 高级设置
+- **基本设置** - 语言、主题、字体大小、动画效果
+- **AI 设置** - API 配置、模型选择、推理强度、温度
+- **工作区设置** - 工作目录、编辑模式、排除目录
+- **安全设置** - 风暴断路器、路径穿越防护、命令白名单
+- **高级设置** - 调试模式、上下文折叠、消息自愈
 
 ### 帮助页面 (`/help`)
 - 快速入门指南
@@ -156,51 +217,72 @@ VITE_APP_TITLE=Agent4J
 - 工具列表
 - 配置说明
 - 故障排除
+- API 文档
+- 更新日志
 
-## 命令说明
+## 🎯 命令说明
 
-在终端输入框中可以使用以下命令：
+在聊天输入框中可以使用以下斜杠命令：
 
-| 命令 | 描述 |
-|------|------|
-| `/chat` | 开始与AI助手对话 |
-| `/tools` | 查看可用工具列表 |
-| `/sessions` | 管理会话历史 |
-| `/settings` | 系统配置设置 |
-| `/help` | 查看帮助信息 |
-| `/new` | 开启新会话 |
-| `/plan` | 进入计划模式 |
-| `/execute` | 退出计划模式 |
-| `/compact` | 折叠历史消息 |
-| `/retry` | 撤回最后一条消息并重试 |
-| `/rewind N` | 回退到第N轮对话 |
-| `clear` | 清空终端输出 |
-| `exit` | 退出系统 |
+| 命令 | 描述 | 示例 |
+|------|------|------|
+| `/help` | 显示帮助信息 | `/help` |
+| `/new` | 开启新会话 | `/new` |
+| `/plan` | 进入计划模式 | `/plan` |
+| `/execute` | 退出计划模式 | `/execute` |
+| `/compact` | 折叠历史消息 | `/compact` |
+| `/retry` | 撤回最后一条消息并重试 | `/retry` |
+| `/rewind N` | 回退到第N轮对话 | `/rewind 5` |
+| `/sessions` | 列出历史会话 | `/sessions` |
+| `/load N` | 加载指定会话 | `/load 3` |
+| `/init` | 自动分析项目生成文档 | `/init` |
+| `/hitl` | 切换 HITL 模式 | `/hitl` |
+| `/agree` | 批准 HITL 待执行的工具调用 | `/agree` |
+| `/deny` | 拒绝 HITL 待执行的工具调用 | `/deny` |
+| `/exit` | 退出系统 | `/exit` |
 
-## 主题定制
+## 🎨 主题定制
 
-项目支持多种复古终端主题：
+项目支持深色和浅色主题，可以通过以下方式切换：
 
-- **retro-green** - 经典绿色磷光屏
-- **retro-amber** - 琥珀色磷光屏
-- **retro-blue** - 蓝色磷光屏
-- **dark** - 深色主题
-- **light** - 浅色主题
+1. **设置页面** - 在设置页面中选择主题
+2. **快捷键** - 使用快捷键切换
+3. **系统偏好** - 自动跟随系统主题
 
-在设置页面可以切换主题。
+### 主题变量
 
-## 快捷键
+项目使用 CSS 变量系统，可以在 `src/assets/styles/main.css` 中自定义：
+
+```css
+:root {
+  /* 品牌色 */
+  --brand-primary: #6366f1;
+  --brand-secondary: #0ea5e9;
+  
+  /* 背景色 */
+  --bg: #ffffff;
+  --bg-secondary: #f8fafc;
+  
+  /* 文字颜色 */
+  --fg: #0f172a;
+  --fg-secondary: #334155;
+  
+  /* 更多变量... */
+}
+```
+
+## ⌨️ 快捷键
 
 | 快捷键 | 描述 |
 |--------|------|
 | `Enter` | 发送消息 |
 | `Shift+Enter` | 换行 |
-| `Ctrl+L` | 清空屏幕 |
-| `Ctrl+C` | 取消当前操作 |
-| `Ctrl+R` | 搜索历史命令 |
-| `Tab` | 自动补全 |
+| `Ctrl+K` | 聚焦搜索 |
+| `Ctrl+N` | 新建对话 |
+| `Ctrl+B` | 切换侧边栏 |
+| `Escape` | 关闭弹窗 |
 
-## 开发说明
+## 🔧 开发指南
 
 ### 添加新页面
 
@@ -212,6 +294,7 @@ VITE_APP_TITLE=Agent4J
 
 1. 在 `src/components/` 目录下创建新的 `.vue` 文件
 2. 在需要使用的页面中导入组件
+3. 遵循组件命名规范
 
 ### 状态管理
 
@@ -220,10 +303,14 @@ VITE_APP_TITLE=Agent4J
 ```javascript
 // 创建新的 store
 import { defineStore } from 'pinia'
+import { ref, computed } from 'vue'
 
 export const useMyStore = defineStore('my', () => {
   // 状态
   const myState = ref(null)
+  
+  // 计算属性
+  const myComputed = computed(() => myState.value)
   
   // 方法
   const updateState = (newValue) => {
@@ -232,22 +319,126 @@ export const useMyStore = defineStore('my', () => {
   
   return {
     myState,
+    myComputed,
     updateState
   }
 })
 ```
 
-## 浏览器支持
+### API 调用
 
-- Chrome 80+
-- Firefox 75+
-- Safari 13+
-- Edge 80+
+```javascript
+import { chatAPI, sessionsAPI } from '@/services/api'
 
-## 许可证
+// 发送消息
+const response = await chatAPI.sendMessage('Hello')
+
+// 流式聊天
+const stream = chatAPI.sendMessageStream(
+  'Hello',
+  (data) => console.log('Message:', data),
+  () => console.log('Done'),
+  (error) => console.error('Error:', error)
+)
+```
+
+## 📊 性能优化
+
+### 代码分割
+- 路由级别的代码分割
+- 组件懒加载
+- 第三方库分离
+
+### 资源优化
+- 图片压缩和懒加载
+- CSS 和 JavaScript 压缩
+- 字体优化
+
+### 缓存策略
+- 静态资源缓存
+- API 响应缓存
+- 本地存储优化
+
+## 🧪 测试
+
+```bash
+# 运行测试
+pnpm test
+
+# 运行测试 UI
+pnpm test:ui
+
+# 运行测试覆盖率
+pnpm test:coverage
+```
+
+## 📦 构建部署
+
+### 开发环境
+
+```bash
+pnpm dev
+```
+
+### 生产环境
+
+```bash
+# 构建
+pnpm build
+
+# 预览
+pnpm preview
+```
+
+### Docker 部署
+
+```dockerfile
+FROM node:18-alpine as builder
+WORKDIR /app
+COPY package*.json ./
+RUN npm ci
+COPY . .
+RUN npm run build
+
+FROM nginx:alpine
+COPY --from=builder /app/dist /usr/share/nginx/html
+COPY nginx.conf /etc/nginx/nginx.conf
+EXPOSE 80
+CMD ["nginx", "-g", "daemon off;"]
+```
+
+## 🌐 浏览器支持
+
+| 浏览器 | 版本 |
+|--------|------|
+| Chrome | 80+ |
+| Firefox | 75+ |
+| Safari | 13+ |
+| Edge | 80+ |
+
+## 📄 许可证
 
 MIT License
 
-## 相关项目
+## 🤝 贡献指南
 
-- [Agent4J](https://gitee.com/ezdemo/agent4j) - Java AI Agent 框架
+欢迎贡献代码！请遵循以下步骤：
+
+1. Fork 项目
+2. 创建功能分支 (`git checkout -b feature/AmazingFeature`)
+3. 提交更改 (`git commit -m 'Add some AmazingFeature'`)
+4. 推送到分支 (`git push origin feature/AmazingFeature`)
+5. 创建 Pull Request
+
+## 📞 联系方式
+
+- 项目地址: https://gitee.com/ezdemo/agent4j
+- 问题反馈: https://gitee.com/ezdemo/agent4j/issues
+
+## 🙏 致谢
+
+感谢所有为这个项目做出贡献的人！
+
+---
+
+**Agent4j** - 智能 AI 代码助手，让编程更高效！
