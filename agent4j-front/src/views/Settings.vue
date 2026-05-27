@@ -350,10 +350,13 @@
 </template>
 
 <script setup>
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, onMounted } from 'vue'
+import { configAPI } from '../services/api'
 
 const activeTab = ref('general')
 const showApiKey = ref(false)
+const loading = ref(false)
+const error = ref('')
 
 const tabs = [
   { id: 'general', label: '基本设置' },
@@ -370,15 +373,15 @@ const settings = reactive({
   animations: true,
   
   ai: {
-    baseUrl: 'https://api.deepseek.com/v1',
+    baseUrl: '',
     apiKey: '',
-    model: 'deepseek-v4-flash',
+    model: '',
     reasoningEffort: 'max',
     temperature: 0.7
   },
   
   workspace: {
-    dir: '.',
+    dir: '',
     editMode: 'auto',
     excludeDirs: 'node_modules, .git, target, dist',
     autoRefresh: true
@@ -400,14 +403,60 @@ const settings = reactive({
   }
 })
 
-const saveSettings = () => {
-  // 模拟保存设置
+const loadSettings = async () => {
+  loading.value = true
+  error.value = ''
+  
+  try {
+    const response = await configAPI.getConfig()
+    if (response.success && response.data) {
+      const config = response.data
+      
+      // 更新AI设置
+      settings.ai.baseUrl = config.baseUrl || ''
+      settings.ai.apiKey = config.apiKey || ''
+      settings.ai.model = config.model || ''
+      settings.ai.reasoningEffort = config.reasoningEffort || 'max'
+      
+      // 更新工作区设置
+      settings.workspace.dir = config.workspace || '.'
+      settings.workspace.editMode = config.editMode || 'auto'
+      
+      // 更新其他设置（从本地存储或默认值）
+      const savedSettings = localStorage.getItem('agent4j-settings')
+      if (savedSettings) {
+        const parsed = JSON.parse(savedSettings)
+        Object.assign(settings, parsed)
+      }
+    } else {
+      error.value = response.error || '加载配置失败'
+    }
+  } catch (err) {
+    console.error('加载配置失败:', err)
+    error.value = '加载配置失败: ' + err.message
+    
+    // 使用默认值
+    settings.ai.baseUrl = 'https://api.deepseek.com/v1'
+    settings.ai.model = 'deepseek-v4-flash'
+    settings.ai.reasoningEffort = 'max'
+    settings.workspace.dir = '.'
+    settings.workspace.editMode = 'auto'
+  } finally {
+    loading.value = false
+  }
+}
+
+const saveSettings = async () => {
+  // 保存到本地存储
   localStorage.setItem('agent4j-settings', JSON.stringify(settings))
+  
+  // 注意：实际的配置保存需要后端支持
+  // 目前只保存到本地存储，因为后端API是只读的
   
   window.dispatchEvent(new CustomEvent('terminal-output', { 
     detail: { 
       type: 'system', 
-      text: '设置已保存' 
+      text: '设置已保存到本地存储' 
     }
   }))
   
@@ -496,7 +545,7 @@ const openConfigFile = () => {
   }))
 }
 
-const validateSettings = () => {
+const validateSettings = async () => {
   // 简单的验证逻辑
   const errors = []
   
@@ -516,12 +565,32 @@ const validateSettings = () => {
       }
     }))
   } else {
-    window.dispatchEvent(new CustomEvent('terminal-output', { 
-      detail: { 
-        type: 'system', 
-        text: '配置验证通过' 
+    // 尝试从后端验证配置
+    try {
+      const response = await configAPI.getConfig()
+      if (response.success && response.data) {
+        window.dispatchEvent(new CustomEvent('terminal-output', { 
+          detail: { 
+            type: 'system', 
+            text: '配置验证通过 - 后端配置有效' 
+          }
+        }))
+      } else {
+        window.dispatchEvent(new CustomEvent('terminal-output', { 
+          detail: { 
+            type: 'system', 
+            text: '配置验证通过 - 本地配置有效' 
+          }
+        }))
       }
-    }))
+    } catch (err) {
+      window.dispatchEvent(new CustomEvent('terminal-output', { 
+        detail: { 
+          type: 'system', 
+          text: '配置验证通过 - 本地配置有效' 
+        }
+      }))
+    }
   }
 }
 
@@ -556,27 +625,15 @@ const applyTheme = (theme) => {
   }
 }
 
-// 加载保存的设置
-const loadSettings = () => {
-  const saved = localStorage.getItem('agent4j-settings')
-  if (saved) {
-    try {
-      const parsed = JSON.parse(saved)
-      Object.assign(settings, parsed)
-      applyTheme(settings.theme)
-    } catch (e) {
-      console.error('Failed to load settings:', e)
-    }
-  }
-}
-
 // 监听设置变化
 watch(() => settings.theme, (newTheme) => {
   applyTheme(newTheme)
 })
 
 // 初始化
-loadSettings()
+onMounted(() => {
+  loadSettings()
+})
 </script>
 
 <style scoped>

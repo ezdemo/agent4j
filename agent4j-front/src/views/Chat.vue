@@ -102,7 +102,8 @@
 </template>
 
 <script setup>
-import { ref, onMounted, nextTick, watch } from 'vue'
+import { ref, onMounted, nextTick, watch, onBeforeUnmount } from 'vue'
+import { chatAPI, agentAPI, sessionsAPI } from '../services/api'
 
 const messagesContainer = ref(null)
 const inputField = ref(null)
@@ -111,44 +112,8 @@ const messages = ref([])
 const attachedFiles = ref([])
 const isTyping = ref(false)
 const planMode = ref(false)
-
-// 模拟消息
-const mockMessages = [
-  {
-    id: 1,
-    role: 'user',
-    content: '你好，Agent4J！',
-    time: '09:30'
-  },
-  {
-    id: 2,
-    role: 'assistant',
-    content: '你好！我是 Agent4J，你的 AI 代码助手。我可以帮你：\n\n1. **编写和修改代码** - 使用 edit_file、multi_edit 等工具\n2. **分析代码结构** - 使用 get_symbols、find_in_code 等工具\n3. **执行命令** - 使用 run_command 工具\n4. **搜索文件** - 使用 glob、grep 等工具\n\n有什么我可以帮你的吗？',
-    time: '09:30',
-    thinking: '用户发送了问候消息。我需要友好地回应，并介绍我的功能。作为 Agent4J，我是一个 Java AI 代理框架，专注于代码编辑和开发辅助。',
-    showThinking: false
-  },
-  {
-    id: 3,
-    role: 'user',
-    content: '请帮我查看当前项目的目录结构',
-    time: '09:31'
-  },
-  {
-    id: 4,
-    role: 'assistant',
-    content: '好的，我来查看项目目录结构。',
-    time: '09:31',
-    toolCalls: [
-      {
-        name: 'tree',
-        status: '执行中',
-        arguments: { maxDepth: 3 },
-        result: 'agent4j/\n├── pom.xml\n├── agent4j-tool/\n│   ├── pom.xml\n│   └── src/main/java/site/sorghum/agent4j/tool/\n├── agent4j-bin/\n│   ├── pom.xml\n│   ├── src/main/resources/app.yml\n│   └── src/main/java/site/sorghum/agent4j/bin/\n├── agent4j-web/\n│   └── pom.xml\n└── agent4j-front/\n    └── package.json'
-      }
-    ]
-  }
-]
+const streaming = ref(false)
+const currentEventSource = ref(null)
 
 const formatMessage = (content) => {
   if (!content) return ''
@@ -198,34 +163,125 @@ const sendMessage = async () => {
   
   await scrollToBottom()
   
-  // 模拟助手回复
+  // 发送消息到后端
   isTyping.value = true
-  setTimeout(async () => {
-    const assistantMessage = {
-      id: Date.now() + 1,
-      role: 'assistant',
-      content: `收到你的消息："${text}"。\n\n我正在处理你的请求...`,
-      time: new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-      thinking: `用户发送了消息：${text}。我需要分析这个消息并给出合适的回复。`,
-      showThinking: false
+  streaming.value = true
+  
+  // 创建助手消息占位符
+  const assistantMessage = {
+    id: Date.now() + 1,
+    role: 'assistant',
+    content: '',
+    time: new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+    thinking: '',
+    showThinking: false,
+    toolCalls: []
+  }
+  
+  messages.value.push(assistantMessage)
+  
+  try {
+    // 使用SSE流式聊天
+    const eventSource = new EventSource(`/api/chat/stream?message=${encodeURIComponent(text)}`)
+    currentEventSource.value = eventSource
+    
+    eventSource.onmessage = (event) => {
+      try {
+        const data = JSON.parse(event.data)
+        
+        if (data.type === 'thinking') {
+          assistantMessage.thinking += data.content
+        } else if (data.type === 'content') {
+          assistantMessage.content += data.content
+        } else if (data.type === 'tool_call') {
+          assistantMessage.toolCalls.push({
+            name: data.name,
+            status: '执行中',
+            arguments: data.arguments,
+            result: ''
+          })
+        } else if (data.type === 'tool_result') {
+          // 更新最后一个工具调用的结果
+          if (assistantMessage.toolCalls.length > 0) {
+            const lastTool = assistantMessage.toolCalls[assistantMessage.toolCalls.length - 1]
+            lastTool.result = data.content
+            lastTool.status = '成功'
+          }
+        } else if (data.type === 'error') {
+          assistantMessage.content = `错误: ${data.content}`
+        } else if (data.type === 'done') {
+          eventSource.close()
+          streaming.value = false
+          isTyping.value = false
+        }
+        
+        scrollToBottom()
+      } catch (e) {
+        console.error('解析SSE消息失败:', e)
+      }
     }
     
-    messages.value.push(assistantMessage)
+    eventSource.onerror = (error) => {
+      console.error('SSE连接错误:', error)
+      eventSource.close()
+      streaming.value = false
+      isTyping.value = false
+      
+      // 如果消息内容为空，显示错误信息
+      if (!assistantMessage.content) {
+        assistantMessage.content = '连接错误，请检查后端服务是否正常运行。'
+      }
+    }
+  } catch (error) {
+    console.error('发送消息失败:', error)
     isTyping.value = false
-    await scrollToBottom()
-  }, 1500)
+    streaming.value = false
+    
+    // 回退到同步聊天
+    try {
+      const response = await chatAPI.sendMessage(text)
+      if (response.success) {
+        assistantMessage.content = response.data.reply
+        assistantMessage.thinking = '同步聊天模式'
+      } else {
+        assistantMessage.content = `错误: ${response.error}`
+      }
+    } catch (syncError) {
+      assistantMessage.content = `发送失败: ${syncError.message}`
+    }
+  }
+  
+  await scrollToBottom()
 }
 
-const clearChat = () => {
+const clearChat = async () => {
   if (confirm('确定要清空所有对话记录吗？')) {
-    messages.value = []
+    try {
+      await sessionsAPI.createNew()
+      messages.value = []
+    } catch (error) {
+      console.error('创建新会话失败:', error)
+    }
   }
 }
 
 const exportChat = () => {
   const chatText = messages.value.map(msg => {
     const header = `[${msg.time}] ${msg.role === 'user' ? '用户' : '助手'}:`
-    return `${header}\n${msg.content}\n`
+    let content = header + '\n' + msg.content
+    if (msg.thinking) {
+      content += '\n\n思考过程: ' + msg.thinking
+    }
+    if (msg.toolCalls && msg.toolCalls.length > 0) {
+      content += '\n\n工具调用:'
+      msg.toolCalls.forEach(tool => {
+        content += `\n  - ${tool.name}: ${JSON.stringify(tool.arguments)}`
+        if (tool.result) {
+          content += `\n    结果: ${tool.result}`
+        }
+      })
+    }
+    return content + '\n'
   }).join('\n')
   
   const blob = new Blob([chatText], { type: 'text/plain' })
@@ -246,25 +302,80 @@ const removeFile = (index) => {
   attachedFiles.value.splice(index, 1)
 }
 
-const togglePlanMode = () => {
-  planMode.value = !planMode.value
-  window.dispatchEvent(new CustomEvent('terminal-output', { 
-    detail: { 
-      type: 'system', 
-      text: planMode.value ? '已启用计划模式 - 只读工具可用' : '已禁用计划模式'
+const togglePlanMode = async () => {
+  try {
+    if (planMode.value) {
+      await agentAPI.disablePlanMode()
+      planMode.value = false
+    } else {
+      await agentAPI.enablePlanMode()
+      planMode.value = true
     }
-  }))
+    
+    window.dispatchEvent(new CustomEvent('terminal-output', { 
+      detail: { 
+        type: 'system', 
+        text: planMode.value ? '已启用计划模式 - 只读工具可用' : '已禁用计划模式'
+      }
+    }))
+  } catch (error) {
+    console.error('切换计划模式失败:', error)
+  }
+}
+
+const loadHistory = async () => {
+  try {
+    const response = await agentAPI.getHistory()
+    if (response.success && response.data) {
+      messages.value = response.data.map((msg, index) => ({
+        id: Date.now() + index,
+        role: msg.role,
+        content: msg.content,
+        time: new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+        thinking: msg.thinking || '',
+        showThinking: false,
+        toolCalls: msg.toolCalls || []
+      }))
+    }
+  } catch (error) {
+    console.error('加载历史消息失败:', error)
+  }
 }
 
 // 监听清空事件
-window.addEventListener('terminal-clear', () => {
-  messages.value = []
-})
+window.addEventListener('terminal-clear', clearChat)
+
+// 加载当前会话状态
+const loadSessionState = async () => {
+  try {
+    const statusResponse = await agentAPI.getStatus()
+    if (statusResponse.success && statusResponse.data) {
+      planMode.value = statusResponse.data.planMode || false
+    }
+    
+    const currentSession = await sessionsAPI.getCurrent()
+    if (currentSession.success && currentSession.data) {
+      // 可以在这里显示当前会话信息
+    }
+  } catch (error) {
+    console.error('加载会话状态失败:', error)
+  }
+}
 
 onMounted(() => {
-  // 加载初始消息
-  messages.value = [...mockMessages]
+  loadSessionState()
+  loadHistory()
   scrollToBottom()
+})
+
+onBeforeUnmount(() => {
+  // 关闭SSE连接
+  if (currentEventSource.value) {
+    currentEventSource.value.close()
+  }
+  
+  // 移除事件监听器
+  window.removeEventListener('terminal-clear', clearChat)
 })
 
 watch(messages, () => {

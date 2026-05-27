@@ -180,22 +180,122 @@
               <div class="endpoint">
                 <span class="method">POST</span>
                 <span class="path">/api/chat</span>
-                <span class="desc">发送消息并获取回复</span>
+                <span class="desc">同步聊天</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <span class="path">/api/chat/stream</span>
+                <span class="desc">SSE流式聊天</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <span class="path">/api/agent/status</span>
+                <span class="desc">获取Agent状态</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <span class="path">/api/agent/history</span>
+                <span class="desc">获取历史消息</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <span class="path">/api/agent/retry</span>
+                <span class="desc">撤回并重试</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <span class="path">/api/agent/rewind</span>
+                <span class="desc">回退到指定轮次</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <span class="path">/api/agent/compact</span>
+                <span class="desc">折叠上下文</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <span class="path">/api/agent/plan/enable</span>
+                <span class="desc">进入计划模式</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <span class="path">/api/agent/plan/disable</span>
+                <span class="desc">退出计划模式</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <span class="path">/api/agent/hitl/status</span>
+                <span class="desc">获取HITL状态</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <span class="path">/api/agent/hitl/toggle</span>
+                <span class="desc">切换HITL模式</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <span class="path">/api/agent/hitl/approve</span>
+                <span class="desc">批准HITL</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <span class="path">/api/agent/hitl/deny</span>
+                <span class="desc">拒绝HITL</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <span class="path">/api/agent/hitl/pending</span>
+                <span class="desc">获取待审批列表</span>
               </div>
               <div class="endpoint">
                 <span class="method">GET</span>
                 <span class="path">/api/sessions</span>
-                <span class="desc">获取会话列表</span>
+                <span class="desc">列出所有会话</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <span class="path">/api/sessions/current</span>
+                <span class="desc">获取当前会话</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <span class="path">/api/sessions/new</span>
+                <span class="desc">新建会话</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">POST</span>
+                <span class="path">/api/sessions/{name}</span>
+                <span class="desc">切换会话</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">DELETE</span>
+                <span class="path">/api/sessions/{name}</span>
+                <span class="desc">删除会话</span>
               </div>
               <div class="endpoint">
                 <span class="method">GET</span>
                 <span class="path">/api/tools</span>
-                <span class="desc">获取工具列表</span>
+                <span class="desc">列出所有工具</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <span class="path">/api/tools/{name}</span>
+                <span class="desc">获取工具详情</span>
               </div>
               <div class="endpoint">
                 <span class="method">POST</span>
-                <span class="path">/api/tools/execute</span>
-                <span class="desc">执行工具调用</span>
+                <span class="path">/api/tools/{name}/execute</span>
+                <span class="desc">直接执行工具</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <span class="path">/api/config</span>
+                <span class="desc">获取当前配置</span>
+              </div>
+              <div class="endpoint">
+                <span class="method">GET</span>
+                <span class="path">/api/usage</span>
+                <span class="desc">获取Token用量统计</span>
               </div>
             </div>
           </div>

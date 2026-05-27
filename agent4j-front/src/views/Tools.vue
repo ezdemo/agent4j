@@ -96,11 +96,14 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { toolsAPI } from '../services/api'
 
 const searchQuery = ref('')
 const activeFilter = ref('all')
 const expandedTools = ref([])
+const loading = ref(false)
+const error = ref('')
 
 const filters = [
   { label: '全部', value: 'all' },
@@ -109,169 +112,74 @@ const filters = [
   { label: '风暴豁免', value: 'exempt' }
 ]
 
-const tools = ref([
-  {
-    name: 'read_file',
-    description: '读取工作区内的文件内容。返回完整的文本内容（无行号标注）。',
-    readonly: true,
-    write: false,
-    stormExempt: true,
-    params: [
-      { name: 'path', type: 'string', required: true, description: '文件路径（相对于工作区根目录）' },
-      { name: 'head', type: 'int', required: false, description: '返回前 N 行' },
-      { name: 'tail', type: 'int', required: false, description: '返回后 N 行' },
-      { name: 'range', type: 'string', required: false, description: '行范围 "start-end"，如 "50-100"' }
-    ],
-    example: 'read_file({ path: "src/main.java", head: 50 })',
-    notes: ['完整读取：默认返回整个文件内容', '范围读取：通过参数控制输出范围', '大文件处理：超过 32 MiB 的文件会被拒绝读取']
-  },
-  {
-    name: 'edit_file',
-    description: '对已有文件执行 SEARCH/REPLACE 编辑。这是修改代码的主要工具。',
-    readonly: false,
-    write: true,
-    stormExempt: false,
-    params: [
-      { name: 'path', type: 'string', required: true, description: '文件路径' },
-      { name: 'search', type: 'string', required: true, description: '要搜索替换的精确文本（必须唯一）' },
-      { name: 'replace', type: 'string', required: true, description: '替换后的文本' }
-    ],
-    example: 'edit_file({ path: "src/Hello.java", search: "Hello!", replace: "Hello, World!" })',
-    notes: ['search 必须唯一：要搜索的文本在文件中只能出现一次', '精确匹配：search 文本必须与文件中完全一致', '缩进敏感：search/replace 中的缩进必须与源文件完全一致']
-  },
-  {
-    name: 'multi_edit',
-    description: '跨一个或多个文件原子性地执行批量 SEARCH/REPLACE 编辑。',
-    readonly: false,
-    write: true,
-    stormExempt: false,
-    params: [
-      { name: 'edits', type: 'array', required: true, description: '编辑列表，每项包含 path, search, replace' }
-    ],
-    example: 'multi_edit({ edits: [{ path: "file1.java", search: "A", replace: "B" }, { path: "file2.java", search: "C", replace: "D" }] })',
-    notes: ['原子性：先验证所有编辑项，全部通过验证后才执行写入', '回滚保护：写入过程中如果某一步失败，已写入的文件会被回滚']
-  },
-  {
-    name: 'write_file',
-    description: '创建新文件或覆盖已有文件的内容。父目录会自动创建。',
-    readonly: false,
-    write: true,
-    stormExempt: false,
-    params: [
-      { name: 'path', type: 'string', required: true, description: '文件路径（相对于工作区根目录）' },
-      { name: 'content', type: 'string', required: true, description: '文件内容' }
-    ],
-    example: 'write_file({ path: "src/Hello.java", content: "public class Hello {\\n    public static void main(String[] args) {\\n        System.out.println(\\"Hello!\\");\\n    }\\n}" })',
-    notes: ['创建新文件：指定 path 和 content，父目录不存在时会自动创建', '覆盖已有文件：会直接覆盖，不可恢复']
-  },
-  {
-    name: 'glob',
-    description: '按 glob 模式匹配文件名。基于工作区索引缓存，毫秒级响应。',
-    readonly: true,
-    write: false,
-    stormExempt: true,
-    params: [
-      { name: 'pattern', type: 'string', required: true, description: 'glob 模式' },
-      { name: 'maxResults', type: 'int', required: false, description: '最大返回条数，默认 200' }
-    ],
-    example: 'glob({ pattern: "**/*.java" })',
-    notes: ['** — 任意多级目录', '* — 单级内任意字符', '? — 单个任意字符', '{a,b} — 分支选择']
-  },
-  {
-    name: 'grep',
-    description: '在工作区文件中按正则表达式搜索内容。自动跳过二进制文件和大文件。',
-    readonly: true,
-    write: false,
-    stormExempt: true,
-    params: [
-      { name: 'pattern', type: 'string', required: true, description: '搜索模式（正则表达式）' },
-      { name: 'glob', type: 'string', required: false, description: '文件过滤 glob' },
-      { name: 'caseSensitive', type: 'boolean', required: false, description: '是否大小写敏感，默认 true' },
-      { name: 'maxResults', type: 'int', required: false, description: '最大返回条数，默认 200' }
-    ],
-    example: 'grep({ pattern: "class \\\\w+", glob: "*.java" })',
-    notes: ['支持正则语法', '自动跳过二进制文件、大文件（>2MB）', '首次调用自动构建索引并缓存']
-  },
-  {
-    name: 'tree',
-    description: '生成工作区的目录树结构。自动跳过无关目录。',
-    readonly: true,
-    write: false,
-    stormExempt: true,
-    params: [
-      { name: 'maxDepth', type: 'int', required: false, description: '最大递归深度，默认 3' }
-    ],
-    example: 'tree({ maxDepth: 2 })',
-    notes: ['maxDepth=3（默认）：输出 3 层深度的目录树', 'maxDepth=0：仅输出根目录', 'maxDepth=-1：不限深度，输出完整目录树']
-  },
-  {
-    name: 'run_command',
-    description: '在项目根目录运行 shell 命令；返回合并的 stdout+stderr。',
-    readonly: false,
-    write: true,
-    stormExempt: false,
-    params: [
-      { name: 'command', type: 'string', required: true, description: '完整命令行' },
-      { name: 'timeoutSec', type: 'int', required: false, description: '覆盖默认 60s 超时' }
-    ],
-    example: 'run_command({ command: "mvn compile" })',
-    notes: ['支持管道 | 和链式 && || ;', '不支持后台 & 和子shell $(...)', '不用于文件操作——使用 write_file/edit_file']
-  },
-  {
-    name: 'web_search',
-    description: '通过 DuckDuckGo Lite 搜索互联网。返回带有标题、URL 和摘要的排序结果。',
-    readonly: true,
-    write: false,
-    stormExempt: true,
-    params: [
-      { name: 'query', type: 'string', required: true, description: '搜索查询语句' }
-    ],
-    example: 'web_search({ query: "Java 8 新特性" })',
-    notes: ['搜索技术问题', '获取最新信息', '仅支持 HTTP/HTTPS']
-  },
-  {
-    name: 'web_fetch',
-    description: '下载指定 URL 的内容并返回可视化的文本。自动提取网页正文。',
-    readonly: true,
-    write: false,
-    stormExempt: true,
-    params: [
-      { name: 'url', type: 'string', required: true, description: '完整的 URL' }
-    ],
-    example: 'web_fetch({ url: "https://github.com/example/repo" })',
-    notes: ['获取文档：读取在线 API 文档、README', '获取问题解决方案：读取 StackOverflow、GitHub Issues']
-  },
-  {
-    name: 'remember',
-    description: '将信息持久化保存到 ~/.agent4j/memory/ 中，供未来的会话使用。',
-    readonly: false,
-    write: true,
-    stormExempt: false,
-    params: [
-      { name: 'name', type: 'string', required: true, description: '记忆标识' },
-      { name: 'type', type: 'string', required: true, description: '类型: user/feedback/project/reference' },
-      { name: 'scope', type: 'string', required: true, description: '作用域: global/project' },
-      { name: 'description', type: 'string', required: true, description: '简短描述' },
-      { name: 'content', type: 'string', required: true, description: '完整内容' },
-      { name: 'priority', type: 'int', required: false, description: '优先级: 0=low,1=medium,2=high' }
-    ],
-    example: 'remember({ name: "java-conventions", type: "project", scope: "project", description: "Java 编码规范", content: "使用驼峰命名法..." })',
-    notes: ['保存用户偏好', '保存项目信息', 'scope 选择：global=跨项目可用，project=仅当前项目']
-  },
-  {
-    name: 'task',
-    description: '创建一个隔离子代理来处理复杂的多步任务。子代理继承父代理的大部分工具。',
-    readonly: false,
-    write: true,
-    stormExempt: false,
-    params: [
-      { name: 'name', type: 'string', required: true, description: '技能名称' },
-      { name: 'arguments', type: 'string', required: false, description: '技能参数描述' }
-    ],
-    example: 'task({ name: "code-analysis", arguments: "分析 src 目录下的所有 Java 文件" })',
-    notes: ['任务分解：当主任务涉及多个独立子任务时使用', '隔离执行：子代理有独立的对话上下文', '结果返回：子代理完成后返回最终结果给主代理']
+const tools = ref([])
+
+const loadTools = async () => {
+  loading.value = true
+  error.value = ''
+  
+  try {
+    const response = await toolsAPI.list()
+    if (response.success && response.data) {
+      // 转换后端数据格式为前端格式
+      tools.value = response.data.map(tool => ({
+        name: tool.name,
+        description: tool.description,
+        readonly: tool.readonly || false,
+        write: !tool.readonly || false,
+        stormExempt: tool.stormExempt || false,
+        params: tool.parameters ? Object.entries(tool.parameters).map(([name, param]) => ({
+          name,
+          type: param.type || 'string',
+          required: param.required || false,
+          description: param.description || ''
+        })) : [],
+        example: tool.example || '',
+        notes: tool.notes || []
+      }))
+    } else {
+      error.value = response.error || '加载工具列表失败'
+    }
+  } catch (err) {
+    console.error('加载工具列表失败:', err)
+    error.value = '加载工具列表失败: ' + err.message
+    
+    // 使用默认工具列表作为后备
+    tools.value = [
+      {
+        name: 'read_file',
+        description: '读取工作区内的文件内容。返回完整的文本内容（无行号标注）。',
+        readonly: true,
+        write: false,
+        stormExempt: true,
+        params: [
+          { name: 'path', type: 'string', required: true, description: '文件路径（相对于工作区根目录）' },
+          { name: 'head', type: 'int', required: false, description: '返回前 N 行' },
+          { name: 'tail', type: 'int', required: false, description: '返回后 N 行' },
+          { name: 'range', type: 'string', required: false, description: '行范围 "start-end"，如 "50-100"' }
+        ],
+        example: 'read_file({ path: "src/main.java", head: 50 })',
+        notes: ['完整读取：默认返回整个文件内容', '范围读取：通过参数控制输出范围', '大文件处理：超过 32 MiB 的文件会被拒绝读取']
+      },
+      {
+        name: 'edit_file',
+        description: '对已有文件执行 SEARCH/REPLACE 编辑。这是修改代码的主要工具。',
+        readonly: false,
+        write: true,
+        stormExempt: false,
+        params: [
+          { name: 'path', type: 'string', required: true, description: '文件路径' },
+          { name: 'search', type: 'string', required: true, description: '要搜索替换的精确文本（必须唯一）' },
+          { name: 'replace', type: 'string', required: true, description: '替换后的文本' }
+        ],
+        example: 'edit_file({ path: "src/Hello.java", search: "Hello!", replace: "Hello, World!" })',
+        notes: ['search 必须唯一：要搜索的文本在文件中只能出现一次', '精确匹配：search 文本必须与文件中完全一致', '缩进敏感：search/replace 中的缩进必须与源文件完全一致']
+      }
+    ]
+  } finally {
+    loading.value = false
   }
-])
+}
 
 const readonlyToolsCount = computed(() => {
   return tools.value.filter(tool => tool.readonly).length
@@ -328,6 +236,10 @@ const resetFilters = () => {
   searchQuery.value = ''
   activeFilter.value = 'all'
 }
+
+onMounted(() => {
+  loadTools()
+})
 </script>
 
 <style scoped>

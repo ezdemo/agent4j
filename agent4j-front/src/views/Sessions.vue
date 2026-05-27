@@ -107,60 +107,24 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { sessionsAPI, configAPI } from '../services/api'
 
 const currentPage = ref(1)
 const pageSize = 10
+const loading = ref(false)
+const error = ref('')
 
-const sessions = ref([
-  {
-    id: 'sess-001',
-    title: 'Java 项目分析',
-    status: 'active',
-    createdAt: '2024-03-20 14:30',
-    lastActivity: '2024-03-20 15:45',
-    messageCount: 12,
-    tokenUsage: '15,420',
-    lastMessage: '请帮我分析一下这个项目的架构设计...',
-    tags: ['Java', '架构分析', '代码审查']
-  },
-  {
-    id: 'sess-002',
-    title: 'Vue3 组件开发',
-    status: 'completed',
-    createdAt: '2024-03-19 10:15',
-    lastActivity: '2024-03-19 12:30',
-    messageCount: 8,
-    tokenUsage: '9,850',
-    lastMessage: '这个组件已经完成了，可以正常工作。',
-    tags: ['Vue3', '前端开发', '组件']
-  },
-  {
-    id: 'sess-003',
-    title: '数据库优化',
-    status: 'completed',
-    createdAt: '2024-03-18 16:20',
-    lastActivity: '2024-03-18 18:10',
-    messageCount: 15,
-    tokenUsage: '18,720',
-    lastMessage: '优化后的查询性能提升了3倍。',
-    tags: ['SQL', '性能优化', '数据库']
-  },
-  {
-    id: 'sess-004',
-    title: 'API 设计讨论',
-    status: 'active',
-    createdAt: '2024-03-20 09:00',
-    lastActivity: '2024-03-20 09:45',
-    messageCount: 5,
-    tokenUsage: '6,340',
-    lastMessage: '我们需要设计一个RESTful API来处理用户认证。',
-    tags: ['API', 'RESTful', '设计']
-  }
-])
+const sessions = ref([])
+const currentSession = ref(null)
+const usageStats = ref({
+  totalTokens: 0,
+  promptTokens: 0,
+  completionTokens: 0
+})
 
 const totalMessages = computed(() => {
-  return sessions.value.reduce((sum, session) => sum + session.messageCount, 0)
+  return sessions.value.reduce((sum, session) => sum + (session.messageCount || 0), 0)
 })
 
 const totalToolCalls = computed(() => {
@@ -175,9 +139,7 @@ const averageSessionLength = computed(() => {
 })
 
 const totalTokens = computed(() => {
-  return sessions.value.reduce((sum, session) => {
-    return sum + parseInt(session.tokenUsage.replace(/,/g, ''))
-  }, 0).toLocaleString()
+  return usageStats.value.totalTokens.toLocaleString()
 })
 
 const totalPages = computed(() => {
@@ -190,30 +152,82 @@ const paginatedSessions = computed(() => {
   return sessions.value.slice(start, end)
 })
 
-const createNewSession = () => {
-  const newSession = {
-    id: `sess-${String(sessions.value.length + 1).padStart(3, '0')}`,
-    title: `新会话 ${sessions.value.length + 1}`,
-    status: 'active',
-    createdAt: new Date().toLocaleString('zh-CN'),
-    lastActivity: new Date().toLocaleString('zh-CN'),
-    messageCount: 0,
-    tokenUsage: '0',
-    lastMessage: '会话刚刚创建',
-    tags: ['新会话']
-  }
+const loadSessions = async () => {
+  loading.value = true
+  error.value = ''
   
-  sessions.value.unshift(newSession)
-  
-  window.dispatchEvent(new CustomEvent('terminal-output', { 
-    detail: { 
-      type: 'system', 
-      text: `已创建新会话: ${newSession.id}` 
+  try {
+    const response = await sessionsAPI.list()
+    if (response.success && response.data) {
+      sessions.value = response.data.map(session => ({
+        id: session.name,
+        title: session.name,
+        status: session.isCurrent ? 'active' : 'completed',
+        createdAt: session.createdAt || new Date().toLocaleString('zh-CN'),
+        lastActivity: session.lastActivity || new Date().toLocaleString('zh-CN'),
+        messageCount: session.messageCount || 0,
+        tokenUsage: session.tokenUsage || '0',
+        lastMessage: session.lastMessage || '无消息',
+        tags: session.tags || []
+      }))
+    } else {
+      error.value = response.error || '加载会话列表失败'
     }
-  }))
+  } catch (err) {
+    console.error('加载会话列表失败:', err)
+    error.value = '加载会话列表失败: ' + err.message
+  } finally {
+    loading.value = false
+  }
 }
 
-const refreshSessions = () => {
+const loadCurrentSession = async () => {
+  try {
+    const response = await sessionsAPI.getCurrent()
+    if (response.success && response.data) {
+      currentSession.value = response.data
+    }
+  } catch (err) {
+    console.error('加载当前会话失败:', err)
+  }
+}
+
+const loadUsageStats = async () => {
+  try {
+    const response = await configAPI.getUsage()
+    if (response.success && response.data) {
+      usageStats.value = response.data
+    }
+  } catch (err) {
+    console.error('加载用量统计失败:', err)
+  }
+}
+
+const createNewSession = async () => {
+  try {
+    const response = await sessionsAPI.createNew()
+    if (response.success) {
+      await loadSessions()
+      window.dispatchEvent(new CustomEvent('terminal-output', { 
+        detail: { 
+          type: 'system', 
+          text: '已创建新会话' 
+        }
+      }))
+    } else {
+      error.value = response.error || '创建新会话失败'
+    }
+  } catch (err) {
+    console.error('创建新会话失败:', err)
+    error.value = '创建新会话失败: ' + err.message
+  }
+}
+
+const refreshSessions = async () => {
+  await loadSessions()
+  await loadCurrentSession()
+  await loadUsageStats()
+  
   window.dispatchEvent(new CustomEvent('terminal-output', { 
     detail: { 
       type: 'system', 
@@ -222,16 +236,26 @@ const refreshSessions = () => {
   }))
 }
 
-const loadSession = (sessionId) => {
-  window.dispatchEvent(new CustomEvent('terminal-output', { 
-    detail: { 
-      type: 'system', 
-      text: `正在加载会话: ${sessionId}` 
+const loadSession = async (sessionId) => {
+  try {
+    const response = await sessionsAPI.switchSession(sessionId)
+    if (response.success) {
+      window.dispatchEvent(new CustomEvent('terminal-output', { 
+        detail: { 
+          type: 'system', 
+          text: `已切换到会话: ${sessionId}` 
+        }
+      }))
+      
+      // 刷新当前会话状态
+      await loadCurrentSession()
+    } else {
+      error.value = response.error || '加载会话失败'
     }
-  }))
-  
-  // 实际应用中会导航到聊天页面并加载会话
-  // router.push('/chat?session=' + sessionId)
+  } catch (err) {
+    console.error('加载会话失败:', err)
+    error.value = '加载会话失败: ' + err.message
+  }
 }
 
 const exportSession = (sessionId) => {
@@ -259,18 +283,25 @@ const exportSession = (sessionId) => {
   }
 }
 
-const deleteSession = (sessionId) => {
+const deleteSession = async (sessionId) => {
   if (confirm(`确定要删除会话 ${sessionId} 吗？此操作不可恢复。`)) {
-    const index = sessions.value.findIndex(s => s.id === sessionId)
-    if (index > -1) {
-      sessions.value.splice(index, 1)
-      
-      window.dispatchEvent(new CustomEvent('terminal-output', { 
-        detail: { 
-          type: 'system', 
-          text: `会话 ${sessionId} 已删除` 
-        }
-      }))
+    try {
+      const response = await sessionsAPI.deleteSession(sessionId)
+      if (response.success) {
+        await loadSessions()
+        
+        window.dispatchEvent(new CustomEvent('terminal-output', { 
+          detail: { 
+            type: 'system', 
+            text: `会话 ${sessionId} 已删除` 
+          }
+        }))
+      } else {
+        error.value = response.error || '删除会话失败'
+      }
+    } catch (err) {
+      console.error('删除会话失败:', err)
+      error.value = '删除会话失败: ' + err.message
     }
   }
 }
@@ -286,6 +317,12 @@ const nextPage = () => {
     currentPage.value++
   }
 }
+
+onMounted(() => {
+  loadSessions()
+  loadCurrentSession()
+  loadUsageStats()
+})
 </script>
 
 <style scoped>

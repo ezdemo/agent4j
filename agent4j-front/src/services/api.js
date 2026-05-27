@@ -56,88 +56,176 @@ api.interceptors.response.use(
   }
 )
 
-// API方法
+// 聊天 API
 export const chatAPI = {
-  // 发送消息
-  sendMessage: (message, sessionId = null) => {
-    return api.post('/chat', {
-      message,
-      sessionId
+  // 同步聊天 - POST /api/chat
+  sendMessage: (message) => {
+    return api.post('/chat', { message })
+  },
+  
+  // SSE流式聊天 - POST /api/chat/stream
+  sendMessageStream: (message, onMessage, onError) => {
+    return new Promise((resolve, reject) => {
+      const eventSource = new EventSource(`/api/chat/stream?message=${encodeURIComponent(message)}`)
+      
+      eventSource.onmessage = (event) => {
+        try {
+          const data = JSON.parse(event.data)
+          if (onMessage) onMessage(data)
+        } catch (e) {
+          console.error('解析SSE消息失败:', e)
+        }
+      }
+      
+      eventSource.onerror = (error) => {
+        if (onError) onError(error)
+        eventSource.close()
+        reject(error)
+      }
+      
+      // 返回EventSource以便外部可以关闭
+      resolve(eventSource)
     })
-  },
-  
-  // 获取会话历史
-  getHistory: (sessionId) => {
-    return api.get(`/chat/history/${sessionId}`)
-  },
-  
-  // 创建新会话
-  createSession: () => {
-    return api.post('/chat/session')
-  },
-  
-  // 获取会话列表
-  getSessions: () => {
-    return api.get('/chat/sessions')
-  },
-  
-  // 删除会话
-  deleteSession: (sessionId) => {
-    return api.delete(`/chat/session/${sessionId}`)
   }
 }
 
+// Agent API
+export const agentAPI = {
+  // 获取Agent状态 - GET /api/agent/status
+  getStatus: () => {
+    return api.get('/agent/status')
+  },
+  
+  // 获取历史消息 - GET /api/agent/history
+  getHistory: () => {
+    return api.get('/agent/history')
+  },
+  
+  // 撤回并重试 - POST /api/agent/retry
+  retryLast: () => {
+    return api.post('/agent/retry')
+  },
+  
+  // 回退到指定轮次 - POST /api/agent/rewind
+  rewind: (step) => {
+    return api.post('/agent/rewind', { step })
+  },
+  
+  // 折叠上下文 - POST /api/agent/compact
+  compact: () => {
+    return api.post('/agent/compact')
+  },
+  
+  // 进入计划模式 - POST /api/agent/plan/enable
+  enablePlanMode: () => {
+    return api.post('/agent/plan/enable')
+  },
+  
+  // 退出计划模式 - POST /api/agent/plan/disable
+  disablePlanMode: () => {
+    return api.post('/agent/plan/disable')
+  },
+  
+  // 获取HITL状态 - GET /api/agent/hitl/status
+  getHitlStatus: () => {
+    return api.get('/agent/hitl/status')
+  },
+  
+  // 切换HITL模式 - POST /api/agent/hitl/toggle
+  toggleHitl: () => {
+    return api.post('/agent/hitl/toggle')
+  },
+  
+  // 批准HITL - POST /api/agent/hitl/approve
+  approveHitl: () => {
+    return api.post('/agent/hitl/approve')
+  },
+  
+  // 拒绝HITL - POST /api/agent/hitl/deny
+  denyHitl: () => {
+    return api.post('/agent/hitl/deny')
+  },
+  
+  // 获取待审批列表 - GET /api/agent/hitl/pending
+  getPendingHitl: () => {
+    return api.get('/agent/hitl/pending')
+  }
+}
+
+// 会话 API
+export const sessionsAPI = {
+  // 列出所有会话 - GET /api/sessions
+  list: () => {
+    return api.get('/sessions')
+  },
+  
+  // 获取当前会话信息 - GET /api/sessions/current
+  getCurrent: () => {
+    return api.get('/sessions/current')
+  },
+  
+  // 新建空白会话 - POST /api/sessions/new
+  createNew: () => {
+    return api.post('/sessions/new')
+  },
+  
+  // 切换会话 - POST /api/sessions/{name}
+  switchSession: (name) => {
+    return api.post(`/sessions/${name}`)
+  },
+  
+  // 删除会话 - DELETE /api/sessions/{name}
+  deleteSession: (name) => {
+    return api.delete(`/sessions/${name}`)
+  }
+}
+
+// 工具 API
 export const toolsAPI = {
-  // 获取工具列表
-  getTools: () => {
+  // 列出所有已注册工具 - GET /api/tools
+  list: () => {
     return api.get('/tools')
   },
   
-  // 执行工具
-  executeTool: (toolName, params) => {
-    return api.post('/tools/execute', {
-      tool: toolName,
-      params
-    })
+  // 获取工具详情 - GET /api/tools/{name}
+  getDetails: (name) => {
+    return api.get(`/tools/${name}`)
   },
   
-  // 获取工具详情
-  getToolDetails: (toolName) => {
-    return api.get(`/tools/${toolName}`)
+  // 直接执行工具 - POST /api/tools/{name}/execute
+  execute: (name, arguments_) => {
+    return api.post(`/tools/${name}/execute`, { arguments: arguments_ })
   }
 }
 
-export const settingsAPI = {
-  // 获取设置
-  getSettings: () => {
-    return api.get('/settings')
+// 配置 API
+export const configAPI = {
+  // 获取当前配置 - GET /api/config
+  getConfig: () => {
+    return api.get('/config')
   },
   
-  // 更新设置
-  updateSettings: (settings) => {
-    return api.put('/settings', settings)
-  },
-  
-  // 重置设置
-  resetSettings: () => {
-    return api.post('/settings/reset')
+  // 获取Token用量统计 - GET /api/usage
+  getUsage: () => {
+    return api.get('/usage')
   }
 }
 
+// 系统 API（兼容性保留）
 export const systemAPI = {
-  // 获取系统状态
+  // 获取系统状态（兼容旧接口）
   getStatus: () => {
-    return api.get('/system/status')
+    return agentAPI.getStatus()
   },
   
-  // 获取系统信息
+  // 获取系统信息（兼容旧接口）
   getInfo: () => {
-    return api.get('/system/info')
+    return configAPI.getConfig()
   },
   
-  // 健康检查
+  // 健康检查（兼容旧接口）
   healthCheck: () => {
-    return api.get('/system/health')
+    return api.get('/health')
   }
 }
 
