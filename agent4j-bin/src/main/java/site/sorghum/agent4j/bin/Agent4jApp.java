@@ -57,6 +57,7 @@ public class Agent4jApp {
         printBanner(apiUrl, apiKey, model, config, cmdRegistry);
 
         Agent4jAgent agent = Agent4jAgent.builder()
+                .config(config)
                 .apiUrl(apiUrl)
                 .apiKey(apiKey)
                 .model(model)
@@ -142,6 +143,7 @@ public class Agent4jApp {
         System.out.println("║ API: " + padRight(truncate(apiUrl, 25), 25) + "║");
         System.out.println("╠══════════════════════════════════════════╣");
         System.out.println("║ /help 查看命令列表       /exit 退出       ║");
+        System.out.println("║ HITL: " + padRight(config.hitl() ? "开启 (工具调用需审批)" : "关闭", 33) + "║");
         System.out.println("╚══════════════════════════════════════════╝");
         System.out.println();
     }

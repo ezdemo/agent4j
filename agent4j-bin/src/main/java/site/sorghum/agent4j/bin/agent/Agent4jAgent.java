@@ -104,7 +104,7 @@ public class Agent4jAgent {
             System.err.println("[session] 初始化失败: " + e.getMessage());
         }
 
-        this.loop = new AgentLoop(client, registry, ctx);
+        this.loop = new AgentLoop(client, registry, ctx, b.hitl);
     }
 
     /**
@@ -308,6 +308,7 @@ public class Agent4jAgent {
         Path workspace = Paths.get(".").toAbsolutePath();
         Set<String> disabledTools;
         List<String> blockedPaths;
+        boolean hitl;
         /** 用户是否显式设置过 systemPrompt */
         private boolean systemPromptExplicitlySet = false;
 
@@ -327,6 +328,7 @@ public class Agent4jAgent {
             this.workspace = c.workspaceDir();
             this.disabledTools = c.disabledTools();
             this.blockedPaths = c.blockedPaths();
+            this.hitl = c.hitl();
             return this;
         }
 

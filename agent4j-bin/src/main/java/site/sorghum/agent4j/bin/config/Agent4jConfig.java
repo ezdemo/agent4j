@@ -32,7 +32,8 @@ public class Agent4jConfig {
             String defaultConfig = "{\n"
                     + "  \"baseUrl\": \"http://localhost:11434/v1\",\n"
                     + "  \"apiKey\": \"sk-your-api-key\",\n"
-                    + "  \"workspaceDir\": \".\"\n"
+                    + "  \"workspaceDir\": \".\",\n"
+                    + "  \"hitl\": false\n"
                     + "}";
             Files.write(configPath, defaultConfig.getBytes(StandardCharsets.UTF_8));
             System.err.println("[config] 已创建默认配置文件: " + configPath);
@@ -128,6 +129,17 @@ public class Agent4jConfig {
     public String lang() {
         String l = root.select("$.lang").getString();
         return l != null ? l : "EN";
+    }
+
+    /**
+     * 获取 HITL（Human-In-The-Loop）模式默认状态。
+     * true = 启动时默认开启 HITL，执行非只读工具前需用户审批。
+     * false = 默认关闭。未配置时默认 false。
+     */
+    public boolean hitl() {
+        ONode n = root.select("$.hitl");
+        if (n == null || n.isNull()) return false;
+        return n.getBoolean();
     }
 
     /**

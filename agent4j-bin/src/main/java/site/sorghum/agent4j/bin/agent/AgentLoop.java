@@ -82,10 +82,15 @@ public class AgentLoop {
     public boolean hasPendingHITL() { return hitlState == HitlState.PENDING; }
 
     public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx) {
+        this(client, registry, ctx, false);
+    }
+
+    public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx, boolean hitlDefault) {
         this.client = client;
         this.registry = registry;
         this.dispatcher = new ToolDispatcher(registry);
         this.ctx = ctx;
+        this.hitlMode = hitlDefault;
     }
 
     /** 手动触发上下文折叠（/compact 命令）— 保留近20条消息，较早消息摘要 */
