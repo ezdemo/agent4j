@@ -354,15 +354,62 @@ const loadHistory = async () => {
   try {
     const response = await agentAPI.getHistory()
     if (response.success && response.data) {
-      messages.value = response.data.map((msg, index) => ({
-        id: Date.now() + index,
-        role: msg.role,
-        content: msg.content,
-        time: new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' }),
-        thinking: msg.thinking || '',
-        showThinking: false,
-        toolCalls: msg.toolCalls || []
-      }))
+      // 后端返回的是 JSONL 原始格式，需要转换为前端消息格式
+      // 消息结构：user / assistant(含 reasoning_content + tool_calls) / tool(工具结果)
+      const raw = response.data
+
+      // 先收集所有 tool_call_id → tool result 的映射
+      const toolResults = {}
+      for (const msg of raw) {
+        if (msg.role === 'tool' && msg.tool_call_id) {
+          toolResults[msg.tool_call_id] = msg.content || ''
+        }
+      }
+
+      // 合并 assistant + tool 消息
+      const merged = []
+      for (const msg of raw) {
+        if (msg.role === 'tool') continue // 已合并到 assistant，跳过
+
+        const item = {
+          id: Date.now() + merged.length,
+          role: msg.role,
+          content: msg.content || '',
+          time: new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' }),
+          thinking: msg.reasoning_content || '',
+          showThinking: false,
+          toolCalls: []
+        }
+
+        // 解析 tool_calls（后端格式：OpenAI function calling 结构）
+        if (msg.tool_calls && Array.isArray(msg.tool_calls)) {
+          item.toolCalls = msg.tool_calls.map(tc => {
+            let name = ''
+            let args = tc.function?.arguments || tc.arguments || ''
+            if (tc.function) {
+              name = tc.function.name || ''
+            } else {
+              name = tc.name || ''
+            }
+            // arguments 是 JSON 字符串，需要解析
+            if (typeof args === 'string') {
+              try { args = JSON.parse(args) } catch (e) { /* 保持原字符串 */ }
+            }
+            // 从 toolResults 中查找对应结果
+            const result = toolResults[tc.id] || ''
+            return {
+              name,
+              status: result ? '成功' : '执行中',
+              arguments: args,
+              result
+            }
+          })
+        }
+
+        merged.push(item)
+      }
+
+      messages.value = merged
     }
   } catch (error) {
     console.error('加载历史消息失败:', error)
