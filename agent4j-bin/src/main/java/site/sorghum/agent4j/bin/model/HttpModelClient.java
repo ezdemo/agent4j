@@ -92,6 +92,7 @@ public class HttpModelClient implements ModelClient {
         // DeepSeek Reasoner 64K，V3/V4 系列 1000K（1M 上下文窗口）
         if (m.contains("reasoner")) return 64_000;
         if (m.contains("deepseek")) return 1_000_000;
+        if (m.contains("mimo")) return 1_000_000;
         // GPT-4 / o1 系列 128K
         if (m.contains("gpt-4") || m.contains("o1") || m.contains("o3")) return 128_000;
         // 默认
@@ -108,8 +109,9 @@ public class HttpModelClient implements ModelClient {
         jsonBody = bodyWithStream.toJson();
 
         for (int attempt = 0; ; attempt++) {
+            HttpURLConnection conn = null;
             try {
-                HttpURLConnection conn = (HttpURLConnection) URI.create(apiUrl).toURL().openConnection();
+                conn = (HttpURLConnection) URI.create(apiUrl).toURL().openConnection();
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("Content-Type", "application/json");
                 conn.setRequestProperty("Authorization", "Bearer " + apiKey);
@@ -121,7 +123,7 @@ public class HttpModelClient implements ModelClient {
                     os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
                 }
 
-                logger.debug("发送API请求到 {}，模型: {}，消息数: {}，工具数: {}", 
+                logger.debug("发送API请求到 {}，模型: {}，消息数: {}，工具数: {}",
                         apiUrl, model, messages.size(), tools != null ? tools.size() : 0);
 
                 int status = conn.getResponseCode();
@@ -129,8 +131,7 @@ public class HttpModelClient implements ModelClient {
                         ? conn.getInputStream()
                         : conn.getErrorStream();
                 String responseText = readFully(is);
-                conn.disconnect();
-                
+
                 logger.debug("收到API响应（完整响应）: {}", responseText);
 
                 if (retryable(status) && attempt < RETRY_DELAYS.length) {
@@ -163,6 +164,8 @@ public class HttpModelClient implements ModelClient {
                 logger.error("非流式API调用被中断", e);
                 Thread.currentThread().interrupt();
                 throw new IOException("Interrupted during retry", e);
+            } finally {
+                if (conn != null) conn.disconnect();
             }
         }
     }
@@ -191,8 +194,9 @@ public class HttpModelClient implements ModelClient {
         }
 
         for (int attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
+            HttpURLConnection conn = null;
             try {
-                HttpURLConnection conn = (HttpURLConnection) URI.create(apiUrl).toURL().openConnection();
+                conn = (HttpURLConnection) URI.create(apiUrl).toURL().openConnection();
                 conn.setRequestMethod("POST");
                 conn.setRequestProperty("Content-Type", "application/json");
                 conn.setRequestProperty("Authorization", "Bearer " + apiKey);
@@ -204,12 +208,11 @@ public class HttpModelClient implements ModelClient {
                     os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
                 }
 
-                logger.debug("发送流式API请求到 {}，模型: {}，消息数: {}，工具数: {}", 
+                logger.debug("发送流式API请求到 {}，模型: {}，消息数: {}，工具数: {}",
                         apiUrl, model, messages.size(), tools != null ? tools.size() : 0);
 
                 int status = conn.getResponseCode();
                 if (retryable(status) && attempt < RETRY_DELAYS.length) {
-                    conn.disconnect();
                     int delay = RETRY_DELAYS[attempt];
                     System.err.println("[retry] HTTP " + status + "，第" + (attempt + 1) + "次重试，等待" + delay + "s...");
                     Thread.sleep(delay * 1000L);
@@ -313,7 +316,7 @@ public class HttpModelClient implements ModelClient {
                                     existing.getOrNew("function").set("arguments",
                                             (prev != null ? prev : "") + (add != null ? add : ""));
                                 }
-                                logger.debug("tool_calls索引: {}, 函数名: {}", idx, 
+                                logger.debug("tool_calls索引: {}, 函数名: {}", idx,
                                         func.get("name").isNull() ? "null" : func.get("name").getString());
                             }
                         }
@@ -325,7 +328,6 @@ public class HttpModelClient implements ModelClient {
                     }
                     callback.onDone();
                 }
-                conn.disconnect();
                 return; // success
 
             } catch (IOException e) {
@@ -348,6 +350,8 @@ public class HttpModelClient implements ModelClient {
                 // 非 IO 异常（如 JSON 解析错误），不重试
                 callback.onError(e.getMessage());
                 return;
+            } finally {
+                if (conn != null) conn.disconnect();
             }
         }
     }

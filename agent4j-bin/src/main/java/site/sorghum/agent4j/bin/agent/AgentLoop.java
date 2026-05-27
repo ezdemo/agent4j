@@ -40,6 +40,9 @@ public class AgentLoop {
     /** 最近一次 API 返回的 prompt_tokens（0 = 尚无数据，回退到字符估算） */
     private int lastPromptTokens = 0;
 
+    /** storm 自愈尝试次数上限（每回合重置），防止无限循环 */
+    private static final int MAX_SELF_CORRECTION_ATTEMPTS = 5;
+
     public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx) {
         this.client = client;
         this.registry = registry;
@@ -117,6 +120,9 @@ public class AgentLoop {
 
         // 每回合重置 storm 窗口
         dispatcher.resetStorm();
+
+        // storm 自愈尝试计数器（每回合重置），防止无限循环
+        int selfCorrectionAttempts = 0;
 
         // 工具定义从 prefix 缓存获取（跨 turn 稳定 → 缓存命中）
         List<Map<String, Object>> tools = ctx.tools();
@@ -331,8 +337,8 @@ public class AgentLoop {
                 ctx.addToolResult((String) tr.get("tool_call_id"), (String) tr.get("content"));
             }
 
-            // Self-Correction：如果所有调用都被 storm 抑制，给模型一次自愈机会
-            // （allSuppressed + self-correction）
+            // Self-Correction：如果所有调用都被 storm 抑制，给模型有限次自愈机会
+            // （allSuppressed + self-correction），超过次数上限则停止循环
             if (anySuppressed.get()) {
                 boolean allSuppressed = true;
                 for (Map<String, Object> tr : toolResults) {
@@ -343,7 +349,16 @@ public class AgentLoop {
                     }
                 }
                 if (allSuppressed) {
-                    output.onLog(AgentOutput.LogLevel.INFO, "[self-correct] 所有工具调用被 storm 抑制，给模型一次自愈机会");
+                    selfCorrectionAttempts++;
+                    if (selfCorrectionAttempts > MAX_SELF_CORRECTION_ATTEMPTS) {
+                        output.onLog(AgentOutput.LogLevel.WARN,
+                                "[self-correct] 已达自愈尝试上限（" + MAX_SELF_CORRECTION_ATTEMPTS + "次），停止循环");
+                        String fallback = "所有工具调用均被风暴断路器抑制，无法继续执行。请换用其他方式完成任务。";
+                        ctx.addAssistant(fallback, null, null);
+                        return fallback;
+                    }
+                    output.onLog(AgentOutput.LogLevel.INFO,
+                            "[self-correct] 所有工具调用被 storm 抑制，第" + selfCorrectionAttempts + "次自愈尝试");
                     // 在上下文中插入提示，让模型换种方式继续
                     ctx.addUser("[系统提示：你刚刚重复调用了相同的工具。请换一种方式完成任务，"
                             + "或直接用文本回答。]");
