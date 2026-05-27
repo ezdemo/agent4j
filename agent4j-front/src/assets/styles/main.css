@@ -1,0 +1,377 @@
+/* 复古终端全局样式 */
+:root {
+  --terminal-green: #33ff33;
+  --terminal-green-dark: #1a8c1a;
+  --terminal-amber: #ffb000;
+  --terminal-red: #ff3333;
+  --terminal-blue: #3399ff;
+  --terminal-cyan: #33ffff;
+  --terminal-magenta: #ff33ff;
+  --terminal-yellow: #ffff33;
+  --terminal-white: #ffffff;
+  --terminal-gray: #888888;
+  
+  --bg-primary: #0a0a0a;
+  --bg-secondary: #1a1a1a;
+  --bg-tertiary: #2a2a2a;
+  --border-color: #333333;
+  
+  --font-mono: 'Courier New', 'Consolas', 'Monaco', monospace;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --font-size-xl: 1.25rem;
+  
+  --spacing-xs: 0.25rem;
+  --spacing-sm: 0.5rem;
+  --spacing-md: 1rem;
+  --spacing-lg: 1.5rem;
+  --spacing-xl: 2rem;
+}
+
+/* 全局重置 */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-mono);
+  background-color: var(--bg-primary);
+  color: var(--terminal-green);
+  line-height: 1.5;
+  font-size: var(--font-size-base);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 复古按钮样式 */
+.terminal-button {
+  font-family: var(--font-mono);
+  background: transparent;
+  border: 1px solid var(--terminal-green);
+  color: var(--terminal-green);
+  padding: var(--spacing-sm) var(--spacing-md);
+  cursor: pointer;
+  transition: all 0.2s;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+}
+
+.terminal-button:hover {
+  background: var(--terminal-green);
+  color: var(--bg-primary);
+  box-shadow: 0 0 10px var(--terminal-green);
+}
+
+.terminal-button:active {
+  transform: scale(0.98);
+}
+
+/* 终端输入框 */
+.terminal-input {
+  font-family: var(--font-mono);
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  color: var(--terminal-green);
+  padding: var(--spacing-sm);
+  width: 100%;
+  font-size: var(--font-size-base);
+}
+
+.terminal-input:focus {
+  outline: none;
+  border-color: var(--terminal-green);
+  box-shadow: 0 0 5px var(--terminal-green);
+}
+
+.terminal-input::placeholder {
+  color: var(--gray);
+}
+
+/* 终端卡片 */
+.terminal-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  padding: var(--spacing-md);
+  margin-bottom: var(--spacing-md);
+}
+
+.terminal-card-header {
+  border-bottom: 1px solid var(--border-color);
+  padding-bottom: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  color: var(--terminal-amber);
+  font-weight: bold;
+}
+
+/* 终端表格 */
+.terminal-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: var(--font-mono);
+}
+
+.terminal-table th,
+.terminal-table td {
+  border: 1px solid var(--border-color);
+  padding: var(--spacing-sm);
+  text-align: left;
+}
+
+.terminal-table th {
+  background: var(--bg-tertiary);
+  color: var(--terminal-amber);
+}
+
+.terminal-table tr:hover {
+  background: var(--bg-tertiary);
+}
+
+/* 终端消息气泡 */
+.terminal-message {
+  margin-bottom: var(--spacing-md);
+  padding: var(--spacing-md);
+  border-left: 3px solid var(--terminal-green);
+}
+
+.terminal-message.user {
+  border-left-color: var(--terminal-blue);
+}
+
+.terminal-message.assistant {
+  border-left-color: var(--terminal-green);
+}
+
+.terminal-message.system {
+  border-left-color: var(--terminal-amber);
+}
+
+.terminal-message.error {
+  border-left-color: var(--terminal-red);
+}
+
+/* 终端列表 */
+.terminal-list {
+  list-style: none;
+}
+
+.terminal-list-item {
+  padding: var(--spacing-sm);
+  border-bottom: 1px solid var(--border-color);
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.terminal-list-item:hover {
+  background: var(--bg-tertiary);
+}
+
+/* 终端标签 */
+.terminal-tag {
+  display: inline-block;
+  padding: var(--spacing-xs) var(--spacing-sm);
+  font-size: var(--font-size-xs);
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  margin-right: var(--spacing-sm);
+}
+
+.terminal-tag.green {
+  background: rgba(51, 255, 51, 0.1);
+  color: var(--terminal-green);
+  border: 1px solid var(--terminal-green);
+}
+
+.terminal-tag.amber {
+  background: rgba(255, 176, 0, 0.1);
+  color: var(--terminal-amber);
+  border: 1px solid var(--terminal-amber);
+}
+
+.terminal-tag.red {
+  background: rgba(255, 51, 51, 0.1);
+  color: var(--terminal-red);
+  border: 1px solid var(--terminal-red);
+}
+
+/* 终端进度条 */
+.terminal-progress {
+  width: 100%;
+  height: 20px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  overflow: hidden;
+  position: relative;
+}
+
+.terminal-progress-bar {
+  height: 100%;
+  background: var(--terminal-green);
+  transition: width 0.3s;
+  position: relative;
+}
+
+.terminal-progress-bar::after {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.1) 0%,
+    rgba(255, 255, 255, 0.2) 50%,
+    rgba(255, 255, 255, 0.1) 100%
+  );
+  animation: progress-shine 2s infinite;
+}
+
+@keyframes progress-shine {
+  0% { transform: translateX(-100%); }
+  100% { transform: translateX(100%); }
+}
+
+/* 终端工具提示 */
+.terminal-tooltip {
+  position: relative;
+  display: inline-block;
+}
+
+.terminal-tooltip .tooltip-text {
+  visibility: hidden;
+  width: 200px;
+  background-color: var(--bg-tertiary);
+  color: var(--terminal-green);
+  text-align: center;
+  border-radius: 4px;
+  padding: var(--spacing-sm);
+  position: absolute;
+  z-index: 1000;
+  bottom: 125%;
+  left: 50%;
+  margin-left: -100px;
+  opacity: 0;
+  transition: opacity 0.3s;
+  border: 1px solid var(--border-color);
+}
+
+.terminal-tooltip:hover .tooltip-text {
+  visibility: visible;
+  opacity: 1;
+}
+
+/* 终端分割线 */
+.terminal-divider {
+  border: none;
+  border-top: 1px solid var(--border-color);
+  margin: var(--spacing-md) 0;
+}
+
+/* 终端代码块 */
+.terminal-code {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  padding: var(--spacing-md);
+  font-family: var(--font-mono);
+  overflow-x: auto;
+  white-space: pre-wrap;
+  word-wrap: break-word;
+}
+
+.terminal-code .keyword {
+  color: var(--terminal-magenta);
+}
+
+.terminal-code .string {
+  color: var(--terminal-yellow);
+}
+
+.terminal-code .comment {
+  color: var(--terminal-gray);
+  font-style: italic;
+}
+
+.terminal-code .function {
+  color: var(--terminal-cyan);
+}
+
+.terminal-code .number {
+  color: var(--terminal-amber);
+}
+
+/* 终端动画 */
+.terminal-blink {
+  animation: terminal-blink 1s infinite;
+}
+
+@keyframes terminal-blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
+.terminal-typing {
+  overflow: hidden;
+  border-right: 2px solid var(--terminal-green);
+  white-space: nowrap;
+  animation: terminal-typing 3s steps(40, end),
+             terminal-blink-caret 0.75s step-end infinite;
+}
+
+@keyframes terminal-typing {
+  from { width: 0 }
+  to { width: 100% }
+}
+
+@keyframes terminal-blink-caret {
+  from, to { border-color: transparent }
+  50% { border-color: var(--terminal-green); }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  :root {
+    --font-size-base: 0.9rem;
+  }
+  
+  .terminal-header {
+    flex-direction: column;
+    gap: var(--spacing-sm);
+  }
+  
+  .terminal-main {
+    padding: var(--spacing-sm);
+  }
+  
+  .terminal-footer {
+    padding: var(--spacing-sm);
+  }
+}
+
+/* 选择文本样式 */
+::selection {
+  background: var(--terminal-green);
+  color: var(--bg-primary);
+}
+
+/* 滚动条样式 */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-secondary);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 4px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--terminal-gray);
+}
