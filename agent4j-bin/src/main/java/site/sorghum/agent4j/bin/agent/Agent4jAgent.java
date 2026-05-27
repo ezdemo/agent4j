@@ -290,10 +290,25 @@ public class Agent4jAgent {
             try {
                 String workspacePath = newWorkspace.toAbsolutePath().toString();
                 workspaceManager.switchWorkspace(workspacePath);
-                // 注意：切换会话目录需要重新创建 SessionService，这里只更新工作区
-                // 实际的会话切换由 AgentService 处理
+                
+                // 关闭旧的 SessionService 的 store
+                if (sessionService != null) {
+                    sessionService.saveUsage();
+                    SessionStore oldStore = sessionService.getStore();
+                    if (oldStore instanceof JsonlSessionStore) {
+                        ((JsonlSessionStore) oldStore).shutdown();
+                    }
+                }
+                
+                // 重新创建 SessionService 使用新工作区的会话目录
+                java.nio.file.Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
+                this.sessionService = new SessionService(ctx, sessionsDir);
+                
+                System.out.println("[workspace] 已切换到工作区: " + workspacePath);
+                System.out.println("[workspace] 会话目录: " + sessionsDir);
             } catch (IOException e) {
                 System.err.println("[workspace] 切换工作区失败: " + e.getMessage());
+                return false;
             }
         }
         

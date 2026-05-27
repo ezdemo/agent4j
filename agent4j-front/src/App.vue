@@ -269,7 +269,14 @@ const toggleTheme = () => {
 const loadSessions = async () => {
   loadingSessions.value = true
   try {
-    const r = await sessionsAPI.list()
+    // 获取当前活跃的工作区 hash
+    let workspaceHash = null
+    const activeWorkspace = workspaces.value.find(w => w.isActive)
+    if (activeWorkspace) {
+      workspaceHash = activeWorkspace.hash
+    }
+    
+    const r = await sessionsAPI.list(workspaceHash)
     if (r.success) sessions.value = r.data || []
   } catch {}
   loadingSessions.value = false
@@ -296,6 +303,8 @@ const handleSwitchWorkspace = async (path) => {
       showWorkspacePicker.value = false
       await loadWorkspaces()
       await loadSessions()
+      // 切换工作区后清空聊天，进入新建会话状态
+      newChat()
     } else {
       alert(r.message || '切换工作区失败')
     }
@@ -317,6 +326,8 @@ const handleAddWorkspace = async () => {
       showWorkspacePicker.value = false
       await loadWorkspaces()
       await loadSessions()
+      // 切换工作区后清空聊天，进入新建会话状态
+      newChat()
     } else {
       alert(r.message || '添加工作区失败')
     }
@@ -402,8 +413,8 @@ onMounted(async () => {
     }
     if (u.status === 'fulfilled' && u.value.success) usage.value = u.value.data || {}
   } catch {}
-  await loadSessions()
   await loadWorkspaces()
+  await loadSessions()
 })
 </script>
 

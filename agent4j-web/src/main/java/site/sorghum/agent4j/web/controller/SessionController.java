@@ -21,12 +21,12 @@ public class SessionController {
     @Inject
     private AgentService agentService;
 
-    /** 列出所有会话 —— GET /api/sessions */
+    /** 列出所有会话 —— GET /api/sessions?workspaceHash=xxx */
     @Get
     @Mapping("")
-    public Object list() throws Exception {
+    public Object list(@Param("workspaceHash") String workspaceHash) throws Exception {
         if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
-        return ApiResponse.ok(agentService.listSessions());
+        return ApiResponse.ok(agentService.listSessions(workspaceHash));
     }
 
     /** 获取当前会话信息 —— GET /api/sessions/current */

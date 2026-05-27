@@ -271,7 +271,21 @@ const loadSessions = async () => {
   error.value = ''
   
   try {
-    const response = await sessionsAPI.list()
+    // 获取当前工作区 hash
+    let workspaceHash = null
+    try {
+      const workspacesResponse = await configAPI.listWorkspaces()
+      if (workspacesResponse.success && workspacesResponse.data) {
+        const activeWorkspace = workspacesResponse.data.find(w => w.isActive)
+        if (activeWorkspace) {
+          workspaceHash = activeWorkspace.hash
+        }
+      }
+    } catch (err) {
+      console.warn('获取工作区信息失败:', err)
+    }
+    
+    const response = await sessionsAPI.list(workspaceHash)
     if (response.success && response.data) {
       sessions.value = response.data.map(session => ({
         id: session.name,

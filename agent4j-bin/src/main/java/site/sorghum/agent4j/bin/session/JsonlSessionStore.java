@@ -310,6 +310,13 @@ public class JsonlSessionStore implements SessionStore {
     @Override
     public void saveUsage(String name, long prompt, long completion, long cacheHit, long cacheMiss) throws IOException {
         Path file = sessionsDir.resolve(sanitize(name) + ".usage");
+        
+        // 如果所有值都是 0，则删除文件（如果存在），避免创建空文件
+        if (prompt == 0 && completion == 0 && cacheHit == 0 && cacheMiss == 0) {
+            Files.deleteIfExists(file);
+            return;
+        }
+        
         String json = "{\"prompt\":" + prompt + ",\"completion\":" + completion
                 + ",\"cacheHit\":" + cacheHit + ",\"cacheMiss\":" + cacheMiss + "}";
         Files.write(file, json.getBytes(StandardCharsets.UTF_8));

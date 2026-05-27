@@ -231,9 +231,10 @@ export const agentAPI = {
 
 // 会话 API
 export const sessionsAPI = {
-  // 列出所有会话 - GET /api/sessions
-  list: () => {
-    return api.get('/sessions')
+  // 列出所有会话 - GET /api/sessions?workspaceHash=xxx
+  list: (workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.get('/sessions', { params })
   },
   
   // 获取当前会话信息 - GET /api/sessions/current

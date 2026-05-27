@@ -222,9 +222,50 @@ public class AgentService {
         agent.newSession();
     }
 
-    public List<Map<String, Object>> listSessions() throws IOException {
+    public List<Map<String, Object>> listSessions(String workspaceHash) throws IOException {
         requireAgent();
-        SessionStore store = agent.getSessionStore();
+        SessionStore store;
+        
+        if (workspaceHash != null && !workspaceHash.isEmpty()) {
+            // 根据工作区 hash 获取对应的会话目录
+            WorkspaceManager workspaceManager = agent.getWorkspaceManager();
+            if (workspaceManager == null) {
+                return new ArrayList<>();
+            }
+            
+            // 查找工作区对应的会话目录
+            try {
+                List<WorkspaceManager.WorkspaceInfo> workspaces = workspaceManager.listWorkspaces();
+                WorkspaceManager.WorkspaceInfo targetWorkspace = null;
+                for (WorkspaceManager.WorkspaceInfo w : workspaces) {
+                    if (w.hash.equals(workspaceHash)) {
+                        targetWorkspace = w;
+                        break;
+                    }
+                }
+                
+                if (targetWorkspace == null) {
+                    System.err.println("[workspace] 未找到工作区: " + workspaceHash);
+                    return new ArrayList<>();
+                }
+                
+                // 获取该工作区的会话目录
+                java.nio.file.Path sessionsDir = workspaceManager.getSessionsDir(targetWorkspace.path);
+                if (!java.nio.file.Files.isDirectory(sessionsDir)) {
+                    return new ArrayList<>();
+                }
+                
+                // 创建临时的 SessionStore 来列出该工作区的会话
+                store = new site.sorghum.agent4j.bin.session.JsonlSessionStore(sessionsDir);
+            } catch (Exception e) {
+                System.err.println("[workspace] 获取工作区会话失败: " + e.getMessage());
+                return new ArrayList<>();
+            }
+        } else {
+            // 使用当前会话的 store
+            store = agent.getSessionStore();
+        }
+        
         List<SessionStore.SessionInfo> sessions = store.list();
         List<Map<String, Object>> result = new ArrayList<>();
         for (SessionStore.SessionInfo s : sessions) {

@@ -21,6 +21,8 @@ public class SessionService {
 
     private final ConversationContext ctx;
     private SessionStore store;
+    /** 当前工作区的会话目录（支持工作区隔离） */
+    private final Path sessionsDir;
     private long sessionPromptTokens;
     private long sessionCompletionTokens;
     private long sessionCacheHitTokens;
@@ -41,6 +43,7 @@ public class SessionService {
     public SessionService(ConversationContext ctx, SessionStore store) {
         this.ctx = ctx;
         this.store = store;
+        this.sessionsDir = null;
         ctx.setSessionStore(store);
     }
 
@@ -52,6 +55,7 @@ public class SessionService {
      */
     public SessionService(ConversationContext ctx, Path sessionsDir) throws IOException {
         this.ctx = ctx;
+        this.sessionsDir = sessionsDir;
         this.store = new JsonlSessionStore(sessionsDir);
         ctx.setSessionStore(store);
     }
@@ -98,7 +102,12 @@ public class SessionService {
         if (store instanceof JsonlSessionStore) {
             ((JsonlSessionStore) store).shutdown();
         }
-        store = new JsonlSessionStore();
+        // 使用工作区隔离的会话目录（如果有的话）
+        if (sessionsDir != null) {
+            store = new JsonlSessionStore(sessionsDir);
+        } else {
+            store = new JsonlSessionStore();
+        }
         ctx.setSessionStore(store);
         ctx.clearHistory();  // 仅清空内存历史，不重写旧会话文件
         resetUsage();

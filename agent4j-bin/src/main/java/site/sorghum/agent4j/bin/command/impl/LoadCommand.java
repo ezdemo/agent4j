@@ -3,7 +3,6 @@ package site.sorghum.agent4j.bin.command.impl;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
-import site.sorghum.agent4j.bin.session.JsonlSessionStore;
 import site.sorghum.agent4j.bin.session.SessionStore;
 
 import java.util.List;
@@ -58,15 +57,15 @@ public class LoadCommand implements ChatCommand {
 
             // 新建会话并切换到目标会话
             context.getAgent().newSession();
-            SessionStore newStore = new JsonlSessionStore();
-            newStore.switchTo(name);
-            List<Map<String, Object>> loaded = newStore.load();
+            // 复用当前 store（已使用工作区隔离的会话目录）
+            SessionStore currentStore = context.getAgent().getSessionStore();
+            currentStore.switchTo(name);
+            List<Map<String, Object>> loaded = currentStore.load();
 
             // 注入历史消息
             for (Map<String, Object> m : loaded) {
                 context.getAgent().injectHistory(m);
             }
-            context.getAgent().setSessionStore(newStore);
 
             System.out.println("(已加载会话: " + name + ", " + loaded.size() + " 条消息)");
         } catch (NumberFormatException e) {
