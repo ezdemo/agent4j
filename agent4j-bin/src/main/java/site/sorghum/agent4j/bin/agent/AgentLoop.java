@@ -111,6 +111,11 @@ public class AgentLoop {
         return ctx;
     }
 
+    /** 获取工具注册表 */
+    public ToolRegistry getToolRegistry() {
+        return registry;
+    }
+
     /** Plan Mode 控制 */
     public void setPlanMode(boolean on) { dispatcher.setPlanMode(on); }
     public boolean isPlanMode() { return dispatcher.isPlanMode(); }

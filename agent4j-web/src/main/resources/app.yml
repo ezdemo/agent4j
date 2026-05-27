@@ -1,0 +1,9 @@
+solon.app:
+  name: "agent4j-web"
+  group: "agent4j"
+
+solon.web:
+  port: 8080
+
+solon.logging:
+  level: "INFO"

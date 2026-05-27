@@ -267,6 +267,11 @@ public class Agent4jAgent {
         loop.compactNow();
     }
 
+    /** 获取工具注册表（供 Web API 列出工具使用） */
+    public site.sorghum.agent4j.bin.tool.ToolRegistry getToolRegistry() {
+        return loop.getToolRegistry();
+    }
+
     public int historySize() {
         return ctx.size();
     }
