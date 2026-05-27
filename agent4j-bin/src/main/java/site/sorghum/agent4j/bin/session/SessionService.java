@@ -60,13 +60,13 @@ public class SessionService {
     /** 新建会话：保存当前、关闭旧 store、创建新会话 */
     public void newSession() throws IOException {
         saveUsage();
-        ctx.clear();
         // 关闭旧的 store，释放定时器 + writer 资源
         if (store instanceof JsonlSessionStore) {
             ((JsonlSessionStore) store).shutdown();
         }
         store = new JsonlSessionStore();
         ctx.setSessionStore(store);
+        ctx.clearHistory();  // 仅清空内存历史，不重写旧会话文件
         resetUsage();
     }
 

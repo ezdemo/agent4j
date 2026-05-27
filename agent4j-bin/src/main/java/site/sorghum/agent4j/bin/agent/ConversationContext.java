@@ -143,6 +143,14 @@ public class ConversationContext {
     }
 
     /**
+     * 仅清除内存中的历史消息，不触发持久化回写。
+     * 用于创建新会话时清空上下文，但保留旧会话内容。
+     */
+    public void clearHistory() {
+        history.clear();
+    }
+
+    /**
      * 撤回最后一条用户消息及其后的所有消息，返回被撤回的用户消息内容。
      * 用于 /retry 命令。同时同步持久化。
      */
