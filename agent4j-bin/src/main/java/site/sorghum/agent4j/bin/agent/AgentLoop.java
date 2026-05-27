@@ -43,6 +43,44 @@ public class AgentLoop {
     /** storm 自愈尝试次数上限（每回合重置），防止无限循环 */
     private static final int MAX_SELF_CORRECTION_ATTEMPTS = 5;
 
+    // ==================== HITL (Human-In-The-Loop) ====================
+
+    /** HITL 审批状态 */
+    private enum HitlState { NONE, PENDING, APPROVED, DENIED }
+
+    /** HITL 模式开关（true = 执行非只读工具前需用户审批） */
+    private volatile boolean hitlMode = false;
+
+    /** HITL 当前审批状态 */
+    private volatile HitlState hitlState = HitlState.NONE;
+
+    /** HITL 暂存的工具调用（ONode 数组） */
+    private volatile ONode pendingHITLToolCalls;
+    /** HITL 暂存的 assistant content */
+    private volatile String pendingHITLContent;
+    /** HITL 暂存的 reasoning_content */
+    private volatile String pendingHITLReasoning;
+    /** HITL 暂存的解析后工具调用列表 */
+    private volatile List<Map<String, Object>> pendingHITTcList;
+
+    /** 获取 HITL 模式状态 */
+    public boolean isHitlMode() { return hitlMode; }
+
+    /** 切换 HITL 模式 */
+    public void toggleHitl() { hitlMode = !hitlMode; }
+
+    /** 批准待执行的工具调用 */
+    public void approveHITL() { hitlState = HitlState.APPROVED; }
+
+    /** 拒绝待执行的工具调用 */
+    public void denyHITL() { hitlState = HitlState.DENIED; }
+
+    /** 获取待审批的工具调用列表（用于 /agree 命令显示） */
+    public List<Map<String, Object>> getPendingHITTcList() { return pendingHITTcList; }
+
+    /** 是否有待审批的工具调用 */
+    public boolean hasPendingHITL() { return hitlState == HitlState.PENDING; }
+
     public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx) {
         this.client = client;
         this.registry = registry;
@@ -115,6 +153,18 @@ public class AgentLoop {
      * </p>
      */
     public String run(String userMessage) throws IOException {
+        // ---- HITL 恢复：用户已审批 / 拒绝 ----
+        if (hitlState == HitlState.APPROVED) {
+            hitlState = HitlState.NONE;
+            output.onLog(AgentOutput.LogLevel.INFO, "[hitl] 用户批准，执行工具调用...");
+            return resumeAfterHITL(true);
+        }
+        if (hitlState == HitlState.DENIED) {
+            hitlState = HitlState.NONE;
+            output.onLog(AgentOutput.LogLevel.INFO, "[hitl] 用户拒绝，跳过工具调用。");
+            return resumeAfterHITL(false);
+        }
+
         ctx.addUser(userMessage);
         dispatcher.resetStorm();
         int selfCorrectionAttempts = 0;
@@ -148,6 +198,11 @@ public class AgentLoop {
                 return handleTextResponse(sr.content, sr.reasoningContent);
             }
 
+            // ---- HITL 拦截：非只读工具需要用户审批 ----
+            if (hitlMode) {
+                return interceptForHITL(toolCalls, sr.content, sr.reasoningContent);
+            }
+
             // 6. 并行执行工具调用
             ToolExecutionResult ter = executeToolCalls(toolCalls);
 
@@ -167,6 +222,148 @@ public class AgentLoop {
             }
         }
     }  // end run
+
+    // ==================== HITL 拦截与恢复 ====================
+
+    /**
+     * HITL 拦截：暂存工具调用，返回审批提示给用户。
+     */
+    private String interceptForHITL(ONode toolCalls, String content, String reasoningContent) {
+        // 解析工具调用列表
+        List<Map<String, Object>> tcList = parseToolCalls(toolCalls);
+
+        // 暂存状态
+        this.pendingHITLToolCalls = toolCalls;
+        this.pendingHITLContent = content;
+        this.pendingHITLReasoning = reasoningContent;
+        this.pendingHITTcList = tcList;
+        this.hitlState = HitlState.PENDING;
+
+        // 构建审批提示
+        StringBuilder sb = new StringBuilder();
+        sb.append("⏸️  **HITL 模式：以下工具调用需要审批**\n\n");
+        for (Map<String, Object> tc : tcList) {
+            String name = (String) tc.get("name");
+            String args = (String) tc.get("arguments");
+            sb.append("- `").append(name).append("`");
+            if (args != null && !args.isEmpty() && !"{}".equals(args)) {
+                // 截断过长的参数
+                String display = args.length() > 200 ? args.substring(0, 200) + "..." : args;
+                sb.append(" ").append(display);
+            }
+            sb.append("\n");
+        }
+        sb.append("\n发送 `/agree` 批准执行，`/deny` 拒绝。");
+
+        String message = sb.toString();
+        // 暂存 assistant 消息（审批通过后写入上下文）
+        output.onContentDelta(message);
+        output.onContentComplete();
+        return message;
+    }
+
+    /**
+     * 解析 ONnode 工具调用为 Map 列表（供 tcList 使用）。
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> parseToolCalls(ONode toolCalls) {
+        List<Map<String, Object>> tcList = new ArrayList<>();
+        if (toolCalls == null || !toolCalls.isArray()) return tcList;
+        for (ONode tc : toolCalls.getArray()) {
+            String tcId = tc.get("id").getString();
+            ONode func = tc.get("function");
+            String tcName = func.get("name").getString();
+            if (tcName == null || tcName.isEmpty()) continue;
+            String tcArgs = func.get("arguments").getString();
+            if (tcArgs == null) tcArgs = "{}";
+            Map<String, Object> tcMap = new LinkedHashMap<>();
+            tcMap.put("id", tcId);
+            tcMap.put("name", tcName);
+            tcMap.put("arguments", tcArgs);
+            tcList.add(tcMap);
+        }
+        return tcList;
+    }
+
+    /**
+     * HITL 恢复：用户审批/拒绝后，继续执行或跳过工具调用。
+     */
+    private String resumeAfterHITL(boolean approved) throws IOException {
+        ONode toolCalls = this.pendingHITLToolCalls;
+        String content = this.pendingHITLContent;
+        String reasoningContent = this.pendingHITLReasoning;
+        List<Map<String, Object>> tcList = this.pendingHITTcList;
+
+        // 清空暂存
+        this.pendingHITLToolCalls = null;
+        this.pendingHITLContent = null;
+        this.pendingHITLReasoning = null;
+        this.pendingHITTcList = null;
+
+        if (!approved) {
+            // 用户拒绝：将 assistant 消息（含工具调用）写入上下文，返回拒绝提示
+            ctx.addAssistant(content, tcList, reasoningContent);
+            String denyMsg = "工具调用已被用户拒绝。";
+            ctx.addAssistant(denyMsg, null, null);
+            return denyMsg;
+        }
+
+        // 用户批准：先写入 assistant 消息，再并行执行工具
+        ctx.addAssistant(content, tcList, reasoningContent);
+
+        dispatcher.resetStorm();
+        List<Map<String, Object>> tools = ctx.tools();
+        int selfCorrectionAttempts = 0;
+
+        // 并行执行暂存的工具调用
+        ToolExecutionResult ter = executeToolCalls(toolCalls);
+
+        // 写入工具结果
+        for (Map<String, Object> tr : ter.toolResults) {
+            ctx.addToolResult((String) tr.get("tool_call_id"), (String) tr.get("content"));
+        }
+
+        // 继续循环：让 LLM 根据工具结果生成回复
+        boolean isThinkingMode = client.isThinkingMode();
+        for (int step = 0; ; step++) {
+            PreparedMessages prepared = prepareMessages(step, isThinkingMode);
+            List<Map<String, Object>> messages = prepared.messages;
+
+            StreamResult sr = streamLLM(messages, tools);
+            if (sr.error) {
+                if (recoverFromStreamError(messages, prepared.foldedThisStep)) continue;
+                throw new IOException("[stream] API error during streaming");
+            }
+            output.onContentComplete();
+
+            ONode nextToolCalls = scavengeToolCalls(sr.toolCalls, sr.reasoningContent, sr.content);
+            boolean hasMoreTools = nextToolCalls != null && nextToolCalls.isArray()
+                    && !nextToolCalls.getArray().isEmpty();
+
+            if (!hasMoreTools) {
+                return handleTextResponse(sr.content, sr.reasoningContent);
+            }
+
+            // 如果再次触发 HITL（嵌套工具调用），暂存并返回提示
+            if (hitlMode) {
+                return interceptForHITL(nextToolCalls, sr.content, sr.reasoningContent);
+            }
+
+            ter = executeToolCalls(nextToolCalls);
+            ctx.addAssistant(sr.content, ter.tcList, sr.reasoningContent);
+            for (Map<String, Object> tr : ter.toolResults) {
+                ctx.addToolResult((String) tr.get("tool_call_id"), (String) tr.get("content"));
+            }
+
+            selfCorrectionAttempts = handleSelfCorrection(
+                    ter.toolResults, ter.anySuppressed, selfCorrectionAttempts);
+            if (selfCorrectionAttempts < 0) {
+                String fallback = "所有工具调用均被风暴断路器抑制，无法继续执行。";
+                ctx.addAssistant(fallback, null, null);
+                return fallback;
+            }
+        }
+    }
 
     private static Map<String, Object> toolResult(String id, String result) {
         Map<String, Object> m = new LinkedHashMap<>();

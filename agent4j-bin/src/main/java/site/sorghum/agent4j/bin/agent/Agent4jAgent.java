@@ -227,6 +227,28 @@ public class Agent4jAgent {
         return loop.isPlanMode();
     }
 
+    // ========== HITL (Human-In-The-Loop) ==========
+
+    /** 获取 HITL 模式状态 */
+    public boolean isHitlMode() { return loop.isHitlMode(); }
+
+    /** 切换 HITL 模式 */
+    public void toggleHitl() { loop.toggleHitl(); }
+
+    /** 批准待执行的工具调用 */
+    public void approveHITL() { loop.approveHITL(); }
+
+    /** 拒绝待执行的工具调用 */
+    public void denyHITL() { loop.denyHITL(); }
+
+    /** 获取待审批的工具调用列表 */
+    public java.util.List<java.util.Map<String, Object>> getPendingHITTcList() {
+        return loop.getPendingHITTcList();
+    }
+
+    /** 是否有待审批的工具调用 */
+    public boolean hasPendingHITL() { return loop.hasPendingHITL(); }
+
     /** 保存会话用量（退出前调用） */
     public void saveUsage() {
         sessionService.saveUsage();
