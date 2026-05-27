@@ -4,6 +4,7 @@ import site.sorghum.agent4j.bin.agent.ConversationContext;
 import site.sorghum.agent4j.bin.agent.MessageHealer;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -40,6 +41,18 @@ public class SessionService {
     public SessionService(ConversationContext ctx, SessionStore store) {
         this.ctx = ctx;
         this.store = store;
+        ctx.setSessionStore(store);
+    }
+
+    /**
+     * 创建支持工作区隔离的 SessionService
+     *
+     * @param ctx 会话上下文
+     * @param sessionsDir 会话目录路径
+     */
+    public SessionService(ConversationContext ctx, Path sessionsDir) throws IOException {
+        this.ctx = ctx;
+        this.store = new JsonlSessionStore(sessionsDir);
         ctx.setSessionStore(store);
     }
 

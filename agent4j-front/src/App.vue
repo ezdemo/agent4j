@@ -23,6 +23,54 @@
         <input v-model="searchQuery" placeholder="搜索会话..." />
       </div>
 
+      <!-- 工作区选择器 -->
+      <div class="workspace-section">
+        <div class="workspace-header" @click="showWorkspacePicker = !showWorkspacePicker">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+          <span class="workspace-name">{{ workspaceName }}</span>
+          <svg class="workspace-chevron" :class="{ open: showWorkspacePicker }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
+        </div>
+        <div v-if="showWorkspacePicker" class="workspace-dropdown">
+          <div v-if="loadingWorkspaces" class="workspace-loading">加载中...</div>
+          <div v-else-if="workspaces.length === 0" class="workspace-empty">暂无工作区记录</div>
+          <div
+            v-for="w in workspaces"
+            :key="w.hash"
+            class="workspace-item"
+            :class="{ active: w.isActive }"
+            @click="handleSwitchWorkspace(w.path)"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+            <div class="workspace-info">
+              <div class="workspace-item-name">{{ w.name }}</div>
+              <div class="workspace-item-path">{{ w.path }}</div>
+            </div>
+            <span class="workspace-item-count">{{ w.sessionCount }}</span>
+            <button class="btn-icon-sm workspace-del" @click.stop="handleDeleteWorkspace(w.hash)" title="删除">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+            </button>
+          </div>
+          <div class="workspace-add">
+            <input 
+              v-model="newWorkspacePath" 
+              placeholder="输入新工作区路径..."
+              @keyup.enter="handleAddWorkspace"
+            />
+            <button class="btn-icon-sm" @click="handleAddWorkspace" :disabled="!newWorkspacePath.trim()">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div class="sidebar-list">
         <div v-if="loadingSessions" class="sidebar-empty">加载中...</div>
         <div v-else-if="filteredSessions.length === 0" class="sidebar-empty">
@@ -111,11 +159,36 @@
             <button class="btn-icon-sm" @click="showConfig = false">×</button>
           </div>
           <div class="modal-body">
-            <div v-for="(v, k) in config" :key="k" class="config-row">
-              <span class="config-key">{{ k }}</span>
-              <span class="config-val">{{ v }}</span>
+            <!-- 工作目录切换 -->
+            <div class="config-section">
+              <div class="config-section-title">工作目录</div>
+              <div class="workspace-control">
+                <div class="workspace-current">
+                  <span class="workspace-label">当前目录：</span>
+                  <span class="workspace-path">{{ workspace || '未设置' }}</span>
+                </div>
+                <div class="workspace-input">
+                  <input 
+                    v-model="newWorkspace" 
+                    placeholder="输入新的工作目录路径"
+                    @keyup.enter="switchWorkspace"
+                  />
+                  <button class="btn btn-sm" @click="switchWorkspace" :disabled="!newWorkspace.trim()">
+                    切换
+                  </button>
+                </div>
+              </div>
             </div>
-            <div v-if="!Object.keys(config).length" class="modal-empty">加载中...</div>
+            
+            <!-- 其他配置 -->
+            <div class="config-section">
+              <div class="config-section-title">系统配置</div>
+              <div v-for="(v, k) in config" :key="k" class="config-row">
+                <span class="config-key">{{ k }}</span>
+                <span class="config-val">{{ v }}</span>
+              </div>
+              <div v-if="!Object.keys(config).length" class="modal-empty">加载中...</div>
+            </div>
           </div>
         </div>
       </div>
@@ -141,6 +214,14 @@ const showTools = ref(false)
 const showConfig = ref(false)
 const loadingSessions = ref(false)
 const chatRef = ref(null)
+const workspace = ref('')
+const newWorkspace = ref('')
+
+// 工作区相关
+const showWorkspacePicker = ref(false)
+const workspaces = ref([])
+const loadingWorkspaces = ref(false)
+const newWorkspacePath = ref('')
 
 const filteredSessions = computed(() => {
   if (!searchQuery.value) return sessions.value
@@ -152,6 +233,12 @@ const currentSessionTitle = computed(() => {
   if (!currentSession.value) return '新对话'
   const s = sessions.value.find(s => s.name === currentSession.value)
   return (s && s.title) || formatName(currentSession.value)
+})
+
+const workspaceName = computed(() => {
+  if (!workspace.value) return '选择工作区'
+  const parts = workspace.value.split(/[\\/]/)
+  return parts[parts.length - 1] || workspace.value
 })
 
 const fmtTokens = n => !n ? '0' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n)
@@ -188,6 +275,72 @@ const loadSessions = async () => {
   loadingSessions.value = false
 }
 
+// 加载工作区列表
+const loadWorkspaces = async () => {
+  loadingWorkspaces.value = true
+  try {
+    const r = await configAPI.listWorkspaces()
+    if (r.success) workspaces.value = r.data || []
+  } catch (e) {
+    console.error('加载工作区列表失败:', e)
+  }
+  loadingWorkspaces.value = false
+}
+
+// 切换工作区
+const handleSwitchWorkspace = async (path) => {
+  try {
+    const r = await configAPI.switchToWorkspace(path)
+    if (r.success) {
+      workspace.value = r.data.workspace
+      showWorkspacePicker.value = false
+      await loadWorkspaces()
+      await loadSessions()
+    } else {
+      alert(r.message || '切换工作区失败')
+    }
+  } catch (e) {
+    alert('切换工作区失败: ' + e.message)
+  }
+}
+
+// 添加新工作区
+const handleAddWorkspace = async () => {
+  const path = newWorkspacePath.value.trim()
+  if (!path) return
+  
+  try {
+    const r = await configAPI.switchWorkspace(path)
+    if (r.success) {
+      workspace.value = r.data.workspace
+      newWorkspacePath.value = ''
+      showWorkspacePicker.value = false
+      await loadWorkspaces()
+      await loadSessions()
+    } else {
+      alert(r.message || '添加工作区失败')
+    }
+  } catch (e) {
+    alert('添加工作区失败: ' + e.message)
+  }
+}
+
+// 删除工作区
+const handleDeleteWorkspace = async (hash) => {
+  if (!confirm('确定要删除此工作区吗？（不会删除实际文件）')) return
+  
+  try {
+    const r = await configAPI.deleteWorkspace(hash)
+    if (r.success) {
+      await loadWorkspaces()
+    } else {
+      alert(r.message || '删除工作区失败')
+    }
+  } catch (e) {
+    alert('删除工作区失败: ' + e.message)
+  }
+}
+
 const newChat = () => {
   chatRef.value?.clearMessages()
   currentSession.value = ''
@@ -209,19 +362,48 @@ const clearChat = () => {
   currentSession.value = ''
 }
 
+const switchWorkspace = async () => {
+  const path = newWorkspace.value.trim()
+  if (!path) return
+  
+  try {
+    const r = await configAPI.switchWorkspace(path)
+    if (r.success) {
+      workspace.value = r.data.workspace
+      newWorkspace.value = ''
+      alert('工作目录已切换: ' + r.data.workspace)
+    } else {
+      alert('切换失败: ' + (r.message || '未知错误'))
+    }
+  } catch (e) {
+    alert('切换失败: ' + (e.message || '网络错误'))
+  }
+}
+
 onMounted(async () => {
   document.documentElement.setAttribute('data-theme', theme.value)
   try {
     const [s, c, t, cf, u] = await Promise.allSettled([
       agentAPI.getStatus(), sessionsAPI.getCurrent(), toolsAPI.list(), configAPI.getConfig(), configAPI.getUsage()
     ])
-    if (s.status === 'fulfilled' && s.value.success) status.value = s.value.data || {}
+    if (s.status === 'fulfilled' && s.value.success) {
+      status.value = s.value.data || {}
+      if (s.value.data?.workspace) {
+        workspace.value = s.value.data.workspace
+      }
+    }
     if (c.status === 'fulfilled' && c.value.success && c.value.data?.name) currentSession.value = c.value.data.name
     if (t.status === 'fulfilled' && t.value.success) tools.value = t.value.data || []
-    if (cf.status === 'fulfilled' && cf.value.success) config.value = cf.value.data || {}
+    if (cf.status === 'fulfilled' && cf.value.success) {
+      config.value = cf.value.data || {}
+      if (cf.value.data?.workspace && !workspace.value) {
+        workspace.value = cf.value.data.workspace
+      }
+    }
     if (u.status === 'fulfilled' && u.value.success) usage.value = u.value.data || {}
   } catch {}
   await loadSessions()
+  await loadWorkspaces()
 })
 </script>
 
@@ -451,6 +633,199 @@ onMounted(async () => {
   text-align: center;
   font-size: 13px;
   color: var(--fg-4);
+}
+
+/* 工作区选择器 */
+.workspace-section {
+  border-bottom: 1px solid var(--border);
+  position: relative;
+}
+
+.workspace-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  cursor: pointer;
+  transition: background var(--t);
+}
+.workspace-header:hover { background: var(--bg-3); }
+.workspace-header svg { color: var(--fg-3); flex-shrink: 0; }
+.workspace-name {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workspace-chevron {
+  transition: transform 0.2s;
+}
+.workspace-chevron.open {
+  transform: rotate(180deg);
+}
+
+.workspace-dropdown {
+  background: var(--bg);
+  border-bottom: 1px solid var(--border);
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.workspace-loading,
+.workspace-empty {
+  padding: 12px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--fg-4);
+}
+
+.workspace-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background var(--t);
+}
+.workspace-item:hover { background: var(--bg-2); }
+.workspace-item.active { background: var(--accent-bg); }
+.workspace-item svg { color: var(--fg-3); flex-shrink: 0; }
+
+.workspace-info {
+  flex: 1;
+  min-width: 0;
+}
+.workspace-item-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workspace-item-path {
+  font-size: 11px;
+  color: var(--fg-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.workspace-item-count {
+  font-size: 11px;
+  color: var(--fg-3);
+  background: var(--bg-3);
+  padding: 1px 5px;
+  border-radius: var(--r-sm);
+}
+
+.workspace-del {
+  opacity: 0;
+  transition: opacity var(--t);
+}
+.workspace-item:hover .workspace-del { opacity: 1; }
+.workspace-del:hover { color: var(--red); }
+
+.workspace-add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 12px;
+  border-top: 1px solid var(--border);
+}
+.workspace-add input {
+  flex: 1;
+  padding: 5px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  font-size: 12px;
+  color: var(--fg);
+}
+.workspace-add input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.workspace-add input::placeholder { color: var(--fg-4); }
+
+/* 工作目录切换 */
+.config-section {
+  margin-bottom: 16px;
+}
+
+.config-section-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  margin-bottom: 8px;
+  padding-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.workspace-control {
+  background: var(--bg-2);
+  border-radius: var(--r);
+  padding: 12px;
+}
+
+.workspace-current {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+
+.workspace-label {
+  font-weight: 500;
+  color: var(--fg-2);
+}
+
+.workspace-path {
+  font-family: var(--mono);
+  color: var(--fg-3);
+  background: var(--bg-3);
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  word-break: break-all;
+}
+
+.workspace-input {
+  display: flex;
+  gap: 8px;
+}
+
+.workspace-input input {
+  flex: 1;
+  padding: 6px 10px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.workspace-input input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.workspace-input input::placeholder {
+  color: var(--fg-4);
+}
+
+.workspace-input .btn {
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.workspace-input .btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .tool-row {

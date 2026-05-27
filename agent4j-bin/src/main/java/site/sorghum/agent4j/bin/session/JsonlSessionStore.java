@@ -14,7 +14,7 @@ import site.sorghum.agent4j.bin.util.ONodeUtil;
 /**
  * JSONL 格式会话持久化实现。
  * <p>
- * 文件位置：~/.agent4j/sessions/{name}.jsonl
+ * 文件位置：~/.agent4j/workspace/{hash}/sessions/{name}.jsonl 或 ~/.agent4j/sessions/{name}.jsonl
  * 格式：每行一个 JSON 格式的消息对象。
  * </p>
  * <p>
@@ -26,8 +26,11 @@ import site.sorghum.agent4j.bin.util.ONodeUtil;
  */
 public class JsonlSessionStore implements SessionStore {
 
-    private static final Path SESSIONS_DIR = Paths.get(
+    private static final Path DEFAULT_SESSIONS_DIR = Paths.get(
             System.getProperty("user.home"), ".agent4j", "sessions");
+
+    /** 当前会话目录（支持工作区隔离） */
+    private final Path sessionsDir;
 
     /** 当前会话名 */
     private String currentName;
@@ -47,8 +50,21 @@ public class JsonlSessionStore implements SessionStore {
     /** 定时刷入间隔（秒） */
     private static final int FLUSH_INTERVAL_SEC = 30;
 
+    /**
+     * 默认构造函数，使用默认会话目录
+     */
     public JsonlSessionStore() throws IOException {
-        Files.createDirectories(SESSIONS_DIR);
+        this(DEFAULT_SESSIONS_DIR);
+    }
+
+    /**
+     * 指定会话目录的构造函数（支持工作区隔离）
+     *
+     * @param sessionsDir 会话目录路径
+     */
+    public JsonlSessionStore(Path sessionsDir) throws IOException {
+        this.sessionsDir = sessionsDir;
+        Files.createDirectories(sessionsDir);
         this.currentName = newSessionName();
         // 不立即创建空文件——延迟到首次 append 时通过 ensureWriter() 按需创建
         this.writer = null;
@@ -255,9 +271,9 @@ public class JsonlSessionStore implements SessionStore {
 
     @Override
     public List<SessionInfo> list() throws IOException {
-        if (!Files.isDirectory(SESSIONS_DIR)) return new ArrayList<>();
+        if (!Files.isDirectory(sessionsDir)) return new ArrayList<>();
         List<SessionInfo> list = new ArrayList<>();
-        try (DirectoryStream<Path> ds = Files.newDirectoryStream(SESSIONS_DIR, "*.jsonl")) {
+        try (DirectoryStream<Path> ds = Files.newDirectoryStream(sessionsDir, "*.jsonl")) {
             for (Path p : ds) {
                 String name = p.getFileName().toString().replace(".jsonl", "");
                 if (name.contains("__archive")) continue;
@@ -269,7 +285,7 @@ public class JsonlSessionStore implements SessionStore {
                 }
                 // 读取标题
                 String title = null;
-                Path metaFile = SESSIONS_DIR.resolve(sanitize(name) + ".meta");
+                Path metaFile = sessionsDir.resolve(sanitize(name) + ".meta");
                 if (Files.exists(metaFile)) {
                     try {
                         String metaJson = new String(Files.readAllBytes(metaFile), StandardCharsets.UTF_8);
@@ -293,7 +309,7 @@ public class JsonlSessionStore implements SessionStore {
 
     @Override
     public void saveUsage(String name, long prompt, long completion, long cacheHit, long cacheMiss) throws IOException {
-        Path file = SESSIONS_DIR.resolve(sanitize(name) + ".usage");
+        Path file = sessionsDir.resolve(sanitize(name) + ".usage");
         String json = "{\"prompt\":" + prompt + ",\"completion\":" + completion
                 + ",\"cacheHit\":" + cacheHit + ",\"cacheMiss\":" + cacheMiss + "}";
         Files.write(file, json.getBytes(StandardCharsets.UTF_8));
@@ -301,7 +317,7 @@ public class JsonlSessionStore implements SessionStore {
 
     @Override
     public void updateTitle(String name, String title) throws IOException {
-        Path file = SESSIONS_DIR.resolve(sanitize(name) + ".meta");
+        Path file = sessionsDir.resolve(sanitize(name) + ".meta");
         org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson("{}");
         node.set("title", title);
         Files.write(file, node.toJson().getBytes(StandardCharsets.UTF_8));
@@ -309,7 +325,7 @@ public class JsonlSessionStore implements SessionStore {
 
     @Override
     public String getTitle(String name) throws IOException {
-        Path file = SESSIONS_DIR.resolve(sanitize(name) + ".meta");
+        Path file = sessionsDir.resolve(sanitize(name) + ".meta");
         if (!Files.exists(file)) return null;
         try {
             String metaJson = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
@@ -322,7 +338,7 @@ public class JsonlSessionStore implements SessionStore {
 
     @Override
     public long[] loadUsage(String name) {
-        Path file = SESSIONS_DIR.resolve(sanitize(name) + ".usage");
+        Path file = sessionsDir.resolve(sanitize(name) + ".usage");
         if (!Files.exists(file)) return new long[]{0, 0, 0, 0};
         try {
             String json = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
@@ -341,7 +357,7 @@ public class JsonlSessionStore implements SessionStore {
     // ---- 内部辅助 ----
 
     private Path sessionPath(String name) {
-        return SESSIONS_DIR.resolve(sanitize(name) + ".jsonl");
+        return sessionsDir.resolve(sanitize(name) + ".jsonl");
     }
 
     private static String sanitize(String name) {

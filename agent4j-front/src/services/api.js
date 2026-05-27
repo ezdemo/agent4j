@@ -334,6 +334,31 @@ export const configAPI = {
   // 重置统计 - POST /api/usage/reset
   resetUsage: () => {
     return api.post('/usage/reset')
+  },
+  
+  // 获取当前工作目录 - GET /api/workspace
+  getWorkspace: () => {
+    return api.get('/workspace')
+  },
+  
+  // 切换工作目录 - POST /api/workspace
+  switchWorkspace: (path) => {
+    return api.post('/workspace', { path })
+  },
+  
+  // 获取所有工作区列表 - GET /api/workspaces
+  listWorkspaces: () => {
+    return api.get('/workspaces')
+  },
+  
+  // 切换到指定工作区 - POST /api/workspaces/switch
+  switchToWorkspace: (path) => {
+    return api.post('/workspaces/switch', { path })
+  },
+  
+  // 删除工作区 - DELETE /api/workspaces/{hash}
+  deleteWorkspace: (hash) => {
+    return api.delete(`/workspaces/${hash}`)
   }
 }
 

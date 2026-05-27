@@ -9,7 +9,7 @@
 
     <!-- Workspace -->
     <div class="side-workspace">
-      <button class="workspace-btn" @click="$emit('openSettings')" :title="workspace || '选择工作区'">
+      <button class="workspace-btn" @click="showWorkspacePicker = true" :title="workspace || '选择工作区'">
         <span class="ico">📁</span>
         <span class="body">
           <span class="label">工作区</span>
@@ -17,6 +17,40 @@
         </span>
         <span class="chev">›</span>
       </button>
+    </div>
+
+    <!-- Workspace Picker Modal -->
+    <div v-if="showWorkspacePicker" class="modal-overlay" @click.self="showWorkspacePicker = false">
+      <div class="modal">
+        <div class="modal-head">
+          <h3>选择工作区</h3>
+          <button class="close-btn" @click="showWorkspacePicker = false">×</button>
+        </div>
+        <div class="modal-body">
+          <div class="workspace-list">
+            <div v-if="workspaces.length === 0" class="empty-hint">暂无工作区记录</div>
+            <div
+              v-for="w in workspaces"
+              :key="w.hash"
+              class="workspace-item"
+              :data-active="w.isActive"
+              @click="handleSwitchWorkspace(w.path)"
+            >
+              <span class="ico">📁</span>
+              <div class="body">
+                <span class="name">{{ w.name }}</span>
+                <span class="path">{{ w.path }}</span>
+                <span class="meta">{{ w.sessionCount }} 个会话</span>
+              </div>
+              <button class="delete-btn" title="删除工作区" @click.stop="handleDeleteWorkspace(w.hash)">×</button>
+            </div>
+          </div>
+          <div class="workspace-add">
+            <input v-model="newWorkspacePath" placeholder="输入新的工作区路径…" @keyup.enter="handleAddWorkspace" />
+            <button @click="handleAddWorkspace">添加</button>
+          </div>
+        </div>
+      </div>
     </div>
 
     <div class="search-row">
@@ -80,7 +114,8 @@
 </template>
 
 <script setup>
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted } from 'vue'
+import { configAPI } from '../services/api.js'
 
 const props = defineProps({
   sessions: { type: Array, default: () => [] },
@@ -88,9 +123,12 @@ const props = defineProps({
   workspace: { type: String, default: '' }
 })
 
-defineEmits(['newChat', 'loadSession', 'deleteSession', 'rename', 'openSettings', 'openAbout'])
+const emit = defineEmits(['newChat', 'loadSession', 'deleteSession', 'rename', 'openSettings', 'openAbout', 'workspaceChanged'])
 
 const query = ref('')
+const showWorkspacePicker = ref(false)
+const workspaces = ref([])
+const newWorkspacePath = ref('')
 
 const workspaceName = computed(() => {
   if (!props.workspace) return '未设置'
@@ -104,6 +142,80 @@ const filtered = computed(() => {
   return props.sessions.filter(s =>
     prettyName(s).toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
   )
+})
+
+// 加载工作区列表
+async function loadWorkspaces() {
+  try {
+    const res = await configAPI.listWorkspaces()
+    if (res.ok) {
+      workspaces.value = res.data || []
+    }
+  } catch (e) {
+    console.error('加载工作区列表失败:', e)
+  }
+}
+
+// 切换工作区
+async function handleSwitchWorkspace(path) {
+  try {
+    const res = await configAPI.switchToWorkspace(path)
+    if (res.ok) {
+      showWorkspacePicker.value = false
+      emit('workspaceChanged', path)
+      await loadWorkspaces()
+    } else {
+      alert(res.message || '切换工作区失败')
+    }
+  } catch (e) {
+    alert('切换工作区失败: ' + e.message)
+  }
+}
+
+// 添加新工作区
+async function handleAddWorkspace() {
+  const path = newWorkspacePath.value.trim()
+  if (!path) return
+  
+  try {
+    const res = await configAPI.switchWorkspace(path)
+    if (res.ok) {
+      newWorkspacePath.value = ''
+      showWorkspacePicker.value = false
+      emit('workspaceChanged', path)
+      await loadWorkspaces()
+    } else {
+      alert(res.message || '添加工作区失败')
+    }
+  } catch (e) {
+    alert('添加工作区失败: ' + e.message)
+  }
+}
+
+// 删除工作区
+async function handleDeleteWorkspace(hash) {
+  if (!confirm('确定要删除此工作区吗？（不会删除实际文件）')) return
+  
+  try {
+    const res = await configAPI.deleteWorkspace(hash)
+    if (res.ok) {
+      await loadWorkspaces()
+    } else {
+      alert(res.message || '删除工作区失败')
+    }
+  } catch (e) {
+    alert('删除工作区失败: ' + e.message)
+  }
+}
+
+// 打开工作区选择器时加载列表
+function openWorkspacePicker() {
+  showWorkspacePicker.value = true
+  loadWorkspaces()
+}
+
+onMounted(() => {
+  loadWorkspaces()
 })
 
 function prettyName(s) {
@@ -277,4 +389,153 @@ function relativeTime(mtime) {
 .side-foot .row:hover { background: var(--bg-2); color: var(--fg); }
 .side-foot .row .ico { display: inline-flex; width: 16px; justify-content: center; font-size: 12px; }
 .side-foot .row .right { margin-left: auto; font-size: 11px; color: var(--muted-2); }
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+.modal {
+  background: var(--panel);
+  border-radius: var(--radius-lg, 12px);
+  width: 90%;
+  max-width: 500px;
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+.modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+.modal-head h3 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg);
+}
+.close-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  color: var(--muted);
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.close-btn:hover { background: var(--bg-2); color: var(--fg); }
+.modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 20px;
+}
+
+/* Workspace List */
+.workspace-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+.workspace-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.workspace-item:hover { background: var(--bg-2); }
+.workspace-item[data-active="true"] {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+.workspace-item .ico { font-size: 18px; }
+.workspace-item .body { flex: 1; min-width: 0; }
+.workspace-item .name {
+  display: block;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workspace-item .path {
+  display: block;
+  font-size: 11px;
+  color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.workspace-item .meta {
+  display: block;
+  font-size: 11px;
+  color: var(--muted-2);
+  margin-top: 2px;
+}
+.workspace-item .delete-btn {
+  width: 24px;
+  height: 24px;
+  border-radius: 4px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  color: var(--muted-2);
+  opacity: 0;
+  transition: opacity 0.15s;
+}
+.workspace-item:hover .delete-btn { opacity: 1; }
+.workspace-item .delete-btn:hover {
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+/* Workspace Add */
+.workspace-add {
+  display: flex;
+  gap: 8px;
+}
+.workspace-add input {
+  flex: 1;
+  padding: 8px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg);
+  font-size: 13px;
+  outline: none;
+}
+.workspace-add input:focus {
+  border-color: var(--accent);
+}
+.workspace-add button {
+  padding: 8px 16px;
+  border-radius: var(--radius);
+  background: var(--accent);
+  color: white;
+  font-size: 13px;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+}
+.workspace-add button:hover {
+  opacity: 0.9;
+}
 </style>

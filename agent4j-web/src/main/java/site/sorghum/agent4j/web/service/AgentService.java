@@ -11,6 +11,7 @@ import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.bin.session.SessionStore;
 import site.sorghum.agent4j.bin.tool.ToolDef;
+import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
 
 import org.noear.snack4.ONode;
 import org.noear.solon.Solon;
@@ -274,6 +275,7 @@ public class AgentService {
         status.put("hasPendingHitl", agent.hasPendingHITL());
         status.put("historySize", agent.historySize());
         status.put("currentSession", agent.getSessionStore().currentName());
+        status.put("workspace", agent.getWorkspace() != null ? agent.getWorkspace().toString() : null);
 
         long[] usage = agent.getSessionUsage();
         Map<String, Object> usageMap = new LinkedHashMap<>();
@@ -284,6 +286,105 @@ public class AgentService {
         status.put("usage", usageMap);
 
         return status;
+    }
+
+    // ==================== 工作目录 ====================
+
+    /**
+     * 获取当前工作目录。
+     */
+    public String getWorkspace() {
+        requireAgent();
+        return agent.getWorkspace() != null ? agent.getWorkspace().toString() : null;
+    }
+
+    /**
+     * 切换工作目录。
+     *
+     * @param path 新的工作目录路径
+     * @return 切换成功返回 true，路径无效返回 false
+     */
+    public boolean switchWorkspace(String path) {
+        requireAgent();
+        if (path == null || path.isEmpty()) {
+            return false;
+        }
+        java.nio.file.Path newPath = java.nio.file.Paths.get(path).toAbsolutePath();
+        return agent.switchWorkspace(newPath);
+    }
+
+    /**
+     * 获取所有工作区列表。
+     */
+    public List<Map<String, Object>> listWorkspaces() {
+        requireAgent();
+        WorkspaceManager workspaceManager = agent.getWorkspaceManager();
+        if (workspaceManager == null) return new ArrayList<>();
+
+        try {
+            List<WorkspaceManager.WorkspaceInfo> workspaces = workspaceManager.listWorkspaces();
+            List<Map<String, Object>> result = new ArrayList<>();
+            for (WorkspaceManager.WorkspaceInfo w : workspaces) {
+                Map<String, Object> m = new LinkedHashMap<>();
+                m.put("hash", w.hash);
+                m.put("name", w.name);
+                m.put("path", w.path);
+                m.put("createdAt", w.createdAt);
+                m.put("lastAccessedAt", w.lastAccessedAt);
+                m.put("sessionCount", w.sessionCount);
+                m.put("isActive", w.isActive);
+                result.add(m);
+            }
+            return result;
+        } catch (IOException e) {
+            System.err.println("[workspace] 列出工作区失败: " + e.getMessage());
+            return new ArrayList<>();
+        }
+    }
+
+    /**
+     * 切换到指定工作区。
+     *
+     * @param workspacePath 工作区路径
+     * @return 切换成功返回 true
+     */
+    public boolean switchToWorkspace(String workspacePath) {
+        requireAgent();
+        if (workspacePath == null || workspacePath.isEmpty()) {
+            return false;
+        }
+        
+        try {
+            // 切换工作区
+            boolean switched = switchWorkspace(workspacePath);
+            if (!switched) return false;
+            
+            // 重新加载会话（使用新工作区的会话目录）
+            agent.newSession();
+            return true;
+        } catch (Exception e) {
+            System.err.println("[workspace] 切换工作区失败: " + e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * 删除工作区。
+     *
+     * @param hash 工作区 hash
+     * @return 删除成功返回 true
+     */
+    public boolean deleteWorkspace(String hash) {
+        requireAgent();
+        WorkspaceManager workspaceManager = agent.getWorkspaceManager();
+        if (workspaceManager == null) return false;
+
+        try {
+            return workspaceManager.deleteWorkspace(hash);
+        } catch (IOException e) {
+            System.err.println("[workspace] 删除工作区失败: " + e.getMessage());
+            return false;
+        }
     }
 
     public List<Map<String, Object>> getHistory() {

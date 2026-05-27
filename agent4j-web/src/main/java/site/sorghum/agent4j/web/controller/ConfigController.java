@@ -7,6 +7,7 @@ import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.service.AgentService;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -30,8 +31,13 @@ public class ConfigController {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("baseUrl", config.baseUrl());
             data.put("model", config.model());
-            data.put("workspace", config.workspaceDir() != null
-                    ? config.workspaceDir().toString() : null);
+            // 优先返回当前运行时的工作目录（可能已被动态切换）
+            if (agentService.isReady()) {
+                data.put("workspace", agentService.getWorkspace());
+            } else {
+                data.put("workspace", config.workspaceDir() != null
+                        ? config.workspaceDir().toString() : null);
+            }
             data.put("editMode", config.editMode());
             data.put("reasoningEffort", config.reasoningEffort());
             data.put("lang", config.lang());
@@ -56,5 +62,78 @@ public class ConfigController {
     public Object getUsage() {
         if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
         return ApiResponse.ok(agentService.getUsage());
+    }
+
+    /** 获取当前工作目录 —— GET /api/workspace */
+    @Get
+    @Mapping("/workspace")
+    public Object getWorkspace() {
+        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        return ApiResponse.ok(agentService.getWorkspace());
+    }
+
+    /** 切换工作目录 —— POST /api/workspace */
+    @Post
+    @Mapping("/workspace")
+    public Object switchWorkspace(@Body Map<String, String> body) {
+        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        String path = body.get("path");
+        if (path == null || path.isEmpty()) {
+            return ApiResponse.fail("路径不能为空");
+        }
+        boolean ok = agentService.switchWorkspace(path);
+        if (ok) {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("message", "工作目录已切换");
+            data.put("workspace", agentService.getWorkspace());
+            return ApiResponse.ok(data);
+        }
+        return ApiResponse.fail("无效的工作目录路径: " + path);
+    }
+
+    // ==================== 工作区管理 ====================
+
+    /** 获取所有工作区列表 —— GET /api/workspaces */
+    @Get
+    @Mapping("/workspaces")
+    public Object listWorkspaces() {
+        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        List<Map<String, Object>> workspaces = agentService.listWorkspaces();
+        return ApiResponse.ok(workspaces);
+    }
+
+    /** 切换到指定工作区 —— POST /api/workspaces/switch */
+    @Post
+    @Mapping("/workspaces/switch")
+    public Object switchToWorkspace(@Body Map<String, String> body) {
+        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        String path = body.get("path");
+        if (path == null || path.isEmpty()) {
+            return ApiResponse.fail("工作区路径不能为空");
+        }
+        boolean ok = agentService.switchToWorkspace(path);
+        if (ok) {
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("message", "工作区已切换");
+            data.put("workspace", agentService.getWorkspace());
+            data.put("currentSession", agentService.getCurrentSession());
+            return ApiResponse.ok(data);
+        }
+        return ApiResponse.fail("切换工作区失败: " + path);
+    }
+
+    /** 删除工作区 —— DELETE /api/workspaces/{hash} */
+    @Delete
+    @Mapping("/workspaces/{hash}")
+    public Object deleteWorkspace(@Param("hash") String hash) {
+        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        if (hash == null || hash.isEmpty()) {
+            return ApiResponse.fail("工作区 hash 不能为空");
+        }
+        boolean ok = agentService.deleteWorkspace(hash);
+        if (ok) {
+            return ApiResponse.ok("工作区已删除");
+        }
+        return ApiResponse.fail("删除工作区失败");
     }
 }

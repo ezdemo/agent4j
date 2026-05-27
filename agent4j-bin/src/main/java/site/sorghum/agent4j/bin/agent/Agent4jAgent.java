@@ -14,6 +14,7 @@ import site.sorghum.agent4j.bin.tool.ToolDispatcher;
 import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.session.SessionStore;
 import site.sorghum.agent4j.bin.session.JsonlSessionStore;
+import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolResult;
@@ -34,9 +35,10 @@ public class Agent4jAgent {
     private AgentLoop loop;
     private ConversationContext ctx;
     private SessionService sessionService;
-    private Path workspace;
+    private volatile Path workspace;
     private String apiUrl;
     private String apiKey;
+    private WorkspaceManager workspaceManager;
 
     /** 命令注册表（用于 chat() 中自动路由 "/" 开头的命令） */
     private final ChatCommandRegistry commandRegistry;
@@ -83,7 +85,7 @@ public class Agent4jAgent {
                     tool.getDescription(),
                     toParamDefs(tool.getParameters()),
                     args -> formatResult(tool.execute(
-                            new ToolContext(args, workspace, apiUrl, apiKey, registry, blockedPaths))),
+                            new ToolContext(args, getWorkspace(), apiUrl, apiKey, registry, blockedPaths))),
                     tool.isReadOnly(),
                     tool.isStormExempt(),
                     toolSpec));
@@ -106,10 +108,13 @@ public class Agent4jAgent {
         PromptPrefix prefix = new PromptPrefix(systemPrompt, registry.toOpenAiTools());
         this.ctx = new ConversationContext(prefix);
 
-        // 会话持久化 — 委托 SessionService
+        // 会话持久化 — 委托 SessionService（支持工作区隔离）
         try {
-            SessionStore store = new JsonlSessionStore();
-            this.sessionService = new SessionService(ctx, store);
+            this.workspaceManager = new WorkspaceManager();
+            String workspacePath = b.workspace.toAbsolutePath().toString();
+            workspaceManager.initWorkspace(workspacePath);
+            java.nio.file.Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
+            this.sessionService = new SessionService(ctx, sessionsDir);
             sessionService.loadOrCreate(System.getenv("AGENT4J_SESSION"));
         } catch (IOException e) {
             System.err.println("[session] 初始化失败: " + e.getMessage());
@@ -259,6 +264,45 @@ public class Agent4jAgent {
     public String rewind(int n) throws IOException {
         String msg = ctx.rewindToUser(n);
         return msg != null ? chat(msg) : null;
+    }
+
+    /** 获取当前工作目录 */
+    public Path getWorkspace() {
+        return workspace;
+    }
+
+    /**
+     * 切换工作目录。
+     * 切换后，所有工具将使用新的工作目录执行。
+     * 同时会切换到对应工作区的会话目录。
+     *
+     * @param newWorkspace 新的工作目录路径
+     * @return 切换成功返回 true，路径无效返回 false
+     */
+    public boolean switchWorkspace(Path newWorkspace) {
+        if (newWorkspace == null || !java.nio.file.Files.isDirectory(newWorkspace)) {
+            return false;
+        }
+        this.workspace = newWorkspace.toAbsolutePath();
+        
+        // 切换工作区会话目录
+        if (workspaceManager != null) {
+            try {
+                String workspacePath = newWorkspace.toAbsolutePath().toString();
+                workspaceManager.switchWorkspace(workspacePath);
+                // 注意：切换会话目录需要重新创建 SessionService，这里只更新工作区
+                // 实际的会话切换由 AgentService 处理
+            } catch (IOException e) {
+                System.err.println("[workspace] 切换工作区失败: " + e.getMessage());
+            }
+        }
+        
+        return true;
+    }
+
+    /** 获取工作区管理器 */
+    public WorkspaceManager getWorkspaceManager() {
+        return workspaceManager;
     }
 
     public void setListener(AgentLoopListener listener) {
