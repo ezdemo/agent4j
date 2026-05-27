@@ -44,7 +44,7 @@ public class Agent4jApp {
 
         String apiUrl = envOr("OPENAI_BASE_URL", config.chatApiUrl());
         String apiKey = envOr("OPENAI_API_KEY", config.apiKey());
-        String model = envOr("MODEL", "deepseek-v4-flash");
+        String model = envOr("MODEL", config.model());
 
         if (apiKey == null || apiKey.isEmpty()) {
             System.err.println("未配置 apiKey");

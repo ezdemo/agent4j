@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n</pattern>
+        </encoder>
+    </appender>
+    
+    <!-- 模型API响应日志 -->
+    <logger name="site.sorghum.agent4j.bin.model.HttpModelClient" level="INFO"/>
+    
+    <!-- 工具调用日志 -->
+    <logger name="site.sorghum.agent4j.bin.agent.AgentLoop" level="INFO"/>
+    
+    <!-- 会话日志 -->
+    <logger name="site.sorghum.agent4j.bin.session" level="INFO"/>
+    
+    <!-- 根日志级别 -->
+    <root level="INFO">
+        <appender-ref ref="STDOUT"/>
+    </root>
+</configuration>

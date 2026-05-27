@@ -1,6 +1,8 @@
 package site.sorghum.agent4j.bin.model;
 
 import org.noear.snack4.ONode;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.net.HttpURLConnection;
@@ -18,6 +20,8 @@ import java.util.Map;
  * @author Sorghum
  */
 public class HttpModelClient implements ModelClient {
+
+    private static final Logger logger = LoggerFactory.getLogger(HttpModelClient.class);
 
     /** reasoning_effort 取值: low / medium / high / max */
     private String reasoningEffort;
@@ -117,12 +121,17 @@ public class HttpModelClient implements ModelClient {
                     os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
                 }
 
+                logger.debug("发送API请求到 {}，模型: {}，消息数: {}，工具数: {}", 
+                        apiUrl, model, messages.size(), tools != null ? tools.size() : 0);
+
                 int status = conn.getResponseCode();
                 InputStream is = status >= 200 && status < 300
                         ? conn.getInputStream()
                         : conn.getErrorStream();
                 String responseText = readFully(is);
                 conn.disconnect();
+                
+                logger.debug("收到API响应（完整响应）: {}", responseText);
 
                 if (retryable(status) && attempt < RETRY_DELAYS.length) {
                     int delay = RETRY_DELAYS[attempt];
@@ -142,6 +151,7 @@ public class HttpModelClient implements ModelClient {
                 }
                 return choices.get(0).get("message");
             } catch (IOException e) {
+                logger.error("非流式API调用IO异常: {}", e.getMessage(), e);
                 if (attempt < RETRY_DELAYS.length) {
                     int delay = RETRY_DELAYS[attempt];
                     System.err.println("[retry] " + e.getMessage() + "，第" + (attempt + 1) + "次重试，等待" + delay + "s...");
@@ -150,6 +160,7 @@ public class HttpModelClient implements ModelClient {
                 }
                 throw e;
             } catch (InterruptedException e) {
+                logger.error("非流式API调用被中断", e);
                 Thread.currentThread().interrupt();
                 throw new IOException("Interrupted during retry", e);
             }
@@ -193,6 +204,9 @@ public class HttpModelClient implements ModelClient {
                     os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
                 }
 
+                logger.debug("发送流式API请求到 {}，模型: {}，消息数: {}，工具数: {}", 
+                        apiUrl, model, messages.size(), tools != null ? tools.size() : 0);
+
                 int status = conn.getResponseCode();
                 if (retryable(status) && attempt < RETRY_DELAYS.length) {
                     conn.disconnect();
@@ -217,18 +231,40 @@ public class HttpModelClient implements ModelClient {
                     while ((line = reader.readLine()) != null) {
                         if (!line.startsWith("data: ")) continue;
                         String data = line.substring(6).trim();
-                        if ("[DONE]".equals(data)) break;
+                        if ("[DONE]".equals(data)) {
+                            logger.debug("收到SSE流结束标记");
+                            break;
+                        }
 
                         ONode chunk = ONode.ofJson(data);
+                        logger.debug("收到SSE数据块，大小: {} 字符", data.length());
 
-                        // 捕获 usage（DeepSeek 在最后一个 chunk 返回）
+                        // 捕获 usage（兼容 DeepSeek / Mimo 等不同模型的缓存字段格式）
                         ONode usage = chunk.get("usage");
                         if (usage != null && !usage.isNull()) {
                             int pt = usage.get("prompt_tokens").isNull() ? 0 : usage.get("prompt_tokens").getInt();
                             int ct = usage.get("completion_tokens").isNull() ? 0 : usage.get("completion_tokens").getInt();
                             int tt = usage.get("total_tokens").isNull() ? 0 : usage.get("total_tokens").getInt();
+                            // 缓存命中：DeepSeek 用 prompt_cache_hit_tokens，Mimo 用 prompt_tokens_details.cached_tokens
                             int ch = usage.get("prompt_cache_hit_tokens").isNull() ? 0 : usage.get("prompt_cache_hit_tokens").getInt();
                             int cm = usage.get("prompt_cache_miss_tokens").isNull() ? 0 : usage.get("prompt_cache_miss_tokens").getInt();
+                            if (ch == 0 && cm == 0) {
+                                ONode ptDetails = usage.get("prompt_tokens_details");
+                                if (ptDetails != null && !ptDetails.isNull()) {
+                                    ch = ptDetails.get("cached_tokens").isNull() ? 0 : ptDetails.get("cached_tokens").getInt();
+                                    // Mimo: miss = prompt_tokens - cached_tokens
+                                    cm = Math.max(0, pt - ch);
+                                }
+                            }
+                            // reasoning_tokens（Mimo 等模型在 completion_tokens_details 中返回）
+                            ONode ctDetails = usage.get("completion_tokens_details");
+                            if (ctDetails != null && !ctDetails.isNull()) {
+                                int reasoningTokens = ctDetails.get("reasoning_tokens").isNull() ? 0 : ctDetails.get("reasoning_tokens").getInt();
+                                if (reasoningTokens > 0) {
+                                    logger.debug("推理 token 消耗: {}", reasoningTokens);
+                                }
+                            }
+                            logger.debug("收到usage数据（完整API响应）: {}", chunk.toJson());
                             callback.onUsage(pt, ct, tt, ch, cm);
                         }
 
@@ -240,6 +276,7 @@ public class HttpModelClient implements ModelClient {
                             String tok = rd.getString();
                             if (tok != null && !tok.isEmpty()) {
                                 reasoningBuf.append(tok);
+                                logger.debug("收到reasoning_content: {}", tok);
                                 callback.onReasoningDelta(tok);
                             }
                         }
@@ -249,12 +286,14 @@ public class HttpModelClient implements ModelClient {
                             String tok = cd.getString();
                             if (tok != null && !tok.isEmpty()) {
                                 contentBuf.append(tok);
+                                logger.debug("收到content: {}", tok);
                                 callback.onContentDelta(tok);
                             }
                         }
 
                         ONode tcDelta = delta.get("tool_calls");
                         if (tcDelta != null && tcDelta.isArray()) {
+                            logger.debug("收到tool_calls数据，数量: {}", tcDelta.getArray().size());
                             for (ONode tcd : tcDelta.getArray()) {
                                 int idx = tcd.get("index").isNull() ? 0 : tcd.get("index").getInt();
                                 ONode func = tcd.get("function");
@@ -274,11 +313,14 @@ public class HttpModelClient implements ModelClient {
                                     existing.getOrNew("function").set("arguments",
                                             (prev != null ? prev : "") + (add != null ? add : ""));
                                 }
+                                logger.debug("tool_calls索引: {}, 函数名: {}", idx, 
+                                        func.get("name").isNull() ? "null" : func.get("name").getString());
                             }
                         }
                     }
 
                     if (toolCallsAccum != null) {
+                        logger.debug("完成tool_calls累积，共 {} 个调用", toolCallsAccum.getArray().size());
                         callback.onToolCalls(toolCallsAccum);
                     }
                     callback.onDone();
@@ -287,6 +329,7 @@ public class HttpModelClient implements ModelClient {
                 return; // success
 
             } catch (IOException e) {
+                logger.error("流式API调用IO异常: {}", e.getMessage(), e);
                 if (attempt < RETRY_DELAYS.length) {
                     int delay = RETRY_DELAYS[attempt];
                     System.err.println("[retry] " + e.getMessage() + "，第" + (attempt + 1) + "次重试，等待" + delay + "s...");
@@ -296,10 +339,12 @@ public class HttpModelClient implements ModelClient {
                 callback.onError(e.getMessage());
                 return;
             } catch (InterruptedException e) {
+                logger.error("流式API调用被中断", e);
                 Thread.currentThread().interrupt();
                 callback.onError("Interrupted during retry");
                 return;
             } catch (Exception e) {
+                logger.error("流式API调用异常: {}", e.getMessage(), e);
                 // 非 IO 异常（如 JSON 解析错误），不重试
                 callback.onError(e.getMessage());
                 return;
@@ -325,7 +370,7 @@ public class HttpModelClient implements ModelClient {
             // 防御：tool 消息必须有 tool_call_id，缺少时跳过该消息
             Object toolCallId = m.get("tool_call_id");
             if ("tool".equals(m.get("role")) && (toolCallId == null || String.valueOf(toolCallId).isEmpty())) {
-                System.err.println("[WARN] buildBody: skipping tool message without tool_call_id");
+                logger.warn("buildBody: 跳过没有tool_call_id的tool消息");
                 continue;
             }
 
@@ -364,9 +409,8 @@ public class HttpModelClient implements ModelClient {
         }
 
         String jsonBody = body.toJson();
-        System.err.println("[DEBUG] request body size=" + jsonBody.length()
-                + " chars, tools=" + (tools != null ? tools.size() : 0)
-                + ", messages=" + messages.size());
+        logger.debug("构建请求体: 大小={} 字符, 工具数={}, 消息数={}", 
+                jsonBody.length(), tools != null ? tools.size() : 0, messages.size());
         return jsonBody;
     }
 
