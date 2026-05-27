@@ -8,6 +8,7 @@ import java.io.*;
 import java.net.HttpURLConnection;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -323,8 +324,30 @@ public class HttpModelClient implements ModelClient {
                     }
 
                     if (toolCallsAccum != null) {
-                        logger.debug("完成tool_calls累积，共 {} 个调用", toolCallsAccum.getArray().size());
-                        callback.onToolCalls(toolCallsAccum);
+                        // 过滤掉 name 为 null/empty 的 tool call（SSE 分块缺失导致）
+                        List<ONode> valid = new ArrayList<>();
+                        for (ONode tc : toolCallsAccum.getArray()) {
+                            ONode fn = tc.get("function");
+                            if (fn != null && !fn.isNull()) {
+                                ONode nm = fn.get("name");
+                                if (nm != null && nm.isString() && nm.getString() != null && !nm.getString().isEmpty()) {
+                                    valid.add(tc);
+                                }
+                            }
+                        }
+                        if (!valid.isEmpty()) {
+                            ONode filtered = org.noear.snack4.ONode.ofJson("[]").asArray();
+                            for (ONode v : valid) {
+                                ONode copy = filtered.addNew();
+                                copy.set("id", v.get("id").isNull() ? "" : v.get("id").getString());
+                                copy.set("type", "function");
+                                ONode copyFn = copy.getOrNew("function");
+                                copyFn.set("name", v.get("function").get("name").getString());
+                                copyFn.set("arguments", v.get("function").get("arguments").getString());
+                            }
+                            logger.debug("完成tool_calls累积，共 {} 个有效调用", valid.size());
+                            callback.onToolCalls(filtered);
+                        }
                     }
                     callback.onDone();
                 }

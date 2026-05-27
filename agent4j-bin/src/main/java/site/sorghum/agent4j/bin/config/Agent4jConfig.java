@@ -118,7 +118,7 @@ public class Agent4jConfig {
      */
     public String reasoningEffort() {
         String r = root.select("$.reasoningEffort").getString();
-        return r != null ? r : "max";
+        return r != null ? r : "high";
     }
 
     /**

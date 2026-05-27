@@ -63,11 +63,27 @@ public class MessageHealer {
                 }
             }
 
-            // 2. fix tool_calls/tool pairing
+            // 2. fix tool_calls/tool pairing + 清除 name 为 null 的 tool_call
             if ("assistant".equals(role) && msg.containsKey("tool_calls")) {
-                List<?> tcs = (List<?>) msg.get("tool_calls");
-                pendingToolCount += tcs != null ? tcs.size() : 0; // 累加而非覆盖
-                lastAssistantWithTcIdx = out.size(); // 记录该 assistant 即将写入的位置
+                @SuppressWarnings("unchecked")
+                List<Map<String, Object>> tcs = (List<Map<String, Object>>) msg.get("tool_calls");
+                if (tcs != null) {
+                    // 过滤 name 为 null 的 tool_call（历史损坏 / SSE 截断残留）
+                    List<Map<String, Object>> cleaned = new ArrayList<>();
+                    for (Map<String, Object> tc : tcs) {
+                        Object nm = tc.get("name");
+                        if (nm != null && (!(nm instanceof String) || !((String) nm).isEmpty())) {
+                            cleaned.add(tc);
+                        }
+                    }
+                    if (cleaned.size() != tcs.size()) {
+                        msg = new LinkedHashMap<>(msg);
+                        msg.put("tool_calls", cleaned);
+                        tcs = cleaned;
+                    }
+                }
+                pendingToolCount += tcs != null ? tcs.size() : 0;
+                lastAssistantWithTcIdx = out.size();
             } else if ("tool".equals(role)) {
                 if (pendingToolCount > 0) {
                     pendingToolCount--;

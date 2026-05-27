@@ -283,6 +283,12 @@ public class AgentLoop {
                 String tcId = tc.get("id").getString();
                 ONode func = tc.get("function");
                 String tcName = func.get("name").getString();
+                // 防御：丢弃 name 为 null 的 tool call（SSE 截断 / 历史损坏会导致 null name，
+                // 存入上下文后模型会模仿生成更多 null 调用，形成死循环）
+                if (tcName == null || tcName.isEmpty()) {
+                    System.err.println("[WARN] 跳过无效 tool call: name=" + tcName + " id=" + tcId);
+                    continue;
+                }
                 String tcArgs = func.get("arguments").getString();
                 if (tcArgs == null) tcArgs = "{}";
 
