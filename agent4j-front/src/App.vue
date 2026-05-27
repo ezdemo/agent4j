@@ -97,6 +97,9 @@
           <div v-if="m.role === 'user'" class="msg-row user">
             <div class="msg-bubble">{{ m.content }}</div>
           </div>
+          <div v-else-if="m.role === 'system'" class="msg-row system">
+            <div class="msg-bubble system-bubble" v-html="renderMd(m.content)" />
+          </div>
           <div v-else class="msg-row asst">
             <div class="msg-avatar">A</div>
             <div class="msg-content">
@@ -272,8 +275,80 @@ const timeAgo = (t) => { if (!t) return ''; const d = Date.now() - Date.parse(t)
 
 // Send
 const quickSend = (text) => { draft.value = text; send() }
-const send = () => { const t = draft.value.trim(); if (!t || busy.value) return; doSend(t) }
+
+const send = () => {
+  let t = draft.value.trim()
+  if (!t || busy.value) return
+
+  // 所有消息（包括 / 命令）都走 doSend → 后端统一解析
+  // 只有 /retry 和 /clear 需要本地预处理
+  if (t.startsWith('/')) {
+    const cmd = t.trim().split(/\s+/)[0].toLowerCase()
+    if (cmd === '/retry') {
+      handleRetryLocally()
+      return
+    }
+    if (cmd === '/clear') {
+      handleClearLocally()
+      return
+    }
+    // /plan 和 /execute 同步本地 planMode 状态
+    if (cmd === '/plan') {
+      planMode.value = true
+    } else if (cmd === '/execute') {
+      planMode.value = false
+    }
+  }
+
+  doSend(t)
+}
+
 const abort = () => { if (abortCtrl) { abortCtrl.abort(); abortCtrl = null }; busy.value = false }
+
+// 本地处理 /retry
+const handleRetryLocally = () => {
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    if (messages.value[i].role === 'user') {
+      const text = messages.value[i].content
+      messages.value.splice(i)
+      scroll()
+      doSend(text)
+      return
+    }
+  }
+  addSystemMsg('没有可重试的消息。')
+}
+
+// 本地处理 /clear
+const handleClearLocally = () => {
+  if (!messages.value.length) return
+  messages.value = []
+  currentSession.value = ''
+}
+
+// 添加系统提示消息（不调用后端）
+const addSystemMsg = (content) => {
+  messages.value.push({
+    id: Date.now(),
+    role: 'system',
+    content,
+    time: new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' })
+  })
+  scroll()
+}
+
+// 导出对话
+const exportChat = () => {
+  const chatText = messages.value.map(m => {
+    const role = m.role === 'user' ? '用户' : m.role === 'assistant' ? '助手' : '系统'
+    return `[${role}] ${m.content}`
+  }).join('\n\n---\n\n')
+  const blob = new Blob([chatText], { type: 'text/plain;charset=utf-8' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url; a.download = `agent4j-${new Date().toISOString().slice(0,10)}.md`; a.click()
+  URL.revokeObjectURL(url)
+}
 
 const doSend = async (text) => {
   messages.value.push({ id: Date.now(), role: 'user', content: text })
@@ -312,12 +387,30 @@ const doSend = async (text) => {
 }
 
 // Actions
-const clearChat = async () => { if (messages.value.length && !confirm('清空对话？')) return; try { await sessionsAPI.createNew(); messages.value = []; currentSession.value = '' } catch {} }
-const togglePlan = async () => { try { if (planMode.value) { await agentAPI.disablePlanMode(); planMode.value = false } else { await agentAPI.enablePlanMode(); planMode.value = true } } catch {} }
+const clearChat = async () => {
+  if (messages.value.length && !confirm('清空对话？')) return
+  // 走消息解析：发送 /new 命令
+  messages.value = []
+  currentSession.value = ''
+  draft.value = '/new'
+  send()
+}
+const togglePlan = async () => {
+  // 翻转本地状态后，发送命令消息让后端处理
+  planMode.value = !planMode.value
+  draft.value = planMode.value ? '/plan' : '/execute'
+  send()
+}
 
 // Sessions
 const loadSessions = async () => { try { const r = await sessionsAPI.list(); if (r.success) sessions.value = r.data || [] } catch {} }
-const newChat = async () => { try { await sessionsAPI.createNew(); messages.value = []; currentSession.value = ''; await loadSessions() } catch {} }
+const newChat = async () => {
+  // 走消息解析：发送 /new 命令
+  messages.value = []
+  currentSession.value = ''
+  draft.value = '/new'
+  send()
+}
 const loadSession = async (name) => {
   try {
     await sessionsAPI.switchSession(name); currentSession.value = name; messages.value = []
@@ -459,10 +552,16 @@ watch(messages, () => scroll(), { deep: true })
 /* Messages */
 .msg-row { display: flex; gap: 10px; margin-bottom: 24px; }
 .msg-row.user { justify-content: flex-end; }
+.msg-row.system { justify-content: center; }
 .msg-bubble {
   max-width: 75%; padding: 12px 16px; background: var(--accent); color: #fff;
   border-radius: var(--r) var(--r) var(--r) 2px; font-size: 14px; line-height: 1.6;
   white-space: pre-wrap; box-shadow: var(--shadow-sm);
+}
+.system-bubble {
+  background: var(--bg-2); color: var(--fg-2); font-size: 13px;
+  text-align: center; border: 1px dashed var(--border-strong);
+  max-width: 85%;
 }
 .msg-avatar {
   width: 32px; height: 32px; border-radius: var(--r-sm);

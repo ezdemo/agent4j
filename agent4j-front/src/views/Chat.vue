@@ -283,12 +283,10 @@ const sendMessage = async () => {
 
 const clearChat = async () => {
   if (confirm('确定要清空所有对话记录吗？')) {
-    try {
-      await sessionsAPI.createNew()
-      messages.value = []
-    } catch (error) {
-      console.error('创建新会话失败:', error)
-    }
+    // 通过发送 /new 命令消息来创建新会话，保持与 CLI 一致的逻辑
+    messages.value = []  // 立即清空本地消息
+    inputText.value = '/new'
+    await sendMessage()
   }
 }
 
@@ -330,24 +328,11 @@ const removeFile = (index) => {
 }
 
 const togglePlanMode = async () => {
-  try {
-    if (planMode.value) {
-      await agentAPI.disablePlanMode()
-      planMode.value = false
-    } else {
-      await agentAPI.enablePlanMode()
-      planMode.value = true
-    }
-    
-    window.dispatchEvent(new CustomEvent('terminal-output', { 
-      detail: { 
-        type: 'system', 
-        text: planMode.value ? '已启用计划模式 - 只读工具可用' : '已禁用计划模式'
-      }
-    }))
-  } catch (error) {
-    console.error('切换计划模式失败:', error)
-  }
+  // 翻转本地状态（UI 立即响应）
+  planMode.value = !planMode.value
+  // 通过发送 /plan 或 /execute 命令消息来切换后端，保持与 CLI 一致的逻辑
+  inputText.value = planMode.value ? '/plan' : '/execute'
+  await sendMessage()
 }
 
 const loadHistory = async () => {

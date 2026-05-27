@@ -1,6 +1,10 @@
 package site.sorghum.agent4j.bin.agent;
 
+import lombok.SneakyThrows;
 import org.noear.solon.Solon;
+import site.sorghum.agent4j.bin.command.ChatCommand;
+import site.sorghum.agent4j.bin.command.ChatCommandContext;
+import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
@@ -34,7 +38,14 @@ public class Agent4jAgent {
     private String apiUrl;
     private String apiKey;
 
+    /** 命令注册表（用于 chat() 中自动路由 "/" 开头的命令） */
+    private final ChatCommandRegistry commandRegistry;
+
+    /** 退出信号（命令返回 EXIT 时设置，主循环据此终止） */
+    private volatile boolean terminated = false;
+
     private Agent4jAgent(Builder b) {
+        this.commandRegistry = b.commandRegistry;
         this.workspace = b.workspace;
         this.apiUrl = b.apiUrl;
         this.apiKey = b.apiKey;
@@ -148,7 +159,46 @@ public class Agent4jAgent {
 
     // ========== 公共 API ==========
 
+    /** 检查是否收到退出信号（命令返回 EXIT 后为 true） */
+    public boolean isTerminated() { return terminated; }
+
+    /**
+     * 处理用户输入，自动路由 "/" 命令或转发到 LLM 推理循环。
+     * <p>
+     * 命令处理通过 {@link ChatCommandRegistry} 自动分发 ——
+     * 新增命令只需实现 {@link ChatCommand} 接口并标注 {@code @Component}，
+     * 即可被 IoC 容器收集并在此处自动匹配执行。
+     * </p>
+     */
+    @SneakyThrows
     public String chat(String message) throws IOException {
+        // HITL 恢复（approve/deny 后传入 null 触发恢复）
+        if (message == null) {
+            return loop.run(null);
+        }
+
+        // === 命令处理（通过 IoC 注册的命令接口自动分发）===
+        if (message.startsWith("/") && commandRegistry != null) {
+            ChatCommand cmd = commandRegistry.match(message);
+            if (cmd != null) {
+                // 构造命令上下文：命令通过此上下文访问 agent 与退出机制
+                ChatCommandContext cmdContext = new ChatCommandContext(
+                        this, null, () -> this.terminated = true);
+                ChatCommand.CommandResult result = cmd.execute(message, cmdContext);
+                // 命令执行后自动刷入会话与保存用量
+                flushSession();
+                saveUsage();
+                if (result == ChatCommand.CommandResult.EXIT) {
+                    this.terminated = true;
+                    return "/exit";
+                }
+                // 命令已自行通过 System.out 输出内容，返回空字符串
+                return "";
+            }
+            // 未匹配到命令："/" 开头但不是命令，降级为普通聊天消息
+        }
+
+        // === 普通聊天逻辑 ===
         return loop.run(message);
     }
 
@@ -314,6 +364,8 @@ public class Agent4jAgent {
         Set<String> disabledTools;
         List<String> blockedPaths;
         boolean hitl;
+        /** 命令注册表（Solon 自动收集的 ChatCommand Bean） */
+        ChatCommandRegistry commandRegistry;
         /** 用户是否显式设置过 systemPrompt */
         private boolean systemPromptExplicitlySet = false;
 
@@ -325,6 +377,7 @@ public class Agent4jAgent {
         public Builder model(String v) { this.model = v; return this; }
         public Builder systemPrompt(String v) { this.systemPrompt = v; this.systemPromptExplicitlySet = true; return this; }
         public Builder workspace(Path v) { this.workspace = v; return this; }
+        public Builder commandRegistry(ChatCommandRegistry v) { this.commandRegistry = v; return this; }
 
         public Builder config(Agent4jConfig c) {
             if (c.chatApiUrl() != null) this.apiUrl = c.chatApiUrl();

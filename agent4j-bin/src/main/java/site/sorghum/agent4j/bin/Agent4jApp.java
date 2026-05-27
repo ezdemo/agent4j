@@ -7,8 +7,6 @@ import org.noear.solon.annotation.SolonMain;
 import site.sorghum.agent4j.bin.agent.Agent4jAgent;
 import site.sorghum.agent4j.bin.agent.AgentLoopListener;
 import site.sorghum.agent4j.bin.agent.ConsoleAgentOutput;
-import site.sorghum.agent4j.bin.command.ChatCommand;
-import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 
@@ -17,8 +15,8 @@ import java.util.Scanner;
 /**
  * Agent4j 入口——纯 Java AI Agent。
  * <p>
- * 命令处理已抽象为 {@link ChatCommand} 接口，通过 Solon IoC
- * 自动发现和注册。新增命令只需实现 {@link ChatCommand} 并标注
+ * 命令处理已抽象为 {@link site.sorghum.agent4j.bin.command.ChatCommand} 接口，通过 Solon IoC
+ * 自动发现和注册。新增命令只需实现 {@code ChatCommand} 并标注
  * {@link org.noear.solon.annotation.Component @Component} 即可。
  * </p>
  *
@@ -62,6 +60,7 @@ public class Agent4jApp {
                 .apiKey(apiKey)
                 .model(model)
                 .workspace(config.workspaceDir())
+                .commandRegistry(cmdRegistry)
                 .build();
 
         // 设置输出接口（控制台输出）
@@ -83,12 +82,6 @@ public class Agent4jApp {
         });
 
         try (Scanner scanner = new Scanner(System.in, "UTF-8")) {
-            // 命令执行上下文（命令可通过此上下文访问 agent、scanner 和退出机制）
-            ChatCommandContext cmdContext = new ChatCommandContext(agent, scanner, () -> {
-                agent.flushSession();
-                agent.saveUsage();
-            });
-
             while (true) {
                 System.out.print("[" + agent.historySize() + "] > ");
                 if (!scanner.hasNextLine()) break;
@@ -96,33 +89,32 @@ public class Agent4jApp {
 
                 if (input.isEmpty()) continue;
 
-                // === 命令处理（通过 IoC 注册的命令接口自动分发） ===
-                ChatCommand cmd = cmdRegistry.match(input);
-                if (cmd != null) {
-                    ChatCommand.CommandResult result = cmd.execute(input, cmdContext);
-                    // /exit 命令返回 EXIT，退出主循环
-                    if (result == ChatCommand.CommandResult.EXIT) {
-                        break;
-                    }
-                    // 其他命令已处理完毕，继续下一轮输入
-                    continue;
-                }
-
-                // === 普通聊天逻辑 ===
+                // 所有输入统一交给 agent.chat() ——
+                // "/" 开头的命令通过 ChatCommandRegistry 自动路由分发，
+                // 非命令消息转发到 LLM 推理循环。
                 try {
                     long t0 = System.currentTimeMillis();
                     String reply = agent.chat(input);
                     long elapsed = System.currentTimeMillis() - t0;
+
+                    // 检查退出信号（命令返回 EXIT 时设置）
+                    if (agent.isTerminated()) break;
+
+                    // 命令已自行通过 System.out 输出内容，此处不重复打印
                     System.out.println();
-                    if (reply == null || reply.isEmpty()) {
-                        System.out.println("(模型返回空内容，可能 API 异常或模型选择有误)");
-                    } else {
+                    if (reply != null && !reply.isEmpty() && !"/exit".equals(reply)) {
                         System.out.println(reply);
+                    } else if ((reply == null || reply.isEmpty()) && !input.startsWith("/")) {
+                        // 只有非命令输入返回空时才提示可能的 API 异常
+                        System.out.println("(模型返回空内容，可能 API 异常或模型选择有误)");
                     }
-                    printUsage(agent, lastUsage, elapsed);
-                    resetUsage(lastUsage);
-                    agent.saveUsage(); // 每次对话后持久化 token 用量
-                    agent.flushSession(); // 每轮对话结束后刷入会话数据到磁盘
+
+                    if (lastUsage[2] > 0) {
+                        printUsage(agent, lastUsage, elapsed);
+                        resetUsage(lastUsage);
+                        agent.saveUsage();
+                        agent.flushSession();
+                    }
                 } catch (Exception e) {
                     System.err.println("错误: " + e.getMessage());
                     e.printStackTrace();
