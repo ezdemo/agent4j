@@ -71,7 +71,12 @@ public class ChatController {
             try {
                 agentService.chatStream(message, emitter);
             } catch (Exception e) {
-                emitter.sendError(e.getMessage());
+                try {
+                    emitter.sendError(e.getMessage());
+                } catch (Exception ex) {
+                    // SSE连接可能已断开，忽略异常
+                    System.err.println("[web] 发送错误信息失败（可能SSE连接已断开）: " + ex.getMessage());
+                }
             }
         }, "agent4j-chat-stream");
         chatThread.setDaemon(true);

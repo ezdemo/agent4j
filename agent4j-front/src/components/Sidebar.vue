@@ -107,7 +107,9 @@ const filtered = computed(() => {
 })
 
 function prettyName(s) {
-  if (s.summary && s.summary.trim()) return s.summary.trim()
+  // 优先使用自动生成的会话标题
+  if (s.title && s.title.trim()) return s.title.trim()
+  // 然后使用会话名称
   const m = s.name.match(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/)
   if (m) return `${m[2]}/${m[3]} ${m[4]}:${m[5]}`
   return s.name.replace(/[-_]+/g, ' ').slice(0, 40)

@@ -267,7 +267,17 @@ public class JsonlSessionStore implements SessionStore {
                 try (BufferedReader r = Files.newBufferedReader(p, StandardCharsets.UTF_8)) {
                     while (r.readLine() != null) lines++;
                 }
-                list.add(new SessionInfo(name, size, lines, attr.lastModifiedTime().toMillis()));
+                // 读取标题
+                String title = null;
+                Path metaFile = SESSIONS_DIR.resolve(sanitize(name) + ".meta");
+                if (Files.exists(metaFile)) {
+                    try {
+                        String metaJson = new String(Files.readAllBytes(metaFile), StandardCharsets.UTF_8);
+                        org.noear.snack4.ONode metaNode = org.noear.snack4.ONode.ofJson(metaJson);
+                        title = metaNode.get("title").getString();
+                    } catch (Exception ignored) {}
+                }
+                list.add(new SessionInfo(name, size, lines, attr.lastModifiedTime().toMillis(), title));
             }
         }
         list.sort((a, b) -> Long.compare(b.mtime, a.mtime));
@@ -287,6 +297,27 @@ public class JsonlSessionStore implements SessionStore {
         String json = "{\"prompt\":" + prompt + ",\"completion\":" + completion
                 + ",\"cacheHit\":" + cacheHit + ",\"cacheMiss\":" + cacheMiss + "}";
         Files.write(file, json.getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Override
+    public void updateTitle(String name, String title) throws IOException {
+        Path file = SESSIONS_DIR.resolve(sanitize(name) + ".meta");
+        org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson("{}");
+        node.set("title", title);
+        Files.write(file, node.toJson().getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Override
+    public String getTitle(String name) throws IOException {
+        Path file = SESSIONS_DIR.resolve(sanitize(name) + ".meta");
+        if (!Files.exists(file)) return null;
+        try {
+            String metaJson = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+            org.noear.snack4.ONode metaNode = org.noear.snack4.ONode.ofJson(metaJson);
+            return metaNode.get("title").getString();
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     @Override

@@ -52,7 +52,7 @@ public class SessionController {
     /** 切换会话 —— POST /api/sessions/{name} */
     @Post
     @Mapping("/{name}")
-    public Object switchSession(String name) {
+    public Object switchSession(@Path("name") String name) {
         if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
         boolean ok = agentService.switchSession(name);
         if (ok) return ApiResponse.ok(agentService.getCurrentSession());
@@ -62,7 +62,7 @@ public class SessionController {
     /** 删除会话 —— DELETE /api/sessions/{name} */
     @Delete
     @Mapping("/{name}")
-    public Object deleteSession(String name) throws Exception {
+    public Object deleteSession(@Path("name") String name) throws Exception {
         if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
         boolean ok = agentService.deleteSession(name);
         if (ok) return ApiResponse.ok();

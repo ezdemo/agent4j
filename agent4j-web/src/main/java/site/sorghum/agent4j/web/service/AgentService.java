@@ -193,13 +193,23 @@ public class AgentService {
                 emitter.send("reply", replyNode.toJson());
             }
         } catch (Exception e) {
-            emitter.sendError(e.getMessage());
+            try {
+                emitter.sendError(e.getMessage());
+            } catch (Exception ex) {
+                // SSE连接可能已断开，忽略异常
+                System.err.println("[web] 发送错误信息失败（可能SSE连接已断开）: " + ex.getMessage());
+            }
         } finally {
             agent.setOutput(AgentOutput.NOOP);
             agent.flushSession();
             agent.saveUsage();
             this.currentSseEmitter = null;
-            emitter.complete();
+            try {
+                emitter.complete();
+            } catch (Exception ex) {
+                // SSE连接可能已断开，忽略异常
+                System.err.println("[web] 完成SSE流失败（可能SSE连接已断开）: " + ex.getMessage());
+            }
             chatLock.unlock();
         }
     }
@@ -222,6 +232,7 @@ public class AgentService {
             m.put("messageCount", s.messageCount);
             m.put("size", s.size);
             m.put("mtime", s.mtime);
+            m.put("title", s.title);
             result.add(m);
         }
         return result;
@@ -229,7 +240,7 @@ public class AgentService {
 
     public boolean switchSession(String name) {
         requireAgent();
-        return agent.getSessionStore().switchTo(name);
+        return agent.switchSession(name);
     }
 
     public boolean deleteSession(String name) throws IOException {
@@ -240,8 +251,15 @@ public class AgentService {
     public Map<String, Object> getCurrentSession() {
         requireAgent();
         Map<String, Object> info = new LinkedHashMap<>();
-        info.put("name", agent.getSessionStore().currentName());
+        String currentName = agent.getSessionStore().currentName();
+        info.put("name", currentName);
         info.put("historySize", agent.historySize());
+        try {
+            String title = agent.getSessionStore().getTitle(currentName);
+            info.put("title", title);
+        } catch (IOException e) {
+            info.put("title", null);
+        }
         return info;
     }
 

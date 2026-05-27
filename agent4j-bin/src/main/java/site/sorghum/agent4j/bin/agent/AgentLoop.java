@@ -100,9 +100,17 @@ public class AgentLoop {
                 messages, 20, client);
         if (folded.size() < ctx.size()) {
             ctx.compact(folded);
-            output.onLog(AgentOutput.LogLevel.INFO, "[compact] " + ctx.size() + " 条消息（保留近20条，较早消息已摘要）");
+            try {
+                output.onLog(AgentOutput.LogLevel.INFO, "[compact] " + ctx.size() + " 条消息（保留近20条，较早消息已摘要）");
+            } catch (Exception e) {
+                // SSE连接断开时忽略异常
+            }
         } else {
-            output.onLog(AgentOutput.LogLevel.INFO, "[compact] 无需折叠（总消息数 ≤ 20）");
+            try {
+                output.onLog(AgentOutput.LogLevel.INFO, "[compact] 无需折叠（总消息数 ≤ 20）");
+            } catch (Exception e) {
+                // SSE连接断开时忽略异常
+            }
         }
     }
 
@@ -166,12 +174,20 @@ public class AgentLoop {
         // ---- HITL 恢复：用户已审批 / 拒绝 ----
         if (hitlState == HitlState.APPROVED) {
             hitlState = HitlState.NONE;
-            output.onLog(AgentOutput.LogLevel.INFO, "[hitl] 用户批准，执行工具调用...");
+            try {
+                output.onLog(AgentOutput.LogLevel.INFO, "[hitl] 用户批准，执行工具调用...");
+            } catch (Exception e) {
+                // 忽略异常
+            }
             return resumeAfterHITL(true);
         }
         if (hitlState == HitlState.DENIED) {
             hitlState = HitlState.NONE;
-            output.onLog(AgentOutput.LogLevel.INFO, "[hitl] 用户拒绝，跳过工具调用。");
+            try {
+                output.onLog(AgentOutput.LogLevel.INFO, "[hitl] 用户拒绝，跳过工具调用。");
+            } catch (Exception e) {
+                // 忽略异常
+            }
             return resumeAfterHITL(false);
         }
 
@@ -197,7 +213,11 @@ public class AgentLoop {
                 throw new IOException("[stream] API error during streaming");
             }
 
-            output.onContentComplete();
+            try {
+                output.onContentComplete();
+            } catch (Exception e) {
+                // SSE连接断开时忽略异常，继续执行
+            }
 
             // 4. 从 reasoning 中回收丢失的工具调用（Scavenger）
             ONode toolCalls = scavengeToolCalls(sr.toolCalls, sr.reasoningContent, sr.content);
@@ -267,8 +287,16 @@ public class AgentLoop {
 
         String message = sb.toString();
         // 暂存 assistant 消息（审批通过后写入上下文）
-        output.onContentDelta(message);
-        output.onContentComplete();
+        try {
+            output.onContentDelta(message);
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常
+        }
+        try {
+            output.onContentComplete();
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常
+        }
         return message;
     }
 
@@ -344,7 +372,11 @@ public class AgentLoop {
                 if (recoverFromStreamError(messages, prepared.foldedThisStep)) continue;
                 throw new IOException("[stream] API error during streaming");
             }
-            output.onContentComplete();
+            try {
+                output.onContentComplete();
+            } catch (Exception e) {
+                // SSE连接断开时忽略异常，继续执行
+            }
 
             ONode nextToolCalls = scavengeToolCalls(sr.toolCalls, sr.reasoningContent, sr.content);
             boolean hasMoreTools = nextToolCalls != null && nextToolCalls.isArray()
@@ -445,8 +477,12 @@ public class AgentLoop {
                 : ContextFolding.estimateChars(messages) / 2;
         boolean needFold = estimatedPromptTokens > tokenThreshold;
         if (needFold) {
-            output.onLog(AgentOutput.LogLevel.INFO, "[fold] 触发折叠: estimatedTokens=" + estimatedPromptTokens
-                    + " threshold=" + tokenThreshold + " maxCtx=" + maxCtx);
+            try {
+                output.onLog(AgentOutput.LogLevel.INFO, "[fold] 触发折叠: estimatedTokens=" + estimatedPromptTokens
+                        + " threshold=" + tokenThreshold + " maxCtx=" + maxCtx);
+            } catch (Exception e) {
+                // 忽略异常
+            }
             messages = ContextFolding.fold(messages, MAX_TOTAL_CHARS, KEEP_TAIL_CHARS, client);
             if (messages.size() < ctx.size()) {
                 ctx.compact(messages);
@@ -455,8 +491,12 @@ public class AgentLoop {
             }
         }
 
-        output.onLog(AgentOutput.LogLevel.DEBUG, "step=" + step + " messages.size=" + messages.size()
-                + " lastPromptTokens=" + lastPromptTokens + " threshold=" + tokenThreshold);
+        try {
+            output.onLog(AgentOutput.LogLevel.DEBUG, "step=" + step + " messages.size=" + messages.size()
+                    + " lastPromptTokens=" + lastPromptTokens + " threshold=" + tokenThreshold);
+        } catch (Exception e) {
+            // 忽略异常
+        }
 
         // 注入动态工具使用指引（作为 user 消息，不持久化到历史）
         String instr = buildToolInstructions();
@@ -489,13 +529,22 @@ public class AgentLoop {
             @Override
             public void onReasoningDelta(String token) {
                 reasoningBuf.append(token);
-                output.onReasoningDelta(token);
+                try {
+                    output.onReasoningDelta(token);
+                } catch (Exception e) {
+                    // SSE连接断开时忽略异常，继续执行
+                    // output可能是SseEmitter桥接，连接断开后会抛出异常
+                }
             }
 
             @Override
             public void onContentDelta(String token) {
                 contentBuf.append(token);
-                output.onContentDelta(token);
+                try {
+                    output.onContentDelta(token);
+                } catch (Exception e) {
+                    // SSE连接断开时忽略异常，继续执行
+                }
             }
 
             @Override
@@ -507,8 +556,16 @@ public class AgentLoop {
             public void onUsage(int promptTokens, int completionTokens, int totalTokens,
                                int cacheHit, int cacheMiss) {
                 lastPromptTokens = promptTokens;
-                listener.onUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
-                output.onUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
+                try {
+                    listener.onUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
+                } catch (Exception e) {
+                    // 忽略异常
+                }
+                try {
+                    output.onUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
+                } catch (Exception e) {
+                    // SSE连接断开时忽略异常，继续执行
+                }
             }
 
             @Override
@@ -517,7 +574,11 @@ public class AgentLoop {
             @Override
             public void onError(String err) {
                 streamError.set(true);
-                output.onError("[stream error] " + err);
+                try {
+                    output.onError("[stream error] " + err);
+                } catch (Exception e) {
+                    // SSE连接断开时忽略异常
+                }
                 streamLatch.countDown();
             }
         });
@@ -540,7 +601,11 @@ public class AgentLoop {
      */
     private boolean recoverFromStreamError(List<Map<String, Object>> messages, boolean foldedThisStep) throws IOException {
         if (!foldedThisStep && ContextFolding.estimateChars(messages) > 50_000) {
-            output.onLog(AgentOutput.LogLevel.INFO, "[recover] API 错误，尝试折叠上下文后重试...");
+            try {
+                output.onLog(AgentOutput.LogLevel.INFO, "[recover] API 错误，尝试折叠上下文后重试...");
+            } catch (Exception e) {
+                // 忽略异常
+            }
             int limit = Math.max(50_000, ContextFolding.estimateChars(messages) / 2);
             List<Map<String, Object>> recovered = ContextFolding.fold(
                     messages, limit, KEEP_TAIL_CHARS, client);
@@ -589,8 +654,16 @@ public class AgentLoop {
     private String handleTextResponse(String content, String reasoningContent) {
         if (content == null || content.isEmpty()) {
             if (reasoningContent != null && !reasoningContent.isEmpty()) {
-                listener.onReasoning(reasoningContent);
-                output.onReasoning(reasoningContent);
+                try {
+                    listener.onReasoning(reasoningContent);
+                } catch (Exception e) {
+                    // 忽略异常
+                }
+                try {
+                    output.onReasoning(reasoningContent);
+                } catch (Exception e) {
+                    // SSE连接断开时忽略异常，继续执行
+                }
                 ctx.addAssistant(reasoningContent, null, null);
                 return reasoningContent;
             }
@@ -615,7 +688,11 @@ public class AgentLoop {
             ONode func = tc.get("function");
             String tcName = func.get("name").getString();
             if (tcName == null || tcName.isEmpty()) {
-                output.onLog(AgentOutput.LogLevel.WARN, "跳过无效 tool call: name=" + tcName + " id=" + tcId);
+                try {
+                    output.onLog(AgentOutput.LogLevel.WARN, "跳过无效 tool call: name=" + tcName + " id=" + tcId);
+                } catch (Exception e) {
+                    // 忽略异常
+                }
                 continue;
             }
             String tcArgs = func.get("arguments").getString();
@@ -627,8 +704,16 @@ public class AgentLoop {
             tcMap.put("arguments", tcArgs);
             tcList.add(tcMap);
 
-            listener.onToolCall(tcName, tcArgs);
-            output.onToolCall(tcName, tcArgs);
+            try {
+                listener.onToolCall(tcName, tcArgs);
+            } catch (Exception e) {
+                // 忽略异常
+            }
+            try {
+                output.onToolCall(tcName, tcArgs);
+            } catch (Exception e) {
+                // SSE连接断开时忽略异常，继续执行
+            }
         }
 
         // 2. 并行分发（CompletableFuture.supplyAsync）
@@ -647,8 +732,16 @@ public class AgentLoop {
                 if (result != null && result.contains("\"rejectedReason\":\"storm\"")) {
                     anySuppressed.set(true);
                 }
-                listener.onToolResult(tcName, result);
-                output.onToolResult(tcName, result);
+                try {
+                    listener.onToolResult(tcName, result);
+                } catch (Exception e) {
+                    // 忽略异常
+                }
+                try {
+                    output.onToolResult(tcName, result);
+                } catch (Exception e) {
+                    // SSE连接断开时忽略异常，继续执行
+                }
                 return toolResult(tcId, result);
             });
         }
@@ -692,13 +785,21 @@ public class AgentLoop {
 
         selfCorrectionAttempts++;
         if (selfCorrectionAttempts > MAX_SELF_CORRECTION_ATTEMPTS) {
-            output.onLog(AgentOutput.LogLevel.WARN,
-                    "[self-correct] 已达自愈尝试上限（" + MAX_SELF_CORRECTION_ATTEMPTS + "次），停止循环");
+            try {
+                output.onLog(AgentOutput.LogLevel.WARN,
+                        "[self-correct] 已达自愈尝试上限（" + MAX_SELF_CORRECTION_ATTEMPTS + "次），停止循环");
+            } catch (Exception e) {
+                // 忽略异常
+            }
             return -1; // 信号：停止循环
         }
 
-        output.onLog(AgentOutput.LogLevel.INFO,
-                "[self-correct] 所有工具调用被 storm 抑制，第" + selfCorrectionAttempts + "次自愈尝试");
+        try {
+            output.onLog(AgentOutput.LogLevel.INFO,
+                    "[self-correct] 所有工具调用被 storm 抑制，第" + selfCorrectionAttempts + "次自愈尝试");
+        } catch (Exception e) {
+            // 忽略异常
+        }
         ctx.addUser("[系统提示：你刚刚重复调用了相同的工具。请换一种方式完成任务，"
                 + "或直接用文本回答。]");
         return selfCorrectionAttempts; // 信号：继续循环

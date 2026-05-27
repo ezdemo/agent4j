@@ -157,6 +157,20 @@ public class Agent4jAgent {
         return "[FAIL:" + r.getErrorCode() + "] " + r.getText();
     }
 
+    /**
+     * 如果当前会话尚未生成标题，则根据用户消息生成标题。
+     *
+     * @param userMessage 用户消息内容
+     */
+    private void generateSessionTitleIfNeeded(String userMessage) {
+        if (sessionService != null && !sessionService.isTitleGenerated()) {
+            String title = sessionService.generateSessionTitle(userMessage);
+            sessionService.updateCurrentSessionTitle(title);
+            sessionService.setTitleGenerated(true);
+            System.out.println("[session] 自动生成会话标题: " + title);
+        }
+    }
+
     // ========== 公共 API ==========
 
     /** 检查是否收到退出信号（命令返回 EXIT 后为 true） */
@@ -199,11 +213,30 @@ public class Agent4jAgent {
         }
 
         // === 普通聊天逻辑 ===
+        // 如果是第一条用户消息，自动生成会话标题
+        generateSessionTitleIfNeeded(message);
         return loop.run(message);
     }
 
     public void newSession() {
         try { sessionService.newSession(); } catch (IOException ignored) {}
+    }
+
+    /**
+     * 切换到指定会话。
+     * 切换后重新检查标题生成状态。
+     */
+    public boolean switchSession(String name) {
+        boolean ok = getSessionStore().switchTo(name);
+        if (ok) {
+            try {
+                String existingTitle = getSessionStore().getTitle(name);
+                sessionService.setTitleGenerated(existingTitle != null && !existingTitle.isEmpty());
+            } catch (IOException e) {
+                sessionService.setTitleGenerated(false);
+            }
+        }
+        return ok;
     }
 
     /** 累计 token 用量 */

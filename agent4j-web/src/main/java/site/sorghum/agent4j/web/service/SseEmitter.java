@@ -33,6 +33,10 @@ public class SseEmitter {
 
     /**
      * 发送一个 SSE 事件。
+     * <p>
+     * 当OutputStream已关闭（如页面刷新断开SSE连接）时，会抛出IOException或RuntimeException。
+     * 此处捕获所有异常，设置completed标志，后续调用直接返回，让Agent继续执行完成。
+     * </p>
      */
     public synchronized void send(String eventType, String data) {
         if (completed.get()) return;
@@ -42,8 +46,11 @@ public class SseEmitter {
             sb.append("data: ").append(data).append("\n\n");
             out.write(sb.toString().getBytes(StandardCharsets.UTF_8));
             out.flush();
-        } catch (IOException e) {
-            complete();
+        } catch (Exception e) {
+            // IOException 或 RuntimeException（如 OutputStream 已关闭时抛出的 IllegalStateException）
+            // 设置completed标志，后续调用直接返回，让Agent继续执行完成
+            completed.set(true);
+            completionFuture.complete(null);
         }
     }
 
@@ -85,10 +92,17 @@ public class SseEmitter {
     public void complete() {
         if (completed.compareAndSet(false, true)) {
             try {
+                // 尝试发送完成事件，如果OutputStream已关闭则忽略异常
                 send("done", "{}" );
+            } catch (Exception ignored) {
+                // send方法内部已处理异常，此处捕获以防万一
+            }
+            try {
                 out.flush();
                 out.close();
-            } catch (IOException ignored) {}
+            } catch (Exception ignored) {
+                // 流可能已关闭，忽略异常
+            }
             completionFuture.complete(null);
         }
     }

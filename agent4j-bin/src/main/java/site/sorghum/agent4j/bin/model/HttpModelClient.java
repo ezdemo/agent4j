@@ -221,7 +221,12 @@ public class HttpModelClient implements ModelClient {
                 }
                 if (status >= 400) {
                     String err = readFully(conn.getErrorStream() != null ? conn.getErrorStream() : conn.getInputStream());
-                    callback.onError("API error " + status + ": " + err);
+                    try {
+                        callback.onError("API error " + status + ": " + err);
+                    } catch (Exception e) {
+                        // SSE连接断开时忽略异常
+                        logger.debug("onError回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                    }
                     return;
                 }
 
@@ -269,7 +274,12 @@ public class HttpModelClient implements ModelClient {
                                 }
                             }
                             logger.debug("收到usage数据（完整API响应）: {}", chunk.toJson());
-                            callback.onUsage(pt, ct, tt, ch, cm);
+                            try {
+                                callback.onUsage(pt, ct, tt, ch, cm);
+                            } catch (Exception e) {
+                                // SSE连接断开时忽略异常，继续执行
+                                logger.debug("onUsage回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                            }
                         }
 
                         ONode delta = chunk.select("$.choices[0].delta");
@@ -281,7 +291,12 @@ public class HttpModelClient implements ModelClient {
                             if (tok != null && !tok.isEmpty()) {
                                 reasoningBuf.append(tok);
                                 logger.debug("收到reasoning_content: {}", tok);
-                                callback.onReasoningDelta(tok);
+                                try {
+                                    callback.onReasoningDelta(tok);
+                                } catch (Exception e) {
+                                    // SSE连接断开时忽略异常，继续执行
+                                    logger.debug("onReasoningDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                                }
                             }
                         }
 
@@ -291,7 +306,12 @@ public class HttpModelClient implements ModelClient {
                             if (tok != null && !tok.isEmpty()) {
                                 contentBuf.append(tok);
                                 logger.debug("收到content: {}", tok);
-                                callback.onContentDelta(tok);
+                                try {
+                                    callback.onContentDelta(tok);
+                                } catch (Exception e) {
+                                    // SSE连接断开时忽略异常，继续执行
+                                    logger.debug("onContentDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                                }
                             }
                         }
 
@@ -346,10 +366,20 @@ public class HttpModelClient implements ModelClient {
                                 copyFn.set("arguments", v.get("function").get("arguments").getString());
                             }
                             logger.debug("完成tool_calls累积，共 {} 个有效调用", valid.size());
-                            callback.onToolCalls(filtered);
+                            try {
+                                callback.onToolCalls(filtered);
+                            } catch (Exception e) {
+                                // SSE连接断开时忽略异常，继续执行
+                                logger.debug("onToolCalls回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                            }
                         }
                     }
-                    callback.onDone();
+                    try {
+                        callback.onDone();
+                    } catch (Exception e) {
+                        // SSE连接断开时忽略异常，继续执行
+                        logger.debug("onDone回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                    }
                 }
                 return; // success
 
@@ -361,17 +391,32 @@ public class HttpModelClient implements ModelClient {
                     try { Thread.sleep(delay * 1000L); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
                     continue;
                 }
-                callback.onError(e.getMessage());
+                try {
+                    callback.onError(e.getMessage());
+                } catch (Exception ex) {
+                    // SSE连接断开时忽略异常
+                    logger.debug("onError回调异常（可能SSE连接已断开）: {}", ex.getMessage());
+                }
                 return;
             } catch (InterruptedException e) {
                 logger.error("流式API调用被中断", e);
                 Thread.currentThread().interrupt();
-                callback.onError("Interrupted during retry");
+                try {
+                    callback.onError("Interrupted during retry");
+                } catch (Exception ex) {
+                    // SSE连接断开时忽略异常
+                    logger.debug("onError回调异常（可能SSE连接已断开）: {}", ex.getMessage());
+                }
                 return;
             } catch (Exception e) {
                 logger.error("流式API调用异常: {}", e.getMessage(), e);
                 // 非 IO 异常（如 JSON 解析错误），不重试
-                callback.onError(e.getMessage());
+                try {
+                    callback.onError(e.getMessage());
+                } catch (Exception ex) {
+                    // SSE连接断开时忽略异常
+                    logger.debug("onError回调异常（可能SSE连接已断开）: {}", ex.getMessage());
+                }
                 return;
             } finally {
                 if (conn != null) conn.disconnect();

@@ -29,7 +29,7 @@ public class ToolController {
     /** 获取工具详情 —— GET /api/tools/{name} */
     @Get
     @Mapping("/{name}")
-    public Object get(String name) {
+    public Object get(@Path("name") String name) {
         if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
         Object tool = agentService.getTool(name);
         if (tool == null) return ApiResponse.fail("工具不存在: " + name);
@@ -39,7 +39,7 @@ public class ToolController {
     /** 直接执行工具 —— POST /api/tools/{name}/execute */
     @Post
     @Mapping("/{name}/execute")
-    public Object execute(String name, @Body ToolExecuteRequest request) {
+    public Object execute(@Path("name") String name, @Body ToolExecuteRequest request) {
         if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
         try {
             String result = agentService.executeTool(name,

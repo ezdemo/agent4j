@@ -24,6 +24,18 @@ public class SessionService {
     private long sessionCompletionTokens;
     private long sessionCacheHitTokens;
     private long sessionCacheMissTokens;
+    /** 是否已生成会话标题 */
+    private boolean titleGenerated = false;
+
+    /** 检查是否已生成会话标题 */
+    public boolean isTitleGenerated() {
+        return titleGenerated;
+    }
+
+    /** 设置标题已生成标志 */
+    public void setTitleGenerated(boolean generated) {
+        this.titleGenerated = generated;
+    }
 
     public SessionService(ConversationContext ctx, SessionStore store) {
         this.ctx = ctx;
@@ -55,6 +67,15 @@ public class SessionService {
             ctx.injectHistory(m);
         }
         restoreUsage(store.currentName());
+        
+        // 检查是否已有标题
+        try {
+            String currentName = store.currentName();
+            String existingTitle = store.getTitle(currentName);
+            titleGenerated = (existingTitle != null && !existingTitle.isEmpty());
+        } catch (Exception e) {
+            titleGenerated = false;
+        }
     }
 
     /** 新建会话：保存当前、关闭旧 store、创建新会话 */
@@ -68,6 +89,7 @@ public class SessionService {
         ctx.setSessionStore(store);
         ctx.clearHistory();  // 仅清空内存历史，不重写旧会话文件
         resetUsage();
+        titleGenerated = false; // 新会话，标题未生成
     }
 
     /** 保存当前会话 token 用量 */
@@ -125,5 +147,37 @@ public class SessionService {
     /** 注入单条历史消息 */
     public void injectHistory(Map<String, Object> msg) {
         ctx.injectHistory(msg);
+    }
+
+    /**
+     * 生成会话标题。
+     * 根据用户第一条消息内容生成简短标题。
+     *
+     * @param userMessage 用户消息内容
+     * @return 生成的标题
+     */
+    public String generateSessionTitle(String userMessage) {
+        if (userMessage == null || userMessage.isEmpty()) {
+            return "新会话";
+        }
+        // 移除换行符，截取前30个字符
+        String title = userMessage.replaceAll("\\s+", " ").trim();
+        if (title.length() > 30) {
+            title = title.substring(0, 30) + "...";
+        }
+        return title;
+    }
+
+    /**
+     * 更新当前会话的标题。
+     *
+     * @param title 会话标题
+     */
+    public void updateCurrentSessionTitle(String title) {
+        try {
+            store.updateTitle(store.currentName(), title);
+        } catch (IOException e) {
+            System.err.println("[session] 更新会话标题失败: " + e.getMessage());
+        }
     }
 }

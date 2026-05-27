@@ -54,26 +54,42 @@ public class ApiAgentOutPut implements AgentOutput {
     @Override
     public void onContentDelta(String token) {
         if (completed) return;
-        emitter.sendContent(token);
+        try {
+            emitter.sendContent(token);
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常，继续执行
+        }
     }
 
     @Override
     public void onContentComplete() {
         // 流式内容结束标记 — 前端可据此更新 UI
         if (completed) return;
-        emitter.send("content_complete", "{}");
+        try {
+            emitter.send("content_complete", "{}");
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常，继续执行
+        }
     }
 
     @Override
     public void onReasoningDelta(String token) {
         if (completed) return;
-        emitter.sendReasoning(token);
+        try {
+            emitter.sendReasoning(token);
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常，继续执行
+        }
     }
 
     @Override
     public void onReasoningComplete() {
         if (completed) return;
-        emitter.send("reasoning_complete", "{}");
+        try {
+            emitter.send("reasoning_complete", "{}");
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常，继续执行
+        }
     }
 
     // ==================== 事件 ====================
@@ -81,19 +97,31 @@ public class ApiAgentOutPut implements AgentOutput {
     @Override
     public void onReasoning(String reasoning) {
         if (completed || reasoning == null || reasoning.isEmpty()) return;
-        emitter.sendReasoning(reasoning);
+        try {
+            emitter.sendReasoning(reasoning);
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常，继续执行
+        }
     }
 
     @Override
     public void onToolCall(String name, String args) {
         if (completed) return;
-        emitter.sendToolCall(name, args);
+        try {
+            emitter.sendToolCall(name, args);
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常，继续执行
+        }
     }
 
     @Override
     public void onToolResult(String name, String result) {
         if (completed) return;
-        emitter.sendToolResult(name, result);
+        try {
+            emitter.sendToolResult(name, result);
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常，继续执行
+        }
     }
 
     @Override
@@ -106,13 +134,21 @@ public class ApiAgentOutPut implements AgentOutput {
         this.lastTotalTokens = totalTokens;
         this.lastCacheHit = cacheHit;
         this.lastCacheMiss = cacheMiss;
-        emitter.sendUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
+        try {
+            emitter.sendUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常，继续执行
+        }
     }
 
     @Override
     public void onError(String error) {
         if (completed) return;
-        emitter.sendError(error);
+        try {
+            emitter.sendError(error);
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常
+        }
         completed = true;
     }
 
@@ -125,13 +161,21 @@ public class ApiAgentOutPut implements AgentOutput {
         ONode node = ONode.ofJson("{}").asObject();
         node.set("level", level != null ? level.name() : "INFO");
         node.set("message", message);
-        emitter.send("log", node.toJson());
+        try {
+            emitter.send("log", node.toJson());
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常，继续执行
+        }
     }
 
     @Override
     public void onMessage(String message) {
         if (completed || message == null) return;
-        emitter.send("message", escapeJson(message));
+        try {
+            emitter.send("message", escapeJson(message));
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常，继续执行
+        }
     }
 
     // ==================== 生命周期 ====================
@@ -142,7 +186,11 @@ public class ApiAgentOutPut implements AgentOutput {
     public void complete() {
         if (completed) return;
         completed = true;
-        emitter.complete();
+        try {
+            emitter.complete();
+        } catch (Exception e) {
+            // SSE连接可能已断开，忽略异常
+        }
     }
 
     /**
@@ -158,9 +206,17 @@ public class ApiAgentOutPut implements AgentOutput {
         if (reply != null && !reply.isEmpty()) {
             ONode replyNode = ONode.ofJson("{}").asObject();
             replyNode.set("content", reply);
-            emitter.send("reply", replyNode.toJson());
+            try {
+                emitter.send("reply", replyNode.toJson());
+            } catch (Exception e) {
+                // SSE连接可能已断开，忽略异常
+            }
         }
-        emitter.complete();
+        try {
+            emitter.complete();
+        } catch (Exception e) {
+            // SSE连接可能已断开，忽略异常
+        }
         completed = true;
     }
 
@@ -174,7 +230,11 @@ public class ApiAgentOutPut implements AgentOutput {
      */
     public void completeWithError(String error) {
         if (completed) return;
-        emitter.sendError(error);
+        try {
+            emitter.sendError(error);
+        } catch (Exception e) {
+            // SSE连接可能已断开，忽略异常
+        }
         completed = true;
     }
 

@@ -57,6 +57,12 @@ public interface SessionStore {
     /** 加载 token 用量 */
     long[] loadUsage(String name);
 
+    /** 更新会话标题 */
+    void updateTitle(String name, String title) throws IOException;
+
+    /** 获取会话标题，不存在则返回 null */
+    String getTitle(String name) throws IOException;
+
     /**
      * 会话元信息。
      */
@@ -65,10 +71,11 @@ public interface SessionStore {
         public final long size;
         public final long messageCount;
         public final long mtime;
+        public final String title;
 
-        public SessionInfo(String name, long size, long messageCount, long mtime) {
+        public SessionInfo(String name, long size, long messageCount, long mtime, String title) {
             this.name = name; this.size = size; this.messageCount = messageCount;
-            this.mtime = mtime;
+            this.mtime = mtime; this.title = title;
         }
     }
 }

@@ -275,7 +275,7 @@ const loadSessions = async () => {
     if (response.success && response.data) {
       sessions.value = response.data.map(session => ({
         id: session.name,
-        title: session.name,
+        title: session.title || session.name,  // 使用生成的会话标题，如果没有则使用会话名称
         status: session.isCurrent ? 'active' : 'completed',
         createdAt: session.createdAt || new Date().toLocaleString('zh-CN'),
         lastActivity: session.lastActivity || new Date().toLocaleString('zh-CN'),
