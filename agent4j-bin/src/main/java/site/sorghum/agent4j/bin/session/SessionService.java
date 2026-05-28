@@ -62,39 +62,36 @@ public class SessionService {
         ctx.setSessionStore(store);
     }
 
-    /** 加载指定会话名，或自动选用最近活跃会话 */
+    /**
+     * 加载指定会话名。
+     * <p>
+     * 当传入 sessionName 时，切换到该会话并加载历史。
+     * 当 sessionName 为空时，不自动加载任何历史会话 ——
+     * 保持空白状态，由用户在前端主动选择会话。
+     * </p>
+     */
     public void loadOrCreate(String sessionName) throws IOException {
         if (sessionName != null && !sessionName.isEmpty()) {
             if (!store.switchTo(sessionName)) {
                 System.err.println("[session] 切换到指定会话失败: " + sessionName + "，使用新会话");
             }
-        } else {
-            List<SessionStore.SessionInfo> sessions = store.list();
-            if (!sessions.isEmpty()) {
-                SessionStore.SessionInfo latest = sessions.get(0);
-                if (store.switchTo(latest.name)) {
-                    System.err.println("[session] 自动加载最近会话: " + latest.name
-                            + " (" + latest.messageCount + " 条消息)");
-                } else {
-                    System.err.println("[session] 自动加载失败: " + latest.name + "，使用新会话");
-                }
+            // 仅在明确指定会话时才加载历史和恢复用量
+            List<Map<String, Object>> loaded = store.load();
+            loaded = MessageHealer.heal(loaded, false);
+            for (Map<String, Object> m : loaded) {
+                ctx.injectHistory(m);
+            }
+            restoreUsage(store.currentName());
+            // 检查是否已有标题
+            try {
+                String currentName = store.currentName();
+                String existingTitle = store.getTitle(currentName);
+                titleGenerated = (existingTitle != null && !existingTitle.isEmpty());
+            } catch (Exception e) {
+                titleGenerated = false;
             }
         }
-        List<Map<String, Object>> loaded = store.load();
-        loaded = MessageHealer.heal(loaded, false);
-        for (Map<String, Object> m : loaded) {
-            ctx.injectHistory(m);
-        }
-        restoreUsage(store.currentName());
-        
-        // 检查是否已有标题
-        try {
-            String currentName = store.currentName();
-            String existingTitle = store.getTitle(currentName);
-            titleGenerated = (existingTitle != null && !existingTitle.isEmpty());
-        } catch (Exception e) {
-            titleGenerated = false;
-        }
+        // sessionName 为空时：保持 store 当前状态（新建的空白会话），不加载历史
     }
 
     /** 新建会话：保存当前、关闭旧 store、创建新会话 */
@@ -118,8 +115,10 @@ public class SessionService {
 
     /** 保存当前会话 token 用量 */
     public void saveUsage() {
+        String name = store.currentName();
+        if (name == null) return; // 尚未选择会话，无需保存
         try {
-            store.saveUsage(store.currentName(), sessionPromptTokens,
+            store.saveUsage(name, sessionPromptTokens,
                     sessionCompletionTokens, sessionCacheHitTokens, sessionCacheMissTokens,
                     sessionLastPromptTokens);
         } catch (IOException ignored) {}
@@ -211,8 +210,10 @@ public class SessionService {
      * @param title 会话标题
      */
     public void updateCurrentSessionTitle(String title) {
+        String name = store.currentName();
+        if (name == null) return; // 尚未选择会话
         try {
-            store.updateTitle(store.currentName(), title);
+            store.updateTitle(name, title);
         } catch (IOException e) {
             System.err.println("[session] 更新会话标题失败: " + e.getMessage());
         }

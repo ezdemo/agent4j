@@ -366,8 +366,8 @@ const clearChat = () => {
 onMounted(async () => {
   document.documentElement.setAttribute('data-theme', theme.value)
   try {
-    const [s, c, t, cf, u] = await Promise.allSettled([
-      agentAPI.getStatus(), sessionsAPI.getCurrent(), toolsAPI.list(), configAPI.getConfig(), configAPI.getUsage()
+    const [s, t, cf] = await Promise.allSettled([
+      agentAPI.getStatus(), toolsAPI.list(), configAPI.getConfig()
     ])
     if (s.status === 'fulfilled' && s.value.success) {
       status.value = s.value.data || {}
@@ -375,7 +375,6 @@ onMounted(async () => {
         workspace.value = s.value.data.workspace
       }
     }
-    if (c.status === 'fulfilled' && c.value.success && c.value.data?.name) currentSession.value = c.value.data.name
     if (t.status === 'fulfilled' && t.value.success) tools.value = t.value.data || []
     if (cf.status === 'fulfilled' && cf.value.success) {
       config.value = cf.value.data || {}
@@ -383,7 +382,7 @@ onMounted(async () => {
         workspace.value = cf.value.data.workspace
       }
     }
-    if (u.status === 'fulfilled' && u.value.success) usage.value = u.value.data || {}
+    // 不再自动加载当前会话和 usage —— 等用户从侧边栏主动选择
   } catch {}
   await loadWorkspaces()
   await loadSessions()

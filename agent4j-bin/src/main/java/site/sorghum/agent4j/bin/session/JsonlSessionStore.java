@@ -65,8 +65,8 @@ public class JsonlSessionStore implements SessionStore {
     public JsonlSessionStore(Path sessionsDir) throws IOException {
         this.sessionsDir = sessionsDir;
         Files.createDirectories(sessionsDir);
-        this.currentName = newSessionName();
-        // 不立即创建空文件——延迟到首次 append 时通过 ensureWriter() 按需创建
+        // 不自动分配会话名 —— 等用户主动选择或首次写入时才确定
+        this.currentName = null;
         this.writer = null;
         startPeriodicFlush();
     }
@@ -177,9 +177,13 @@ public class JsonlSessionStore implements SessionStore {
 
     @Override
     public void append(Map<String, Object> message) throws IOException {
-        String json = serializeMessage(message);
         lock.lock();
         try {
+            // 若尚未选择会话，自动创建新会话
+            if (currentName == null) {
+                currentName = newSessionName();
+            }
+            String json = serializeMessage(message);
             // 延迟创建：首次写入消息时才真正创建文件
             ensureWriter();
             writer.write(json);
@@ -205,6 +209,7 @@ public class JsonlSessionStore implements SessionStore {
 
     @Override
     public List<Map<String, Object>> load() throws IOException {
+        if (currentName == null) return new ArrayList<>();
         return load(currentName);
     }
 

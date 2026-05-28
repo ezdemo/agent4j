@@ -209,11 +209,13 @@ const contextPercent = computed(() => {
   return ((current / max) * 100).toFixed(1)
 })
 
-const loadUsage = async () => {
+const loadUsage = async (override) => {
   try {
     const params = {}
-    if (props.workspaceHash) params.workspaceHash = props.workspaceHash
-    if (props.sessionName) params.sessionName = props.sessionName
+    const wsHash = override?.workspaceHash ?? props.workspaceHash
+    const sessName = override?.sessionName ?? props.sessionName
+    if (wsHash) params.workspaceHash = wsHash
+    if (sessName) params.sessionName = sessName
     
     const [usageRes, modelsRes] = await Promise.allSettled([
       configAPI.getUsage(params),
@@ -256,14 +258,34 @@ const handleClickOutside = (e) => {
   }
 }
 
+// 只加载模型列表（不加载 usage，除非明确选了 session）
+const loadModels = async () => {
+  try {
+    const r = await configAPI.getModels()
+    if (r.success) {
+      currentModel.value = r.data?.current || ''
+      availableModels.value = r.data?.models || []
+    }
+  } catch {}
+}
+
 // 监听 workspace 和 session 变化，重新加载 usage
-watch([() => props.workspaceHash, () => props.sessionName], () => {
-  loadUsage()
+watch([() => props.workspaceHash, () => props.sessionName], ([ws, sess]) => {
+  if (ws || sess) {
+    if (sess) {
+      loadUsage()
+    }
+  }
 })
 
 onMounted(() => {
-  loadUsage()
-  usageTimer = setInterval(loadUsage, 30000)
+  // 仅加载模型列表；usage 在明确选择 session 后才查询
+  loadModels()
+  if (props.sessionName) loadUsage()
+  usageTimer = setInterval(() => {
+    if (props.sessionName) loadUsage()
+    else loadModels()
+  }, 30000)
   document.addEventListener('click', handleClickOutside)
 })
 
@@ -495,8 +517,8 @@ const loadSession = async (name, workspaceHash) => {
 
 const sendCommand = async cmd => { inputText.value = cmd; await sendMessage() }
 
-// 加载历史消息
-onMounted(loadHistory)
+// 加载历史消息（仅在明确选了 session 时）
+onMounted(() => { if (props.sessionName) loadHistory() })
 
 defineExpose({ clearMessages, loadSession, sendCommand, exportChat })
 </script>

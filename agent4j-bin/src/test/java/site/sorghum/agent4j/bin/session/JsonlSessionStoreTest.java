@@ -28,7 +28,19 @@ class JsonlSessionStoreTest {
     }
 
     @Test
-    void currentNameIsNonNull() {
+    void currentNameIsNullBeforeSwitch() throws IOException {
+        // 新建 store 时 currentName 为 null（不自动分配会话名）
+        JsonlSessionStore freshStore = new JsonlSessionStore();
+        try {
+            assertNull(freshStore.currentName());
+        } finally {
+            freshStore.shutdown();
+        }
+    }
+
+    @Test
+    void currentNameIsNonNullAfterSwitch() {
+        // setUp 中已 switchTo，此时 currentName 非空
         assertNotNull(store.currentName());
         assertFalse(store.currentName().isEmpty());
     }

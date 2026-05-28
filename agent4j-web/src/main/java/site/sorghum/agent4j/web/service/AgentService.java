@@ -294,12 +294,16 @@ public class AgentService {
         requireAgent();
         Map<String, Object> info = new LinkedHashMap<>();
         String currentName = agent.getSessionStore().currentName();
-        info.put("name", currentName);
-        info.put("historySize", agent.historySize());
-        try {
-            String title = agent.getSessionStore().getTitle(currentName);
-            info.put("title", title);
-        } catch (IOException e) {
+        info.put("name", currentName); // 可能为 null（未选择会话）
+        info.put("historySize", currentName != null ? agent.historySize() : 0);
+        if (currentName != null) {
+            try {
+                String title = agent.getSessionStore().getTitle(currentName);
+                info.put("title", title);
+            } catch (IOException e) {
+                info.put("title", null);
+            }
+        } else {
             info.put("title", null);
         }
         return info;
