@@ -54,6 +54,9 @@ public interface SessionStore {
     /** 保存 token 用量 */
     void saveUsage(String name, long prompt, long completion, long cacheHit, long cacheMiss) throws IOException;
 
+    /** 保存 token 用量（包含 lastPromptTokens） */
+    void saveUsage(String name, long prompt, long completion, long cacheHit, long cacheMiss, long lastPromptTokens) throws IOException;
+
     /** 加载 token 用量 */
     long[] loadUsage(String name);
 

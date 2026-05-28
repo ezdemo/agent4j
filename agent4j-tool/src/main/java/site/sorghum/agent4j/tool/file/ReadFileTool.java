@@ -20,8 +20,8 @@ public class ReadFileTool extends AgentTool {
     @Override
     public String getDescription() {
         return "Read a file under the workspace root. Returns full text content (no annotations).\n"
-                + "Optional scoping: head (first N lines), tail (last N lines), range \"A-B\" (1-indexed inclusive).\n"
-                + "Binaries and files over 32 MiB are refused.";
+                + "Always read the complete file — do NOT use head/tail/range unless specifically needed for line-level precision.\n"
+                + "Binaries and files over 100 MiB are refused.";
     }
 
     @Override
@@ -30,18 +30,14 @@ public class ReadFileTool extends AgentTool {
                 + "描述：读取工作区内的文件内容。返回完整的文本内容（无行号标注）。\n\n"
                 + "## 使用指南\n\n"
                 + "1. **完整读取**：默认返回整个文件内容\n"
-                + "2. **范围读取**：通过以下参数控制输出范围：\n"
-                + "   - head: 返回文件前 N 行\n"
-                + "   - tail: 返回文件后 N 行\n"
-                + "   - range: 返回指定行范围 \"start-end\"（从 1 开始计数，两端包含）\n"
-                + "3. **head/tail/range 可以组合使用**：如 head=50 返回前 50 行\n"
-                + "4. **大文件处理**：超过 32 MiB 的文件会被拒绝读取\n"
-                + "5. **二进制文件**：二进制文件会自动检测并拒绝\n\n"
+                + "2. **一次性读取**：请直接读取完整文件，不要使用 head/tail/range 分段读取，除非你确实只需要文件的特定行\n"
+                + "3. **大文件处理**：超过 100 MiB 的文件会被拒绝读取\n"
+                + "4. **二进制文件**：二进制文件会自动检测并拒绝\n\n"
                 + "参数：\n"
                 + "  - path (string, 必填): 文件路径（相对于工作区根目录）\n"
-                + "  - head (int, 可选): 返回前 N 行\n"
-                + "  - tail (int, 可选): 返回后 N 行\n"
-                + "  - range (string, 可选): 行范围 \"start-end\"，如 \"50-100\"\n\n"
+                + "  - head (int, 可选): 返回前 N 行（仅在需要精确行范围时使用）\n"
+                + "  - tail (int, 可选): 返回后 N 行（仅在需要精确行范围时使用）\n"
+                + "  - range (string, 可选): 行范围 \"start-end\"，如 \"50-100\"（仅在需要精确行范围时使用）\n\n"
                 + "只读：是\n"
                 + "风暴豁免：是";
     }
@@ -52,7 +48,7 @@ public class ReadFileTool extends AgentTool {
                 new ToolParameter("path", "string", true, "文件路径（相对于工作区根目录）"),
                 new ToolParameter("head", "int", false, "返回前 N 行"),
                 new ToolParameter("tail", "int", false, "返回后 N 行"),
-                new ToolParameter("range", "string", false, "行范围 \"start-end\"，如 \"50-100\"")
+                new ToolParameter("range", "string", false, "行范围 \"start-end\"，如 \"1-1000\"")
         );
     }
 

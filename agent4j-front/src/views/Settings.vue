@@ -19,13 +19,16 @@
           </svg>
           重置默认
         </button>
-        <button class="btn btn-primary btn-sm" @click="saveSettings">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <button class="btn btn-primary btn-sm" @click="saveSettings" :disabled="loading">
+          <svg v-if="loading" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin">
+            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
+          </svg>
+          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
             <polyline points="17 21 17 13 7 13 7 21"/>
             <polyline points="7 3 7 8 15 8"/>
           </svg>
-          保存设置
+          {{ loading ? '保存中...' : '保存设置' }}
         </button>
       </div>
     </div>
@@ -41,6 +44,22 @@
       >
         <span class="tab-icon">{{ tab.icon }}</span>
         <span class="tab-label">{{ tab.label }}</span>
+      </button>
+    </div>
+    
+    <!-- 错误提示 -->
+    <div v-if="error" class="error-banner">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="15" y1="9" x2="9" y2="15"/>
+        <line x1="9" y1="9" x2="15" y2="15"/>
+      </svg>
+      <span>{{ error }}</span>
+      <button class="btn-icon-sm" @click="error = ''">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
       </button>
     </div>
     
@@ -181,11 +200,13 @@
             </div>
             <div class="setting-control">
               <select v-model="settings.ai.model" class="form-select">
-                <option value="gpt-4">GPT-4</option>
-                <option value="gpt-4-turbo">GPT-4 Turbo</option>
-                <option value="gpt-3.5-turbo">GPT-3.5 Turbo</option>
-                <option value="deepseek-v4-flash">DeepSeek V4 Flash</option>
-                <option value="ollama">Ollama (本地)</option>
+                <option 
+                  v-for="model in availableModels" 
+                  :key="model.name" 
+                  :value="model.name"
+                >
+                  {{ model.name }}
+                </option>
               </select>
             </div>
           </div>
@@ -486,6 +507,7 @@ const activeTab = ref('general')
 const showApiKey = ref(false)
 const loading = ref(false)
 const error = ref('')
+const availableModels = ref([])
 
 // 标签页配置
 const tabs = [
@@ -546,9 +568,14 @@ const loadSettings = async () => {
   error.value = ''
   
   try {
-    const response = await configAPI.getConfig()
-    if (response.success && response.data) {
-      const config = response.data
+    // 并行加载配置和模型列表
+    const [configResponse, modelsResponse] = await Promise.all([
+      configAPI.getConfig(),
+      configAPI.getModels()
+    ])
+    
+    if (configResponse.success && configResponse.data) {
+      const config = configResponse.data
       
       // 更新AI设置
       settings.ai.baseUrl = config.baseUrl || ''
@@ -560,6 +587,11 @@ const loadSettings = async () => {
       settings.workspace.dir = config.workspace || '.'
       settings.workspace.editMode = config.editMode || 'auto'
       
+      // 更新语言设置
+      if (config.lang) {
+        settings.language = config.lang === 'ZH' ? 'zh-CN' : 'en-US'
+      }
+      
       // 更新其他设置（从本地存储或默认值）
       const savedSettings = localStorage.getItem('agent4j-settings')
       if (savedSettings) {
@@ -567,7 +599,12 @@ const loadSettings = async () => {
         Object.assign(settings, parsed)
       }
     } else {
-      error.value = response.error || '加载配置失败'
+      error.value = configResponse.error || '加载配置失败'
+    }
+    
+    // 更新可用模型列表
+    if (modelsResponse.success && modelsResponse.data) {
+      availableModels.value = modelsResponse.data.models || []
     }
   } catch (err) {
     console.error('加载配置失败:', err)
@@ -579,25 +616,78 @@ const loadSettings = async () => {
     settings.ai.reasoningEffort = 'max'
     settings.workspace.dir = '.'
     settings.workspace.editMode = 'auto'
+    
+    // 默认模型列表
+    availableModels.value = [
+      { name: 'deepseek-v4-flash', active: true },
+      { name: 'gpt-4', active: false },
+      { name: 'gpt-4-turbo', active: false },
+      { name: 'gpt-3.5-turbo', active: false }
+    ]
   } finally {
     loading.value = false
   }
 }
 
 const saveSettings = async () => {
-  // 保存到本地存储
-  localStorage.setItem('agent4j-settings', JSON.stringify(settings))
+  loading.value = true
+  error.value = ''
   
-  // 应用主题
-  applyTheme(settings.theme)
-  
-  // 显示成功消息
-  window.dispatchEvent(new CustomEvent('terminal-output', { 
-    detail: { 
-      type: 'system', 
-      text: '设置已保存到本地存储' 
+  try {
+    // 构建要保存到后端的配置
+    const configToUpdate = {
+      baseUrl: settings.ai.baseUrl,
+      apiKey: settings.ai.apiKey,
+      model: settings.ai.model,
+      reasoningEffort: settings.ai.reasoningEffort,
+      workspaceDir: settings.workspace.dir,
+      editMode: settings.workspace.editMode,
+      lang: settings.language === 'zh-CN' ? 'ZH' : 'EN'
     }
-  }))
+    
+    // 调用后端API保存配置
+    const response = await configAPI.updateConfig(configToUpdate)
+    
+    if (response.success) {
+      // 保存本地设置到localStorage
+      localStorage.setItem('agent4j-settings', JSON.stringify(settings))
+      
+      // 应用主题
+      applyTheme(settings.theme)
+      
+      // 显示成功消息
+      window.dispatchEvent(new CustomEvent('terminal-output', { 
+        detail: { 
+          type: 'success', 
+          text: '设置已保存并同步到服务器' 
+        }
+      }))
+    } else {
+      error.value = response.error || '保存失败'
+      window.dispatchEvent(new CustomEvent('terminal-output', { 
+        detail: { 
+          type: 'error', 
+          text: '保存失败: ' + (response.error || '未知错误') 
+        }
+      }))
+    }
+  } catch (err) {
+    console.error('保存配置失败:', err)
+    error.value = '保存失败: ' + err.message
+    
+    // 降级保存到本地
+    localStorage.setItem('agent4j-settings', JSON.stringify(settings))
+    applyTheme(settings.theme)
+    
+    window.dispatchEvent(new CustomEvent('terminal-output', { 
+      detail: { 
+        type: 'warning', 
+        text: '服务器保存失败，已保存到本地存储' 
+      }
+    }))
+  } finally {
+    loading.value = false
+  }
 }
 
 const resetSettings = () => {
@@ -1205,5 +1295,35 @@ onMounted(() => {
 [data-theme="dark"] .settings-footer {
   background: var(--bg-tertiary);
   border-color: var(--border);
+}
+
+/* 错误提示 */
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--danger-bg);
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  color: var(--danger);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-4);
+}
+
+.error-banner svg {
+  flex-shrink: 0;
+}
+
+.error-banner span {
+  flex: 1;
+}
+
+.error-banner .btn-icon-sm {
+  color: var(--danger);
+}
+
+.error-banner .btn-icon-sm:hover {
+  background: rgba(220, 38, 38, 0.1);
 }
 </style>

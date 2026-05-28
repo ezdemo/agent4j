@@ -121,6 +121,8 @@ public class Agent4jAgent {
         }
 
         this.loop = new AgentLoop(client, registry, ctx, b.hitl);
+        // 设置 SessionService 引用，用于同步 lastPromptTokens
+        this.loop.setSessionService(this.sessionService);
     }
 
     /**

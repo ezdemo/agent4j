@@ -3,6 +3,7 @@ package site.sorghum.agent4j.bin.agent;
 import org.noear.snack4.ONode;
 
 import site.sorghum.agent4j.bin.model.ModelClient;
+import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.tool.ToolDispatcher;
 
@@ -32,6 +33,8 @@ public class AgentLoop {
     private final ToolRegistry registry;
     private final ToolDispatcher dispatcher;
     private final ConversationContext ctx;
+    /** 会话服务引用（用于同步 lastPromptTokens 到 usage 文件） */
+    private SessionService sessionService;
     // 无固定步数限制：循环直到模型返回纯文本
     /** 事件监听（打印思考/工具调用/步骤） */
     private AgentLoopListener listener = new AgentLoopListener() {};
@@ -74,6 +77,11 @@ public class AgentLoop {
 
     /** 获取最近一次 API 返回的 prompt_tokens */
     public int getLastPromptTokens() { return lastPromptTokens; }
+
+    /** 设置会话服务（用于同步 lastPromptTokens） */
+    public void setSessionService(SessionService sessionService) {
+        this.sessionService = sessionService;
+    }
 
     /** 获取模型最大上下文窗口 token 数 */
     public int getMaxContextTokens() { return client.getMaxContextTokens(); }
@@ -612,6 +620,10 @@ public class AgentLoop {
             public void onUsage(int promptTokens, int completionTokens, int totalTokens,
                                int cacheHit, int cacheMiss) {
                 lastPromptTokens = promptTokens;
+                // 同步 lastPromptTokens 到 SessionService
+                if (sessionService != null) {
+                    sessionService.updateLastPromptTokens(promptTokens);
+                }
                 try {
                     listener.onUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
                 } catch (Exception e) {

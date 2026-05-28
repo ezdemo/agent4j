@@ -94,19 +94,21 @@ class FileEditTest {
         }
 
         @Test
-        @DisplayName("超大文件应使用大纲模式")
-        void largeFile_shouldUseOutlineMode(@TempDir Path tempDir) throws IOException {
+        @DisplayName("大文件应返回完整内容")
+        void largeFile_shouldReturnFullContent(@TempDir Path tempDir) throws IOException {
             Path f = tempDir.resolve("large.txt");
             StringBuilder sb = new StringBuilder();
-            // 生成足够大的文件以触发 outline 模式（阈值 64KB）
+            // 生成大文件
             for (int i = 0; i < 20000; i++) {
-                sb.append("This is a rather long line to ensure the file exceeds the outline threshold of 64 KiB: line ").append(i).append("\n");
+                sb.append("This is a rather long line to ensure the file is large: line ").append(i).append("\n");
             }
             Files.write(f, sb.toString().getBytes());
-            assertTrue(Files.size(f) > 64 * 1024, "文件应大于 64KB 以触发大纲模式");
+            assertTrue(Files.size(f) > 64 * 1024, "文件应大于 64KB");
             String result = FileEdit.readFile(tempDir, "large.txt", null, null, null);
-            assertTrue(result.contains("large file") || result.contains("outline"),
-                    () -> "应为大纲模式，实际输出前100字符: " + result.substring(0, Math.min(100, result.length())));
+            // 大文件现在应该返回完整内容，而不是大纲模式
+            assertFalse(result.contains("outline"), "不应包含大纲模式提示");
+            assertFalse(result.contains("large file"), "不应包含大文件提示");
+            assertTrue(result.length() > 1000, "应返回完整内容");
         }
     }
 

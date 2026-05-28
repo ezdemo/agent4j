@@ -309,6 +309,11 @@ public class JsonlSessionStore implements SessionStore {
 
     @Override
     public void saveUsage(String name, long prompt, long completion, long cacheHit, long cacheMiss) throws IOException {
+        saveUsage(name, prompt, completion, cacheHit, cacheMiss, 0);
+    }
+
+    @Override
+    public void saveUsage(String name, long prompt, long completion, long cacheHit, long cacheMiss, long lastPromptTokens) throws IOException {
         Path file = sessionsDir.resolve(sanitize(name) + ".usage");
         
         // 如果所有值都是 0，则删除文件（如果存在），避免创建空文件
@@ -318,7 +323,8 @@ public class JsonlSessionStore implements SessionStore {
         }
         
         String json = "{\"prompt\":" + prompt + ",\"completion\":" + completion
-                + ",\"cacheHit\":" + cacheHit + ",\"cacheMiss\":" + cacheMiss + "}";
+                + ",\"cacheHit\":" + cacheHit + ",\"cacheMiss\":" + cacheMiss
+                + ",\"lastPromptTokens\":" + lastPromptTokens + "}";
         Files.write(file, json.getBytes(StandardCharsets.UTF_8));
     }
 
@@ -346,7 +352,7 @@ public class JsonlSessionStore implements SessionStore {
     @Override
     public long[] loadUsage(String name) {
         Path file = sessionsDir.resolve(sanitize(name) + ".usage");
-        if (!Files.exists(file)) return new long[]{0, 0, 0, 0};
+        if (!Files.exists(file)) return new long[]{0, 0, 0, 0, 0};
         try {
             String json = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
             org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson(json);
@@ -354,10 +360,11 @@ public class JsonlSessionStore implements SessionStore {
                     node.get("prompt").getLong(),
                     node.get("completion").getLong(),
                     node.get("cacheHit").getLong(),
-                    node.get("cacheMiss").getLong()
+                    node.get("cacheMiss").getLong(),
+                    node.get("lastPromptTokens").getLong()
             };
         } catch (Exception e) {
-            return new long[]{0, 0, 0, 0};
+            return new long[]{0, 0, 0, 0, 0};
         }
     }
 

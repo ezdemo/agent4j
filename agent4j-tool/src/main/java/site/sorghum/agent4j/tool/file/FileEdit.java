@@ -17,13 +17,8 @@ import java.util.stream.Stream;
  */
 public class FileEdit {
 
-    private static final int HARD_MAX_FILE_BYTES = 32 * 1024 * 1024;
-    /** 全量内容返回的最大文件大小（64KB） */
-    private static final long OUTLINE_THRESHOLD = 64 * 1024;
-    /** Outline 模式下显示的前 N 行 */
-    private static final int OUTLINE_HEAD_LINES = 80;
-    /** Outline 模式下的符号大纲最大行数 */
-    private static final int OUTLINE_MAX_SYMBOLS = 30;
+    /** 最大文件大小限制（100 MiB）— 超过此大小才拒绝读取 */
+    private static final int HARD_MAX_FILE_BYTES = 100 * 1024 * 1024;
 
     /** read_file 实现 */
     public static String readFile(Path root, String pathStr, Integer head, Integer tail, String range)
@@ -77,28 +72,8 @@ public class FileEdit {
                     : body;
         }
 
-        // 无显式 scope，按大小决定策略
-        if (size <= OUTLINE_THRESHOLD) {
-            // 小文件 → 全量内容
-            return prefix + joinLines(lines);
-        }
-
-        // 大文件 → outline 模式（head + 符号结构 + 导航提示）
-        String headBlock = joinLines(lines.subList(0, Math.min(OUTLINE_HEAD_LINES, total)));
-        String outline = extractSimpleOutline(pathStr, lines);
-        StringBuilder sb = new StringBuilder();
-        sb.append(prefix);
-        sb.append("[large file: ").append(size).append(" bytes, ").append(total).append(" lines — outline mode (threshold ").append(OUTLINE_THRESHOLD / 1024).append(" KiB)]\n\n");
-        sb.append("[head ").append(Math.min(OUTLINE_HEAD_LINES, total)).append(" lines for orientation]\n");
-        sb.append(headBlock).append("\n");
-        if (!outline.isEmpty()) {
-            sb.append("\n").append(outline).append("\n");
-        }
-        sb.append("\n[to read more, call one of:\n");
-        sb.append("  - read_file path:\"").append(pathStr).append("\" range:\"A-B\"          — 1-indexed line range\n");
-        sb.append("  - read_file path:\"").append(pathStr).append("\" head:N  /  tail:N    — first/last N lines\n");
-        sb.append("  - grep pattern:\"...\" path:\"").append(pathStr).append("\"     — grep within this file]");
-        return sb.toString();
+        // 全量返回文件内容
+        return prefix + joinLines(lines);
     }
 
     /** edit_file: SEARCH → REPLACE，search 必须唯一 */
@@ -237,42 +212,7 @@ public class FileEdit {
         return null;
     }
 
-    /** 简单符号大纲提取 */
-    private static String extractSimpleOutline(String pathStr, List<String> lines) {
-        List<String> symbols = new ArrayList<>();
-        int total = lines.size();
 
-        // Java 类/接口/枚举/注解/记录
-        java.util.regex.Pattern classPat = java.util.regex.Pattern.compile(
-                "^(?:public\\s+|private\\s+|protected\\s+|static\\s+|abstract\\s+|final\\s+|sealed\\s+|non-sealed\\s+)*(?:class|interface|enum|@interface|record)\\s+(\\w+)");
-        // 方法
-        java.util.regex.Pattern methodPat = java.util.regex.Pattern.compile(
-                "^(?:\\s{0,3}(?:public|private|protected|static|abstract|final|synchronized|native)\\s+)+(?:<[^>]+>\\s+)?(?:\\w+(?:<[^>]+>)?\\s+)?(\\w+)\\s*\\([^)]*\\)\\s*(?:throws\\s+[^{]+)?\\s*(?:\\{|;)");
-        // HTML id = / class = 用作锚点
-        java.util.regex.Pattern idPat = java.util.regex.Pattern.compile(
-                "id=\\\"?([a-zA-Z_]\\w*)\\\"");
-
-        for (int i = 0; i < total && symbols.size() < OUTLINE_MAX_SYMBOLS; i++) {
-            String line = lines.get(i);
-            java.util.regex.Matcher cm = classPat.matcher(line);
-            if (cm.find()) {
-                symbols.add("  L" + (i + 1) + "  class " + cm.group(1));
-                continue;
-            }
-            java.util.regex.Matcher mm = methodPat.matcher(line);
-            if (mm.find()) {
-                symbols.add("  L" + (i + 1) + "  method " + mm.group(1) + "()");
-                continue;
-            }
-            java.util.regex.Matcher im = idPat.matcher(line);
-            if (im.find()) {
-                symbols.add("  L" + (i + 1) + "  id=" + im.group(1));
-                continue;
-            }
-        }
-        if (symbols.isEmpty()) return "";
-        return "[outline: " + symbols.size() + " symbols]\n" + String.join("\n", symbols);
-    }
 
     // ---- 内部辅助 ----
 

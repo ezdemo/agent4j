@@ -108,12 +108,13 @@ public class ConfigController {
         }
     }
 
-    /** 获取 Token 用量统计 —— GET /api/usage */
+    /** 获取 Token 用量统计 —— GET /api/usage?workspaceHash=xxx&sessionName=xxx */
     @Get
     @Mapping("/usage")
-    public Object getUsage() {
+    public Object getUsage(@Param("workspaceHash") String workspaceHash,
+                           @Param("sessionName") String sessionName) {
         if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
-        return ApiResponse.ok(agentService.getUsage());
+        return ApiResponse.ok(agentService.getUsage(workspaceHash, sessionName));
     }
 
     /** 获取当前工作目录 —— GET /api/workspace */

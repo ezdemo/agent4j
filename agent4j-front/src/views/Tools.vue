@@ -331,8 +331,8 @@ const getDefaultTools = () => [
       { name: 'tail', type: 'int', required: false, description: '返回后 N 行' },
       { name: 'range', type: 'string', required: false, description: '行范围 "start-end"' }
     ],
-    example: 'read_file({ path: "src/main.java", head: 50 })',
-    notes: ['完整读取：默认返回整个文件内容', '范围读取：通过参数控制输出范围', '大文件处理：超过 32 MiB 的文件会被拒绝读取']
+    example: 'read_file({ path: "src/main.java" })',
+    notes: ['一次性读取：请直接读取完整文件，不要使用 head/tail/range 分段读取', '大文件处理：超过 100 MiB 的文件会被拒绝读取']
   },
   {
     name: 'edit_file',

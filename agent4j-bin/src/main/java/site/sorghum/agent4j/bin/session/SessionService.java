@@ -27,6 +27,8 @@ public class SessionService {
     private long sessionCompletionTokens;
     private long sessionCacheHitTokens;
     private long sessionCacheMissTokens;
+    /** 最近一次 API 返回的 prompt_tokens（用于上下文使用率计算） */
+    private long sessionLastPromptTokens;
     /** 是否已生成会话标题 */
     private boolean titleGenerated = false;
 
@@ -118,7 +120,8 @@ public class SessionService {
     public void saveUsage() {
         try {
             store.saveUsage(store.currentName(), sessionPromptTokens,
-                    sessionCompletionTokens, sessionCacheHitTokens, sessionCacheMissTokens);
+                    sessionCompletionTokens, sessionCacheHitTokens, sessionCacheMissTokens,
+                    sessionLastPromptTokens);
         } catch (IOException ignored) {}
     }
 
@@ -133,7 +136,7 @@ public class SessionService {
     /** 获取会话累计 token 用量 */
     public long[] getUsage() {
         return new long[]{sessionPromptTokens, sessionCompletionTokens,
-                sessionCacheHitTokens, sessionCacheMissTokens};
+                sessionCacheHitTokens, sessionCacheMissTokens, sessionLastPromptTokens};
     }
 
     /** 恢复 token 用量 */
@@ -143,12 +146,24 @@ public class SessionService {
         sessionCompletionTokens = u[1];
         sessionCacheHitTokens = u[2];
         sessionCacheMissTokens = u[3];
+        sessionLastPromptTokens = u.length > 4 ? u[4] : 0;
+    }
+
+    /** 更新 lastPromptTokens（上下文使用量） */
+    public void updateLastPromptTokens(int lastPromptTokens) {
+        this.sessionLastPromptTokens = lastPromptTokens;
+    }
+
+    /** 获取 lastPromptTokens */
+    public long getLastPromptTokens() {
+        return sessionLastPromptTokens;
     }
 
     /** 重置 token 累计 */
     public void resetUsage() {
         sessionPromptTokens = sessionCompletionTokens = 0;
         sessionCacheHitTokens = sessionCacheMissTokens = 0;
+        sessionLastPromptTokens = 0;
     }
 
     /**

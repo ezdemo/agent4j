@@ -327,9 +327,9 @@ export const configAPI = {
     return api.get('/models')
   },
   
-  // 获取Token用量统计 - GET /api/usage
-  getUsage: () => {
-    return api.get('/usage')
+  // 获取Token用量统计 - GET /api/usage?workspaceHash=xxx&sessionName=xxx
+  getUsage: (params) => {
+    return api.get('/usage', { params })
   },
   
   // 获取使用历史 - GET /api/usage/history

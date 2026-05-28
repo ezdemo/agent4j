@@ -323,7 +323,7 @@ SessionService (JsonlSessionStore)
 
 | 工具名 | 只读 | 风暴豁免 | 参数 | 说明 |
 |--------|------|----------|------|------|
-| `read_file` | ✅ | ✅ | path, head?, tail?, range? | 读取文件（支持范围/头/尾/大纲模式） |
+| `read_file` | ✅ | ✅ | path, head?, tail?, range? | 读取文件（一次性读取完整内容，支持范围/头/尾） |
 | `edit_file` | ❌ | ❌ | path, search, replace | SEARCH/REPLACE 编辑（search 必须唯一） |
 | `write_file` | ❌ | ❌ | path, content | 创建/覆盖文件（自动创建父目录） |
 | `multi_edit` | ❌ | ❌ | edits[{path,search,replace}] | 批量原子编辑（全验证→全写入→失败回滚） |

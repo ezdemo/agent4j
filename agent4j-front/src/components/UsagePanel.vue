@@ -97,12 +97,14 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { configAPI } from '../services/api'
 
 const props = defineProps({
   autoRefresh: { type: Boolean, default: false },
-  refreshInterval: { type: Number, default: 30000 }
+  refreshInterval: { type: Number, default: 30000 },
+  workspaceHash: { type: String, default: null },
+  sessionName: { type: String, default: null }
 })
 
 const usage = ref(null)
@@ -156,7 +158,11 @@ const formatNumber = (num) => {
 const refresh = async () => {
   loading.value = true
   try {
-    const r = await configAPI.getUsage()
+    const params = {}
+    if (props.workspaceHash) params.workspaceHash = props.workspaceHash
+    if (props.sessionName) params.sessionName = props.sessionName
+    
+    const r = await configAPI.getUsage(params)
     if (r.success) {
       usage.value = r.data
     }
@@ -181,6 +187,11 @@ const stopAutoRefresh = () => {
     timer = null
   }
 }
+
+// 监听 workspace 和 session 变化，重新加载 usage
+watch([() => props.workspaceHash, () => props.sessionName], () => {
+  refresh()
+})
 
 onMounted(() => {
   refresh()

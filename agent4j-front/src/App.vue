@@ -126,7 +126,13 @@
 
     <!-- 主区域 -->
     <main class="main">
-      <ChatView ref="chatRef" hide-header style="flex:1;min-height:0" />
+      <ChatView 
+        ref="chatRef" 
+        hide-header 
+        :workspace-hash="activeWorkspaceHash"
+        :session-name="currentSession"
+        style="flex:1;min-height:0" 
+      />
     </main>
     </div><!-- .app-body -->
 
@@ -217,6 +223,12 @@ const workspaceName = computed(() => {
   if (!workspace.value) return '选择工作区'
   const parts = workspace.value.split(/[\\/]/)
   return parts[parts.length - 1] || workspace.value
+})
+
+// 获取当前活跃工作区的 hash
+const activeWorkspaceHash = computed(() => {
+  const active = workspaces.value.find(w => w.isActive)
+  return active ? active.hash : null
 })
 
 const fmtTokens = n => !n ? '0' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n)
@@ -337,7 +349,7 @@ const newChat = () => {
 
 const loadSession = name => {
   currentSession.value = name
-  chatRef.value?.loadSession(name)
+  chatRef.value?.loadSession(name, activeWorkspaceHash.value)
 }
 
 const deleteSession = async name => {

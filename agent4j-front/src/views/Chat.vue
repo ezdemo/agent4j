@@ -164,11 +164,15 @@
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { chatAPI, agentAPI, configAPI } from '../services/api'
 import { marked } from 'marked'
 
-const props = defineProps({ hideHeader: { type: Boolean, default: false } })
+const props = defineProps({ 
+  hideHeader: { type: Boolean, default: false },
+  workspaceHash: { type: String, default: null },
+  sessionName: { type: String, default: null }
+})
 
 const messagesContainer = ref(null)
 const inputField = ref(null)
@@ -207,8 +211,12 @@ const contextPercent = computed(() => {
 
 const loadUsage = async () => {
   try {
+    const params = {}
+    if (props.workspaceHash) params.workspaceHash = props.workspaceHash
+    if (props.sessionName) params.sessionName = props.sessionName
+    
     const [usageRes, modelsRes] = await Promise.allSettled([
-      configAPI.getUsage(),
+      configAPI.getUsage(params),
       configAPI.getModels()
     ])
     if (usageRes.status === 'fulfilled' && usageRes.value.success) {
@@ -247,6 +255,11 @@ const handleClickOutside = (e) => {
     showModelPicker.value = false
   }
 }
+
+// 监听 workspace 和 session 变化，重新加载 usage
+watch([() => props.workspaceHash, () => props.sessionName], () => {
+  loadUsage()
+})
 
 onMounted(() => {
   loadUsage()
@@ -470,13 +483,13 @@ const loadHistory = async () => {
   } catch {}
 }
 
-const loadSession = async name => {
+const loadSession = async (name, workspaceHash) => {
   try {
     const { sessionsAPI } = await import('../services/api')
     await sessionsAPI.switchSession(name)
     await loadHistory()
-    // 切换会话后刷新 usage 数据
-    await loadUsage()
+    // 切换会话后刷新 usage 数据（传入 sessionName 和 workspaceHash）
+    await loadUsage({ sessionName: name, workspaceHash })
   } catch (e) { console.error('切换会话失败:', e) }
 }
 

@@ -485,15 +485,68 @@ public class AgentService {
 
     // ==================== 用量 ====================
 
+    /**
+     * 获取当前会话的 Token 用量统计。
+     */
     public Map<String, Object> getUsage() {
+        return getUsage(null, null);
+    }
+
+    /**
+     * 获取指定工作区和会话的 Token 用量统计。
+     * @param workspaceHash 工作区 hash（可选，null 时使用当前工作区）
+     * @param sessionName   会话名称（可选，null 时使用当前会话）
+     */
+    public Map<String, Object> getUsage(String workspaceHash, String sessionName) {
         requireAgent();
-        long[] u = agent.getSessionUsage();
+        
+        long[] u;
+        
+        // 如果指定了会话名，尝试从对应的 usage 文件加载
+        if (sessionName != null && !sessionName.isEmpty()) {
+            SessionStore store = null;
+            
+            // 如果指定了工作区 hash，获取该工作区的会话目录
+            if (workspaceHash != null && !workspaceHash.isEmpty()) {
+                WorkspaceManager workspaceManager = agent.getWorkspaceManager();
+                if (workspaceManager != null) {
+                    try {
+                        List<WorkspaceManager.WorkspaceInfo> workspaces = workspaceManager.listWorkspaces();
+                        for (WorkspaceManager.WorkspaceInfo w : workspaces) {
+                            if (w.hash.equals(workspaceHash)) {
+                                java.nio.file.Path sessionsDir = workspaceManager.getSessionsDir(w.path);
+                                if (java.nio.file.Files.isDirectory(sessionsDir)) {
+                                    store = new site.sorghum.agent4j.bin.session.JsonlSessionStore(sessionsDir);
+                                }
+                                break;
+                            }
+                        }
+                    } catch (Exception e) {
+                        System.err.println("[usage] 获取工作区会话目录失败: " + e.getMessage());
+                    }
+                }
+            }
+            
+            // 从指定会话加载 usage
+            if (store != null) {
+                u = store.loadUsage(sessionName);
+            } else {
+                // 回退到当前会话
+                u = agent.getSessionUsage();
+            }
+        } else {
+            // 使用当前会话的 usage
+            u = agent.getSessionUsage();
+        }
+        
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("promptTokens", u[0]);
         m.put("completionTokens", u[1]);
         m.put("cacheHit", u[2]);
         m.put("cacheMiss", u[3]);
-        m.put("lastPromptTokens", agent.getLastPromptTokens());
+        // 优先使用持久化的 lastPromptTokens（0 时回退到 AgentLoop 的实时值）
+        long sessionLast = u.length > 4 ? u[4] : 0;
+        m.put("lastPromptTokens", sessionLast > 0 ? sessionLast : agent.getLastPromptTokens());
         m.put("maxContextTokens", agent.getMaxContextTokens());
         return m;
     }

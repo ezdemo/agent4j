@@ -2,6 +2,7 @@ package site.sorghum.agent4j.bin.tool;
 
 import org.noear.snack4.ONode;
 
+import org.smartboot.socket.util.StringUtils;
 import site.sorghum.agent4j.bin.agent.StormBreaker;
 import site.sorghum.agent4j.bin.util.ONodeUtil;
 
@@ -73,6 +74,9 @@ public class ToolDispatcher {
 
     /** 执行工具调用，返回结果字符串 */
     public String dispatch(String name, String argumentsJson, int maxResultTokens) {
+        if (name == null || name.equals("null")){
+            return error("请重新思考,调用方式错误，工具名不能为null。");
+        }
         ToolDef tool = registry.get(name);
         if (tool == null) {
             return error("unknown tool: " + name);
