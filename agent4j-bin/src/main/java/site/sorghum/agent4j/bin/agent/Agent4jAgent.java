@@ -144,8 +144,35 @@ public class Agent4jAgent {
 
         // 使用共享组件
         ModelClient client = b.sharedModelClient;
-        ToolRegistry registry = b.sharedToolRegistry;
         PromptPrefix prefix = b.sharedPrefix;
+
+        // 为每个 Agent 创建独立的 ToolRegistry（支持 sessionId 传递）
+        ToolRegistry registry = new ToolRegistry();
+        // 从共享 ToolRegistry 复制工具定义，但重新创建 lambda 以支持 sessionId
+        for (var entry : b.sharedToolRegistry.all().entrySet()) {
+            ToolDef original = entry.getValue();
+            // 获取原始工具的 AgentTool 实例
+            AgentTool agentTool = findAgentTool(original.name());
+            if (agentTool != null) {
+                // 重新创建 lambda，使用 this.loop（在创建后设置）
+                registry.register(new ToolDef(
+                        original.name(),
+                        original.description(),
+                        original.params(),
+                        args -> {
+                            // 从 AgentLoop 获取 sessionId
+                            String sessionId = this.loop != null ? this.loop.getSessionId() : null;
+                            return ToolDefHelper.formatResult(agentTool.execute(
+                                    new ToolContext(args, getWorkspace(), apiUrl, apiKey, registry, b.blockedPaths != null ? b.blockedPaths : java.util.Collections.emptyList(), sessionId)));
+                        },
+                        original.readOnly(),
+                        original.stormExempt(),
+                        original.toolSpec()));
+            } else {
+                // 保留原始定义
+                registry.register(original);
+            }
+        }
 
         // 创建独立的会话上下文
         this.ctx = new ConversationContext(prefix);
@@ -165,6 +192,17 @@ public class Agent4jAgent {
         this.loop = new AgentLoop(client, registry, ctx, b.hitl);
         // 设置 SessionService 引用，用于同步 lastPromptTokens
         this.loop.setSessionService(this.sessionService);
+    }
+
+    /**
+     * 根据工具名查找 AgentTool 实例。
+     */
+    private AgentTool findAgentTool(String name) {
+        try {
+            return Solon.context().getBean(AgentTool.class, name);
+        } catch (Exception e) {
+            return null;
+        }
     }
 
     // 使用 ToolDefHelper 提供的公共方法
