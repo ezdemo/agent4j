@@ -84,8 +84,12 @@ public class Agent4jAgent {
                     tool.getName(),
                     tool.getDescription(),
                     ToolDefHelper.toParamDefs(tool.getParameters()),
-                    args -> ToolDefHelper.formatResult(tool.execute(
-                            new ToolContext(args, getWorkspace(), apiUrl, apiKey, registry, blockedPaths))),
+                    args -> {
+                        // 动态获取当前会话ID（工具执行时才调用，此时 sessionService 已初始化）
+                        String sessionId = sessionService != null ? sessionService.getStore().currentName() : null;
+                        return ToolDefHelper.formatResult(tool.execute(
+                                new ToolContext(args, getWorkspace(), apiUrl, apiKey, registry, blockedPaths, sessionId)));
+                    },
                     tool.isReadOnly(),
                     tool.isStormExempt(),
                     toolSpec));

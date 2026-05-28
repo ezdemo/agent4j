@@ -56,6 +56,6 @@ public class TodoWriteTool extends AgentTool {
     public ToolResult execute(ToolContext ctx) {
         @SuppressWarnings("unchecked")
         List<Map<String, Object>> todos = (List<Map<String, Object>>) ctx.getParams().get("todos");
-        return ToolResult.ok(interactionService.todoWrite(todos));
+        return ToolResult.ok(interactionService.todoWrite(todos, ctx.getSessionId()));
     }
 }

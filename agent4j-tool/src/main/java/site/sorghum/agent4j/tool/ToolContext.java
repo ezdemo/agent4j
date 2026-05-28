@@ -38,6 +38,9 @@ public class ToolContext {
     /** 屏蔽目录列表（相对路径，相对于工作区根目录） */
     private final List<String> blockedPaths;
 
+    /** 当前会话ID（可选，用于按会话隔离数据） */
+    private final String sessionId;
+
     public ToolContext(Map<String, Object> params) {
         this(params, null, null, null, null, Collections.<String>emptyList());
     }
@@ -57,12 +60,18 @@ public class ToolContext {
 
     public ToolContext(Map<String, Object> params, Path rootDir, String apiUrl, String apiKey,
                        Object toolRegistry, List<String> blockedPaths) {
+        this(params, rootDir, apiUrl, apiKey, toolRegistry, blockedPaths, null);
+    }
+
+    public ToolContext(Map<String, Object> params, Path rootDir, String apiUrl, String apiKey,
+                       Object toolRegistry, List<String> blockedPaths, String sessionId) {
         this.params = params != null ? new HashMap<>(params) : Collections.<String, Object>emptyMap();
         this.rootDir = rootDir;
         this.apiUrl = apiUrl;
         this.apiKey = apiKey;
         this.toolRegistry = toolRegistry;
         this.blockedPaths = blockedPaths != null ? blockedPaths : Collections.<String>emptyList();
+        this.sessionId = sessionId;
     }
 
     /** 获取字符串参数。 */

@@ -5,6 +5,7 @@ import org.noear.solon.annotation.Component;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 交互服务 —— 用户选择(ask_choice)和任务跟踪(todo_write)。
@@ -14,7 +15,11 @@ import java.util.Map;
 @Component
 public class InteractionService {
 
-    private List<Map<String, Object>> currentTodos = new ArrayList<>();
+    /** 按会话ID隔离的 todo 列表 */
+    private final Map<String, List<Map<String, Object>>> sessionTodos = new ConcurrentHashMap<>();
+
+    /** 获取默认会话ID（用于未指定会话ID的情况） */
+    private static final String DEFAULT_SESSION = "__default__";
 
     /**
      * 渲染一个用户选择菜单。
@@ -42,10 +47,15 @@ public class InteractionService {
 
     /**
      * 更新会话内的任务跟踪列表。
+     *
+     * @param todos     todo 列表
+     * @param sessionId 会话ID（为 null 时使用默认会话）
      */
     @SuppressWarnings("unchecked")
-    public String todoWrite(List<Map<String, Object>> todos) {
-        currentTodos = todos != null ? new ArrayList<>(todos) : new ArrayList<>();
+    public String todoWrite(List<Map<String, Object>> todos, String sessionId) {
+        String key = sessionId != null ? sessionId : DEFAULT_SESSION;
+        List<Map<String, Object>> currentTodos = todos != null ? new ArrayList<>(todos) : new ArrayList<>();
+        sessionTodos.put(key, currentTodos);
         if (currentTodos.isEmpty()) return "todos cleared (0 items)";
         long done = currentTodos.stream().filter(t -> "completed".equals(t.get("status"))).count();
         long inProg = currentTodos.stream().filter(t -> "in_progress".equals(t.get("status"))).count();
@@ -62,5 +72,17 @@ public class InteractionService {
             else sb.append("[ ] ").append(content).append("\n");
         }
         return sb.toString().trim();
+    }
+
+    /**
+     * 获取指定会话的 todo 列表。
+     *
+     * @param sessionId 会话ID（为 null 时使用默认会话）
+     * @return todo 列表的副本，如果不存在返回空列表
+     */
+    public List<Map<String, Object>> getTodos(String sessionId) {
+        String key = sessionId != null ? sessionId : DEFAULT_SESSION;
+        List<Map<String, Object>> todos = sessionTodos.get(key);
+        return todos != null ? new ArrayList<>(todos) : new ArrayList<>();
     }
 }
