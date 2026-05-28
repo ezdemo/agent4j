@@ -92,19 +92,19 @@
         <div class="todo-trigger" 
              @mouseenter="handleTodoMouseEnter" 
              @mouseleave="handleTodoMouseLeave">
-          <button class="todo-btn" :class="{ 'has-todos': todos.length > 0 }">
+          <button class="todo-btn" :class="{ 'has-todos': todoStats.pending + todoStats.inProgress > 0 }">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M9 11l3 3L22 4"/>
               <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
             </svg>
-            <span v-if="todos.length > 0" class="todo-badge">{{ todoStats.total }}</span>
+            <span v-if="todoStats.pending + todoStats.inProgress > 0" class="todo-badge">{{ todoStats.pending + todoStats.inProgress }}</span>
           </button>
           
           <!-- TODO Tooltip -->
           <Transition name="tooltip">
             <div v-if="todoTooltipVisible" class="todo-tooltip">
               <div class="todo-tooltip-header">
-                <span class="todo-tooltip-title">📋 当前任务</span>
+                <span class="todo-tooltip-title">任务列表</span>
                 <span class="todo-tooltip-stats">
                   {{ todoStats.completed }}/{{ todoStats.total }} 完成
                 </span>
@@ -113,12 +113,43 @@
                 暂无任务
               </div>
               <div v-else class="todo-tooltip-list">
-                <div v-for="(todo, index) in todos" :key="index" class="todo-tooltip-item">
-                  <span class="todo-status-icon">{{ getTodoStatusIcon(todo.status) }}</span>
+                <!-- 未完成的任务（按原顺序） -->
+                <div v-for="(todo, index) in incompleteTodos" :key="'incomplete-' + index" class="todo-tooltip-item">
+                  <span class="todo-status-icon" :class="todo.status">
+                    <svg v-if="todo.status === 'in_progress'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <polyline points="12 6 12 12 16 14"/>
+                    </svg>
+                    <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                    </svg>
+                  </span>
                   <span class="todo-content" :class="todo.status">{{ todo.content }}</span>
                 </div>
+                
+                <!-- 已完成的任务（折叠） -->
+                <div v-if="completedTodos.length > 0" class="todo-completed-section">
+                  <div class="todo-completed-toggle" @click="showCompleted = !showCompleted">
+                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: showCompleted ? 'rotate(90deg)' : '' }">
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                    <span>{{ completedTodos.length }} 项已完成</span>
+                  </div>
+                  <Transition name="collapse">
+                    <div v-if="showCompleted" class="todo-completed-list">
+                      <div v-for="(todo, index) in completedTodos" :key="'completed-' + index" class="todo-tooltip-item completed">
+                        <span class="todo-status-icon completed">
+                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="20 6 9 17 4 12"/>
+                          </svg>
+                        </span>
+                        <span class="todo-content completed">{{ todo.content }}</span>
+                      </div>
+                    </div>
+                  </Transition>
+                </div>
               </div>
-              <div v-if="todoStats.inProgress > 0" class="todo-tooltip-footer">
+              <div v-if="todoStats.total > 0" class="todo-tooltip-footer">
                 <div class="todo-progress-bar">
                   <div class="todo-progress-fill" :style="{ width: (todoStats.completed / todoStats.total * 100) + '%' }"></div>
                 </div>
@@ -233,6 +264,7 @@ let currentAbortController = null
 const todos = ref([])
 const todoTooltipVisible = ref(false)
 const todoTooltipTimer = ref(null)
+const showCompleted = ref(false)
 
 // Usage 相关
 const usage = ref({ promptTokens: 0, completionTokens: 0, cacheHit: 0, cacheMiss: 0, maxContextTokens: 128000, lastPromptTokens: 0 })
@@ -315,16 +347,6 @@ const handleTodoMouseLeave = () => {
   todoTooltipVisible.value = false
 }
 
-// 获取 TODO 状态图标
-const getTodoStatusIcon = (status) => {
-  switch (status) {
-    case 'completed': return '✅'
-    case 'in_progress': return '🔄'
-    case 'pending': return '⬜'
-    default: return '❓'
-  }
-}
-
 // 计算 TODO 统计
 const todoStats = computed(() => {
   const total = todos.value.length
@@ -332,6 +354,16 @@ const todoStats = computed(() => {
   const inProgress = todos.value.filter(t => t.status === 'in_progress').length
   const pending = todos.value.filter(t => t.status === 'pending').length
   return { total, completed, inProgress, pending }
+})
+
+// 未完成的任务（按原顺序）
+const incompleteTodos = computed(() => {
+  return todos.value.filter(t => t.status !== 'completed')
+})
+
+// 已完成的任务
+const completedTodos = computed(() => {
+  return todos.value.filter(t => t.status === 'completed')
 })
 
 const switchModel = async (modelName) => {
@@ -1272,6 +1304,7 @@ defineExpose({ clearMessages, loadSession, sendCommand, exportChat })
   font-size: 12px;
   font-weight: 600;
   color: var(--fg-2);
+  letter-spacing: 0.02em;
 }
 
 .todo-tooltip-stats {
@@ -1347,6 +1380,49 @@ defineExpose({ clearMessages, loadSession, sendCommand, exportChat })
   background: var(--accent);
   border-radius: 2px;
   transition: width 0.3s ease;
+}
+
+/* 已完成部分折叠 */
+.todo-completed-section {
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.todo-completed-toggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  font-size: 11px;
+  color: var(--fg-4);
+  cursor: pointer;
+  transition: all var(--t);
+}
+
+.todo-completed-toggle:hover {
+  color: var(--fg-2);
+  background: var(--bg-2);
+}
+
+.todo-completed-toggle svg {
+  transition: transform 0.2s ease;
+}
+
+.todo-completed-list {
+  overflow: hidden;
+}
+
+/* 折叠动画 */
+.collapse-enter-active,
+.collapse-leave-active {
+  transition: all 0.2s ease;
+  max-height: 200px;
+}
+
+.collapse-enter-from,
+.collapse-leave-to {
+  max-height: 0;
+  opacity: 0;
 }
 
 /* Tooltip 动画 */
