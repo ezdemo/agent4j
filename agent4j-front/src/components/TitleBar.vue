@@ -1,71 +1,92 @@
 <template>
-  <div class="titlebar">
+  <header class="titlebar" data-tauri-drag-region @dblclick="toggleMaximize">
+    <!-- 左侧：侧边栏切换 + Logo + 会话名 -->
     <div class="titlebar-left">
-      <button class="btn-icon-sm sidebar-toggle" @click="$emit('toggleSide')" :class="{ active: sideOn }" title="切换侧边栏">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <button class="tb-btn sidebar-toggle" @click="$emit('toggleSide')" :class="{ active: sideOn }" title="切换侧边栏">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
           <line x1="9" y1="3" x2="9" y2="21"/>
         </svg>
       </button>
-      
-      <div class="brand">
-        <div class="brand-logo">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="url(#titleGradient)" stroke="url(#titleGradient)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-            <defs>
-              <linearGradient id="titleGradient" x1="3" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
-                <stop stop-color="#6366f1"/>
-                <stop offset="1" stop-color="#8b5cf6"/>
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
-        <span class="brand-name">Agent4j</span>
+
+      <div class="tb-brand">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
+          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="url(#tbGrad)" stroke="url(#tbGrad)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+          <defs>
+            <linearGradient id="tbGrad" x1="3" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
+              <stop stop-color="#6366f1"/>
+              <stop offset="1" stop-color="#8b5cf6"/>
+            </linearGradient>
+          </defs>
+        </svg>
+        <span class="tb-brand-name">Agent4j</span>
       </div>
-      
-      <div v-if="session" class="session-breadcrumb">
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="breadcrumb-sep">
+
+      <div v-if="session" class="tb-breadcrumb">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <polyline points="9 18 15 12 9 6"/>
         </svg>
-        <span class="session-name">{{ session }}</span>
+        <span class="tb-session">{{ session }}</span>
       </div>
     </div>
-    
-    <div class="titlebar-center">
-      <div class="window-controls">
-        <div class="window-dot close"></div>
-        <div class="window-dot minimize"></div>
-        <div class="window-dot maximize"></div>
-      </div>
-    </div>
-    
+
+    <!-- 右侧：操作按钮 + 窗口控制 -->
     <div class="titlebar-right">
-      <button v-if="hasMessages" class="btn-icon-sm action-btn" @click="$emit('clear')" title="清空对话">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <button v-if="hasMessages" class="tb-btn" @click.stop="$emit('clear')" title="清空对话">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <polyline points="3 6 5 6 21 6"/>
           <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
         </svg>
       </button>
-      
-      <button v-if="hasMessages" class="btn-icon-sm action-btn" @click="$emit('export')" title="导出对话">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+
+      <button v-if="hasMessages" class="tb-btn" @click.stop="$emit('export')" title="导出对话">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
           <polyline points="7 10 12 15 17 10"/>
           <line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
       </button>
-      
-      <button class="btn-icon-sm action-btn" @click="$emit('openSettings')" title="设置">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+
+      <button class="tb-btn" @click.stop="$emit('openSettings')" title="设置">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"/>
           <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
         </svg>
       </button>
+
+      <!-- 分隔线 -->
+      <div class="tb-sep"></div>
+
+      <!-- 窗口控制按钮 -->
+      <button class="tb-win-btn minimize" @click.stop="minimize" title="最小化">
+        <svg width="10" height="1" viewBox="0 0 10 1">
+          <rect width="10" height="1" fill="currentColor"/>
+        </svg>
+      </button>
+      <button class="tb-win-btn maximize" @click.stop="toggleMaximize" :title="isMaximized ? '还原' : '最大化'">
+        <!-- 还原图标 -->
+        <svg v-if="isMaximized" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2">
+          <rect x="2.5" y="0.5" width="9" height="9" rx="1"/>
+          <rect x="0.5" y="2.5" width="9" height="9" rx="1" fill="var(--bg)" stroke="currentColor"/>
+        </svg>
+        <!-- 最大化图标 -->
+        <svg v-else width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2">
+          <rect x="0.5" y="0.5" width="11" height="11" rx="1.5"/>
+        </svg>
+      </button>
+      <button class="tb-win-btn close" @click.stop="closeWindow" title="关闭">
+        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+          <line x1="1" y1="1" x2="11" y2="11"/>
+          <line x1="11" y1="1" x2="1" y2="11"/>
+        </svg>
+      </button>
     </div>
-  </div>
+  </header>
 </template>
 
 <script setup>
+import { ref, onMounted, onBeforeUnmount } from 'vue'
+
 defineProps({
   session: { type: String, default: '' },
   sideOn: { type: Boolean, default: true },
@@ -73,6 +94,36 @@ defineProps({
 })
 
 defineEmits(['toggleSide', 'openSettings', 'clear', 'export'])
+
+const isMaximized = ref(false)
+let appWindow = null
+
+onMounted(async () => {
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window')
+    appWindow = getCurrentWindow()
+    isMaximized.value = await appWindow.isMaximized()
+
+    // 监听窗口状态变化
+    await appWindow.onResized(async () => {
+      isMaximized.value = await appWindow.isMaximized()
+    })
+  } catch {
+    // 非 Tauri 环境（浏览器开发模式），静默忽略
+  }
+})
+
+const minimize = async () => {
+  if (appWindow) await appWindow.minimize()
+}
+
+const toggleMaximize = async () => {
+  if (appWindow) await appWindow.toggleMaximize()
+}
+
+const closeWindow = async () => {
+  if (appWindow) await appWindow.close()
+}
 </script>
 
 <style scoped>
@@ -80,188 +131,145 @@ defineEmits(['toggleSide', 'openSettings', 'clear', 'export'])
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: var(--header-height, 64px);
-  padding: 0 var(--space-4);
-  background: var(--surface);
+  height: 36px;
+  min-height: 36px;
+  padding: 0 6px 0 10px;
+  background: var(--bg-2);
   border-bottom: 1px solid var(--border);
+  border-radius: 10px 10px 0 0;
   user-select: none;
   -webkit-app-region: drag;
-  position: relative;
-  z-index: var(--z-sticky);
+  z-index: 200;
 }
 
-/* 左侧 */
+/* ── 左侧 ── */
 .titlebar-left {
   display: flex;
   align-items: center;
-  gap: var(--space-3);
+  gap: 6px;
+  min-width: 0;
+}
+
+.tb-btn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r);
+  color: var(--fg-3);
+  transition: all var(--t);
+  flex-shrink: 0;
   -webkit-app-region: no-drag;
 }
-
-.sidebar-toggle {
-  color: var(--fg-muted);
-  transition: all var(--transition-fast);
-}
-
-.sidebar-toggle:hover {
-  background: var(--surface-hover);
+.tb-btn:hover {
+  background: var(--bg-3);
   color: var(--fg);
 }
 
 .sidebar-toggle.active {
-  background: var(--accent-soft);
-  color: var(--brand-primary);
+  background: var(--accent-bg);
+  color: var(--accent);
 }
 
-/* 品牌 */
-.brand {
+.tb-brand {
   display: flex;
   align-items: center;
-  gap: var(--space-2);
+  gap: 5px;
+  flex-shrink: 0;
 }
-
-.brand-logo {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.brand-name {
-  font-size: var(--text-base);
-  font-weight: var(--font-bold);
+.tb-brand-name {
+  font-size: 12px;
+  font-weight: 600;
   color: var(--fg);
-  letter-spacing: -0.02em;
+  letter-spacing: -0.01em;
 }
 
-/* 会话面包屑 */
-.session-breadcrumb {
+.tb-breadcrumb {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
-  color: var(--fg-muted);
-  font-size: var(--text-sm);
+  gap: 4px;
+  min-width: 0;
+  margin-left: 2px;
 }
-
-.breadcrumb-sep {
-  color: var(--fg-muted);
+.tb-breadcrumb svg {
+  color: var(--fg-4);
+  flex-shrink: 0;
   opacity: 0.5;
 }
-
-.session-name {
-  color: var(--fg-secondary);
-  font-weight: var(--font-medium);
-  max-width: 200px;
+.tb-session {
+  font-size: 12px;
+  color: var(--fg-3);
+  font-weight: 500;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  max-width: 200px;
 }
 
-/* 中间 */
-.titlebar-center {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
-  -webkit-app-region: no-drag;
-}
-
-.window-controls {
-  display: flex;
-  gap: var(--space-2);
-}
-
-.window-dot {
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  transition: all var(--transition-fast);
-  cursor: pointer;
-}
-
-.window-dot.close {
-  background: var(--danger);
-}
-
-.window-dot.minimize {
-  background: var(--warning);
-}
-
-.window-dot.maximize {
-  background: var(--success);
-}
-
-.window-dot:hover {
-  transform: scale(1.1);
-  opacity: 0.8;
-}
-
-/* 右侧 */
+/* ── 右侧 ── */
 .titlebar-right {
   display: flex;
   align-items: center;
-  gap: var(--space-1);
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.tb-sep {
+  width: 1px;
+  height: 14px;
+  background: var(--border);
+  margin: 0 4px;
+}
+
+/* ── 窗口控制按钮 ── */
+.tb-win-btn {
+  width: 36px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r);
+  color: var(--fg-3);
+  transition: all 80ms ease;
   -webkit-app-region: no-drag;
 }
 
-.action-btn {
-  color: var(--fg-muted);
-  transition: all var(--transition-fast);
-}
-
-.action-btn:hover {
-  background: var(--surface-hover);
+.tb-win-btn.minimize:hover,
+.tb-win-btn.maximize:hover {
+  background: var(--bg-3);
   color: var(--fg);
 }
 
-/* 响应式设计 */
+.tb-win-btn.close:hover {
+  background: #e81123;
+  color: #fff;
+}
+
+/* ── 响应式 ── */
 @media (max-width: 768px) {
   .titlebar {
-    height: 56px;
-    padding: 0 var(--space-3);
+    height: 32px;
+    min-height: 32px;
   }
-  
-  .session-breadcrumb {
+  .tb-breadcrumb {
     display: none;
   }
-  
-  .window-controls {
+  .tb-brand-name {
     display: none;
   }
-  
-  .brand-name {
-    display: none;
+  .tb-win-btn {
+    width: 32px;
   }
 }
 
-/* 深色模式调整 */
+/* 深色模式微调 */
 [data-theme="dark"] .titlebar {
-  background: var(--bg-secondary);
+  background: var(--bg-2);
   border-color: var(--border);
 }
 
-[data-theme="dark"] .window-dot.close {
-  background: #ff5f57;
-}
-
-[data-theme="dark"] .window-dot.minimize {
-  background: #febc2e;
-}
-
-[data-theme="dark"] .window-dot.maximize {
-  background: #28c840;
-}
-
-/* 窗口控制按钮样式 */
-.window-dot.close:hover {
-  background: #ff3b30;
-}
-
-.window-dot.minimize:hover {
-  background: #ff9500;
-}
-
-.window-dot.maximize:hover {
-  background: #34c759;
+[data-theme="dark"] .tb-win-btn.close:hover {
+  background: #c42b1c;
 }
 </style>

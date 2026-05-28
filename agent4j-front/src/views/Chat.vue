@@ -333,6 +333,8 @@ const loadHistory = async () => {
         merged.push(item)
       }
       messages.value = merged
+      // 加载完成后滚动到底部
+      await scroll()
     }
   } catch {}
 }

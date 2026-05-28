@@ -1,5 +1,18 @@
 <template>
   <div class="app" :data-theme="theme">
+    <!-- 自定义标题栏 -->
+    <TitleBar
+      :session="currentSessionTitle"
+      :sideOn="sideOpen"
+      :hasMessages="true"
+      @toggleSide="sideOpen = !sideOpen"
+      @openSettings="showConfig = true"
+      @clear="clearChat"
+      @export="() => chatRef?.exportChat()"
+    />
+
+    <!-- 主体区域 -->
+    <div class="app-body">
     <!-- 侧边栏 -->
     <aside class="sidebar" :class="{ collapsed: !sideOpen }">
       <div class="sidebar-head">
@@ -113,23 +126,9 @@
 
     <!-- 主区域 -->
     <main class="main">
-      <!-- 顶栏 -->
-      <header class="topbar">
-        <button class="btn-icon-sm" @click="sideOpen = !sideOpen">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
-        </button>
-        <span class="topbar-title">{{ currentSessionTitle }}</span>
-        <span class="topbar-status" :class="{ on: status.ready }"></span>
-        <div style="flex:1"></div>
-        <span v-if="usage.totalTokens" class="topbar-tokens">{{ fmtTokens(usage.totalTokens) }} tok</span>
-        <button class="btn-icon-sm" @click="clearChat" title="清空">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
-        </button>
-      </header>
-
-      <!-- 聊天区 -->
       <ChatView ref="chatRef" hide-header style="flex:1;min-height:0" />
     </main>
+    </div><!-- .app-body -->
 
     <!-- 工具弹窗 -->
     <Teleport to="body">
@@ -200,6 +199,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { agentAPI, sessionsAPI, toolsAPI, configAPI } from './services/api'
 import ChatView from './views/Chat.vue'
+import TitleBar from './components/TitleBar.vue'
 
 const theme = ref(localStorage.getItem('agent4j-theme') || 'light')
 const sideOpen = ref(true)
@@ -421,7 +421,24 @@ onMounted(async () => {
 <style scoped>
 .app {
   display: flex;
+  flex-direction: column;
   height: 100vh;
+  overflow: hidden;
+  border-radius: 10px;
+  border: 1px solid var(--border-2);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+}
+
+[data-theme="dark"] .app {
+  border-color: var(--border);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.4);
+}
+
+/* 主体区域（侧边栏 + 主区域） */
+.app-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -566,39 +583,6 @@ onMounted(async () => {
   flex-direction: column;
   min-width: 0;
   background: var(--bg);
-}
-
-.topbar {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 48px;
-  padding: 0 16px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.topbar-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: var(--fg);
-}
-
-.topbar-status {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--fg-4);
-}
-.topbar-status.on { background: var(--green); }
-
-.topbar-tokens {
-  font-size: 11px;
-  font-family: var(--mono);
-  color: var(--fg-3);
-  background: var(--bg-3);
-  padding: 2px 6px;
-  border-radius: var(--r-sm);
 }
 
 /* 弹窗 */
@@ -883,13 +867,11 @@ onMounted(async () => {
   .sidebar {
     position: fixed;
     left: -260px;
-    top: 0;
+    top: 36px;
     bottom: 0;
     z-index: 200;
     transition: left 0.2s;
   }
   .sidebar:not(.collapsed) { left: 0; }
-  .topbar-title { display: none; }
-  .topbar-tokens { display: none; }
 }
 </style>

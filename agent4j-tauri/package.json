@@ -1,6 +1,6 @@
 {
   "name": "agent4j-tauri",
-  "version": "1.0.0",
+  "version": "2.0.0",
   "private": true,
   "type": "module",
   "description": "Agent4j - 桌面端 AI 代码助手 (Tauri)",
@@ -16,10 +16,10 @@
     "format": "prettier --write src/"
   },
   "dependencies": {
-    "@tauri-apps/api": "^1.6.0"
+    "@tauri-apps/api": "^2.0.0"
   },
   "devDependencies": {
-    "@tauri-apps/cli": "^1.6.0",
+    "@tauri-apps/cli": "^2.0.0",
     "eslint": "^8.57.0",
     "eslint-plugin-vue": "^9.22.0",
     "@vue/eslint-config-prettier": "^9.0.0",

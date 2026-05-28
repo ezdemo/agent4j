@@ -152,13 +152,13 @@
 
 /* 全局 */
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-html, body, #app { height: 100%; overflow: hidden; }
+html, body, #app { height: 100%; overflow: hidden; background: transparent; }
 body {
   font-family: var(--sans);
   font-size: 14px;
   line-height: 1.5;
   color: var(--fg);
-  background: var(--bg);
+  background: transparent;
   -webkit-font-smoothing: antialiased;
 }
 
