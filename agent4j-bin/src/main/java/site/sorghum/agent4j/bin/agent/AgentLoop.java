@@ -72,6 +72,15 @@ public class AgentLoop {
     /** 切换 HITL 模式 */
     public void toggleHitl() { hitlMode = !hitlMode; }
 
+    /** 获取最近一次 API 返回的 prompt_tokens */
+    public int getLastPromptTokens() { return lastPromptTokens; }
+
+    /** 获取模型最大上下文窗口 token 数 */
+    public int getMaxContextTokens() { return client.getMaxContextTokens(); }
+
+    /** 获取模型客户端 */
+    public ModelClient getclient() { return client; }
+
     /** 批准待执行的工具调用 */
     public void approveHITL() { hitlState = HitlState.APPROVED; }
 

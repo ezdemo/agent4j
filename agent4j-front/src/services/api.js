@@ -322,6 +322,11 @@ export const configAPI = {
     return api.put('/config', config)
   },
   
+  // 获取可用模型列表 - GET /api/models
+  getModels: () => {
+    return api.get('/models')
+  },
+  
   // 获取Token用量统计 - GET /api/usage
   getUsage: () => {
     return api.get('/usage')

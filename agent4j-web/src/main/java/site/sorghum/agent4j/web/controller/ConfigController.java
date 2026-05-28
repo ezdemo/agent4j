@@ -6,9 +6,8 @@ import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.service.AgentService;
 
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * 配置与用量 API 控制器。
@@ -31,6 +30,7 @@ public class ConfigController {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("baseUrl", config.baseUrl());
             data.put("model", config.model());
+            data.put("availableModels", config.availableModels());
             // 优先返回当前运行时的工作目录（可能已被动态切换）
             if (agentService.isReady()) {
                 data.put("workspace", agentService.getWorkspace());
@@ -53,6 +53,58 @@ public class ConfigController {
             return ApiResponse.ok(data);
         } catch (Exception e) {
             return ApiResponse.fail("读取配置失败: " + e.getMessage());
+        }
+    }
+
+    /** 更新配置（合并不为空的字段） —— PUT /api/config */
+    @Put
+    @Mapping("/config")
+    public Object updateConfig(@Body Map<String, Object> body) {
+        try {
+            Agent4jConfig config = Agent4jConfig.load();
+            config.updateAndSave(body);
+            
+            // 如果更新了模型，需要通知 AgentService
+            if (body.containsKey("model") && agentService.isReady()) {
+                String newModel = body.get("model").toString();
+                agentService.updateModel(newModel);
+            }
+            
+            return ApiResponse.ok("配置已更新");
+        } catch (Exception e) {
+            return ApiResponse.fail("更新配置失败: " + e.getMessage());
+        }
+    }
+
+    /** 获取可用模型列表 —— GET /api/models */
+    @Get
+    @Mapping("/models")
+    public Object getModels() {
+        try {
+            Agent4jConfig config = Agent4jConfig.load();
+            String currentModel = config.model();
+            List<String> available = config.availableModels();
+            
+            // 合并 currentModel 到列表（去重）
+            Set<String> modelSet = new LinkedHashSet<>();
+            modelSet.add(currentModel);
+            modelSet.addAll(available);
+            
+            List<Map<String, Object>> models = modelSet.stream()
+                .map(m -> {
+                    Map<String, Object> item = new LinkedHashMap<>();
+                    item.put("name", m);
+                    item.put("active", m.equals(currentModel));
+                    return item;
+                })
+                .collect(Collectors.toList());
+            
+            Map<String, Object> result = new LinkedHashMap<>();
+            result.put("current", currentModel);
+            result.put("models", models);
+            return ApiResponse.ok(result);
+        } catch (Exception e) {
+            return ApiResponse.fail("获取模型列表失败: " + e.getMessage());
         }
     }
 

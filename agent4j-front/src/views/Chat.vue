@@ -112,13 +112,60 @@
           </button>
         </div>
       </div>
+      <!-- Token 用量统计 -->
+      <div class="usage-bar">
+        <div class="usage-stats">
+          <span class="usage-item" :title="'输入 Token: ' + formatTokens(usage.promptTokens)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
+            输入 {{ formatTokens(usage.promptTokens) }}
+          </span>
+          <span class="usage-item" :title="'输出 Token: ' + formatTokens(usage.completionTokens)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            输出 {{ formatTokens(usage.completionTokens) }}
+          </span>
+          <span class="usage-item" :title="'缓存命中: ' + formatTokens(usage.cacheHit) + ' / 未命中: ' + formatTokens(usage.cacheMiss)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            缓存 {{ cacheRate }}%
+          </span>
+          <span class="usage-sep">|</span>
+          <span class="usage-context-wrap" :title="'上下文使用: ' + formatTokens(usage.lastPromptTokens || usage.promptTokens) + ' / ' + formatTokens(usage.maxContextTokens)">
+            上下文
+            <span class="usage-progress">
+              <span class="usage-progress-bar" :style="{ width: Math.min(contextPercent, 100) + '%' }" :class="{ high: contextPercent >= 80, medium: contextPercent >= 50 && contextPercent < 80 }"></span>
+            </span>
+            <span class="usage-value" :class="{ high: contextPercent >= 80, medium: contextPercent >= 50 && contextPercent < 80 }">{{ contextPercent }}%</span>
+          </span>
+          <button class="usage-refresh" @click="loadUsage" title="刷新用量">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          </button>
+        </div>
+        <div class="model-selector" v-if="currentModel">
+          <button class="model-btn" @click="showModelPicker = !showModelPicker" :title="'当前模型: ' + currentModel">
+            {{ currentModel }}
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="model-dropdown" v-if="showModelPicker">
+            <div class="model-dropdown-title">切换模型</div>
+            <div 
+              v-for="m in availableModels" 
+              :key="m.name" 
+              class="model-option" 
+              :class="{ active: m.active }"
+              @click="switchModel(m.name)"
+            >
+              <span class="model-option-name">{{ m.name }}</span>
+              <svg v-if="m.active" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { chatAPI, agentAPI } from '../services/api'
+import { chatAPI, agentAPI, configAPI } from '../services/api'
 import { marked } from 'marked'
 
 const props = defineProps({ hideHeader: { type: Boolean, default: false } })
@@ -130,6 +177,88 @@ const messages = ref([])
 const streaming = ref(false)
 const planMode = ref(false)
 const inputFocused = ref(false)
+
+// Usage 相关
+const usage = ref({ promptTokens: 0, completionTokens: 0, cacheHit: 0, cacheMiss: 0, maxContextTokens: 128000, lastPromptTokens: 0 })
+const currentModel = ref('')
+const availableModels = ref([])
+const showModelPicker = ref(false)
+let usageTimer = null
+
+const formatTokens = (n) => {
+  if (!n || n === 0) return '0'
+  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
+  if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
+  return String(n)
+}
+
+const cacheRate = computed(() => {
+  const total = usage.value.cacheHit + usage.value.cacheMiss
+  if (total === 0) return '0'
+  return ((usage.value.cacheHit / total) * 100).toFixed(1)
+})
+
+const contextPercent = computed(() => {
+  const max = usage.value.maxContextTokens || 128000
+  const current = usage.value.lastPromptTokens || usage.value.promptTokens || 0
+  if (max === 0) return '0'
+  return ((current / max) * 100).toFixed(1)
+})
+
+const loadUsage = async () => {
+  try {
+    const [usageRes, modelsRes] = await Promise.allSettled([
+      configAPI.getUsage(),
+      configAPI.getModels()
+    ])
+    if (usageRes.status === 'fulfilled' && usageRes.value.success) {
+      usage.value = { ...usage.value, ...usageRes.value.data }
+    }
+    if (modelsRes.status === 'fulfilled' && modelsRes.value.success) {
+      currentModel.value = modelsRes.value.data?.current || ''
+      availableModels.value = modelsRes.value.data?.models || []
+    }
+  } catch {}
+}
+
+const switchModel = async (modelName) => {
+  if (modelName === currentModel.value) {
+    showModelPicker.value = false
+    return
+  }
+  try {
+    const r = await configAPI.updateConfig({ model: modelName })
+    if (r.success) {
+      currentModel.value = modelName
+      // 更新 availableModels 中的 active 状态
+      availableModels.value.forEach(m => {
+        m.active = m.name === modelName
+      })
+      showModelPicker.value = false
+    }
+  } catch (e) {
+    console.error('切换模型失败:', e)
+  }
+}
+
+// 点击外部关闭模型选择器
+const handleClickOutside = (e) => {
+  if (!e.target.closest('.model-selector')) {
+    showModelPicker.value = false
+  }
+}
+
+onMounted(() => {
+  loadUsage()
+  usageTimer = setInterval(loadUsage, 30000)
+  document.addEventListener('click', handleClickOutside)
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('click', handleClickOutside)
+  if (usageTimer) clearInterval(usageTimer)
+  window.removeEventListener('terminal-clear', clearChat)
+})
 
 const suggestions = ['解释这段代码', '优化这个函数', '写个单元测试', '检查潜在问题']
 
@@ -254,6 +383,8 @@ const sendMessage = async () => {
         if (last?.role === 'assistant' && (!last.blocks || last.blocks.length === 0)) {
           messages.value.pop()
         }
+        // 刷新 usage 数据
+        loadUsage()
       },
       () => {
         streaming.value = false
@@ -270,7 +401,7 @@ const clearChat = async () => {
   // 静默发送 /new 给后端，不显示任何气泡
   streaming.value = true
   try {
-    chatAPI.sendMessageStream('/new', () => {}, () => { streaming.value = false }, () => { streaming.value = false })
+    chatAPI.sendMessageStream('/new', () => {}, () => { streaming.value = false; loadUsage() }, () => { streaming.value = false })
   } catch { streaming.value = false }
 }
 
@@ -279,7 +410,7 @@ const clearMessages = () => {
   messages.value = []
   streaming.value = true
   try {
-    chatAPI.sendMessageStream('/new', () => {}, () => { streaming.value = false }, () => { streaming.value = false })
+    chatAPI.sendMessageStream('/new', () => {}, () => { streaming.value = false; loadUsage() }, () => { streaming.value = false })
   } catch { streaming.value = false }
 }
 
@@ -344,13 +475,15 @@ const loadSession = async name => {
     const { sessionsAPI } = await import('../services/api')
     await sessionsAPI.switchSession(name)
     await loadHistory()
+    // 切换会话后刷新 usage 数据
+    await loadUsage()
   } catch (e) { console.error('切换会话失败:', e) }
 }
 
 const sendCommand = async cmd => { inputText.value = cmd; await sendMessage() }
 
+// 加载历史消息
 onMounted(loadHistory)
-onBeforeUnmount(() => { window.removeEventListener('terminal-clear', clearChat) })
 
 defineExpose({ clearMessages, loadSession, sendCommand, exportChat })
 </script>
@@ -683,6 +816,184 @@ defineExpose({ clearMessages, loadSession, sendCommand, exportChat })
 .send-btn.active:hover { background: var(--blue-dark); }
 
 .btn-icon-sm.active { background: var(--accent-bg); color: var(--accent); }
+
+/* Token 用量统计 */
+.usage-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--fg-3);
+  border-top: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.usage-stats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.usage-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  cursor: default;
+  color: var(--fg-3);
+}
+
+.usage-item svg {
+  color: var(--fg-4);
+  flex-shrink: 0;
+}
+
+.usage-value {
+  font-weight: 500;
+  color: var(--fg-2);
+  font-family: var(--mono);
+}
+
+.usage-sep {
+  color: var(--border);
+  font-size: 14px;
+}
+
+.usage-context-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.usage-progress {
+  width: 60px;
+  height: 4px;
+  background: var(--bg-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.usage-progress-bar {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+.usage-progress-bar.medium {
+  background: var(--yellow);
+}
+
+.usage-progress-bar.high {
+  background: var(--red);
+}
+
+.usage-value.high {
+  color: var(--red);
+  font-weight: 600;
+}
+
+.usage-value.medium {
+  color: var(--yellow);
+}
+
+.usage-refresh {
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r-sm);
+  color: var(--fg-4);
+  font-size: 14px;
+  transition: all var(--t);
+  cursor: pointer;
+}
+
+.usage-refresh:hover {
+  background: var(--bg-3);
+  color: var(--fg-2);
+}
+
+/* 模型选择器 */
+.model-selector {
+  position: relative;
+}
+
+.model-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+  font-family: var(--mono);
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  transition: all var(--t);
+  cursor: pointer;
+}
+
+.model-btn:hover {
+  background: var(--bg-3);
+}
+
+.model-btn svg {
+  transition: transform var(--t);
+}
+
+.model-btn:has(+ .model-dropdown) svg {
+  transform: rotate(180deg);
+}
+
+.model-dropdown {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 4px;
+  min-width: 200px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.model-dropdown-title {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+}
+
+.model-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: var(--mono);
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: all var(--t);
+}
+
+.model-option:hover {
+  background: var(--bg-2);
+}
+
+.model-option.active {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.model-option svg {
+  color: var(--accent);
+}
 
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
 </style>

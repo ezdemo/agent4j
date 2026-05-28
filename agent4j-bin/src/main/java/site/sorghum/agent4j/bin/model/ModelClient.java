@@ -37,6 +37,12 @@ public interface ModelClient {
     /** 获取推理力度。 */
     String getReasoningEffort();
 
+    /** 设置模型名称（运行时切换）。 */
+    void setModel(String model);
+
+    /** 获取当前模型名称。 */
+    String getModel();
+
     /** 是否为推理模型（DeepSeek V4 / Reasoner 系列）。 */
     boolean isThinkingMode();
 

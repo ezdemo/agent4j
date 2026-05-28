@@ -158,28 +158,7 @@
             <button class="btn-icon-sm" @click="showConfig = false">×</button>
           </div>
           <div class="modal-body">
-            <!-- 工作目录切换 -->
-            <div class="config-section">
-              <div class="config-section-title">工作目录</div>
-              <div class="workspace-control">
-                <div class="workspace-current">
-                  <span class="workspace-label">当前目录：</span>
-                  <span class="workspace-path">{{ workspace || '未设置' }}</span>
-                </div>
-                <div class="workspace-input">
-                  <input 
-                    v-model="newWorkspace" 
-                    placeholder="输入新的工作目录路径"
-                    @keyup.enter="switchWorkspace"
-                  />
-                  <button class="btn btn-sm" @click="switchWorkspace" :disabled="!newWorkspace.trim()">
-                    切换
-                  </button>
-                </div>
-              </div>
-            </div>
-            
-            <!-- 其他配置 -->
+            <!-- 系统配置 -->
             <div class="config-section">
               <div class="config-section-title">系统配置</div>
               <div v-for="(v, k) in config" :key="k" class="config-row">
@@ -215,7 +194,6 @@ const showConfig = ref(false)
 const loadingSessions = ref(false)
 const chatRef = ref(null)
 const workspace = ref('')
-const newWorkspace = ref('')
 
 // 工作区相关
 const showWorkspacePicker = ref(false)
@@ -373,24 +351,6 @@ const clearChat = () => {
   currentSession.value = ''
 }
 
-const switchWorkspace = async () => {
-  const path = newWorkspace.value.trim()
-  if (!path) return
-  
-  try {
-    const r = await configAPI.switchWorkspace(path)
-    if (r.success) {
-      workspace.value = r.data.workspace
-      newWorkspace.value = ''
-      alert('工作目录已切换: ' + r.data.workspace)
-    } else {
-      alert('切换失败: ' + (r.message || '未知错误'))
-    }
-  } catch (e) {
-    alert('切换失败: ' + (e.message || '网络错误'))
-  }
-}
-
 onMounted(async () => {
   document.documentElement.setAttribute('data-theme', theme.value)
   try {
@@ -427,6 +387,7 @@ onMounted(async () => {
   border-radius: 10px;
   border: 1px solid var(--border-2);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  background: var(--bg);
 }
 
 [data-theme="dark"] .app {
@@ -758,69 +719,6 @@ onMounted(async () => {
   margin-bottom: 8px;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--border);
-}
-
-.workspace-control {
-  background: var(--bg-2);
-  border-radius: var(--r);
-  padding: 12px;
-}
-
-.workspace-current {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 8px;
-  font-size: 13px;
-}
-
-.workspace-label {
-  font-weight: 500;
-  color: var(--fg-2);
-}
-
-.workspace-path {
-  font-family: var(--mono);
-  color: var(--fg-3);
-  background: var(--bg-3);
-  padding: 2px 6px;
-  border-radius: var(--r-sm);
-  word-break: break-all;
-}
-
-.workspace-input {
-  display: flex;
-  gap: 8px;
-}
-
-.workspace-input input {
-  flex: 1;
-  padding: 6px 10px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  font-size: 13px;
-  color: var(--fg);
-}
-
-.workspace-input input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-
-.workspace-input input::placeholder {
-  color: var(--fg-4);
-}
-
-.workspace-input .btn {
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.workspace-input .btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
 }
 
 .tool-row {

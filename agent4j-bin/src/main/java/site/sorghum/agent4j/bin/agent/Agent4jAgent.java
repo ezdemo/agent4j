@@ -254,6 +254,23 @@ public class Agent4jAgent {
         return sessionService.getUsage();
     }
 
+    /** 获取最近一次 API 返回的 prompt_tokens */
+    public int getLastPromptTokens() {
+        return loop != null ? loop.getLastPromptTokens() : 0;
+    }
+
+    /** 获取模型最大上下文窗口 token 数 */
+    public int getMaxContextTokens() {
+        return loop != null ? loop.getMaxContextTokens() : 128000;
+    }
+
+    /** 更新当前模型 */
+    public void updateModel(String model) {
+        if (loop != null) {
+            loop.getclient().setModel(model);
+        }
+    }
+
     /** /retry 撤回最后一条消息并重试 */
     public String retryLast() throws IOException {
         String msg = ctx.retryLastUser();

@@ -29,7 +29,7 @@ public class HttpModelClient implements ModelClient {
 
     private final String apiUrl;
     private final String apiKey;
-    private final String model;
+    private volatile String model;
 
     /** 流式中断标志（ReasonBreaker 触发时设置） */
     private volatile boolean abortRequested = false;
@@ -67,6 +67,13 @@ public class HttpModelClient implements ModelClient {
 
     @Override
     public String getReasoningEffort() { return reasoningEffort; }
+
+    /** 设置模型名称（运行时切换）。 */
+    @Override
+    public void setModel(String model) { this.model = model; }
+
+    @Override
+    public String getModel() { return model; }
 
     /** DeepSeek V4 系列推理模型 — reasoning_content 必须回传 */
     @Override

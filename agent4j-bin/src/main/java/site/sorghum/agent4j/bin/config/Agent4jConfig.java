@@ -200,6 +200,73 @@ public class Agent4jConfig {
         return result;
     }
 
+    /**
+     * 获取可用模型列表。
+     * 从 config.json 的 availableModels 数组读取。
+     */
+    public List<String> availableModels() {
+        ONode arr = root.select("$.availableModels");
+        List<String> result = new ArrayList<>();
+        if (arr != null && arr.isArray()) {
+            for (ONode item : arr.getArray()) {
+                String val = item.getString();
+                if (val != null && !val.isEmpty()) {
+                    result.add(val);
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 合并更新配置（只更新非空字段）。
+     * 更新后自动保存到 config.json。
+     */
+    public void updateAndSave(Map<String, Object> updates) throws IOException {
+        if (updates == null || updates.isEmpty()) return;
+        
+        for (Map.Entry<String, Object> entry : updates.entrySet()) {
+            String key = entry.getKey();
+            Object value = entry.getValue();
+            
+            // 跳过空值
+            if (value == null) continue;
+            if (value instanceof String && ((String) value).isEmpty()) continue;
+            
+            // 更新到 ONode
+            if (value instanceof List) {
+                ONode arr = root.getOrNew(key).asArray();
+                arr.clear();
+                for (Object item : (List<?>) value) {
+                    if (item != null) {
+                        arr.add(item.toString());
+                    }
+                }
+            } else {
+                root.set(key, value);
+            }
+        }
+        
+        // 保存到文件
+        save();
+    }
+
+    /**
+     * 保存配置到文件。
+     */
+    public void save() throws IOException {
+        Path configPath = getConfigPath();
+        String json = root.toJson();
+        Files.write(configPath, json.getBytes(StandardCharsets.UTF_8));
+    }
+
+    /**
+     * 获取配置文件路径。
+     */
+    public static Path getConfigPath() {
+        return Paths.get(System.getProperty("user.home"), ".agent4j", "config.json");
+    }
+
     @Override
     public String toString() {
         return "Agent4jConfig{baseUrl=" + baseUrl() + ", model=" + model()

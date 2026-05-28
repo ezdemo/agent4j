@@ -27,8 +27,10 @@
     "core:window:allow-set-position",
     "core:window:allow-set-fullscreen",
     "core:window:allow-set-focus",
-    "core:window:allow-print",
+    "core:webview:allow-print",
+    "core:webview:default",
+    "core:event:default",
     "shell:allow-open",
-    "core:event:default"
+    "shell:default"
   ]
 }

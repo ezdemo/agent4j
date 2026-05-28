@@ -493,7 +493,20 @@ public class AgentService {
         m.put("completionTokens", u[1]);
         m.put("cacheHit", u[2]);
         m.put("cacheMiss", u[3]);
+        m.put("lastPromptTokens", agent.getLastPromptTokens());
+        m.put("maxContextTokens", agent.getMaxContextTokens());
         return m;
+    }
+
+    // ==================== 模型 ====================
+
+    /**
+     * 更新当前模型。
+     * @param model 新的模型名称
+     */
+    public void updateModel(String model) {
+        requireAgent();
+        agent.updateModel(model);
     }
 
     // ==================== 辅助 ====================
