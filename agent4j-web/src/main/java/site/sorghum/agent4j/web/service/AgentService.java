@@ -183,10 +183,10 @@ public class AgentService {
                         tool.getDescription(),
                         ToolDefHelper.toParamDefs(tool.getParameters()),
                         args -> {
-                            // 不使用 ThreadLocal（并行工具执行时无法传递）
-                            // sessionId 由 AgentLoop 在执行前设置，通过 ToolContext 传递
+                            // 从 args 中获取 sessionId（由 ToolDispatcher 在执行前注入）
+                            String sessionId = args != null ? (String) args.remove("__sessionId__") : null;
                             return ToolDefHelper.formatResult(tool.execute(
-                                    new ToolContext(args, config.workspaceDir(), apiUrl, apiKey, sharedToolRegistry, blockedPaths)));
+                                    new ToolContext(args, config.workspaceDir(), apiUrl, apiKey, sharedToolRegistry, blockedPaths, sessionId)));
                         },
                         tool.isReadOnly(),
                         tool.isStormExempt(),

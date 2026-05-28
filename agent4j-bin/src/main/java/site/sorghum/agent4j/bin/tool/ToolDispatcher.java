@@ -37,8 +37,21 @@ public class ToolDispatcher {
     /** Storm 断路器（每回合重置） */
     private final StormBreaker stormBreaker = new StormBreaker();
 
+    /** 当前会话ID（注入到工具 args 中） */
+    private volatile String sessionId;
+
     public ToolDispatcher(ToolRegistry registry) {
         this.registry = registry;
+    }
+
+    /** 设置当前会话ID */
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
+    }
+
+    /** 获取当前会话ID */
+    public String getSessionId() {
+        return sessionId;
     }
 
     // ---- Plan Mode ----
@@ -111,6 +124,11 @@ public class ToolDispatcher {
             args = ONodeUtil.toMap(node);
         } catch (Exception e) {
             return error(name + ": invalid arguments JSON — " + e.getMessage());
+        }
+
+        // 注入 sessionId 到 args 中（供 ToolContext 使用）
+        if (sessionId != null) {
+            args.put("__sessionId__", sessionId);
         }
 
         try {

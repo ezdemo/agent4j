@@ -830,6 +830,9 @@ public class AgentLoop {
      */
     @SuppressWarnings("unchecked")
     private ToolExecutionResult executeToolCalls(ONode toolCalls) {
+        // 将 sessionId 设置到 dispatcher（供工具执行时使用）
+        dispatcher.setSessionId(this.sessionId);
+        
         ONode[] tcArray = toolCalls.getArray().toArray(new ONode[0]);
         int tcCount = tcArray.length;
 

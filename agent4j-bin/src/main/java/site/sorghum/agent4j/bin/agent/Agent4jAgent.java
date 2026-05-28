@@ -85,8 +85,8 @@ public class Agent4jAgent {
                     tool.getDescription(),
                     ToolDefHelper.toParamDefs(tool.getParameters()),
                     args -> {
-                        // 从 AgentLoop 获取当前会话ID（支持并行工具执行）
-                        String sessionId = loop != null ? loop.getSessionId() : null;
+                        // 从 args 中获取 sessionId（由 ToolDispatcher 在执行前注入）
+                        String sessionId = args != null ? (String) args.remove("__sessionId__") : null;
                         return ToolDefHelper.formatResult(tool.execute(
                                 new ToolContext(args, getWorkspace(), apiUrl, apiKey, registry, blockedPaths, sessionId)));
                     },
