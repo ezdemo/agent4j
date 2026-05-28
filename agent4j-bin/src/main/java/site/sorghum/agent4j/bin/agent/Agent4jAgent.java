@@ -239,10 +239,12 @@ public class Agent4jAgent {
     public boolean switchSession(String name) {
         boolean ok = getSessionStore().switchTo(name);
         if (ok) {
-            // 加载会话历史消息到上下文（不做 heal，保留思考/工具等完整数据）
+            // 加载会话历史消息到上下文，将 JSONL 中的 OpenAI 格式 tool_calls
+            // 转回内存格式 {id, name, arguments}，与新创建的消息保持一致
             try {
                 List<Map<String, Object>> loaded = getSessionStore().load();
                 for (Map<String, Object> m : loaded) {
+                    normalizeToolCalls(m);
                     sessionService.injectHistory(m);
                 }
             } catch (IOException e) {
@@ -258,6 +260,32 @@ public class Agent4jAgent {
             }
         }
         return ok;
+    }
+
+    /**
+     * 将 JSONL 中的 OpenAI 格式 tool_calls 转回内存格式 {id, name, arguments}。
+     * 加载历史时调用，保证注入上下文的消息与新创建的格式一致。
+     */
+    @SuppressWarnings("unchecked")
+    private static void normalizeToolCalls(Map<String, Object> msg) {
+        Object tcs = msg.get("tool_calls");
+        if (!(tcs instanceof List)) return;
+        List<Map<String, Object>> list = (List<Map<String, Object>>) tcs;
+        for (Map<String, Object> tc : list) {
+            // 已经是内存格式 {id, name, arguments} → 跳过
+            if (tc.containsKey("name") && !tc.containsKey("type")) continue;
+            // OpenAI 格式 {id, type, function: {name, arguments}} → 转换
+            Object func = tc.get("function");
+            if (func instanceof Map) {
+                Map<String, Object> fm = (Map<String, Object>) func;
+                Object fnName = fm.get("name");
+                if (fnName != null) tc.put("name", fnName.toString());
+                Object fnArgs = fm.get("arguments");
+                if (fnArgs != null) tc.put("arguments", fnArgs.toString());
+            }
+            tc.remove("type");
+            tc.remove("function");
+        }
     }
 
     /** 累计 token 用量 */
