@@ -3,10 +3,12 @@ package site.sorghum.agent4j.web.controller;
 import org.noear.solon.annotation.*;
 import org.noear.solon.core.handle.Context;
 
+import site.sorghum.agent4j.tool.interact.InteractionService;
 import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.service.AgentService;
 
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -20,6 +22,9 @@ public class SessionController {
 
     @Inject
     private AgentService agentService;
+
+    @Inject
+    private InteractionService interactionService;
 
     /** 列出所有会话 —— GET /api/sessions?workspaceHash=xxx */
     @Get
@@ -122,6 +127,20 @@ public class SessionController {
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("cacheSize", agentService.getCacheSize());
         data.put("maxCacheSize", 50);
+        return ApiResponse.ok(data);
+    }
+
+    /** 获取指定会话的 TODO 列表 —— GET /api/sessions/{name}/todos?workspaceHash=xxx */
+    @Get
+    @Mapping("/{name}/todos")
+    public Object getTodos(@Path("name") String sessionName,
+                           @Param(value = "workspaceHash", required = false) String workspaceHash) {
+        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        List<Map<String, Object>> todos = interactionService.getTodos(sessionName);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("sessionName", sessionName);
+        data.put("todos", todos);
+        data.put("count", todos.size());
         return ApiResponse.ok(data);
     }
 }
