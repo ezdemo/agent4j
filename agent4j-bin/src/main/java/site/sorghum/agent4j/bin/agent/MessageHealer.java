@@ -69,10 +69,22 @@ public class MessageHealer {
                 List<Map<String, Object>> tcs = (List<Map<String, Object>>) msg.get("tool_calls");
                 if (tcs != null) {
                     // 过滤 name 为 null 的 tool_call（历史损坏 / SSE 截断残留）
+                    // OpenAI 格式: name 在 function.name 下; 兼容顶层 name
                     List<Map<String, Object>> cleaned = new ArrayList<>();
                     for (Map<String, Object> tc : tcs) {
-                        Object nm = tc.get("name");
-                        if (nm != null && (!(nm instanceof String) || !((String) nm).isEmpty())) {
+                        String tcName = null;
+                        // 优先从 function.name 取（OpenAI 格式）
+                        Object func = tc.get("function");
+                        if (func instanceof Map) {
+                            Object fnName = ((Map<?, ?>) func).get("name");
+                            if (fnName instanceof String) tcName = (String) fnName;
+                        }
+                        // 回退到顶层 name
+                        if (tcName == null) {
+                            Object topName = tc.get("name");
+                            if (topName instanceof String) tcName = (String) topName;
+                        }
+                        if (tcName != null && !tcName.isEmpty()) {
                             cleaned.add(tc);
                         }
                     }

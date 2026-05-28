@@ -43,6 +43,9 @@ public class AgentLoop {
     /** storm 自愈尝试次数上限（每回合重置），防止无限循环 */
     private static final int MAX_SELF_CORRECTION_ATTEMPTS = 5;
 
+    /** 推理断路器（每回合重置），检测思考循环 */
+    private final ReasonBreaker reasonBreaker = new ReasonBreaker();
+
     // ==================== HITL (Human-In-The-Loop) ====================
 
     /** HITL 审批状态 */
@@ -193,6 +196,7 @@ public class AgentLoop {
 
         ctx.addUser(userMessage);
         dispatcher.resetStorm();
+        reasonBreaker.reset();
         int selfCorrectionAttempts = 0;
         List<Map<String, Object>> tools = ctx.tools();
         boolean isThinkingMode = client.isThinkingMode();
@@ -217,6 +221,13 @@ public class AgentLoop {
                 output.onContentComplete();
             } catch (Exception e) {
                 // SSE连接断开时忽略异常，继续执行
+            }
+
+            // 推理断路器：流式检测到循环则注入警告
+            if (sr.loopAborted) {
+                ctx.addUser("[ReasonBreaker] 检测到思考循环，已提前终止本轮推理。请停止当前思路，尝试不同的方法。");
+                selfCorrectionAttempts = 0;
+                continue;
             }
 
             // 4. 从 reasoning 中回收丢失的工具调用（Scavenger）
@@ -378,6 +389,13 @@ public class AgentLoop {
                 // SSE连接断开时忽略异常，继续执行
             }
 
+            // 推理断路器：流式检测到循环则注入警告
+            if (sr.loopAborted) {
+                ctx.addUser("[ReasonBreaker] 检测到思考循环，已提前终止本轮推理。请停止当前思路，尝试不同的方法。");
+                selfCorrectionAttempts = 0;
+                continue;
+            }
+
             ONode nextToolCalls = scavengeToolCalls(sr.toolCalls, sr.reasoningContent, sr.content);
             boolean hasMoreTools = nextToolCalls != null && nextToolCalls.isArray()
                     && !nextToolCalls.getArray().isEmpty();
@@ -423,12 +441,19 @@ public class AgentLoop {
         final String reasoningContent;
         final ONode toolCalls;
         final boolean error;
+        /** true = 流被 ReasonBreaker 提前掐断 */
+        final boolean loopAborted;
 
         StreamResult(String content, String reasoningContent, ONode toolCalls, boolean error) {
+            this(content, reasoningContent, toolCalls, error, false);
+        }
+
+        StreamResult(String content, String reasoningContent, ONode toolCalls, boolean error, boolean loopAborted) {
             this.content = content;
             this.reasoningContent = reasoningContent;
             this.toolCalls = toolCalls;
             this.error = error;
+            this.loopAborted = loopAborted;
         }
     }
 
@@ -524,16 +549,38 @@ public class AgentLoop {
         final ONode[] streamedTcs = {null};
         final CountDownLatch streamLatch = new CountDownLatch(1);
         final AtomicBoolean streamError = new AtomicBoolean(false);
+        final AtomicBoolean loopAborted = new AtomicBoolean(false);
+        final String[] loopSnapshot = {null};
+        final int[] lastCheckLen = {0};
 
         client.chatStream(messages, tools, new ModelClient.StreamCallback() {
             @Override
             public void onReasoningDelta(String token) {
+                if (loopAborted.get()) return;
                 reasoningBuf.append(token);
                 try {
                     output.onReasoningDelta(token);
                 } catch (Exception e) {
                     // SSE连接断开时忽略异常，继续执行
                     // output可能是SseEmitter桥接，连接断开后会抛出异常
+                }
+                // 流式增量检测：每 500 字符检查一次思考循环
+                int newLen = reasoningBuf.length();
+                if (newLen - lastCheckLen[0] >= 500) {
+                    lastCheckLen[0] = newLen;
+                    ReasonBreaker.LoopResult lr = reasonBreaker.analyze(reasoningBuf.toString());
+                    if (lr.looping) {
+                        loopSnapshot[0] = reasoningBuf.toString();
+                        loopAborted.set(true);
+                        try {
+                            output.onLog(AgentOutput.LogLevel.WARN,
+                                    "[ReasonBreaker] " + lr.toWarning());
+                        } catch (Exception ex) {
+                            // 忽略异常
+                        }
+                        client.abortStream();
+                        streamLatch.countDown();
+                    }
                 }
             }
 
@@ -588,6 +635,12 @@ public class AgentLoop {
 
         if (streamError.get()) {
             return new StreamResult(null, null, null, true);
+        }
+
+        if (loopAborted.get()) {
+            String reasoning = loopSnapshot[0] != null ? loopSnapshot[0]
+                    : (reasoningBuf.length() > 0 ? reasoningBuf.toString() : null);
+            return new StreamResult(null, reasoning, streamedTcs[0], false, true);
         }
 
         String content = contentBuf.length() > 0 ? contentBuf.toString() : null;

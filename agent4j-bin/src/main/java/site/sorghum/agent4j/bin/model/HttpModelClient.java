@@ -31,6 +31,11 @@ public class HttpModelClient implements ModelClient {
     private final String apiKey;
     private final String model;
 
+    /** 流式中断标志（ReasonBreaker 触发时设置） */
+    private volatile boolean abortRequested = false;
+    /** 当前活跃的 HTTP 连接（用于中断） */
+    private volatile HttpURLConnection activeConnection;
+
     /**
      * 重试间隔（秒），共 10 次：1,1,1,2,2,2,3,3,6,10 — 总计约 31 秒。
      * 指数退避策略，应对 API 临时故障。
@@ -71,6 +76,20 @@ public class HttpModelClient implements ModelClient {
                 || model.equals("deepseek-v4-flash")
                 || model.equals("deepseek-v4-pro")
         );
+    }
+
+    /** 中断当前流式请求（ReasonBreaker 触发时调用） */
+    @Override
+    public void abortStream() {
+        abortRequested = true;
+        HttpURLConnection conn = activeConnection;
+        if (conn != null) {
+            try {
+                conn.disconnect();
+            } catch (Exception ignored) {
+                // 忽略断开异常
+            }
+        }
     }
 
     /**
@@ -237,7 +256,12 @@ public class HttpModelClient implements ModelClient {
                     StringBuilder reasoningBuf = new StringBuilder();
                     ONode toolCallsAccum = null;
 
+                    activeConnection = conn;
                     while ((line = reader.readLine()) != null) {
+                        if (abortRequested) {
+                            logger.debug("流式请求被 ReasonBreaker 中断");
+                            break;
+                        }
                         if (!line.startsWith("data: ")) continue;
                         String data = line.substring(6).trim();
                         if ("[DONE]".equals(data)) {
@@ -380,10 +404,20 @@ public class HttpModelClient implements ModelClient {
                         // SSE连接断开时忽略异常，继续执行
                         logger.debug("onDone回调异常（可能SSE连接已断开）: {}", e.getMessage());
                     }
+                } finally {
+                    activeConnection = null;
+                    abortRequested = false;
                 }
                 return; // success
 
             } catch (IOException e) {
+                if (abortRequested) {
+                    // 主动中断，不重试，不报错
+                    logger.debug("流式请求已被中断，跳过重试");
+                    activeConnection = null;
+                    abortRequested = false;
+                    return;
+                }
                 logger.error("流式API调用IO异常: {}", e.getMessage(), e);
                 if (attempt < RETRY_DELAYS.length) {
                     int delay = RETRY_DELAYS[attempt];

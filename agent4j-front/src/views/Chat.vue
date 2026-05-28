@@ -119,6 +119,7 @@
 <script setup>
 import { ref, computed, nextTick, onMounted, onBeforeUnmount } from 'vue'
 import { chatAPI, agentAPI } from '../services/api'
+import { marked } from 'marked'
 
 const props = defineProps({ hideHeader: { type: Boolean, default: false } })
 
@@ -139,15 +140,18 @@ const hasAssistant = computed(() => messages.value.some(m => m.role === 'assista
 
 const now = () => new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' })
 
+// 配置marked选项
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+  headerIds: false,
+  mangle: false
+})
+
 const fmt = c => {
   if (!c) return ''
-  return c
-    .replace(/```(\w+)?\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
-    .replace(/`([^`]+)`/g, '<code>$1</code>')
-    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
-    .replace(/\*(.*?)\*/g, '<em>$1</em>')
-    .replace(/\[([^\]]+)\]\(([^)]+)\)/g, '<a href="$2" target="_blank">$1</a>')
-    .replace(/\n/g, '<br>')
+  // 使用marked渲染Markdown
+  return marked(c)
 }
 
 const fmtArgs = a => {
@@ -483,7 +487,67 @@ defineExpose({ clearMessages, loadSession, sendCommand, exportChat })
 }
 .block-content :deep(pre code) { background: none; padding: 0; }
 .block-content :deep(strong) { font-weight: 600; }
-.block-content :deep(a) { color: var(--accent); }
+.block-content :deep(a) { color: var(--accent); text-decoration: none; }
+.block-content :deep(a:hover) { text-decoration: underline; }
+
+/* Markdown标题样式 */
+.block-content :deep(h1) { font-size: 1.5em; margin: 0.5em 0; font-weight: 600; }
+.block-content :deep(h2) { font-size: 1.3em; margin: 0.5em 0; font-weight: 600; }
+.block-content :deep(h3) { font-size: 1.1em; margin: 0.5em 0; font-weight: 600; }
+.block-content :deep(h4) { font-size: 1em; margin: 0.5em 0; font-weight: 600; }
+.block-content :deep(h5) { font-size: 0.9em; margin: 0.5em 0; font-weight: 600; }
+.block-content :deep(h6) { font-size: 0.8em; margin: 0.5em 0; font-weight: 600; }
+
+/* 列表样式 */
+.block-content :deep(ul) { margin: 0.5em 0; padding-left: 1.5em; }
+.block-content :deep(ol) { margin: 0.5em 0; padding-left: 1.5em; }
+.block-content :deep(li) { margin: 0.25em 0; }
+.block-content :deep(li > ul) { margin: 0.25em 0; }
+.block-content :deep(li > ol) { margin: 0.25em 0; }
+
+/* 引用块样式 */
+.block-content :deep(blockquote) {
+  margin: 0.5em 0;
+  padding: 0.5em 1em;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-3);
+  border-radius: 0 var(--r) var(--r) 0;
+}
+
+/* 表格样式 */
+.block-content :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+}
+.block-content :deep(th),
+.block-content :deep(td) {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.block-content :deep(th) {
+  background: var(--bg-3);
+  font-weight: 600;
+}
+
+/* 水平线 */
+.block-content :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1em 0;
+}
+
+/* 段落 */
+.block-content :deep(p) { margin: 0.5em 0; }
+.block-content :deep(p:first-child) { margin-top: 0; }
+.block-content :deep(p:last-child) { margin-bottom: 0; }
+
+/* 斜体 */
+.block-content :deep(em) { font-style: italic; }
+
+/* 删除线 */
+.block-content :deep(del) { text-decoration: line-through; color: var(--fg-3); }
 
 /* 工具块 */
 .block-tool {

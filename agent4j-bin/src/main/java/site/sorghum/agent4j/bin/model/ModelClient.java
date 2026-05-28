@@ -41,6 +41,12 @@ public interface ModelClient {
     boolean isThinkingMode();
 
     /**
+     * 中断当前正在进行的流式调用（如果存在）。
+     * 默认空实现——不支持中断的客户端可忽略。
+     */
+    default void abortStream() {}
+
+    /**
      * 模型最大上下文窗口 token 数。
      * 用于折叠阈值计算：当 prompt_tokens 达到此值的 80% 时触发自动折叠。
      * 默认 128K，子类可按模型名返回更准确的值。
