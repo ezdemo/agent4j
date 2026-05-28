@@ -49,18 +49,18 @@ public class ToolController {
     /** 将 ToolDef 转为可安全序列化的 Map（剔除 lambda fn 字段避免 Snack4 StackOverflow） */
     private static Map<String, Object> toToolMap(ToolDef def) {
         Map<String, Object> m = new LinkedHashMap<>();
-        m.put("name", def.name);
-        m.put("description", def.description);
-        m.put("readOnly", def.readOnly);
-        m.put("stormExempt", def.stormExempt);
+        m.put("name", def.name());
+        m.put("description", def.description());
+        m.put("readOnly", def.readOnly());
+        m.put("stormExempt", def.stormExempt());
         // 参数列表
         List<Map<String, Object>> params = new ArrayList<>();
-        for (ToolDef.ParamDef p : def.params) {
+        for (ToolDef.ParamDef p : def.params()) {
             Map<String, Object> pm = new LinkedHashMap<>();
-            pm.put("name", p.name);
-            pm.put("type", p.type);
-            pm.put("description", p.description);
-            pm.put("required", p.required);
+            pm.put("name", p.name());
+            pm.put("type", p.type());
+            pm.put("description", p.description());
+            pm.put("required", p.required());
             params.add(pm);
         }
         m.put("params", params);

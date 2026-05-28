@@ -84,19 +84,10 @@ public class ConsoleAgentOutput implements AgentOutput {
     public void onLog(LogLevel level, String message) {
         if (message == null) return;
         switch (level) {
-            case ERROR:
-                System.err.println("[error] " + message);
-                break;
-            case WARN:
-                System.err.println("[warn] " + message);
-                break;
-            case DEBUG:
-                System.err.println("[DEBUG] " + message);
-                break;
-            case INFO:
-            default:
-                System.err.println(message);
-                break;
+            case ERROR: System.err.println("[error] " + message); break;
+            case WARN: System.err.println("[warn] " + message); break;
+            case DEBUG: System.err.println("[DEBUG] " + message); break;
+            case INFO: default: System.err.println(message); break;
         }
     }
 

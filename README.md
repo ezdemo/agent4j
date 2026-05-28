@@ -1,12 +1,12 @@
 # Agent4j — Java AI Agent 框架
 
 <p align="center">
-  <strong>Java 8 实现的 AI 编码代理框架</strong><br>
+  <strong>Java 17 实现的 AI 编码代理框架</strong><br>
   推理循环 · 工具调用 · 会话管理 · 流式输出 · 子代理
 </p>
 
 <p align="center">
-  <img src="https://img.shields.io/badge/Java-8%2B-orange?logo=java" alt="Java 8+">
+  <img src="https://img.shields.io/badge/Java-17-orange?logo=java" alt="Java 17+">
   <img src="https://img.shields.io/badge/Maven-3.x-blue?logo=apache-maven" alt="Maven">
   <img src="https://img.shields.io/badge/Solon-3.9.6-green" alt="Solon 3.9.6">
   <img src="https://img.shields.io/badge/license-MIT-yellow" alt="License">
@@ -42,7 +42,7 @@ Agent4j 是一个纯 Java 实现的 AI 编码代理框架，将 LLM（大语言�
 
 ### 前置条件
 
-- JDK 8（推荐 Corretto 1.8）
+- JDK 17+
 - Maven 3.x
 - 一个兼容 OpenAI API 的 LLM 端点（如 DeepSeek / Ollama / OpenAI）
 
@@ -76,13 +76,13 @@ mvn compile -pl agent4j-bin
 
 ```bash
 # Windows
-set JAVA_HOME=C:\path\to\corretto-1.8.0_492
+set JAVA_HOME=C:\path\to\jdk-17
 mvn exec:java -pl agent4j-bin -Dexec.mainClass="site.sorghum.agent4j.bin.Agent4jApp"
 ```
 
 ```bash
 # Linux / macOS
-JAVA_HOME=/path/to/jdk8 mvn compile -pl agent4j-bin
+JAVA_HOME=/path/to/jdk17 mvn compile -pl agent4j-bin
 java -cp "agent4j-bin/target/classes:agent4j-tool/target/classes" \
   site.sorghum.agent4j.bin.Agent4jApp
 ```
@@ -245,7 +245,7 @@ AgentLoop.run(message)
 
 | 组件 | 版本 | 用途 |
 |------|------|------|
-| **Java** | 8 (Corretto 1.8) | 开发语言 |
+| **Java** | 17+ | 开发语言 |
 | **Maven** | 3.x | 构建工具 |
 | **Solon** | 3.9.6 | IoC 容器 / AOP / Web |
 | **Snack4** | 4.0.49 | JSON 解析与序列化 |

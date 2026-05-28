@@ -17,25 +17,25 @@ class ToolParameterTest {
     @DisplayName("构造必填参数")
     void shouldCreateRequiredParam() {
         ToolParameter p = new ToolParameter("path", "string", true, "文件路径");
-        assertEquals("path", p.getName());
-        assertEquals("string", p.getType());
-        assertTrue(p.isRequired());
-        assertEquals("文件路径", p.getDescription());
-        assertNull(p.getDefaultValue());
+        assertEquals("path", p.name());
+        assertEquals("string", p.type());
+        assertTrue(p.required());
+        assertEquals("文件路径", p.description());
+        assertNull(p.defaultValue());
     }
 
     @Test
     @DisplayName("构造可选参数")
     void shouldCreateOptionalParam() {
         ToolParameter p = new ToolParameter("timeout", "int", false, "超时秒数");
-        assertFalse(p.isRequired());
+        assertFalse(p.required());
     }
 
     @Test
     @DisplayName("构造带默认值的参数")
     void shouldCreateParamWithDefault() {
         ToolParameter p = new ToolParameter("count", "int", false, "数量", "10");
-        assertEquals("10", p.getDefaultValue());
+        assertEquals("10", p.defaultValue());
     }
 
     @Test
@@ -53,10 +53,10 @@ class ToolParameterTest {
     @DisplayName("全参构造器应正确设置所有字段")
     void fullConstructor_shouldSetAllFields() {
         ToolParameter p = new ToolParameter("name", "string", true, "名称", "defaultName");
-        assertEquals("name", p.getName());
-        assertEquals("string", p.getType());
-        assertTrue(p.isRequired());
-        assertEquals("名称", p.getDescription());
-        assertEquals("defaultName", p.getDefaultValue());
+        assertEquals("name", p.name());
+        assertEquals("string", p.type());
+        assertTrue(p.required());
+        assertEquals("名称", p.description());
+        assertEquals("defaultName", p.defaultValue());
     }
 }

@@ -173,18 +173,23 @@ public class AgentLoop {
      * Plan mode 时附加只读约束说明。
      */
     private String buildToolInstructions() {
-        StringBuilder sb = new StringBuilder();
-        sb.append("编辑文件时使用 edit_file（SEARCH/REPLACE，search 必须唯一）。\n");
-        sb.append("多文件批量编辑使用 multi_edit。\n");
-        sb.append("不确定文件位置时用 glob/grep 搜索，需要构建/测试时用 run_command。\n");
+        String base = """
+                编辑文件时使用 edit_file（SEARCH/REPLACE，search 必须唯一）。
+                多文件批量编辑使用 multi_edit。
+                不确定文件位置时用 glob/grep 搜索，需要构建/测试时用 run_command。
+                """;
         if (dispatcher.isPlanMode()) {
-            sb.append("\n# Plan mode\n\n");
-            sb.append("写入工具（edit_file / multi_edit / write_file / run_command 等）不可用。\n");
-            sb.append("只读工具（read_file / glob / grep / tree / get_file_info / web_search）正常使用。\n");
-            sb.append("先探索代码库，然后用 submit_plan 提交计划。\n");
-            sb.append("用户审批或输入 /execute 退出计划模式后，所有工具恢复正常。\n");
+            return base + """
+
+                    # Plan mode
+
+                    写入工具（edit_file / multi_edit / write_file / run_command 等）不可用。
+                    只读工具（read_file / glob / grep / tree / get_file_info / web_search）正常使用。
+                    先探索代码库，然后用 submit_plan 提交计划。
+                    用户审批或输入 /execute 退出计划模式后，所有工具恢复正常。
+                    """;
         }
-        return sb.toString();
+        return base;
     }
 
     /** 设置输出接口（用于自定义输出处理，如控制台 / WebSocket SSE / 日志） */
@@ -538,52 +543,20 @@ public class AgentLoop {
     // ==================== 内部数据类 ====================
 
     /** 流式调用结果封装 */
-    private static class StreamResult {
-        final String content;
-        final String reasoningContent;
-        final ONode toolCalls;
-        final boolean error;
-        /** true = 流被 ReasonBreaker 提前掐断 */
-        final boolean loopAborted;
-
+    private record StreamResult(String content, String reasoningContent, ONode toolCalls,
+                                boolean error, boolean loopAborted) {
         StreamResult(String content, String reasoningContent, ONode toolCalls, boolean error) {
             this(content, reasoningContent, toolCalls, error, false);
-        }
-
-        StreamResult(String content, String reasoningContent, ONode toolCalls, boolean error, boolean loopAborted) {
-            this.content = content;
-            this.reasoningContent = reasoningContent;
-            this.toolCalls = toolCalls;
-            this.error = error;
-            this.loopAborted = loopAborted;
         }
     }
 
     /** 消息准备结果（含是否发生了折叠） */
-    private static class PreparedMessages {
-        final List<Map<String, Object>> messages;
-        final boolean foldedThisStep;
-
-        PreparedMessages(List<Map<String, Object>> messages, boolean foldedThisStep) {
-            this.messages = messages;
-            this.foldedThisStep = foldedThisStep;
-        }
-    }
+    private record PreparedMessages(List<Map<String, Object>> messages, boolean foldedThisStep) {}
 
     /** 工具并行执行结果 */
-    private static class ToolExecutionResult {
-        final List<Map<String, Object>> tcList;
-        final List<Map<String, Object>> toolResults;
-        final boolean anySuppressed;
-
-        ToolExecutionResult(List<Map<String, Object>> tcList,
-                            List<Map<String, Object>> toolResults,
-                            boolean anySuppressed) {
-            this.tcList = tcList;
-            this.toolResults = toolResults;
-            this.anySuppressed = anySuppressed;
-        }
-    }
+    private record ToolExecutionResult(List<Map<String, Object>> tcList,
+                                       List<Map<String, Object>> toolResults,
+                                       boolean anySuppressed) {}
 
     // ==================== 拆分后的子方法 ====================
 

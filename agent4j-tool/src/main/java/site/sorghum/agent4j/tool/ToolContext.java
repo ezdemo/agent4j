@@ -80,9 +80,9 @@ public class ToolContext {
     /** 获取整数参数。 */
     public int getInt(String key, int defaultValue) {
         Object v = params.get(key);
-        if (v instanceof Number) return ((Number) v).intValue();
-        if (v instanceof String) {
-            try { return Integer.parseInt((String) v); } catch (NumberFormatException ignored) {}
+        if (v instanceof Number number) return number.intValue();
+        if (v instanceof String str) {
+            try { return Integer.parseInt(str); } catch (NumberFormatException ignored) {}
         }
         return defaultValue;
     }
@@ -90,8 +90,8 @@ public class ToolContext {
     /** 获取布尔参数。 */
     public boolean getBool(String key, boolean defaultValue) {
         Object v = params.get(key);
-        if (v instanceof Boolean) return (Boolean) v;
-        if (v instanceof String) return Boolean.parseBoolean((String) v);
+        if (v instanceof Boolean bool) return bool;
+        if (v instanceof String str) return Boolean.parseBoolean(str);
         return defaultValue;
     }
 

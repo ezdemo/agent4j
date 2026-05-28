@@ -17,6 +17,7 @@ import site.sorghum.agent4j.bin.model.HttpModelClient;
 import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.session.SessionStore;
 import site.sorghum.agent4j.bin.tool.ToolDef;
+import site.sorghum.agent4j.bin.tool.ToolDefHelper;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
 import site.sorghum.agent4j.tool.AgentTool;
@@ -175,8 +176,8 @@ public class AgentService {
                 sharedToolRegistry.register(new ToolDef(
                         tool.getName(),
                         tool.getDescription(),
-                        toParamDefs(tool.getParameters()),
-                        args -> formatResult(tool.execute(
+                        ToolDefHelper.toParamDefs(tool.getParameters()),
+                        args -> ToolDefHelper.formatResult(tool.execute(
                                 new ToolContext(args, config.workspaceDir(), apiUrl, apiKey, sharedToolRegistry, blockedPaths))),
                         tool.isReadOnly(),
                         tool.isStormExempt(),
@@ -820,58 +821,6 @@ public class AgentService {
     }
 
     // ==================== 工具方法 ====================
-
-    /**
-     * 将 AgentTool 的参数类型映射为 JSON Schema 类型。
-     */
-    private static String toJsonType(String type) {
-        if (type == null) return "string";
-        switch (type.toLowerCase()) {
-            case "int":
-            case "integer":
-            case "long":
-                return "integer";
-            case "bool":
-            case "boolean":
-                return "boolean";
-            case "number":
-            case "float":
-            case "double":
-                return "number";
-            case "array":
-            case "list":
-                return "array";
-            case "object":
-            case "map":
-                return "object";
-            default:
-                return "string";
-        }
-    }
-
-    /**
-     * 将 AgentTool 的参数定义列表转换为 ToolDef.ParamDef 列表。
-     */
-    private static List<ToolDef.ParamDef> toParamDefs(List<ToolParameter> params) {
-        List<ToolDef.ParamDef> out = new ArrayList<>();
-        for (ToolParameter p : params) {
-            if (p.isRequired()) {
-                out.add(ToolDef.ParamDef.required(p.getName(), toJsonType(p.getType()), p.getDescription()));
-            } else {
-                out.add(ToolDef.ParamDef.of(p.getName(), toJsonType(p.getType()), p.getDescription()));
-            }
-        }
-        return out;
-    }
-
-    /**
-     * 将 ToolResult 格式化为工具调用的返回字符串。
-     * 失败结果添加 [FAIL:errorCode] 前缀。
-     */
-    private static String formatResult(ToolResult r) {
-        if (r.isSuccess()) return r.getText();
-        return "[FAIL:" + r.getErrorCode() + "] " + r.getText();
-    }
 
     /**
      * 加载用户级默认系统提示词。

@@ -1,7 +1,5 @@
 package site.sorghum.agent4j.tool;
 
-import lombok.Getter;
-
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
@@ -13,35 +11,23 @@ import java.util.Map;
  * 后续操作建议（如"请重新读取后重试"）。
  * </p>
  *
+ * @param success     执行是否成功
+ * @param text        人类可读的结果文本
+ * @param data        结构化数据（可选）
+ * @param errorCode   错误码（失败时非空）
+ * @param suggestion  给模型的后续操作建议
+ * @param shouldRetry 是否需要模型重新读取文件后重试
+ * @param retryView   重试时需要的新鲜视图（如 hashline 重新读取结果）
+ *
  * @author Sorghum
  */
-@Getter
-public class ToolResult {
+public record ToolResult(boolean success, String text, Object data,
+                         String errorCode, String suggestion,
+                         boolean shouldRetry, String retryView) {
 
-    /** 执行是否成功 */
-    private final boolean success;
-
-    /** 人类可读的结果文本 */
-    private final String text;
-
-    /** 结构化数据（可选） */
-    private final Object data;
-
-    /** 错误码（失败时非空） */
-    private final String errorCode;
-
-    /** 给模型的后续操作建议 */
-    private final String suggestion;
-
-    /** 是否需要模型重新读取文件后重试 */
-    private final boolean shouldRetry;
-
-    /** 重试时需要的新鲜视图（如 hashline 重新读取结果） */
-    private final String retryView;
-
-    private ToolResult(boolean success, String text, Object data,
-                       String errorCode, String suggestion,
-                       boolean shouldRetry, String retryView) {
+    public ToolResult(boolean success, String text, Object data,
+                      String errorCode, String suggestion,
+                      boolean shouldRetry, String retryView) {
         this.success = success;
         this.text = text;
         this.data = data;

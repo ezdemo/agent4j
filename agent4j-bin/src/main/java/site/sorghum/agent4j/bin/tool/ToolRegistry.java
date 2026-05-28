@@ -34,11 +34,11 @@ public class ToolRegistry {
     }
 
     public ToolRegistry register(ToolDef def) {
-        if (disabledTools.contains(def.name)) {
-            System.err.println("[registry] 工具已禁用，跳过注册: " + def.name);
+        if (disabledTools.contains(def.name())) {
+            System.err.println("[registry] 工具已禁用，跳过注册: " + def.name());
             return this;
         }
-        tools.put(def.name, def);
+        tools.put(def.name(), def);
         return this;
     }
 
@@ -62,13 +62,13 @@ public class ToolRegistry {
     public List<Map<String, Object>> toOpenAiTools() {
         List<Map<String, Object>> list = new ArrayList<>();
         List<ToolDef> sorted = new ArrayList<>(tools.values());
-        sorted.sort(Comparator.comparing(t -> t.name));
+        sorted.sort(Comparator.comparing(ToolDef::name));
         for (ToolDef t : sorted) {
             Map<String, Object> entry = new LinkedHashMap<>();
             entry.put("type", "function");
             Map<String, Object> func = new LinkedHashMap<>();
-            func.put("name", t.name);
-            func.put("description", t.description);
+            func.put("name", t.name());
+            func.put("description", t.description());
             Map<String, Object> schema = flattener.maybeFlattenSchema(t.toParametersSchema());
             func.put("parameters", schema);
             entry.put("function", func);

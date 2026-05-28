@@ -89,7 +89,7 @@ public class ToolDispatcher {
         }
 
         // Plan Mode 门控
-        if (planMode && !tool.readOnly) {
+        if (planMode && !tool.readOnly()) {
             return "{\"error\":\"" + name
                     + ": 计划模式下不可用——当前为只读探索阶段。"
                     + "请使用 read_file / glob / grep / tree / get_file_info 调查代码。"
@@ -98,8 +98,8 @@ public class ToolDispatcher {
         }
 
         // Storm Breaker 检查
-        if (!tool.stormExempt) {
-            StormBreaker.SuppressResult sr = stormBreaker.inspect(name, argumentsJson, tool.readOnly);
+        if (!tool.stormExempt()) {
+            StormBreaker.SuppressResult sr = stormBreaker.inspect(name, argumentsJson, tool.readOnly());
             if (sr.suppressed) {
                 return "{\"error\":\"" + sr.reason + "\",\"rejectedReason\":\"storm\"}";
             }
@@ -114,7 +114,7 @@ public class ToolDispatcher {
         }
 
         try {
-            String result = tool.fn.call(args);
+            String result = tool.fn().call(args);
             result = result != null ? result : "(ok)";
 
             // Post-dispatch Hook

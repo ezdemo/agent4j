@@ -48,8 +48,8 @@ class SearchToolsTest {
 
             ToolResult result = tool.execute(new ToolContext(params, tempDir));
 
-            assertTrue(result.isSuccess());
-            assertTrue(result.getText().contains("Hashline"));
+            assertTrue(result.success());
+            assertTrue(result.text().contains("Hashline"));
         }
 
         @Test
@@ -64,8 +64,8 @@ class SearchToolsTest {
 
             ToolResult result = tool.execute(new ToolContext(params, tempDir));
 
-            assertTrue(result.isSuccess());
-            assertTrue(result.getText().contains("HELLO"));
+            assertTrue(result.success());
+            assertTrue(result.text().contains("HELLO"));
         }
 
         @Test
@@ -76,8 +76,8 @@ class SearchToolsTest {
             params.put("glob", "*.java");
 
             ToolResult result = tool.execute(new ToolContext(params));
-            assertFalse(result.isSuccess());
-            assertEquals("MISSING_PATTERN", result.getErrorCode());
+            assertFalse(result.success());
+            assertEquals("MISSING_PATTERN", result.errorCode());
         }
     }
 
@@ -96,8 +96,8 @@ class SearchToolsTest {
 
             ToolResult result = tool.execute(new ToolContext(params, tempDir));
 
-            assertTrue(result.isSuccess());
-            assertTrue(result.getText().contains(".java"));
+            assertTrue(result.success());
+            assertTrue(result.text().contains(".java"));
         }
 
         @Test
@@ -105,7 +105,7 @@ class SearchToolsTest {
         void shouldFailWithoutPattern() {
             GlobTool tool = new GlobTool();
             ToolResult result = tool.execute(new ToolContext(new HashMap<>()));
-            assertFalse(result.isSuccess());
+            assertFalse(result.success());
         }
     }
 
@@ -124,10 +124,10 @@ class SearchToolsTest {
 
             ToolResult result = tool.execute(new ToolContext(params, tempDir));
 
-            assertTrue(result.isSuccess());
-            assertTrue(result.getText().contains("pom.xml"));
-            assertTrue(result.getText().contains("src/"));
-            assertTrue(result.getText().contains("个文件"));
+            assertTrue(result.success());
+            assertTrue(result.text().contains("pom.xml"));
+            assertTrue(result.text().contains("src/"));
+            assertTrue(result.text().contains("个文件"));
         }
     }
 
@@ -152,8 +152,8 @@ class SearchToolsTest {
             globParams.put("pattern", "*.java");
 
             ToolResult result = glob.execute(new ToolContext(globParams, tempDir));
-            assertTrue(result.isSuccess());
-            assertTrue(result.getText().contains("Test.java"));
+            assertTrue(result.success());
+            assertTrue(result.text().contains("Test.java"));
         }
     }
 

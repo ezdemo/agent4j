@@ -225,10 +225,10 @@ public class CommandChainParser {
         int stdin = 0, stdout = 0, stderr = 0;
         for (Redirect r : redirects) {
             switch (r.kind) {
-                case IN: stdin++; break;
-                case OUT: case APPEND: stdout++; break;
-                case ERR_OUT: case ERR_APPEND: case ERR_MERGE: stderr++; break;
-                case ALL: stdout++; stderr++; break;
+                case IN -> stdin++;
+                case OUT, APPEND -> stdout++;
+                case ERR_OUT, ERR_APPEND, ERR_MERGE -> stderr++;
+                case ALL -> { stdout++; stderr++; }
             }
         }
         if (stdin > 1) throw new UnsupportedSyntaxException("multiple `<` stdin redirects in one segment");

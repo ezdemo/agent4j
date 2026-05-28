@@ -112,18 +112,17 @@ public class FileTool extends AgentTool {
                 }
             }
 
-            switch (action.toLowerCase()) {
-                case "create_dir":  return doCreateDir(root, path);
-                case "create_file": return doCreateFile(root, path, ctx.getString("content", ""));
-                case "delete_file": return doDeleteFile(root, path);
-                case "delete_dir":  return doDeleteDir(root, path);
-                case "move":        return doMove(root, path, destination);
-                case "copy":        return doCopy(root, path, destination);
-                case "stat":        return doStat(root, path);
-                default:
-                    return ToolResult.fail("UNKNOWN_ACTION",
-                            "未知操作: " + action + "，支持: create_dir/create_file/delete_file/delete_dir/move/copy/stat");
-            }
+            return switch (action.toLowerCase()) {
+                case "create_dir" -> doCreateDir(root, path);
+                case "create_file" -> doCreateFile(root, path, ctx.getString("content", ""));
+                case "delete_file" -> doDeleteFile(root, path);
+                case "delete_dir" -> doDeleteDir(root, path);
+                case "move" -> doMove(root, path, destination);
+                case "copy" -> doCopy(root, path, destination);
+                case "stat" -> doStat(root, path);
+                default -> ToolResult.fail("UNKNOWN_ACTION",
+                        "未知操作: " + action + "，支持: create_dir/create_file/delete_file/delete_dir/move/copy/stat");
+            };
         } catch (IOException e) {
             return ToolResult.fail("IO_ERROR", e.getMessage());
         }

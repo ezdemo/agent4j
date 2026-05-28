@@ -20,12 +20,12 @@ class ToolResultTest {
     @DisplayName("ok() 应创建纯文本成功结果")
     void ok_shouldCreateSuccessResult() {
         ToolResult r = ToolResult.ok("操作成功");
-        assertTrue(r.isSuccess());
-        assertEquals("操作成功", r.getText());
-        assertNull(r.getData());
-        assertNull(r.getErrorCode());
-        assertNull(r.getSuggestion());
-        assertFalse(r.isShouldRetry());
+        assertTrue(r.success());
+        assertEquals("操作成功", r.text());
+        assertNull(r.data());
+        assertNull(r.errorCode());
+        assertNull(r.suggestion());
+        assertFalse(r.shouldRetry());
     }
 
     @Test
@@ -34,31 +34,31 @@ class ToolResultTest {
         HashMap<Object, Object> data = new HashMap<>();
         data.put("key", "value");
         ToolResult r = ToolResult.ok("带数据的结果", data);
-        assertTrue(r.isSuccess());
-        assertEquals("带数据的结果", r.getText());
-        assertEquals(data, r.getData());
+        assertTrue(r.success());
+        assertEquals("带数据的结果", r.text());
+        assertEquals(data, r.data());
     }
 
     @Test
     @DisplayName("fail() 应创建失败结果")
     void fail_shouldCreateFailureResult() {
         ToolResult r = ToolResult.fail("FILE_NOT_FOUND", "文件未找到");
-        assertFalse(r.isSuccess());
-        assertEquals("FILE_NOT_FOUND", r.getErrorCode());
-        assertEquals("文件未找到", r.getText());
-        assertNull(r.getSuggestion());
-        assertFalse(r.isShouldRetry());
+        assertFalse(r.success());
+        assertEquals("FILE_NOT_FOUND", r.errorCode());
+        assertEquals("文件未找到", r.text());
+        assertNull(r.suggestion());
+        assertFalse(r.shouldRetry());
     }
 
     @Test
     @DisplayName("retry() 应创建可重试的失败结果")
     void retry_shouldCreateRetryableResult() {
         ToolResult r = ToolResult.retry("LOCKED", "文件被锁定", "请稍后重试", "文件最新内容");
-        assertFalse(r.isSuccess());
-        assertEquals("LOCKED", r.getErrorCode());
-        assertTrue(r.isShouldRetry());
-        assertEquals("请稍后重试", r.getSuggestion());
-        assertEquals("文件最新内容", r.getRetryView());
+        assertFalse(r.success());
+        assertEquals("LOCKED", r.errorCode());
+        assertTrue(r.shouldRetry());
+        assertEquals("请稍后重试", r.suggestion());
+        assertEquals("文件最新内容", r.retryView());
     }
 
     @Test

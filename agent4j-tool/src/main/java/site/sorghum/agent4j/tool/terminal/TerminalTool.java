@@ -164,13 +164,13 @@ public class TerminalTool extends AgentTool {
             if (remainingMs <= 0) { timedOut = true; break; }
 
             ToolResult groupResult = runPipeGroup(group, cwd, (int) Math.min(remainingMs, Integer.MAX_VALUE));
-            if (groupResult.isSuccess()) {
+            if (groupResult.success()) {
                 lastExit = 0;
-                allOutput.append(groupResult.getText());
+                allOutput.append(groupResult.text());
             } else {
-                String code = groupResult.getErrorCode();
+                String code = groupResult.errorCode();
                 lastExit = code != null && code.startsWith("EXIT_") ? Integer.parseInt(code.substring(5)) : 1;
-                allOutput.append(groupResult.getText());
+                allOutput.append(groupResult.text());
                 if (code != null && code.equals("TIMEOUT")) { timedOut = true; break; }
             }
         }

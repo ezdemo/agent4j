@@ -222,6 +222,7 @@ public class Agent4jConfig {
      * 合并更新配置（只更新非空字段）。
      * 更新后自动保存到 config.json。
      */
+    @SuppressWarnings("unchecked")
     public void updateAndSave(Map<String, Object> updates) throws IOException {
         if (updates == null || updates.isEmpty()) return;
         
@@ -231,13 +232,13 @@ public class Agent4jConfig {
             
             // 跳过空值
             if (value == null) continue;
-            if (value instanceof String && ((String) value).isEmpty()) continue;
+            if (value instanceof String str && str.isEmpty()) continue;
             
             // 更新到 ONode
-            if (value instanceof List) {
+            if (value instanceof List<?> list) {
                 ONode arr = root.getOrNew(key).asArray();
                 arr.clear();
-                for (Object item : (List<?>) value) {
+                for (Object item : list) {
                     if (item != null) {
                         arr.add(item.toString());
                     }
