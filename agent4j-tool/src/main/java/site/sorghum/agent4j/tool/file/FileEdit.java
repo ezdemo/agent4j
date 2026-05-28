@@ -54,6 +54,10 @@ public class FileEdit {
             String[] parts = range.split("-");
             int start = Math.max(1, Integer.parseInt(parts[0].trim()));
             int end = Math.min(total, Math.max(start, Integer.parseInt(parts[1].trim())));
+            // range 范围必须 >= 500 行
+            if (end - start + 1 < 500) {
+                return "[ERROR] range 范围必须 >= 500 行（当前: " + (end - start + 1) + " 行）。请使用更大的范围，如 " + start + "-" + (start + 499);
+            }
             String body = joinLines(lines.subList(start - 1, end));
             return "[range " + start + "-" + end + " of " + total + " lines]\n" + body;
         }

@@ -37,7 +37,7 @@ public class ReadFileTool extends AgentTool {
                 + "  - path (string, 必填): 文件路径（相对于工作区根目录）\n"
                 + "  - head (int, 可选): 返回前 N 行（仅在需要精确行范围时使用）\n"
                 + "  - tail (int, 可选): 返回后 N 行（仅在需要精确行范围时使用）\n"
-                + "  - range (string, 可选): 行范围 \"start-end\"，如 \"50-100\"（仅在需要精确行范围时使用）\n\n"
+                + "  - range (string, 可选): 行范围 \"start-end\"，如 \"1-500\"（仅在需要精确行范围时使用，(end-start + 1) 必须 >= 500）\n\n"
                 + "只读：是\n"
                 + "风暴豁免：是";
     }
