@@ -275,31 +275,37 @@ const loadSessions = async () => {
     let workspaceHash = null
     try {
       const workspacesResponse = await configAPI.listWorkspaces()
-      if (workspacesResponse.success && workspacesResponse.data) {
+      console.log('工作区响应:', workspacesResponse) // 调试日志
+      if (workspacesResponse && workspacesResponse.data) {
         const activeWorkspace = workspacesResponse.data.find(w => w.isActive)
         if (activeWorkspace) {
           workspaceHash = activeWorkspace.hash
+          console.log('活跃工作区 hash:', workspaceHash) // 调试日志
         }
       }
     } catch (err) {
       console.warn('获取工作区信息失败:', err)
     }
     
+    console.log('加载会话列表, workspaceHash:', workspaceHash) // 调试日志
     const response = await sessionsAPI.list(workspaceHash)
-    if (response.success && response.data) {
+    console.log('会话列表响应:', response) // 调试日志
+    
+    if (response && response.data) {
       sessions.value = response.data.map(session => ({
         id: session.name,
-        title: session.title || session.name,  // 使用生成的会话标题，如果没有则使用会话名称
+        title: session.title || session.name,
         status: session.isCurrent ? 'active' : 'completed',
         createdAt: session.createdAt || new Date().toLocaleString('zh-CN'),
         lastActivity: session.lastActivity || new Date().toLocaleString('zh-CN'),
         messageCount: session.messageCount || 0,
-        tokenUsage: session.tokenUsage || '0',
-        lastMessage: session.lastMessage || '无消息',
+        tokenUsage: formatTokenUsage(session.tokenUsage || 0),
+        lastMessage: session.lastMessage || `${session.messageCount || 0} 条消息`,
         tags: session.tags || []
       }))
+      console.log('解析后的会话列表:', sessions.value) // 调试日志
     } else {
-      error.value = response.error || '加载会话列表失败'
+      error.value = (response && response.error) || '加载会话列表失败'
     }
   } catch (err) {
     console.error('加载会话列表失败:', err)
@@ -307,6 +313,14 @@ const loadSessions = async () => {
   } finally {
     loading.value = false
   }
+}
+
+// 格式化 Token 用量
+const formatTokenUsage = (tokens) => {
+  if (!tokens || tokens === 0) return '0'
+  if (tokens >= 1000000) return (tokens / 1000000).toFixed(1) + 'M'
+  if (tokens >= 1000) return (tokens / 1000).toFixed(1) + 'K'
+  return tokens.toString()
 }
 
 const loadCurrentSession = async () => {

@@ -179,6 +179,8 @@ const props = defineProps({
   sessionName: { type: String, default: null }
 })
 
+const emit = defineEmits(['sessionUpdated'])
+
 const messagesContainer = ref(null)
 const inputField = ref(null)
 const inputText = ref('')
@@ -433,12 +435,19 @@ const sendMessage = async () => {
         }
         // 刷新 usage 数据
         loadUsage()
+        // 通知父组件刷新会话列表（标题可能已更新）
+        emit('sessionUpdated')
       },
       () => {
         streaming.value = false
         currentAbortController = null
         const msg = getMsg()
         if (msg && !msg.blocks.length) msg.blocks.push({ type: 'content', content: '连接错误' })
+      },
+      // 传递工作区和会话信息
+      {
+        workspaceHash: props.workspaceHash,
+        sessionName: props.sessionName
       }
     )
   } catch { streaming.value = false }

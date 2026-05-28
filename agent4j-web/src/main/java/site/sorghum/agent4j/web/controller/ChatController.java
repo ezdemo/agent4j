@@ -37,13 +37,16 @@ public class ChatController {
         }
         try {
             long t0 = System.currentTimeMillis();
-            String reply = agentService.chat(request.message.trim());
+            // 支持工作区和会话隔离（hash 可选，不传则使用默认工作区）
+            String workspacePath = agentService.resolveWorkspacePath(request.workspaceHash);
+            if (workspacePath == null) workspacePath = agentService.getWorkspace();
+            String reply = agentService.chat(request.message.trim(), workspacePath, request.sessionName);
             long elapsed = System.currentTimeMillis() - t0;
 
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("reply", reply);
             data.put("elapsedMs", elapsed);
-            data.put("usage", agentService.getUsage());
+            data.put("usage", agentService.getSessionUsage(workspacePath, request.sessionName));
             return ApiResponse.ok(data);
         } catch (Exception e) {
             return ApiResponse.fail("聊天出错: " + e.getMessage());
@@ -81,9 +84,14 @@ public class ChatController {
 
         SseEmitter emitter = new SseEmitter(ctx);
         final String message = request.message.trim();
+        String workspacePath = agentService.resolveWorkspacePath(request.workspaceHash);
+        if (workspacePath == null) workspacePath = agentService.getWorkspace();
+        final String resolvedPath = workspacePath;
+        final String sessionName = request.sessionName;
+        
         Thread chatThread = new Thread(() -> {
             try {
-                agentService.chatStream(message, emitter);
+                agentService.chatStream(message, resolvedPath, sessionName, emitter);
             } catch (Exception e) {
                 try {
                     emitter.sendError(e.getMessage());

@@ -12,4 +12,10 @@ public class ChatRequest {
 
     /** 是否为流式模式（默认 false） */
     public boolean stream;
+
+    /** 工作区 hash（用于多工作区隔离，由 /api/workspaces 返回） */
+    public String workspaceHash;
+
+    /** 会话名称（用于多会话隔离） */
+    public String sessionName;
 }

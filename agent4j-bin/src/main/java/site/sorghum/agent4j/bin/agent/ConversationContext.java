@@ -57,15 +57,28 @@ public class ConversationContext {
     public void addAssistant(String content, List<Map<String, Object>> toolCalls, String reasoningContent) {
         Map<String, Object> msg = new LinkedHashMap<>();
         msg.put("role", "assistant");
-        if (content != null && !content.isEmpty()) {
+
+        boolean hasContent = content != null && !content.isEmpty();
+        boolean hasToolCalls = toolCalls != null && !toolCalls.isEmpty();
+        boolean hasReasoning = reasoningContent != null && !reasoningContent.isEmpty();
+
+        if (hasContent) {
             msg.put("content", content);
         }
-        if (toolCalls != null && !toolCalls.isEmpty()) {
+        if (hasToolCalls) {
             msg.put("tool_calls", toolCalls);
         }
-        if (reasoningContent != null && !reasoningContent.isEmpty()) {
+        if (hasReasoning) {
             msg.put("reasoning_content", reasoningContent);
         }
+
+        // 防御：assistant 消息必须至少包含 content、tool_calls 或 reasoning_content 之一
+        // 否则 API 会报错 "assistant must provide content, reasoning_content or tool_calls"
+        // 常见于用户中断（stop）导致 response 不完整的情况
+        if (!hasContent && !hasToolCalls && !hasReasoning) {
+            msg.put("content", "");
+        }
+
         history.add(msg);
         persist(msg);
     }
@@ -215,5 +228,22 @@ public class ConversationContext {
      */
     public List<Map<String, Object>> getHistory() {
         return new ArrayList<>(history);
+    }
+
+    /**
+     * 获取最后一条 assistant 消息的 content（用于用户中断时返回已生成内容）。
+     * @return 最后一条 assistant 消息的 content，如果没有则返回 null
+     */
+    public String getLastAssistantContent() {
+        for (int i = history.size() - 1; i >= 0; i--) {
+            Map<String, Object> msg = history.get(i);
+            if ("assistant".equals(msg.get("role"))) {
+                Object content = msg.get("content");
+                if (content instanceof String && !((String) content).isEmpty()) {
+                    return (String) content;
+                }
+            }
+        }
+        return null;
     }
 }

@@ -24,48 +24,104 @@ public class SessionController {
     /** 列出所有会话 —— GET /api/sessions?workspaceHash=xxx */
     @Get
     @Mapping("")
-    public Object list(@Param("workspaceHash") String workspaceHash) throws Exception {
+    public Object list(@Param(value = "workspaceHash", required = false) String workspaceHash) throws Exception {
         if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
-        return ApiResponse.ok(agentService.listSessions(workspaceHash));
+        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
+        if (workspacePath == null) workspacePath = agentService.getWorkspace();
+        return ApiResponse.ok(agentService.listSessions(workspacePath));
     }
 
-    /** 获取当前会话信息 —— GET /api/sessions/current */
+    /** 获取当前会话信息 —— GET /api/sessions/current?workspaceHash=xxx */
     @Get
     @Mapping("/current")
-    public Object current() {
+    public Object current(@Param(value = "workspaceHash", required = false) String workspaceHash) {
         if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
-        return ApiResponse.ok(agentService.getCurrentSession());
-    }
-
-    /** 新建空白会话 —— POST /api/sessions/new */
-    @Post
-    @Mapping("/new")
-    public Object createNew() {
-        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
-        agentService.newSession();
+        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
+        if (workspacePath == null) workspacePath = agentService.getWorkspace();
+        String currentName = agentService.getCurrentSessionName(workspacePath);
+        String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("message", "已创建新会话");
-        data.put("session", agentService.getCurrentSession());
+        data.put("workspaceHash", resolvedHash);
+        data.put("sessionName", currentName);
         return ApiResponse.ok(data);
     }
 
-    /** 切换会话 —— POST /api/sessions/{name} */
+    /** 新建空白会话 —— POST /api/sessions/new?workspaceHash=xxx&sessionName=xxx */
     @Post
-    @Mapping("/{name}")
-    public Object switchSession(@Path("name") String name) {
+    @Mapping("/new")
+    public Object createNew(@Param(value = "workspaceHash", required = false) String workspaceHash,
+                            @Param(value = "sessionName", required = false) String sessionName) {
         if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
-        boolean ok = agentService.switchSession(name);
-        if (ok) return ApiResponse.ok(agentService.getCurrentSession());
-        return ApiResponse.fail("会话不存在: " + name);
+        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
+        if (workspacePath == null) workspacePath = agentService.getWorkspace();
+        String actualName = agentService.newSession(workspacePath, sessionName);
+        String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("message", "已创建新会话");
+        data.put("workspaceHash", resolvedHash);
+        data.put("sessionName", actualName);
+        return ApiResponse.ok(data);
     }
 
-    /** 删除会话 —— DELETE /api/sessions/{name} */
+    /** 切换会话 —— POST /api/sessions/{name}?workspaceHash=xxx */
+    @Post
+    @Mapping("/{name}")
+    public Object switchSession(@Path("name") String name,
+                                @Param(value = "workspaceHash", required = false) String workspaceHash) {
+        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        try {
+            String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
+            if (workspacePath == null) workspacePath = agentService.getWorkspace();
+            boolean ok = agentService.switchSession(workspacePath, name);
+            if (ok) {
+                String confirmedName = agentService.getCurrentSessionName(workspacePath);
+                String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
+                Map<String, Object> data = new LinkedHashMap<>();
+                data.put("workspaceHash", resolvedHash);
+                data.put("sessionName", confirmedName != null ? confirmedName : name);
+                data.put("switched", true);
+                return ApiResponse.ok(data);
+            }
+            return ApiResponse.fail("会话不存在: " + name);
+        } catch (Exception e) {
+            return ApiResponse.fail("切换会话失败: " + e.getMessage());
+        }
+    }
+
+    /** 清除会话 Agent 缓存 —— DELETE /api/sessions/{name}?workspaceHash=xxx */
     @Delete
     @Mapping("/{name}")
-    public Object deleteSession(@Path("name") String name) throws Exception {
+    public Object evictAgent(@Path("name") String name,
+                             @Param(value = "workspaceHash", required = false) String workspaceHash) {
         if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
-        boolean ok = agentService.deleteSession(name);
-        if (ok) return ApiResponse.ok();
-        return ApiResponse.fail("会话不存在: " + name);
+        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
+        if (workspacePath == null) workspacePath = agentService.getWorkspace();
+        agentService.evictAgent(workspacePath, name);
+        String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("message", "已清除会话 Agent 缓存");
+        data.put("workspaceHash", resolvedHash);
+        data.put("sessionName", name);
+        return ApiResponse.ok(data);
+    }
+
+    /** 清除所有 Agent 缓存 —— POST /api/sessions/evict-all */
+    @Post
+    @Mapping("/evict-all")
+    public Object evictAll() {
+        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        agentService.evictAllAgents();
+        return ApiResponse.ok("已清除所有 Agent 缓存");
+    }
+
+    /** 获取缓存统计 —— GET /api/sessions/stats */
+    @Get
+    @Mapping("/stats")
+    public Object stats() {
+        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("cacheSize", agentService.getCacheSize());
+        data.put("maxCacheSize", 50);
+        return ApiResponse.ok(data);
     }
 }

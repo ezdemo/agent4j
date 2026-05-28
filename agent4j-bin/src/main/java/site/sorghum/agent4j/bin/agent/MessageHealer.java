@@ -63,6 +63,16 @@ public class MessageHealer {
                 }
             }
 
+            // 1.5 修复空 assistant 消息（用户中断/历史损坏）
+            // assistant 消息必须至少包含 content、tool_calls 或 reasoning_content 之一
+            if ("assistant".equals(role)
+                    && !msg.containsKey("content")
+                    && !msg.containsKey("tool_calls")
+                    && !msg.containsKey("reasoning_content")) {
+                msg = new LinkedHashMap<>(msg);
+                msg.put("content", "");
+            }
+
             // 2. fix tool_calls/tool pairing + 清除 name 为 null 的 tool_call
             if ("assistant".equals(role) && msg.containsKey("tool_calls")) {
                 @SuppressWarnings("unchecked")

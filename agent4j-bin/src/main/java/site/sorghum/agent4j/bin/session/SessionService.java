@@ -205,6 +205,21 @@ public class SessionService {
     }
 
     /**
+     * 确保当前会话已分配名称。
+     * <p>
+     * 新建会话时 {@code currentName} 为 null（延迟到首次 append 才分配），
+     * 但标题生成等操作需要会话名才能写入 .meta 文件。
+     * 此方法在 currentName 为 null 时主动分配一个新名称。
+     * </p>
+     */
+    public void ensureSessionName() {
+        if (store.currentName() == null) {
+            String newName = store.newSessionName();
+            store.switchTo(newName);
+        }
+    }
+
+    /**
      * 更新当前会话的标题。
      *
      * @param title 会话标题

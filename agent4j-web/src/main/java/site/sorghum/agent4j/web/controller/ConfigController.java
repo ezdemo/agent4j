@@ -111,10 +111,12 @@ public class ConfigController {
     /** 获取 Token 用量统计 —— GET /api/usage?workspaceHash=xxx&sessionName=xxx */
     @Get
     @Mapping("/usage")
-    public Object getUsage(@Param("workspaceHash") String workspaceHash,
-                           @Param("sessionName") String sessionName) {
+    public Object getUsage(@Param(value = "workspaceHash", required = false) String workspaceHash,
+                           @Param(value = "sessionName",required = false) String sessionName) {
         if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
-        return ApiResponse.ok(agentService.getUsage(workspaceHash, sessionName));
+        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
+        if (workspacePath == null) workspacePath = agentService.getWorkspace();
+        return ApiResponse.ok(agentService.getUsage(workspacePath, sessionName));
     }
 
     /** 获取当前工作目录 —— GET /api/workspace */

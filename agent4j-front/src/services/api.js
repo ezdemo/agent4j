@@ -127,11 +127,16 @@ export const chatAPI = {
   },
   
   // SSE流式聊天 - POST /api/chat/stream
-  sendMessageStream: (message, onMessage, onDone, onError) => {
+  sendMessageStream: (message, onMessage, onDone, onError, options = {}) => {
     const abortController = new AbortController()
 
     ;(async () => {
       try {
+        const requestBody = { message }
+        // 添加工作区和会话信息
+        if (options.workspaceHash) requestBody.workspaceHash = options.workspaceHash
+        if (options.sessionName) requestBody.sessionName = options.sessionName
+        
         const res = await fetch('/api/chat/stream', {
           method: 'POST',
           headers: { 
@@ -139,7 +144,7 @@ export const chatAPI = {
             'X-Request-ID': generateRequestId(),
             'X-Timestamp': Date.now().toString()
           },
-          body: JSON.stringify({ message }),
+          body: JSON.stringify(requestBody),
           signal: abortController.signal
         })
 

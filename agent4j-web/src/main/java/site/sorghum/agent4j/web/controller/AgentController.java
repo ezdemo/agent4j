@@ -35,13 +35,16 @@ public class AgentController {
         return ApiResponse.ok(agentService.getStatus());
     }
 
-    /** 获取历史消息 —— GET /api/agent/history */
+    /** 获取历史消息 —— GET /api/agent/history?workspaceHash=xxx&sessionName=xxx */
     @Get
     @Mapping("/history")
-    public Object history() {
+    public Object history(@Param(value = "workspaceHash", required = false) String workspaceHash,
+                          @Param(value = "sessionName", required = false) String sessionName) {
         if (!agentService.isReady()) {
             return ApiResponse.fail("Agent 未初始化");
         }
-        return ApiResponse.ok(agentService.getHistory());
+        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
+        if (workspacePath == null) workspacePath = agentService.getWorkspace();
+        return ApiResponse.ok(agentService.getHistory(workspacePath, sessionName));
     }
 }

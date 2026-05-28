@@ -49,6 +49,9 @@ public class AgentLoop {
     /** 推理断路器（每回合重置），检测思考循环 */
     private final ReasonBreaker reasonBreaker = new ReasonBreaker();
 
+    /** 用户主动中断标志（前端点击停止按钮时设置） */
+    private volatile boolean userAbortRequested = false;
+
     // ==================== HITL (Human-In-The-Loop) ====================
 
     /** HITL 审批状态 */
@@ -148,6 +151,17 @@ public class AgentLoop {
     public void setPlanMode(boolean on) { dispatcher.setPlanMode(on); }
     public boolean isPlanMode() { return dispatcher.isPlanMode(); }
 
+    /** 用户主动中断：设置中断标志并中止当前 HTTP 流式请求 */
+    public void requestUserAbort() {
+        userAbortRequested = true;
+        client.abortStream();
+    }
+
+    /** 重置用户中断标志（每回合开始时调用） */
+    public void resetUserAbort() {
+        userAbortRequested = false;
+    }
+
     /** 设置事件监听器 */
     public void setListener(AgentLoopListener listener) {
         this.listener = listener != null ? listener : new AgentLoopListener() {};
@@ -214,17 +228,53 @@ public class AgentLoop {
         ctx.addUser(userMessage);
         dispatcher.resetStorm();
         reasonBreaker.reset();
+        resetUserAbort(); // 重置用户中断标志
         int selfCorrectionAttempts = 0;
         List<Map<String, Object>> tools = ctx.tools();
         boolean isThinkingMode = client.isThinkingMode();
 
         for (int step = 0; ; step++) {
+            // 0. 检查用户中断请求
+            if (userAbortRequested) {
+                try {
+                    output.onLog(AgentOutput.LogLevel.INFO, "[abort] 用户请求中断，停止推理循环");
+                } catch (Exception e) {
+                    // 忽略异常
+                }
+                // 返回已生成的内容（如果有），或返回中断提示
+                String lastContent = ctx.getLastAssistantContent();
+                if (lastContent != null && !lastContent.isEmpty()) {
+                    return lastContent;
+                }
+                return "⏹️ 已停止生成";
+            }
+
             // 1. 准备消息：构建 + Healing + 折叠 + 注入工具指引
             PreparedMessages prepared = prepareMessages(step, isThinkingMode);
             List<Map<String, Object>> messages = prepared.messages;
 
             // 2. 流式调用 LLM
             StreamResult sr = streamLLM(messages, tools);
+
+            // 2.1 用户中断：streamLLM 已提前返回，直接退出循环，不执行工具、不重试
+            if (userAbortRequested) {
+                try {
+                    output.onLog(AgentOutput.LogLevel.INFO, "[abort] 用户请求中断（streamLLM 后检测），停止推理循环");
+                } catch (Exception e) {
+                    // 忽略异常
+                }
+                String content = sr.content;
+                String reasoningContent = sr.reasoningContent;
+                if (content != null && !content.isEmpty()) {
+                    ctx.addAssistant(content, null, reasoningContent);
+                    return content;
+                }
+                if (reasoningContent != null && !reasoningContent.isEmpty()) {
+                    ctx.addAssistant(reasoningContent, null, null);
+                    return reasoningContent;
+                }
+                return "⏹️ 已停止生成";
+            }
 
             // 3. 流式错误恢复
             if (sr.error) {
@@ -392,10 +442,45 @@ public class AgentLoop {
         // 继续循环：让 LLM 根据工具结果生成回复
         boolean isThinkingMode = client.isThinkingMode();
         for (int step = 0; ; step++) {
+            // 用户中断：直接退出，不重试
+            if (userAbortRequested) {
+                try {
+                    output.onLog(AgentOutput.LogLevel.INFO, "[abort] 用户请求中断（HITL 恢复循环），停止推理循环");
+                } catch (Exception e) {
+                    // 忽略异常
+                }
+                String lastContent = ctx.getLastAssistantContent();
+                if (lastContent != null && !lastContent.isEmpty()) {
+                    return lastContent;
+                }
+                return "⏹️ 已停止生成";
+            }
+
             PreparedMessages prepared = prepareMessages(step, isThinkingMode);
             List<Map<String, Object>> messages = prepared.messages;
 
             StreamResult sr = streamLLM(messages, tools);
+
+            // 用户中断：streamLLM 已提前返回，直接退出，不执行工具、不重试
+            if (userAbortRequested) {
+                try {
+                    output.onLog(AgentOutput.LogLevel.INFO, "[abort] 用户请求中断（HITL streamLLM 后检测），停止推理循环");
+                } catch (Exception e) {
+                    // 忽略异常
+                }
+                String abortContent = sr.content;
+                String abortReasoning = sr.reasoningContent;
+                if (abortContent != null && !abortContent.isEmpty()) {
+                    ctx.addAssistant(abortContent, null, abortReasoning);
+                    return abortContent;
+                }
+                if (abortReasoning != null && !abortReasoning.isEmpty()) {
+                    ctx.addAssistant(abortReasoning, null, null);
+                    return abortReasoning;
+                }
+                return "⏹️ 已停止生成";
+            }
+
             if (sr.error) {
                 if (recoverFromStreamError(messages, prepared.foldedThisStep)) continue;
                 throw new IOException("[stream] API error during streaming");
@@ -573,7 +658,7 @@ public class AgentLoop {
         client.chatStream(messages, tools, new ModelClient.StreamCallback() {
             @Override
             public void onReasoningDelta(String token) {
-                if (loopAborted.get()) return;
+                if (loopAborted.get() || userAbortRequested) return;
                 reasoningBuf.append(token);
                 try {
                     output.onReasoningDelta(token);
@@ -653,6 +738,13 @@ public class AgentLoop {
 
         // 等待流结束（CountDownLatch 无忙等待）
         try { streamLatch.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+
+        // 用户主动中断
+        if (userAbortRequested) {
+            String content = contentBuf.length() > 0 ? contentBuf.toString() : null;
+            String reasoningContent = reasoningBuf.length() > 0 ? reasoningBuf.toString() : null;
+            return new StreamResult(content, reasoningContent, streamedTcs[0], false);
+        }
 
         if (streamError.get()) {
             return new StreamResult(null, null, null, true);

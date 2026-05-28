@@ -10,7 +10,6 @@ import site.sorghum.agent4j.bin.model.HttpModelClient;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.bin.tool.ToolDef;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
-import site.sorghum.agent4j.bin.tool.ToolDispatcher;
 import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.session.SessionStore;
 import site.sorghum.agent4j.bin.session.JsonlSessionStore;
@@ -124,6 +123,44 @@ public class Agent4jAgent {
         // 设置 SessionService 引用，用于同步 lastPromptTokens
         this.loop.setSessionService(this.sessionService);
     }
+    
+    /**
+     * 轻量级构造函数 —— 共享 ModelClient、ToolRegistry 和 PromptPrefix。
+     * 适用于"一个会话一个 Agent"场景，减少资源消耗。
+     *
+     * @param b Builder
+     * @param lightweight 标记为轻量级构建（未使用，仅用于区分构造函数）
+     */
+    private Agent4jAgent(Builder b, boolean lightweight) {
+        this.commandRegistry = b.commandRegistry;
+        this.workspace = b.workspace;
+        this.apiUrl = b.apiUrl;
+        this.apiKey = b.apiKey;
+
+        // 使用共享组件
+        ModelClient client = b.sharedModelClient;
+        ToolRegistry registry = b.sharedToolRegistry;
+        PromptPrefix prefix = b.sharedPrefix;
+
+        // 创建独立的会话上下文
+        this.ctx = new ConversationContext(prefix);
+
+        // 会话持久化 — 委托 SessionService（支持工作区隔离）
+        try {
+            this.workspaceManager = new WorkspaceManager();
+            String workspacePath = b.workspace.toAbsolutePath().toString();
+            workspaceManager.initWorkspace(workspacePath);
+            java.nio.file.Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
+            this.sessionService = new SessionService(ctx, sessionsDir);
+            sessionService.loadOrCreate(System.getenv("AGENT4J_SESSION"));
+        } catch (IOException e) {
+            System.err.println("[session] 初始化失败: " + e.getMessage());
+        }
+
+        this.loop = new AgentLoop(client, registry, ctx, b.hitl);
+        // 设置 SessionService 引用，用于同步 lastPromptTokens
+        this.loop.setSessionService(this.sessionService);
+    }
 
     /**
      * 将 AgentTool 的参数类型映射为 JSON Schema 类型。
@@ -171,6 +208,8 @@ public class Agent4jAgent {
      */
     private void generateSessionTitleIfNeeded(String userMessage) {
         if (sessionService != null && !sessionService.isTitleGenerated()) {
+            // 确保会话名已分配（新会话的 currentName 初始为 null，延迟到首次 append 才分配）
+            sessionService.ensureSessionName();
             String title = sessionService.generateSessionTitle(userMessage);
             sessionService.updateCurrentSessionTitle(title);
             sessionService.setTitleGenerated(true);
@@ -322,6 +361,8 @@ public class Agent4jAgent {
                 // 重新创建 SessionService 使用新工作区的会话目录
                 java.nio.file.Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
                 this.sessionService = new SessionService(ctx, sessionsDir);
+                // ★ 同步更新 AgentLoop 的 SessionService 引用（修复 lastPromptTokens 跟踪）
+                this.loop.setSessionService(this.sessionService);
                 
                 System.out.println("[workspace] 已切换到工作区: " + workspacePath);
                 System.out.println("[workspace] 会话目录: " + sessionsDir);
@@ -372,6 +413,31 @@ public class Agent4jAgent {
         ctx.setSessionStore(store);
         // 重建 SessionService 以保持一致性
         this.sessionService = new SessionService(ctx, store);
+        // ★ 同步更新 AgentLoop 的 SessionService 引用
+        this.loop.setSessionService(this.sessionService);
+    }
+
+    /** 获取当前 SessionService（用于保存/恢复状态） */
+    public SessionService getSessionService() {
+        return sessionService;
+    }
+
+    /**
+     * 轻量级恢复工作区状态 —— 直接恢复 SessionService 引用，不销毁/重建 store。
+     * <p>
+     * 用于 chatStream 等临时切换场景：先保存原始 SessionService，
+     * 聊天结束后用此方法恢复，避免 switchWorkspace() 销毁再重建导致
+     * 用量数据丢失、titleGenerated 重置等问题。
+     * </p>
+     *
+     * @param workspace       原始工作区路径
+     * @param originalService 原始 SessionService 实例
+     */
+    public void restoreWorkspaceState(Path workspace, SessionService originalService) {
+        this.workspace = workspace.toAbsolutePath();
+        this.sessionService = originalService;
+        ctx.setSessionStore(originalService.getStore());
+        this.loop.setSessionService(originalService);
     }
 
     /** 注入历史消息（加载会话时） */
@@ -421,10 +487,7 @@ public class Agent4jAgent {
      */
     public void abort() {
         if (loop != null) {
-            ModelClient client = loop.getclient();
-            if (client != null) {
-                client.abortStream();
-            }
+            loop.requestUserAbort();
         }
     }
 
@@ -492,6 +555,15 @@ public class Agent4jAgent {
         ChatCommandRegistry commandRegistry;
         /** 用户是否显式设置过 systemPrompt */
         private boolean systemPromptExplicitlySet = false;
+        
+        /** 共享的 ModelClient（用于轻量级构建，避免重复创建 HTTP 客户端） */
+        ModelClient sharedModelClient;
+        /** 共享的 ToolRegistry（用于轻量级构建，避免重复注册工具） */
+        ToolRegistry sharedToolRegistry;
+        /** 共享的 system prompt（用于轻量级构建） */
+        String sharedSystemPrompt;
+        /** 共享的 PromptPrefix（用于轻量级构建） */
+        PromptPrefix sharedPrefix;
 
         /** 硬编码的默认系统提示词（在 ~/.agent4j/agent4j.md 不存在时使用） */
         private static final String DEFAULT_SYSTEM_PROMPT = "你是一个智能体助手，名为Agent4J\n";
@@ -544,6 +616,36 @@ public class Agent4jAgent {
                 systemPrompt = loadDefaultSystemPrompt();
             }
             return new Agent4jAgent(this);
+        }
+        
+        /**
+         * 设置共享组件，用于轻量级构建。
+         * 避免每个会话都重新创建 ModelClient 和 ToolRegistry。
+         *
+         * @param client 共享的 ModelClient
+         * @param registry 共享的 ToolRegistry
+         * @param prefix 共享的 PromptPrefix
+         * @return this
+         */
+        public Builder sharedComponents(ModelClient client, ToolRegistry registry, PromptPrefix prefix) {
+            this.sharedModelClient = client;
+            this.sharedToolRegistry = registry;
+            this.sharedPrefix = prefix;
+            return this;
+        }
+        
+        /**
+         * 构建轻量级 Agent 实例。
+         * 共享 ModelClient、ToolRegistry 和 PromptPrefix，仅创建独立的会话上下文。
+         * 适用于"一个会话一个 Agent"场景，减少资源消耗。
+         *
+         * @return 轻量级 Agent 实例
+         */
+        public Agent4jAgent buildLightweight() {
+            Objects.requireNonNull(sharedModelClient, "sharedModelClient is required");
+            Objects.requireNonNull(sharedToolRegistry, "sharedToolRegistry is required");
+            Objects.requireNonNull(sharedPrefix, "sharedPrefix is required");
+            return new Agent4jAgent(this, true);
         }
     }
 }

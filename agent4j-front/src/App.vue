@@ -129,7 +129,8 @@
         hide-header 
         :workspace-hash="activeWorkspaceHash"
         :session-name="currentSession"
-        style="flex:1;min-height:0" 
+        style="flex:1;min-height:0"
+        @session-updated="loadSessions"
       />
     </main>
     </div><!-- .app-body -->

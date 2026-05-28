@@ -148,7 +148,11 @@ const filtered = computed(() => {
 async function loadWorkspaces() {
   try {
     const res = await configAPI.listWorkspaces()
-    if (res.ok) {
+    console.log('工作区列表响应:', res) // 调试日志
+    if (res && res.success) {
+      workspaces.value = res.data || []
+    } else if (res && res.data) {
+      // 兼容不同的响应格式
       workspaces.value = res.data || []
     }
   } catch (e) {
@@ -160,12 +164,12 @@ async function loadWorkspaces() {
 async function handleSwitchWorkspace(path) {
   try {
     const res = await configAPI.switchToWorkspace(path)
-    if (res.ok) {
+    if (res && res.success) {
       showWorkspacePicker.value = false
       emit('workspaceChanged', path)
       await loadWorkspaces()
     } else {
-      alert(res.message || '切换工作区失败')
+      alert((res && res.message) || '切换工作区失败')
     }
   } catch (e) {
     alert('切换工作区失败: ' + e.message)
@@ -179,13 +183,13 @@ async function handleAddWorkspace() {
   
   try {
     const res = await configAPI.switchWorkspace(path)
-    if (res.ok) {
+    if (res && res.success) {
       newWorkspacePath.value = ''
       showWorkspacePicker.value = false
       emit('workspaceChanged', path)
       await loadWorkspaces()
     } else {
-      alert(res.message || '添加工作区失败')
+      alert((res && res.message) || '添加工作区失败')
     }
   } catch (e) {
     alert('添加工作区失败: ' + e.message)
@@ -198,10 +202,10 @@ async function handleDeleteWorkspace(hash) {
   
   try {
     const res = await configAPI.deleteWorkspace(hash)
-    if (res.ok) {
+    if (res && res.success) {
       await loadWorkspaces()
     } else {
-      alert(res.message || '删除工作区失败')
+      alert((res && res.message) || '删除工作区失败')
     }
   } catch (e) {
     alert('删除工作区失败: ' + e.message)
@@ -229,8 +233,22 @@ function prettyName(s) {
 
 function relativeTime(mtime) {
   if (!mtime) return ''
-  const ms = Date.now() - Date.parse(mtime)
-  if (!Number.isFinite(ms)) return mtime
+  
+  // 处理毫秒时间戳（数字）
+  let timestamp
+  if (typeof mtime === 'number') {
+    timestamp = mtime
+  } else if (typeof mtime === 'string') {
+    timestamp = Date.parse(mtime)
+  } else {
+    return ''
+  }
+  
+  if (!Number.isFinite(timestamp)) return typeof mtime === 'string' ? mtime : ''
+  
+  const ms = Date.now() - timestamp
+  if (ms < 0) return '刚刚'
+  
   const min = ms / 60000
   if (min < 1) return '刚刚'
   if (min < 60) return `${Math.floor(min)}分钟前`

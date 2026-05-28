@@ -46,38 +46,40 @@
         </svg>
       </button>
 
-      <!-- 分隔线 -->
-      <div class="tb-sep"></div>
+      <template v-if="isTauri">
+        <!-- 分隔线 -->
+        <div class="tb-sep"></div>
 
-      <!-- 窗口控制按钮 -->
-      <button class="tb-win-btn minimize" @click.stop="minimize" @dblclick.stop title="最小化">
-        <svg width="10" height="1" viewBox="0 0 10 1">
-          <rect width="10" height="1" fill="currentColor"/>
-        </svg>
-      </button>
-      <button class="tb-win-btn maximize" @click.stop="toggleMaximize" @dblclick.stop :title="isMaximized ? '还原' : '最大化'">
-        <!-- 还原图标 -->
-        <svg v-if="isMaximized" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2">
-          <rect x="2.5" y="0.5" width="9" height="9" rx="1"/>
-          <rect x="0.5" y="2.5" width="9" height="9" rx="1" fill="var(--bg)" stroke="currentColor"/>
-        </svg>
-        <!-- 最大化图标 -->
-        <svg v-else width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2">
-          <rect x="0.5" y="0.5" width="11" height="11" rx="1.5"/>
-        </svg>
-      </button>
-      <button class="tb-win-btn close" @click.stop="closeWindow" @dblclick.stop title="关闭">
-        <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
-          <line x1="1" y1="1" x2="11" y2="11"/>
-          <line x1="11" y1="1" x2="1" y2="11"/>
-        </svg>
-      </button>
+        <!-- 窗口控制按钮 -->
+        <button class="tb-win-btn minimize" @click.stop="minimize" @dblclick.stop title="最小化">
+          <svg width="10" height="1" viewBox="0 0 10 1">
+            <rect width="10" height="1" fill="currentColor"/>
+          </svg>
+        </button>
+        <button class="tb-win-btn maximize" @click.stop="toggleMaximize" @dblclick.stop :title="isMaximized ? '还原' : '最大化'">
+          <!-- 还原图标 -->
+          <svg v-if="isMaximized" width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2">
+            <rect x="2.5" y="0.5" width="9" height="9" rx="1"/>
+            <rect x="0.5" y="2.5" width="9" height="9" rx="1" fill="var(--bg)" stroke="currentColor"/>
+          </svg>
+          <!-- 最大化图标 -->
+          <svg v-else width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.2">
+            <rect x="0.5" y="0.5" width="11" height="11" rx="1.5"/>
+          </svg>
+        </button>
+        <button class="tb-win-btn close" @click.stop="closeWindow" @dblclick.stop title="关闭">
+          <svg width="10" height="10" viewBox="0 0 12 12" fill="none" stroke="currentColor" stroke-width="1.4" stroke-linecap="round">
+            <line x1="1" y1="1" x2="11" y2="11"/>
+            <line x1="11" y1="1" x2="1" y2="11"/>
+          </svg>
+        </button>
+      </template>
     </div>
   </header>
 </template>
 
 <script setup>
-import { ref, onMounted, onBeforeUnmount } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 
 defineProps({
   session: { type: String, default: '' },
@@ -88,12 +90,14 @@ defineProps({
 defineEmits(['toggleSide', 'openSettings', 'clear', 'export'])
 
 const isMaximized = ref(false)
+const isTauri = ref(false)
 let appWindow = null
 
 onMounted(async () => {
   try {
     const { getCurrentWindow } = await import('@tauri-apps/api/window')
     appWindow = getCurrentWindow()
+    isTauri.value = true
     isMaximized.value = await appWindow.isMaximized()
 
     // 监听窗口状态变化
