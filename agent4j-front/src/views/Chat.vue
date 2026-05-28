@@ -349,7 +349,7 @@ const handleTodoMouseLeave = () => {
   clearTimeout(todoTooltipTimer.value)
   todoTooltipTimer.value = setTimeout(() => {
     todoTooltipVisible.value = false
-  }, 800)
+  }, 100)
 }
 
 // Tooltip 自身的鼠标事件
