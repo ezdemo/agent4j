@@ -85,8 +85,8 @@ public class Agent4jAgent {
                     tool.getDescription(),
                     ToolDefHelper.toParamDefs(tool.getParameters()),
                     args -> {
-                        // 动态获取当前会话ID（工具执行时才调用，此时 sessionService 已初始化）
-                        String sessionId = sessionService != null ? sessionService.getStore().currentName() : null;
+                        // 从 AgentLoop 获取当前会话ID（支持并行工具执行）
+                        String sessionId = loop != null ? loop.getSessionId() : null;
                         return ToolDefHelper.formatResult(tool.execute(
                                 new ToolContext(args, getWorkspace(), apiUrl, apiKey, registry, blockedPaths, sessionId)));
                     },
@@ -229,6 +229,9 @@ public class Agent4jAgent {
         // === 普通聊天逻辑 ===
         // 如果是第一条用户消息，自动生成会话标题
         generateSessionTitleIfNeeded(message);
+        // 设置当前会话ID到 AgentLoop（用于工具执行上下文）
+        String currentSessionId = sessionService != null ? sessionService.getStore().currentName() : null;
+        loop.setSessionId(currentSessionId);
         return loop.run(message);
     }
 
@@ -408,6 +411,13 @@ public class Agent4jAgent {
     /** 获取当前输出接口 */
     public AgentOutput getOutput() {
         return loop.getOutput();
+    }
+
+    /** 设置当前会话ID（用于工具执行上下文） */
+    public void setSessionId(String sessionId) {
+        if (loop != null) {
+            loop.setSessionId(sessionId);
+        }
     }
 
     /** 获取 SessionStore（用于列表/切换） */

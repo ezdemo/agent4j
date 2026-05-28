@@ -52,6 +52,9 @@ public class AgentLoop {
     /** 用户主动中断标志（前端点击停止按钮时设置） */
     private volatile boolean userAbortRequested = false;
 
+    /** 当前会话ID（用于传递给工具执行上下文） */
+    private volatile String sessionId;
+
     // ==================== HITL (Human-In-The-Loop) ====================
 
     /** HITL 审批状态 */
@@ -84,6 +87,16 @@ public class AgentLoop {
     /** 设置会话服务（用于同步 lastPromptTokens） */
     public void setSessionService(SessionService sessionService) {
         this.sessionService = sessionService;
+    }
+
+    /** 设置当前会话ID（用于传递给工具执行上下文） */
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
+    }
+
+    /** 获取当前会话ID */
+    public String getSessionId() {
+        return sessionId;
     }
 
     /** 获取模型最大上下文窗口 token 数 */

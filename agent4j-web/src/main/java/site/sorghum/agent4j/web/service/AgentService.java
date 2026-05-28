@@ -473,6 +473,9 @@ public class AgentService {
             }
 
             agent.setOutput(AgentOutput.NOOP);
+            // 设置会话ID到 AgentLoop
+            String sessionId = sessionName != null ? sessionName : "default";
+            agent.setSessionId(sessionId);
             return agent.chat(message);
         } finally {
             // 清理 ThreadLocal
@@ -584,6 +587,9 @@ public class AgentService {
                 }
             });
 
+            // 设置会话ID到 AgentLoop
+            String sessionId = sessionName != null ? sessionName : "default";
+            agent.setSessionId(sessionId);
             String reply = agent.chat(message);
 
             // 发送最终回复
