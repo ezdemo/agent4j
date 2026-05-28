@@ -1346,7 +1346,7 @@ defineExpose({ clearMessages, loadSession, sendCommand, exportChat })
 
 .todo-tooltip-item {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 6px;
   padding: 6px 8px;
   border-radius: var(--r-sm);
