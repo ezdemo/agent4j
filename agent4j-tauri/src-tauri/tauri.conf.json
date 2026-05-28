@@ -1,0 +1,76 @@
+{
+  "$schema": "https://raw.githubusercontent.com/nicegui/nicegui/main/src-tauri/tauri.conf.json",
+  "build": {
+    "beforeDevCommand": "cd ../agent4j-front && pnpm dev",
+    "beforeBuildCommand": "cd ../agent4j-front && pnpm build",
+    "devPath": "http://localhost:3000",
+    "distDir": "../agent4j-front/dist"
+  },
+  "package": {
+    "productName": "Agent4j",
+    "version": "1.0.0"
+  },
+  "tauri": {
+    "allowlist": {
+      "all": false,
+      "shell": {
+        "all": false,
+        "open": true
+      }
+    },
+    "bundle": {
+      "active": true,
+      "category": "DeveloperTool",
+      "copyright": "Copyright © 2024 Agent4j Team",
+      "deb": {
+        "depends": []
+      },
+      "externalBin": [],
+      "icon": [
+        "icons/32x32.png",
+        "icons/128x128.png",
+        "icons/128x128@2x.png",
+        "icons/icon.icns",
+        "icons/icon.ico"
+      ],
+      "identifier": "com.agent4j.desktop",
+      "longDescription": "Agent4j - 智能 AI 代码助手桌面端",
+      "macOS": {
+        "entitlements": null,
+        "exceptionDomain": "",
+        "frameworks": [],
+        "providerShortName": null,
+        "signingIdentity": null
+      },
+      "resources": [],
+      "shortDescription": "Agent4j Desktop",
+      "targets": "all",
+      "windows": {
+        "certificateThumbprint": null,
+        "digestAlgorithm": "sha256",
+        "timestampUrl": ""
+      }
+    },
+    "security": {
+      "csp": null
+    },
+    "updater": {
+      "active": false
+    },
+    "windows": [
+      {
+        "fullscreen": false,
+        "resizable": true,
+        "title": "Agent4j",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 800,
+        "minHeight": 600,
+        "center": true,
+        "decorations": true,
+        "transparent": false,
+        "visible": true
+      }
+    ]
+  }
+}

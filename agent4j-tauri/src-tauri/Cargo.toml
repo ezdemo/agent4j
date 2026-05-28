@@ -1,0 +1,30 @@
+[package]
+name = "agent4j-tauri"
+version = "1.0.0"
+description = "Agent4j - 桌面端 AI 代码助手"
+authors = ["Agent4j Team"]
+license = "MIT"
+repository = "https://gitee.com/ezdemo/agent4j.git"
+edition = "2021"
+
+[lib]
+name = "agent4j_tauri_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "1.5", features = [] }
+
+[dependencies]
+serde_json = "1.0"
+serde = { version = "1.0", features = ["derive"] }
+tauri = { version = "1.8", features = ["shell-open"] }
+
+[features]
+default = ["custom-protocol"]
+custom-protocol = ["tauri/custom-protocol"]
+
+[profile.release]
+strip = true
+lto = true
+codegen-units = 1
+panic = "abort"
