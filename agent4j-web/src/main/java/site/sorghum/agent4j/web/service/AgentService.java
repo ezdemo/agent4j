@@ -183,10 +183,10 @@ public class AgentService {
                         tool.getDescription(),
                         ToolDefHelper.toParamDefs(tool.getParameters()),
                         args -> {
-                            // 从 ThreadLocal 获取当前会话名称
-                            String sessionId = currentSessionName.get();
+                            // 不使用 ThreadLocal（并行工具执行时无法传递）
+                            // sessionId 由 AgentLoop 在执行前设置，通过 ToolContext 传递
                             return ToolDefHelper.formatResult(tool.execute(
-                                    new ToolContext(args, config.workspaceDir(), apiUrl, apiKey, sharedToolRegistry, blockedPaths, sessionId)));
+                                    new ToolContext(args, config.workspaceDir(), apiUrl, apiKey, sharedToolRegistry, blockedPaths)));
                         },
                         tool.isReadOnly(),
                         tool.isStormExempt(),
