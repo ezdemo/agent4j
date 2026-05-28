@@ -102,7 +102,9 @@
           
           <!-- TODO Tooltip -->
           <Transition name="tooltip">
-            <div v-if="todoTooltipVisible" class="todo-tooltip">
+            <div v-if="todoTooltipVisible" class="todo-tooltip"
+                 @mouseenter="handleTooltipMouseEnter"
+                 @mouseleave="handleTooltipMouseLeave">
               <div class="todo-tooltip-header">
                 <span class="todo-tooltip-title">任务列表</span>
                 <span class="todo-tooltip-stats">
@@ -336,6 +338,7 @@ const fetchTodos = async () => {
 
 // TODO tooltip 处理
 const handleTodoMouseEnter = () => {
+  clearTimeout(todoTooltipTimer.value)
   todoTooltipTimer.value = setTimeout(() => {
     todoTooltipVisible.value = true
     fetchTodos()
@@ -344,7 +347,20 @@ const handleTodoMouseEnter = () => {
 
 const handleTodoMouseLeave = () => {
   clearTimeout(todoTooltipTimer.value)
-  todoTooltipVisible.value = false
+  todoTooltipTimer.value = setTimeout(() => {
+    todoTooltipVisible.value = false
+  }, 800)
+}
+
+// Tooltip 自身的鼠标事件
+const handleTooltipMouseEnter = () => {
+  clearTimeout(todoTooltipTimer.value)
+}
+
+const handleTooltipMouseLeave = () => {
+  todoTooltipTimer.value = setTimeout(() => {
+    todoTooltipVisible.value = false
+  }, 300)
 }
 
 // 计算 TODO 统计
