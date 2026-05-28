@@ -121,6 +121,11 @@ public class AgentService {
     private volatile SseEmitter currentSseEmitter;
 
     /**
+     * 当前线程正在处理的会话名称（用于工具执行时获取 sessionId）
+     */
+    private static final ThreadLocal<String> currentSessionName = new ThreadLocal<>();
+
+    /**
      * 初始化共享组件（Solon 启动后自动调用）
      */
     @Init
@@ -177,8 +182,12 @@ public class AgentService {
                         tool.getName(),
                         tool.getDescription(),
                         ToolDefHelper.toParamDefs(tool.getParameters()),
-                        args -> ToolDefHelper.formatResult(tool.execute(
-                                new ToolContext(args, config.workspaceDir(), apiUrl, apiKey, sharedToolRegistry, blockedPaths))),
+                        args -> {
+                            // 从 ThreadLocal 获取当前会话名称
+                            String sessionId = currentSessionName.get();
+                            return ToolDefHelper.formatResult(tool.execute(
+                                    new ToolContext(args, config.workspaceDir(), apiUrl, apiKey, sharedToolRegistry, blockedPaths, sessionId)));
+                        },
                         tool.isReadOnly(),
                         tool.isStormExempt(),
                         toolSpec));
@@ -453,6 +462,10 @@ public class AgentService {
         ReentrantLock lock = getSessionLock(sessionKey);
         lock.lock();
 
+        // 设置当前会话名称到 ThreadLocal，供工具执行时获取
+        String effectiveSessionName = sessionName != null ? sessionName : "default";
+        currentSessionName.set(effectiveSessionName);
+
         try {
             Agent4jAgent agent = getOrCreateAgent(sessionKey);
             if (agent == null) {
@@ -462,6 +475,8 @@ public class AgentService {
             agent.setOutput(AgentOutput.NOOP);
             return agent.chat(message);
         } finally {
+            // 清理 ThreadLocal
+            currentSessionName.remove();
             // 刷入会话数据
             Agent4jAgent agent = agentCache.get(sessionKey);
             if (agent != null) {
@@ -497,6 +512,10 @@ public class AgentService {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         ReentrantLock lock = getSessionLock(sessionKey);
         lock.lock();
+
+        // 设置当前会话名称到 ThreadLocal，供工具执行时获取
+        String effectiveSessionName = sessionName != null ? sessionName : "default";
+        currentSessionName.set(effectiveSessionName);
 
         try {
             Agent4jAgent agent = getOrCreateAgent(sessionKey);
@@ -581,6 +600,8 @@ public class AgentService {
                 System.err.println("[web] 发送错误信息失败（可能SSE连接已断开）: " + ex.getMessage());
             }
         } finally {
+            // 清理 ThreadLocal
+            currentSessionName.remove();
             // 恢复 Agent 输出
             Agent4jAgent agent = agentCache.get(sessionKey);
             if (agent != null) {
