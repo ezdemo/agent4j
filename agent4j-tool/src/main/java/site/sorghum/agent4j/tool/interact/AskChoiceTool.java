@@ -7,6 +7,7 @@ import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
@@ -40,7 +41,9 @@ public class AskChoiceTool extends AgentTool {
                 + "3. **适用场景**：当需要用户做出选择时使用，如确认操作方式\n\n"
                 + "参数：\n"
                 + "  - question (string, 必填): 问题\n"
-                + "  - options (array, 必填): 选项列表\n"
+                + "  - options (array, 必填): 选项列表，支持两种格式：\n"
+                + "    - 简单字符串数组: [\"选项1\", \"选项2\"]\n"
+                + "    - 对象数组: [{\"title\": \"选项1\", \"summary\": \"说明\"}, ...]\n"
                 + "  - allowCustom (boolean, 可选): 是否允许自定义输入\n\n"
                 + "只读：否\n"
                 + "风暴豁免：否";
@@ -58,8 +61,36 @@ public class AskChoiceTool extends AgentTool {
     @Override
     public ToolResult execute(ToolContext ctx) {
         @SuppressWarnings("unchecked")
-        List<Map<String, Object>> options = (List<Map<String, Object>>) ctx.getParams().get("options");
+        List<?> rawOptions = (List<?>) ctx.getParams().get("options");
+        List<Map<String, Object>> options = normalizeOptions(rawOptions);
         return ToolResult.ok(interactionService.askChoice(ctx.getString("question"),
                 options, ctx.getBool("allowCustom", false)));
+    }
+
+    /**
+     * 将 options 统一转换为 List<Map<String, Object>> 格式。
+     * 兼容两种输入：
+     * 1. 字符串数组 ["选项1", "选项2"] → [{"title": "选项1"}, {"title": "选项2"}]
+     * 2. 对象数组 [{"title": "选项1", "summary": "说明"}] → 保持不变
+     */
+    @SuppressWarnings("unchecked")
+    private List<Map<String, Object>> normalizeOptions(List<?> raw) {
+        if (raw == null || raw.isEmpty()) return new ArrayList<>();
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (Object item : raw) {
+            if (item instanceof Map) {
+                result.add((Map<String, Object>) item);
+            } else if (item instanceof String) {
+                Map<String, Object> opt = new java.util.HashMap<>();
+                opt.put("title", item);
+                result.add(opt);
+            } else {
+                // 其他类型转为字符串处理
+                Map<String, Object> opt = new java.util.HashMap<>();
+                opt.put("title", String.valueOf(item));
+                result.add(opt);
+            }
+        }
+        return result;
     }
 }
