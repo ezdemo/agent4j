@@ -10,15 +10,7 @@
       </button>
 
       <div class="tb-brand">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none">
-          <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="url(#tbGrad)" stroke="url(#tbGrad)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-          <defs>
-            <linearGradient id="tbGrad" x1="3" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
-              <stop stop-color="#6366f1"/>
-              <stop offset="1" stop-color="#8b5cf6"/>
-            </linearGradient>
-          </defs>
-        </svg>
+        <img src="../assets/logo.png" alt="Agent4j Logo" class="titlebar-logo-img" />
         <span class="tb-brand-name">Agent4j</span>
       </div>
 
@@ -177,6 +169,12 @@ const closeWindow = async () => {
   align-items: center;
   gap: 5px;
   flex-shrink: 0;
+}
+
+.titlebar-logo-img {
+  width: 18px;
+  height: 18px;
+  object-fit: contain;
 }
 .tb-brand-name {
   font-size: 12px;

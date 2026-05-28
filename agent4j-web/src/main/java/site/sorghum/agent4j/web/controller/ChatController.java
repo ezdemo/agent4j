@@ -51,6 +51,20 @@ public class ChatController {
     }
 
     /**
+     * 中断当前聊天 —— POST /api/chat/abort
+     */
+    @Post
+    @Mapping("/abort")
+    public Object abort() {
+        try {
+            agentService.abortCurrentChat();
+            return ApiResponse.ok("已发送中断请求");
+        } catch (Exception e) {
+            return ApiResponse.fail("中断失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * SSE 流式聊天 —— POST /api/chat/stream
      */
     @Post

@@ -121,6 +121,11 @@ export const chatAPI = {
     return api.post('/chat', { message })
   },
   
+  // 中断当前聊天 - POST /api/chat/abort
+  abort: () => {
+    return api.post('/chat/abort')
+  },
+  
   // SSE流式聊天 - POST /api/chat/stream
   sendMessageStream: (message, onMessage, onDone, onError) => {
     const abortController = new AbortController()

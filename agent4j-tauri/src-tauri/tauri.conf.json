@@ -35,10 +35,10 @@
     "copyright": "Copyright © 2024 Agent4j Team",
     "externalBin": [],
     "icon": [
+      "icons/icon.png",
       "icons/32x32.png",
       "icons/128x128.png",
       "icons/128x128@2x.png",
-      "icons/icon.icns",
       "icons/icon.ico"
     ],
     "longDescription": "Agent4j - 智能 AI 代码助手桌面端",

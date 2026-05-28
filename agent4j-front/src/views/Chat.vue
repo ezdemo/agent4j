@@ -102,7 +102,12 @@
           <button class="btn-icon-sm" :class="{ active: planMode }" @click="togglePlan" title="计划模式">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
           </button>
+          <button v-if="streaming" class="stop-btn" @click="abortChat" title="停止生成 (Esc)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+            <span class="stop-text">停止</span>
+          </button>
           <button
+            v-else
             class="send-btn"
             :class="{ active: inputText.trim() && !streaming }"
             @click="sendMessage"
@@ -181,6 +186,7 @@ const messages = ref([])
 const streaming = ref(false)
 const planMode = ref(false)
 const inputFocused = ref(false)
+let currentAbortController = null
 
 // Usage 相关
 const usage = ref({ promptTokens: 0, completionTokens: 0, cacheHit: 0, cacheMiss: 0, maxContextTokens: 128000, lastPromptTokens: 0 })
@@ -334,6 +340,11 @@ const scroll = async () => {
 }
 
 const handleEnter = e => {
+  if (e.key === 'Escape' && streaming.value) {
+    e.preventDefault()
+    abortChat()
+    return
+  }
   if (!e.shiftKey) { e.preventDefault(); sendMessage() }
 }
 
@@ -367,8 +378,9 @@ const sendMessage = async () => {
   const getMsg = () => messages.value[isSilent ? -1 : mi] // 静默命令时 getMsg 返回 undefined
 
   try {
-    chatAPI.sendMessageStream(text,
+    const streamResult = chatAPI.sendMessageStream(text,
       data => {
+        currentAbortController = streamResult
         // 静默命令：首次收到有内容的数据时才创建助手气泡
         if (isSilent) {
           if (!data.type || data.type === 'done') return
@@ -413,6 +425,7 @@ const sendMessage = async () => {
       },
       () => {
         streaming.value = false
+        currentAbortController = null
         // 流结束后清理空的助手气泡
         const last = messages.value[messages.value.length - 1]
         if (last?.role === 'assistant' && (!last.blocks || last.blocks.length === 0)) {
@@ -423,12 +436,25 @@ const sendMessage = async () => {
       },
       () => {
         streaming.value = false
+        currentAbortController = null
         const msg = getMsg()
         if (msg && !msg.blocks.length) msg.blocks.push({ type: 'content', content: '连接错误' })
       }
     )
   } catch { streaming.value = false }
   await scroll()
+}
+
+const abortChat = async () => {
+  if (currentAbortController) {
+    currentAbortController.abort()
+    currentAbortController = null
+  }
+  // 同时通知后端中断
+  try {
+    await chatAPI.abort()
+  } catch {}
+  streaming.value = false
 }
 
 const clearChat = async () => {
@@ -849,6 +875,40 @@ defineExpose({ clearMessages, loadSession, sendCommand, exportChat })
   color: #fff;
 }
 .send-btn.active:hover { background: var(--blue-dark); }
+
+.stop-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--red);
+  color: #fff;
+  border-radius: var(--r);
+  font-size: 12px;
+  font-weight: 500;
+  transition: all var(--t);
+  animation: pulse-red 1.5s infinite;
+}
+.stop-btn:hover {
+  background: var(--red-dark);
+  transform: scale(1.05);
+}
+.stop-btn svg {
+  animation: spin 1s linear infinite;
+}
+.stop-text {
+  margin-left: 2px;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+@keyframes pulse-red {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
+  50% { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0); }
+}
 
 .btn-icon-sm.active { background: var(--accent-bg); color: var(--accent); }
 

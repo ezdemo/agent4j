@@ -416,6 +416,19 @@ public class Agent4jAgent {
     }
 
     /**
+     * 中断当前聊天 —— 调用底层 ModelClient 的中断方法。
+     * 用于前端主动停止生成。
+     */
+    public void abort() {
+        if (loop != null) {
+            ModelClient client = loop.getclient();
+            if (client != null) {
+                client.abortStream();
+            }
+        }
+    }
+
+    /**
      * 刷入会话数据到磁盘。
      * 每轮对话结束后调用，确保消息已持久化。
      */

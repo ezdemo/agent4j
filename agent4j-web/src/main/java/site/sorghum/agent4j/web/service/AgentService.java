@@ -102,6 +102,15 @@ public class AgentService {
     // ==================== 聊天 ====================
 
     /**
+     * 中断当前聊天 —— 调用 Agent4jAgent 的中断方法。
+     */
+    public void abortCurrentChat() {
+        if (agent != null) {
+            agent.abort();
+        }
+    }
+
+    /**
      * 同步聊天 —— 串行执行，返回完整回复。
      * <p>
      * 命令字符串（如 "/retry"、"/compact"）会由 Agent4jAgent.chat()

@@ -5,15 +5,7 @@
       <div class="welcome-content">
         <div class="logo-container">
           <div class="logo-icon">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" fill="url(#homeGradient)" stroke="url(#homeGradient)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
-              <defs>
-                <linearGradient id="homeGradient" x1="3" y1="2" x2="22" y2="22" gradientUnits="userSpaceOnUse">
-                  <stop stop-color="#6366f1"/>
-                  <stop offset="1" stop-color="#8b5cf6"/>
-                </linearGradient>
-              </defs>
-            </svg>
+            <img src="../assets/logo.png" alt="Agent4j Logo" class="logo-img" />
           </div>
           <div class="logo-glow"></div>
         </div>
@@ -294,7 +286,7 @@ const viewHelp = () => {
 .logo-icon {
   width: 80px;
   height: 80px;
-  background: var(--gradient-primary);
+  background: transparent;
   border-radius: var(--radius-2xl);
   display: flex;
   align-items: center;
@@ -302,6 +294,12 @@ const viewHelp = () => {
   box-shadow: 0 8px 24px rgba(99, 102, 241, 0.3);
   position: relative;
   z-index: 1;
+}
+
+.logo-img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
 }
 
 .logo-glow {
