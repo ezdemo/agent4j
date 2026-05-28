@@ -88,6 +88,45 @@
     <!-- 输入区 -->
     <div class="input-area">
       <div class="input-box" :class="{ focused: inputFocused }">
+        <!-- TODO 图标按钮 -->
+        <div class="todo-trigger" 
+             @mouseenter="handleTodoMouseEnter" 
+             @mouseleave="handleTodoMouseLeave">
+          <button class="todo-btn" :class="{ 'has-todos': todos.length > 0 }">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M9 11l3 3L22 4"/>
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+            <span v-if="todos.length > 0" class="todo-badge">{{ todoStats.total }}</span>
+          </button>
+          
+          <!-- TODO Tooltip -->
+          <Transition name="tooltip">
+            <div v-if="todoTooltipVisible" class="todo-tooltip">
+              <div class="todo-tooltip-header">
+                <span class="todo-tooltip-title">📋 当前任务</span>
+                <span class="todo-tooltip-stats">
+                  {{ todoStats.completed }}/{{ todoStats.total }} 完成
+                </span>
+              </div>
+              <div v-if="todos.length === 0" class="todo-tooltip-empty">
+                暂无任务
+              </div>
+              <div v-else class="todo-tooltip-list">
+                <div v-for="(todo, index) in todos" :key="index" class="todo-tooltip-item">
+                  <span class="todo-status-icon">{{ getTodoStatusIcon(todo.status) }}</span>
+                  <span class="todo-content" :class="todo.status">{{ todo.content }}</span>
+                </div>
+              </div>
+              <div v-if="todoStats.inProgress > 0" class="todo-tooltip-footer">
+                <div class="todo-progress-bar">
+                  <div class="todo-progress-fill" :style="{ width: (todoStats.completed / todoStats.total * 100) + '%' }"></div>
+                </div>
+              </div>
+            </div>
+          </Transition>
+        </div>
+        
         <textarea
           ref="inputField"
           v-model="inputText"
@@ -190,6 +229,11 @@ const planMode = ref(false)
 const inputFocused = ref(false)
 let currentAbortController = null
 
+// TODO 相关状态
+const todos = ref([])
+const todoTooltipVisible = ref(false)
+const todoTooltipTimer = ref(null)
+
 // Usage 相关
 const usage = ref({ promptTokens: 0, completionTokens: 0, cacheHit: 0, cacheMiss: 0, maxContextTokens: 128000, lastPromptTokens: 0 })
 const currentModel = ref('')
@@ -238,6 +282,56 @@ const loadUsage = async (override) => {
     }
   } catch {}
 }
+
+// 获取当前会话的 TODO 列表
+const fetchTodos = async () => {
+  if (!props.sessionName) {
+    todos.value = []
+    return
+  }
+  try {
+    const params = { sessionName: props.sessionName }
+    if (props.workspaceHash) params.workspaceHash = props.workspaceHash
+    const res = await configAPI.getTodos(params)
+    if (res.success) {
+      todos.value = res.data?.todos || []
+    }
+  } catch {
+    todos.value = []
+  }
+}
+
+// TODO tooltip 处理
+const handleTodoMouseEnter = () => {
+  todoTooltipTimer.value = setTimeout(() => {
+    todoTooltipVisible.value = true
+    fetchTodos()
+  }, 300)
+}
+
+const handleTodoMouseLeave = () => {
+  clearTimeout(todoTooltipTimer.value)
+  todoTooltipVisible.value = false
+}
+
+// 获取 TODO 状态图标
+const getTodoStatusIcon = (status) => {
+  switch (status) {
+    case 'completed': return '✅'
+    case 'in_progress': return '🔄'
+    case 'pending': return '⬜'
+    default: return '❓'
+  }
+}
+
+// 计算 TODO 统计
+const todoStats = computed(() => {
+  const total = todos.value.length
+  const completed = todos.value.filter(t => t.status === 'completed').length
+  const inProgress = todos.value.filter(t => t.status === 'in_progress').length
+  const pending = todos.value.filter(t => t.status === 'pending').length
+  return { total, completed, inProgress, pending }
+})
 
 const switchModel = async (modelName) => {
   if (modelName === currentModel.value) {
@@ -1105,4 +1199,169 @@ defineExpose({ clearMessages, loadSession, sendCommand, exportChat })
 }
 
 @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
+
+/* TODO 触发器 */
+.todo-trigger {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.todo-btn {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-4);
+  transition: all var(--t);
+  position: relative;
+}
+
+.todo-btn:hover {
+  background: var(--bg-3);
+  color: var(--fg-2);
+}
+
+.todo-btn.has-todos {
+  color: var(--accent);
+}
+
+.todo-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 3px;
+  background: var(--accent);
+  color: white;
+  font-size: 9px;
+  font-weight: 700;
+  border-radius: 7px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* TODO Tooltip */
+.todo-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 280px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.todo-tooltip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.todo-tooltip-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+}
+
+.todo-tooltip-stats {
+  font-size: 11px;
+  color: var(--fg-4);
+  background: var(--bg-3);
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+}
+
+.todo-tooltip-empty {
+  padding: 16px;
+  text-align: center;
+  color: var(--fg-4);
+  font-size: 12px;
+}
+
+.todo-tooltip-list {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.todo-tooltip-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  transition: background var(--t);
+}
+
+.todo-tooltip-item:hover {
+  background: var(--bg-2);
+}
+
+.todo-status-icon {
+  flex-shrink: 0;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.todo-content {
+  font-size: 12px;
+  color: var(--fg-2);
+  line-height: 1.5;
+}
+
+.todo-content.completed {
+  text-decoration: line-through;
+  color: var(--fg-4);
+}
+
+.todo-content.in_progress {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.todo-tooltip-footer {
+  padding: 6px 12px 8px;
+  border-top: 1px solid var(--border);
+}
+
+.todo-progress-bar {
+  height: 3px;
+  background: var(--bg-3);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.todo-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  border-radius: 2px;
+  transition: width 0.3s ease;
+}
+
+/* Tooltip 动画 */
+.tooltip-enter-active,
+.tooltip-leave-active {
+  transition: all 0.2s ease;
+}
+
+.tooltip-enter-from,
+.tooltip-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
+/* 输入框内 textarea 需要 flex: 1 */
+.input-box textarea {
+  flex: 1;
+}
 </style>

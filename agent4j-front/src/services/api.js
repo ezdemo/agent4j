@@ -342,6 +342,14 @@ export const configAPI = {
     return api.get('/usage', { params })
   },
   
+  // 获取会话 TODO 列表 - GET /api/sessions/{name}/todos?workspaceHash=xxx
+  getTodos: (params) => {
+    const { sessionName, workspaceHash } = params || {}
+    if (!sessionName) return Promise.resolve({ success: true, data: { todos: [] } })
+    const query = workspaceHash ? { workspaceHash } : {}
+    return api.get(`/sessions/${sessionName}/todos`, { params: query })
+  },
+  
   // 获取使用历史 - GET /api/usage/history
   getUsageHistory: (params) => {
     return api.get('/usage/history', { params })

@@ -60,6 +60,45 @@
         
         <!-- 输入区域 -->
         <div class="input-area">
+          <!-- TODO 图标按钮 -->
+          <div class="todo-trigger" 
+               @mouseenter="handleTodoMouseEnter" 
+               @mouseleave="handleTodoMouseLeave">
+            <button class="todo-btn" :class="{ 'has-todos': todos.length > 0 }">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M9 11l3 3L22 4"/>
+                <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+              </svg>
+              <span v-if="todos.length > 0" class="todo-badge">{{ todoStats.total }}</span>
+            </button>
+            
+            <!-- TODO Tooltip -->
+            <Transition name="tooltip">
+              <div v-if="todoTooltipVisible" class="todo-tooltip">
+                <div class="todo-tooltip-header">
+                  <span class="todo-tooltip-title">📋 当前任务</span>
+                  <span class="todo-tooltip-stats">
+                    {{ todoStats.completed }}/{{ todoStats.total }} 完成
+                  </span>
+                </div>
+                <div v-if="todos.length === 0" class="todo-tooltip-empty">
+                  暂无任务
+                </div>
+                <div v-else class="todo-tooltip-list">
+                  <div v-for="(todo, index) in todos" :key="index" class="todo-tooltip-item">
+                    <span class="todo-status-icon">{{ getTodoStatusIcon(todo.status) }}</span>
+                    <span class="todo-content" :class="todo.status">{{ todo.content }}</span>
+                  </div>
+                </div>
+                <div v-if="todoStats.inProgress > 0" class="todo-tooltip-footer">
+                  <div class="todo-progress-bar">
+                    <div class="todo-progress-fill" :style="{ width: (todoStats.completed / todoStats.total * 100) + '%' }"></div>
+                  </div>
+                </div>
+              </div>
+            </Transition>
+          </div>
+          
           <textarea
             ref="textareaRef"
             :value="draft"
@@ -171,7 +210,8 @@ const props = defineProps({
   modelLabel: { type: String, default: 'deepseek' },
   editMode: { type: String, default: 'auto' },
   queuedSends: { type: Array, default: () => [] },
-  slashCommands: { type: Array, default: () => [] }
+  slashCommands: { type: Array, default: () => [] },
+  todos: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits([
@@ -184,6 +224,8 @@ const focused = ref(false)
 const slashPopup = ref(false)
 const slashQuery = ref('')
 const activePopupIdx = ref(0)
+const todoTooltipVisible = ref(false)
+const todoTooltipTimer = ref(null)
 
 // 模式配置
 const modes = [
@@ -354,6 +396,38 @@ const selectSlashCmd = (cmd) => {
   }
 }
 
+// TODO tooltip 处理
+const handleTodoMouseEnter = () => {
+  todoTooltipTimer.value = setTimeout(() => {
+    todoTooltipVisible.value = true
+    emit('fetchTodos')
+  }, 300)
+}
+
+const handleTodoMouseLeave = () => {
+  clearTimeout(todoTooltipTimer.value)
+  todoTooltipVisible.value = false
+}
+
+// 获取 TODO 状态图标
+const getTodoStatusIcon = (status) => {
+  switch (status) {
+    case 'completed': return '✅'
+    case 'in_progress': return '🔄'
+    case 'pending': return '⬜'
+    default: return '❓'
+  }
+}
+
+// 计算 TODO 统计
+const todoStats = computed(() => {
+  const total = props.todos.length
+  const completed = props.todos.filter(t => t.status === 'completed').length
+  const inProgress = props.todos.filter(t => t.status === 'in_progress').length
+  const pending = props.todos.filter(t => t.status === 'pending').length
+  return { total, completed, inProgress, pending }
+})
+
 // 监听draft变化
 watch(() => props.draft, (newVal) => {
   if (!newVal && slashPopup.value) {
@@ -477,6 +551,174 @@ defineExpose({
   position: relative;
 }
 
+/* 输入区域布局 */
+.input-area {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+}
+
+/* TODO 触发器 */
+.todo-trigger {
+  position: relative;
+  padding: var(--space-3) 0 var(--space-3) var(--space-3);
+  flex-shrink: 0;
+}
+
+.todo-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--fg-muted);
+  transition: all var(--transition-fast);
+  position: relative;
+}
+
+.todo-btn:hover {
+  background: var(--surface-hover);
+  color: var(--fg);
+}
+
+.todo-btn.has-todos {
+  color: var(--brand-primary);
+}
+
+.todo-badge {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  background: var(--brand-primary);
+  color: white;
+  font-size: 10px;
+  font-weight: var(--font-bold);
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* TODO Tooltip */
+.todo-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  width: 280px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.todo-tooltip-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--space-3) var(--space-4);
+  background: var(--bg-secondary);
+  border-bottom: 1px solid var(--border);
+}
+
+.todo-tooltip-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--fg);
+}
+
+.todo-tooltip-stats {
+  font-size: var(--text-xs);
+  color: var(--fg-muted);
+  background: var(--surface-hover);
+  padding: 2px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.todo-tooltip-empty {
+  padding: var(--space-4);
+  text-align: center;
+  color: var(--fg-muted);
+  font-size: var(--text-sm);
+}
+
+.todo-tooltip-list {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: var(--space-2);
+}
+
+.todo-tooltip-item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius);
+  transition: background var(--transition-fast);
+}
+
+.todo-tooltip-item:hover {
+  background: var(--surface-hover);
+}
+
+.todo-status-icon {
+  flex-shrink: 0;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.todo-content {
+  font-size: var(--text-sm);
+  color: var(--fg);
+  line-height: 1.5;
+}
+
+.todo-content.completed {
+  text-decoration: line-through;
+  color: var(--fg-muted);
+}
+
+.todo-content.in_progress {
+  color: var(--brand-primary);
+  font-weight: var(--font-medium);
+}
+
+.todo-tooltip-footer {
+  padding: var(--space-2) var(--space-4) var(--space-3);
+  border-top: 1px solid var(--border);
+}
+
+.todo-progress-bar {
+  height: 4px;
+  background: var(--bg-secondary);
+  border-radius: 2px;
+  overflow: hidden;
+}
+
+.todo-progress-fill {
+  height: 100%;
+  background: var(--gradient-primary);
+  border-radius: 2px;
+  transition: width var(--transition-normal);
+}
+
+/* Tooltip 动画 */
+.tooltip-enter-active,
+.tooltip-leave-active {
+  transition: all 0.2s ease;
+}
+
+.tooltip-enter-from,
+.tooltip-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
+}
+
 .message-textarea {
   display: block;
   width: 100%;
@@ -491,6 +733,7 @@ defineExpose({
   font-size: var(--text-base);
   line-height: 1.6;
   color: var(--fg);
+  flex: 1;
 }
 
 .message-textarea::placeholder {
