@@ -285,18 +285,19 @@ const loadUsage = async (override) => {
 
 // 获取当前会话的 TODO 列表
 const fetchTodos = async () => {
-  if (!props.sessionName) {
-    todos.value = []
-    return
-  }
   try {
-    const params = { sessionName: props.sessionName }
+    const params = {}
+    // 使用当前会话名，如果没有则使用 'default'
+    params.sessionName = props.sessionName || 'default'
     if (props.workspaceHash) params.workspaceHash = props.workspaceHash
+    console.log('[fetchTodos] 请求参数:', params)
     const res = await configAPI.getTodos(params)
+    console.log('[fetchTodos] 响应:', res)
     if (res.success) {
       todos.value = res.data?.todos || []
     }
-  } catch {
+  } catch (e) {
+    console.error('[fetchTodos] 错误:', e)
     todos.value = []
   }
 }
