@@ -287,10 +287,8 @@ public class AgentService {
 
                 agent = builder.buildLightweight();
 
-                // 切换到指定会话
-                if (!"default".equals(sessionName)) {
-                    agent.switchSession(sessionName);
-                }
+                // 切换到指定会话（含 default，以恢复 usage / title）
+                agent.switchSession(sessionName);
 
                 // 注册 token 用量追踪
                 Agent4jAgent finalAgent = agent;
@@ -757,11 +755,51 @@ public class AgentService {
      */
     public long[] getSessionUsage(String workspacePath, String sessionName) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
-        Agent4jAgent agent = agentCache.get(sessionKey);
+        Agent4jAgent agent = getOrCreateAgent(sessionKey);
         if (agent != null) {
             return agent.getSessionUsage();
         }
         return new long[]{0, 0, 0, 0};
+    }
+
+    /**
+     * 获取指定会话的 token 用量（返回 Map 格式，前端友好）。
+     *
+     * @param workspacePath 工作区路径（可选）
+     * @param sessionName   会话名称（可选）
+     * @return usage 数据 Map
+     */
+    public Map<String, Object> getSessionUsageMap(String workspacePath, String sessionName) {
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        Agent4jAgent agent = agentCache.get(sessionKey);
+        Map<String, Object> result = new LinkedHashMap<>();
+        
+        if (agent != null) {
+            long[] usage = agent.getSessionUsage();
+            long promptTokens = usage[0];
+            long completionTokens = usage[1];
+            long cacheHit = usage[2];
+            long cacheMiss = usage[3];
+            long lastPromptTokens = usage.length > 4 ? usage[4] : 0;
+            int maxContextTokens = agent.getMaxContextTokens();
+            
+            result.put("promptTokens", promptTokens);
+            result.put("completionTokens", completionTokens);
+            result.put("cacheHit", cacheHit);
+            result.put("cacheMiss", cacheMiss);
+            result.put("lastPromptTokens", lastPromptTokens);
+            result.put("maxContextTokens", maxContextTokens);
+            result.put("totalTokens", promptTokens + completionTokens);
+        } else {
+            result.put("promptTokens", 0);
+            result.put("completionTokens", 0);
+            result.put("cacheHit", 0);
+            result.put("cacheMiss", 0);
+            result.put("lastPromptTokens", 0);
+            result.put("maxContextTokens", 128000);
+            result.put("totalTokens", 0);
+        }
+        return result;
     }
 
     /**

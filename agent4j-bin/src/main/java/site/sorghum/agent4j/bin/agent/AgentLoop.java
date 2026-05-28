@@ -275,7 +275,7 @@ public class AgentLoop {
                     return content;
                 }
                 if (reasoningContent != null && !reasoningContent.isEmpty()) {
-                    ctx.addAssistant(reasoningContent, null, null);
+                    ctx.addAssistant(null, null, reasoningContent);
                     return reasoningContent;
                 }
                 return "⏹️ 已停止生成";
@@ -480,7 +480,7 @@ public class AgentLoop {
                     return abortContent;
                 }
                 if (abortReasoning != null && !abortReasoning.isEmpty()) {
-                    ctx.addAssistant(abortReasoning, null, null);
+                    ctx.addAssistant(null, null, abortReasoning);
                     return abortReasoning;
                 }
                 return "⏹️ 已停止生成";
@@ -803,11 +803,11 @@ public class AgentLoop {
                 } catch (Exception e) {
                     // SSE连接断开时忽略异常，继续执行
                 }
-                ctx.addAssistant(reasoningContent, null, null);
+                ctx.addAssistant(null, null, reasoningContent);
                 return reasoningContent;
             }
         }
-        ctx.addAssistant(content, null, null);
+        ctx.addAssistant(content, null, reasoningContent);
         return content != null ? content : "(empty response)";
     }
 

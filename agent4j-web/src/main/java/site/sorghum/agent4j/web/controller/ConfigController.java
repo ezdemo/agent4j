@@ -116,7 +116,7 @@ public class ConfigController {
         if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
-        return ApiResponse.ok(agentService.getUsage(workspacePath, sessionName));
+        return ApiResponse.ok(agentService.getSessionUsageMap(workspacePath, sessionName));
     }
 
     /** 获取当前工作目录 —— GET /api/workspace */

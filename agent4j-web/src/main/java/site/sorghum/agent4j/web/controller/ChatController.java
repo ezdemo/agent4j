@@ -46,7 +46,7 @@ public class ChatController {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("reply", reply);
             data.put("elapsedMs", elapsed);
-            data.put("usage", agentService.getSessionUsage(workspacePath, request.sessionName));
+            data.put("usage", agentService.getSessionUsageMap(workspacePath, request.sessionName));
             return ApiResponse.ok(data);
         } catch (Exception e) {
             return ApiResponse.fail("聊天出错: " + e.getMessage());

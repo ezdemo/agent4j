@@ -422,6 +422,11 @@ const sendMessage = async () => {
           }
         } else if (data.type === 'error') {
           msg.blocks.push({ type: 'content', content: '错误: ' + (data.error || data.content || '未知') })
+        } else if (data.type === 'usage') {
+          // 更新 usage 数据
+          if (data.promptTokens !== undefined) {
+            usage.value = { ...usage.value, ...data }
+          }
         }
         scroll()
       },

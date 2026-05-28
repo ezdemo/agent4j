@@ -234,11 +234,22 @@ public class Agent4jAgent {
 
     /**
      * 切换到指定会话。
-     * 切换后重新检查标题生成状态。
+     * 切换后加载历史消息到上下文并恢复 token 用量。
      */
     public boolean switchSession(String name) {
         boolean ok = getSessionStore().switchTo(name);
         if (ok) {
+            // 加载会话历史消息到上下文（不做 heal，保留思考/工具等完整数据）
+            try {
+                List<Map<String, Object>> loaded = getSessionStore().load();
+                for (Map<String, Object> m : loaded) {
+                    sessionService.injectHistory(m);
+                }
+            } catch (IOException e) {
+                System.err.println("[session] 加载会话历史失败: " + e.getMessage());
+            }
+            // 恢复该会话的 token 用量
+            sessionService.restoreUsage(name);
             try {
                 String existingTitle = getSessionStore().getTitle(name);
                 sessionService.setTitleGenerated(existingTitle != null && !existingTitle.isEmpty());
