@@ -20,6 +20,7 @@ import site.sorghum.agent4j.bin.tool.ToolDef;
 import site.sorghum.agent4j.bin.tool.ToolDefHelper;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
+import site.sorghum.agent4j.bin.skill.SkillStoreV2;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolResult;
@@ -77,6 +78,11 @@ public class AgentService {
      * 共享的 PromptPrefix（所有会话复用）
      */
     private volatile PromptPrefix sharedPrefix;
+
+    /**
+     * 共享的 SkillStoreV2（所有会话复用）
+     */
+    private volatile SkillStoreV2 sharedSkillStore;
 
     /**
      * 共享的 Agent4jConfig
@@ -205,7 +211,20 @@ public class AgentService {
             }
             // 将工具规范追加到 system prompt 末尾
             systemPrompt = systemPrompt + "\n\n" + toolSpecsBuilder.toString().trim();
+            
+            // 初始化技能存储并加载 skill 索引
+            this.sharedSkillStore = new SkillStoreV2(config.workspaceDir(), 
+                    Paths.get(System.getProperty("user.home")), 
+                    Collections.emptyList());
+            String skillsIndex = sharedSkillStore.buildSkillsIndex();
+            if (!skillsIndex.isEmpty()) {
+                systemPrompt = systemPrompt + "\n\n" + skillsIndex;
+                System.out.println("[web] 已加载 skill 索引，共 " + sharedSkillStore.list().size() + " 个 skill");
+            }
 
+            // 注册 SkillStoreV2 到容器，供 RunSkillTool 和 InstallSkillTool 使用
+            Solon.context().wrapAndPut(SkillStoreV2.class, sharedSkillStore);
+            
             // 构建缓存优先前缀：system prompt + 工具定义（注册后冻结，跨 turn 稳定）
             this.sharedPrefix = new PromptPrefix(systemPrompt, sharedToolRegistry.toOpenAiTools());
 

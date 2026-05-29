@@ -520,14 +520,15 @@ const sendMessage = async () => {
     messages.value.push({ id: Date.now() + 1, role: 'assistant', time: now(), blocks: [] })
   }
 
-  const getMsg = () => messages.value[isSilent ? -1 : mi] // 静默命令时 getMsg 返回 undefined
+  let getMsg = () => messages.value[isSilent ? -1 : mi] // 静默命令时 getMsg 返回 undefined
+  let silentBubbleCreated = false // 防止静默命令每次 SSE 事件重复创建气泡
 
   try {
     const streamResult = chatAPI.sendMessageStream(text,
       data => {
         currentAbortController = streamResult
-        // 静默命令：首次收到有内容的数据时才创建助手气泡
-        if (isSilent) {
+        // 静默命令：首次收到有内容的数据时才创建助手气泡（只创建一次）
+        if (isSilent && !silentBubbleCreated) {
           if (!data.type || data.type === 'done') return
           const hasContent = (data.type === 'content' && data.content?.trim()) ||
                              (data.type === 'reasoning' && data.content?.trim()) ||
@@ -535,10 +536,8 @@ const sendMessage = async () => {
           if (!hasContent) return
           // 有实际内容了，插入助手气泡
           messages.value.push({ id: Date.now(), role: 'assistant', time: now(), blocks: [] })
-          // 修正 mi 指向
-          const idx = messages.value.length - 1
-          getMsg = () => messages.value[idx]
-          // 不再走静默分支
+          silentBubbleCreated = true
+          getMsg = () => messages.value[messages.value.length - 1]
         }
 
         const msg = getMsg()

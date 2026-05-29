@@ -1,6 +1,6 @@
 package site.sorghum.agent4j.bin.skill;
 
-import org.noear.solon.annotation.Component;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -17,6 +17,7 @@ import java.util.regex.Pattern;
  *
  * @author Sorghum
  */
+@Slf4j
 public class SkillStoreV2 {
 
     private static final String SKILLS_DIRNAME = "skills";

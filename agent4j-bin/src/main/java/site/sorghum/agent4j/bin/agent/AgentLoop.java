@@ -14,6 +14,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 
 /**
  * Agent 循环 —— 编排 prompt → LLM → 工具调用 → 反馈结果 → LLM 的循环。
@@ -74,6 +75,17 @@ public class AgentLoop {
     private volatile String pendingHITLReasoning;
     /** HITL 暂存的解析后工具调用列表 */
     private volatile List<Map<String, Object>> pendingHITTcList;
+
+    // ==================== 沙箱越界 HITL（强制审批，不受 hitlMode 影响） ====================
+
+    /** 沙箱越界 HITL 暂存：完整的工具调用 ONode（供重放） */
+    private volatile ONode pendingSandboxHITToolCalls;
+    /** 沙箱越界 HITL 暂存：assistant content */
+    private volatile String pendingSandboxHITContent;
+    /** 沙箱越界 HITL 暂存：reasoning_content */
+    private volatile String pendingSandboxHITReasoning;
+    /** 沙箱越界 HITL 暂存：越界详情（展示给用户） */
+    private volatile String pendingSandboxHITDetails;
 
     /** 获取 HITL 模式状态 */
     public boolean isHitlMode() { return hitlMode; }
@@ -226,6 +238,15 @@ public class AgentLoop {
         // ---- HITL 恢复：用户已审批 / 拒绝 ----
         if (hitlState == HitlState.APPROVED) {
             hitlState = HitlState.NONE;
+            // 区分沙箱越界 HITL 与普通 HITL
+            if (pendingSandboxHITToolCalls != null) {
+                try {
+                    output.onLog(AgentOutput.LogLevel.INFO, "[hitl] 用户批准沙箱越界，重放工具调用...");
+                } catch (Exception e) {
+                    // 忽略异常
+                }
+                return resumeAfterSandboxHITL(true);
+            }
             try {
                 output.onLog(AgentOutput.LogLevel.INFO, "[hitl] 用户批准，执行工具调用...");
             } catch (Exception e) {
@@ -235,6 +256,15 @@ public class AgentLoop {
         }
         if (hitlState == HitlState.DENIED) {
             hitlState = HitlState.NONE;
+            // 区分沙箱越界 HITL 与普通 HITL
+            if (pendingSandboxHITToolCalls != null) {
+                try {
+                    output.onLog(AgentOutput.LogLevel.INFO, "[hitl] 用户拒绝沙箱越界。");
+                } catch (Exception e) {
+                    // 忽略异常
+                }
+                return resumeAfterSandboxHITL(false);
+            }
             try {
                 output.onLog(AgentOutput.LogLevel.INFO, "[hitl] 用户拒绝，跳过工具调用。");
             } catch (Exception e) {
@@ -331,6 +361,14 @@ public class AgentLoop {
 
             // 6. 并行执行工具调用
             ToolExecutionResult ter = executeToolCalls(toolCalls);
+
+            // 6.1 沙箱越界 HITL：暂停并等待用户审批
+            if (hitlState == HitlState.PENDING && pendingSandboxHITToolCalls != null) {
+                // 暂存 assistant content（审批通过后写入上下文）
+                this.pendingSandboxHITContent = sr.content;
+                this.pendingSandboxHITReasoning = sr.reasoningContent;
+                return interceptForSandboxHITL();
+            }
 
             // 7. 将 assistant 消息和工具结果写入上下文（API 顺序要求：assistant 先于 tool result）
             ctx.addAssistant(sr.content, ter.tcList, sr.reasoningContent);
@@ -530,6 +568,183 @@ public class AgentLoop {
             }
 
             ter = executeToolCalls(nextToolCalls);
+            ctx.addAssistant(sr.content, ter.tcList, sr.reasoningContent);
+            for (Map<String, Object> tr : ter.toolResults) {
+                ctx.addToolResult((String) tr.get("tool_call_id"), (String) tr.get("content"));
+            }
+
+            selfCorrectionAttempts = handleSelfCorrection(
+                    ter.toolResults, ter.anySuppressed, selfCorrectionAttempts);
+            if (selfCorrectionAttempts < 0) {
+                String fallback = "所有工具调用均被风暴断路器抑制，无法继续执行。";
+                ctx.addAssistant(fallback, null, null);
+                return fallback;
+            }
+        }
+    }
+
+    // ==================== 沙箱越界 HITL ====================
+
+    /**
+     * 沙箱越界 HITL 拦截：向用户展示越界详情，等待审批。
+     */
+    private String interceptForSandboxHITL() {
+        String details = this.pendingSandboxHITDetails != null
+                ? this.pendingSandboxHITDetails : "未知路径越界";
+
+        StringBuilder sb = new StringBuilder();
+        sb.append("⏸️  **沙箱越界 — 需要审批**\n\n");
+        sb.append("检测到工具试图访问工作区之外的路径：\n\n");
+        sb.append("> ").append(details).append("\n\n");
+        sb.append("发送 `/agree` 批准执行，`/deny` 拒绝。");
+
+        String message = sb.toString();
+        try {
+            output.onContentDelta(message);
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常
+        }
+        try {
+            output.onContentComplete();
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常
+        }
+        return message;
+    }
+
+    /**
+     * 沙箱越界 HITL 恢复：审批通过后以沙箱旁路模式重放工具调用。
+     */
+    private String resumeAfterSandboxHITL(boolean approved) throws IOException {
+        ONode toolCalls = this.pendingSandboxHITToolCalls;
+        String content = this.pendingSandboxHITContent;
+        String reasoningContent = this.pendingSandboxHITReasoning;
+
+        // 清空暂存
+        this.pendingSandboxHITToolCalls = null;
+        this.pendingSandboxHITContent = null;
+        this.pendingSandboxHITReasoning = null;
+        this.pendingSandboxHITDetails = null;
+
+        if (!approved) {
+            // 用户拒绝：将 assistant 消息（含工具调用）写入上下文，返回拒绝提示
+            List<Map<String, Object>> tcList = parseToolCalls(toolCalls);
+            ctx.addAssistant(content, tcList, reasoningContent);
+            String denyMsg = "沙箱越界已被用户拒绝。";
+            ctx.addAssistant(denyMsg, null, null);
+            return denyMsg;
+        }
+
+        // 用户批准：先写入 assistant 消息，再以沙箱旁路模式执行工具
+        List<Map<String, Object>> tcList = parseToolCalls(toolCalls);
+        ctx.addAssistant(content, tcList, reasoningContent);
+
+        dispatcher.resetStorm();
+        reasonBreaker.reset();
+        resetUserAbort();
+        List<Map<String, Object>> tools = ctx.tools();
+
+        // 重放执行工具调用（沙箱旁路：pass skipSandboxCheck=true 到异步线程）
+        ToolExecutionResult initialTer;
+        try {
+            initialTer = executeToolCalls(toolCalls, true);
+        } catch (Exception e) {
+            output.onLog(AgentOutput.LogLevel.ERROR, "[hitl] 沙箱旁路重放失败: " + e.getMessage());
+            throw new IOException("沙箱旁路重放工具调用失败: " + e.getMessage(), e);
+        }
+
+        // 写入工具结果
+        for (Map<String, Object> tr : initialTer.toolResults) {
+            ctx.addToolResult((String) tr.get("tool_call_id"), (String) tr.get("content"));
+        }
+
+        // Self-Correction 检查
+        int scAttempts = handleSelfCorrection(initialTer.toolResults, initialTer.anySuppressed, 0);
+        if (scAttempts < 0) {
+            String fallback = "所有工具调用均被风暴断路器抑制，无法继续执行。";
+            ctx.addAssistant(fallback, null, null);
+            return fallback;
+        }
+
+        // 继续循环
+        boolean isThinkingMode = client.isThinkingMode();
+        int selfCorrectionAttempts = 0;
+        for (int step = 0; ; step++) {
+            if (userAbortRequested) {
+                try {
+                    output.onLog(AgentOutput.LogLevel.INFO, "[abort] 用户请求中断（沙箱 HITL 恢复循环），停止推理循环");
+                } catch (Exception e) {
+                    // 忽略异常
+                }
+                String lastContent = ctx.getLastAssistantContent();
+                if (lastContent != null && !lastContent.isEmpty()) {
+                    return lastContent;
+                }
+                return "⏹️ 已停止生成";
+            }
+
+            PreparedMessages prepared = prepareMessages(step, isThinkingMode);
+            List<Map<String, Object>> messages = prepared.messages;
+
+            StreamResult sr = streamLLM(messages, tools);
+
+            if (userAbortRequested) {
+                try {
+                    output.onLog(AgentOutput.LogLevel.INFO, "[abort] 用户请求中断（沙箱 HITL streamLLM 后检测），停止推理循环");
+                } catch (Exception e) {
+                    // 忽略异常
+                }
+                String abortContent = sr.content;
+                String abortReasoning = sr.reasoningContent;
+                if (abortContent != null && !abortContent.isEmpty()) {
+                    ctx.addAssistant(abortContent, null, abortReasoning);
+                    return abortContent;
+                }
+                if (abortReasoning != null && !abortReasoning.isEmpty()) {
+                    ctx.addAssistant(null, null, abortReasoning);
+                    return abortReasoning;
+                }
+                return "⏹️ 已停止生成";
+            }
+
+            if (sr.error) {
+                if (recoverFromStreamError(messages, prepared.foldedThisStep)) continue;
+                throw new IOException("[stream] API error during streaming");
+            }
+            try {
+                output.onContentComplete();
+            } catch (Exception e) {
+                // SSE连接断开时忽略异常，继续执行
+            }
+
+            if (sr.loopAborted) {
+                ctx.addUser("[ReasonBreaker] 检测到思考循环，已提前终止本轮推理。请停止当前思路，尝试不同的方法。");
+                selfCorrectionAttempts = 0;
+                continue;
+            }
+
+            ONode nextToolCalls = scavengeToolCalls(sr.toolCalls, sr.reasoningContent, sr.content);
+            boolean hasMoreTools = nextToolCalls != null && nextToolCalls.isArray()
+                    && !nextToolCalls.getArray().isEmpty();
+
+            if (!hasMoreTools) {
+                return handleTextResponse(sr.content, sr.reasoningContent);
+            }
+
+            // 沙箱 HITL 恢复后不再走普通 HITL 拦截（已审批）
+            if (hitlMode) {
+                return interceptForHITL(nextToolCalls, sr.content, sr.reasoningContent);
+            }
+
+            ToolExecutionResult ter = executeToolCalls(nextToolCalls);
+
+            // 再次沙箱越界？再次触发审批
+            if (hitlState == HitlState.PENDING && pendingSandboxHITToolCalls != null) {
+                this.pendingSandboxHITContent = sr.content;
+                this.pendingSandboxHITReasoning = sr.reasoningContent;
+                return interceptForSandboxHITL();
+            }
+
             ctx.addAssistant(sr.content, ter.tcList, sr.reasoningContent);
             for (Map<String, Object> tr : ter.toolResults) {
                 ctx.addToolResult((String) tr.get("tool_call_id"), (String) tr.get("content"));
@@ -830,6 +1045,11 @@ public class AgentLoop {
      */
     @SuppressWarnings("unchecked")
     private ToolExecutionResult executeToolCalls(ONode toolCalls) {
+        return executeToolCalls(toolCalls, false);
+    }
+
+    @SuppressWarnings("unchecked")
+    private ToolExecutionResult executeToolCalls(ONode toolCalls, boolean skipSandboxCheck) {
         // 将 sessionId 设置到 dispatcher（供工具执行时使用）
         dispatcher.setSessionId(this.sessionId);
         
@@ -874,30 +1094,59 @@ public class AgentLoop {
         // 2. 并行分发（CompletableFuture.supplyAsync）
         CompletableFuture<Map<String, Object>>[] futures = new CompletableFuture[tcCount];
         final AtomicBoolean anySuppressed = new AtomicBoolean(false);
+        final AtomicReference<site.sorghum.agent4j.tool.HitlRequiredException> hitlRef =
+                new AtomicReference<>(null);
+        final AtomicReference<String> hitlTcName = new AtomicReference<>(null);
+        final AtomicReference<String> hitlTcArgs = new AtomicReference<>(null);
+        final AtomicReference<String> hitlTcId = new AtomicReference<>(null);
         for (int i = 0; i < tcCount; i++) {
             final int idx = i;
             futures[i] = CompletableFuture.supplyAsync(() -> {
-                ONode tc = tcArray[idx];
-                String tcId = tc.get("id").getString();
-                ONode func = tc.get("function");
-                String tcName = func.get("name").getString();
-                String tcArgs = func.get("arguments").getString();
-                if (tcArgs == null) tcArgs = "{}";
-                String result = dispatcher.dispatch(tcName, tcArgs, MAX_RESULT_TOKENS);
-                if (result != null && result.contains("\"rejectedReason\":\"storm\"")) {
-                    anySuppressed.set(true);
+                // 沙箱旁路：在异步工作线程上设置 ThreadLocal
+                if (skipSandboxCheck) {
+                    site.sorghum.agent4j.tool.ToolContext.enableSandboxBypass();
                 }
                 try {
-                    listener.onToolResult(tcName, result);
-                } catch (Exception e) {
-                    // 忽略异常
+                    ONode tc = tcArray[idx];
+                    String tcId = tc.get("id").getString();
+                    ONode func = tc.get("function");
+                    String tcName = func.get("name").getString();
+                    String tcArgs = func.get("arguments").getString();
+                    if (tcArgs == null) tcArgs = "{}";
+                    try {
+                        String result = dispatcher.dispatch(tcName, tcArgs, MAX_RESULT_TOKENS);
+                        if (result != null && result.contains("\"rejectedReason\":\"storm\"")) {
+                            anySuppressed.set(true);
+                        }
+                        try {
+                            listener.onToolResult(tcName, result);
+                        } catch (Exception e) {
+                            // 忽略异常
+                        }
+                        try {
+                            output.onToolResult(tcName, result);
+                        } catch (Exception e) {
+                            // SSE连接断开时忽略异常，继续执行
+                        }
+                        return toolResult(tcId, result);
+                    } catch (site.sorghum.agent4j.tool.HitlRequiredException e) {
+                        // 沙箱越界 → 暂存 HITL 信息，不执行
+                        hitlRef.set(e);
+                        hitlTcName.set(tcName);
+                        hitlTcArgs.set(tcArgs);
+                        hitlTcId.set(tcId);
+                        // 返回占位结果，等待审批后重放
+                        Map<String, Object> placeholder = new LinkedHashMap<>();
+                        placeholder.put("role", "tool");
+                        placeholder.put("tool_call_id", tcId);
+                        placeholder.put("content", "[HITL_PENDING:" + e.reason() + "] " + e.details());
+                        return placeholder;
+                    }
+                } finally {
+                    if (skipSandboxCheck) {
+                        site.sorghum.agent4j.tool.ToolContext.disableSandboxBypass();
+                    }
                 }
-                try {
-                    output.onToolResult(tcName, result);
-                } catch (Exception e) {
-                    // SSE连接断开时忽略异常，继续执行
-                }
-                return toolResult(tcId, result);
             });
         }
 
@@ -909,6 +1158,20 @@ public class AgentLoop {
                 toolResults.add(f.get());
             } catch (InterruptedException | java.util.concurrent.ExecutionException e) {
                 toolResults.add(toolResult("?", "[ERROR] " + e.getMessage()));
+            }
+        }
+
+        // 3.1 沙箱越界 HITL：暂存并标记待审批
+        site.sorghum.agent4j.tool.HitlRequiredException hitlEx = hitlRef.get();
+        if (hitlEx != null) {
+            this.pendingSandboxHITToolCalls = toolCalls;
+            this.pendingSandboxHITDetails = hitlEx.details();
+            this.hitlState = HitlState.PENDING;
+            try {
+                output.onLog(AgentOutput.LogLevel.WARN,
+                        "[hitl] 沙箱越界触发强制审批: " + hitlEx.details());
+            } catch (Exception e) {
+                // 忽略异常
             }
         }
 

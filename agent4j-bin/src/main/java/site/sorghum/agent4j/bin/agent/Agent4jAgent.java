@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.bin.agent;
 
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.Solon;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
@@ -32,6 +33,7 @@ import site.sorghum.agent4j.bin.skill.SkillV2;
  *
  * @author Sorghum
  */
+@Slf4j
 public class Agent4jAgent {
 
     private AgentLoop loop;
@@ -63,7 +65,10 @@ public class Agent4jAgent {
         this.skillStore = new SkillStoreV2(b.workspace, 
                 Paths.get(System.getProperty("user.home")), 
                 Collections.<Path>emptyList());
-        Solon.context().beanInject(skillStore);
+        
+        // 注册到容器（供 RunSkillTool / InstallSkillTool 使用）
+        Solon.context().wrapAndPut(SkillStoreV2.class, skillStore);
+        
         // 使用普通工具注册表
         ToolRegistry registry = new ToolRegistry();
 
@@ -71,13 +76,13 @@ public class Agent4jAgent {
         Set<String> disabledTools = b.disabledTools != null ? b.disabledTools : Collections.<String>emptySet();
         registry.setDisabledTools(disabledTools);
         if (!disabledTools.isEmpty()) {
-            System.err.println("[config] 已禁用工具: " + String.join(", ", disabledTools));
+            log.info("[config] 已禁用工具: {}", String.join(", ", disabledTools));
         }
 
         // 屏蔽目录列表
         final List<String> blockedPaths = b.blockedPaths != null ? b.blockedPaths : Collections.<String>emptyList();
         if (!blockedPaths.isEmpty()) {
-            System.err.println("[config] 已屏蔽目录: " + String.join(", ", blockedPaths));
+            log.info("[config] 已屏蔽目录: {}", String.join(", ", blockedPaths));
         }
 
         // 存储所有工具的 toToolSpec 结果，用于追加到 system prompt
@@ -124,7 +129,7 @@ public class Agent4jAgent {
         String skillsIndex = skillStore.buildSkillsIndex();
         if (!skillsIndex.isEmpty()) {
             systemPrompt = systemPrompt + "\n\n" + skillsIndex;
-            System.err.println("[skill] 已加载 skill 索引，共 " + skillStore.list().size() + " 个 skill");
+            log.info("[skill] 已加载 skill 索引，共 {} 个 skill", skillStore.list().size());
         }
 
         // 构建缓存优先前缀：system prompt + 工具定义（注册后冻结，跨 turn 稳定）
@@ -140,7 +145,7 @@ public class Agent4jAgent {
             this.sessionService = new SessionService(ctx, sessionsDir);
             sessionService.loadOrCreate(System.getenv("AGENT4J_SESSION"));
         } catch (IOException e) {
-            System.err.println("[session] 初始化失败: " + e.getMessage());
+            log.error("[session] 初始化失败: {}", e.getMessage());
         }
 
         this.loop = new AgentLoop(client, registry, ctx, b.hitl);
@@ -178,7 +183,7 @@ public class Agent4jAgent {
             this.sessionService = new SessionService(ctx, sessionsDir);
             sessionService.loadOrCreate(System.getenv("AGENT4J_SESSION"));
         } catch (IOException e) {
-            System.err.println("[session] 初始化失败: " + e.getMessage());
+            log.error("[session] 初始化失败: {}", e.getMessage());
         }
 
         this.loop = new AgentLoop(client, registry, ctx, b.hitl);
@@ -200,7 +205,7 @@ public class Agent4jAgent {
             String title = sessionService.generateSessionTitle(userMessage);
             sessionService.updateCurrentSessionTitle(title);
             sessionService.setTitleGenerated(true);
-            System.out.println("[session] 自动生成会话标题: " + title);
+            log.info("[session] 自动生成会话标题: {}", title);
         }
     }
 
@@ -274,7 +279,7 @@ public class Agent4jAgent {
                     sessionService.injectHistory(m);
                 }
             } catch (IOException e) {
-                System.err.println("[session] 加载会话历史失败: " + e.getMessage());
+                log.error("[session] 加载会话历史失败: {}", e.getMessage());
             }
             // 恢复该会话的 token 用量
             sessionService.restoreUsage(name);
@@ -393,10 +398,10 @@ public class Agent4jAgent {
                 // ★ 同步更新 AgentLoop 的 SessionService 引用（修复 lastPromptTokens 跟踪）
                 this.loop.setSessionService(this.sessionService);
                 
-                System.out.println("[workspace] 已切换到工作区: " + workspacePath);
-                System.out.println("[workspace] 会话目录: " + sessionsDir);
+                log.info("[workspace] 已切换到工作区: {}", workspacePath);
+                log.info("[workspace] 会话目录: {}", sessionsDir);
             } catch (IOException e) {
-                System.err.println("[workspace] 切换工作区失败: " + e.getMessage());
+                log.error("[workspace] 切换工作区失败: {}", e.getMessage());
                 return false;
             }
         }
@@ -639,11 +644,11 @@ public class Agent4jAgent {
                     String content = new String(java.nio.file.Files.readAllBytes(homePrompt),
                             java.nio.charset.StandardCharsets.UTF_8);
                     if (content != null && !content.trim().isEmpty()) {
-                        System.err.println("[prompt] 从 ~/.agent4j/agent4j.md 加载默认系统提示词（" + content.length() + " 字符）");
+                        log.info("[prompt] 从 ~/.agent4j/agent4j.md 加载默认系统提示词（{} 字符）", content.length());
                         return content.trim();
                     }
                 } catch (IOException e) {
-                    System.err.println("[prompt] 读取 ~/.agent4j/agent4j.md 失败: " + e.getMessage());
+                    log.error("[prompt] 读取 ~/.agent4j/agent4j.md 失败: {}", e.getMessage());
                 }
             }
             return DEFAULT_SYSTEM_PROMPT;

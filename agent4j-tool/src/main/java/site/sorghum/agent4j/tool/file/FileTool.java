@@ -2,6 +2,7 @@ package site.sorghum.agent4j.tool.file;
 
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.tool.AgentTool;
+import site.sorghum.agent4j.tool.HitlRequiredException;
 import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
@@ -134,7 +135,11 @@ public class FileTool extends AgentTool {
         Path resolved = root.resolve(rel).toAbsolutePath().normalize();
         Path rootAbs = root.toAbsolutePath().normalize();
         if (!resolved.startsWith(rootAbs)) {
-            throw new IOException("路径越界: " + rel);
+            if (ToolContext.isSandboxBypass()) {
+                return resolved; // HITL 审批通过，跳过边界检查
+            }
+            throw new HitlRequiredException("file", "SANDBOX_ESCAPE",
+                    "路径越界: " + rel, null);
         }
         return resolved;
     }

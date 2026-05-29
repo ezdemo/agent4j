@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.agent;
 
+import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.bin.session.SessionStore;
 
 import java.util.ArrayList;
@@ -21,6 +22,7 @@ import java.util.Map;
  *
  * @author Sorghum
  */
+@Slf4j
 public class ConversationContext {
 
     private final List<Map<String, Object>> history = new ArrayList<>();
@@ -101,7 +103,7 @@ public class ConversationContext {
             try {
                 sessionStore.append(msg);
             } catch (Exception e) {
-                System.err.println("[session] jsonl 写入失败: " + e.getMessage());
+                log.error("[session] jsonl 写入失败: {}", e.getMessage());
             }
         }
     }
@@ -207,7 +209,7 @@ public class ConversationContext {
             try {
                 sessionStore.rewrite(history);
             } catch (Exception e) {
-                System.err.println("[session] rewrite 失败: " + e.getMessage());
+                log.error("[session] rewrite 失败: {}", e.getMessage());
             }
         }
     }

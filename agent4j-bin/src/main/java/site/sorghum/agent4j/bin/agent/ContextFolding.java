@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.agent;
 
+import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 
 import site.sorghum.agent4j.bin.model.ModelClient;
@@ -19,6 +20,7 @@ import java.util.Map;
  *
  * @author Sorghum
  */
+@Slf4j
 public class ContextFolding {
 
     private static final int HEAD_CHARS_LIMIT = 60_000;
@@ -67,7 +69,7 @@ public class ContextFolding {
 
         String summary = summarize(head, client);
         if (summary == null || summary.trim().isEmpty()) {
-            System.err.println("[fold] 摘要失败，跳过折叠");
+            log.warn("[fold] 摘要失败，跳过折叠");
             return messages;
         }
 
@@ -81,7 +83,7 @@ public class ContextFolding {
 
         int before = total;
         int after = estimateChars(result);
-        System.err.println("[fold] " + dropped + " 条消息 → " + summary.length() + " 字符摘要（" + before + " → ~" + after + " 字符）");
+        log.info("[fold] {} 条消息 → {} 字符摘要（{} → ~{} 字符）", dropped, summary.length(), before, after);
         return result;
     }
 
@@ -203,7 +205,6 @@ public class ContextFolding {
      * 清理消息列表用于摘要 API：
      * - 保留 tool_calls 结构（维持 API 所要求的配对约束）
      * - 移除孤立的 tool role 消息（无对应 tool_calls 的）
-     * - 截断过大的 tool 结果
      */
     private static List<Map<String, Object>> sanitizeMessagesForSummary(List<Map<String, Object>> msgs) {
         List<Map<String, Object>> result = new ArrayList<>();
@@ -216,16 +217,7 @@ public class ContextFolding {
                 List<?> tcs = (List<?>) m.get("tool_calls");
                 pendingToolCount += tcs != null ? tcs.size() : 0;
             } else if ("tool".equals(role) && pendingToolCount > 0) {
-                // 保留 tool 结果（包含工具的实质输出），但截断过长内容
-                String content = (String) m.getOrDefault("content", "");
-                if (content.length() > 4000) {
-                    Map<String, Object> truncated = new LinkedHashMap<>(m);
-                    truncated.put("content", content.substring(0, 4000)
-                            + "\n\n[… truncated for summary …]");
-                    result.add(truncated);
-                } else {
-                    result.add(m);
-                }
+                result.add(m);
                 pendingToolCount--;
             } else if ("tool".equals(role)) {
                 continue; // 孤立 tool，丢弃
@@ -335,7 +327,7 @@ public class ContextFolding {
 
         String summary = summarize(headWithSystem, client);
         if (summary == null || summary.trim().isEmpty()) {
-            System.err.println("[foldKeepLast] 摘要失败，跳过折叠");
+            log.warn("[foldKeepLast] 摘要失败，跳过折叠");
             return new ArrayList<>(history);
         }
 
@@ -350,7 +342,7 @@ public class ContextFolding {
 
         int before = estimateChars(messages);
         int after = estimateChars(result);
-        System.err.println("[foldKeepLast] " + dropped + " 条消息 → " + summary.length() + " 字符摘要（" + before + " → ~" + after + " 字符）");
+        log.info("[foldKeepLast] {} 条消息 → {} 字符摘要（{} → ~{} 字符）", dropped, summary.length(), before, after);
 
         return result;
     }

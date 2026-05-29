@@ -150,6 +150,8 @@ public class ToolDispatcher {
                 }
             }
             return result;
+        } catch (site.sorghum.agent4j.tool.HitlRequiredException e) {
+            throw e; // 向上传播到 AgentLoop 触发 HITL 审批
         } catch (Exception e) {
             return error(name + ": " + e.getMessage());
         }

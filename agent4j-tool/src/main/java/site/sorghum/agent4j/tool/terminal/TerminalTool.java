@@ -2,6 +2,7 @@ package site.sorghum.agent4j.tool.terminal;
 
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.tool.AgentTool;
+import site.sorghum.agent4j.tool.HitlRequiredException;
 import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
@@ -220,8 +221,8 @@ public class TerminalTool extends AgentTool {
                 if (r.target.isEmpty() || CommandAllowlist.isNullDevice(r.target)) continue;
                 Path resolved = cwd.resolve(r.target).normalize();
                 if (!resolved.startsWith(cwd.normalize())) {
-                    return ToolResult.fail("SANDBOX_ESCAPE",
-                            "redirect target \"" + r.target + "\" resolves outside workspace");
+                    throw new HitlRequiredException("run_command", "SANDBOX_ESCAPE",
+                            "redirect target \"" + r.target + "\" resolves outside workspace", null);
                 }
             }
         }

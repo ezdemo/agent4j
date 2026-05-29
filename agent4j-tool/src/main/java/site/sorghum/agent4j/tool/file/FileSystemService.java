@@ -1,6 +1,8 @@
 package site.sorghum.agent4j.tool.file;
 
 import org.noear.solon.annotation.Component;
+import site.sorghum.agent4j.tool.HitlRequiredException;
+import site.sorghum.agent4j.tool.ToolContext;
 
 import java.io.*;
 import java.nio.charset.StandardCharsets;
@@ -71,8 +73,13 @@ public class FileSystemService {
     public Path resolveSafe(Path root, String raw) throws IOException {
         if (raw == null || raw.isEmpty()) return root;
         Path resolved = root.resolve(raw).toAbsolutePath().normalize();
-        if (!resolved.startsWith(root.toAbsolutePath().normalize()))
-            throw new IOException("路径越界: " + raw);
+        if (!resolved.startsWith(root.toAbsolutePath().normalize())) {
+            if (ToolContext.isSandboxBypass()) {
+                return resolved; // HITL 审批通过，跳过边界检查
+            }
+            throw new HitlRequiredException("file", "SANDBOX_ESCAPE",
+                    "路径越界: " + raw, null);
+        }
         return resolved;
     }
 

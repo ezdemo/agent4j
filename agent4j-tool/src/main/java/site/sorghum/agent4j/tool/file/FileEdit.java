@@ -1,5 +1,8 @@
 package site.sorghum.agent4j.tool.file;
 
+import site.sorghum.agent4j.tool.HitlRequiredException;
+import site.sorghum.agent4j.tool.ToolContext;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
@@ -236,8 +239,13 @@ public class FileEdit {
     private static Path resolveSafe(Path root, String raw, List<String> blockedPaths) throws IOException {
         Path normalized = root.resolve(raw).toAbsolutePath().normalize();
         Path rootAbs = root.toAbsolutePath().normalize();
-        if (!normalized.startsWith(rootAbs))
-            throw new IOException("路径越界: " + raw);
+        if (!normalized.startsWith(rootAbs)) {
+            if (ToolContext.isSandboxBypass()) {
+                return normalized; // HITL 审批通过，跳过边界检查
+            }
+            throw new HitlRequiredException("file", "SANDBOX_ESCAPE",
+                    "路径越界: " + raw, null);
+        }
         // 检查屏蔽目录
         if (blockedPaths != null && !blockedPaths.isEmpty()) {
             for (String blocked : blockedPaths) {

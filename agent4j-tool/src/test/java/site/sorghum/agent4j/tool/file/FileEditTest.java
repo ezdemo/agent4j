@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import site.sorghum.agent4j.tool.HitlRequiredException;
+
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -371,7 +373,7 @@ class FileEditTest {
         @Test
         @DisplayName("路径越界应被拒绝")
         void pathTraversal_shouldBeRejected(@TempDir Path tempDir) {
-            assertThrows(IOException.class,
+            assertThrows(HitlRequiredException.class,
                     () -> FileEdit.readFile(tempDir, "../outside.txt", null, null, null));
         }
 
@@ -379,7 +381,7 @@ class FileEditTest {
         @DisplayName("绝对路径越界应被拒绝")
         void absolutePathOutside_shouldBeRejected(@TempDir Path tempDir) {
             String outside = tempDir.getParent().resolve("secret.txt").toString();
-            assertThrows(IOException.class,
+            assertThrows(HitlRequiredException.class,
                     () -> FileEdit.readFile(tempDir, outside, null, null, null));
         }
     }
