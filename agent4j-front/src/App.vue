@@ -341,9 +341,17 @@ const handleDeleteWorkspace = async (hash) => {
   }
 }
 
-const newChat = () => {
-  chatRef.value?.clearMessages()
-  currentSession.value = ''
+const newChat = async () => {
+  try {
+    const r = await sessionsAPI.createNew({ workspaceHash: activeWorkspaceHash.value })
+    if (r.success && r.data?.sessionName) {
+      currentSession.value = r.data.sessionName
+      chatRef.value?.resetLocalMessages()
+      await loadSessions()
+    }
+  } catch (e) {
+    console.error('新建会话失败:', e)
+  }
 }
 
 const loadSession = name => {
@@ -356,10 +364,18 @@ const deleteSession = async name => {
   try { await sessionsAPI.deleteSession(name); await loadSessions() } catch {}
 }
 
-const clearChat = () => {
+const clearChat = async () => {
   if (!confirm('清空对话？')) return
-  chatRef.value?.clearMessages()
-  currentSession.value = ''
+  try {
+    const r = await sessionsAPI.createNew({ workspaceHash: activeWorkspaceHash.value })
+    if (r.success && r.data?.sessionName) {
+      currentSession.value = r.data.sessionName
+      chatRef.value?.resetLocalMessages()
+      await loadSessions()
+    }
+  } catch (e) {
+    console.error('清空对话失败:', e)
+  }
 }
 
 onMounted(async () => {

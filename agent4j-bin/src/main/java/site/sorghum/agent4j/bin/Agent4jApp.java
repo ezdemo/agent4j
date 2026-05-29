@@ -102,7 +102,10 @@ public class Agent4jApp {
 
                     // 命令已自行通过 System.out 输出内容，此处不重复打印
                     System.out.println();
-                    if (reply != null && !reply.isEmpty() && !"/exit".equals(reply)) {
+                    // HITL 待审批时跳过打印：interceptForHITL/interceptForSandboxHITL 已通过
+                    // output.onContentDelta() 输出过 HITL 消息，此处不应重复输出
+                    if (reply != null && !reply.isEmpty() && !"/exit".equals(reply)
+                            && !agent.hasPendingHITL()) {
                         System.out.println(reply);
                     } else if ((reply == null || reply.isEmpty()) && !input.startsWith("/")) {
                         // 只有非命令输入返回空时才提示可能的 API 异常

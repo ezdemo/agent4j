@@ -181,6 +181,11 @@ public class Agent4jAgent {
                     this.terminated = true;
                     return "/exit";
                 }
+                // 静默命令（如 /agree、/deny）不返回确认消息，
+                // 它们的实际输出已在命令内部通过 AgentOutput/SSE 发送
+                if (cmd.isSilent()) {
+                    return null;
+                }
                 // 返回执行确认（Web 模式下前端需要看到回复，CLI 模式也便于追踪）
                 return "✅ 已执行 " + message + " 命令";
             }

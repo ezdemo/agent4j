@@ -732,18 +732,19 @@ const handleEnter = e => {
 /**
  * 核心发送逻辑：
  * - 普通消息：加用户气泡 → 创建助手占位 → 流式填充
- * - /new：静默，不加气泡直接发后端；若后端无内容回复则不显示助手气泡
- * - 其他 / 命令和 /skill:：显示用户气泡 + 助手气泡（正常流程）
+ * - 静默命令（SILENT_CMDS 中的命令，如 /new、/agree、/deny 等）：不加气泡直接发后端；
+ *   收到有内容的 SSE 事件时才创建助手气泡
+ * - /skill: 命令：显示用户气泡 + 助手气泡（正常流程）
  */
 const sendMessage = async () => {
   const text = inputText.value.trim()
   if (!text || streaming.value) return
 
   const firstWord = text.split(/\s+/)[0].toLowerCase()
-  // 只有 /new 是静默的，其他命令和 skill 都正常显示气泡
-  const isSilent = firstWord === '/new'
+  // 静默命令不显示用户气泡（系统命令、模式切换、HITL 审批等）
+  const isSilent = SILENT_CMDS.has(firstWord)
 
-  // 静默命令（仅 /new）不显示用户气泡
+  // 静默命令不显示用户气泡
   if (!isSilent) {
     messages.value.push({ id: Date.now(), role: 'user', content: text, time: now() })
   }
@@ -754,19 +755,19 @@ const sendMessage = async () => {
   streaming.value = true
   const mi = messages.value.length
 
-  // 静默命令（仅 /new）不预创建助手占位
+  // 静默命令不预创建助手占位
   if (!isSilent) {
     messages.value.push({ id: Date.now() + 1, role: 'assistant', time: now(), blocks: [] })
   }
 
   let getMsg = () => messages.value[isSilent ? -1 : mi] // 静默命令时 getMsg 返回 undefined
-  let silentBubbleCreated = false // 防止静默命令每次 SSE 事件重复创建气泡
+  let silentBubbleCreated = false // 静默命令首次收到内容时创建气泡，之后复用
 
   try {
     const streamResult = chatAPI.sendMessageStream(text,
       data => {
         currentAbortController = streamResult
-        // 静默命令（仅 /new）：首次收到有内容的数据时才创建助手气泡（只创建一次）
+        // 静默命令：首次收到有内容的数据时才创建助手气泡（只创建一次）
         if (isSilent && !silentBubbleCreated) {
           if (!data.type || data.type === 'done') return
           const hasContent = (data.type === 'content' && data.content?.trim()) ||
@@ -863,20 +864,25 @@ const abortChat = async () => {
 
 const clearChat = async () => {
   messages.value = []
-  // 静默发送 /new 给后端，不显示任何气泡
+  // 发送 /new 给后端（/new 属于 SILENT_CMDS，不显示气泡）
   streaming.value = true
   try {
     chatAPI.sendMessageStream('/new', () => {}, () => { streaming.value = false; loadUsage() }, () => { streaming.value = false })
   } catch { streaming.value = false }
 }
 
-// 暴露给父组件的清空方法（同样静默发 /new）
+// 暴露给父组件的清空方法（/new 属于 SILENT_CMDS，不显示气泡）
 const clearMessages = () => {
   messages.value = []
   streaming.value = true
   try {
     chatAPI.sendMessageStream('/new', () => {}, () => { streaming.value = false; loadUsage() }, () => { streaming.value = false })
   } catch { streaming.value = false }
+}
+
+// 仅清空本地消息，不请求后端（配合 REST API 创建新会话时使用）
+const resetLocalMessages = () => {
+  messages.value = []
 }
 
 const exportChat = () => {
@@ -953,7 +959,7 @@ onMounted(() => {
   loadCommandAndSkills()
 })
 
-defineExpose({ clearMessages, loadSession, sendCommand, exportChat })
+defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, exportChat })
 </script>
 
 <style scoped>

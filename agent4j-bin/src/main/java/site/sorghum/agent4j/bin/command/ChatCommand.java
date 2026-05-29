@@ -109,6 +109,20 @@ public interface ChatCommand {
     }
 
     /**
+     * 是否为静默命令。静默命令执行后：
+     * <ul>
+     *   <li>不显示 "✅ 已执行 /xxx 命令" 确认消息</li>
+     *   <li>前端不渲染用户消息气泡</li>
+     * </ul>
+     * 适用于自行处理所有输出的命令（如 HITL 审批命令 /agree、/deny）。
+     *
+     * @return true 表示静默命令
+     */
+    default boolean isSilent() {
+        return false;
+    }
+
+    /**
      * 执行命令。
      *
      * @param input   用户原始输入

@@ -262,9 +262,9 @@ export const sessionsAPI = {
     return api.get('/sessions/current')
   },
   
-  // 新建空白会话 - POST /api/sessions/new
-  createNew: () => {
-    return api.post('/sessions/new')
+  // 新建空白会话 - POST /api/sessions/new?workspaceHash=xxx&sessionName=xxx
+  createNew: (params) => {
+    return api.post('/sessions/new', null, { params: params || {} })
   },
   
   // 切换会话 - POST /api/sessions/{name}

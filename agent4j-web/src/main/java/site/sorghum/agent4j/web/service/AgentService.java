@@ -570,7 +570,9 @@ public class AgentService {
             String reply = agent.chat(message);
 
             // 发送最终回复（使用 content 事件，前端可直接渲染）
-            if (reply != null && !reply.isEmpty()) {
+            // HITL 待审批时跳过：interceptForHITL/interceptForSandboxHITL 已通过
+            // output.onContentDelta() 发送过 HITL 消息，此处不应重复发送
+            if (reply != null && !reply.isEmpty() && !agent.hasPendingHITL()) {
                 emitter.sendContent(reply);
             }
         } catch (Exception e) {
