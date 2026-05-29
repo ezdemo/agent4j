@@ -24,6 +24,8 @@ import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
+import site.sorghum.agent4j.bin.skill.SkillStoreV2;
+import site.sorghum.agent4j.bin.skill.SkillV2;
 
 /**
  * Agent4j 工厂——组装 ModelClient + ToolRegistry → AgentLoop。
@@ -43,6 +45,9 @@ public class Agent4jAgent {
     /** 命令注册表（用于 chat() 中自动路由 "/" 开头的命令） */
     private final ChatCommandRegistry commandRegistry;
 
+    /** 技能存储（V2 - Claude Code 风格） */
+    private SkillStoreV2 skillStore;
+
     /** 退出信号（命令返回 EXIT 时设置，主循环据此终止） */
     private volatile boolean terminated = false;
 
@@ -53,6 +58,13 @@ public class Agent4jAgent {
         this.apiKey = b.apiKey;
 
         ModelClient client = new HttpModelClient(b.apiUrl, b.apiKey, b.model);
+        
+        // 初始化技能存储（V2 - Claude Code 风格）
+        this.skillStore = new SkillStoreV2(b.workspace, 
+                Paths.get(System.getProperty("user.home")), 
+                Collections.<Path>emptyList());
+        
+        // 使用普通工具注册表
         ToolRegistry registry = new ToolRegistry();
 
         // 设置禁用工具（被禁用的工具不会注册到 LLM 工具列表）
@@ -88,7 +100,7 @@ public class Agent4jAgent {
                         // 从 args 中获取 sessionId（由 ToolDispatcher 在执行前注入）
                         String sessionId = args != null ? (String) args.remove("__sessionId__") : null;
                         return ToolDefHelper.formatResult(tool.execute(
-                                new ToolContext(args, getWorkspace(), apiUrl, apiKey, registry, blockedPaths, sessionId)));
+                                new ToolContext(args, getWorkspace(), apiUrl, apiKey, (Object) registry, blockedPaths, sessionId)));
                     },
                     tool.isReadOnly(),
                     tool.isStormExempt(),
@@ -107,6 +119,13 @@ public class Agent4jAgent {
         }
         // 将工具规范追加到 system prompt 末尾
         systemPrompt = systemPrompt + "\n\n" + toolSpecsBuilder.toString().trim();
+        
+        // 添加 skill 索引到 system prompt
+        String skillsIndex = skillStore.buildSkillsIndex();
+        if (!skillsIndex.isEmpty()) {
+            systemPrompt = systemPrompt + "\n\n" + skillsIndex;
+            System.err.println("[skill] 已加载 skill 索引，共 " + skillStore.list().size() + " 个 skill");
+        }
 
         // 构建缓存优先前缀：system prompt + 工具定义（注册后冻结，跨 turn 稳定）
         PromptPrefix prefix = new PromptPrefix(systemPrompt, registry.toOpenAiTools());
@@ -524,6 +543,11 @@ public class Agent4jAgent {
     /** 获取工具注册表（供 Web API 列出工具使用） */
     public site.sorghum.agent4j.bin.tool.ToolRegistry getToolRegistry() {
         return loop.getToolRegistry();
+    }
+    
+    /** 获取技能存储（V2） */
+    public SkillStoreV2 getSkillStore() {
+        return skillStore;
     }
 
     public int historySize() {
