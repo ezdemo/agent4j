@@ -68,6 +68,21 @@
                     <pre v-if="block.result"><code>{{ block.result }}</code></pre>
                   </div>
                 </div>
+
+                <!-- 选项按钮（choice） -->
+                <div v-else-if="block.type === 'choice'" class="block-choice">
+                  <div v-if="!block.resolved" class="choice-buttons">
+                    <button v-for="opt in (block.options || [])" :key="opt.value"
+                            class="choice-btn"
+                            @click="sendChoice(opt.value, block)">
+                      {{ opt.title }}
+                    </button>
+                  </div>
+                  <div v-else class="choice-resolved">
+                    <span class="choice-label">已选择：</span>
+                    <span class="choice-value">{{ block.selectedTitle || block.options?.[0]?.title || '—' }}</span>
+                  </div>
+                </div>
               </template>
             </div>
             <div class="msg-time">{{ msg.time }}</div>
@@ -484,6 +499,25 @@ const scroll = async () => {
   if (messagesContainer.value) messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
 }
 
+/** 用户点击选项按钮 → 直接发送 value 作为消息，清理旧工具卡片 */
+const sendChoice = (value, block) => {
+  // 标记已选择
+  if (block) {
+    block.resolved = true
+    const opt = (block.options || []).find(o => o.value === value)
+    block.selectedTitle = opt ? opt.title : value
+  }
+  // 清理当前消息中已拦截的 tool_call 块（避免与重放执行重复）
+  const last = messages.value[messages.value.length - 1]
+  if (last?.role === 'assistant' && last.blocks) {
+    last.blocks = last.blocks.filter(b =>
+      b === block || b.type !== 'tool_call'
+    )
+  }
+  inputText.value = value
+  sendMessage()
+}
+
 const handleEnter = e => {
   if (e.key === 'Escape' && streaming.value) {
     e.preventDefault()
@@ -568,6 +602,15 @@ const sendMessage = async () => {
           // 更新 usage 数据
           if (data.promptTokens !== undefined) {
             usage.value = { ...usage.value, ...data }
+          }
+        } else if (data.type === 'choice') {
+          // 选项按钮（如 HITL 审批）
+          let options = data.options || []
+          if (typeof options === 'string') {
+            try { options = JSON.parse(options) } catch {}
+          }
+          if (Array.isArray(options) && options.length > 0) {
+            msg.blocks.push({ type: 'choice', options })
           }
         }
         scroll()
@@ -958,6 +1001,46 @@ defineExpose({ clearMessages, loadSession, sendCommand, exportChat })
   font-size: 11px;
   max-height: 150px;
   overflow: auto;
+}
+
+/* 选项按钮 */
+.block-choice {
+  margin: 4px 0;
+}
+.choice-buttons {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.choice-btn {
+  padding: 6px 16px;
+  border: 1px solid var(--accent);
+  border-radius: var(--r);
+  background: var(--accent-bg, rgba(var(--accent-rgb, 59 130 246), 0.1));
+  color: var(--accent);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all var(--t);
+}
+.choice-btn:hover {
+  background: var(--accent);
+  color: #fff;
+}
+.choice-resolved {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 0;
+  font-size: 13px;
+  color: var(--fg-3);
+}
+.choice-label {
+  font-weight: 500;
+}
+.choice-value {
+  color: var(--accent);
+  font-weight: 600;
 }
 
 /* 打字动画 */

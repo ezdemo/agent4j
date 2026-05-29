@@ -64,10 +64,18 @@ public interface AgentOutput {
     /** 普通文本消息（如 Agent4jApp 中的提示信息） */
     void onMessage(String message);
 
+    /** 选项列表（如 HITL 审批：同意/拒绝） */
+    void onChoice(java.util.List<ChoiceOption> options);
+
+    // ==================== 数据类型 ====================
+
     /** 日志级别 */
     enum LogLevel {
         DEBUG, INFO, WARN, ERROR
     }
+
+    /** 选项（value = 发送的消息，title = 展示文本） */
+    record ChoiceOption(String value, String title) {}
 
     // ==================== NOOP 空实现 ====================
 
@@ -84,5 +92,6 @@ public interface AgentOutput {
         @Override public void onError(String error) {}
         @Override public void onLog(LogLevel level, String message) {}
         @Override public void onMessage(String message) {}
+        @Override public void onChoice(java.util.List<ChoiceOption> options) {}
     };
 }

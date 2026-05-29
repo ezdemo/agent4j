@@ -95,4 +95,14 @@ public class ConsoleAgentOutput implements AgentOutput {
     public void onMessage(String message) {
         System.out.println(message);
     }
+
+    @Override
+    public void onChoice(java.util.List<ChoiceOption> options) {
+        if (options == null || options.isEmpty()) return;
+        System.out.println();
+        for (ChoiceOption opt : options) {
+            System.out.println("  [" + opt.value() + "] " + opt.title());
+        }
+        System.out.flush();
+    }
 }

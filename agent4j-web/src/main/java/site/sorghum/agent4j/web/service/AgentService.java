@@ -604,6 +604,13 @@ public class AgentService {
                 @Override
                 public void onMessage(String message) {
                 }
+
+                @Override
+                public void onChoice(java.util.List<AgentOutput.ChoiceOption> options) {
+                    if (options != null && !options.isEmpty()) {
+                        emitter.sendChoice(new java.util.ArrayList<>(options));
+                    }
+                }
             });
 
             // 设置会话ID到 AgentLoop

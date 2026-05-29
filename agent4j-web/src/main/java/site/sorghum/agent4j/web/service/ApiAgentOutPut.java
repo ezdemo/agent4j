@@ -178,6 +178,16 @@ public class ApiAgentOutPut implements AgentOutput {
         }
     }
 
+    @Override
+    public void onChoice(java.util.List<ChoiceOption> options) {
+        if (completed || options == null || options.isEmpty()) return;
+        try {
+            emitter.sendChoice(new java.util.ArrayList<>(options));
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常，继续执行
+        }
+    }
+
     // ==================== 生命周期 ====================
 
     /**

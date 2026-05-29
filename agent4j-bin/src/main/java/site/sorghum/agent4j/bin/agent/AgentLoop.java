@@ -9,6 +9,7 @@ import site.sorghum.agent4j.bin.tool.ToolDispatcher;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -417,12 +418,20 @@ public class AgentLoop {
             }
             sb.append("\n");
         }
-        sb.append("\n发送 `/agree` 批准执行，`/deny` 拒绝。");
+        sb.append("\n请选择：");
 
         String message = sb.toString();
-        // 暂存 assistant 消息（审批通过后写入上下文）
         try {
             output.onContentDelta(message);
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常
+        }
+        // 发送选项按钮（前端渲染为可点击按钮，CLI 渲染为文本菜单）
+        try {
+            output.onChoice(java.util.Arrays.asList(
+                    new AgentOutput.ChoiceOption("/agree", "同意执行"),
+                    new AgentOutput.ChoiceOption("/deny", "拒绝执行")
+            ));
         } catch (Exception e) {
             // SSE连接断开时忽略异常
         }
@@ -596,11 +605,20 @@ public class AgentLoop {
         sb.append("⏸️  **沙箱越界 — 需要审批**\n\n");
         sb.append("检测到工具试图访问工作区之外的路径：\n\n");
         sb.append("> ").append(details).append("\n\n");
-        sb.append("发送 `/agree` 批准执行，`/deny` 拒绝。");
+        sb.append("请选择：");
 
         String message = sb.toString();
         try {
             output.onContentDelta(message);
+        } catch (Exception e) {
+            // SSE连接断开时忽略异常
+        }
+        // 发送选项按钮（前端渲染为可点击按钮，CLI 渲染为文本菜单）
+        try {
+            output.onChoice(java.util.Arrays.asList(
+                    new AgentOutput.ChoiceOption("/agree", "同意执行"),
+                    new AgentOutput.ChoiceOption("/deny", "拒绝执行")
+            ));
         } catch (Exception e) {
             // SSE连接断开时忽略异常
         }
