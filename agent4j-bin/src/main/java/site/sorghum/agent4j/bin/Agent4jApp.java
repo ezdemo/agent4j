@@ -134,7 +134,8 @@ public class Agent4jApp {
         System.out.println("║          Agent4j — 代码助手               ║");
         System.out.println("╠══════════════════════════════════════════╣");
         System.out.println("║ 模型: " + padRight(model, 27) + "║");
-        System.out.println("║ 工作区: " + padRight(truncate(config.workspaceDir().toString(), 25), 25) + "║");
+        String wsDisplay = config.workspaceDir() != null ? config.workspaceDir().toString() : "(未设置)";
+        System.out.println("║ 工作区: " + padRight(truncate(wsDisplay, 25), 25) + "║");
         System.out.println("║ API: " + padRight(truncate(apiUrl, 25), 25) + "║");
         System.out.println("╠══════════════════════════════════════════╣");
         System.out.println("║ /help 查看命令列表       /exit 退出       ║");

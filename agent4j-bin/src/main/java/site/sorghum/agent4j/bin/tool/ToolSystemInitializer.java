@@ -167,6 +167,7 @@ public class ToolSystemInitializer {
      * 加载工作区根目录下的 agent4j.md 和 CLAUDE.md。
      */
     private static String loadProjectMd(Path workspace) {
+        if (workspace == null) return "";
         StringBuilder sb = new StringBuilder();
         for (String name : new String[]{"agent4j.md", "CLAUDE.md"}) {
             Path file = workspace.resolve(name);

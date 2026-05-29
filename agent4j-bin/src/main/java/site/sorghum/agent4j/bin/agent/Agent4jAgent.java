@@ -76,7 +76,9 @@ public class Agent4jAgent {
         // 会话持久化 — 委托 SessionService（支持工作区隔离）
         try {
             this.workspaceManager = new WorkspaceManager();
-            String workspacePath = b.workspace.toAbsolutePath().toString();
+            String workspacePath = b.workspace != null
+                    ? b.workspace.toAbsolutePath().toString()
+                    : Paths.get(System.getProperty("user.home"), ".agent4j").toString();
             workspaceManager.initWorkspace(workspacePath);
             java.nio.file.Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
             this.sessionService = new SessionService(ctx, sessionsDir);
@@ -114,7 +116,9 @@ public class Agent4jAgent {
         // 会话持久化 — 委托 SessionService（支持工作区隔离）
         try {
             this.workspaceManager = new WorkspaceManager();
-            String workspacePath = b.workspace.toAbsolutePath().toString();
+            String workspacePath = b.workspace != null
+                    ? b.workspace.toAbsolutePath().toString()
+                    : Paths.get(System.getProperty("user.home"), ".agent4j").toString();
             workspaceManager.initWorkspace(workspacePath);
             java.nio.file.Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
             this.sessionService = new SessionService(ctx, sessionsDir);
@@ -513,6 +517,7 @@ public class Agent4jAgent {
      * 文件不存在时返回空字符串。
      */
     private static String loadProjectMd(Path workspace) {
+        if (workspace == null) return "";
         StringBuilder sb = new StringBuilder();
         for (String name : new String[]{"agent4j.md", "CLAUDE.md"}) {
             Path file = workspace.resolve(name);
@@ -535,7 +540,7 @@ public class Agent4jAgent {
         String model = "deepseek-v4-flash";
         /** 默认系统提示词。如果 ~/.agent4j/agent4j.md 存在则从中读取，否则用此硬编码默认值。 */
         String systemPrompt = DEFAULT_SYSTEM_PROMPT;
-        Path workspace = Paths.get(".").toAbsolutePath();
+        Path workspace = null;
         Set<String> disabledTools;
         List<String> blockedPaths;
         boolean hitl;

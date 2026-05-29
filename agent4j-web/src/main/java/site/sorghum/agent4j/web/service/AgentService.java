@@ -96,6 +96,11 @@ public class AgentService {
     private volatile String sharedModel;
 
     /**
+     * 当前活跃的工作区路径（动态切换）
+     */
+    private volatile String currentActiveWorkspace;
+
+    /**
      * 会话级 Agent 缓存：key = workspacePath::sessionName
      */
     private final ConcurrentHashMap<String, Agent4jAgent> agentCache = new ConcurrentHashMap<>();
@@ -197,7 +202,11 @@ public class AgentService {
     private String generateSessionKey(String workspacePath, String sessionName) {
         // 使用默认工作区路径（如果未指定）
         if (workspacePath == null || workspacePath.isEmpty()) {
-            workspacePath = sharedConfig != null ? sharedConfig.workspaceDir().toAbsolutePath().toString() : ".";
+            if (sharedConfig != null && sharedConfig.workspaceDir() != null) {
+                workspacePath = sharedConfig.workspaceDir().toAbsolutePath().toString();
+            } else {
+                workspacePath = Paths.get(System.getProperty("user.home"), ".agent4j").toString();
+            }
         }
         // 使用默认会话名称（如果未指定）
         if (sessionName == null || sessionName.isEmpty()) {
@@ -965,10 +974,14 @@ public class AgentService {
      * @return 工作区路径
      */
     public String getWorkspace() {
+        // 优先返回动态切换的工作区
+        if (currentActiveWorkspace != null) {
+            return currentActiveWorkspace;
+        }
         if (sharedConfig != null && sharedConfig.workspaceDir() != null) {
             return sharedConfig.workspaceDir().toAbsolutePath().toString();
         }
-        return ".";
+        return null;
     }
 
     /**
@@ -997,7 +1010,6 @@ public class AgentService {
 
     /**
      * 切换工作区（兼容旧接口）。
-     * 在新架构中，工作区路径由会话标识决定，此方法仅用于更新默认配置。
      *
      * @param path 新的工作区路径
      * @return 切换成功返回 true
@@ -1006,42 +1018,68 @@ public class AgentService {
         if (path == null || path.isEmpty()) {
             return false;
         }
-        // 在新架构中，工作区路径在创建 Agent 时确定
-        // 这里仅清除默认会话的缓存，让下次访问时使用新路径
-        String defaultKey = generateSessionKey(null, null);
+        // 更新当前活跃工作区路径
+        this.currentActiveWorkspace = Paths.get(path).toAbsolutePath().normalize().toString();
+        // 清除默认会话的缓存，让下次访问时使用新路径
         evictAgent(null, null);
-        System.out.println("[web] 工作区已切换: " + path);
+        System.out.println("[web] 工作区已切换: " + currentActiveWorkspace);
         return true;
     }
 
     /**
      * 列出工作区（兼容旧接口）。
-     * 需要 WorkspaceManager 支持。
+     * 使用 WorkspaceManager 获取所有已注册的工作区。
      *
      * @return 工作区列表
      */
     public List<Map<String, Object>> listWorkspaces() {
         List<Map<String, Object>> result = new ArrayList<>();
-        // 从缓存中收集所有工作区路径
-        Set<String> workspacePaths = new HashSet<>();
-        for (String key : agentCache.keySet()) {
-            String[] parts = key.split("::", 2);
-            if (parts.length > 0) {
-                workspacePaths.add(parts[0]);
+        
+        // 使用 WorkspaceManager 获取所有已注册的工作区
+        try {
+            WorkspaceManager workspaceManager = new WorkspaceManager();
+            // 设置当前活跃工作区 hash，以便 isActive 字段正确
+            String currentPath = getWorkspace();
+            if (currentPath != null) {
+                workspaceManager.switchWorkspace(currentPath);
+            }
+            List<WorkspaceManager.WorkspaceInfo> workspaces = workspaceManager.listWorkspaces();
+            
+            for (WorkspaceManager.WorkspaceInfo info : workspaces) {
+                Map<String, Object> item = new LinkedHashMap<>();
+                item.put("hash", info.hash);
+                item.put("name", info.name);
+                item.put("path", info.path);
+                item.put("createdAt", info.createdAt);
+                item.put("lastAccessedAt", info.lastAccessedAt);
+                item.put("sessionCount", info.sessionCount);
+                item.put("isActive", info.isActive);
+                result.add(item);
+            }
+        } catch (IOException e) {
+            System.err.println("[web] 获取工作区列表失败: " + e.getMessage());
+            // 回退到旧逻辑：从缓存中收集
+            Set<String> workspacePaths = new HashSet<>();
+            for (String key : agentCache.keySet()) {
+                String[] parts = key.split("::", 2);
+                if (parts.length > 0) {
+                    workspacePaths.add(parts[0]);
+                }
+            }
+
+            // 添加默认工作区
+            if (sharedConfig != null && sharedConfig.workspaceDir() != null) {
+                workspacePaths.add(sharedConfig.workspaceDir().toAbsolutePath().toString());
+            }
+
+            for (String path : workspacePaths) {
+                Map<String, Object> info = new LinkedHashMap<>();
+                info.put("path", path);
+                info.put("hash", WorkspaceManager.computeHash(path));
+                result.add(info);
             }
         }
-
-        // 添加默认工作区
-        if (sharedConfig != null && sharedConfig.workspaceDir() != null) {
-            workspacePaths.add(sharedConfig.workspaceDir().toAbsolutePath().toString());
-        }
-
-        for (String path : workspacePaths) {
-            Map<String, Object> info = new LinkedHashMap<>();
-            info.put("path", path);
-            info.put("hash", WorkspaceManager.computeHash(path));
-            result.add(info);
-        }
+        
         return result;
     }
 
@@ -1053,6 +1091,38 @@ public class AgentService {
      */
     public boolean switchToWorkspace(String path) {
         return switchWorkspace(path);
+    }
+
+    /**
+     * 通过 hash 切换到指定工作区。
+     *
+     * @param hash 工作区 hash
+     * @return 切换成功返回 true
+     */
+    public boolean switchToWorkspaceByHash(String hash) {
+        if (hash == null || hash.isEmpty()) {
+            return false;
+        }
+        // 从已注册的工作区中查找匹配的路径
+        try {
+            WorkspaceManager wm = new WorkspaceManager();
+            List<WorkspaceManager.WorkspaceInfo> list = wm.listWorkspaces();
+            for (WorkspaceManager.WorkspaceInfo info : list) {
+                if (hash.equals(info.hash)) {
+                    return switchWorkspace(info.path);
+                }
+            }
+        } catch (IOException e) {
+            System.err.println("[web] 查询工作区失败: " + e.getMessage());
+        }
+        // 兼容：从缓存中查找
+        for (String key : agentCache.keySet()) {
+            String workspacePath = key.split("::", 2)[0];
+            if (hash.equals(WorkspaceManager.computeHash(workspacePath))) {
+                return switchWorkspace(workspacePath);
+            }
+        }
+        return false;
     }
 
     /**

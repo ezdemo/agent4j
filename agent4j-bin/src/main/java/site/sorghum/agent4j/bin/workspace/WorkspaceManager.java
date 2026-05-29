@@ -116,11 +116,23 @@ public class WorkspaceManager {
     }
 
     /**
-     * 从路径中提取工作区名称（最后一级目录名）
+     * 从路径中提取工作区名称（最后一级目录名）。
+     * 当最后一级是 "." 或 ".." 时，取规范化路径的倒数第二级目录名。
      */
     private String extractWorkspaceName(String workspacePath) {
-        Path path = Paths.get(workspacePath);
-        return path.getFileName().toString();
+        Path path = Paths.get(workspacePath).normalize();
+        String fileName = path.getFileName() != null ? path.getFileName().toString() : "";
+        // "." 或 ".." 或空（根路径）时，取父目录名
+        if (fileName.isEmpty() || ".".equals(fileName) || "..".equals(fileName)) {
+            Path parent = path.getParent();
+            if (parent != null && parent.getFileName() != null) {
+                return parent.getFileName().toString();
+            }
+            // 仍然为空则回退到绝对路径的末级
+            Path abs = path.toAbsolutePath().normalize();
+            return abs.getFileName() != null ? abs.getFileName().toString() : workspacePath;
+        }
+        return fileName;
     }
 
     /**
@@ -141,7 +153,7 @@ public class WorkspaceManager {
                     org.noear.snack4.ONode config = org.noear.snack4.ONode.ofJson(json);
 
                     String path = config.get("path").getString();
-                    String name = config.get("name").getString();
+                    String name = extractWorkspaceName(path);
                     long createdAt = config.get("createdAt").getLong();
                     long lastAccessedAt = config.get("lastAccessedAt").getLong();
 

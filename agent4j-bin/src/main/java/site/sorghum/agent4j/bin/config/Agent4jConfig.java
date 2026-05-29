@@ -32,7 +32,6 @@ public class Agent4jConfig {
             String defaultConfig = "{\n"
                     + "  \"baseUrl\": \"http://localhost:11434/v1\",\n"
                     + "  \"apiKey\": \"sk-your-api-key\",\n"
-                    + "  \"workspaceDir\": \".\",\n"
                     + "  \"hitl\": false\n"
                     + "}";
             Files.write(configPath, defaultConfig.getBytes(StandardCharsets.UTF_8));
@@ -94,12 +93,12 @@ public class Agent4jConfig {
 
     /**
      * 获取工作区目录路径。
-     * 未配置时默认返回当前目录。
+     * 未配置时返回 null（工作区为空）。
      */
     public Path workspaceDir() {
         String dir = root.select("$.workspaceDir").getString();
         if (dir == null || dir.isEmpty()) {
-            return Paths.get(".").toAbsolutePath();
+            return null;
         }
         return Paths.get(dir).toAbsolutePath();
     }

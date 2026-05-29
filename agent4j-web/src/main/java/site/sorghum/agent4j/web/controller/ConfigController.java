@@ -162,11 +162,11 @@ public class ConfigController {
     @Mapping("/workspaces/switch")
     public Object switchToWorkspace(@Body Map<String, String> body) {
         if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
-        String path = body.get("path");
-        if (path == null || path.isEmpty()) {
-            return ApiResponse.fail("工作区路径不能为空");
+        String hash = body.get("hash");
+        if (hash == null || hash.isEmpty()) {
+            return ApiResponse.fail("工作区 hash 不能为空");
         }
-        boolean ok = agentService.switchToWorkspace(path);
+        boolean ok = agentService.switchToWorkspaceByHash(hash);
         if (ok) {
             Map<String, Object> data = new LinkedHashMap<>();
             data.put("message", "工作区已切换");
@@ -174,7 +174,7 @@ public class ConfigController {
             data.put("currentSession", agentService.getCurrentSession());
             return ApiResponse.ok(data);
         }
-        return ApiResponse.fail("切换工作区失败: " + path);
+        return ApiResponse.fail("切换工作区失败: " + hash);
     }
 
     /** 删除工作区 —— DELETE /api/workspaces/{hash} */

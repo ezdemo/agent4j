@@ -49,7 +49,10 @@
       "providerShortName": null,
       "signingIdentity": null
     },
-    "resources": [],
+    "resources": [
+      "resources/agent4j-web-dist.zip",
+      "resources/agent4j-web-dist.tar.gz"
+    ],
     "shortDescription": "Agent4j Desktop",
     "targets": "all",
     "windows": {

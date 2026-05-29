@@ -386,8 +386,8 @@ export const configAPI = {
   },
   
   // 切换到指定工作区 - POST /api/workspaces/switch
-  switchToWorkspace: (path) => {
-    return api.post('/workspaces/switch', { path })
+  switchToWorkspace: (hash) => {
+    return api.post('/workspaces/switch', { hash })
   },
   
   // 删除工作区 - DELETE /api/workspaces/{hash}

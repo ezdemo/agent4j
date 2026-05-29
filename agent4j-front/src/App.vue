@@ -1,5 +1,13 @@
 <template>
   <div class="app" :data-theme="theme">
+    <!-- 启动画面 (仅 Tauri 环境) -->
+    <SplashScreen 
+      v-if="isTauri" 
+      ref="splashRef"
+      @ready="onServiceReady"
+      @error="onServiceError"
+    />
+
     <!-- 自定义标题栏 -->
     <TitleBar
       :session="currentSessionTitle"
@@ -53,7 +61,7 @@
             :key="w.hash"
             class="workspace-item"
             :class="{ active: w.isActive }"
-            @click="handleSwitchWorkspace(w.path)"
+            @click="handleSwitchWorkspace(w.hash)"
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -182,8 +190,13 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { agentAPI, sessionsAPI, toolsAPI, configAPI } from './services/api'
+import { isTauriEnvironment } from './services/tauri'
 import ChatView from './views/Chat.vue'
 import TitleBar from './components/TitleBar.vue'
+import SplashScreen from './components/SplashScreen.vue'
+
+const isTauri = isTauriEnvironment()
+const splashRef = ref(null)
 
 const theme = ref(localStorage.getItem('agent4j-theme') || 'light')
 const sideOpen = ref(true)
@@ -255,6 +268,42 @@ const toggleTheme = () => {
   document.documentElement.setAttribute('data-theme', theme.value)
 }
 
+// 服务就绪回调
+const onServiceReady = () => {
+  console.log('Agent4j Web service is ready')
+  // 加载数据
+  loadData()
+}
+
+// 服务错误回调
+const onServiceError = (error) => {
+  console.error('Agent4j Web service error:', error)
+}
+
+// 加载数据
+const loadData = async () => {
+  try {
+    const [s, t, cf] = await Promise.allSettled([
+      agentAPI.getStatus(), toolsAPI.list(), configAPI.getConfig()
+    ])
+    if (s.status === 'fulfilled' && s.value.success) {
+      status.value = s.value.data || {}
+      if (s.value.data?.workspace) {
+        workspace.value = s.value.data.workspace
+      }
+    }
+    if (t.status === 'fulfilled' && t.value.success) tools.value = t.value.data || []
+    if (cf.status === 'fulfilled' && cf.value.success) {
+      config.value = cf.value.data || {}
+      if (cf.value.data?.workspace && !workspace.value) {
+        workspace.value = cf.value.data.workspace
+      }
+    }
+  } catch {}
+  await loadWorkspaces()
+  await loadSessions()
+}
+
 const loadSessions = async () => {
   loadingSessions.value = true
   try {
@@ -284,9 +333,9 @@ const loadWorkspaces = async () => {
 }
 
 // 切换工作区
-const handleSwitchWorkspace = async (path) => {
+const handleSwitchWorkspace = async (hash) => {
   try {
-    const r = await configAPI.switchToWorkspace(path)
+    const r = await configAPI.switchToWorkspace(hash)
     if (r.success) {
       workspace.value = r.data.workspace
       showWorkspacePicker.value = false
@@ -380,27 +429,12 @@ const clearChat = async () => {
 
 onMounted(async () => {
   document.documentElement.setAttribute('data-theme', theme.value)
-  try {
-    const [s, t, cf] = await Promise.allSettled([
-      agentAPI.getStatus(), toolsAPI.list(), configAPI.getConfig()
-    ])
-    if (s.status === 'fulfilled' && s.value.success) {
-      status.value = s.value.data || {}
-      if (s.value.data?.workspace) {
-        workspace.value = s.value.data.workspace
-      }
-    }
-    if (t.status === 'fulfilled' && t.value.success) tools.value = t.value.data || []
-    if (cf.status === 'fulfilled' && cf.value.success) {
-      config.value = cf.value.data || {}
-      if (cf.value.data?.workspace && !workspace.value) {
-        workspace.value = cf.value.data.workspace
-      }
-    }
-    // 不再自动加载当前会话和 usage —— 等用户从侧边栏主动选择
-  } catch {}
-  await loadWorkspaces()
-  await loadSessions()
+  
+  // 非 Tauri 环境直接加载数据
+  if (!isTauri) {
+    await loadData()
+  }
+  // Tauri 环境等待服务就绪后自动加载
 })
 </script>
 
