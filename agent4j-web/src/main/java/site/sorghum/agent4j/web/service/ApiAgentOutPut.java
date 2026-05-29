@@ -214,10 +214,8 @@ public class ApiAgentOutPut implements AgentOutput {
     public void complete(String reply) {
         if (completed) return;
         if (reply != null && !reply.isEmpty()) {
-            ONode replyNode = ONode.ofJson("{}").asObject();
-            replyNode.set("content", reply);
             try {
-                emitter.send("reply", replyNode.toJson());
+                emitter.sendContent(reply);
             } catch (Exception e) {
                 // SSE连接可能已断开，忽略异常
             }

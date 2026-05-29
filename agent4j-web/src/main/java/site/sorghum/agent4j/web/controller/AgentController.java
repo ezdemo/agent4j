@@ -47,4 +47,34 @@ public class AgentController {
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
         return ApiResponse.ok(agentService.getHistory(workspacePath, sessionName));
     }
+
+    /**
+     * 获取可用命令列表 —— GET /api/agent/commands
+     * <p>
+     * 返回前端斜杠命令选择弹窗所需的元数据。
+     * </p>
+     */
+    @Get
+    @Mapping("/commands")
+    public Object commands() {
+        if (!agentService.isReady()) {
+            return ApiResponse.fail("Agent 未初始化");
+        }
+        return ApiResponse.ok(agentService.getCommandMetaList());
+    }
+
+    /**
+     * 获取可用 skill 列表 —— GET /api/agent/skills
+     * <p>
+     * 返回前端 skill 选择弹窗所需的元数据。
+     * </p>
+     */
+    @Get
+    @Mapping("/skills")
+    public Object skills() {
+        if (!agentService.isReady()) {
+            return ApiResponse.fail("Agent 未初始化");
+        }
+        return ApiResponse.ok(agentService.getSkillMetaList());
+    }
 }

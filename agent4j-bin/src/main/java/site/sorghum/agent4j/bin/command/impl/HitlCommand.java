@@ -27,6 +27,11 @@ public class HitlCommand implements ChatCommand {
     }
 
     @Override
+    public String getCommandType() {
+        return "mode";
+    }
+
+    @Override
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
         context.getAgent().toggleHitl();
         boolean on = context.getAgent().isHitlMode();

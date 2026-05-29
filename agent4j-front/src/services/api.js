@@ -236,6 +236,16 @@ export const agentAPI = {
   // 获取Agent统计 - GET /api/agent/stats
   getStats: () => {
     return api.get('/agent/stats')
+  },
+  
+  // 获取可用命令列表 - GET /api/agent/commands
+  getCommands: () => {
+    return api.get('/agent/commands')
+  },
+  
+  // 获取可用skill列表 - GET /api/agent/skills
+  getSkills: () => {
+    return api.get('/agent/skills')
   }
 }
 

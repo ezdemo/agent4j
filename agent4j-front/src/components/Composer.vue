@@ -44,14 +44,21 @@
               >
                 <div class="cmd-icon">{{ getSlashIcon(cmd.cmd) }}</div>
                 <div class="cmd-info">
-                  <div class="cmd-name">{{ cmd.cmd }}</div>
+                  <div class="cmd-name">
+                    {{ cmd.cmd }}
+                    <span v-if="cmd.type === 'skill'" class="cmd-badge skill">skill</span>
+                    <span v-else-if="cmd.type === 'mode'" class="cmd-badge mode">模式</span>
+                  </div>
                   <div class="cmd-desc">{{ cmd.desc }}</div>
                 </div>
                 <div v-if="cmd.shortcut" class="cmd-shortcut">
                   <kbd>{{ cmd.shortcut }}</kbd>
                 </div>
               </div>
-              <div v-if="filteredSlashCmds.length === 0" class="popup-empty">
+              <div v-if="!loaded" class="popup-empty popup-loading">
+                <span class="loading-dot"></span> 加载命令中...
+              </div>
+              <div v-else-if="filteredSlashCmds.length === 0" class="popup-empty">
                 无匹配命令
               </div>
             </div>
@@ -201,7 +208,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick } from 'vue'
+import { ref, computed, watch, nextTick, onMounted } from 'vue'
+import { agentAPI } from '../services/api.js'
 
 const props = defineProps({
   draft: { type: String, default: '' },
@@ -215,7 +223,7 @@ const props = defineProps({
 })
 
 const emit = defineEmits([
-  'update:draft', 'send', 'abort', 'setMode', 'cycleModel', 'clear', 'dequeue', 'export'
+  'update:draft', 'send', 'abort', 'setMode', 'cycleModel', 'clear', 'dequeue', 'export', 'slash'
 ])
 
 // 响应式状态
@@ -226,6 +234,11 @@ const slashQuery = ref('')
 const activePopupIdx = ref(0)
 const todoTooltipVisible = ref(false)
 const todoTooltipTimer = ref(null)
+
+// 从后端获取的命令和 skill 列表
+const backendCommands = ref([])
+const backendSkills = ref([])
+const loaded = ref(false)
 
 // 模式配置
 const modes = [
@@ -239,18 +252,68 @@ const modeLabel = computed(() => {
   return mode ? mode.label : props.editMode
 })
 
+// 加载命令和 skill 列表
+const fetchCommandsAndSkills = async () => {
+  if (loaded.value) return
+  try {
+    const [cmdRes, skillRes] = await Promise.allSettled([
+      agentAPI.getCommands(),
+      agentAPI.getSkills()
+    ])
+    if (cmdRes.status === 'fulfilled' && cmdRes.value.success && cmdRes.value.data) {
+      backendCommands.value = cmdRes.value.data
+    }
+    if (skillRes.status === 'fulfilled' && skillRes.value.success && skillRes.value.data) {
+      backendSkills.value = skillRes.value.data
+    }
+  } catch (e) {
+    console.warn('加载命令/skill列表失败:', e)
+  } finally {
+    loaded.value = true
+  }
+}
+
+onMounted(() => {
+  fetchCommandsAndSkills()
+})
+
 // 斜杠命令
 const defaultSlashCmds = [
-  { cmd: '/new', desc: '新建对话', shortcut: 'Ctrl+N' },
-  { cmd: '/clear', desc: '清空对话' },
-  { cmd: '/retry', desc: '重试最后一条', shortcut: 'Ctrl+R' },
-  { cmd: '/compact', desc: '折叠上下文' },
-  { cmd: '/export', desc: '导出对话', shortcut: 'Ctrl+E' },
-  { cmd: '/plan', desc: '进入计划模式' },
-  { cmd: '/execute', desc: '退出计划模式' }
+  { cmd: '/new', desc: '新建对话', shortcut: 'Ctrl+N', type: 'session' },
+  { cmd: '/clear', desc: '清空对话', type: 'session' },
+  { cmd: '/retry', desc: '重试最后一条', shortcut: 'Ctrl+R', type: 'session' },
+  { cmd: '/compact', desc: '折叠上下文', type: 'session' },
+  { cmd: '/export', desc: '导出对话', shortcut: 'Ctrl+E', type: 'session' },
+  { cmd: '/plan', desc: '进入计划模式', type: 'mode' },
+  { cmd: '/execute', desc: '退出计划模式', type: 'mode' }
 ]
 
-const allSlashCmds = computed(() => [...defaultSlashCmds, ...props.slashCommands])
+// 合并后端命令（优先使用后端数据）
+const mergedCommands = computed(() => {
+  if (backendCommands.value.length > 0) {
+    // 后端命令已包含完整信息，直接使用
+    return backendCommands.value.map(cmd => ({
+      cmd: cmd.cmd,
+      desc: cmd.desc,
+      type: cmd.type || 'system',
+      argHint: cmd.argHint
+    }))
+  }
+  return defaultSlashCmds
+})
+
+// Skill 列表（转换为命令格式）
+const skillCommands = computed(() => {
+  return backendSkills.value.map(skill => ({
+    cmd: `/skill:${skill.name}`,
+    desc: skill.description || '运行 skill',
+    type: 'skill',
+    runAs: skill.runAs
+  }))
+})
+
+// 所有可用命令（命令 + skill）
+const allSlashCmds = computed(() => [...mergedCommands.value, ...skillCommands.value, ...props.slashCommands])
 
 const filteredSlashCmds = computed(() => {
   if (!slashQuery.value) return allSlashCmds.value
@@ -269,8 +332,19 @@ const getSlashIcon = (cmd) => {
     '/compact': '📦',
     '/export': '📥',
     '/plan': '📋',
-    '/execute': '⚡'
+    '/execute': '⚡',
+    '/sessions': '📂',
+    '/load': '📂',
+    '/rewind': '⏪',
+    '/init': '🔧',
+    '/hitl': '🛡',
+    '/agree': '✅',
+    '/deny': '❌',
+    '/help': '❓',
+    '/exit': '👋'
   }
+  // Skill 图标
+  if (cmd.startsWith('/skill:')) return '🧩'
   return icons[cmd] || '🔧'
 }
 
@@ -285,6 +359,11 @@ const handleInput = (e) => {
     slashPopup.value = true
     slashQuery.value = slashMatch[3] || ''
     activePopupIdx.value = 0
+    // 如果后端数据还没加载，触发加载
+    if (!loaded.value || (backendCommands.value.length === 0 && backendSkills.value.length === 0)) {
+      loaded.value = false // 重置以允许重试
+      fetchCommandsAndSkills()
+    }
   } else {
     slashPopup.value = false
   }
@@ -391,6 +470,9 @@ const selectSlashCmd = (cmd) => {
     emit('clear')
   } else if (cmd.cmd === '/export') {
     emit('export')
+  } else if (cmd.type === 'skill') {
+    // Skill 命令：发送 /skill:name 格式
+    emit('slash', cmd.cmd.slice(1))
   } else if (cmd.cmd) {
     emit('slash', cmd.cmd.slice(1)) // 移除前面的 /
   }
@@ -950,6 +1032,29 @@ defineExpose({
   font-weight: var(--font-semibold);
   font-family: var(--font-mono);
   color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.cmd-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: var(--font-medium);
+  border-radius: var(--radius-sm);
+  line-height: 1.4;
+}
+
+.cmd-badge.skill {
+  background: var(--success-bg, #dcfce7);
+  color: var(--success, #16a34a);
+}
+
+.cmd-badge.mode {
+  background: var(--info-bg, #dbeafe);
+  color: var(--info, #2563eb);
 }
 
 .cmd-desc {
@@ -979,6 +1084,27 @@ defineExpose({
   text-align: center;
   font-size: var(--text-sm);
   color: var(--fg-muted);
+}
+
+.popup-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  color: var(--brand-primary);
+}
+
+.loading-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand-primary);
+  animation: loading-bounce 0.6s infinite alternate;
+}
+
+@keyframes loading-bounce {
+  from { opacity: 0.3; transform: scale(0.8); }
+  to   { opacity: 1;   transform: scale(1.2); }
 }
 
 /* 底部提示 */

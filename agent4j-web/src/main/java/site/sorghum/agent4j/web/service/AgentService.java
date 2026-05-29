@@ -618,11 +618,9 @@ public class AgentService {
             agent.setSessionId(sessionId);
             String reply = agent.chat(message);
 
-            // 发送最终回复
+            // 发送最终回复（使用 content 事件，前端可直接渲染）
             if (reply != null && !reply.isEmpty()) {
-                ONode replyNode = ONode.ofJson("{}").asObject();
-                replyNode.set("content", reply);
-                emitter.send("reply", replyNode.toJson());
+                emitter.sendContent(reply);
             }
         } catch (Exception e) {
             try {
@@ -1147,5 +1145,41 @@ public class AgentService {
 
         System.out.println("[web] 已删除工作区: " + hash + "，清除了 " + keysToRemove.size() + " 个 Agent");
         return !keysToRemove.isEmpty();
+    }
+
+    // ==================== 命令与 Skill 查询 ====================
+
+    /**
+     * 获取所有命令的元数据列表（供前端命令选择弹窗使用）。
+     *
+     * @return 命令元数据列表
+     */
+    public List<Map<String, Object>> getCommandMetaList() {
+        if (commandRegistry == null) {
+            return Collections.emptyList();
+        }
+        return commandRegistry.getCommandMetaList();
+    }
+
+    /**
+     * 获取所有 skill 的元数据列表（供前端 skill 选择弹窗使用）。
+     *
+     * @return skill 元数据列表
+     */
+    public List<Map<String, Object>> getSkillMetaList() {
+        if (sharedSkillStore == null) {
+            return Collections.emptyList();
+        }
+        List<Map<String, Object>> result = new ArrayList<>();
+        List<site.sorghum.agent4j.bin.skill.SkillV2> skills = sharedSkillStore.list();
+        for (site.sorghum.agent4j.bin.skill.SkillV2 skill : skills) {
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("name", skill.getName());
+            meta.put("description", skill.getDescription() != null ? skill.getDescription() : "");
+            meta.put("scope", skill.getScope().name().toLowerCase());
+            meta.put("runAs", skill.getRunAs().name().toLowerCase());
+            result.add(meta);
+        }
+        return result;
     }
 }

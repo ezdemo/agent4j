@@ -26,6 +26,11 @@ public class NewSessionCommand implements ChatCommand {
     }
 
     @Override
+    public String getCommandType() {
+        return "session";
+    }
+
+    @Override
     public CommandResult execute(String input, ChatCommandContext context) {
         context.getAgent().newSession();
         System.out.println("(新会话已开启)");

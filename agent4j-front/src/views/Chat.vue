@@ -102,6 +102,42 @@
 
     <!-- 输入区 -->
     <div class="input-area">
+      <!-- 斜杠命令弹窗 -->
+      <Transition name="slash-popup">
+        <div v-if="slashPopupOpen" class="slash-popup">
+          <div class="slash-popup-header">
+            <span class="slash-popup-title">可用命令</span>
+            <span class="slash-popup-hint">输入 / 触发</span>
+          </div>
+          <div v-if="!commandsLoaded" class="slash-popup-loading">
+            <span class="loading-dot"></span> 加载命令中...
+          </div>
+          <div v-else-if="filteredSlashCmds.length === 0" class="slash-popup-empty">
+            无匹配命令
+          </div>
+          <div v-else class="slash-popup-list">
+            <div
+              v-for="(cmd, index) in filteredSlashCmds"
+              :key="cmd.cmd"
+              class="slash-popup-item"
+              :class="{ active: index === activePopupIdx }"
+              @click="selectSlashCmd(cmd)"
+              @mouseenter="activePopupIdx = index"
+            >
+              <div class="slash-popup-icon">{{ getSlashIcon(cmd.cmd) }}</div>
+              <div class="slash-popup-info">
+                <div class="slash-popup-cmd">
+                  {{ cmd.cmd }}
+                  <span v-if="cmd.type === 'skill'" class="slash-popup-badge skill">skill</span>
+                  <span v-else-if="cmd.type === 'mode'" class="slash-popup-badge mode">模式</span>
+                  <span v-else-if="cmd.type === 'session'" class="slash-popup-badge session">会话</span>
+                </div>
+                <div class="slash-popup-desc">{{ cmd.desc }}</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </Transition>
       <div class="input-box" :class="{ focused: inputFocused }">
         <!-- TODO 图标按钮 -->
         <div class="todo-trigger" 
@@ -178,11 +214,11 @@
         <textarea
           ref="inputField"
           v-model="inputText"
-          @keydown.enter.exact="handleEnter"
+          @keydown="handleEnter"
           @focus="inputFocused = true"
-          @blur="inputFocused = false"
-          @input="autoResize"
-          placeholder="输入消息... (Enter 发送)"
+          @blur="handleInputBlur"
+          @input="handleInputChange"
+          placeholder="输入消息... (Enter 发送, / 命令)"
           rows="1"
         ></textarea>
         <div class="input-actions">
@@ -259,6 +295,120 @@
 import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { chatAPI, agentAPI, configAPI } from '../services/api'
 import { marked } from 'marked'
+
+// ============= 斜杠命令相关 =============
+const slashPopupOpen = ref(false)
+const slashQuery = ref('')
+const activePopupIdx = ref(0)
+const backendCommands = ref([])
+const backendSkills = ref([])
+const commandsLoaded = ref(false)
+
+// 默认命令列表
+const defaultSlashCmds = [
+  { cmd: '/new', desc: '新建对话', type: 'session' },
+  { cmd: '/clear', desc: '清空对话', type: 'session' },
+  { cmd: '/retry', desc: '重试最后一条', type: 'session' },
+  { cmd: '/compact', desc: '折叠上下文', type: 'session' },
+  { cmd: '/export', desc: '导出对话', type: 'session' },
+  { cmd: '/plan', desc: '进入计划模式', type: 'mode' },
+  { cmd: '/execute', desc: '退出计划模式', type: 'mode' },
+  { cmd: '/sessions', desc: '列出历史会话', type: 'session' },
+  { cmd: '/help', desc: '显示帮助信息', type: 'system' },
+  { cmd: '/exit', desc: '退出', type: 'system' },
+  { cmd: '/hitl', desc: '切换 HITL 模式', type: 'mode' },
+  { cmd: '/agree', desc: '批准待执行工具', type: 'mode' },
+  { cmd: '/deny', desc: '拒绝待执行工具', type: 'mode' },
+  { cmd: '/init', desc: '初始化项目文档', type: 'system' }
+]
+
+// 合并后端命令
+const mergedCommands = computed(() => {
+  if (backendCommands.value.length > 0) {
+    return backendCommands.value.map(cmd => ({
+      cmd: cmd.cmd,
+      desc: cmd.desc || '',
+      type: cmd.type || 'system',
+      argHint: cmd.argHint
+    }))
+  }
+  return defaultSlashCmds
+})
+
+// Skill 列表转换为命令格式
+const skillCommands = computed(() => {
+  return backendSkills.value.map(skill => ({
+    cmd: `/skill:${skill.name}`,
+    desc: skill.description || '运行 skill',
+    type: 'skill',
+    runAs: skill.runAs
+  }))
+})
+
+// 所有可用命令（命令 + skill）
+const allSlashCmds = computed(() => [...mergedCommands.value, ...skillCommands.value])
+
+// 过滤后的命令
+const filteredSlashCmds = computed(() => {
+  if (!slashQuery.value) return allSlashCmds.value
+  const query = slashQuery.value.toLowerCase()
+  return allSlashCmds.value.filter(cmd =>
+    cmd.cmd.toLowerCase().includes(query) ||
+    cmd.desc.toLowerCase().includes(query)
+  )
+})
+
+// 获取命令图标
+const getSlashIcon = (cmd) => {
+  const icons = {
+    '/new': '✨', '/clear': '🗑️', '/retry': '🔄', '/compact': '📦',
+    '/export': '📥', '/plan': '📋', '/execute': '⚡', '/sessions': '📂',
+    '/load': '📂', '/rewind': '⏪', '/init': '🔧', '/hitl': '🛡',
+    '/agree': '✅', '/deny': '❌', '/help': '❓', '/exit': '👋'
+  }
+  if (cmd.startsWith('/skill:')) return '🧩'
+  return icons[cmd] || '🔧'
+}
+
+// 加载命令和 skill 列表
+const loadCommandAndSkills = async () => {
+  if (commandsLoaded.value) return
+  try {
+    const [cmdRes, skillRes] = await Promise.allSettled([
+      agentAPI.getCommands(),
+      agentAPI.getSkills()
+    ])
+    if (cmdRes.status === 'fulfilled' && cmdRes.value.success && cmdRes.value.data) {
+      backendCommands.value = cmdRes.value.data
+    }
+    if (skillRes.status === 'fulfilled' && skillRes.value.success && skillRes.value.data) {
+      backendSkills.value = skillRes.value.data
+    }
+  } catch (e) {
+    console.warn('[Chat] 加载命令/skill列表失败:', e)
+  } finally {
+    commandsLoaded.value = true
+  }
+}
+
+// 选择斜杠命令
+const selectSlashCmd = (cmd) => {
+  slashPopupOpen.value = false
+  slashQuery.value = ''
+  if (cmd.type === 'skill') {
+    // skill：拼到输入框，不发送，让用户继续输入
+    inputText.value = cmd.cmd + ' '
+    nextTick(() => {
+      inputField.value?.focus()
+    })
+  } else {
+    // 普通命令：直接发送
+    inputText.value = cmd.cmd
+    nextTick(() => {
+      sendMessage()
+    })
+  }
+}
 
 const props = defineProps({ 
   hideHeader: { type: Boolean, default: false },
@@ -464,7 +614,7 @@ onBeforeUnmount(() => {
 const suggestions = ['解释这段代码', '优化这个函数', '写个单元测试', '检查潜在问题']
 
 // 不在聊天区显示的静默命令（只发给后端，不加用户消息气泡）
-const SILENT_CMDS = new Set(['/new', '/plan', '/execute', '/compact', '/retry', '/sessions', '/load', '/init', '/hitl', '/agree', '/deny'])
+const SILENT_CMDS = new Set(['/new', '/plan', '/execute', '/compact', '/retry', '/sessions', '/load', '/init', '/hitl', '/agree', '/deny', '/help', '/exit', '/rewind', '/clear'])
 
 const hasAssistant = computed(() => messages.value.some(m => m.role === 'assistant' && m.blocks?.length > 0))
 
@@ -494,6 +644,33 @@ const autoResize = () => {
   if (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px' }
 }
 
+const handleInputChange = () => {
+  autoResize()
+  // 检测斜杠命令
+  const value = inputText.value
+  const slashMatch = value.match(/(^|\s)(\/)([^\s]*)$/)
+  if (slashMatch) {
+    slashPopupOpen.value = true
+    slashQuery.value = slashMatch[3] || ''
+    activePopupIdx.value = 0
+    // 如果后端数据还没加载，触发加载
+    if (!commandsLoaded.value || (backendCommands.value.length === 0 && backendSkills.value.length === 0)) {
+      commandsLoaded.value = false // 重置以允许重试
+      loadCommandAndSkills()
+    }
+  } else {
+    slashPopupOpen.value = false
+  }
+}
+
+const handleInputBlur = () => {
+  inputFocused.value = false
+  // 延迟关闭弹窗，允许点击命令
+  setTimeout(() => {
+    slashPopupOpen.value = false
+  }, 200)
+}
+
 const scroll = async () => {
   await nextTick()
   if (messagesContainer.value) messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
@@ -519,12 +696,37 @@ const sendChoice = (value, block) => {
 }
 
 const handleEnter = e => {
+  // 斜杠命令弹窗导航
+  if (slashPopupOpen.value) {
+    if (e.key === 'ArrowDown') {
+      e.preventDefault()
+      activePopupIdx.value = (activePopupIdx.value + 1) % filteredSlashCmds.value.length
+      return
+    }
+    if (e.key === 'ArrowUp') {
+      e.preventDefault()
+      activePopupIdx.value = (activePopupIdx.value - 1 + filteredSlashCmds.value.length) % filteredSlashCmds.value.length
+      return
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      slashPopupOpen.value = false
+      return
+    }
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault()
+      if (filteredSlashCmds.value.length > 0) {
+        selectSlashCmd(filteredSlashCmds.value[activePopupIdx.value])
+      }
+      return
+    }
+  }
   if (e.key === 'Escape' && streaming.value) {
     e.preventDefault()
     abortChat()
     return
   }
-  if (!e.shiftKey) { e.preventDefault(); sendMessage() }
+  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
 }
 
 /**
@@ -536,7 +738,8 @@ const sendMessage = async () => {
   const text = inputText.value.trim()
   if (!text || streaming.value) return
 
-  const isSilent = SILENT_CMDS.has(text.split(/\s+/)[0].toLowerCase())
+  const firstWord = text.split(/\s+/)[0].toLowerCase()
+  const isSilent = SILENT_CMDS.has(firstWord) || firstWord.startsWith('/skill:')
 
   // 非静默命令才显示用户气泡
   if (!isSilent) {
@@ -742,8 +945,11 @@ const loadSession = async (name, workspaceHash) => {
 
 const sendCommand = async cmd => { inputText.value = cmd; await sendMessage() }
 
-// 加载历史消息（仅在明确选了 session 时）
-onMounted(() => { if (props.sessionName) loadHistory() })
+// 加载历史消息（仅在明确选了 session 时）和命令列表
+onMounted(() => { 
+  if (props.sessionName) loadHistory()
+  loadCommandAndSkills()
+})
 
 defineExpose({ clearMessages, loadSession, sendCommand, exportChat })
 </script>
@@ -1538,5 +1744,167 @@ defineExpose({ clearMessages, loadSession, sendCommand, exportChat })
 /* 输入框内 textarea 需要 flex: 1 */
 .input-box textarea {
   flex: 1;
+}
+
+/* ============= 斜杠命令弹窗 ============= */
+.input-area {
+  position: relative;
+}
+
+.slash-popup {
+  position: absolute;
+  bottom: 100%;
+  left: 16px;
+  right: 16px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+  z-index: 100;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.slash-popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.slash-popup-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+}
+
+.slash-popup-hint {
+  font-size: 11px;
+  color: var(--fg-4);
+}
+
+.slash-popup-list {
+  max-height: 280px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.slash-popup-loading,
+.slash-popup-empty {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--fg-4);
+}
+
+.slash-popup-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  color: var(--accent);
+}
+
+.slash-popup-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--t);
+}
+
+.slash-popup-item:hover,
+.slash-popup-item.active {
+  background: var(--bg-2);
+}
+
+.slash-popup-icon {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  background: var(--bg-3);
+  border-radius: var(--r-sm);
+  flex-shrink: 0;
+}
+
+.slash-popup-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.slash-popup-cmd {
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--mono);
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.slash-popup-badge {
+  display: inline-flex;
+  align-items: center;
+  padding: 0 4px;
+  font-size: 10px;
+  font-weight: 500;
+  border-radius: var(--r-sm);
+  line-height: 1.4;
+}
+
+.slash-popup-badge.skill {
+  background: #dcfce7;
+  color: #16a34a;
+}
+
+.slash-popup-badge.mode {
+  background: #dbeafe;
+  color: #2563eb;
+}
+
+.slash-popup-badge.session {
+  background: #fef3c7;
+  color: #d97706;
+}
+
+.slash-popup-desc {
+  font-size: 11px;
+  color: var(--fg-4);
+  margin-top: 1px;
+}
+
+/* 深色模式 badge 颜色调整 */
+[data-theme="dark"] .slash-popup-badge.skill {
+  background: #052e16;
+  color: #4ade80;
+}
+
+[data-theme="dark"] .slash-popup-badge.mode {
+  background: #1e3a5f;
+  color: #60a5fa;
+}
+
+[data-theme="dark"] .slash-popup-badge.session {
+  background: #422006;
+  color: #fbbf24;
+}
+
+/* 弹窗动画 */
+.slash-popup-enter-active,
+.slash-popup-leave-active {
+  transition: all 0.15s ease;
+}
+
+.slash-popup-enter-from,
+.slash-popup-leave-to {
+  opacity: 0;
+  transform: translateY(8px) scale(0.98);
 }
 </style>

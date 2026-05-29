@@ -5,6 +5,7 @@ import org.noear.solon.annotation.Init;
 import org.noear.solon.annotation.Inject;
 
 import java.util.*;
+import java.util.stream.Collectors;
 
 /**
  * ChatCommandRegistry — 聊天命令注册表。
@@ -113,5 +114,27 @@ public class ChatCommandRegistry {
      */
     public List<ChatCommand> getAll() {
         return sortedCommands;
+    }
+
+    /**
+     * 获取所有命令的元数据列表（供前端命令选择弹窗使用）。
+     *
+     * @return 命令元数据列表，每项包含 cmd、desc、type、argHint
+     */
+    public List<Map<String, Object>> getCommandMetaList() {
+        List<Map<String, Object>> result = new ArrayList<>();
+        List<ChatCommand> sorted = new ArrayList<>(sortedCommands);
+        sorted.sort(Comparator.comparing(c -> c.getCommand().toLowerCase()));
+        for (ChatCommand cmd : sorted) {
+            Map<String, Object> meta = new LinkedHashMap<>();
+            meta.put("cmd", "/" + cmd.getCommand());
+            meta.put("desc", cmd.getShortDescription());
+            meta.put("type", cmd.getCommandType());
+            if (cmd.getArgHint() != null) {
+                meta.put("argHint", cmd.getArgHint());
+            }
+            result.add(meta);
+        }
+        return result;
     }
 }

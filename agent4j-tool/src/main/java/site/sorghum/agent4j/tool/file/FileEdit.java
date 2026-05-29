@@ -56,11 +56,12 @@ public class FileEdit {
         if (range != null && range.matches("\\d+\\s*-\\s*\\d+")) {
             String[] parts = range.split("-");
             int start = Math.max(1, Integer.parseInt(parts[0].trim()));
-            int end = Math.min(total, Math.max(start, Integer.parseInt(parts[1].trim())));
-            // range 范围必须 >= 500 行
-            if (end != total && end - start + 1 < 500) {
-                return "[ERROR] range 范围必须 >= 500 行（当前: " + (end - start + 1) + " 行）。请使用更大的范围，如 " + start + "-" + (start + 500);
+            int originalEnd =  Integer.parseInt(parts[1].trim());
+            if (originalEnd - start + 1 < 500){
+                originalEnd = start + 501;
             }
+            int end = Math.min(total, Math.max(start,originalEnd));
+
             String body = joinLines(lines.subList(start - 1, end));
             return "[range " + start + "-" + end + " of " + total + " lines]\n" + body;
         }

@@ -1134,7 +1134,7 @@ public class AgentLoop {
                     String tcArgs = func.get("arguments").getString();
                     if (tcArgs == null) tcArgs = "{}";
                     try {
-                        String result = dispatcher.dispatch(tcName, tcArgs, MAX_RESULT_TOKENS);
+                        String result = dispatcher.dispatch(tcName, tcArgs);
                         if (result != null && result.contains("\"rejectedReason\":\"storm\"")) {
                             anySuppressed.set(true);
                         }
@@ -1244,9 +1244,6 @@ public class AgentLoop {
     }
 
     // ==================== 常量 ====================
-
-    /** 工具结果最大 token 数 */
-    private static final int MAX_RESULT_TOKENS = 8000;
 
     /** 消息总字符数阈值（超出时触发折叠），约 200KB — 注意 estimateChars 不含 tools JSON，实际请求体会更大 */
     private static final int MAX_TOTAL_CHARS = 200_000;

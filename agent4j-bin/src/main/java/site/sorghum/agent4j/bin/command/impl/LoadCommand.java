@@ -38,6 +38,16 @@ public class LoadCommand implements ChatCommand {
     }
 
     @Override
+    public String getCommandType() {
+        return "session";
+    }
+
+    @Override
+    public String getArgHint() {
+        return "N";
+    }
+
+    @Override
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
         SessionStore store = context.getAgent().getSessionStore();
         if (store == null) {

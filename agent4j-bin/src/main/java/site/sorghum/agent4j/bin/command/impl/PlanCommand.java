@@ -27,6 +27,11 @@ public class PlanCommand implements ChatCommand {
     }
 
     @Override
+    public String getCommandType() {
+        return "mode";
+    }
+
+    @Override
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
         context.getAgent().setPlanMode(true);
         System.out.println("(已进入计划模式 — 仅允许只读操作)");

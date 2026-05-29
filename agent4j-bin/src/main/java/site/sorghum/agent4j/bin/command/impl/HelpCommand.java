@@ -31,6 +31,11 @@ public class HelpCommand implements ChatCommand {
     }
 
     @Override
+    public String getCommandType() {
+        return "info";
+    }
+
+    @Override
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
         // 通过 Solon IoC 获取注册表
         ChatCommandRegistry registry = Solon.context().getBean(ChatCommandRegistry.class);

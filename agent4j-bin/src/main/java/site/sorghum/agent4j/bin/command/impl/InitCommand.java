@@ -27,6 +27,11 @@ public class InitCommand implements ChatCommand {
     }
 
     @Override
+    public String getCommandType() {
+        return "tool";
+    }
+
+    @Override
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
         System.out.println("正在分析项目...\n");
         String prompt = "请全面分析这个项目的代码库，生成 agent4j.md 放在项目根目录。\n\n"

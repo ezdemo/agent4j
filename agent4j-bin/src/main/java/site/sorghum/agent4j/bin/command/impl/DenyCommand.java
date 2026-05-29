@@ -27,6 +27,11 @@ public class DenyCommand implements ChatCommand {
     }
 
     @Override
+    public String getCommandType() {
+        return "mode";
+    }
+
+    @Override
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
         if (!context.getAgent().hasPendingHITL()) {
             System.out.println("(当前没有待审批的工具调用)");

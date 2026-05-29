@@ -33,6 +33,11 @@ public class ExitCommand implements ChatCommand {
     }
 
     @Override
+    public String getCommandType() {
+        return "system";
+    }
+
+    @Override
     public CommandResult execute(String input, ChatCommandContext context) {
         context.getAgent().flushSession();
         context.getAgent().saveUsage();

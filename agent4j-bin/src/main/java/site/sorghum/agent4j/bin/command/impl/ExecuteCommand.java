@@ -27,6 +27,11 @@ public class ExecuteCommand implements ChatCommand {
     }
 
     @Override
+    public String getCommandType() {
+        return "mode";
+    }
+
+    @Override
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
         context.getAgent().setPlanMode(false);
         System.out.println("(已退出计划模式 — 允许全部操作)");

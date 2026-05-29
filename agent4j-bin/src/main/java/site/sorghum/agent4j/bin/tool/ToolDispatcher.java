@@ -81,11 +81,8 @@ public class ToolDispatcher {
 
     // ---- Dispatch ----
 
-    /** 工具结果最大 token 数 */
-    private static final int MAX_RESULT_TOKENS = 8000;
-
     /** 执行工具调用，返回结果字符串 */
-    public String dispatch(String name, String argumentsJson, int maxResultTokens) {
+    public String dispatch(String name, String argumentsJson) {
         if (name == null || name.equals("null")){
             return error("请重新思考,调用方式错误，工具名不能为null。");
         }
@@ -139,27 +136,12 @@ public class ToolDispatcher {
                 result = postDispatchHook.apply(name, result);
             }
 
-            // Token 截断
-            int estimatedTokens = result.length() / 2;
-            if (estimatedTokens > maxResultTokens) {
-                int maxChars = maxResultTokens * 2;
-                if (result.length() > maxChars) {
-                    result = result.substring(0, maxChars)
-                            + "\n\n[… truncated " + (result.length() - maxChars)
-                            + " chars (~" + (estimatedTokens - maxResultTokens) + " tokens) …]";
-                }
-            }
             return result;
         } catch (site.sorghum.agent4j.tool.HitlRequiredException e) {
             throw e; // 向上传播到 AgentLoop 触发 HITL 审批
         } catch (Exception e) {
             return error(name + ": " + e.getMessage());
         }
-    }
-
-    /** 兼容无 token 上限的调用 */
-    public String dispatch(String name, String argumentsJson) {
-        return dispatch(name, argumentsJson, MAX_RESULT_TOKENS);
     }
 
     private static String error(String msg) {

@@ -32,6 +32,11 @@ public class SessionsCommand implements ChatCommand {
     }
 
     @Override
+    public String getCommandType() {
+        return "session";
+    }
+
+    @Override
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
         SessionStore store = context.getAgent().getSessionStore();
         if (store == null) {

@@ -27,6 +27,11 @@ public class CompactCommand implements ChatCommand {
     }
 
     @Override
+    public String getCommandType() {
+        return "session";
+    }
+
+    @Override
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
         System.out.println("正在折叠历史消息...");
         context.getAgent().compact();

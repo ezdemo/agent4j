@@ -63,6 +63,52 @@ public interface ChatCommand {
     String getDescription();
 
     /**
+     * 获取命令的简短描述（不含命令名前缀）。
+     * 用于前端命令选择弹窗显示。
+     * <p>
+     * 默认实现从 getDescription() 中提取 / 后的说明部分。
+     * </p>
+     *
+     * @return 命令描述文本
+     */
+    default String getShortDescription() {
+        String desc = getDescription();
+        if (desc == null) return "";
+        // 尝试提取 "/command    description" 格式中的 description 部分
+        int slashIdx = desc.indexOf('/');
+        if (slashIdx >= 0) {
+            int spaceIdx = desc.indexOf(' ', slashIdx);
+            if (spaceIdx >= 0) {
+                return desc.substring(spaceIdx).trim();
+            }
+        }
+        return desc;
+    }
+
+    /**
+     * 获取命令类型。
+     * 用于前端分类显示。
+     * <p>
+     * 可选值：session / mode / info / tool / system
+     * </p>
+     *
+     * @return 命令类型
+     */
+    default String getCommandType() {
+        return "system";
+    }
+
+    /**
+     * 获取命令的参数提示（如有）。
+     * 用于前端显示参数占位符。
+     *
+     * @return 参数提示，如 "N" 表示需要数字参数
+     */
+    default String getArgHint() {
+        return null;
+    }
+
+    /**
      * 执行命令。
      *
      * @param input   用户原始输入
