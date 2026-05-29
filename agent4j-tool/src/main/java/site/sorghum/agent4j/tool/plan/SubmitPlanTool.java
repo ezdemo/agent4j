@@ -44,8 +44,13 @@ public class SubmitPlanTool extends AgentTool {
                 + "  - summary (string, 可选): 计划标题/摘要\n"
                 + "  - plan (string, 必填): Markdown 格式的计划内容\n"
                 + "  - steps (array, 必填): 步骤列表，每项包含 id/title/action\n\n"
-                + "只读：否\n"
+                + "只读：是\n"
                 + "风暴豁免：否";
+    }
+
+    @Override
+    public boolean isReadOnly() {
+        return true; // 计划模式下可用——submit_plan 是计划模式的核心工具
     }
 
     @Override
