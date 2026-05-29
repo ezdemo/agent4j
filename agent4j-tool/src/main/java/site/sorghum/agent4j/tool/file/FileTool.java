@@ -12,7 +12,9 @@ import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -37,8 +39,7 @@ public class FileTool extends AgentTool {
                     + "  delete_dir  — 递归删除目录\n"
                     + "  move        — 移动/重命名\n"
                     + "  copy        — 复制文件或目录\n"
-                    + "  stat        — 查看文件/目录元信息\n"
-                    + "所有操作限制在工作区根目录内。";
+                    + "  stat        — 查看文件/目录元信息";
 
     private static final List<ToolParameter> PARAMETERS = Arrays.asList(
             new ToolParameter("action", "string", true,
@@ -60,7 +61,7 @@ public class FileTool extends AgentTool {
     @Override
     public String toToolSpec() {
         return "### file\n\n"
-                + "描述：工作区文件系统操作工具。所有路径限制在工作区根目录内（路径穿越防护）。\n\n"
+                + "描述：工作区文件系统操作工具。\n\n"
                 + "## 支持的操作类型\n\n"
                 + "| 操作 | 说明 | 必填参数 |\n"
                 + "|------|------|---------|\n"
@@ -73,7 +74,6 @@ public class FileTool extends AgentTool {
                 + "| stat | 查看文件/目录元信息 | path |\n\n"
                 + "## 注意事项\n\n"
                 + "- 所有路径都是相对于工作区根目录的\n"
-                + "- 路径穿越防护：禁止访问工作区根目录之外的路径\n"
                 + "- create_file 如果不传 content，会创建空文件\n"
                 + "- delete_dir 会递归删除目录及其所有子文件和子目录\n\n"
                 + "参数：\n"
@@ -165,6 +165,14 @@ public class FileTool extends AgentTool {
         if (Files.isDirectory(file)) {
             return ToolResult.fail("IS_DIR", "路径是目录，请用 delete_dir: " + path);
         }
+        // 删除文件强制触发 HITL 审批
+        if (!ToolContext.isSandboxBypass()) {
+            Map<String, Object> toolArgs = new HashMap<>();
+            toolArgs.put("action", "delete_file");
+            toolArgs.put("path", path);
+            throw new HitlRequiredException("file", "DELETE_FILE",
+                    "删除文件: " + path, toolArgs);
+        }
         Files.delete(file);
         return ToolResult.ok("已删除: " + path);
     }
@@ -176,6 +184,14 @@ public class FileTool extends AgentTool {
         }
         if (!Files.isDirectory(dir)) {
             return ToolResult.fail("NOT_DIR", "路径不是目录: " + path);
+        }
+        // 删除目录强制触发 HITL 审批
+        if (!ToolContext.isSandboxBypass()) {
+            Map<String, Object> toolArgs = new HashMap<>();
+            toolArgs.put("action", "delete_dir");
+            toolArgs.put("path", path);
+            throw new HitlRequiredException("file", "DELETE_DIR",
+                    "递归删除目录: " + path, toolArgs);
         }
         // 递归删除
         try (Stream<Path> walk = Files.walk(dir)) {
