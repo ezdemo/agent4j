@@ -197,27 +197,14 @@ public class AgentLoop {
 
     /**
      * 构建动态工具使用指引（作为 user 消息注入，不持久化到历史）。
-     * 随 tool definitions 一起注入，避免冗余硬编码在 system prompt 中。
-     * Plan mode 时附加只读约束说明。
+     * Plan mode 规则已永久在 system prompt 中描述，此处仅注入通用工具使用提示。
      */
     private String buildToolInstructions() {
-        String base = """
+        return """
                 编辑文件时使用 edit_file（SEARCH/REPLACE，search 必须唯一）。
                 多文件批量编辑使用 multi_edit。
                 不确定文件位置时用 glob/grep 搜索，需要构建/测试时用 run_command。
                 """;
-        if (dispatcher.isPlanMode()) {
-            return base + """
-
-                    # Plan mode
-
-                    写入工具（edit_file / multi_edit / write_file / run_command 等）不可用。
-                    只读工具（read_file / glob / grep / tree / get_file_info / web_search）正常使用。
-                    先探索代码库，然后用 submit_plan 提交计划。
-                    用户审批或输入 /execute 退出计划模式后，所有工具恢复正常。
-                    """;
-        }
-        return base;
     }
 
     /** 设置输出接口（用于自定义输出处理，如控制台 / WebSocket SSE / 日志） */

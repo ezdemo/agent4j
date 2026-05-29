@@ -7,8 +7,8 @@ import site.sorghum.agent4j.bin.command.ChatCommandContext;
 /**
  * /execute — 退出计划模式（允许全部操作）。
  * <p>
- * 切换回正常模式后，所有工具恢复可用。
- * 同时自动向 LLM 发送一条消息，使其感知到已退出计划模式。
+ * 仅切换模式标志，不向 LLM 发送消息。
+ * 用户输入下一条消息时，LLM 自然感知所有工具已恢复可用。
  * </p>
  *
  * @author Sorghum
@@ -35,13 +35,6 @@ public class ExecuteCommand implements ChatCommand {
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
         context.getAgent().setPlanMode(false);
         System.out.println("(已退出计划模式 — 允许全部操作)");
-        try {
-            String reply = context.getAgent().chat("退出计划模式，等待用户消息输入。");
-            System.out.println();
-            System.out.println(reply);
-        } catch (Exception e) {
-            System.out.println("(执行模式初始化失败: " + e.getMessage() + ")");
-        }
         return CommandResult.CONTINUE;
     }
 }

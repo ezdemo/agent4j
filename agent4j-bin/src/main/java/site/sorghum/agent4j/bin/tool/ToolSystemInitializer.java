@@ -109,6 +109,9 @@ public class ToolSystemInitializer {
         // 4. 追加工具规范到 system prompt
         systemPrompt = systemPrompt + "\n\n" + toolSpecsBuilder.toString().trim();
 
+        // 4.5. 追加 Plan Mode 说明（永久存在于 system prompt 中）
+        systemPrompt = systemPrompt + "\n\n" + PLAN_MODE_DESCRIPTION;
+
         // 5. 初始化 SkillStoreV2 并加载 skill 索引
         SkillStoreV2 skillStore = new SkillStoreV2(workspace,
                 Paths.get(System.getProperty("user.home")),
@@ -148,6 +151,17 @@ public class ToolSystemInitializer {
         }
         return fallback;
     }
+
+    /** Plan Mode 说明（永久存在于 system prompt 中，不随模式切换动态注入） */
+    private static final String PLAN_MODE_DESCRIPTION = """
+            ## Plan Mode（计划模式）
+            
+            用户可以使用 /plan 命令进入计划模式。在计划模式下：
+            - 仅只读工具可用（read_file / glob / grep / tree / get_file_info / web_search 等）
+            - 写入/修改工具被禁用（edit_file / multi_edit / write_file / run_command 等）
+            - 先用只读工具探索代码库，了解现状后再用 submit_plan 提交执行计划供审查
+            - 用户输入 /execute 退出计划模式后，所有工具恢复正常
+            """;
 
     /**
      * 加载工作区根目录下的 agent4j.md 和 CLAUDE.md。

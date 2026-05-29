@@ -7,8 +7,9 @@ import site.sorghum.agent4j.bin.command.ChatCommandContext;
 /**
  * /plan — 进入计划模式（仅允许只读操作）。
  * <p>
- * 切换 Plan Mode 后，工具调度器将拒绝所有写入类工具调用。
- * 同时自动向 LLM 发送一条消息，使其感知到已进入计划模式。
+ * 仅切换模式标志，不向 LLM 发送消息。
+ * 计划模式规则已永久在 system prompt 中描述，
+ * 用户输入下一条消息时 LLM 自然感知约束。
  * </p>
  *
  * @author Sorghum
@@ -36,13 +37,6 @@ public class PlanCommand implements ChatCommand {
         context.getAgent().setPlanMode(true);
         System.out.println("(已进入计划模式 — 仅允许只读操作)");
         System.out.println("探索完成后使用 submit_plan 提交计划，或输入 /execute 开始执行");
-        try {
-            String reply = context.getAgent().chat("进入计划模式，等待用户消息输入。");
-            System.out.println();
-            System.out.println(reply);
-        } catch (Exception e) {
-            System.out.println("(计划模式初始化失败: " + e.getMessage() + ")");
-        }
         return CommandResult.CONTINUE;
     }
 }
