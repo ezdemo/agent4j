@@ -732,16 +732,18 @@ const handleEnter = e => {
 /**
  * 核心发送逻辑：
  * - 普通消息：加用户气泡 → 创建助手占位 → 流式填充
- * - 静默命令（/new /plan 等）：不加气泡，直接发后端；若后端无内容回复则不显示助手气泡
+ * - /new：静默，不加气泡直接发后端；若后端无内容回复则不显示助手气泡
+ * - 其他 / 命令和 /skill:：显示用户气泡 + 助手气泡（正常流程）
  */
 const sendMessage = async () => {
   const text = inputText.value.trim()
   if (!text || streaming.value) return
 
   const firstWord = text.split(/\s+/)[0].toLowerCase()
-  const isSilent = SILENT_CMDS.has(firstWord) || firstWord.startsWith('/skill:')
+  // 只有 /new 是静默的，其他命令和 skill 都正常显示气泡
+  const isSilent = firstWord === '/new'
 
-  // 非静默命令才显示用户气泡
+  // 静默命令（仅 /new）不显示用户气泡
   if (!isSilent) {
     messages.value.push({ id: Date.now(), role: 'user', content: text, time: now() })
   }
@@ -752,7 +754,7 @@ const sendMessage = async () => {
   streaming.value = true
   const mi = messages.value.length
 
-  // 非静默命令才预创建助手占位
+  // 静默命令（仅 /new）不预创建助手占位
   if (!isSilent) {
     messages.value.push({ id: Date.now() + 1, role: 'assistant', time: now(), blocks: [] })
   }
@@ -764,7 +766,7 @@ const sendMessage = async () => {
     const streamResult = chatAPI.sendMessageStream(text,
       data => {
         currentAbortController = streamResult
-        // 静默命令：首次收到有内容的数据时才创建助手气泡（只创建一次）
+        // 静默命令（仅 /new）：首次收到有内容的数据时才创建助手气泡（只创建一次）
         if (isSilent && !silentBubbleCreated) {
           if (!data.type || data.type === 'done') return
           const hasContent = (data.type === 'content' && data.content?.trim()) ||

@@ -1,0 +1,1679 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Agent4j — Java AI Agent 框架</title>
+    <meta name="description" content="Agent4j 是一个纯 Java 8 实现的 AI 编码代理框架。推理循环 · 工具调度 · 流式输出 · 会话持久化 · 子代理隔离 — 将 LLM 与可扩展工具系统结合，形成自主工作的编码代理。" />
+    <meta property="og:title" content="Agent4j — Java AI Agent Framework" />
+    <meta property="og:description" content="纯 Java AI 代理框架：推理循环、工具调用、会话管理、流式输出，一个自主工作的编码代理。" />
+    <meta property="og:type" content="website" />
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>☕</text></svg>" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900;1,9..40,400&family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+
+    <style>
+        /* ============================================================
+           Agent4j — 官网介绍页 | v1.0
+           美学方向: 终端未来主义 · Terminal Futurism
+           深色基底 + 霓虹代码绿 + Java 琥珀暖色
+           ============================================================ */
+
+        /* ---------- CSS 变量 ---------- */
+        :root {
+            /* 主色调 */
+            --bg-deep:      #080c10;
+            --bg-surface:   #0d1419;
+            --bg-elevated:  #141c24;
+            --bg-overlay:   #1a2330;
+
+            /* 霓虹绿 (代码/终端) */
+            --neon:         #00e676;
+            --neon-dim:     #00c853;
+            --neon-glow:    rgba(0,230,118,0.18);
+            --neon-soft:    rgba(0,230,118,0.08);
+
+            /* Java 琥珀 */
+            --amber:        #f0a500;
+            --amber-dim:    #c68400;
+            --amber-glow:   rgba(240,165,0,0.15);
+
+            /* 冷蓝 */
+            --blue:         #64b5f6;
+            --blue-glow:    rgba(100,181,246,0.12);
+
+            /* 灰阶 */
+            --text-primary: #e8edf2;
+            --text-secondary:#9aa4b2;
+            --text-muted:   #5a6678;
+            --border:       #1e2a38;
+            --border-light: #2a3848;
+
+            /* 间距 */
+            --gap: 24px;
+            --radius: 8px;
+            --radius-lg: 14px;
+        }
+
+        /* ---------- Reset & Base ---------- */
+        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+        html {
+            scroll-behavior: smooth;
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+        }
+
+        body {
+            font-family: 'DM Sans', -apple-system, sans-serif;
+            background: var(--bg-deep);
+            color: var(--text-primary);
+            line-height: 1.7;
+            overflow-x: hidden;
+            min-height: 100vh;
+        }
+
+        /* Grid background texture */
+        body::before {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            background-image:
+                    radial-gradient(circle at 20% 30%, rgba(0,230,118,0.03) 0%, transparent 50%),
+                    radial-gradient(circle at 80% 70%, rgba(240,165,0,0.03) 0%, transparent 50%),
+                    radial-gradient(circle at 50% 10%, rgba(100,181,246,0.03) 0%, transparent 40%);
+        }
+
+        /* Dot grid overlay */
+        body::after {
+            content: '';
+            position: fixed;
+            inset: 0;
+            z-index: 0;
+            pointer-events: none;
+            opacity: 0.06;
+            background-image: radial-gradient(circle, var(--text-muted) 1px, transparent 1px);
+            background-size: 28px 28px;
+        }
+
+        /* ---------- Container ---------- */
+        .container {
+            position: relative;
+            z-index: 1;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 0 32px;
+        }
+
+        /* ---------- Nav ---------- */
+        .nav {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 100;
+            padding: 16px 0;
+            transition: background 0.3s, box-shadow 0.3s, backdrop-filter 0.3s;
+        }
+        .nav.scrolled {
+            background: rgba(8,12,16,0.85);
+            backdrop-filter: blur(20px) saturate(120%);
+            -webkit-backdrop-filter: blur(20px) saturate(120%);
+            box-shadow: 0 1px 0 var(--border), 0 4px 24px rgba(0,0,0,0.4);
+        }
+        .nav .container {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        .nav-logo {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-family: 'Orbitron', 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 1.2rem;
+            color: var(--text-primary);
+            text-decoration: none;
+            letter-spacing: 0.03em;
+        }
+        .nav-logo .bracket { color: var(--neon); font-weight: 400; }
+        .nav-logo .version {
+            font-size: 0.65rem;
+            color: var(--text-muted);
+            padding: 2px 8px;
+            border: 1px solid var(--border);
+            border-radius: 100px;
+            font-family: 'JetBrains Mono', monospace;
+            letter-spacing: 0;
+        }
+        .nav-links {
+            display: flex;
+            gap: 28px;
+            list-style: none;
+            align-items: center;
+        }
+        .nav-links a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.9rem;
+            font-weight: 500;
+            transition: color 0.2s;
+            position: relative;
+        }
+        .nav-links a:hover { color: var(--text-primary); }
+        .nav-links a::after {
+            content: '';
+            position: absolute;
+            bottom: -4px;
+            left: 0;
+            right: 0;
+            height: 1.5px;
+            background: var(--neon);
+            transform: scaleX(0);
+            transition: transform 0.2s;
+        }
+        .nav-links a:hover::after { transform: scaleX(1); }
+        .btn-ghost {
+            padding: 8px 20px;
+            border: 1px solid var(--border-light);
+            border-radius: 100px;
+            color: var(--text-primary);
+            font-size: 0.85rem;
+            font-weight: 600;
+            text-decoration: none;
+            transition: all 0.25s;
+            background: transparent;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        .btn-ghost:hover {
+            border-color: var(--neon);
+            background: var(--neon-soft);
+            color: var(--neon);
+            box-shadow: 0 0 20px var(--neon-glow);
+        }
+
+        /* ---------- Hero ---------- */
+        .hero {
+            padding: 160px 0 100px;
+            position: relative;
+            z-index: 1;
+        }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 8px;
+            padding: 6px 16px;
+            border-radius: 100px;
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            color: var(--text-secondary);
+            margin-bottom: 32px;
+            animation: fadeInUp 0.6s ease-out;
+        }
+        .hero-badge .dot {
+            width: 7px;
+            height: 7px;
+            border-radius: 50%;
+            background: var(--neon);
+            box-shadow: 0 0 8px var(--neon-glow);
+            animation: pulse-dot 2s infinite;
+        }
+        @keyframes pulse-dot {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.4; }
+        }
+        .hero h1 {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 800;
+            font-size: clamp(2.8rem, 6vw, 5rem);
+            line-height: 1.08;
+            letter-spacing: -0.02em;
+            margin-bottom: 8px;
+            animation: fadeInUp 0.6s ease-out 0.1s both;
+        }
+        .hero h1 .accent { color: var(--neon); }
+        .hero h1 .java-accent { color: var(--amber); }
+        .hero-subtitle {
+            font-size: 1.25rem;
+            color: var(--text-secondary);
+            font-weight: 400;
+            max-width: 640px;
+            margin-bottom: 24px;
+            animation: fadeInUp 0.6s ease-out 0.2s both;
+            line-height: 1.6;
+        }
+        .hero-terminal {
+            background: var(--bg-overlay);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            max-width: 700px;
+            margin-bottom: 40px;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,230,118,0.06);
+            animation: fadeInUp 0.6s ease-out 0.3s both;
+        }
+        .terminal-header {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 12px 16px;
+            background: var(--bg-elevated);
+            border-bottom: 1px solid var(--border);
+        }
+        .terminal-dot {
+            width: 11px;
+            height: 11px;
+            border-radius: 50%;
+        }
+        .terminal-dot.red { background: #ff5f56; }
+        .terminal-dot.yellow { background: #ffbd2e; }
+        .terminal-dot.green { background: #27c93f; }
+        .terminal-title {
+            margin-left: 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            color: var(--text-muted);
+        }
+        .terminal-body {
+            padding: 20px 24px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.82rem;
+            line-height: 1.8;
+            position: relative;
+        }
+        .terminal-body .line {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .terminal-body .prompt { color: var(--neon); font-weight: 600; }
+        .terminal-body .cmd { color: var(--text-primary); }
+        .terminal-body .comment { color: var(--text-muted); font-style: italic; }
+        .terminal-body .cursor {
+            display: inline-block;
+            width: 8px;
+            height: 17px;
+            background: var(--neon);
+            margin-left: 2px;
+            animation: blink 1s step-end infinite;
+        }
+        @keyframes blink {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
+        .hero-cta {
+            display: flex;
+            gap: 14px;
+            flex-wrap: wrap;
+            animation: fadeInUp 0.6s ease-out 0.4s both;
+        }
+        .btn-primary {
+            padding: 12px 30px;
+            border-radius: 100px;
+            background: var(--neon);
+            color: #000;
+            font-weight: 700;
+            font-size: 0.95rem;
+            text-decoration: none;
+            border: none;
+            cursor: pointer;
+            transition: all 0.25s;
+            font-family: inherit;
+            letter-spacing: 0.01em;
+        }
+        .btn-primary:hover {
+            box-shadow: 0 0 40px var(--neon-glow), 0 4px 20px rgba(0,230,118,0.3);
+            transform: translateY(-1px);
+        }
+        .btn-secondary {
+            padding: 12px 28px;
+            border-radius: 100px;
+            background: transparent;
+            border: 1px solid var(--border-light);
+            color: var(--text-primary);
+            font-weight: 600;
+            font-size: 0.95rem;
+            text-decoration: none;
+            cursor: pointer;
+            transition: all 0.25s;
+            font-family: inherit;
+        }
+        .btn-secondary:hover {
+            border-color: var(--amber);
+            background: var(--amber-glow);
+            color: var(--amber);
+        }
+
+        /* Stats row */
+        .hero-stats {
+            display: flex;
+            gap: 48px;
+            margin-top: 60px;
+            padding-top: 32px;
+            border-top: 1px solid var(--border);
+            animation: fadeInUp 0.6s ease-out 0.5s both;
+        }
+        .hero-stat {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+        .hero-stat .num {
+            font-family: 'Orbitron', 'JetBrains Mono', monospace;
+            font-size: 1.8rem;
+            font-weight: 700;
+            color: var(--text-primary);
+            letter-spacing: 0.02em;
+        }
+        .hero-stat .num .unit { color: var(--neon); }
+        .hero-stat .label {
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            font-weight: 500;
+        }
+
+        /* ---------- Section Common ---------- */
+        .section {
+            padding: 100px 0;
+            position: relative;
+            z-index: 1;
+        }
+        .section-label {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            color: var(--neon);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 12px;
+            font-weight: 500;
+        }
+        .section h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            font-size: clamp(1.8rem, 3vw, 2.4rem);
+            letter-spacing: -0.01em;
+            margin-bottom: 16px;
+            color: var(--text-primary);
+        }
+        .section-desc {
+            font-size: 1.05rem;
+            color: var(--text-secondary);
+            max-width: 600px;
+            margin-bottom: 48px;
+            line-height: 1.7;
+        }
+
+        /* ---------- Capability Cards ---------- */
+        .capabilities-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+            gap: var(--gap);
+        }
+        .cap-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 28px;
+            transition: all 0.3s;
+            position: relative;
+            overflow: hidden;
+        }
+        .cap-card::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, transparent, var(--neon), transparent);
+            opacity: 0;
+            transition: opacity 0.3s;
+        }
+        .cap-card:hover {
+            border-color: var(--border-light);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,230,118,0.06);
+        }
+        .cap-card:hover::before { opacity: 1; }
+        .cap-card .icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.3rem;
+            margin-bottom: 18px;
+        }
+        .cap-card .icon.green { background: var(--neon-soft); color: var(--neon); }
+        .cap-card .icon.amber { background: var(--amber-glow); color: var(--amber); }
+        .cap-card .icon.blue { background: var(--blue-glow); color: var(--blue); }
+        .cap-card h3 {
+            font-weight: 700;
+            font-size: 1.05rem;
+            margin-bottom: 8px;
+            color: var(--text-primary);
+        }
+        .cap-card p {
+            font-size: 0.88rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* ---------- Architecture Section ---------- */
+        .arch-wrapper {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            padding: 40px;
+            overflow-x: auto;
+        }
+        .arch-diagram {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            min-width: 700px;
+        }
+        .arch-row {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .arch-box {
+            background: var(--bg-elevated);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 14px 20px;
+            text-align: center;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            font-weight: 500;
+            color: var(--text-primary);
+            transition: all 0.3s;
+            white-space: nowrap;
+        }
+        .arch-box:hover {
+            border-color: var(--neon);
+            background: var(--neon-soft);
+            box-shadow: 0 0 16px var(--neon-glow);
+        }
+        .arch-box.highlight {
+            border-color: var(--neon);
+            color: var(--neon);
+            font-weight: 700;
+        }
+        .arch-box.secondary {
+            border-color: var(--amber);
+            color: var(--amber);
+        }
+        .arch-arrow {
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            padding: 0 4px;
+        }
+        .arch-arrow-down {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.9rem;
+            gap: 0;
+            line-height: 1;
+        }
+        .arch-divider {
+            width: 100%;
+            height: 1px;
+            background: var(--border);
+            margin: 8px 0;
+        }
+        .arch-label {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            font-family: 'JetBrains Mono', monospace;
+            margin-bottom: 8px;
+        }
+
+        /* ---------- Tools Section ---------- */
+        .tools-categories {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+            gap: var(--gap);
+        }
+        .tool-cat {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            transition: all 0.3s;
+        }
+        .tool-cat:hover {
+            border-color: var(--border-light);
+        }
+        .tool-cat-header {
+            padding: 20px 24px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            user-select: none;
+            transition: background 0.2s;
+        }
+        .tool-cat-header:hover { background: var(--bg-elevated); }
+        .tool-cat-header .left {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+        .tool-cat-header .emoji { font-size: 1.3rem; }
+        .tool-cat-header h4 {
+            font-weight: 700;
+            font-size: 0.95rem;
+            color: var(--text-primary);
+        }
+        .tool-cat-header .count {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            background: var(--bg-elevated);
+            padding: 3px 10px;
+            border-radius: 100px;
+        }
+        .tool-cat-header .chevron {
+            color: var(--text-muted);
+            font-size: 0.8rem;
+            transition: transform 0.3s;
+        }
+        .tool-cat.open .tool-cat-header .chevron { transform: rotate(180deg); }
+        .tool-cat-body {
+            max-height: 0;
+            overflow: hidden;
+            transition: max-height 0.4s ease;
+        }
+        .tool-cat.open .tool-cat-body { max-height: 600px; }
+        .tool-list {
+            padding: 0 24px 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .tool-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            border-radius: 6px;
+            background: var(--bg-elevated);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.75rem;
+        }
+        .tool-item .tool-name {
+            color: var(--neon);
+            font-weight: 500;
+            min-width: 120px;
+        }
+        .tool-item .tool-desc {
+            color: var(--text-secondary);
+            font-size: 0.72rem;
+            font-family: 'DM Sans', sans-serif;
+        }
+        .tool-item .badge {
+            padding: 2px 8px;
+            border-radius: 100px;
+            font-size: 0.65rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.04em;
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+        .badge.read { background: var(--neon-soft); color: var(--neon); }
+        .badge.write { background: var(--amber-glow); color: var(--amber); }
+
+        /* ---------- Tech Stack ---------- */
+        .tech-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+            gap: var(--gap);
+        }
+        .tech-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 24px 20px;
+            text-align: center;
+            transition: all 0.3s;
+        }
+        .tech-card:hover {
+            border-color: var(--border-light);
+            transform: translateY(-3px);
+            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
+        }
+        .tech-card .tech-name {
+            font-family: 'Orbitron', 'JetBrains Mono', monospace;
+            font-weight: 700;
+            font-size: 0.9rem;
+            color: var(--text-primary);
+            margin-bottom: 6px;
+        }
+        .tech-card .tech-ver {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--neon);
+            margin-bottom: 4px;
+        }
+        .tech-card .tech-role {
+            font-size: 0.75rem;
+            color: var(--text-muted);
+        }
+
+        /* ---------- Design Patterns ---------- */
+        .patterns-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: var(--gap);
+        }
+        .pattern-card {
+            background: var(--bg-surface);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            padding: 22px;
+            transition: all 0.3s;
+            position: relative;
+        }
+        .pattern-card:hover {
+            border-color: var(--border-light);
+            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+        }
+        .pattern-card .pattern-name {
+            font-family: 'JetBrains Mono', monospace;
+            font-weight: 600;
+            font-size: 0.85rem;
+            color: var(--amber);
+            margin-bottom: 6px;
+        }
+        .pattern-card .pattern-loc {
+            font-size: 0.72rem;
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            margin-bottom: 8px;
+        }
+        .pattern-card p {
+            font-size: 0.82rem;
+            color: var(--text-secondary);
+            line-height: 1.6;
+        }
+
+        /* ---------- Quick Start ---------- */
+        .code-block-wrapper {
+            background: var(--bg-overlay);
+            border: 1px solid var(--border);
+            border-radius: var(--radius-lg);
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+        }
+        .code-block-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 16px;
+            background: var(--bg-elevated);
+            border-bottom: 1px solid var(--border);
+        }
+        .code-block-lang {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.7rem;
+            color: var(--text-muted);
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+        }
+        .btn-copy {
+            padding: 4px 14px;
+            border-radius: 100px;
+            background: transparent;
+            border: 1px solid var(--border);
+            color: var(--text-secondary);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+        .btn-copy:hover {
+            border-color: var(--neon);
+            color: var(--neon);
+        }
+        .btn-copy.copied {
+            background: var(--neon-soft);
+            border-color: var(--neon);
+            color: var(--neon);
+        }
+        .code-block-body {
+            padding: 24px;
+            overflow-x: auto;
+        }
+        .code-block-body pre {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            line-height: 1.8;
+            color: var(--text-primary);
+            margin: 0;
+        }
+        .code-block-body .k { color: #c792ea; } /* keyword */
+        .code-block-body .s { color: #c3e88d; } /* string */
+        .code-block-body .c { color: #546e7a; font-style: italic; } /* comment */
+        .code-block-body .f { color: #82aaff; } /* function */
+        .code-block-body .n { color: #f78c6c; } /* number */
+        .code-block-body .p { color: #89ddff; } /* punctuation */
+
+        /* ---------- Highlight Bar ---------- */
+        .highlight-bar {
+            padding: 48px 0;
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+            background: var(--bg-surface);
+            position: relative;
+            z-index: 1;
+        }
+        .highlight-bar .container {
+            display: flex;
+            gap: 36px;
+            align-items: center;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+        .highlight-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            font-size: 0.9rem;
+            color: var(--text-secondary);
+        }
+        .highlight-item .check {
+            color: var(--neon);
+            font-weight: 700;
+            font-size: 1.1rem;
+        }
+
+        /* ---------- CTA Section ---------- */
+        .cta-section {
+            padding: 100px 0;
+            text-align: center;
+            position: relative;
+            z-index: 1;
+        }
+        .cta-section h2 {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            font-size: clamp(1.8rem, 3vw, 2.4rem);
+            margin-bottom: 12px;
+        }
+        .cta-section p {
+            color: var(--text-secondary);
+            font-size: 1.05rem;
+            margin-bottom: 32px;
+        }
+        .cta-buttons {
+            display: flex;
+            gap: 14px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        /* ---------- Footer ---------- */
+        .footer {
+            padding: 48px 0;
+            border-top: 1px solid var(--border);
+            background: var(--bg-surface);
+            position: relative;
+            z-index: 1;
+        }
+        .footer-grid {
+            display: grid;
+            grid-template-columns: 2fr 1fr 1fr 1fr;
+            gap: 40px;
+        }
+        .footer-brand {
+            font-family: 'Orbitron', sans-serif;
+            font-weight: 700;
+            font-size: 1.1rem;
+            color: var(--text-primary);
+        }
+        .footer-brand .bracket { color: var(--neon); }
+        .footer-desc {
+            margin-top: 12px;
+            font-size: 0.82rem;
+            color: var(--text-muted);
+            line-height: 1.7;
+        }
+        .footer-col h5 {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            font-weight: 600;
+        }
+        .footer-col ul {
+            list-style: none;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .footer-col ul a {
+            color: var(--text-secondary);
+            text-decoration: none;
+            font-size: 0.85rem;
+            transition: color 0.2s;
+        }
+        .footer-col ul a:hover { color: var(--neon); }
+        .footer-bottom {
+            margin-top: 40px;
+            padding-top: 24px;
+            border-top: 1px solid var(--border);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        .footer-bottom .love { color: var(--amber); }
+
+        /* ---------- Animations ---------- */
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(24px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .reveal {
+            opacity: 0;
+            transform: translateY(30px);
+            transition: opacity 0.7s ease, transform 0.7s ease;
+        }
+        .reveal.visible {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* ---------- Responsive ---------- */
+        @media (max-width: 900px) {
+            .nav-links { display: none; }
+            .hero { padding: 120px 0 60px; }
+            .hero-stats { gap: 28px; flex-wrap: wrap; }
+            .footer-grid { grid-template-columns: 1fr 1fr; }
+            .tools-categories { grid-template-columns: 1fr; }
+            .arch-wrapper { padding: 20px; }
+            .arch-diagram { min-width: auto; }
+            .arch-box { font-size: 0.7rem; padding: 10px 14px; }
+        }
+        @media (max-width: 500px) {
+            .container { padding: 0 18px; }
+            .hero h1 { font-size: 2rem; }
+            .hero-cta { flex-direction: column; }
+            .btn-primary, .btn-secondary { text-align: center; }
+            .footer-grid { grid-template-columns: 1fr; }
+        }
+
+        /* ---------- Glow orb decorations ---------- */
+        .glow-orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            pointer-events: none;
+            z-index: 0;
+            opacity: 0.25;
+        }
+        .glow-orb.green {
+            width: 400px; height: 400px;
+            background: var(--neon);
+            top: -100px; right: -120px;
+        }
+        .glow-orb.amber {
+            width: 300px; height: 300px;
+            background: var(--amber);
+            bottom: -80px; left: -80px;
+        }
+
+        /* Selection */
+        ::selection {
+            background: var(--neon-soft);
+            color: var(--neon);
+        }
+    </style>
+</head>
+<body>
+
+<!-- ============ NAV ============ -->
+<nav class="nav" id="nav">
+    <div class="container">
+        <a href="#" class="nav-logo">
+            <span class="bracket">[</span>Agent4j<span class="bracket">]</span>
+            <span class="version">v1.0</span>
+        </a>
+        <ul class="nav-links">
+            <li><a href="#capabilities">能力</a></li>
+            <li><a href="#architecture">架构</a></li>
+            <li><a href="#tools">工具</a></li>
+            <li><a href="#quickstart">快速开始</a></li>
+            <li><a href="https://gitee.com/ezdemo/agent4j" class="btn-ghost" target="_blank">GitHub ↗</a></li>
+        </ul>
+    </div>
+</nav>
+
+<!-- ============ HERO ============ -->
+<section class="hero" id="hero">
+    <div class="glow-orb green"></div>
+    <div class="container">
+        <div class="hero-badge">
+            <span class="dot"></span> 纯 Java 17 · 多模块 · Maven 构建
+        </div>
+        <h1>
+            Java 世界的<br />
+            <span class="accent">AI 编码代理</span>
+        </h1>
+        <p class="hero-subtitle">
+            将大语言模型与可扩展工具系统深度融合，打造自主推理、自主调用、自主完成的编码代理框架。
+            支持 Skill 系统 V2、HITL 人机协同、多端交付（CLI / Web / Tauri 桌面端），5 个 Maven 模块协同运作。
+        </p>
+
+        <!-- Terminal demo -->
+        <div class="hero-terminal">
+            <div class="terminal-header">
+                <span class="terminal-dot red"></span>
+                <span class="terminal-dot yellow"></span>
+                <span class="terminal-dot green"></span>
+                <span class="terminal-title">agent4j — zsh</span>
+            </div>
+            <div class="terminal-body">
+                <div class="line"><span class="prompt">❯</span> <span class="cmd">java -jar agent4j-bin.jar</span></div>
+                <div class="line"><span class="comment"># Agent4j v1.0-SNAPSHOT 启动中…</span></div>
+                <div class="line"><span class="comment"># 加载工具: 5 核心 + 23 内置 + 3 Skill → 就绪</span></div>
+                <div class="line"><span class="comment"># Skill V2 · HITL 双模式 · ReasonBreaker 已激活</span></div>
+                <div class="line"><span class="prompt">❯</span> <span class="cmd">帮我重构 UserService 模块</span><span class="cursor"></span></div>
+            </div>
+        </div>
+
+        <div class="hero-cta">
+            <a href="#quickstart" class="btn-primary">快速开始</a>
+            <a href="#architecture" class="btn-secondary">了解架构</a>
+        </div>
+
+        <div class="hero-stats">
+            <div class="hero-stat">
+                <span class="num">31<span class="unit">+</span></span>
+                <span class="label">内置工具</span>
+            </div>
+            <div class="hero-stat">
+                <span class="num">90<span class="unit">+</span></span>
+                <span class="label">Java 源文件</span>
+            </div>
+            <div class="hero-stat">
+                <span class="num">5</span>
+                <span class="label">Maven 模块</span>
+            </div>
+            <div class="hero-stat">
+                <span class="num">14</span>
+                <span class="label">设计模式</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============ CAPABILITIES ============ -->
+<section class="section" id="capabilities">
+    <div class="container">
+        <div class="section-label reveal">// 核心能力</div>
+        <h2 class="reveal">不只是对话，是<span style="color:var(--neon);">自主工作</span></h2>
+        <p class="section-desc reveal">
+            Agent4j 将 LLM 推理与工具系统深度绑定，形成一个能自主完成复杂编码任务的智能代理。
+        </p>
+
+        <div class="capabilities-grid">
+            <div class="cap-card reveal">
+                <div class="icon green">🔄</div>
+                <h3>对话式推理循环</h3>
+                <p>多轮上下文自动保持，流式 SSE 调用 OpenAI 兼容 API。思考过程实时打印，工具调用自动收集分发。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon green">⚡</div>
+                <h3>并行工具执行</h3>
+                <p>CompletableFuture.allOf 并行分发工具调用，最大化吞吐量。非阻塞等待，CAS 替代锁。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon amber">🛡️</div>
+                <h3>双断路器防护</h3>
+                <p>StormBreaker（滑动窗口 + JSON 指纹）+ ReasonBreaker（流式循环检测），双保险防止 LLM 死循环消耗 token。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon amber">📋</div>
+                <h3>计划模式</h3>
+                <p>Plan Mode — 只读探索代码库，制定执行计划，用户审批后切换执行模式，安全可控。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon blue">🧠</div>
+                <h3>上下文折叠</h3>
+                <p>ContextFolding — 长对话语义压缩，将历史消息折叠为摘要，避免上下文窗口溢出。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon blue">🔧</div>
+                <h3>消息自愈</h3>
+                <p>MessageHealer — 发送前自动修复消息序列：配对 tool_calls、补充 reasoning、截断过长的 tool 结果。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon green">🕵️</div>
+                <h3>工具调用回收</h3>
+                <p>Scavenger — 从 reasoning_content 中回收因 API 格式问题丢失的 tool_calls，提高调用成功率。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon amber">🧬</div>
+                <h3>子代理隔离</h3>
+                <p>SubAgent — 创建独立循环的子代理处理复杂任务，排除递归 spawn 和用户交互工具，结果自动返回。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon blue">💾</div>
+                <h3>会话持久化</h3>
+                <p>JSONL 文件存储 + BufferedWriter 缓冲写入 + 定时自动刷入，ReentrantLock 保证线程安全。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon green">📊</div>
+                <h3>Token 用量追踪</h3>
+                <p>精确统计每次 API 调用的 token 消耗，支持缓存命中率分析，帮助优化成本和性能。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon amber">🔒</div>
+                <h3>路径穿越防护</h3>
+                <p>所有文件操作通过 resolveSafe() 严格校验路径，杜绝目录穿越攻击，确保工作区安全。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon blue">✏️</div>
+                <h3>原子批量编辑</h3>
+                <p>multi_edit — 全验证→全写入→失败回滚，确保跨文件编辑的数据一致性与原子性。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon amber">🧠</div>
+                <h3>推理断路器</h3>
+                <p>ReasonBreaker — 流式检测 LLM 思考循环，发现重复推理模式时提前终止，节省 token 消耗。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon green">👤</div>
+                <h3>HITL 人机协同</h3>
+                <p>双模式审批 — 写入操作需确认 + 沙箱越界强制拦截（独立管道），安全可控的人机协作。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon blue">📦</div>
+                <h3>Skill 系统 V2</h3>
+                <p>用户可定义可复用的 Skill playbook，支持 inline 和 subagent 两种运行模式，跨会话持久化。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon amber">🖥️</div>
+                <h3>多端交付</h3>
+                <p>CLI 命令行 + Web REST API + Vue 3 前端 + Tauri 桌面端，四端统一核心，一次编写处处运行。</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============ ARCHITECTURE ============ -->
+<section class="section" id="architecture" style="background: var(--bg-surface);">
+    <div class="container">
+        <div class="section-label reveal">// 架构设计</div>
+        <h2 class="reveal">分层解耦，<span style="color:var(--amber);">职责清晰</span></h2>
+        <p class="section-desc reveal">
+            五层模块 + 三大核心引擎，每个组件专注做好一件事。
+        </p>
+
+        <div class="arch-wrapper reveal">
+            <div class="arch-diagram">
+                <!-- Layer 1 -->
+                <div class="arch-label">入口层 · Presentation</div>
+                <div class="arch-row">
+                    <div class="arch-box highlight">Agent4jApp (CLI)</div>
+                    <div class="arch-arrow">→</div>
+                    <div class="arch-box highlight">Agent4jWebApp (REST)</div>
+                    <div class="arch-arrow">→</div>
+                    <div class="arch-box highlight">Tauri (Desktop)</div>
+                </div>
+                <div class="arch-arrow-down">│</div>
+                <!-- Layer 2 -->
+                <div class="arch-label">核心层 · Core</div>
+                <div class="arch-row">
+                    <div class="arch-box highlight">Agent4jAgent</div>
+                    <div class="arch-arrow">→</div>
+                    <div class="arch-box">AgentLoop</div>
+                    <div class="arch-arrow">←</div>
+                    <div class="arch-box secondary">ToolDispatcher</div>
+                </div>
+                <div class="arch-arrow-down">│</div>
+                <!-- Layer 3 -->
+                <div class="arch-label">基础层 · Infrastructure</div>
+                <div class="arch-row">
+                    <div class="arch-box">ModelClient</div>
+                    <div class="arch-arrow">·</div>
+                    <div class="arch-box">ToolRegistry</div>
+                    <div class="arch-arrow">·</div>
+                    <div class="arch-box">SessionStore</div>
+                    <div class="arch-arrow">·</div>
+                    <div class="arch-box">JobRegistry</div>
+                </div>
+                <div class="arch-divider"></div>
+                <!-- Module row -->
+                <div class="arch-label">模块划分 · Modules</div>
+                <div class="arch-row">
+                    <div class="arch-box highlight">agent4j-tool</div>
+                    <div class="arch-arrow">◂</div>
+                    <div class="arch-box highlight">agent4j-bin</div>
+                    <div class="arch-arrow">◂</div>
+                    <div class="arch-box highlight">agent4j-web</div>
+                    <div class="arch-arrow">◂</div>
+                    <div class="arch-box highlight">agent4j-front</div>
+                    <div class="arch-arrow">◂</div>
+                    <div class="arch-box highlight">agent4j-tauri</div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============ DESIGN PATTERNS ============ -->
+<section class="section">
+    <div class="container">
+        <div class="section-label reveal">// 设计模式</div>
+        <h2 class="reveal">十几种经典模式的<span style="color:var(--neon);">Java 实践</span></h2>
+        <p class="section-desc reveal">每个组件都经过精心设计，追求高内聚低耦合。</p>
+
+        <div class="patterns-grid">
+            <div class="pattern-card reveal">
+                <div class="pattern-name">不可变前缀 · Caching</div>
+                <div class="pattern-loc">PromptPrefix</div>
+                <p>System prompt + tool specs 跨 turn 不变，最大化 DeepSeek 前缀缓存命中，显著降低延迟。</p>
+            </div>
+            <div class="pattern-card reveal">
+                <div class="pattern-name">双断路器 · Circuit Breaker</div>
+                <div class="pattern-loc">StormBreaker + ReasonBreaker</div>
+                <p>StormBreaker 滑动窗口 + JSON 指纹去重；ReasonBreaker 流式检测思考循环。双保险防死循环。</p>
+            </div>
+            <div class="pattern-card reveal">
+                <div class="pattern-name">工厂模式 · Factory</div>
+                <div class="pattern-loc">Agent4jAgent.Builder</div>
+                <p>链式 Builder 构建复杂对象，可读性强，支持灵活配置 ModelClient、ToolRegistry 等组件。</p>
+            </div>
+            <div class="pattern-card reveal">
+                <div class="pattern-name">观察者模式 · Observer</div>
+                <div class="pattern-loc">AgentLoopListener</div>
+                <p>推理过程、工具调用、用量统计的事件回调，支持实时监控和自定义处理逻辑。</p>
+            </div>
+            <div class="pattern-card reveal">
+                <div class="pattern-name">策略模式 · Strategy</div>
+                <div class="pattern-loc">ModelClient 接口</div>
+                <p>可替换的 LLM API 实现，默认 HttpModelClient 支持所有 OpenAI 兼容端点。</p>
+            </div>
+            <div class="pattern-card reveal">
+                <div class="pattern-name">命令模式 · Command</div>
+                <div class="pattern-loc">ChatCommandRegistry</div>
+                <p>"/" 命令通过 Solon IoC 自动注册，新增命令只需实现接口标注 @Component。</p>
+            </div>
+            <div class="pattern-card reveal">
+                <div class="pattern-name">模板方法 · Template</div>
+                <div class="pattern-loc">AgentTool</div>
+                <p>子类实现 getName/getDescription/getParameters/execute，框架负责调度和生命周期。</p>
+            </div>
+            <div class="pattern-card reveal">
+                <div class="pattern-name">缓冲写入 · Buffered I/O</div>
+                <div class="pattern-loc">JsonlSessionStore</div>
+                <p>BufferedWriter 保持打开 + flush() 显式刷入 + 30s 定时刷入，ReentrantLock 保证线程安全。</p>
+            </div>
+            <div class="pattern-card reveal">
+                <div class="pattern-name">享元模式 · Flyweight</div>
+                <div class="pattern-loc">PromptPrefix</div>
+                <p>共享 system prompt + tool defs，多个 Agent 实例复用同一不可变前缀，减少内存和构建开销。</p>
+            </div>
+            <div class="pattern-card reveal">
+                <div class="pattern-name">沙箱旁路 · ThreadLocal</div>
+                <div class="pattern-loc">ToolContext</div>
+                <p>ThreadLocal 控制沙箱越界权限，HITL 审批通过后临时提升，审批结束自动恢复隔离。</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============ TOOLS ============ -->
+<section class="section" id="tools" style="background: var(--bg-surface);">
+    <div class="container">
+        <div class="section-label reveal">// 工具系统</div>
+        <h2 class="reveal">31+ 工具，覆盖<span style="color:var(--neon);">全开发场景</span></h2>
+        <p class="section-desc reveal">
+            5 个核心工具 + 23 个内置工具 + 3 个 Skill 工具，分为文件操作、代码分析、网络搜索、记忆管理、后台作业、计划交互、Skill 系统七大类。
+        </p>
+
+        <div class="tools-categories">
+            <!-- 文件操作 -->
+            <div class="tool-cat reveal">
+                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="left">
+                        <span class="emoji">📁</span>
+                        <h4>文件操作</h4>
+                        <span class="count">6 tools</span>
+                    </div>
+                    <span class="chevron">▾</span>
+                </div>
+                <div class="tool-cat-body">
+                    <div class="tool-list">
+                        <div class="tool-item"><span class="tool-name">read_file</span><span class="tool-desc">完整读取文件内容</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">edit_file</span><span class="tool-desc">SEARCH/REPLACE 编辑</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">write_file</span><span class="tool-desc">创建/覆盖文件</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">multi_edit</span><span class="tool-desc">批量原子编辑</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">copy_file</span><span class="tool-desc">复制文件或目录</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">get_file_info</span><span class="tool-desc">查看元信息 (JSON)</span><span class="badge read">只读</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 代码分析 -->
+            <div class="tool-cat reveal">
+                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="left">
+                        <span class="emoji">🔍</span>
+                        <h4>代码分析</h4>
+                        <span class="count">3 tools</span>
+                    </div>
+                    <span class="chevron">▾</span>
+                </div>
+                <div class="tool-cat-body">
+                    <div class="tool-list">
+                        <div class="tool-item"><span class="tool-name">get_symbols</span><span class="tool-desc">AST 符号大纲</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">find_in_code</span><span class="tool-desc">标识符查找</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">java_source</span><span class="tool-desc">全限定类名定位</span><span class="badge read">只读</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 核心工具 -->
+            <div class="tool-cat reveal">
+                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="left">
+                        <span class="emoji">⚙️</span>
+                        <h4>核心工具库</h4>
+                        <span class="count">5 tools</span>
+                    </div>
+                    <span class="chevron">▾</span>
+                </div>
+                <div class="tool-cat-body">
+                    <div class="tool-list">
+                        <div class="tool-item"><span class="tool-name">run_command</span><span class="tool-desc">Shell 命令执行</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">file</span><span class="tool-desc">文件系统操作</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">glob</span><span class="tool-desc">文件名匹配 (缓存)</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">grep</span><span class="tool-desc">正则内容搜索</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">tree</span><span class="tool-desc">目录树生成</span><span class="badge read">只读</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 网络 -->
+            <div class="tool-cat reveal">
+                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="left">
+                        <span class="emoji">🌐</span>
+                        <h4>网络搜索</h4>
+                        <span class="count">2 tools</span>
+                    </div>
+                    <span class="chevron">▾</span>
+                </div>
+                <div class="tool-cat-body">
+                    <div class="tool-list">
+                        <div class="tool-item"><span class="tool-name">web_search</span><span class="tool-desc">DuckDuckGo 搜索</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">web_fetch</span><span class="tool-desc">网页内容抓取</span><span class="badge read">只读</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 记忆 -->
+            <div class="tool-cat reveal">
+                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="left">
+                        <span class="emoji">🧠</span>
+                        <h4>记忆服务</h4>
+                        <span class="count">3 tools</span>
+                    </div>
+                    <span class="chevron">▾</span>
+                </div>
+                <div class="tool-cat-body">
+                    <div class="tool-list">
+                        <div class="tool-item"><span class="tool-name">remember</span><span class="tool-desc">持久化保存记忆</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">recall_memory</span><span class="tool-desc">读取完整记忆</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">forget</span><span class="tool-desc">删除记忆</span><span class="badge write">写入</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 后台作业 -->
+            <div class="tool-cat reveal">
+                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="left">
+                        <span class="emoji">🖥️</span>
+                        <h4>后台作业</h4>
+                        <span class="count">5 tools</span>
+                    </div>
+                    <span class="chevron">▾</span>
+                </div>
+                <div class="tool-cat-body">
+                    <div class="tool-list">
+                        <div class="tool-item"><span class="tool-name">run_background</span><span class="tool-desc">启动后台进程</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">job_output</span><span class="tool-desc">读取作业输出</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">wait_for_job</span><span class="tool-desc">等待作业完成</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">stop_job</span><span class="tool-desc">停止作业</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">list_jobs</span><span class="tool-desc">列出所有作业</span><span class="badge read">只读</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Skill 系统 -->
+            <div class="tool-cat reveal">
+                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="left">
+                        <span class="emoji">📦</span>
+                        <h4>Skill 系统</h4>
+                        <span class="count">3 tools</span>
+                    </div>
+                    <span class="chevron">▾</span>
+                </div>
+                <div class="tool-cat-body">
+                    <div class="tool-list">
+                        <div class="tool-item"><span class="tool-name">install_skill</span><span class="tool-desc">创建/保存 Skill</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">run_skill</span><span class="tool-desc">调用用户 Skill</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">task</span><span class="tool-desc">子代理任务委派</span><span class="badge write">写入</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 计划交互 -->
+            <div class="tool-cat reveal">
+                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="left">
+                        <span class="emoji">📋</span>
+                        <h4>计划 & 交互</h4>
+                        <span class="count">5 tools</span>
+                    </div>
+                    <span class="chevron">▾</span>
+                </div>
+                <div class="tool-cat-body">
+                    <div class="tool-list">
+                        <div class="tool-item"><span class="tool-name">submit_plan</span><span class="tool-desc">提交执行计划</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">revise_plan</span><span class="tool-desc">修订剩余步骤</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">mark_step_complete</span><span class="tool-desc">标记步骤完成</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">ask_choice</span><span class="tool-desc">用户选择菜单</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">todo_write</span><span class="tool-desc">任务跟踪列表</span><span class="badge write">写入</span></div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============ TECH STACK ============ -->
+<section class="section">
+    <div class="container">
+        <div class="section-label reveal">// 技术栈</div>
+        <h2 class="reveal">精选依赖，<span style="color:var(--amber);">追求轻量</span></h2>
+        <p class="section-desc reveal">
+            基于 Java 17，Solon 轻量级 IoC，前后端分离 + Tauri 桌面端，无 Spring Boot 重依赖。
+        </p>
+
+        <div class="tech-grid">
+            <div class="tech-card reveal">
+                <div class="tech-name">Java</div>
+                <div class="tech-ver">17</div>
+                <div class="tech-role">开发语言</div>
+            </div>
+            <div class="tech-card reveal">
+                <div class="tech-name">Maven</div>
+                <div class="tech-ver">3.x</div>
+                <div class="tech-role">构建 & 多模块管理</div>
+            </div>
+            <div class="tech-card reveal">
+                <div class="tech-name">Solon</div>
+                <div class="tech-ver">3.9.6</div>
+                <div class="tech-role">IoC / AOP / Web</div>
+            </div>
+            <div class="tech-card reveal">
+                <div class="tech-name">Snack4</div>
+                <div class="tech-ver">4.0.49</div>
+                <div class="tech-role">JSON 解析 & 序列化</div>
+            </div>
+            <div class="tech-card reveal">
+                <div class="tech-name">Lombok</div>
+                <div class="tech-ver">1.18.34</div>
+                <div class="tech-role">样板代码简化</div>
+            </div>
+            <div class="tech-card reveal">
+                <div class="tech-name">SLF4J</div>
+                <div class="tech-ver">1.7.36</div>
+                <div class="tech-role">日志门面</div>
+            </div>
+            <div class="tech-card reveal">
+                <div class="tech-name">JUnit</div>
+                <div class="tech-ver">5.10.3</div>
+                <div class="tech-role">单元测试框架</div>
+            </div>
+            <div class="tech-card reveal">
+                <div class="tech-name">Logback</div>
+                <div class="tech-ver">via Solon</div>
+                <div class="tech-role">高性能日志实现</div>
+            </div>
+            <div class="tech-card reveal">
+                <div class="tech-name">Vue 3</div>
+                <div class="tech-ver">latest</div>
+                <div class="tech-role">前端框架</div>
+            </div>
+            <div class="tech-card reveal">
+                <div class="tech-name">Vite</div>
+                <div class="tech-ver">latest</div>
+                <div class="tech-role">前端构建工具</div>
+            </div>
+            <div class="tech-card reveal">
+                <div class="tech-name">Tauri</div>
+                <div class="tech-ver">v2</div>
+                <div class="tech-role">桌面端框架</div>
+            </div>
+            <div class="tech-card reveal">
+                <div class="tech-name">Rust</div>
+                <div class="tech-ver">stable</div>
+                <div class="tech-role">Tauri 后端</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============ HIGHLIGHT BAR ============ -->
+<div class="highlight-bar">
+    <div class="container">
+        <div class="highlight-item"><span class="check">✓</span> 纯 Java 17，多模块 Maven 构建</div>
+        <div class="highlight-item"><span class="check">✓</span> 双断路器防护，杜绝死循环</div>
+        <div class="highlight-item"><span class="check">✓</span> Skill 系统 V2，可复用 playbook</div>
+        <div class="highlight-item"><span class="check">✓</span> HITL 双模式，安全人机协同</div>
+        <div class="highlight-item"><span class="check">✓</span> 四端交付：CLI / Web / Tauri</div>
+    </div>
+</div>
+
+<!-- ============ QUICK START ============ -->
+<section class="section" id="quickstart">
+    <div class="container">
+        <div class="section-label reveal">// 快速开始</div>
+        <h2 class="reveal">5 分钟<span style="color:var(--neon);">上手运行</span></h2>
+        <p class="section-desc reveal">
+            只需 JDK 17+、Maven 和一个 OpenAI 兼容的 LLM 端点。
+        </p>
+
+        <div class="code-block-wrapper reveal" style="margin-bottom: 28px;">
+            <div class="code-block-header">
+                <span class="code-block-lang">~/.agent4j/config.json</span>
+                <button class="btn-copy" onclick="copyCode(this, 'config-code')">复制</button>
+            </div>
+            <div class="code-block-body">
+        <pre id="config-code"><span class="p">{</span>
+  <span class="s">"baseUrl"</span><span class="p">:</span> <span class="s">"https://api.deepseek.com/v1"</span><span class="p">,</span>
+  <span class="s">"apiKey"</span><span class="p">:</span> <span class="s">"sk-your-api-key"</span><span class="p">,</span>
+  <span class="s">"model"</span><span class="p">:</span> <span class="s">"deepseek-v4-flash"</span><span class="p">,</span>
+  <span class="s">"workspaceDir"</span><span class="p">:</span> <span class="s">"."</span><span class="p">,</span>
+  <span class="s">"editMode"</span><span class="p">:</span> <span class="s">"auto"</span><span class="p">,</span>
+  <span class="s">"reasoningEffort"</span><span class="p">:</span> <span class="s">"max"</span><span class="p">,</span>
+  <span class="s">"lang"</span><span class="p">:</span> <span class="s">"ZH"</span><span class="p">,</span>
+  <span class="s">"hitl"</span><span class="p">:</span> <span class="k">false</span><span class="p">,</span>
+  <span class="s">"disabledTools"</span><span class="p">:</span> <span class="p">[],</span>
+  <span class="s">"blockedPaths"</span><span class="p">:</span> <span class="p">[],</span>
+  <span class="s">"availableModels"</span><span class="p">:</span> <span class="p">[</span><span class="s">"deepseek-v4-flash"</span><span class="p">,</span> <span class="s">"gpt-4o"</span><span class="p">,</span> <span class="s">"claude-3.5-sonnet"</span><span class="p">]</span>
+<span class="p">}</span></pre>
+            </div>
+        </div>
+
+        <div class="code-block-wrapper reveal">
+            <div class="code-block-header">
+                <span class="code-block-lang">终端 · Terminal</span>
+                <button class="btn-copy" onclick="copyCode(this, 'terminal-code')">复制</button>
+            </div>
+            <div class="code-block-body">
+        <pre id="terminal-code"><span class="c"># 1. 克隆项目</span>
+git clone https://gitee.com/ezdemo/agent4j.git
+<span class="k">cd</span> agent4j
+
+<span class="c"># 2. 编译</span>
+mvn compile <span class="p">-pl</span> agent4j-bin
+
+<span class="c"># 3. 运行</span>
+mvn <span class="k">exec</span><span class="p">:</span>java <span class="p">-pl</span> agent4j-bin \
+  <span class="p">-D</span>exec.mainClass=<span class="s">"site.sorghum.agent4j.bin.Agent4jApp"</span>
+
+<span class="c"># 首次启动自动创建 ~/.agent4j/config.json</span>
+<span class="c"># 编辑 API 配置后重新运行即可</span></pre>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ============ CTA ============ -->
+<section class="cta-section">
+    <div class="container">
+        <h2 class="reveal">准备好开始了吗？</h2>
+        <p class="reveal" style="color: var(--text-secondary); max-width: 560px; margin: 12px auto 32px;">
+            将 AI 编码代理引入你的 Java 工作流。开源、轻量、可扩展。
+        </p>
+        <div class="cta-buttons reveal">
+            <a href="https://gitee.com/ezdemo/agent4j" class="btn-primary" target="_blank">前往 Gitee →</a>
+            <a href="#quickstart" class="btn-secondary">查看文档</a>
+        </div>
+    </div>
+</section>
+
+<!-- ============ FOOTER ============ -->
+<footer class="footer">
+    <div class="container">
+        <div class="footer-grid">
+            <div>
+                <div class="footer-brand"><span class="bracket">[</span>Agent4j<span class="bracket">]</span></div>
+                <p class="footer-desc">
+                    纯 Java AI 代理框架 — 推理循环 · 工具调度 · Skill 系统 · 多端交付。<br />
+                    CLI + Web REST + Vue 3 前端 + Tauri 桌面端，将 LLM 与可扩展工具系统结合，形成自主工作的编码代理。
+                </p>
+            </div>
+            <div class="footer-col">
+                <h5>项目</h5>
+                <ul>
+                    <li><a href="https://gitee.com/ezdemo/agent4j" target="_blank">Gitee 仓库</a></li>
+                    <li><a href="#capabilities">核心能力</a></li>
+                    <li><a href="#architecture">架构设计</a></li>
+                    <li><a href="#tools">工具列表</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h5>资源</h5>
+                <ul>
+                    <li><a href="#quickstart">快速开始</a></li>
+                    <li><a href="#">API 文档</a></li>
+                    <li><a href="#">更新日志</a></li>
+                    <li><a href="#">贡献指南</a></li>
+                </ul>
+            </div>
+            <div class="footer-col">
+                <h5>技术栈</h5>
+                <ul>
+                    <li><a href="https://solon.noear.org/" target="_blank">Solon 框架</a></li>
+                    <li><a href="https://snack4.noear.org/" target="_blank">Snack4 JSON</a></li>
+                    <li><a href="https://vuejs.org/" target="_blank">Vue 3</a></li>
+                    <li><a href="https://v2.tauri.app/" target="_blank">Tauri v2</a></li>
+                </ul>
+            </div>
+        </div>
+        <div class="footer-bottom">
+            <span>© 2025 Agent4j · 作者 Sorghum · MIT 许可证</span>
+            <span>Made with <span class="love">♥</span> in Java</span>
+        </div>
+    </div>
+</footer>
+
+<script>
+    /* ---------- Scroll: nav background ---------- */
+    const nav = document.getElementById('nav');
+    window.addEventListener('scroll', () => {
+        nav.classList.toggle('scrolled', window.scrollY > 40);
+    });
+
+    /* ---------- Scroll: reveal animation ---------- */
+    const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+            if (entry.isIntersecting) {
+                entry.target.classList.add('visible');
+            }
+        });
+    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
+
+    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+
+    /* ---------- Tool category accordion ---------- */
+    document.querySelectorAll('.tool-cat').forEach(cat => {
+        // First one open by default
+    });
+
+    /* ---------- Copy code ---------- */
+    function copyCode(btn, codeId) {
+        const code = document.getElementById(codeId).innerText;
+        navigator.clipboard.writeText(code).then(() => {
+            btn.textContent = '已复制 ✓';
+            btn.classList.add('copied');
+            setTimeout(() => {
+                btn.textContent = '复制';
+                btn.classList.remove('copied');
+            }, 2000);
+        });
+    }
+
+    /* ---------- Smooth scroll for anchor links ---------- */
+    document.querySelectorAll('a[href^="#"]').forEach(link => {
+        link.addEventListener('click', (e) => {
+            e.preventDefault();
+            const target = document.querySelector(link.getAttribute('href'));
+            if (target) {
+                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            }
+        });
+    });
+</script>
+
+</body>
+</html>
