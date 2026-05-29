@@ -569,11 +569,11 @@ public class AgentService {
             agent.setSessionId(sessionId);
             String reply = agent.chat(message);
 
-            // 发送最终回复（使用 content 事件，前端可直接渲染）
+            // 发送最终完整回复（使用 complete 事件，与增量 content 事件区分）
             // HITL 待审批时跳过：interceptForHITL/interceptForSandboxHITL 已通过
             // output.onContentDelta() 发送过 HITL 消息，此处不应重复发送
             if (reply != null && !reply.isEmpty() && !agent.hasPendingHITL()) {
-                emitter.sendContent(reply);
+                emitter.sendComplete(reply);
             }
         } catch (Exception e) {
             try {

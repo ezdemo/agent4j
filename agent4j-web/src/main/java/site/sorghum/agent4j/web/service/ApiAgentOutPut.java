@@ -215,7 +215,7 @@ public class ApiAgentOutPut implements AgentOutput {
         if (completed) return;
         if (reply != null && !reply.isEmpty()) {
             try {
-                emitter.sendContent(reply);
+                emitter.sendComplete(reply);
             } catch (Exception e) {
                 // SSE连接可能已断开，忽略异常
             }

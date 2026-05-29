@@ -132,6 +132,13 @@ public class SseEmitter {
         }
     }
 
+    /**
+     * 发送完整回复事件（event: complete），用于在增量流结束后告知前端最终完整文本。
+     */
+    public void sendComplete(String reply) {
+        send("complete", escapeJson(reply));
+    }
+
     public void sendError(String message) {
         ONode node = ONode.ofJson("{}").asObject();
         node.set("error", message != null ? message : "unknown error");
