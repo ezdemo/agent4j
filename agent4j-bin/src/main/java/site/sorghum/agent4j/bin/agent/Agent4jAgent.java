@@ -546,7 +546,7 @@ public class Agent4jAgent {
     }
 
     /** 获取工具注册表（供 Web API 列出工具使用） */
-    public site.sorghum.agent4j.bin.tool.ToolRegistry getToolRegistry() {
+    public ToolRegistry getToolRegistry() {
         return loop.getToolRegistry();
     }
     

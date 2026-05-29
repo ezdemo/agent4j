@@ -6,6 +6,8 @@ import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.tool.ToolDispatcher;
+import site.sorghum.agent4j.tool.HitlRequiredException;
+import site.sorghum.agent4j.tool.ToolContext;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -1112,7 +1114,7 @@ public class AgentLoop {
         // 2. 并行分发（CompletableFuture.supplyAsync）
         CompletableFuture<Map<String, Object>>[] futures = new CompletableFuture[tcCount];
         final AtomicBoolean anySuppressed = new AtomicBoolean(false);
-        final AtomicReference<site.sorghum.agent4j.tool.HitlRequiredException> hitlRef =
+        final AtomicReference<HitlRequiredException> hitlRef =
                 new AtomicReference<>(null);
         final AtomicReference<String> hitlTcName = new AtomicReference<>(null);
         final AtomicReference<String> hitlTcArgs = new AtomicReference<>(null);
@@ -1122,7 +1124,7 @@ public class AgentLoop {
             futures[i] = CompletableFuture.supplyAsync(() -> {
                 // 沙箱旁路：在异步工作线程上设置 ThreadLocal
                 if (skipSandboxCheck) {
-                    site.sorghum.agent4j.tool.ToolContext.enableSandboxBypass();
+                    ToolContext.enableSandboxBypass();
                 }
                 try {
                     ONode tc = tcArray[idx];
@@ -1147,7 +1149,7 @@ public class AgentLoop {
                             // SSE连接断开时忽略异常，继续执行
                         }
                         return toolResult(tcId, result);
-                    } catch (site.sorghum.agent4j.tool.HitlRequiredException e) {
+                    } catch (HitlRequiredException e) {
                         // 沙箱越界 → 暂存 HITL 信息，不执行
                         hitlRef.set(e);
                         hitlTcName.set(tcName);
@@ -1162,7 +1164,7 @@ public class AgentLoop {
                     }
                 } finally {
                     if (skipSandboxCheck) {
-                        site.sorghum.agent4j.tool.ToolContext.disableSandboxBypass();
+                        ToolContext.disableSandboxBypass();
                     }
                 }
             });
@@ -1180,7 +1182,7 @@ public class AgentLoop {
         }
 
         // 3.1 沙箱越界 HITL：暂存并标记待审批
-        site.sorghum.agent4j.tool.HitlRequiredException hitlEx = hitlRef.get();
+        HitlRequiredException hitlEx = hitlRef.get();
         if (hitlEx != null) {
             this.pendingSandboxHITToolCalls = toolCalls;
             this.pendingSandboxHITDetails = hitlEx.details();

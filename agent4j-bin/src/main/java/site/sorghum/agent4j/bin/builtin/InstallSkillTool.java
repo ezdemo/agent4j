@@ -4,6 +4,7 @@ import org.noear.solon.Solon;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import site.sorghum.agent4j.bin.skill.SkillStoreV2;
+import site.sorghum.agent4j.bin.skill.SkillV2;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
@@ -111,7 +112,7 @@ public class InstallSkillTool extends AgentTool {
 
         // 确定作用域
         boolean hasProjectScope = Solon.context().getBean(SkillStoreV2.class).getRoots().stream()
-                .anyMatch(r -> r.scope == site.sorghum.agent4j.bin.skill.SkillV2.Scope.PROJECT);
+                .anyMatch(r -> r.scope == SkillV2.Scope.PROJECT);
 
         boolean wantsGlobal = "global".equalsIgnoreCase(scopeStr);
         if (!wantsGlobal && !hasProjectScope) {
@@ -125,7 +126,7 @@ public class InstallSkillTool extends AgentTool {
         } else {
             // 使用第一个项目级目录
             targetDir = Solon.context().getBean(SkillStoreV2.class).getRoots().stream()
-                    .filter(r -> r.scope == site.sorghum.agent4j.bin.skill.SkillV2.Scope.PROJECT)
+                    .filter(r -> r.scope == SkillV2.Scope.PROJECT)
                     .map(r -> r.dir)
                     .findFirst()
                     .orElse(Paths.get(System.getProperty("user.home"), ".agent4j", "skills"));
