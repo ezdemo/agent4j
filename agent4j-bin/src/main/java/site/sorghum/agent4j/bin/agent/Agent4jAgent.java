@@ -9,9 +9,8 @@ import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
-import site.sorghum.agent4j.bin.tool.ToolDef;
-import site.sorghum.agent4j.bin.tool.ToolDefHelper;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
+import site.sorghum.agent4j.bin.tool.ToolSystemInitializer;
 import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.session.SessionStore;
 import site.sorghum.agent4j.bin.session.JsonlSessionStore;
@@ -66,75 +65,13 @@ public class Agent4jAgent {
                 Paths.get(System.getProperty("user.home")), 
                 Collections.<Path>emptyList());
         
-        // 注册到容器（供 RunSkillTool / InstallSkillTool 使用）
-        Solon.context().wrapAndPut(SkillStoreV2.class, skillStore);
-        
-        // 使用普通工具注册表
-        ToolRegistry registry = new ToolRegistry();
-
-        // 设置禁用工具（被禁用的工具不会注册到 LLM 工具列表）
-        Set<String> disabledTools = b.disabledTools != null ? b.disabledTools : Collections.<String>emptySet();
-        registry.setDisabledTools(disabledTools);
-        if (!disabledTools.isEmpty()) {
-            log.info("[config] 已禁用工具: {}", String.join(", ", disabledTools));
-        }
-
-        // 屏蔽目录列表
-        final List<String> blockedPaths = b.blockedPaths != null ? b.blockedPaths : Collections.<String>emptyList();
-        if (!blockedPaths.isEmpty()) {
-            log.info("[config] 已屏蔽目录: {}", String.join(", ", blockedPaths));
-        }
-
-        // 存储所有工具的 toToolSpec 结果，用于追加到 system prompt
-        StringBuilder toolSpecsBuilder = new StringBuilder();
-        toolSpecsBuilder.append("\n\n## 可用工具规范\n\n");
-
-        // 通过 getBeansOfType 同步获取所有 AgentTool 子类 Bean
-        List<AgentTool> agentTools = new ArrayList<>(Solon.context().getBeansOfType(AgentTool.class));
-        // 排序保证前缀一致
-        agentTools.sort(Comparator.comparing(it -> it.getClass().getName()));
-        for (AgentTool tool : agentTools) {
-            // 获取工具的 toToolSpec() 纯文本规范
-            String toolSpec = tool.toToolSpec();
-            // 注册到 ToolDef，同时传递 toolSpec
-            registry.register(new ToolDef(
-                    tool.getName(),
-                    tool.getDescription(),
-                    ToolDefHelper.toParamDefs(tool.getParameters()),
-                    args -> {
-                        // 从 args 中获取 sessionId（由 ToolDispatcher 在执行前注入）
-                        String sessionId = args != null ? (String) args.remove("__sessionId__") : null;
-                        return ToolDefHelper.formatResult(tool.execute(
-                                new ToolContext(args, getWorkspace(), apiUrl, apiKey, (Object) registry, blockedPaths, sessionId)));
-                    },
-                    tool.isReadOnly(),
-                    tool.isStormExempt(),
-                    toolSpec));
-            // 收集工具规范文本
-            if (toolSpec != null && !toolSpec.isEmpty()) {
-                toolSpecsBuilder.append(toolSpec).append("\n\n---\n\n");
-            }
-        }
-
-        // 加载项目文档（agent4j.md / CLAUDE.md），追加到 system prompt
-        String systemPrompt = b.systemPrompt;
-        String projectMd = loadProjectMd(b.workspace);
-        if (!projectMd.isEmpty()) {
-            systemPrompt = projectMd + "\n\n---\n\n" + systemPrompt;
-        }
-        // 将工具规范追加到 system prompt 末尾
-        systemPrompt = systemPrompt + "\n\n" + toolSpecsBuilder.toString().trim();
-        
-        // 添加 skill 索引到 system prompt
-        String skillsIndex = skillStore.buildSkillsIndex();
-        if (!skillsIndex.isEmpty()) {
-            systemPrompt = systemPrompt + "\n\n" + skillsIndex;
-            log.info("[skill] 已加载 skill 索引，共 {} 个 skill", skillStore.list().size());
-        }
-
-        // 构建缓存优先前缀：system prompt + 工具定义（注册后冻结，跨 turn 稳定）
-        PromptPrefix prefix = new PromptPrefix(systemPrompt, registry.toOpenAiTools());
-        this.ctx = new ConversationContext(prefix);
+        // 使用 ToolSystemInitializer 统一初始化（消除重复代码）
+        ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
+                b.workspace, b.apiUrl, b.apiKey,
+                b.disabledTools, b.blockedPaths, b.systemPrompt);
+        ToolRegistry registry = initResult.toolRegistry;
+        this.skillStore = initResult.skillStore;
+        this.ctx = new ConversationContext(initResult.promptPrefix);
 
         // 会话持久化 — 委托 SessionService（支持工作区隔离）
         try {

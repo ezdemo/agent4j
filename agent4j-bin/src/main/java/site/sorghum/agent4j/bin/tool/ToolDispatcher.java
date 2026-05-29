@@ -145,7 +145,9 @@ public class ToolDispatcher {
     }
 
     private static String error(String msg) {
-        return "{\"error\":\"" + msg.replace("\"", "\\\"") + "\"}";
+        ONode node = ONode.ofJson("{}").asObject();
+        node.set("error", msg);
+        return node.toJson();
     }
 
 

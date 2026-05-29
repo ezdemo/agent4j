@@ -72,31 +72,28 @@ public class SseEmitter {
     }
 
     public void sendChoice(java.util.List<?> options) {
-        // 手动构建 JSON 数组，兼容任意 option 对象（value/title）
-        StringBuilder sb = new StringBuilder("[");
-        boolean first = true;
+        ONode root = ONode.ofJson("{}").asObject();
+        ONode arr = root.getOrNew("options").asArray();
         for (Object opt : options) {
-            if (!first) sb.append(",");
-            first = false;
-            String value = "", title = "";
+            ONode item = arr.addNew();
             if (opt instanceof java.util.Map) {
                 @SuppressWarnings("unchecked")
                 java.util.Map<Object, Object> m = (java.util.Map<Object, Object>) opt;
-                Object v = m.get("value"); value = v != null ? v.toString() : "";
-                Object t = m.get("title"); title = t != null ? t.toString() : "";
+                item.set("value", String.valueOf(m.getOrDefault("value", "")));
+                item.set("title", String.valueOf(m.getOrDefault("title", "")));
             } else {
-                // 反射获取 value/title 字段（兼容 record / POJO）
                 try {
-                    var vm = opt.getClass().getMethod("value"); value = String.valueOf(vm.invoke(opt));
-                    var tm = opt.getClass().getMethod("title"); title = String.valueOf(tm.invoke(opt));
-                } catch (Exception ignored) {}
+                    java.lang.reflect.Method vm = opt.getClass().getMethod("value");
+                    java.lang.reflect.Method tm = opt.getClass().getMethod("title");
+                    item.set("value", String.valueOf(vm.invoke(opt)));
+                    item.set("title", String.valueOf(tm.invoke(opt)));
+                } catch (Exception e) {
+                    item.set("value", "");
+                    item.set("title", "");
+                }
             }
-            sb.append("{\"value\":").append(escapeJson(value))
-              .append(",\"title\":").append(escapeJson(title)).append("}");
         }
-        sb.append("]");
-        // 发送 choice 事件，payload 为 { options: [...] }
-        send("choice", "{\"options\":" + sb.toString() + "}");
+        send("choice", root.toJson());
     }
 
     public void sendToolResult(String name, String result) {

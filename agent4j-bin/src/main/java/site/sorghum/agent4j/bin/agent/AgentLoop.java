@@ -506,92 +506,8 @@ public class AgentLoop {
             ctx.addToolResult((String) tr.get("tool_call_id"), (String) tr.get("content"));
         }
 
-        // 继续循环：让 LLM 根据工具结果生成回复
-        boolean isThinkingMode = client.isThinkingMode();
-        for (int step = 0; ; step++) {
-            // 用户中断：直接退出，不重试
-            if (userAbortRequested) {
-                try {
-                    output.onLog(AgentOutput.LogLevel.INFO, "[abort] 用户请求中断（HITL 恢复循环），停止推理循环");
-                } catch (Exception e) {
-                    // 忽略异常
-                }
-                String lastContent = ctx.getLastAssistantContent();
-                if (lastContent != null && !lastContent.isEmpty()) {
-                    return lastContent;
-                }
-                return "⏹️ 已停止生成";
-            }
-
-            PreparedMessages prepared = prepareMessages(step, isThinkingMode);
-            List<Map<String, Object>> messages = prepared.messages;
-
-            StreamResult sr = streamLLM(messages, tools);
-
-            // 用户中断：streamLLM 已提前返回，直接退出，不执行工具、不重试
-            if (userAbortRequested) {
-                try {
-                    output.onLog(AgentOutput.LogLevel.INFO, "[abort] 用户请求中断（HITL streamLLM 后检测），停止推理循环");
-                } catch (Exception e) {
-                    // 忽略异常
-                }
-                String abortContent = sr.content;
-                String abortReasoning = sr.reasoningContent;
-                if (abortContent != null && !abortContent.isEmpty()) {
-                    ctx.addAssistant(abortContent, null, abortReasoning);
-                    return abortContent;
-                }
-                if (abortReasoning != null && !abortReasoning.isEmpty()) {
-                    ctx.addAssistant(null, null, abortReasoning);
-                    return abortReasoning;
-                }
-                return "⏹️ 已停止生成";
-            }
-
-            if (sr.error) {
-                if (recoverFromStreamError(messages, prepared.foldedThisStep)) continue;
-                throw new IOException("[stream] API error during streaming");
-            }
-            try {
-                output.onContentComplete();
-            } catch (Exception e) {
-                // SSE连接断开时忽略异常，继续执行
-            }
-
-            // 推理断路器：流式检测到循环则注入警告
-            if (sr.loopAborted) {
-                ctx.addUser("[ReasonBreaker] 检测到思考循环，已提前终止本轮推理。请停止当前思路，尝试不同的方法。");
-                selfCorrectionAttempts = 0;
-                continue;
-            }
-
-            ONode nextToolCalls = scavengeToolCalls(sr.toolCalls, sr.reasoningContent, sr.content);
-            boolean hasMoreTools = nextToolCalls != null && nextToolCalls.isArray()
-                    && !nextToolCalls.getArray().isEmpty();
-
-            if (!hasMoreTools) {
-                return handleTextResponse(sr.content, sr.reasoningContent);
-            }
-
-            // 如果再次触发 HITL（嵌套工具调用），暂存并返回提示
-            if (hitlMode) {
-                return interceptForHITL(nextToolCalls, sr.content, sr.reasoningContent);
-            }
-
-            ter = executeToolCalls(nextToolCalls);
-            ctx.addAssistant(sr.content, ter.tcList, sr.reasoningContent);
-            for (Map<String, Object> tr : ter.toolResults) {
-                ctx.addToolResult((String) tr.get("tool_call_id"), (String) tr.get("content"));
-            }
-
-            selfCorrectionAttempts = handleSelfCorrection(
-                    ter.toolResults, ter.anySuppressed, selfCorrectionAttempts);
-            if (selfCorrectionAttempts < 0) {
-                String fallback = "所有工具调用均被风暴断路器抑制，无法继续执行。";
-                ctx.addAssistant(fallback, null, null);
-                return fallback;
-            }
-        }
+        // 委托给统一的内部循环
+        return continueConversationLoop(0);
     }
 
     // ==================== 沙箱越界 HITL ====================
@@ -678,7 +594,7 @@ public class AgentLoop {
             ctx.addToolResult((String) tr.get("tool_call_id"), (String) tr.get("content"));
         }
 
-        // Self-Correction 检查
+        // Self-Correction 检查与委托给统一的内部循环
         int scAttempts = handleSelfCorrection(initialTer.toolResults, initialTer.anySuppressed, 0);
         if (scAttempts < 0) {
             String fallback = "所有工具调用均被风暴断路器抑制，无法继续执行。";
@@ -686,13 +602,28 @@ public class AgentLoop {
             return fallback;
         }
 
-        // 继续循环
+        // 委托给统一的内部循环（沙箱 HITL 恢复后仍需检查沙箱越界）
+        return continueConversationLoop(0);
+    }
+
+    // ==================== 统一的继续对话循环（消除 HITL 恢复中的重复代码） ====================
+
+    /**
+     * 在工具结果写入上下文后继续推理循环。
+     * 被 resumeAfterHITL / resumeAfterSandboxHITL 以及主循环复用。
+     *
+     * @param initialSelfCorrectionAttempts 初始 self-correction 尝试次数
+     * @return 最终的 assistant content
+     */
+    private String continueConversationLoop(int initialSelfCorrectionAttempts) throws IOException {
         boolean isThinkingMode = client.isThinkingMode();
-        int selfCorrectionAttempts = 0;
+        List<Map<String, Object>> tools = ctx.tools();
+        int selfCorrectionAttempts = initialSelfCorrectionAttempts;
+
         for (int step = 0; ; step++) {
             if (userAbortRequested) {
                 try {
-                    output.onLog(AgentOutput.LogLevel.INFO, "[abort] 用户请求中断（沙箱 HITL 恢复循环），停止推理循环");
+                    output.onLog(AgentOutput.LogLevel.INFO, "[abort] 用户请求中断，停止推理循环");
                 } catch (Exception e) {
                     // 忽略异常
                 }
@@ -709,11 +640,6 @@ public class AgentLoop {
             StreamResult sr = streamLLM(messages, tools);
 
             if (userAbortRequested) {
-                try {
-                    output.onLog(AgentOutput.LogLevel.INFO, "[abort] 用户请求中断（沙箱 HITL streamLLM 后检测），停止推理循环");
-                } catch (Exception e) {
-                    // 忽略异常
-                }
                 String abortContent = sr.content;
                 String abortReasoning = sr.reasoningContent;
                 if (abortContent != null && !abortContent.isEmpty()) {
@@ -743,22 +669,21 @@ public class AgentLoop {
                 continue;
             }
 
-            ONode nextToolCalls = scavengeToolCalls(sr.toolCalls, sr.reasoningContent, sr.content);
-            boolean hasMoreTools = nextToolCalls != null && nextToolCalls.isArray()
-                    && !nextToolCalls.getArray().isEmpty();
+            ONode toolCalls = scavengeToolCalls(sr.toolCalls, sr.reasoningContent, sr.content);
+            boolean hasToolCalls = toolCalls != null && toolCalls.isArray()
+                    && !toolCalls.getArray().isEmpty();
 
-            if (!hasMoreTools) {
+            if (!hasToolCalls) {
                 return handleTextResponse(sr.content, sr.reasoningContent);
             }
 
-            // 沙箱 HITL 恢复后不再走普通 HITL 拦截（已审批）
             if (hitlMode) {
-                return interceptForHITL(nextToolCalls, sr.content, sr.reasoningContent);
+                return interceptForHITL(toolCalls, sr.content, sr.reasoningContent);
             }
 
-            ToolExecutionResult ter = executeToolCalls(nextToolCalls);
+            ToolExecutionResult ter = executeToolCalls(toolCalls);
 
-            // 再次沙箱越界？再次触发审批
+            // 沙箱越界 HITL：暂停并等待用户审批
             if (hitlState == HitlState.PENDING && pendingSandboxHITToolCalls != null) {
                 this.pendingSandboxHITContent = sr.content;
                 this.pendingSandboxHITReasoning = sr.reasoningContent;
@@ -773,7 +698,7 @@ public class AgentLoop {
             selfCorrectionAttempts = handleSelfCorrection(
                     ter.toolResults, ter.anySuppressed, selfCorrectionAttempts);
             if (selfCorrectionAttempts < 0) {
-                String fallback = "所有工具调用均被风暴断路器抑制，无法继续执行。";
+                String fallback = "所有工具调用均被风暴断路器抑制，无法继续执行。请换用其他方式完成任务。";
                 ctx.addAssistant(fallback, null, null);
                 return fallback;
             }
@@ -1170,13 +1095,41 @@ public class AgentLoop {
             });
         }
 
-        // 3. 等待全部完成，结果顺序与 tcList 一致
-        CompletableFuture.allOf(futures).join();
+        // 3. 等待全部完成（带超时保护），结果顺序与 tcList 一致
+        try {
+            CompletableFuture.allOf(futures).get(TOOL_TIMEOUT_SEC, TimeUnit.SECONDS);
+        } catch (TimeoutException e) {
+            try {
+                output.onLog(AgentOutput.LogLevel.WARN, "[tool] 工具执行超时（" + TOOL_TIMEOUT_SEC + "s），取消未完成的调用");
+            } catch (Exception ex) {
+                // 忽略异常
+            }
+            // 取消未完成的 Future
+            for (CompletableFuture<Map<String, Object>> f : futures) {
+                if (!f.isDone()) {
+                    f.cancel(true);
+                }
+            }
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (java.util.concurrent.ExecutionException e) {
+            // allOf 在某个 future 异常完成时抛出 ExecutionException，继续逐个收集结果
+        }
+
         List<Map<String, Object>> toolResults = new ArrayList<>();
-        for (CompletableFuture<Map<String, Object>> f : futures) {
+        for (int i = 0; i < futures.length; i++) {
+            CompletableFuture<Map<String, Object>> f = futures[i];
             try {
                 toolResults.add(f.get());
-            } catch (InterruptedException | java.util.concurrent.ExecutionException e) {
+            } catch (java.util.concurrent.CancellationException e) {
+                // 超时取消的，返回带有工具ID的占位错误
+                ONode tc = tcArray[i];
+                String tcId = tc.get("id").getString();
+                toolResults.add(toolResult(tcId, "{\"error\":\"工具执行超时（" + TOOL_TIMEOUT_SEC + "s）\",\"rejectedReason\":\"timeout\"}"));
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                toolResults.add(toolResult("?", "[ERROR] Interrupted"));
+            } catch (java.util.concurrent.ExecutionException e) {
                 toolResults.add(toolResult("?", "[ERROR] " + e.getMessage()));
             }
         }
@@ -1250,4 +1203,7 @@ public class AgentLoop {
 
     /** 折叠时保留的尾部预算（字符数），约 80KB */
     private static final int KEEP_TAIL_CHARS = 80_000;
+
+    /** 工具执行超时（秒），单个工具调用最长等待时间 */
+    private static final int TOOL_TIMEOUT_SEC = 360;
 }

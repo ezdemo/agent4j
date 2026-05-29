@@ -16,9 +16,8 @@ import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
 import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.session.SessionStore;
-import site.sorghum.agent4j.bin.tool.ToolDef;
-import site.sorghum.agent4j.bin.tool.ToolDefHelper;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
+import site.sorghum.agent4j.bin.tool.ToolSystemInitializer;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
 import site.sorghum.agent4j.bin.skill.SkillStoreV2;
 import site.sorghum.agent4j.tool.AgentTool;
@@ -172,64 +171,16 @@ public class AgentService {
                 System.err.println("[config] 已屏蔽目录: " + String.join(", ", blockedPaths));
             }
 
-            // 存储所有工具的 toToolSpec 结果，用于追加到 system prompt
-            StringBuilder toolSpecsBuilder = new StringBuilder();
-            toolSpecsBuilder.append("\n\n## 可用工具规范\n\n");
-
-            // 通过 getBeansOfType 同步获取所有 AgentTool 子类 Bean
-            List<AgentTool> agentTools = new ArrayList<>(Solon.context().getBeansOfType(AgentTool.class));
-            // 排序保证前缀一致
-            agentTools.sort(Comparator.comparing(it -> it.getClass().getName()));
-            for (AgentTool tool : agentTools) {
-                // 获取工具的 toToolSpec() 纯文本规范
-                String toolSpec = tool.toToolSpec();
-                // 注册到 ToolDef，同时传递 toolSpec
-                sharedToolRegistry.register(new ToolDef(
-                        tool.getName(),
-                        tool.getDescription(),
-                        ToolDefHelper.toParamDefs(tool.getParameters()),
-                        args -> {
-                            // 从 args 中获取 sessionId（由 ToolDispatcher 在执行前注入）
-                            String sessionId = args != null ? (String) args.remove("__sessionId__") : null;
-                            return ToolDefHelper.formatResult(tool.execute(
-                                    new ToolContext(args, config.workspaceDir(), apiUrl, apiKey, sharedToolRegistry, blockedPaths, sessionId)));
-                        },
-                        tool.isReadOnly(),
-                        tool.isStormExempt(),
-                        toolSpec));
-                // 收集工具规范文本
-                if (toolSpec != null && !toolSpec.isEmpty()) {
-                    toolSpecsBuilder.append(toolSpec).append("\n\n---\n\n");
-                }
-            }
-
-            // 加载项目文档（agent4j.md / CLAUDE.md），追加到 system prompt
-            String systemPrompt = loadDefaultSystemPrompt();
-            String projectMd = loadProjectMd(config.workspaceDir());
-            if (!projectMd.isEmpty()) {
-                systemPrompt = projectMd + "\n\n---\n\n" + systemPrompt;
-            }
-            // 将工具规范追加到 system prompt 末尾
-            systemPrompt = systemPrompt + "\n\n" + toolSpecsBuilder.toString().trim();
-            
-            // 初始化技能存储并加载 skill 索引
-            this.sharedSkillStore = new SkillStoreV2(config.workspaceDir(), 
-                    Paths.get(System.getProperty("user.home")), 
-                    Collections.emptyList());
-            String skillsIndex = sharedSkillStore.buildSkillsIndex();
-            if (!skillsIndex.isEmpty()) {
-                systemPrompt = systemPrompt + "\n\n" + skillsIndex;
-                System.out.println("[web] 已加载 skill 索引，共 " + sharedSkillStore.list().size() + " 个 skill");
-            }
-
-            // 注册 SkillStoreV2 到容器，供 RunSkillTool 和 InstallSkillTool 使用
-            Solon.context().wrapAndPut(SkillStoreV2.class, sharedSkillStore);
-            
-            // 构建缓存优先前缀：system prompt + 工具定义（注册后冻结，跨 turn 稳定）
-            this.sharedPrefix = new PromptPrefix(systemPrompt, sharedToolRegistry.toOpenAiTools());
+            // 使用 ToolSystemInitializer 统一初始化（消除重复代码）
+            ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
+                    config.workspaceDir(), apiUrl, apiKey,
+                    disabledTools, blockedPaths,
+                    loadDefaultSystemPrompt());
+            this.sharedToolRegistry = initResult.toolRegistry;
+            this.sharedPrefix = initResult.promptPrefix;
+            this.sharedSkillStore = initResult.skillStore;
 
             System.out.println("[web] Agent 共享组件初始化完成 — 模型: " + model);
-            System.out.println("[web] 工具数量: " + agentTools.size());
         } catch (Exception e) {
             System.err.println("[web] Agent 共享组件初始化失败: " + e.getMessage());
             e.printStackTrace();
