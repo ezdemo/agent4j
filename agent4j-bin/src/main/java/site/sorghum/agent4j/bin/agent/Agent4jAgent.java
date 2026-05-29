@@ -63,7 +63,7 @@ public class Agent4jAgent {
         this.skillStore = new SkillStoreV2(b.workspace, 
                 Paths.get(System.getProperty("user.home")), 
                 Collections.<Path>emptyList());
-        
+        Solon.context().beanInject(skillStore);
         // 使用普通工具注册表
         ToolRegistry registry = new ToolRegistry();
 

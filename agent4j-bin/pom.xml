@@ -22,11 +22,6 @@
             <groupId>org.noear</groupId>
             <artifactId>solon-logging-logback</artifactId>
         </dependency>
-
-        <dependency>
-            <groupId>org.noear</groupId>
-            <artifactId>solon-web</artifactId>
-        </dependency>
         <!-- Solon IoC/AOP 容器 -->
         <dependency>
             <groupId>org.noear</groupId>

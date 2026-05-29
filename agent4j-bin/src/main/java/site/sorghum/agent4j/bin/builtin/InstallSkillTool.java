@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.builtin;
 
+import org.noear.solon.Solon;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import site.sorghum.agent4j.bin.skill.SkillStoreV2;
@@ -29,9 +30,6 @@ import java.util.regex.Pattern;
 public class InstallSkillTool extends AgentTool {
 
     private static final Pattern VALID_SKILL_NAME = Pattern.compile("^[a-zA-Z0-9][a-zA-Z0-9._-]{0,63}$");
-
-    @Inject
-    private SkillStoreV2 skillStore;
 
     @Override
     public String getName() {
@@ -112,7 +110,7 @@ public class InstallSkillTool extends AgentTool {
         }
 
         // 确定作用域
-        boolean hasProjectScope = skillStore.getRoots().stream()
+        boolean hasProjectScope = Solon.context().getBean(SkillStoreV2.class).getRoots().stream()
                 .anyMatch(r -> r.scope == site.sorghum.agent4j.bin.skill.SkillV2.Scope.PROJECT);
 
         boolean wantsGlobal = "global".equalsIgnoreCase(scopeStr);
@@ -126,7 +124,7 @@ public class InstallSkillTool extends AgentTool {
             targetDir = Paths.get(System.getProperty("user.home"), ".agent4j", "skills");
         } else {
             // 使用第一个项目级目录
-            targetDir = skillStore.getRoots().stream()
+            targetDir = Solon.context().getBean(SkillStoreV2.class).getRoots().stream()
                     .filter(r -> r.scope == site.sorghum.agent4j.bin.skill.SkillV2.Scope.PROJECT)
                     .map(r -> r.dir)
                     .findFirst()

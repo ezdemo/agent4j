@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.builtin;
 
+import org.noear.solon.Solon;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import site.sorghum.agent4j.bin.skill.SkillV2;
@@ -23,9 +24,6 @@ import java.util.stream.Collectors;
  */
 @Component
 public class RunSkillTool extends AgentTool {
-
-    @Inject
-    private SkillStoreV2 skillStore;
 
     @Override
     public String getName() {
@@ -87,10 +85,10 @@ public class RunSkillTool extends AgentTool {
         }
 
         // 查找 skill
-        SkillV2 skill = skillStore.read(name);
+        SkillV2 skill = Solon.context().getBean(SkillStoreV2.class).read(name);
         if (skill == null) {
             // 列出可用的 skill
-            String available = skillStore.list().stream()
+            String available = Solon.context().getBean(SkillStoreV2.class).list().stream()
                     .map(SkillV2::getName)
                     .collect(Collectors.joining(", "));
             return ToolResult.fail("SKILL_NOT_FOUND",

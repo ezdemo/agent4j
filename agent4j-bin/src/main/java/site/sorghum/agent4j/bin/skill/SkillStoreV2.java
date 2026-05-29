@@ -47,9 +47,13 @@ public class SkillStoreV2 {
         if (projectRoot != null) {
             roots.add(new SkillRoot(projectRoot.resolve(".agent4j").resolve(SKILLS_DIRNAME),
                     SkillV2.Scope.PROJECT, priority++));
-            roots.add(new SkillRoot(projectRoot.resolve(".agents").resolve(SKILLS_DIRNAME),
+            roots.add(new SkillRoot(projectRoot.resolve(".reasonix").resolve(SKILLS_DIRNAME),
                     SkillV2.Scope.PROJECT, priority++));
             roots.add(new SkillRoot(projectRoot.resolve(".claude").resolve(SKILLS_DIRNAME),
+                    SkillV2.Scope.PROJECT, priority++));
+            roots.add(new SkillRoot(projectRoot.resolve(".agents").resolve(SKILLS_DIRNAME),
+                    SkillV2.Scope.PROJECT, priority++));
+            roots.add(new SkillRoot(projectRoot.resolve(".opencode").resolve(SKILLS_DIRNAME),
                     SkillV2.Scope.PROJECT, priority++));
         }
 
@@ -61,9 +65,13 @@ public class SkillStoreV2 {
         // 全局目录
         roots.add(new SkillRoot(homeDir.resolve(".agent4j").resolve(SKILLS_DIRNAME),
                 SkillV2.Scope.GLOBAL, priority++));
-        roots.add(new SkillRoot(homeDir.resolve(".agents").resolve(SKILLS_DIRNAME),
+        roots.add(new SkillRoot(homeDir.resolve(".reasonix").resolve(SKILLS_DIRNAME),
                 SkillV2.Scope.GLOBAL, priority++));
         roots.add(new SkillRoot(homeDir.resolve(".claude").resolve(SKILLS_DIRNAME),
+                SkillV2.Scope.GLOBAL, priority++));
+        roots.add(new SkillRoot(homeDir.resolve(".agents").resolve(SKILLS_DIRNAME),
+                SkillV2.Scope.GLOBAL, priority++));
+        roots.add(new SkillRoot(homeDir.resolve(".opencode").resolve(SKILLS_DIRNAME),
                 SkillV2.Scope.GLOBAL, priority++));
 
         return roots;
