@@ -54,7 +54,7 @@
           </svg>
         </div>
         <div v-if="showWorkspacePicker" class="workspace-dropdown">
-          <div v-if="loadingWorkspaces" class="workspace-loading">加载中...</div>
+          <div v-if="workspaces.length === 0 && !initialDataLoaded" class="workspace-loading">加载中...</div>
           <div v-else-if="workspaces.length === 0" class="workspace-empty">暂无工作区记录</div>
           <div
             v-for="w in workspaces"
@@ -91,17 +91,14 @@
       </div>
 
       <div class="sidebar-list">
-        <div v-if="loadingSessions" class="sidebar-empty">加载中...</div>
-        <div v-else-if="filteredSessions.length === 0" class="sidebar-empty">
-          {{ searchQuery ? '无匹配' : '暂无会话' }}
-        </div>
-        <div
-          v-for="s in filteredSessions"
-          :key="s.name"
-          class="session-item"
-          :class="{ active: s.name === currentSession }"
-          @click="loadSession(s.name)"
-        >
+        <div>
+          <div
+            v-for="s in filteredSessions"
+            :key="s.name"
+            class="session-item"
+            :class="{ active: s.name === currentSession }"
+            @click="loadSession(s.name)"
+          >
           <span class="session-dot" :class="{ on: s.name === currentSession }"></span>
           <div class="session-info">
             <div class="session-name">{{ s.title || s.summary || formatName(s.name) }}</div>
@@ -110,6 +107,10 @@
           <button class="btn-icon-sm session-del" @click.stop="deleteSession(s.name)">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
+        </div>
+        </div>
+        <div v-if="filteredSessions.length === 0" class="sidebar-empty">
+          {{ !initialDataLoaded ? '加载中...' : (searchQuery ? '无匹配' : '暂无会话') }}
         </div>
       </div>
 
@@ -206,7 +207,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfirm } from './composables/useConfirm'
 import { agentAPI, sessionsAPI, toolsAPI, configAPI } from './services/api'
@@ -232,14 +233,13 @@ const config = ref({})
 const showTools = ref(false)
 const showConfig = ref(false)
 const showSettings = ref(false)
-const loadingSessions = ref(false)
+const initialDataLoaded = ref(false)
 const chatRef = ref(null)
 const workspace = ref('')
 
 // 工作区相关
 const showWorkspacePicker = ref(false)
 const workspaces = ref([])
-const loadingWorkspaces = ref(false)
 const newWorkspacePath = ref('')
 
 const filteredSessions = computed(() => {
@@ -325,10 +325,10 @@ const loadData = async () => {
   } catch {}
   await loadWorkspaces()
   await loadSessions()
+  initialDataLoaded.value = true
 }
 
 const loadSessions = async () => {
-  loadingSessions.value = true
   try {
     // 获取当前活跃的工作区 hash
     let workspaceHash = null
@@ -340,19 +340,16 @@ const loadSessions = async () => {
     const r = await sessionsAPI.list(workspaceHash)
     if (r.success) sessions.value = r.data || []
   } catch {}
-  loadingSessions.value = false
 }
 
 // 加载工作区列表
 const loadWorkspaces = async () => {
-  loadingWorkspaces.value = true
   try {
     const r = await configAPI.listWorkspaces()
     if (r.success) workspaces.value = r.data || []
   } catch (e) {
     console.error('加载工作区列表失败:', e)
   }
-  loadingWorkspaces.value = false
 }
 
 // 切换工作区
@@ -362,10 +359,9 @@ const handleSwitchWorkspace = async (hash) => {
     if (r.success) {
       workspace.value = r.data.workspace
       showWorkspacePicker.value = false
-      await loadWorkspaces()
-      await loadSessions()
-      // 切换工作区后清空聊天，进入新建会话状态
-      newChat()
+      // 并行加载，减少链式渲染
+      await Promise.all([loadWorkspaces(), loadSessions()])
+      await newChat(true)   // skipReload，避免再重载列表
     } else {
       alert(r.message || '切换工作区失败')
     }
@@ -385,10 +381,8 @@ const handleAddWorkspace = async () => {
       workspace.value = r.data.workspace
       newWorkspacePath.value = ''
       showWorkspacePicker.value = false
-      await loadWorkspaces()
-      await loadSessions()
-      // 切换工作区后清空聊天，进入新建会话状态
-      newChat()
+      await Promise.all([loadWorkspaces(), loadSessions()])
+      await newChat(true)
     } else {
       alert(r.message || '添加工作区失败')
     }
@@ -414,14 +408,16 @@ const handleDeleteWorkspace = async (hash) => {
   }
 }
 
-const newChat = async () => {
+const newChat = async (skipReload = false) => {
   try {
     const r = await sessionsAPI.createNew({})
     if (r.success && r.data?.sessionName) {
       currentSession.value = r.data.sessionName
       chatRef.value?.resetLocalMessages()
-      await loadSessions()
-      await loadWorkspaces()
+      if (!skipReload) {
+        await loadSessions()
+        await loadWorkspaces()
+      }
     }
   } catch (e) {
     console.error('新建会话失败:', e)
