@@ -3,6 +3,7 @@ package site.sorghum.agent4j.web.controller;
 import org.noear.solon.annotation.*;
 
 import site.sorghum.agent4j.bin.tool.ToolDef;
+import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.model.ToolExecuteRequest;
 import site.sorghum.agent4j.web.service.AgentService;
@@ -28,7 +29,7 @@ public class ToolController {
     @Get
     @Mapping("")
     public Object list() {
-        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         List<Map<String, Object>> tools = new ArrayList<>();
         for (ToolDef def : agentService.getSharedToolRegistry().all().values()) {
             tools.add(toToolMap(def));
@@ -40,9 +41,9 @@ public class ToolController {
     @Get
     @Mapping("/{name}")
     public Object get(@Path("name") String name) {
-        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         ToolDef tool = agentService.getSharedToolRegistry().get(name);
-        if (tool == null) return ApiResponse.fail("工具不存在: " + name);
+        if (tool == null) throw new ServiceException("工具不存在: " + name);
         return ApiResponse.ok(toToolMap(tool));
     }
 

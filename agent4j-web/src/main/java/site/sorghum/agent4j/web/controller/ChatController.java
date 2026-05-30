@@ -35,22 +35,18 @@ public class ChatController {
         if (request == null || request.message == null || request.message.trim().isEmpty()) {
             return ApiResponse.fail("message 不能为空");
         }
-        try {
-            long t0 = System.currentTimeMillis();
-            // 支持工作区和会话隔离（hash 可选，不传则使用默认工作区）
-            String workspacePath = agentService.resolveWorkspacePath(request.workspaceHash);
-            if (workspacePath == null) workspacePath = agentService.getWorkspace();
-            String reply = agentService.chat(request.message.trim(), workspacePath, request.sessionName);
-            long elapsed = System.currentTimeMillis() - t0;
+        long t0 = System.currentTimeMillis();
+        // 支持工作区和会话隔离（hash 可选，不传则使用默认工作区）
+        String workspacePath = agentService.resolveWorkspacePath(request.workspaceHash);
+        if (workspacePath == null) workspacePath = agentService.getWorkspace();
+        String reply = agentService.chat(request.message.trim(), workspacePath, request.sessionName);
+        long elapsed = System.currentTimeMillis() - t0;
 
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("reply", reply);
-            data.put("elapsedMs", elapsed);
-            data.put("usage", agentService.getSessionUsageMap(workspacePath, request.sessionName));
-            return ApiResponse.ok(data);
-        } catch (Exception e) {
-            return ApiResponse.fail("聊天出错: " + e.getMessage());
-        }
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("reply", reply);
+        data.put("elapsedMs", elapsed);
+        data.put("usage", agentService.getSessionUsageMap(workspacePath, request.sessionName));
+        return ApiResponse.ok(data);
     }
 
     /**
@@ -59,12 +55,8 @@ public class ChatController {
     @Post
     @Mapping("/abort")
     public Object abort() {
-        try {
-            agentService.abortCurrentChat();
-            return ApiResponse.ok("已发送中断请求");
-        } catch (Exception e) {
-            return ApiResponse.fail("中断失败: " + e.getMessage());
-        }
+        agentService.abortCurrentChat();
+        return ApiResponse.ok("已发送中断请求");
     }
 
     /**

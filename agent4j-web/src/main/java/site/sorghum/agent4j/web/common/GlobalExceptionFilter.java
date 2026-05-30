@@ -1,0 +1,42 @@
+package site.sorghum.agent4j.web.common;
+
+import org.noear.solon.annotation.Component;
+import org.noear.solon.core.handle.Context;
+import org.noear.solon.core.handle.Filter;
+import org.noear.solon.core.handle.FilterChain;
+
+import site.sorghum.agent4j.web.model.ApiResponse;
+
+/**
+ * 全局异常拦截 Filter —— 所有未捕获异常统一返回 ApiResponse JSON 格式。
+ * <p>
+ * {@code index = 0} 确保最先执行，兜住所有下游抛出的异常。
+ * </p>
+ *
+ * <pre>{@code
+ * // Controller 中不再需要 try-catch，直接：
+ * if (xxx) throw new ServiceException("message 不能为空");
+ * // 或让业务异常自然向上传播
+ * }</pre>
+ *
+ * @author Sorghum
+ */
+@Component(index = 0)
+public class GlobalExceptionFilter implements Filter {
+
+    @Override
+    public void doFilter(Context ctx, FilterChain chain) throws Throwable {
+        try {
+            chain.doFilter(ctx);
+        } catch (ServiceException e) {
+            // 已知业务异常 → 4xx
+            ctx.status(e.getCode());
+            ctx.outputAsJson(ApiResponse.fail(e.getMessage()).toString());
+        } catch (Throwable e) {
+            // 未预期的系统异常 → 500（避免泄露内部细节）
+            e.printStackTrace();
+            ctx.status(500);
+            ctx.outputAsJson(ApiResponse.fail("服务器内部错误").toString());
+        }
+    }
+}

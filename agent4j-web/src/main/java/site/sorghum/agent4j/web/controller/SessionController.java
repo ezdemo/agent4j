@@ -1,9 +1,11 @@
 package site.sorghum.agent4j.web.controller;
 
+import lombok.SneakyThrows;
 import org.noear.solon.annotation.*;
 import org.noear.solon.core.handle.Context;
 
 import site.sorghum.agent4j.tool.interact.InteractionService;
+import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.service.AgentService;
 
@@ -30,7 +32,7 @@ public class SessionController {
     @Get
     @Mapping("")
     public Object list(@Param(value = "workspaceHash", required = false) String workspaceHash) throws Exception {
-        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
         return ApiResponse.ok(agentService.listSessions(workspacePath));
@@ -40,7 +42,7 @@ public class SessionController {
     @Get
     @Mapping("/current")
     public Object current(@Param(value = "workspaceHash", required = false) String workspaceHash) {
-        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
         String currentName = agentService.getCurrentSessionName(workspacePath);
@@ -56,7 +58,7 @@ public class SessionController {
     @Mapping("/new")
     public Object createNew(@Param(value = "workspaceHash", required = false) String workspaceHash,
                             @Param(value = "sessionName", required = false) String sessionName) {
-        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
         String actualName = agentService.newSession(workspacePath, sessionName);
@@ -69,28 +71,25 @@ public class SessionController {
     }
 
     /** 切换会话 —— POST /api/sessions/{name}?workspaceHash=xxx */
+    @SneakyThrows
     @Post
     @Mapping("/{name}")
     public Object switchSession(@Path("name") String name,
                                 @Param(value = "workspaceHash", required = false) String workspaceHash) {
-        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
-        try {
-            String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
-            if (workspacePath == null) workspacePath = agentService.getWorkspace();
-            boolean ok = agentService.switchSession(workspacePath, name);
-            if (ok) {
-                String confirmedName = agentService.getCurrentSessionName(workspacePath);
-                String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
-                Map<String, Object> data = new LinkedHashMap<>();
-                data.put("workspaceHash", resolvedHash);
-                data.put("sessionName", confirmedName != null ? confirmedName : name);
-                data.put("switched", true);
-                return ApiResponse.ok(data);
-            }
-            return ApiResponse.fail("会话不存在: " + name);
-        } catch (Exception e) {
-            return ApiResponse.fail("切换会话失败: " + e.getMessage());
+        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
+        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
+        if (workspacePath == null) workspacePath = agentService.getWorkspace();
+        boolean ok = agentService.switchSession(workspacePath, name);
+        if (ok) {
+            String confirmedName = agentService.getCurrentSessionName(workspacePath);
+            String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
+            Map<String, Object> data = new LinkedHashMap<>();
+            data.put("workspaceHash", resolvedHash);
+            data.put("sessionName", confirmedName != null ? confirmedName : name);
+            data.put("switched", true);
+            return ApiResponse.ok(data);
         }
+        throw new ServiceException("会话不存在: " + name);
     }
 
     /** 清除会话 Agent 缓存 —— DELETE /api/sessions/{name}?workspaceHash=xxx */
@@ -98,7 +97,7 @@ public class SessionController {
     @Mapping("/{name}")
     public Object evictAgent(@Path("name") String name,
                              @Param(value = "workspaceHash", required = false) String workspaceHash) {
-        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
         agentService.evictAgent(workspacePath, name);
@@ -114,7 +113,7 @@ public class SessionController {
     @Post
     @Mapping("/evict-all")
     public Object evictAll() {
-        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         agentService.evictAllAgents();
         return ApiResponse.ok("已清除所有 Agent 缓存");
     }
@@ -123,7 +122,7 @@ public class SessionController {
     @Get
     @Mapping("/stats")
     public Object stats() {
-        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("cacheSize", agentService.getCacheSize());
         data.put("maxCacheSize", 50);
@@ -135,7 +134,7 @@ public class SessionController {
     @Mapping("/{name}/todos")
     public Object getTodos(@Path("name") String sessionName,
                            @Param(value = "workspaceHash", required = false) String workspaceHash) {
-        if (!agentService.isReady()) return ApiResponse.fail("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         List<Map<String, Object>> todos = interactionService.getTodos(sessionName);
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("sessionName", sessionName);

@@ -2,6 +2,7 @@ package site.sorghum.agent4j.web.controller;
 
 import org.noear.solon.annotation.*;
 
+import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.service.AgentService;
 
@@ -30,7 +31,7 @@ public class AgentController {
     @Mapping("/status")
     public Object status() {
         if (!agentService.isReady()) {
-            return ApiResponse.fail("Agent 未初始化，请检查 ~/.agent4j/config.json 配置");
+            throw new ServiceException("Agent 未初始化，请检查 ~/.agent4j/config.json 配置");
         }
         return ApiResponse.ok(agentService.getStatus());
     }
@@ -41,7 +42,7 @@ public class AgentController {
     public Object history(@Param(value = "workspaceHash", required = false) String workspaceHash,
                           @Param(value = "sessionName", required = false) String sessionName) {
         if (!agentService.isReady()) {
-            return ApiResponse.fail("Agent 未初始化");
+            throw new ServiceException("Agent 未初始化");
         }
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
@@ -58,7 +59,7 @@ public class AgentController {
     @Mapping("/commands")
     public Object commands() {
         if (!agentService.isReady()) {
-            return ApiResponse.fail("Agent 未初始化");
+            throw new ServiceException("Agent 未初始化");
         }
         return ApiResponse.ok(agentService.getCommandMetaList());
     }
@@ -73,7 +74,7 @@ public class AgentController {
     @Mapping("/skills")
     public Object skills() {
         if (!agentService.isReady()) {
-            return ApiResponse.fail("Agent 未初始化");
+            throw new ServiceException("Agent 未初始化");
         }
         return ApiResponse.ok(agentService.getSkillMetaList());
     }

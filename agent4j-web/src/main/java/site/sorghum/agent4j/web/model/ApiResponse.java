@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.web.model;
 
+import org.noear.snack4.ONode;
+
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -39,5 +41,10 @@ public class ApiResponse<T> {
         if (error != null) m.put("error", error);
         if (data != null) m.put("data", data);
         return m;
+    }
+
+    @Override
+    public String toString() {
+        return ONode.ofBean(this).toString();
     }
 }
