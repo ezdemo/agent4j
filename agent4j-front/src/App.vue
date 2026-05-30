@@ -359,8 +359,9 @@ const handleSwitchWorkspace = async (hash) => {
     if (r.success) {
       workspace.value = r.data.workspace
       showWorkspacePicker.value = false
-      // 并行加载，减少链式渲染
-      await Promise.all([loadWorkspaces(), loadSessions()])
+      // 先加载工作区（更新 activeWorkspaceHash），再加载会话
+      await loadWorkspaces()
+      await loadSessions()
       await newChat(true)   // skipReload，避免再重载列表
     } else {
       alert(r.message || '切换工作区失败')
@@ -381,7 +382,8 @@ const handleAddWorkspace = async () => {
       workspace.value = r.data.workspace
       newWorkspacePath.value = ''
       showWorkspacePicker.value = false
-      await Promise.all([loadWorkspaces(), loadSessions()])
+      await loadWorkspaces()
+      await loadSessions()
       await newChat(true)
     } else {
       alert(r.message || '添加工作区失败')

@@ -231,9 +231,12 @@ export const agentAPI = {
     return api.get('/agent/status')
   },
   
-  // 获取历史消息 - GET /api/agent/history
-  getHistory: () => {
-    return api.get('/agent/history')
+  // 获取历史消息 - GET /api/agent/history?workspaceHash=xxx&sessionName=xxx
+  getHistory: (workspaceHash, sessionName) => {
+    const params = {}
+    if (workspaceHash) params.workspaceHash = workspaceHash
+    if (sessionName) params.sessionName = sessionName
+    return api.get('/agent/history', { params })
   },
   
   // 执行命令 - POST /api/chat

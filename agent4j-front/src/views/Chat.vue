@@ -909,9 +909,9 @@ const togglePlan = async () => {
   await sendMessage()
 }
 
-const loadHistory = async () => {
+const loadHistory = async (sessionName) => {
   try {
-    const r = await agentAPI.getHistory()
+    const r = await agentAPI.getHistory(props.workspaceHash, sessionName || props.sessionName)
     if (r.success && r.data) {
       const raw = r.data, tr = {}
       for (const m of raw) if (m.role === 'tool' && m.tool_call_id) tr[m.tool_call_id] = m.content || ''
@@ -945,7 +945,7 @@ const loadSession = async (name, workspaceHash) => {
   try {
     const { sessionsAPI } = await import('../services/api')
     await sessionsAPI.switchSession(name)
-    await loadHistory()
+    await loadHistory(name)   // 显式传 sessionName，避免 props 尚未更新的时序问题
     // 切换会话后刷新 usage 数据（传入 sessionName 和 workspaceHash）
     await loadUsage({ sessionName: name, workspaceHash })
   } catch (e) { console.error('切换会话失败:', e) }
