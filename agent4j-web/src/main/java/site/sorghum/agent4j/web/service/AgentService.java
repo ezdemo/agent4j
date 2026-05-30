@@ -266,12 +266,15 @@ public class AgentService {
             // 构建轻量级 Agent
             try {
                 Agent4jAgent.Builder builder = Agent4jAgent.builder()
-                        .apiUrl(sharedApiUrl)
+                        .config(sharedConfig)               // 先加载 config 默认值（含 disabledTools/blockedPaths/hitl）
+                        .apiUrl(sharedApiUrl)               // 覆盖为 env 感知的值
                         .apiKey(sharedApiKey)
                         .model(sharedModel)
-                        .workspace(Paths.get(workspacePath))
+                        .workspace(Paths.get(workspacePath)) // 覆盖为当前工作区路径
                         .commandRegistry(commandRegistry)
-                        .sharedComponents(sharedModelClient, sharedToolRegistry, sharedPrefix);
+                        .sharedModelClient(sharedModelClient)
+                        .sharedPrefix(sharedPrefix)
+                        .sharedSystemPrompt(loadDefaultSystemPrompt());
 
                 agent = builder.buildLightweight();
 

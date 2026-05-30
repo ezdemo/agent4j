@@ -1,4 +1,4 @@
-<template>
+﻿<template>
   <div class="app" :data-theme="theme">
     <!-- 启动画面 (仅 Tauri 环境) -->
     <SplashScreen 
@@ -14,7 +14,7 @@
       :sideOn="sideOpen"
       :hasMessages="true"
       @toggleSide="sideOpen = !sideOpen"
-      @openSettings="showConfig = true"
+      @openSettings="showSettings = true"
       @clear="clearChat"
       @export="() => chatRef?.exportChat()"
     />
@@ -123,7 +123,7 @@
           <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
           {{ theme === 'light' ? '深色' : '浅色' }}
         </button>
-        <button class="foot-btn" @click="showConfig = true">
+        <button class="foot-btn" @click="showSettings = true">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
           设置
         </button>
@@ -184,21 +184,43 @@
         </div>
       </div>
     </Teleport>
+
+    <!-- 设置弹窗 -->
+    <Teleport to="body">
+      <div v-if="showSettings" class="modal-mask" @click.self="showSettings = false">
+        <div class="modal modal-settings">
+          <div class="modal-head">
+            <span>设置</span>
+            <button class="btn-icon-sm" @click="showSettings = false">×</button>
+          </div>
+          <div class="modal-body">
+            <SettingsView />
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 确认对话框 -->
+    <ConfirmDialog />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRouter } from 'vue-router'
+import { useConfirm } from './composables/useConfirm'
 import { agentAPI, sessionsAPI, toolsAPI, configAPI } from './services/api'
 import { isTauriEnvironment } from './services/tauri'
-import ChatView from './views/Chat.vue'
 import TitleBar from './components/TitleBar.vue'
 import SplashScreen from './components/SplashScreen.vue'
+import ConfirmDialog from './components/ConfirmDialog.vue'
+import ChatView from './views/Chat.vue'
+import SettingsView from './views/Settings.vue'
 
+const theme = ref('light')
 const isTauri = isTauriEnvironment()
-const splashRef = ref(null)
-
-const theme = ref(localStorage.getItem('agent4j-theme') || 'light')
+const router = useRouter()
+const { confirm } = useConfirm()
 const sideOpen = ref(true)
 const searchQuery = ref('')
 const sessions = ref([])
@@ -209,6 +231,7 @@ const tools = ref([])
 const config = ref({})
 const showTools = ref(false)
 const showConfig = ref(false)
+const showSettings = ref(false)
 const loadingSessions = ref(false)
 const chatRef = ref(null)
 const workspace = ref('')
@@ -376,7 +399,8 @@ const handleAddWorkspace = async () => {
 
 // 删除工作区
 const handleDeleteWorkspace = async (hash) => {
-  if (!confirm('确定要删除此工作区吗？（不会删除实际文件）')) return
+  const ok = await confirm({ message: '确定要删除此工作区吗？（不会删除实际文件）' })
+  if (!ok) return
   
   try {
     const r = await configAPI.deleteWorkspace(hash)
@@ -392,11 +416,12 @@ const handleDeleteWorkspace = async (hash) => {
 
 const newChat = async () => {
   try {
-    const r = await sessionsAPI.createNew({ workspaceHash: activeWorkspaceHash.value })
+    const r = await sessionsAPI.createNew({})
     if (r.success && r.data?.sessionName) {
       currentSession.value = r.data.sessionName
       chatRef.value?.resetLocalMessages()
       await loadSessions()
+      await loadWorkspaces()
     }
   } catch (e) {
     console.error('新建会话失败:', e)
@@ -405,22 +430,25 @@ const newChat = async () => {
 
 const loadSession = name => {
   currentSession.value = name
-  chatRef.value?.loadSession(name, activeWorkspaceHash.value)
+  chatRef.value?.loadSession(name, null)
 }
 
 const deleteSession = async name => {
-  if (!confirm(`删除会话？`)) return
+  const ok = await confirm({ message: `确定要删除此会话吗？` })
+  if (!ok) return
   try { await sessionsAPI.deleteSession(name); await loadSessions() } catch {}
 }
 
 const clearChat = async () => {
-  if (!confirm('清空对话？')) return
+  const ok = await confirm({ message: '确定要清空当前对话吗？' })
+  if (!ok) return
   try {
-    const r = await sessionsAPI.createNew({ workspaceHash: activeWorkspaceHash.value })
+    const r = await sessionsAPI.createNew({})
     if (r.success && r.data?.sessionName) {
       currentSession.value = r.data.sessionName
       chatRef.value?.resetLocalMessages()
       await loadSessions()
+      await loadWorkspaces()
     }
   } catch (e) {
     console.error('清空对话失败:', e)
@@ -435,6 +463,14 @@ onMounted(async () => {
     await loadData()
   }
   // Tauri 环境等待服务就绪后自动加载
+})
+
+// 设置弹窗关闭时刷新工作区和会话（用户可能在设置中切换了工作目录）
+watch(showSettings, (newVal) => {
+  if (!newVal) {
+    loadWorkspaces()
+    loadSessions()
+  }
 })
 </script>
 
@@ -632,6 +668,11 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+.modal-settings {
+  width: min(800px, 95vw);
+  max-height: 85vh;
 }
 
 .modal-head {

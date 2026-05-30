@@ -2,27 +2,31 @@ import { defineStore } from 'pinia'
 import { ref, computed } from 'vue'
 
 export const useAppStore = defineStore('app', () => {
-  // 连接状态
+  // 连接状�?
   const connectionStatus = ref('disconnected')
   const isConnecting = ref(false)
   const lastError = ref(null)
   
-  // 会话状态
+  // 会话状�?
   const currentSession = ref(null)
   const sessions = ref([])
   const isLoadingSessions = ref(false)
   
-  // 消息状态
+  // 消息状�?
   const messages = ref([])
   const isStreaming = ref(false)
   const streamingMessage = ref(null)
   
-  // 设置状态
+  // 设置状�?
   const settings = ref({
     language: 'zh-CN',
     theme: 'light',
     fontSize: 14,
     animations: true,
+    server: {
+      apiBaseUrl: '',
+      autoConnect: true
+    },
     ai: {
       baseUrl: '',
       apiKey: '',
@@ -51,11 +55,11 @@ export const useAppStore = defineStore('app', () => {
     }
   })
   
-  // 工具状态
+  // 工具状�?
   const tools = ref([])
   const isLoadingTools = ref(false)
   
-  // 统计状态
+  // 统计状�?
   const usageStats = ref({
     totalTokens: 0,
     promptTokens: 0,
@@ -63,20 +67,20 @@ export const useAppStore = defineStore('app', () => {
     cacheHit: 0
   })
   
-  // UI 状态
+  // UI 状�?
   const sidebarOpen = ref(true)
   const activeModal = ref(null)
   const notifications = ref([])
   const isLoading = ref(false)
   
-  // 计算属性
+  // 计算属�?
   const isConnected = computed(() => connectionStatus.value === 'connected')
   const hasMessages = computed(() => messages.value.length > 0)
   const unreadNotifications = computed(() => 
     notifications.value.filter(n => !n.read).length
   )
   
-  // 连接状态管理
+  // 连接状态管�?
   const setConnectionStatus = (status) => {
     connectionStatus.value = status
     isConnecting.value = status === 'connecting'
@@ -171,7 +175,7 @@ export const useAppStore = defineStore('app', () => {
   // 设置管理
   const updateSettings = (newSettings) => {
     settings.value = { ...settings.value, ...newSettings }
-    // 保存到本地存储
+    // 保存到本地存�?
     localStorage.setItem('agent4j-settings', JSON.stringify(settings.value))
   }
   
@@ -193,6 +197,10 @@ export const useAppStore = defineStore('app', () => {
       theme: 'light',
       fontSize: 14,
       animations: true,
+      server: {
+        apiBaseUrl: '',
+        autoConnect: true
+      },
       ai: {
         baseUrl: '',
         apiKey: '',
@@ -271,7 +279,7 @@ export const useAppStore = defineStore('app', () => {
       ...notification
     })
     
-    // 自动移除通知（如果设置了持续时间）
+    // 自动移除通知（如果设置了持续时间�?
     if (notification.duration) {
       setTimeout(() => {
         removeNotification(id)
@@ -296,17 +304,17 @@ export const useAppStore = defineStore('app', () => {
     notifications.value = []
   }
   
-  // 加载状态管理
+  // 加载状态管�?
   const setLoading = (loading) => {
     isLoading.value = loading
   }
   
-  // 初始化
+  // 初始�?
   const initialize = () => {
     // 加载设置
     loadSettings()
     
-    // 加载侧边栏状态
+    // 加载侧边栏状�?
     const savedSidebar = localStorage.getItem('agent4j-sidebar')
     if (savedSidebar !== null) {
       sidebarOpen.value = savedSidebar === 'true'
@@ -320,7 +328,7 @@ export const useAppStore = defineStore('app', () => {
   }
   
   return {
-    // 状态
+    // 状�?
     connectionStatus,
     isConnecting,
     lastError,
@@ -339,12 +347,12 @@ export const useAppStore = defineStore('app', () => {
     notifications,
     isLoading,
     
-    // 计算属性
+    // 计算属�?
     isConnected,
     hasMessages,
     unreadNotifications,
     
-    // 连接状态管理
+    // 连接状态管�?
     setConnectionStatus,
     setConnectionError,
     
@@ -391,10 +399,10 @@ export const useAppStore = defineStore('app', () => {
     markNotificationRead,
     clearNotifications,
     
-    // 加载状态管理
+    // 加载状态管�?
     setLoading,
     
-    // 初始化
+    // 初始�?
     initialize
   }
 })

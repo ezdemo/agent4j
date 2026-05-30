@@ -1,0 +1,1 @@
+var c=require("fs").readFileSync("agent4j-front/src/stores/app.js","utf8");c=c.replace("apiBaseUrl: \"","apiBaseUrl: ''");require("fs").writeFileSync("agent4j-front/src/stores/app.js",,c);console.log("Done");

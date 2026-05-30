@@ -108,41 +108,50 @@
             </div>
           </div>
           
+
+        </div>
+      </div>
+      
+      <!-- 服务器设置 -->
+      <div v-if="activeTab === 'server'" class="settings-section">
+        <div class="section-header">
+          <h3>服务器设置</h3>
+          <p>配置后端 Agent4j 服务的连接地址</p>
+        </div>
+
+        <div class="settings-group">
           <div class="setting-item">
             <div class="setting-info">
-              <div class="setting-label">字体大小</div>
-              <div class="setting-description">界面字体大小</div>
+              <div class="setting-label">后端 API 地址</div>
+              <div class="setting-description">留空使用默认代理（localhost:8097）</div>
             </div>
             <div class="setting-control">
-              <div class="slider-control">
-                <input 
-                  type="range" 
-                  v-model="settings.fontSize" 
-                  min="12" 
-                  max="24" 
-                  step="1"
-                  class="form-slider"
-                />
-                <span class="slider-value">{{ settings.fontSize }}px</span>
-              </div>
+              <input
+                v-model="settings.server.apiBaseUrl"
+                type="url"
+                class="form-input"
+                placeholder="留空 = 默认 http://localhost:8097"
+              />
             </div>
           </div>
-          
+
           <div class="setting-item">
             <div class="setting-info">
-              <div class="setting-label">动画效果</div>
-              <div class="setting-description">启用界面动画效果</div>
+              <div class="setting-label">连接状态</div>
+              <div class="setting-description">测试后端服务是否可达</div>
             </div>
             <div class="setting-control">
-              <label class="toggle-switch">
-                <input type="checkbox" v-model="settings.animations" />
-                <span class="toggle-slider"></span>
-              </label>
+              <button class="btn btn-secondary btn-sm" @click="checkServerConnection" :disabled="checkingConnection">
+                {{ checkingConnection ? '检测中...' : '检测连接' }}
+              </button>
+              <span class="connection-status-text" :class="connectionOk ? 'ok' : 'fail'" v-if="connectionChecked">
+                {{ connectionOk ? '✓ 连接成功' : '✗ 连接失败' }}
+              </span>
             </div>
           </div>
         </div>
       </div>
-      
+
       <!-- AI 设置 -->
       <div v-if="activeTab === 'ai'" class="settings-section">
         <div class="section-header">
@@ -228,21 +237,16 @@
           
           <div class="setting-item">
             <div class="setting-info">
-              <div class="setting-label">温度</div>
-              <div class="setting-description">生成随机性控制 (0-2)</div>
+              <div class="setting-label">可用模型列表</div>
+              <div class="setting-description">每行一个模型名称</div>
             </div>
             <div class="setting-control">
-              <div class="slider-control">
-                <input 
-                  type="range" 
-                  v-model="settings.ai.temperature" 
-                  min="0" 
-                  max="2" 
-                  step="0.1"
-                  class="form-slider"
-                />
-                <span class="slider-value">{{ settings.ai.temperature }}</span>
-              </div>
+              <textarea
+                v-model="settings.ai.availableModelsText"
+                class="form-textarea"
+                placeholder="deepseek-v4-flash&#10;gpt-4&#10;gpt-4-turbo"
+                rows="4"
+              ></textarea>
             </div>
           </div>
         </div>
@@ -262,15 +266,15 @@
               <div class="setting-description">默认工作目录</div>
             </div>
             <div class="setting-control">
-              <input 
-                v-model="settings.workspace.dir" 
+              <input
+                v-model="settings.workspace.dir"
                 type="text"
                 class="form-input"
                 placeholder="."
               />
             </div>
           </div>
-          
+
           <div class="setting-item">
             <div class="setting-info">
               <div class="setting-label">编辑模式</div>
@@ -285,184 +289,6 @@
             </div>
           </div>
           
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">排除目录</div>
-              <div class="setting-description">搜索和索引时排除的目录</div>
-            </div>
-            <div class="setting-control">
-              <textarea 
-                v-model="settings.workspace.excludeDirs" 
-                class="form-textarea"
-                placeholder="node_modules, .git, target, dist"
-                rows="3"
-              ></textarea>
-            </div>
-          </div>
-          
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">自动刷新索引</div>
-              <div class="setting-description">文件变更时自动更新索引</div>
-            </div>
-            <div class="setting-control">
-              <label class="toggle-switch">
-                <input type="checkbox" v-model="settings.workspace.autoRefresh" />
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 安全设置 -->
-      <div v-if="activeTab === 'security'" class="settings-section">
-        <div class="section-header">
-          <h3>安全设置</h3>
-          <p>配置安全防护和访问控制</p>
-        </div>
-        
-        <div class="settings-group">
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">风暴断路器</div>
-              <div class="setting-description">防止重复工具调用死循环</div>
-            </div>
-            <div class="setting-control">
-              <label class="toggle-switch">
-                <input type="checkbox" v-model="settings.security.stormBreaker" />
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-          </div>
-          
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">路径穿越防护</div>
-              <div class="setting-description">阻止访问工作区外的文件</div>
-            </div>
-            <div class="setting-control">
-              <label class="toggle-switch">
-                <input type="checkbox" v-model="settings.security.pathTraversal" />
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-          </div>
-          
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">命令白名单</div>
-              <div class="setting-description">只允许执行白名单中的命令</div>
-            </div>
-            <div class="setting-control">
-              <label class="toggle-switch">
-                <input type="checkbox" v-model="settings.security.commandWhitelist" />
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-          </div>
-          
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">操作日志</div>
-              <div class="setting-description">记录所有文件和命令操作</div>
-            </div>
-            <div class="setting-control">
-              <label class="toggle-switch">
-                <input type="checkbox" v-model="settings.security.auditLog" />
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-          </div>
-        </div>
-      </div>
-      
-      <!-- 高级设置 -->
-      <div v-if="activeTab === 'advanced'" class="settings-section">
-        <div class="section-header">
-          <h3>高级设置</h3>
-          <p>配置高级功能和性能选项</p>
-        </div>
-        
-        <div class="settings-group">
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">调试模式</div>
-              <div class="setting-description">启用详细日志输出</div>
-            </div>
-            <div class="setting-control">
-              <label class="toggle-switch">
-                <input type="checkbox" v-model="settings.advanced.debugMode" />
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-          </div>
-          
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">上下文折叠</div>
-              <div class="setting-description">长对话时自动压缩历史</div>
-            </div>
-            <div class="setting-control">
-              <label class="toggle-switch">
-                <input type="checkbox" v-model="settings.advanced.contextFolding" />
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-          </div>
-          
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">消息自愈</div>
-              <div class="setting-description">发送前自动修复消息格式</div>
-            </div>
-            <div class="setting-control">
-              <label class="toggle-switch">
-                <input type="checkbox" v-model="settings.advanced.messageHealing" />
-                <span class="toggle-slider"></span>
-              </label>
-            </div>
-          </div>
-          
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">会话自动保存</div>
-              <div class="setting-description">定期自动保存会话</div>
-            </div>
-            <div class="setting-control">
-              <div class="slider-control">
-                <input 
-                  type="range" 
-                  v-model="settings.advanced.autoSaveInterval" 
-                  min="30" 
-                  max="300" 
-                  step="30"
-                  class="form-slider"
-                />
-                <span class="slider-value">{{ settings.advanced.autoSaveInterval }}秒</span>
-              </div>
-            </div>
-          </div>
-          
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">最大历史消息</div>
-              <div class="setting-description">保留的历史消息数量</div>
-            </div>
-            <div class="setting-control">
-              <div class="slider-control">
-                <input 
-                  type="range" 
-                  v-model="settings.advanced.maxHistory" 
-                  min="10" 
-                  max="100" 
-                  step="10"
-                  class="form-slider"
-                />
-                <span class="slider-value">{{ settings.advanced.maxHistory }}条</span>
-              </div>
-            </div>
-          </div>
         </div>
       </div>
     </div>
@@ -500,6 +326,7 @@
 
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue'
+import { useConfirm } from '../composables/useConfirm'
 import { configAPI } from '../services/api'
 
 // 状态
@@ -508,14 +335,17 @@ const showApiKey = ref(false)
 const loading = ref(false)
 const error = ref('')
 const availableModels = ref([])
+const { confirm } = useConfirm()
+const checkingConnection = ref(false)
+const connectionOk = ref(false)
+const connectionChecked = ref(false)
 
 // 标签页配置
 const tabs = [
   { id: 'general', label: '基本设置', icon: '⚙️' },
+  { id: 'server', label: '服务器', icon: '🌐' },
   { id: 'ai', label: 'AI 设置', icon: '🤖' },
-  { id: 'workspace', label: '工作区', icon: '📁' },
-  { id: 'security', label: '安全', icon: '🛡' },
-  { id: 'advanced', label: '高级', icon: '🔧' }
+  { id: 'workspace', label: '工作区', icon: '📁' }
 ]
 
 // 主题配置
@@ -530,35 +360,23 @@ const settings = reactive({
   theme: 'light',
   fontSize: 14,
   animations: true,
-  
+
+  server: {
+    apiBaseUrl: '',
+    autoConnect: true
+  },
+
   ai: {
     baseUrl: '',
     apiKey: '',
     model: '',
     reasoningEffort: 'max',
-    temperature: 0.7
+    availableModelsText: ''
   },
   
   workspace: {
     dir: '',
-    editMode: 'auto',
-    excludeDirs: 'node_modules, .git, target, dist',
-    autoRefresh: true
-  },
-  
-  security: {
-    stormBreaker: true,
-    pathTraversal: true,
-    commandWhitelist: true,
-    auditLog: true
-  },
-  
-  advanced: {
-    debugMode: false,
-    contextFolding: true,
-    messageHealing: true,
-    autoSaveInterval: 30,
-    maxHistory: 50
+    editMode: 'auto'
   }
 })
 
@@ -577,11 +395,18 @@ const loadSettings = async () => {
     if (configResponse.success && configResponse.data) {
       const config = configResponse.data
       
+      // 更新服务器设置
+      settings.server.apiBaseUrl = config.serverApiBaseUrl || ''
+
       // 更新AI设置
       settings.ai.baseUrl = config.baseUrl || ''
-      settings.ai.apiKey = config.apiKey || ''
+      // apiKey 后端返回的是脱敏后的值，不加载到输入框
       settings.ai.model = config.model || ''
       settings.ai.reasoningEffort = config.reasoningEffort || 'max'
+      // 可用模型列表从后端数组拼成文本
+      if (config.availableModels && Array.isArray(config.availableModels)) {
+        settings.ai.availableModelsText = config.availableModels.join('\n')
+      }
       
       // 更新工作区设置
       settings.workspace.dir = config.workspace || '.'
@@ -636,11 +461,15 @@ const saveSettings = async () => {
   try {
     // 构建要保存到后端的配置
     const configToUpdate = {
+      serverApiBaseUrl: settings.server.apiBaseUrl,
       baseUrl: settings.ai.baseUrl,
       apiKey: settings.ai.apiKey,
       model: settings.ai.model,
       reasoningEffort: settings.ai.reasoningEffort,
-      workspaceDir: settings.workspace.dir,
+      availableModels: settings.ai.availableModelsText
+        .split('\n')
+        .map(s => s.trim())
+        .filter(s => s),
       editMode: settings.workspace.editMode,
       lang: settings.language === 'zh-CN' ? 'ZH' : 'EN'
     }
@@ -655,11 +484,20 @@ const saveSettings = async () => {
       // 应用主题
       applyTheme(settings.theme)
       
+      // 如果工作区路径有变化，同步切换运行时工作目录
+      if (settings.workspace.dir && settings.workspace.dir.trim()) {
+        try {
+          await configAPI.switchWorkspace(settings.workspace.dir.trim())
+        } catch (e) {
+          console.warn('切换工作目录失败:', e)
+        }
+      }
+
       // 显示成功消息
       window.dispatchEvent(new CustomEvent('terminal-output', { 
         detail: { 
           type: 'success', 
-          text: '设置已保存并同步到服务器' 
+          text: '设置已保存' + (settings.workspace.dir ? '，工作目录已切换' : '') 
         }
       }))
     } else {
@@ -690,43 +528,32 @@ const saveSettings = async () => {
   }
 }
 
-const resetSettings = () => {
-  if (confirm('确定要重置所有设置为默认值吗？')) {
+const resetSettings = async () => {
+  const ok = await confirm({ message: '确定要重置所有设置为默认值吗？' })
+  if (ok) {
     // 重置为默认值
     Object.assign(settings, {
       language: 'zh-CN',
       theme: 'light',
       fontSize: 14,
       animations: true,
+
+      server: {
+        apiBaseUrl: '',
+        autoConnect: true
+      },
       
       ai: {
         baseUrl: 'https://api.deepseek.com/v1',
         apiKey: '',
         model: 'deepseek-v4-flash',
         reasoningEffort: 'max',
-        temperature: 0.7
+        availableModelsText: ''
       },
       
       workspace: {
         dir: '.',
-        editMode: 'auto',
-        excludeDirs: 'node_modules, .git, target, dist',
-        autoRefresh: true
-      },
-      
-      security: {
-        stormBreaker: true,
-        pathTraversal: true,
-        commandWhitelist: true,
-        auditLog: true
-      },
-      
-      advanced: {
-        debugMode: false,
-        contextFolding: true,
-        messageHealing: true,
-        autoSaveInterval: 30,
-        maxHistory: 50
+        editMode: 'auto'
       }
     })
     
@@ -741,6 +568,21 @@ const resetSettings = () => {
       }
     }))
   }
+}
+
+const checkServerConnection = async () => {
+  checkingConnection.value = true
+  connectionChecked.value = false
+  try {
+    const baseUrl = settings.server.apiBaseUrl.trim() || '/api'
+    const url = baseUrl.endsWith('/api') ? baseUrl + '/agent/status' : baseUrl.replace(/\/+$/, '') + '/api/agent/status'
+    const resp = await fetch(url, { signal: AbortSignal.timeout(5000) })
+    connectionOk.value = resp.ok
+  } catch {
+    connectionOk.value = false
+  }
+  connectionChecked.value = true
+  checkingConnection.value = false
 }
 
 const exportSettings = () => {
@@ -787,10 +629,6 @@ watch(() => settings.theme, (newTheme) => {
   applyTheme(newTheme)
 })
 
-watch(() => settings.fontSize, (newSize) => {
-  document.documentElement.style.fontSize = `${newSize}px`
-})
-
 // 生命周期
 onMounted(() => {
   loadSettings()
@@ -802,12 +640,6 @@ onMounted(() => {
     applyTheme(savedTheme)
   }
   
-  // 应用保存的字体大小
-  const savedFontSize = localStorage.getItem('agent4j-font-size')
-  if (savedFontSize) {
-    settings.fontSize = parseInt(savedFontSize)
-    document.documentElement.style.fontSize = `${settings.fontSize}px`
-  }
 })
 </script>
 

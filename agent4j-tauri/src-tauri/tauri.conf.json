@@ -7,7 +7,7 @@
     "beforeDevCommand": "cd ../agent4j-front && pnpm dev",
     "beforeBuildCommand": "cd ../agent4j-front && pnpm build",
     "devUrl": "http://localhost:3000",
-    "frontendDist": "../agent4j-front/dist"
+    "frontendDist": "../../agent4j-front/dist"
   },
   "app": {
     "windows": [
@@ -32,7 +32,6 @@
   "bundle": {
     "active": true,
     "category": "DeveloperTool",
-    "copyright": "Copyright © 2024 Agent4j Team",
     "externalBin": [],
     "icon": [
       "icons/icon.png",
@@ -41,14 +40,6 @@
       "icons/128x128@2x.png",
       "icons/icon.ico"
     ],
-    "longDescription": "Agent4j - 智能 AI 代码助手桌面端",
-    "macOS": {
-      "entitlements": null,
-      "exceptionDomain": "",
-      "frameworks": [],
-      "providerShortName": null,
-      "signingIdentity": null
-    },
     "resources": [
       "resources/agent4j-web-dist.zip",
       "resources/agent4j-web-dist.tar.gz"

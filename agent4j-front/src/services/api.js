@@ -1,8 +1,21 @@
+﻿import { useAppStore } from '../stores/app'
+
 import axios from 'axios'
 
 // 创建axios实例
+function getBaseURL() {
+  try {
+    const store = useAppStore()
+    const customUrl = store.settings?.server?.apiBaseUrl
+    if (customUrl && customUrl.trim()) {
+      return customUrl.replace(/\/+$/, '') + '/api'
+    }
+  } catch (e) {}
+  return '/api'
+}
+
 const api = axios.create({
-  baseURL: '/api',
+  baseURL: getBaseURL(),
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
@@ -137,7 +150,7 @@ export const chatAPI = {
         if (options.workspaceHash) requestBody.workspaceHash = options.workspaceHash
         if (options.sessionName) requestBody.sessionName = options.sessionName
         
-        const res = await fetch('/api/chat/stream', {
+        const res = await fetch(getBaseURL() + '/chat/stream', {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
@@ -517,3 +530,4 @@ export const utils = {
 }
 
 export default api
+

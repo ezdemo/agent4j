@@ -105,10 +105,18 @@ public class Agent4jAgent {
         this.apiUrl = b.apiUrl;
         this.apiKey = b.apiKey;
 
-        // 使用共享组件
+        // 共享 ModelClient（无状态 HTTP 客户端），但每个 Agent 创建独立的 ToolRegistry
         ModelClient client = b.sharedModelClient;
-        ToolRegistry registry = b.sharedToolRegistry;
-        PromptPrefix prefix = b.sharedPrefix;
+
+        // 为当前工作区创建独立的 ToolRegistry 和 SkillStore
+        String prompt = b.systemPrompt != null ? b.systemPrompt
+                : (b.sharedSystemPrompt != null ? b.sharedSystemPrompt : "你是一个智能体助手，名为Agent4J\n");
+        ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
+                b.workspace, b.apiUrl, b.apiKey,
+                b.disabledTools, b.blockedPaths, prompt);
+        ToolRegistry registry = initResult.toolRegistry;
+        this.skillStore = initResult.skillStore;
+        PromptPrefix prefix = b.sharedPrefix != null ? b.sharedPrefix : initResult.promptPrefix;
 
         // 创建独立的会话上下文
         this.ctx = new ConversationContext(prefix);
@@ -626,6 +634,13 @@ public class Agent4jAgent {
             this.sharedPrefix = prefix;
             return this;
         }
+
+        /** 单独设置共享的 ModelClient */
+        public Builder sharedModelClient(ModelClient v) { this.sharedModelClient = v; return this; }
+        /** 单独设置共享的 PromptPrefix */
+        public Builder sharedPrefix(PromptPrefix v) { this.sharedPrefix = v; return this; }
+        /** 单独设置共享的 system prompt */
+        public Builder sharedSystemPrompt(String v) { this.sharedSystemPrompt = v; return this; }
         
         /**
          * 构建轻量级 Agent 实例。
@@ -636,8 +651,6 @@ public class Agent4jAgent {
          */
         public Agent4jAgent buildLightweight() {
             Objects.requireNonNull(sharedModelClient, "sharedModelClient is required");
-            Objects.requireNonNull(sharedToolRegistry, "sharedToolRegistry is required");
-            Objects.requireNonNull(sharedPrefix, "sharedPrefix is required");
             return new Agent4jAgent(this, true);
         }
     }
