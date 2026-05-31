@@ -386,6 +386,7 @@ onMounted(() => {
 .settings-main {
   flex: 1;
   display: flex;
+  height: 500px;
   flex-direction: column;
   min-width: 0;
 }
