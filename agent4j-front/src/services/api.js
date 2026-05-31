@@ -492,6 +492,15 @@ export const systemAPI = {
   }
 }
 
+// Git API
+export const gitAPI = {
+  // 获取当前分支和变更文件列表 - GET /api/git/diff?workspaceHash=xxx
+  diff: (workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.get('/git/diff', { params })
+  }
+}
+
 // 工具函数
 export const utils = {
   // 格式化错误消息

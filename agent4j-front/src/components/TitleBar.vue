@@ -39,6 +39,10 @@
         </svg>
       </button>
 
+      <button v-if="hasSession" class="tb-btn" :class="{ active: gitOn }" @click.stop="$emit('toggleGit')" @dblclick.stop title="源代码管理">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>
+      </button>
+
       <button class="tb-btn" @click.stop="$emit('openSettings')" @dblclick.stop title="设置">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <circle cx="12" cy="12" r="3"/>
@@ -84,10 +88,12 @@ import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
 defineProps({
   session: { type: String, default: '' },
   sideOn: { type: Boolean, default: true },
-  hasMessages: { type: Boolean, default: false }
+  hasMessages: { type: Boolean, default: false },
+  hasSession: { type: Boolean, default: false },
+  gitOn: { type: Boolean, default: false }
 })
 
-defineEmits(['toggleSide', 'openSettings', 'clear', 'export'])
+defineEmits(['toggleSide', 'openSettings', 'clear', 'export', 'toggleGit'])
 
 const isMaximized = ref(false)
 const isTauri = ref(false)
@@ -161,6 +167,10 @@ const closeWindow = async () => {
 .tb-btn:hover {
   background: var(--bg-3);
   color: var(--fg);
+}
+.tb-btn.active {
+  background: var(--accent-bg);
+  color: var(--accent);
 }
 
 .sidebar-toggle.active {

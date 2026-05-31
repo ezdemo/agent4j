@@ -15,10 +15,13 @@
       :session="currentSessionTitle"
       :sideOn="sideOpen"
       :hasMessages="true"
+      :hasSession="!!currentSession"
+      :gitOn="gitOpen"
       @toggleSide="sideOpen = !sideOpen"
       @openSettings="showSettings = true"
       @clear="clearChat"
       @export="() => chatRef?.exportChat()"
+      @toggleGit="gitOpen = !gitOpen"
     />
 
     <!-- 主体区域 -->
@@ -150,6 +153,12 @@
         @session-updated="loadSessions"
       />
     </main>
+
+    <!-- 右侧 Git 面板 -->
+    <Transition name="git-panel">
+      <GitPanel v-if="gitOpen" :workspace-hash="activeWorkspaceHash" @close="gitOpen = false" />
+    </Transition>
+
     </div><!-- .app-body -->
 
     <!-- 工具弹窗 -->
@@ -225,6 +234,7 @@ import SetupScreen from './components/SetupScreen.vue'
 import TitleBar from './components/TitleBar.vue'
 import SplashScreen from './components/SplashScreen.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
+import GitPanel from './components/GitPanel.vue'
 import ChatView from './views/Chat.vue'
 import SettingsView from './views/Settings.vue'
 
@@ -246,6 +256,7 @@ const showTools = ref(false)
 const showSetup = ref(true)  // SplashScreen (Tauri) 或 SetupScreen (非Tauri) 成功后设为 false
 const showConfig = ref(false)
 const showSettings = ref(false)
+const gitOpen = ref(false)
 const initialDataLoaded = ref(false)
 const chatRef = ref(null)
 const workspace = ref('')
@@ -671,6 +682,7 @@ watch(showSettings, (newVal) => {
   transition: all var(--t);
 }
 .foot-btn:hover { background: var(--bg-3); color: var(--fg); }
+.foot-btn.active { background: var(--accent-bg); color: var(--accent); }
 
 /* 主区域 */
 .main {
@@ -679,6 +691,18 @@ watch(showSettings, (newVal) => {
   flex-direction: column;
   min-width: 0;
   background: var(--bg);
+}
+
+/* Git 面板滑动动画 */
+.git-panel-enter-active,
+.git-panel-leave-active {
+  transition: width 0.2s ease, opacity 0.2s ease;
+  overflow: hidden;
+}
+.git-panel-enter-from,
+.git-panel-leave-to {
+  width: 0;
+  opacity: 0;
 }
 
 /* 弹窗 */
