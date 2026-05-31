@@ -20,7 +20,7 @@ export const useAppStore = defineStore('app', () => {
   // 设置状态
   const settings = ref({
     language: 'zh-CN',
-    theme: 'light',
+    theme: 'retro-yellow',
     fontSize: 14,
     animations: true,
     server: {
@@ -193,7 +193,7 @@ export const useAppStore = defineStore('app', () => {
   const resetSettings = () => {
     settings.value = {
       language: 'zh-CN',
-      theme: 'light',
+      theme: 'retro-yellow',
       fontSize: 14,
       animations: true,
       server: {

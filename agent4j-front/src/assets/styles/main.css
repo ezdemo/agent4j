@@ -462,6 +462,26 @@ textarea { resize: none; }
   color: var(--fg-2);
 }
 
+/* Ant Design 按钮跟随主题 accent 色 */
+[data-theme="dark"] .ant-btn-primary,
+[data-theme="retro"] .ant-btn-primary,
+[data-theme="retro-yellow"] .ant-btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+[data-theme="retro"] .ant-btn-primary {
+  color: #0a0e0a;
+}
+[data-theme="dark"] .ant-btn-primary:hover,
+[data-theme="retro"] .ant-btn-primary:hover,
+[data-theme="retro-yellow"] .ant-btn-primary:hover {
+  background: var(--blue-dark, var(--accent));
+  border-color: var(--blue-dark, var(--accent));
+}
+[data-theme="retro"] .ant-btn-primary:hover {
+  color: #0a0e0a;
+}
+
 /* 无障碍 */
 .sr-only {
   position: absolute;
