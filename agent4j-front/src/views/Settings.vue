@@ -331,7 +331,6 @@ const settings = reactive({
 // 方法
 const loadSettings = async () => {
   loading.value = true
-  error.value = ''
   
   try {
     // 并行加载配置和模型列表
@@ -411,7 +410,6 @@ const loadSettings = async () => {
 
 const saveSettings = async () => {
   loading.value = true
-  error.value = ''
   
   try {
     // 分离 UI 本地偏好和后端配置
