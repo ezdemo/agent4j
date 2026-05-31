@@ -1,12 +1,12 @@
 <template>
   <a-modal
     :visible="true"
-    :closable="false"
     :footer="null"
-    :width="720"
+    :width="680"
     :bodyStyle="{ padding: 0 }"
     :destroyOnClose="false"
     wrapClassName="settings-modal"
+    @cancel="goBack"
   >
     <!-- title 区域放 tab -->
     <template #title>
@@ -188,9 +188,13 @@
 
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { SaveOutlined, DownloadOutlined, FileOutlined } from '@ant-design/icons-vue'
 import { configAPI } from '../services/api'
+
+const router = useRouter()
+const goBack = () => router.back()
 
 const activeTab = ref('general')
 const showApiKey = ref(false)
