@@ -320,8 +320,7 @@ export const useAppStore = defineStore('app', () => {
       sidebarOpen.value = savedSidebar === 'true'
     }
     
-    // 应用主题
-    document.documentElement.setAttribute('data-theme', settings.value.theme)
+    // 主题由 useTheme 管理，不再覆盖
     
     // 应用字体大小
     document.documentElement.style.fontSize = `${settings.value.fontSize}px`

@@ -5,28 +5,12 @@ import 'ant-design-vue/dist/reset.css'
 import App from './App.vue'
 import router from './router'
 import './assets/styles/main.css'
-
-// 初始化主题
-const initTheme = () => {
-  const savedTheme = localStorage.getItem('agent4j-theme')
-  const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches
-  
-  // 优先使用用户保存的主题，其次使用系统偏好
-  const theme = savedTheme || (prefersDark ? 'dark' : 'light')
-  document.documentElement.setAttribute('data-theme', theme)
-  
-  // 监听系统主题变化
-  window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', (e) => {
-    if (!localStorage.getItem('agent4j-theme')) {
-      document.documentElement.setAttribute('data-theme', e.matches ? 'dark' : 'light')
-    }
-  })
-}
+import { useTheme } from './composables/useTheme'
 
 // 初始化应用
 const initApp = () => {
-  // 初始化主题
-  initTheme()
+  // 主题由 useTheme 自动初始化
+  useTheme()
   
   // 创建应用实例
   const app = createApp(App)

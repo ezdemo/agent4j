@@ -162,7 +162,10 @@
 import { ref, reactive, watch, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { SaveOutlined, DownloadOutlined, FileOutlined } from '@ant-design/icons-vue'
+import { useTheme } from '../composables/useTheme'
 import { configAPI } from '../services/api'
+
+const { theme, applyTheme } = useTheme()
 
 const activeTab = ref('general')
 const showApiKey = ref(false)
@@ -309,31 +312,20 @@ const exportSettings = () => {
 
 const openConfigFile = () => { message.info('配置文件: ~/.agent4j/config.json') }
 
-const applyTheme = (theme) => {
-  document.documentElement.setAttribute('data-theme', theme)
-  localStorage.setItem('agent4j-theme', theme)
-}
-
 watch(() => settings.theme, (t) => applyTheme(t))
 
+// 初始化：从 useTheme 同步当前主题到 settings.theme
 onMounted(() => {
+  settings.theme = theme.value
   loadSettings()
+  // 迁移旧版 localStorage
   const savedPrefs = localStorage.getItem('agent4j-ui-preferences')
   if (savedPrefs) {
     try {
       const prefs = JSON.parse(savedPrefs)
-      if (prefs.theme) { settings.theme = prefs.theme; applyTheme(prefs.theme) }
       if (prefs.fontSize) settings.fontSize = prefs.fontSize
       if (prefs.animations !== undefined) settings.animations = prefs.animations
     } catch (e) { /* ignore */ }
-  } else {
-    const savedTheme = localStorage.getItem('agent4j-theme')
-    if (savedTheme) {
-      settings.theme = savedTheme
-      applyTheme(savedTheme)
-      localStorage.setItem('agent4j-ui-preferences', JSON.stringify({ theme: savedTheme }))
-      localStorage.removeItem('agent4j-theme')
-    }
   }
 })
 </script>
