@@ -677,8 +677,15 @@ public class AgentService {
         }
 
         SessionStore store = agent.getSessionStore();
+        if (store == null) {
+            return new ArrayList<>();
+        }
+
         // 确定当前会话名（优先用追踪记录，其次用 store.currentName）
         String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+        if (resolvedPath == null) {
+            return new ArrayList<>();
+        }
         String activeSession = currentSessionNames.get(resolvedPath);
         if (activeSession == null) {
             activeSession = store.currentName();

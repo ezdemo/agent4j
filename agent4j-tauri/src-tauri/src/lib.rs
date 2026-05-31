@@ -239,25 +239,9 @@ impl Agent4jWebManager {
         Ok(())
     }
 
-    fn kill_by_pidfile(&self) {
-        let pid_path = self.get_install_dir().join("bin").join("agent4j-web.pid");
-        if let Ok(pid_str) = fs::read_to_string(&pid_path) {
-            if let Ok(pid) = pid_str.trim().parse::<u32>() {
-                #[cfg(target_os = "windows")]
-                { let _ = Command::new("taskkill").args(&["/f", "/pid", &pid.to_string()]).output(); }
-                #[cfg(not(target_os = "windows"))]
-                { let _ = Command::new("kill").args(&["-9", &pid.to_string()]).output(); }
-            }
-        }
-    }
-
-    // 停止之前残留的 agent4j-web 进程
+    // 停止本实例之前启动的子进程（self.child 句柄追踪，不会误杀其他实例的进程）
     fn cleanup_stale(&self) {
-        // 尝试 kill 本 session 之前启动的子进程
         let _ = self.stop();
-
-        // 跨 session：从 PID 文件 kill 旧进程
-        self.kill_by_pidfile();
     }
 
     // 启动 agent4j-web 服务
@@ -355,19 +339,11 @@ impl Agent4jWebManager {
 
         println!("Agent4j Web is ready on 127.0.0.1:{} (PID {})", port, pid);
 
-        // 写 PID 文件，下次启动时用于 kill 旧进程
-        let pid_path = self.get_install_dir().join("bin").join("agent4j-web.pid");
-        let _ = fs::write(&pid_path, pid.to_string());
-
         Ok(port as u32)
     }
 
-    // 停止 agent4j-web 服务
+    // 停止 agent4j-web 服务（仅通过 self.child 句柄杀进程，不会误杀其他实例）
     fn stop(&self) -> Result<(), String> {
-        // 清理 PID 文件
-        let pid_path = self.get_install_dir().join("bin").join("agent4j-web.pid");
-        let _ = fs::remove_file(&pid_path);
-
         let mut child_lock = self.child.lock().unwrap();
         
         if let Some(ref mut child) = *child_lock {
