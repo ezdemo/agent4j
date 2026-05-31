@@ -56,6 +56,8 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { systemAPI } from '../services/api'
+import { invoke } from '@tauri-apps/api/core'
+
 
 const emit = defineEmits(['connected', 'close'])
 
@@ -103,6 +105,19 @@ function saveServerUrl(url) {
   }
 }
 
+// 尝试从 Rust 同步最新端口（Tauri 模式下端口会变）
+async function syncPortFromRust() {
+  try {
+    const port = await invoke('get_agent4j_web_port')
+    if (port > 0) {
+      localStorage.setItem('agent4j-port', String(port))
+      const baseUrl = `http://127.0.0.1:${port}`
+      localStorage.setItem('agent4j-api-base', baseUrl)
+      serverUrl.value = baseUrl
+    }
+  } catch { /* 非 Tauri 环境，忽略 */ }
+}
+
 // 关闭/跳过
 function handleClose() {
   emit('close')
@@ -110,6 +125,9 @@ function handleClose() {
 
 // 检测连接
 async function handleConnect() {
+  // 连接前先刷新端口（Tauri 下确保是最新的）
+  await syncPortFromRust()
+
   connecting.value = true
   status.value = 'connecting'
   errorMsg.value = ''
@@ -163,6 +181,9 @@ async function handleCheckVersion() {
 
 // 自动连接：尝试连接已保存的地址
 async function autoConnect() {
+  // 先同步最新端口
+  await syncPortFromRust()
+
   const saved = localStorage.getItem('agent4j-api-base')
   if (saved) {
     serverUrl.value = saved
@@ -180,7 +201,10 @@ async function autoConnect() {
 }
 
 onMounted(() => {
-  autoConnect()
+  // Tauri 模式下 SplashScreen 处理，SetupScreen 不自动连接
+  if (!window.__TAURI__) {
+    autoConnect()
+  }
 })
 </script>
 

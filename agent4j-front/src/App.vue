@@ -4,8 +4,7 @@
     <SetupScreen v-if="showSetup" @connected="onConnected" @close="onSetupClose" />
 
     <!-- 启动画面 (仅 Tauri 环境) -->
-    <SplashScreen 
-      v-if="isTauri" 
+    <SplashScreen
       ref="splashRef"
       @ready="onServiceReady"
       @error="onServiceError"
@@ -214,7 +213,6 @@ import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfirm } from './composables/useConfirm'
 import { agentAPI, sessionsAPI, toolsAPI, configAPI } from './services/api'
-import { isTauriEnvironment } from './services/tauri'
 import SetupScreen from './components/SetupScreen.vue'
 import TitleBar from './components/TitleBar.vue'
 import SplashScreen from './components/SplashScreen.vue'
@@ -223,7 +221,6 @@ import ChatView from './views/Chat.vue'
 import SettingsView from './views/Settings.vue'
 
 const theme = ref('light')
-const isTauri = isTauriEnvironment()
 const router = useRouter()
 const { confirm } = useConfirm()
 const sideOpen = ref(true)
@@ -235,7 +232,7 @@ const usage = ref({})
 const tools = ref([])
 const config = ref({})
 const showTools = ref(false)
-const showSetup = ref(true)  // 初始显示连接设置页面
+const showSetup = ref(true)  // SplashScreen (Tauri) 或 SetupScreen (非Tauri) 成功后设为 false
 const showConfig = ref(false)
 const showSettings = ref(false)
 const initialDataLoaded = ref(false)
@@ -472,10 +469,6 @@ const clearChat = async () => {
 
 onMounted(async () => {
   document.documentElement.setAttribute('data-theme', theme.value)
-  
-  // Tauri 环境：SplashScreen 负责启动后端服务
-  // 非 Tauri 环境：SetupScreen 会自动检测连接
-  // 都不需要在此直接 loadData()
 })
 
 // 设置弹窗关闭时刷新工作区和会话（用户可能在设置中切换了工作目录）

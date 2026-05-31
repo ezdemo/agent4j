@@ -149,7 +149,9 @@ export const chatAPI = {
         if (options.workspaceHash) requestBody.workspaceHash = options.workspaceHash
         if (options.sessionName) requestBody.sessionName = options.sessionName
         
-        const res = await fetch(getBaseURL() + '/chat/stream', {
+        const base = getCustomBaseURL() || ''
+        const url = base ? `${base}/api/chat/stream` : '/api/chat/stream'
+        const res = await fetch(url, {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',

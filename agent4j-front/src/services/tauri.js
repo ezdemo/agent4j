@@ -4,94 +4,95 @@
 
 import { invoke } from '@tauri-apps/api/core'
 
-// 检查是否在 Tauri 环境中运行
-export function isTauriEnvironment() {
-  return window.__TAURI__ !== undefined
+// 直接尝试 invoke，失败说明不在 Tauri 环境或命令不可用
+async function tryInvoke(command, args) {
+  try {
+    return await invoke(command, args)
+  } catch {
+    return undefined  // invoke 失败 = 非 Tauri 环境
+  }
+}
+
+// 获取当前后端端口（始终优先从 Rust 侧获取最新端口）
+async function getCurrentPort() {
+  // 1) 先尝试从 Rust 获取（保证是最新的）
+  const port = await tryInvoke('get_agent4j_web_port')
+  if (port > 0) {
+    localStorage.setItem('agent4j-port', String(port))
+    return port
+  }
+
+  // 2) 非 Tauri：从 localStorage 取（之前连接成功时保存的）
+  const stored = parseInt(localStorage.getItem('agent4j-port') || '', 10)
+  if (stored > 0) return stored
+
+  // 3) 回退到默认端口
+  return 8097
 }
 
 // agent4j-web 服务管理 API
 export const agent4jWebService = {
   /**
    * 获取 agent4j-web 状态
-   * @returns {Promise<{installed: boolean, running: boolean, install_dir: string}>}
    */
   async getStatus() {
-    if (!isTauriEnvironment()) {
-      // 非 Tauri 环境，假设服务已在外部启动
-      return {
-        installed: true,
-        running: true,
-        install_dir: '~/.agent4j'
-      }
-    }
-    
-    try {
-      return await invoke('get_agent4j_web_status')
-    } catch (error) {
-      console.error('Failed to get agent4j-web status:', error)
-      return {
-        installed: false,
-        running: false,
-        install_dir: '',
-        error: error
-      }
+    const status = await tryInvoke('get_agent4j_web_status')
+    if (status) return status
+
+    // 非 Tauri：假设服务已在外部启动
+    return {
+      installed: true,
+      running: true,
+      install_dir: '~/.agent4j'
     }
   },
 
   /**
-   * 启动 agent4j-web 服务
-   * @returns {Promise<number>} 进程 PID
+   * 启动 agent4j-web 服务（返回端口号）
+   * @returns {Promise<number>} 端口号
    */
   async start() {
-    if (!isTauriEnvironment()) {
-      console.warn('Not in Tauri environment, skipping start')
-      return 0
+    const port = await tryInvoke('start_agent4j_web')
+    if (port > 0) {
+      console.log('Agent4j Web started on port:', port)
+      localStorage.setItem('agent4j-port', String(port))
+      return port
     }
-    
-    try {
-      const pid = await invoke('start_agent4j_web')
-      console.log('Agent4j Web started with PID:', pid)
-      return pid
-    } catch (error) {
-      console.error('Failed to start agent4j-web:', error)
-      throw error
-    }
+    console.warn('Not in Tauri environment, skipping start')
+    return 0
   },
 
   /**
    * 停止 agent4j-web 服务
    */
   async stop() {
-    if (!isTauriEnvironment()) {
-      console.warn('Not in Tauri environment, skipping stop')
+    const result = await tryInvoke('stop_agent4j_web')
+    if (result !== undefined) {
+      console.log('Agent4j Web stopped')
       return
     }
-    
-    try {
-      await invoke('stop_agent4j_web')
-      console.log('Agent4j Web stopped')
-    } catch (error) {
-      console.error('Failed to stop agent4j-web:', error)
-      throw error
-    }
+    console.warn('Not in Tauri environment, skipping stop')
   },
 
   /**
-   * 等待服务就绪（轮询检查）
+   * 等待服务就绪（轮询检查，端口动态）
    * @param {number} maxAttempts - 最大尝试次数
    * @param {number} interval - 每次尝试间隔（毫秒）
    * @returns {Promise<boolean>}
    */
   async waitForReady(maxAttempts = 30, interval = 1000) {
+    const port = await getCurrentPort()
+    const baseUrl = `http://127.0.0.1:${port}`
+
     for (let i = 0; i < maxAttempts; i++) {
       try {
-        const response = await fetch('http://localhost:8097/api/health', {
+        const response = await fetch(`${baseUrl}/api/system/health`, {
           method: 'GET',
           signal: AbortSignal.timeout(2000)
         })
         
         if (response.ok) {
-          console.log('Agent4j Web is ready')
+          console.log('Agent4j Web is ready on port', port)
           return true
         }
       } catch (e) {
@@ -111,8 +112,9 @@ export const agent4jWebService = {
    * @returns {Promise<boolean>}
    */
   async healthCheck() {
+    const port = await getCurrentPort()
     try {
-      const response = await fetch('http://localhost:8097/api/health', {
+      const response = await fetch(`http://127.0.0.1:${port}/api/system/health`, {
         method: 'GET',
         signal: AbortSignal.timeout(5000)
       })
@@ -124,15 +126,15 @@ export const agent4jWebService = {
 
   /**
    * 获取服务 API 基础地址
-   * @returns {string}
+   * @returns {Promise<string>}
    */
-  getBaseUrl() {
-    return 'http://localhost:8097'
+  async getBaseUrl() {
+    const port = await getCurrentPort()
+    return `http://127.0.0.1:${port}`
   }
 }
 
 // 导出默认对象
 export default {
-  isTauriEnvironment,
   agent4jWebService
 }

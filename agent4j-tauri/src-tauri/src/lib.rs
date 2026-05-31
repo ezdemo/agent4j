@@ -1,6 +1,7 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
 use std::fs;
+use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Mutex;
@@ -9,13 +10,20 @@ use tauri::Manager;
 // agent4j-web 进程管理器
 struct Agent4jWebManager {
     child: Mutex<Option<Child>>,
+    port: Mutex<u16>,
 }
 
 impl Agent4jWebManager {
     fn new() -> Self {
         Self {
             child: Mutex::new(None),
+            port: Mutex::new(0),
         }
+    }
+
+    // 获取当前端口
+    fn get_port(&self) -> u16 {
+        *self.port.lock().unwrap()
     }
 
     // 获取安装目录
@@ -126,20 +134,43 @@ impl Agent4jWebManager {
 
     // 启动 agent4j-web 服务
     fn start(&self) -> Result<u32, String> {
-        let install_dir = self.get_install_dir();
-        let bin_dir = install_dir.join("bin");
-        let jar_path = bin_dir.join("agent4j-web.jar");
+        // Dev 模式：优先使用 Maven target 目录的最新 jar
+        let dev_jar = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+            .join("../../agent4j-web/target/agent4j-web.jar");
+        let jar_path = if dev_jar.exists() {
+            println!("Using dev jar: {:?}", dev_jar);
+            dev_jar
+        } else {
+            let install_dir = self.get_install_dir();
+            let bin_dir = install_dir.join("bin");
+            let fallback = bin_dir.join("agent4j-web.jar");
+            if !fallback.exists() {
+                return Err("agent4j-web.jar not found".to_string());
+            }
+            println!("Using installed jar: {:?}", fallback);
+            fallback
+        };
 
-        if !jar_path.exists() {
-            return Err("agent4j-web.jar not found".to_string());
-        }
+        // 找一个可用的端口
+        let listener = TcpListener::bind("127.0.0.1:0")
+            .map_err(|e| format!("Failed to bind port: {}", e))?;
+        let port = listener.local_addr()
+            .map_err(|e| format!("Failed to get port: {}", e))?
+            .port();
+        // 释放端口，Java 进程会重新绑定
+        drop(listener);
 
-        // 构建启动命令
+        // 保存端口
+        let mut port_lock = self.port.lock().unwrap();
+        *port_lock = port;
+
+        // 构建启动命令（传 --server.port 覆盖 app.yml 中的 server.port）
         let mut cmd = Command::new("java");
         cmd.args(&[
             "-Dfile.encoding=UTF-8",
             "-jar",
             jar_path.to_str().unwrap(),
+            &format!("--server.port={}", port),
         ]);
 
         // Windows: 隐藏控制台窗口
@@ -155,12 +186,54 @@ impl Agent4jWebManager {
             .map_err(|e| format!("Failed to start agent4j-web: {}", e))?;
 
         let pid = child.id();
-        
+
         // 保存进程引用
         let mut child_lock = self.child.lock().unwrap();
         *child_lock = Some(child);
+        drop(child_lock);
 
-        Ok(pid)
+        // 等 Java 进程就绪（最长 15 秒，逐秒尝试连接端口）
+        let start = std::time::Instant::now();
+        let timeout = std::time::Duration::from_secs(15);
+        let mut ready = false;
+
+        while start.elapsed() < timeout {
+            // 先检查进程是否还活着
+            {
+                let mut cl = self.child.lock().unwrap();
+                if let Some(ref mut ch) = *cl {
+                    if let Ok(Some(_)) = ch.try_wait() {
+                        // 进程已退出
+                        *cl = None;
+                        return Err(format!("Java process (PID {}) exited prematurely", pid));
+                    }
+                }
+            }
+
+            // 尝试连接端口
+            if std::net::TcpStream::connect_timeout(
+                &format!("127.0.0.1:{}", port).parse().unwrap(),
+                std::time::Duration::from_millis(500),
+            )
+            .is_ok()
+            {
+                ready = true;
+                break;
+            }
+
+            std::thread::sleep(std::time::Duration::from_secs(1));
+        }
+
+        if !ready {
+            return Err(format!(
+                "Java process (PID {}) started but did not listen on port {} within 15s",
+                pid, port
+            ));
+        }
+
+        println!("Agent4j Web is ready on 127.0.0.1:{} (PID {})", port, pid);
+
+        Ok(port as u32)
     }
 
     // 停止 agent4j-web 服务
@@ -211,10 +284,16 @@ fn get_agent4j_web_status(state: tauri::State<'_, Agent4jWebManager>) -> serde_j
     })
 }
 
-// Tauri 命令：启动 agent4j-web
+// Tauri 命令：启动 agent4j-web（返回端口号）
 #[tauri::command]
 fn start_agent4j_web(state: tauri::State<'_, Agent4jWebManager>) -> Result<u32, String> {
     state.start()
+}
+
+// Tauri 命令：获取当前端口号
+#[tauri::command]
+fn get_agent4j_web_port(state: tauri::State<'_, Agent4jWebManager>) -> u16 {
+    state.get_port()
 }
 
 // Tauri 命令：停止 agent4j-web
@@ -255,7 +334,8 @@ pub fn run() {
             get_system_info,
             get_agent4j_web_status,
             start_agent4j_web,
-            stop_agent4j_web
+            stop_agent4j_web,
+            get_agent4j_web_port
         ])
         .setup(|app| {
             // 窗口标题
@@ -280,10 +360,9 @@ pub fn run() {
                 }
             }
 
-            // 启动 agent4j-web 服务
-            match manager.start() {
-                Ok(pid) => println!("Agent4j Web started with PID: {}", pid),
-                Err(e) => eprintln!("Failed to start Agent4j Web: {}", e),
+            // 启动 agent4j-web 服务（start 内部会等待就绪）
+            if let Err(e) = manager.start() {
+                eprintln!("Failed to start Agent4j Web: {}", e);
             }
 
             Ok(())

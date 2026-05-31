@@ -2,20 +2,15 @@
   <div class="splash-screen" v-if="visible">
     <div class="splash-content">
       <div class="logo-container">
-        <img src="@/assets/logo.svg" alt="Agent4j" class="logo" />
+        <img src="@/assets/logo.png" alt="Agent4j" class="logo" />
       </div>
       
       <h1 class="title">Agent4j</h1>
       <p class="subtitle">智能 AI 代码助手</p>
       
-      <div class="status-container">
-        <div class="loading-spinner" v-if="loading"></div>
-        <div class="status-icon" :class="statusClass" v-else>
-          <span v-if="status === 'ready'">✓</span>
-          <span v-else-if="status === 'error'">✗</span>
-        </div>
-        
-        <p class="status-text">{{ statusText }}</p>
+      <div class="status-bar" :class="statusClass">
+        <span class="status-dot"></span>
+        <span>{{ statusText }}</span>
       </div>
       
       <div class="progress-bar" v-if="loading">
@@ -23,7 +18,7 @@
       </div>
       
       <button 
-        class="retry-button" 
+        class="btn btn-primary" 
         v-if="status === 'error'" 
         @click="retry"
       >
@@ -36,6 +31,7 @@
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { agent4jWebService } from '@/services/tauri'
+import { invoke } from '@tauri-apps/api/core'
 
 const props = defineProps({
   autoStart: {
@@ -55,6 +51,7 @@ const errorMessage = ref('')
 let progressInterval = null
 
 const statusClass = computed(() => ({
+  'status-connecting': status.value === 'starting' || status.value === 'installing',
   'status-ready': status.value === 'ready',
   'status-error': status.value === 'error'
 }))
@@ -100,35 +97,51 @@ async function startService() {
   startProgress()
   
   try {
-    // 检查状态
-    const serviceStatus = await agent4jWebService.getStatus()
-    
-    if (!serviceStatus.installed) {
-      status.value = 'installing'
-      // 安装会自动在 Tauri setup 中完成
-      // 等待安装完成
-      await new Promise(resolve => setTimeout(resolve, 2000))
+    // 1) 直接尝试从 Rust 获取端口（setup() 中 start() 已执行完毕）
+    let port = 0
+    try {
+      port = await invoke('get_agent4j_web_port')
+    } catch {}
+
+    // 2) 端口有效则保存；无效则通过 start() 启动
+    if (port > 0) {
+      localStorage.setItem('agent4j-port', String(port))
+      localStorage.setItem('agent4j-api-base', `http://127.0.0.1:${port}`)
+    } else {
+      // 尝试启动（非 Tauri 环境会返回 0）
+      const startedPort = await agent4jWebService.start()
+      if (startedPort > 0) {
+        port = startedPort
+      }
     }
-    
-    // 如果服务没在运行，启动它
-    if (!serviceStatus.running) {
-      await agent4jWebService.start()
-    }
-    
-    // 等待服务就绪
-    status.value = 'starting'
-    const ready = await agent4jWebService.waitForReady(30, 1000)
+
+    // 3) 验证后端可达（最多 5 秒）
+    const ready = await agent4jWebService.waitForReady(5, 1000)
     
     if (ready) {
       status.value = 'ready'
       stopProgress()
       
-      // 延迟一下再隐藏，让用户看到成功状态
       setTimeout(() => {
         visible.value = false
         emit('ready')
       }, 500)
     } else {
+      // 非 Tauri：可能用户自己启动了后端，尝试默认端口
+      if (port === 0) {
+        localStorage.setItem('agent4j-api-base', 'http://127.0.0.1:8097')
+        localStorage.setItem('agent4j-port', '8097')
+        const fallbackReady = await agent4jWebService.waitForReady(3, 1000)
+        if (fallbackReady) {
+          status.value = 'ready'
+          stopProgress()
+          setTimeout(() => {
+            visible.value = false
+            emit('ready')
+          }, 500)
+          return
+        }
+      }
       throw new Error('服务启动超时')
     }
   } catch (error) {
@@ -167,26 +180,18 @@ defineExpose({
 <style scoped>
 .splash-screen {
   position: fixed;
-  top: 0;
-  left: 0;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(135deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+  inset: 0;
+  background: var(--bg);
   display: flex;
   justify-content: center;
   align-items: center;
   z-index: 9999;
-  animation: fadeIn 0.3s ease-out;
-}
-
-@keyframes fadeIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
 }
 
 .splash-content {
-  text-align: center;
+  width: 380px;
   padding: 40px;
+  text-align: center;
 }
 
 .logo-container {
@@ -194,108 +199,89 @@ defineExpose({
 }
 
 .logo {
-  width: 96px;
-  height: 96px;
-  animation: pulse 2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  0%, 100% { transform: scale(1); opacity: 1; }
-  50% { transform: scale(1.05); opacity: 0.8; }
+  width: 80px;
+  height: 80px;
+  object-fit: contain;
 }
 
 .title {
-  font-size: 32px;
+  font-size: 28px;
   font-weight: 700;
-  color: #ffffff;
-  margin: 0 0 8px 0;
-  letter-spacing: 2px;
+  color: var(--fg);
+  margin: 0 0 4px;
 }
 
 .subtitle {
-  font-size: 16px;
-  color: rgba(255, 255, 255, 0.7);
-  margin: 0 0 48px 0;
-}
-
-.status-container {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 16px;
-  margin-bottom: 32px;
-}
-
-.loading-spinner {
-  width: 32px;
-  height: 32px;
-  border: 3px solid rgba(255, 255, 255, 0.2);
-  border-top-color: #4f8cff;
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.status-icon {
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  font-size: 18px;
-  font-weight: bold;
-}
-
-.status-ready {
-  background: #10b981;
-  color: white;
-}
-
-.status-error {
-  background: #ef4444;
-  color: white;
-}
-
-.status-text {
   font-size: 14px;
-  color: rgba(255, 255, 255, 0.8);
-  margin: 0;
+  color: var(--fg-4);
+  margin: 0 0 32px;
+}
+
+/* 状态条（与 SetupScreen 一致） */
+.status-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: 20px;
+  font-size: 13px;
+  background: var(--bg-2);
+  color: var(--fg-3);
+  margin-bottom: 24px;
+}
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--fg-4);
+}
+.status-bar.status-connecting .status-dot {
+  background: var(--accent);
+  animation: pulse 1s ease-in-out infinite;
+}
+.status-bar.status-ready .status-dot {
+  background: #10b981;
+}
+.status-bar.status-error .status-dot {
+  background: #ef4444;
+}
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
 }
 
 .progress-bar {
-  width: 240px;
+  width: 200px;
   height: 4px;
-  background: rgba(255, 255, 255, 0.2);
+  margin: 0 auto;
+  background: var(--bg-2);
   border-radius: 2px;
   overflow: hidden;
-  margin: 0 auto;
 }
-
 .progress-fill {
   height: 100%;
-  background: linear-gradient(90deg, #4f8cff, #6366f1);
+  background: var(--accent);
   border-radius: 2px;
   transition: width 0.3s ease-out;
 }
 
-.retry-button {
+/* 按钮（与 SetupScreen 一致） */
+.btn {
   margin-top: 24px;
-  padding: 10px 32px;
-  background: #4f8cff;
-  color: white;
-  border: none;
-  border-radius: 6px;
-  font-size: 14px;
+  padding: 9px 32px;
+  border-radius: var(--r);
+  font-size: 13px;
   font-weight: 500;
   cursor: pointer;
-  transition: background 0.2s;
+  border: 1px solid transparent;
+  transition: all 0.15s;
 }
-
-.retry-button:hover {
-  background: #3b7aed;
+.btn-primary {
+  background: var(--accent);
+  color: #fff;
+}
+.btn-primary:hover {
+  opacity: 0.9;
 }
 </style>
