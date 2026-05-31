@@ -1,9 +1,6 @@
 <template>
   <div class="settings-view">
-    <!-- 头部 -->
-    <div class="settings-header">
-      <span class="settings-title">设置</span>
-    </div>
+    <!-- 头部（已移除） -->
     
     <!-- 标签页 -->
     <div class="settings-tabs">
@@ -541,19 +538,6 @@ onMounted(() => {
   min-height: 100%;
 }
 
-/* 头部 — 仅保留小标题 */
-.settings-header {
-  margin-bottom: var(--space-6);
-}
-
-.settings-title {
-  font-size: var(--text-sm);
-  font-weight: var(--font-semibold);
-  color: var(--fg-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-}
-
 /* 标签页 */
 .settings-tabs {
   display: flex;
@@ -849,17 +833,6 @@ onMounted(() => {
 @media (max-width: 768px) {
   .settings-view {
     padding: var(--space-4);
-  }
-  
-  .settings-header {
-    flex-direction: column;
-    gap: var(--space-4);
-    align-items: flex-start;
-  }
-  
-  .header-actions {
-    width: 100%;
-    justify-content: flex-end;
   }
   
   .settings-tabs {
