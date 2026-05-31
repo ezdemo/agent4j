@@ -26,6 +26,18 @@ public class GlobalExceptionFilter implements Filter {
 
     @Override
     public void doFilter(Context ctx, FilterChain chain) throws Throwable {
+        // CORS 头：所有响应都加上
+        ctx.headerSet("Access-Control-Allow-Origin", "*");
+        ctx.headerSet("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");
+        ctx.headerSet("Access-Control-Allow-Headers", "*");
+        ctx.headerSet("Access-Control-Max-Age", "3600");
+
+        // OPTIONS 预检请求直接放行
+        if ("OPTIONS".equals(ctx.method())) {
+            ctx.output("");
+            return;
+        }
+
         try {
             chain.doFilter(ctx);
         } catch (ServiceException e) {

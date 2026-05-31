@@ -2,20 +2,13 @@
 
 import axios from 'axios'
 
-// 创建axios实例
-function getBaseURL() {
-  try {
-    const store = useAppStore()
-    const customUrl = store.settings?.server?.apiBaseUrl
-    if (customUrl && customUrl.trim()) {
-      return customUrl.replace(/\/+$/, '') + '/api'
-    }
-  } catch (e) {}
-  return '/api'
+// 读取持久化的 API 地址（用户在设置页配置的）
+function getCustomBaseURL() {
+  return localStorage.getItem('agent4j-api-base') || ''
 }
 
 const api = axios.create({
-  baseURL: getBaseURL(),
+  baseURL: '/api',  // 默认值，请求拦截器中会动态覆盖
   timeout: 30000,
   headers: {
     'Content-Type': 'application/json'
@@ -25,6 +18,12 @@ const api = axios.create({
 // 请求拦截器
 api.interceptors.request.use(
   (config) => {
+    // 动态 baseURL：优先使用用户配置的服务端地址
+    const customBase = getCustomBaseURL()
+    if (customBase) {
+      config.baseURL = customBase.replace(/\/+$/, '') + '/api'
+    }
+    
     // 添加认证令牌
     const token = localStorage.getItem('agent4j-token')
     if (token) {
@@ -475,14 +474,14 @@ export const systemAPI = {
     return configAPI.getConfig()
   },
   
-  // 健康检查
+  // 健康检查 - GET /api/system/health
   healthCheck: () => {
-    return api.get('/health')
+    return api.get('/system/health')
   },
   
-  // 获取系统版本
+  // 获取系统版本 - GET /api/system/version
   getVersion: () => {
-    return api.get('/version')
+    return api.get('/system/version')
   },
   
   // 获取系统日志

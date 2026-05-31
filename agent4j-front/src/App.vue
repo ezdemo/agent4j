@@ -1,5 +1,8 @@
 ﻿<template>
   <div class="app" :data-theme="theme">
+    <!-- 连接设置（后端未连上时显示） -->
+    <SetupScreen v-if="showSetup" @connected="onConnected" @close="onSetupClose" />
+
     <!-- 启动画面 (仅 Tauri 环境) -->
     <SplashScreen 
       v-if="isTauri" 
@@ -212,6 +215,7 @@ import { useRouter } from 'vue-router'
 import { useConfirm } from './composables/useConfirm'
 import { agentAPI, sessionsAPI, toolsAPI, configAPI } from './services/api'
 import { isTauriEnvironment } from './services/tauri'
+import SetupScreen from './components/SetupScreen.vue'
 import TitleBar from './components/TitleBar.vue'
 import SplashScreen from './components/SplashScreen.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
@@ -231,6 +235,7 @@ const usage = ref({})
 const tools = ref([])
 const config = ref({})
 const showTools = ref(false)
+const showSetup = ref(true)  // 初始显示连接设置页面
 const showConfig = ref(false)
 const showSettings = ref(false)
 const initialDataLoaded = ref(false)
@@ -289,6 +294,18 @@ const toggleTheme = () => {
   theme.value = theme.value === 'light' ? 'dark' : 'light'
   localStorage.setItem('agent4j-theme', theme.value)
   document.documentElement.setAttribute('data-theme', theme.value)
+}
+
+// 连接设置页回调：后端连接成功
+const onConnected = () => {
+  showSetup.value = false
+  loadData()
+}
+
+// 用户关闭设置页：跳过，直接进入主界面
+const onSetupClose = () => {
+  showSetup.value = false
+  loadData()
 }
 
 // 服务就绪回调
@@ -456,11 +473,9 @@ const clearChat = async () => {
 onMounted(async () => {
   document.documentElement.setAttribute('data-theme', theme.value)
   
-  // 非 Tauri 环境直接加载数据
-  if (!isTauri) {
-    await loadData()
-  }
-  // Tauri 环境等待服务就绪后自动加载
+  // Tauri 环境：SplashScreen 负责启动后端服务
+  // 非 Tauri 环境：SetupScreen 会自动检测连接
+  // 都不需要在此直接 loadData()
 })
 
 // 设置弹窗关闭时刷新工作区和会话（用户可能在设置中切换了工作目录）
