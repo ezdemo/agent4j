@@ -278,13 +278,12 @@
           <div class="setting-item">
             <div class="setting-info">
               <div class="setting-label">编辑模式</div>
-              <div class="setting-description">文件编辑的确认方式</div>
+              <div class="setting-description">手动 = 写入操作需审批，自由 = 直接执行</div>
             </div>
             <div class="setting-control">
-              <select v-model="settings.workspace.editMode" class="form-select">
-                <option value="auto">自动应用</option>
-                <option value="confirm">需要确认</option>
-                <option value="preview">预览模式</option>
+              <select v-model="settings.workspace.mode" class="form-select">
+                <option :value="true">手动</option>
+                <option :value="false">自由</option>
               </select>
             </div>
           </div>
@@ -376,7 +375,7 @@ const settings = reactive({
   
   workspace: {
     dir: '',
-    editMode: 'auto'
+    mode: false
   }
 })
 
@@ -410,7 +409,8 @@ const loadSettings = async () => {
       
       // 更新工作区设置
       settings.workspace.dir = config.workspaceDir || config.workspace || '.'
-      settings.workspace.editMode = config.editMode || 'auto'
+      // hitl = true 表示手动（需审批），false 表示自由（直接执行）
+      settings.workspace.mode = config.hitl === true
       
       // 更新语言设置（后端是 'ZH'/'EN'，前端是 'zh-CN'/'en-US'）
       if (config.lang) {
@@ -446,7 +446,7 @@ const loadSettings = async () => {
     settings.ai.model = 'deepseek-v4-flash'
     settings.ai.reasoningEffort = 'max'
     settings.workspace.dir = '.'
-    settings.workspace.editMode = 'auto'
+    settings.workspace.mode = false
     
     // 默认模型列表
     availableModels.value = [
@@ -484,7 +484,8 @@ const saveSettings = async () => {
         .split('\n')
         .map(s => s.trim())
         .filter(s => s),
-      editMode: settings.workspace.editMode,
+      // hitl: true=手动(需审批), false=自由(直接执行)
+      hitl: settings.workspace.mode === true,
       lang: settings.language === 'zh-CN' ? 'ZH' : 'EN'
     }
     
@@ -563,7 +564,7 @@ const resetSettings = async () => {
       
       workspace: {
         dir: '.',
-        editMode: 'auto'
+        mode: false
       }
     })
     
