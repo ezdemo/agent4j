@@ -224,7 +224,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch, nextTick } from 'vue'
+import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { useConfirm } from './composables/useConfirm'
@@ -315,23 +315,47 @@ const toggleTheme = () => {
   store.settings.theme = themeOrder[(idx + 1) % themeOrder.length]
 }
 
+let heartbeatTimer = null
+
+const startHeartbeat = () => {
+  stopHeartbeat()
+  heartbeatTimer = setInterval(async () => {
+    if (showSetup.value) return  // 已在设置页，跳过
+    try {
+      await agentAPI.getStatus()
+    } catch {
+      console.warn('[heartbeat] 后端不可达，切换到设置页')
+      showSetup.value = true
+    }
+  }, 5000)
+}
+
+const stopHeartbeat = () => {
+  if (heartbeatTimer) {
+    clearInterval(heartbeatTimer)
+    heartbeatTimer = null
+  }
+}
+
 // 连接设置页回调：后端连接成功
 const onConnected = () => {
   showSetup.value = false
   loadData()
+  startHeartbeat()
 }
 
 // 用户关闭设置页：跳过，直接进入主界面
 const onSetupClose = () => {
   showSetup.value = false
   loadData()
+  startHeartbeat()
 }
 
 // 服务就绪回调
 const onServiceReady = () => {
   console.log('Agent4j Web service is ready')
-  // 加载数据
   loadData()
+  startHeartbeat()
 }
 
 // 服务错误回调
@@ -507,6 +531,10 @@ const clearChat = async () => {
 
 onMounted(async () => {
   // 主题已由 store.initialize() 和 store watcher 设置到 DOM
+})
+
+onBeforeUnmount(() => {
+  stopHeartbeat()
 })
 
 // 设置弹窗关闭时刷新工作区和会话（用户可能在设置中切换了工作目录）
