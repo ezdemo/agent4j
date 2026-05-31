@@ -505,11 +505,14 @@ const saveSettings = async () => {
         }
       }
 
-      // 显示成功消息
+      // 显示服务端返回的成功消息
+      const serverMsg = typeof response.data === 'string'
+        ? response.data
+        : (response.data?.message || '设置已保存')
       window.dispatchEvent(new CustomEvent('terminal-output', { 
         detail: { 
           type: 'success', 
-          text: '设置已保存' + (settings.workspace.dir ? '，工作目录已切换' : '') 
+          text: serverMsg + (settings.workspace.dir ? '，工作目录已切换' : '') 
         }
       }))
     } else {
