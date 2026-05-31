@@ -100,6 +100,10 @@ public class Agent4jConfig {
         if (dir == null || dir.isEmpty()) {
             return null;
         }
+        // 忽略 "."，避免启动时在 CWD 创建工作目录
+        if (".".equals(dir.trim())) {
+            return null;
+        }
         return Paths.get(dir).toAbsolutePath();
     }
 

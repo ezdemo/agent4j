@@ -131,6 +131,39 @@ impl Agent4jWebManager {
         }
     }
 
+    // 计算文件 SHA256 十六进制字符串
+    fn sha256(path: &Path) -> Result<String, String> {
+        use sha2::{Digest, Sha256};
+        let mut file = fs::File::open(path)
+            .map_err(|e| format!("Failed to open {}: {}", path.display(), e))?;
+        let mut hasher = Sha256::new();
+        std::io::copy(&mut file, &mut hasher)
+            .map_err(|e| format!("Failed to read {}: {}", path.display(), e))?;
+        Ok(format!("{:x}", hasher.finalize()))
+    }
+
+    // 计算 tar.gz 内 bin/agent4j-web.jar 的 SHA256
+    // 使用 ends_with 匹配，兼容 tar 条目可能带 ./ 前缀等情况
+    fn jar_hash_in_archive(archive_path: &Path) -> Result<String, String> {
+        use sha2::{Digest, Sha256};
+        let file = fs::File::open(archive_path)
+            .map_err(|e| format!("Failed to open archive: {}", e))?;
+        let gz = flate2::read::GzDecoder::new(file);
+        let mut archive = tar::Archive::new(gz);
+
+        for entry in archive.entries().map_err(|e| format!("Failed to read archive: {}", e))? {
+            let mut entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+            let path = entry.path().map_err(|_| "Failed to get path".to_string())?;
+            if path.ends_with("bin/agent4j-web.jar") {
+                let mut hasher = Sha256::new();
+                std::io::copy(&mut entry, &mut hasher)
+                    .map_err(|e| format!("Failed to read jar from archive: {}", e))?;
+                return Ok(format!("{:x}", hasher.finalize()));
+            }
+        }
+        Err("bin/agent4j-web.jar not found in archive".to_string())
+    }
+
     // 从资源中安装 agent4j-web
     fn install_from_resource(&self, resource_dir: &Path) -> Result<(), String> {
         // 0) 检查 Java
@@ -170,8 +203,9 @@ impl Agent4jWebManager {
             }
         }
 
-        // 3) 复制配置（保留已有的 config.json / agent4j.md）
-        for name in &["config.json", "agent4j.md"] {
+        // 3) 复制 agent4j.md（保留已有的，不覆盖）
+        //     config.json 由 Agent4jConfig.load() 自动创建，不从归档复制
+        for name in &["agent4j.md"] {
             let src = temp_dir.join(name);
             let target = install_dir.join(name);
             if src.exists() && !target.exists() {
@@ -447,29 +481,28 @@ pub fn run() {
             // 获取管理器
             let manager = app.state::<Agent4jWebManager>();
 
-            // 检查资源包中的 jar 是否比已安装的新，若是则重新安装
+            // 检查压缩包中 jar 的 hash 与已安装的是否一致
             let archive_path = resource_dir.join("agent4j-web-dist.tar.gz");
+            let installed_jar = manager.get_install_dir().join("bin").join("agent4j-web.jar");
 
-            let needs_update = if let Ok(archive_meta) = std::fs::metadata(&archive_path) {
-                let archive_mtime = archive_meta.modified().ok();
-                let installed_jar = manager.get_install_dir().join("bin").join("agent4j-web.jar");
-                let jar_mtime = std::fs::metadata(&installed_jar).ok()
-                    .and_then(|m| m.modified().ok());
-                match (archive_mtime, jar_mtime) {
-                    (Some(a), Some(j)) => a > j,   // 资源包比已安装的 jar 新
-                    (Some(_), None) => true,        // 已安装的 jar 不存在
-                    _ => false,
+            let needs_install = if !manager.is_installed() {
+                true
+            } else if let (Ok(archive_hash), Ok(installed_hash)) = (
+                Agent4jWebManager::jar_hash_in_archive(&archive_path),
+                Agent4jWebManager::sha256(&installed_jar),
+            ) {
+                if archive_hash != installed_hash {
+                    println!("Jar hash mismatch, reinstalling...");
+                    true
+                } else {
+                    println!("Jar hash matches, skipping install.");
+                    false
                 }
             } else {
-                false
+                true  // 无法计算 hash 时保守地重新安装
             };
 
-            if !manager.is_installed() || needs_update {
-                if needs_update {
-                    println!("Resource archive is newer, reinstalling...");
-                } else {
-                    println!("Agent4j Web not installed, installing from resources...");
-                }
+            if needs_install {
                 match manager.install_from_resource(&resource_dir) {
                     Ok(_) => println!("Agent4j Web installed successfully"),
                     Err(e) => eprintln!("Failed to install Agent4j Web: {}", e),
