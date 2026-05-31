@@ -170,6 +170,89 @@ body {
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #333; }
 [data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #444; }
 
+/* 复古模式 — 磷光绿 CRT 风格 */
+[data-theme="retro"] {
+  --bg: #0a0e0a;
+  --bg-2: #0f150f;
+  --bg-3: #151d15;
+  --fg: #33ff33;
+  --fg-2: #22cc22;
+  --fg-3: #1a9e1a;
+  --fg-4: #117711;
+  --border: #1a3a1a;
+  --border-2: #224422;
+  --accent: #33ff33;
+  --accent-bg: #0a1f0a;
+  --blue: #33ff33;
+  --blue-bg: #0a1f0a;
+  --green: #33ff33;
+  --green-bg: #0a1f0a;
+  --yellow: #ccaa33;
+  --yellow-bg: #1a1500;
+  --red: #ff4444;
+  --red-bg: #1a0505;
+  --bg-primary: var(--bg);
+  --bg-secondary: var(--bg-2);
+  --bg-tertiary: var(--bg-3);
+  --surface: var(--bg-2);
+  --surface-hover: var(--bg-3);
+  --fg-muted: var(--fg-4);
+  --fg-secondary: var(--fg-2);
+  --accent-soft: var(--accent-bg);
+  --success-bg: var(--green-bg);
+  --warning-bg: var(--yellow-bg);
+  --danger-bg: var(--red-bg);
+}
+[data-theme="retro"] ::-webkit-scrollbar-thumb { background: #1a3a1a; }
+[data-theme="retro"] ::-webkit-scrollbar-thumb:hover { background: #224422; }
+[data-theme="retro"] code,
+[data-theme="retro"] pre {
+  background: var(--bg-3);
+  border-color: var(--border);
+}
+[data-theme="retro"] .user-body {
+  color: #0a0e0a;
+}
+
+/* 复古黄 — 古色古香羊皮纸风格 */
+[data-theme="retro-yellow"] {
+  --bg: #f5e6c8;
+  --bg-2: #ecdbc2;
+  --bg-3: #e0cdb0;
+  --fg: #3c2415;
+  --fg-2: #5c3d28;
+  --fg-3: #7a5c42;
+  --fg-4: #9c8068;
+  --border: #c9b494;
+  --border-2: #b8a07a;
+  --accent: #8b4513;
+  --accent-bg: #f0dfc0;
+  --blue: #5b4a2a;
+  --blue-bg: #f0dfc0;
+  --green: #4a6741;
+  --green-bg: #e8eddf;
+  --yellow: #b8860b;
+  --yellow-bg: #f5ecd0;
+  --red: #8b2500;
+  --red-bg: #f5e0d8;
+  --bg-primary: var(--bg);
+  --bg-secondary: var(--bg-2);
+  --bg-tertiary: var(--bg-3);
+  --surface: var(--bg-2);
+  --surface-hover: var(--bg-3);
+  --fg-muted: var(--fg-4);
+  --fg-secondary: var(--fg-2);
+  --accent-soft: var(--accent-bg);
+  --success-bg: var(--green-bg);
+  --warning-bg: var(--yellow-bg);
+  --danger-bg: var(--red-bg);
+}
+[data-theme="retro-yellow"] ::-webkit-scrollbar-thumb { background: #c9b494; }
+[data-theme="retro-yellow"] ::-webkit-scrollbar-thumb:hover { background: #b8a07a; }
+[data-theme="retro-yellow"] .user-body {
+  color: #f5e6c8;
+}
+
 ::selection { background: var(--accent); color: #fff; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
