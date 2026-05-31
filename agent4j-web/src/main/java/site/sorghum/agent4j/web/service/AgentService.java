@@ -94,6 +94,8 @@ public class AgentService {
     private volatile String sharedApiUrl;
     private volatile String sharedApiKey;
     private volatile String sharedModel;
+    /** 当前 HITL 模式（true=手动需审批，false=自由直接执行） */
+    private volatile boolean hitlMode = false;
 
     /**
      * 当前活跃的工作区路径（动态切换）
@@ -272,6 +274,7 @@ public class AgentService {
                         .model(sharedModel)
                         .workspace(Paths.get(workspacePath)) // 覆盖为当前工作区路径
                         .commandRegistry(commandRegistry)
+                        .hitl(hitlMode)  // 使用热更新后的 HITL 模式
                         .sharedModelClient(sharedModelClient)
                         .sharedPrefix(sharedPrefix)
                         .sharedSystemPrompt(loadDefaultSystemPrompt());
@@ -1005,6 +1008,20 @@ public class AgentService {
             this.sharedModel = model;
             System.out.println("[web] 模型已更新: " + model);
         }
+    }
+
+    /**
+     * 热更新 HITL 模式 — 同步到所有已缓存的 Agent 实例。
+     *
+     * @param hitl true=手动(需审批)，false=自由(直接执行)
+     */
+    public void updateHitlMode(boolean hitl) {
+        for (Agent4jAgent agent : agentCache.values()) {
+            agent.setHitlMode(hitl);
+        }
+        // 更新共享配置引用，确保后续新建的 Agent 也使用新值
+        this.hitlMode = hitl;
+        System.out.println("[web] HITL 模式已更新: " + (hitl ? "手动(需审批)" : "自由(直接执行)"));
     }
 
     /**

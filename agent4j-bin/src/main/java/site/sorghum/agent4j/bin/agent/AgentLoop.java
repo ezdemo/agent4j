@@ -96,6 +96,9 @@ public class AgentLoop {
     /** 切换 HITL 模式 */
     public void toggleHitl() { hitlMode = !hitlMode; }
 
+    /** 直接设置 HITL 模式（用于配置热更新） */
+    public void setHitlMode(boolean on) { hitlMode = on; }
+
     /** 获取最近一次 API 返回的 prompt_tokens */
     public int getLastPromptTokens() { return lastPromptTokens; }
 

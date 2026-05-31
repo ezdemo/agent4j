@@ -457,6 +457,9 @@ public class Agent4jAgent {
     /** 切换 HITL 模式 */
     public void toggleHitl() { loop.toggleHitl(); }
 
+    /** 直接设置 HITL 模式（用于配置热更新） */
+    public void setHitlMode(boolean on) { loop.setHitlMode(on); }
+
     /** 批准待执行的工具调用 */
     public void approveHITL() { loop.approveHITL(); }
 
@@ -575,6 +578,8 @@ public class Agent4jAgent {
         public Builder systemPrompt(String v) { this.systemPrompt = v; this.systemPromptExplicitlySet = true; return this; }
         public Builder workspace(Path v) { this.workspace = v; return this; }
         public Builder commandRegistry(ChatCommandRegistry v) { this.commandRegistry = v; return this; }
+
+        public Builder hitl(boolean v) { this.hitl = v; return this; }
 
         public Builder config(Agent4jConfig c) {
             if (c.chatApiUrl() != null) this.apiUrl = c.chatApiUrl();

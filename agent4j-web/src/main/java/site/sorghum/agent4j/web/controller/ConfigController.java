@@ -69,6 +69,13 @@ public class ConfigController {
             agentService.updateModel(newModel);
         }
 
+        // 如果更新了 hitl，需要热更新所有运行中的 Agent 实例
+        if (body.containsKey("hitl") && agentService.isReady()) {
+            Object hitlVal = body.get("hitl");
+            boolean newHitl = hitlVal instanceof Boolean ? (Boolean) hitlVal : Boolean.parseBoolean(hitlVal.toString());
+            agentService.updateHitlMode(newHitl);
+        }
+
         return ApiResponse.ok("配置已更新");
     }
 
