@@ -5,80 +5,231 @@
       <span class="settings-title">设置</span>
     </div>
     
-    <!-- antdv tabs 接管切换 -->
-    <a-tabs v-model:activeKey="activeTab">
-      <a-tab-pane key="general" tab="⚙️ 基本设置">
-        <a-form layout="vertical">
-          <a-form-item label="主题" help="界面主题风格">
-            <a-button-group>
-              <a-button
-                v-for="theme in themes" 
-                :key="theme.value"
-                :type="settings.theme === theme.value ? 'primary' : 'default'"
-                @click="settings.theme = theme.value"
-              >
-                {{ theme.label }}
+    <!-- 标签页 -->
+    <div class="settings-tabs">
+      <button 
+        v-for="tab in tabs" 
+        :key="tab.id"
+        class="tab-btn"
+        :class="{ active: activeTab === tab.id }"
+        @click="activeTab = tab.id"
+      >
+        <span class="tab-icon">{{ tab.icon }}</span>
+        <span class="tab-label">{{ tab.label }}</span>
+      </button>
+    </div>
+    
+    <!-- antdv message 已全局注册，由 message.success/error 控制 -->
+    
+    <!-- 设置内容 -->
+    <div class="settings-content">
+      <!-- 基本设置 -->
+      <div v-if="activeTab === 'general'" class="settings-section">
+        <div class="section-header">
+          <h3>基本设置</h3>
+          <p>配置界面语言、主题和显示选项</p>
+        </div>
+        
+        <div class="settings-group">
+          <div class="setting-item" v-if="false">
+            <div class="setting-info">
+              <div class="setting-label">语言</div>
+              <div class="setting-description">界面显示语言</div>
+            </div>
+            <div class="setting-control">
+              <a-select v-model:value="settings.language" style="width: 200px">
+                <a-select-option value="zh-CN">简体中文</a-select-option>
+                <a-select-option value="en-US">English</a-select-option>
+                <a-select-option value="ja-JP">日本語</a-select-option>
+              </a-select>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">主题</div>
+              <div class="setting-description">界面主题风格</div>
+            </div>
+            <div class="setting-control">
+              <div class="theme-selector">
+                <a-button
+                  v-for="theme in themes" 
+                  :key="theme.value"
+                  :type="settings.theme === theme.value ? 'primary' : 'default'"
+                  @click="settings.theme = theme.value"
+                  style="display: flex; flex-direction: column; align-items: center; height: auto; padding: 12px; min-width: 80px;"
+                >
+                  <span class="theme-preview" :style="{ background: theme.color, display: 'block', width: 32, height: 32, borderRadius: 6, border: '1px solid #d9d9d9', marginBottom: 4 }"></span>
+                  <span>{{ theme.label }}</span>
+                </a-button>
+              </div>
+            </div>
+          </div>
+          
+
+        </div>
+      </div>
+      
+      <!-- 服务器设置 -->
+      <div v-if="activeTab === 'server'" class="settings-section">
+        <div class="section-header">
+          <h3>服务器设置</h3>
+          <p>配置后端 Agent4j 服务的连接地址</p>
+        </div>
+
+        <div class="settings-group">
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">后端 API 地址</div>
+              <div class="setting-description">留空使用默认代理（localhost:8097）</div>
+            </div>
+            <div class="setting-control">
+              <a-input
+                v-model:value="settings.server.apiBaseUrl"
+                placeholder="留空 = 默认 http://localhost:8097"
+              />
+            </div>
+          </div>
+
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">连接状态</div>
+              <div class="setting-description">测试后端服务是否可达</div>
+            </div>
+            <div class="setting-control">
+              <a-button @click="checkServerConnection" :loading="checkingConnection">
+                检测连接
               </a-button>
-            </a-button-group>
-          </a-form-item>
-        </a-form>
-      </a-tab-pane>
+              <span style="margin-left: 8px; font-size: 13px;" :style="{ color: connectionOk ? '#52c41a' : '#ff4d4f' }" v-if="connectionChecked">
+                {{ connectionOk ? '✓ 连接成功' : '✗ 连接失败' }}
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
 
-      <a-tab-pane key="server" tab="🌐 服务器">
-        <a-form layout="vertical">
-          <a-form-item label="后端 API 地址" help="留空使用默认代理（localhost:8097）">
-            <a-input v-model:value="settings.server.apiBaseUrl" placeholder="留空 = 默认 http://localhost:8097" />
-          </a-form-item>
-          <a-form-item label="连接状态">
-            <a-button @click="checkServerConnection" :loading="checkingConnection">检测连接</a-button>
-            <span style="margin-left: 8px; font-size: 13px;" :style="{ color: connectionOk ? '#52c41a' : '#ff4d4f' }" v-if="connectionChecked">
-              {{ connectionOk ? '✓ 连接成功' : '✗ 连接失败' }}
-            </span>
-          </a-form-item>
-        </a-form>
-      </a-tab-pane>
+      <!-- AI 设置 -->
+      <div v-if="activeTab === 'ai'" class="settings-section">
+        <div class="section-header">
+          <h3>AI 设置</h3>
+          <p>配置AI模型和API连接参数</p>
+        </div>
+        
+        <div class="settings-group">
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">API 地址</div>
+              <div class="setting-description">OpenAI 兼容 API 的基础 URL</div>
+            </div>
+            <div class="setting-control">
+              <a-input 
+                v-model:value="settings.ai.baseUrl" 
+                placeholder="https://api.openai.com/v1"
+              />
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">API 密钥</div>
+              <div class="setting-description">用于身份验证的 API 密钥</div>
+            </div>
+            <div class="setting-control">
+              <a-input-password
+                v-model:value="settings.ai.apiKey"
+                :visible="showApiKey"
+                @update:visible="showApiKey = $event"
+                placeholder="sk-..."
+              />
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">模型</div>
+              <div class="setting-description">使用的 AI 模型</div>
+            </div>
+            <div class="setting-control">
+              <a-select v-model:value="settings.ai.model" style="width: 200px">
+                <a-select-option 
+                  v-for="model in availableModels" 
+                  :key="model.name" 
+                  :value="model.name"
+                >
+                  {{ model.name }}
+                </a-select-option>
+              </a-select>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">推理强度</div>
+              <div class="setting-description">AI 推理的详细程度</div>
+            </div>
+            <div class="setting-control">
+              <a-select v-model:value="settings.ai.reasoningEffort" style="width: 200px">
+                <a-select-option value="low">低</a-select-option>
+                <a-select-option value="medium">中</a-select-option>
+                <a-select-option value="high">高</a-select-option>
+                <a-select-option value="max">最大</a-select-option>
+              </a-select>
+            </div>
+          </div>
+          
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">可用模型列表</div>
+              <div class="setting-description">每行一个模型名称</div>
+            </div>
+            <div class="setting-control">
+              <a-textarea
+                v-model:value="settings.ai.availableModelsText"
+                placeholder="deepseek-v4-flash&#10;gpt-4&#10;gpt-4-turbo"
+                :rows="4"
+              />
+            </div>
+          </div>
+        </div>
+      </div>
+      
+      <!-- 工作区设置 -->
+      <div v-if="activeTab === 'workspace'" class="settings-section">
+        <div class="section-header">
+          <h3>工作区设置</h3>
+          <p>配置工作目录和文件编辑选项</p>
+        </div>
+        
+        <div class="settings-group">
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">工作区路径</div>
+              <div class="setting-description">默认工作目录</div>
+            </div>
+            <div class="setting-control">
+              <a-input
+                v-model:value="settings.workspace.dir"
+                placeholder="."
+              />
+            </div>
+          </div>
 
-      <a-tab-pane key="ai" tab="🤖 AI 设置">
-        <a-form layout="vertical">
-          <a-form-item label="API 地址" help="OpenAI 兼容 API 的基础 URL">
-            <a-input v-model:value="settings.ai.baseUrl" placeholder="https://api.openai.com/v1" />
-          </a-form-item>
-          <a-form-item label="API 密钥" help="用于身份验证的 API 密钥">
-            <a-input-password v-model:value="settings.ai.apiKey" :visible="showApiKey" @update:visible="showApiKey = $event" placeholder="sk-..." />
-          </a-form-item>
-          <a-form-item label="模型" help="使用的 AI 模型">
-            <a-select v-model:value="settings.ai.model" style="width: 240px">
-              <a-select-option v-for="model in availableModels" :key="model.name" :value="model.name">{{ model.name }}</a-select-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item label="推理强度" help="AI 推理的详细程度">
-            <a-select v-model:value="settings.ai.reasoningEffort" style="width: 240px">
-              <a-select-option value="low">低</a-select-option>
-              <a-select-option value="medium">中</a-select-option>
-              <a-select-option value="high">高</a-select-option>
-              <a-select-option value="max">最大</a-select-option>
-            </a-select>
-          </a-form-item>
-          <a-form-item label="可用模型列表" help="每行一个模型名称">
-            <a-textarea v-model:value="settings.ai.availableModelsText" placeholder="deepseek-v4-flash&#10;gpt-4&#10;gpt-4-turbo" :rows="4" style="max-width: 400px;" />
-          </a-form-item>
-        </a-form>
-      </a-tab-pane>
-
-      <a-tab-pane key="workspace" tab="📁 工作区">
-        <a-form layout="vertical">
-          <a-form-item label="工作区路径" help="默认工作目录">
-            <a-input v-model:value="settings.workspace.dir" placeholder="." />
-          </a-form-item>
-          <a-form-item label="编辑模式" help="手动 = 写入操作需审批，自由 = 直接执行">
-            <a-select v-model:value="settings.workspace.mode" style="width: 240px">
-              <a-select-option :value="true">手动</a-select-option>
-              <a-select-option :value="false">自由</a-select-option>
-            </a-select>
-          </a-form-item>
-        </a-form>
-      </a-tab-pane>
-    </a-tabs>
+          <div class="setting-item">
+            <div class="setting-info">
+              <div class="setting-label">编辑模式</div>
+              <div class="setting-description">手动 = 写入操作需审批，自由 = 直接执行</div>
+            </div>
+            <div class="setting-control">
+              <a-select v-model:value="settings.workspace.mode" style="width: 200px">
+                <a-select-option :value="true">手动</a-select-option>
+                <a-select-option :value="false">自由</a-select-option>
+              </a-select>
+            </div>
+          </div>
+          
+        </div>
+      </div>
+    </div>
     
     <!-- 底部 -->
     <div class="settings-footer">
@@ -114,6 +265,14 @@ const availableModels = ref([])
 const checkingConnection = ref(false)
 const connectionOk = ref(false)
 const connectionChecked = ref(false)
+
+// 标签页配置
+const tabs = [
+  { id: 'general', label: '基本设置', icon: '⚙️' },
+  { id: 'server', label: '服务器', icon: '🌐' },
+  { id: 'ai', label: 'AI 设置', icon: '🤖' },
+  { id: 'workspace', label: '工作区', icon: '📁' }
+]
 
 // 主题配置
 const themes = [
@@ -382,9 +541,284 @@ onMounted(() => {
   min-height: 100%;
 }
 
-/* 头部 */
+/* 头部 — 仅保留小标题 */
 .settings-header {
   margin-bottom: var(--space-6);
+}
+
+.settings-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* 标签页 */
+.settings-tabs {
+  display: flex;
+  gap: var(--space-1);
+  margin-bottom: var(--space-6);
+  padding: var(--space-1);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.settings-tabs::-webkit-scrollbar {
+  display: none;
+}
+
+.tab-btn {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2) var(--space-4);
+  border-radius: var(--radius);
+  font-size: var(--text-sm);
+  font-weight: var(--font-medium);
+  color: var(--fg-secondary);
+  transition: all var(--transition-fast);
+  white-space: nowrap;
+}
+
+.tab-btn:hover {
+  background: var(--surface-hover);
+  color: var(--fg);
+}
+
+.tab-btn.active {
+  background: var(--surface);
+  color: var(--brand-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.tab-icon {
+  font-size: 14px;
+}
+
+/* 设置内容 */
+.settings-content {
+  flex: 1;
+  margin-bottom: var(--space-6);
+}
+
+.settings-section {
+  animation: fadeIn var(--transition-base) ease-out;
+}
+
+.section-header {
+  margin-bottom: var(--space-6);
+}
+
+.section-header h3 {
+  font-size: var(--text-xl);
+  font-weight: var(--font-semibold);
+  color: var(--fg);
+  margin-bottom: var(--space-1);
+}
+
+.section-header p {
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+}
+
+/* 设置组 */
+.settings-group {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.setting-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-6);
+  padding: var(--space-4);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-fast);
+}
+
+.setting-item:hover {
+  border-color: var(--border-focus);
+  box-shadow: var(--shadow-sm);
+}
+
+.setting-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.setting-label {
+  font-size: var(--text-base);
+  font-weight: var(--font-semibold);
+  color: var(--fg);
+  margin-bottom: 0.25rem;
+}
+
+.setting-description {
+  font-size: var(--text-sm);
+  color: var(--fg-muted);
+  line-height: 1.5;
+}
+
+.setting-control {
+  flex-shrink: 0;
+  min-width: 200px;
+}
+
+/* antdv 接管了所有表单控件样式 */
+
+/* 滑块控制 */
+.slider-control {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.form-slider {
+  flex: 1;
+  height: 6px;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-full);
+  outline: none;
+  -webkit-appearance: none;
+  appearance: none;
+}
+
+.form-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width: 18px;
+  height: 18px;
+  background: var(--brand-primary);
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid var(--surface);
+  box-shadow: var(--shadow-sm);
+  transition: all var(--transition-fast);
+}
+
+.form-slider::-webkit-slider-thumb:hover {
+  transform: scale(1.1);
+  box-shadow: var(--shadow-md);
+}
+
+.form-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  background: var(--brand-primary);
+  border-radius: 50%;
+  cursor: pointer;
+  border: 2px solid var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.slider-value {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--fg);
+  min-width: 50px;
+  text-align: right;
+  font-family: var(--font-mono);
+}
+
+/* 主题选择器 */
+.theme-selector {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.theme-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--bg-secondary);
+  border: 2px solid var(--border);
+  border-radius: var(--radius-lg);
+  transition: all var(--transition-fast);
+  min-width: 80px;
+}
+
+.theme-btn:hover {
+  border-color: var(--fg-muted);
+}
+
+.theme-btn.active {
+  border-color: var(--brand-primary);
+  background: var(--accent-soft);
+}
+
+.theme-preview {
+  width: 32px;
+  height: 32px;
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+}
+
+.theme-name {
+  font-size: var(--text-xs);
+  font-weight: var(--font-medium);
+  color: var(--fg-secondary);
+}
+
+.theme-btn.active .theme-name {
+  color: var(--brand-primary);
+}
+
+/* 开关 */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 48px;
+  height: 24px;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  cursor: pointer;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: var(--bg-tertiary);
+  transition: var(--transition-fast);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border);
+}
+
+.toggle-slider:before {
+  position: absolute;
+  content: '';
+  height: 18px;
+  width: 18px;
+  left: 2px;
+  bottom: 2px;
+  background-color: var(--fg-muted);
+  transition: var(--transition-fast);
+  border-radius: 50%;
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background-color: var(--accent-soft);
+  border-color: var(--brand-primary);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(24px);
+  background-color: var(--brand-primary);
 }
 
 /* 底部 — 保存按钮在右下角 */
@@ -404,4 +838,93 @@ onMounted(() => {
   align-items: center;
   width: 100%;
 }
+
+/* 动画 */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .settings-view {
+    padding: var(--space-4);
+  }
+  
+  .settings-header {
+    flex-direction: column;
+    gap: var(--space-4);
+    align-items: flex-start;
+  }
+  
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+  
+  .settings-tabs {
+    flex-wrap: wrap;
+  }
+  
+  .tab-btn {
+    flex: 1;
+    min-width: calc(50% - var(--space-1));
+    justify-content: center;
+  }
+  
+  .setting-item {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: var(--space-3);
+  }
+  
+  .setting-control {
+    width: 100%;
+    min-width: auto;
+  }
+  
+  .theme-selector {
+    flex-wrap: wrap;
+  }
+  
+  .theme-btn {
+    min-width: calc(50% - var(--space-1));
+  }
+  
+  .settings-footer {
+    flex-direction: column;
+    gap: var(--space-3);
+    text-align: center;
+  }
+  
+  .footer-actions {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* 深色模式调整 */
+[data-theme="dark"] .setting-item {
+  background: var(--bg-secondary);
+  border-color: var(--border);
+}
+
+[data-theme="dark"] .setting-item:hover {
+  border-color: var(--brand-primary-light);
+}
+
+[data-theme="dark"] .settings-tabs {
+  background: var(--bg-tertiary);
+}
+
+[data-theme="dark"] .tab-btn.active {
+  background: var(--bg-secondary);
+}
+
+[data-theme="dark"] .settings-footer {
+  background: var(--bg-tertiary);
+  border-color: var(--border);
+}
+
+/* antdv message 接管了提示条样式 */
 </style>
