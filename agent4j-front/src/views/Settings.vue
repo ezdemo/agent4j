@@ -1,6 +1,6 @@
 <template>
   <div class="settings-page">
-    <!-- 标题栏 + tab 集成 -->
+    <!-- 标题栏：设置 | tabs | 保存 -->
     <div class="settings-titlebar">
       <span class="titlebar-label">设置</span>
       <div class="titlebar-tabs">
@@ -14,6 +14,14 @@
           <span>{{ tab.icon }}</span>
           <span>{{ tab.label }}</span>
         </button>
+      </div>
+      <div class="titlebar-actions">
+        <a-button size="small" @click="openConfigFile"><FileOutlined /></a-button>
+        <a-button size="small" @click="exportSettings"><DownloadOutlined /></a-button>
+        <a-button type="primary" size="small" @click="saveSettings" :loading="loading" style="margin-left:4px">
+          <template #icon><SaveOutlined /></template>
+          {{ loading ? '保存…' : '保存' }}
+        </a-button>
       </div>
     </div>
 
@@ -165,17 +173,7 @@
       </div>
     </div>
 
-    <!-- 底部操作栏 -->
-    <div class="settings-bottom-bar">
-      <a-space>
-        <a-button size="small" @click="openConfigFile"><FileOutlined /> 配置文件</a-button>
-        <a-button size="small" @click="exportSettings"><DownloadOutlined /> 导出</a-button>
-      </a-space>
-      <a-button type="primary" @click="saveSettings" :loading="loading">
-        <template #icon><SaveOutlined /></template>
-        {{ loading ? '保存中…' : '保存设置' }}
-      </a-button>
-    </div>
+
   </div>
 </template>
 
@@ -409,6 +407,12 @@ onMounted(() => {
   color: var(--brand-primary);
   font-weight: 600;
 }
+.titlebar-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
 .settings-body {
   flex: 1;
   overflow-y: auto;
@@ -452,15 +456,6 @@ onMounted(() => {
   min-width: 200px;
   display: flex;
   align-items: center;
-}
-.settings-bottom-bar {
-  flex-shrink: 0;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 24px;
-  border-top: 1px solid var(--border);
-  background: var(--bg-secondary);
 }
 [data-theme="dark"] .setting-item {
   background: var(--bg-secondary);
