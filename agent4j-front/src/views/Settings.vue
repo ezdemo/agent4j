@@ -531,14 +531,29 @@ onMounted(() => {
 <style scoped>
 .settings-view {
   padding: var(--space-6);
-  max-width: 1000px;
+  width: 860px;
+  max-width: 100%;
+  height: calc(100vh - 120px);
+  min-height: 520px;
   margin: 0 auto;
   display: flex;
   flex-direction: column;
-  min-height: 100%;
+  overflow: hidden;
 }
 
-/* 标签页 */
+/* 标签页 — 固定顶部 */
+.settings-tabs {
+  display: flex;
+  gap: var(--space-1);
+  margin-bottom: var(--space-6);
+  padding: var(--space-1);
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+  flex-shrink: 0;
+}
 .settings-tabs {
   display: flex;
   gap: var(--space-1);
@@ -583,10 +598,12 @@ onMounted(() => {
   font-size: 14px;
 }
 
-/* 设置内容 */
+/* 设置内容 — 中间滚动 */
 .settings-content {
   flex: 1;
+  overflow-y: auto;
   margin-bottom: var(--space-6);
+  min-height: 0;
 }
 
 .settings-section {
@@ -805,7 +822,7 @@ onMounted(() => {
   background-color: var(--brand-primary);
 }
 
-/* 底部 — 保存按钮在右下角 */
+/* 底部 — 固定底部，始终在最下面 */
 .settings-footer {
   display: flex;
   justify-content: flex-end;
@@ -813,7 +830,7 @@ onMounted(() => {
   background: var(--bg-secondary);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  margin-top: auto;
+  flex-shrink: 0;
 }
 
 .footer-actions {
