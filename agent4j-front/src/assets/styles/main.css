@@ -448,6 +448,20 @@ textarea { resize: none; }
   animation: spin 0.6s linear infinite;
 }
 
+/* Ant Design message 弹窗 — 深色 & 复古主题适配 */
+[data-theme="dark"] .ant-message-notice-content,
+[data-theme="retro"] .ant-message-notice-content,
+[data-theme="retro-yellow"] .ant-message-notice-content {
+  background: var(--bg-2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+}
+[data-theme="dark"] .ant-message .anticon,
+[data-theme="retro"] .ant-message .anticon,
+[data-theme="retro-yellow"] .ant-message .anticon {
+  color: var(--fg-2);
+}
+
 /* 无障碍 */
 .sr-only {
   position: absolute;
