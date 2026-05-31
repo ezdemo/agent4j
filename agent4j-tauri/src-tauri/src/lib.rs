@@ -39,50 +39,157 @@ impl Agent4jWebManager {
         jar_path.exists()
     }
 
+    // 检查 Java 是否可用且版本 >= 17
+    fn check_java() -> Result<String, String> {
+        let output = Command::new("java")
+            .args(&["-version"])
+            .output()
+            .map_err(|_| "Java not found, please install JDK 17+ from https://adoptium.net/".to_string())?;
+
+        let ver_str = String::from_utf8_lossy(&output.stderr);
+        // 解析 "openjdk version \"17.0.1\" 2021-10-19" 或 "\"17\""
+        let major = ver_str.split('"').nth(1)
+            .and_then(|v| v.split('.').next())
+            .and_then(|v| v.parse::<i32>().ok())
+            .unwrap_or(0);
+        if major < 17 {
+            return Err(format!("Java 17+ required, found version {}", major));
+        }
+        Ok(ver_str.lines().next().unwrap_or("unknown").to_string())
+    }
+
+    // 配置 PATH 环境变量（Windows: User PATH；Unix: shell rc）
+    fn setup_path(bin_dir: &Path) {
+        let bin_str = bin_dir.to_string_lossy().to_string();
+
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            // 通过注册表设置用户 PATH
+            let key = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
+                .open_subkey_with_flags("Environment", winreg::enums::KEY_READ | winreg::enums::KEY_WRITE)
+                .ok();
+            if let Some(key) = key {
+                let current: String = key.get_value("Path").unwrap_or_default();
+                if !current.contains(&bin_str) {
+                    let new_path = if current.is_empty() { bin_str.clone() } else { format!("{};{}", current, bin_str) };
+                    let _ = key.set_value("Path", &new_path);
+                    // 通知系统环境变量已更改
+                    let _ = Command::new("powershell")
+                        .args(&["-NoProfile", "-Command", "[Environment]::SetEnvironmentVariable('Path', $env:Path, 'User')"])
+                        .creation_flags(0x08000000)
+                        .output();
+                }
+            }
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            // 写入 ~/.profile（最通用的 shell rc）
+            let profile = dirs::home_dir().map(|h| h.join(".profile"));
+            if let Some(path) = profile {
+                if let Ok(content) = fs::read_to_string(&path) {
+                    if !content.contains(&bin_str) {
+                        let _ = fs::write(&path, format!(
+                            "{}\n# Agent4j Web\nexport PATH=\"$PATH:{}\"\n", content, bin_str
+                        ));
+                    }
+                } else {
+                    let _ = fs::write(&path, format!("# Agent4j Web\nexport PATH=\"$PATH:{}\"\n", bin_str));
+                }
+            }
+        }
+    }
+
+    // 创建启动脚本（agent4j-web.bat / agent4j-web）
+    fn create_launcher(bin_dir: &Path) {
+        let jar_path = bin_dir.join("agent4j-web.jar");
+
+        #[cfg(target_os = "windows")]
+        {
+            // agent4j-web.bat
+            let bat = bin_dir.join("agent4j-web.bat");
+            if !bat.exists() {
+                let _ = fs::write(&bat, format!(
+                    "@echo off\r\nset \"JAVA_OPTS=-Dfile.encoding=UTF-8\"\r\njava %JAVA_OPTS% -jar \"{}\" %*\r\n",
+                    jar_path.to_string_lossy()
+                ));
+            }
+        }
+
+        #[cfg(not(target_os = "windows"))]
+        {
+            // agent4j-web shell script
+            let launcher = bin_dir.join("agent4j-web");
+            if !launcher.exists() {
+                let _ = fs::write(&launcher, format!(
+                    "#!/bin/bash\nJAVA_OPTS=\"-Dfile.encoding=UTF-8\"\njava $JAVA_OPTS -jar \"{}\" \"$@\"\n",
+                    jar_path.to_string_lossy()
+                ));
+                let _ = std::process::Command::new("chmod").args(&["+x", &launcher.to_string_lossy()]).output();
+            }
+        }
+    }
+
     // 从资源中安装 agent4j-web
     fn install_from_resource(&self, resource_dir: &Path) -> Result<(), String> {
+        // 0) 检查 Java
+        let java_ver = Self::check_java()?;
+        println!("Java: {}", java_ver);
+
         let install_dir = self.get_install_dir();
-        let bin_dir = install_dir.join("bin");
-
-        // 创建目录
-        fs::create_dir_all(&bin_dir)
-            .map_err(|e| format!("Failed to create directory: {}", e))?;
-
-        // 根据平台选择解压方式
-        #[cfg(target_os = "windows")]
-        let archive_name = "agent4j-web-dist.zip";
-        #[cfg(not(target_os = "windows"))]
-        let archive_name = "agent4j-web-dist.tar.gz";
-
-        let archive_path = resource_dir.join(archive_name);
+        let archive_path = resource_dir.join("agent4j-web-dist.tar.gz");
 
         if !archive_path.exists() {
             return Err(format!("Resource not found: {:?}", archive_path));
         }
 
-        // 解压
-        #[cfg(target_os = "windows")]
-        self.extract_zip(&archive_path, &install_dir)?;
+        // 1) 解压到临时目录
+        let temp_dir = install_dir.join(".tmp-install");
+        if temp_dir.exists() {
+            let _ = fs::remove_dir_all(&temp_dir);
+        }
+        fs::create_dir_all(&temp_dir)
+            .map_err(|e| format!("Failed to create temp dir: {}", e))?;
+        self.extract_tar_gz(&archive_path, &temp_dir)?;
 
-        #[cfg(not(target_os = "windows"))]
-        self.extract_tar_gz(&archive_path, &install_dir)?;
+        // 2) 复制 bin/ 下所有文件到安装目录
+        let target_bin = install_dir.join("bin");
+        fs::create_dir_all(&target_bin)
+            .map_err(|e| format!("Failed to create bin dir: {}", e))?;
 
-        // 设置执行权限（Linux/macOS）
-        #[cfg(not(target_os = "windows"))]
-        {
-            let launcher = bin_dir.join("agent4j-web");
-            if launcher.exists() {
-                use std::os::unix::fs::PermissionsExt;
-                fs::set_permissions(&launcher, fs::Permissions::from_mode(0o755))
-                    .map_err(|e| format!("Failed to set permissions: {}", e))?;
+        let src_bin = temp_dir.join("bin");
+        if src_bin.exists() {
+            for entry in fs::read_dir(&src_bin).map_err(|e| format!("Failed to read bin: {}", e))? {
+                let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+                let fname = entry.file_name();
+                let target = target_bin.join(&fname);
+                let _ = fs::remove_file(&target);
+                fs::copy(&entry.path(), &target)
+                    .map_err(|e| format!("Failed to copy {}: {}", fname.to_string_lossy(), e))?;
             }
         }
+
+        // 3) 复制配置（保留已有的 config.json / agent4j.md）
+        for name in &["config.json", "agent4j.md"] {
+            let src = temp_dir.join(name);
+            let target = install_dir.join(name);
+            if src.exists() && !target.exists() {
+                let _ = fs::copy(&src, &target);
+            }
+        }
+
+        // 4) 创建启动脚本 + 配置 PATH
+        Self::create_launcher(&target_bin);
+        Self::setup_path(&target_bin);
+
+        // 5) 清理临时目录
+        let _ = fs::remove_dir_all(&temp_dir);
 
         Ok(())
     }
 
     // 解压 tar.gz
-    #[cfg(not(target_os = "windows"))]
     fn extract_tar_gz(&self, archive_path: &Path, dest_dir: &Path) -> Result<(), String> {
         use flate2::read::GzDecoder;
         use tar::Archive;
@@ -98,41 +205,6 @@ impl Agent4jWebManager {
         Ok(())
     }
 
-    // 解压 zip
-    #[cfg(target_os = "windows")]
-    fn extract_zip(&self, archive_path: &Path, dest_dir: &Path) -> Result<(), String> {
-        let file = fs::File::open(archive_path)
-            .map_err(|e| format!("Failed to open archive: {}", e))?;
-        let mut archive = zip::ZipArchive::new(file)
-            .map_err(|e| format!("Failed to read zip: {}", e))?;
-
-        for i in 0..archive.len() {
-            let mut file = archive.by_index(i)
-                .map_err(|e| format!("Failed to read zip entry: {}", e))?;
-
-            let outpath = dest_dir.join(file.mangled_name());
-
-            if file.name().ends_with('/') {
-                fs::create_dir_all(&outpath)
-                    .map_err(|e| format!("Failed to create directory: {}", e))?;
-            } else {
-                if let Some(p) = outpath.parent() {
-                    if !p.exists() {
-                        fs::create_dir_all(p)
-                            .map_err(|e| format!("Failed to create directory: {}", e))?;
-                    }
-                }
-                let mut outfile = fs::File::create(&outpath)
-                    .map_err(|e| format!("Failed to create file: {}", e))?;
-                std::io::copy(&mut file, &mut outfile)
-                    .map_err(|e| format!("Failed to write file: {}", e))?;
-            }
-        }
-
-        Ok(())
-    }
-
-    // 读取 PID 文件，kill 旧进程
     fn kill_by_pidfile(&self) {
         let pid_path = self.get_install_dir().join("bin").join("agent4j-web.pid");
         if let Ok(pid_str) = fs::read_to_string(&pid_path) {
@@ -159,22 +231,13 @@ impl Agent4jWebManager {
         // 先清理残留进程
         self.cleanup_stale();
 
-        // Dev 模式：优先使用 Maven target 目录的最新 jar
-        let dev_jar = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../agent4j-web/target/agent4j-web.jar");
-        let jar_path = if dev_jar.exists() {
-            println!("Using dev jar: {:?}", dev_jar);
-            dev_jar
-        } else {
-            let install_dir = self.get_install_dir();
-            let bin_dir = install_dir.join("bin");
-            let fallback = bin_dir.join("agent4j-web.jar");
-            if !fallback.exists() {
-                return Err("agent4j-web.jar not found".to_string());
-            }
-            println!("Using installed jar: {:?}", fallback);
-            fallback
-        };
+        // 始终使用已安装目录下的 jar（由 setup 保证是最新版）
+        let install_dir = self.get_install_dir();
+        let bin_dir = install_dir.join("bin");
+        let jar_path = bin_dir.join("agent4j-web.jar");
+        if !jar_path.exists() {
+            return Err("agent4j-web.jar not found".to_string());
+        }
 
         // 找一个可用的端口
         let listener = TcpListener::bind("127.0.0.1:0")
@@ -384,9 +447,29 @@ pub fn run() {
             // 获取管理器
             let manager = app.state::<Agent4jWebManager>();
 
-            // 检查是否已安装，如果没有则安装
-            if !manager.is_installed() {
-                println!("Agent4j Web not installed, installing from resources...");
+            // 检查资源包中的 jar 是否比已安装的新，若是则重新安装
+            let archive_path = resource_dir.join("agent4j-web-dist.tar.gz");
+
+            let needs_update = if let Ok(archive_meta) = std::fs::metadata(&archive_path) {
+                let archive_mtime = archive_meta.modified().ok();
+                let installed_jar = manager.get_install_dir().join("bin").join("agent4j-web.jar");
+                let jar_mtime = std::fs::metadata(&installed_jar).ok()
+                    .and_then(|m| m.modified().ok());
+                match (archive_mtime, jar_mtime) {
+                    (Some(a), Some(j)) => a > j,   // 资源包比已安装的 jar 新
+                    (Some(_), None) => true,        // 已安装的 jar 不存在
+                    _ => false,
+                }
+            } else {
+                false
+            };
+
+            if !manager.is_installed() || needs_update {
+                if needs_update {
+                    println!("Resource archive is newer, reinstalling...");
+                } else {
+                    println!("Agent4j Web not installed, installing from resources...");
+                }
                 match manager.install_from_resource(&resource_dir) {
                     Ok(_) => println!("Agent4j Web installed successfully"),
                     Err(e) => eprintln!("Failed to install Agent4j Web: {}", e),

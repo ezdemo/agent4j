@@ -5,12 +5,10 @@
     <id>dist</id>
 
     <formats>
-        <format>zip</format>
         <format>tar.gz</format>
     </formats>
 
-    <includeBaseDirectory>true</includeBaseDirectory>
-    <baseDirectory>agent4j-web</baseDirectory>
+    <includeBaseDirectory>false</includeBaseDirectory>
 
     <!-- 包含 fat jar -->
     <files>
