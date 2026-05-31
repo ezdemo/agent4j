@@ -1,16 +1,17 @@
 <template>
   <div class="settings-page">
-    <!-- 标题栏 -->
-    <div class="settings-top-bar">
-      <div class="settings-tabs">
+    <!-- 标题栏 + tab 集成 -->
+    <div class="settings-titlebar">
+      <span class="titlebar-label">设置</span>
+      <div class="titlebar-tabs">
         <button
           v-for="tab in tabs"
           :key="tab.id"
-          class="tab-btn"
+          class="titlebar-tab"
           :class="{ active: activeTab === tab.id }"
           @click="activeTab = tab.id"
         >
-          <span class="tab-icon">{{ tab.icon }}</span>
+          <span>{{ tab.icon }}</span>
           <span>{{ tab.label }}</span>
         </button>
       </div>
@@ -365,40 +366,48 @@ onMounted(() => {
   height: 100%;
   background: var(--bg-primary);
 }
-.settings-top-bar {
+.settings-titlebar {
   flex-shrink: 0;
-  padding: 12px 16px 0;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 16px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-secondary);
 }
-.settings-tabs {
+.titlebar-label {
+  font-size: 15px;
+  font-weight: 700;
+  color: var(--fg);
+  padding-right: 12px;
+  border-right: 1px solid var(--border);
+  line-height: 1;
+}
+.titlebar-tabs {
   display: flex;
   gap: 2px;
 }
-.tab-btn {
+.titlebar-tab {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 18px;
+  gap: 4px;
+  padding: 6px 14px;
   border: none;
-  border-radius: 6px 6px 0 0;
+  border-radius: 6px;
   background: transparent;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--fg-secondary);
   cursor: pointer;
   transition: all 0.2s;
 }
-.tab-btn:hover {
+.titlebar-tab:hover {
   background: var(--surface-hover);
   color: var(--fg);
 }
-.tab-btn.active {
+.titlebar-tab.active {
   background: var(--surface);
   color: var(--brand-primary);
   font-weight: 600;
-}
-.tab-icon {
-  font-size: 16px;
 }
 .settings-body {
   flex: 1;
