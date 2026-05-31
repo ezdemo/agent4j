@@ -19,7 +19,7 @@
     <div class="git-branch" v-if="branch && branch !== 'unknown'">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
       <span class="branch-name">{{ branch }}</span>
-      <span class="change-count" v-if="files.length">{{ files.length }}</span>
+      <span class="change-count" v-if="hasChanges">{{ staged.length + unstaged.length + untracked.length }}</span>
     </div>
 
     <div class="git-branch" v-else-if="!loading && !error">
@@ -35,15 +35,55 @@
     <div v-else-if="error" class="git-error">{{ error }}</div>
 
     <!-- 文件列表 -->
-    <div v-else-if="files.length" class="git-files">
-      <div
-        v-for="f in files"
-        :key="f.path"
-        class="git-file"
-      >
-        <span class="file-status" :class="f.status">{{ statusLabel(f.status) }}</span>
-        <span class="file-path" :title="f.path">{{ f.path }}</span>
-      </div>
+    <div v-else-if="hasChanges" class="git-files">
+      <!-- 未暂存变更（默认展开） -->
+      <template v-if="unstaged.length">
+        <div class="git-section-header" @click="showUnstaged = !showUnstaged">
+          <div class="section-left">
+            <svg class="chevron" :class="{ open: showUnstaged }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+            <span>未暂存的变更</span>
+          </div>
+          <span class="section-count">{{ unstaged.length }}</span>
+        </div>
+        <template v-if="showUnstaged">
+          <div v-for="f in unstaged" :key="'u-'+f.path" class="git-file">
+            <span class="file-status" :class="f.status">{{ f.status }}</span>
+            <span class="file-path" :title="f.path">{{ f.path }}</span>
+          </div>
+        </template>
+      </template>
+      <!-- 已暂存变更（默认折叠） -->
+      <template v-if="staged.length">
+        <div class="git-section-header" @click="showStaged = !showStaged">
+          <div class="section-left">
+            <svg class="chevron" :class="{ open: showStaged }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+            <span>已暂存的变更</span>
+          </div>
+          <span class="section-count">{{ staged.length }}</span>
+        </div>
+        <template v-if="showStaged">
+          <div v-for="f in staged" :key="'s-'+f.path" class="git-file">
+            <span class="file-status" :class="f.status">{{ f.status }}</span>
+            <span class="file-path" :title="f.path">{{ f.path }}</span>
+          </div>
+        </template>
+      </template>
+      <!-- 未跟踪文件（默认折叠） -->
+      <template v-if="untracked.length">
+        <div class="git-section-header" @click="showUntracked = !showUntracked">
+          <div class="section-left">
+            <svg class="chevron" :class="{ open: showUntracked }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+            <span>未跟踪文件</span>
+          </div>
+          <span class="section-count">{{ untracked.length }}</span>
+        </div>
+        <template v-if="showUntracked">
+          <div v-for="f in untracked" :key="'n-'+f.path" class="git-file">
+            <span class="file-status U">?</span>
+            <span class="file-path" :title="f.path">{{ f.path }}</span>
+          </div>
+        </template>
+      </template>
     </div>
 
     <!-- 空状态 -->
@@ -55,7 +95,7 @@
 </template>
 
 <script setup>
-import { ref, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
 import { gitAPI } from '../services/api'
 
 const props = defineProps({
@@ -65,14 +105,16 @@ const props = defineProps({
 defineEmits(['close'])
 
 const branch = ref('')
-const files = ref([])
+const staged = ref([])
+const unstaged = ref([])
+const untracked = ref([])
 const loading = ref(false)
 const error = ref('')
+const showUnstaged = ref(true)
+const showStaged = ref(false)
+const showUntracked = ref(false)
 
-const statusLabel = (s) => {
-  const map = { M: '改', A: '增', D: '删', R: '重', U: '新', '??': '新' }
-  return map[s] || s
-}
+const hasChanges = computed(() => staged.value.length || unstaged.value.length || untracked.value.length)
 
 const load = async () => {
   loading.value = true
@@ -81,7 +123,9 @@ const load = async () => {
     const r = await gitAPI.diff(props.workspaceHash)
     if (r.success && r.data) {
       branch.value = r.data.branch || ''
-      files.value = r.data.files || []
+      staged.value = r.data.staged || []
+      unstaged.value = r.data.unstaged || []
+      untracked.value = r.data.untracked || []
     } else {
       error.value = r.error || '加载失败'
     }
@@ -181,6 +225,42 @@ watch(() => props.workspaceHash, () => {
   flex: 1;
   overflow-y: auto;
   padding: 4px 0;
+}
+
+.git-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 4px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-4);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  cursor: pointer;
+  user-select: none;
+}
+.git-section-header:hover { color: var(--fg-2); }
+.git-section-header.staged { color: var(--green); }
+.git-section-header.untracked { color: var(--fg-4); }
+.section-left {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+}
+.chevron {
+  transition: transform 0.15s ease;
+  flex-shrink: 0;
+}
+.chevron.open {
+  transform: rotate(90deg);
+}
+.section-count {
+  font-size: 10px;
+  background: var(--bg-3);
+  padding: 0 5px;
+  border-radius: 8px;
+  font-weight: 600;
 }
 
 .git-file {

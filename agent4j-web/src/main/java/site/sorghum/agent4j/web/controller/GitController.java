@@ -47,17 +47,21 @@ public class GitController {
         // 1. 当前分支
         String branch = runGit(workspacePath, "rev-parse", "--abbrev-ref", "HEAD");
 
-        // 2. 变更文件列表（staged + unstaged）
-        String raw = runGit(workspacePath, "status", "--porcelain=v1");
+        // 2. 使用 git status --porcelain 获取变更列表
+        String raw = runGit(workspacePath, "status", "--porcelain");
 
-        List<Map<String, String>> files = new ArrayList<>();
+        // 3. 分三组：staged / unstaged / untracked
+        List<Map<String, String>> staged = new ArrayList<>();
+        List<Map<String, String>> unstaged = new ArrayList<>();
+        List<Map<String, String>> untracked = new ArrayList<>();
+
         if (raw != null && !raw.trim().isEmpty()) {
             for (String line : raw.split("\n")) {
-                if (line.trim().isEmpty()) continue;
-                // porcelain v1 格式: XY filename   或   X -> Y filename
-                String index = line.length() > 0 ? String.valueOf(line.charAt(0)) : " ";
-                String workTree = line.length() > 1 ? String.valueOf(line.charAt(1)) : " ";
-                String filename = line.length() > 3 ? line.substring(3).trim() : "";
+                if (line.trim().isEmpty() || line.length() < 3) continue;
+
+                String indexStatus = String.valueOf(line.charAt(0));
+                String workStatus  = String.valueOf(line.charAt(1));
+                String filename = line.substring(3).trim();
 
                 // 处理 rename: "R  old -> new"
                 if (filename.contains(" -> ")) {
@@ -65,32 +69,36 @@ public class GitController {
                     filename = parts[1];
                 }
 
-                String status;
-                if (index.equals("?") && workTree.equals("?")) {
-                    status = "U";  // untracked
-                } else if (index.equals("A") || workTree.equals("A")) {
-                    status = "A";  // added
-                } else if (index.equals("D") || workTree.equals("D")) {
-                    status = "D";  // deleted
-                } else if (index.equals("R") || workTree.equals("R")) {
-                    status = "R";  // renamed
-                } else if (index.equals("M") || workTree.equals("M")) {
-                    status = "M";  // modified
-                } else {
-                    status = index.trim() + workTree.trim();
-                }
-
                 Map<String, String> file = new LinkedHashMap<>();
                 file.put("path", filename);
-                file.put("status", status);
-                files.add(file);
+                file.put("index", indexStatus);
+                file.put("workTree", workStatus);
+
+                if (indexStatus.equals("?") && workStatus.equals("?")) {
+                    // ?? — untracked
+                    untracked.add(file);
+                } else {
+                    // staged changes（index 列非空且非 ?）
+                    if (!indexStatus.equals(" ") && !indexStatus.equals("?")) {
+                        file.put("status", indexStatus);
+                        staged.add(file);
+                    }
+                    // unstaged changes（workTree 列非空且非 ?）
+                    if (!workStatus.equals(" ") && !workStatus.equals("?")) {
+                        Map<String, String> unstagedFile = new LinkedHashMap<>(file);
+                        unstagedFile.put("status", workStatus);
+                        unstaged.add(unstagedFile);
+                    }
+                }
             }
         }
 
         Map<String, Object> data = new LinkedHashMap<>();
         data.put("branch", branch != null ? branch.trim() : "unknown");
-        data.put("files", files);
-        data.put("count", files.size());
+        data.put("staged", staged);
+        data.put("unstaged", unstaged);
+        data.put("untracked", untracked);
+        data.put("count", staged.size() + unstaged.size() + untracked.size());
         return ApiResponse.ok(data);
     }
 
