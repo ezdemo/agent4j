@@ -1,6 +1,9 @@
 <template>
   <div class="settings-view">
-    <!-- 头部（已移除） -->
+    <!-- 头部 -->
+    <div class="settings-header">
+      <span class="settings-title">设置</span>
+    </div>
     
     <!-- antdv tabs 接管切换 -->
     <a-tabs v-model:activeKey="activeTab">
