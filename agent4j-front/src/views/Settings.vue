@@ -2,25 +2,7 @@
   <div class="settings-view">
     <!-- 头部 -->
     <div class="settings-header">
-      <div class="header-left">
-        <div class="header-title">
-          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <circle cx="12" cy="12" r="3"/>
-            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
-          </svg>
-          <h2>设置</h2>
-        </div>
-      </div>
-      <div class="header-actions">
-        <a-button @click="resetSettings">
-        <template #icon><ReloadOutlined /></template>
-        重置默认
-      </a-button>
-      <a-button type="primary" @click="saveSettings" :loading="loading">
-        <template #icon><SaveOutlined /></template>
-        {{ loading ? '保存中...' : '保存设置' }}
-      </a-button>
-      </div>
+      <span class="settings-title">设置</span>
     </div>
     
     <!-- 标签页 -->
@@ -251,14 +233,6 @@
     
     <!-- 底部 -->
     <div class="settings-footer">
-      <div class="footer-info">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="12" cy="12" r="10"/>
-          <line x1="12" y1="16" x2="12" y2="12"/>
-          <line x1="12" y1="8" x2="12.01" y2="8"/>
-        </svg>
-        <span>配置文件位置: ~/.agent4j/config.json</span>
-      </div>
       <div class="footer-actions">
         <a-button size="small" @click="openConfigFile">
           <template #icon><FileOutlined /></template>
@@ -268,6 +242,10 @@
           <template #icon><DownloadOutlined /></template>
           导出配置
         </a-button>
+        <a-button type="primary" @click="saveSettings" :loading="loading" style="margin-left: auto;">
+          <template #icon><SaveOutlined /></template>
+          {{ loading ? '保存中...' : '保存设置' }}
+        </a-button>
       </div>
     </div>
   </div>
@@ -275,8 +253,8 @@
 
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue'
-import { message, Modal } from 'ant-design-vue'
-import { ReloadOutlined, SaveOutlined, DownloadOutlined, FileOutlined, InfoCircleOutlined } from '@ant-design/icons-vue'
+import { message } from 'ant-design-vue'
+import { SaveOutlined, DownloadOutlined, FileOutlined } from '@ant-design/icons-vue'
 import { configAPI } from '../services/api'
 
 // 状态
@@ -471,45 +449,7 @@ const saveSettings = async () => {
   }
 }
 
-const resetSettings = () => {
-  Modal.confirm({
-    title: '重置设置',
-    content: '确定要重置所有设置为默认值吗？',
-    onOk() {
-    // 重置为默认值
-    Object.assign(settings, {
-      language: 'zh-CN',
-      theme: 'light',
-      fontSize: 14,
-      animations: true,
 
-      server: {
-        apiBaseUrl: '',
-        autoConnect: true
-      },
-      
-      ai: {
-        baseUrl: 'https://api.deepseek.com/v1',
-        apiKey: '',
-        model: 'deepseek-v4-flash',
-        reasoningEffort: 'max',
-        availableModelsText: ''
-      },
-      
-      workspace: {
-        dir: '.',
-        mode: false
-      }
-    })
-    
-    // 清除本地存储的 UI 偏好
-    localStorage.removeItem('agent4j-ui-preferences')
-    localStorage.removeItem('agent4j-theme')
-    
-      message.success('设置已重置为默认值')
-    }
-  })
-}
 
 const checkServerConnection = async () => {
   checkingConnection.value = true
@@ -601,41 +541,17 @@ onMounted(() => {
   min-height: 100%;
 }
 
-/* 头部 */
+/* 头部 — 仅保留小标题 */
 .settings-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
   margin-bottom: var(--space-6);
-  padding-bottom: var(--space-4);
-  border-bottom: 1px solid var(--border);
 }
 
-.header-left {
-  display: flex;
-  align-items: center;
-  gap: var(--space-4);
-}
-
-.header-title {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  color: var(--fg);
-}
-
-.header-title svg {
-  color: var(--brand-primary);
-}
-
-.header-title h2 {
-  font-size: var(--text-2xl);
-  font-weight: var(--font-bold);
-}
-
-.header-actions {
-  display: flex;
-  gap: var(--space-2);
+.settings-title {
+  font-size: var(--text-sm);
+  font-weight: var(--font-semibold);
+  color: var(--fg-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
 }
 
 /* 标签页 */
@@ -905,11 +821,10 @@ onMounted(() => {
   background-color: var(--brand-primary);
 }
 
-/* 底部 */
+/* 底部 — 保存按钮在右下角 */
 .settings-footer {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  justify-content: flex-end;
   padding: var(--space-4);
   background: var(--bg-secondary);
   border: 1px solid var(--border);
@@ -917,21 +832,11 @@ onMounted(() => {
   margin-top: auto;
 }
 
-.footer-info {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  font-size: var(--text-sm);
-  color: var(--fg-muted);
-}
-
-.footer-info svg {
-  color: var(--fg-muted);
-}
-
 .footer-actions {
   display: flex;
   gap: var(--space-2);
+  align-items: center;
+  width: 100%;
 }
 
 /* 动画 */
