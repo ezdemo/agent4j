@@ -409,19 +409,25 @@ const loadSettings = async () => {
       }
       
       // 更新工作区设置
-      settings.workspace.dir = config.workspace || '.'
+      settings.workspace.dir = config.workspaceDir || config.workspace || '.'
       settings.workspace.editMode = config.editMode || 'auto'
       
-      // 更新语言设置
+      // 更新语言设置（后端是 'ZH'/'EN'，前端是 'zh-CN'/'en-US'）
       if (config.lang) {
         settings.language = config.lang === 'ZH' ? 'zh-CN' : 'en-US'
       }
       
-      // 更新其他设置（从本地存储或默认值）
-      const savedSettings = localStorage.getItem('agent4j-settings')
-      if (savedSettings) {
-        const parsed = JSON.parse(savedSettings)
-        Object.assign(settings, parsed)
+      // 仅恢复 UI 本地偏好（主题、字体大小），不覆盖后端配置数据
+      const savedPrefs = localStorage.getItem('agent4j-ui-preferences')
+      if (savedPrefs) {
+        try {
+          const prefs = JSON.parse(savedPrefs)
+          if (prefs.theme) settings.theme = prefs.theme
+          if (prefs.fontSize) settings.fontSize = prefs.fontSize
+          if (prefs.animations !== undefined) settings.animations = prefs.animations
+        } catch (e) {
+          // ignore parse error
+        }
       }
     } else {
       error.value = configResponse.error || '加载配置失败'
@@ -459,6 +465,14 @@ const saveSettings = async () => {
   error.value = ''
   
   try {
+    // 分离 UI 本地偏好和后端配置
+    const uiPrefs = {
+      theme: settings.theme,
+      fontSize: settings.fontSize,
+      animations: settings.animations
+    }
+    localStorage.setItem('agent4j-ui-preferences', JSON.stringify(uiPrefs))
+
     // 构建要保存到后端的配置
     const configToUpdate = {
       serverApiBaseUrl: settings.server.apiBaseUrl,
@@ -478,9 +492,6 @@ const saveSettings = async () => {
     const response = await configAPI.updateConfig(configToUpdate)
     
     if (response.success) {
-      // 保存本地设置到localStorage
-      localStorage.setItem('agent4j-settings', JSON.stringify(settings))
-      
       // 应用主题
       applyTheme(settings.theme)
       
@@ -513,14 +524,13 @@ const saveSettings = async () => {
     console.error('保存配置失败:', err)
     error.value = '保存失败: ' + err.message
     
-    // 降级保存到本地
-    localStorage.setItem('agent4j-settings', JSON.stringify(settings))
+    // 降级：UI 偏好已保存到 localStorage，后端配置保存失败提示用户
     applyTheme(settings.theme)
     
     window.dispatchEvent(new CustomEvent('terminal-output', { 
       detail: { 
         type: 'warning', 
-        text: '服务器保存失败，已保存到本地存储' 
+        text: '服务器保存失败，后端配置未更新' 
       }
     }))
   } finally {
@@ -557,8 +567,9 @@ const resetSettings = async () => {
       }
     })
     
-    // 清除本地存储
-    localStorage.removeItem('agent4j-settings')
+    // 清除本地存储的 UI 偏好
+    localStorage.removeItem('agent4j-ui-preferences')
+    localStorage.removeItem('agent4j-theme')
     
     // 显示消息
     window.dispatchEvent(new CustomEvent('terminal-output', { 
@@ -629,17 +640,34 @@ watch(() => settings.theme, (newTheme) => {
   applyTheme(newTheme)
 })
 
-// 生命周期
+// 生命周期 — 每次进入设置页面都从后端重新加载最新配置
 onMounted(() => {
   loadSettings()
   
-  // 应用保存的主题
-  const savedTheme = localStorage.getItem('agent4j-theme')
-  if (savedTheme) {
-    settings.theme = savedTheme
-    applyTheme(savedTheme)
+  // 应用保存的 UI 偏好（仅本地，不影响后端配置）
+  const savedPrefs = localStorage.getItem('agent4j-ui-preferences')
+  if (savedPrefs) {
+    try {
+      const prefs = JSON.parse(savedPrefs)
+      if (prefs.theme) {
+        settings.theme = prefs.theme
+        applyTheme(prefs.theme)
+      }
+      if (prefs.fontSize) settings.fontSize = prefs.fontSize
+      if (prefs.animations !== undefined) settings.animations = prefs.animations
+    } catch (e) {
+      // ignore
+    }
+  } else {
+    // 兼容旧版本：从旧 key 迁移
+    const savedTheme = localStorage.getItem('agent4j-theme')
+    if (savedTheme) {
+      settings.theme = savedTheme
+      applyTheme(savedTheme)
+      localStorage.setItem('agent4j-ui-preferences', JSON.stringify({ theme: savedTheme }))
+      localStorage.removeItem('agent4j-theme')
+    }
   }
-  
 })
 </script>
 
