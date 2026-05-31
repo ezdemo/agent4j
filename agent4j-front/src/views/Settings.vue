@@ -1,20 +1,12 @@
 <template>
-  <a-modal
-    :visible="true"
-    :footer="null"
-    :width="680"
-    :bodyStyle="{ padding: 0 }"
-    :destroyOnClose="false"
-    wrapClassName="settings-modal"
-    @cancel="goBack"
-  >
-    <!-- title 区域放 tab -->
-    <template #title>
-      <div class="modal-tabs">
+  <div class="settings-page">
+    <!-- 标题栏 -->
+    <div class="settings-top-bar">
+      <div class="settings-tabs">
         <button
           v-for="tab in tabs"
           :key="tab.id"
-          class="modal-tab-btn"
+          class="tab-btn"
           :class="{ active: activeTab === tab.id }"
           @click="activeTab = tab.id"
         >
@@ -22,179 +14,175 @@
           <span>{{ tab.label }}</span>
         </button>
       </div>
-    </template>
+    </div>
 
-    <!-- body — 内容区自动滚动 -->
-    <!-- 基本设置 -->
-    <div v-if="activeTab === 'general'" style="padding: 24px">
-      <h4 style="margin: 0 0 4px">基本设置</h4>
-      <p style="color: var(--fg-muted); font-size: 13px; margin: 0 0 20px">界面主题与显示选项</p>
+    <!-- 内容区（滚动） -->
+    <div class="settings-body">
+      <!-- 基本设置 -->
+      <div v-if="activeTab === 'general'">
+        <h4 style="margin: 0 0 4px">基本设置</h4>
+        <p class="section-desc">界面主题与显示选项</p>
 
-      <div class="setting-item">
-        <div class="setting-info">
-          <div class="setting-label">主题</div>
-          <div class="setting-description">界面主题风格</div>
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">主题</div>
+            <div class="setting-description">界面主题风格</div>
+          </div>
+          <div class="setting-control">
+            <a-button
+              v-for="theme in themes"
+              :key="theme.value"
+              :type="settings.theme === theme.value ? 'primary' : 'default'"
+              @click="settings.theme = theme.value"
+              style="margin-right: 8px"
+            >
+              {{ theme.label }}
+            </a-button>
+          </div>
         </div>
-        <div class="setting-control">
-          <a-button
-            v-for="theme in themes" 
-            :key="theme.value"
-            :type="settings.theme === theme.value ? 'primary' : 'default'"
-            @click="settings.theme = theme.value"
-            style="margin-right: 8px"
-          >
-            {{ theme.label }}
-          </a-button>
+      </div>
+
+      <!-- 服务器设置 -->
+      <div v-if="activeTab === 'server'">
+        <h4 style="margin: 0 0 4px">服务器设置</h4>
+        <p class="section-desc">配置后端 Agent4j 服务的连接地址</p>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">后端 API 地址</div>
+            <div class="setting-description">留空使用默认代理（localhost:8097）</div>
+          </div>
+          <div class="setting-control">
+            <a-input v-model:value="settings.server.apiBaseUrl" placeholder="留空 = 默认 http://localhost:8097" />
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">连接状态</div>
+            <div class="setting-description">测试后端服务是否可达</div>
+          </div>
+          <div class="setting-control">
+            <a-button @click="checkServerConnection" :loading="checkingConnection">检测连接</a-button>
+            <span style="margin-left: 8px; font-size: 13px;" :style="{ color: connectionOk ? '#52c41a' : '#ff4d4f' }" v-if="connectionChecked">
+              {{ connectionOk ? '✓ 连接成功' : '✗ 连接失败' }}
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- AI 设置 -->
+      <div v-if="activeTab === 'ai'">
+        <h4 style="margin: 0 0 4px">AI 模型设置</h4>
+        <p class="section-desc">配置 LLM API 连接与模型参数</p>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">API 地址</div>
+            <div class="setting-description">OpenAI 兼容 API 的基础 URL</div>
+          </div>
+          <div class="setting-control">
+            <a-input v-model:value="settings.ai.baseUrl" placeholder="https://api.openai.com/v1" />
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">API 密钥</div>
+            <div class="setting-description">用于身份验证的 API 密钥</div>
+          </div>
+          <div class="setting-control">
+            <a-input-password v-model:value="settings.ai.apiKey" :visible="showApiKey" @update:visible="showApiKey = $event" placeholder="sk-..." />
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">模型</div>
+            <div class="setting-description">使用的 AI 模型</div>
+          </div>
+          <div class="setting-control">
+            <a-select v-model:value="settings.ai.model" style="width: 200px">
+              <a-select-option v-for="model in availableModels" :key="model.name" :value="model.name">{{ model.name }}</a-select-option>
+            </a-select>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">推理强度</div>
+            <div class="setting-description">AI 推理的详细程度</div>
+          </div>
+          <div class="setting-control">
+            <a-select v-model:value="settings.ai.reasoningEffort" style="width: 200px">
+              <a-select-option value="low">低</a-select-option>
+              <a-select-option value="medium">中</a-select-option>
+              <a-select-option value="high">高</a-select-option>
+              <a-select-option value="max">最大</a-select-option>
+            </a-select>
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">可用模型列表</div>
+            <div class="setting-description">每行一个模型名称</div>
+          </div>
+          <div class="setting-control">
+            <a-textarea v-model:value="settings.ai.availableModelsText" placeholder="deepseek-v4-flash&#10;gpt-4&#10;gpt-4-turbo" :rows="4" />
+          </div>
+        </div>
+      </div>
+
+      <!-- 工作区设置 -->
+      <div v-if="activeTab === 'workspace'">
+        <h4 style="margin: 0 0 4px">工作区设置</h4>
+        <p class="section-desc">配置工作目录与编辑行为</p>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">工作区路径</div>
+            <div class="setting-description">默认工作目录</div>
+          </div>
+          <div class="setting-control">
+            <a-input v-model:value="settings.workspace.dir" placeholder="." />
+          </div>
+        </div>
+
+        <div class="setting-item">
+          <div class="setting-info">
+            <div class="setting-label">编辑模式</div>
+            <div class="setting-description">手动 = 写入操作需审批，自由 = 直接执行</div>
+          </div>
+          <div class="setting-control">
+            <a-select v-model:value="settings.workspace.mode" style="width: 200px">
+              <a-select-option :value="true">手动</a-select-option>
+              <a-select-option :value="false">自由</a-select-option>
+            </a-select>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- 服务器设置 -->
-    <div v-if="activeTab === 'server'" style="padding: 24px">
-      <h4 style="margin: 0 0 4px">服务器设置</h4>
-      <p style="color: var(--fg-muted); font-size: 13px; margin: 0 0 20px">配置后端 Agent4j 服务的连接地址</p>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <div class="setting-label">后端 API 地址</div>
-          <div class="setting-description">留空使用默认代理（localhost:8097）</div>
-        </div>
-        <div class="setting-control">
-          <a-input v-model:value="settings.server.apiBaseUrl" placeholder="留空 = 默认 http://localhost:8097" />
-        </div>
-      </div>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <div class="setting-label">连接状态</div>
-          <div class="setting-description">测试后端服务是否可达</div>
-        </div>
-        <div class="setting-control">
-          <a-button @click="checkServerConnection" :loading="checkingConnection">检测连接</a-button>
-          <span style="margin-left: 8px; font-size: 13px;" :style="{ color: connectionOk ? '#52c41a' : '#ff4d4f' }" v-if="connectionChecked">
-            {{ connectionOk ? '✓ 连接成功' : '✗ 连接失败' }}
-          </span>
-        </div>
-      </div>
+    <!-- 底部操作栏 -->
+    <div class="settings-bottom-bar">
+      <a-space>
+        <a-button size="small" @click="openConfigFile"><FileOutlined /> 配置文件</a-button>
+        <a-button size="small" @click="exportSettings"><DownloadOutlined /> 导出</a-button>
+      </a-space>
+      <a-button type="primary" @click="saveSettings" :loading="loading">
+        <template #icon><SaveOutlined /></template>
+        {{ loading ? '保存中…' : '保存设置' }}
+      </a-button>
     </div>
-
-    <!-- AI 设置 -->
-    <div v-if="activeTab === 'ai'" style="padding: 24px">
-      <h4 style="margin: 0 0 4px">AI 模型设置</h4>
-      <p style="color: var(--fg-muted); font-size: 13px; margin: 0 0 20px">配置 LLM API 连接与模型参数</p>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <div class="setting-label">API 地址</div>
-          <div class="setting-description">OpenAI 兼容 API 的基础 URL</div>
-        </div>
-        <div class="setting-control">
-          <a-input v-model:value="settings.ai.baseUrl" placeholder="https://api.openai.com/v1" />
-        </div>
-      </div>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <div class="setting-label">API 密钥</div>
-          <div class="setting-description">用于身份验证的 API 密钥</div>
-        </div>
-        <div class="setting-control">
-          <a-input-password v-model:value="settings.ai.apiKey" :visible="showApiKey" @update:visible="showApiKey = $event" placeholder="sk-..." />
-        </div>
-      </div>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <div class="setting-label">模型</div>
-          <div class="setting-description">使用的 AI 模型</div>
-        </div>
-        <div class="setting-control">
-          <a-select v-model:value="settings.ai.model" style="width: 200px">
-            <a-select-option v-for="model in availableModels" :key="model.name" :value="model.name">{{ model.name }}</a-select-option>
-          </a-select>
-        </div>
-      </div>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <div class="setting-label">推理强度</div>
-          <div class="setting-description">AI 推理的详细程度</div>
-        </div>
-        <div class="setting-control">
-          <a-select v-model:value="settings.ai.reasoningEffort" style="width: 200px">
-            <a-select-option value="low">低</a-select-option>
-            <a-select-option value="medium">中</a-select-option>
-            <a-select-option value="high">高</a-select-option>
-            <a-select-option value="max">最大</a-select-option>
-          </a-select>
-        </div>
-      </div>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <div class="setting-label">可用模型列表</div>
-          <div class="setting-description">每行一个模型名称</div>
-        </div>
-        <div class="setting-control">
-          <a-textarea v-model:value="settings.ai.availableModelsText" placeholder="deepseek-v4-flash&#10;gpt-4&#10;gpt-4-turbo" :rows="4" />
-        </div>
-      </div>
-    </div>
-
-    <!-- 工作区设置 -->
-    <div v-if="activeTab === 'workspace'" style="padding: 24px">
-      <h4 style="margin: 0 0 4px">工作区设置</h4>
-      <p style="color: var(--fg-muted); font-size: 13px; margin: 0 0 20px">配置工作目录与编辑行为</p>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <div class="setting-label">工作区路径</div>
-          <div class="setting-description">默认工作目录</div>
-        </div>
-        <div class="setting-control">
-          <a-input v-model:value="settings.workspace.dir" placeholder="." />
-        </div>
-      </div>
-
-      <div class="setting-item">
-        <div class="setting-info">
-          <div class="setting-label">编辑模式</div>
-          <div class="setting-description">手动 = 写入操作需审批，自由 = 直接执行</div>
-        </div>
-        <div class="setting-control">
-          <a-select v-model:value="settings.workspace.mode" style="width: 200px">
-            <a-select-option :value="true">手动</a-select-option>
-            <a-select-option :value="false">自由</a-select-option>
-          </a-select>
-        </div>
-      </div>
-    </div>
-
-    <!-- footer — 按钮固定在底部 -->
-    <template #footer>
-      <div class="modal-footer-bar">
-        <a-space>
-          <a-button size="small" @click="openConfigFile"><FileOutlined /> 配置文件</a-button>
-          <a-button size="small" @click="exportSettings"><DownloadOutlined /> 导出</a-button>
-        </a-space>
-        <a-button type="primary" @click="saveSettings" :loading="loading">
-          <template #icon><SaveOutlined /></template>
-          {{ loading ? '保存中…' : '保存设置' }}
-        </a-button>
-      </div>
-    </template>
-  </a-modal>
+  </div>
 </template>
 
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue'
-import { useRouter } from 'vue-router'
 import { message } from 'ant-design-vue'
 import { SaveOutlined, DownloadOutlined, FileOutlined } from '@ant-design/icons-vue'
 import { configAPI } from '../services/api'
-
-const router = useRouter()
-const goBack = () => router.back()
 
 const activeTab = ref('general')
 const showApiKey = ref(false)
@@ -212,8 +200,8 @@ const tabs = [
 ]
 
 const themes = [
-  { value: 'light', label: '浅色', color: '#ffffff' },
-  { value: 'dark', label: '深色', color: '#0f172a' }
+  { value: 'light', label: '浅色' },
+  { value: 'dark', label: '深色' }
 ]
 
 const settings = reactive({
@@ -303,7 +291,7 @@ const saveSettings = async () => {
         try { await configAPI.switchWorkspace(settings.workspace.dir.trim()) } catch (e) { console.warn('切换工作目录失败:', e) }
       }
       const serverMsg = typeof response.data === 'string' ? response.data : (response.data?.message || '设置已保存')
-      message.success(serverMsg + (settings.workspace.dir ? '，工作目录已切换' : ''))
+      message.success(serverMsg)
     } else {
       message.error(response.error || '保存失败')
     }
@@ -371,33 +359,56 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.modal-tabs {
+.settings-page {
   display: flex;
-  gap: 4px;
+  flex-direction: column;
+  height: 100%;
+  background: var(--bg-primary);
 }
-.modal-tab-btn {
+.settings-top-bar {
+  flex-shrink: 0;
+  padding: 12px 16px 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-secondary);
+}
+.settings-tabs {
+  display: flex;
+  gap: 2px;
+}
+.tab-btn {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 16px;
+  padding: 8px 18px;
   border: none;
-  border-radius: 6px;
+  border-radius: 6px 6px 0 0;
   background: transparent;
   font-size: 14px;
   color: var(--fg-secondary);
   cursor: pointer;
   transition: all 0.2s;
 }
-.modal-tab-btn:hover {
+.tab-btn:hover {
   background: var(--surface-hover);
   color: var(--fg);
 }
-.modal-tab-btn.active {
-  background: var(--brand-primary);
-  color: #fff;
+.tab-btn.active {
+  background: var(--surface);
+  color: var(--brand-primary);
+  font-weight: 600;
 }
 .tab-icon {
   font-size: 16px;
+}
+.settings-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+}
+.section-desc {
+  color: var(--fg-muted);
+  font-size: 13px;
+  margin: 0 0 20px;
 }
 .setting-item {
   display: flex;
@@ -433,11 +444,14 @@ onMounted(() => {
   display: flex;
   align-items: center;
 }
-.modal-footer-bar {
+.settings-bottom-bar {
+  flex-shrink: 0;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  width: 100%;
+  padding: 12px 24px;
+  border-top: 1px solid var(--border);
+  background: var(--bg-secondary);
 }
 [data-theme="dark"] .setting-item {
   background: var(--bg-secondary);
