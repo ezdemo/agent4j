@@ -122,9 +122,15 @@
           工具
         </button>
         <button class="foot-btn" @click="toggleTheme">
+          <!-- 浅色：月亮图标 -->
           <svg v-if="theme === 'light'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
-          <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-          {{ theme === 'light' ? '深色' : '浅色' }}
+          <!-- 深色：太阳图标 -->
+          <svg v-else-if="theme === 'dark'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+          <!-- 复古绿：CRT 显示器图标 -->
+          <svg v-else-if="theme === 'retro'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          <!-- 复古黄：书本图标 -->
+          <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+          {{ { light: '深色', dark: '复古绿', retro: '复古黄', 'retro-yellow': '浅色' }[store.settings.theme] }}
         </button>
         <button class="foot-btn" @click="showSettings = true">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
@@ -212,6 +218,7 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfirm } from './composables/useConfirm'
+import { useAppStore } from './stores/app'
 import { agentAPI, sessionsAPI, toolsAPI, configAPI } from './services/api'
 import SetupScreen from './components/SetupScreen.vue'
 import TitleBar from './components/TitleBar.vue'
@@ -220,9 +227,12 @@ import ConfirmDialog from './components/ConfirmDialog.vue'
 import ChatView from './views/Chat.vue'
 import SettingsView from './views/Settings.vue'
 
-const theme = ref('light')
+const store = useAppStore()
 const router = useRouter()
 const { confirm } = useConfirm()
+
+// 主题：统一从 Pinia store 读写，确保设置页和主页一致
+const theme = computed({ get: () => store.settings.theme, set: (v) => { store.settings.theme = v } })
 const sideOpen = ref(true)
 const searchQuery = ref('')
 const sessions = ref([])
@@ -287,10 +297,10 @@ const formatName = n => {
   return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}` : n.replace(/[-_]+/g, ' ').slice(0, 24)
 }
 
+const themeOrder = ['light', 'dark', 'retro', 'retro-yellow']
 const toggleTheme = () => {
-  theme.value = theme.value === 'light' ? 'dark' : 'light'
-  localStorage.setItem('agent4j-theme', theme.value)
-  document.documentElement.setAttribute('data-theme', theme.value)
+  const idx = themeOrder.indexOf(store.settings.theme)
+  store.settings.theme = themeOrder[(idx + 1) % themeOrder.length]
 }
 
 // 连接设置页回调：后端连接成功
@@ -468,7 +478,7 @@ const clearChat = async () => {
 }
 
 onMounted(async () => {
-  document.documentElement.setAttribute('data-theme', theme.value)
+  // 主题已由 store.initialize() 和 store watcher 设置到 DOM
 })
 
 // 设置弹窗关闭时刷新工作区和会话（用户可能在设置中切换了工作目录）

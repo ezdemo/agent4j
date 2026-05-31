@@ -1,23 +1,23 @@
 import { defineStore } from 'pinia'
-import { ref, computed } from 'vue'
+import { ref, computed, watch } from 'vue'
 
 export const useAppStore = defineStore('app', () => {
-  // 连接状�?
+  // 连接状态
   const connectionStatus = ref('disconnected')
   const isConnecting = ref(false)
   const lastError = ref(null)
   
-  // 会话状�?
+  // 会话状态
   const currentSession = ref(null)
   const sessions = ref([])
   const isLoadingSessions = ref(false)
   
-  // 消息状�?
+  // 消息状态
   const messages = ref([])
   const isStreaming = ref(false)
   const streamingMessage = ref(null)
   
-  // 设置状�?
+  // 设置状态
   const settings = ref({
     language: 'zh-CN',
     theme: 'light',
@@ -55,11 +55,11 @@ export const useAppStore = defineStore('app', () => {
     }
   })
   
-  // 工具状�?
+  // 工具状态
   const tools = ref([])
   const isLoadingTools = ref(false)
   
-  // 统计状�?
+  // 统计状态
   const usageStats = ref({
     totalTokens: 0,
     promptTokens: 0,
@@ -67,20 +67,20 @@ export const useAppStore = defineStore('app', () => {
     cacheHit: 0
   })
   
-  // UI 状�?
+  // UI 状态
   const sidebarOpen = ref(true)
   const activeModal = ref(null)
   const notifications = ref([])
   const isLoading = ref(false)
   
-  // 计算属�?
+  // 计算属性
   const isConnected = computed(() => connectionStatus.value === 'connected')
   const hasMessages = computed(() => messages.value.length > 0)
   const unreadNotifications = computed(() => 
     notifications.value.filter(n => !n.read).length
   )
   
-  // 连接状态管�?
+  // 连接状态管理
   const setConnectionStatus = (status) => {
     connectionStatus.value = status
     isConnecting.value = status === 'connecting'
@@ -175,7 +175,6 @@ export const useAppStore = defineStore('app', () => {
   // 设置管理
   const updateSettings = (newSettings) => {
     settings.value = { ...settings.value, ...newSettings }
-    // 保存到本地存�?
     localStorage.setItem('agent4j-settings', JSON.stringify(settings.value))
   }
   
@@ -279,7 +278,6 @@ export const useAppStore = defineStore('app', () => {
       ...notification
     })
     
-    // 自动移除通知（如果设置了持续时间�?
     if (notification.duration) {
       setTimeout(() => {
         removeNotification(id)
@@ -304,30 +302,36 @@ export const useAppStore = defineStore('app', () => {
     notifications.value = []
   }
   
-  // 加载状态管�?
   const setLoading = (loading) => {
     isLoading.value = loading
   }
   
-  // 初始�?
+  // 初始化
   const initialize = () => {
-    // 加载设置
     loadSettings()
     
-    // 加载侧边栏状�?
+    // 从独立 key 读取主题
+    const savedTheme = localStorage.getItem('agent4j-theme')
+    if (savedTheme) {
+      settings.value.theme = savedTheme
+    }
+    
     const savedSidebar = localStorage.getItem('agent4j-sidebar')
     if (savedSidebar !== null) {
       sidebarOpen.value = savedSidebar === 'true'
     }
     
-    // 主题由 useTheme 管理，不再覆盖
-    
-    // 应用字体大小
+    document.documentElement.setAttribute('data-theme', settings.value.theme)
     document.documentElement.style.fontSize = `${settings.value.fontSize}px`
   }
+
+  // 监听主题变化，自动同步到全局
+  watch(() => settings.value.theme, (val) => {
+    document.documentElement.setAttribute('data-theme', val)
+    localStorage.setItem('agent4j-theme', val)
+  })
   
   return {
-    // 状�?
     connectionStatus,
     isConnecting,
     lastError,
@@ -345,63 +349,39 @@ export const useAppStore = defineStore('app', () => {
     activeModal,
     notifications,
     isLoading,
-    
-    // 计算属�?
     isConnected,
     hasMessages,
     unreadNotifications,
-    
-    // 连接状态管�?
     setConnectionStatus,
     setConnectionError,
-    
-    // 会话管理
     setCurrentSession,
     setSessions,
     addSession,
     removeSession,
     updateSession,
-    
-    // 消息管理
     addMessage,
     updateMessage,
     removeMessage,
     clearMessages,
-    
-    // 流式消息管理
     startStreaming,
     updateStreamingContent,
     finishStreaming,
-    
-    // 设置管理
     updateSettings,
     loadSettings,
     resetSettings,
-    
-    // 工具管理
     setTools,
     getToolByName,
-    
-    // 统计管理
     updateUsageStats,
     incrementTokens,
-    
-    // UI 管理
     toggleSidebar,
     setSidebarOpen,
     openModal,
     closeModal,
-    
-    // 通知管理
     addNotification,
     removeNotification,
     markNotificationRead,
     clearNotifications,
-    
-    // 加载状态管�?
     setLoading,
-    
-    // 初始�?
     initialize
   }
 })

@@ -162,10 +162,22 @@
 import { ref, reactive, watch, onMounted } from 'vue'
 import { message } from 'ant-design-vue'
 import { SaveOutlined, DownloadOutlined, FileOutlined } from '@ant-design/icons-vue'
-import { useTheme } from '../composables/useTheme'
+import { useAppStore } from '../stores/app'
 import { configAPI } from '../services/api'
 
-const { theme, applyTheme } = useTheme()
+const store = useAppStore()
+
+// theme 直接绑定 store，不再独立管理
+const settings = reactive({
+  language: 'zh-CN',
+  get theme() { return store.settings.theme },
+  set theme(v) { store.settings.theme = v },
+  fontSize: 14,
+  animations: true,
+  server: { apiBaseUrl: '', autoConnect: true },
+  ai: { baseUrl: '', apiKey: '', model: '', reasoningEffort: 'max', availableModelsText: '' },
+  workspace: { dir: '', mode: false }
+})
 
 const activeTab = ref('general')
 const showApiKey = ref(false)
@@ -184,18 +196,12 @@ const tabs = [
 
 const themes = [
   { value: 'light', label: '浅色' },
-  { value: 'dark', label: '深色' }
+  { value: 'dark', label: '深色' },
+  { value: 'retro', label: '复古绿' },
+  { value: 'retro-yellow', label: '复古黄' }
 ]
 
-const settings = reactive({
-  language: 'zh-CN',
-  theme: 'light',
-  fontSize: 14,
-  animations: true,
-  server: { apiBaseUrl: '', autoConnect: true },
-  ai: { baseUrl: '', apiKey: '', model: '', reasoningEffort: 'max', availableModelsText: '' },
-  workspace: { dir: '', mode: false }
-})
+// theme 通过 getter/setter 直接绑定 store，无需额外 watch
 
 const loadSettings = async () => {
   loading.value = true
@@ -222,7 +228,7 @@ const loadSettings = async () => {
       if (savedPrefs) {
         try {
           const prefs = JSON.parse(savedPrefs)
-          if (prefs.theme) settings.theme = prefs.theme
+          // theme 已由 store 管理，不再从 ui-preferences 覆盖
           if (prefs.fontSize) settings.fontSize = prefs.fontSize
           if (prefs.animations !== undefined) settings.animations = prefs.animations
         } catch (e) { /* ignore */ }
@@ -255,7 +261,7 @@ const loadSettings = async () => {
 const saveSettings = async () => {
   loading.value = true
   try {
-    const uiPrefs = { theme: settings.theme, fontSize: settings.fontSize, animations: settings.animations }
+    const uiPrefs = { fontSize: settings.fontSize, animations: settings.animations }
     localStorage.setItem('agent4j-ui-preferences', JSON.stringify(uiPrefs))
     const configToUpdate = {
       serverApiBaseUrl: settings.server.apiBaseUrl,
@@ -269,7 +275,6 @@ const saveSettings = async () => {
     }
     const response = await configAPI.updateConfig(configToUpdate)
     if (response.success) {
-      applyTheme(settings.theme)
       if (settings.workspace.dir && settings.workspace.dir.trim()) {
         try { await configAPI.switchWorkspace(settings.workspace.dir.trim()) } catch (e) { console.warn('切换工作目录失败:', e) }
       }
@@ -281,7 +286,6 @@ const saveSettings = async () => {
   } catch (err) {
     console.error('保存配置失败:', err)
     message.error('保存失败: ' + err.message)
-    applyTheme(settings.theme)
   } finally {
     loading.value = false
   }
@@ -312,13 +316,8 @@ const exportSettings = () => {
 
 const openConfigFile = () => { message.info('配置文件: ~/.agent4j/config.json') }
 
-watch(() => settings.theme, (t) => applyTheme(t))
-
-// 初始化：从 useTheme 同步当前主题到 settings.theme
 onMounted(() => {
-  settings.theme = theme.value
   loadSettings()
-  // 迁移旧版 localStorage
   const savedPrefs = localStorage.getItem('agent4j-ui-preferences')
   if (savedPrefs) {
     try {
@@ -378,7 +377,6 @@ onMounted(() => {
 .settings-main {
   flex: 1;
   display: flex;
-  height: 500px;
   flex-direction: column;
   min-width: 0;
 }
@@ -434,42 +432,62 @@ onMounted(() => {
   display: flex;
   align-items: center;
 }
-[data-theme="dark"] .setting-item {
+[data-theme="dark"] .setting-item,
+[data-theme="retro"] .setting-item,
+[data-theme="retro-yellow"] .setting-item {
   background: var(--bg-secondary);
 }
-[data-theme="dark"] .sidebar-tab.active {
+[data-theme="dark"] .sidebar-tab.active,
+[data-theme="retro"] .sidebar-tab.active,
+[data-theme="retro-yellow"] .sidebar-tab.active {
   background: var(--bg-tertiary);
 }
-[data-theme="dark"] .settings-sidebar {
+[data-theme="dark"] .settings-sidebar,
+[data-theme="retro"] .settings-sidebar,
+[data-theme="retro-yellow"] .settings-sidebar {
   background: var(--bg-tertiary);
 }
-[data-theme="dark"] .settings-top-actions {
+[data-theme="dark"] .settings-top-actions,
+[data-theme="retro"] .settings-top-actions,
+[data-theme="retro-yellow"] .settings-top-actions {
   background: var(--bg-tertiary);
 }
 </style>
 
 <style>
-[data-theme="dark"] .ant-btn-default {
+[data-theme="dark"] .ant-btn-default,
+[data-theme="retro"] .ant-btn-default,
+[data-theme="retro-yellow"] .ant-btn-default {
   background: var(--bg-tertiary);
   border-color: var(--border);
   color: var(--fg);
 }
-[data-theme="dark"] .ant-btn-default:hover {
+[data-theme="dark"] .ant-btn-default:hover,
+[data-theme="retro"] .ant-btn-default:hover,
+[data-theme="retro-yellow"] .ant-btn-default:hover {
   background: var(--bg-secondary);
   border-color: var(--brand-primary);
   color: var(--brand-primary);
 }
 [data-theme="dark"] .ant-input-affix-wrapper,
-[data-theme="dark"] .ant-input {
+[data-theme="dark"] .ant-input,
+[data-theme="retro"] .ant-input-affix-wrapper,
+[data-theme="retro"] .ant-input,
+[data-theme="retro-yellow"] .ant-input-affix-wrapper,
+[data-theme="retro-yellow"] .ant-input {
   background: var(--bg-tertiary) !important;
   border-color: var(--border) !important;
   color: var(--fg) !important;
 }
-[data-theme="dark"] .ant-select-selector {
+[data-theme="dark"] .ant-select-selector,
+[data-theme="retro"] .ant-select-selector,
+[data-theme="retro-yellow"] .ant-select-selector {
   background: var(--bg-tertiary) !important;
   border-color: var(--border) !important;
 }
-[data-theme="dark"] .ant-select-selection-item {
+[data-theme="dark"] .ant-select-selection-item,
+[data-theme="retro"] .ant-select-selection-item,
+[data-theme="retro-yellow"] .ant-select-selection-item {
   color: var(--fg) !important;
 }
 </style>
