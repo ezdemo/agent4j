@@ -217,6 +217,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { useRouter } from 'vue-router'
+import { message } from 'ant-design-vue'
 import { useConfirm } from './composables/useConfirm'
 import { useAppStore } from './stores/app'
 import { agentAPI, sessionsAPI, toolsAPI, configAPI } from './services/api'
@@ -383,15 +384,15 @@ const handleSwitchWorkspace = async (hash) => {
     if (r.success) {
       workspace.value = r.data.workspace
       showWorkspacePicker.value = false
-      // 先加载工作区（更新 activeWorkspaceHash），再加载会话
       await loadWorkspaces()
       await loadSessions()
-      await newChat(true)   // skipReload，避免再重载列表
+      await newChat(true)
+      message.success('已切换工作区')
     } else {
-      alert(r.message || '切换工作区失败')
+      message.error(r.message || '切换工作区失败')
     }
   } catch (e) {
-    alert('切换工作区失败: ' + e.message)
+    message.error('切换工作区失败: ' + e.message)
   }
 }
 
@@ -409,11 +410,12 @@ const handleAddWorkspace = async () => {
       await loadWorkspaces()
       await loadSessions()
       await newChat(true)
+      message.success('已添加工作区')
     } else {
-      alert(r.message || '添加工作区失败')
+      message.error(r.message || '添加工作区失败')
     }
   } catch (e) {
-    alert('添加工作区失败: ' + e.message)
+    message.error('添加工作区失败: ' + e.message)
   }
 }
 
@@ -426,11 +428,12 @@ const handleDeleteWorkspace = async (hash) => {
     const r = await configAPI.deleteWorkspace(hash)
     if (r.success) {
       await loadWorkspaces()
+      message.success('工作区已删除')
     } else {
-      alert(r.message || '删除工作区失败')
+      message.error(r.message || '删除工作区失败')
     }
   } catch (e) {
-    alert('删除工作区失败: ' + e.message)
+    message.error('删除工作区失败: ' + e.message)
   }
 }
 
@@ -443,10 +446,14 @@ const newChat = async (skipReload = false) => {
       if (!skipReload) {
         await loadSessions()
         await loadWorkspaces()
+        message.success('已新建对话')
       }
+    } else {
+      message.error('新建对话失败')
     }
   } catch (e) {
     console.error('新建会话失败:', e)
+    message.error('新建对话失败: ' + e.message)
   }
 }
 
@@ -458,7 +465,13 @@ const loadSession = name => {
 const deleteSession = async name => {
   const ok = await confirm({ message: `确定要删除此会话吗？` })
   if (!ok) return
-  try { await sessionsAPI.deleteSession(name); await loadSessions() } catch {}
+  try {
+    await sessionsAPI.deleteSession(name)
+    await loadSessions()
+    message.success('会话已删除')
+  } catch (e) {
+    message.error('删除会话失败: ' + e.message)
+  }
 }
 
 const clearChat = async () => {
@@ -471,9 +484,13 @@ const clearChat = async () => {
       chatRef.value?.resetLocalMessages()
       await loadSessions()
       await loadWorkspaces()
+      message.success('对话已清空')
+    } else {
+      message.error('清空对话失败')
     }
   } catch (e) {
     console.error('清空对话失败:', e)
+    message.error('清空对话失败: ' + e.message)
   }
 }
 

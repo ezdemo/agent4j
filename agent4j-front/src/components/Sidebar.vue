@@ -115,6 +115,7 @@
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
+import { message } from 'ant-design-vue'
 import { configAPI } from '../services/api.js'
 
 const props = defineProps({
@@ -168,11 +169,12 @@ async function handleSwitchWorkspace(path) {
       showWorkspacePicker.value = false
       emit('workspaceChanged', path)
       await loadWorkspaces()
+      message.success('已切换工作区')
     } else {
-      alert((res && res.message) || '切换工作区失败')
+      message.error((res && res.message) || '切换工作区失败')
     }
   } catch (e) {
-    alert('切换工作区失败: ' + e.message)
+    message.error('切换工作区失败: ' + e.message)
   }
 }
 
@@ -188,11 +190,12 @@ async function handleAddWorkspace() {
       showWorkspacePicker.value = false
       emit('workspaceChanged', path)
       await loadWorkspaces()
+      message.success('已添加工作区')
     } else {
-      alert((res && res.message) || '添加工作区失败')
+      message.error((res && res.message) || '添加工作区失败')
     }
   } catch (e) {
-    alert('添加工作区失败: ' + e.message)
+    message.error('添加工作区失败: ' + e.message)
   }
 }
 
@@ -204,11 +207,12 @@ async function handleDeleteWorkspace(hash) {
     const res = await configAPI.deleteWorkspace(hash)
     if (res && res.success) {
       await loadWorkspaces()
+      message.success('工作区已删除')
     } else {
-      alert((res && res.message) || '删除工作区失败')
+      message.error((res && res.message) || '删除工作区失败')
     }
   } catch (e) {
-    alert('删除工作区失败: ' + e.message)
+    message.error('删除工作区失败: ' + e.message)
   }
 }
 

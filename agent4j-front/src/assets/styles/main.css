@@ -210,9 +210,22 @@ body {
   background: var(--bg-3);
   border-color: var(--border);
 }
+/* 复古绿 — 消息 & 加载适配 */
 [data-theme="retro"] .user-body {
   color: #0a0e0a;
 }
+[data-theme="retro"] .assistant-body {
+  background: #0f150f;
+  border-color: #1a3a1a;
+}
+[data-theme="retro"] .assistant-body .msg-time {
+  color: #117711;
+}
+[data-theme="retro"] .loading-spinner {
+  border-color: #1a3a1a;
+  border-top-color: #33ff33;
+}
+
 
 /* 复古黄 — 古色古香羊皮纸风格 */
 [data-theme="retro-yellow"] {
@@ -249,9 +262,22 @@ body {
 }
 [data-theme="retro-yellow"] ::-webkit-scrollbar-thumb { background: #c9b494; }
 [data-theme="retro-yellow"] ::-webkit-scrollbar-thumb:hover { background: #b8a07a; }
+/* 复古黄 — 消息 & 加载适配 */
 [data-theme="retro-yellow"] .user-body {
   color: #f5e6c8;
 }
+[data-theme="retro-yellow"] .assistant-body {
+  background: #ecdbc2;
+  border-color: #c9b494;
+}
+[data-theme="retro-yellow"] .assistant-body .msg-time {
+  color: #9c8068;
+}
+[data-theme="retro-yellow"] .loading-spinner {
+  border-color: #c9b494;
+  border-top-color: #8b4513;
+}
+
 
 ::selection { background: var(--accent); color: #fff; }
 a { color: var(--accent); text-decoration: none; }
