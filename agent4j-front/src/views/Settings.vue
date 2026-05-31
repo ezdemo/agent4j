@@ -445,4 +445,39 @@ onMounted(() => {
 [data-theme="dark"] .setting-item {
   background: var(--bg-secondary);
 }
+[data-theme="dark"] .sidebar-tab.active {
+  background: var(--bg-tertiary);
+}
+[data-theme="dark"] .settings-sidebar {
+  background: var(--bg-tertiary);
+}
+[data-theme="dark"] .settings-top-actions {
+  background: var(--bg-tertiary);
+}
+</style>
+
+<style>
+[data-theme="dark"] .ant-btn-default {
+  background: var(--bg-tertiary);
+  border-color: var(--border);
+  color: var(--fg);
+}
+[data-theme="dark"] .ant-btn-default:hover {
+  background: var(--bg-secondary);
+  border-color: var(--brand-primary);
+  color: var(--brand-primary);
+}
+[data-theme="dark"] .ant-input-affix-wrapper,
+[data-theme="dark"] .ant-input {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--border) !important;
+  color: var(--fg) !important;
+}
+[data-theme="dark"] .ant-select-selector {
+  background: var(--bg-tertiary) !important;
+  border-color: var(--border) !important;
+}
+[data-theme="dark"] .ant-select-selection-item {
+  color: var(--fg) !important;
+}
 </style>
