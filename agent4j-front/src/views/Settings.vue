@@ -73,7 +73,7 @@
         </div>
         
         <div class="settings-group">
-          <div class="setting-item">
+          <div class="setting-item" v-if="false">
             <div class="setting-info">
               <div class="setting-label">语言</div>
               <div class="setting-description">界面显示语言</div>
