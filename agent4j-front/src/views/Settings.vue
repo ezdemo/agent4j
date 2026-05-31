@@ -212,7 +212,8 @@ const loadSettings = async () => {
     ])
     if (configResponse.success && configResponse.data) {
       const config = configResponse.data
-      settings.server.apiBaseUrl = config.serverApiBaseUrl || ''
+      // 优先读 localStorage 中实际连接的地址（SplashScreen/SetupScreen 设置的）
+      settings.server.apiBaseUrl = localStorage.getItem('agent4j-api-base') || config.serverApiBaseUrl || ''
       settings.ai.baseUrl = config.baseUrl || ''
       settings.ai.model = config.model || ''
       settings.ai.reasoningEffort = config.reasoningEffort || 'max'
@@ -263,8 +264,11 @@ const saveSettings = async () => {
   try {
     const uiPrefs = { fontSize: settings.fontSize, animations: settings.animations }
     localStorage.setItem('agent4j-ui-preferences', JSON.stringify(uiPrefs))
+    // 同步更新 localStorage 中的实际连接地址
+    if (settings.server.apiBaseUrl && settings.server.apiBaseUrl.trim()) {
+      localStorage.setItem('agent4j-api-base', settings.server.apiBaseUrl.trim())
+    }
     const configToUpdate = {
-      serverApiBaseUrl: settings.server.apiBaseUrl,
       baseUrl: settings.ai.baseUrl,
       apiKey: settings.ai.apiKey,
       model: settings.ai.model,
@@ -377,6 +381,7 @@ onMounted(() => {
 .settings-main {
   flex: 1;
   display: flex;
+  height: 500px;
   flex-direction: column;
   min-width: 0;
 }

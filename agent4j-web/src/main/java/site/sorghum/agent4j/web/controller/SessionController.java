@@ -92,18 +92,18 @@ public class SessionController {
         throw new ServiceException("会话不存在: " + name);
     }
 
-    /** 清除会话 Agent 缓存 —— DELETE /api/sessions/{name}?workspaceHash=xxx */
+    /** 删除会话 —— DELETE /api/sessions/{name}?workspaceHash=xxx */
     @Delete
     @Mapping("/{name}")
-    public Object evictAgent(@Path("name") String name,
-                             @Param(value = "workspaceHash", required = false) String workspaceHash) {
+    public Object deleteSession(@Path("name") String name,
+                                @Param(value = "workspaceHash", required = false) String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
-        agentService.evictAgent(workspacePath, name);
+        agentService.deleteSession(workspacePath, name);
         String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
         Map<String, Object> data = new LinkedHashMap<>();
-        data.put("message", "已清除会话 Agent 缓存");
+        data.put("message", "会话已删除");
         data.put("workspaceHash", resolvedHash);
         data.put("sessionName", name);
         return ApiResponse.ok(data);

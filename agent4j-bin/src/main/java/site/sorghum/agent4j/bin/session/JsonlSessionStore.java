@@ -308,8 +308,14 @@ public class JsonlSessionStore implements SessionStore {
     @Override
     public boolean delete(String name) throws IOException {
         flush();
-        Path p = sessionPath(name);
-        return Files.deleteIfExists(p);
+        String safe = sanitize(name);
+        Path jsonl = sessionsDir.resolve(safe + ".jsonl");
+        Path usage = sessionsDir.resolve(safe + ".usage");
+        Path meta  = sessionsDir.resolve(safe + ".meta");
+        boolean deleted = Files.deleteIfExists(jsonl);
+        Files.deleteIfExists(usage);
+        Files.deleteIfExists(meta);
+        return deleted;
     }
 
     @Override

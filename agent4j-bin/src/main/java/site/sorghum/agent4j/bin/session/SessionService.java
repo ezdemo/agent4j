@@ -113,6 +113,12 @@ public class SessionService {
         titleGenerated = false; // 新会话，标题未生成
     }
 
+    /** 删除指定会话的持久化文件（.jsonl / .usage / .meta） */
+    public boolean deleteSession(String name) throws IOException {
+        if (name == null || name.isEmpty()) return false;
+        return store.delete(name);
+    }
+
     /** 保存当前会话 token 用量 */
     public void saveUsage() {
         String name = store.currentName();

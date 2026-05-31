@@ -863,6 +863,34 @@ public class AgentService {
     }
 
     /**
+     * 删除指定会话：清除 Agent 缓存 + 删除磁盘文件（.jsonl / .usage / .meta）。
+     *
+     * @param workspacePath 工作区路径（可选）
+     * @param sessionName   会话名称
+     */
+    public void deleteSession(String workspacePath, String sessionName) {
+        // 1. 清除 Agent 缓存
+        evictAgent(workspacePath, sessionName);
+        // 2. 删除磁盘文件
+        try {
+            String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+            if (resolvedPath == null) return;
+            site.sorghum.agent4j.bin.workspace.WorkspaceManager wm =
+                    new site.sorghum.agent4j.bin.workspace.WorkspaceManager();
+            java.nio.file.Path sessionsDir = wm.getSessionsDir(resolvedPath);
+            if (sessionsDir == null || !java.nio.file.Files.exists(sessionsDir)) return;
+            site.sorghum.agent4j.bin.session.SessionStore store =
+                    new site.sorghum.agent4j.bin.session.JsonlSessionStore(sessionsDir);
+            boolean ok = store.delete(sessionName);
+            if (ok) {
+                System.out.println("[web] 已删除会话文件: " + sessionName);
+            }
+        } catch (Exception e) {
+            System.err.println("[web] 删除会话文件失败: " + e.getMessage());
+        }
+    }
+
+    /**
      * 清除所有 Agent 缓存。
      */
     public void evictAllAgents() {
@@ -1176,7 +1204,7 @@ public class AgentService {
             return false;
         }
 
-        // 查找并清除该工作区的所有 Agent
+        // 1. 查找并清除该工作区的所有 Agent 缓存
         List<String> keysToRemove = new ArrayList<>();
         for (String key : agentCache.keySet()) {
             String workspacePath = key.split("::", 2)[0];
@@ -1191,6 +1219,17 @@ public class AgentService {
             String workspacePath = parts[0];
             String sessionName = parts.length > 1 ? parts[1] : "default";
             evictAgent(workspacePath, sessionName);
+        }
+
+        // 2. 删除工作区数据目录（~/.agent4j/workspace/{hash}/）
+        try {
+            WorkspaceManager wm = new WorkspaceManager();
+            boolean deleted = wm.deleteWorkspace(hash);
+            if (deleted) {
+                System.out.println("[web] 已删除工作区数据目录: " + hash);
+            }
+        } catch (Exception e) {
+            System.err.println("[web] 删除工作区数据目录失败: " + e.getMessage());
         }
 
         System.out.println("[web] 已删除工作区: " + hash + "，清除了 " + keysToRemove.size() + " 个 Agent");

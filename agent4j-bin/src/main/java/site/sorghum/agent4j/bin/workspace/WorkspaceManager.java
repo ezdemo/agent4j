@@ -178,8 +178,8 @@ public class WorkspaceManager {
             }
         }
 
-        // 按最后访问时间排序
-        workspaces.sort((a, b) -> Long.compare(b.lastAccessedAt, a.lastAccessedAt));
+        // 按创建时间排序（固定顺序，不随切换跳动）
+        workspaces.sort((a, b) -> Long.compare(a.createdAt, b.createdAt));
         return workspaces;
     }
 
