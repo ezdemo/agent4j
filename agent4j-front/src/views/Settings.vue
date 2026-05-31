@@ -47,6 +47,21 @@
       </button>
     </div>
     
+    <!-- 成功提示 -->
+    <div v-if="success" class="success-banner">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+        <polyline points="22 4 12 14.01 9 11.01"/>
+      </svg>
+      <span>{{ success }}</span>
+      <button class="btn-icon-sm" @click="success = ''">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="18" y1="6" x2="6" y2="18"/>
+          <line x1="6" y1="6" x2="18" y2="18"/>
+        </svg>
+      </button>
+    </div>
+
     <!-- 错误提示 -->
     <div v-if="error" class="error-banner">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -332,8 +347,17 @@ import { configAPI } from '../services/api'
 const activeTab = ref('general')
 const showApiKey = ref(false)
 const loading = ref(false)
+const success = ref('')
 const error = ref('')
 const availableModels = ref([])
+
+// 自动清除提示
+let successTimer = null
+const showSuccess = (msg) => {
+  success.value = msg
+  if (successTimer) clearTimeout(successTimer)
+  successTimer = setTimeout(() => { success.value = '' }, 3000)
+}
 const { confirm } = useConfirm()
 const checkingConnection = ref(false)
 const connectionOk = ref(false)
@@ -509,20 +533,9 @@ const saveSettings = async () => {
       const serverMsg = typeof response.data === 'string'
         ? response.data
         : (response.data?.message || '设置已保存')
-      window.dispatchEvent(new CustomEvent('terminal-output', { 
-        detail: { 
-          type: 'success', 
-          text: serverMsg + (settings.workspace.dir ? '，工作目录已切换' : '') 
-        }
-      }))
+      showSuccess(serverMsg + (settings.workspace.dir ? '，工作目录已切换' : ''))
     } else {
       error.value = response.error || '保存失败'
-      window.dispatchEvent(new CustomEvent('terminal-output', { 
-        detail: { 
-          type: 'error', 
-          text: '保存失败: ' + (response.error || '未知错误') 
-        }
-      }))
     }
   } catch (err) {
     console.error('保存配置失败:', err)
@@ -530,13 +543,7 @@ const saveSettings = async () => {
     
     // 降级：UI 偏好已保存到 localStorage，后端配置保存失败提示用户
     applyTheme(settings.theme)
-    
-    window.dispatchEvent(new CustomEvent('terminal-output', { 
-      detail: { 
-        type: 'warning', 
-        text: '服务器保存失败，后端配置未更新' 
-      }
-    }))
+    // 错误已在 catch 开头设置到 error.value
   } finally {
     loading.value = false
   }
@@ -575,13 +582,7 @@ const resetSettings = async () => {
     localStorage.removeItem('agent4j-ui-preferences')
     localStorage.removeItem('agent4j-theme')
     
-    // 显示消息
-    window.dispatchEvent(new CustomEvent('terminal-output', { 
-      detail: { 
-        type: 'system', 
-        text: '设置已重置为默认值' 
-      }
-    }))
+    showSuccess('设置已重置为默认值')
   }
 }
 
@@ -615,23 +616,13 @@ const exportSettings = () => {
   a.click()
   URL.revokeObjectURL(url)
   
-  window.dispatchEvent(new CustomEvent('terminal-output', { 
-    detail: { 
-      type: 'system', 
-      text: '设置已导出' 
-    }
-  }))
+  showSuccess('设置已导出')
 }
 
 const openConfigFile = () => {
   // 这里可以调用后端API打开配置文件
   // 目前只是显示提示
-  window.dispatchEvent(new CustomEvent('terminal-output', { 
-    detail: { 
-      type: 'system', 
-      text: '配置文件位置: ~/.agent4j/config.json' 
-    }
-  }))
+  showSuccess('配置文件位置: ~/.agent4j/config.json')
 }
 
 const applyTheme = (theme) => {
@@ -1159,6 +1150,38 @@ onMounted(() => {
 [data-theme="dark"] .settings-footer {
   background: var(--bg-tertiary);
   border-color: var(--border);
+}
+
+/* 成功提示 */
+.success-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-4);
+  background: var(--success-bg, #dcfce7);
+  border: 1px solid var(--success, #22c55e);
+  border-radius: var(--radius);
+  color: var(--success, #166534);
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-4);
+  animation: fadeIn var(--transition-base) ease-out;
+}
+
+.success-banner svg {
+  flex-shrink: 0;
+  color: var(--success, #22c55e);
+}
+
+.success-banner span {
+  flex: 1;
+}
+
+.success-banner .btn-icon-sm {
+  color: var(--success, #166534);
+}
+
+.success-banner .btn-icon-sm:hover {
+  background: rgba(34, 197, 94, 0.1);
 }
 
 /* 错误提示 */
