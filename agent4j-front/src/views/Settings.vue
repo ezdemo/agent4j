@@ -329,19 +329,14 @@ onMounted(() => {
 <style scoped>
 .settings-layout {
   height: 100%;
-  min-height: 520px;
   background: transparent;
 }
 
-/* 左侧导航 — 固定宽 */
+/* 左侧导航 */
 .settings-sider {
-  width: 200px !important;
-  max-width: 200px !important;
-  min-width: 200px !important;
   border-right: 1px solid var(--border);
   background: var(--bg-secondary);
   overflow: auto;
-  flex: 0 0 200px !important;
 }
 
 .sider-title {
@@ -358,27 +353,25 @@ onMounted(() => {
   background: transparent;
 }
 
-/* 右侧内容 — 固定区域高度，超出滚动 */
+/* 右侧内容 */
 .settings-content {
   padding: 28px 32px;
   overflow-y: auto;
   flex: 1;
-  height: calc(100% - 53px);
-  min-height: 460px;
 }
 
 .setting-card {
   margin-top: 16px;
   background: var(--surface);
   border-radius: 8px;
-  max-width: 100%;
+  max-width: 640px;
 }
 
 .setting-card + .setting-card {
   margin-top: 12px;
 }
 
-/* 底部操作栏 — 固定高度 */
+/* 底部操作栏 */
 .settings-bottom-bar {
   display: flex;
   align-items: center;
@@ -386,8 +379,6 @@ onMounted(() => {
   padding: 12px 24px;
   border-top: 1px solid var(--border);
   background: var(--bg-secondary);
-  height: 53px;
-  flex-shrink: 0;
 }
 
 .save-btn {
