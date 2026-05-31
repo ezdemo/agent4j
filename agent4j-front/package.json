@@ -17,7 +17,9 @@
     "test:coverage": "vitest --coverage"
   },
   "dependencies": {
+    "@ant-design/icons-vue": "^7.0.1",
     "@tauri-apps/api": "^2.0.0",
+    "ant-design-vue": "^4.2.6",
     "axios": "^1.6.7",
     "marked": "^12.0.0",
     "pinia": "^2.1.7",

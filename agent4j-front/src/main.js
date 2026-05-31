@@ -1,5 +1,7 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import Antd from 'ant-design-vue'
+import 'ant-design-vue/dist/reset.css'
 import App from './App.vue'
 import router from './router'
 import './assets/styles/main.css'
@@ -32,6 +34,9 @@ const initApp = () => {
   // 添加Pinia状态管理
   const pinia = createPinia()
   app.use(pinia)
+  
+  // 注册 Ant Design Vue
+  app.use(Antd)
   
   // 添加路由
   app.use(router)

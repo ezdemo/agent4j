@@ -12,24 +12,14 @@
         </div>
       </div>
       <div class="header-actions">
-        <button class="btn btn-secondary btn-sm" @click="resetSettings">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="1 4 1 10 7 10"/>
-            <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-          </svg>
-          重置默认
-        </button>
-        <button class="btn btn-primary btn-sm" @click="saveSettings" :disabled="loading">
-          <svg v-if="loading" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin">
-            <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
-          </svg>
-          <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-            <polyline points="17 21 17 13 7 13 7 21"/>
-            <polyline points="7 3 7 8 15 8"/>
-          </svg>
-          {{ loading ? '保存中...' : '保存设置' }}
-        </button>
+        <a-button @click="resetSettings">
+        <template #icon><ReloadOutlined /></template>
+        重置默认
+      </a-button>
+      <a-button type="primary" @click="saveSettings" :loading="loading">
+        <template #icon><SaveOutlined /></template>
+        {{ loading ? '保存中...' : '保存设置' }}
+      </a-button>
       </div>
     </div>
     
@@ -47,36 +37,7 @@
       </button>
     </div>
     
-    <!-- 成功提示 -->
-    <div v-if="success" class="success-banner">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
-        <polyline points="22 4 12 14.01 9 11.01"/>
-      </svg>
-      <span>{{ success }}</span>
-      <button class="btn-icon-sm" @click="success = ''">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-    </div>
-
-    <!-- 错误提示 -->
-    <div v-if="error" class="error-banner">
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <circle cx="12" cy="12" r="10"/>
-        <line x1="15" y1="9" x2="9" y2="15"/>
-        <line x1="9" y1="9" x2="15" y2="15"/>
-      </svg>
-      <span>{{ error }}</span>
-      <button class="btn-icon-sm" @click="error = ''">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <line x1="18" y1="6" x2="6" y2="18"/>
-          <line x1="6" y1="6" x2="18" y2="18"/>
-        </svg>
-      </button>
-    </div>
+    <!-- antdv message 已全局注册，由 message.success/error 控制 -->
     
     <!-- 设置内容 -->
     <div class="settings-content">
@@ -94,11 +55,11 @@
               <div class="setting-description">界面显示语言</div>
             </div>
             <div class="setting-control">
-              <select v-model="settings.language" class="form-select">
-                <option value="zh-CN">简体中文</option>
-                <option value="en-US">English</option>
-                <option value="ja-JP">日本語</option>
-              </select>
+              <a-select v-model:value="settings.language" style="width: 200px">
+                <a-select-option value="zh-CN">简体中文</a-select-option>
+                <a-select-option value="en-US">English</a-select-option>
+                <a-select-option value="ja-JP">日本語</a-select-option>
+              </a-select>
             </div>
           </div>
           
@@ -109,16 +70,16 @@
             </div>
             <div class="setting-control">
               <div class="theme-selector">
-                <button 
+                <a-button
                   v-for="theme in themes" 
                   :key="theme.value"
-                  class="theme-btn"
-                  :class="{ active: settings.theme === theme.value }"
+                  :type="settings.theme === theme.value ? 'primary' : 'default'"
                   @click="settings.theme = theme.value"
+                  style="display: flex; flex-direction: column; align-items: center; height: auto; padding: 12px; min-width: 80px;"
                 >
-                  <span class="theme-preview" :style="{ background: theme.color }"></span>
-                  <span class="theme-name">{{ theme.label }}</span>
-                </button>
+                  <span class="theme-preview" :style="{ background: theme.color, display: 'block', width: 32, height: 32, borderRadius: 6, border: '1px solid #d9d9d9', marginBottom: 4 }"></span>
+                  <span>{{ theme.label }}</span>
+                </a-button>
               </div>
             </div>
           </div>
@@ -141,10 +102,8 @@
               <div class="setting-description">留空使用默认代理（localhost:8097）</div>
             </div>
             <div class="setting-control">
-              <input
-                v-model="settings.server.apiBaseUrl"
-                type="url"
-                class="form-input"
+              <a-input
+                v-model:value="settings.server.apiBaseUrl"
                 placeholder="留空 = 默认 http://localhost:8097"
               />
             </div>
@@ -156,10 +115,10 @@
               <div class="setting-description">测试后端服务是否可达</div>
             </div>
             <div class="setting-control">
-              <button class="btn btn-secondary btn-sm" @click="checkServerConnection" :disabled="checkingConnection">
-                {{ checkingConnection ? '检测中...' : '检测连接' }}
-              </button>
-              <span class="connection-status-text" :class="connectionOk ? 'ok' : 'fail'" v-if="connectionChecked">
+              <a-button @click="checkServerConnection" :loading="checkingConnection">
+                检测连接
+              </a-button>
+              <span style="margin-left: 8px; font-size: 13px;" :style="{ color: connectionOk ? '#52c41a' : '#ff4d4f' }" v-if="connectionChecked">
                 {{ connectionOk ? '✓ 连接成功' : '✗ 连接失败' }}
               </span>
             </div>
@@ -181,10 +140,8 @@
               <div class="setting-description">OpenAI 兼容 API 的基础 URL</div>
             </div>
             <div class="setting-control">
-              <input 
-                v-model="settings.ai.baseUrl" 
-                type="url"
-                class="form-input"
+              <a-input 
+                v-model:value="settings.ai.baseUrl" 
                 placeholder="https://api.openai.com/v1"
               />
             </div>
@@ -196,24 +153,12 @@
               <div class="setting-description">用于身份验证的 API 密钥</div>
             </div>
             <div class="setting-control">
-              <div class="password-input">
-                <input 
-                  v-model="settings.ai.apiKey" 
-                  :type="showApiKey ? 'text' : 'password'"
-                  class="form-input"
-                  placeholder="sk-..."
-                />
-                <button class="btn-icon-sm toggle-password" @click="showApiKey = !showApiKey">
-                  <svg v-if="showApiKey" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                    <line x1="1" y1="1" x2="23" y2="23"/>
-                  </svg>
-                  <svg v-else width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                    <circle cx="12" cy="12" r="3"/>
-                  </svg>
-                </button>
-              </div>
+              <a-input-password
+                v-model:value="settings.ai.apiKey"
+                :visible="showApiKey"
+                @update:visible="showApiKey = $event"
+                placeholder="sk-..."
+              />
             </div>
           </div>
           
@@ -223,15 +168,15 @@
               <div class="setting-description">使用的 AI 模型</div>
             </div>
             <div class="setting-control">
-              <select v-model="settings.ai.model" class="form-select">
-                <option 
+              <a-select v-model:value="settings.ai.model" style="width: 200px">
+                <a-select-option 
                   v-for="model in availableModels" 
                   :key="model.name" 
                   :value="model.name"
                 >
                   {{ model.name }}
-                </option>
-              </select>
+                </a-select-option>
+              </a-select>
             </div>
           </div>
           
@@ -241,12 +186,12 @@
               <div class="setting-description">AI 推理的详细程度</div>
             </div>
             <div class="setting-control">
-              <select v-model="settings.ai.reasoningEffort" class="form-select">
-                <option value="low">低</option>
-                <option value="medium">中</option>
-                <option value="high">高</option>
-                <option value="max">最大</option>
-              </select>
+              <a-select v-model:value="settings.ai.reasoningEffort" style="width: 200px">
+                <a-select-option value="low">低</a-select-option>
+                <a-select-option value="medium">中</a-select-option>
+                <a-select-option value="high">高</a-select-option>
+                <a-select-option value="max">最大</a-select-option>
+              </a-select>
             </div>
           </div>
           
@@ -256,12 +201,11 @@
               <div class="setting-description">每行一个模型名称</div>
             </div>
             <div class="setting-control">
-              <textarea
-                v-model="settings.ai.availableModelsText"
-                class="form-textarea"
+              <a-textarea
+                v-model:value="settings.ai.availableModelsText"
                 placeholder="deepseek-v4-flash&#10;gpt-4&#10;gpt-4-turbo"
-                rows="4"
-              ></textarea>
+                :rows="4"
+              />
             </div>
           </div>
         </div>
@@ -281,10 +225,8 @@
               <div class="setting-description">默认工作目录</div>
             </div>
             <div class="setting-control">
-              <input
-                v-model="settings.workspace.dir"
-                type="text"
-                class="form-input"
+              <a-input
+                v-model:value="settings.workspace.dir"
                 placeholder="."
               />
             </div>
@@ -296,10 +238,10 @@
               <div class="setting-description">手动 = 写入操作需审批，自由 = 直接执行</div>
             </div>
             <div class="setting-control">
-              <select v-model="settings.workspace.mode" class="form-select">
-                <option :value="true">手动</option>
-                <option :value="false">自由</option>
-              </select>
+              <a-select v-model:value="settings.workspace.mode" style="width: 200px">
+                <a-select-option :value="true">手动</a-select-option>
+                <a-select-option :value="false">自由</a-select-option>
+              </a-select>
             </div>
           </div>
           
@@ -318,21 +260,14 @@
         <span>配置文件位置: ~/.agent4j/config.json</span>
       </div>
       <div class="footer-actions">
-        <button class="btn btn-ghost btn-sm" @click="openConfigFile">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M13 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V9z"/>
-            <polyline points="13 2 13 9 20 9"/>
-          </svg>
+        <a-button size="small" @click="openConfigFile">
+          <template #icon><FileOutlined /></template>
           打开配置文件
-        </button>
-        <button class="btn btn-ghost btn-sm" @click="exportSettings">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-            <polyline points="7 10 12 15 17 10"/>
-            <line x1="12" y1="15" x2="12" y2="3"/>
-          </svg>
+        </a-button>
+        <a-button size="small" @click="exportSettings">
+          <template #icon><DownloadOutlined /></template>
           导出配置
-        </button>
+        </a-button>
       </div>
     </div>
   </div>
@@ -340,25 +275,15 @@
 
 <script setup>
 import { ref, reactive, watch, onMounted } from 'vue'
-import { useConfirm } from '../composables/useConfirm'
+import { message, Modal } from 'ant-design-vue'
+import { ReloadOutlined, SaveOutlined, DownloadOutlined, FileOutlined, InfoCircleOutlined } from '@ant-design/icons-vue'
 import { configAPI } from '../services/api'
 
 // 状态
 const activeTab = ref('general')
 const showApiKey = ref(false)
 const loading = ref(false)
-const success = ref('')
-const error = ref('')
 const availableModels = ref([])
-
-// 自动清除提示
-let successTimer = null
-const showSuccess = (msg) => {
-  success.value = msg
-  if (successTimer) clearTimeout(successTimer)
-  successTimer = setTimeout(() => { success.value = '' }, 3000)
-}
-const { confirm } = useConfirm()
 const checkingConnection = ref(false)
 const connectionOk = ref(false)
 const connectionChecked = ref(false)
@@ -454,7 +379,7 @@ const loadSettings = async () => {
         }
       }
     } else {
-      error.value = configResponse.error || '加载配置失败'
+      message.error(configResponse.error || '加载配置失败')
     }
     
     // 更新可用模型列表
@@ -463,7 +388,7 @@ const loadSettings = async () => {
     }
   } catch (err) {
     console.error('加载配置失败:', err)
-    error.value = '加载配置失败: ' + err.message
+    message.error('加载配置失败: ' + err.message)
     
     // 使用默认值
     settings.ai.baseUrl = 'https://api.deepseek.com/v1'
@@ -533,25 +458,26 @@ const saveSettings = async () => {
       const serverMsg = typeof response.data === 'string'
         ? response.data
         : (response.data?.message || '设置已保存')
-      showSuccess(serverMsg + (settings.workspace.dir ? '，工作目录已切换' : ''))
+      message.success(serverMsg + (settings.workspace.dir ? '，工作目录已切换' : ''))
     } else {
-      error.value = response.error || '保存失败'
+      message.error(response.error || '保存失败')
     }
   } catch (err) {
     console.error('保存配置失败:', err)
-    error.value = '保存失败: ' + err.message
+    message.error('保存失败: ' + err.message)
     
     // 降级：UI 偏好已保存到 localStorage，后端配置保存失败提示用户
     applyTheme(settings.theme)
-    // 错误已在 catch 开头设置到 error.value
   } finally {
     loading.value = false
   }
 }
 
-const resetSettings = async () => {
-  const ok = await confirm({ message: '确定要重置所有设置为默认值吗？' })
-  if (ok) {
+const resetSettings = () => {
+  Modal.confirm({
+    title: '重置设置',
+    content: '确定要重置所有设置为默认值吗？',
+    onOk() {
     // 重置为默认值
     Object.assign(settings, {
       language: 'zh-CN',
@@ -582,8 +508,9 @@ const resetSettings = async () => {
     localStorage.removeItem('agent4j-ui-preferences')
     localStorage.removeItem('agent4j-theme')
     
-    showSuccess('设置已重置为默认值')
-  }
+      message.success('设置已重置为默认值')
+    }
+  })
 }
 
 const checkServerConnection = async () => {
@@ -616,13 +543,13 @@ const exportSettings = () => {
   a.click()
   URL.revokeObjectURL(url)
   
-  showSuccess('设置已导出')
+  message.success('设置已导出')
 }
 
 const openConfigFile = () => {
   // 这里可以调用后端API打开配置文件
   // 目前只是显示提示
-  showSuccess('配置文件位置: ~/.agent4j/config.json')
+  message.info('配置文件位置: ~/.agent4j/config.json')
 }
 
 const applyTheme = (theme) => {
@@ -831,63 +758,7 @@ onMounted(() => {
   min-width: 200px;
 }
 
-/* 表单元素 */
-.form-input,
-.form-select,
-.form-textarea {
-  width: 100%;
-  padding: var(--space-2) var(--space-3);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  font-size: var(--text-sm);
-  color: var(--fg);
-  transition: all var(--transition-fast);
-}
-
-.form-input:focus,
-.form-select:focus,
-.form-textarea:focus {
-  background: var(--surface);
-  border-color: var(--border-focus);
-  box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
-  outline: none;
-}
-
-.form-textarea {
-  resize: vertical;
-  min-height: 80px;
-}
-
-.form-select {
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2'%3E%3Cpolyline points='6 9 12 15 18 9'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right var(--space-3) center;
-  padding-right: var(--space-8);
-}
-
-/* 密码输入 */
-.password-input {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.password-input .form-input {
-  padding-right: var(--space-10);
-}
-
-.toggle-password {
-  position: absolute;
-  right: var(--space-2);
-  color: var(--fg-muted);
-  transition: color var(--transition-fast);
-}
-
-.toggle-password:hover {
-  color: var(--fg);
-}
+/* antdv 接管了所有表单控件样式 */
 
 /* 滑块控制 */
 .slider-control {
@@ -1152,65 +1023,5 @@ onMounted(() => {
   border-color: var(--border);
 }
 
-/* 成功提示 */
-.success-banner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  background: var(--success-bg, #dcfce7);
-  border: 1px solid var(--success, #22c55e);
-  border-radius: var(--radius);
-  color: var(--success, #166534);
-  font-size: var(--text-sm);
-  margin-bottom: var(--space-4);
-  animation: fadeIn var(--transition-base) ease-out;
-}
-
-.success-banner svg {
-  flex-shrink: 0;
-  color: var(--success, #22c55e);
-}
-
-.success-banner span {
-  flex: 1;
-}
-
-.success-banner .btn-icon-sm {
-  color: var(--success, #166534);
-}
-
-.success-banner .btn-icon-sm:hover {
-  background: rgba(34, 197, 94, 0.1);
-}
-
-/* 错误提示 */
-.error-banner {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
-  padding: var(--space-3) var(--space-4);
-  background: var(--danger-bg);
-  border: 1px solid var(--danger);
-  border-radius: var(--radius);
-  color: var(--danger);
-  font-size: var(--text-sm);
-  margin-bottom: var(--space-4);
-}
-
-.error-banner svg {
-  flex-shrink: 0;
-}
-
-.error-banner span {
-  flex: 1;
-}
-
-.error-banner .btn-icon-sm {
-  color: var(--danger);
-}
-
-.error-banner .btn-icon-sm:hover {
-  background: rgba(220, 38, 38, 0.1);
-}
+/* antdv message 接管了提示条样式 */
 </style>
