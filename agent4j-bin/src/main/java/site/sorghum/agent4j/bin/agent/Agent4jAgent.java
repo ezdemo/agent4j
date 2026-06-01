@@ -39,8 +39,6 @@ public class Agent4jAgent {
     private final ChatCommandRegistry commandRegistry;
     private SessionService sessionService;
     private volatile Path workspace;
-    private final String apiUrl;
-    private final String apiKey;
     private WorkspaceManager workspaceManager;
     /**
      * 技能存储（V2 - Claude Code 风格）
@@ -58,8 +56,6 @@ public class Agent4jAgent {
     private Agent4jAgent(Builder b) {
         this.commandRegistry = b.commandRegistry;
         this.workspace = b.workspace;
-        this.apiUrl = b.apiUrl;
-        this.apiKey = b.apiKey;
 
         ModelClient client = new HttpModelClient(b.apiUrl, b.apiKey, b.model);
 
@@ -105,8 +101,6 @@ public class Agent4jAgent {
     private Agent4jAgent(Builder b, boolean lightweight) {
         this.commandRegistry = b.commandRegistry;
         this.workspace = b.workspace;
-        this.apiUrl = b.apiUrl;
-        this.apiKey = b.apiKey;
 
         // 共享 ModelClient（无状态 HTTP 客户端），但每个 Agent 创建独立的 ToolRegistry
         ModelClient client = b.sharedModelClient;

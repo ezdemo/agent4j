@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.bin.agent;
 
 import lombok.Getter;
+import lombok.Setter;
 import org.noear.snack4.ONode;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.session.SessionService;
@@ -50,7 +51,6 @@ public class AgentLoop {
     private static final int TOOL_TIMEOUT_SEC = 360;
     private final ModelClient client;
     // 无固定步数限制：循环直到模型返回纯文本
-    private final ToolRegistry registry;
     private final ToolDispatcher dispatcher;
     /**
      * -- GETTER --
@@ -64,7 +64,11 @@ public class AgentLoop {
     private final ReasonBreaker reasonBreaker = new ReasonBreaker();
     /**
      * 会话服务引用（用于同步 lastPromptTokens 到 usage 文件）
+     * -- SETTER --
+     *  设置会话服务（用于同步 lastPromptTokens）
+
      */
+    @Setter
     private SessionService sessionService;
     /**
      * 事件监听（打印思考/工具调用/步骤）
@@ -72,13 +76,21 @@ public class AgentLoop {
     private AgentLoopListener listener = NoOpAgentLoopListener.INSTANCE;
     /**
      * 输出接口（默认为控制台输出，可替换为其他实现）
+     * -- GETTER --
+     *  获取当前输出接口
+
      */
+    @Getter
     private AgentOutput output = new ConsoleAgentOutput();
 
     // ==================== HITL (Human-In-The-Loop) ====================
     /**
      * 最近一次 API 返回的 prompt_tokens（0 = 尚无数据，回退到字符估算）
+     * -- GETTER --
+     *  获取最近一次 API 返回的 prompt_tokens
+
      */
+    @Getter
     private int lastPromptTokens = 0;
     /**
      * 用户主动中断标志（前端点击停止按钮时设置）
@@ -86,12 +98,28 @@ public class AgentLoop {
     private volatile boolean userAbortRequested = false;
     /**
      * 当前会话ID（用于传递给工具执行上下文）
+     * -- GETTER --
+     *  获取当前会话ID
+     * -- SETTER --
+     *  设置当前会话ID（用于传递给工具执行上下文）
+
+
      */
+    @Setter
+    @Getter
     private volatile String sessionId;
     /**
      * HITL 模式开关（true = 执行非只读工具前需用户审批）
+     * -- GETTER --
+     *  获取 HITL 模式状态
+     * -- SETTER --
+     *  直接设置 HITL 模式（用于配置热更新）
+
+
      */
-    private volatile boolean hitlMode = false;
+    @Setter
+    @Getter
+    private volatile boolean hitlMode;
     /**
      * HITL 当前审批状态
      */
@@ -112,7 +140,11 @@ public class AgentLoop {
     private volatile String pendingHITLReasoning;
     /**
      * HITL 暂存的解析后工具调用列表
+     * -- GETTER --
+     *  获取待审批的工具调用列表（用于 /agree 命令显示）
+
      */
+    @Getter
     private volatile List<ToolCallEntry> pendingHITTcList;
     /**
      * 沙箱越界 HITL 暂存：完整的工具调用 ONode（供重放）
@@ -137,7 +169,6 @@ public class AgentLoop {
 
     public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx, boolean hitlDefault) {
         this.client = client;
-        this.registry = registry;
         this.dispatcher = new ToolDispatcher(registry);
         this.ctx = ctx;
         this.hitlMode = hitlDefault;
@@ -148,52 +179,10 @@ public class AgentLoop {
     }
 
     /**
-     * 获取 HITL 模式状态
-     */
-    public boolean isHitlMode() {
-        return hitlMode;
-    }
-
-    /**
-     * 直接设置 HITL 模式（用于配置热更新）
-     */
-    public void setHitlMode(boolean on) {
-        hitlMode = on;
-    }
-
-    /**
      * 切换 HITL 模式
      */
-    public void toggleHitl() {
+    public synchronized void toggleHitl() {
         hitlMode = !hitlMode;
-    }
-
-    /**
-     * 获取最近一次 API 返回的 prompt_tokens
-     */
-    public int getLastPromptTokens() {
-        return lastPromptTokens;
-    }
-
-    /**
-     * 设置会话服务（用于同步 lastPromptTokens）
-     */
-    public void setSessionService(SessionService sessionService) {
-        this.sessionService = sessionService;
-    }
-
-    /**
-     * 获取当前会话ID
-     */
-    public String getSessionId() {
-        return sessionId;
-    }
-
-    /**
-     * 设置当前会话ID（用于传递给工具执行上下文）
-     */
-    public void setSessionId(String sessionId) {
-        this.sessionId = sessionId;
     }
 
     /**
@@ -225,13 +214,6 @@ public class AgentLoop {
     }
 
     /**
-     * 获取待审批的工具调用列表（用于 /agree 命令显示）
-     */
-    public List<ToolCallEntry> getPendingHITTcList() {
-        return pendingHITTcList;
-    }
-
-    /**
      * 是否有待审批的工具调用
      */
     public boolean hasPendingHITL() {
@@ -251,13 +233,6 @@ public class AgentLoop {
         } else {
             output.onLog(LogLevel.INFO, "[compact] 无需折叠（总消息数 ≤ 20）");
         }
-    }
-
-    /**
-     * 获取工具注册表
-     */
-    public ToolRegistry getToolRegistry() {
-        return registry;
     }
 
     public boolean isPlanMode() {
@@ -306,13 +281,6 @@ public class AgentLoop {
     }
 
     // ==================== HITL 拦截与恢复 ====================
-
-    /**
-     * 获取当前输出接口
-     */
-    public AgentOutput getOutput() {
-        return output;
-    }
 
     /**
      * 设置输出接口（用于自定义输出处理，如控制台 / WebSocket SSE / 日志）
@@ -584,8 +552,6 @@ public class AgentLoop {
         ctx.addAssistant(content, tcList, reasoningContent);
 
         dispatcher.resetStorm();
-        List<Map<String, Object>> tools = ctx.tools();
-        int selfCorrectionAttempts = 0;
 
         // 并行执行暂存的工具调用
         ToolExecutionResult ter = executeToolCalls(toolCalls);
@@ -596,7 +562,7 @@ public class AgentLoop {
         }
 
         // 委托给统一的内部循环
-        return continueConversationLoop(0);
+        return continueConversationLoop();
     }
 
     /**
@@ -664,7 +630,6 @@ public class AgentLoop {
         dispatcher.resetStorm();
         reasonBreaker.reset();
         resetUserAbort();
-        List<Map<String, Object>> tools = ctx.tools();
 
         // 重放执行工具调用（沙箱旁路：pass skipSandboxCheck=true 到异步线程）
         ToolExecutionResult initialTer;
@@ -689,20 +654,19 @@ public class AgentLoop {
         }
 
         // 委托给统一的内部循环（沙箱 HITL 恢复后仍需检查沙箱越界）
-        return continueConversationLoop(0);
+        return continueConversationLoop();
     }
 
     /**
      * 在工具结果写入上下文后继续推理循环。
      * 被 resumeAfterHITL / resumeAfterSandboxHITL 以及主循环复用。
      *
-     * @param initialSelfCorrectionAttempts 初始 self-correction 尝试次数
      * @return 最终的 assistant content
      */
-    private String continueConversationLoop(int initialSelfCorrectionAttempts) throws IOException {
+    private String continueConversationLoop() throws IOException {
         boolean isThinkingMode = client.isThinkingMode();
         List<Map<String, Object>> tools = ctx.tools();
-        int selfCorrectionAttempts = initialSelfCorrectionAttempts;
+        int selfCorrectionAttempts = 0;
 
         for (int step = 0; ; step++) {
             if (userAbortRequested) {
@@ -911,7 +875,7 @@ public class AgentLoop {
                     sessionService.updateLastPromptTokens(promptTokens);
                 }
                 // 获取当前模型名称，用于按模型分别计费
-                String currentModel = client != null ? client.getModel() : null;
+                String currentModel = client.getModel();
                 try {
                     listener.onUsage(currentModel, promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
                 } catch (Exception e) {
@@ -950,8 +914,8 @@ public class AgentLoop {
 
         // 用户主动中断
         if (userAbortRequested) {
-            String content = contentBuf.length() > 0 ? contentBuf.toString() : null;
-            String reasoningContent = reasoningBuf.length() > 0 ? reasoningBuf.toString() : null;
+            String content = !contentBuf.isEmpty() ? contentBuf.toString() : null;
+            String reasoningContent = !reasoningBuf.isEmpty() ? reasoningBuf.toString() : null;
             return new StreamResult(content, reasoningContent, streamedTcs[0], false);
         }
 
@@ -961,12 +925,12 @@ public class AgentLoop {
 
         if (loopAborted.get()) {
             String reasoning = loopSnapshot[0] != null ? loopSnapshot[0]
-                    : (reasoningBuf.length() > 0 ? reasoningBuf.toString() : null);
+                    : (!reasoningBuf.isEmpty() ? reasoningBuf.toString() : null);
             return new StreamResult(null, reasoning, streamedTcs[0], false, true);
         }
 
-        String content = contentBuf.length() > 0 ? contentBuf.toString() : null;
-        String reasoningContent = reasoningBuf.length() > 0 ? reasoningBuf.toString() : null;
+        String content = !contentBuf.isEmpty() ? contentBuf.toString() : null;
+        String reasoningContent = !reasoningBuf.isEmpty() ? reasoningBuf.toString() : null;
         return new StreamResult(content, reasoningContent, streamedTcs[0], false);
     }
 
@@ -1052,7 +1016,6 @@ public class AgentLoop {
      * 步骤 6: 解析工具调用列表并并行执行，返回 tcList + toolResults + storm 抑制状态。
      * 丢弃 name 为 null 的无效 tool call（SSE 截断 / 历史损坏保护）。
      */
-    @SuppressWarnings("unchecked")
     private ToolExecutionResult executeToolCalls(ONode toolCalls) {
         return executeToolCalls(toolCalls, false);
     }
@@ -1104,9 +1067,6 @@ public class AgentLoop {
         final AtomicBoolean anySuppressed = new AtomicBoolean(false);
         final AtomicReference<HitlRequiredException> hitlRef =
                 new AtomicReference<>(null);
-        final AtomicReference<String> hitlTcName = new AtomicReference<>(null);
-        final AtomicReference<String> hitlTcArgs = new AtomicReference<>(null);
-        final AtomicReference<String> hitlTcId = new AtomicReference<>(null);
         for (int i = 0; i < tcCount; i++) {
             final int idx = i;
             futures[i] = CompletableFuture.supplyAsync(() -> {
@@ -1140,12 +1100,7 @@ public class AgentLoop {
                     } catch (HitlRequiredException e) {
                         // 沙箱越界 → 暂存 HITL 信息，不执行
                         hitlRef.set(e);
-                        hitlTcName.set(tcName);
-                        hitlTcArgs.set(tcArgs);
-                        hitlTcId.set(tcId);
-                        // 返回占位结果，等待审批后重放
-                        ChatMessage placeholder = ChatMessage.tool(tcId, "[HITL_PENDING:" + e.reason() + "] " + e.details());
-                        return placeholder;
+                        return ChatMessage.tool(tcId, "[HITL_PENDING:" + e.reason() + "] " + e.details());
                     }
                 } finally {
                     if (skipSandboxCheck) {
