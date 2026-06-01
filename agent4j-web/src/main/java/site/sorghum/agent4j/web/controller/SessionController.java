@@ -6,12 +6,10 @@ import org.noear.solon.core.handle.Context;
 
 import site.sorghum.agent4j.tool.interact.InteractionService;
 import site.sorghum.agent4j.web.common.ServiceException;
-import site.sorghum.agent4j.web.model.ApiResponse;
+import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
 
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 会话管理 API 控制器。
@@ -47,10 +45,7 @@ public class SessionController {
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
         String currentName = agentService.getCurrentSessionName(workspacePath);
         String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("workspaceHash", resolvedHash);
-        data.put("sessionName", currentName);
-        return ApiResponse.ok(data);
+        return ApiResponse.ok(new SessionCurrentDTO(resolvedHash, currentName));
     }
 
     /** 新建空白会话 —— POST /api/sessions/new?workspaceHash=xxx&sessionName=xxx */
@@ -63,11 +58,7 @@ public class SessionController {
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
         String actualName = agentService.newSession(workspacePath, sessionName);
         String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("message", "已创建新会话");
-        data.put("workspaceHash", resolvedHash);
-        data.put("sessionName", actualName);
-        return ApiResponse.ok(data);
+        return ApiResponse.ok(new SessionCreateDTO("已创建新会话", resolvedHash, actualName));
     }
 
     /** 切换会话 —— POST /api/sessions/{name}?workspaceHash=xxx */
@@ -83,11 +74,7 @@ public class SessionController {
         if (ok) {
             String confirmedName = agentService.getCurrentSessionName(workspacePath);
             String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("workspaceHash", resolvedHash);
-            data.put("sessionName", confirmedName != null ? confirmedName : name);
-            data.put("switched", true);
-            return ApiResponse.ok(data);
+            return ApiResponse.ok(new SessionSwitchDTO(resolvedHash, confirmedName != null ? confirmedName : name, true));
         }
         throw new ServiceException("会话不存在: " + name);
     }
@@ -102,11 +89,7 @@ public class SessionController {
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
         agentService.deleteSession(workspacePath, name);
         String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("message", "会话已删除");
-        data.put("workspaceHash", resolvedHash);
-        data.put("sessionName", name);
-        return ApiResponse.ok(data);
+        return ApiResponse.ok(new SessionDeleteDTO("会话已删除", resolvedHash, name));
     }
 
     /** 清除所有 Agent 缓存 —— POST /api/sessions/evict-all */
@@ -123,10 +106,7 @@ public class SessionController {
     @Mapping("/stats")
     public Object stats() {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("cacheSize", agentService.getCacheSize());
-        data.put("maxCacheSize", 50);
-        return ApiResponse.ok(data);
+        return ApiResponse.ok(new SessionStatsDTO(agentService.getCacheSize(), 50));
     }
 
     /** 获取指定会话的 TODO 列表 —— GET /api/sessions/{name}/todos?workspaceHash=xxx */
@@ -135,11 +115,9 @@ public class SessionController {
     public Object getTodos(@Path("name") String sessionName,
                            @Param(value = "workspaceHash", required = false) String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
-        List<Map<String, Object>> todos = interactionService.getTodos(sessionName);
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("sessionName", sessionName);
-        data.put("todos", todos);
-        data.put("count", todos.size());
-        return ApiResponse.ok(data);
+        // InteractionService.getTodos() 返回 List<Map>，这里直接透传
+        // TODO: 后续将 InteractionService 也改为返回 DTO
+        List<?> todos = interactionService.getTodos(sessionName);
+        return ApiResponse.ok(todos);
     }
 }

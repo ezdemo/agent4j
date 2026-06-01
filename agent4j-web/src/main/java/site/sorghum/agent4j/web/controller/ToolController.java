@@ -5,13 +5,13 @@ import org.noear.solon.annotation.*;
 import site.sorghum.agent4j.bin.tool.ToolDef;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.ApiResponse;
+import site.sorghum.agent4j.web.model.ToolInfoDTO;
+import site.sorghum.agent4j.web.model.ToolParamInfoDTO;
 import site.sorghum.agent4j.web.model.ToolExecuteRequest;
 import site.sorghum.agent4j.web.service.AgentService;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 工具管理 API 控制器 —— 列出工具、查看详情、直接执行。
@@ -30,9 +30,9 @@ public class ToolController {
     @Mapping("")
     public Object list() {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
-        List<Map<String, Object>> tools = new ArrayList<>();
+        List<ToolInfoDTO> tools = new ArrayList<>();
         for (ToolDef def : agentService.getSharedToolRegistry().all().values()) {
-            tools.add(toToolMap(def));
+            tools.add(toToolInfoDTO(def));
         }
         return ApiResponse.ok(tools);
     }
@@ -44,28 +44,15 @@ public class ToolController {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         ToolDef tool = agentService.getSharedToolRegistry().get(name);
         if (tool == null) throw new ServiceException("工具不存在: " + name);
-        return ApiResponse.ok(toToolMap(tool));
+        return ApiResponse.ok(toToolInfoDTO(tool));
     }
 
-    /** 将 ToolDef 转为可安全序列化的 Map（剔除 lambda fn 字段避免 Snack4 StackOverflow） */
-    private static Map<String, Object> toToolMap(ToolDef def) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("name", def.name());
-        m.put("description", def.description());
-        m.put("readOnly", def.readOnly());
-        m.put("stormExempt", def.stormExempt());
-        // 参数列表
-        List<Map<String, Object>> params = new ArrayList<>();
+    /** 将 ToolDef 转为安全序列化的 DTO（剔除 lambda fn 字段避免 Snack4 StackOverflow） */
+    private static ToolInfoDTO toToolInfoDTO(ToolDef def) {
+        List<ToolParamInfoDTO> params = new ArrayList<>();
         for (ToolDef.ParamDef p : def.params()) {
-            Map<String, Object> pm = new LinkedHashMap<>();
-            pm.put("name", p.name());
-            pm.put("type", p.type());
-            pm.put("description", p.description());
-            pm.put("required", p.required());
-            params.add(pm);
+            params.add(new ToolParamInfoDTO(p.name(), p.type(), p.description(), p.required()));
         }
-        m.put("params", params);
-        return m;
+        return new ToolInfoDTO(def.name(), def.description(), def.readOnly(), def.stormExempt(), params);
     }
-
 }

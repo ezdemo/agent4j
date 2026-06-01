@@ -5,10 +5,14 @@ import org.noear.solon.annotation.*;
 
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.web.common.ServiceException;
-import site.sorghum.agent4j.web.model.ApiResponse;
+import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
@@ -29,30 +33,34 @@ public class ConfigController {
     @Mapping("/config")
     public Object getConfig() {
         Agent4jConfig config = Agent4jConfig.load();
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("baseUrl", config.baseUrl());
-        data.put("model", config.model());
-        data.put("availableModels", config.availableModels());
-        // 优先返回当前运行时的工作目录（可能已被动态切换）
+        String workspace = null;
         if (agentService.isReady()) {
-            data.put("workspace", agentService.getWorkspace());
-        } else {
-            data.put("workspace", config.workspaceDir() != null
-                    ? config.workspaceDir().toString() : null);
+            workspace = agentService.getWorkspace();
+        } else if (config.workspaceDir() != null) {
+            workspace = config.workspaceDir().toString();
         }
-        data.put("editMode", config.editMode());
-        data.put("reasoningEffort", config.reasoningEffort());
-        data.put("lang", config.lang());
-        data.put("hitl", config.hitl());
-        data.put("disabledTools", config.disabledTools());
-        data.put("blockedPaths", config.blockedPaths());
-        data.put("price", config.price());
+
         String apiKey = config.apiKey();
+        String maskedKey;
         if (apiKey != null && apiKey.length() > 8) {
-            data.put("apiKey", apiKey.substring(0, 4) + "****" + apiKey.substring(apiKey.length() - 4));
+            maskedKey = apiKey.substring(0, 4) + "****" + apiKey.substring(apiKey.length() - 4);
         } else {
-            data.put("apiKey", "****");
+            maskedKey = "****";
         }
+
+        ConfigDTO data = new ConfigDTO(
+                config.baseUrl(),
+                config.model(),
+                config.availableModels(),
+                workspace,
+                config.editMode(),
+                config.reasoningEffort(),
+                config.lang(),
+                config.hitl(),
+                config.disabledTools(),
+                config.blockedPaths(),
+                maskedKey
+        );
         return ApiResponse.ok(data);
     }
 
@@ -64,13 +72,11 @@ public class ConfigController {
         Agent4jConfig config = Agent4jConfig.load();
         config.updateAndSave(body);
 
-        // 如果更新了模型，需要通知 AgentService
         if (body.containsKey("model") && agentService.isReady()) {
             String newModel = body.get("model").toString();
             agentService.updateModel(newModel);
         }
 
-        // 如果更新了 hitl，需要热更新所有运行中的 Agent 实例
         if (body.containsKey("hitl") && agentService.isReady()) {
             Object hitlVal = body.get("hitl");
             boolean newHitl = hitlVal instanceof Boolean ? (Boolean) hitlVal : Boolean.parseBoolean(hitlVal.toString());
@@ -89,31 +95,22 @@ public class ConfigController {
         String currentModel = config.model();
         List<String> available = config.availableModels();
 
-        // 合并 currentModel 到列表（去重）
         Set<String> modelSet = new LinkedHashSet<>();
         modelSet.add(currentModel);
         modelSet.addAll(available);
 
-        List<Map<String, Object>> models = modelSet.stream()
-            .map(m -> {
-                Map<String, Object> item = new LinkedHashMap<>();
-                item.put("name", m);
-                item.put("active", m.equals(currentModel));
-                return item;
-            })
+        List<ModelInfoDTO> models = modelSet.stream()
+            .map(m -> new ModelInfoDTO(m, m.equals(currentModel)))
             .collect(Collectors.toList());
 
-        Map<String, Object> result = new LinkedHashMap<>();
-        result.put("current", currentModel);
-        result.put("models", models);
-        return ApiResponse.ok(result);
+        return ApiResponse.ok(new ModelListDTO(currentModel, models));
     }
 
     /** 获取 Token 用量统计 —— GET /api/usage?workspaceHash=xxx&sessionName=xxx */
     @Get
     @Mapping("/usage")
     public Object getUsage(@Param(value = "workspaceHash", required = false) String workspaceHash,
-                           @Param(value = "sessionName",required = false) String sessionName) {
+                           @Param(value = "sessionName", required = false) String sessionName) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
@@ -139,9 +136,8 @@ public class ConfigController {
         }
         boolean ok = agentService.switchWorkspace(path);
         if (ok) {
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("message", "工作目录已切换");
-            data.put("workspace", agentService.getWorkspace());
+            WorkspaceSwitchDTO data = new WorkspaceSwitchDTO(
+                    "工作目录已切换", agentService.getWorkspace(), null);
             return ApiResponse.ok(data);
         }
         throw new ServiceException("无效的工作目录路径: " + path);
@@ -154,8 +150,7 @@ public class ConfigController {
     @Mapping("/workspaces")
     public Object listWorkspaces() {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
-        List<Map<String, Object>> workspaces = agentService.listWorkspaces();
-        return ApiResponse.ok(workspaces);
+        return ApiResponse.ok(agentService.listWorkspaces());
     }
 
     /** 切换到指定工作区 —— POST /api/workspaces/switch */
@@ -169,10 +164,8 @@ public class ConfigController {
         }
         boolean ok = agentService.switchToWorkspaceByHash(hash);
         if (ok) {
-            Map<String, Object> data = new LinkedHashMap<>();
-            data.put("message", "工作区已切换");
-            data.put("workspace", agentService.getWorkspace());
-            data.put("currentSession", agentService.getCurrentSession());
+            WorkspaceSwitchDTO data = new WorkspaceSwitchDTO(
+                    "工作区已切换", agentService.getWorkspace(), agentService.getCurrentSession());
             return ApiResponse.ok(data);
         }
         throw new ServiceException("切换工作区失败: " + hash);

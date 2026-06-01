@@ -15,6 +15,7 @@ import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
 import site.sorghum.agent4j.bin.session.SessionService;
+import site.sorghum.agent4j.bin.session.JsonlSessionStore;
 import site.sorghum.agent4j.bin.session.SessionStore;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.tool.ToolSystemInitializer;
@@ -25,6 +26,8 @@ import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolResult;
 import site.sorghum.agent4j.tool.ToolParameter;
 
+import site.sorghum.agent4j.web.model.*;
+
 import org.noear.snack4.ONode;
 import org.noear.solon.Solon;
 
@@ -34,8 +37,7 @@ import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.HashSet;
-import java.util.LinkedHashMap;
+import java.util.stream.Collectors;
 
 /**
  * Agent 会话级服务 —— 管理 Agent4jAgent 的生命周期和并发访问。
@@ -340,31 +342,39 @@ public class AgentService {
     /**
      * 获取 Agent 整体状态（供前端状态面板使用）。
      *
-     * @return 状态信息 Map
+     * @return 状态信息
      */
-    public Map<String, Object> getStatus() {
-        Map<String, Object> status = new LinkedHashMap<>();
-        status.put("ready", isReady());
-        status.put("model", sharedModel);
-        status.put("workspace", getWorkspace());
-        status.put("cacheSize", agentCache.size());
+    public AgentStatusDTO getStatus() {
+        boolean ready = isReady();
+        String model = sharedModel;
+        String workspace = getWorkspace();
+        int cacheSize = agentCache.size();
+
+        int historySize = 0;
+        boolean planMode = false;
+        boolean hitlMode = false;
+        String sessionName = null;
+        long promptTokens = 0;
+        long completionTokens = 0;
 
         // 追加默认会话的详细信息
         String defaultKey = generateSessionKey(null, null);
         Agent4jAgent agent = agentCache.get(defaultKey);
         if (agent != null) {
-            status.put("historySize", agent.historySize());
-            status.put("planMode", agent.isPlanMode());
-            status.put("hitlMode", agent.isHitlMode());
+            historySize = agent.historySize();
+            planMode = agent.isPlanMode();
+            hitlMode = agent.isHitlMode();
             SessionStore store = agent.getSessionStore();
             if (store != null) {
-                status.put("sessionName", store.currentName());
+                sessionName = store.currentName();
             }
             long[] usage = agent.getSessionUsage();
-            status.put("promptTokens", usage[0]);
-            status.put("completionTokens", usage[1]);
+            promptTokens = usage[0];
+            completionTokens = usage[1];
         }
-        return status;
+        return new AgentStatusDTO(ready, model, workspace, cacheSize,
+                historySize, planMode, hitlMode, sessionName,
+                promptTokens, completionTokens);
     }
 
     /**
@@ -667,40 +677,40 @@ public class AgentService {
      * @param workspacePath 工作区路径（可选）
      * @return 会话列表
      */
-    public List<Map<String, Object>> listSessions(String workspacePath) throws IOException {
+    public List<SessionInfoDTO> listSessions(String workspacePath) throws IOException {
         if (!isReady()) {
-            return new ArrayList<>();
+            return Collections.emptyList();
         }
 
         // 获取一个 Agent 实例来访问 SessionStore
         String sessionKey = generateSessionKey(workspacePath, null);
         Agent4jAgent agent = getOrCreateAgent(sessionKey);
         if (agent == null) {
-            return new ArrayList<>();
+            return Collections.emptyList();
         }
 
         SessionStore store = agent.getSessionStore();
         if (store == null) {
-            return new ArrayList<>();
+            return Collections.emptyList();
         }
 
         // 确定当前会话名（优先用追踪记录，其次用 store.currentName）
         String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
         if (resolvedPath == null) {
-            return new ArrayList<>();
+            return Collections.emptyList();
         }
         String activeSession = currentSessionNames.get(resolvedPath);
         if (activeSession == null) {
             activeSession = store.currentName();
         }
-        List<Map<String, Object>> sessions = new ArrayList<>();
+        List<SessionInfoDTO> sessions = new ArrayList<>();
         for (SessionStore.SessionInfo sessionInfo : store.list()) {
-            Map<String, Object> info = new LinkedHashMap<>();
-            info.put("name", sessionInfo.name);
-            info.put("title", store.getTitle(sessionInfo.name));
-            info.put("messageCount", sessionInfo.messageCount);
-            info.put("current", sessionInfo.name.equals(activeSession));
-            sessions.add(info);
+            sessions.add(new SessionInfoDTO(
+                    sessionInfo.name,
+                    store.getTitle(sessionInfo.name),
+                    sessionInfo.messageCount,
+                    sessionInfo.name.equals(activeSession)
+            ));
         }
         return sessions;
     }
@@ -789,16 +799,15 @@ public class AgentService {
     }
 
     /**
-     * 获取指定会话的 token 用量（返回 Map 格式，前端友好）。
+     * 获取指定会话的 token 用量（返回 DTO）。
      *
      * @param workspacePath 工作区路径（可选）
      * @param sessionName   会话名称（可选）
-     * @return usage 数据 Map
+     * @return usage 数据
      */
-    public Map<String, Object> getSessionUsageMap(String workspacePath, String sessionName) {
+    public UsageDTO getSessionUsageMap(String workspacePath, String sessionName) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         Agent4jAgent agent = agentCache.get(sessionKey);
-        Map<String, Object> result = new LinkedHashMap<>();
 
         long promptTokens = 0;
         long completionTokens = 0;
@@ -817,49 +826,52 @@ public class AgentService {
             maxContextTokens = agent.getMaxContextTokens();
         }
 
-        result.put("promptTokens", promptTokens);
-        result.put("completionTokens", completionTokens);
-        result.put("cacheHit", cacheHit);
-        result.put("cacheMiss", cacheMiss);
-        result.put("lastPromptTokens", lastPromptTokens);
-        result.put("maxContextTokens", maxContextTokens);
-        result.put("totalTokens", promptTokens + completionTokens);
+        String currentModel = null;
+        boolean hasPrice = false;
+        double inputCost = 0;
+        double cacheCost = 0;
+        double outputCost = 0;
+        double totalCost = 0;
+        String currency = null;
 
         // 价格计算
         try {
             Agent4jConfig config = Agent4jConfig.load();
-            String currentModel = config.model();
+            currentModel = config.model();
             Map<String, Map<String, Double>> prices = config.price();
             Map<String, Double> modelPrice = prices.get(currentModel);
 
-            result.put("model", currentModel);
-            result.put("hasPrice", modelPrice != null && !modelPrice.isEmpty());
+            hasPrice = modelPrice != null && !modelPrice.isEmpty();
 
-            if (modelPrice != null && !modelPrice.isEmpty()) {
-                // 价格单位：每百万 token 的金额
+            if (hasPrice) {
                 double inputRate = modelPrice.getOrDefault("input", 0.0);
                 double cacheRate = modelPrice.getOrDefault("cache", 0.0);
                 double outputRate = modelPrice.getOrDefault("output", 0.0);
 
-                // 非缓存输入 = promptTokens - cacheHit
                 long nonCacheInput = Math.max(0, promptTokens - cacheHit);
-                double inputCost = nonCacheInput / 1_000_000.0 * inputRate;
-                double cacheCost = cacheHit / 1_000_000.0 * cacheRate;
-                double outputCost = completionTokens / 1_000_000.0 * outputRate;
-                double totalCost = inputCost + cacheCost + outputCost;
+                inputCost = nonCacheInput / 1_000_000.0 * inputRate;
+                cacheCost = cacheHit / 1_000_000.0 * cacheRate;
+                outputCost = completionTokens / 1_000_000.0 * outputRate;
+                totalCost = inputCost + cacheCost + outputCost;
+                currency = "CNY";
 
-                result.put("inputCost", Math.round(inputCost * 10000.0) / 10000.0);
-                result.put("cacheCost", Math.round(cacheCost * 10000.0) / 10000.0);
-                result.put("outputCost", Math.round(outputCost * 10000.0) / 10000.0);
-                result.put("totalCost", Math.round(totalCost * 10000.0) / 10000.0);
-                result.put("currency", "CNY");
+                inputCost = Math.round(inputCost * 10000.0) / 10000.0;
+                cacheCost = Math.round(cacheCost * 10000.0) / 10000.0;
+                outputCost = Math.round(outputCost * 10000.0) / 10000.0;
+                totalCost = Math.round(totalCost * 10000.0) / 10000.0;
             }
         } catch (Exception e) {
             // 价格计算失败不影响主逻辑
-            result.put("hasPrice", false);
         }
 
-        return result;
+        return new UsageDTO(
+                promptTokens, completionTokens, cacheHit, cacheMiss,
+                lastPromptTokens, maxContextTokens,
+                promptTokens + completionTokens,
+                currentModel, hasPrice,
+                inputCost, cacheCost, outputCost, totalCost,
+                currency
+        );
     }
 
     /**
@@ -909,12 +921,10 @@ public class AgentService {
         try {
             String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
             if (resolvedPath == null) return;
-            site.sorghum.agent4j.bin.workspace.WorkspaceManager wm =
-                    new site.sorghum.agent4j.bin.workspace.WorkspaceManager();
-            java.nio.file.Path sessionsDir = wm.getSessionsDir(resolvedPath);
+            WorkspaceManager wm = new WorkspaceManager();
+            Path sessionsDir = wm.getSessionsDir(resolvedPath);
             if (sessionsDir == null || !java.nio.file.Files.exists(sessionsDir)) return;
-            site.sorghum.agent4j.bin.session.SessionStore store =
-                    new site.sorghum.agent4j.bin.session.JsonlSessionStore(sessionsDir);
+            SessionStore store = new JsonlSessionStore(sessionsDir);
             boolean ok = store.delete(sessionName);
             if (ok) {
                 System.out.println("[web] 已删除会话文件: " + sessionName);
@@ -1117,17 +1127,14 @@ public class AgentService {
 
     /**
      * 列出工作区（兼容旧接口）。
-     * 使用 WorkspaceManager 获取所有已注册的工作区。
      *
      * @return 工作区列表
      */
-    public List<Map<String, Object>> listWorkspaces() {
-        List<Map<String, Object>> result = new ArrayList<>();
+    public List<WorkspaceInfoDTO> listWorkspaces() {
+        List<WorkspaceInfoDTO> result = new ArrayList<>();
         
-        // 使用 WorkspaceManager 获取所有已注册的工作区
         try {
             WorkspaceManager workspaceManager = new WorkspaceManager();
-            // 设置当前活跃工作区 hash，以便 isActive 字段正确
             String currentPath = getWorkspace();
             if (currentPath != null) {
                 workspaceManager.switchWorkspace(currentPath);
@@ -1135,15 +1142,11 @@ public class AgentService {
             List<WorkspaceManager.WorkspaceInfo> workspaces = workspaceManager.listWorkspaces();
             
             for (WorkspaceManager.WorkspaceInfo info : workspaces) {
-                Map<String, Object> item = new LinkedHashMap<>();
-                item.put("hash", info.hash);
-                item.put("name", info.name);
-                item.put("path", info.path);
-                item.put("createdAt", info.createdAt);
-                item.put("lastAccessedAt", info.lastAccessedAt);
-                item.put("sessionCount", info.sessionCount);
-                item.put("isActive", info.isActive);
-                result.add(item);
+                result.add(new WorkspaceInfoDTO(
+                        info.hash, info.name, info.path,
+                        info.createdAt, info.lastAccessedAt,
+                        info.sessionCount, info.isActive
+                ));
             }
         } catch (IOException e) {
             System.err.println("[web] 获取工作区列表失败: " + e.getMessage());
@@ -1156,16 +1159,15 @@ public class AgentService {
                 }
             }
 
-            // 添加默认工作区
             if (sharedConfig != null && sharedConfig.workspaceDir() != null) {
                 workspacePaths.add(sharedConfig.workspaceDir().toAbsolutePath().toString());
             }
 
             for (String path : workspacePaths) {
-                Map<String, Object> info = new LinkedHashMap<>();
-                info.put("path", path);
-                info.put("hash", WorkspaceManager.computeHash(path));
-                result.add(info);
+                result.add(new WorkspaceInfoDTO(
+                        WorkspaceManager.computeHash(path), null, path,
+                        0, 0, 0, false
+                ));
             }
         }
         
@@ -1219,11 +1221,8 @@ public class AgentService {
      *
      * @return 当前会话信息
      */
-    public Map<String, Object> getCurrentSession() {
-        Map<String, Object> info = new LinkedHashMap<>();
-        info.put("workspacePath", getWorkspace());
-        info.put("sessionName", getCurrentSessionName(null));
-        return info;
+    public SessionCurrentDTO getCurrentSession() {
+        return new SessionCurrentDTO(getWorkspace(), getCurrentSessionName(null));
     }
 
     /**
@@ -1277,11 +1276,17 @@ public class AgentService {
      *
      * @return 命令元数据列表
      */
-    public List<Map<String, Object>> getCommandMetaList() {
+    public List<CommandMetaDTO> getCommandMetaList() {
         if (commandRegistry == null) {
             return Collections.emptyList();
         }
-        return commandRegistry.getCommandMetaList();
+        return commandRegistry.getCommandMetaList().stream()
+                .map(m -> new CommandMetaDTO(
+                        (String) m.get("name"),
+                        (String) m.get("description"),
+                        (String) m.get("args")
+                ))
+                .collect(Collectors.toList());
     }
 
     /**
@@ -1289,19 +1294,18 @@ public class AgentService {
      *
      * @return skill 元数据列表
      */
-    public List<Map<String, Object>> getSkillMetaList() {
+    public List<SkillMetaDTO> getSkillMetaList() {
         if (sharedSkillStore == null) {
             return Collections.emptyList();
         }
-        List<Map<String, Object>> result = new ArrayList<>();
-        List<site.sorghum.agent4j.bin.skill.SkillV2> skills = sharedSkillStore.list();
-        for (site.sorghum.agent4j.bin.skill.SkillV2 skill : skills) {
-            Map<String, Object> meta = new LinkedHashMap<>();
-            meta.put("name", skill.getName());
-            meta.put("description", skill.getDescription() != null ? skill.getDescription() : "");
-            meta.put("scope", skill.getScope().name().toLowerCase());
-            meta.put("runAs", skill.getRunAs().name().toLowerCase());
-            result.add(meta);
+        List<SkillMetaDTO> result = new ArrayList<>();
+        for (site.sorghum.agent4j.bin.skill.SkillV2 skill : sharedSkillStore.list()) {
+            result.add(new SkillMetaDTO(
+                    skill.getName(),
+                    skill.getDescription() != null ? skill.getDescription() : "",
+                    skill.getScope().name().toLowerCase(),
+                    skill.getRunAs().name().toLowerCase()
+            ));
         }
         return result;
     }

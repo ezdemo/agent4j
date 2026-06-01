@@ -5,9 +5,8 @@ import org.noear.solon.annotation.Get;
 import org.noear.solon.annotation.Mapping;
 
 import site.sorghum.agent4j.web.model.ApiResponse;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
+import site.sorghum.agent4j.web.model.SystemHealthDTO;
+import site.sorghum.agent4j.web.model.SystemVersionDTO;
 
 /**
  * 系统管理端点 —— 健康检查、版本查询。
@@ -28,22 +27,14 @@ public class SystemController {
     /** 健康检查 —— GET /api/system/health */
     @Get
     @Mapping("/health")
-    public ApiResponse<Map<String, Object>> health() {
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("status", "ok");
-        data.put("version", VERSION);
-        data.put("buildTime", BUILD_TIME);
-        return ApiResponse.ok(data);
+    public ApiResponse<SystemHealthDTO> health() {
+        return ApiResponse.ok(new SystemHealthDTO("ok", VERSION, BUILD_TIME));
     }
 
     /** 获取版本信息 —— GET /api/system/version */
     @Get
     @Mapping("/version")
-    public ApiResponse<Map<String, Object>> version() {
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("version", VERSION);
-        data.put("buildTime", BUILD_TIME);
-        data.put("name", "Agent4j");
-        return ApiResponse.ok(data);
+    public ApiResponse<SystemVersionDTO> version() {
+        return ApiResponse.ok(new SystemVersionDTO(VERSION, BUILD_TIME, "Agent4j"));
     }
 }

@@ -6,8 +6,6 @@ import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.service.AgentService;
 
-import java.util.Map;
-
 /**
  * Agent 状态查询 API。
  * <p>
@@ -50,9 +48,6 @@ public class AgentController {
 
     /**
      * 获取可用命令列表 —— GET /api/agent/commands
-     * <p>
-     * 返回前端斜杠命令选择弹窗所需的元数据。
-     * </p>
      */
     @Get
     @Mapping("/commands")
@@ -65,9 +60,6 @@ public class AgentController {
 
     /**
      * 获取可用 skill 列表 —— GET /api/agent/skills
-     * <p>
-     * 返回前端 skill 选择弹窗所需的元数据。
-     * </p>
      */
     @Get
     @Mapping("/skills")

@@ -5,11 +5,9 @@ import org.noear.solon.core.handle.Context;
 
 import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.model.ChatRequest;
+import site.sorghum.agent4j.web.model.ChatResultDTO;
 import site.sorghum.agent4j.web.service.AgentService;
 import site.sorghum.agent4j.web.service.SseEmitter;
-
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * 聊天 API 控制器 —— 同步聊天 + SSE 流式聊天。
@@ -36,16 +34,15 @@ public class ChatController {
             return ApiResponse.fail("message 不能为空");
         }
         long t0 = System.currentTimeMillis();
-        // 支持工作区和会话隔离（hash 可选，不传则使用默认工作区）
         String workspacePath = agentService.resolveWorkspacePath(request.workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
         String reply = agentService.chat(request.message.trim(), workspacePath, request.sessionName);
         long elapsed = System.currentTimeMillis() - t0;
 
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("reply", reply);
-        data.put("elapsedMs", elapsed);
-        data.put("usage", agentService.getSessionUsageMap(workspacePath, request.sessionName));
+        ChatResultDTO data = new ChatResultDTO(
+                reply, elapsed,
+                agentService.getSessionUsageMap(workspacePath, request.sessionName)
+        );
         return ApiResponse.ok(data);
     }
 
@@ -88,7 +85,6 @@ public class ChatController {
                 try {
                     emitter.sendError(e.getMessage());
                 } catch (Exception ex) {
-                    // SSE连接可能已断开，忽略异常
                     System.err.println("[web] 发送错误信息失败（可能SSE连接已断开）: " + ex.getMessage());
                 }
             }
