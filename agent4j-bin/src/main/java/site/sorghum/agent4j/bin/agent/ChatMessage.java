@@ -1,5 +1,9 @@
 package site.sorghum.agent4j.bin.agent;
 
+import lombok.Data;
+import org.noear.snack4.ONode;
+import org.noear.snack4.annotation.ONodeAttr;
+
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -8,23 +12,27 @@ import java.util.Map;
 /**
  * 聊天消息 —— 替代 Map&lt;String, Object&gt; 表示消息的强类型封装。
  * <p>
- * 统一表示 OpenAI 兼容 API 的四种消息角色：
- * system / user / assistant / tool。
+ * 统一表示 OpenAI 兼容 API 的四种消息角色：system / user / assistant / tool。
  * </p>
  *
  * @author Sorghum
  */
+@Data
 public class ChatMessage {
 
     private final String role;
-    private String content;
-    private List<ToolCallEntry> toolCalls;
-    private String toolCallId;
-    private String reasoningContent;
 
-    private ChatMessage(String role) {
-        this.role = role;
-    }
+    @ONodeAttr(name = "content")
+    private String content;
+
+    @ONodeAttr(name = "tool_calls")
+    private List<ToolCallEntry> toolCalls;
+
+    @ONodeAttr(name = "tool_call_id")
+    private String toolCallId;
+
+    @ONodeAttr(name = "reasoning_content")
+    private String reasoningContent;
 
     // ==================== 工厂方法 ====================
 
@@ -55,40 +63,24 @@ public class ChatMessage {
         return msg;
     }
 
-    // ==================== Getters ====================
-
-    public String getRole() { return role; }
-
-    public String getContent() { return content; }
-
-    public void setContent(String content) { this.content = content; }
-
-    public List<ToolCallEntry> getToolCalls() { return toolCalls; }
-
-    public void setToolCalls(List<ToolCallEntry> toolCalls) { this.toolCalls = toolCalls; }
-
-    public String getToolCallId() { return toolCallId; }
-
-    public String getReasoningContent() { return reasoningContent; }
-
-    public void setReasoningContent(String reasoningContent) { this.reasoningContent = reasoningContent; }
-
     // ==================== 便捷判断 ====================
 
     public boolean isSystem() { return "system".equals(role); }
+
     public boolean isUser() { return "user".equals(role); }
+
     public boolean isAssistant() { return "assistant".equals(role); }
+
     public boolean isTool() { return "tool".equals(role); }
 
     public boolean hasContent() { return content != null && !content.isEmpty(); }
+
     public boolean hasToolCalls() { return toolCalls != null && !toolCalls.isEmpty(); }
+
     public boolean hasReasoning() { return reasoningContent != null && !reasoningContent.isEmpty(); }
 
     // ==================== 反序列化 ====================
 
-    /**
-     * 从 Map 构建 ChatMessage（兼容旧的 JSONL 反序列化路径）。
-     */
     @SuppressWarnings("unchecked")
     public static ChatMessage fromMap(Map<String, Object> m) {
         String role = String.valueOf(m.getOrDefault("role", "user"));
@@ -105,9 +97,27 @@ public class ChatMessage {
                 msg.toolCalls = new ArrayList<>();
                 for (Map<String, Object> tc : tcMaps) {
                     String tcId = String.valueOf(tc.getOrDefault("id", "unknown"));
-                    String tcName = String.valueOf(tc.getOrDefault("name", "unknown"));
-                    String tcArgs = tc.get("arguments") != null ? tc.get("arguments").toString() : "{}";
-                    msg.toolCalls.add(new ToolCallEntry(tcId, tcName, tcArgs));
+                    String tcName = "unknown";
+                    Object tcArgsObj = "{}";
+                    Object funcObj = tc.get("function");
+                    if (funcObj instanceof Map) {
+                        @SuppressWarnings("unchecked")
+                        Map<String, Object> func = (Map<String, Object>) funcObj;
+                        tcName = String.valueOf(func.getOrDefault("name", "unknown"));
+                        tcArgsObj = func.get("arguments");
+                        if (tcArgsObj == null) tcArgsObj = "{}";
+                    } else {
+                        tcName = String.valueOf(tc.getOrDefault("name", "unknown"));
+                        tcArgsObj = tc.get("arguments");
+                        if (tcArgsObj == null) tcArgsObj = "{}";
+                    }
+                    if (tcArgsObj instanceof String) {
+                        String tcArgsStr = (String) tcArgsObj;
+                        try {
+                            tcArgsObj = ONode.ofJson(tcArgsStr).toData();
+                        } catch (Exception ignored) { }
+                    }
+                    msg.toolCalls.add(new ToolCallEntry(tcId, tcName, tcArgsObj));
                 }
             }
         }
@@ -116,10 +126,6 @@ public class ChatMessage {
 
     // ==================== 序列化 ====================
 
-    /**
-     * 转换为 Map（兼容旧的 JSON 序列化路径）。
-     * 仅在序列化边界使用，内部逻辑应直接使用类型化字段。
-     */
     public Map<String, Object> toMap() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("role", role);
@@ -134,11 +140,5 @@ public class ChatMessage {
             m.put("tool_calls", tcMaps);
         }
         return m;
-    }
-
-    @Override
-    public String toString() {
-        return "ChatMessage{role='" + role + "', content='" +
-                (content != null ? content.substring(0, Math.min(50, content.length())) : "null") + "'}";
     }
 }

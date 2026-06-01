@@ -403,7 +403,8 @@ public class AgentLoop {
         sb.append("⏸️  **HITL 模式：以下工具调用需要审批**\n\n");
         for (ToolCallEntry tc : tcList) {
             String name = tc.name();
-            String args = tc.arguments();
+            Object argsObj = tc.arguments();
+            String args = argsObj != null ? argsObj.toString() : null;
             sb.append("- `").append(name).append("`");
             if (args != null && !args.isEmpty() && !"{}".equals(args)) {
                 // 截断过长的参数

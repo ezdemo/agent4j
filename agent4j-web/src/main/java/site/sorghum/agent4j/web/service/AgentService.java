@@ -374,6 +374,10 @@ public class AgentService {
 
     /**
      * 获取会话的对话历史。
+     * <p>
+     * 直接返回 {@code List&lt;ChatMessage&gt;}，利用 {@code @ONodeAttr} 注解
+     * 控制序列化字段名（snake_case）以及排除 boolean 辅助方法，避免 Map 转换。
+     * </p>
      *
      * @param workspacePath 工作区路径（可选）
      * @param sessionName   会话名称（可选，不传则使用当前活跃会话）

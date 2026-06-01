@@ -499,7 +499,18 @@ public class HttpModelClient implements ModelClient {
                     tcNode.set("type", "function");
                     ONode funcNode = tcNode.getOrNew("function");
                     funcNode.set("name", tc.name());
-                    funcNode.set("arguments", tc.arguments() != null ? tc.arguments() : "{}");
+                    // arguments 可能为 String（API 返回/AgentLoop 构造）或 Map（JSONL 加载后解析），统一转字符串
+                    Object argsObj = tc.arguments();
+                    String argsStr = "{}";
+                    if (argsObj != null) {
+                        if (argsObj instanceof String) {
+                            argsStr = (String) argsObj;
+                        } else {
+                            // Map → JSON 字符串
+                            argsStr = org.noear.snack4.ONode.serialize(argsObj);
+                        }
+                    }
+                    funcNode.set("arguments", argsStr);
                 }
             }
             if (m.getReasoningContent() != null) msg.set("reasoning_content", m.getReasoningContent());
