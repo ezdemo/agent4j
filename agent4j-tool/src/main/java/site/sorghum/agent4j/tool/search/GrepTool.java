@@ -7,10 +7,13 @@ import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * 内容搜索工具——在工作区文件内按正则表达式搜索。
@@ -55,15 +58,15 @@ public class GrepTool extends AgentTool {
     );
 
     // 按工作区根目录隔离的索引（多 Agent 场景线程安全）
-    private static final java.util.Map<String, WorkspaceIndex> INDEX_MAP = new java.util.concurrent.ConcurrentHashMap<>();
+    private static final Map<String, WorkspaceIndex> INDEX_MAP = new ConcurrentHashMap<>();
 
     /** 获取或创建工作区索引（按 rootDir 隔离）。 */
-    public static WorkspaceIndex getOrCreateIndex(java.nio.file.Path rootDir) throws IOException {
+    public static WorkspaceIndex getOrCreateIndex(Path rootDir) throws IOException {
         return getOrCreateIndex(rootDir, Collections.<String>emptyList());
     }
 
     /** 获取或创建工作区索引（按 rootDir + blockedPaths 隔离）。 */
-    public static WorkspaceIndex getOrCreateIndex(java.nio.file.Path rootDir, List<String> blockedPaths) throws IOException {
+    public static WorkspaceIndex getOrCreateIndex(Path rootDir, List<String> blockedPaths) throws IOException {
         String rootKey = rootDir.toAbsolutePath().normalize().toString();
         String bpKey = blockedPaths != null ? String.join(",", blockedPaths) : "";
         String key = rootKey + "|" + bpKey;
@@ -82,7 +85,7 @@ public class GrepTool extends AgentTool {
     }
 
     /** 设置工作区索引（测试用）。 */
-    public static void setIndex(WorkspaceIndex idx, java.nio.file.Path rootDir) {
+    public static void setIndex(WorkspaceIndex idx, Path rootDir) {
         String key = rootDir.toAbsolutePath().normalize().toString();
         INDEX_MAP.put(key, idx);
     }
@@ -143,7 +146,7 @@ public class GrepTool extends AgentTool {
         }
 
         try {
-            java.nio.file.Path root = ctx.getRootDir() != null
+            Path root = ctx.getRootDir() != null
                     ? ctx.getRootDir()
                     : Paths.get(".").toAbsolutePath();
             List<String> blockedPaths = ctx.getBlockedPaths();
@@ -187,7 +190,7 @@ public class GrepTool extends AgentTool {
     }
 
     private void ensureIndex(ToolContext ctx) throws IOException {
-        java.nio.file.Path root = ctx.getRootDir() != null
+        Path root = ctx.getRootDir() != null
                 ? ctx.getRootDir()
                 : Paths.get(".").toAbsolutePath();
         getOrCreateIndex(root, ctx.getBlockedPaths());

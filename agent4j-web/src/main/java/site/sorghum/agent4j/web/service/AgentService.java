@@ -9,6 +9,7 @@ import org.noear.solon.annotation.Inject;
 import site.sorghum.agent4j.bin.agent.Agent4jAgent;
 import site.sorghum.agent4j.bin.agent.AgentLoopListener;
 import site.sorghum.agent4j.bin.agent.AgentOutput;
+import site.sorghum.agent4j.bin.agent.ChatMessage;
 import site.sorghum.agent4j.bin.agent.PromptPrefix;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
@@ -32,6 +33,7 @@ import org.noear.snack4.ONode;
 import org.noear.solon.Solon;
 
 import java.io.IOException;
+import java.text.SimpleDateFormat;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
@@ -287,14 +289,7 @@ public class AgentService {
                 agent.switchSession(sessionName);
 
                 // 注册 token 用量追踪
-                Agent4jAgent finalAgent = agent;
-                agent.setListener(new AgentLoopListener() {
-                    @Override
-                    public void onUsage(String model, int promptTokens, int completionTokens, int totalTokens,
-                                        int cacheHit, int cacheMiss) {
-                        finalAgent.addUsage(model, promptTokens, completionTokens, cacheHit, cacheMiss);
-                    }
-                });
+                agent.setListener(new WebUsageListener(agent));
 
                 // 默认使用 NOOP 输出（API 调用时由 SseEmitter 接管）
                 agent.setOutput(AgentOutput.NOOP);
@@ -384,7 +379,7 @@ public class AgentService {
      * @param sessionName   会话名称（可选，不传则使用当前活跃会话）
      * @return 历史消息列表
      */
-    public List<Map<String, Object>> getHistory(String workspacePath, String sessionName) {
+    public List<ChatMessage> getHistory(String workspacePath, String sessionName) {
         // 未指定会话名时，使用当前活跃会话
         if (sessionName == null || sessionName.isEmpty()) {
             sessionName = getCurrentSessionName(workspacePath);
@@ -412,7 +407,7 @@ public class AgentService {
      *
      * @return 历史消息列表
      */
-    public List<Map<String, Object>> getHistory() {
+    public List<ChatMessage> getHistory() {
         return getHistory(null, null);
     }
 
@@ -525,76 +520,7 @@ public class AgentService {
             this.currentSseEmitter = emitter;
 
             // 设置 AgentOutput：将所有事件桥接到 SSE
-            agent.setOutput(new AgentOutput() {
-                @Override
-                public void onContentDelta(String token) {
-                    emitter.sendContent(token);
-                }
-
-                @Override
-                public void onContentComplete() {
-                }
-
-                @Override
-                public void onReasoningDelta(String token) {
-                    emitter.sendReasoning(token);
-                }
-
-                @Override
-                public void onReasoningComplete() {
-                }
-
-                @Override
-                public void onReasoning(String reasoning) {
-                    if (reasoning != null && !reasoning.isEmpty()) {
-                        emitter.sendReasoning(reasoning);
-                    }
-                }
-
-                @Override
-                public void onToolCall(String name, String args) {
-                    emitter.sendToolCall(name, args);
-                }
-
-                @Override
-                public void onToolResult(String name, String result) {
-                    emitter.sendToolResult(name, result);
-                }
-
-                @Override
-                public void onUsage(int promptTokens, int completionTokens, int totalTokens,
-                                    int cacheHit, int cacheMiss) {
-                    emitter.sendUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
-                    agent.addUsage(promptTokens, completionTokens, cacheHit, cacheMiss);
-                }
-
-                @Override
-                public void onUsage(String model, int promptTokens, int completionTokens, int totalTokens,
-                                    int cacheHit, int cacheMiss) {
-                    emitter.sendUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
-                    agent.addUsage(model, promptTokens, completionTokens, cacheHit, cacheMiss);
-                }
-
-                @Override
-                public void onError(String error) {
-                    emitter.sendError(error);
-                }
-
-                @Override
-                public void onLog(LogLevel level, String message) {
-                }
-
-                @Override
-                public void onMessage(String message) {
-                }
-
-                @Override
-                public void onChoice(java.util.List<AgentOutput.ChoiceOption> options) {
-                    if (options != null && !options.isEmpty()) {
-                        emitter.sendChoice(new java.util.ArrayList<>(options));
-                    }
-                }
-            });
+            agent.setOutput(new SseAgentOutput(emitter, agent));
 
             // 设置会话ID到 AgentLoop
             String sessionId = sessionName != null ? sessionName : "default";
@@ -651,7 +577,7 @@ public class AgentService {
 
         // 未指定会话名时自动生成
         if (sessionName == null || sessionName.isEmpty()) {
-            sessionName = "agent4j-" + new java.text.SimpleDateFormat("yyyyMMddHHmmss").format(new java.util.Date());
+            sessionName = "agent4j-" + new SimpleDateFormat("yyyyMMddHHmmss").format(new java.util.Date());
         }
 
         // 直接以目标会话名创建/获取 Agent（switchTo 是惰性的，不创建文件）

@@ -9,6 +9,7 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import site.sorghum.agent4j.bin.agent.ChatMessage;
 
 /**
  * 会话管理服务 —— 编排会话生命周期。
@@ -80,9 +81,9 @@ public class SessionService {
                 System.err.println("[session] 切换到指定会话失败: " + sessionName + "，使用新会话");
             }
             // 仅在明确指定会话时才加载历史和恢复用量
-            List<Map<String, Object>> loaded = store.load();
+            List<ChatMessage> loaded = store.load();
             loaded = MessageHealer.heal(loaded, false);
-            for (Map<String, Object> m : loaded) {
+            for (ChatMessage m : loaded) {
                 ctx.injectHistory(m);
             }
             restoreUsage(store.currentName());
@@ -219,7 +220,7 @@ public class SessionService {
     }
 
     /** 注入单条历史消息 */
-    public void injectHistory(Map<String, Object> msg) {
+    public void injectHistory(ChatMessage msg) {
         ctx.injectHistory(msg);
     }
 

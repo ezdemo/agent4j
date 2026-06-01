@@ -2,6 +2,8 @@ package site.sorghum.agent4j.web.service;
 
 import org.noear.snack4.ONode;
 import site.sorghum.agent4j.bin.agent.AgentOutput;
+import site.sorghum.agent4j.bin.agent.ChoiceOption;
+import site.sorghum.agent4j.bin.agent.LogLevel;
 
 /**
  * API 输出实现 —— 将 {@link AgentOutput} 事件桥接到 {@link SseEmitter}（SSE 流式推送）。

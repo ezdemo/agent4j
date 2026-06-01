@@ -1,12 +1,12 @@
 package site.sorghum.agent4j.tool.terminal;
 
-import java.io.IOException;
+import java.lang.reflect.Field;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 跨平台进程树终止工具。
  * <p>
- * 参考 Reasonix TS killProcessTree：
- * Windows → taskkill /T /F，POSIX → kill(-pid, SIGKILL)。
+ * Windows: taskkill /T /F，POSIX: kill(-pid, SIGKILL)。
  * </p>
  */
 public class ProcessTreeKiller {
@@ -14,7 +14,7 @@ public class ProcessTreeKiller {
     /**
      * 终止进程及其所有子进程。
      * Windows: taskkill /T /F /PID。
-     * POSIX:   kill(-pid, SIGKILL) → fallback destroyForcibly。
+     * POSIX:   kill(-pid, SIGKILL) -> fallback destroyForcibly。
      */
     public static void kill(Process process) {
         if (process == null || !process.isAlive()) return;
@@ -42,7 +42,6 @@ public class ProcessTreeKiller {
         process.destroyForcibly();
     }
 
-    // Java 8 没有 Process.pid()，用反射或命令获取
     private static long getPid(Process process) {
         try {
             // Java 9+ 有 Process.pid()
@@ -50,7 +49,7 @@ public class ProcessTreeKiller {
         } catch (Exception e) {
             // Java 8 fallback: 通过反射访问 private pid 字段（OpenJDK/HotSpot 特有）
             try {
-                java.lang.reflect.Field f = process.getClass().getDeclaredField("pid");
+                Field f = process.getClass().getDeclaredField("pid");
                 f.setAccessible(true);
                 Object val = f.get(process);
                 if (val instanceof Integer) return ((Integer) val).longValue();
@@ -63,7 +62,7 @@ public class ProcessTreeKiller {
     /** 等待进程结束，超时后杀进程树 */
     public static boolean waitFor(Process process, long timeoutMs) {
         try {
-            if (process.waitFor(timeoutMs, java.util.concurrent.TimeUnit.MILLISECONDS)) {
+            if (process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {
                 return true;
             }
             kill(process);

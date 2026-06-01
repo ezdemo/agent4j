@@ -3,6 +3,7 @@ package site.sorghum.agent4j.bin.session;
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
+import site.sorghum.agent4j.bin.agent.ChatMessage;
 
 /**
  * 会话持久化仓库接口 —— 定义会话消息的 CRUD 契约。
@@ -34,16 +35,16 @@ public interface SessionStore {
     boolean switchTo(String name);
 
     /** 追加一条消息 */
-    void append(Map<String, Object> message) throws IOException;
+    void append(ChatMessage message) throws IOException;
 
     /** 加载当前会话全部消息 */
-    List<Map<String, Object>> load() throws IOException;
+    List<ChatMessage> load() throws IOException;
 
     /** 加载指定会话的消息 */
-    List<Map<String, Object>> load(String name) throws IOException;
+    List<ChatMessage> load(String name) throws IOException;
 
     /** 重写整个会话文件 */
-    void rewrite(List<Map<String, Object>> messages) throws IOException;
+    void rewrite(List<ChatMessage> messages) throws IOException;
 
     /** 归档当前会话 */
     String archive() throws IOException;

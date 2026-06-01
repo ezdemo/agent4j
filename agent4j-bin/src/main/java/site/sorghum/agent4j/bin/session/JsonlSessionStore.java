@@ -9,6 +9,8 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.locks.ReentrantLock;
 
+import site.sorghum.agent4j.bin.agent.ChatMessage;
+import site.sorghum.agent4j.bin.agent.ToolCallEntry;
 import site.sorghum.agent4j.bin.util.ONodeUtil;
 
 /**
@@ -176,7 +178,7 @@ public class JsonlSessionStore implements SessionStore {
     }
 
     @Override
-    public void append(Map<String, Object> message) throws IOException {
+    public void append(ChatMessage message) throws IOException {
         lock.lock();
         try {
             // 若尚未选择会话，自动创建新会话
@@ -208,29 +210,29 @@ public class JsonlSessionStore implements SessionStore {
     }
 
     @Override
-    public List<Map<String, Object>> load() throws IOException {
+    public List<ChatMessage> load() throws IOException {
         if (currentName == null) return new ArrayList<>();
         return load(currentName);
     }
 
     @Override
-    public List<Map<String, Object>> load(String name) throws IOException {
+    public List<ChatMessage> load(String name) throws IOException {
         Path file = sessionPath(name);
         if (!Files.exists(file)) return new ArrayList<>();
-        List<Map<String, Object>> messages = new ArrayList<>();
+        List<ChatMessage> messages = new ArrayList<>();
         for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
             line = line.trim();
             if (line.isEmpty() || line.startsWith("//")) continue;
             try {
                 org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson(line);
-                messages.add(ONodeUtil.toMap(node));
+                messages.add(ChatMessage.fromMap(ONodeUtil.toMap(node)));
             } catch (Exception ignored) {}
         }
         return messages;
     }
 
     @Override
-    public void rewrite(List<Map<String, Object>> messages) throws IOException {
+    public void rewrite(List<ChatMessage> messages) throws IOException {
         lock.lock();
         try {
             // 关闭当前 writer
@@ -240,7 +242,7 @@ public class JsonlSessionStore implements SessionStore {
             Files.createDirectories(file.getParent());
             Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
             try (BufferedWriter w = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {
-                for (Map<String, Object> m : messages) {
+                for (ChatMessage m : messages) {
                     w.write(serializeMessage(m));
                     w.newLine();
                 }
@@ -436,38 +438,27 @@ public class JsonlSessionStore implements SessionStore {
 
 
 
-    @SuppressWarnings("unchecked")
-    public static String serializeMessage(Map<String, Object> msg) {
+    public static String serializeMessage(ChatMessage msg) {
         org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson("{}");
-        Object role = msg.get("role");
-        node.set("role", role != null ? String.valueOf(role) : "user");
-        // content: 只有非 null 才设置，避免 "null" 字符串
-        Object content = msg.get("content");
-        if (content != null) {
-            node.set("content", content.toString());
+        node.set("role", msg.getRole());
+        if (msg.getContent() != null) {
+            node.set("content", msg.getContent());
         }
-        // reasoning_content: 只有非 null 才设置
-        Object reasoning = msg.get("reasoning_content");
-        if (reasoning != null) {
-            node.set("reasoning_content", reasoning.toString());
+        if (msg.getReasoningContent() != null) {
+            node.set("reasoning_content", msg.getReasoningContent());
         }
-        // tool_call_id: 只有非 null 才设置
-        Object toolCallId = msg.get("tool_call_id");
-        if (toolCallId != null) {
-            node.set("tool_call_id", toolCallId.toString());
+        if (msg.getToolCallId() != null) {
+            node.set("tool_call_id", msg.getToolCallId());
         }
-        if (msg.containsKey("tool_calls")) {
+        if (msg.hasToolCalls()) {
             org.noear.snack4.ONode tcArr = node.getOrNew("tool_calls").asArray();
-            for (Map<String, Object> tc : (List<Map<String, Object>>) msg.get("tool_calls")) {
+            for (ToolCallEntry tc : msg.getToolCalls()) {
                 org.noear.snack4.ONode tcn = tcArr.addNew();
-                Object tcId = tc.get("id");
-                tcn.set("id", tcId != null ? String.valueOf(tcId) : "unknown");
+                tcn.set("id", tc.id() != null ? tc.id() : "unknown");
                 tcn.set("type", "function");
                 org.noear.snack4.ONode func = tcn.getOrNew("function");
-                Object tcName = tc.get("name");
-                func.set("name", tcName != null ? String.valueOf(tcName) : "unknown");
-                String args = tc.get("arguments") != null ? tc.get("arguments").toString() : "{}";
-                func.set("arguments", args);
+                func.set("name", tc.name() != null ? tc.name() : "unknown");
+                func.set("arguments", tc.arguments() != null ? tc.arguments() : "{}");
             }
         }
         return node.toJson();

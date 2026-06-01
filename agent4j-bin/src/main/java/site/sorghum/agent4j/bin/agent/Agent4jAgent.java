@@ -227,9 +227,8 @@ public class Agent4jAgent {
             // 加载会话历史消息到上下文，将 JSONL 中的 OpenAI 格式 tool_calls
             // 转回内存格式 {id, name, arguments}，与新创建的消息保持一致
             try {
-                List<Map<String, Object>> loaded = getSessionStore().load();
-                for (Map<String, Object> m : loaded) {
-                    normalizeToolCalls(m);
+                List<ChatMessage> loaded = getSessionStore().load();
+                for (ChatMessage m : loaded) {
                     sessionService.injectHistory(m);
                 }
             } catch (IOException e) {
@@ -289,7 +288,7 @@ public class Agent4jAgent {
     }
 
     /** 获取按模型分别累计的 token 用量 */
-    public java.util.Map<String, long[]> getModelUsage() {
+    public Map<String, long[]> getModelUsage() {
         return sessionService.getModelUsage();
     }
 
@@ -446,7 +445,7 @@ public class Agent4jAgent {
     }
 
     /** 注入历史消息（加载会话时） */
-    public void injectHistory(Map<String, Object> msg) {
+    public void injectHistory(ChatMessage msg) {
         sessionService.injectHistory(msg);
     }
 
@@ -477,7 +476,7 @@ public class Agent4jAgent {
     public void denyHITL() { loop.denyHITL(); }
 
     /** 获取待审批的工具调用列表 */
-    public java.util.List<java.util.Map<String, Object>> getPendingHITTcList() {
+    public List<ToolCallEntry> getPendingHITTcList() {
         return loop.getPendingHITTcList();
     }
 

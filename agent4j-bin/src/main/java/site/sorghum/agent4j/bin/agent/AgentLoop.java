@@ -16,6 +16,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -41,7 +43,7 @@ public class AgentLoop {
     private SessionService sessionService;
     // 无固定步数限制：循环直到模型返回纯文本
     /** 事件监听（打印思考/工具调用/步骤） */
-    private AgentLoopListener listener = new AgentLoopListener() {};
+    private AgentLoopListener listener = NoOpAgentLoopListener.INSTANCE;
     /** 输出接口（默认为控制台输出，可替换为其他实现） */
     private AgentOutput output = new ConsoleAgentOutput();
     /** 最近一次 API 返回的 prompt_tokens（0 = 尚无数据，回退到字符估算） */
@@ -77,7 +79,7 @@ public class AgentLoop {
     /** HITL 暂存的 reasoning_content */
     private volatile String pendingHITLReasoning;
     /** HITL 暂存的解析后工具调用列表 */
-    private volatile List<Map<String, Object>> pendingHITTcList;
+    private volatile List<ToolCallEntry> pendingHITTcList;
 
     // ==================== 沙箱越界 HITL（强制审批，不受 hitlMode 影响） ====================
 
@@ -130,7 +132,7 @@ public class AgentLoop {
     public void denyHITL() { hitlState = HitlState.DENIED; }
 
     /** 获取待审批的工具调用列表（用于 /agree 命令显示） */
-    public List<Map<String, Object>> getPendingHITTcList() { return pendingHITTcList; }
+    public List<ToolCallEntry> getPendingHITTcList() { return pendingHITTcList; }
 
     /** 是否有待审批的工具调用 */
     public boolean hasPendingHITL() { return hitlState == HitlState.PENDING; }
@@ -149,19 +151,19 @@ public class AgentLoop {
 
     /** 手动触发上下文折叠（/compact 命令）— 保留近20条消息，较早消息摘要 */
     public void compactNow() throws IOException {
-        List<Map<String, Object>> messages = ctx.buildMessages();
-        List<Map<String, Object>> folded = ContextFolding.foldKeepLast(
+        List<ChatMessage> messages = ctx.buildMessages();
+        List<ChatMessage> folded = ContextFolding.foldKeepLast(
                 messages, 20, client);
         if (folded.size() < ctx.size()) {
             ctx.compact(folded);
             try {
-                output.onLog(AgentOutput.LogLevel.INFO, "[compact] " + ctx.size() + " 条消息（保留近20条，较早消息已摘要）");
+                output.onLog(LogLevel.INFO, "[compact] " + ctx.size() + " 条消息（保留近20条，较早消息已摘要）");
             } catch (Exception e) {
                 // SSE连接断开时忽略异常
             }
         } else {
             try {
-                output.onLog(AgentOutput.LogLevel.INFO, "[compact] 无需折叠（总消息数 ≤ 20）");
+                output.onLog(LogLevel.INFO, "[compact] 无需折叠（总消息数 ≤ 20）");
             } catch (Exception e) {
                 // SSE连接断开时忽略异常
             }
@@ -195,7 +197,7 @@ public class AgentLoop {
 
     /** 设置事件监听器 */
     public void setListener(AgentLoopListener listener) {
-        this.listener = listener != null ? listener : new AgentLoopListener() {};
+        this.listener = listener != null ? listener : NoOpAgentLoopListener.INSTANCE;
     }
 
     /**
@@ -234,14 +236,14 @@ public class AgentLoop {
             // 区分沙箱越界 HITL 与普通 HITL
             if (pendingSandboxHITToolCalls != null) {
                 try {
-                    output.onLog(AgentOutput.LogLevel.INFO, "[hitl] 用户批准沙箱越界，重放工具调用...");
+                    output.onLog(LogLevel.INFO, "[hitl] 用户批准沙箱越界，重放工具调用...");
                 } catch (Exception e) {
                     // 忽略异常
                 }
                 return resumeAfterSandboxHITL(true);
             }
             try {
-                output.onLog(AgentOutput.LogLevel.INFO, "[hitl] 用户批准，执行工具调用...");
+                output.onLog(LogLevel.INFO, "[hitl] 用户批准，执行工具调用...");
             } catch (Exception e) {
                 // 忽略异常
             }
@@ -252,14 +254,14 @@ public class AgentLoop {
             // 区分沙箱越界 HITL 与普通 HITL
             if (pendingSandboxHITToolCalls != null) {
                 try {
-                    output.onLog(AgentOutput.LogLevel.INFO, "[hitl] 用户拒绝沙箱越界。");
+                    output.onLog(LogLevel.INFO, "[hitl] 用户拒绝沙箱越界。");
                 } catch (Exception e) {
                     // 忽略异常
                 }
                 return resumeAfterSandboxHITL(false);
             }
             try {
-                output.onLog(AgentOutput.LogLevel.INFO, "[hitl] 用户拒绝，跳过工具调用。");
+                output.onLog(LogLevel.INFO, "[hitl] 用户拒绝，跳过工具调用。");
             } catch (Exception e) {
                 // 忽略异常
             }
@@ -278,7 +280,7 @@ public class AgentLoop {
             // 0. 检查用户中断请求
             if (userAbortRequested) {
                 try {
-                    output.onLog(AgentOutput.LogLevel.INFO, "[abort] 用户请求中断，停止推理循环");
+                    output.onLog(LogLevel.INFO, "[abort] 用户请求中断，停止推理循环");
                 } catch (Exception e) {
                     // 忽略异常
                 }
@@ -292,7 +294,7 @@ public class AgentLoop {
 
             // 1. 准备消息：构建 + Healing + 折叠 + 注入工具指引
             PreparedMessages prepared = prepareMessages(step, isThinkingMode);
-            List<Map<String, Object>> messages = prepared.messages;
+            List<ChatMessage> messages = prepared.messages;
 
             // 2. 流式调用 LLM
             StreamResult sr = streamLLM(messages, tools);
@@ -300,7 +302,7 @@ public class AgentLoop {
             // 2.1 用户中断：streamLLM 已提前返回，直接退出循环，不执行工具、不重试
             if (userAbortRequested) {
                 try {
-                    output.onLog(AgentOutput.LogLevel.INFO, "[abort] 用户请求中断（streamLLM 后检测），停止推理循环");
+                    output.onLog(LogLevel.INFO, "[abort] 用户请求中断（streamLLM 后检测），停止推理循环");
                 } catch (Exception e) {
                     // 忽略异常
                 }
@@ -365,8 +367,8 @@ public class AgentLoop {
 
             // 7. 将 assistant 消息和工具结果写入上下文（API 顺序要求：assistant 先于 tool result）
             ctx.addAssistant(sr.content, ter.tcList, sr.reasoningContent);
-            for (Map<String, Object> tr : ter.toolResults) {
-                ctx.addToolResult((String) tr.get("tool_call_id"), (String) tr.get("content"));
+            for (ChatMessage tr : ter.toolResults) {
+                ctx.addToolResult(tr.getToolCallId(), tr.getContent());
             }
 
             // 8. Self-Correction：所有调用被 storm 抑制时，给模型有限次自愈机会
@@ -387,7 +389,7 @@ public class AgentLoop {
      */
     private String interceptForHITL(ONode toolCalls, String content, String reasoningContent) {
         // 解析工具调用列表
-        List<Map<String, Object>> tcList = parseToolCalls(toolCalls);
+        List<ToolCallEntry> tcList = parseToolCalls(toolCalls);
 
         // 暂存状态
         this.pendingHITLToolCalls = toolCalls;
@@ -399,9 +401,9 @@ public class AgentLoop {
         // 构建审批提示
         StringBuilder sb = new StringBuilder();
         sb.append("⏸️  **HITL 模式：以下工具调用需要审批**\n\n");
-        for (Map<String, Object> tc : tcList) {
-            String name = (String) tc.get("name");
-            String args = (String) tc.get("arguments");
+        for (ToolCallEntry tc : tcList) {
+            String name = tc.name();
+            String args = tc.arguments();
             sb.append("- `").append(name).append("`");
             if (args != null && !args.isEmpty() && !"{}".equals(args)) {
                 // 截断过长的参数
@@ -420,9 +422,9 @@ public class AgentLoop {
         }
         // 发送选项按钮（前端渲染为可点击按钮，CLI 渲染为文本菜单）
         try {
-            output.onChoice(java.util.Arrays.asList(
-                    new AgentOutput.ChoiceOption("/agree", "同意执行"),
-                    new AgentOutput.ChoiceOption("/deny", "拒绝执行")
+            output.onChoice(Arrays.asList(
+                    new ChoiceOption("/agree", "同意执行"),
+                    new ChoiceOption("/deny", "拒绝执行")
             ));
         } catch (Exception e) {
             // SSE连接断开时忽略异常
@@ -438,9 +440,8 @@ public class AgentLoop {
     /**
      * 解析 ONnode 工具调用为 Map 列表（供 tcList 使用）。
      */
-    @SuppressWarnings("unchecked")
-    private List<Map<String, Object>> parseToolCalls(ONode toolCalls) {
-        List<Map<String, Object>> tcList = new ArrayList<>();
+    private List<ToolCallEntry> parseToolCalls(ONode toolCalls) {
+        List<ToolCallEntry> tcList = new ArrayList<>();
         if (toolCalls == null || !toolCalls.isArray()) return tcList;
         for (ONode tc : toolCalls.getArray()) {
             String tcId = tc.get("id").getString();
@@ -449,11 +450,7 @@ public class AgentLoop {
             if (tcName == null || tcName.isEmpty()) continue;
             String tcArgs = func.get("arguments").getString();
             if (tcArgs == null) tcArgs = "{}";
-            Map<String, Object> tcMap = new LinkedHashMap<>();
-            tcMap.put("id", tcId);
-            tcMap.put("name", tcName);
-            tcMap.put("arguments", tcArgs);
-            tcList.add(tcMap);
+            tcList.add(new ToolCallEntry(tcId, tcName, tcArgs));
         }
         return tcList;
     }
@@ -465,7 +462,7 @@ public class AgentLoop {
         ONode toolCalls = this.pendingHITLToolCalls;
         String content = this.pendingHITLContent;
         String reasoningContent = this.pendingHITLReasoning;
-        List<Map<String, Object>> tcList = this.pendingHITTcList;
+        List<ToolCallEntry> tcList = this.pendingHITTcList;
 
         // 清空暂存
         this.pendingHITLToolCalls = null;
@@ -492,8 +489,8 @@ public class AgentLoop {
         ToolExecutionResult ter = executeToolCalls(toolCalls);
 
         // 写入工具结果
-        for (Map<String, Object> tr : ter.toolResults) {
-            ctx.addToolResult((String) tr.get("tool_call_id"), (String) tr.get("content"));
+        for (ChatMessage tr : ter.toolResults) {
+            ctx.addToolResult(tr.getToolCallId(), tr.getContent());
         }
 
         // 委托给统一的内部循环
@@ -523,9 +520,9 @@ public class AgentLoop {
         }
         // 发送选项按钮（前端渲染为可点击按钮，CLI 渲染为文本菜单）
         try {
-            output.onChoice(java.util.Arrays.asList(
-                    new AgentOutput.ChoiceOption("/agree", "同意执行"),
-                    new AgentOutput.ChoiceOption("/deny", "拒绝执行")
+            output.onChoice(Arrays.asList(
+                    new ChoiceOption("/agree", "同意执行"),
+                    new ChoiceOption("/deny", "拒绝执行")
             ));
         } catch (Exception e) {
             // SSE连接断开时忽略异常
@@ -554,7 +551,7 @@ public class AgentLoop {
 
         if (!approved) {
             // 用户拒绝：将 assistant 消息（含工具调用）写入上下文，返回拒绝提示
-            List<Map<String, Object>> tcList = parseToolCalls(toolCalls);
+            List<ToolCallEntry> tcList = parseToolCalls(toolCalls);
             ctx.addAssistant(content, tcList, reasoningContent);
             String denyMsg = "沙箱越界已被用户拒绝。";
             ctx.addAssistant(denyMsg, null, null);
@@ -562,7 +559,7 @@ public class AgentLoop {
         }
 
         // 用户批准：先写入 assistant 消息，再以沙箱旁路模式执行工具
-        List<Map<String, Object>> tcList = parseToolCalls(toolCalls);
+        List<ToolCallEntry> tcList = parseToolCalls(toolCalls);
         ctx.addAssistant(content, tcList, reasoningContent);
 
         dispatcher.resetStorm();
@@ -575,13 +572,13 @@ public class AgentLoop {
         try {
             initialTer = executeToolCalls(toolCalls, true);
         } catch (Exception e) {
-            output.onLog(AgentOutput.LogLevel.ERROR, "[hitl] 沙箱旁路重放失败: " + e.getMessage());
+            output.onLog(LogLevel.ERROR, "[hitl] 沙箱旁路重放失败: " + e.getMessage());
             throw new IOException("沙箱旁路重放工具调用失败: " + e.getMessage(), e);
         }
 
         // 写入工具结果
-        for (Map<String, Object> tr : initialTer.toolResults) {
-            ctx.addToolResult((String) tr.get("tool_call_id"), (String) tr.get("content"));
+        for (ChatMessage tr : initialTer.toolResults) {
+            ctx.addToolResult(tr.getToolCallId(), tr.getContent());
         }
 
         // Self-Correction 检查与委托给统一的内部循环
@@ -613,7 +610,7 @@ public class AgentLoop {
         for (int step = 0; ; step++) {
             if (userAbortRequested) {
                 try {
-                    output.onLog(AgentOutput.LogLevel.INFO, "[abort] 用户请求中断，停止推理循环");
+                    output.onLog(LogLevel.INFO, "[abort] 用户请求中断，停止推理循环");
                 } catch (Exception e) {
                     // 忽略异常
                 }
@@ -625,7 +622,7 @@ public class AgentLoop {
             }
 
             PreparedMessages prepared = prepareMessages(step, isThinkingMode);
-            List<Map<String, Object>> messages = prepared.messages;
+            List<ChatMessage> messages = prepared.messages;
 
             StreamResult sr = streamLLM(messages, tools);
 
@@ -681,8 +678,8 @@ public class AgentLoop {
             }
 
             ctx.addAssistant(sr.content, ter.tcList, sr.reasoningContent);
-            for (Map<String, Object> tr : ter.toolResults) {
-                ctx.addToolResult((String) tr.get("tool_call_id"), (String) tr.get("content"));
+            for (ChatMessage tr : ter.toolResults) {
+                ctx.addToolResult(tr.getToolCallId(), tr.getContent());
             }
 
             selfCorrectionAttempts = handleSelfCorrection(
@@ -695,12 +692,8 @@ public class AgentLoop {
         }
     }
 
-    private static Map<String, Object> toolResult(String id, String result) {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("role", "tool");
-        m.put("tool_call_id", id);
-        m.put("content", result);
-        return m;
+    private static ChatMessage toolResult(String id, String result) {
+        return ChatMessage.tool(id, result);
     }
 
     // ==================== 内部数据类 ====================
@@ -714,11 +707,11 @@ public class AgentLoop {
     }
 
     /** 消息准备结果（含是否发生了折叠） */
-    private record PreparedMessages(List<Map<String, Object>> messages, boolean foldedThisStep) {}
+    private record PreparedMessages(List<ChatMessage> messages, boolean foldedThisStep) {}
 
     /** 工具并行执行结果 */
-    private record ToolExecutionResult(List<Map<String, Object>> tcList,
-                                       List<Map<String, Object>> toolResults,
+    private record ToolExecutionResult(List<ToolCallEntry> tcList,
+                                       List<ChatMessage> toolResults,
                                        boolean anySuppressed) {}
 
     // ==================== 拆分后的子方法 ====================
@@ -728,7 +721,7 @@ public class AgentLoop {
      * 处理 lastPromptTokens / ctx.compact / foldedThisStep 等副作用。
      */
     private PreparedMessages prepareMessages(int step, boolean isThinkingMode) throws IOException {
-        List<Map<String, Object>> messages = ctx.buildMessages();
+        List<ChatMessage> messages = ctx.buildMessages();
         messages = MessageHealer.heal(messages, isThinkingMode);
 
         // 预检：token 数接近上下文窗口 80% 时折叠
@@ -741,7 +734,7 @@ public class AgentLoop {
         boolean needFold = estimatedPromptTokens > tokenThreshold;
         if (needFold) {
             try {
-                output.onLog(AgentOutput.LogLevel.INFO, "[fold] 触发折叠: estimatedTokens=" + estimatedPromptTokens
+                output.onLog(LogLevel.INFO, "[fold] 触发折叠: estimatedTokens=" + estimatedPromptTokens
                         + " threshold=" + tokenThreshold + " maxCtx=" + maxCtx);
             } catch (Exception e) {
                 // 忽略异常
@@ -755,7 +748,7 @@ public class AgentLoop {
         }
 
         try {
-            output.onLog(AgentOutput.LogLevel.DEBUG, "step=" + step + " messages.size=" + messages.size()
+            output.onLog(LogLevel.DEBUG, "step=" + step + " messages.size=" + messages.size()
                     + " lastPromptTokens=" + lastPromptTokens + " threshold=" + tokenThreshold);
         } catch (Exception e) {
             // 忽略异常
@@ -764,12 +757,9 @@ public class AgentLoop {
         // 注入动态工具使用指引（作为 user 消息，不持久化到历史）
         String instr = buildToolInstructions();
         if (!instr.isEmpty()) {
-            List<Map<String, Object>> withInstr = new ArrayList<>(messages.size() + 1);
+            List<ChatMessage> withInstr = new ArrayList<>(messages.size() + 1);
             withInstr.add(messages.get(0)); // system prompt
-            Map<String, Object> instrMsg = new LinkedHashMap<>();
-            instrMsg.put("role", "user");
-            instrMsg.put("content", instr);
-            withInstr.add(instrMsg);
+            withInstr.add(ChatMessage.user(instr));
             withInstr.addAll(messages.subList(1, messages.size()));
             messages = withInstr;
         }
@@ -781,7 +771,7 @@ public class AgentLoop {
      * 步骤 2: 流式调用 LLM API，阻塞等待流结束，返回内容/思考/工具调用/错误状态。
      * 副作用：更新 lastPromptTokens（通过回调），触发 listener/output 事件。
      */
-    private StreamResult streamLLM(List<Map<String, Object>> messages, List<Map<String, Object>> tools) {
+    private StreamResult streamLLM(List<ChatMessage> messages, List<Map<String, Object>> tools) {
         final StringBuilder contentBuf = new StringBuilder();
         final StringBuilder reasoningBuf = new StringBuilder();
         final ONode[] streamedTcs = {null};
@@ -811,7 +801,7 @@ public class AgentLoop {
                         loopSnapshot[0] = reasoningBuf.toString();
                         loopAborted.set(true);
                         try {
-                            output.onLog(AgentOutput.LogLevel.WARN,
+                            output.onLog(LogLevel.WARN,
                                     "[ReasonBreaker] " + lr.toWarning());
                         } catch (Exception ex) {
                             // 忽略异常
@@ -903,15 +893,15 @@ public class AgentLoop {
      * 步骤 3: 流式错误后尝试折叠恢复。
      * @return true 表示已恢复（应 continue 重试），false 表示无法恢复（应抛异常）
      */
-    private boolean recoverFromStreamError(List<Map<String, Object>> messages, boolean foldedThisStep) throws IOException {
+    private boolean recoverFromStreamError(List<ChatMessage> messages, boolean foldedThisStep) throws IOException {
         if (!foldedThisStep && ContextFolding.estimateChars(messages) > 50_000) {
             try {
-                output.onLog(AgentOutput.LogLevel.INFO, "[recover] API 错误，尝试折叠上下文后重试...");
+                output.onLog(LogLevel.INFO, "[recover] API 错误，尝试折叠上下文后重试...");
             } catch (Exception e) {
                 // 忽略异常
             }
             int limit = Math.max(50_000, ContextFolding.estimateChars(messages) / 2);
-            List<Map<String, Object>> recovered = ContextFolding.fold(
+            List<ChatMessage> recovered = ContextFolding.fold(
                     messages, limit, KEEP_TAIL_CHARS, client);
             ctx.compact(recovered);
             lastPromptTokens = 0; // 折叠后重置
@@ -994,14 +984,14 @@ public class AgentLoop {
         int tcCount = tcArray.length;
 
         // 1. 解析 tcList，过滤无效调用，通知监听器
-        List<Map<String, Object>> tcList = new ArrayList<>();
+        List<ToolCallEntry> tcList = new ArrayList<>();
         for (ONode tc : tcArray) {
             String tcId = tc.get("id").getString();
             ONode func = tc.get("function");
             String tcName = func.get("name").getString();
             if (tcName == null || tcName.isEmpty()) {
                 try {
-                    output.onLog(AgentOutput.LogLevel.WARN, "跳过无效 tool call: name=" + tcName + " id=" + tcId);
+                    output.onLog(LogLevel.WARN, "跳过无效 tool call: name=" + tcName + " id=" + tcId);
                 } catch (Exception e) {
                     // 忽略异常
                 }
@@ -1010,11 +1000,7 @@ public class AgentLoop {
             String tcArgs = func.get("arguments").getString();
             if (tcArgs == null) tcArgs = "{}";
 
-            Map<String, Object> tcMap = new LinkedHashMap<>();
-            tcMap.put("id", tcId);
-            tcMap.put("name", tcName);
-            tcMap.put("arguments", tcArgs);
-            tcList.add(tcMap);
+            tcList.add(new ToolCallEntry(tcId, tcName, tcArgs));
 
             try {
                 listener.onToolCall(tcName, tcArgs);
@@ -1029,7 +1015,7 @@ public class AgentLoop {
         }
 
         // 2. 并行分发（CompletableFuture.supplyAsync）
-        CompletableFuture<Map<String, Object>>[] futures = new CompletableFuture[tcCount];
+        CompletableFuture<ChatMessage>[] futures = new CompletableFuture[tcCount];
         final AtomicBoolean anySuppressed = new AtomicBoolean(false);
         final AtomicReference<HitlRequiredException> hitlRef =
                 new AtomicReference<>(null);
@@ -1073,10 +1059,7 @@ public class AgentLoop {
                         hitlTcArgs.set(tcArgs);
                         hitlTcId.set(tcId);
                         // 返回占位结果，等待审批后重放
-                        Map<String, Object> placeholder = new LinkedHashMap<>();
-                        placeholder.put("role", "tool");
-                        placeholder.put("tool_call_id", tcId);
-                        placeholder.put("content", "[HITL_PENDING:" + e.reason() + "] " + e.details());
+                        ChatMessage placeholder = ChatMessage.tool(tcId, "[HITL_PENDING:" + e.reason() + "] " + e.details());
                         return placeholder;
                     }
                 } finally {
@@ -1092,28 +1075,28 @@ public class AgentLoop {
             CompletableFuture.allOf(futures).get(TOOL_TIMEOUT_SEC, TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             try {
-                output.onLog(AgentOutput.LogLevel.WARN, "[tool] 工具执行超时（" + TOOL_TIMEOUT_SEC + "s），取消未完成的调用");
+                output.onLog(LogLevel.WARN, "[tool] 工具执行超时（" + TOOL_TIMEOUT_SEC + "s），取消未完成的调用");
             } catch (Exception ex) {
                 // 忽略异常
             }
             // 取消未完成的 Future
-            for (CompletableFuture<Map<String, Object>> f : futures) {
+            for (CompletableFuture<ChatMessage> f : futures) {
                 if (!f.isDone()) {
                     f.cancel(true);
                 }
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-        } catch (java.util.concurrent.ExecutionException e) {
+        } catch (ExecutionException e) {
             // allOf 在某个 future 异常完成时抛出 ExecutionException，继续逐个收集结果
         }
 
-        List<Map<String, Object>> toolResults = new ArrayList<>();
+        List<ChatMessage> toolResults = new ArrayList<>();
         for (int i = 0; i < futures.length; i++) {
-            CompletableFuture<Map<String, Object>> f = futures[i];
+            CompletableFuture<ChatMessage> f = futures[i];
             try {
                 toolResults.add(f.get());
-            } catch (java.util.concurrent.CancellationException e) {
+            } catch (CancellationException e) {
                 // 超时取消的，返回带有工具ID的占位错误
                 ONode tc = tcArray[i];
                 String tcId = tc.get("id").getString();
@@ -1121,7 +1104,7 @@ public class AgentLoop {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 toolResults.add(toolResult("?", "[ERROR] Interrupted"));
-            } catch (java.util.concurrent.ExecutionException e) {
+            } catch (ExecutionException e) {
                 toolResults.add(toolResult("?", "[ERROR] " + e.getMessage()));
             }
         }
@@ -1133,7 +1116,7 @@ public class AgentLoop {
             this.pendingSandboxHITDetails = hitlEx.details();
             this.hitlState = HitlState.PENDING;
             try {
-                output.onLog(AgentOutput.LogLevel.WARN,
+                output.onLog(LogLevel.WARN,
                         "[hitl] 沙箱越界触发强制审批: " + hitlEx.details());
             } catch (Exception e) {
                 // 忽略异常
@@ -1148,15 +1131,15 @@ public class AgentLoop {
      *
      * @return 更新后的尝试次数；返回 -1 表示已达上限，应停止循环返回 fallback
      */
-    private int handleSelfCorrection(List<Map<String, Object>> toolResults,
+    private int handleSelfCorrection(List<ChatMessage> toolResults,
                                      boolean anySuppressed, int selfCorrectionAttempts) {
         if (!anySuppressed) {
             return selfCorrectionAttempts;
         }
 
         boolean allSuppressed = true;
-        for (Map<String, Object> tr : toolResults) {
-            String r = (String) tr.get("content");
+        for (ChatMessage tr : toolResults) {
+            String r = tr.getContent();
             if (r == null || !r.contains("\"rejectedReason\":\"storm\"")) {
                 allSuppressed = false;
                 break;
@@ -1169,7 +1152,7 @@ public class AgentLoop {
         selfCorrectionAttempts++;
         if (selfCorrectionAttempts > MAX_SELF_CORRECTION_ATTEMPTS) {
             try {
-                output.onLog(AgentOutput.LogLevel.WARN,
+                output.onLog(LogLevel.WARN,
                         "[self-correct] 已达自愈尝试上限（" + MAX_SELF_CORRECTION_ATTEMPTS + "次），停止循环");
             } catch (Exception e) {
                 // 忽略异常
@@ -1178,7 +1161,7 @@ public class AgentLoop {
         }
 
         try {
-            output.onLog(AgentOutput.LogLevel.INFO,
+            output.onLog(LogLevel.INFO,
                     "[self-correct] 所有工具调用被 storm 抑制，第" + selfCorrectionAttempts + "次自愈尝试");
         } catch (Exception e) {
             // 忽略异常

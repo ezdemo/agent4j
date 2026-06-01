@@ -4,7 +4,6 @@ import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.bin.session.SessionStore;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -25,7 +24,7 @@ import java.util.Map;
 @Slf4j
 public class ConversationContext {
 
-    private final List<Map<String, Object>> history = new ArrayList<>();
+    private final List<ChatMessage> history = new ArrayList<>();
     private final PromptPrefix prefix;
     /** 持久化存储（可选） */
     private SessionStore sessionStore = null;
@@ -49,47 +48,26 @@ public class ConversationContext {
     // ---- 写入 ----
 
     public void addUser(String content) {
-        Map<String, Object> msg = new LinkedHashMap<>();
-        msg.put("role", "user");
-        msg.put("content", content);
+        ChatMessage msg = ChatMessage.user(content);
         history.add(msg);
         persist(msg);
     }
 
-    public void addAssistant(String content, List<Map<String, Object>> toolCalls, String reasoningContent) {
-        Map<String, Object> msg = new LinkedHashMap<>();
-        msg.put("role", "assistant");
-
+    public void addAssistant(String content, List<ToolCallEntry> toolCalls, String reasoningContent) {
+        // 防御：assistant 消息必须至少包含 content、tool_calls 或 reasoning_content 之一
         boolean hasContent = content != null && !content.isEmpty();
         boolean hasToolCalls = toolCalls != null && !toolCalls.isEmpty();
         boolean hasReasoning = reasoningContent != null && !reasoningContent.isEmpty();
-
-        if (hasContent) {
-            msg.put("content", content);
-        }
-        if (hasToolCalls) {
-            msg.put("tool_calls", toolCalls);
-        }
-        if (hasReasoning) {
-            msg.put("reasoning_content", reasoningContent);
-        }
-
-        // 防御：assistant 消息必须至少包含 content、tool_calls 或 reasoning_content 之一
-        // 否则 API 会报错 "assistant must provide content, reasoning_content or tool_calls"
-        // 常见于用户中断（stop）导致 response 不完整的情况
         if (!hasContent && !hasToolCalls && !hasReasoning) {
-            msg.put("content", "");
+            content = "";
         }
-
+        ChatMessage msg = ChatMessage.assistant(content, toolCalls, reasoningContent);
         history.add(msg);
         persist(msg);
     }
 
     public void addToolResult(String toolCallId, String result) {
-        Map<String, Object> msg = new LinkedHashMap<>();
-        msg.put("role", "tool");
-        msg.put("tool_call_id", toolCallId);
-        msg.put("content", result != null ? result : "(empty)");
+        ChatMessage msg = ChatMessage.tool(toolCallId, result);
         history.add(msg);
         persist(msg);
     }
@@ -98,7 +76,7 @@ public class ConversationContext {
      * 将消息追加写入 JSONL 文件。
      * 如果 sessionStore 未设置或写入失败，静默忽略。
      */
-    private void persist(Map<String, Object> msg) {
+    private void persist(ChatMessage msg) {
         if (sessionStore != null) {
             try {
                 sessionStore.append(msg);
@@ -114,8 +92,8 @@ public class ConversationContext {
      * 构建发给 API 的消息列表 = prefix（system msg） + history。
      * prefix 始终保持不变 → DeepSeek 前缀缓存命中。
      */
-    public List<Map<String, Object>> buildMessages() {
-        List<Map<String, Object>> msgs = prefix.toMessages();
+    public List<ChatMessage> buildMessages() {
+        List<ChatMessage> msgs = prefix.toMessages();
         msgs.addAll(history);
         return msgs;
     }
@@ -140,7 +118,7 @@ public class ConversationContext {
      * 加载历史会话时注入消息到上下文，不触发持久化。
      * 用于 /load 命令从 JSONL 文件恢复会话。
      */
-    public void injectHistory(Map<String, Object> msg) {
+    public void injectHistory(ChatMessage msg) {
         history.add(msg);
     }
 
@@ -171,8 +149,8 @@ public class ConversationContext {
      */
     public String retryLastUser() {
         for (int i = history.size() - 1; i >= 0; i--) {
-            if ("user".equals(history.get(i).get("role"))) {
-                String text = (String) history.get(i).get("content");
+            if (history.get(i).isUser()) {
+                String text = history.get(i).getContent();
                 history.subList(i, history.size()).clear();
                 // 同步持久化：回写文件以移除被撤回的消息
                 rewriteStore();
@@ -189,9 +167,9 @@ public class ConversationContext {
     public String rewindToUser(int userIndex) {
         int count = 0;
         for (int i = 0; i < history.size(); i++) {
-            if ("user".equals(history.get(i).get("role"))) {
+            if (history.get(i).isUser()) {
                 if (count == userIndex) {
-                    String text = (String) history.get(i).get("content");
+                    String text = history.get(i).getContent();
                     history.subList(i, history.size()).clear();
                     // 同步持久化：回写文件以移除被回退的消息
                     rewriteStore();
@@ -218,7 +196,7 @@ public class ConversationContext {
      * 折叠历史：用折叠后的消息列表替换当前历史。
      * 由 AgentLoop 的预检调用，将旧消息替换为摘要。
      */
-    public void compact(List<Map<String, Object>> foldedMessages) {
+    public void compact(List<ChatMessage> foldedMessages) {
         history.clear();
         history.addAll(foldedMessages);
         // 持久化回写
@@ -228,7 +206,7 @@ public class ConversationContext {
     /**
      * 获取完整历史消息列表的副本（用于调试）。
      */
-    public List<Map<String, Object>> getHistory() {
+    public List<ChatMessage> getHistory() {
         return new ArrayList<>(history);
     }
 
@@ -238,11 +216,11 @@ public class ConversationContext {
      */
     public String getLastAssistantContent() {
         for (int i = history.size() - 1; i >= 0; i--) {
-            Map<String, Object> msg = history.get(i);
-            if ("assistant".equals(msg.get("role"))) {
-                Object content = msg.get("content");
-                if (content instanceof String && !((String) content).isEmpty()) {
-                    return (String) content;
+            ChatMessage msg = history.get(i);
+            if (msg.isAssistant()) {
+                String content = msg.getContent();
+                if (content != null && !content.isEmpty()) {
+                    return content;
                 }
             }
         }

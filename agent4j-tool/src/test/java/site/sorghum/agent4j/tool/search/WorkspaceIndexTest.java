@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
+import java.util.Collections;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -150,10 +151,10 @@ class WorkspaceIndexTest {
             // 分别创建以确保两个文件都存在
             Path deep = tempDir.resolve("a/b/deep.txt");
             Files.createDirectories(deep.getParent());
-            Files.write(deep, java.util.Collections.singletonList("deep"));
+            Files.write(deep, Collections.singletonList("deep"));
 
             Path shallow = tempDir.resolve("shallow.txt");
-            Files.write(shallow, java.util.Collections.singletonList("shallow"));
+            Files.write(shallow, Collections.singletonList("shallow"));
 
             WorkspaceIndex index = new WorkspaceIndex(tempDir);
             index.refresh();

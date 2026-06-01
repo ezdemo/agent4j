@@ -9,6 +9,8 @@ import java.nio.file.*;
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
+import java.util.stream.Stream;
+import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /**
@@ -75,7 +77,7 @@ public class CodeQueryService {
     public String javaSource(Path root, String className, String jarKeyword) throws IOException {
         String pathPattern = className.replace('.', '/') + ".java";
         Path start = root;
-        try (java.util.stream.Stream<Path> walk = Files.walk(start)) {
+        try (Stream<Path> walk = Files.walk(start)) {
             Optional<Path> found = walk.filter(Files::isRegularFile)
                     .filter(p -> p.toString().replace('\\', '/').endsWith(pathPattern))
                     .findFirst();
@@ -87,7 +89,7 @@ public class CodeQueryService {
         String home = System.getProperty("user.home");
         Path m2 = Paths.get(home, ".m2", "repository");
         if (Files.isDirectory(m2) && jarKeyword != null) {
-            try (java.util.stream.Stream<Path> walk = Files.walk(m2)) {
+            try (Stream<Path> walk = Files.walk(m2)) {
                 Optional<Path> jar = walk.filter(Files::isRegularFile)
                         .filter(p -> p.toString().endsWith("-sources.jar"))
                         .filter(p -> p.toString().toLowerCase()
@@ -95,7 +97,7 @@ public class CodeQueryService {
                         .findFirst();
                 if (jar.isPresent()) {
                     try (ZipFile zf = new ZipFile(jar.get().toFile())) {
-                        java.util.zip.ZipEntry entry = zf.getEntry(pathPattern);
+                        ZipEntry entry = zf.getEntry(pathPattern);
                         if (entry != null) {
                             String content = FileSystemService.readFully(zf.getInputStream(entry));
                             return content.substring(0, Math.min(content.length(), 50000));

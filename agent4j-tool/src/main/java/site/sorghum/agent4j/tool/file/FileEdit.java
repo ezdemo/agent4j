@@ -186,7 +186,7 @@ public class FileEdit {
         if (!Files.exists(src)) throw new IOException("源不存在: " + srcStr);
         Files.createDirectories(dst.getParent());
         if (Files.isDirectory(src)) {
-            try (java.util.stream.Stream<Path> walk = java.nio.file.Files.walk(src)) {
+            try (Stream<Path> walk = Files.walk(src)) {
                 walk.forEach(s -> {
                     try {
                         Path d = dst.resolve(src.relativize(s));

@@ -34,12 +34,22 @@ public class ContextFolding {
      * @param client    API 客户端
      * @return 折叠后的消息列表，未触发折叠时返回原列表
      */
-    public static List<Map<String, Object>> fold(
+    public static List<ChatMessage> fold(
+            List<ChatMessage> messages,
+            int maxChars, int keepChars,
+            ModelClient client) throws IOException {
+        // 转换为 Map 进行内部处理
+        List<Map<String, Object>> mapMessages = toMapList(messages);
+        List<Map<String, Object>> result = foldInternal(mapMessages, maxChars, keepChars, client);
+        return fromMapList(result);
+    }
+
+    private static List<Map<String, Object>> foldInternal(
             List<Map<String, Object>> messages,
             int maxChars, int keepChars,
             ModelClient client) throws IOException {
 
-        int total = estimateChars(messages);
+        int total = estimateCharsMap(messages);
         if (total <= maxChars) return messages;
 
         // 找到折叠边界：从尾部往前累积，留够 keepChars
@@ -47,7 +57,7 @@ public class ContextFolding {
         int cum = 0;
         int boundary = 0;
         for (int i = messages.size() - 1; i >= 0; i--) {
-            int sz = estimateChars(messages.get(i));
+            int sz = estimateCharsMap(messages.get(i));
             if (cum + sz > keepChars) break;
             cum += sz;
             boundary = i;
@@ -82,7 +92,7 @@ public class ContextFolding {
         result.addAll(tail);
 
         int before = total;
-        int after = estimateChars(result);
+        int after = estimateCharsMap(result);
         log.info("[fold] {} 条消息 → {} 字符摘要（{} → ~{} 字符）", dropped, summary.length(), before, after);
         return result;
     }
@@ -179,17 +189,10 @@ public class ContextFolding {
         // 截断后再清理 tool_calls/tool 对（顺序重要：先截断后清理）
         trimmed = sanitizeMessagesForSummary(trimmed);
 
-        List<Map<String, Object>> msgs = new ArrayList<>();
-        Map<String, Object> sys = new LinkedHashMap<>();
-        sys.put("role", "system");
-        sys.put("content", sp);
-        msgs.add(sys);
-        msgs.addAll(trimmed);
-
-        Map<String, Object> user = new LinkedHashMap<>();
-        user.put("role", "user");
-        user.put("content", "请用一段中文总结上面的对话。这段摘要将替代原始对话以释放上下文。");
-        msgs.add(user);
+        List<ChatMessage> msgs = new ArrayList<>();
+        msgs.add(ChatMessage.system(sp));
+        for (Map<String, Object> m : trimmed) msgs.add(ChatMessage.fromMap(m));
+        msgs.add(ChatMessage.user("请用一段中文总结上面的对话。这段摘要将替代原始对话以释放上下文。"));
 
         ONode resp = client.chat(msgs, null);
         String content = resp.get("content").getString();
@@ -251,14 +254,14 @@ public class ContextFolding {
 
     /** 截断到字符限制，保留尾部。 */
     private static List<Map<String, Object>> truncateForSummary(List<Map<String, Object>> msgs, int limit) {
-        int total = estimateChars(msgs);
+        int total = estimateCharsMap(msgs);
         if (total <= limit) return msgs;
 
         int cum = 0;
         int start = msgs.size();
         for (int i = msgs.size() - 1; i >= 0; i--) {
-            if (cum + estimateChars(msgs.get(i)) > limit) break;
-            cum += estimateChars(msgs.get(i));
+            if (cum + estimateCharsMap(msgs.get(i)) > limit) break;
+            cum += estimateCharsMap(msgs.get(i));
             start = i;
         }
         if (start >= msgs.size()) return new ArrayList<>();
@@ -274,7 +277,16 @@ public class ContextFolding {
      * @param client    API 客户端
      * @return 折叠后的消息列表（不含 system prompt，用于替换 history），未触发时返回原 history
      */
-    public static List<Map<String, Object>> foldKeepLast(
+    public static List<ChatMessage> foldKeepLast(
+            List<ChatMessage> messages,
+            int keepCount,
+            ModelClient client) throws IOException {
+        List<Map<String, Object>> mapMessages = toMapList(messages);
+        List<Map<String, Object>> result = foldKeepLastInternal(mapMessages, keepCount, client);
+        return fromMapList(result);
+    }
+
+    private static List<Map<String, Object>> foldKeepLastInternal(
             List<Map<String, Object>> messages,
             int keepCount,
             ModelClient client) throws IOException {
@@ -340,8 +352,8 @@ public class ContextFolding {
         result.add(summaryMsg);
         result.addAll(tail);
 
-        int before = estimateChars(messages);
-        int after = estimateChars(result);
+        int before = estimateCharsMap(messages);
+        int after = estimateCharsMap(result);
         log.info("[foldKeepLast] {} 条消息 → {} 字符摘要（{} → ~{} 字符）", dropped, summary.length(), before, after);
 
         return result;
@@ -353,19 +365,50 @@ public class ContextFolding {
      * 估算消息列表的总字符数，用于判断是否触发折叠。
      * 注意：这不包含 tools JSON 的大小，实际请求体会更大。
      */
-    public static int estimateChars(List<Map<String, Object>> messages) {
+    public static int estimateChars(List<ChatMessage> messages) {
         int total = 0;
-        for (Map<String, Object> m : messages) total += estimateChars(m);
+        for (ChatMessage m : messages) total += estimateChars(m);
         return total;
     }
 
     /** 估算单条消息的字符数（role + content + tool_calls + reasoning_content）。 */
-    public static int estimateChars(Map<String, Object> m) {
+    public static int estimateChars(ChatMessage m) {
+        int n = 0;
+        if (m.getRole() != null) n += m.getRole().length();
+        if (m.getContent() != null) n += m.getContent().length();
+        if (m.hasToolCalls()) n += m.getToolCalls().toString().length();
+        if (m.getReasoningContent() != null) n += m.getReasoningContent().length();
+        return n;
+    }
+
+    /** 估算消息列表的总字符数（Map 版本，内部使用）。 */
+    private static int estimateCharsMap(List<Map<String, Object>> messages) {
+        int total = 0;
+        for (Map<String, Object> m : messages) total += estimateCharsMap(m);
+        return total;
+    }
+
+    /** 估算单条消息的字符数（role + content + tool_calls + reasoning_content）。 */
+    private static int estimateCharsMap(Map<String, Object> m) {
         int n = 0;
         if (m.containsKey("role")) n += m.get("role").toString().length();
         if (m.containsKey("content")) n += m.get("content").toString().length();
         if (m.containsKey("tool_calls")) n += m.get("tool_calls").toString().length();
         if (m.containsKey("reasoning_content")) n += m.get("reasoning_content").toString().length();
         return n;
+    }
+
+    // ==================== 转换工具方法 ====================
+
+    private static List<Map<String, Object>> toMapList(List<ChatMessage> messages) {
+        List<Map<String, Object>> result = new ArrayList<>();
+        for (ChatMessage m : messages) result.add(m.toMap());
+        return result;
+    }
+
+    private static List<ChatMessage> fromMapList(List<Map<String, Object>> maps) {
+        List<ChatMessage> result = new ArrayList<>();
+        for (Map<String, Object> m : maps) result.add(ChatMessage.fromMap(m));
+        return result;
     }
 }

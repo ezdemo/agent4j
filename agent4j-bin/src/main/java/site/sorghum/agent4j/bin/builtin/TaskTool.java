@@ -76,14 +76,7 @@ public class TaskTool extends AgentTool {
             ToolRegistry registry = ctx.getToolRegistry();
             SubAgent sub = new SubAgent(modelClient, registry,
                     "你是一个子代理，专注于完成以下任务：" + arguments);
-            String result = sub.run(arguments, new AgentLoopListener() {
-                @Override public void onReasoning(String r) { System.err.println("[sub] " + r); }
-                @Override public void onToolCall(String n, String a) { System.err.println("[sub] 🔧 " + n); }
-                @Override public void onToolResult(String n, String r) {
-                    String d = r != null && r.length() > 100 ? r.substring(0, 100) + "…" : r;
-                    System.err.println("[sub] 📦 " + n + " → " + d);
-                }
-            });
+            String result = sub.run(arguments, new SubAgentListener());
             return ToolResult.ok(result);
         } catch (IOException e) {
             return ToolResult.fail("IO_ERROR", e.getMessage());

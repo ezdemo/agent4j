@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.bin.agent;
 
+import java.util.List;
+
 /**
  * Agent 输出抽象接口 —— 所有 Agent 向外输出的内容都通过此接口发送。
  * <p>
@@ -7,18 +9,6 @@ package site.sorghum.agent4j.bin.agent;
  * 可替换为其他实现（如 WebSocket SSE、日志文件、测试 Mock 等），
  * 实现不同场景下的输出处理。
  * </p>
- *
- * <h3>使用示例</h3>
- * <pre>{@code
- * // 控制台输出（默认行为）
- * agent.setOutput(new ConsoleAgentOutput());
- *
- * // 自定义输出（如收集到 StringBuilder）
- * agent.setOutput(new AgentOutput() {
- *     public void onContentDelta(String token) { buffer.append(token); }
- *     // ... 其他方法
- * });
- * }</pre>
  *
  * @author Sorghum
  */
@@ -71,34 +61,10 @@ public interface AgentOutput {
     void onMessage(String message);
 
     /** 选项列表（如 HITL 审批：同意/拒绝） */
-    void onChoice(java.util.List<ChoiceOption> options);
-
-    // ==================== 数据类型 ====================
-
-    /** 日志级别 */
-    enum LogLevel {
-        DEBUG, INFO, WARN, ERROR
-    }
-
-    /** 选项（value = 发送的消息，title = 展示文本） */
-    record ChoiceOption(String value, String title) {}
+    void onChoice(List<ChoiceOption> options);
 
     // ==================== NOOP 空实现 ====================
 
     /** 无操作的空实现 —— 关闭所有输出 */
-    AgentOutput NOOP = new AgentOutput() {
-        @Override public void onContentDelta(String token) {}
-        @Override public void onContentComplete() {}
-        @Override public void onReasoningDelta(String token) {}
-        @Override public void onReasoningComplete() {}
-        @Override public void onReasoning(String reasoning) {}
-        @Override public void onToolCall(String name, String args) {}
-        @Override public void onToolResult(String name, String result) {}
-        @Override public void onUsage(int promptTokens, int completionTokens, int totalTokens, int cacheHit, int cacheMiss) {}
-        @Override public void onUsage(String model, int promptTokens, int completionTokens, int totalTokens, int cacheHit, int cacheMiss) {}
-        @Override public void onError(String error) {}
-        @Override public void onLog(LogLevel level, String message) {}
-        @Override public void onMessage(String message) {}
-        @Override public void onChoice(java.util.List<ChoiceOption> options) {}
-    };
+    AgentOutput NOOP = NoOpAgentOutput.INSTANCE;
 }

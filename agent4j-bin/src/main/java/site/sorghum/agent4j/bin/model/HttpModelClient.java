@@ -6,6 +6,8 @@ import org.slf4j.LoggerFactory;
 
 import java.io.*;
 import java.net.HttpURLConnection;
+import site.sorghum.agent4j.bin.agent.ChatMessage;
+import site.sorghum.agent4j.bin.agent.ToolCallEntry;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -128,7 +130,7 @@ public class HttpModelClient implements ModelClient {
 
     /** 非流式调用（用于 fold 摘要、/compact 等后台操作），5xx 自动重试最多 10 次 */
     @Override
-    public ONode chat(List<Map<String, Object>> messages,
+    public ONode chat(List<ChatMessage> messages,
                       List<Map<String, Object>> tools) throws IOException {
         String jsonBody = buildBody(messages, tools);
         ONode bodyWithStream = ONode.ofJson(jsonBody);
@@ -206,7 +208,7 @@ public class HttpModelClient implements ModelClient {
      * </p>
      */
     @Override
-    public void chatStream(List<Map<String, Object>> messages,
+    public void chatStream(List<ChatMessage> messages,
                             List<Map<String, Object>> tools,
                             StreamCallback callback) {
         String jsonBody;
@@ -470,7 +472,7 @@ public class HttpModelClient implements ModelClient {
      * 包含 model、messages、tools 等字段，
      * 对 tool 消息做防御性检查（缺少 tool_call_id 时跳过）。
      */
-    private String buildBody(List<Map<String, Object>> messages,
+    private String buildBody(List<ChatMessage> messages,
                               List<Map<String, Object>> tools) throws IOException {
         ONode body = new ONode(ONode.ofJson("{}").options()).asObject();
         body.set("model", model);
@@ -479,36 +481,29 @@ public class HttpModelClient implements ModelClient {
         }
 
         ONode msgs = body.getOrNew("messages").asArray();
-        for (Map<String, Object> m : messages) {
+        for (ChatMessage m : messages) {
             // 防御：tool 消息必须有 tool_call_id，缺少时跳过该消息
-            Object toolCallId = m.get("tool_call_id");
-            if ("tool".equals(m.get("role")) && (toolCallId == null || String.valueOf(toolCallId).isEmpty())) {
+            if (m.isTool() && (m.getToolCallId() == null || m.getToolCallId().isEmpty())) {
                 logger.warn("buildBody: 跳过没有tool_call_id的tool消息");
                 continue;
             }
 
             ONode msg = msgs.addNew();
-            msg.set("role", String.valueOf(m.getOrDefault("role", "user")));
-            Object content = m.get("content");
-            if (content instanceof String) msg.set("content", (String) content);
-            else if (content != null) msg.set("content", content.toString());
-
-            @SuppressWarnings("unchecked")
-            List<Map<String, Object>> toolCalls = (List<Map<String, Object>>) m.get("tool_calls");
-            if (toolCalls != null) {
+            msg.set("role", m.getRole());
+            if (m.hasContent()) msg.set("content", m.getContent());
+            if (m.hasToolCalls()) {
                 ONode tcArray = msg.getOrNew("tool_calls").asArray();
-                for (Map<String, Object> tc : toolCalls) {
+                for (ToolCallEntry tc : m.getToolCalls()) {
                     ONode tcNode = tcArray.addNew();
-                    tcNode.set("id", String.valueOf(tc.get("id")));
+                    tcNode.set("id", tc.id());
                     tcNode.set("type", "function");
                     ONode funcNode = tcNode.getOrNew("function");
-                    funcNode.set("name", String.valueOf(tc.get("name")));
-                    funcNode.set("arguments", String.valueOf(tc.getOrDefault("arguments", "{}")));
+                    funcNode.set("name", tc.name());
+                    funcNode.set("arguments", tc.arguments() != null ? tc.arguments() : "{}");
                 }
             }
-            Object reasoning = m.get("reasoning_content");
-            if (reasoning instanceof String) msg.set("reasoning_content", (String) reasoning);
-            if (toolCallId != null) msg.set("tool_call_id", String.valueOf(toolCallId));
+            if (m.getReasoningContent() != null) msg.set("reasoning_content", m.getReasoningContent());
+            if (m.getToolCallId() != null) msg.set("tool_call_id", m.getToolCallId());
         }
 
         if (tools != null && !tools.isEmpty()) {

@@ -67,19 +67,9 @@ public class Agent4jApp {
         agent.setOutput(new ConsoleAgentOutput());
 
         // 注册事件监听：追踪 token 用量
-        final int[] lastUsage = {0, 0, 0, 0, 0}; // prompt, completion, total, cacheHit, cacheMiss
-        agent.setListener(new AgentLoopListener() {
-            @Override
-            public void onUsage(String model, int promptTokens, int completionTokens, int totalTokens,
-                                 int cacheHit, int cacheMiss) {
-                lastUsage[0] = promptTokens;
-                lastUsage[1] = completionTokens;
-                lastUsage[2] = totalTokens;
-                lastUsage[3] = cacheHit;
-                lastUsage[4] = cacheMiss;
-                agent.addUsage(model, promptTokens, completionTokens, cacheHit, cacheMiss);
-            }
-        });
+        final ConsoleUsageListener usageListener = new ConsoleUsageListener(agent);
+        agent.setListener(usageListener);
+        final int[] lastUsage = usageListener.getLastUsage();
 
         try (Scanner scanner = new Scanner(System.in, "UTF-8")) {
             while (true) {

@@ -1,0 +1,91 @@
+package site.sorghum.agent4j.web.service;
+
+import site.sorghum.agent4j.bin.agent.Agent4jAgent;
+import site.sorghum.agent4j.bin.agent.AgentOutput;
+import site.sorghum.agent4j.bin.agent.ChoiceOption;
+import site.sorghum.agent4j.bin.agent.LogLevel;
+
+import java.util.ArrayList;
+import java.util.List;
+
+/**
+ * SSE 桥接的 AgentOutput 实现 —— 将 Agent 事件转发到 SseEmitter。
+ * 替代 AgentService 中的匿名 AgentOutput。
+ *
+ * @author Sorghum
+ */
+public class SseAgentOutput implements AgentOutput {
+
+    private final SseEmitter emitter;
+    private final Agent4jAgent agent;
+
+    public SseAgentOutput(SseEmitter emitter, Agent4jAgent agent) {
+        this.emitter = emitter;
+        this.agent = agent;
+    }
+
+    @Override
+    public void onContentDelta(String token) {
+        emitter.sendContent(token);
+    }
+
+    @Override
+    public void onContentComplete() {}
+
+    @Override
+    public void onReasoningDelta(String token) {
+        emitter.sendReasoning(token);
+    }
+
+    @Override
+    public void onReasoningComplete() {}
+
+    @Override
+    public void onReasoning(String reasoning) {
+        if (reasoning != null && !reasoning.isEmpty()) {
+            emitter.sendReasoning(reasoning);
+        }
+    }
+
+    @Override
+    public void onToolCall(String name, String args) {
+        emitter.sendToolCall(name, args);
+    }
+
+    @Override
+    public void onToolResult(String name, String result) {
+        emitter.sendToolResult(name, result);
+    }
+
+    @Override
+    public void onUsage(int promptTokens, int completionTokens, int totalTokens,
+                        int cacheHit, int cacheMiss) {
+        emitter.sendUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
+        agent.addUsage(promptTokens, completionTokens, cacheHit, cacheMiss);
+    }
+
+    @Override
+    public void onUsage(String model, int promptTokens, int completionTokens, int totalTokens,
+                        int cacheHit, int cacheMiss) {
+        emitter.sendUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
+        agent.addUsage(model, promptTokens, completionTokens, cacheHit, cacheMiss);
+    }
+
+    @Override
+    public void onError(String error) {
+        emitter.sendError(error);
+    }
+
+    @Override
+    public void onLog(LogLevel level, String message) {}
+
+    @Override
+    public void onMessage(String message) {}
+
+    @Override
+    public void onChoice(List<ChoiceOption> options) {
+        if (options != null && !options.isEmpty()) {
+            emitter.sendChoice(new ArrayList<>(options));
+        }
+    }
+}

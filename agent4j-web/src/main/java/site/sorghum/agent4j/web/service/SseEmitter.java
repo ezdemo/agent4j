@@ -6,6 +6,8 @@ import org.noear.solon.core.handle.Context;
 import java.io.IOException;
 import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -71,14 +73,14 @@ public class SseEmitter {
         send("tool_call", node.toJson());
     }
 
-    public void sendChoice(java.util.List<?> options) {
+    public void sendChoice(List<?> options) {
         ONode root = ONode.ofJson("{}").asObject();
         ONode arr = root.getOrNew("options").asArray();
         for (Object opt : options) {
             ONode item = arr.addNew();
-            if (opt instanceof java.util.Map) {
+            if (opt instanceof Map) {
                 @SuppressWarnings("unchecked")
-                java.util.Map<Object, Object> m = (java.util.Map<Object, Object>) opt;
+                Map<Object, Object> m = (Map<Object, Object>) opt;
                 item.set("value", String.valueOf(m.getOrDefault("value", "")));
                 item.set("title", String.valueOf(m.getOrDefault("title", "")));
             } else {

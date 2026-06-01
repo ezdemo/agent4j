@@ -1,12 +1,12 @@
 package site.sorghum.agent4j.bin.command.impl;
 
 import org.noear.solon.annotation.Component;
+import site.sorghum.agent4j.bin.agent.ChatMessage;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.bin.session.SessionStore;
 
 import java.util.List;
-import java.util.Map;
 
 /**
  * /load N — 加载指定编号的历史会话。
@@ -70,10 +70,10 @@ public class LoadCommand implements ChatCommand {
             // 复用当前 store（已使用工作区隔离的会话目录）
             SessionStore currentStore = context.getAgent().getSessionStore();
             currentStore.switchTo(name);
-            List<Map<String, Object>> loaded = currentStore.load();
+            List<ChatMessage> loaded = currentStore.load();
 
             // 注入历史消息
-            for (Map<String, Object> m : loaded) {
+            for (ChatMessage m : loaded) {
                 context.getAgent().injectHistory(m);
             }
 

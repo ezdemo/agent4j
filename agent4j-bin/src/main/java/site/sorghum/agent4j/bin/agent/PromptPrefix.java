@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.bin.agent;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -31,12 +32,9 @@ public class PromptPrefix {
     }
 
     /** 构建消息前缀：[{role: system, content: ...}] */
-    public List<Map<String, Object>> toMessages() {
-        List<Map<String, Object>> msgs = new ArrayList<>();
-        java.util.Map<String, Object> sys = new java.util.LinkedHashMap<>();
-        sys.put("role", "system");
-        sys.put("content", system);
-        msgs.add(sys);
+    public List<ChatMessage> toMessages() {
+        List<ChatMessage> msgs = new ArrayList<>();
+        msgs.add(ChatMessage.system(system));
         return msgs;
     }
 
