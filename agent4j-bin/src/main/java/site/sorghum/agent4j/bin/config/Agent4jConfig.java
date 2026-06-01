@@ -1,6 +1,9 @@
 package site.sorghum.agent4j.bin.config;
 
+import org.noear.snack4.Feature;
 import org.noear.snack4.ONode;
+import org.noear.snack4.Options;
+import org.noear.snack4.json.JsonWriter;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -23,23 +26,63 @@ public class Agent4jConfig {
         this.root = root;
     }
 
+    /** 生成完整的默认配置 JSON */
+    private static String defaultConfigJson() {
+        return "{\n"
+                + "  \"baseUrl\": \"http://localhost:11434/v1\",\n"
+                + "  \"apiKey\": \"sk-your-api-key\",\n"
+                + "  \"model\": \"mimo-v2.5\",\n"
+                + "  \"reasoningEffort\": \"high\",\n"
+                + "  \"hitl\": false,\n"
+                + "  \"price\": {\n"
+                + "    \"mimo-v2.5\": { \"input\": \"1\", \"cache\": \"0.02\", \"output\": \"2\" },\n"
+                + "    \"mimo-v2.5-pro\": { \"input\": \"3\", \"cache\": \"0.025\", \"output\": \"6\" },\n"
+                + "    \"deepseek-v4-flash\": { \"input\": \"1\", \"cache\": \"0.025\", \"output\": \"2\" },\n"
+                + "    \"deepseek-v4-pro\": { \"input\": \"3\", \"cache\": \"0.02\", \"output\": \"6\" }\n"
+                + "  },\n"
+                + "  \"disabledTools\": [],\n"
+                + "  \"blockedPaths\": [],\n"
+                + "  \"availableModels\": [\"deepseek-v4-flash\", \"deepseek-v4-pro\", \"mimo-v2.5\", \"mimo-v2.5-pro\"]\n"
+                + "}";
+    }
+
+    /** 返回默认配置的 ONode */
+    private static ONode defaultConfigNode() {
+        return ONode.ofJson(defaultConfigJson());
+    }
+
+    /**
+     * 递归合并默认配置到目标节点。
+     * 只补充目标中缺失的字段，不覆盖已有的值。
+     */
+    private static void mergeDefaults(ONode target, ONode defaults) {
+        if (defaults == null || !defaults.isObject()) return;
+        if (target == null || !target.isObject()) return;
+
+        for (Map.Entry<String, ONode> entry : defaults.getObject().entrySet()) {
+            String key = entry.getKey();
+            ONode defaultVal = entry.getValue();
+            ONode targetVal = target.get(key);
+
+            if (targetVal == null || targetVal.isNull()) {
+                // 目标缺失该字段 → 用默认值填充（深度拷贝）
+                target.set(key, ONode.ofJson(defaultVal.toJson()));
+            } else if (defaultVal.isObject() && !defaultVal.isArray()
+                    && targetVal.isObject() && !targetVal.isArray()) {
+                // 双方都是对象 → 递归合并
+                mergeDefaults(targetVal, defaultVal);
+            }
+            // 其他情况：保留目标值
+        }
+    }
+
     /** 从默认路径加载：{@code ~/.agent4j/config.json}，首次启动自动创建 */
     public static Agent4jConfig load() throws IOException {
         Path configDir = Paths.get(System.getProperty("user.home"), ".agent4j");
         Path configPath = configDir.resolve("config.json");
         if (!Files.exists(configPath)) {
             Files.createDirectories(configDir);
-            String defaultConfig = "{\n"
-                    + "  \"baseUrl\": \"http://localhost:11434/v1\",\n"
-                    + "  \"apiKey\": \"sk-your-api-key\",\n"
-                    + "  \"hitl\": false,\n"
-                    + "  \"price\": {\n"
-                    + "    \"mimo-v2.5\": { \"input\": \"3\", \"cache\": \"0.025\", \"output\": \"6\" },\n"
-                    + "    \"mimo-v2.5-pro\": { \"input\": \"3\", \"cache\": \"0.025\", \"output\": \"6\" },\n"
-                    + "    \"deepseek-v4-flash\": { \"input\": \"3\", \"cache\": \"0.025\", \"output\": \"6\" },\n"
-                    + "    \"deepseek-v4-pro\": { \"input\": \"3\", \"cache\": \"0.025\", \"output\": \"6\" }\n"
-                    + "  }\n"
-                    + "}";
+            String defaultConfig = defaultConfigJson();
             Files.write(configPath, defaultConfig.getBytes(StandardCharsets.UTF_8));
             System.err.println("[config] 已创建默认配置文件: " + configPath);
             System.err.println("[config] 请编辑 " + configPath + " 填入 apiKey 后重启");
@@ -47,7 +90,10 @@ public class Agent4jConfig {
         }
         try {
             String json = String.join("\n", Files.readAllLines(configPath));
-            return new Agent4jConfig(ONode.ofJson(json));
+            ONode root = ONode.ofJson(json);
+            // 加载后用默认配置补充缺失字段（适配旧版本 config.json）
+            mergeDefaults(root, defaultConfigNode());
+            return new Agent4jConfig(root);
         } catch (Exception e) {
             throw new IllegalStateException("读取配置文件失败: " + configPath, e);
         }
@@ -294,10 +340,13 @@ public class Agent4jConfig {
 
     /**
      * 保存配置到文件。
+     * 保存前自动补充默认配置中缺失的字段，确保新版本新增的配置项自动出现。
      */
     public void save() throws IOException {
+        // 保存前补充默认配置中缺失的字段
+        mergeDefaults(root, defaultConfigNode());
         Path configPath = getConfigPath();
-        String json = root.toJson();
+        String json = JsonWriter.write(root, Options.of(Feature.Write_PrettyFormat));
         Files.write(configPath, json.getBytes(StandardCharsets.UTF_8));
     }
 

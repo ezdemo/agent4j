@@ -1015,6 +1015,9 @@ public class AgentLoop {
             }
         }
 
+        // 清空子代理用量收集器（task 工具会在 Future 中写入用量数据）
+        site.sorghum.agent4j.bin.builtin.TaskTool.clearUsageCollector();
+
         // 2. 并行分发（CompletableFuture.supplyAsync）
         CompletableFuture<ChatMessage>[] futures = new CompletableFuture[tcCount];
         final AtomicBoolean anySuppressed = new AtomicBoolean(false);
@@ -1121,6 +1124,16 @@ public class AgentLoop {
                         "[hitl] 沙箱越界触发强制审批: " + hitlEx.details());
             } catch (Exception e) {
                 // 忽略异常
+            }
+        }
+
+        // 收集子代理的 token 用量，同步到父会话
+        if (sessionService != null) {
+            var subUsage = site.sorghum.agent4j.bin.builtin.TaskTool.drainUsageCollector();
+            for (var ur : subUsage) {
+                sessionService.addUsage(ur.model(),
+                    (int) ur.prompt(), (int) ur.completion(),
+                    (int) ur.cacheHit(), (int) ur.cacheMiss());
             }
         }
 

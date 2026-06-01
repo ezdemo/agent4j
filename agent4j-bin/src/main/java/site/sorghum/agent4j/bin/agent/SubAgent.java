@@ -37,6 +37,26 @@ public class SubAgent {
     private final ToolRegistry registry;
     private final String systemPrompt;
 
+    // ==================== 子代理用量追踪 ====================
+    private long totalPromptTokens;
+    private long totalCompletionTokens;
+    private long totalCacheHit;
+    private long totalCacheMiss;
+    private final Map<String, long[]> modelUsage = new LinkedHashMap<>();
+
+    /** 获取累计 prompt token 数 */
+    public long getTotalPromptTokens() { return totalPromptTokens; }
+    /** 获取累计 completion token 数 */
+    public long getTotalCompletionTokens() { return totalCompletionTokens; }
+    /** 获取累计 cache hit token 数 */
+    public long getTotalCacheHit() { return totalCacheHit; }
+    /** 获取累计 cache miss token 数 */
+    public long getTotalCacheMiss() { return totalCacheMiss; }
+    /** 获取按模型分别累计的 token 用量: model -> [prompt, completion, cacheHit, cacheMiss] */
+    public Map<String, long[]> getModelUsage() { return modelUsage; }
+    /** 是否有用量数据 */
+    public boolean hasUsage() { return totalPromptTokens > 0 || totalCompletionTokens > 0; }
+
     /** 构造函数（接受 ModelClient 接口，便于 DI） */
     public SubAgent(ModelClient client, ToolRegistry parentRegistry, String systemPrompt) {
         this.client = client;
@@ -68,7 +88,44 @@ public class SubAgent {
         ConversationContext ctx = new ConversationContext(
                 new PromptPrefix(systemPrompt, registry.toOpenAiTools()));
         AgentLoop subLoop = new AgentLoop(client, registry, ctx);
-        if (listener != null) subLoop.setListener(listener);
+
+        // 创建用量捕获监听器：拦截 onUsage 记录到 SubAgent 字段，同时委托给外部 listener
+        AgentLoopListener capturingListener = new AgentLoopListener() {
+            @Override
+            public void onReasoning(String r) {
+                if (listener != null) listener.onReasoning(r);
+            }
+            @Override
+            public void onToolCall(String n, String a) {
+                if (listener != null) listener.onToolCall(n, a);
+            }
+            @Override
+            public void onToolResult(String n, String r) {
+                if (listener != null) listener.onToolResult(n, r);
+            }
+            @Override
+            public void onUsage(String model, int prompt, int completion, int total,
+                                int cacheHit, int cacheMiss) {
+                // 累计总量
+                totalPromptTokens += prompt;
+                totalCompletionTokens += completion;
+                totalCacheHit += cacheHit;
+                totalCacheMiss += cacheMiss;
+                // 按模型累计
+                modelUsage.computeIfAbsent(model != null ? model : "unknown",
+                        k -> new long[4]);
+                long[] mu = modelUsage.get(model != null ? model : "unknown");
+                mu[0] += prompt;
+                mu[1] += completion;
+                mu[2] += cacheHit;
+                mu[3] += cacheMiss;
+                // 委托给外部 listener
+                if (listener != null) {
+                    listener.onUsage(model, prompt, completion, total, cacheHit, cacheMiss);
+                }
+            }
+        };
+        subLoop.setListener(capturingListener);
         return subLoop.run(task);
     }
 }

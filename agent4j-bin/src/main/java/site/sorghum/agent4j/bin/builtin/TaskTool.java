@@ -14,6 +14,8 @@ import site.sorghum.agent4j.tool.ToolResult;
 import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Task 工具 —— 创建隔离子代理处理复杂多步任务。
@@ -25,6 +27,29 @@ import java.util.List;
  */
 @Component
 public class TaskTool extends AgentTool {
+
+    // ==================== 子代理用量收集器 ====================
+
+    /** 用量记录（线程安全，用于跨 Future 收集） */
+    public record UsageRecord(String model, long prompt, long completion, long cacheHit, long cacheMiss) {}
+
+    /** 全局用量收集队列，AgentLoop 在 dispatch 前清空、dispatch 后读取 */
+    private static final ConcurrentLinkedQueue<UsageRecord> subAgentUsageCollector = new ConcurrentLinkedQueue<>();
+
+    /** 清空收集器（在并行 dispatch 前调用） */
+    public static void clearUsageCollector() {
+        subAgentUsageCollector.clear();
+    }
+
+    /** 获取收集器并清空（在并行 dispatch 完成后调用） */
+    public static ConcurrentLinkedQueue<UsageRecord> drainUsageCollector() {
+        ConcurrentLinkedQueue<UsageRecord> drained = new ConcurrentLinkedQueue<>();
+        UsageRecord ur;
+        while ((ur = subAgentUsageCollector.poll()) != null) {
+            drained.add(ur);
+        }
+        return drained;
+    }
 
     @Inject
     private ModelClient modelClient;
@@ -77,6 +102,17 @@ public class TaskTool extends AgentTool {
             SubAgent sub = new SubAgent(modelClient, registry,
                     "你是一个子代理，专注于完成以下任务：" + arguments);
             String result = sub.run(arguments, new SubAgentListener());
+
+            // 将子代理的 token 用量报告给父会话
+            if (sub.hasUsage()) {
+                Map<String, long[]> usage = sub.getModelUsage();
+                for (Map.Entry<String, long[]> e : usage.entrySet()) {
+                    long[] u = e.getValue();
+                    subAgentUsageCollector.add(new UsageRecord(
+                            e.getKey(), u[0], u[1], u[2], u[3]));
+                }
+            }
+
             return ToolResult.ok(result);
         } catch (IOException e) {
             return ToolResult.fail("IO_ERROR", e.getMessage());
