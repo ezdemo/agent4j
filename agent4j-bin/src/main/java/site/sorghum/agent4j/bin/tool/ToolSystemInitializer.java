@@ -5,7 +5,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import site.sorghum.agent4j.bin.agent.PromptPrefix;
 import site.sorghum.agent4j.bin.skill.SkillStoreV2;
-import site.sorghum.agent4j.bin.skill.SkillV2;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
 
@@ -27,33 +26,27 @@ import java.util.*;
 public class ToolSystemInitializer {
 
     private static final Logger log = LoggerFactory.getLogger(ToolSystemInitializer.class);
-
     /**
-     * 初始化结果，包含所有已初始化的组件。
+     * Plan Mode 说明（永久存在于 system prompt 中，不随模式切换动态注入）
      */
-    public static class Result {
-        public final ToolRegistry toolRegistry;
-        public final PromptPrefix promptPrefix;
-        public final SkillStoreV2 skillStore;
-        public final String systemPrompt;
-
-        Result(ToolRegistry toolRegistry, PromptPrefix promptPrefix,
-               SkillStoreV2 skillStore, String systemPrompt) {
-            this.toolRegistry = toolRegistry;
-            this.promptPrefix = promptPrefix;
-            this.skillStore = skillStore;
-            this.systemPrompt = systemPrompt;
-        }
-    }
+    private static final String PLAN_MODE_DESCRIPTION = """
+            ## Plan Mode（计划模式）
+            
+            用户可以使用 /plan 命令进入计划模式。在计划模式下：
+            - 仅只读工具可用（read_file / glob / grep / tree / get_file_info / web_search 等）
+            - 写入/修改工具被禁用（edit_file / multi_edit / write_file / run_command 等）
+            - 先用只读工具探索代码库，了解现状后再用 submit_plan 提交执行计划供审查
+            - 用户输入 /execute 退出计划模式后，所有工具恢复正常
+            """;
 
     /**
      * 执行完整的工具系统初始化。
      *
-     * @param workspace        工作区根目录
-     * @param apiUrl           LLM API URL
-     * @param apiKey           LLM API Key
-     * @param disabledTools    禁用的工具名称集合（可为 null）
-     * @param blockedPaths     屏蔽的目录列表（可为 null）
+     * @param workspace           工作区根目录
+     * @param apiUrl              LLM API URL
+     * @param apiKey              LLM API Key
+     * @param disabledTools       禁用的工具名称集合（可为 null）
+     * @param blockedPaths        屏蔽的目录列表（可为 null）
      * @param defaultSystemPrompt 默认系统提示词（当 ~/.agent4j/agent4j.md 不存在时使用）
      * @return 初始化后的 Result，包含 ToolRegistry / PromptPrefix / SkillStoreV2 / systemPrompt
      */
@@ -152,17 +145,6 @@ public class ToolSystemInitializer {
         return fallback;
     }
 
-    /** Plan Mode 说明（永久存在于 system prompt 中，不随模式切换动态注入） */
-    private static final String PLAN_MODE_DESCRIPTION = """
-            ## Plan Mode（计划模式）
-            
-            用户可以使用 /plan 命令进入计划模式。在计划模式下：
-            - 仅只读工具可用（read_file / glob / grep / tree / get_file_info / web_search 等）
-            - 写入/修改工具被禁用（edit_file / multi_edit / write_file / run_command 等）
-            - 先用只读工具探索代码库，了解现状后再用 submit_plan 提交执行计划供审查
-            - 用户输入 /execute 退出计划模式后，所有工具恢复正常
-            """;
-
     /**
      * 加载工作区根目录下的 agent4j.md 和 CLAUDE.md。
      */
@@ -182,5 +164,23 @@ public class ToolSystemInitializer {
             }
         }
         return sb.toString();
+    }
+
+    /**
+     * 初始化结果，包含所有已初始化的组件。
+     */
+    public static class Result {
+        public final ToolRegistry toolRegistry;
+        public final PromptPrefix promptPrefix;
+        public final SkillStoreV2 skillStore;
+        public final String systemPrompt;
+
+        Result(ToolRegistry toolRegistry, PromptPrefix promptPrefix,
+               SkillStoreV2 skillStore, String systemPrompt) {
+            this.toolRegistry = toolRegistry;
+            this.promptPrefix = promptPrefix;
+            this.skillStore = skillStore;
+            this.systemPrompt = systemPrompt;
+        }
     }
 }

@@ -9,4 +9,5 @@ import java.util.List;
  * @param foldedThisStep 本次是否发生了上下文折叠
  * @author Sorghum
  */
-record PreparedMessages(List<ChatMessage> messages, boolean foldedThisStep) {}
+record PreparedMessages(List<ChatMessage> messages, boolean foldedThisStep) {
+}

@@ -1,11 +1,11 @@
 package site.sorghum.agent4j.bin.model;
 
 import org.noear.snack4.ONode;
+import site.sorghum.agent4j.bin.agent.ChatMessage;
 
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import site.sorghum.agent4j.bin.agent.ChatMessage;
 
 /**
  * 模型客户端接口 —— 封装 LLM API 调用的抽象契约。
@@ -32,26 +32,37 @@ public interface ModelClient {
                     List<Map<String, Object>> tools,
                     StreamCallback callback);
 
-    /** 设置推理力度（运行时切换）。 */
-    void setReasoningEffort(String effort);
-
-    /** 获取推理力度。 */
+    /**
+     * 获取推理力度。
+     */
     String getReasoningEffort();
 
-    /** 设置模型名称（运行时切换）。 */
-    void setModel(String model);
+    /**
+     * 设置推理力度（运行时切换）。
+     */
+    void setReasoningEffort(String effort);
 
-    /** 获取当前模型名称。 */
+    /**
+     * 获取当前模型名称。
+     */
     String getModel();
 
-    /** 是否为推理模型（DeepSeek V4 / Reasoner 系列）。 */
+    /**
+     * 设置模型名称（运行时切换）。
+     */
+    void setModel(String model);
+
+    /**
+     * 是否为推理模型（DeepSeek V4 / Reasoner 系列）。
+     */
     boolean isThinkingMode();
 
     /**
      * 中断当前正在进行的流式调用（如果存在）。
      * 默认空实现——不支持中断的客户端可忽略。
      */
-    default void abortStream() {}
+    default void abortStream() {
+    }
 
     /**
      * 模型最大上下文窗口 token 数。
@@ -66,25 +77,47 @@ public interface ModelClient {
      * 流式回调接口 —— 用于实时消费 SSE 事件。
      */
     interface StreamCallback {
-        /** 收到 reasoning token */
-        default void onReasoningDelta(String token) {}
-        /** 收到内容 token */
-        default void onContentDelta(String token) {}
-        /** 收到完整 tool_calls（流结束时的最终数组） */
-        default void onToolCalls(ONode toolCalls) {}
+        /**
+         * 收到 reasoning token
+         */
+        default void onReasoningDelta(String token) {
+        }
+
+        /**
+         * 收到内容 token
+         */
+        default void onContentDelta(String token) {
+        }
+
+        /**
+         * 收到完整 tool_calls（流结束时的最终数组）
+         */
+        default void onToolCalls(ONode toolCalls) {
+        }
+
         /**
          * token 用量回调。
-         * @param promptTokens      输入 token 数
-         * @param completionTokens  输出 token 数
-         * @param totalTokens       总 token 数
-         * @param cacheHitTokens    缓存命中 token 数
-         * @param cacheMissTokens   缓存未命中 token 数
+         *
+         * @param promptTokens     输入 token 数
+         * @param completionTokens 输出 token 数
+         * @param totalTokens      总 token 数
+         * @param cacheHitTokens   缓存命中 token 数
+         * @param cacheMissTokens  缓存未命中 token 数
          */
         default void onUsage(int promptTokens, int completionTokens, int totalTokens,
-                              int cacheHitTokens, int cacheMissTokens) {}
-        /** 流结束 */
-        default void onDone() {}
-        /** 错误 */
-        default void onError(String error) {}
+                             int cacheHitTokens, int cacheMissTokens) {
+        }
+
+        /**
+         * 流结束
+         */
+        default void onDone() {
+        }
+
+        /**
+         * 错误
+         */
+        default void onError(String error) {
+        }
     }
 }

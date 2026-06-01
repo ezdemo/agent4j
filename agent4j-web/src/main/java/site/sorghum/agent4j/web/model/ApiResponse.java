@@ -34,7 +34,9 @@ public class ApiResponse<T> {
         return r;
     }
 
-    /** 转为 Map（方便 Solon JSON 序列化） */
+    /**
+     * 转为 Map（方便 Solon JSON 序列化）
+     */
     public Map<String, Object> toMap() {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("success", success);

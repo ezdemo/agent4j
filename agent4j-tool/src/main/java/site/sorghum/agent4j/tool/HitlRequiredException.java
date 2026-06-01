@@ -32,8 +32,19 @@ public class HitlRequiredException extends RuntimeException {
         this.toolArgs = toolArgs;
     }
 
-    public String toolName() { return toolName; }
-    public String reason() { return reason; }
-    public String details() { return details; }
-    public Map<String, Object> toolArgs() { return toolArgs; }
+    public String toolName() {
+        return toolName;
+    }
+
+    public String reason() {
+        return reason;
+    }
+
+    public String details() {
+        return details;
+    }
+
+    public Map<String, Object> toolArgs() {
+        return toolArgs;
+    }
 }

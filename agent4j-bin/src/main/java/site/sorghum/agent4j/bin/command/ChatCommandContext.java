@@ -22,8 +22,8 @@ public class ChatCommandContext {
     /**
      * 创建命令执行上下文。
      *
-     * @param agent      Agent4jAgent 实例
-     * @param scanner    用户输入扫描器
+     * @param agent       Agent4jAgent 实例
+     * @param scanner     用户输入扫描器
      * @param exitHandler 退出回调（由主循环设置，如关闭资源、打印再见等）
      */
     public ChatCommandContext(Agent4jAgent agent, Scanner scanner, Runnable exitHandler) {
@@ -32,17 +32,23 @@ public class ChatCommandContext {
         this.exitHandler = exitHandler;
     }
 
-    /** 获取 Agent4jAgent 实例 */
+    /**
+     * 获取 Agent4jAgent 实例
+     */
     public Agent4jAgent getAgent() {
         return agent;
     }
 
-    /** 获取用户输入扫描器 */
+    /**
+     * 获取用户输入扫描器
+     */
     public Scanner getScanner() {
         return scanner;
     }
 
-    /** 触发退出回调（通常由 /exit 命令调用） */
+    /**
+     * 触发退出回调（通常由 /exit 命令调用）
+     */
     public void exit() {
         if (exitHandler != null) {
             exitHandler.run();

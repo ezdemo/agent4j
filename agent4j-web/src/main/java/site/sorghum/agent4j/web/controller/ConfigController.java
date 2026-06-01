@@ -2,13 +2,11 @@ package site.sorghum.agent4j.web.controller;
 
 import lombok.SneakyThrows;
 import org.noear.solon.annotation.*;
-
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
 
-import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -27,7 +25,9 @@ public class ConfigController {
     @Inject
     private AgentService agentService;
 
-    /** 获取当前配置（apiKey 脱敏） —— GET /api/config */
+    /**
+     * 获取当前配置（apiKey 脱敏） —— GET /api/config
+     */
     @SneakyThrows
     @Get
     @Mapping("/config")
@@ -64,7 +64,9 @@ public class ConfigController {
         return ApiResponse.ok(data);
     }
 
-    /** 更新配置（合并不为空的字段） —— PUT /api/config */
+    /**
+     * 更新配置（合并不为空的字段） —— PUT /api/config
+     */
     @SneakyThrows
     @Put
     @Mapping("/config")
@@ -86,7 +88,9 @@ public class ConfigController {
         return ApiResponse.ok("配置已更新");
     }
 
-    /** 获取可用模型列表 —— GET /api/models */
+    /**
+     * 获取可用模型列表 —— GET /api/models
+     */
     @SneakyThrows
     @Get
     @Mapping("/models")
@@ -100,24 +104,28 @@ public class ConfigController {
         modelSet.addAll(available);
 
         List<ModelInfoDTO> models = modelSet.stream()
-            .map(m -> new ModelInfoDTO(m, m.equals(currentModel)))
-            .collect(Collectors.toList());
+                .map(m -> new ModelInfoDTO(m, m.equals(currentModel)))
+                .collect(Collectors.toList());
 
         return ApiResponse.ok(new ModelListDTO(currentModel, models));
     }
 
-    /** 获取 Token 用量统计 —— GET /api/usage?workspaceHash=xxx&sessionName=xxx */
+    /**
+     * 获取 Token 用量统计 —— GET /api/usage?workspaceHash=xxx&sessionName=xxx
+     */
     @Get
     @Mapping("/usage")
     public ApiResponse<UsageDTO> getUsage(@Param(value = "workspaceHash", required = false) String workspaceHash,
-                           @Param(value = "sessionName", required = false) String sessionName) {
+                                          @Param(value = "sessionName", required = false) String sessionName) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
         return ApiResponse.ok(agentService.getSessionUsageMap(workspacePath, sessionName));
     }
 
-    /** 获取当前工作目录 —— GET /api/workspace */
+    /**
+     * 获取当前工作目录 —— GET /api/workspace
+     */
     @Get
     @Mapping("/workspace")
     public ApiResponse<String> getWorkspace() {
@@ -125,7 +133,9 @@ public class ConfigController {
         return ApiResponse.ok(agentService.getWorkspace());
     }
 
-    /** 切换工作目录 —— POST /api/workspace */
+    /**
+     * 切换工作目录 —— POST /api/workspace
+     */
     @Post
     @Mapping("/workspace")
     public ApiResponse<WorkspaceSwitchDTO> switchWorkspace(@Body Map<String, String> body) {
@@ -145,7 +155,9 @@ public class ConfigController {
 
     // ==================== 工作区管理 ====================
 
-    /** 获取所有工作区列表 —— GET /api/workspaces */
+    /**
+     * 获取所有工作区列表 —— GET /api/workspaces
+     */
     @Get
     @Mapping("/workspaces")
     public ApiResponse<List<WorkspaceInfoDTO>> listWorkspaces() {
@@ -153,7 +165,9 @@ public class ConfigController {
         return ApiResponse.ok(agentService.listWorkspaces());
     }
 
-    /** 切换到指定工作区 —— POST /api/workspaces/switch */
+    /**
+     * 切换到指定工作区 —— POST /api/workspaces/switch
+     */
     @Post
     @Mapping("/workspaces/switch")
     public ApiResponse<WorkspaceSwitchDTO> switchToWorkspace(@Body Map<String, String> body) {
@@ -171,7 +185,9 @@ public class ConfigController {
         throw new ServiceException("切换工作区失败: " + hash);
     }
 
-    /** 删除工作区 —— DELETE /api/workspaces/{hash} */
+    /**
+     * 删除工作区 —— DELETE /api/workspaces/{hash}
+     */
     @Delete
     @Mapping("/workspaces/{hash}")
     public ApiResponse<String> deleteWorkspace(@Param("hash") String hash) {

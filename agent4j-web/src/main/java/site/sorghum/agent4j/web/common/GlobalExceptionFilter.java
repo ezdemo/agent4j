@@ -4,7 +4,6 @@ import org.noear.solon.annotation.Component;
 import org.noear.solon.core.handle.Context;
 import org.noear.solon.core.handle.Filter;
 import org.noear.solon.core.handle.FilterChain;
-
 import site.sorghum.agent4j.web.model.ApiResponse;
 
 /**

@@ -22,7 +22,9 @@ public class WaitForJobTool extends AgentTool {
     private JobService jobService;
 
     @Override
-    public String getName() { return "wait_for_job"; }
+    public String getName() {
+        return "wait_for_job";
+    }
 
     @Override
     public String getDescription() {

@@ -18,7 +18,6 @@ import java.util.Map;
  * @param suggestion  给模型的后续操作建议
  * @param shouldRetry 是否需要模型重新读取文件后重试
  * @param retryView   重试时需要的新鲜视图（如 hashline 重新读取结果）
- *
  * @author Sorghum
  */
 public record ToolResult(boolean success, String text, Object data,
@@ -39,28 +38,38 @@ public record ToolResult(boolean success, String text, Object data,
 
     // ---- 工厂方法 ----
 
-    /** 纯文本成功结果。 */
+    /**
+     * 纯文本成功结果。
+     */
     public static ToolResult ok(String text) {
         return new ToolResult(true, text, null, null, null, false, null);
     }
 
-    /** 带结构化数据的成功结果。 */
+    /**
+     * 带结构化数据的成功结果。
+     */
     public static ToolResult ok(String text, Object data) {
         return new ToolResult(true, text, data, null, null, false, null);
     }
 
-    /** 失败结果。 */
+    /**
+     * 失败结果。
+     */
     public static ToolResult fail(String errorCode, String text) {
         return new ToolResult(false, text, null, errorCode, null, false, null);
     }
 
-    /** 失败但可重试的结果。 */
+    /**
+     * 失败但可重试的结果。
+     */
     public static ToolResult retry(String errorCode, String text,
                                    String suggestion, String retryView) {
         return new ToolResult(false, text, null, errorCode, suggestion, true, retryView);
     }
 
-    /** 转为 Map 便于 JSON 序列化。 */
+    /**
+     * 转为 Map 便于 JSON 序列化。
+     */
     public Map<String, Object> toMap() {
         Map<String, Object> map = new HashMap<>();
         map.put("success", success);

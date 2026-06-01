@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.bin.command.impl;
 
 import org.noear.solon.annotation.Component;
+import site.sorghum.agent4j.bin.agent.LogLevel;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 
@@ -34,7 +35,8 @@ public class ExecuteCommand implements ChatCommand {
     @Override
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
         context.getAgent().setPlanMode(false);
-        System.out.println("(已退出计划模式 — 允许全部操作)");
+        context.getAgent().getOutput().onLog(LogLevel.INFO, "已退出计划模式 — 允许全部操作");
+        context.getAgent().getOutput().onMessage("已退出计划模式 — 允许全部操作");
         return CommandResult.CONTINUE;
     }
 }

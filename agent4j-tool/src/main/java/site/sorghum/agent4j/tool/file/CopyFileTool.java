@@ -20,7 +20,9 @@ import java.util.List;
 public class CopyFileTool extends AgentTool {
 
     @Override
-    public String getName() { return "copy_file"; }
+    public String getName() {
+        return "copy_file";
+    }
 
     @Override
     public String getDescription() {

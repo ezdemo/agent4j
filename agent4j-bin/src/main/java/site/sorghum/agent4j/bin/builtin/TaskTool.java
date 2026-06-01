@@ -2,9 +2,8 @@ package site.sorghum.agent4j.bin.builtin;
 
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
-import site.sorghum.agent4j.bin.agent.AgentLoopListener;
-import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.agent.SubAgent;
+import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
@@ -30,18 +29,23 @@ public class TaskTool extends AgentTool {
 
     // ==================== 子代理用量收集器 ====================
 
-    /** 用量记录（线程安全，用于跨 Future 收集） */
-    public record UsageRecord(String model, long prompt, long completion, long cacheHit, long cacheMiss) {}
-
-    /** 全局用量收集队列，AgentLoop 在 dispatch 前清空、dispatch 后读取 */
+    /**
+     * 全局用量收集队列，AgentLoop 在 dispatch 前清空、dispatch 后读取
+     */
     private static final ConcurrentLinkedQueue<UsageRecord> subAgentUsageCollector = new ConcurrentLinkedQueue<>();
+    @Inject
+    private ModelClient modelClient;
 
-    /** 清空收集器（在并行 dispatch 前调用） */
+    /**
+     * 清空收集器（在并行 dispatch 前调用）
+     */
     public static void clearUsageCollector() {
         subAgentUsageCollector.clear();
     }
 
-    /** 获取收集器并清空（在并行 dispatch 完成后调用） */
+    /**
+     * 获取收集器并清空（在并行 dispatch 完成后调用）
+     */
     public static ConcurrentLinkedQueue<UsageRecord> drainUsageCollector() {
         ConcurrentLinkedQueue<UsageRecord> drained = new ConcurrentLinkedQueue<>();
         UsageRecord ur;
@@ -51,11 +55,10 @@ public class TaskTool extends AgentTool {
         return drained;
     }
 
-    @Inject
-    private ModelClient modelClient;
-
     @Override
-    public String getName() { return "task"; }
+    public String getName() {
+        return "task";
+    }
 
     @Override
     public String getDescription() {
@@ -117,5 +120,11 @@ public class TaskTool extends AgentTool {
         } catch (IOException e) {
             return ToolResult.fail("IO_ERROR", e.getMessage());
         }
+    }
+
+    /**
+     * 用量记录（线程安全，用于跨 Future 收集）
+     */
+    public record UsageRecord(String model, long prompt, long completion, long cacheHit, long cacheMiss) {
     }
 }

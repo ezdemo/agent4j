@@ -23,7 +23,9 @@ public class SubmitPlanTool extends AgentTool {
     private PlanService planService;
 
     @Override
-    public String getName() { return "submit_plan"; }
+    public String getName() {
+        return "submit_plan";
+    }
 
     @Override
     public String getDescription() {

@@ -22,7 +22,10 @@ public class JobService {
         JobRegistry.JobEntry entry = JOB_REGISTRY.start(cmd, cwd);
         String preview = null;
         if (waitSec != null && waitSec > 0) {
-            try { Thread.sleep(waitSec * 1000L); } catch (InterruptedException ignored) {}
+            try {
+                Thread.sleep(waitSec * 1000L);
+            } catch (InterruptedException ignored) {
+            }
             JobRegistry.ReadResult r = JOB_REGISTRY.read(entry.id, 0, 10);
             preview = r != null ? r.output : null;
         }

@@ -1,20 +1,15 @@
 package site.sorghum.agent4j.tool.file;
 
 import org.noear.solon.annotation.Component;
-import site.sorghum.agent4j.tool.AgentTool;
-import site.sorghum.agent4j.tool.HitlRequiredException;
-import site.sorghum.agent4j.tool.ToolContext;
-import site.sorghum.agent4j.tool.ToolParameter;
-import site.sorghum.agent4j.tool.ToolResult;
+import site.sorghum.agent4j.tool.*;
 
 import java.io.IOException;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.Arrays;
-import java.util.Comparator;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.stream.Stream;
 
 /**
@@ -53,10 +48,14 @@ public class FileTool extends AgentTool {
     );
 
     @Override
-    public String getName() { return NAME; }
+    public String getName() {
+        return NAME;
+    }
 
     @Override
-    public String getDescription() { return DESCRIPTION; }
+    public String getDescription() {
+        return DESCRIPTION;
+    }
 
     @Override
     public String toToolSpec() {
@@ -86,7 +85,9 @@ public class FileTool extends AgentTool {
     }
 
     @Override
-    public List<ToolParameter> getParameters() { return PARAMETERS; }
+    public List<ToolParameter> getParameters() {
+        return PARAMETERS;
+    }
 
     @Override
     public ToolResult execute(ToolContext ctx) {
@@ -196,7 +197,12 @@ public class FileTool extends AgentTool {
         // 递归删除
         try (Stream<Path> walk = Files.walk(dir)) {
             walk.sorted(Comparator.reverseOrder())
-                    .forEach(p -> { try { Files.delete(p); } catch (IOException ignored) {} });
+                    .forEach(p -> {
+                        try {
+                            Files.delete(p);
+                        } catch (IOException ignored) {
+                        }
+                    });
         }
         return ToolResult.ok("已递归删除: " + path);
     }
@@ -236,7 +242,8 @@ public class FileTool extends AgentTool {
                         } else {
                             Files.copy(s, d, StandardCopyOption.REPLACE_EXISTING);
                         }
-                    } catch (IOException ignored) {}
+                    } catch (IOException ignored) {
+                    }
                 });
             }
         } else {
@@ -259,7 +266,7 @@ public class FileTool extends AgentTool {
         sb.append("  修改: ").append(attr.lastModifiedTime()).append("\n");
         if (attr.isRegularFile()) {
             sb.append("  读写: ").append(Files.isReadable(target) ? "可读" : "-")
-              .append(" / ").append(Files.isWritable(target) ? "可写" : "-");
+                    .append(" / ").append(Files.isWritable(target) ? "可写" : "-");
         }
         return ToolResult.ok(sb.toString());
     }

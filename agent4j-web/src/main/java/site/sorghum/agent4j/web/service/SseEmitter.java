@@ -8,7 +8,10 @@ import java.io.OutputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.*;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
@@ -31,6 +34,39 @@ public class SseEmitter {
         ctx.headerSet("Connection", "keep-alive");
         ctx.headerSet("X-Accel-Buffering", "no");
         this.out = ctx.outputStream();
+    }
+
+    static String escapeJson(String s) {
+        if (s == null) return "\"\"";
+        StringBuilder sb = new StringBuilder("\"");
+        for (int i = 0; i < s.length(); i++) {
+            char c = s.charAt(i);
+            switch (c) {
+                case '"':
+                    sb.append("\\\"");
+                    break;
+                case '\\':
+                    sb.append("\\\\");
+                    break;
+                case '\n':
+                    sb.append("\\n");
+                    break;
+                case '\r':
+                    sb.append("\\r");
+                    break;
+                case '\t':
+                    sb.append("\\t");
+                    break;
+                default:
+                    if (c < 0x20) {
+                        sb.append(String.format("\\u%04x", (int) c));
+                    } else {
+                        sb.append(c);
+                    }
+            }
+        }
+        sb.append("\"");
+        return sb.toString();
     }
 
     /**
@@ -120,7 +156,7 @@ public class SseEmitter {
         if (completed.compareAndSet(false, true)) {
             try {
                 // 尝试发送完成事件，如果OutputStream已关闭则忽略异常
-                send("done", "{}" );
+                send("done", "{}");
             } catch (Exception ignored) {
                 // send方法内部已处理异常，此处捕获以防万一
             }
@@ -158,7 +194,8 @@ public class SseEmitter {
     public void awaitCompletion() {
         try {
             completionFuture.get();
-        } catch (InterruptedException | ExecutionException ignored) {}
+        } catch (InterruptedException | ExecutionException ignored) {
+        }
     }
 
     /**
@@ -167,29 +204,7 @@ public class SseEmitter {
     public void awaitCompletion(long timeoutMs) {
         try {
             completionFuture.get(timeoutMs, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException | ExecutionException | TimeoutException ignored) {}
-    }
-
-    static String escapeJson(String s) {
-        if (s == null) return "\"\"";
-        StringBuilder sb = new StringBuilder("\"");
-        for (int i = 0; i < s.length(); i++) {
-            char c = s.charAt(i);
-            switch (c) {
-                case '"': sb.append("\\\""); break;
-                case '\\': sb.append("\\\\"); break;
-                case '\n': sb.append("\\n"); break;
-                case '\r': sb.append("\\r"); break;
-                case '\t': sb.append("\\t"); break;
-                default:
-                    if (c < 0x20) {
-                        sb.append(String.format("\\u%04x", (int) c));
-                    } else {
-                        sb.append(c);
-                    }
-            }
+        } catch (InterruptedException | ExecutionException | TimeoutException ignored) {
         }
-        sb.append("\"");
-        return sb.toString();
     }
 }

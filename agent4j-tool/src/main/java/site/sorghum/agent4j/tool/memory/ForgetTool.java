@@ -23,7 +23,9 @@ public class ForgetTool extends AgentTool {
     private MemoryService memoryService;
 
     @Override
-    public String getName() { return "forget"; }
+    public String getName() {
+        return "forget";
+    }
 
     @Override
     public String getDescription() {

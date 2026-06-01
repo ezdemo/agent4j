@@ -24,7 +24,9 @@ public class GetSymbolsTool extends AgentTool {
     private CodeQueryService codeQueryService;
 
     @Override
-    public String getName() { return "get_symbols"; }
+    public String getName() {
+        return "get_symbols";
+    }
 
     @Override
     public String getDescription() {

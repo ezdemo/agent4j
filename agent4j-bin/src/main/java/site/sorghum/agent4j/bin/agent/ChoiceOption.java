@@ -7,4 +7,5 @@ package site.sorghum.agent4j.bin.agent;
  * @param title 展示文本
  * @author Sorghum
  */
-public record ChoiceOption(String value, String title) {}
+public record ChoiceOption(String value, String title) {
+}

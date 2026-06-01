@@ -9,5 +9,6 @@ public final class NoOpAgentLoopListener implements AgentLoopListener {
 
     public static final NoOpAgentLoopListener INSTANCE = new NoOpAgentLoopListener();
 
-    private NoOpAgentLoopListener() {}
+    private NoOpAgentLoopListener() {
+    }
 }

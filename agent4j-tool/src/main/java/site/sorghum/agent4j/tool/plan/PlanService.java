@@ -2,7 +2,9 @@ package site.sorghum.agent4j.tool.plan;
 
 import org.noear.solon.annotation.Component;
 
-import java.util.*;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 /**
  * 计划服务 —— 管理计划提交、步骤完成标记、计划修订的状态机。
@@ -14,17 +16,6 @@ public class PlanService {
 
     private Map<String, PlanStep> currentPlan = null;
     private int currentPlanStepIndex = 0;
-
-    public static class PlanStep {
-        public final String id;
-        public final String title;
-        public final String action;
-        public boolean completed = false;
-
-        PlanStep(String id, String title, String action) {
-            this.id = id; this.title = title; this.action = action;
-        }
-    }
 
     @SuppressWarnings("unchecked")
     public String submitPlan(String summary, String planBody, List<Map<String, Object>> stepsRaw) {
@@ -42,7 +33,7 @@ public class PlanService {
     }
 
     public String markStepComplete(String stepId, String result,
-                                    List<Map<String, Object>> evidence) {
+                                   List<Map<String, Object>> evidence) {
         if (currentPlan == null) return "{\"error\":\"no active plan\"}";
         PlanStep step = currentPlan.get(stepId);
         if (step == null) return "{\"error\":\"step not found: " + stepId + "\"}";
@@ -62,5 +53,18 @@ public class PlanService {
             currentPlan.put(id, new PlanStep(id, title, action));
         }
         return "[Plan revised: " + reason + " (" + remainingSteps.size() + " remaining steps)]";
+    }
+
+    public static class PlanStep {
+        public final String id;
+        public final String title;
+        public final String action;
+        public boolean completed = false;
+
+        PlanStep(String id, String title, String action) {
+            this.id = id;
+            this.title = title;
+            this.action = action;
+        }
     }
 }

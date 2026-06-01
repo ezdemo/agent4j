@@ -15,7 +15,9 @@ import java.util.List;
 public class EditFileTool extends AgentTool {
 
     @Override
-    public String getName() { return "edit_file"; }
+    public String getName() {
+        return "edit_file";
+    }
 
     @Override
     public String getDescription() {

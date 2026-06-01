@@ -24,7 +24,9 @@ public class FindInCodeTool extends AgentTool {
     private CodeQueryService codeQueryService;
 
     @Override
-    public String getName() { return "find_in_code"; }
+    public String getName() {
+        return "find_in_code";
+    }
 
     @Override
     public String getDescription() {

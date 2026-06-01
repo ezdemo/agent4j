@@ -22,6 +22,30 @@ import static org.junit.jupiter.api.Assertions.*;
 @DisplayName("WorkspaceIndex 工作区索引测试")
 class WorkspaceIndexTest {
 
+    private void createFiles(Path root, String... paths) throws IOException {
+        for (String path : paths) {
+            Path file = root.resolve(path);
+            Files.createDirectories(file.getParent());
+            if (path.contains("/")) {
+                // 可能是目录也可能文件，检查扩展名判断
+            }
+            if (!path.endsWith("/")) {
+                Files.write(file, Arrays.asList("test content for " + path));
+            } else {
+                Files.createDirectories(file);
+            }
+        }
+    }
+
+    /**
+     * 创建文件并写入指定内容。
+     */
+    private void createFiles(Path root, String path, String content) throws IOException {
+        Path file = root.resolve(path);
+        Files.createDirectories(file.getParent());
+        Files.write(file, Arrays.asList(content.split("\n")));
+    }
+
     @Nested
     @DisplayName("扫描与初始化")
     class Scan {
@@ -193,6 +217,8 @@ class WorkspaceIndexTest {
         }
     }
 
+    // ==================== 辅助 ====================
+
     @Nested
     @DisplayName("grep 内容搜索")
     class Grep {
@@ -268,29 +294,5 @@ class WorkspaceIndexTest {
 
             assertEquals(2, index.glob("*.txt").size());
         }
-    }
-
-    // ==================== 辅助 ====================
-
-    private void createFiles(Path root, String... paths) throws IOException {
-        for (String path : paths) {
-            Path file = root.resolve(path);
-            Files.createDirectories(file.getParent());
-            if (path.contains("/")) {
-                // 可能是目录也可能文件，检查扩展名判断
-            }
-            if (!path.endsWith("/")) {
-                Files.write(file, Arrays.asList("test content for " + path));
-            } else {
-                Files.createDirectories(file);
-            }
-        }
-    }
-
-    /** 创建文件并写入指定内容。 */
-    private void createFiles(Path root, String path, String content) throws IOException {
-        Path file = root.resolve(path);
-        Files.createDirectories(file.getParent());
-        Files.write(file, Arrays.asList(content.split("\n")));
     }
 }

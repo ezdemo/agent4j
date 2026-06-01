@@ -15,17 +15,20 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class InteractionService {
 
-    /** 按会话ID隔离的 todo 列表 */
-    private final Map<String, List<Map<String, Object>>> sessionTodos = new ConcurrentHashMap<>();
-
-    /** 获取默认会话ID（用于未指定会话ID的情况） */
+    /**
+     * 获取默认会话ID（用于未指定会话ID的情况）
+     */
     private static final String DEFAULT_SESSION = "__default__";
+    /**
+     * 按会话ID隔离的 todo 列表
+     */
+    private final Map<String, List<Map<String, Object>>> sessionTodos = new ConcurrentHashMap<>();
 
     /**
      * 渲染一个用户选择菜单。
      */
     public String askChoice(String question, List<Map<String, Object>> options,
-                              Boolean allowCustom) {
+                            Boolean allowCustom) {
         if (options == null || options.isEmpty())
             return "{\"error\":\"ask_choice requires at least one option\"}";
         StringBuilder sb = new StringBuilder();

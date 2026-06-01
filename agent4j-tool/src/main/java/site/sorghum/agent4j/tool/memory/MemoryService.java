@@ -4,7 +4,9 @@ import org.noear.solon.annotation.Component;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -19,8 +21,21 @@ public class MemoryService {
     private static final Path MEMORY_DIR = Paths.get(
             System.getProperty("user.home"), ".agent4j", "memory");
 
+    private static Path memoryFile(String name) {
+        return MEMORY_DIR.resolve(name.replaceAll("[^a-zA-Z0-9_\\-.]", "_") + ".json");
+    }
+
+    private static void appendJsonString(StringBuilder sb, String key, String value) {
+        sb.append("\"").append(key).append("\":\"");
+        if (value != null) {
+            sb.append(value.replace("\\", "\\\\").replace("\"", "\\\"")
+                    .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t"));
+        }
+        sb.append("\"");
+    }
+
     public String remember(String name, String type, String scope, String description,
-                            String content, Integer priority) throws IOException {
+                           String content, Integer priority) throws IOException {
         Files.createDirectories(MEMORY_DIR);
         Map<String, Object> mem = new LinkedHashMap<>();
         mem.put("name", name);
@@ -59,18 +74,5 @@ public class MemoryService {
         Path f = memoryFile(name);
         if (Files.deleteIfExists(f)) return "forgotten: " + name;
         return "memory '" + name + "' not found";
-    }
-
-    private static Path memoryFile(String name) {
-        return MEMORY_DIR.resolve(name.replaceAll("[^a-zA-Z0-9_\\-.]", "_") + ".json");
-    }
-
-    private static void appendJsonString(StringBuilder sb, String key, String value) {
-        sb.append("\"").append(key).append("\":\"");
-        if (value != null) {
-            sb.append(value.replace("\\", "\\\\").replace("\"", "\\\"")
-                    .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t"));
-        }
-        sb.append("\"");
     }
 }

@@ -23,7 +23,9 @@ public class JavaSourceTool extends AgentTool {
     private CodeQueryService codeQueryService;
 
     @Override
-    public String getName() { return "java_source"; }
+    public String getName() {
+        return "java_source";
+    }
 
     @Override
     public String getDescription() {

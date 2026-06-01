@@ -1,9 +1,10 @@
 package site.sorghum.agent4j.bin.session;
 
+import site.sorghum.agent4j.bin.agent.ChatMessage;
+
 import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import site.sorghum.agent4j.bin.agent.ChatMessage;
 
 /**
  * 会话持久化仓库接口 —— 定义会话消息的 CRUD 契约。
@@ -14,6 +15,7 @@ import site.sorghum.agent4j.bin.agent.ChatMessage;
  *
  * @author Sorghum
  */
+
 /**
  * 会话持久化仓库接口 —— 定义会话消息的 CRUD 契约。
  * <p>
@@ -25,34 +27,54 @@ import site.sorghum.agent4j.bin.agent.ChatMessage;
  */
 public interface SessionStore {
 
-    /** 获取当前会话名 */
+    /**
+     * 获取当前会话名
+     */
     String currentName();
 
-    /** 生成新会话名 */
+    /**
+     * 生成新会话名
+     */
     String newSessionName();
 
-    /** 切换到指定会话 */
+    /**
+     * 切换到指定会话
+     */
     boolean switchTo(String name);
 
-    /** 追加一条消息 */
+    /**
+     * 追加一条消息
+     */
     void append(ChatMessage message) throws IOException;
 
-    /** 加载当前会话全部消息 */
+    /**
+     * 加载当前会话全部消息
+     */
     List<ChatMessage> load() throws IOException;
 
-    /** 加载指定会话的消息 */
+    /**
+     * 加载指定会话的消息
+     */
     List<ChatMessage> load(String name) throws IOException;
 
-    /** 重写整个会话文件 */
+    /**
+     * 重写整个会话文件
+     */
     void rewrite(List<ChatMessage> messages) throws IOException;
 
-    /** 归档当前会话 */
+    /**
+     * 归档当前会话
+     */
     String archive() throws IOException;
 
-    /** 列出所有活跃会话（最新在前） */
+    /**
+     * 列出所有活跃会话（最新在前）
+     */
     List<SessionInfo> list() throws IOException;
 
-    /** 删除会话 */
+    /**
+     * 删除会话
+     */
     boolean delete(String name) throws IOException;
 
     /**
@@ -61,25 +83,39 @@ public interface SessionStore {
      */
     void flush() throws IOException;
 
-    /** 保存 token 用量 */
+    /**
+     * 保存 token 用量
+     */
     void saveUsage(String name, long prompt, long completion, long cacheHit, long cacheMiss) throws IOException;
 
-    /** 保存 token 用量（包含 lastPromptTokens） */
+    /**
+     * 保存 token 用量（包含 lastPromptTokens）
+     */
     void saveUsage(String name, long prompt, long completion, long cacheHit, long cacheMiss, long lastPromptTokens) throws IOException;
 
-    /** 加载 token 用量 */
+    /**
+     * 加载 token 用量
+     */
     long[] loadUsage(String name);
 
-    /** 保存按模型分别累计的 token 用量 */
+    /**
+     * 保存按模型分别累计的 token 用量
+     */
     void saveModelUsage(String name, Map<String, long[]> modelUsage) throws IOException;
 
-    /** 加载按模型分别累计的 token 用量 */
+    /**
+     * 加载按模型分别累计的 token 用量
+     */
     Map<String, long[]> loadModelUsage(String name);
 
-    /** 更新会话标题 */
+    /**
+     * 更新会话标题
+     */
     void updateTitle(String name, String title) throws IOException;
 
-    /** 获取会话标题，不存在则返回 null */
+    /**
+     * 获取会话标题，不存在则返回 null
+     */
     String getTitle(String name) throws IOException;
 
     /**
@@ -93,8 +129,11 @@ public interface SessionStore {
         public final String title;
 
         public SessionInfo(String name, long size, long messageCount, long mtime, String title) {
-            this.name = name; this.size = size; this.messageCount = messageCount;
-            this.mtime = mtime; this.title = title;
+            this.name = name;
+            this.size = size;
+            this.messageCount = messageCount;
+            this.mtime = mtime;
+            this.title = title;
         }
     }
 }

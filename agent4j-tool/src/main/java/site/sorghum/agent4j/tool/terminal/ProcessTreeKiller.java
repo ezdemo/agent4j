@@ -54,12 +54,15 @@ public class ProcessTreeKiller {
                 Object val = f.get(process);
                 if (val instanceof Integer) return ((Integer) val).longValue();
                 if (val instanceof Long) return (Long) val;
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
             return -1;
         }
     }
 
-    /** 等待进程结束，超时后杀进程树 */
+    /**
+     * 等待进程结束，超时后杀进程树
+     */
     public static boolean waitFor(Process process, long timeoutMs) {
         try {
             if (process.waitFor(timeoutMs, TimeUnit.MILLISECONDS)) {

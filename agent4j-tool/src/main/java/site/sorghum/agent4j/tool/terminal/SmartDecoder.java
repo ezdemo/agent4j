@@ -27,13 +27,15 @@ public class SmartDecoder {
             utf8.onMalformedInput(CodingErrorAction.REPORT);
             utf8.onUnmappableCharacter(CodingErrorAction.REPORT);
             return utf8.decode(ByteBuffer.wrap(bytes)).toString();
-        } catch (CharacterCodingException ignored) {}
+        } catch (CharacterCodingException ignored) {
+        }
 
         // 2. Windows → GB18030 (GBK 的超集)
         if (isWindows()) {
             try {
                 return new String(bytes, Charset.forName("GB18030"));
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
 
         // 3. Lossy UTF-8

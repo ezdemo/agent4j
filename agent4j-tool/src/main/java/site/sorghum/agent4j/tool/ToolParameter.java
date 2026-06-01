@@ -11,7 +11,6 @@ package site.sorghum.agent4j.tool;
  * @param required     是否必填
  * @param description  参数含义描述
  * @param defaultValue 默认值（可选），无默认值时为 null
- *
  * @author Sorghum
  */
 public record ToolParameter(String name, String type, boolean required, String description, String defaultValue) {

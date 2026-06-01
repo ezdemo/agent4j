@@ -23,7 +23,9 @@ public class RunBackgroundTool extends AgentTool {
     private JobService jobService;
 
     @Override
-    public String getName() { return "run_background"; }
+    public String getName() {
+        return "run_background";
+    }
 
     @Override
     public String getDescription() {

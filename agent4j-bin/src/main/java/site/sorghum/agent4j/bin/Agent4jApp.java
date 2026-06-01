@@ -3,9 +3,7 @@ package site.sorghum.agent4j.bin;
 import org.noear.solon.Solon;
 import org.noear.solon.annotation.Import;
 import org.noear.solon.annotation.SolonMain;
-
 import site.sorghum.agent4j.bin.agent.Agent4jAgent;
-import site.sorghum.agent4j.bin.agent.AgentLoopListener;
 import site.sorghum.agent4j.bin.agent.ConsoleAgentOutput;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
@@ -119,7 +117,7 @@ public class Agent4jApp {
     // ========== 静态辅助方法 ==========
 
     private static void printBanner(String apiUrl, String apiKey, String model,
-                                     Agent4jConfig config, ChatCommandRegistry cmdRegistry) {
+                                    Agent4jConfig config, ChatCommandRegistry cmdRegistry) {
         System.out.println("╔══════════════════════════════════════════╗");
         System.out.println("║          Agent4j — 代码助手               ║");
         System.out.println("╠══════════════════════════════════════════╣");
@@ -139,7 +137,7 @@ public class Agent4jApp {
         int cacheTotal = usage[3] + usage[4];
         String cacheStr = cacheTotal > 0
                 ? " | cache: " + usage[3] + " hit + " + usage[4] + " miss"
-                  + " (" + (usage[3] * 100 / cacheTotal) + "%)"
+                + " (" + (usage[3] * 100 / cacheTotal) + "%)"
                 : "";
         System.out.println("[" + (elapsedMs / 1000.0) + "s]"
                 + " | in=" + usage[0] + " out=" + usage[1] + " total=" + usage[2] + cacheStr);
@@ -149,7 +147,7 @@ public class Agent4jApp {
         long sessCacheTotal = sess[2] + sess[3];
         String sessCacheStr = sessCacheTotal > 0
                 ? " | cache: " + sess[2] + " hit + " + sess[3] + " miss"
-                  + " (" + (sess[2] * 100 / sessCacheTotal) + "%)"
+                + " (" + (sess[2] * 100 / sessCacheTotal) + "%)"
                 : "";
         System.out.println("       [会话累计 in=" + sess[0] + " out=" + sess[1] + sessCacheStr + "]");
     }

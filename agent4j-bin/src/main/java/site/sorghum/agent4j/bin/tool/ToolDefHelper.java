@@ -13,7 +13,8 @@ import java.util.List;
  */
 public final class ToolDefHelper {
 
-    private ToolDefHelper() {}
+    private ToolDefHelper() {
+    }
 
     /**
      * 将 AgentTool 的参数类型映射为 JSON Schema 类型。

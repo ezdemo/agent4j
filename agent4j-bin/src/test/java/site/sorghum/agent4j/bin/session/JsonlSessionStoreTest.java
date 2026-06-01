@@ -3,17 +3,19 @@ package site.sorghum.agent4j.bin.session;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import java.io.IOException;
-import java.util.*;
-import static org.junit.jupiter.api.Assertions.*;
-
 import site.sorghum.agent4j.bin.agent.ChatMessage;
 import site.sorghum.agent4j.bin.agent.ToolCallEntry;
 
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
+
+import static org.junit.jupiter.api.Assertions.*;
+
 class JsonlSessionStoreTest {
 
-    private JsonlSessionStore store;
     private static int counter = 0;
+    private JsonlSessionStore store;
 
     @BeforeEach
     void setUp() throws IOException {

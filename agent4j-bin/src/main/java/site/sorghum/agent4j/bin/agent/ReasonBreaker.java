@@ -29,23 +29,46 @@ import java.util.Map;
  */
 public class ReasonBreaker {
 
-    /** 滑动窗口大小（字符数） */
+    /**
+     * 滑动窗口大小（字符数）
+     */
     static final int WINDOW_SIZE = 200;
 
-    /** 同一窗口出现多少次视为循环 */
+    /**
+     * 同一窗口出现多少次视为循环
+     */
     static final int MIN_REPEATS = 3;
 
-    /** 推理内容至少多长才开始检测 */
+    /**
+     * 推理内容至少多长才开始检测
+     */
     static final int MIN_REASONING_LENGTH = 1000;
 
-    /** 最多分析多长的推理内容（性能上限，超出取尾部） */
+    /**
+     * 最多分析多长的推理内容（性能上限，超出取尾部）
+     */
     static final int MAX_ANALYZE_LENGTH = 20_000;
 
-    /** 每回合最多触发次数（防止 ReasonBreaker 自身形成无限循环） */
+    /**
+     * 每回合最多触发次数（防止 ReasonBreaker 自身形成无限循环）
+     */
     static final int MAX_TRIGGERS_PER_TURN = 3;
 
-    /** 本回合已触发次数 */
+    /**
+     * 本回合已触发次数
+     */
     private int triggerCount = 0;
+
+    /**
+     * 检测窗口是否全由同一字符构成（如 "AAAA..."），此类窗口跳过不计数
+     */
+    private static boolean isUniform(String s) {
+        char first = s.charAt(0);
+        for (int i = 1; i < s.length(); i++) {
+            if (s.charAt(i) != first) return false;
+        }
+        return true;
+    }
 
     /**
      * 分析推理内容是否包含循环重复。
@@ -103,32 +126,33 @@ public class ReasonBreaker {
         return LoopResult.NO_LOOP;
     }
 
-    /** 每回合开始时重置触发计数 */
+    /**
+     * 每回合开始时重置触发计数
+     */
     public void reset() {
         triggerCount = 0;
-    }
-
-    /** 检测窗口是否全由同一字符构成（如 "AAAA..."），此类窗口跳过不计数 */
-    private static boolean isUniform(String s) {
-        char first = s.charAt(0);
-        for (int i = 1; i < s.length(); i++) {
-            if (s.charAt(i) != first) return false;
-        }
-        return true;
     }
 
     /**
      * 检测结果。
      */
     public static class LoopResult {
-        /** 无循环的单例 */
+        /**
+         * 无循环的单例
+         */
         public static final LoopResult NO_LOOP = new LoopResult(false, null, 0);
 
-        /** 是否检测到循环 */
+        /**
+         * 是否检测到循环
+         */
         public final boolean looping;
-        /** 重复片段的摘要（最多 80 字符） */
+        /**
+         * 重复片段的摘要（最多 80 字符）
+         */
         public final String snippet;
-        /** 重复次数 */
+        /**
+         * 重复次数
+         */
         public final int count;
 
         LoopResult(boolean looping, String snippet, int count) {

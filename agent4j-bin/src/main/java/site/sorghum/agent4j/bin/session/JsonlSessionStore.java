@@ -1,17 +1,21 @@
 package site.sorghum.agent4j.bin.session;
 
-import java.io.*;
+import site.sorghum.agent4j.bin.agent.ChatMessage;
+import site.sorghum.agent4j.bin.agent.ToolCallEntry;
+import site.sorghum.agent4j.bin.util.ONodeUtil;
+
+import java.io.BufferedReader;
+import java.io.BufferedWriter;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.concurrent.*;
+import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.ReentrantLock;
-
-import site.sorghum.agent4j.bin.agent.ChatMessage;
-import site.sorghum.agent4j.bin.agent.ToolCallEntry;
-import site.sorghum.agent4j.bin.util.ONodeUtil;
 
 /**
  * JSONL 格式会话持久化实现。
@@ -30,27 +34,34 @@ public class JsonlSessionStore implements SessionStore {
 
     private static final Path DEFAULT_SESSIONS_DIR = Paths.get(
             System.getProperty("user.home"), ".agent4j", "sessions");
-
-    /** 当前会话目录（支持工作区隔离） */
-    private final Path sessionsDir;
-
-    /** 当前会话名 */
-    private String currentName;
-
-    /** 当前会话的 BufferedWriter（保持打开） */
-    private BufferedWriter writer;
-
-    /** 当前会话文件路径（用于 rewrite 时重新打开） */
-    private Path currentFile;
-
-    /** 线程同步锁 */
-    private final ReentrantLock lock = new ReentrantLock();
-
-    /** 定时刷入调度器 */
-    private ScheduledExecutorService scheduler;
-
-    /** 定时刷入间隔（秒） */
+    /**
+     * 定时刷入间隔（秒）
+     */
     private static final int FLUSH_INTERVAL_SEC = 30;
+    /**
+     * 当前会话目录（支持工作区隔离）
+     */
+    private final Path sessionsDir;
+    /**
+     * 线程同步锁
+     */
+    private final ReentrantLock lock = new ReentrantLock();
+    /**
+     * 当前会话名
+     */
+    private String currentName;
+    /**
+     * 当前会话的 BufferedWriter（保持打开）
+     */
+    private BufferedWriter writer;
+    /**
+     * 当前会话文件路径（用于 rewrite 时重新打开）
+     */
+    private Path currentFile;
+    /**
+     * 定时刷入调度器
+     */
+    private ScheduledExecutorService scheduler;
 
     /**
      * 默认构造函数，使用默认会话目录
@@ -75,7 +86,48 @@ public class JsonlSessionStore implements SessionStore {
 
     // ---- 文件管理 ----
 
-    /** 打开（或重新打开）当前会话的 BufferedWriter */
+    private static String sanitize(String name) {
+        return name.replaceAll("[^a-zA-Z0-9_\\-]", "_");
+    }
+
+    public static String serializeMessage(ChatMessage msg) {
+        org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson("{}");
+        node.set("role", msg.getRole());
+        if (msg.getContent() != null) {
+            node.set("content", msg.getContent());
+        }
+        if (msg.getReasoningContent() != null) {
+            node.set("reasoning_content", msg.getReasoningContent());
+        }
+        if (msg.getToolCallId() != null) {
+            node.set("tool_call_id", msg.getToolCallId());
+        }
+        if (msg.hasToolCalls()) {
+            org.noear.snack4.ONode tcArr = node.getOrNew("tool_calls").asArray();
+            for (ToolCallEntry tc : msg.getToolCalls()) {
+                org.noear.snack4.ONode tcn = tcArr.addNew();
+                tcn.set("id", tc.id() != null ? tc.id() : "unknown");
+                tcn.set("type", "function");
+                org.noear.snack4.ONode func = tcn.getOrNew("function");
+                func.set("name", tc.name() != null ? tc.name() : "unknown");
+                Object tcArgs = tc.arguments();
+                String argsStr = "{}";
+                if (tcArgs != null) {
+                    if (tcArgs instanceof String) {
+                        argsStr = (String) tcArgs;
+                    } else {
+                        argsStr = org.noear.snack4.ONode.serialize(tcArgs);
+                    }
+                }
+                func.set("arguments", argsStr);
+            }
+        }
+        return node.toJson();
+    }
+
+    /**
+     * 打开（或重新打开）当前会话的 BufferedWriter
+     */
     private void openWriter() throws IOException {
         closeWriter();
         this.currentFile = sessionPath(currentName);
@@ -83,6 +135,8 @@ public class JsonlSessionStore implements SessionStore {
         this.writer = Files.newBufferedWriter(currentFile, StandardCharsets.UTF_8,
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     }
+
+    // ---- 定时刷入 ----
 
     /**
      * 确保 writer 已打开，若未打开则按需创建文件和 writer。
@@ -98,17 +152,21 @@ public class JsonlSessionStore implements SessionStore {
         }
     }
 
-    /** 关闭当前 writer（刷入后关闭） */
+    /**
+     * 关闭当前 writer（刷入后关闭）
+     */
     private void closeWriter() {
         lock.lock();
         try {
             if (writer != null) {
                 try {
                     writer.flush();
-                } catch (IOException ignored) {}
+                } catch (IOException ignored) {
+                }
                 try {
                     writer.close();
-                } catch (IOException ignored) {}
+                } catch (IOException ignored) {
+                }
                 writer = null;
             }
         } finally {
@@ -116,9 +174,11 @@ public class JsonlSessionStore implements SessionStore {
         }
     }
 
-    // ---- 定时刷入 ----
+    // ---- 关闭/清理 ----
 
-    /** 启动定时刷入线程（daemon） */
+    /**
+     * 启动定时刷入线程（daemon）
+     */
     private void startPeriodicFlush() {
         scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
             Thread t = new Thread(r, "jsonl-flusher");
@@ -129,7 +189,11 @@ public class JsonlSessionStore implements SessionStore {
                 FLUSH_INTERVAL_SEC, FLUSH_INTERVAL_SEC, TimeUnit.SECONDS);
     }
 
-    /** 停止定时刷入 */
+    // ---- SessionStore 接口实现 ----
+
+    /**
+     * 停止定时刷入
+     */
     private void stopPeriodicFlush() {
         if (scheduler != null && !scheduler.isShutdown()) {
             scheduler.shutdown();
@@ -141,8 +205,6 @@ public class JsonlSessionStore implements SessionStore {
         }
     }
 
-    // ---- 关闭/清理 ----
-
     /**
      * 关闭 store，释放所有资源（定时器 + writer）。
      * 调用后不能再使用此 store 实例。
@@ -152,10 +214,10 @@ public class JsonlSessionStore implements SessionStore {
         closeWriter();
     }
 
-    // ---- SessionStore 接口实现 ----
-
     @Override
-    public String currentName() { return currentName; }
+    public String currentName() {
+        return currentName;
+    }
 
     @Override
     public String newSessionName() {
@@ -226,7 +288,8 @@ public class JsonlSessionStore implements SessionStore {
             try {
                 org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson(line);
                 messages.add(ChatMessage.fromMap(ONodeUtil.toMap(node)));
-            } catch (Exception ignored) {}
+            } catch (Exception ignored) {
+            }
         }
         return messages;
     }
@@ -298,7 +361,8 @@ public class JsonlSessionStore implements SessionStore {
                         String metaJson = new String(Files.readAllBytes(metaFile), StandardCharsets.UTF_8);
                         org.noear.snack4.ONode metaNode = org.noear.snack4.ONode.ofJson(metaJson);
                         title = metaNode.get("title").getString();
-                    } catch (Exception ignored) {}
+                    } catch (Exception ignored) {
+                    }
                 }
                 list.add(new SessionInfo(name, size, lines, attr.lastModifiedTime().toMillis(), title));
             }
@@ -313,7 +377,7 @@ public class JsonlSessionStore implements SessionStore {
         String safe = sanitize(name);
         Path jsonl = sessionsDir.resolve(safe + ".jsonl");
         Path usage = sessionsDir.resolve(safe + ".usage");
-        Path meta  = sessionsDir.resolve(safe + ".meta");
+        Path meta = sessionsDir.resolve(safe + ".meta");
         boolean deleted = Files.deleteIfExists(jsonl);
         Files.deleteIfExists(usage);
         Files.deleteIfExists(meta);
@@ -328,13 +392,13 @@ public class JsonlSessionStore implements SessionStore {
     @Override
     public void saveUsage(String name, long prompt, long completion, long cacheHit, long cacheMiss, long lastPromptTokens) throws IOException {
         Path file = sessionsDir.resolve(sanitize(name) + ".usage");
-        
+
         // 如果所有值都是 0，则删除文件（如果存在），避免创建空文件
         if (prompt == 0 && completion == 0 && cacheHit == 0 && cacheMiss == 0) {
             Files.deleteIfExists(file);
             return;
         }
-        
+
         String json = "{\"prompt\":" + prompt + ",\"completion\":" + completion
                 + ",\"cacheHit\":" + cacheHit + ",\"cacheMiss\":" + cacheMiss
                 + ",\"lastPromptTokens\":" + lastPromptTokens + "}";
@@ -381,6 +445,8 @@ public class JsonlSessionStore implements SessionStore {
         }
     }
 
+    // ---- 内部辅助 ----
+
     @Override
     public void saveModelUsage(String name, Map<String, long[]> modelUsage) throws IOException {
         if (modelUsage == null || modelUsage.isEmpty()) {
@@ -426,50 +492,7 @@ public class JsonlSessionStore implements SessionStore {
         return result;
     }
 
-    // ---- 内部辅助 ----
-
     private Path sessionPath(String name) {
         return sessionsDir.resolve(sanitize(name) + ".jsonl");
-    }
-
-    private static String sanitize(String name) {
-        return name.replaceAll("[^a-zA-Z0-9_\\-]", "_");
-    }
-
-
-
-    public static String serializeMessage(ChatMessage msg) {
-        org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson("{}");
-        node.set("role", msg.getRole());
-        if (msg.getContent() != null) {
-            node.set("content", msg.getContent());
-        }
-        if (msg.getReasoningContent() != null) {
-            node.set("reasoning_content", msg.getReasoningContent());
-        }
-        if (msg.getToolCallId() != null) {
-            node.set("tool_call_id", msg.getToolCallId());
-        }
-        if (msg.hasToolCalls()) {
-            org.noear.snack4.ONode tcArr = node.getOrNew("tool_calls").asArray();
-            for (ToolCallEntry tc : msg.getToolCalls()) {
-                org.noear.snack4.ONode tcn = tcArr.addNew();
-                tcn.set("id", tc.id() != null ? tc.id() : "unknown");
-                tcn.set("type", "function");
-                org.noear.snack4.ONode func = tcn.getOrNew("function");
-                func.set("name", tc.name() != null ? tc.name() : "unknown");
-                Object tcArgs = tc.arguments();
-                String argsStr = "{}";
-                if (tcArgs != null) {
-                    if (tcArgs instanceof String) {
-                        argsStr = (String) tcArgs;
-                    } else {
-                        argsStr = org.noear.snack4.ONode.serialize(tcArgs);
-                    }
-                }
-                func.set("arguments", argsStr);
-            }
-        }
-        return node.toJson();
     }
 }

@@ -3,11 +3,11 @@ package site.sorghum.agent4j.bin.model;
 import org.noear.snack4.ONode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import site.sorghum.agent4j.bin.agent.ChatMessage;
+import site.sorghum.agent4j.bin.agent.ToolCallEntry;
 
 import java.io.*;
 import java.net.HttpURLConnection;
-import site.sorghum.agent4j.bin.agent.ChatMessage;
-import site.sorghum.agent4j.bin.agent.ToolCallEntry;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
@@ -25,32 +25,26 @@ import java.util.Map;
 public class HttpModelClient implements ModelClient {
 
     private static final Logger logger = LoggerFactory.getLogger(HttpModelClient.class);
-
-    /** reasoning_effort 取值: low / medium / high / max */
-    private String reasoningEffort;
-
-    private final String apiUrl;
-    private final String apiKey;
-    private volatile String model;
-
-    /** 流式中断标志（ReasonBreaker 触发时设置） */
-    private volatile boolean abortRequested = false;
-    /** 当前活跃的 HTTP 连接（用于中断） */
-    private volatile HttpURLConnection activeConnection;
-
     /**
      * 重试间隔（秒），共 10 次：1,1,1,2,2,2,3,3,6,10 — 总计约 31 秒。
      * 指数退避策略，应对 API 临时故障。
      */
     private static final int[] RETRY_DELAYS = {1, 1, 1, 2, 2, 2, 3, 3, 6, 10};
-
+    private final String apiUrl;
+    private final String apiKey;
     /**
-     * 判断 HTTP 状态码是否应重试。
-     * 5xx 服务端错误或 0（连接失败）需要重试，4xx 客户端错误不重试。
+     * reasoning_effort 取值: low / medium / high / max
      */
-    private static boolean retryable(int status) {
-        return status >= 500 || status == 0;
-    }
+    private String reasoningEffort;
+    private volatile String model;
+    /**
+     * 流式中断标志（ReasonBreaker 触发时设置）
+     */
+    private volatile boolean abortRequested = false;
+    /**
+     * 当前活跃的 HTTP 连接（用于中断）
+     */
+    private volatile HttpURLConnection activeConnection;
 
     public HttpModelClient(String apiUrl, String apiKey, String model) {
         this(apiUrl, apiKey, model, "high");
@@ -63,31 +57,66 @@ public class HttpModelClient implements ModelClient {
         this.reasoningEffort = reasoningEffort;
     }
 
-    /** 设置推理力度（运行时切换）。 */
-    @Override
-    public void setReasoningEffort(String effort) { this.reasoningEffort = effort; }
+    /**
+     * 判断 HTTP 状态码是否应重试。
+     * 5xx 服务端错误或 0（连接失败）需要重试，4xx 客户端错误不重试。
+     */
+    private static boolean retryable(int status) {
+        return status >= 500 || status == 0;
+    }
+
+    private static String readFully(InputStream is) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        try (BufferedReader r = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
+            String line;
+            while ((line = r.readLine()) != null) {
+                sb.append(line);
+            }
+        }
+        return sb.toString();
+    }
 
     @Override
-    public String getReasoningEffort() { return reasoningEffort; }
+    public String getReasoningEffort() {
+        return reasoningEffort;
+    }
 
-    /** 设置模型名称（运行时切换）。 */
+    /**
+     * 设置推理力度（运行时切换）。
+     */
     @Override
-    public void setModel(String model) { this.model = model; }
+    public void setReasoningEffort(String effort) {
+        this.reasoningEffort = effort;
+    }
 
     @Override
-    public String getModel() { return model; }
+    public String getModel() {
+        return model;
+    }
 
-    /** DeepSeek V4 系列推理模型 — reasoning_content 必须回传 */
+    /**
+     * 设置模型名称（运行时切换）。
+     */
+    @Override
+    public void setModel(String model) {
+        this.model = model;
+    }
+
+    /**
+     * DeepSeek V4 系列推理模型 — reasoning_content 必须回传
+     */
     @Override
     public boolean isThinkingMode() {
         return model != null && (
                 model.contains("reasoner")
-                || model.equals("deepseek-v4-flash")
-                || model.equals("deepseek-v4-pro")
+                        || model.equals("deepseek-v4-flash")
+                        || model.equals("deepseek-v4-pro")
         );
     }
 
-    /** 中断当前流式请求（ReasonBreaker 触发时调用） */
+    /**
+     * 中断当前流式请求（ReasonBreaker 触发时调用）
+     */
     @Override
     public void abortStream() {
         abortRequested = true;
@@ -110,7 +139,10 @@ public class HttpModelClient implements ModelClient {
         // 环境变量覆盖
         String env = System.getenv("AGENT4J_MAX_CONTEXT_TOKENS");
         if (env != null && !env.isEmpty()) {
-            try { return Integer.parseInt(env); } catch (NumberFormatException ignored) {}
+            try {
+                return Integer.parseInt(env);
+            } catch (NumberFormatException ignored) {
+            }
         }
         if (model == null) return 128_000;
         String m = model.toLowerCase();
@@ -128,7 +160,9 @@ public class HttpModelClient implements ModelClient {
         return 128_000;
     }
 
-    /** 非流式调用（用于 fold 摘要、/compact 等后台操作），5xx 自动重试最多 10 次 */
+    /**
+     * 非流式调用（用于 fold 摘要、/compact 等后台操作），5xx 自动重试最多 10 次
+     */
     @Override
     public ONode chat(List<ChatMessage> messages,
                       List<Map<String, Object>> tools) throws IOException {
@@ -185,7 +219,11 @@ public class HttpModelClient implements ModelClient {
                 if (attempt < RETRY_DELAYS.length) {
                     int delay = RETRY_DELAYS[attempt];
                     System.err.println("[retry] " + e.getMessage() + "，第" + (attempt + 1) + "次重试，等待" + delay + "s...");
-                    try { Thread.sleep(delay * 1000L); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                    try {
+                        Thread.sleep(delay * 1000L);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
                     continue;
                 }
                 throw e;
@@ -209,8 +247,8 @@ public class HttpModelClient implements ModelClient {
      */
     @Override
     public void chatStream(List<ChatMessage> messages,
-                            List<Map<String, Object>> tools,
-                            StreamCallback callback) {
+                           List<Map<String, Object>> tools,
+                           StreamCallback callback) {
         String jsonBody;
         try {
             jsonBody = buildBody(messages, tools);
@@ -363,7 +401,8 @@ public class HttpModelClient implements ModelClient {
                                 }
                                 ONode existing = toolCallsAccum.get(idx);
                                 if (!tcd.get("id").isNull()) existing.set("id", tcd.get("id").getString());
-                                if (!func.get("name").isNull()) existing.getOrNew("function").set("name", func.get("name").getString());
+                                if (!func.get("name").isNull())
+                                    existing.getOrNew("function").set("name", func.get("name").getString());
                                 if (!func.get("arguments").isNull()) {
                                     String prev = existing.getOrNew("function").get("arguments").getString();
                                     String add = func.get("arguments").getString();
@@ -431,7 +470,11 @@ public class HttpModelClient implements ModelClient {
                 if (attempt < RETRY_DELAYS.length) {
                     int delay = RETRY_DELAYS[attempt];
                     System.err.println("[retry] " + e.getMessage() + "，第" + (attempt + 1) + "次重试，等待" + delay + "s...");
-                    try { Thread.sleep(delay * 1000L); } catch (InterruptedException ie) { Thread.currentThread().interrupt(); }
+                    try {
+                        Thread.sleep(delay * 1000L);
+                    } catch (InterruptedException ie) {
+                        Thread.currentThread().interrupt();
+                    }
                     continue;
                 }
                 try {
@@ -473,7 +516,7 @@ public class HttpModelClient implements ModelClient {
      * 对 tool 消息做防御性检查（缺少 tool_call_id 时跳过）。
      */
     private String buildBody(List<ChatMessage> messages,
-                              List<Map<String, Object>> tools) throws IOException {
+                             List<Map<String, Object>> tools) throws IOException {
         ONode body = new ONode(ONode.ofJson("{}").options()).asObject();
         body.set("model", model);
         if (reasoningEffort != null && !reasoningEffort.isEmpty()) {
@@ -528,19 +571,8 @@ public class HttpModelClient implements ModelClient {
         }
 
         String jsonBody = body.toJson();
-        logger.debug("构建请求体: 大小={} 字符, 工具数={}, 消息数={}", 
+        logger.debug("构建请求体: 大小={} 字符, 工具数={}, 消息数={}",
                 jsonBody.length(), tools != null ? tools.size() : 0, messages.size());
         return jsonBody;
-    }
-
-    private static String readFully(InputStream is) throws IOException {
-        StringBuilder sb = new StringBuilder();
-        try (BufferedReader r = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = r.readLine()) != null) {
-                sb.append(line);
-            }
-        }
-        return sb.toString();
     }
 }

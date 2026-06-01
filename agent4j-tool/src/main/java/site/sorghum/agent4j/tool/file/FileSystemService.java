@@ -4,10 +4,11 @@ import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.tool.HitlRequiredException;
 import site.sorghum.agent4j.tool.ToolContext;
 
-import java.io.*;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
-import java.nio.file.attribute.BasicFileAttributes;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.stream.Stream;
 
@@ -18,6 +19,30 @@ import java.util.stream.Stream;
  */
 @Component
 public class FileSystemService {
+
+    /**
+     * 读取输入流全部内容为 UTF-8 字符串。
+     * 使用 8KB 缓冲，适用于 HTTP 响应等流式读取。
+     */
+    public static String readFully(InputStream is) throws IOException {
+        StringBuilder sb = new StringBuilder();
+        byte[] buf = new byte[8192];
+        int n;
+        while ((n = is.read(buf)) != -1) {
+            sb.append(new String(buf, 0, n, StandardCharsets.UTF_8));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 检查路径中是否包含跳过目录。
+     */
+    private static boolean pathContainsSkip(Path p, Set<String> skip) {
+        for (int i = 0; i < p.getNameCount(); i++) {
+            if (skip.contains(p.getName(i).toString())) return true;
+        }
+        return false;
+    }
 
     /**
      * 列出指定目录的内容。
@@ -42,9 +67,9 @@ public class FileSystemService {
     /**
      * 按文件名模式搜索文件（大小写不敏感）。
      *
-     * @param root       工作区根目录
-     * @param pathStr    起始路径
-     * @param pattern    文件名包含模式
+     * @param root        工作区根目录
+     * @param pathStr     起始路径
+     * @param pattern     文件名包含模式
      * @param includeDeps 是否包含依赖目录（node_modules 等）
      * @return 匹配的文件路径列表
      */
@@ -54,7 +79,7 @@ public class FileSystemService {
         if (!Files.isDirectory(start)) return "[NOT_DIR]";
         Set<String> skip = includeDeps == Boolean.TRUE ? Collections.<String>emptySet()
                 : new HashSet<>(Arrays.asList("node_modules", ".git", "target", "dist", "build",
-                        ".venv", "__pycache__"));
+                ".venv", "__pycache__"));
         String lower = pattern != null ? pattern.toLowerCase() : "";
         List<String> results = new ArrayList<>();
         try (Stream<Path> walk = Files.walk(start)) {
@@ -88,27 +113,5 @@ public class FileSystemService {
      */
     public String displayRel(Path root, Path abs) {
         return root.relativize(abs).toString().replace('\\', '/');
-    }
-
-    /**
-     * 读取输入流全部内容为 UTF-8 字符串。
-     * 使用 8KB 缓冲，适用于 HTTP 响应等流式读取。
-     */
-    public static String readFully(InputStream is) throws IOException {
-        StringBuilder sb = new StringBuilder();
-        byte[] buf = new byte[8192];
-        int n;
-        while ((n = is.read(buf)) != -1) {
-            sb.append(new String(buf, 0, n, StandardCharsets.UTF_8));
-        }
-        return sb.toString();
-    }
-
-    /** 检查路径中是否包含跳过目录。 */
-    private static boolean pathContainsSkip(Path p, Set<String> skip) {
-        for (int i = 0; i < p.getNameCount(); i++) {
-            if (skip.contains(p.getName(i).toString())) return true;
-        }
-        return false;
     }
 }

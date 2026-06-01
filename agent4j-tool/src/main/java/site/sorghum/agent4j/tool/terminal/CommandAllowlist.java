@@ -38,6 +38,19 @@ public class CommandAllowlist {
     // ---- 风险参数 —— 命中则降级到确认门控 ----
 
     private static final Map<String, List<String>> RISKY_ARGS = new LinkedHashMap<>();
+    private static final List<String> DEFAULT_SENSITIVE_PREFIXES = Arrays.asList(
+            "~/.ssh", "~/.aws", "~/.gnupg", "~/.kube",
+            "/etc/shadow", "/etc/sudoers"
+    );
+
+    // ---- 敏感路径前缀 ----
+    private static final List<String> DEFAULT_SENSITIVE_PATTERNS = Arrays.asList(
+            "*.env", "*.env.*", "*.key", "*.pem",
+            "id_rsa*", "id_ed25519*", "*credentials*", "*secret*"
+    );
+
+    // ---- 敏感文件名模式 ----
+
     static {
         RISKY_ARGS.put("git branch", Arrays.asList(
                 "-d", "-D", "--delete", "-m", "-M", "--move", "-c", "-C", "--copy", "--force"));
@@ -55,37 +68,23 @@ public class CommandAllowlist {
         RISKY_ARGS.put("ruff", Arrays.asList("--fix", "--unsafe-fixes", "format"));
     }
 
-    // ---- 敏感路径前缀 ----
-
-    private static final List<String> DEFAULT_SENSITIVE_PREFIXES = Arrays.asList(
-            "~/.ssh", "~/.aws", "~/.gnupg", "~/.kube",
-            "/etc/shadow", "/etc/sudoers"
-    );
-
-    // ---- 敏感文件名模式 ----
-
-    private static final List<String> DEFAULT_SENSITIVE_PATTERNS = Arrays.asList(
-            "*.env", "*.env.*", "*.key", "*.pem",
-            "id_rsa*", "id_ed25519*", "*credentials*", "*secret*"
-    );
-
     // ======== 公共 API ========
 
     /**
      * 检查命令是否可以通过白名单（含风险参数降级和敏感路径检测）。
      *
-     * @param cmd           原始命令字符串
-     * @param extraAllowed  额外允许的前缀
-     * @param projectRoot   项目根目录（用于敏感路径解析），null 则跳过路径检测
+     * @param cmd               原始命令字符串
+     * @param extraAllowed      额外允许的前缀
+     * @param projectRoot       项目根目录（用于敏感路径解析），null 则跳过路径检测
      * @param sensitivePrefixes 额外的敏感路径前缀
      * @param sensitivePatterns 额外的敏感文件名模式
      * @return true = 允许自动执行
      */
     public static boolean isAllowed(String cmd,
-                                     List<String> extraAllowed,
-                                     Path projectRoot,
-                                     List<String> sensitivePrefixes,
-                                     List<String> sensitivePatterns) {
+                                    List<String> extraAllowed,
+                                    Path projectRoot,
+                                    List<String> sensitivePrefixes,
+                                    List<String> sensitivePatterns) {
         List<String> argv;
         try {
             argv = CommandTokenizer.tokenize(cmd);
@@ -102,7 +101,10 @@ public class CommandAllowlist {
             if (argv.size() < prefixTokens.size()) continue;
             boolean match = true;
             for (int i = 0; i < prefixTokens.size(); i++) {
-                if (!argv.get(i).equals(prefixTokens.get(i))) { match = false; break; }
+                if (!argv.get(i).equals(prefixTokens.get(i))) {
+                    match = false;
+                    break;
+                }
             }
             if (!match) continue;
 
@@ -122,7 +124,9 @@ public class CommandAllowlist {
         return false;
     }
 
-    /** 仅检查命令行字符串句法是否合法（引号闭合等），不走白名单。 */
+    /**
+     * 仅检查命令行字符串句法是否合法（引号闭合等），不走白名单。
+     */
     public static boolean isParsable(String cmd) {
         try {
             CommandTokenizer.tokenize(cmd);
@@ -144,10 +148,12 @@ public class CommandAllowlist {
         return false;
     }
 
-    /** 检查 argv 中的路径参数是否触碰敏感位置 */
+    /**
+     * 检查 argv 中的路径参数是否触碰敏感位置
+     */
     static boolean hasSensitivePathArgs(List<String> argv, Path projectRoot,
-                                         List<String> extraPrefixes,
-                                         List<String> extraPatterns) {
+                                        List<String> extraPrefixes,
+                                        List<String> extraPatterns) {
         List<String> prefixes = new ArrayList<>(DEFAULT_SENSITIVE_PREFIXES);
         prefixes.addAll(extraPrefixes);
         List<String> patterns = new ArrayList<>(DEFAULT_SENSITIVE_PATTERNS);
@@ -200,7 +206,9 @@ public class CommandAllowlist {
         return name.toLowerCase().matches("(?i)" + regex);
     }
 
-    /** 判断 /dev/null 或 Windows nul 等价物 */
+    /**
+     * 判断 /dev/null 或 Windows nul 等价物
+     */
     public static boolean isNullDevice(String target) {
         if (target == null) return false;
         String lower = target.toLowerCase();
@@ -210,7 +218,9 @@ public class CommandAllowlist {
         return false;
     }
 
-    /** 检查重定向目标是否在沙箱内 */
+    /**
+     * 检查重定向目标是否在沙箱内
+     */
     public static boolean redirectsEscapeSandbox(CommandChainParser.CommandChain chain, Path projectRoot) {
         Path root = projectRoot.normalize().toAbsolutePath();
         for (CommandChainParser.ChainSegment seg : chain.segments) {

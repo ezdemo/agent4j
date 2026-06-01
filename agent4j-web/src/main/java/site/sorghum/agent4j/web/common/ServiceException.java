@@ -22,7 +22,9 @@ public class ServiceException extends RuntimeException {
         this.code = code;
     }
 
-    /** HTTP 状态码，默认 400 */
+    /**
+     * HTTP 状态码，默认 400
+     */
     public int getCode() {
         return code;
     }

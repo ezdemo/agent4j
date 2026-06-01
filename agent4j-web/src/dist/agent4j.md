@@ -20,18 +20,19 @@
    ```
 
 3. **访问 API**
-   - 默认地址：http://localhost:8097
-   - 聊天接口：POST /api/chat
-   - 会话管理：GET/POST /api/sessions
-   - 工具列表：GET /api/tools
-   - Agent 控制：GET /api/agent
-   - 配置查询：GET /api/config
+    - 默认地址：http://localhost:8097
+    - 聊天接口：POST /api/chat
+    - 会话管理：GET/POST /api/sessions
+    - 工具列表：GET /api/tools
+    - Agent 控制：GET /api/agent
+    - 配置查询：GET /api/config
 
 ## API 接口
 
 ### 聊天接口
 
 **POST /api/chat**
+
 ```json
 {
   "message": "帮我分析这个项目",
@@ -44,6 +45,7 @@
 **GET /api/chat/stream?message=xxx**
 
 返回 Server-Sent Events 流：
+
 ```
 data: {"type":"content","content":"正在分析..."}
 data: {"type":"tool_call","name":"read_file","args":{...}}
@@ -65,16 +67,16 @@ data: {"type":"done"}
 
 ## 配置说明
 
-| 字段 | 说明 | 默认值 |
-|------|------|--------|
-| baseUrl | LLM API 地址 | - |
-| apiKey | API 密钥 | - |
-| model | 模型名称 | - |
-| workspaceDir | 工作区目录 | `.` |
-| lang | 语言 | `ZH` |
-| hitl | HITL 模式 | `false` |
-| disabledTools | 禁用的工具 | `[]` |
-| blockedPaths | 禁止访问的路径 | `[]` |
+| 字段            | 说明         | 默认值     |
+|---------------|------------|---------|
+| baseUrl       | LLM API 地址 | -       |
+| apiKey        | API 密钥     | -       |
+| model         | 模型名称       | -       |
+| workspaceDir  | 工作区目录      | `.`     |
+| lang          | 语言         | `ZH`    |
+| hitl          | HITL 模式    | `false` |
+| disabledTools | 禁用的工具      | `[]`    |
+| blockedPaths  | 禁止访问的路径    | `[]`    |
 
 ## 环境变量
 

@@ -1,7 +1,5 @@
 package site.sorghum.agent4j.bin.agent;
 
-import org.noear.snack4.ONode;
-
 import java.util.*;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -19,7 +17,9 @@ import java.util.regex.Pattern;
  */
 public class Scavenger {
 
-    /** DSML 标记模式：<invoke name="xxx">...参数...</invoke> */
+    /**
+     * DSML 标记模式：<invoke name="xxx">...参数...</invoke>
+     */
     private static final Pattern DSML_INVOKE = Pattern.compile(
             "<invoke\\s+name=\"([^\"]+)\">([\\s\\S]*?)</invoke>", Pattern.CASE_INSENSITIVE);
 
@@ -136,7 +136,9 @@ public class Scavenger {
                 .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t");
     }
 
-    /** 工具调用数据 */
+    /**
+     * 工具调用数据
+     */
     public static class ToolCall {
         public final String id;
         public final String name;

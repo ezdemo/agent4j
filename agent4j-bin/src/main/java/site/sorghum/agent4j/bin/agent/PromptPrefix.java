@@ -1,7 +1,6 @@
 package site.sorghum.agent4j.bin.agent;
 
 import java.util.ArrayList;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -18,11 +17,17 @@ import java.util.Objects;
  */
 public class PromptPrefix {
 
-    /** 系统提示词（turn 之间稳定，计划模式切换时会被替换） */
-    public String system;
-    /** 工具定义列表（注册后冻结） */
+    /**
+     * 工具定义列表（注册后冻结）
+     */
     private final List<Map<String, Object>> toolSpecs;
-    /** 缓存指纹 */
+    /**
+     * 系统提示词（turn 之间稳定，计划模式切换时会被替换）
+     */
+    public String system;
+    /**
+     * 缓存指纹
+     */
     private String fingerprintCache = null;
 
     public PromptPrefix(String system, List<Map<String, Object>> toolSpecs) {
@@ -31,19 +36,25 @@ public class PromptPrefix {
         this.fingerprintCache = computeFingerprint();
     }
 
-    /** 构建消息前缀：[{role: system, content: ...}] */
+    /**
+     * 构建消息前缀：[{role: system, content: ...}]
+     */
     public List<ChatMessage> toMessages() {
         List<ChatMessage> msgs = new ArrayList<>();
         msgs.add(ChatMessage.system(system));
         return msgs;
     }
 
-    /** 工具定义（stable reference） */
+    /**
+     * 工具定义（stable reference）
+     */
     public List<Map<String, Object>> tools() {
         return toolSpecs;
     }
 
-    /** 替换系统提示词（计划模式切换时用，会导致下一次 API 调用缓存 miss） */
+    /**
+     * 替换系统提示词（计划模式切换时用，会导致下一次 API 调用缓存 miss）
+     */
     public void replaceSystem(String newSystem) {
         this.system = newSystem;
         this.fingerprintCache = computeFingerprint();

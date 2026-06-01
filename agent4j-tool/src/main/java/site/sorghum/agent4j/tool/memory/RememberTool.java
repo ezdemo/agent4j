@@ -23,7 +23,9 @@ public class RememberTool extends AgentTool {
     private MemoryService memoryService;
 
     @Override
-    public String getName() { return "remember"; }
+    public String getName() {
+        return "remember";
+    }
 
     @Override
     public String getDescription() {

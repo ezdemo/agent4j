@@ -20,27 +20,39 @@ import java.util.Map;
 @Getter
 public class ToolContext {
 
-    /** 调用参数 */
+    /**
+     * 线程局部沙箱旁路标志，供 resolveSafe 等深层方法在不持有 ToolContext 时检查。
+     * HITL 审批通过路径越界后，AgentLoop 在重放执行前设置此标志。
+     */
+    private static final ThreadLocal<Boolean> SANDBOX_BYPASS_TL = new ThreadLocal<>();
+    /**
+     * 调用参数
+     */
     private final Map<String, Object> params;
-
-    /** 工作区根目录（可选） */
+    /**
+     * 工作区根目录（可选）
+     */
     private final Path rootDir;
-
-    /** LLM API 地址（可选，供需要 API 调用的工具使用） */
+    /**
+     * LLM API 地址（可选，供需要 API 调用的工具使用）
+     */
     private final String apiUrl;
-
-    /** LLM API Key（可选） */
+    /**
+     * LLM API Key（可选）
+     */
     private final String apiKey;
-
-    /** 工具注册表引用（可选，供需要创建子代理的工具使用） */
+    /**
+     * 工具注册表引用（可选，供需要创建子代理的工具使用）
+     */
     private final Object toolRegistry;
-
-    /** 屏蔽目录列表（相对路径，相对于工作区根目录） */
+    /**
+     * 屏蔽目录列表（相对路径，相对于工作区根目录）
+     */
     private final List<String> blockedPaths;
-
-    /** 当前会话ID（可选，用于按会话隔离数据） */
+    /**
+     * 当前会话ID（可选，用于按会话隔离数据）
+     */
     private final String sessionId;
-
     /**
      * 沙箱旁路标志 — HITL 审批通过路径越界后置为 true，
      * resolveSafe 检测到此标志时跳过边界校验。
@@ -87,55 +99,70 @@ public class ToolContext {
         this.skipSandboxCheck = skipSandboxCheck;
     }
 
-    /** 沙箱旁路标志 — HITL 审批通过后为 true */
-    public boolean isSkipSandboxCheck() { return skipSandboxCheck; }
-
     // ==================== 线程级沙箱旁路 ====================
 
     /**
-     * 线程局部沙箱旁路标志，供 resolveSafe 等深层方法在不持有 ToolContext 时检查。
-     * HITL 审批通过路径越界后，AgentLoop 在重放执行前设置此标志。
+     * 开启当前线程的沙箱旁路（resolveSafe 跳过边界检查）
      */
-    private static final ThreadLocal<Boolean> SANDBOX_BYPASS_TL = new ThreadLocal<>();
-
-    /** 开启当前线程的沙箱旁路（resolveSafe 跳过边界检查） */
     public static void enableSandboxBypass() {
         SANDBOX_BYPASS_TL.set(true);
     }
 
-    /** 关闭当前线程的沙箱旁路 */
+    /**
+     * 关闭当前线程的沙箱旁路
+     */
     public static void disableSandboxBypass() {
         SANDBOX_BYPASS_TL.remove();
     }
 
-    /** 当前线程是否开启了沙箱旁路 */
+    /**
+     * 当前线程是否开启了沙箱旁路
+     */
     public static boolean isSandboxBypass() {
         return Boolean.TRUE.equals(SANDBOX_BYPASS_TL.get());
     }
 
-    /** 获取字符串参数。 */
+    /**
+     * 沙箱旁路标志 — HITL 审批通过后为 true
+     */
+    public boolean isSkipSandboxCheck() {
+        return skipSandboxCheck;
+    }
+
+    /**
+     * 获取字符串参数。
+     */
     public String getString(String key) {
         Object v = params.get(key);
         return v != null ? v.toString() : null;
     }
 
-    /** 获取字符串参数，带默认值。 */
+    /**
+     * 获取字符串参数，带默认值。
+     */
     public String getString(String key, String defaultValue) {
         String v = getString(key);
         return v != null ? v : defaultValue;
     }
 
-    /** 获取整数参数。 */
+    /**
+     * 获取整数参数。
+     */
     public int getInt(String key, int defaultValue) {
         Object v = params.get(key);
         if (v instanceof Number number) return number.intValue();
         if (v instanceof String str) {
-            try { return Integer.parseInt(str); } catch (NumberFormatException ignored) {}
+            try {
+                return Integer.parseInt(str);
+            } catch (NumberFormatException ignored) {
+            }
         }
         return defaultValue;
     }
 
-    /** 获取布尔参数。 */
+    /**
+     * 获取布尔参数。
+     */
     public boolean getBool(String key, boolean defaultValue) {
         Object v = params.get(key);
         if (v instanceof Boolean bool) return bool;
@@ -143,18 +170,24 @@ public class ToolContext {
         return defaultValue;
     }
 
-    /** 获取工具注册表（类型安全的调用方应自行转型）。 */
+    /**
+     * 获取工具注册表（类型安全的调用方应自行转型）。
+     */
     @SuppressWarnings("unchecked")
     public <T> T getToolRegistry() {
         return (T) toolRegistry;
     }
 
-    /** 检查参数是否存在。 */
+    /**
+     * 检查参数是否存在。
+     */
     public boolean has(String key) {
         return params.containsKey(key);
     }
 
-    /** 参数数量。 */
+    /**
+     * 参数数量。
+     */
     public int paramCount() {
         return params.size();
     }

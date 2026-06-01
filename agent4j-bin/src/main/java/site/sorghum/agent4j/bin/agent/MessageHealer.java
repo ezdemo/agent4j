@@ -28,7 +28,7 @@ public class MessageHealer {
      * @return 修复后的消息列表
      */
     public static List<ChatMessage> heal(List<ChatMessage> messages,
-                                                  boolean isThinkingMode) {
+                                         boolean isThinkingMode) {
         List<Map<String, Object>> mapMessages = new ArrayList<>();
         for (ChatMessage m : messages) mapMessages.add(m.toMap());
         List<Map<String, Object>> result = healInternal(mapMessages, isThinkingMode);
@@ -38,7 +38,7 @@ public class MessageHealer {
     }
 
     private static List<Map<String, Object>> healInternal(List<Map<String, Object>> messages,
-                                                  boolean isThinkingMode) {
+                                                          boolean isThinkingMode) {
         List<Map<String, Object>> out = new ArrayList<>();
         int pendingToolCount = 0;
         int lastAssistantWithTcIdx = -1; // 跟踪最后一个带 tool_calls 的 assistant 在 out 中的位置

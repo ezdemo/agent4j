@@ -1,7 +1,7 @@
 package site.sorghum.agent4j.bin.agent;
 
-import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
+import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.tool.ToolDef;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 
@@ -36,28 +36,16 @@ public class SubAgent {
     private final ModelClient client;
     private final ToolRegistry registry;
     private final String systemPrompt;
-
+    private final Map<String, long[]> modelUsage = new LinkedHashMap<>();
     // ==================== 子代理用量追踪 ====================
     private long totalPromptTokens;
     private long totalCompletionTokens;
     private long totalCacheHit;
     private long totalCacheMiss;
-    private final Map<String, long[]> modelUsage = new LinkedHashMap<>();
 
-    /** 获取累计 prompt token 数 */
-    public long getTotalPromptTokens() { return totalPromptTokens; }
-    /** 获取累计 completion token 数 */
-    public long getTotalCompletionTokens() { return totalCompletionTokens; }
-    /** 获取累计 cache hit token 数 */
-    public long getTotalCacheHit() { return totalCacheHit; }
-    /** 获取累计 cache miss token 数 */
-    public long getTotalCacheMiss() { return totalCacheMiss; }
-    /** 获取按模型分别累计的 token 用量: model -> [prompt, completion, cacheHit, cacheMiss] */
-    public Map<String, long[]> getModelUsage() { return modelUsage; }
-    /** 是否有用量数据 */
-    public boolean hasUsage() { return totalPromptTokens > 0 || totalCompletionTokens > 0; }
-
-    /** 构造函数（接受 ModelClient 接口，便于 DI） */
+    /**
+     * 构造函数（接受 ModelClient 接口，便于 DI）
+     */
     public SubAgent(ModelClient client, ToolRegistry parentRegistry, String systemPrompt) {
         this.client = client;
         this.registry = new ToolRegistry();
@@ -69,10 +57,54 @@ public class SubAgent {
         this.systemPrompt = systemPrompt;
     }
 
-    /** 构造函数（接受 apiUrl/apiKey/model 字符串，用于非 DI 场景） */
+    /**
+     * 构造函数（接受 apiUrl/apiKey/model 字符串，用于非 DI 场景）
+     */
     public SubAgent(String apiUrl, String apiKey, String model,
-                     ToolRegistry parentRegistry, String systemPrompt) {
+                    ToolRegistry parentRegistry, String systemPrompt) {
         this(new HttpModelClient(apiUrl, apiKey, model), parentRegistry, systemPrompt);
+    }
+
+    /**
+     * 获取累计 prompt token 数
+     */
+    public long getTotalPromptTokens() {
+        return totalPromptTokens;
+    }
+
+    /**
+     * 获取累计 completion token 数
+     */
+    public long getTotalCompletionTokens() {
+        return totalCompletionTokens;
+    }
+
+    /**
+     * 获取累计 cache hit token 数
+     */
+    public long getTotalCacheHit() {
+        return totalCacheHit;
+    }
+
+    /**
+     * 获取累计 cache miss token 数
+     */
+    public long getTotalCacheMiss() {
+        return totalCacheMiss;
+    }
+
+    /**
+     * 获取按模型分别累计的 token 用量: model -> [prompt, completion, cacheHit, cacheMiss]
+     */
+    public Map<String, long[]> getModelUsage() {
+        return modelUsage;
+    }
+
+    /**
+     * 是否有用量数据
+     */
+    public boolean hasUsage() {
+        return totalPromptTokens > 0 || totalCompletionTokens > 0;
     }
 
     /**
@@ -95,14 +127,17 @@ public class SubAgent {
             public void onReasoning(String r) {
                 if (listener != null) listener.onReasoning(r);
             }
+
             @Override
             public void onToolCall(String n, String a) {
                 if (listener != null) listener.onToolCall(n, a);
             }
+
             @Override
             public void onToolResult(String n, String r) {
                 if (listener != null) listener.onToolResult(n, r);
             }
+
             @Override
             public void onUsage(String model, int prompt, int completion, int total,
                                 int cacheHit, int cacheMiss) {

@@ -128,7 +128,7 @@ public interface ChatCommand {
      * @param input   用户原始输入
      * @param context 执行上下文（持有 agent、scanner 等依赖）
      * @return {@link CommandResult#CONTINUE} 继续主循环，
-     *         {@link CommandResult#EXIT} 退出主循环
+     * {@link CommandResult#EXIT} 退出主循环
      * @throws Exception 执行异常
      */
     CommandResult execute(String input, ChatCommandContext context) throws Exception;
@@ -137,9 +137,13 @@ public interface ChatCommand {
      * 命令执行结果枚举。
      */
     enum CommandResult {
-        /** 命令已处理，主循环继续（读取下一条输入） */
+        /**
+         * 命令已处理，主循环继续（读取下一条输入）
+         */
         CONTINUE,
-        /** 命令已处理，主循环应退出（如 /exit） */
+        /**
+         * 命令已处理，主循环应退出（如 /exit）
+         */
         EXIT
     }
 }

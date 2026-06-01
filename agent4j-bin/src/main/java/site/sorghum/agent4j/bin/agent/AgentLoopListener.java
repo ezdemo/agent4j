@@ -10,27 +10,40 @@ package site.sorghum.agent4j.bin.agent;
  */
 public interface AgentLoopListener {
 
-    /** 模型在思考（reasoning_content） */
-    default void onReasoning(String reasoning) {}
+    /**
+     * 模型在思考（reasoning_content）
+     */
+    default void onReasoning(String reasoning) {
+    }
 
-    /** 模型调用了工具 */
-    default void onToolCall(String name, String args) {}
+    /**
+     * 模型调用了工具
+     */
+    default void onToolCall(String name, String args) {
+    }
 
-    /** 工具返回结果 */
-    default void onToolResult(String name, String result) {}
+    /**
+     * 工具返回结果
+     */
+    default void onToolResult(String name, String result) {
+    }
 
     /**
      * token 用量回调。
-     * @param promptTokens      输入 token 数
-     * @param completionTokens  输出 token 数
-     * @param totalTokens       总 token 数
-     * @param cacheHit          缓存命中 token 数
-     * @param cacheMiss         缓存未命中 token 数
+     *
+     * @param promptTokens     输入 token 数
+     * @param completionTokens 输出 token 数
+     * @param totalTokens      总 token 数
+     * @param cacheHit         缓存命中 token 数
+     * @param cacheMiss        缓存未命中 token 数
      */
     default void onUsage(int promptTokens, int completionTokens, int totalTokens,
-                          int cacheHit, int cacheMiss) {}
+                         int cacheHit, int cacheMiss) {
+    }
 
-    /** Token 用量回调（含模型名称） */
+    /**
+     * Token 用量回调（含模型名称）
+     */
     default void onUsage(String model, int promptTokens, int completionTokens, int totalTokens,
                          int cacheHit, int cacheMiss) {
         onUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);

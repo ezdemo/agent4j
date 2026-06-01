@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.bin.command.impl;
 
 import org.noear.solon.annotation.Component;
+import site.sorghum.agent4j.bin.agent.LogLevel;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 
@@ -35,8 +36,11 @@ public class PlanCommand implements ChatCommand {
     @Override
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
         context.getAgent().setPlanMode(true);
-        System.out.println("(已进入计划模式 — 仅允许只读操作)");
-        System.out.println("探索完成后使用 submit_plan 提交计划，或输入 /execute 开始执行");
+        context.getAgent().getOutput().onLog(LogLevel.INFO, "探索完成后使用 输入 /execute 开始执行");
+        context.getAgent().getOutput().onLog(LogLevel.INFO, "已进入计划模式 — 仅允许只读操作");
+        context.getAgent().getOutput().onMessage(
+                "已进入计划模式 — 仅允许只读操作"
+        );
         return CommandResult.CONTINUE;
     }
 }

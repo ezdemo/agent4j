@@ -82,7 +82,7 @@ public class SseAgentOutput implements AgentOutput {
 
     @Override
     public void onLog(LogLevel level, String message) {
-        emitter.send("log",ONode.serialize( Map.of("level", level.name(), "message", message)));
+        emitter.send("log", ONode.serialize(Map.of("level", level.name(), "message", message)));
     }
 
     @Override

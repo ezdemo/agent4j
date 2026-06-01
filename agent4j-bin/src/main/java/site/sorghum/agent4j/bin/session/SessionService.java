@@ -1,15 +1,14 @@
 package site.sorghum.agent4j.bin.session;
 
+import site.sorghum.agent4j.bin.agent.ChatMessage;
 import site.sorghum.agent4j.bin.agent.ConversationContext;
 import site.sorghum.agent4j.bin.agent.MessageHealer;
 
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import site.sorghum.agent4j.bin.agent.ChatMessage;
 
 /**
  * 会话管理服务 —— 编排会话生命周期。
@@ -23,29 +22,27 @@ import site.sorghum.agent4j.bin.agent.ChatMessage;
 public class SessionService {
 
     private final ConversationContext ctx;
-    private SessionStore store;
-    /** 当前工作区的会话目录（支持工作区隔离） */
+    /**
+     * 当前工作区的会话目录（支持工作区隔离）
+     */
     private final Path sessionsDir;
+    /**
+     * 按模型分别累计的 token 用量：model -> [prompt, completion, cacheHit, cacheMiss]
+     */
+    private final Map<String, long[]> modelUsage = new LinkedHashMap<>();
+    private SessionStore store;
     private long sessionPromptTokens;
     private long sessionCompletionTokens;
     private long sessionCacheHitTokens;
     private long sessionCacheMissTokens;
-    /** 最近一次 API 返回的 prompt_tokens（用于上下文使用率计算） */
+    /**
+     * 最近一次 API 返回的 prompt_tokens（用于上下文使用率计算）
+     */
     private long sessionLastPromptTokens;
-    /** 按模型分别累计的 token 用量：model -> [prompt, completion, cacheHit, cacheMiss] */
-    private final Map<String, long[]> modelUsage = new LinkedHashMap<>();
-    /** 是否已生成会话标题 */
+    /**
+     * 是否已生成会话标题
+     */
     private boolean titleGenerated = false;
-
-    /** 检查是否已生成会话标题 */
-    public boolean isTitleGenerated() {
-        return titleGenerated;
-    }
-
-    /** 设置标题已生成标志 */
-    public void setTitleGenerated(boolean generated) {
-        this.titleGenerated = generated;
-    }
 
     public SessionService(ConversationContext ctx, SessionStore store) {
         this.ctx = ctx;
@@ -57,7 +54,7 @@ public class SessionService {
     /**
      * 创建支持工作区隔离的 SessionService
      *
-     * @param ctx 会话上下文
+     * @param ctx         会话上下文
      * @param sessionsDir 会话目录路径
      */
     public SessionService(ConversationContext ctx, Path sessionsDir) throws IOException {
@@ -65,6 +62,20 @@ public class SessionService {
         this.sessionsDir = sessionsDir;
         this.store = new JsonlSessionStore(sessionsDir);
         ctx.setSessionStore(store);
+    }
+
+    /**
+     * 检查是否已生成会话标题
+     */
+    public boolean isTitleGenerated() {
+        return titleGenerated;
+    }
+
+    /**
+     * 设置标题已生成标志
+     */
+    public void setTitleGenerated(boolean generated) {
+        this.titleGenerated = generated;
     }
 
     /**
@@ -99,7 +110,9 @@ public class SessionService {
         // sessionName 为空时：保持 store 当前状态（新建的空白会话），不加载历史
     }
 
-    /** 新建会话：保存当前、关闭旧 store、创建新会话 */
+    /**
+     * 新建会话：保存当前、关闭旧 store、创建新会话
+     */
     public void newSession() throws IOException {
         saveUsage();
         // 关闭旧的 store，释放定时器 + writer 资源
@@ -118,13 +131,17 @@ public class SessionService {
         titleGenerated = false; // 新会话，标题未生成
     }
 
-    /** 删除指定会话的持久化文件（.jsonl / .usage / .meta） */
+    /**
+     * 删除指定会话的持久化文件（.jsonl / .usage / .meta）
+     */
     public boolean deleteSession(String name) throws IOException {
         if (name == null || name.isEmpty()) return false;
         return store.delete(name);
     }
 
-    /** 保存当前会话 token 用量 */
+    /**
+     * 保存当前会话 token 用量
+     */
     public void saveUsage() {
         String name = store.currentName();
         if (name == null) return; // 尚未选择会话，无需保存
@@ -134,10 +151,13 @@ public class SessionService {
                     sessionLastPromptTokens);
             // 保存按模型分别累计的用量
             store.saveModelUsage(name, modelUsage);
-        } catch (IOException ignored) {}
+        } catch (IOException ignored) {
+        }
     }
 
-    /** 累计 token 用量（兼容旧接口，不区分模型） */
+    /**
+     * 累计 token 用量（兼容旧接口，不区分模型）
+     */
     public void addUsage(int prompt, int completion, int cacheHit, int cacheMiss) {
         this.sessionPromptTokens += prompt;
         this.sessionCompletionTokens += completion;
@@ -145,7 +165,9 @@ public class SessionService {
         this.sessionCacheMissTokens += cacheMiss;
     }
 
-    /** 按模型累计 token 用量（同时更新总量） */
+    /**
+     * 按模型累计 token 用量（同时更新总量）
+     */
     public void addUsage(String model, int prompt, int completion, int cacheHit, int cacheMiss) {
         // 更新总量（向后兼容）
         addUsage(prompt, completion, cacheHit, cacheMiss);
@@ -158,7 +180,9 @@ public class SessionService {
         mu[3] += cacheMiss;
     }
 
-    /** 获取按模型分别累计的 token 用量快照 */
+    /**
+     * 获取按模型分别累计的 token 用量快照
+     */
     public Map<String, long[]> getModelUsage() {
         Map<String, long[]> copy = new LinkedHashMap<>();
         for (Map.Entry<String, long[]> e : modelUsage.entrySet()) {
@@ -167,13 +191,17 @@ public class SessionService {
         return copy;
     }
 
-    /** 获取会话累计 token 用量 */
+    /**
+     * 获取会话累计 token 用量
+     */
     public long[] getUsage() {
         return new long[]{sessionPromptTokens, sessionCompletionTokens,
                 sessionCacheHitTokens, sessionCacheMissTokens, sessionLastPromptTokens};
     }
 
-    /** 恢复 token 用量 */
+    /**
+     * 恢复 token 用量
+     */
     public void restoreUsage(String name) {
         long[] u = store.loadUsage(name);
         sessionPromptTokens = u[0];
@@ -186,17 +214,23 @@ public class SessionService {
         modelUsage.putAll(store.loadModelUsage(name));
     }
 
-    /** 更新 lastPromptTokens（上下文使用量） */
+    /**
+     * 更新 lastPromptTokens（上下文使用量）
+     */
     public void updateLastPromptTokens(int lastPromptTokens) {
         this.sessionLastPromptTokens = lastPromptTokens;
     }
 
-    /** 获取 lastPromptTokens */
+    /**
+     * 获取 lastPromptTokens
+     */
     public long getLastPromptTokens() {
         return sessionLastPromptTokens;
     }
 
-    /** 重置 token 累计 */
+    /**
+     * 重置 token 累计
+     */
     public void resetUsage() {
         sessionPromptTokens = sessionCompletionTokens = 0;
         sessionCacheHitTokens = sessionCacheMissTokens = 0;
@@ -211,15 +245,20 @@ public class SessionService {
     public void flush() {
         try {
             store.flush();
-        } catch (IOException ignored) {}
+        } catch (IOException ignored) {
+        }
     }
 
-    /** 获取底层 SessionStore */
+    /**
+     * 获取底层 SessionStore
+     */
     public SessionStore getStore() {
         return store;
     }
 
-    /** 注入单条历史消息 */
+    /**
+     * 注入单条历史消息
+     */
     public void injectHistory(ChatMessage msg) {
         ctx.injectHistory(msg);
     }

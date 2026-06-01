@@ -2,7 +2,6 @@ package site.sorghum.agent4j.bin.agent;
 
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
-
 import site.sorghum.agent4j.bin.model.ModelClient;
 
 import java.io.IOException;
@@ -237,7 +236,8 @@ public class ContextFolding {
                     Map<String, Object> stripped = new LinkedHashMap<>();
                     stripped.put("role", "assistant");
                     if (m.containsKey("content")) stripped.put("content", m.get("content"));
-                    if (m.containsKey("reasoning_content")) stripped.put("reasoning_content", m.get("reasoning_content"));
+                    if (m.containsKey("reasoning_content"))
+                        stripped.put("reasoning_content", m.get("reasoning_content"));
                     result.set(i, stripped);
                     // 同步删除该 assistant 之后所有孤儿 tool 消息
                     for (int j = result.size() - 1; j > i; j--) {
@@ -252,7 +252,9 @@ public class ContextFolding {
         return result;
     }
 
-    /** 截断到字符限制，保留尾部。 */
+    /**
+     * 截断到字符限制，保留尾部。
+     */
     private static List<Map<String, Object>> truncateForSummary(List<Map<String, Object>> msgs, int limit) {
         int total = estimateCharsMap(msgs);
         if (total <= limit) return msgs;
@@ -371,7 +373,9 @@ public class ContextFolding {
         return total;
     }
 
-    /** 估算单条消息的字符数（role + content + tool_calls + reasoning_content）。 */
+    /**
+     * 估算单条消息的字符数（role + content + tool_calls + reasoning_content）。
+     */
     public static int estimateChars(ChatMessage m) {
         int n = 0;
         if (m.getRole() != null) n += m.getRole().length();
@@ -381,14 +385,18 @@ public class ContextFolding {
         return n;
     }
 
-    /** 估算消息列表的总字符数（Map 版本，内部使用）。 */
+    /**
+     * 估算消息列表的总字符数（Map 版本，内部使用）。
+     */
     private static int estimateCharsMap(List<Map<String, Object>> messages) {
         int total = 0;
         for (Map<String, Object> m : messages) total += estimateCharsMap(m);
         return total;
     }
 
-    /** 估算单条消息的字符数（role + content + tool_calls + reasoning_content）。 */
+    /**
+     * 估算单条消息的字符数（role + content + tool_calls + reasoning_content）。
+     */
     private static int estimateCharsMap(Map<String, Object> m) {
         int n = 0;
         if (m.containsKey("role")) n += m.get("role").toString().length();

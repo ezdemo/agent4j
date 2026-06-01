@@ -23,7 +23,9 @@ public class RecallMemoryTool extends AgentTool {
     private MemoryService memoryService;
 
     @Override
-    public String getName() { return "recall_memory"; }
+    public String getName() {
+        return "recall_memory";
+    }
 
     @Override
     public String getDescription() {

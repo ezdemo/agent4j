@@ -16,7 +16,9 @@ import java.util.Map;
 public class MultiEditTool extends AgentTool {
 
     @Override
-    public String getName() { return "multi_edit"; }
+    public String getName() {
+        return "multi_edit";
+    }
 
     @Override
     public String getDescription() {

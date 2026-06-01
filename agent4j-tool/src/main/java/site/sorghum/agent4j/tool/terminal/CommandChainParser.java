@@ -13,39 +13,9 @@ public class CommandChainParser {
 
     // ---- 数据结构 ----
 
-    public enum ChainOp { PIPE("|"), OR("||"), AND("&&"), SEMI(";");
-        final String text; ChainOp(String t) { text = t; } }
-
-    public enum RedirectKind { OUT(">"), APPEND(">>"), IN("<"), ERR_OUT("2>"),
-        ERR_APPEND("2>>"), ERR_MERGE("2>&1"), ALL("&>");
-        final String text; RedirectKind(String t) { text = t; }
-        boolean needsTarget() { return this != ERR_MERGE; } }
-
-    public static class Redirect {
-        public final RedirectKind kind;
-        public final String target; // "" for 2>&1
-        public Redirect(RedirectKind kind, String target) {
-            this.kind = kind; this.target = target == null ? "" : target; }
-    }
-
-    public static class ChainSegment {
-        public final List<String> argv;
-        public final List<Redirect> redirects;
-        public ChainSegment(List<String> argv, List<Redirect> redirects) {
-            this.argv = argv; this.redirects = redirects; }
-    }
-
-    public static class CommandChain {
-        public final List<ChainSegment> segments;
-        public final List<ChainOp> ops; // segs.size() - 1
-        public CommandChain(List<ChainSegment> segments, List<ChainOp> ops) {
-            this.segments = segments; this.ops = ops; }
-    }
-
-    // ---- 公共入口 ----
-
     /**
      * 解析命令字符串。返回 null 表示无链式操作符也无重定向（调用方可走简单路径）。
+     *
      * @throws UnsupportedSyntaxException 不支持的语法
      */
     public static CommandChain parse(String cmd) {
@@ -83,14 +53,6 @@ public class CommandChainParser {
         return new CommandChain(segments, split.ops);
     }
 
-    // ---- 链操作符分割 ----
-
-    private static class SplitResult {
-        final List<String> segs;
-        final List<ChainOp> ops;
-        SplitResult(List<String> segs, List<ChainOp> ops) { this.segs = segs; this.ops = ops; }
-    }
-
     private static SplitResult splitOnChainOps(String cmd) {
         List<String> segs = new ArrayList<>();
         List<ChainOp> ops = new ArrayList<>();
@@ -103,18 +65,37 @@ public class CommandChainParser {
             if (quote != null) {
                 if (ch == quote.charValue()) quote = null;
                 else if (quote == '"' && i + 1 < cmd.length() && isDqEscape(ch, cmd.charAt(i + 1))) i++;
-                i++; atTokenStart = false;
+                i++;
+                atTokenStart = false;
                 continue;
             }
-            if (ch == '"' || ch == '\'') { quote = ch; i++; atTokenStart = false; continue; }
-            if (ch == ' ' || ch == '\t') { i++; atTokenStart = true; continue; }
+            if (ch == '"' || ch == '\'') {
+                quote = ch;
+                i++;
+                atTokenStart = false;
+                continue;
+            }
+            if (ch == ' ' || ch == '\t') {
+                i++;
+                atTokenStart = true;
+                continue;
+            }
             if (atTokenStart) {
                 ChainOp op = null;
                 int opLen = 0;
-                if (ch == '|' && i + 1 < cmd.length() && cmd.charAt(i + 1) == '|') { op = ChainOp.OR; opLen = 2; }
-                else if (ch == '&' && i + 1 < cmd.length() && cmd.charAt(i + 1) == '&') { op = ChainOp.AND; opLen = 2; }
-                else if (ch == '|') { op = ChainOp.PIPE; opLen = 1; }
-                else if (ch == ';') { op = ChainOp.SEMI; opLen = 1; }
+                if (ch == '|' && i + 1 < cmd.length() && cmd.charAt(i + 1) == '|') {
+                    op = ChainOp.OR;
+                    opLen = 2;
+                } else if (ch == '&' && i + 1 < cmd.length() && cmd.charAt(i + 1) == '&') {
+                    op = ChainOp.AND;
+                    opLen = 2;
+                } else if (ch == '|') {
+                    op = ChainOp.PIPE;
+                    opLen = 1;
+                } else if (ch == ';') {
+                    op = ChainOp.SEMI;
+                    opLen = 1;
+                }
                 if (op != null) {
                     segs.add(cmd.substring(segStart, i));
                     ops.add(op);
@@ -124,23 +105,11 @@ public class CommandChainParser {
                     continue;
                 }
             }
-            i++; atTokenStart = false;
+            i++;
+            atTokenStart = false;
         }
         segs.add(cmd.substring(segStart));
         return new SplitResult(segs, ops);
-    }
-
-    // ---- Segment 解析 ----
-
-    /** 可变的 flush 状态（Java 8 不支持 lambda 捕获可变局部变量，用 holder 替代） */
-    private static final class FlushState {
-        final List<String> argv;
-        final List<Redirect> redirects;
-        StringBuilder cur = new StringBuilder();
-        boolean curHasContent = false;
-        RedirectKind pending = null;
-        FlushState(List<String> argv, List<Redirect> redirects) {
-            this.argv = argv; this.redirects = redirects; }
     }
 
     private static void flush(FlushState s) {
@@ -167,12 +136,26 @@ public class CommandChainParser {
             if (quote != null) {
                 if (ch == quote.charValue()) quote = null;
                 else if (quote == '"' && i + 1 < segStr.length() && isDqEscape(ch, segStr.charAt(i + 1))) {
-                    state.cur.append(segStr.charAt(++i)); state.curHasContent = true;
-                } else { state.cur.append(ch); state.curHasContent = true; }
-                i++; continue;
+                    state.cur.append(segStr.charAt(++i));
+                    state.curHasContent = true;
+                } else {
+                    state.cur.append(ch);
+                    state.curHasContent = true;
+                }
+                i++;
+                continue;
             }
-            if (ch == '"' || ch == '\'') { quote = ch; state.curHasContent = true; i++; continue; }
-            if (ch == ' ' || ch == '\t') { flush(state); i++; continue; }
+            if (ch == '"' || ch == '\'') {
+                quote = ch;
+                state.curHasContent = true;
+                i++;
+                continue;
+            }
+            if (ch == ' ' || ch == '\t') {
+                flush(state);
+                i++;
+                continue;
+            }
             if (state.cur.length() == 0 && !state.curHasContent) {
                 String remaining = segStr.substring(i);
                 RedirectMatch m = matchRedirect(remaining);
@@ -191,7 +174,9 @@ public class CommandChainParser {
                         "shell operator \"&\" is not supported — background runs need run_background, not run_command. "
                                 + "Wrap a literal `&` arg in quotes.");
             }
-            state.cur.append(ch); state.curHasContent = true; i++;
+            state.cur.append(ch);
+            state.curHasContent = true;
+            i++;
         }
         if (quote != null) throw new IllegalArgumentException("unclosed " + quote + " in command");
         flush(state);
@@ -203,24 +188,25 @@ public class CommandChainParser {
         return new ChainSegment(argv, redirects);
     }
 
-    private static class RedirectMatch { final RedirectKind kind; final int len;
-        RedirectMatch(RedirectKind k, int l) { kind = k; len = l; } }
-
     private static RedirectMatch matchRedirect(String s) {
         if (s.startsWith("2>&1")) return new RedirectMatch(RedirectKind.ERR_MERGE, 4);
-        if (s.startsWith("&>"))   return new RedirectMatch(RedirectKind.ALL, 2);
-        if (s.startsWith("2>>"))  return new RedirectMatch(RedirectKind.ERR_APPEND, 3);
-        if (s.startsWith("2>"))   return new RedirectMatch(RedirectKind.ERR_OUT, 2);
-        if (s.startsWith(">>"))   return new RedirectMatch(RedirectKind.APPEND, 2);
-        if (s.startsWith("<<"))   throw new UnsupportedSyntaxException(
+        if (s.startsWith("&>")) return new RedirectMatch(RedirectKind.ALL, 2);
+        if (s.startsWith("2>>")) return new RedirectMatch(RedirectKind.ERR_APPEND, 3);
+        if (s.startsWith("2>")) return new RedirectMatch(RedirectKind.ERR_OUT, 2);
+        if (s.startsWith(">>")) return new RedirectMatch(RedirectKind.APPEND, 2);
+        if (s.startsWith("<<")) throw new UnsupportedSyntaxException(
                 "shell operator \"<<\" is not supported — heredoc / here-string is not implemented; "
                         + "pass input via a \"<\" file or the binary's --input flag");
-        if (s.startsWith(">"))    return new RedirectMatch(RedirectKind.OUT, 1);
-        if (s.startsWith("<"))    return new RedirectMatch(RedirectKind.IN, 1);
+        if (s.startsWith(">")) return new RedirectMatch(RedirectKind.OUT, 1);
+        if (s.startsWith("<")) return new RedirectMatch(RedirectKind.IN, 1);
         return null;
     }
 
-    /** 每个 fd 最多一个重定向，避免冲突 */
+    // ---- 公共入口 ----
+
+    /**
+     * 每个 fd 最多一个重定向，避免冲突
+     */
     private static void validateRedirectFds(List<Redirect> redirects) {
         int stdin = 0, stdout = 0, stderr = 0;
         for (Redirect r : redirects) {
@@ -228,7 +214,10 @@ public class CommandChainParser {
                 case IN -> stdin++;
                 case OUT, APPEND -> stdout++;
                 case ERR_OUT, ERR_APPEND, ERR_MERGE -> stderr++;
-                case ALL -> { stdout++; stderr++; }
+                case ALL -> {
+                    stdout++;
+                    stderr++;
+                }
             }
         }
         if (stdin > 1) throw new UnsupportedSyntaxException("multiple `<` stdin redirects in one segment");
@@ -236,10 +225,103 @@ public class CommandChainParser {
         if (stderr > 1) throw new UnsupportedSyntaxException("multiple stderr redirects in one segment");
     }
 
-    // ---- 工具方法 ----
+    // ---- 链操作符分割 ----
 
     private static boolean isDqEscape(char prev, char next) {
         return prev == '\\' && (next == '"' || next == '\\');
+    }
+
+    public enum ChainOp {
+        PIPE("|"), OR("||"), AND("&&"), SEMI(";");
+        final String text;
+
+        ChainOp(String t) {
+            text = t;
+        }
+    }
+
+    // ---- Segment 解析 ----
+
+    public enum RedirectKind {
+        OUT(">"), APPEND(">>"), IN("<"), ERR_OUT("2>"),
+        ERR_APPEND("2>>"), ERR_MERGE("2>&1"), ALL("&>");
+        final String text;
+
+        RedirectKind(String t) {
+            text = t;
+        }
+
+        boolean needsTarget() {
+            return this != ERR_MERGE;
+        }
+    }
+
+    public static class Redirect {
+        public final RedirectKind kind;
+        public final String target; // "" for 2>&1
+
+        public Redirect(RedirectKind kind, String target) {
+            this.kind = kind;
+            this.target = target == null ? "" : target;
+        }
+    }
+
+    public static class ChainSegment {
+        public final List<String> argv;
+        public final List<Redirect> redirects;
+
+        public ChainSegment(List<String> argv, List<Redirect> redirects) {
+            this.argv = argv;
+            this.redirects = redirects;
+        }
+    }
+
+    public static class CommandChain {
+        public final List<ChainSegment> segments;
+        public final List<ChainOp> ops; // segs.size() - 1
+
+        public CommandChain(List<ChainSegment> segments, List<ChainOp> ops) {
+            this.segments = segments;
+            this.ops = ops;
+        }
+    }
+
+    private static class SplitResult {
+        final List<String> segs;
+        final List<ChainOp> ops;
+
+        SplitResult(List<String> segs, List<ChainOp> ops) {
+            this.segs = segs;
+            this.ops = ops;
+        }
+    }
+
+    /**
+     * 可变的 flush 状态（Java 8 不支持 lambda 捕获可变局部变量，用 holder 替代）
+     */
+    private static final class FlushState {
+        final List<String> argv;
+        final List<Redirect> redirects;
+        StringBuilder cur = new StringBuilder();
+        boolean curHasContent = false;
+        RedirectKind pending = null;
+
+        FlushState(List<String> argv, List<Redirect> redirects) {
+            this.argv = argv;
+            this.redirects = redirects;
+        }
+    }
+
+    // ---- 工具方法 ----
+
+    private static class RedirectMatch {
+        final RedirectKind kind;
+        final int len;
+
+        RedirectMatch(RedirectKind k, int l) {
+            kind = k;
+            len = l;
+        }
     }
 
     // ---- 异常 ----

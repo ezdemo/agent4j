@@ -15,7 +15,9 @@ import java.util.List;
 public class ReadFileTool extends AgentTool {
 
     @Override
-    public String getName() { return "read_file"; }
+    public String getName() {
+        return "read_file";
+    }
 
     @Override
     public String getDescription() {
@@ -72,5 +74,7 @@ public class ReadFileTool extends AgentTool {
     }
 
     @Override
-    public boolean isReadOnly() { return true; }
+    public boolean isReadOnly() {
+        return true;
+    }
 }

@@ -26,7 +26,9 @@ public class Agent4jConfig {
         this.root = root;
     }
 
-    /** 生成完整的默认配置 JSON */
+    /**
+     * 生成完整的默认配置 JSON
+     */
     private static String defaultConfigJson() {
         return "{\n"
                 + "  \"baseUrl\": \"http://localhost:11434/v1\",\n"
@@ -46,7 +48,9 @@ public class Agent4jConfig {
                 + "}";
     }
 
-    /** 返回默认配置的 ONode */
+    /**
+     * 返回默认配置的 ONode
+     */
     private static ONode defaultConfigNode() {
         return ONode.ofJson(defaultConfigJson());
     }
@@ -76,7 +80,9 @@ public class Agent4jConfig {
         }
     }
 
-    /** 从默认路径加载：{@code ~/.agent4j/config.json}，首次启动自动创建 */
+    /**
+     * 从默认路径加载：{@code ~/.agent4j/config.json}，首次启动自动创建
+     */
     public static Agent4jConfig load() throws IOException {
         Path configDir = Paths.get(System.getProperty("user.home"), ".agent4j");
         Path configPath = configDir.resolve("config.json");
@@ -99,7 +105,9 @@ public class Agent4jConfig {
         }
     }
 
-    /** 加载指定路径的配置。 */
+    /**
+     * 加载指定路径的配置。
+     */
     public static Agent4jConfig load(Path configPath) {
         try {
             String json = String.join("\n", Files.readAllLines(configPath));
@@ -107,6 +115,13 @@ public class Agent4jConfig {
         } catch (Exception e) {
             throw new IllegalStateException("读取配置文件失败: " + configPath, e);
         }
+    }
+
+    /**
+     * 获取配置文件路径。
+     */
+    public static Path getConfigPath() {
+        return Paths.get(System.getProperty("user.home"), ".agent4j", "config.json");
     }
 
     /**
@@ -276,7 +291,8 @@ public class Agent4jConfig {
                 if (fn != null && !fn.isNull()) {
                     try {
                         rates.put(field, Double.parseDouble(fn.getString()));
-                    } catch (NumberFormatException ignored) {}
+                    } catch (NumberFormatException ignored) {
+                    }
                 }
             }
             if (!rates.isEmpty()) {
@@ -311,15 +327,15 @@ public class Agent4jConfig {
     @SuppressWarnings("unchecked")
     public void updateAndSave(Map<String, Object> updates) throws IOException {
         if (updates == null || updates.isEmpty()) return;
-        
+
         for (Map.Entry<String, Object> entry : updates.entrySet()) {
             String key = entry.getKey();
             Object value = entry.getValue();
-            
+
             // 跳过空值
             if (value == null) continue;
             if (value instanceof String str && str.isEmpty()) continue;
-            
+
             // 更新到 ONode
             if (value instanceof List<?> list) {
                 ONode arr = root.getOrNew(key).asArray();
@@ -333,7 +349,7 @@ public class Agent4jConfig {
                 root.set(key, value);
             }
         }
-        
+
         // 保存到文件
         save();
     }
@@ -348,13 +364,6 @@ public class Agent4jConfig {
         Path configPath = getConfigPath();
         String json = JsonWriter.write(root, Options.of(Feature.Write_PrettyFormat));
         Files.write(configPath, json.getBytes(StandardCharsets.UTF_8));
-    }
-
-    /**
-     * 获取配置文件路径。
-     */
-    public static Path getConfigPath() {
-        return Paths.get(System.getProperty("user.home"), ".agent4j", "config.json");
     }
 
     @Override

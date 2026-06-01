@@ -4,7 +4,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import site.sorghum.agent4j.tool.HitlRequiredException;
 import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolResult;
@@ -45,7 +44,7 @@ class FileToolTest {
             // 执行删除，应触发 HITL
             FileTool tool = new FileTool();
             assertThrows(HitlRequiredException.class, () -> tool.execute(ctx));
-            
+
             // 验证文件仍然存在（因为 HITL 未审批）
             assertTrue(Files.exists(file));
         }
@@ -69,7 +68,7 @@ class FileToolTest {
                 // 执行删除，应成功
                 FileTool tool = new FileTool();
                 ToolResult result = tool.execute(ctx);
-                
+
                 // 验证删除成功
                 assertTrue(result.success());
                 assertFalse(Files.exists(file));
@@ -91,7 +90,7 @@ class FileToolTest {
             // 执行删除，应返回错误
             FileTool tool = new FileTool();
             ToolResult result = tool.execute(ctx);
-            
+
             // 验证返回 NOT_FOUND 错误
             assertFalse(result.success());
             assertTrue(result.errorCode().contains("NOT_FOUND"));
@@ -113,7 +112,7 @@ class FileToolTest {
             // 执行删除，应返回错误
             FileTool tool = new FileTool();
             ToolResult result = tool.execute(ctx);
-            
+
             // 验证返回 IS_DIR 错误
             assertFalse(result.success());
             assertTrue(result.errorCode().contains("IS_DIR"));
@@ -141,7 +140,7 @@ class FileToolTest {
             // 执行删除，应触发 HITL
             FileTool tool = new FileTool();
             assertThrows(HitlRequiredException.class, () -> tool.execute(ctx));
-            
+
             // 验证目录仍然存在（因为 HITL 未审批）
             assertTrue(Files.exists(dir));
             assertTrue(Files.exists(dir.resolve("file.txt")));
@@ -167,7 +166,7 @@ class FileToolTest {
                 // 执行删除，应成功
                 FileTool tool = new FileTool();
                 ToolResult result = tool.execute(ctx);
-                
+
                 // 验证删除成功
                 assertTrue(result.success());
                 assertFalse(Files.exists(dir));
@@ -189,7 +188,7 @@ class FileToolTest {
             // 执行删除，应返回错误
             FileTool tool = new FileTool();
             ToolResult result = tool.execute(ctx);
-            
+
             // 验证返回 NOT_FOUND 错误
             assertFalse(result.success());
             assertTrue(result.errorCode().contains("NOT_FOUND"));
@@ -211,7 +210,7 @@ class FileToolTest {
             // 执行删除，应返回错误
             FileTool tool = new FileTool();
             ToolResult result = tool.execute(ctx);
-            
+
             // 验证返回 NOT_DIR 错误
             assertFalse(result.success());
             assertTrue(result.errorCode().contains("NOT_DIR"));
@@ -255,14 +254,17 @@ class FileToolTest {
                 // 执行操作，应成功
                 FileTool tool = new FileTool();
                 ToolResult result = tool.execute(ctx);
-                
+
                 // 验证操作成功
                 assertTrue(result.success());
             } finally {
                 // 清理沙箱旁路模式
                 ToolContext.disableSandboxBypass();
                 // 清理外部文件
-                try { Files.deleteIfExists(outside); } catch (IOException ignored) {}
+                try {
+                    Files.deleteIfExists(outside);
+                } catch (IOException ignored) {
+                }
             }
         }
     }

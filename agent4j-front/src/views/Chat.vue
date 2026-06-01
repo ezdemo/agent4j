@@ -11,14 +11,16 @@
 
     <!-- 消息区 -->
     <div class="messages" ref="messagesContainer">
-      <!-- 悬浮日志通知 -->
-      <Transition name="log-bar">
-        <div v-if="currentLog" class="log-bar" :class="'log-' + (currentLog.level || 'info').toLowerCase()" @click="currentLog = null">
-          <span class="log-bar-icon">📋</span>
-          <span class="log-bar-text">{{ currentLog.text }}</span>
-          <span class="log-bar-time">{{ formatTime(currentLog.time) }}</span>
-        </div>
-      </Transition>
+      <!-- 悬浮日志通知（堆叠） -->
+      <div class="log-stack">
+        <TransitionGroup name="log-bar">
+          <div v-for="log in currentLogs" :key="log.id" class="log-bar" :class="'log-' + (log.level || 'info').toLowerCase()" @click="currentLogs = currentLogs.filter(l => l.id !== log.id)">
+            <span class="log-bar-icon">📋</span>
+            <span class="log-bar-text">{{ log.text }}</span>
+            <span class="log-bar-time">{{ formatTime(log.time) }}</span>
+          </div>
+        </TransitionGroup>
+      </div>
       <!-- 空状态 -->
       <div v-if="messages.length === 0" class="empty">
         <div class="empty-icon">
@@ -502,17 +504,16 @@ const loadUsage = async (override) => {
   } catch {}
 }
 
-// 当前日志通知（顶部悬浮条，不断被新日志刷新）
-const currentLog = ref(null)
-let logTimer = null
+// 日志通知列表（逐条堆叠，每条6秒后自动移除）
+const currentLogs = ref([])
 
-// 日志通知自动消失（6秒后）
-watch(currentLog, (val) => {
-  if (logTimer) clearTimeout(logTimer)
-  if (val) {
-    logTimer = setTimeout(() => { currentLog.value = null }, 6000)
-  }
-})
+const addLog = (log) => {
+  const id = Date.now() + Math.random()
+  currentLogs.value.unshift({ ...log, id })
+  setTimeout(() => {
+    currentLogs.value = currentLogs.value.filter(l => l.id !== id)
+  }, 6000)
+}
 
 const formatTime = (t) => {
   if (!t) return ''
@@ -643,7 +644,7 @@ onMounted(() => {
   document.addEventListener('click', handleClickOutside)
   // 监听复制成功事件，更新日志通知条
   window.addEventListener('copy-success', (e) => {
-    currentLog.value = { level: 'INFO', text:(e.detail || '已复制'), time: Date.now() }
+    addLog({ level: 'INFO', text: '✅ ' + (e.detail || '已复制'), time: Date.now() })
   })
 })
 
@@ -905,7 +906,7 @@ const sendMessage = async () => {
           const level = (data.level || 'INFO').toUpperCase()
           if (level === 'DEBUG') return
           const text = data.message || data.content || ''
-          currentLog.value = { level, text, time: Date.now() }
+          addLog({ level, text, time: Date.now() })
         }
         scroll()
       },
@@ -1904,17 +1905,29 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   opacity: 0;
 }
 
+/* 日志堆叠容器 */
+.log-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  position: sticky;
+  top: 0;
+  z-index: 50;
+  margin-bottom: 8px;
+  pointer-events: none;
+}
+.log-stack > * {
+  pointer-events: auto;
+}
+
 /* 🎯 灵动岛风格日志通知 — 大气居中，超长省略 */
 .log-bar {
-  position: sticky;
-  top: 10px;
-  z-index: 50;
   display: inline-flex;
   align-items: center;
   gap: 10px;
   padding: 8px 18px;
-  margin: 0 auto 10px;
-  max-width: 85%;
+  margin: 0 auto;
+
   background: rgba(30, 30, 40, 0.85);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
@@ -1926,9 +1939,6 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   cursor: pointer;
   transition: all 0.25s ease;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
-  /* 居中 */
-  left: 50%;
-  transform: translateX(-50%);
 }
 .log-bar:hover {
   background: rgba(40, 40, 55, 0.92);
@@ -1948,7 +1958,7 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
 }
 .log-bar-text {
   min-width: 0;
-  max-width: 15ch;
+  max-width: 50ch;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -1957,7 +1967,7 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   transition: max-width 0.3s ease;
 }
 .log-bar:hover .log-bar-text {
-  max-width: 60ch;
+  max-width: 100ch;
 }
 .log-bar-time {
   flex-shrink: 0;
@@ -1974,11 +1984,11 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
 }
 .log-bar-enter-from {
   opacity: 0;
-  transform: translateX(-50%) translateY(-16px) scale(0.92);
+  transform: translateY(-16px) scale(0.92);
 }
 .log-bar-leave-to {
   opacity: 0;
-  transform: translateX(-50%) translateY(-10px) scale(0.95);
+  transform: translateY(-10px) scale(0.95);
 }
 
 /* Tooltip 动画 */

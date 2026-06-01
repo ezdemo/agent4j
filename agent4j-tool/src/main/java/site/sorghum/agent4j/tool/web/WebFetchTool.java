@@ -23,7 +23,9 @@ public class WebFetchTool extends AgentTool {
     private WebService webService;
 
     @Override
-    public String getName() { return "web_fetch"; }
+    public String getName() {
+        return "web_fetch";
+    }
 
     @Override
     public String getDescription() {

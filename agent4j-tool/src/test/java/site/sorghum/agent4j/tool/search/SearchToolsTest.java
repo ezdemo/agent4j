@@ -13,7 +13,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -29,6 +28,20 @@ class SearchToolsTest {
     @AfterEach
     void resetIndex() {
         GrepTool.clearIndexes();
+    }
+
+    private void createFiles(Path root, String... paths) throws IOException {
+        for (String path : paths) {
+            Path file = root.resolve(path);
+            Files.createDirectories(file.getParent());
+            Files.write(file, Arrays.asList("test content for " + path));
+        }
+    }
+
+    private void createFiles(Path root, String path, String content) throws IOException {
+        Path file = root.resolve(path);
+        Files.createDirectories(file.getParent());
+        Files.write(file, Arrays.asList(content.split("\n")));
     }
 
     @Nested
@@ -109,6 +122,8 @@ class SearchToolsTest {
         }
     }
 
+    // ==================== 辅助 ====================
+
     @Nested
     @DisplayName("TreeTool")
     class TreeToolTests {
@@ -155,21 +170,5 @@ class SearchToolsTest {
             assertTrue(result.success());
             assertTrue(result.text().contains("Test.java"));
         }
-    }
-
-    // ==================== 辅助 ====================
-
-    private void createFiles(Path root, String... paths) throws IOException {
-        for (String path : paths) {
-            Path file = root.resolve(path);
-            Files.createDirectories(file.getParent());
-            Files.write(file, Arrays.asList("test content for " + path));
-        }
-    }
-
-    private void createFiles(Path root, String path, String content) throws IOException {
-        Path file = root.resolve(path);
-        Files.createDirectories(file.getParent());
-        Files.write(file, Arrays.asList(content.split("\n")));
     }
 }

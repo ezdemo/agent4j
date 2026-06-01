@@ -9,5 +9,9 @@
   "hitl": false,
   "disabledTools": [],
   "blockedPaths": [],
-  "availableModels": ["deepseek-v4-flash", "gpt-4o", "claude-3.5-sonnet"]
+  "availableModels": [
+    "deepseek-v4-flash",
+    "gpt-4o",
+    "claude-3.5-sonnet"
+  ]
 }

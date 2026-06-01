@@ -17,7 +17,9 @@ import java.util.Map;
  */
 public class ONodeUtil {
 
-    /** 将 ONode 对象转换为 Map<String, Object>（递归） */
+    /**
+     * 将 ONode 对象转换为 Map<String, Object>（递归）
+     */
     public static Map<String, Object> toMap(ONode node) {
         Map<String, Object> result = new LinkedHashMap<>();
         if (node.isObject()) {
@@ -34,7 +36,9 @@ public class ONodeUtil {
         return result;
     }
 
-    /** 将 ONode 数组转换为 List<Object>（递归） */
+    /**
+     * 将 ONode 数组转换为 List<Object>（递归）
+     */
     public static List<Object> toList(ONode node) {
         List<Object> list = new ArrayList<>();
         for (ONode item : node.getArray()) {

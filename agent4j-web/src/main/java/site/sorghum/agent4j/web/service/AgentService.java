@@ -2,40 +2,28 @@ package site.sorghum.agent4j.web.service;
 
 import lombok.Getter;
 import org.noear.solon.annotation.Component;
-import org.noear.solon.annotation.Get;
 import org.noear.solon.annotation.Init;
-
 import org.noear.solon.annotation.Inject;
 import site.sorghum.agent4j.bin.agent.Agent4jAgent;
-import site.sorghum.agent4j.bin.agent.AgentLoopListener;
 import site.sorghum.agent4j.bin.agent.AgentOutput;
 import site.sorghum.agent4j.bin.agent.ChatMessage;
 import site.sorghum.agent4j.bin.agent.PromptPrefix;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
-import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
-import site.sorghum.agent4j.bin.session.SessionService;
+import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.session.JsonlSessionStore;
 import site.sorghum.agent4j.bin.session.SessionStore;
+import site.sorghum.agent4j.bin.skill.SkillStoreV2;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.tool.ToolSystemInitializer;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
-import site.sorghum.agent4j.bin.skill.SkillStoreV2;
-import site.sorghum.agent4j.tool.AgentTool;
-import site.sorghum.agent4j.tool.ToolContext;
-import site.sorghum.agent4j.tool.ToolResult;
-import site.sorghum.agent4j.tool.ToolParameter;
-
 import site.sorghum.agent4j.web.model.*;
 
-import org.noear.snack4.ONode;
-import org.noear.solon.Solon;
-
 import java.io.IOException;
-import java.text.SimpleDateFormat;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
@@ -63,83 +51,130 @@ import java.util.stream.Collectors;
 @Component
 public class AgentService {
 
+    /**
+     * 最大缓存 Agent 数量
+     */
+    private static final int MAX_CACHE_SIZE = 50;
+    /**
+     * 当前线程正在处理的会话名称（用于工具执行时获取 sessionId）
+     */
+    private static final ThreadLocal<String> currentSessionName = new ThreadLocal<>();
+    /**
+     * 会话级 Agent 缓存：key = workspacePath::sessionName
+     */
+    private final ConcurrentHashMap<String, Agent4jAgent> agentCache = new ConcurrentHashMap<>();
+    /**
+     * 会话级锁：key = workspacePath::sessionName
+     */
+    private final ConcurrentHashMap<String, ReentrantLock> sessionLocks = new ConcurrentHashMap<>();
+    /**
+     * 每个工作区当前活跃的会话名：key = workspacePath
+     */
+    private final ConcurrentHashMap<String, String> currentSessionNames = new ConcurrentHashMap<>();
+    /**
+     * Agent 访问顺序（用于 LRU 淘汰）
+     */
+    private final java.util.concurrent.ConcurrentLinkedDeque<String> accessOrder = new java.util.concurrent.ConcurrentLinkedDeque<>();
     @Inject
     ChatCommandRegistry commandRegistry;
-
     /**
      * 共享的 ModelClient（所有会话复用）
      */
     private volatile ModelClient sharedModelClient;
-
     /**
      * 共享的 ToolRegistry（所有会话复用）
      */
     @Getter
     private volatile ToolRegistry sharedToolRegistry;
-
     /**
      * 共享的 PromptPrefix（所有会话复用）
      */
     private volatile PromptPrefix sharedPrefix;
-
     /**
      * 共享的 SkillStoreV2（所有会话复用）
      */
     private volatile SkillStoreV2 sharedSkillStore;
-
     /**
      * 共享的 Agent4jConfig
      */
     private volatile Agent4jConfig sharedConfig;
-
     /**
      * 共享的 API 配置
      */
     private volatile String sharedApiUrl;
     private volatile String sharedApiKey;
     private volatile String sharedModel;
-    /** 当前 HITL 模式（true=手动需审批，false=自由直接执行） */
+    /**
+     * 当前 HITL 模式（true=手动需审批，false=自由直接执行）
+     */
     private volatile boolean hitlMode = false;
-
     /**
      * 当前活跃的工作区路径（动态切换）
      */
     private volatile String currentActiveWorkspace;
-
-    /**
-     * 会话级 Agent 缓存：key = workspacePath::sessionName
-     */
-    private final ConcurrentHashMap<String, Agent4jAgent> agentCache = new ConcurrentHashMap<>();
-
-    /**
-     * 会话级锁：key = workspacePath::sessionName
-     */
-    private final ConcurrentHashMap<String, ReentrantLock> sessionLocks = new ConcurrentHashMap<>();
-
-    /**
-     * 每个工作区当前活跃的会话名：key = workspacePath
-     */
-    private final ConcurrentHashMap<String, String> currentSessionNames = new ConcurrentHashMap<>();
-
-    /**
-     * Agent 访问顺序（用于 LRU 淘汰）
-     */
-    private final java.util.concurrent.ConcurrentLinkedDeque<String> accessOrder = new java.util.concurrent.ConcurrentLinkedDeque<>();
-
-    /**
-     * 最大缓存 Agent 数量
-     */
-    private static final int MAX_CACHE_SIZE = 50;
-
     /**
      * 当前 SSE 输出（每次请求创建一个新的）
      */
     private volatile SseEmitter currentSseEmitter;
 
     /**
-     * 当前线程正在处理的会话名称（用于工具执行时获取 sessionId）
+     * 加载用户级默认系统提示词。
+     * 优先级：~/.agent4j/agent4j.md > 硬编码默认值
      */
-    private static final ThreadLocal<String> currentSessionName = new ThreadLocal<>();
+    private static String loadDefaultSystemPrompt() {
+        // 如果 ~/.agent4j/agent4j.md 存在，以其内容作为默认系统提示词
+        Path homePrompt = Paths.get(System.getProperty("user.home"), ".agent4j", "agent4j.md");
+        if (java.nio.file.Files.exists(homePrompt)) {
+            try {
+                String content = new String(java.nio.file.Files.readAllBytes(homePrompt),
+                        java.nio.charset.StandardCharsets.UTF_8);
+                if (content != null && !content.trim().isEmpty()) {
+                    System.err.println("[prompt] 从 ~/.agent4j/agent4j.md 加载默认系统提示词（" + content.length() + " 字符）");
+                    return content.trim();
+                }
+            } catch (IOException e) {
+                System.err.println("[prompt] 读取 ~/.agent4j/agent4j.md 失败: " + e.getMessage());
+            }
+        }
+        return "你是一个智能体助手，名为Agent4J\n";
+    }
+
+    /**
+     * 如果当前工作区存在 agent4j.md / CLAUDE.md，则读取并返回其内容。
+     * 文件不存在时返回空字符串。
+     */
+    private static String loadProjectMd(Path workspace) {
+        StringBuilder sb = new StringBuilder();
+        for (String name : new String[]{"agent4j.md", "CLAUDE.md"}) {
+            Path file = workspace.resolve(name);
+            if (java.nio.file.Files.exists(file)) {
+                try {
+                    String content = new String(java.nio.file.Files.readAllBytes(file),
+                            java.nio.charset.StandardCharsets.UTF_8);
+                    if (sb.length() > 0) sb.append("\n\n");
+                    sb.append("[来自 ").append(name).append(" 的项目上下文]\n");
+                    sb.append(content.trim());
+                } catch (IOException ignored) {
+                }
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 从环境变量读取配置，如果环境变量不存在则使用默认值。
+     */
+    private static String envOr(String envName, String defaultValue) {
+        String value = System.getenv(envName);
+        return (value != null && !value.isEmpty()) ? value : defaultValue;
+    }
+
+    /**
+     * 计算工作区路径的 hash 值（与 WorkspaceManager 一致，MD5 前 12 位）。
+     */
+    public static String computeWorkspaceHash(String workspacePath) {
+        return WorkspaceManager.computeHash(workspacePath);
+    }
 
     /**
      * 初始化共享组件（Solon 启动后自动调用）
@@ -220,6 +255,8 @@ public class AgentService {
         }
         return workspacePath + "::" + sessionName;
     }
+
+    // ==================== 状态查询 ====================
 
     /**
      * 获取或创建会话级 Agent。
@@ -324,6 +361,8 @@ public class AgentService {
         return sharedModelClient != null && sharedToolRegistry != null && sharedPrefix != null;
     }
 
+    // ==================== 聊天 ====================
+
     /**
      * 获取默认 Agent 实例（兼容旧代码）
      */
@@ -331,8 +370,6 @@ public class AgentService {
         String defaultKey = generateSessionKey(null, null);
         return getOrCreateAgent(defaultKey);
     }
-
-    // ==================== 状态查询 ====================
 
     /**
      * 获取 Agent 整体状态（供前端状态面板使用）。
@@ -415,8 +452,6 @@ public class AgentService {
         return getHistory(null, null);
     }
 
-    // ==================== 聊天 ====================
-
     /**
      * 中断当前聊天 —— 中断所有活跃的 Agent。
      */
@@ -428,6 +463,8 @@ public class AgentService {
             }
         }
     }
+
+    // ==================== 会话管理 ====================
 
     /**
      * 同步聊天 —— 串行执行，返回完整回复。
@@ -566,8 +603,6 @@ public class AgentService {
             lock.unlock();
         }
     }
-
-    // ==================== 会话管理 ====================
 
     /**
      * 创建新会话（前端指定 sessionId，延迟持久化：文件在首次发消息时才创建）。
@@ -847,6 +882,8 @@ public class AgentService {
         );
     }
 
+    // ==================== 工具方法 ====================
+
     /**
      * 获取缓存的 Agent 数量。
      *
@@ -907,6 +944,8 @@ public class AgentService {
         }
     }
 
+    // ==================== 兼容旧接口 ====================
+
     /**
      * 清除所有 Agent 缓存。
      */
@@ -927,69 +966,6 @@ public class AgentService {
         sessionLocks.clear();
         currentSessionNames.clear();
         System.out.println("[web] 已清除所有 Agent 缓存");
-    }
-
-    // ==================== 工具方法 ====================
-
-    /**
-     * 加载用户级默认系统提示词。
-     * 优先级：~/.agent4j/agent4j.md > 硬编码默认值
-     */
-    private static String loadDefaultSystemPrompt() {
-        // 如果 ~/.agent4j/agent4j.md 存在，以其内容作为默认系统提示词
-        Path homePrompt = Paths.get(System.getProperty("user.home"), ".agent4j", "agent4j.md");
-        if (java.nio.file.Files.exists(homePrompt)) {
-            try {
-                String content = new String(java.nio.file.Files.readAllBytes(homePrompt),
-                        java.nio.charset.StandardCharsets.UTF_8);
-                if (content != null && !content.trim().isEmpty()) {
-                    System.err.println("[prompt] 从 ~/.agent4j/agent4j.md 加载默认系统提示词（" + content.length() + " 字符）");
-                    return content.trim();
-                }
-            } catch (IOException e) {
-                System.err.println("[prompt] 读取 ~/.agent4j/agent4j.md 失败: " + e.getMessage());
-            }
-        }
-        return "你是一个智能体助手，名为Agent4J\n";
-    }
-
-    /**
-     * 如果当前工作区存在 agent4j.md / CLAUDE.md，则读取并返回其内容。
-     * 文件不存在时返回空字符串。
-     */
-    private static String loadProjectMd(Path workspace) {
-        StringBuilder sb = new StringBuilder();
-        for (String name : new String[]{"agent4j.md", "CLAUDE.md"}) {
-            Path file = workspace.resolve(name);
-            if (java.nio.file.Files.exists(file)) {
-                try {
-                    String content = new String(java.nio.file.Files.readAllBytes(file),
-                            java.nio.charset.StandardCharsets.UTF_8);
-                    if (sb.length() > 0) sb.append("\n\n");
-                    sb.append("[来自 ").append(name).append(" 的项目上下文]\n");
-                    sb.append(content.trim());
-                } catch (IOException ignored) {
-                }
-            }
-        }
-        return sb.toString();
-    }
-
-    /**
-     * 从环境变量读取配置，如果环境变量不存在则使用默认值。
-     */
-    private static String envOr(String envName, String defaultValue) {
-        String value = System.getenv(envName);
-        return (value != null && !value.isEmpty()) ? value : defaultValue;
-    }
-
-    // ==================== 兼容旧接口 ====================
-
-    /**
-     * 计算工作区路径的 hash 值（与 WorkspaceManager 一致，MD5 前 12 位）。
-     */
-    public static String computeWorkspaceHash(String workspacePath) {
-        return WorkspaceManager.computeHash(workspacePath);
     }
 
     /**
@@ -1105,7 +1081,7 @@ public class AgentService {
      */
     public List<WorkspaceInfoDTO> listWorkspaces() {
         List<WorkspaceInfoDTO> result = new ArrayList<>();
-        
+
         try {
             WorkspaceManager workspaceManager = new WorkspaceManager();
             String currentPath = getWorkspace();
@@ -1113,7 +1089,7 @@ public class AgentService {
                 workspaceManager.switchWorkspace(currentPath);
             }
             List<WorkspaceManager.WorkspaceInfo> workspaces = workspaceManager.listWorkspaces();
-            
+
             for (WorkspaceManager.WorkspaceInfo info : workspaces) {
                 result.add(new WorkspaceInfoDTO(
                         info.hash, info.name, info.path,
@@ -1143,7 +1119,7 @@ public class AgentService {
                 ));
             }
         }
-        
+
         return result;
     }
 

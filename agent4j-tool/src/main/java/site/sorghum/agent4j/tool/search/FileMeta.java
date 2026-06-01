@@ -12,19 +12,29 @@ import lombok.Getter;
 @AllArgsConstructor
 public class FileMeta {
 
-    /** 相对于工作区根目录的路径 */
+    /**
+     * 相对于工作区根目录的路径
+     */
     private final String relativePath;
 
-    /** 文件大小（字节） */
+    /**
+     * 文件大小（字节）
+     */
     private final long size;
 
-    /** 最后修改时间戳（毫秒） */
+    /**
+     * 最后修改时间戳（毫秒）
+     */
     private final long lastModified;
 
-    /** 是否为目录 */
+    /**
+     * 是否为目录
+     */
     private final boolean directory;
 
-    /** 是否为文本文件（可 grep） */
+    /**
+     * 是否为文本文件（可 grep）
+     */
     private final boolean textFile;
 
     @Override

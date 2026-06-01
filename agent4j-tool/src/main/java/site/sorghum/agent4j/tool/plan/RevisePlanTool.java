@@ -23,7 +23,9 @@ public class RevisePlanTool extends AgentTool {
     private PlanService planService;
 
     @Override
-    public String getName() { return "revise_plan"; }
+    public String getName() {
+        return "revise_plan";
+    }
 
     @Override
     public String getDescription() {

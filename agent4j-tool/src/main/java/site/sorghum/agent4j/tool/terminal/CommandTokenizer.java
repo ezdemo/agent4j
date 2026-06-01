@@ -12,7 +12,9 @@ import java.util.List;
  */
 public class CommandTokenizer {
 
-    /** 双引号内的转义：\" 和 \\ */
+    /**
+     * 双引号内的转义：\" 和 \\
+     */
     private static boolean isDqEscape(char prev, char next) {
         return prev == '\\' && (next == '"' || next == '\\');
     }

@@ -26,11 +26,17 @@ public class ConversationContext {
 
     private final List<ChatMessage> history = new ArrayList<>();
     private final PromptPrefix prefix;
-    /** 持久化存储（可选） */
+    /**
+     * 持久化存储（可选）
+     */
     private SessionStore sessionStore = null;
 
     public ConversationContext(PromptPrefix prefix) {
         this.prefix = prefix;
+    }
+
+    public SessionStore getSessionStore() {
+        return sessionStore;
     }
 
     /**
@@ -39,10 +45,6 @@ public class ConversationContext {
      */
     public void setSessionStore(SessionStore store) {
         this.sessionStore = store;
-    }
-
-    public SessionStore getSessionStore() {
-        return sessionStore;
     }
 
     // ---- 写入 ----
@@ -181,7 +183,9 @@ public class ConversationContext {
         return null;
     }
 
-    /** 将当前历史持久化回写到 session store */
+    /**
+     * 将当前历史持久化回写到 session store
+     */
     private void rewriteStore() {
         if (sessionStore != null) {
             try {
@@ -212,6 +216,7 @@ public class ConversationContext {
 
     /**
      * 获取最后一条 assistant 消息的 content（用于用户中断时返回已生成内容）。
+     *
      * @return 最后一条 assistant 消息的 content，如果没有则返回 null
      */
     public String getLastAssistantContent() {

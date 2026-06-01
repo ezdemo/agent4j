@@ -22,7 +22,9 @@ public class StopJobTool extends AgentTool {
     private JobService jobService;
 
     @Override
-    public String getName() { return "stop_job"; }
+    public String getName() {
+        return "stop_job";
+    }
 
     @Override
     public String getDescription() {

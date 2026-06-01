@@ -12,4 +12,5 @@ import java.util.List;
  */
 record ToolExecutionResult(List<ToolCallEntry> tcList,
                            List<ChatMessage> toolResults,
-                           boolean anySuppressed) {}
+                           boolean anySuppressed) {
+}

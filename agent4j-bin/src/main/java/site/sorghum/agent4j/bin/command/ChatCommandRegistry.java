@@ -5,7 +5,6 @@ import org.noear.solon.annotation.Init;
 import org.noear.solon.annotation.Inject;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * ChatCommandRegistry — 聊天命令注册表。
@@ -34,7 +33,9 @@ public class ChatCommandRegistry {
     @Inject
     private List<ChatCommand> commands;
 
-    /** 按名称长度降序排列的命令列表 */
+    /**
+     * 按名称长度降序排列的命令列表
+     */
     private List<ChatCommand> sortedCommands = Collections.emptyList();
 
     @Init

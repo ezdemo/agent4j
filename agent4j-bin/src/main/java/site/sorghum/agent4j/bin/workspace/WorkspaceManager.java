@@ -2,20 +2,24 @@ package site.sorghum.agent4j.bin.workspace;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.List;
 
 /**
  * 工作区管理器 —— 管理多个工作区的生命周期。
  * <p>
  * 工作区存储结构：
  * ~/.agent4j/workspace/{hash}/
- *   ├── workspace.json    (工作区配置)
- *   └── sessions/         (会话目录)
- *       ├── session1.jsonl
- *       └── session2.jsonl
+ * ├── workspace.json    (工作区配置)
+ * └── sessions/         (会话目录)
+ * ├── session1.jsonl
+ * └── session2.jsonl
  * </p>
  * <p>
  * hash 是工作目录完整路径的 MD5 哈希值（前12位）。
@@ -28,10 +32,14 @@ public class WorkspaceManager {
     private static final Path WORKSPACES_DIR = Paths.get(
             System.getProperty("user.home"), ".agent4j", "workspace");
 
-    /** 当前活跃的工作区路径（工作目录的实际路径） */
+    /**
+     * 当前活跃的工作区路径（工作目录的实际路径）
+     */
     private String currentWorkspacePath;
 
-    /** 当前工作区的 hash */
+    /**
+     * 当前工作区的 hash
+     */
     private String currentWorkspaceHash;
 
     public WorkspaceManager() {

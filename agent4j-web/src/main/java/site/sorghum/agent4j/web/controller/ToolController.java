@@ -1,13 +1,11 @@
 package site.sorghum.agent4j.web.controller;
 
 import org.noear.solon.annotation.*;
-
 import site.sorghum.agent4j.bin.tool.ToolDef;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.model.ToolInfoDTO;
 import site.sorghum.agent4j.web.model.ToolParamInfoDTO;
-import site.sorghum.agent4j.web.model.ToolExecuteRequest;
 import site.sorghum.agent4j.web.service.AgentService;
 
 import java.util.ArrayList;
@@ -25,7 +23,20 @@ public class ToolController {
     @Inject
     private AgentService agentService;
 
-    /** 列出所有已注册工具 —— GET /api/tools */
+    /**
+     * 将 ToolDef 转为安全序列化的 DTO（剔除 lambda fn 字段避免 Snack4 StackOverflow）
+     */
+    private static ToolInfoDTO toToolInfoDTO(ToolDef def) {
+        List<ToolParamInfoDTO> params = new ArrayList<>();
+        for (ToolDef.ParamDef p : def.params()) {
+            params.add(new ToolParamInfoDTO(p.name(), p.type(), p.description(), p.required()));
+        }
+        return new ToolInfoDTO(def.name(), def.description(), def.readOnly(), def.stormExempt(), params);
+    }
+
+    /**
+     * 列出所有已注册工具 —— GET /api/tools
+     */
     @Get
     @Mapping("")
     public ApiResponse<List<ToolInfoDTO>> list() {
@@ -37,7 +48,9 @@ public class ToolController {
         return ApiResponse.ok(tools);
     }
 
-    /** 获取工具详情 —— GET /api/tools/{name} */
+    /**
+     * 获取工具详情 —— GET /api/tools/{name}
+     */
     @Get
     @Mapping("/{name}")
     public ApiResponse<ToolInfoDTO> get(@Path("name") String name) {
@@ -45,14 +58,5 @@ public class ToolController {
         ToolDef tool = agentService.getSharedToolRegistry().get(name);
         if (tool == null) throw new ServiceException("工具不存在: " + name);
         return ApiResponse.ok(toToolInfoDTO(tool));
-    }
-
-    /** 将 ToolDef 转为安全序列化的 DTO（剔除 lambda fn 字段避免 Snack4 StackOverflow） */
-    private static ToolInfoDTO toToolInfoDTO(ToolDef def) {
-        List<ToolParamInfoDTO> params = new ArrayList<>();
-        for (ToolDef.ParamDef p : def.params()) {
-            params.add(new ToolParamInfoDTO(p.name(), p.type(), p.description(), p.required()));
-        }
-        return new ToolInfoDTO(def.name(), def.description(), def.readOnly(), def.stormExempt(), params);
     }
 }

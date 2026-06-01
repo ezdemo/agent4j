@@ -5,9 +5,14 @@ import site.sorghum.agent4j.tool.ToolContext;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.attribute.BasicFileAttributes;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
 /**
@@ -20,10 +25,14 @@ import java.util.stream.Stream;
  */
 public class FileEdit {
 
-    /** 最大文件大小限制（100 MiB）— 超过此大小才拒绝读取 */
+    /**
+     * 最大文件大小限制（100 MiB）— 超过此大小才拒绝读取
+     */
     private static final int HARD_MAX_FILE_BYTES = 100 * 1024 * 1024;
 
-    /** read_file 实现 */
+    /**
+     * read_file 实现
+     */
     public static String readFile(Path root, String pathStr, Integer head, Integer tail, String range)
             throws IOException {
         Path abs = resolveSafe(root, pathStr);
@@ -56,11 +65,11 @@ public class FileEdit {
         if (range != null && range.matches("\\d+\\s*-\\s*\\d+")) {
             String[] parts = range.split("-");
             int start = Math.max(1, Integer.parseInt(parts[0].trim()));
-            int originalEnd =  Integer.parseInt(parts[1].trim());
-            if (originalEnd - start + 1 < 500){
+            int originalEnd = Integer.parseInt(parts[1].trim());
+            if (originalEnd - start + 1 < 500) {
                 originalEnd = start + 501;
             }
-            int end = Math.min(total, Math.max(start,originalEnd));
+            int end = Math.min(total, Math.max(start, originalEnd));
 
             String body = joinLines(lines.subList(start - 1, end));
             return "[range " + start + "-" + end + " of " + total + " lines]\n" + body;
@@ -84,7 +93,9 @@ public class FileEdit {
         return prefix + joinLines(lines);
     }
 
-    /** edit_file: SEARCH → REPLACE，search 必须唯一 */
+    /**
+     * edit_file: SEARCH → REPLACE，search 必须唯一
+     */
     public static String editFile(Path root, String pathStr, String search, String replace)
             throws IOException {
         if (search == null || search.isEmpty()) throw new IOException("edit_file: search 不能为空");
@@ -114,7 +125,9 @@ public class FileEdit {
                 + "+ " + truncateLine(firstLine(adaptedReplace));
     }
 
-    /** multi_edit: 跨文件批量编辑，全验证后全写入，失败回滚 */
+    /**
+     * multi_edit: 跨文件批量编辑，全验证后全写入，失败回滚
+     */
     public static String multiEdit(Path root, List<Map<String, Object>> edits) throws IOException {
         if (edits == null || edits.isEmpty()) throw new IOException("multi_edit: edits 不能为空");
         // 记录每文件的编辑前内容供回滚
@@ -155,13 +168,18 @@ public class FileEdit {
         } catch (IOException e) {
             // 回滚
             for (int i = writtenFiles.size() - 1; i >= 0; i--) {
-                try { Files.write(writtenFiles.get(i), rollbackContents.get(i).getBytes(StandardCharsets.UTF_8)); } catch (IOException ignored) {}
+                try {
+                    Files.write(writtenFiles.get(i), rollbackContents.get(i).getBytes(StandardCharsets.UTF_8));
+                } catch (IOException ignored) {
+                }
             }
             throw new IOException("multi_edit failed after " + applied + " edits; rolled back. " + e.getMessage());
         }
     }
 
-    /** write_file: 创建/覆盖 */
+    /**
+     * write_file: 创建/覆盖
+     */
     public static String writeFile(Path root, String pathStr, String content) throws IOException {
         Path abs = resolveSafe(root, pathStr);
         Files.createDirectories(abs.getParent());
@@ -169,7 +187,9 @@ public class FileEdit {
         return "wrote " + content.length() + " chars to " + pathStr;
     }
 
-    /** get_file_info: 文件/目录/符号链接元信息 */
+    /**
+     * get_file_info: 文件/目录/符号链接元信息
+     */
     public static String getFileInfo(Path root, String pathStr) throws IOException {
         Path abs = resolveSafe(root, pathStr);
         if (!Files.exists(abs)) return "{\"error\":\"path not found\"}";
@@ -179,7 +199,9 @@ public class FileEdit {
                 + ",\"mtime\":\"" + attr.lastModifiedTime().toString() + "\"}";
     }
 
-    /** copy_file: 复制文件或目录 */
+    /**
+     * copy_file: 复制文件或目录
+     */
     public static String copyFile(Path root, String srcStr, String dstStr) throws IOException {
         Path src = resolveSafe(root, srcStr);
         Path dst = resolveSafe(root, dstStr);
@@ -192,7 +214,8 @@ public class FileEdit {
                         Path d = dst.resolve(src.relativize(s));
                         if (Files.isDirectory(s)) Files.createDirectories(d);
                         else Files.copy(s, d, StandardCopyOption.REPLACE_EXISTING);
-                    } catch (IOException ignored) {}
+                    } catch (IOException ignored) {
+                    }
                 });
             }
         } else {
@@ -201,7 +224,9 @@ public class FileEdit {
         return "copied " + srcStr + " → " + dstStr;
     }
 
-    /** 查找子目录 AGENT4J.md */
+    /**
+     * 查找子目录 AGENT4J.md
+     */
     private static String findSubdirMemory(Path root, Path abs) {
         Path dir = abs.getParent();
         if (dir == null) return null;
@@ -216,10 +241,10 @@ public class FileEdit {
                 }
                 dir = dir.getParent();
             }
-        } catch (IOException ignored) {}
+        } catch (IOException ignored) {
+        }
         return null;
     }
-
 
 
     // ---- 内部辅助 ----

@@ -14,7 +14,6 @@ import java.util.Map;
  * @param readOnly    true = 只读，storm breaker 中变异调用会清除只读条目的窗口
  * @param stormExempt true = storm 豁免（廉价检查工具免检）
  * @param toolSpec    纯文本工具规范（用于嵌入 system prompt），为空时自动生成
- *
  * @author Sorghum
  */
 public record ToolDef(String name, String description, List<ParamDef> params, ToolFn fn,
@@ -29,7 +28,9 @@ public record ToolDef(String name, String description, List<ParamDef> params, To
         this(name, description, params, fn, readOnly, stormExempt, null);
     }
 
-    /** 生成 OpenAI function-calling 格式的 parameters schema */
+    /**
+     * 生成 OpenAI function-calling 格式的 parameters schema
+     */
     public Map<String, Object> toParametersSchema() {
         Map<String, Object> schema = new LinkedHashMap<>();
         schema.put("type", "object");
@@ -59,7 +60,17 @@ public record ToolDef(String name, String description, List<ParamDef> params, To
         return toolSpec != null && !toolSpec.isEmpty() ? toolSpec : "";
     }
 
-    /** 参数定义 */
+    /**
+     * 工具执行函数
+     */
+    @FunctionalInterface
+    public interface ToolFn {
+        String call(Map<String, Object> args);
+    }
+
+    /**
+     * 参数定义
+     */
     public record ParamDef(String name, String type, String description, boolean required) {
         public static ParamDef of(String name, String type, String description) {
             return new ParamDef(name, type, description, false);
@@ -68,11 +79,5 @@ public record ToolDef(String name, String description, List<ParamDef> params, To
         public static ParamDef required(String name, String type, String description) {
             return new ParamDef(name, type, description, true);
         }
-    }
-
-    /** 工具执行函数 */
-    @FunctionalInterface
-    public interface ToolFn {
-        String call(Map<String, Object> args);
     }
 }

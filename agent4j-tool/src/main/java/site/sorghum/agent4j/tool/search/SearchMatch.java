@@ -12,13 +12,19 @@ import lombok.Getter;
 @AllArgsConstructor
 public class SearchMatch {
 
-    /** 文件相对路径 */
+    /**
+     * 文件相对路径
+     */
     private final String file;
 
-    /** 行号（1-based） */
+    /**
+     * 行号（1-based）
+     */
     private final int line;
 
-    /** 匹配行的文本内容（不含换行符） */
+    /**
+     * 匹配行的文本内容（不含换行符）
+     */
     private final String content;
 
     @Override

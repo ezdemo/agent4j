@@ -44,9 +44,9 @@ public class HelpCommand implements ChatCommand {
             return CommandResult.CONTINUE;
         }
         List<String> lines = registry.getHelpLines();
-        System.out.println("可用命令：");
+        context.getAgent().getOutput().onMessage("可用命令：");
         for (String line : lines) {
-            System.out.println("  " + line);
+            context.getAgent().getOutput().onMessage("  " + line);
         }
         return CommandResult.CONTINUE;
     }

@@ -1,23 +1,20 @@
 package site.sorghum.agent4j.bin.agent;
 
+import lombok.Getter;
 import org.noear.snack4.ONode;
-
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.session.SessionService;
-import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.tool.ToolDispatcher;
+import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.tool.HitlRequiredException;
 import site.sorghum.agent4j.tool.ToolContext;
 
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.*;
-import java.util.concurrent.ExecutionException;
-import java.util.concurrent.CancellationException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -35,107 +32,104 @@ import java.util.concurrent.atomic.AtomicReference;
  */
 public class AgentLoop {
 
+    /**
+     * storm 自愈尝试次数上限（每回合重置），防止无限循环
+     */
+    private static final int MAX_SELF_CORRECTION_ATTEMPTS = 5;
+    /**
+     * 消息总字符数阈值（超出时触发折叠），约 200KB — 注意 estimateChars 不含 tools JSON，实际请求体会更大
+     */
+    private static final int MAX_TOTAL_CHARS = 200_000;
+    /**
+     * 折叠时保留的尾部预算（字符数），约 80KB
+     */
+    private static final int KEEP_TAIL_CHARS = 80_000;
+    /**
+     * 工具执行超时（秒），单个工具调用最长等待时间
+     */
+    private static final int TOOL_TIMEOUT_SEC = 360;
     private final ModelClient client;
+    // 无固定步数限制：循环直到模型返回纯文本
     private final ToolRegistry registry;
     private final ToolDispatcher dispatcher;
+    /**
+     * -- GETTER --
+     * 获取上下文（用于访问 SessionStore）
+     */
+    @Getter
     private final ConversationContext ctx;
-    /** 会话服务引用（用于同步 lastPromptTokens 到 usage 文件） */
-    private SessionService sessionService;
-    // 无固定步数限制：循环直到模型返回纯文本
-    /** 事件监听（打印思考/工具调用/步骤） */
-    private AgentLoopListener listener = NoOpAgentLoopListener.INSTANCE;
-    /** 输出接口（默认为控制台输出，可替换为其他实现） */
-    private AgentOutput output = new ConsoleAgentOutput();
-    /** 最近一次 API 返回的 prompt_tokens（0 = 尚无数据，回退到字符估算） */
-    private int lastPromptTokens = 0;
-
-    /** storm 自愈尝试次数上限（每回合重置），防止无限循环 */
-    private static final int MAX_SELF_CORRECTION_ATTEMPTS = 5;
-
-    /** 推理断路器（每回合重置），检测思考循环 */
+    /**
+     * 推理断路器（每回合重置），检测思考循环
+     */
     private final ReasonBreaker reasonBreaker = new ReasonBreaker();
-
-    /** 用户主动中断标志（前端点击停止按钮时设置） */
-    private volatile boolean userAbortRequested = false;
-
-    /** 当前会话ID（用于传递给工具执行上下文） */
-    private volatile String sessionId;
+    /**
+     * 会话服务引用（用于同步 lastPromptTokens 到 usage 文件）
+     */
+    private SessionService sessionService;
+    /**
+     * 事件监听（打印思考/工具调用/步骤）
+     */
+    private AgentLoopListener listener = NoOpAgentLoopListener.INSTANCE;
+    /**
+     * 输出接口（默认为控制台输出，可替换为其他实现）
+     */
+    private AgentOutput output = new ConsoleAgentOutput();
 
     // ==================== HITL (Human-In-The-Loop) ====================
-
-    /** HITL 审批状态 */
-    private enum HitlState { NONE, PENDING, APPROVED, DENIED }
-
-    /** HITL 模式开关（true = 执行非只读工具前需用户审批） */
+    /**
+     * 最近一次 API 返回的 prompt_tokens（0 = 尚无数据，回退到字符估算）
+     */
+    private int lastPromptTokens = 0;
+    /**
+     * 用户主动中断标志（前端点击停止按钮时设置）
+     */
+    private volatile boolean userAbortRequested = false;
+    /**
+     * 当前会话ID（用于传递给工具执行上下文）
+     */
+    private volatile String sessionId;
+    /**
+     * HITL 模式开关（true = 执行非只读工具前需用户审批）
+     */
     private volatile boolean hitlMode = false;
-
-    /** HITL 当前审批状态 */
+    /**
+     * HITL 当前审批状态
+     */
     private volatile HitlState hitlState = HitlState.NONE;
-
-    /** HITL 暂存的工具调用（ONode 数组） */
+    /**
+     * HITL 暂存的工具调用（ONode 数组）
+     */
     private volatile ONode pendingHITLToolCalls;
-    /** HITL 暂存的 assistant content */
+    /**
+     * HITL 暂存的 assistant content
+     */
     private volatile String pendingHITLContent;
-    /** HITL 暂存的 reasoning_content */
-    private volatile String pendingHITLReasoning;
-    /** HITL 暂存的解析后工具调用列表 */
-    private volatile List<ToolCallEntry> pendingHITTcList;
 
     // ==================== 沙箱越界 HITL（强制审批，不受 hitlMode 影响） ====================
-
-    /** 沙箱越界 HITL 暂存：完整的工具调用 ONode（供重放） */
+    /**
+     * HITL 暂存的 reasoning_content
+     */
+    private volatile String pendingHITLReasoning;
+    /**
+     * HITL 暂存的解析后工具调用列表
+     */
+    private volatile List<ToolCallEntry> pendingHITTcList;
+    /**
+     * 沙箱越界 HITL 暂存：完整的工具调用 ONode（供重放）
+     */
     private volatile ONode pendingSandboxHITToolCalls;
-    /** 沙箱越界 HITL 暂存：assistant content */
+    /**
+     * 沙箱越界 HITL 暂存：assistant content
+     */
     private volatile String pendingSandboxHITContent;
-    /** 沙箱越界 HITL 暂存：reasoning_content */
+    /**
+     * 沙箱越界 HITL 暂存：reasoning_content
+     */
     private volatile String pendingSandboxHITReasoning;
-    /** 沙箱越界 HITL 暂存：越界详情（展示给用户） */
+    /**
+     * 沙箱越界 HITL 暂存：越界详情（展示给用户）
+     */
     private volatile String pendingSandboxHITDetails;
-
-    /** 获取 HITL 模式状态 */
-    public boolean isHitlMode() { return hitlMode; }
-
-    /** 切换 HITL 模式 */
-    public void toggleHitl() { hitlMode = !hitlMode; }
-
-    /** 直接设置 HITL 模式（用于配置热更新） */
-    public void setHitlMode(boolean on) { hitlMode = on; }
-
-    /** 获取最近一次 API 返回的 prompt_tokens */
-    public int getLastPromptTokens() { return lastPromptTokens; }
-
-    /** 设置会话服务（用于同步 lastPromptTokens） */
-    public void setSessionService(SessionService sessionService) {
-        this.sessionService = sessionService;
-    }
-
-    /** 设置当前会话ID（用于传递给工具执行上下文） */
-    public void setSessionId(String sessionId) {
-        this.sessionId = sessionId;
-    }
-
-    /** 获取当前会话ID */
-    public String getSessionId() {
-        return sessionId;
-    }
-
-    /** 获取模型最大上下文窗口 token 数 */
-    public int getMaxContextTokens() { return client.getMaxContextTokens(); }
-
-    /** 获取模型客户端 */
-    public ModelClient getclient() { return client; }
-
-    /** 批准待执行的工具调用 */
-    public void approveHITL() { hitlState = HitlState.APPROVED; }
-
-    /** 拒绝待执行的工具调用 */
-    public void denyHITL() { hitlState = HitlState.DENIED; }
-
-    /** 获取待审批的工具调用列表（用于 /agree 命令显示） */
-    public List<ToolCallEntry> getPendingHITTcList() { return pendingHITTcList; }
-
-    /** 是否有待审批的工具调用 */
-    public boolean hasPendingHITL() { return hitlState == HitlState.PENDING; }
 
     public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx) {
         this(client, registry, ctx, false);
@@ -149,53 +143,152 @@ public class AgentLoop {
         this.hitlMode = hitlDefault;
     }
 
-    /** 手动触发上下文折叠（/compact 命令）— 保留近20条消息，较早消息摘要 */
+    private static ChatMessage toolResult(String id, String result) {
+        return ChatMessage.tool(id, result);
+    }
+
+    /**
+     * 获取 HITL 模式状态
+     */
+    public boolean isHitlMode() {
+        return hitlMode;
+    }
+
+    /**
+     * 直接设置 HITL 模式（用于配置热更新）
+     */
+    public void setHitlMode(boolean on) {
+        hitlMode = on;
+    }
+
+    /**
+     * 切换 HITL 模式
+     */
+    public void toggleHitl() {
+        hitlMode = !hitlMode;
+    }
+
+    /**
+     * 获取最近一次 API 返回的 prompt_tokens
+     */
+    public int getLastPromptTokens() {
+        return lastPromptTokens;
+    }
+
+    /**
+     * 设置会话服务（用于同步 lastPromptTokens）
+     */
+    public void setSessionService(SessionService sessionService) {
+        this.sessionService = sessionService;
+    }
+
+    /**
+     * 获取当前会话ID
+     */
+    public String getSessionId() {
+        return sessionId;
+    }
+
+    /**
+     * 设置当前会话ID（用于传递给工具执行上下文）
+     */
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
+    }
+
+    /**
+     * 获取模型最大上下文窗口 token 数
+     */
+    public int getMaxContextTokens() {
+        return client.getMaxContextTokens();
+    }
+
+    /**
+     * 获取模型客户端
+     */
+    public ModelClient getclient() {
+        return client;
+    }
+
+    /**
+     * 批准待执行的工具调用
+     */
+    public void approveHITL() {
+        hitlState = HitlState.APPROVED;
+    }
+
+    /**
+     * 拒绝待执行的工具调用
+     */
+    public void denyHITL() {
+        hitlState = HitlState.DENIED;
+    }
+
+    /**
+     * 获取待审批的工具调用列表（用于 /agree 命令显示）
+     */
+    public List<ToolCallEntry> getPendingHITTcList() {
+        return pendingHITTcList;
+    }
+
+    /**
+     * 是否有待审批的工具调用
+     */
+    public boolean hasPendingHITL() {
+        return hitlState == HitlState.PENDING;
+    }
+
+    /**
+     * 手动触发上下文折叠（/compact 命令）— 保留近20条消息，较早消息摘要
+     */
     public void compactNow() throws IOException {
         List<ChatMessage> messages = ctx.buildMessages();
         List<ChatMessage> folded = ContextFolding.foldKeepLast(
                 messages, 20, client);
         if (folded.size() < ctx.size()) {
             ctx.compact(folded);
-            try {
-                output.onLog(LogLevel.INFO, "[compact] " + ctx.size() + " 条消息（保留近20条，较早消息已摘要）");
-            } catch (Exception e) {
-                // SSE连接断开时忽略异常
-            }
+            output.onLog(LogLevel.INFO, "[compact] " + ctx.size() + " 条消息（保留近20条，较早消息已摘要）");
         } else {
-            try {
-                output.onLog(LogLevel.INFO, "[compact] 无需折叠（总消息数 ≤ 20）");
-            } catch (Exception e) {
-                // SSE连接断开时忽略异常
-            }
+            output.onLog(LogLevel.INFO, "[compact] 无需折叠（总消息数 ≤ 20）");
         }
     }
 
-    /** 获取上下文（用于访问 SessionStore） */
-    public ConversationContext getCtx() {
-        return ctx;
-    }
-
-    /** 获取工具注册表 */
+    /**
+     * 获取工具注册表
+     */
     public ToolRegistry getToolRegistry() {
         return registry;
     }
 
-    /** Plan Mode 控制 */
-    public void setPlanMode(boolean on) { dispatcher.setPlanMode(on); }
-    public boolean isPlanMode() { return dispatcher.isPlanMode(); }
+    public boolean isPlanMode() {
+        return dispatcher.isPlanMode();
+    }
 
-    /** 用户主动中断：设置中断标志并中止当前 HTTP 流式请求 */
+    /**
+     * Plan Mode 控制
+     */
+    public void setPlanMode(boolean on) {
+        dispatcher.setPlanMode(on);
+    }
+
+    /**
+     * 用户主动中断：设置中断标志并中止当前 HTTP 流式请求
+     */
     public void requestUserAbort() {
         userAbortRequested = true;
         client.abortStream();
     }
 
-    /** 重置用户中断标志（每回合开始时调用） */
+    /**
+     * 重置用户中断标志（每回合开始时调用）
+     */
     public void resetUserAbort() {
         userAbortRequested = false;
     }
 
-    /** 设置事件监听器 */
+    /**
+     * 设置事件监听器
+     */
     public void setListener(AgentLoopListener listener) {
         this.listener = listener != null ? listener : NoOpAgentLoopListener.INSTANCE;
     }
@@ -212,14 +305,20 @@ public class AgentLoop {
                 """;
     }
 
-    /** 设置输出接口（用于自定义输出处理，如控制台 / WebSocket SSE / 日志） */
-    public void setOutput(AgentOutput output) {
-        this.output = output != null ? output : AgentOutput.NOOP;
-    }
+    // ==================== HITL 拦截与恢复 ====================
 
-    /** 获取当前输出接口 */
+    /**
+     * 获取当前输出接口
+     */
     public AgentOutput getOutput() {
         return output;
+    }
+
+    /**
+     * 设置输出接口（用于自定义输出处理，如控制台 / WebSocket SSE / 日志）
+     */
+    public void setOutput(AgentOutput output) {
+        this.output = output != null ? output : AgentOutput.NOOP;
     }
 
     /**
@@ -382,7 +481,7 @@ public class AgentLoop {
         }
     }  // end run
 
-    // ==================== HITL 拦截与恢复 ====================
+    // ==================== 沙箱越界 HITL ====================
 
     /**
      * HITL 拦截：暂存工具调用，返回审批提示给用户。
@@ -456,6 +555,8 @@ public class AgentLoop {
         return tcList;
     }
 
+    // ==================== 统一的继续对话循环（消除 HITL 恢复中的重复代码） ====================
+
     /**
      * HITL 恢复：用户审批/拒绝后，继续执行或跳过工具调用。
      */
@@ -498,8 +599,6 @@ public class AgentLoop {
         return continueConversationLoop(0);
     }
 
-    // ==================== 沙箱越界 HITL ====================
-
     /**
      * 沙箱越界 HITL 拦截：向用户展示越界详情，等待审批。
      */
@@ -535,6 +634,8 @@ public class AgentLoop {
         }
         return message;
     }
+
+    // ==================== 内部数据类 ====================
 
     /**
      * 沙箱越界 HITL 恢复：审批通过后以沙箱旁路模式重放工具调用。
@@ -593,8 +694,6 @@ public class AgentLoop {
         // 委托给统一的内部循环（沙箱 HITL 恢复后仍需检查沙箱越界）
         return continueConversationLoop(0);
     }
-
-    // ==================== 统一的继续对话循环（消除 HITL 恢复中的重复代码） ====================
 
     /**
      * 在工具结果写入上下文后继续推理循环。
@@ -693,30 +792,6 @@ public class AgentLoop {
         }
     }
 
-    private static ChatMessage toolResult(String id, String result) {
-        return ChatMessage.tool(id, result);
-    }
-
-    // ==================== 内部数据类 ====================
-
-    /** 流式调用结果封装 */
-    private record StreamResult(String content, String reasoningContent, ONode toolCalls,
-                                boolean error, boolean loopAborted) {
-        StreamResult(String content, String reasoningContent, ONode toolCalls, boolean error) {
-            this(content, reasoningContent, toolCalls, error, false);
-        }
-    }
-
-    /** 消息准备结果（含是否发生了折叠） */
-    private record PreparedMessages(List<ChatMessage> messages, boolean foldedThisStep) {}
-
-    /** 工具并行执行结果 */
-    private record ToolExecutionResult(List<ToolCallEntry> tcList,
-                                       List<ChatMessage> toolResults,
-                                       boolean anySuppressed) {}
-
-    // ==================== 拆分后的子方法 ====================
-
     /**
      * 步骤 1: 构建消息 + Healing + 预检折叠 + 注入工具指引 + 调试日志。
      * 处理 lastPromptTokens / ctx.compact / foldedThisStep 等副作用。
@@ -767,6 +842,8 @@ public class AgentLoop {
 
         return new PreparedMessages(messages, foldedThisStep);
     }
+
+    // ==================== 拆分后的子方法 ====================
 
     /**
      * 步骤 2: 流式调用 LLM API，阻塞等待流结束，返回内容/思考/工具调用/错误状态。
@@ -830,7 +907,7 @@ public class AgentLoop {
 
             @Override
             public void onUsage(int promptTokens, int completionTokens, int totalTokens,
-                               int cacheHit, int cacheMiss) {
+                                int cacheHit, int cacheMiss) {
                 lastPromptTokens = promptTokens;
                 // 同步 lastPromptTokens 到 SessionService
                 if (sessionService != null) {
@@ -839,7 +916,7 @@ public class AgentLoop {
                 // 获取当前模型名称，用于按模型分别计费
                 String currentModel = client != null ? client.getModel() : null;
                 try {
-                listener.onUsage(currentModel, promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
+                    listener.onUsage(currentModel, promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
                 } catch (Exception e) {
                     // 忽略异常
                 }
@@ -851,7 +928,9 @@ public class AgentLoop {
             }
 
             @Override
-            public void onDone() { streamLatch.countDown(); }
+            public void onDone() {
+                streamLatch.countDown();
+            }
 
             @Override
             public void onError(String err) {
@@ -866,7 +945,11 @@ public class AgentLoop {
         });
 
         // 等待流结束（CountDownLatch 无忙等待）
-        try { streamLatch.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        try {
+            streamLatch.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
 
         // 用户主动中断
         if (userAbortRequested) {
@@ -892,6 +975,7 @@ public class AgentLoop {
 
     /**
      * 步骤 3: 流式错误后尝试折叠恢复。
+     *
      * @return true 表示已恢复（应 continue 重试），false 表示无法恢复（应抛异常）
      */
     private boolean recoverFromStreamError(List<ChatMessage> messages, boolean foldedThisStep) throws IOException {
@@ -980,7 +1064,7 @@ public class AgentLoop {
     private ToolExecutionResult executeToolCalls(ONode toolCalls, boolean skipSandboxCheck) {
         // 将 sessionId 设置到 dispatcher（供工具执行时使用）
         dispatcher.setSessionId(this.sessionId);
-        
+
         ONode[] tcArray = toolCalls.getArray().toArray(new ONode[0]);
         int tcCount = tcArray.length;
 
@@ -1132,8 +1216,8 @@ public class AgentLoop {
             var subUsage = site.sorghum.agent4j.bin.builtin.TaskTool.drainUsageCollector();
             for (var ur : subUsage) {
                 sessionService.addUsage(ur.model(),
-                    (int) ur.prompt(), (int) ur.completion(),
-                    (int) ur.cacheHit(), (int) ur.cacheMiss());
+                        (int) ur.prompt(), (int) ur.completion(),
+                        (int) ur.cacheHit(), (int) ur.cacheMiss());
             }
         }
 
@@ -1185,14 +1269,34 @@ public class AgentLoop {
         return selfCorrectionAttempts; // 信号：继续循环
     }
 
+    /**
+     * HITL 审批状态
+     */
+    private enum HitlState {NONE, PENDING, APPROVED, DENIED}
+
     // ==================== 常量 ====================
 
-    /** 消息总字符数阈值（超出时触发折叠），约 200KB — 注意 estimateChars 不含 tools JSON，实际请求体会更大 */
-    private static final int MAX_TOTAL_CHARS = 200_000;
+    /**
+     * 流式调用结果封装
+     */
+    private record StreamResult(String content, String reasoningContent, ONode toolCalls,
+                                boolean error, boolean loopAborted) {
+        StreamResult(String content, String reasoningContent, ONode toolCalls, boolean error) {
+            this(content, reasoningContent, toolCalls, error, false);
+        }
+    }
 
-    /** 折叠时保留的尾部预算（字符数），约 80KB */
-    private static final int KEEP_TAIL_CHARS = 80_000;
+    /**
+     * 消息准备结果（含是否发生了折叠）
+     */
+    private record PreparedMessages(List<ChatMessage> messages, boolean foldedThisStep) {
+    }
 
-    /** 工具执行超时（秒），单个工具调用最长等待时间 */
-    private static final int TOOL_TIMEOUT_SEC = 360;
+    /**
+     * 工具并行执行结果
+     */
+    private record ToolExecutionResult(List<ToolCallEntry> tcList,
+                                       List<ChatMessage> toolResults,
+                                       boolean anySuppressed) {
+    }
 }

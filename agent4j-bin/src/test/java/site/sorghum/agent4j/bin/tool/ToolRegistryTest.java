@@ -1,7 +1,9 @@
 package site.sorghum.agent4j.bin.tool;
 
 import org.junit.jupiter.api.Test;
+
 import java.util.*;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 class ToolRegistryTest {

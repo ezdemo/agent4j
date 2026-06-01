@@ -14,10 +14,14 @@ class MessageHealerTest {
 
     private static ChatMessage msg(String role, String content) {
         switch (role) {
-            case "system": return ChatMessage.system(content);
-            case "user": return ChatMessage.user(content);
-            case "assistant": return ChatMessage.assistant(content, null, null);
-            default: return ChatMessage.user(content);
+            case "system":
+                return ChatMessage.system(content);
+            case "user":
+                return ChatMessage.user(content);
+            case "assistant":
+                return ChatMessage.assistant(content, null, null);
+            default:
+                return ChatMessage.user(content);
         }
     }
 

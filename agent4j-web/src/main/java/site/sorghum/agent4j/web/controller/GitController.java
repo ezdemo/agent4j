@@ -1,9 +1,11 @@
 package site.sorghum.agent4j.web.controller;
 
 import org.noear.solon.annotation.*;
-
 import site.sorghum.agent4j.web.common.ServiceException;
-import site.sorghum.agent4j.web.model.*;
+import site.sorghum.agent4j.web.model.ApiResponse;
+import site.sorghum.agent4j.web.model.GitBranchDTO;
+import site.sorghum.agent4j.web.model.GitDiffDTO;
+import site.sorghum.agent4j.web.model.GitFileChangeDTO;
 import site.sorghum.agent4j.web.service.AgentService;
 
 import java.io.BufferedReader;
@@ -25,7 +27,9 @@ public class GitController {
     @Inject
     private AgentService agentService;
 
-    /** 当前分支 —— GET /api/git/branch?workspaceHash=xxx */
+    /**
+     * 当前分支 —— GET /api/git/branch?workspaceHash=xxx
+     */
     @Get
     @Mapping("/branch")
     public ApiResponse<GitBranchDTO> branch(@Param(value = "workspaceHash", required = false) String workspaceHash) {
@@ -37,7 +41,9 @@ public class GitController {
         return ApiResponse.ok(new GitBranchDTO(branch.trim()));
     }
 
-    /** 变更文件列表 —— GET /api/git/diff?workspaceHash=xxx */
+    /**
+     * 变更文件列表 —— GET /api/git/diff?workspaceHash=xxx
+     */
     @Get
     @Mapping("/diff")
     public ApiResponse<GitDiffDTO> diff(@Param(value = "workspaceHash", required = false) String workspaceHash) {
@@ -55,7 +61,7 @@ public class GitController {
                 if (line.trim().isEmpty() || line.length() < 3) continue;
 
                 String indexStatus = String.valueOf(line.charAt(0));
-                String workStatus  = String.valueOf(line.charAt(1));
+                String workStatus = String.valueOf(line.charAt(1));
                 String filename = line.substring(3).trim();
 
                 if (filename.contains(" -> ")) {

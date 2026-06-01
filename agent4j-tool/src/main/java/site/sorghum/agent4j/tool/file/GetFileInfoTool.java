@@ -20,7 +20,9 @@ import java.util.List;
 public class GetFileInfoTool extends AgentTool {
 
     @Override
-    public String getName() { return "get_file_info"; }
+    public String getName() {
+        return "get_file_info";
+    }
 
     @Override
     public String getDescription() {
@@ -50,5 +52,7 @@ public class GetFileInfoTool extends AgentTool {
     }
 
     @Override
-    public boolean isReadOnly() { return true; }
+    public boolean isReadOnly() {
+        return true;
+    }
 }

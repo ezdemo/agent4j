@@ -60,12 +60,16 @@ public class GrepTool extends AgentTool {
     // 按工作区根目录隔离的索引（多 Agent 场景线程安全）
     private static final Map<String, WorkspaceIndex> INDEX_MAP = new ConcurrentHashMap<>();
 
-    /** 获取或创建工作区索引（按 rootDir 隔离）。 */
+    /**
+     * 获取或创建工作区索引（按 rootDir 隔离）。
+     */
     public static WorkspaceIndex getOrCreateIndex(Path rootDir) throws IOException {
         return getOrCreateIndex(rootDir, Collections.<String>emptyList());
     }
 
-    /** 获取或创建工作区索引（按 rootDir + blockedPaths 隔离）。 */
+    /**
+     * 获取或创建工作区索引（按 rootDir + blockedPaths 隔离）。
+     */
     public static WorkspaceIndex getOrCreateIndex(Path rootDir, List<String> blockedPaths) throws IOException {
         String rootKey = rootDir.toAbsolutePath().normalize().toString();
         String bpKey = blockedPaths != null ? String.join(",", blockedPaths) : "";
@@ -84,13 +88,17 @@ public class GrepTool extends AgentTool {
         return idx;
     }
 
-    /** 设置工作区索引（测试用）。 */
+    /**
+     * 设置工作区索引（测试用）。
+     */
     public static void setIndex(WorkspaceIndex idx, Path rootDir) {
         String key = rootDir.toAbsolutePath().normalize().toString();
         INDEX_MAP.put(key, idx);
     }
 
-    /** 清除所有索引（测试用）。 */
+    /**
+     * 清除所有索引（测试用）。
+     */
     public static void clearIndexes() {
         INDEX_MAP.clear();
     }

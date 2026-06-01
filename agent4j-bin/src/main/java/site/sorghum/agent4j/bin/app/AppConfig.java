@@ -2,10 +2,9 @@ package site.sorghum.agent4j.bin.app;
 
 import org.noear.solon.annotation.Bean;
 import org.noear.solon.annotation.Configuration;
-
-import site.sorghum.agent4j.bin.model.ModelClient;
-import site.sorghum.agent4j.bin.model.HttpModelClient;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
+import site.sorghum.agent4j.bin.model.HttpModelClient;
+import site.sorghum.agent4j.bin.model.ModelClient;
 
 import java.io.IOException;
 

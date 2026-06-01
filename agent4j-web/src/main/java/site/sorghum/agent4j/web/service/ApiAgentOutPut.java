@@ -26,13 +26,19 @@ import site.sorghum.agent4j.bin.agent.LogLevel;
  */
 public class ApiAgentOutPut implements AgentOutput {
 
-    /** 关联的 SSE 发射器 */
+    /**
+     * 关联的 SSE 发射器
+     */
     private final SseEmitter emitter;
 
-    /** 是否已完成 */
+    /**
+     * 是否已完成
+     */
     private volatile boolean completed = false;
 
-    /** 累计的 usage 数据（用于最终一次性发送） */
+    /**
+     * 累计的 usage 数据（用于最终一次性发送）
+     */
     private int lastPromptTokens;
     private int lastCompletionTokens;
     private int lastTotalTokens;
@@ -52,6 +58,11 @@ public class ApiAgentOutPut implements AgentOutput {
     }
 
     // ==================== 流式输出 ====================
+
+    private static String escapeJson(String s) {
+        // 复用 SseEmitter 的 JSON 转义逻辑
+        return SseEmitter.escapeJson(s);
+    }
 
     @Override
     public void onContentDelta(String token) {
@@ -84,6 +95,8 @@ public class ApiAgentOutPut implements AgentOutput {
         }
     }
 
+    // ==================== 事件 ====================
+
     @Override
     public void onReasoningComplete() {
         if (completed) return;
@@ -93,8 +106,6 @@ public class ApiAgentOutPut implements AgentOutput {
             // SSE连接断开时忽略异常，继续执行
         }
     }
-
-    // ==================== 事件 ====================
 
     @Override
     public void onReasoning(String reasoning) {
@@ -150,6 +161,8 @@ public class ApiAgentOutPut implements AgentOutput {
         onUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
     }
 
+    // ==================== 日志 & 消息 ====================
+
     @Override
     public void onError(String error) {
         if (completed) return;
@@ -160,8 +173,6 @@ public class ApiAgentOutPut implements AgentOutput {
         }
         completed = true;
     }
-
-    // ==================== 日志 & 消息 ====================
 
     @Override
     public void onLog(LogLevel level, String message) {
@@ -187,6 +198,8 @@ public class ApiAgentOutPut implements AgentOutput {
         }
     }
 
+    // ==================== 生命周期 ====================
+
     @Override
     public void onChoice(java.util.List<ChoiceOption> options) {
         if (completed || options == null || options.isEmpty()) return;
@@ -196,8 +209,6 @@ public class ApiAgentOutPut implements AgentOutput {
             // SSE连接断开时忽略异常，继续执行
         }
     }
-
-    // ==================== 生命周期 ====================
 
     /**
      * 标记输出完成，发送 done 事件并关闭 SSE 连接。
@@ -255,17 +266,12 @@ public class ApiAgentOutPut implements AgentOutput {
         completed = true;
     }
 
+    // ==================== 辅助 ====================
+
     /**
      * 是否已完成。
      */
     public boolean isCompleted() {
         return completed;
-    }
-
-    // ==================== 辅助 ====================
-
-    private static String escapeJson(String s) {
-        // 复用 SseEmitter 的 JSON 转义逻辑
-        return SseEmitter.escapeJson(s);
     }
 }

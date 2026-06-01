@@ -50,7 +50,9 @@ public class ToolRegistry {
         return tools.containsKey(name);
     }
 
-    /** 返回所有工具的不可变视图。 */
+    /**
+     * 返回所有工具的不可变视图。
+     */
     public Map<String, ToolDef> all() {
         return Collections.unmodifiableMap(tools);
     }

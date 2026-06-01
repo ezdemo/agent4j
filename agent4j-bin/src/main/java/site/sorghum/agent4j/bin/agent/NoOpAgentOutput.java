@@ -14,19 +14,58 @@ public final class NoOpAgentOutput implements AgentOutput {
 
     public static final NoOpAgentOutput INSTANCE = new NoOpAgentOutput();
 
-    private NoOpAgentOutput() {}
+    private NoOpAgentOutput() {
+    }
 
-    @Override public void onContentDelta(String token) {}
-    @Override public void onContentComplete() {}
-    @Override public void onReasoningDelta(String token) {}
-    @Override public void onReasoningComplete() {}
-    @Override public void onReasoning(String reasoning) {}
-    @Override public void onToolCall(String name, String args) {}
-    @Override public void onToolResult(String name, String result) {}
-    @Override public void onUsage(int promptTokens, int completionTokens, int totalTokens, int cacheHit, int cacheMiss) {}
-    @Override public void onUsage(String model, int promptTokens, int completionTokens, int totalTokens, int cacheHit, int cacheMiss) {}
-    @Override public void onError(String error) {}
-    @Override public void onLog(LogLevel level, String message) {}
-    @Override public void onMessage(String message) {}
-    @Override public void onChoice(List<ChoiceOption> options) {}
+    @Override
+    public void onContentDelta(String token) {
+    }
+
+    @Override
+    public void onContentComplete() {
+    }
+
+    @Override
+    public void onReasoningDelta(String token) {
+    }
+
+    @Override
+    public void onReasoningComplete() {
+    }
+
+    @Override
+    public void onReasoning(String reasoning) {
+    }
+
+    @Override
+    public void onToolCall(String name, String args) {
+    }
+
+    @Override
+    public void onToolResult(String name, String result) {
+    }
+
+    @Override
+    public void onUsage(int promptTokens, int completionTokens, int totalTokens, int cacheHit, int cacheMiss) {
+    }
+
+    @Override
+    public void onUsage(String model, int promptTokens, int completionTokens, int totalTokens, int cacheHit, int cacheMiss) {
+    }
+
+    @Override
+    public void onError(String error) {
+    }
+
+    @Override
+    public void onLog(LogLevel level, String message) {
+    }
+
+    @Override
+    public void onMessage(String message) {
+    }
+
+    @Override
+    public void onChoice(List<ChoiceOption> options) {
+    }
 }

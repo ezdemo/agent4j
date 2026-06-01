@@ -1,7 +1,6 @@
 package site.sorghum.agent4j.bin.skill;
 
 import java.util.List;
-import java.util.Set;
 
 /**
  * Skill V2 - Claude Code 风格的 Skill 定义。
@@ -13,48 +12,44 @@ import java.util.Set;
  */
 public interface SkillV2 {
 
-    /** Skill 运行模式 */
-    enum RunAs {
-        /** 直接插入上下文 */
-        INLINE,
-        /** 隔离子代理运行 */
-        SUBAGENT
-    }
-
-    /** Skill 作用域 */
-    enum Scope {
-        /** 项目级 */
-        PROJECT,
-        /** 自定义路径 */
-        CUSTOM,
-        /** 全局级 */
-        GLOBAL,
-        /** 内置 */
-        BUILTIN
-    }
-
-    /** 获取 skill 名称 */
+    /**
+     * 获取 skill 名称
+     */
     String getName();
 
-    /** 获取描述（一行简短描述） */
+    /**
+     * 获取描述（一行简短描述）
+     */
     String getDescription();
 
-    /** 获取完整的 Markdown 正文 */
+    /**
+     * 获取完整的 Markdown 正文
+     */
     String getBody();
 
-    /** 获取作用域 */
+    /**
+     * 获取作用域
+     */
     Scope getScope();
 
-    /** 获取文件路径 */
+    /**
+     * 获取文件路径
+     */
     String getPath();
 
-    /** 获取运行模式 */
+    /**
+     * 获取运行模式
+     */
     RunAs getRunAs();
 
-    /** 获取允许的工具列表（仅 subagent 模式有效） */
+    /**
+     * 获取允许的工具列表（仅 subagent 模式有效）
+     */
     List<String> getAllowedTools();
 
-    /** 获取模型覆盖（仅 subagent 模式有效） */
+    /**
+     * 获取模型覆盖（仅 subagent 模式有效）
+     */
     String getModel();
 
     /**
@@ -85,5 +80,41 @@ public interface SkillV2 {
             sb.append("\n\nArguments: ").append(arguments);
         }
         return sb.toString();
+    }
+
+    /**
+     * Skill 运行模式
+     */
+    enum RunAs {
+        /**
+         * 直接插入上下文
+         */
+        INLINE,
+        /**
+         * 隔离子代理运行
+         */
+        SUBAGENT
+    }
+
+    /**
+     * Skill 作用域
+     */
+    enum Scope {
+        /**
+         * 项目级
+         */
+        PROJECT,
+        /**
+         * 自定义路径
+         */
+        CUSTOM,
+        /**
+         * 全局级
+         */
+        GLOBAL,
+        /**
+         * 内置
+         */
+        BUILTIN
     }
 }

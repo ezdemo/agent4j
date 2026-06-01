@@ -12,6 +12,43 @@ class ReasonBreakerTest {
 
     private ReasonBreaker breaker;
 
+    /**
+     * 构造一个 ~WINDOW_SIZE 长的自然语言文本块（非 uniform，避免单一块内重叠计数）
+     */
+    private static String textBlock(char label) {
+        // 使用变长的自然语言句子组成 ~200 字符的块，确保相邻窗口内容不同
+        String[] sentences = {
+                "模型正在分析代码库的结构和依赖关系。",
+                "需要检查每个函数的调用链和参数传递方式。",
+                "这意味着要深入理解整个系统的架构设计。",
+                "同时还要考虑性能影响和内存使用模式。",
+                "不同模块之间的耦合度也需要仔细评估。",
+                "测试覆盖率是否足够，边界情况是否处理妥当。",
+                "重构时要注意保持向后兼容性，避免破坏现有功能。",
+                label + ": 这是标记文本用于区分不同测试块的唯一标识。"
+        };
+        StringBuilder sb = new StringBuilder();
+        while (sb.length() < ReasonBreaker.WINDOW_SIZE) {
+            for (String s : sentences) {
+                sb.append(s);
+                if (sb.length() >= ReasonBreaker.WINDOW_SIZE) break;
+            }
+        }
+        return sb.substring(0, ReasonBreaker.WINDOW_SIZE);
+    }
+
+    /**
+     * 生成不重复的前缀文本（避免周期性模式被误判为循环）
+     */
+    private static String variedPrefix(int minLength) {
+        StringBuilder sb = new StringBuilder();
+        int i = 0;
+        while (sb.length() < minLength) {
+            sb.append("这是第").append(i++).append("段前缀文本用于填充推理内容长度需求。");
+        }
+        return sb.toString();
+    }
+
     @BeforeEach
     void setUp() {
         breaker = new ReasonBreaker();
@@ -31,44 +68,11 @@ class ReasonBreakerTest {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < 10; i++) {
             sb.append("这是第").append(i).append("段正常的推理内容。")
-              .append("模型在分析代码结构，考虑不同的实现方案。")
-              .append("需要检查文件依赖关系和接口兼容性。".repeat(3));
+                    .append("模型在分析代码结构，考虑不同的实现方案。")
+                    .append("需要检查文件依赖关系和接口兼容性。".repeat(3));
         }
         ReasonBreaker.LoopResult r = breaker.analyze(sb.toString());
         assertFalse(r.looping, "正常推理不应触发");
-    }
-
-    /** 构造一个 ~WINDOW_SIZE 长的自然语言文本块（非 uniform，避免单一块内重叠计数） */
-    private static String textBlock(char label) {
-        // 使用变长的自然语言句子组成 ~200 字符的块，确保相邻窗口内容不同
-        String[] sentences = {
-            "模型正在分析代码库的结构和依赖关系。",
-            "需要检查每个函数的调用链和参数传递方式。",
-            "这意味着要深入理解整个系统的架构设计。",
-            "同时还要考虑性能影响和内存使用模式。",
-            "不同模块之间的耦合度也需要仔细评估。",
-            "测试覆盖率是否足够，边界情况是否处理妥当。",
-            "重构时要注意保持向后兼容性，避免破坏现有功能。",
-            label + ": 这是标记文本用于区分不同测试块的唯一标识。"
-        };
-        StringBuilder sb = new StringBuilder();
-        while (sb.length() < ReasonBreaker.WINDOW_SIZE) {
-            for (String s : sentences) {
-                sb.append(s);
-                if (sb.length() >= ReasonBreaker.WINDOW_SIZE) break;
-            }
-        }
-        return sb.substring(0, ReasonBreaker.WINDOW_SIZE);
-    }
-
-    /** 生成不重复的前缀文本（避免周期性模式被误判为循环） */
-    private static String variedPrefix(int minLength) {
-        StringBuilder sb = new StringBuilder();
-        int i = 0;
-        while (sb.length() < minLength) {
-            sb.append("这是第").append(i++).append("段前缀文本用于填充推理内容长度需求。");
-        }
-        return sb.toString();
     }
 
     @Test

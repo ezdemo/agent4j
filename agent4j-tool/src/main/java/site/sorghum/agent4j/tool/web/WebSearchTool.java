@@ -23,7 +23,9 @@ public class WebSearchTool extends AgentTool {
     private WebService webService;
 
     @Override
-    public String getName() { return "web_search"; }
+    public String getName() {
+        return "web_search";
+    }
 
     @Override
     public String getDescription() {

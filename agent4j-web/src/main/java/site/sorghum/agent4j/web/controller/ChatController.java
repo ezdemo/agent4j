@@ -2,7 +2,6 @@ package site.sorghum.agent4j.web.controller;
 
 import org.noear.solon.annotation.*;
 import org.noear.solon.core.handle.Context;
-
 import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.model.ChatRequest;
 import site.sorghum.agent4j.web.model.ChatResultDTO;
@@ -77,7 +76,7 @@ public class ChatController {
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
         final String resolvedPath = workspacePath;
         final String sessionName = request.sessionName;
-        
+
         Thread chatThread = new Thread(() -> {
             try {
                 agentService.chatStream(message, resolvedPath, sessionName, emitter);

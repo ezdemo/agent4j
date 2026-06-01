@@ -23,7 +23,9 @@ public class TodoWriteTool extends AgentTool {
     private InteractionService interactionService;
 
     @Override
-    public String getName() { return "todo_write"; }
+    public String getName() {
+        return "todo_write";
+    }
 
     @Override
     public String getDescription() {

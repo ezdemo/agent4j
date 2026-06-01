@@ -1,13 +1,9 @@
 package site.sorghum.agent4j.bin.tool;
 
 import org.noear.snack4.ONode;
-
 import site.sorghum.agent4j.bin.agent.StormBreaker;
 import site.sorghum.agent4j.bin.util.ONodeUtil;
 
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.function.BiFunction;
 import java.util.function.Function;
@@ -23,67 +19,88 @@ import java.util.function.Function;
 public class ToolDispatcher {
 
     private final ToolRegistry registry;
-
-    /** Plan Mode — 开启后仅允许只读工具 */
-    private boolean planMode = false;
-
-    /** 工具调用前拦截器 */
-    private Function<String, String> preDispatchHook = null;
-
-    /** 工具调用后拦截器 */
-    private BiFunction<String, String, String> postDispatchHook = null;
-
-    /** Storm 断路器（每回合重置） */
+    /**
+     * Storm 断路器（每回合重置）
+     */
     private final StormBreaker stormBreaker = new StormBreaker();
-
-    /** 当前会话ID（注入到工具 args 中） */
+    /**
+     * Plan Mode — 开启后仅允许只读工具
+     */
+    private boolean planMode = false;
+    /**
+     * 工具调用前拦截器
+     */
+    private Function<String, String> preDispatchHook = null;
+    /**
+     * 工具调用后拦截器
+     */
+    private BiFunction<String, String, String> postDispatchHook = null;
+    /**
+     * 当前会话ID（注入到工具 args 中）
+     */
     private volatile String sessionId;
 
     public ToolDispatcher(ToolRegistry registry) {
         this.registry = registry;
     }
 
-    /** 设置当前会话ID */
-    public void setSessionId(String sessionId) {
-        this.sessionId = sessionId;
+    private static String error(String msg) {
+        ONode node = ONode.ofJson("{}").asObject();
+        node.set("error", msg);
+        return node.toJson();
     }
 
-    /** 获取当前会话ID */
+    /**
+     * 获取当前会话ID
+     */
     public String getSessionId() {
         return sessionId;
     }
 
     // ---- Plan Mode ----
 
-    public boolean isPlanMode() { return planMode; }
+    /**
+     * 设置当前会话ID
+     */
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
+    }
 
-    public void setPlanMode(boolean on) { this.planMode = on; }
+    public boolean isPlanMode() {
+        return planMode;
+    }
 
     // ---- Hooks ----
+
+    public void setPlanMode(boolean on) {
+        this.planMode = on;
+    }
 
     public void setPreDispatchHook(Function<String, String> hook) {
         this.preDispatchHook = hook;
     }
 
+    // ---- Storm ----
+
     public void setPostDispatchHook(BiFunction<String, String, String> hook) {
         this.postDispatchHook = hook;
     }
-
-    // ---- Storm ----
 
     public void resetStorm() {
         stormBreaker.reset();
     }
 
+    // ---- Dispatch ----
+
     public StormBreaker getStormBreaker() {
         return stormBreaker;
     }
 
-    // ---- Dispatch ----
-
-    /** 执行工具调用，返回结果字符串 */
+    /**
+     * 执行工具调用，返回结果字符串
+     */
     public String dispatch(String name, String argumentsJson) {
-        if (name == null || name.equals("null")){
+        if (name == null || name.equals("null")) {
             return error("请重新思考,调用方式错误，工具名不能为null。");
         }
         ToolDef tool = registry.get(name);
@@ -142,12 +159,6 @@ public class ToolDispatcher {
         } catch (Exception e) {
             return error(name + ": " + e.getMessage());
         }
-    }
-
-    private static String error(String msg) {
-        ONode node = ONode.ofJson("{}").asObject();
-        node.set("error", msg);
-        return node.toJson();
     }
 
 

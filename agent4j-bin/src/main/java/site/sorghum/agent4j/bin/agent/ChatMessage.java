@@ -65,22 +65,6 @@ public class ChatMessage {
 
     // ==================== 便捷判断 ====================
 
-    public boolean isSystem() { return "system".equals(role); }
-
-    public boolean isUser() { return "user".equals(role); }
-
-    public boolean isAssistant() { return "assistant".equals(role); }
-
-    public boolean isTool() { return "tool".equals(role); }
-
-    public boolean hasContent() { return content != null && !content.isEmpty(); }
-
-    public boolean hasToolCalls() { return toolCalls != null && !toolCalls.isEmpty(); }
-
-    public boolean hasReasoning() { return reasoningContent != null && !reasoningContent.isEmpty(); }
-
-    // ==================== 反序列化 ====================
-
     @SuppressWarnings("unchecked")
     public static ChatMessage fromMap(Map<String, Object> m) {
         String role = String.valueOf(m.getOrDefault("role", "user"));
@@ -115,13 +99,44 @@ public class ChatMessage {
                         String tcArgsStr = (String) tcArgsObj;
                         try {
                             tcArgsObj = ONode.ofJson(tcArgsStr).toData();
-                        } catch (Exception ignored) { }
+                        } catch (Exception ignored) {
+                        }
                     }
                     msg.toolCalls.add(new ToolCallEntry(tcId, tcName, tcArgsObj));
                 }
             }
         }
         return msg;
+    }
+
+    public boolean isSystem() {
+        return "system".equals(role);
+    }
+
+    public boolean isUser() {
+        return "user".equals(role);
+    }
+
+    public boolean isAssistant() {
+        return "assistant".equals(role);
+    }
+
+    public boolean isTool() {
+        return "tool".equals(role);
+    }
+
+    public boolean hasContent() {
+        return content != null && !content.isEmpty();
+    }
+
+    public boolean hasToolCalls() {
+        return toolCalls != null && !toolCalls.isEmpty();
+    }
+
+    // ==================== 反序列化 ====================
+
+    public boolean hasReasoning() {
+        return reasoningContent != null && !reasoningContent.isEmpty();
     }
 
     // ==================== 序列化 ====================

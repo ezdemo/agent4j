@@ -23,7 +23,9 @@ public class MarkStepCompleteTool extends AgentTool {
     private PlanService planService;
 
     @Override
-    public String getName() { return "mark_step_complete"; }
+    public String getName() {
+        return "mark_step_complete";
+    }
 
     @Override
     public String getDescription() {

@@ -14,9 +14,13 @@ import java.util.Map;
  */
 public class ToolSchemaFlattener {
 
-    /** 展平阈值：叶子数 */
+    /**
+     * 展平阈值：叶子数
+     */
     static final int MAX_LEAVES = 10;
-    /** 展平阈值：深度 */
+    /**
+     * 展平阈值：深度
+     */
     static final int MAX_DEPTH = 2;
 
     /**

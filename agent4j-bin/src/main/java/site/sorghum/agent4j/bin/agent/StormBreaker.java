@@ -1,6 +1,6 @@
 package site.sorghum.agent4j.bin.agent;
 
-import java.util.*;
+import java.util.LinkedList;
 
 /**
  * 风暴断路器 —— 滑动窗口检测重复工具调用。
@@ -15,22 +15,78 @@ public class StormBreaker {
 
     private static final int WINDOW_SIZE = 6;
     private static final int THRESHOLD = 3;
+    private final LinkedList<Entry> recent = new LinkedList<>();
 
-    static class Entry {
-        final String name;
-        final String argsFingerprint;
-        final boolean readOnly;
-        final int rawLength;
-
-        Entry(String name, String argsFingerprint, boolean readOnly, int rawLength) {
-            this.name = name;
-            this.argsFingerprint = argsFingerprint;
-            this.readOnly = readOnly;
-            this.rawLength = rawLength;
+    /**
+     * 计算工具调用的指纹，用于检测重复调用。
+     * 使用 ONode 解析参数 JSON 后重新序列化，消除键顺序和空格差异。
+     * 解析失败时尝试补全 JSON；仍失败则返回 null（表示"无法判断"）。
+     */
+    private static String fingerprint(String name, String args) {
+        try {
+            org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson(args);
+            return name + "|" + node.toJson();
+        } catch (Exception e) {
+            // JSON 损坏 → 尝试补全
+            String repaired = tryRepairJson(args);
+            if (repaired != null) {
+                try {
+                    org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson(repaired);
+                    return name + "|" + node.toJson();
+                } catch (Exception ignored) {
+                }
+            }
+            // 修不了 → 返回 null，inspect() 会放行
+            return null;
         }
     }
 
-    private final LinkedList<Entry> recent = new LinkedList<>();
+    /**
+     * 尝试补全被截断的 JSON：补上缺失的 }、]、" 等
+     */
+    private static String tryRepairJson(String s) {
+        if (s == null || s.isEmpty()) return null;
+        StringBuilder sb = new StringBuilder(s);
+        // 补未闭合的字符串（奇数个引号 → 补一个）
+        int quoteCount = 0;
+        boolean escaped = false;
+        for (int i = 0; i < sb.length(); i++) {
+            char c = sb.charAt(i);
+            if (escaped) {
+                escaped = false;
+                continue;
+            }
+            if (c == '\\') {
+                escaped = true;
+                continue;
+            }
+            if (c == '"') quoteCount++;
+        }
+        if (quoteCount % 2 != 0 && !escaped) sb.append('"');
+        // 补缺失的 }
+        int braceDepth = 0;
+        for (int i = 0; i < sb.length(); i++) {
+            char c = sb.charAt(i);
+            if (c == '{') braceDepth++;
+            else if (c == '}') braceDepth--;
+        }
+        while (braceDepth > 0) {
+            sb.append('}');
+            braceDepth--;
+        }
+        // 补缺失的 ]
+        int bracketDepth = 0;
+        for (int i = 0; i < sb.length(); i++) {
+            char c = sb.charAt(i);
+            if (c == '[') bracketDepth++;
+            else if (c == ']') bracketDepth--;
+        }
+        while (bracketDepth > 0) {
+            sb.append(']');
+            bracketDepth--;
+        }
+        return sb.toString();
+    }
 
     /**
      * 重置滑动窗口，每回合开始时调用。
@@ -43,6 +99,7 @@ public class StormBreaker {
 
     /**
      * 检查是否应抑制此调用。
+     *
      * @param name          工具名
      * @param argumentsJson 参数 JSON 字符串
      * @param readOnly      工具是否为只读
@@ -95,60 +152,18 @@ public class StormBreaker {
         return new SuppressResult(false, null);
     }
 
-    /**
-     * 计算工具调用的指纹，用于检测重复调用。
-     * 使用 ONode 解析参数 JSON 后重新序列化，消除键顺序和空格差异。
-     * 解析失败时尝试补全 JSON；仍失败则返回 null（表示"无法判断"）。
-     */
-    private static String fingerprint(String name, String args) {
-        try {
-            org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson(args);
-            return name + "|" + node.toJson();
-        } catch (Exception e) {
-            // JSON 损坏 → 尝试补全
-            String repaired = tryRepairJson(args);
-            if (repaired != null) {
-                try {
-                    org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson(repaired);
-                    return name + "|" + node.toJson();
-                } catch (Exception ignored) {}
-            }
-            // 修不了 → 返回 null，inspect() 会放行
-            return null;
-        }
-    }
+    static class Entry {
+        final String name;
+        final String argsFingerprint;
+        final boolean readOnly;
+        final int rawLength;
 
-    /** 尝试补全被截断的 JSON：补上缺失的 }、]、" 等 */
-    private static String tryRepairJson(String s) {
-        if (s == null || s.isEmpty()) return null;
-        StringBuilder sb = new StringBuilder(s);
-        // 补未闭合的字符串（奇数个引号 → 补一个）
-        int quoteCount = 0;
-        boolean escaped = false;
-        for (int i = 0; i < sb.length(); i++) {
-            char c = sb.charAt(i);
-            if (escaped) { escaped = false; continue; }
-            if (c == '\\') { escaped = true; continue; }
-            if (c == '"') quoteCount++;
+        Entry(String name, String argsFingerprint, boolean readOnly, int rawLength) {
+            this.name = name;
+            this.argsFingerprint = argsFingerprint;
+            this.readOnly = readOnly;
+            this.rawLength = rawLength;
         }
-        if (quoteCount % 2 != 0 && !escaped) sb.append('"');
-        // 补缺失的 }
-        int braceDepth = 0;
-        for (int i = 0; i < sb.length(); i++) {
-            char c = sb.charAt(i);
-            if (c == '{') braceDepth++;
-            else if (c == '}') braceDepth--;
-        }
-        while (braceDepth > 0) { sb.append('}'); braceDepth--; }
-        // 补缺失的 ]
-        int bracketDepth = 0;
-        for (int i = 0; i < sb.length(); i++) {
-            char c = sb.charAt(i);
-            if (c == '[') bracketDepth++;
-            else if (c == ']') bracketDepth--;
-        }
-        while (bracketDepth > 0) { sb.append(']'); bracketDepth--; }
-        return sb.toString();
     }
 
     public static class SuppressResult {

@@ -28,7 +28,9 @@ public class ConsoleUsageListener implements AgentLoopListener {
         agent.addUsage(model, promptTokens, completionTokens, cacheHit, cacheMiss);
     }
 
-    public int[] getLastUsage() { return lastUsage; }
+    public int[] getLastUsage() {
+        return lastUsage;
+    }
 
     public void resetUsage() {
         lastUsage[0] = lastUsage[1] = lastUsage[2] = lastUsage[3] = lastUsage[4] = 0;

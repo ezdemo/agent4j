@@ -22,7 +22,9 @@ public class ListJobsTool extends AgentTool {
     private JobService jobService;
 
     @Override
-    public String getName() { return "list_jobs"; }
+    public String getName() {
+        return "list_jobs";
+    }
 
     @Override
     public String getDescription() {

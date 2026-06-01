@@ -24,7 +24,9 @@ public class AskChoiceTool extends AgentTool {
     private InteractionService interactionService;
 
     @Override
-    public String getName() { return "ask_choice"; }
+    public String getName() {
+        return "ask_choice";
+    }
 
     @Override
     public String getDescription() {

@@ -9,12 +9,20 @@ package site.sorghum.agent4j.bin.agent;
  * @author Sorghum
  */
 public enum HitlState {
-    /** 无待审批 */
+    /**
+     * 无待审批
+     */
     NONE,
-    /** 等待用户审批 */
+    /**
+     * 等待用户审批
+     */
     PENDING,
-    /** 用户已批准 */
+    /**
+     * 用户已批准
+     */
     APPROVED,
-    /** 用户已拒绝 */
+    /**
+     * 用户已拒绝
+     */
     DENIED
 }

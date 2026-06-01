@@ -4,7 +4,6 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-
 import site.sorghum.agent4j.tool.HitlRequiredException;
 
 import java.io.IOException;
@@ -21,6 +20,14 @@ import static org.junit.jupiter.api.Assertions.*;
  */
 @DisplayName("FileEdit 文件读写编辑引擎测试")
 class FileEditTest {
+
+    private static Map<String, Object> createEdit(String path, String search, String replace) {
+        Map<String, Object> edit = new LinkedHashMap<>();
+        edit.put("path", path);
+        edit.put("search", search);
+        edit.put("replace", replace);
+        return edit;
+    }
 
     @Nested
     @DisplayName("readFile 读取文件")
@@ -366,6 +373,8 @@ class FileEditTest {
         }
     }
 
+    // ==================== 辅助方法 ====================
+
     @Nested
     @DisplayName("路径安全防护")
     class PathSecurity {
@@ -384,15 +393,5 @@ class FileEditTest {
             assertThrows(HitlRequiredException.class,
                     () -> FileEdit.readFile(tempDir, outside, null, null, null));
         }
-    }
-
-    // ==================== 辅助方法 ====================
-
-    private static Map<String, Object> createEdit(String path, String search, String replace) {
-        Map<String, Object> edit = new LinkedHashMap<>();
-        edit.put("path", path);
-        edit.put("search", search);
-        edit.put("replace", replace);
-        return edit;
     }
 }

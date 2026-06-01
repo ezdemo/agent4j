@@ -20,7 +20,9 @@ import java.util.List;
 public class WriteFileTool extends AgentTool {
 
     @Override
-    public String getName() { return "write_file"; }
+    public String getName() {
+        return "write_file";
+    }
 
     @Override
     public String getDescription() {
