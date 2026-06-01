@@ -37,11 +37,11 @@ class ConversationContextTest {
     void buildMessagesIncludesSystemPrefix() {
         ConversationContext ctx = createContext();
         ctx.addUser("hi");
-        List<Map<String, Object>> msgs = ctx.buildMessages();
+        List<ChatMessage> msgs = ctx.buildMessages();
         assertEquals(2, msgs.size());
-        assertEquals("system", msgs.get(0).get("role"));
-        assertEquals("system prompt", msgs.get(0).get("content"));
-        assertEquals("user", msgs.get(1).get("role"));
+        assertEquals("system", msgs.get(0).getRole());
+        assertEquals("system prompt", msgs.get(0).getContent());
+        assertEquals("user", msgs.get(1).getRole());
     }
 
     @Test
@@ -106,23 +106,18 @@ class ConversationContextTest {
         ctx.addAssistant("reply1", null, null);
         ctx.addUser("msg2");
 
-        List<Map<String, Object>> folded = new ArrayList<Map<String, Object>>();
-        Map<String, Object> summary = new LinkedHashMap<String, Object>();
-        summary.put("role", "user");
-        summary.put("content", "summary");
-        folded.add(summary);
+        List<ChatMessage> folded = new ArrayList<>();
+        folded.add(ChatMessage.user("summary"));
 
         ctx.compact(folded);
         assertEquals(1, ctx.size());
-        assertEquals("summary", ctx.getHistory().get(0).get("content"));
+        assertEquals("summary", ctx.getHistory().get(0).getContent());
     }
 
     @Test
     void injectHistoryDoesNotAffectSize() {
         ConversationContext ctx = createContext();
-        Map<String, Object> msg = new LinkedHashMap<String, Object>();
-        msg.put("role", "user");
-        msg.put("content", "loaded");
+        ChatMessage msg = ChatMessage.user("loaded");
         ctx.injectHistory(msg);
         assertEquals(1, ctx.size());
     }
@@ -131,7 +126,7 @@ class ConversationContextTest {
     void getHistoryReturnsCopy() {
         ConversationContext ctx = createContext();
         ctx.addUser("hello");
-        List<Map<String, Object>> history = ctx.getHistory();
+        List<ChatMessage> history = ctx.getHistory();
         history.clear();
         assertEquals(1, ctx.size(), "getHistory 返回副本，修改不应影响内部状态");
     }
@@ -139,21 +134,17 @@ class ConversationContextTest {
     @Test
     void assistantWithToolCallsAndReasoning() {
         ConversationContext ctx = createContext();
-        List<Map<String, Object>> tcs = new ArrayList<Map<String, Object>>();
-        Map<String, Object> tc = new LinkedHashMap<String, Object>();
-        tc.put("id", "tc_1");
-        tc.put("type", "function");
-        Map<String, Object> fn = new LinkedHashMap<String, Object>();
-        fn.put("name", "read_file");
-        fn.put("arguments", "{}");
-        tc.put("function", fn);
-        tcs.add(tc);
+        List<ToolCallEntry> tcs = new ArrayList<>();
+        tcs.add(new ToolCallEntry("tc_1", "read_file", "{}"));
 
         ctx.addAssistant("content", tcs, "thinking...");
-        Map<String, Object> history = ctx.getHistory().get(0);
-        assertEquals("assistant", history.get("role"));
-        assertEquals("content", history.get("content"));
-        assertEquals("thinking...", history.get("reasoning_content"));
-        assertNotNull(history.get("tool_calls"));
+        ChatMessage history = ctx.getHistory().get(0);
+        assertEquals("assistant", history.getRole());
+        assertEquals("content", history.getContent());
+        assertEquals("thinking...", history.getReasoningContent());
+        assertTrue(history.hasToolCalls());
+        assertEquals(1, history.getToolCalls().size());
+        assertEquals("tc_1", history.getToolCalls().get(0).id());
+        assertEquals("read_file", history.getToolCalls().get(0).name());
     }
 }

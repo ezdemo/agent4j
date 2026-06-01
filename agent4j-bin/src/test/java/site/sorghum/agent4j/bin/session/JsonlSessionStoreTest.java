@@ -7,6 +7,9 @@ import java.io.IOException;
 import java.util.*;
 import static org.junit.jupiter.api.Assertions.*;
 
+import site.sorghum.agent4j.bin.agent.ChatMessage;
+import site.sorghum.agent4j.bin.agent.ToolCallEntry;
+
 class JsonlSessionStoreTest {
 
     private JsonlSessionStore store;
@@ -47,57 +50,46 @@ class JsonlSessionStoreTest {
 
     @Test
     void appendAndLoad() throws IOException {
-        Map<String, Object> msg = new LinkedHashMap<String, Object>();
-        msg.put("role", "user");
-        msg.put("content", "hello");
+        ChatMessage msg = ChatMessage.user("hello");
         store.append(msg);
 
         store.flush();
-        List<Map<String, Object>> loaded = store.load();
+        List<ChatMessage> loaded = store.load();
         assertEquals(1, loaded.size());
-        assertEquals("user", loaded.get(0).get("role"));
-        assertEquals("hello", loaded.get(0).get("content"));
+        assertEquals("user", loaded.get(0).getRole());
+        assertEquals("hello", loaded.get(0).getContent());
     }
 
     @Test
     void appendMultipleMessages() throws IOException {
         for (int i = 0; i < 5; i++) {
-            Map<String, Object> msg = new LinkedHashMap<String, Object>();
-            msg.put("role", "user");
-            msg.put("content", "msg" + i);
+            ChatMessage msg = ChatMessage.user("msg" + i);
             store.append(msg);
         }
         store.flush();
-        List<Map<String, Object>> loaded = store.load();
+        List<ChatMessage> loaded = store.load();
         assertEquals(5, loaded.size());
     }
 
     @Test
     void rewriteReplacesAllMessages() throws IOException {
-        Map<String, Object> msg1 = new LinkedHashMap<String, Object>();
-        msg1.put("role", "user");
-        msg1.put("content", "original");
+        ChatMessage msg1 = ChatMessage.user("original");
         store.append(msg1);
         store.flush();
 
-        List<Map<String, Object>> newMsgs = new ArrayList<Map<String, Object>>();
-        Map<String, Object> msg2 = new LinkedHashMap<String, Object>();
-        msg2.put("role", "assistant");
-        msg2.put("content", "replaced");
-        newMsgs.add(msg2);
+        List<ChatMessage> newMsgs = new ArrayList<>();
+        newMsgs.add(ChatMessage.assistant("replaced", null, null));
         store.rewrite(newMsgs);
 
-        List<Map<String, Object>> loaded = store.load();
+        List<ChatMessage> loaded = store.load();
         assertEquals(1, loaded.size());
-        assertEquals("replaced", loaded.get(0).get("content"));
+        assertEquals("replaced", loaded.get(0).getContent());
     }
 
     @Test
     void switchToAndLoad() throws IOException {
         String uniqueName = "sw-" + System.nanoTime();
-        Map<String, Object> msg = new LinkedHashMap<String, Object>();
-        msg.put("role", "user");
-        msg.put("content", "in session 1");
+        ChatMessage msg = ChatMessage.user("in session 1");
         store.append(msg);
         store.flush();
 
@@ -105,27 +97,23 @@ class JsonlSessionStoreTest {
         assertTrue(store.switchTo(uniqueName));
         assertNotEquals(name1, store.currentName());
 
-        Map<String, Object> msg2 = new LinkedHashMap<String, Object>();
-        msg2.put("role", "user");
-        msg2.put("content", "in session 2");
+        ChatMessage msg2 = ChatMessage.user("in session 2");
         store.append(msg2);
         store.flush();
 
-        List<Map<String, Object>> loaded = store.load();
+        List<ChatMessage> loaded = store.load();
         assertEquals(1, loaded.size());
-        assertEquals("in session 2", loaded.get(0).get("content"));
+        assertEquals("in session 2", loaded.get(0).getContent());
 
         store.switchTo(name1);
-        List<Map<String, Object>> loaded1 = store.load();
+        List<ChatMessage> loaded1 = store.load();
         assertEquals(1, loaded1.size());
-        assertEquals("in session 1", loaded1.get(0).get("content"));
+        assertEquals("in session 1", loaded1.get(0).getContent());
     }
 
     @Test
     void listReturnsSessions() throws IOException {
-        Map<String, Object> msg = new LinkedHashMap<String, Object>();
-        msg.put("role", "user");
-        msg.put("content", "hi");
+        ChatMessage msg = ChatMessage.user("hi");
         store.append(msg);
         store.flush();
 
@@ -149,6 +137,7 @@ class JsonlSessionStoreTest {
         assertEquals(200, usage[1]);
         assertEquals(50, usage[2]);
         assertEquals(50, usage[3]);
+        assertEquals(0, usage[4]); // lastPromptTokens
     }
 
     @Test
@@ -158,13 +147,12 @@ class JsonlSessionStoreTest {
         assertEquals(0, usage[1]);
         assertEquals(0, usage[2]);
         assertEquals(0, usage[3]);
+        assertEquals(0, usage[4]);
     }
 
     @Test
     void deleteSession() throws IOException {
-        Map<String, Object> msg = new LinkedHashMap<String, Object>();
-        msg.put("role", "user");
-        msg.put("content", "to be deleted");
+        ChatMessage msg = ChatMessage.user("to be deleted");
         store.append(msg);
         store.flush();
 
@@ -182,16 +170,9 @@ class JsonlSessionStoreTest {
 
     @Test
     void serializeMessageWithToolCalls() {
-        Map<String, Object> msg = new LinkedHashMap<String, Object>();
-        msg.put("role", "assistant");
-        msg.put("content", "I'll edit");
-        List<Map<String, Object>> tcs = new ArrayList<Map<String, Object>>();
-        Map<String, Object> tc = new LinkedHashMap<String, Object>();
-        tc.put("id", "tc_1");
-        tc.put("name", "edit_file");
-        tc.put("arguments", "{\"path\":\"a.java\"}");
-        tcs.add(tc);
-        msg.put("tool_calls", tcs);
+        ChatMessage msg = ChatMessage.assistant("I'll edit",
+                List.of(new ToolCallEntry("tc_1", "edit_file", "{\"path\":\"a.java\"}")),
+                null);
 
         String json = JsonlSessionStore.serializeMessage(msg);
         assertTrue(json.contains("edit_file"));
