@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.web.service;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
 import org.noear.solon.annotation.Inject;
@@ -48,6 +49,7 @@ import java.util.stream.Collectors;
  *
  * @author Sorghum
  */
+@Slf4j
 @Component
 public class AgentService {
 
@@ -122,9 +124,8 @@ public class AgentService {
         Path homePrompt = Paths.get(System.getProperty("user.home"), ".agent4j", "agent4j.md");
         if (java.nio.file.Files.exists(homePrompt)) {
             try {
-                String content = new String(java.nio.file.Files.readAllBytes(homePrompt),
-                        java.nio.charset.StandardCharsets.UTF_8);
-                if (content != null && !content.trim().isEmpty()) {
+                String content = java.nio.file.Files.readString(homePrompt);
+                if (!content.trim().isEmpty()) {
                     System.err.println("[prompt] 从 ~/.agent4j/agent4j.md 加载默认系统提示词（" + content.length() + " 字符）");
                     return content.trim();
                 }
@@ -133,28 +134,6 @@ public class AgentService {
             }
         }
         return "你是一个智能体助手，名为Agent4J\n";
-    }
-
-    /**
-     * 如果当前工作区存在 agent4j.md / CLAUDE.md，则读取并返回其内容。
-     * 文件不存在时返回空字符串。
-     */
-    private static String loadProjectMd(Path workspace) {
-        StringBuilder sb = new StringBuilder();
-        for (String name : new String[]{"agent4j.md", "CLAUDE.md"}) {
-            Path file = workspace.resolve(name);
-            if (java.nio.file.Files.exists(file)) {
-                try {
-                    String content = new String(java.nio.file.Files.readAllBytes(file),
-                            java.nio.charset.StandardCharsets.UTF_8);
-                    if (sb.length() > 0) sb.append("\n\n");
-                    sb.append("[来自 ").append(name).append(" 的项目上下文]\n");
-                    sb.append(content.trim());
-                } catch (IOException ignored) {
-                }
-            }
-        }
-        return sb.toString();
     }
 
     /**
@@ -225,7 +204,9 @@ public class AgentService {
             System.out.println("[web] Agent 共享组件初始化完成 — 模型: " + model);
         } catch (Exception e) {
             System.err.println("[web] Agent 共享组件初始化失败: " + e.getMessage());
-            e.printStackTrace();
+            log.error(
+                    "Agent 共享组件初始化失败: ", e
+            );
         }
     }
 
@@ -334,7 +315,9 @@ public class AgentService {
                 return agent;
             } catch (Exception e) {
                 System.err.println("[web] 创建 Agent 失败: " + e.getMessage());
-                e.printStackTrace();
+                log.error(
+                        "Agent 共享组件初始化失败: ", e
+                );
                 return null;
             }
         }
@@ -440,15 +423,6 @@ public class AgentService {
     }
 
     /**
-     * 获取当前活跃会话的对话历史（兼容旧接口）。
-     *
-     * @return 历史消息列表
-     */
-    public List<ChatMessage> getHistory() {
-        return getHistory(null, null);
-    }
-
-    /**
      * 中断当前聊天 —— 中断所有活跃的 Agent。
      */
     public void abortCurrentChat() {
@@ -463,17 +437,6 @@ public class AgentService {
     // ==================== 会话管理 ====================
 
     /**
-     * 同步聊天 —— 串行执行，返回完整回复。
-     * <p>
-     * 命令字符串（如 "/retry"、"/compact"）会由 Agent4jAgent.chat()
-     * 自动路由到 {@link site.sorghum.agent4j.bin.command.ChatCommandRegistry} 处理。
-     * </p>
-     */
-    public String chat(String message) throws IOException, InterruptedException {
-        return chat(message, null, null);
-    }
-
-    /**
      * 同步聊天 —— 支持工作区和会话隔离。
      * <p>
      * 每个会话拥有独立的 Agent4jAgent 实例，无需切换和恢复状态。
@@ -484,7 +447,7 @@ public class AgentService {
      * @param sessionName   会话名称（可选）
      * @return 聊天回复
      */
-    public String chat(String message, String workspacePath, String sessionName) throws IOException, InterruptedException {
+    public String chat(String message, String workspacePath, String sessionName) throws IOException {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         ReentrantLock lock = getSessionLock(sessionKey);
         lock.lock();
@@ -518,16 +481,6 @@ public class AgentService {
     }
 
     /**
-     * 流式聊天 —— 通过 AgentOutput 桥接到 SseEmitter。
-     * <p>
-     * 命令字符串同样在此通道处理，命令的输出通过 SSE 事件返回。
-     * </p>
-     */
-    public void chatStream(String message, SseEmitter emitter) throws IOException, InterruptedException {
-        chatStream(message, null, null, emitter);
-    }
-
-    /**
      * 流式聊天 —— 支持工作区和会话隔离。
      * <p>
      * 每个会话拥有独立的 Agent4jAgent 实例，无需切换和恢复状态。
@@ -538,7 +491,7 @@ public class AgentService {
      * @param sessionName   会话名称（可选）
      * @param emitter       SSE 发射器
      */
-    public void chatStream(String message, String workspacePath, String sessionName, SseEmitter emitter) throws IOException, InterruptedException {
+    public void chatStream(String message, String workspacePath, String sessionName, SseEmitter emitter) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         ReentrantLock lock = getSessionLock(sessionKey);
         lock.lock();
@@ -605,7 +558,6 @@ public class AgentService {
      * @return 实际使用的会话名
      */
     public String newSession(String workspacePath, String sessionName) {
-        String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
 
         // 未指定会话名时自动生成
         if (sessionName == null || sessionName.isEmpty()) {
@@ -620,20 +572,6 @@ public class AgentService {
         }
 
         return sessionName;
-    }
-
-    /**
-     * 创建新会话（兼容旧接口，自动生成名称）。
-     */
-    public void newSession(String workspacePath) {
-        newSession(workspacePath, null);
-    }
-
-    /**
-     * 创建新会话（兼容旧接口）。
-     */
-    public void newSession() {
-        newSession(null, null);
     }
 
     /**
@@ -728,42 +666,6 @@ public class AgentService {
     }
 
     /**
-     * 获取当前会话的 token 用量。
-     *
-     * @return [promptTokens, completionTokens, cacheHitTokens, cacheMissTokens]
-     */
-    public long[] getUsage() {
-        // 汇总所有会话的用量
-        long totalPrompt = 0, totalCompletion = 0, totalCacheHit = 0, totalCacheMiss = 0;
-        for (Agent4jAgent agent : agentCache.values()) {
-            if (agent != null) {
-                long[] usage = agent.getSessionUsage();
-                totalPrompt += usage[0];
-                totalCompletion += usage[1];
-                totalCacheHit += usage[2];
-                totalCacheMiss += usage[3];
-            }
-        }
-        return new long[]{totalPrompt, totalCompletion, totalCacheHit, totalCacheMiss};
-    }
-
-    /**
-     * 获取指定会话的 token 用量。
-     *
-     * @param workspacePath 工作区路径（可选）
-     * @param sessionName   会话名称（可选）
-     * @return [promptTokens, completionTokens, cacheHitTokens, cacheMissTokens]
-     */
-    public long[] getSessionUsage(String workspacePath, String sessionName) {
-        String sessionKey = generateSessionKey(workspacePath, sessionName);
-        Agent4jAgent agent = getOrCreateAgent(sessionKey);
-        if (agent != null) {
-            return agent.getSessionUsage();
-        }
-        return new long[]{0, 0, 0, 0};
-    }
-
-    /**
      * 获取指定会话的 token 用量（返回 DTO）。
      *
      * @param workspacePath 工作区路径（可选）
@@ -806,6 +708,7 @@ public class AgentService {
             Map<String, Map<String, Double>> prices = config.price();
 
             // 获取按模型分别累计的用量
+            assert agent != null;
             Map<String, long[]> mu = agent.getModelUsage();
 
             if (mu != null && !mu.isEmpty()) {
@@ -1039,17 +942,6 @@ public class AgentService {
     }
 
     /**
-     * 获取指定会话的 token 用量（兼容旧接口）。
-     *
-     * @param workspaceHash 工作区 hash（现在用作 workspacePath）
-     * @param sessionName   会话名称（可选）
-     * @return [promptTokens, completionTokens, cacheHitTokens, cacheMissTokens]
-     */
-    public long[] getUsage(String workspaceHash, String sessionName) {
-        return getSessionUsage(workspaceHash, sessionName);
-    }
-
-    /**
      * 切换工作区（兼容旧接口）。
      *
      * @param path 新的工作区路径
@@ -1114,16 +1006,6 @@ public class AgentService {
         }
 
         return result;
-    }
-
-    /**
-     * 切换到指定工作区（兼容旧接口）。
-     *
-     * @param path 工作区路径
-     * @return 切换成功返回 true
-     */
-    public boolean switchToWorkspace(String path) {
-        return switchWorkspace(path);
     }
 
     /**
