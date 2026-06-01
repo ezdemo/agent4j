@@ -31,7 +31,7 @@ public class ConfigController {
     @SneakyThrows
     @Get
     @Mapping("/config")
-    public Object getConfig() {
+    public ApiResponse<ConfigDTO> getConfig() {
         Agent4jConfig config = Agent4jConfig.load();
         String workspace = null;
         if (agentService.isReady()) {
@@ -68,7 +68,7 @@ public class ConfigController {
     @SneakyThrows
     @Put
     @Mapping("/config")
-    public Object updateConfig(@Body Map<String, Object> body) {
+    public ApiResponse<String> updateConfig(@Body Map<String, Object> body) {
         Agent4jConfig config = Agent4jConfig.load();
         config.updateAndSave(body);
 
@@ -90,7 +90,7 @@ public class ConfigController {
     @SneakyThrows
     @Get
     @Mapping("/models")
-    public Object getModels() {
+    public ApiResponse<ModelListDTO> getModels() {
         Agent4jConfig config = Agent4jConfig.load();
         String currentModel = config.model();
         List<String> available = config.availableModels();
@@ -109,7 +109,7 @@ public class ConfigController {
     /** 获取 Token 用量统计 —— GET /api/usage?workspaceHash=xxx&sessionName=xxx */
     @Get
     @Mapping("/usage")
-    public Object getUsage(@Param(value = "workspaceHash", required = false) String workspaceHash,
+    public ApiResponse<UsageDTO> getUsage(@Param(value = "workspaceHash", required = false) String workspaceHash,
                            @Param(value = "sessionName", required = false) String sessionName) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
@@ -120,7 +120,7 @@ public class ConfigController {
     /** 获取当前工作目录 —— GET /api/workspace */
     @Get
     @Mapping("/workspace")
-    public Object getWorkspace() {
+    public ApiResponse<String> getWorkspace() {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         return ApiResponse.ok(agentService.getWorkspace());
     }
@@ -128,7 +128,7 @@ public class ConfigController {
     /** 切换工作目录 —— POST /api/workspace */
     @Post
     @Mapping("/workspace")
-    public Object switchWorkspace(@Body Map<String, String> body) {
+    public ApiResponse<WorkspaceSwitchDTO> switchWorkspace(@Body Map<String, String> body) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String path = body.get("path");
         if (path == null || path.isEmpty()) {
@@ -148,7 +148,7 @@ public class ConfigController {
     /** 获取所有工作区列表 —— GET /api/workspaces */
     @Get
     @Mapping("/workspaces")
-    public Object listWorkspaces() {
+    public ApiResponse<List<WorkspaceInfoDTO>> listWorkspaces() {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         return ApiResponse.ok(agentService.listWorkspaces());
     }
@@ -156,7 +156,7 @@ public class ConfigController {
     /** 切换到指定工作区 —— POST /api/workspaces/switch */
     @Post
     @Mapping("/workspaces/switch")
-    public Object switchToWorkspace(@Body Map<String, String> body) {
+    public ApiResponse<WorkspaceSwitchDTO> switchToWorkspace(@Body Map<String, String> body) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String hash = body.get("hash");
         if (hash == null || hash.isEmpty()) {
@@ -174,7 +174,7 @@ public class ConfigController {
     /** 删除工作区 —— DELETE /api/workspaces/{hash} */
     @Delete
     @Mapping("/workspaces/{hash}")
-    public Object deleteWorkspace(@Param("hash") String hash) {
+    public ApiResponse<String> deleteWorkspace(@Param("hash") String hash) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         if (hash == null || hash.isEmpty()) {
             throw new ServiceException("工作区 hash 不能为空");

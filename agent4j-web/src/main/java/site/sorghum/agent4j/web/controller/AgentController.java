@@ -4,7 +4,12 @@ import org.noear.solon.annotation.*;
 
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.ApiResponse;
+import site.sorghum.agent4j.web.model.AgentStatusDTO;
+import site.sorghum.agent4j.web.model.CommandMetaDTO;
+import site.sorghum.agent4j.web.model.SkillMetaDTO;
 import site.sorghum.agent4j.web.service.AgentService;
+
+import java.util.List;
 
 /**
  * Agent 状态查询 API。
@@ -27,7 +32,7 @@ public class AgentController {
     /** 获取 Agent 状态 —— GET /api/agent/status */
     @Get
     @Mapping("/status")
-    public Object status() {
+    public ApiResponse<AgentStatusDTO> status() {
         if (!agentService.isReady()) {
             throw new ServiceException("Agent 未初始化，请检查 ~/.agent4j/config.json 配置");
         }
@@ -37,7 +42,7 @@ public class AgentController {
     /** 获取历史消息 —— GET /api/agent/history?workspaceHash=xxx&sessionName=xxx */
     @Get
     @Mapping("/history")
-    public Object history(@Param(value = "workspaceHash", required = true) String workspaceHash,
+    public ApiResponse<List<?>> history(@Param(value = "workspaceHash", required = true) String workspaceHash,
                           @Param(value = "sessionName", required = true) String sessionName) {
         if (!agentService.isReady()) {
             throw new ServiceException("Agent 未初始化");
@@ -51,7 +56,7 @@ public class AgentController {
      */
     @Get
     @Mapping("/commands")
-    public Object commands() {
+    public ApiResponse<List<CommandMetaDTO>> commands() {
         if (!agentService.isReady()) {
             throw new ServiceException("Agent 未初始化");
         }
@@ -63,7 +68,7 @@ public class AgentController {
      */
     @Get
     @Mapping("/skills")
-    public Object skills() {
+    public ApiResponse<List<SkillMetaDTO>> skills() {
         if (!agentService.isReady()) {
             throw new ServiceException("Agent 未初始化");
         }

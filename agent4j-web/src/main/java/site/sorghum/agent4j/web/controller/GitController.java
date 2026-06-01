@@ -28,7 +28,7 @@ public class GitController {
     /** 当前分支 —— GET /api/git/branch?workspaceHash=xxx */
     @Get
     @Mapping("/branch")
-    public Object branch(@Param(value = "workspaceHash", required = false) String workspaceHash) {
+    public ApiResponse<GitBranchDTO> branch(@Param(value = "workspaceHash", required = false) String workspaceHash) {
         String workspacePath = resolveWorkspace(workspaceHash);
         String branch = runGit(workspacePath, "rev-parse", "--abbrev-ref", "HEAD");
         if (branch == null) {
@@ -40,7 +40,7 @@ public class GitController {
     /** 变更文件列表 —— GET /api/git/diff?workspaceHash=xxx */
     @Get
     @Mapping("/diff")
-    public Object diff(@Param(value = "workspaceHash", required = false) String workspaceHash) {
+    public ApiResponse<GitDiffDTO> diff(@Param(value = "workspaceHash", required = false) String workspaceHash) {
         String workspacePath = resolveWorkspace(workspaceHash);
 
         String branch = runGit(workspacePath, "rev-parse", "--abbrev-ref", "HEAD");

@@ -28,7 +28,7 @@ public class ToolController {
     /** 列出所有已注册工具 —— GET /api/tools */
     @Get
     @Mapping("")
-    public Object list() {
+    public ApiResponse<List<ToolInfoDTO>> list() {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         List<ToolInfoDTO> tools = new ArrayList<>();
         for (ToolDef def : agentService.getSharedToolRegistry().all().values()) {
@@ -40,7 +40,7 @@ public class ToolController {
     /** 获取工具详情 —— GET /api/tools/{name} */
     @Get
     @Mapping("/{name}")
-    public Object get(@Path("name") String name) {
+    public ApiResponse<ToolInfoDTO> get(@Path("name") String name) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         ToolDef tool = agentService.getSharedToolRegistry().get(name);
         if (tool == null) throw new ServiceException("工具不存在: " + name);

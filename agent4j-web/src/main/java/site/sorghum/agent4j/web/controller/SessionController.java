@@ -29,7 +29,7 @@ public class SessionController {
     /** 列出所有会话 —— GET /api/sessions?workspaceHash=xxx */
     @Get
     @Mapping("")
-    public Object list(@Param(value = "workspaceHash", required = false) String workspaceHash) throws Exception {
+    public ApiResponse<List<SessionInfoDTO>> list(@Param(value = "workspaceHash", required = false) String workspaceHash) throws Exception {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
@@ -39,7 +39,7 @@ public class SessionController {
     /** 获取当前会话信息 —— GET /api/sessions/current?workspaceHash=xxx */
     @Get
     @Mapping("/current")
-    public Object current(@Param(value = "workspaceHash", required = false) String workspaceHash) {
+    public ApiResponse<SessionCurrentDTO> current(@Param(value = "workspaceHash", required = false) String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
@@ -51,7 +51,7 @@ public class SessionController {
     /** 新建空白会话 —— POST /api/sessions/new?workspaceHash=xxx&sessionName=xxx */
     @Post
     @Mapping("/new")
-    public Object createNew(@Param(value = "workspaceHash", required = false) String workspaceHash,
+    public ApiResponse<SessionCreateDTO> createNew(@Param(value = "workspaceHash", required = false) String workspaceHash,
                             @Param(value = "sessionName", required = false) String sessionName) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
@@ -65,7 +65,7 @@ public class SessionController {
     @SneakyThrows
     @Post
     @Mapping("/{name}")
-    public Object switchSession(@Path("name") String name,
+    public ApiResponse<SessionSwitchDTO> switchSession(@Path("name") String name,
                                 @Param(value = "workspaceHash", required = false) String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
@@ -82,7 +82,7 @@ public class SessionController {
     /** 删除会话 —— DELETE /api/sessions/{name}?workspaceHash=xxx */
     @Delete
     @Mapping("/{name}")
-    public Object deleteSession(@Path("name") String name,
+    public ApiResponse<SessionDeleteDTO> deleteSession(@Path("name") String name,
                                 @Param(value = "workspaceHash", required = false) String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
@@ -95,7 +95,7 @@ public class SessionController {
     /** 清除所有 Agent 缓存 —— POST /api/sessions/evict-all */
     @Post
     @Mapping("/evict-all")
-    public Object evictAll() {
+    public ApiResponse<String> evictAll() {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         agentService.evictAllAgents();
         return ApiResponse.ok("已清除所有 Agent 缓存");
@@ -104,7 +104,7 @@ public class SessionController {
     /** 获取缓存统计 —— GET /api/sessions/stats */
     @Get
     @Mapping("/stats")
-    public Object stats() {
+    public ApiResponse<SessionStatsDTO> stats() {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         return ApiResponse.ok(new SessionStatsDTO(agentService.getCacheSize(), 50));
     }
@@ -112,7 +112,7 @@ public class SessionController {
     /** 获取指定会话的 TODO 列表 —— GET /api/sessions/{name}/todos?workspaceHash=xxx */
     @Get
     @Mapping("/{name}/todos")
-    public Object getTodos(@Path("name") String sessionName,
+    public ApiResponse<List<?>> getTodos(@Path("name") String sessionName,
                            @Param(value = "workspaceHash", required = false) String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         // InteractionService.getTodos() 返回 List<Map>，这里直接透传

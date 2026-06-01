@@ -26,7 +26,7 @@ public class ChatController {
      */
     @Post
     @Mapping("")
-    public Object chat(@Body ChatRequest request) throws Exception {
+    public ApiResponse<ChatResultDTO> chat(@Body ChatRequest request) throws Exception {
         if (!agentService.isReady()) {
             return ApiResponse.fail("Agent 未初始化，请检查 ~/.agent4j/config.json");
         }
@@ -51,7 +51,7 @@ public class ChatController {
      */
     @Post
     @Mapping("/abort")
-    public Object abort() {
+    public ApiResponse<String> abort() {
         agentService.abortCurrentChat();
         return ApiResponse.ok("已发送中断请求");
     }
