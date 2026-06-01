@@ -37,8 +37,7 @@ public class PlanCommand implements ChatCommand {
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
         context.getAgent().setPlanMode(true);
         context.getAgent().getOutput().onLog(LogLevel.INFO, "探索完成后使用 输入 /execute 开始执行");
-        context.getAgent().getOutput().onLog(LogLevel.INFO, "已进入计划模式 — 仅允许只读操作");
-        context.getAgent().getOutput().onMessage(
+        context.getAgent().getOutput().onReasoning(
                 "已进入计划模式 — 仅允许只读操作"
         );
         return CommandResult.CONTINUE;

@@ -2,6 +2,7 @@ package site.sorghum.agent4j.bin.command.impl;
 
 import org.noear.solon.Solon;
 import org.noear.solon.annotation.Component;
+import site.sorghum.agent4j.bin.agent.LogLevel;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
@@ -40,13 +41,15 @@ public class HelpCommand implements ChatCommand {
         // 通过 Solon IoC 获取注册表
         ChatCommandRegistry registry = Solon.context().getBean(ChatCommandRegistry.class);
         if (registry == null) {
-            System.out.println("(命令注册表不可用)");
+            context.getAgent().getOutput().onLog(
+                    LogLevel.ERROR, "命令注册表不可用"
+            );
             return CommandResult.CONTINUE;
         }
         List<String> lines = registry.getHelpLines();
-        context.getAgent().getOutput().onMessage("可用命令：");
+        context.getAgent().getOutput().onReasoning("可用命令：");
         for (String line : lines) {
-            context.getAgent().getOutput().onMessage("  " + line);
+            context.getAgent().getOutput().onReasoning("\n  " + line);
         }
         return CommandResult.CONTINUE;
     }

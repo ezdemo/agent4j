@@ -40,7 +40,7 @@ public class CompactCommand implements ChatCommand {
         agent.flushSession();
         int after = agent.historySize();
         int folded = before - after;
-        System.out.println("✅ 折叠完成：释放 " + folded + " 条消息（" + before + " → " + after + " 条）");
+        agent.getOutput().onReasoning("折叠完成：释放 " + folded + " 条消息（" + before + " → " + after + " 条）");
         return CommandResult.CONTINUE;
     }
 }

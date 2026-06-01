@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.bin.command.impl;
 
 import org.noear.solon.annotation.Component;
+import site.sorghum.agent4j.bin.agent.LogLevel;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 
@@ -34,6 +35,7 @@ public class InitCommand implements ChatCommand {
     @Override
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
         System.out.println("正在分析项目...\n");
+        context.getAgent().getOutput().onReasoning("正在分析项目...");
         String prompt = "请全面分析这个项目的代码库，生成 agent4j.md 放在项目根目录。\n\n"
                 + "要求：\n"
                 + "1. 用 tree / glob 了解项目结构\n"
@@ -43,10 +45,9 @@ public class InitCommand implements ChatCommand {
                 + "5. 完成后一句话总结";
         try {
             String reply = context.getAgent().chat(prompt);
-            System.out.println();
-            System.out.println(reply);
+            context.getAgent().getOutput().onReasoning(reply);
         } catch (Exception e) {
-            System.out.println("(初始化失败: " + e.getMessage() + ")");
+            context.getAgent().getOutput().onLog(LogLevel.ERROR, "分析项目失败: " + e.getMessage());
         }
         return CommandResult.CONTINUE;
     }

@@ -33,7 +33,7 @@ public class NewSessionCommand implements ChatCommand {
     @Override
     public CommandResult execute(String input, ChatCommandContext context) {
         context.getAgent().newSession();
-        System.out.println("(新会话已开启)");
+        context.getAgent().getOutput().onReasoning("已开启新会话");
         return CommandResult.CONTINUE;
     }
 }

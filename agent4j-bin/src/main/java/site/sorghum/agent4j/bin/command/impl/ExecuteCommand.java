@@ -35,8 +35,8 @@ public class ExecuteCommand implements ChatCommand {
     @Override
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
         context.getAgent().setPlanMode(false);
-        context.getAgent().getOutput().onLog(LogLevel.INFO, "已退出计划模式 — 允许全部操作");
-        context.getAgent().getOutput().onMessage("已退出计划模式 — 允许全部操作");
+        context.getAgent().getOutput().onLog(LogLevel.INFO, "退出计划模式");
+        context.getAgent().getOutput().onReasoning("已退出计划模式 — 允许全部操作");
         return CommandResult.CONTINUE;
     }
 }
