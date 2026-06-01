@@ -9,10 +9,8 @@ import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
 import site.sorghum.agent4j.bin.model.ModelClient;
-import site.sorghum.agent4j.bin.session.JsonlSessionStore;
 import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.session.SessionStore;
-import site.sorghum.agent4j.bin.skill.SkillStoreV2;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.tool.ToolSystemInitializer;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
@@ -21,7 +19,10 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.List;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 
 /**
  * Agent4j 工厂——组装 ModelClient + ToolRegistry → AgentLoop。
@@ -37,13 +38,24 @@ public class Agent4jAgent {
      * 命令注册表（用于 chat() 中自动路由 "/" 开头的命令）
      */
     private final ChatCommandRegistry commandRegistry;
-    private SessionService sessionService;
-    private volatile Path workspace;
-    private WorkspaceManager workspaceManager;
     /**
-     * 技能存储（V2 - Claude Code 风格）
+     * -- GETTER --
+     * 获取当前 SessionService（用于保存/恢复状态）
      */
-    private SkillStoreV2 skillStore;
+    @Getter
+    private SessionService sessionService;
+    /**
+     * -- GETTER --
+     * 获取当前工作目录
+     */
+    @Getter
+    private volatile Path workspace;
+    /**
+     * -- GETTER --
+     * 获取工作区管理器
+     */
+    @Getter
+    private WorkspaceManager workspaceManager;
 
     /**
      * 退出信号（命令返回 EXIT 时设置，主循环据此终止）
@@ -60,16 +72,12 @@ public class Agent4jAgent {
         ModelClient client = new HttpModelClient(b.apiUrl, b.apiKey, b.model);
 
         // 初始化技能存储（V2 - Claude Code 风格）
-        this.skillStore = new SkillStoreV2(b.workspace,
-                Paths.get(System.getProperty("user.home")),
-                Collections.emptyList());
 
         // 使用 ToolSystemInitializer 统一初始化（消除重复代码）
         ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
                 b.workspace, b.apiUrl, b.apiKey,
                 b.disabledTools, b.blockedPaths, b.systemPrompt);
         ToolRegistry registry = initResult.toolRegistry;
-        this.skillStore = initResult.skillStore;
         this.ctx = new ConversationContext(initResult.promptPrefix);
 
         // 会话持久化 — 委托 SessionService（支持工作区隔离）
@@ -112,7 +120,6 @@ public class Agent4jAgent {
                 b.workspace, b.apiUrl, b.apiKey,
                 b.disabledTools, b.blockedPaths, prompt);
         ToolRegistry registry = initResult.toolRegistry;
-        this.skillStore = initResult.skillStore;
         PromptPrefix prefix = b.sharedPrefix != null ? b.sharedPrefix : initResult.promptPrefix;
 
         // 创建独立的会话上下文
@@ -139,59 +146,11 @@ public class Agent4jAgent {
 
     // 使用 ToolDefHelper 提供的公共方法
 
-    /**
-     * 将 JSONL 中的 OpenAI 格式 tool_calls 转回内存格式 {id, name, arguments}。
-     * 加载历史时调用，保证注入上下文的消息与新创建的格式一致。
-     */
-    @SuppressWarnings("unchecked")
-    private static void normalizeToolCalls(Map<String, Object> msg) {
-        Object tcs = msg.get("tool_calls");
-        if (!(tcs instanceof List)) return;
-        List<Map<String, Object>> list = (List<Map<String, Object>>) tcs;
-        for (Map<String, Object> tc : list) {
-            // 已经是内存格式 {id, name, arguments} → 跳过
-            if (tc.containsKey("name") && !tc.containsKey("type")) continue;
-            // OpenAI 格式 {id, type, function: {name, arguments}} → 转换
-            Object func = tc.get("function");
-            if (func instanceof Map) {
-                Map<String, Object> fm = (Map<String, Object>) func;
-                Object fnName = fm.get("name");
-                if (fnName != null) tc.put("name", fnName.toString());
-                Object fnArgs = fm.get("arguments");
-                if (fnArgs != null) tc.put("arguments", fnArgs.toString());
-            }
-            tc.remove("type");
-            tc.remove("function");
-        }
-    }
 
     // ========== 公共 API ==========
 
     public static Builder builder() {
         return new Builder();
-    }
-
-    /**
-     * 加载工作区根目录下的 agent4j.md 和 CLAUDE.md，
-     * 将项目文档作为系统提示的补充上下文。
-     * 文件不存在时返回空字符串。
-     */
-    private static String loadProjectMd(Path workspace) {
-        if (workspace == null) return "";
-        StringBuilder sb = new StringBuilder();
-        for (String name : new String[]{"agent4j.md", "CLAUDE.md"}) {
-            Path file = workspace.resolve(name);
-            if (Files.exists(file)) {
-                try {
-                    String content = Files.readString(file);
-                    if (!sb.isEmpty()) sb.append("\n\n");
-                    sb.append("[来自 ").append(name).append(" 的项目上下文]\n");
-                    sb.append(content.trim());
-                } catch (IOException ignored) {
-                }
-            }
-        }
-        return sb.toString();
     }
 
     /**
@@ -271,7 +230,7 @@ public class Agent4jAgent {
      * 切换到指定会话。
      * 切换后加载历史消息到上下文并恢复 token 用量。
      */
-    public boolean switchSession(String name) {
+    public void switchSession(String name) {
         boolean ok = getSessionStore().switchTo(name);
         if (ok) {
             // 加载会话历史消息到上下文，将 JSONL 中的 OpenAI 格式 tool_calls
@@ -293,7 +252,6 @@ public class Agent4jAgent {
                 sessionService.setTitleGenerated(false);
             }
         }
-        return ok;
     }
 
     /**
@@ -325,26 +283,10 @@ public class Agent4jAgent {
     }
 
     /**
-     * 获取最近一次 API 返回的 prompt_tokens
-     */
-    public int getLastPromptTokens() {
-        return loop != null ? loop.getLastPromptTokens() : 0;
-    }
-
-    /**
      * 获取模型最大上下文窗口 token 数
      */
     public int getMaxContextTokens() {
         return loop != null ? loop.getMaxContextTokens() : 128000;
-    }
-
-    /**
-     * 更新当前模型
-     */
-    public void updateModel(String model) {
-        if (loop != null) {
-            loop.getclient().setModel(model);
-        }
     }
 
     /**
@@ -361,66 +303,6 @@ public class Agent4jAgent {
     public String rewind(int n) throws IOException {
         String msg = ctx.rewindToUser(n);
         return msg != null ? chat(msg) : null;
-    }
-
-    /**
-     * 获取当前工作目录
-     */
-    public Path getWorkspace() {
-        return workspace;
-    }
-
-    /**
-     * 切换工作目录。
-     * 切换后，所有工具将使用新的工作目录执行。
-     * 同时会切换到对应工作区的会话目录。
-     *
-     * @param newWorkspace 新的工作目录路径
-     * @return 切换成功返回 true，路径无效返回 false
-     */
-    public boolean switchWorkspace(Path newWorkspace) {
-        if (newWorkspace == null || !Files.isDirectory(newWorkspace)) {
-            return false;
-        }
-        this.workspace = newWorkspace.toAbsolutePath();
-
-        // 切换工作区会话目录
-        if (workspaceManager != null) {
-            try {
-                String workspacePath = newWorkspace.toAbsolutePath().toString();
-                workspaceManager.switchWorkspace(workspacePath);
-
-                // 关闭旧的 SessionService 的 store
-                if (sessionService != null) {
-                    sessionService.saveUsage();
-                    SessionStore oldStore = sessionService.getStore();
-                    if (oldStore instanceof JsonlSessionStore) {
-                        ((JsonlSessionStore) oldStore).shutdown();
-                    }
-                }
-
-                // 重新创建 SessionService 使用新工作区的会话目录
-                Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
-                this.sessionService = new SessionService(ctx, sessionsDir);
-                // ★ 同步更新 AgentLoop 的 SessionService 引用（修复 lastPromptTokens 跟踪）
-                this.loop.setSessionService(this.sessionService);
-
-                log.info("[workspace] 已切换到工作区: {}", workspacePath);
-                log.info("[workspace] 会话目录: {}", sessionsDir);
-            } catch (IOException e) {
-                log.error("[workspace] 切换工作区失败: {}", e.getMessage());
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    /**
-     * 获取工作区管理器
-     */
-    public WorkspaceManager getWorkspaceManager() {
-        return workspaceManager;
     }
 
     public void setListener(AgentLoopListener listener) {
@@ -462,42 +344,6 @@ public class Agent4jAgent {
      */
     public SessionStore getSessionStore() {
         return sessionService.getStore();
-    }
-
-    /**
-     * 设置 SessionStore
-     */
-    public void setSessionStore(SessionStore store) {
-        ctx.setSessionStore(store);
-        // 重建 SessionService 以保持一致性
-        this.sessionService = new SessionService(ctx, store);
-        // ★ 同步更新 AgentLoop 的 SessionService 引用
-        this.loop.setSessionService(this.sessionService);
-    }
-
-    /**
-     * 获取当前 SessionService（用于保存/恢复状态）
-     */
-    public SessionService getSessionService() {
-        return sessionService;
-    }
-
-    /**
-     * 轻量级恢复工作区状态 —— 直接恢复 SessionService 引用，不销毁/重建 store。
-     * <p>
-     * 用于 chatStream 等临时切换场景：先保存原始 SessionService，
-     * 聊天结束后用此方法恢复，避免 switchWorkspace() 销毁再重建导致
-     * 用量数据丢失、titleGenerated 重置等问题。
-     * </p>
-     *
-     * @param workspace       原始工作区路径
-     * @param originalService 原始 SessionService 实例
-     */
-    public void restoreWorkspaceState(Path workspace, SessionService originalService) {
-        this.workspace = workspace.toAbsolutePath();
-        this.sessionService = originalService;
-        ctx.setSessionStore(originalService.getStore());
-        this.loop.setSessionService(originalService);
     }
 
     /**
@@ -556,17 +402,10 @@ public class Agent4jAgent {
     }
 
     /**
-     * 获取待审批的工具调用列表
-     */
-    public List<ToolCallEntry> getPendingHITTcList() {
-        return loop.getPendingHITTcList();
-    }
-
-    /**
      * 是否有待审批的工具调用
      */
-    public boolean hasPendingHITL() {
-        return loop.hasPendingHITL();
+    public boolean noPendingHITL() {
+        return !loop.hasPendingHITL();
     }
 
     /**
@@ -605,10 +444,6 @@ public class Agent4jAgent {
         return ctx.size();
     }
 
-    public SkillStoreV2 getSkillStore() {
-        return skillStore;
-    }
-
     public static class Builder {
         /**
          * 硬编码的默认系统提示词（在 ~/.agent4j/agent4j.md 不存在时使用）
@@ -634,10 +469,6 @@ public class Agent4jAgent {
          */
         ModelClient sharedModelClient;
         /**
-         * 共享的 ToolRegistry（用于轻量级构建，避免重复注册工具）
-         */
-        ToolRegistry sharedToolRegistry;
-        /**
          * 共享的 system prompt（用于轻量级构建）
          */
         String sharedSystemPrompt;
@@ -645,14 +476,9 @@ public class Agent4jAgent {
          * 共享的 PromptPrefix（用于轻量级构建）
          */
         PromptPrefix sharedPrefix;
-        /**
-         * 用户是否显式设置过 systemPrompt
-         */
-        private boolean systemPromptExplicitlySet = false;
 
         /**
          * 加载用户级默认系统提示词。
-         * 优先级：builder.systemPrompt(v) 显式设置 > ~/.agent4j/agent4j.md > 硬编码默认值
          */
         private static String loadDefaultSystemPrompt() {
             // 如果 ~/.agent4j/agent4j.md 存在，以其内容作为默认系统提示词
@@ -686,12 +512,6 @@ public class Agent4jAgent {
             return this;
         }
 
-        public Builder systemPrompt(String v) {
-            this.systemPrompt = v;
-            this.systemPromptExplicitlySet = true;
-            return this;
-        }
-
         public Builder workspace(Path v) {
             this.workspace = v;
             return this;
@@ -721,27 +541,8 @@ public class Agent4jAgent {
         public Agent4jAgent build() {
             Objects.requireNonNull(apiUrl, "apiUrl is required");
             Objects.requireNonNull(apiKey, "apiKey is required");
-            // 如果用户没有显式设置 systemPrompt，则尝试从 ~/.agent4j/agent4j.md 读取默认值
-            if (!systemPromptExplicitlySet) {
-                systemPrompt = loadDefaultSystemPrompt();
-            }
+            systemPrompt = loadDefaultSystemPrompt();
             return new Agent4jAgent(this);
-        }
-
-        /**
-         * 设置共享组件，用于轻量级构建。
-         * 避免每个会话都重新创建 ModelClient 和 ToolRegistry。
-         *
-         * @param client   共享的 ModelClient
-         * @param registry 共享的 ToolRegistry
-         * @param prefix   共享的 PromptPrefix
-         * @return this
-         */
-        public Builder sharedComponents(ModelClient client, ToolRegistry registry, PromptPrefix prefix) {
-            this.sharedModelClient = client;
-            this.sharedToolRegistry = registry;
-            this.sharedPrefix = prefix;
-            return this;
         }
 
         /**

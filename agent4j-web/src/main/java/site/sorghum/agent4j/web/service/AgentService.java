@@ -112,10 +112,6 @@ public class AgentService {
      * 当前活跃的工作区路径（动态切换）
      */
     private volatile String currentActiveWorkspace;
-    /**
-     * 当前 SSE 输出（每次请求创建一个新的）
-     */
-    private volatile SseEmitter currentSseEmitter;
 
     /**
      * 加载用户级默认系统提示词。
@@ -558,8 +554,6 @@ public class AgentService {
                 return;
             }
 
-            this.currentSseEmitter = emitter;
-
             // 设置 AgentOutput：将所有事件桥接到 SSE
             agent.setOutput(new SseAgentOutput(emitter, agent));
 
@@ -571,7 +565,7 @@ public class AgentService {
             // 发送最终完整回复（使用 complete 事件，与增量 content 事件区分）
             // HITL 待审批时跳过：interceptForHITL/interceptForSandboxHITL 已通过
             // output.onContentDelta() 发送过 HITL 消息，此处不应重复发送
-            if (reply != null && !reply.isEmpty() && !agent.hasPendingHITL()) {
+            if (reply != null && !reply.isEmpty() && agent.noPendingHITL()) {
                 emitter.sendComplete(reply);
             }
         } catch (Exception e) {
@@ -592,7 +586,6 @@ public class AgentService {
                 agent.saveUsage();
             }
 
-            this.currentSseEmitter = null;
             try {
                 emitter.complete();
             } catch (Exception ex) {

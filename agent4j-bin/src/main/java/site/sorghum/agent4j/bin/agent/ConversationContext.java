@@ -16,7 +16,6 @@ import java.util.Map;
  *   <li>{@code assistant} — 模型回复（可能含 tool_calls、reasoning_content）</li>
  *   <li>{@code tool} — 工具执行结果</li>
  * </ul>
- * 每次 API 调用时，{@link #buildMessages(String)} 将 systemPrompt + history 组装为完整消息列表。
  * </p>
  *
  * @author Sorghum
