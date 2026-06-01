@@ -349,9 +349,10 @@ const onSetupClose = () => {
   startHeartbeat()
 }
 
-// 服务就绪回调
+// 服务就绪回调（SplashScreen 安装/启动完成后调用）
 const onServiceReady = () => {
   console.log('Agent4j Web service is ready')
+  showSetup.value = false
   loadData()
   startHeartbeat()
 }

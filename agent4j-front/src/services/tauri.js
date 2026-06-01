@@ -13,20 +13,17 @@ async function tryInvoke(command, args) {
   }
 }
 
-// 获取当前后端端口（始终优先从 Rust 侧获取最新端口）
+// 获取当前后端端口
 async function getCurrentPort() {
-  // 1) 先尝试从 Rust 获取（保证是最新的）
   const port = await tryInvoke('get_agent4j_web_port')
   if (port > 0) {
     localStorage.setItem('agent4j-port', String(port))
     return port
   }
 
-  // 2) 非 Tauri：从 localStorage 取（之前连接成功时保存的）
   const stored = parseInt(localStorage.getItem('agent4j-port') || '', 10)
   if (stored > 0) return stored
 
-  // 3) 回退到默认端口
   return 8097
 }
 
@@ -48,8 +45,41 @@ export const agent4jWebService = {
   },
 
   /**
+   * 获取资源目录路径（Tauri 桌面端专用）
+   * @returns {Promise<string|null>}
+   */
+  async getResourceDir() {
+    return await tryInvoke('get_resource_dir')
+  },
+
+  /**
+   * 检查是否需要安装（比对 jar hash）
+   * @param {string} resourceDir - 资源目录路径
+   * @returns {Promise<{needed: boolean, reason: string}>}
+   */
+  async checkInstallNeeded(resourceDir) {
+    const result = await tryInvoke('check_install_needed', { resourceDir })
+    if (result) return result
+
+    // 非 Tauri 环境：假设已安装
+    return { needed: false, reason: 'not_tauri' }
+  },
+
+  /**
+   * 执行安装（解压 tar.gz、复制文件、创建脚本）
+   * @param {string} resourceDir - 资源目录路径
+   * @returns {Promise<{success: boolean, steps: string[]}>}
+   */
+  async install(resourceDir) {
+    const result = await tryInvoke('install_agent4j_web', { resourceDir })
+    if (result) return result
+
+    throw new Error('Not in Tauri environment')
+  },
+
+  /**
    * 启动 agent4j-web 服务（返回端口号）
-   * @returns {Promise<number>} 端口号
+   * @returns {Promise<number>}
    */
   async start() {
     const port = await tryInvoke('start_agent4j_web')
@@ -76,8 +106,8 @@ export const agent4jWebService = {
 
   /**
    * 等待服务就绪（轮询检查，端口动态）
-   * @param {number} maxAttempts - 最大尝试次数
-   * @param {number} interval - 每次尝试间隔（毫秒）
+   * @param {number} maxAttempts
+   * @param {number} interval
    * @returns {Promise<boolean>}
    */
   async waitForReady(maxAttempts = 30, interval = 1000) {
@@ -90,19 +120,19 @@ export const agent4jWebService = {
           method: 'GET',
           signal: AbortSignal.timeout(2000)
         })
-        
+
         if (response.ok) {
           console.log('Agent4j Web is ready on port', port)
           return true
         }
       } catch (e) {
-        // 服务还没准备好，继续等待
+        // 服务还没准备好
       }
-      
+
       await new Promise(resolve => setTimeout(resolve, interval))
       console.log(`Waiting for Agent4j Web... (${i + 1}/${maxAttempts})`)
     }
-    
+
     console.error('Agent4j Web failed to start within timeout')
     return false
   },
@@ -134,7 +164,6 @@ export const agent4jWebService = {
   }
 }
 
-// 导出默认对象
 export default {
   agent4jWebService
 }

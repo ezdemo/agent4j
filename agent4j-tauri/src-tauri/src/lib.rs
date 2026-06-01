@@ -47,7 +47,6 @@ impl Agent4jWebManager {
             .map_err(|_| "Java not found, please install JDK 17+ from https://adoptium.net/".to_string())?;
 
         let ver_str = String::from_utf8_lossy(&output.stderr);
-        // 解析 "openjdk version \"17.0.1\" 2021-10-19" 或 "\"17\""
         let major = ver_str.split('"').nth(1)
             .and_then(|v| v.split('.').next())
             .and_then(|v| v.parse::<i32>().ok())
@@ -58,14 +57,13 @@ impl Agent4jWebManager {
         Ok(ver_str.lines().next().unwrap_or("unknown").to_string())
     }
 
-    // 配置 PATH 环境变量（Windows: User PATH；Unix: shell rc）
+    // 配置 PATH 环境变量
     fn setup_path(bin_dir: &Path) {
         let bin_str = bin_dir.to_string_lossy().to_string();
 
         #[cfg(target_os = "windows")]
         {
             use std::os::windows::process::CommandExt;
-            // 通过注册表设置用户 PATH
             let key = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
                 .open_subkey_with_flags("Environment", winreg::enums::KEY_READ | winreg::enums::KEY_WRITE)
                 .ok();
@@ -74,7 +72,6 @@ impl Agent4jWebManager {
                 if !current.contains(&bin_str) {
                     let new_path = if current.is_empty() { bin_str.clone() } else { format!("{};{}", current, bin_str) };
                     let _ = key.set_value("Path", &new_path);
-                    // 通知系统环境变量已更改
                     let _ = Command::new("powershell")
                         .args(&["-NoProfile", "-Command", "[Environment]::SetEnvironmentVariable('Path', $env:Path, 'User')"])
                         .creation_flags(0x08000000)
@@ -85,7 +82,6 @@ impl Agent4jWebManager {
 
         #[cfg(not(target_os = "windows"))]
         {
-            // 写入 ~/.profile（最通用的 shell rc）
             let profile = dirs::home_dir().map(|h| h.join(".profile"));
             if let Some(path) = profile {
                 if let Ok(content) = fs::read_to_string(&path) {
@@ -101,13 +97,12 @@ impl Agent4jWebManager {
         }
     }
 
-    // 创建启动脚本（agent4j-web.bat / agent4j-web）
+    // 创建启动脚本
     fn create_launcher(bin_dir: &Path) {
         let jar_path = bin_dir.join("agent4j-web.jar");
 
         #[cfg(target_os = "windows")]
         {
-            // agent4j-web.bat
             let bat = bin_dir.join("agent4j-web.bat");
             if !bat.exists() {
                 let _ = fs::write(&bat, format!(
@@ -119,7 +114,6 @@ impl Agent4jWebManager {
 
         #[cfg(not(target_os = "windows"))]
         {
-            // agent4j-web shell script
             let launcher = bin_dir.join("agent4j-web");
             if !launcher.exists() {
                 let _ = fs::write(&launcher, format!(
@@ -131,7 +125,7 @@ impl Agent4jWebManager {
         }
     }
 
-    // 计算文件 SHA256 十六进制字符串
+    // 计算文件 SHA256
     fn sha256(path: &Path) -> Result<String, String> {
         use sha2::{Digest, Sha256};
         let mut file = fs::File::open(path)
@@ -142,8 +136,7 @@ impl Agent4jWebManager {
         Ok(format!("{:x}", hasher.finalize()))
     }
 
-    // 计算 tar.gz 内 bin/agent4j-web.jar 的 SHA256
-    // 使用 ends_with 匹配，兼容 tar 条目可能带 ./ 前缀等情况
+    // 计算 tar.gz 内 jar 的 SHA256
     fn jar_hash_in_archive(archive_path: &Path) -> Result<String, String> {
         use sha2::{Digest, Sha256};
         let file = fs::File::open(archive_path)
@@ -164,11 +157,14 @@ impl Agent4jWebManager {
         Err("bin/agent4j-web.jar not found in archive".to_string())
     }
 
-    // 从资源中安装 agent4j-web
-    fn install_from_resource(&self, resource_dir: &Path) -> Result<(), String> {
-        // 0) 检查 Java
+    // 从资源中安装 agent4j-web（返回详细进度信息）
+    fn install_from_resource(&self, resource_dir: &Path) -> Result<Vec<String>, String> {
+        let mut steps = Vec::new();
+
+        // 1) 检查 Java
+        steps.push("检查 Java 环境...".to_string());
         let java_ver = Self::check_java()?;
-        println!("Java: {}", java_ver);
+        steps.push(format!("Java: {}", java_ver));
 
         let install_dir = self.get_install_dir();
         let archive_path = resource_dir.join("agent4j-web-dist.tar.gz");
@@ -177,7 +173,8 @@ impl Agent4jWebManager {
             return Err(format!("Resource not found: {:?}", archive_path));
         }
 
-        // 1) 解压到临时目录
+        // 2) 解压
+        steps.push("解压安装包...".to_string());
         let temp_dir = install_dir.join(".tmp-install");
         if temp_dir.exists() {
             let _ = fs::remove_dir_all(&temp_dir);
@@ -185,8 +182,10 @@ impl Agent4jWebManager {
         fs::create_dir_all(&temp_dir)
             .map_err(|e| format!("Failed to create temp dir: {}", e))?;
         self.extract_tar_gz(&archive_path, &temp_dir)?;
+        steps.push("解压完成".to_string());
 
-        // 2) 复制 bin/ 下所有文件到安装目录
+        // 3) 复制 bin/
+        steps.push("复制文件...".to_string());
         let target_bin = install_dir.join("bin");
         fs::create_dir_all(&target_bin)
             .map_err(|e| format!("Failed to create bin dir: {}", e))?;
@@ -203,8 +202,7 @@ impl Agent4jWebManager {
             }
         }
 
-        // 3) 复制 agent4j.md（保留已有的，不覆盖）
-        //     config.json 由 Agent4jConfig.load() 自动创建，不从归档复制
+        // 4) 复制 agent4j.md（保留已有的）
         for name in &["agent4j.md"] {
             let src = temp_dir.join(name);
             let target = install_dir.join(name);
@@ -212,15 +210,19 @@ impl Agent4jWebManager {
                 let _ = fs::copy(&src, &target);
             }
         }
+        steps.push("文件复制完成".to_string());
 
-        // 4) 创建启动脚本 + 配置 PATH
+        // 5) 创建启动脚本 + 配置 PATH
+        steps.push("配置环境...".to_string());
         Self::create_launcher(&target_bin);
         Self::setup_path(&target_bin);
+        steps.push("环境配置完成".to_string());
 
-        // 5) 清理临时目录
+        // 6) 清理
         let _ = fs::remove_dir_all(&temp_dir);
+        steps.push("安装完成！".to_string());
 
-        Ok(())
+        Ok(steps)
     }
 
     // 解压 tar.gz
@@ -239,17 +241,15 @@ impl Agent4jWebManager {
         Ok(())
     }
 
-    // 停止本实例之前启动的子进程（self.child 句柄追踪，不会误杀其他实例的进程）
+    // 清理残留进程
     fn cleanup_stale(&self) {
         let _ = self.stop();
     }
 
     // 启动 agent4j-web 服务
     fn start(&self) -> Result<u32, String> {
-        // 先清理残留进程
         self.cleanup_stale();
 
-        // 始终使用已安装目录下的 jar（由 setup 保证是最新版）
         let install_dir = self.get_install_dir();
         let bin_dir = install_dir.join("bin");
         let jar_path = bin_dir.join("agent4j-web.jar");
@@ -257,20 +257,16 @@ impl Agent4jWebManager {
             return Err("agent4j-web.jar not found".to_string());
         }
 
-        // 找一个可用的端口
         let listener = TcpListener::bind("127.0.0.1:0")
             .map_err(|e| format!("Failed to bind port: {}", e))?;
         let port = listener.local_addr()
             .map_err(|e| format!("Failed to get port: {}", e))?
             .port();
-        // 释放端口，Java 进程会重新绑定
         drop(listener);
 
-        // 保存端口
         let mut port_lock = self.port.lock().unwrap();
         *port_lock = port;
 
-        // 构建启动命令（传 --server.port 覆盖 app.yml 中的 server.port）
         let mut cmd = Command::new("java");
         cmd.args(&[
             "-Dfile.encoding=UTF-8",
@@ -279,44 +275,38 @@ impl Agent4jWebManager {
             &format!("--server.port={}", port),
         ]);
 
-        // Windows: 隐藏控制台窗口
         #[cfg(target_os = "windows")]
         {
             use std::os::windows::process::CommandExt;
-            cmd.creation_flags(0x08000000); // CREATE_NO_WINDOW
+            cmd.creation_flags(0x08000000);
         }
 
-        // 启动进程
         let child = cmd
             .spawn()
             .map_err(|e| format!("Failed to start agent4j-web: {}", e))?;
 
         let pid = child.id();
 
-        // 保存进程引用
         let mut child_lock = self.child.lock().unwrap();
         *child_lock = Some(child);
         drop(child_lock);
 
-        // 等 Java 进程就绪（最长 15 秒，逐秒尝试连接端口）
+        // 等待就绪（最长 15 秒）
         let start = std::time::Instant::now();
         let timeout = std::time::Duration::from_secs(15);
         let mut ready = false;
 
         while start.elapsed() < timeout {
-            // 先检查进程是否还活着
             {
                 let mut cl = self.child.lock().unwrap();
                 if let Some(ref mut ch) = *cl {
                     if let Ok(Some(_)) = ch.try_wait() {
-                        // 进程已退出
                         *cl = None;
                         return Err(format!("Java process (PID {}) exited prematurely", pid));
                     }
                 }
             }
 
-            // 尝试连接端口
             if std::net::TcpStream::connect_timeout(
                 &format!("127.0.0.1:{}", port).parse().unwrap(),
                 std::time::Duration::from_millis(500),
@@ -338,14 +328,13 @@ impl Agent4jWebManager {
         }
 
         println!("Agent4j Web is ready on 127.0.0.1:{} (PID {})", port, pid);
-
         Ok(port as u32)
     }
 
-    // 停止 agent4j-web 服务（仅通过 self.child 句柄杀进程，不会误杀其他实例）
+    // 停止服务
     fn stop(&self) -> Result<(), String> {
         let mut child_lock = self.child.lock().unwrap();
-        
+
         if let Some(ref mut child) = *child_lock {
             child.kill()
                 .map_err(|e| format!("Failed to kill process: {}", e))?;
@@ -360,15 +349,14 @@ impl Agent4jWebManager {
     // 检查是否正在运行
     fn is_running(&self) -> bool {
         let mut child_lock = self.child.lock().unwrap();
-        
+
         if let Some(ref mut child) = *child_lock {
             match child.try_wait() {
                 Ok(Some(_)) => {
-                    // 进程已退出
                     *child_lock = None;
                     false
                 }
-                Ok(None) => true, // 进程仍在运行
+                Ok(None) => true,
                 Err(_) => {
                     *child_lock = None;
                     false
@@ -380,7 +368,9 @@ impl Agent4jWebManager {
     }
 }
 
-// Tauri 命令：获取 agent4j-web 状态
+// ========== Tauri Commands ==========
+
+// 获取 agent4j-web 状态
 #[tauri::command]
 fn get_agent4j_web_status(state: tauri::State<'_, Agent4jWebManager>) -> serde_json::Value {
     serde_json::json!({
@@ -390,25 +380,83 @@ fn get_agent4j_web_status(state: tauri::State<'_, Agent4jWebManager>) -> serde_j
     })
 }
 
-// Tauri 命令：启动 agent4j-web（返回端口号）
+// 检查是否需要安装（比对 jar hash）
+#[tauri::command]
+fn check_install_needed(state: tauri::State<'_, Agent4jWebManager>, resource_dir: String) -> serde_json::Value {
+    let resource_path = PathBuf::from(&resource_dir);
+    let archive_path = resource_path.join("agent4j-web-dist.tar.gz");
+    let installed_jar = state.get_install_dir().join("bin").join("agent4j-web.jar");
+
+    if !state.is_installed() {
+        return serde_json::json!({
+            "needed": true,
+            "reason": "not_installed"
+        });
+    }
+
+    if let (Ok(archive_hash), Ok(installed_hash)) = (
+        Agent4jWebManager::jar_hash_in_archive(&archive_path),
+        Agent4jWebManager::sha256(&installed_jar),
+    ) {
+        if archive_hash != installed_hash {
+            serde_json::json!({
+                "needed": true,
+                "reason": "version_mismatch"
+            })
+        } else {
+            serde_json::json!({
+                "needed": false,
+                "reason": "up_to_date"
+            })
+        }
+    } else {
+        serde_json::json!({
+            "needed": true,
+            "reason": "hash_check_failed"
+        })
+    }
+}
+
+// 执行安装（返回步骤列表）
+#[tauri::command]
+fn install_agent4j_web(state: tauri::State<'_, Agent4jWebManager>, resource_dir: String) -> Result<serde_json::Value, String> {
+    let resource_path = PathBuf::from(&resource_dir);
+    let steps = state.install_from_resource(&resource_path)?;
+
+    Ok(serde_json::json!({
+        "success": true,
+        "steps": steps
+    }))
+}
+
+// 启动服务（返回端口号）
 #[tauri::command]
 fn start_agent4j_web(state: tauri::State<'_, Agent4jWebManager>) -> Result<u32, String> {
     state.start()
 }
 
-// Tauri 命令：获取当前端口号
+// 获取当前端口号
 #[tauri::command]
 fn get_agent4j_web_port(state: tauri::State<'_, Agent4jWebManager>) -> u16 {
     state.get_port()
 }
 
-// Tauri 命令：停止 agent4j-web
+// 停止服务
 #[tauri::command]
 fn stop_agent4j_web(state: tauri::State<'_, Agent4jWebManager>) -> Result<(), String> {
     state.stop()
 }
 
-// 从 Rust 端获取应用信息
+// 获取资源目录路径
+#[tauri::command]
+fn get_resource_dir(app: tauri::AppHandle) -> Result<String, String> {
+    let dir = app.path().resource_dir()
+        .map_err(|e| format!("Failed to get resource dir: {}", e))?
+        .join("resources");
+    Ok(dir.to_string_lossy().to_string())
+}
+
+// 获取应用信息
 #[tauri::command]
 fn get_app_info() -> serde_json::Value {
     serde_json::json!({
@@ -418,7 +466,7 @@ fn get_app_info() -> serde_json::Value {
     })
 }
 
-// 从 Rust 端获取系统信息
+// 获取系统信息
 #[tauri::command]
 fn get_system_info() -> serde_json::Value {
     serde_json::json!({
@@ -427,6 +475,8 @@ fn get_system_info() -> serde_json::Value {
         "family": std::env::consts::FAMILY
     })
 }
+
+// ========== Entry ==========
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
@@ -438,7 +488,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             get_app_info,
             get_system_info,
+            get_resource_dir,
             get_agent4j_web_status,
+            check_install_needed,
+            install_agent4j_web,
             start_agent4j_web,
             stop_agent4j_web,
             get_agent4j_web_port
@@ -449,51 +502,12 @@ pub fn run() {
                 window.set_title("Agent4j").ok();
             }
 
-            // 获取资源目录
-            let resource_dir = app.path().resource_dir()
-                .unwrap_or_else(|_| PathBuf::from("resources"))
-                .join("resources");
-
-            // 获取管理器
-            let manager = app.state::<Agent4jWebManager>();
-
-            // 检查压缩包中 jar 的 hash 与已安装的是否一致
-            let archive_path = resource_dir.join("agent4j-web-dist.tar.gz");
-            let installed_jar = manager.get_install_dir().join("bin").join("agent4j-web.jar");
-
-            let needs_install = if !manager.is_installed() {
-                true
-            } else if let (Ok(archive_hash), Ok(installed_hash)) = (
-                Agent4jWebManager::jar_hash_in_archive(&archive_path),
-                Agent4jWebManager::sha256(&installed_jar),
-            ) {
-                if archive_hash != installed_hash {
-                    println!("Jar hash mismatch, reinstalling...");
-                    true
-                } else {
-                    println!("Jar hash matches, skipping install.");
-                    false
-                }
-            } else {
-                true  // 无法计算 hash 时保守地重新安装
-            };
-
-            if needs_install {
-                match manager.install_from_resource(&resource_dir) {
-                    Ok(_) => println!("Agent4j Web installed successfully"),
-                    Err(e) => eprintln!("Failed to install Agent4j Web: {}", e),
-                }
-            }
-
-            // 启动 agent4j-web 服务（start 内部会等待就绪）
-            if let Err(e) = manager.start() {
-                eprintln!("Failed to start Agent4j Web: {}", e);
-            }
+            // 注意：不再在这里做阻塞式安装/启动
+            // 安装流程由前端 SplashScreen 驱动，通过 Tauri commands 交互
 
             Ok(())
         })
         .on_window_event(|window, event| {
-            // 窗口关闭时停止 agent4j-web（CloseRequested 比 Destroyed 先触发）
             if let tauri::WindowEvent::CloseRequested { .. } = event {
                 let manager = window.state::<Agent4jWebManager>();
                 if let Err(e) = manager.stop() {
