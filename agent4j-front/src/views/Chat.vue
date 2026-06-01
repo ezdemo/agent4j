@@ -11,6 +11,14 @@
 
     <!-- 消息区 -->
     <div class="messages" ref="messagesContainer">
+      <!-- 悬浮日志通知 -->
+      <Transition name="log-bar">
+        <div v-if="currentLog" class="log-bar" :class="'log-' + (currentLog.level || 'info').toLowerCase()" @click="currentLog = null">
+          <span class="log-bar-icon">📋</span>
+          <span class="log-bar-text">{{ currentLog.text }}</span>
+          <span class="log-bar-time">{{ formatTime(currentLog.time) }}</span>
+        </div>
+      </Transition>
       <!-- 空状态 -->
       <div v-if="messages.length === 0" class="empty">
         <div class="empty-icon">
@@ -83,6 +91,7 @@
                     <span class="choice-value">{{ block.selectedTitle || block.options?.[0]?.title || '—' }}</span>
                   </div>
                 </div>
+
               </template>
             </div>
             <div class="msg-time">{{ msg.time }}</div>
@@ -218,7 +227,7 @@
           @focus="inputFocused = true"
           @blur="handleInputBlur"
           @input="handleInputChange"
-          placeholder="输入消息... (Enter 发送, / 命令)"
+          placeholder="输入消息... (Enter 发送, Tab 补全, / 命令)"
           rows="1"
         ></textarea>
         <div class="input-actions">
@@ -364,6 +373,7 @@ const filteredSlashCmds = computed(() => {
 
 // 获取命令图标
 const getSlashIcon = (cmd) => {
+  if (!cmd) return '🔧'
   const icons = {
     '/new': '✨', '/clear': '🗑️', '/retry': '🔄', '/compact': '📦',
     '/export': '📥', '/plan': '📋', '/execute': '⚡', '/sessions': '📂',
@@ -399,19 +409,12 @@ const loadCommandAndSkills = async () => {
 const selectSlashCmd = (cmd) => {
   slashPopupOpen.value = false
   slashQuery.value = ''
-  if (cmd.type === 'skill') {
-    // skill：拼到输入框，不发送，让用户继续输入
-    inputText.value = cmd.cmd + ' '
-    nextTick(() => {
-      inputField.value?.focus()
-    })
-  } else {
-    // 普通命令：直接发送
-    inputText.value = cmd.cmd
-    nextTick(() => {
-      sendMessage()
-    })
-  }
+  // 不管是命令还是 skill，都只补全到输入框，不发送
+  // 用户按 Enter 才会真正发送，Tab 仅负责补全
+  inputText.value = cmd.cmd + ' '
+  nextTick(() => {
+    inputField.value?.focus()
+  })
 }
 
 const props = defineProps({ 
@@ -491,6 +494,24 @@ const loadUsage = async (override) => {
       availableModels.value = modelsRes.value.data?.models || []
     }
   } catch {}
+}
+
+// 当前日志通知（顶部悬浮条，不断被新日志刷新）
+const currentLog = ref(null)
+let logTimer = null
+
+// 日志通知自动消失（6秒后）
+watch(currentLog, (val) => {
+  if (logTimer) clearTimeout(logTimer)
+  if (val) {
+    logTimer = setTimeout(() => { currentLog.value = null }, 6000)
+  }
+})
+
+const formatTime = (t) => {
+  if (!t) return ''
+  const d = new Date(t)
+  return d.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
 }
 
 // 获取当前会话的 TODO 列表
@@ -625,7 +646,7 @@ onBeforeUnmount(() => {
 const suggestions = ['解释这段代码', '优化这个函数', '写个单元测试', '检查潜在问题']
 
 // 不在聊天区显示的静默命令（只发给后端，不加用户消息气泡）
-const SILENT_CMDS = new Set(['/new', '/plan', '/execute', '/compact', '/retry', '/sessions', '/load', '/init', '/hitl', '/agree', '/deny', '/help', '/exit', '/rewind', '/clear'])
+const SILENT_CMDS = new Set(['/agree', '/deny', '/exit'])
 
 const hasAssistant = computed(() => messages.value.some(m => m.role === 'assistant' && m.blocks?.length > 0))
 
@@ -724,7 +745,7 @@ const handleEnter = e => {
       slashPopupOpen.value = false
       return
     }
-    if (e.key === 'Enter' && !e.shiftKey) {
+    if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
       e.preventDefault()
       if (filteredSlashCmds.value.length > 0) {
         selectSlashCmd(filteredSlashCmds.value[activePopupIdx.value])
@@ -829,6 +850,12 @@ const sendMessage = async () => {
           if (Array.isArray(options) && options.length > 0) {
             msg.blocks.push({ type: 'choice', options })
           }
+        } else if (data.type === 'log') {
+          // 系统日志（如 [compact] 折叠结果）→ 仅展示 INFO 及以上级别
+          const level = (data.level || 'INFO').toUpperCase()
+          if (level === 'DEBUG') return
+          const text = data.message || data.content || ''
+          currentLog.value = { level, text, time: Date.now() }
         }
         scroll()
       },
@@ -875,7 +902,7 @@ const abortChat = async () => {
 
 const clearChat = async () => {
   messages.value = []
-  // 发送 /new 给后端（/new 属于 SILENT_CMDS，不显示气泡）
+  // 发送 /new 给后端清空会话
   streaming.value = true
   try {
     chatAPI.sendMessageStream('/new', () => {}, () => { streaming.value = false; loadUsage() }, () => { streaming.value = false })
@@ -1756,6 +1783,83 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
 .collapse-leave-to {
   max-height: 0;
   opacity: 0;
+}
+
+/* 🎯 灵动岛风格日志通知 — 大气居中，超长省略 */
+.log-bar {
+  position: sticky;
+  top: 10px;
+  z-index: 50;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 18px;
+  margin: 0 auto 10px;
+  max-width: 85%;
+  background: rgba(30, 30, 40, 0.85);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #f0f0f0;
+  cursor: pointer;
+  transition: all 0.25s ease;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+  /* 居中 */
+  left: 50%;
+  transform: translateX(-50%);
+}
+.log-bar:hover {
+  background: rgba(40, 40, 55, 0.92);
+  border-radius: 10px;
+  padding: 8px 20px;
+}
+.log-bar.log-warn {
+  border-color: rgba(245, 158, 11, 0.5);
+}
+.log-bar.log-error {
+  border-color: rgba(239, 68, 68, 0.5);
+}
+.log-bar-icon {
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1;
+}
+.log-bar-text {
+  min-width: 0;
+  max-width: 15ch;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 14px;
+  font-weight: 500;
+  transition: max-width 0.3s ease;
+}
+.log-bar:hover .log-bar-text {
+  max-width: 60ch;
+}
+.log-bar-time {
+  flex-shrink: 0;
+  font-size: 10px;
+  opacity: 0.4;
+  font-family: var(--mono);
+}
+/* 进出动画：从顶部滑入 + 淡入 */
+.log-bar-enter-active {
+  transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.log-bar-leave-active {
+  transition: all 0.2s ease;
+}
+.log-bar-enter-from {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-16px) scale(0.92);
+}
+.log-bar-leave-to {
+  opacity: 0;
+  transform: translateX(-50%) translateY(-10px) scale(0.95);
 }
 
 /* Tooltip 动画 */

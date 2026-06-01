@@ -1255,9 +1255,9 @@ public class AgentService {
         }
         return commandRegistry.getCommandMetaList().stream()
                 .map(m -> new CommandMetaDTO(
-                        (String) m.get("name"),
-                        (String) m.get("description"),
-                        (String) m.get("args")
+                        (String) m.get("cmd"),
+                        (String) m.get("desc"),
+                        (String) m.get("argHint")
                 ))
                 .collect(Collectors.toList());
     }

@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.bin.command.impl;
 
 import org.noear.solon.annotation.Component;
+import site.sorghum.agent4j.bin.agent.Agent4jAgent;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 
@@ -33,10 +34,13 @@ public class CompactCommand implements ChatCommand {
 
     @Override
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
-        System.out.println("正在折叠历史消息...");
-        context.getAgent().compact();
-        context.getAgent().flushSession();
-        System.out.println("(完成，当前 " + context.getAgent().historySize() + " 条消息)");
+        Agent4jAgent agent = context.getAgent();
+        int before = agent.historySize();
+        agent.compact();
+        agent.flushSession();
+        int after = agent.historySize();
+        int folded = before - after;
+        System.out.println("✅ 折叠完成：释放 " + folded + " 条消息（" + before + " → " + after + " 条）");
         return CommandResult.CONTINUE;
     }
 }

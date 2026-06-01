@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.web.service;
 
+import org.noear.snack4.ONode;
 import site.sorghum.agent4j.bin.agent.Agent4jAgent;
 import site.sorghum.agent4j.bin.agent.AgentOutput;
 import site.sorghum.agent4j.bin.agent.ChoiceOption;
@@ -7,6 +8,7 @@ import site.sorghum.agent4j.bin.agent.LogLevel;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * SSE 桥接的 AgentOutput 实现 —— 将 Agent 事件转发到 SseEmitter。
@@ -30,7 +32,8 @@ public class SseAgentOutput implements AgentOutput {
     }
 
     @Override
-    public void onContentComplete() {}
+    public void onContentComplete() {
+    }
 
     @Override
     public void onReasoningDelta(String token) {
@@ -38,7 +41,8 @@ public class SseAgentOutput implements AgentOutput {
     }
 
     @Override
-    public void onReasoningComplete() {}
+    public void onReasoningComplete() {
+    }
 
     @Override
     public void onReasoning(String reasoning) {
@@ -77,10 +81,13 @@ public class SseAgentOutput implements AgentOutput {
     }
 
     @Override
-    public void onLog(LogLevel level, String message) {}
+    public void onLog(LogLevel level, String message) {
+        emitter.send("log",ONode.serialize( Map.of("level", level.name(), "message", message)));
+    }
 
     @Override
-    public void onMessage(String message) {}
+    public void onMessage(String message) {
+    }
 
     @Override
     public void onChoice(List<ChoiceOption> options) {

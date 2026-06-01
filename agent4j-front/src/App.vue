@@ -567,6 +567,13 @@ watch(showSettings, (newVal) => {
   display: flex;
   flex: 1;
   min-height: 0;
+  /* 不能 overflow: hidden，否则会裁剪 Chat.vue 中
+     绝对定位的斜杠命令弹出框（position: absolute; bottom: 100%） */
+  overflow: visible;
+}
+
+/* sidebar 单独控制滚动，不影响主区域 */
+.sidebar {
   overflow: hidden;
 }
 
