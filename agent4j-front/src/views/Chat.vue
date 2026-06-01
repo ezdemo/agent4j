@@ -37,7 +37,10 @@
         <template v-if="msg.role === 'user'">
           <div class="msg-body user-body">
             <div class="msg-text">{{ msg.content }}</div>
-            <div class="msg-time">{{ msg.time }}</div>
+            <div class="msg-footer">
+              <span class="msg-time">{{ msg.time }}</span>
+              <button class="copy-msg-btn" @click="copyMessage(msg)" title="复制消息" v-html="COPY_ICON"></button>
+            </div>
           </div>
         </template>
 
@@ -94,7 +97,10 @@
 
               </template>
             </div>
-            <div class="msg-time">{{ msg.time }}</div>
+            <div class="msg-footer">
+              <span class="msg-time">{{ msg.time }}</span>
+              <button class="copy-msg-btn" @click="copyMessage(msg)" title="复制消息" v-html="COPY_ICON"></button>
+            </div>
           </div>
         </template>
       </div>
@@ -635,12 +641,17 @@ onMounted(() => {
     else loadModels()
   }, 30000)
   document.addEventListener('click', handleClickOutside)
+  // 监听复制成功事件，更新日志通知条
+  window.addEventListener('copy-success', (e) => {
+    currentLog.value = { level: 'INFO', text:(e.detail || '已复制'), time: Date.now() }
+  })
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', handleClickOutside)
   if (usageTimer) clearInterval(usageTimer)
   window.removeEventListener('terminal-clear', clearChat)
+  window.removeEventListener('copy-success', () => {})
 })
 
 const suggestions = ['解释这段代码', '优化这个函数', '写个单元测试', '检查潜在问题']
@@ -652,18 +663,58 @@ const hasAssistant = computed(() => messages.value.some(m => m.role === 'assista
 
 const now = () => new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' })
 
-// 配置marked选项
+// 配置marked选项 —— 代码块右上角悬浮复制按钮
+const markedRenderer = new marked.Renderer()
+markedRenderer.code = (code, language) => {
+  const lang = language ? ` class="language-${language}"` : ''
+  return `<div class="code-block-wrap">
+    <button class="code-copy-btn" onclick="copyCode(this)" title="复制代码">${COPY_ICON}</button>
+    <pre><code${lang}>${code}</code></pre>
+  </div>`
+}
+
 marked.setOptions({
   breaks: true,
   gfm: true,
   headerIds: false,
-  mangle: false
+  mangle: false,
+  renderer: markedRenderer
 })
+
+// 全局函数：代码复制（被 onclick 引用）
+// SVG 复制图标
+const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+const CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
+
+window.copyCode = (btn) => {
+  const wrap = btn.closest('.code-block-wrap')
+  const code = wrap?.querySelector('code')?.textContent || ''
+  navigator.clipboard.writeText(code).then(() => {
+    // 通过自定义事件通知 Vue 更新日志条
+    window.dispatchEvent(new CustomEvent('copy-success', { detail: '代码已复制' }))
+  }).catch(() => {})
+}
 
 const fmt = c => {
   if (!c) return ''
-  // 使用marked渲染Markdown
   return marked(c)
+}
+
+// 复制整条消息内容
+const copyMessage = (msg) => {
+  let text = ''
+  if (msg.role === 'user') {
+    text = msg.content || ''
+  } else if (msg.role === 'assistant' && msg.blocks) {
+    text = msg.blocks
+      .filter(b => b.type === 'content' || b.type === 'reasoning')
+      .map(b => b.content || '')
+      .join('\n\n')
+  }
+  if (!text) return
+  navigator.clipboard.writeText(text).then(() => {
+    window.dispatchEvent(new CustomEvent('copy-success', { detail: '消息已复制' }))
+  }).catch(() => {})
 }
 
 const fmtArgs = a => {
@@ -1072,6 +1123,10 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   padding: 8px 12px;
   border-radius: var(--r);
 }
+.user-body ::selection {
+  background: rgba(255, 255, 255, 0.35);
+  color: #000;
+}
 .user-body .msg-time { font-size: 10px; opacity: 0.7; margin-top: 4px; text-align: right; }
 
 .assistant-body {
@@ -1080,9 +1135,74 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   border-radius: var(--r);
   padding: 8px 12px;
 }
+.assistant-body ::selection {
+  background: var(--accent);
+  color: #fff;
+}
 .assistant-body .msg-time { font-size: 10px; color: var(--fg-4); margin-top: 4px; }
 
 .msg-text { font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+
+/* 消息底部栏（时间 + 复制按钮） */
+.msg-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 4px;
+  gap: 8px;
+}
+.copy-msg-btn {
+  opacity: 0;
+  background: none;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--r-sm);
+  transition: opacity 0.15s;
+  line-height: 1;
+  color: var(--fg-3);
+}
+.user-body .copy-msg-btn {
+  color: rgba(255, 255, 255, 0.7);
+}
+.msg-body:hover .copy-msg-btn {
+  opacity: 0.7;
+}
+.copy-msg-btn:hover {
+  opacity: 1 !important;
+}
+
+/* 代码块右上角悬浮复制按钮 */
+.code-block-wrap {
+  position: relative;
+  margin: 8px 0;
+}
+.code-block-wrap pre {
+  margin: 0 !important;
+}
+.code-copy-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  opacity: 0;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  transition: opacity 0.15s;
+  line-height: 1;
+  z-index: 2;
+}
+.code-block-wrap:hover .code-copy-btn {
+  opacity: 0.7;
+}
+.code-copy-btn:hover {
+  opacity: 1 !important;
+  background: var(--bg);
+}
 
 /* 消息块 */
 .msg-blocks { display: flex; flex-direction: column; gap: 8px; }
