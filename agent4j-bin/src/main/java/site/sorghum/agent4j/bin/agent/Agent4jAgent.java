@@ -39,8 +39,8 @@ public class Agent4jAgent {
     private final ChatCommandRegistry commandRegistry;
     private SessionService sessionService;
     private volatile Path workspace;
-    private String apiUrl;
-    private String apiKey;
+    private final String apiUrl;
+    private final String apiKey;
     private WorkspaceManager workspaceManager;
     /**
      * 技能存储（V2 - Claude Code 风格）
@@ -66,7 +66,7 @@ public class Agent4jAgent {
         // 初始化技能存储（V2 - Claude Code 风格）
         this.skillStore = new SkillStoreV2(b.workspace,
                 Paths.get(System.getProperty("user.home")),
-                Collections.<Path>emptyList());
+                Collections.emptyList());
 
         // 使用 ToolSystemInitializer 统一初始化（消除重复代码）
         ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(

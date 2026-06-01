@@ -26,14 +26,14 @@ class SkillV2ImplTest {
                 null
         );
 
-        assertEquals("test-skill", skill.getName());
-        assertEquals("A test skill", skill.getDescription());
-        assertEquals("# Test\n\nBody content", skill.getBody());
-        assertEquals(SkillV2.Scope.PROJECT, skill.getScope());
-        assertEquals("/path/to/skill.md", skill.getPath());
-        assertEquals(SkillV2.RunAs.INLINE, skill.getRunAs());
-        assertTrue(skill.getAllowedTools().isEmpty());
-        assertNull(skill.getModel());
+        assertEquals("test-skill", skill.name());
+        assertEquals("A test skill", skill.description());
+        assertEquals("# Test\n\nBody content", skill.body());
+        assertEquals(SkillV2.Scope.PROJECT, skill.scope());
+        assertEquals("/path/to/skill.md", skill.path());
+        assertEquals(SkillV2.RunAs.INLINE, skill.runAs());
+        assertTrue(skill.allowedTools().isEmpty());
+        assertNull(skill.model());
     }
 
     @Test
@@ -41,7 +41,7 @@ class SkillV2ImplTest {
         SkillV2Impl skill = new SkillV2Impl(
                 "test", null, "Body", SkillV2.Scope.GLOBAL,
                 "/path", SkillV2.RunAs.INLINE, null, null);
-        assertEquals("", skill.getDescription());
+        assertEquals("", skill.description());
     }
 
     @Test
@@ -49,7 +49,7 @@ class SkillV2ImplTest {
         SkillV2Impl skill = new SkillV2Impl(
                 "test", "Desc", null, SkillV2.Scope.GLOBAL,
                 "/path", SkillV2.RunAs.INLINE, null, null);
-        assertEquals("", skill.getBody());
+        assertEquals("", skill.body());
     }
 
     @Test
@@ -57,7 +57,7 @@ class SkillV2ImplTest {
         SkillV2Impl skill = new SkillV2Impl(
                 "test", "Desc", "Body", SkillV2.Scope.GLOBAL,
                 "/path", null, null, null);
-        assertEquals(SkillV2.RunAs.INLINE, skill.getRunAs());
+        assertEquals(SkillV2.RunAs.INLINE, skill.runAs());
     }
 
     @Test
@@ -70,9 +70,9 @@ class SkillV2ImplTest {
                 "deepseek-v4-pro"
         );
 
-        assertEquals(SkillV2.RunAs.SUBAGENT, skill.getRunAs());
-        assertEquals(3, skill.getAllowedTools().size());
-        assertEquals("deepseek-v4-pro", skill.getModel());
+        assertEquals(SkillV2.RunAs.SUBAGENT, skill.runAs());
+        assertEquals(3, skill.allowedTools().size());
+        assertEquals("deepseek-v4-pro", skill.model());
     }
 
     @Test

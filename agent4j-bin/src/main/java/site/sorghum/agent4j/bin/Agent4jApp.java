@@ -8,6 +8,7 @@ import site.sorghum.agent4j.bin.agent.ConsoleAgentOutput;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 
+import java.nio.charset.StandardCharsets;
 import java.util.Scanner;
 
 /**
@@ -69,7 +70,7 @@ public class Agent4jApp {
         agent.setListener(usageListener);
         final int[] lastUsage = usageListener.getLastUsage();
 
-        try (Scanner scanner = new Scanner(System.in, "UTF-8")) {
+        try (Scanner scanner = new Scanner(System.in, StandardCharsets.UTF_8)) {
             while (true) {
                 System.out.print("[" + agent.historySize() + "] > ");
                 if (!scanner.hasNextLine()) break;

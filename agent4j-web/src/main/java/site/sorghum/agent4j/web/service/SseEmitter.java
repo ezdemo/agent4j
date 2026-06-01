@@ -79,10 +79,9 @@ public class SseEmitter {
     public synchronized void send(String eventType, String data) {
         if (completed.get()) return;
         try {
-            StringBuilder sb = new StringBuilder();
-            sb.append("event: ").append(eventType).append("\n");
-            sb.append("data: ").append(data).append("\n\n");
-            out.write(sb.toString().getBytes(StandardCharsets.UTF_8));
+            String sb = "event: " + eventType + "\n" +
+                    "data: " + data + "\n\n";
+            out.write(sb.getBytes(StandardCharsets.UTF_8));
             out.flush();
         } catch (Exception e) {
             // IOException 或 RuntimeException（如 OutputStream 已关闭时抛出的 IllegalStateException）

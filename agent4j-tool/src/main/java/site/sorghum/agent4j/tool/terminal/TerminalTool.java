@@ -58,10 +58,10 @@ public class TerminalTool extends AgentTool {
             CommandChainParser.CommandChain chain) {
         List<List<CommandChainParser.ChainSegment>> groups = new ArrayList<>();
         List<CommandChainParser.ChainSegment> current = new ArrayList<>();
-        current.add(chain.segments.get(0));
-        for (int i = 0; i < chain.ops.size(); i++) {
-            CommandChainParser.ChainOp op = chain.ops.get(i);
-            CommandChainParser.ChainSegment next = chain.segments.get(i + 1);
+        current.add(chain.segments().get(0));
+        for (int i = 0; i < chain.ops().size(); i++) {
+            CommandChainParser.ChainOp op = chain.ops().get(i);
+            CommandChainParser.ChainSegment next = chain.segments().get(i + 1);
             if (op == CommandChainParser.ChainOp.PIPE) {
                 current.add(next);
             } else {
@@ -296,7 +296,7 @@ public class TerminalTool extends AgentTool {
 
         for (int g = 0; g < groups.size(); g++) {
             List<CommandChainParser.ChainSegment> group = groups.get(g);
-            CommandChainParser.ChainOp opBefore = g > 0 ? chain.ops.get(g - 1) : null;
+            CommandChainParser.ChainOp opBefore = g > 0 ? chain.ops().get(g - 1) : null;
 
             // 短路求值
             if (opBefore == CommandChainParser.ChainOp.AND && lastExit != 0) continue;
@@ -346,8 +346,8 @@ public class TerminalTool extends AgentTool {
      */
     private ToolResult runPipeGroup(List<CommandChainParser.ChainSegment> segments,
                                     Path cwd, int timeoutMs) {
-        if (segments.size() == 1 && segments.get(0).redirects.isEmpty()) {
-            return runSimple(segments.get(0).argv, cwd, timeoutMs / 1000);
+        if (segments.size() == 1 && segments.get(0).redirects().isEmpty()) {
+            return runSimple(segments.get(0).argv(), cwd, timeoutMs / 1000);
         }
 
         // 复杂管道/重定向 → 回退到简单的进程内执行
@@ -357,23 +357,23 @@ public class TerminalTool extends AgentTool {
         for (int i = 0; i < segments.size(); i++) {
             if (i > 0) cmdBuilder.append(" | ");
             CommandChainParser.ChainSegment seg = segments.get(i);
-            for (String a : seg.argv) cmdBuilder.append(quoteArg(a)).append(" ");
-            for (CommandChainParser.Redirect r : seg.redirects) {
-                cmdBuilder.append(r.kind.text);
-                if (r.kind.needsTarget()) cmdBuilder.append(" ").append(quoteArg(r.target));
+            for (String a : seg.argv()) cmdBuilder.append(quoteArg(a)).append(" ");
+            for (CommandChainParser.Redirect r : seg.redirects()) {
+                cmdBuilder.append(r.kind().text);
+                if (r.kind().needsTarget()) cmdBuilder.append(" ").append(quoteArg(r.target()));
                 cmdBuilder.append(" ");
             }
         }
 
         // 沙箱校验：重定向目标不能出 workspace
         for (CommandChainParser.ChainSegment seg : segments) {
-            for (CommandChainParser.Redirect r : seg.redirects) {
-                if (r.kind == CommandChainParser.RedirectKind.ERR_MERGE) continue;
-                if (r.target.isEmpty() || CommandAllowlist.isNullDevice(r.target)) continue;
-                Path resolved = cwd.resolve(r.target).normalize();
+            for (CommandChainParser.Redirect r : seg.redirects()) {
+                if (r.kind() == CommandChainParser.RedirectKind.ERR_MERGE) continue;
+                if (r.target().isEmpty() || CommandAllowlist.isNullDevice(r.target())) continue;
+                Path resolved = cwd.resolve(r.target()).normalize();
                 if (!resolved.startsWith(cwd.normalize())) {
                     throw new HitlRequiredException("run_command", "SANDBOX_ESCAPE",
-                            "redirect target \"" + r.target + "\" resolves outside workspace", null);
+                            "redirect target \"" + r.target() + "\" resolves outside workspace", null);
                 }
             }
         }
@@ -385,11 +385,6 @@ public class TerminalTool extends AgentTool {
         return runSimple(wrapper, cwd, timeoutMs / 1000);
     }
 
-    private static class SpawnResult {
-        final List<String> argv;
-
-        SpawnResult(List<String> a) {
-            argv = a;
-        }
+    private record SpawnResult(List<String> argv) {
     }
 }

@@ -152,18 +152,7 @@ public class StormBreaker {
         return new SuppressResult(false, null);
     }
 
-    static class Entry {
-        final String name;
-        final String argsFingerprint;
-        final boolean readOnly;
-        final int rawLength;
-
-        Entry(String name, String argsFingerprint, boolean readOnly, int rawLength) {
-            this.name = name;
-            this.argsFingerprint = argsFingerprint;
-            this.readOnly = readOnly;
-            this.rawLength = rawLength;
-        }
+    record Entry(String name, String argsFingerprint, boolean readOnly, int rawLength) {
     }
 
     public static class SuppressResult {

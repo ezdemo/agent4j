@@ -1,32 +1,18 @@
 package site.sorghum.agent4j.tool.search;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
+import org.jetbrains.annotations.NotNull;
 
 /**
  * grep 搜索的一条匹配结果。
  *
+ * @param file    文件相对路径
+ * @param line    行号（1-based）
+ * @param content 匹配行的文本内容（不含换行符）
  * @author Sorghum
  */
-@Getter
-@AllArgsConstructor
-public class SearchMatch {
+public record SearchMatch(String file, int line, String content) {
 
-    /**
-     * 文件相对路径
-     */
-    private final String file;
-
-    /**
-     * 行号（1-based）
-     */
-    private final int line;
-
-    /**
-     * 匹配行的文本内容（不含换行符）
-     */
-    private final String content;
-
+    @NotNull
     @Override
     public String toString() {
         return file + ":" + line + ": " + content;

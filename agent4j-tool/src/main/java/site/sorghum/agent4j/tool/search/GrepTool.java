@@ -64,7 +64,7 @@ public class GrepTool extends AgentTool {
      * 获取或创建工作区索引（按 rootDir 隔离）。
      */
     public static WorkspaceIndex getOrCreateIndex(Path rootDir) throws IOException {
-        return getOrCreateIndex(rootDir, Collections.<String>emptyList());
+        return getOrCreateIndex(rootDir, Collections.emptyList());
     }
 
     /**

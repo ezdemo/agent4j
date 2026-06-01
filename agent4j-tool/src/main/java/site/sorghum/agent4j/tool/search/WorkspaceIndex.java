@@ -103,12 +103,12 @@ public class WorkspaceIndex {
     private boolean initialized = false;
 
     public WorkspaceIndex(Path root) {
-        this(root, Collections.<String>emptyList());
+        this(root, Collections.emptyList());
     }
 
     public WorkspaceIndex(Path root, List<String> blockedPaths) {
         this.root = root.toAbsolutePath().normalize();
-        this.blockedPaths = blockedPaths != null ? blockedPaths : Collections.<String>emptyList();
+        this.blockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
     }
 
     // ==================== 刷新 ====================
@@ -217,7 +217,7 @@ public class WorkspaceIndex {
         TreeNode rootNode = new TreeNode(root.getFileName().toString(), true);
         for (Map.Entry<String, FileMeta> entry : fileIndex.entrySet()) {
             String path = entry.getKey();
-            boolean isDir = entry.getValue().isDirectory();
+            boolean isDir = entry.getValue().directory();
             String[] parts = path.split("/");
             TreeNode current = rootNode;
             for (int i = 0; i < parts.length; i++) {
@@ -258,14 +258,14 @@ public class WorkspaceIndex {
         List<String> results = new ArrayList<>();
         for (String path : fileIndex.keySet()) {
             FileMeta meta = fileIndex.get(path);
-            if (!meta.isDirectory() && regex.matcher(path).matches()) {
+            if (!meta.directory() && regex.matcher(path).matches()) {
                 results.add(path);
             }
         }
         // 按 mtime 倒序
         results.sort((a, b) -> Long.compare(
-                fileIndex.get(b).getLastModified(),
-                fileIndex.get(a).getLastModified()));
+                fileIndex.get(b).lastModified(),
+                fileIndex.get(a).lastModified()));
         return results;
     }
 
@@ -284,14 +284,14 @@ public class WorkspaceIndex {
         for (Map.Entry<String, FileMeta> entry : fileIndex.entrySet()) {
             if (regex.matcher(entry.getKey()).matches()) {
                 FileMeta meta = entry.getValue();
-                if (!meta.isDirectory() || includeDirs) {
+                if (!meta.directory() || includeDirs) {
                     results.add(entry.getKey());
                 }
             }
         }
         results.sort((a, b) -> Long.compare(
-                fileIndex.get(b).getLastModified(),
-                fileIndex.get(a).getLastModified()));
+                fileIndex.get(b).lastModified(),
+                fileIndex.get(a).lastModified()));
         return results;
     }
 
@@ -329,8 +329,8 @@ public class WorkspaceIndex {
             if (results.size() >= MAX_GREP_MATCHES) break;
 
             FileMeta meta = entry.getValue();
-            if (meta.isDirectory() || !meta.isTextFile()) continue;
-            if (meta.getSize() > MAX_GREP_FILE_SIZE) continue;
+            if (meta.directory() || !meta.textFile()) continue;
+            if (meta.size() > MAX_GREP_FILE_SIZE) continue;
             if (fileFilter != null && !fileFilter.matcher(entry.getKey()).matches()) continue;
 
             Path absPath = root.resolve(entry.getKey());
@@ -364,7 +364,7 @@ public class WorkspaceIndex {
      */
     public int fileCount() throws IOException {
         ensureInitialized();
-        return (int) fileIndex.values().stream().filter(m -> !m.isDirectory()).count();
+        return (int) fileIndex.values().stream().filter(m -> !m.directory()).count();
     }
 
     /**
@@ -373,8 +373,8 @@ public class WorkspaceIndex {
     public long totalSize() throws IOException {
         ensureInitialized();
         return fileIndex.values().stream()
-                .filter(m -> !m.isDirectory())
-                .mapToLong(FileMeta::getSize)
+                .filter(m -> !m.directory())
+                .mapToLong(FileMeta::size)
                 .sum();
     }
 

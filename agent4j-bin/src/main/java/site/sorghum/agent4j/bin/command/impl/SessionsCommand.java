@@ -52,8 +52,8 @@ public class SessionsCommand implements ChatCommand {
         SimpleDateFormat sdf = new SimpleDateFormat("MM-dd HH:mm");
         for (int i = 0; i < Math.min(sessions.size(), 20); i++) {
             SessionStore.SessionInfo s = sessions.get(i);
-            System.out.println("  " + i + ". " + s.name + " (" + s.messageCount + " 条消息, "
-                    + sdf.format(new Date(s.mtime)) + ")");
+            System.out.println("  " + i + ". " + s.name() + " (" + s.messageCount() + " 条消息, "
+                    + sdf.format(new Date(s.mtime())) + ")");
         }
         System.out.println("使用 /load N 加载");
         return CommandResult.CONTINUE;

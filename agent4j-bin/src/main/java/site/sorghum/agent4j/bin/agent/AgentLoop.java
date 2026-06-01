@@ -606,13 +606,10 @@ public class AgentLoop {
         String details = this.pendingSandboxHITDetails != null
                 ? this.pendingSandboxHITDetails : "未知路径越界";
 
-        StringBuilder sb = new StringBuilder();
-        sb.append("⏸️  **沙箱越界 — 需要审批**\n\n");
-        sb.append("检测到工具试图访问工作区之外的路径：\n\n");
-        sb.append("> ").append(details).append("\n\n");
-        sb.append("请选择：");
-
-        String message = sb.toString();
+        String message = "⏸️  **沙箱越界 — 需要审批**\n\n" +
+                "检测到工具试图访问工作区之外的路径：\n\n" +
+                "> " + details + "\n\n" +
+                "请选择：";
         try {
             output.onContentDelta(message);
         } catch (Exception e) {
@@ -1017,11 +1014,11 @@ public class AgentLoop {
         ONode fakeTcArray = ONode.ofJson("[]").asArray();
         for (Scavenger.ToolCall tc : scavenged) {
             ONode tcn = fakeTcArray.addNew();
-            tcn.set("id", tc.id != null ? tc.id : "scavenged_" + tc.name);
+            tcn.set("id", tc.id() != null ? tc.id() : "scavenged_" + tc.name());
             tcn.set("type", "function");
             ONode fn = tcn.getOrNew("function");
-            fn.set("name", tc.name);
-            fn.set("arguments", tc.arguments);
+            fn.set("name", tc.name());
+            fn.set("arguments", tc.arguments());
         }
         return fakeTcArray;
     }

@@ -53,8 +53,8 @@ public class ToolSystemInitializer {
     public static Result initialize(Path workspace, String apiUrl, String apiKey,
                                     Set<String> disabledTools, List<String> blockedPaths,
                                     String defaultSystemPrompt) {
-        final Set<String> effectiveDisabledTools = disabledTools != null ? disabledTools : Collections.<String>emptySet();
-        final List<String> effectiveBlockedPaths = blockedPaths != null ? blockedPaths : Collections.<String>emptyList();
+        final Set<String> effectiveDisabledTools = disabledTools != null ? disabledTools : Collections.emptySet();
+        final List<String> effectiveBlockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
 
         // 1. 创建 ToolRegistry 并设置禁用工具
         final ToolRegistry registry = new ToolRegistry();

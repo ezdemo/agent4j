@@ -79,10 +79,10 @@ class SkillStoreV2Test {
         // 读取 skill
         SkillV2 skill = store.read("test-skill");
         assertNotNull(skill);
-        assertEquals("test-skill", skill.getName());
-        assertEquals("A test skill", skill.getDescription());
-        assertEquals(SkillV2.RunAs.INLINE, skill.getRunAs());
-        assertTrue(skill.getBody().contains("# Test Skill"));
+        assertEquals("test-skill", skill.name());
+        assertEquals("A test skill", skill.description());
+        assertEquals(SkillV2.RunAs.INLINE, skill.runAs());
+        assertTrue(skill.body().contains("# Test Skill"));
     }
 
     @Test
@@ -105,13 +105,13 @@ class SkillStoreV2Test {
         // 读取 skill
         SkillV2 skill = store.read("my-skill");
         assertNotNull(skill);
-        assertEquals("my-skill", skill.getName());
-        assertEquals("My custom skill", skill.getDescription());
-        assertEquals(SkillV2.RunAs.SUBAGENT, skill.getRunAs());
-        assertNotNull(skill.getAllowedTools());
-        assertEquals(2, skill.getAllowedTools().size());
-        assertTrue(skill.getAllowedTools().contains("read_file"));
-        assertTrue(skill.getAllowedTools().contains("glob"));
+        assertEquals("my-skill", skill.name());
+        assertEquals("My custom skill", skill.description());
+        assertEquals(SkillV2.RunAs.SUBAGENT, skill.runAs());
+        assertNotNull(skill.allowedTools());
+        assertEquals(2, skill.allowedTools().size());
+        assertTrue(skill.allowedTools().contains("read_file"));
+        assertTrue(skill.allowedTools().contains("glob"));
     }
 
     @Test
@@ -127,9 +127,9 @@ class SkillStoreV2Test {
         List<SkillV2> skills = store.list();
         assertEquals(3, skills.size());
         // 应该按名称排序
-        assertEquals("alpha", skills.get(0).getName());
-        assertEquals("beta", skills.get(1).getName());
-        assertEquals("gamma", skills.get(2).getName());
+        assertEquals("alpha", skills.get(0).name());
+        assertEquals("beta", skills.get(1).name());
+        assertEquals("gamma", skills.get(2).name());
     }
 
     @Test
@@ -147,7 +147,7 @@ class SkillStoreV2Test {
         // 项目级应该覆盖全局级
         SkillV2 skill = store.read("shared");
         assertNotNull(skill);
-        assertEquals("Project version", skill.getDescription());
+        assertEquals("Project version", skill.description());
     }
 
     @Test

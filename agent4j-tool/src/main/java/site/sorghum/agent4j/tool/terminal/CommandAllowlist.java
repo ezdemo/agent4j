@@ -57,12 +57,12 @@ public class CommandAllowlist {
         RISKY_ARGS.put("git remote", Arrays.asList(
                 "add", "remove", "rm", "rename", "set-url", "set-head", "prune"));
         RISKY_ARGS.put("git diff", Arrays.asList("--output", "--ext-diff"));
-        RISKY_ARGS.put("git log", Arrays.asList("--output"));
-        RISKY_ARGS.put("git show", Arrays.asList("--output"));
+        RISKY_ARGS.put("git log", List.of("--output"));
+        RISKY_ARGS.put("git show", List.of("--output"));
         RISKY_ARGS.put("find", Arrays.asList(
                 "-delete", "-exec", "-execdir", "-ok", "-okdir",
                 "-fprint", "-fprint0", "-fprintf", "-fls"));
-        RISKY_ARGS.put("tree", Arrays.asList("-o"));
+        RISKY_ARGS.put("tree", List.of("-o"));
         RISKY_ARGS.put("npx eslint", Arrays.asList("--fix", "--fix-dry-run"));
         RISKY_ARGS.put("npx biome check", Arrays.asList("--write", "--apply", "--apply-unsafe"));
         RISKY_ARGS.put("ruff", Arrays.asList("--fix", "--unsafe-fixes", "format"));
@@ -114,12 +114,9 @@ public class CommandAllowlist {
                 return false;
 
             // 敏感路径检测
-            if (projectRoot != null && hasSensitivePathArgs(argv, projectRoot,
-                    sensitivePrefixes != null ? sensitivePrefixes : Collections.<String>emptyList(),
-                    sensitivePatterns != null ? sensitivePatterns : Collections.<String>emptyList()))
-                return false;
-
-            return true;
+            return projectRoot == null || !hasSensitivePathArgs(argv, projectRoot,
+                    sensitivePrefixes != null ? sensitivePrefixes : Collections.emptyList(),
+                    sensitivePatterns != null ? sensitivePatterns : Collections.emptyList());
         }
         return false;
     }
@@ -213,9 +210,8 @@ public class CommandAllowlist {
         if (target == null) return false;
         String lower = target.toLowerCase();
         if ("/dev/null".equals(lower)) return true;
-        if (System.getProperty("os.name", "").toLowerCase().contains("win")
-                && "nul".equals(lower)) return true;
-        return false;
+        return System.getProperty("os.name", "").toLowerCase().contains("win")
+                && "nul".equals(lower);
     }
 
     /**
@@ -223,11 +219,11 @@ public class CommandAllowlist {
      */
     public static boolean redirectsEscapeSandbox(CommandChainParser.CommandChain chain, Path projectRoot) {
         Path root = projectRoot.normalize().toAbsolutePath();
-        for (CommandChainParser.ChainSegment seg : chain.segments) {
-            for (CommandChainParser.Redirect r : seg.redirects) {
-                if (r.kind == CommandChainParser.RedirectKind.ERR_MERGE) continue;
-                if (r.target.isEmpty() || isNullDevice(r.target)) continue;
-                Path resolved = root.resolve(r.target).normalize();
+        for (CommandChainParser.ChainSegment seg : chain.segments()) {
+            for (CommandChainParser.Redirect r : seg.redirects()) {
+                if (r.kind() == CommandChainParser.RedirectKind.ERR_MERGE) continue;
+                if (r.target().isEmpty() || isNullDevice(r.target())) continue;
+                Path resolved = root.resolve(r.target()).normalize();
                 if (!resolved.startsWith(root)) return true;
             }
         }

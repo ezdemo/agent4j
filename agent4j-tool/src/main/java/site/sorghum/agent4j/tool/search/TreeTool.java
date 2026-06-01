@@ -8,7 +8,6 @@ import site.sorghum.agent4j.tool.ToolResult;
 
 import java.io.IOException;
 import java.nio.file.Paths;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -43,7 +42,7 @@ public class TreeTool extends AgentTool {
                     + "自动跳过 node_modules / .git / target 等无关目录。\n"
                     + "可通过 maxDepth 控制输出深度，避免上下文过大。";
 
-    private static final List<ToolParameter> PARAMETERS = Arrays.asList(
+    private static final List<ToolParameter> PARAMETERS = List.of(
             new ToolParameter("maxDepth", "int", false,
                     "最大递归深度，默认 3。0 = 仅根目录，-1 = 不限深度")
     );

@@ -121,19 +121,6 @@ public interface SessionStore {
     /**
      * 会话元信息。
      */
-    class SessionInfo {
-        public final String name;
-        public final long size;
-        public final long messageCount;
-        public final long mtime;
-        public final String title;
-
-        public SessionInfo(String name, long size, long messageCount, long mtime, String title) {
-            this.name = name;
-            this.size = size;
-            this.messageCount = messageCount;
-            this.mtime = mtime;
-            this.title = title;
-        }
+    record SessionInfo(String name, long size, long messageCount, long mtime, String title) {
     }
 }

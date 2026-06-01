@@ -278,23 +278,7 @@ public class WorkspaceManager {
     /**
      * 工作区信息
      */
-    public static class WorkspaceInfo {
-        public final String hash;
-        public final String name;
-        public final String path;
-        public final long createdAt;
-        public final long lastAccessedAt;
-        public final int sessionCount;
-        public final boolean isActive;
-
-        public WorkspaceInfo(String hash, String name, String path, long createdAt, long lastAccessedAt, int sessionCount, boolean isActive) {
-            this.hash = hash;
-            this.name = name;
-            this.path = path;
-            this.createdAt = createdAt;
-            this.lastAccessedAt = lastAccessedAt;
-            this.sessionCount = sessionCount;
-            this.isActive = isActive;
-        }
+    public record WorkspaceInfo(String hash, String name, String path, long createdAt, long lastAccessedAt,
+                                int sessionCount, boolean isActive) {
     }
 }

@@ -678,10 +678,10 @@ public class AgentService {
         List<SessionInfoDTO> sessions = new ArrayList<>();
         for (SessionStore.SessionInfo sessionInfo : store.list()) {
             sessions.add(new SessionInfoDTO(
-                    sessionInfo.name,
-                    store.getTitle(sessionInfo.name),
-                    sessionInfo.messageCount,
-                    sessionInfo.name.equals(activeSession)
+                    sessionInfo.name(),
+                    store.getTitle(sessionInfo.name()),
+                    sessionInfo.messageCount(),
+                    sessionInfo.name().equals(activeSession)
             ));
         }
         return sessions;
@@ -1092,9 +1092,9 @@ public class AgentService {
 
             for (WorkspaceManager.WorkspaceInfo info : workspaces) {
                 result.add(new WorkspaceInfoDTO(
-                        info.hash, info.name, info.path,
-                        info.createdAt, info.lastAccessedAt,
-                        info.sessionCount, info.isActive
+                        info.hash(), info.name(), info.path(),
+                        info.createdAt(), info.lastAccessedAt(),
+                        info.sessionCount(), info.isActive()
                 ));
             }
         } catch (IOException e) {
@@ -1148,8 +1148,8 @@ public class AgentService {
             WorkspaceManager wm = new WorkspaceManager();
             List<WorkspaceManager.WorkspaceInfo> list = wm.listWorkspaces();
             for (WorkspaceManager.WorkspaceInfo info : list) {
-                if (hash.equals(info.hash)) {
-                    return switchWorkspace(info.path);
+                if (hash.equals(info.hash())) {
+                    return switchWorkspace(info.path());
                 }
             }
         } catch (IOException e) {
@@ -1250,10 +1250,10 @@ public class AgentService {
         List<SkillMetaDTO> result = new ArrayList<>();
         for (site.sorghum.agent4j.bin.skill.SkillV2 skill : sharedSkillStore.list()) {
             result.add(new SkillMetaDTO(
-                    skill.getName(),
-                    skill.getDescription() != null ? skill.getDescription() : "",
-                    skill.getScope().name().toLowerCase(),
-                    skill.getRunAs().name().toLowerCase()
+                    skill.name(),
+                    skill.description() != null ? skill.description() : "",
+                    skill.scope().name().toLowerCase(),
+                    skill.runAs().name().toLowerCase()
             ));
         }
         return result;

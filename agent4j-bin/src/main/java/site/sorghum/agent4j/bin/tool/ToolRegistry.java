@@ -22,7 +22,7 @@ public class ToolRegistry {
      * 被禁用的工具在 register 时会被跳过，不会出现在 LLM 的工具列表中。
      */
     public ToolRegistry setDisabledTools(Set<String> disabledTools) {
-        this.disabledTools = disabledTools != null ? disabledTools : Collections.<String>emptySet();
+        this.disabledTools = disabledTools != null ? disabledTools : Collections.emptySet();
         return this;
     }
 

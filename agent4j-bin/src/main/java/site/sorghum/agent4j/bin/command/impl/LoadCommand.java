@@ -63,7 +63,7 @@ public class LoadCommand implements ChatCommand {
                 System.out.println("(无效编号)");
                 return CommandResult.CONTINUE;
             }
-            String name = sessions.get(n).name;
+            String name = sessions.get(n).name();
 
             // 新建会话并切换到目标会话
             context.getAgent().newSession();

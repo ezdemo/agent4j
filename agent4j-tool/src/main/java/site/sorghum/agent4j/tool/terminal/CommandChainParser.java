@@ -256,44 +256,26 @@ public class CommandChainParser {
         }
     }
 
-    public static class Redirect {
-        public final RedirectKind kind;
-        public final String target; // "" for 2>&1
-
+    /**
+     * @param target "" for 2>&1
+     */
+    public record Redirect(RedirectKind kind, String target) {
         public Redirect(RedirectKind kind, String target) {
             this.kind = kind;
             this.target = target == null ? "" : target;
         }
     }
 
-    public static class ChainSegment {
-        public final List<String> argv;
-        public final List<Redirect> redirects;
-
-        public ChainSegment(List<String> argv, List<Redirect> redirects) {
-            this.argv = argv;
-            this.redirects = redirects;
-        }
+    public record ChainSegment(List<String> argv, List<Redirect> redirects) {
     }
 
-    public static class CommandChain {
-        public final List<ChainSegment> segments;
-        public final List<ChainOp> ops; // segs.size() - 1
-
-        public CommandChain(List<ChainSegment> segments, List<ChainOp> ops) {
-            this.segments = segments;
-            this.ops = ops;
-        }
+    /**
+     * @param ops segs.size() - 1
+     */
+    public record CommandChain(List<ChainSegment> segments, List<ChainOp> ops) {
     }
 
-    private static class SplitResult {
-        final List<String> segs;
-        final List<ChainOp> ops;
-
-        SplitResult(List<String> segs, List<ChainOp> ops) {
-            this.segs = segs;
-            this.ops = ops;
-        }
+    private record SplitResult(List<String> segs, List<ChainOp> ops) {
     }
 
     /**
@@ -314,14 +296,7 @@ public class CommandChainParser {
 
     // ---- 工具方法 ----
 
-    private static class RedirectMatch {
-        final RedirectKind kind;
-        final int len;
-
-        RedirectMatch(RedirectKind k, int l) {
-            kind = k;
-            len = l;
-        }
+    private record RedirectMatch(RedirectKind kind, int len) {
     }
 
     // ---- 异常 ----

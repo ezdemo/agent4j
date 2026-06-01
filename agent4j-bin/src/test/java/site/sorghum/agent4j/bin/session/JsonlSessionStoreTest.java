@@ -123,9 +123,9 @@ class JsonlSessionStoreTest {
         assertFalse(sessions.isEmpty());
         boolean found = false;
         for (SessionStore.SessionInfo s : sessions) {
-            if (s.name.equals(store.currentName())) {
+            if (s.name().equals(store.currentName())) {
                 found = true;
-                assertTrue(s.messageCount >= 1);
+                assertTrue(s.messageCount() >= 1);
             }
         }
         assertTrue(found, "当前会话应在列表中");

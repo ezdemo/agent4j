@@ -30,7 +30,7 @@ class ScavengerTest {
         existingList.add(existing);
         List<Scavenger.ToolCall> result = Scavenger.scavenge(null, content, existingList);
         for (Scavenger.ToolCall tc : result) {
-            assertFalse(tc.name.equals("read_file") && tc.arguments.equals("{}"),
+            assertFalse(tc.name().equals("read_file") && tc.arguments().equals("{}"),
                     "已存在的调用不应重复回收");
         }
     }

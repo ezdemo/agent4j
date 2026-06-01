@@ -88,7 +88,7 @@ public class RunSkillTool extends AgentTool {
         if (skill == null) {
             // 列出可用的 skill
             String available = Solon.context().getBean(SkillStoreV2.class).list().stream()
-                    .map(SkillV2::getName)
+                    .map(SkillV2::name)
                     .collect(Collectors.joining(", "));
             return ToolResult.fail("SKILL_NOT_FOUND",
                     "unknown skill: " + name + "\navailable: " + (available.isEmpty() ? "(none)" : available));
@@ -100,7 +100,7 @@ public class RunSkillTool extends AgentTool {
         }
 
         // 根据运行模式处理
-        if (skill.getRunAs() == SkillV2.RunAs.SUBAGENT) {
+        if (skill.runAs() == SkillV2.RunAs.SUBAGENT) {
             // TODO: 实现 subagent 模式
             // 目前暂时以 inline 模式处理
             return ToolResult.ok(skill.toFullContent(arguments));

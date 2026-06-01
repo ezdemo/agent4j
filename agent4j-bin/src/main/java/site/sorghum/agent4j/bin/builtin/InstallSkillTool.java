@@ -111,7 +111,7 @@ public class InstallSkillTool extends AgentTool {
 
         // 确定作用域
         boolean hasProjectScope = Solon.context().getBean(SkillStoreV2.class).getRoots().stream()
-                .anyMatch(r -> r.scope == SkillV2.Scope.PROJECT);
+                .anyMatch(r -> r.scope() == SkillV2.Scope.PROJECT);
 
         boolean wantsGlobal = "global".equalsIgnoreCase(scopeStr);
         if (!wantsGlobal && !hasProjectScope) {
@@ -125,8 +125,8 @@ public class InstallSkillTool extends AgentTool {
         } else {
             // 使用第一个项目级目录
             targetDir = Solon.context().getBean(SkillStoreV2.class).getRoots().stream()
-                    .filter(r -> r.scope == SkillV2.Scope.PROJECT)
-                    .map(r -> r.dir)
+                    .filter(r -> r.scope() == SkillV2.Scope.PROJECT)
+                    .map(r -> r.dir())
                     .findFirst()
                     .orElse(Paths.get(System.getProperty("user.home"), ".agent4j", "skills"));
         }

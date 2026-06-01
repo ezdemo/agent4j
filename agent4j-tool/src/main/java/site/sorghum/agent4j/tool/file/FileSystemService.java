@@ -77,7 +77,7 @@ public class FileSystemService {
             throws IOException {
         Path start = pathStr != null ? resolveSafe(root, pathStr) : root;
         if (!Files.isDirectory(start)) return "[NOT_DIR]";
-        Set<String> skip = includeDeps == Boolean.TRUE ? Collections.<String>emptySet()
+        Set<String> skip = includeDeps == Boolean.TRUE ? Collections.emptySet()
                 : new HashSet<>(Arrays.asList("node_modules", ".git", "target", "dist", "build",
                 ".venv", "__pycache__"));
         String lower = pattern != null ? pattern.toLowerCase() : "";

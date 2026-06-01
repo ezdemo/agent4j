@@ -95,8 +95,7 @@ public class ChatMessage {
                         tcArgsObj = tc.get("arguments");
                         if (tcArgsObj == null) tcArgsObj = "{}";
                     }
-                    if (tcArgsObj instanceof String) {
-                        String tcArgsStr = (String) tcArgsObj;
+                    if (tcArgsObj instanceof String tcArgsStr) {
                         try {
                             tcArgsObj = ONode.ofJson(tcArgsStr).toData();
                         } catch (Exception ignored) {

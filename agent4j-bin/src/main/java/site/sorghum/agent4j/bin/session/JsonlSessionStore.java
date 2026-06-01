@@ -367,7 +367,7 @@ public class JsonlSessionStore implements SessionStore {
                 list.add(new SessionInfo(name, size, lines, attr.lastModifiedTime().toMillis(), title));
             }
         }
-        list.sort((a, b) -> Long.compare(b.mtime, a.mtime));
+        list.sort((a, b) -> Long.compare(b.mtime(), a.mtime()));
         return list;
     }
 

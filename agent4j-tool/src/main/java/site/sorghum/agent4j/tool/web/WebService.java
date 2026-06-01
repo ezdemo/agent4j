@@ -8,6 +8,7 @@ import java.net.HttpURLConnection;
 import java.net.URI;
 import java.net.URL;
 import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -24,7 +25,7 @@ public class WebService {
      */
     public String webSearch(String query, Integer topK) throws IOException {
         try {
-            String encoded = URLEncoder.encode(query, "UTF-8");
+            String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8);
             URL url = new URL("https://lite.duckduckgo.com/lite/?q=" + encoded);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setConnectTimeout(10000);

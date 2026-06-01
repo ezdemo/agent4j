@@ -234,7 +234,7 @@ class WorkspaceIndexTest {
 
             List<SearchMatch> matches = index.grep("hello");
             assertEquals(2, matches.size());
-            assertTrue(matches.get(0).getContent().contains("hello"));
+            assertTrue(matches.get(0).content().contains("hello"));
         }
 
         @Test
@@ -260,7 +260,7 @@ class WorkspaceIndexTest {
 
             List<SearchMatch> matches = index.grep("hello", "*.java");
             assertEquals(1, matches.size());
-            assertTrue(matches.get(0).getFile().endsWith(".java"));
+            assertTrue(matches.get(0).file().endsWith(".java"));
         }
 
         @Test

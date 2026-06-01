@@ -98,7 +98,7 @@ public class Scavenger {
             String pname = m.group(1);
             boolean isStr = "true".equalsIgnoreCase(m.group(2));
             String val = m.group(3).trim();
-            params.put(pname, isStr ? val : val);
+            params.put(pname, val);
         }
         if (params.isEmpty()) return "{}";
         StringBuilder sb = new StringBuilder("{");
@@ -139,15 +139,6 @@ public class Scavenger {
     /**
      * 工具调用数据
      */
-    public static class ToolCall {
-        public final String id;
-        public final String name;
-        public final String arguments;
-
-        public ToolCall(String id, String name, String arguments) {
-            this.id = id;
-            this.name = name;
-            this.arguments = arguments;
-        }
+    public record ToolCall(String id, String name, String arguments) {
     }
 }

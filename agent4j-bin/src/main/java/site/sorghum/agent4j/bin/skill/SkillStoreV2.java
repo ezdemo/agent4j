@@ -95,8 +95,8 @@ public class SkillStoreV2 {
             try (DirectoryStream<Path> stream = Files.newDirectoryStream(root.dir)) {
                 for (Path entry : stream) {
                     SkillV2 skill = readEntry(entry, root.scope);
-                    if (skill != null && !byName.containsKey(skill.getName())) {
-                        byName.put(skill.getName(), skill);
+                    if (skill != null && !byName.containsKey(skill.name())) {
+                        byName.put(skill.name(), skill);
                     }
                 }
             } catch (IOException e) {
@@ -106,7 +106,7 @@ public class SkillStoreV2 {
 
         // 按名称排序
         List<SkillV2> skills = new ArrayList<>(byName.values());
-        skills.sort(Comparator.comparing(SkillV2::getName));
+        skills.sort(Comparator.comparing(SkillV2::name));
         return skills;
     }
 
@@ -194,7 +194,7 @@ public class SkillStoreV2 {
         Map<String, String> fields = parseFrontmatter(frontmatter);
 
         String name = fields.get("name");
-        if (name == null || !isValidSkillName(name)) {
+        if (!isValidSkillName(name)) {
             name = stem;
         }
 
@@ -293,15 +293,6 @@ public class SkillStoreV2 {
     /**
      * Skill 根目录。
      */
-    public static class SkillRoot {
-        public final Path dir;
-        public final SkillV2.Scope scope;
-        public final int priority;
-
-        public SkillRoot(Path dir, SkillV2.Scope scope, int priority) {
-            this.dir = dir;
-            this.scope = scope;
-            this.priority = priority;
-        }
+    public record SkillRoot(Path dir, SkillV2.Scope scope, int priority) {
     }
 }

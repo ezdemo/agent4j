@@ -60,20 +60,20 @@ public class ToolContext {
     private final boolean skipSandboxCheck;
 
     public ToolContext(Map<String, Object> params) {
-        this(params, null, null, null, null, Collections.<String>emptyList());
+        this(params, null, null, null, null, Collections.emptyList());
     }
 
     public ToolContext(Map<String, Object> params, Path rootDir) {
-        this(params, rootDir, null, null, null, Collections.<String>emptyList());
+        this(params, rootDir, null, null, null, Collections.emptyList());
     }
 
     public ToolContext(Map<String, Object> params, Path rootDir, String apiUrl, String apiKey) {
-        this(params, rootDir, apiUrl, apiKey, null, Collections.<String>emptyList());
+        this(params, rootDir, apiUrl, apiKey, null, Collections.emptyList());
     }
 
     public ToolContext(Map<String, Object> params, Path rootDir, String apiUrl, String apiKey,
                        Object toolRegistry) {
-        this(params, rootDir, apiUrl, apiKey, toolRegistry, Collections.<String>emptyList());
+        this(params, rootDir, apiUrl, apiKey, toolRegistry, Collections.emptyList());
     }
 
     public ToolContext(Map<String, Object> params, Path rootDir, String apiUrl, String apiKey,
@@ -89,12 +89,12 @@ public class ToolContext {
     public ToolContext(Map<String, Object> params, Path rootDir, String apiUrl, String apiKey,
                        Object toolRegistry, List<String> blockedPaths, String sessionId,
                        boolean skipSandboxCheck) {
-        this.params = params != null ? new HashMap<>(params) : Collections.<String, Object>emptyMap();
+        this.params = params != null ? new HashMap<>(params) : Collections.emptyMap();
         this.rootDir = rootDir;
         this.apiUrl = apiUrl;
         this.apiKey = apiKey;
         this.toolRegistry = toolRegistry;
-        this.blockedPaths = blockedPaths != null ? blockedPaths : Collections.<String>emptyList();
+        this.blockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
         this.sessionId = sessionId;
         this.skipSandboxCheck = skipSandboxCheck;
     }

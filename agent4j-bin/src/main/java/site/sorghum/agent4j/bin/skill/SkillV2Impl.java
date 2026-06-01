@@ -9,16 +9,8 @@ import java.util.Objects;
  *
  * @author Sorghum
  */
-public class SkillV2Impl implements SkillV2 {
-
-    private final String name;
-    private final String description;
-    private final String body;
-    private final Scope scope;
-    private final String path;
-    private final RunAs runAs;
-    private final List<String> allowedTools;
-    private final String model;
+public record SkillV2Impl(String name, String description, String body, Scope scope, String path, RunAs runAs,
+                          List<String> allowedTools, String model) implements SkillV2 {
 
     public SkillV2Impl(String name, String description, String body, Scope scope,
                        String path, RunAs runAs, List<String> allowedTools, String model) {
@@ -30,46 +22,6 @@ public class SkillV2Impl implements SkillV2 {
         this.runAs = runAs != null ? runAs : RunAs.INLINE;
         this.allowedTools = allowedTools != null ? allowedTools : Collections.emptyList();
         this.model = model;
-    }
-
-    @Override
-    public String getName() {
-        return name;
-    }
-
-    @Override
-    public String getDescription() {
-        return description;
-    }
-
-    @Override
-    public String getBody() {
-        return body;
-    }
-
-    @Override
-    public Scope getScope() {
-        return scope;
-    }
-
-    @Override
-    public String getPath() {
-        return path;
-    }
-
-    @Override
-    public RunAs getRunAs() {
-        return runAs;
-    }
-
-    @Override
-    public List<String> getAllowedTools() {
-        return allowedTools;
-    }
-
-    @Override
-    public String getModel() {
-        return model;
     }
 
     @Override
