@@ -3,6 +3,7 @@ package site.sorghum.agent4j.bin.agent;
 import lombok.Getter;
 import lombok.Setter;
 import org.noear.snack4.ONode;
+import site.sorghum.agent4j.bin.builtin.TaskTool;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.tool.ToolDispatcher;
@@ -1158,7 +1159,7 @@ public class AgentLoop {
 
         // 收集子代理的 token 用量，同步到父会话
         if (sessionService != null) {
-            var subUsage = site.sorghum.agent4j.bin.builtin.TaskTool.drainUsageCollector();
+            var subUsage = TaskTool.drainUsageCollector();
             for (var ur : subUsage) {
                 sessionService.addUsage(ur.model(),
                         (int) ur.prompt(), (int) ur.completion(),

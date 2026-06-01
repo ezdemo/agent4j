@@ -1,6 +1,6 @@
 package site.sorghum.agent4j.bin.agent;
 
-import site.sorghum.agent4j.bin.model.HttpModelClient;
+import lombok.Getter;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.tool.ToolDef;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
@@ -36,11 +36,31 @@ public class SubAgent {
     private final ModelClient client;
     private final ToolRegistry registry;
     private final String systemPrompt;
+    /**
+     * 获取按模型分别累计的 token 用量: model -> [prompt, completion, cacheHit, cacheMiss]
+     */
+    @Getter
     private final Map<String, long[]> modelUsage = new LinkedHashMap<>();
+    /**
+     * 获取累计 prompt token 数
+     */
     // ==================== 子代理用量追踪 ====================
+    @Getter
     private long totalPromptTokens;
+    /**
+     * 获取累计 completion token 数
+     */
+    @Getter
     private long totalCompletionTokens;
+    /**
+     * 获取累计 cache hit token 数
+     */
+    @Getter
     private long totalCacheHit;
+    /**
+     * 获取累计 cache miss token 数
+     */
+    @Getter
     private long totalCacheMiss;
 
     /**
@@ -55,49 +75,6 @@ public class SubAgent {
             }
         }
         this.systemPrompt = systemPrompt;
-    }
-
-    /**
-     * 构造函数（接受 apiUrl/apiKey/model 字符串，用于非 DI 场景）
-     */
-    public SubAgent(String apiUrl, String apiKey, String model,
-                    ToolRegistry parentRegistry, String systemPrompt) {
-        this(new HttpModelClient(apiUrl, apiKey, model), parentRegistry, systemPrompt);
-    }
-
-    /**
-     * 获取累计 prompt token 数
-     */
-    public long getTotalPromptTokens() {
-        return totalPromptTokens;
-    }
-
-    /**
-     * 获取累计 completion token 数
-     */
-    public long getTotalCompletionTokens() {
-        return totalCompletionTokens;
-    }
-
-    /**
-     * 获取累计 cache hit token 数
-     */
-    public long getTotalCacheHit() {
-        return totalCacheHit;
-    }
-
-    /**
-     * 获取累计 cache miss token 数
-     */
-    public long getTotalCacheMiss() {
-        return totalCacheMiss;
-    }
-
-    /**
-     * 获取按模型分别累计的 token 用量: model -> [prompt, completion, cacheHit, cacheMiss]
-     */
-    public Map<String, long[]> getModelUsage() {
-        return modelUsage;
     }
 
     /**
