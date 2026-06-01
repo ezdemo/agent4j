@@ -39,11 +39,6 @@ public interface AgentOutput {
     // ==================== 事件 ====================
 
     /**
-     * 流式思考结束
-     */
-    void onReasoningComplete();
-
-    /**
      * 完整思考内容（非流式场景，如无 tool_calls 时模型返回纯思考）
      */
     void onReasoning(String reasoning);
@@ -83,11 +78,6 @@ public interface AgentOutput {
      * 日志消息（调试/信息/警告/错误日志）
      */
     void onLog(LogLevel level, String message);
-
-    /**
-     * 普通文本消息（如 Agent4jApp 中的提示信息）
-     */
-    void onMessage(String message);
 
     // ==================== NOOP 空实现 ====================
 

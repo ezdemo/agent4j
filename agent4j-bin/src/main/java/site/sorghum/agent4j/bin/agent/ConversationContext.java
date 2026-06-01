@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.bin.agent;
 
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.bin.session.SessionStore;
 
@@ -27,23 +29,17 @@ public class ConversationContext {
     private final PromptPrefix prefix;
     /**
      * 持久化存储（可选）
+     * -- SETTER --
+     *  绑定会话存储，所有后续消息将通过此存储持久化。
+     *  传入 null 可解除绑定（停止持久化）。
+
      */
+    @Setter
+    @Getter
     private SessionStore sessionStore = null;
 
     public ConversationContext(PromptPrefix prefix) {
         this.prefix = prefix;
-    }
-
-    public SessionStore getSessionStore() {
-        return sessionStore;
-    }
-
-    /**
-     * 绑定会话存储，所有后续消息将通过此存储持久化。
-     * 传入 null 可解除绑定（停止持久化）。
-     */
-    public void setSessionStore(SessionStore store) {
-        this.sessionStore = store;
     }
 
     // ---- 写入 ----
@@ -97,14 +93,6 @@ public class ConversationContext {
         List<ChatMessage> msgs = prefix.toMessages();
         msgs.addAll(history);
         return msgs;
-    }
-
-    /**
-     * 替换系统提示词（计划模式切换时用）。
-     * 注意：这将导致下一次 API 调用缓存 miss。
-     */
-    public void replaceSystem(String newSystem) {
-        prefix.replaceSystem(newSystem);
     }
 
     /**

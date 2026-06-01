@@ -98,16 +98,6 @@ public class ApiAgentOutPut implements AgentOutput {
     // ==================== 事件 ====================
 
     @Override
-    public void onReasoningComplete() {
-        if (completed) return;
-        try {
-            emitter.send("reasoning_complete", "{}");
-        } catch (Exception e) {
-            // SSE连接断开时忽略异常，继续执行
-        }
-    }
-
-    @Override
     public void onReasoning(String reasoning) {
         if (completed || reasoning == null || reasoning.isEmpty()) return;
         try {
@@ -183,16 +173,6 @@ public class ApiAgentOutPut implements AgentOutput {
         node.set("message", message);
         try {
             emitter.send("log", node.toJson());
-        } catch (Exception e) {
-            // SSE连接断开时忽略异常，继续执行
-        }
-    }
-
-    @Override
-    public void onMessage(String message) {
-        if (completed || message == null) return;
-        try {
-            emitter.send("message", escapeJson(message));
         } catch (Exception e) {
             // SSE连接断开时忽略异常，继续执行
         }

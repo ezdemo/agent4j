@@ -90,9 +90,8 @@ public class ContextFolding {
         result.add(summaryMsg);
         result.addAll(tail);
 
-        int before = total;
         int after = estimateCharsMap(result);
-        log.info("[fold] {} 条消息 → {} 字符摘要（{} → ~{} 字符）", dropped, summary.length(), before, after);
+        log.info("[fold] {} 条消息 → {} 字符摘要（{} → ~{} 字符）", dropped, summary.length(), total, after);
         return result;
     }
 
@@ -147,7 +146,7 @@ public class ContextFolding {
             }
         }
         // 如果 tail 末尾还有未配对的 tool_calls，剥离 tool_calls 并删除孤儿 tool 结果
-        if (pendingToolCount > 0 && lastAssistantWithTcIdx >= 0) {
+        if (pendingToolCount > 0) {
             // 剥离最后一个 assistant 的 tool_calls
             Map<String, Object> m = clean.get(lastAssistantWithTcIdx);
             Map<String, Object> stripped = new LinkedHashMap<>();
@@ -174,17 +173,18 @@ public class ContextFolding {
      * @return 摘要文本，失败时返回 null
      */
     private static String summarize(List<Map<String, Object>> head, ModelClient client) throws IOException {
-        String sp = "你是一个编码助手的对话历史摘要器。"
-                + "输出一段简洁的中文段落，包含以下内容：\n"
-                + "- 用户的整体目标\n"
-                + "- 已完成的决策和结论\n"
-                + "- 已检查或修改的文件\n"
-                + "- 仍相关的工具结果\n"
-                + "- 未完成的待办\n"
-                + "不要逐轮记录，不要 markdown 标题，纯中文段落。";
+        String sp = """
+                你是一个编码助手的对话历史摘要器。\
+                输出一段简洁的中文段落，包含以下内容：
+                - 用户的整体目标
+                - 已完成的决策和结论
+                - 已检查或修改的文件
+                - 仍相关的工具结果
+                - 未完成的待办
+                不要逐轮记录，不要 markdown 标题，纯中文段落。""";
 
         // 先截断到字符限制
-        List<Map<String, Object>> trimmed = truncateForSummary(head, HEAD_CHARS_LIMIT);
+        List<Map<String, Object>> trimmed = truncateForSummary(head);
         // 截断后再清理 tool_calls/tool 对（顺序重要：先截断后清理）
         trimmed = sanitizeMessagesForSummary(trimmed);
 
@@ -255,19 +255,19 @@ public class ContextFolding {
     /**
      * 截断到字符限制，保留尾部。
      */
-    private static List<Map<String, Object>> truncateForSummary(List<Map<String, Object>> msgs, int limit) {
+    private static List<Map<String, Object>> truncateForSummary(List<Map<String, Object>> msgs) {
         int total = estimateCharsMap(msgs);
-        if (total <= limit) return msgs;
+        if (total <= ContextFolding.HEAD_CHARS_LIMIT) return msgs;
 
         int cum = 0;
         int start = msgs.size();
         for (int i = msgs.size() - 1; i >= 0; i--) {
-            if (cum + estimateCharsMap(msgs.get(i)) > limit) break;
+            if (cum + estimateCharsMap(msgs.get(i)) > ContextFolding.HEAD_CHARS_LIMIT) break;
             cum += estimateCharsMap(msgs.get(i));
             start = i;
         }
         if (start >= msgs.size()) return new ArrayList<>();
-        return new ArrayList<>(msgs.subList(Math.max(0, start), msgs.size()));
+        return new ArrayList<>(msgs.subList(start, msgs.size()));
     }
 
     /**

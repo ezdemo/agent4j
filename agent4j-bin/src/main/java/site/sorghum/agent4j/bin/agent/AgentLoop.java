@@ -193,13 +193,6 @@ public class AgentLoop {
     }
 
     /**
-     * 获取模型客户端
-     */
-    public ModelClient getclient() {
-        return client;
-    }
-
-    /**
      * 批准待执行的工具调用
      */
     public void approveHITL() {

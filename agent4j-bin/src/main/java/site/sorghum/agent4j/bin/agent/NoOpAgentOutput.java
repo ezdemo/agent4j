@@ -30,10 +30,6 @@ public final class NoOpAgentOutput implements AgentOutput {
     }
 
     @Override
-    public void onReasoningComplete() {
-    }
-
-    @Override
     public void onReasoning(String reasoning) {
     }
 
@@ -59,10 +55,6 @@ public final class NoOpAgentOutput implements AgentOutput {
 
     @Override
     public void onLog(LogLevel level, String message) {
-    }
-
-    @Override
-    public void onMessage(String message) {
     }
 
     @Override

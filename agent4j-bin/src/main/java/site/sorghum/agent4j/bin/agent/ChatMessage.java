@@ -81,23 +81,22 @@ public class ChatMessage {
                 msg.toolCalls = new ArrayList<>();
                 for (Map<String, Object> tc : tcMaps) {
                     String tcId = String.valueOf(tc.getOrDefault("id", "unknown"));
-                    String tcName = "unknown";
-                    Object tcArgsObj = "{}";
+                    String tcName;
+                    Object tcArgsObj;
                     Object funcObj = tc.get("function");
                     if (funcObj instanceof Map) {
                         @SuppressWarnings("unchecked")
                         Map<String, Object> func = (Map<String, Object>) funcObj;
                         tcName = String.valueOf(func.getOrDefault("name", "unknown"));
                         tcArgsObj = func.get("arguments");
-                        if (tcArgsObj == null) tcArgsObj = "{}";
                     } else {
                         tcName = String.valueOf(tc.getOrDefault("name", "unknown"));
                         tcArgsObj = tc.get("arguments");
-                        if (tcArgsObj == null) tcArgsObj = "{}";
                     }
+                    if (tcArgsObj == null) tcArgsObj = "{}";
                     if (tcArgsObj instanceof String tcArgsStr) {
                         try {
-                            tcArgsObj = ONode.ofJson(tcArgsStr).toData();
+                            tcArgsObj = ONode.ofJson(tcArgsStr).toBean();
                         } catch (Exception ignored) {
                         }
                     }
@@ -133,10 +132,6 @@ public class ChatMessage {
     }
 
     // ==================== 反序列化 ====================
-
-    public boolean hasReasoning() {
-        return reasoningContent != null && !reasoningContent.isEmpty();
-    }
 
     // ==================== 序列化 ====================
 

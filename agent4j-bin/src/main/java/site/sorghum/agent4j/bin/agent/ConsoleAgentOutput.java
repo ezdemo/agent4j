@@ -44,11 +44,6 @@ public class ConsoleAgentOutput implements AgentOutput {
     }
 
     @Override
-    public void onReasoningComplete() {
-        // 默认不做额外输出，由 onContentComplete 或 onReasoning 处理
-    }
-
-    @Override
     public void onReasoning(String reasoning) {
         System.out.println("\n── 思考 ──");
         System.out.println(reasoning);
@@ -106,11 +101,6 @@ public class ConsoleAgentOutput implements AgentOutput {
                 System.err.println(message);
                 break;
         }
-    }
-
-    @Override
-    public void onMessage(String message) {
-        System.out.println(message);
     }
 
     @Override

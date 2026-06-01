@@ -31,14 +31,8 @@ public interface AgentLoopListener {
     /**
      * token 用量回调。
      *
-     * @param promptTokens     输入 token 数
-     * @param completionTokens 输出 token 数
-     * @param totalTokens      总 token 数
-     * @param cacheHit         缓存命中 token 数
-     * @param cacheMiss        缓存未命中 token 数
      */
-    default void onUsage(int promptTokens, int completionTokens, int totalTokens,
-                         int cacheHit, int cacheMiss) {
+    default void onUsage() {
     }
 
     /**
@@ -46,6 +40,6 @@ public interface AgentLoopListener {
      */
     default void onUsage(String model, int promptTokens, int completionTokens, int totalTokens,
                          int cacheHit, int cacheMiss) {
-        onUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
+        onUsage();
     }
 }

@@ -41,10 +41,6 @@ public class SseAgentOutput implements AgentOutput {
     }
 
     @Override
-    public void onReasoningComplete() {
-    }
-
-    @Override
     public void onReasoning(String reasoning) {
         if (reasoning != null && !reasoning.isEmpty()) {
             emitter.sendReasoning(reasoning);
@@ -83,10 +79,6 @@ public class SseAgentOutput implements AgentOutput {
     @Override
     public void onLog(LogLevel level, String message) {
         emitter.send("log", ONode.serialize(Map.of("level", level.name(), "message", message)));
-    }
-
-    @Override
-    public void onMessage(String message) {
     }
 
     @Override
