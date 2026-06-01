@@ -668,8 +668,7 @@ const markedRenderer = new marked.Renderer()
 markedRenderer.code = (code, language) => {
   const lang = language ? ` class="language-${language}"` : ''
   return `<div class="code-block-wrap">
-    <button class="code-copy-btn" onclick="copyCode(this)" title="复制代码">${COPY_ICON}</button>
-    <pre><code${lang}>${code}</code></pre>
+    <pre><code${lang}>${code}</code><button class="code-copy-btn" onclick="copyCode(this)" title="复制代码">${COPY_ICON}</button></pre>
   </div>`
 }
 
@@ -1173,15 +1172,15 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   opacity: 1 !important;
 }
 
-/* 代码块右上角悬浮复制按钮 */
-.code-block-wrap {
-  position: relative;
+/* 代码块内嵌复制按钮（通过 :deep 穿透 v-html） */
+.block-content :deep(.code-block-wrap) {
   margin: 8px 0;
 }
-.code-block-wrap pre {
+.block-content :deep(.code-block-wrap pre) {
+  position: relative;
   margin: 0 !important;
 }
-.code-copy-btn {
+.block-content :deep(.code-copy-btn) {
   position: absolute;
   top: 6px;
   right: 6px;
@@ -1196,10 +1195,10 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   line-height: 1;
   z-index: 2;
 }
-.code-block-wrap:hover .code-copy-btn {
+.block-content :deep(.code-block-wrap pre:hover .code-copy-btn) {
   opacity: 0.7;
 }
-.code-copy-btn:hover {
+.block-content :deep(.code-copy-btn:hover) {
   opacity: 1 !important;
   background: var(--bg);
 }
