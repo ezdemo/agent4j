@@ -32,7 +32,13 @@ public class Agent4jConfig {
             String defaultConfig = "{\n"
                     + "  \"baseUrl\": \"http://localhost:11434/v1\",\n"
                     + "  \"apiKey\": \"sk-your-api-key\",\n"
-                    + "  \"hitl\": false\n"
+                    + "  \"hitl\": false,\n"
+                    + "  \"price\": {\n"
+                    + "    \"mimo-v2.5\": { \"input\": \"3\", \"cache\": \"0.025\", \"output\": \"6\" },\n"
+                    + "    \"mimo-v2.5-pro\": { \"input\": \"3\", \"cache\": \"0.025\", \"output\": \"6\" },\n"
+                    + "    \"deepseek-v4-flash\": { \"input\": \"3\", \"cache\": \"0.025\", \"output\": \"6\" },\n"
+                    + "    \"deepseek-v4-pro\": { \"input\": \"3\", \"cache\": \"0.025\", \"output\": \"6\" }\n"
+                    + "  }\n"
                     + "}";
             Files.write(configPath, defaultConfig.getBytes(StandardCharsets.UTF_8));
             System.err.println("[config] 已创建默认配置文件: " + configPath);
@@ -198,6 +204,37 @@ public class Agent4jConfig {
                 if (val != null && !val.isEmpty()) {
                     result.add(val.replace('\\', '/'));
                 }
+            }
+        }
+        return result;
+    }
+
+    /**
+     * 获取模型价格配置。
+     * 从 config.json 的 price 对象读取，格式：
+     * { "model-name": { "input": "0.02", "cache": "1", "output": "2" } }
+     * 价格单位：每百万 token 的人民币金额。
+     */
+    public Map<String, Map<String, Double>> price() {
+        Map<String, Map<String, Double>> result = new LinkedHashMap<>();
+        ONode priceNode = root.select("$.price");
+        if (priceNode == null || priceNode.isNull() || !priceNode.isObject()) {
+            return result;
+        }
+        for (Map.Entry<String, ONode> entry : priceNode.getObject().entrySet()) {
+            String modelName = entry.getKey();
+            ONode val = entry.getValue();
+            Map<String, Double> rates = new LinkedHashMap<>();
+            for (String field : new String[]{"input", "cache", "output"}) {
+                ONode fn = val.get(field);
+                if (fn != null && !fn.isNull()) {
+                    try {
+                        rates.put(field, Double.parseDouble(fn.getString()));
+                    } catch (NumberFormatException ignored) {}
+                }
+            }
+            if (!rates.isEmpty()) {
+                result.put(modelName, rates);
             }
         }
         return result;

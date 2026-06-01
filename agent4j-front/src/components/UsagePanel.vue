@@ -92,6 +92,35 @@
           <span>折叠阈值: {{ formatNumber(foldThreshold) }} (80%)</span>
         </div>
       </div>
+
+      <!-- 费用估算 -->
+      <div v-if="usage.hasPrice" class="usage-cost">
+        <div class="usage-cost-header">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+          </svg>
+          <span class="usage-cost-label">费用估算</span>
+          <span class="usage-cost-model">{{ usage.model }}</span>
+        </div>
+        <div class="usage-cost-total">
+          <span class="usage-cost-currency">¥</span>
+          <span class="usage-cost-value">{{ formatCost(usage.totalCost) }}</span>
+        </div>
+        <div class="usage-cost-grid">
+          <div class="usage-cost-item">
+            <span class="usage-cost-item-label">输入</span>
+            <span class="usage-cost-item-value">¥{{ formatCost(usage.inputCost) }}</span>
+          </div>
+          <div class="usage-cost-item">
+            <span class="usage-cost-item-label">缓存</span>
+            <span class="usage-cost-item-value">¥{{ formatCost(usage.cacheCost) }}</span>
+          </div>
+          <div class="usage-cost-item">
+            <span class="usage-cost-item-label">输出</span>
+            <span class="usage-cost-item-value">¥{{ formatCost(usage.outputCost) }}</span>
+          </div>
+        </div>
+      </div>
     </template>
   </div>
 </template>
@@ -153,6 +182,14 @@ const formatNumber = (num) => {
   if (num >= 1000000) return (num / 1000000).toFixed(1) + 'M'
   if (num >= 1000) return (num / 1000).toFixed(1) + 'K'
   return num.toString()
+}
+
+const formatCost = (cost) => {
+  if (cost === undefined || cost === null) return '0.00'
+  if (cost === 0) return '0.00'
+  if (cost < 0.01) return cost.toFixed(4)
+  if (cost < 1) return cost.toFixed(2)
+  return cost.toFixed(2)
 }
 
 const refresh = async () => {
@@ -409,6 +446,82 @@ defineExpose({ refresh })
   font-size: 11px;
   color: var(--fg-4);
   text-align: center;
+}
+
+/* 费用估算 */
+.usage-cost {
+  padding: 12px;
+  background: var(--bg);
+  border-radius: var(--r);
+  margin-top: 12px;
+}
+
+.usage-cost-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 10px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-2);
+}
+
+.usage-cost-header svg {
+  color: var(--yellow);
+}
+
+.usage-cost-model {
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--fg-4);
+  font-family: var(--mono);
+}
+
+.usage-cost-total {
+  text-align: center;
+  padding: 12px 0;
+  margin-bottom: 10px;
+}
+
+.usage-cost-currency {
+  font-size: 16px;
+  color: var(--fg-3);
+  vertical-align: top;
+  margin-right: 2px;
+}
+
+.usage-cost-value {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--yellow);
+  font-family: var(--mono);
+}
+
+.usage-cost-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.usage-cost-item {
+  text-align: center;
+  padding: 6px;
+  background: var(--bg-2);
+  border-radius: var(--r);
+}
+
+.usage-cost-item-label {
+  display: block;
+  font-size: 10px;
+  color: var(--fg-4);
+  margin-bottom: 2px;
+}
+
+.usage-cost-item-value {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+  font-family: var(--mono);
 }
 
 /* 动画 */

@@ -255,6 +255,10 @@
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
             缓存 {{ cacheRate }}%
           </span>
+          <span class="usage-item usage-cost-item" v-if="usage.hasPrice" :title="'费用: 输入¥' + (usage.inputCost||0).toFixed(4) + ' 缓存¥' + (usage.cacheCost||0).toFixed(4) + ' 输出¥' + (usage.outputCost||0).toFixed(4)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+            ¥{{ formatCost(usage.totalCost) }}
+          </span>
           <span class="usage-sep">|</span>
           <span class="usage-context-wrap" :title="'上下文使用: ' + formatTokens(usage.lastPromptTokens || usage.promptTokens) + ' / ' + formatTokens(usage.maxContextTokens)">
             上下文
@@ -445,6 +449,13 @@ const formatTokens = (n) => {
   if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
   if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
   return String(n)
+}
+
+const formatCost = (cost) => {
+  if (cost === undefined || cost === null) return '0.00'
+  if (cost === 0) return '0.00'
+  if (cost < 0.01) return cost.toFixed(4)
+  return cost.toFixed(2)
 }
 
 const cacheRate = computed(() => {
@@ -1461,6 +1472,16 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
 .usage-refresh:hover {
   background: var(--bg-3);
   color: var(--fg-2);
+}
+
+.usage-cost-item {
+  color: var(--yellow);
+  font-weight: 500;
+  font-family: var(--mono);
+}
+
+.usage-cost-item svg {
+  color: var(--yellow);
 }
 
 /* 模型选择器 */

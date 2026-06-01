@@ -799,32 +799,66 @@ public class AgentService {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         Agent4jAgent agent = agentCache.get(sessionKey);
         Map<String, Object> result = new LinkedHashMap<>();
-        
+
+        long promptTokens = 0;
+        long completionTokens = 0;
+        long cacheHit = 0;
+        long cacheMiss = 0;
+        long lastPromptTokens = 0;
+        int maxContextTokens = 128000;
+
         if (agent != null) {
             long[] usage = agent.getSessionUsage();
-            long promptTokens = usage[0];
-            long completionTokens = usage[1];
-            long cacheHit = usage[2];
-            long cacheMiss = usage[3];
-            long lastPromptTokens = usage.length > 4 ? usage[4] : 0;
-            int maxContextTokens = agent.getMaxContextTokens();
-            
-            result.put("promptTokens", promptTokens);
-            result.put("completionTokens", completionTokens);
-            result.put("cacheHit", cacheHit);
-            result.put("cacheMiss", cacheMiss);
-            result.put("lastPromptTokens", lastPromptTokens);
-            result.put("maxContextTokens", maxContextTokens);
-            result.put("totalTokens", promptTokens + completionTokens);
-        } else {
-            result.put("promptTokens", 0);
-            result.put("completionTokens", 0);
-            result.put("cacheHit", 0);
-            result.put("cacheMiss", 0);
-            result.put("lastPromptTokens", 0);
-            result.put("maxContextTokens", 128000);
-            result.put("totalTokens", 0);
+            promptTokens = usage[0];
+            completionTokens = usage[1];
+            cacheHit = usage[2];
+            cacheMiss = usage[3];
+            lastPromptTokens = usage.length > 4 ? usage[4] : 0;
+            maxContextTokens = agent.getMaxContextTokens();
         }
+
+        result.put("promptTokens", promptTokens);
+        result.put("completionTokens", completionTokens);
+        result.put("cacheHit", cacheHit);
+        result.put("cacheMiss", cacheMiss);
+        result.put("lastPromptTokens", lastPromptTokens);
+        result.put("maxContextTokens", maxContextTokens);
+        result.put("totalTokens", promptTokens + completionTokens);
+
+        // 价格计算
+        try {
+            Agent4jConfig config = Agent4jConfig.load();
+            String currentModel = config.model();
+            Map<String, Map<String, Double>> prices = config.price();
+            Map<String, Double> modelPrice = prices.get(currentModel);
+
+            result.put("model", currentModel);
+            result.put("hasPrice", modelPrice != null && !modelPrice.isEmpty());
+
+            if (modelPrice != null && !modelPrice.isEmpty()) {
+                // 价格单位：每百万 token 的金额
+                double inputRate = modelPrice.getOrDefault("input", 0.0);
+                double cacheRate = modelPrice.getOrDefault("cache", 0.0);
+                double outputRate = modelPrice.getOrDefault("output", 0.0);
+
+                // 非缓存输入 = promptTokens - cacheHit
+                long nonCacheInput = Math.max(0, promptTokens - cacheHit);
+                double inputCost = nonCacheInput / 1_000_000.0 * inputRate;
+                double cacheCost = cacheHit / 1_000_000.0 * cacheRate;
+                double outputCost = completionTokens / 1_000_000.0 * outputRate;
+                double totalCost = inputCost + cacheCost + outputCost;
+
+                result.put("inputCost", Math.round(inputCost * 10000.0) / 10000.0);
+                result.put("cacheCost", Math.round(cacheCost * 10000.0) / 10000.0);
+                result.put("outputCost", Math.round(outputCost * 10000.0) / 10000.0);
+                result.put("totalCost", Math.round(totalCost * 10000.0) / 10000.0);
+                result.put("currency", "CNY");
+            }
+        } catch (Exception e) {
+            // 价格计算失败不影响主逻辑
+            result.put("hasPrice", false);
+        }
+
         return result;
     }
 

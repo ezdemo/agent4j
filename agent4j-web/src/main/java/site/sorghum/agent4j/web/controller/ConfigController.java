@@ -46,6 +46,7 @@ public class ConfigController {
         data.put("hitl", config.hitl());
         data.put("disabledTools", config.disabledTools());
         data.put("blockedPaths", config.blockedPaths());
+        data.put("price", config.price());
         String apiKey = config.apiKey();
         if (apiKey != null && apiKey.length() > 8) {
             data.put("apiKey", apiKey.substring(0, 4) + "****" + apiKey.substring(apiKey.length() - 4));
