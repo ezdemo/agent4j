@@ -70,14 +70,14 @@ public class Agent4jApp {
         final int[] lastUsage = {0, 0, 0, 0, 0}; // prompt, completion, total, cacheHit, cacheMiss
         agent.setListener(new AgentLoopListener() {
             @Override
-            public void onUsage(int promptTokens, int completionTokens, int totalTokens,
+            public void onUsage(String model, int promptTokens, int completionTokens, int totalTokens,
                                  int cacheHit, int cacheMiss) {
                 lastUsage[0] = promptTokens;
                 lastUsage[1] = completionTokens;
                 lastUsage[2] = totalTokens;
                 lastUsage[3] = cacheHit;
                 lastUsage[4] = cacheMiss;
-                agent.addUsage(promptTokens, completionTokens, cacheHit, cacheMiss);
+                agent.addUsage(model, promptTokens, completionTokens, cacheHit, cacheMiss);
             }
         });
 

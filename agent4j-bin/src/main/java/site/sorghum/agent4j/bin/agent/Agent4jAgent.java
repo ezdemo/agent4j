@@ -278,9 +278,19 @@ public class Agent4jAgent {
         sessionService.addUsage(prompt, completion, cacheHit, cacheMiss);
     }
 
+    /** 按模型累计 token 用量 */
+    public void addUsage(String model, int prompt, int completion, int cacheHit, int cacheMiss) {
+        sessionService.addUsage(model, prompt, completion, cacheHit, cacheMiss);
+    }
+
     /** 获取会话累计 token 用量 */
     public long[] getSessionUsage() {
         return sessionService.getUsage();
+    }
+
+    /** 获取按模型分别累计的 token 用量 */
+    public java.util.Map<String, long[]> getModelUsage() {
+        return sessionService.getModelUsage();
     }
 
     /** 获取最近一次 API 返回的 prompt_tokens */

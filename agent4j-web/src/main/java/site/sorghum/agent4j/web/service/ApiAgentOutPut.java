@@ -142,6 +142,13 @@ public class ApiAgentOutPut implements AgentOutput {
     }
 
     @Override
+    public void onUsage(String model, int promptTokens, int completionTokens, int totalTokens,
+                        int cacheHit, int cacheMiss) {
+        // 保持一致：缓存 usage 并推送到 SSE
+        onUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
+    }
+
+    @Override
     public void onError(String error) {
         if (completed) return;
         try {

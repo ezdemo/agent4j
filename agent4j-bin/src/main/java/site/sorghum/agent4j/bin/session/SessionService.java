@@ -5,6 +5,8 @@ import site.sorghum.agent4j.bin.agent.MessageHealer;
 
 import java.io.IOException;
 import java.nio.file.Path;
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -29,6 +31,8 @@ public class SessionService {
     private long sessionCacheMissTokens;
     /** 最近一次 API 返回的 prompt_tokens（用于上下文使用率计算） */
     private long sessionLastPromptTokens;
+    /** 按模型分别累计的 token 用量：model -> [prompt, completion, cacheHit, cacheMiss] */
+    private final Map<String, long[]> modelUsage = new LinkedHashMap<>();
     /** 是否已生成会话标题 */
     private boolean titleGenerated = false;
 
@@ -127,15 +131,39 @@ public class SessionService {
             store.saveUsage(name, sessionPromptTokens,
                     sessionCompletionTokens, sessionCacheHitTokens, sessionCacheMissTokens,
                     sessionLastPromptTokens);
+            // 保存按模型分别累计的用量
+            store.saveModelUsage(name, modelUsage);
         } catch (IOException ignored) {}
     }
 
-    /** 累计 token 用量 */
+    /** 累计 token 用量（兼容旧接口，不区分模型） */
     public void addUsage(int prompt, int completion, int cacheHit, int cacheMiss) {
         this.sessionPromptTokens += prompt;
         this.sessionCompletionTokens += completion;
         this.sessionCacheHitTokens += cacheHit;
         this.sessionCacheMissTokens += cacheMiss;
+    }
+
+    /** 按模型累计 token 用量（同时更新总量） */
+    public void addUsage(String model, int prompt, int completion, int cacheHit, int cacheMiss) {
+        // 更新总量（向后兼容）
+        addUsage(prompt, completion, cacheHit, cacheMiss);
+        // 按模型分别累计
+        String key = model != null ? model : "unknown";
+        long[] mu = modelUsage.computeIfAbsent(key, k -> new long[4]);
+        mu[0] += prompt;
+        mu[1] += completion;
+        mu[2] += cacheHit;
+        mu[3] += cacheMiss;
+    }
+
+    /** 获取按模型分别累计的 token 用量快照 */
+    public Map<String, long[]> getModelUsage() {
+        Map<String, long[]> copy = new LinkedHashMap<>();
+        for (Map.Entry<String, long[]> e : modelUsage.entrySet()) {
+            copy.put(e.getKey(), e.getValue().clone());
+        }
+        return copy;
     }
 
     /** 获取会话累计 token 用量 */
@@ -152,6 +180,9 @@ public class SessionService {
         sessionCacheHitTokens = u[2];
         sessionCacheMissTokens = u[3];
         sessionLastPromptTokens = u.length > 4 ? u[4] : 0;
+        // 恢复按模型用量
+        modelUsage.clear();
+        modelUsage.putAll(store.loadModelUsage(name));
     }
 
     /** 更新 lastPromptTokens（上下文使用量） */
@@ -169,6 +200,7 @@ public class SessionService {
         sessionPromptTokens = sessionCompletionTokens = 0;
         sessionCacheHitTokens = sessionCacheMissTokens = 0;
         sessionLastPromptTokens = 0;
+        modelUsage.clear();
     }
 
     /**

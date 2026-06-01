@@ -290,9 +290,9 @@ public class AgentService {
                 Agent4jAgent finalAgent = agent;
                 agent.setListener(new AgentLoopListener() {
                     @Override
-                    public void onUsage(int promptTokens, int completionTokens, int totalTokens,
+                    public void onUsage(String model, int promptTokens, int completionTokens, int totalTokens,
                                         int cacheHit, int cacheMiss) {
-                        finalAgent.addUsage(promptTokens, completionTokens, cacheHit, cacheMiss);
+                        finalAgent.addUsage(model, promptTokens, completionTokens, cacheHit, cacheMiss);
                     }
                 });
 
@@ -569,6 +569,13 @@ public class AgentService {
                 }
 
                 @Override
+                public void onUsage(String model, int promptTokens, int completionTokens, int totalTokens,
+                                    int cacheHit, int cacheMiss) {
+                    emitter.sendUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
+                    agent.addUsage(model, promptTokens, completionTokens, cacheHit, cacheMiss);
+                }
+
+                @Override
                 public void onError(String error) {
                     emitter.sendError(error);
                 }
@@ -834,31 +841,67 @@ public class AgentService {
         double totalCost = 0;
         String currency = null;
 
-        // 价格计算
+        // 价格计算：优先按模型分别计费，解决模型中途切换导致计价错乱
         try {
             Agent4jConfig config = Agent4jConfig.load();
             currentModel = config.model();
             Map<String, Map<String, Double>> prices = config.price();
-            Map<String, Double> modelPrice = prices.get(currentModel);
 
-            hasPrice = modelPrice != null && !modelPrice.isEmpty();
+            // 获取按模型分别累计的用量
+            Map<String, long[]> mu = agent.getModelUsage();
 
-            if (hasPrice) {
-                double inputRate = modelPrice.getOrDefault("input", 0.0);
-                double cacheRate = modelPrice.getOrDefault("cache", 0.0);
-                double outputRate = modelPrice.getOrDefault("output", 0.0);
+            if (mu != null && !mu.isEmpty()) {
+                // 按模型分别计算费用
+                for (Map.Entry<String, long[]> entry : mu.entrySet()) {
+                    String modelName = entry.getKey();
+                    long[] usage = entry.getValue();
+                    long mPrompt = usage[0];
+                    long mCompletion = usage[1];
+                    long mCacheHit = usage[2];
 
-                long nonCacheInput = Math.max(0, promptTokens - cacheHit);
-                inputCost = nonCacheInput / 1_000_000.0 * inputRate;
-                cacheCost = cacheHit / 1_000_000.0 * cacheRate;
-                outputCost = completionTokens / 1_000_000.0 * outputRate;
+                    Map<String, Double> modelPrice = prices.get(modelName);
+                    if (modelPrice != null && !modelPrice.isEmpty()) {
+                        hasPrice = true;
+                        double inputRate = modelPrice.getOrDefault("input", 0.0);
+                        double cacheRate = modelPrice.getOrDefault("cache", 0.0);
+                        double outputRate = modelPrice.getOrDefault("output", 0.0);
+
+                        long nonCacheInput = Math.max(0, mPrompt - mCacheHit);
+                        inputCost += nonCacheInput / 1_000_000.0 * inputRate;
+                        cacheCost += mCacheHit / 1_000_000.0 * cacheRate;
+                        outputCost += mCompletion / 1_000_000.0 * outputRate;
+                    }
+                    // 无价格配置的模型不计入费用
+                }
                 totalCost = inputCost + cacheCost + outputCost;
-                currency = "CNY";
+                currency = hasPrice ? "CNY" : null;
 
                 inputCost = Math.round(inputCost * 10000.0) / 10000.0;
                 cacheCost = Math.round(cacheCost * 10000.0) / 10000.0;
                 outputCost = Math.round(outputCost * 10000.0) / 10000.0;
                 totalCost = Math.round(totalCost * 10000.0) / 10000.0;
+            } else {
+                // 无 per-model 数据（旧格式 .usage 文件），回退到当前模型计费
+                Map<String, Double> modelPrice = prices.get(currentModel);
+                hasPrice = modelPrice != null && !modelPrice.isEmpty();
+
+                if (hasPrice) {
+                    double inputRate = modelPrice.getOrDefault("input", 0.0);
+                    double cacheRate = modelPrice.getOrDefault("cache", 0.0);
+                    double outputRate = modelPrice.getOrDefault("output", 0.0);
+
+                    long nonCacheInput = Math.max(0, promptTokens - cacheHit);
+                    inputCost = nonCacheInput / 1_000_000.0 * inputRate;
+                    cacheCost = cacheHit / 1_000_000.0 * cacheRate;
+                    outputCost = completionTokens / 1_000_000.0 * outputRate;
+                    totalCost = inputCost + cacheCost + outputCost;
+                    currency = "CNY";
+
+                    inputCost = Math.round(inputCost * 10000.0) / 10000.0;
+                    cacheCost = Math.round(cacheCost * 10000.0) / 10000.0;
+                    outputCost = Math.round(outputCost * 10000.0) / 10000.0;
+                    totalCost = Math.round(totalCost * 10000.0) / 10000.0;
+                }
             }
         } catch (Exception e) {
             // 价格计算失败不影响主逻辑

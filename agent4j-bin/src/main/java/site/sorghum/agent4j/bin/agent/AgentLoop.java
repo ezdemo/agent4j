@@ -845,13 +845,15 @@ public class AgentLoop {
                 if (sessionService != null) {
                     sessionService.updateLastPromptTokens(promptTokens);
                 }
+                // 获取当前模型名称，用于按模型分别计费
+                String currentModel = client != null ? client.getModel() : null;
                 try {
-                    listener.onUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
+                listener.onUsage(currentModel, promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
                 } catch (Exception e) {
                     // 忽略异常
                 }
                 try {
-                    output.onUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
+                    output.onUsage(currentModel, promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
                 } catch (Exception e) {
                     // SSE连接断开时忽略异常，继续执行
                 }

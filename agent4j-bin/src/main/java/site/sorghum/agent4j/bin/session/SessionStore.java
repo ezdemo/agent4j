@@ -13,6 +13,15 @@ import java.util.Map;
  *
  * @author Sorghum
  */
+/**
+ * 会话持久化仓库接口 —— 定义会话消息的 CRUD 契约。
+ * <p>
+ * 实现负责具体的存储格式（JSONL、数据库等），
+ * 调用方仅依赖此接口以保证可替换性和可测试性。
+ * </p>
+ *
+ * @author Sorghum
+ */
 public interface SessionStore {
 
     /** 获取当前会话名 */
@@ -59,6 +68,12 @@ public interface SessionStore {
 
     /** 加载 token 用量 */
     long[] loadUsage(String name);
+
+    /** 保存按模型分别累计的 token 用量 */
+    void saveModelUsage(String name, Map<String, long[]> modelUsage) throws IOException;
+
+    /** 加载按模型分别累计的 token 用量 */
+    Map<String, long[]> loadModelUsage(String name);
 
     /** 更新会话标题 */
     void updateTitle(String name, String title) throws IOException;

@@ -29,4 +29,10 @@ public interface AgentLoopListener {
      */
     default void onUsage(int promptTokens, int completionTokens, int totalTokens,
                           int cacheHit, int cacheMiss) {}
+
+    /** Token 用量回调（含模型名称） */
+    default void onUsage(String model, int promptTokens, int completionTokens, int totalTokens,
+                         int cacheHit, int cacheMiss) {
+        onUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
+    }
 }

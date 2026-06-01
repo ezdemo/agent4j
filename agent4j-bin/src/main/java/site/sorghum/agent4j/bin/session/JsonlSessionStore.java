@@ -379,6 +379,51 @@ public class JsonlSessionStore implements SessionStore {
         }
     }
 
+    @Override
+    public void saveModelUsage(String name, Map<String, long[]> modelUsage) throws IOException {
+        if (modelUsage == null || modelUsage.isEmpty()) {
+            // 删除文件（如果存在）
+            Path file = sessionsDir.resolve(sanitize(name) + ".model_usage");
+            Files.deleteIfExists(file);
+            return;
+        }
+        org.noear.snack4.ONode root = org.noear.snack4.ONode.ofJson("{}").asObject();
+        for (Map.Entry<String, long[]> entry : modelUsage.entrySet()) {
+            long[] mu = entry.getValue();
+            org.noear.snack4.ONode arr = root.getOrNew(entry.getKey()).asArray();
+            arr.clear();
+            for (long v : mu) {
+                arr.add(v);
+            }
+        }
+        Path file = sessionsDir.resolve(sanitize(name) + ".model_usage");
+        Files.write(file, root.toJson().getBytes(StandardCharsets.UTF_8));
+    }
+
+    @Override
+    public Map<String, long[]> loadModelUsage(String name) {
+        Map<String, long[]> result = new LinkedHashMap<>();
+        Path file = sessionsDir.resolve(sanitize(name) + ".model_usage");
+        if (!Files.exists(file)) return result;
+        try {
+            String json = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+            org.noear.snack4.ONode root = org.noear.snack4.ONode.ofJson(json);
+            for (Map.Entry<String, org.noear.snack4.ONode> entry : root.getObject().entrySet()) {
+                org.noear.snack4.ONode arr = entry.getValue();
+                if (arr.isArray() && !arr.getArray().isEmpty()) {
+                    long[] mu = new long[Math.min(arr.getArray().size(), 4)];
+                    for (int i = 0; i < mu.length; i++) {
+                        mu[i] = arr.getArray().get(i).getLong();
+                    }
+                    result.put(entry.getKey(), mu);
+                }
+            }
+        } catch (Exception e) {
+            return result;
+        }
+        return result;
+    }
+
     // ---- 内部辅助 ----
 
     private Path sessionPath(String name) {

@@ -76,6 +76,12 @@ public class ConsoleAgentOutput implements AgentOutput {
     }
 
     @Override
+    public void onUsage(String model, int promptTokens, int completionTokens, int totalTokens,
+                        int cacheHit, int cacheMiss) {
+        // 保持一致：不在流式过程中打印 usage
+    }
+
+    @Override
     public void onError(String error) {
         System.err.println("[error] " + error);
     }

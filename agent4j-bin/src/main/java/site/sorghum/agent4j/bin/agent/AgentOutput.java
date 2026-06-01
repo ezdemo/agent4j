@@ -53,6 +53,12 @@ public interface AgentOutput {
     void onUsage(int promptTokens, int completionTokens, int totalTokens,
                  int cacheHit, int cacheMiss);
 
+    /** Token 用量回调（含模型名称，用于按模型分别计费） */
+    default void onUsage(String model, int promptTokens, int completionTokens, int totalTokens,
+                         int cacheHit, int cacheMiss) {
+        onUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
+    }
+
     /** 错误信息 */
     void onError(String error);
 
@@ -89,6 +95,7 @@ public interface AgentOutput {
         @Override public void onToolCall(String name, String args) {}
         @Override public void onToolResult(String name, String result) {}
         @Override public void onUsage(int promptTokens, int completionTokens, int totalTokens, int cacheHit, int cacheMiss) {}
+        @Override public void onUsage(String model, int promptTokens, int completionTokens, int totalTokens, int cacheHit, int cacheMiss) {}
         @Override public void onError(String error) {}
         @Override public void onLog(LogLevel level, String message) {}
         @Override public void onMessage(String message) {}
