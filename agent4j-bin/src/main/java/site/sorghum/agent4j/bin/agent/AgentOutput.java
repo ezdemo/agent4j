@@ -85,4 +85,21 @@ public interface AgentOutput {
      * 选项列表（如 HITL 审批：同意/拒绝）
      */
     void onChoice(List<ChoiceOption> options);
+
+    // ==================== 自定义事件 ====================
+
+    /**
+     * 发送自定义事件（如 sub_start / sub_end 子代理边界事件）。
+     * <p>
+     * 默认无操作，各实现类可覆盖此方法实现特定处理。
+     * <li>{@link ConsoleAgentOutput} → 打印到控制台</li>
+     * <li>{@link SseAgentOutput} → 通过 SSE 发送</li>
+     * </p>
+     *
+     * @param type 事件类型，如 "sub_start", "sub_end"
+     * @param data JSON 格式的事件数据
+     */
+    default void sendEvent(String type, String data) {
+        // 默认无操作
+    }
 }

@@ -37,6 +37,11 @@ public class SubAgent {
     private final ToolRegistry registry;
     private final String systemPrompt;
     /**
+     * 父代理的 AgentOutput 引用 —— 用于将子代理的流式输出实时推送给用户。
+     * 通过 {@link #setOutput(AgentOutput)} 由 TaskTool 注入。
+     */
+    private AgentOutput parentOutput = null;
+    /**
      * 获取按模型分别累计的 token 用量: model -> [prompt, completion, cacheHit, cacheMiss]
      */
     @Getter
@@ -78,6 +83,19 @@ public class SubAgent {
     }
 
     /**
+     * 设置父代理的 AgentOutput，使子代理的流式输出能通过父代理的通道实时推送给用户。
+     * <p>
+     * 由 {@link site.sorghum.agent4j.bin.builtin.TaskTool#execute(ToolContext)} 在创建 SubAgent 后调用，
+     * 传入 {@link site.sorghum.agent4j.bin.agent.AgentLoop} 中持有的 {@link AgentOutput}。
+     * </p>
+     *
+     * @param output 父代理的输出接口（ConsoleAgentOutput / SseAgentOutput 等）
+     */
+    public void setOutput(AgentOutput output) {
+        this.parentOutput = output;
+    }
+
+    /**
      * 是否有用量数据
      */
     public boolean hasUsage() {
@@ -97,6 +115,14 @@ public class SubAgent {
         ConversationContext ctx = new ConversationContext(
                 new PromptPrefix(systemPrompt, registry.toOpenAiTools()));
         AgentLoop subLoop = new AgentLoop(client, registry, ctx);
+
+        // 将父代理的 AgentOutput 传递给子代理的推理循环，
+        // 使用 SubAgentAgentOutput 包装器将所有事件以 sub_xxx 前缀独立通道发送，
+        // 前端在独立 Modal 中渲染子代理输出，不占用主消息流。
+        if (parentOutput != null) {
+            AgentOutput wrapped = new SubAgentAgentOutput(parentOutput, task);
+            subLoop.setOutput(wrapped);
+        }
 
         // 创建用量捕获监听器：拦截 onUsage 记录到 SubAgent 字段，同时委托给外部 listener
         AgentLoopListener capturingListener = new AgentLoopListener() {

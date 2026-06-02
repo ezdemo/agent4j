@@ -112,4 +112,9 @@ public class ConsoleAgentOutput implements AgentOutput {
         }
         System.out.flush();
     }
+
+    @Override
+    public void sendEvent(String type, String data) {
+        System.err.println("[" + type + "] " + (data != null ? data : ""));
+    }
 }

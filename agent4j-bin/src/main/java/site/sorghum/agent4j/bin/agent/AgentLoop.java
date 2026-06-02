@@ -535,8 +535,8 @@ public class AgentLoop {
         this.pendingHITTcList = null;
 
         if (!approved) {
-            // 用户拒绝：将 assistant 消息（含工具调用）写入上下文，返回拒绝提示
-            ctx.addAssistant(content, tcList, reasoningContent);
+            // 用户拒绝：不写入带 tool_calls 的 assistant（否则 API 要求必须跟 tool 消息），
+            // 只写入一条纯文本拒绝消息告知模型
             String denyMsg = "工具调用已被用户拒绝。";
             ctx.addAssistant(denyMsg, null, null);
             return denyMsg;
@@ -1020,10 +1020,11 @@ public class AgentLoop {
         dispatcher.setSessionId(this.sessionId);
 
         ONode[] tcArray = toolCalls.getArray().toArray(new ONode[0]);
-        int tcCount = tcArray.length;
 
         // 1. 解析 tcList，过滤无效调用，通知监听器
+        // 关键：同时构建 filteredTcArray（仅有效调用），确保 tcList 和 toolResults 数量严格一致
         List<ToolCallEntry> tcList = new ArrayList<>();
+        List<ONode> filteredTcList = new ArrayList<>();
         for (ONode tc : tcArray) {
             String tcId = tc.get("id").getString();
             ONode func = tc.get("function");
@@ -1040,6 +1041,7 @@ public class AgentLoop {
             if (tcArgs == null) tcArgs = "{}";
 
             tcList.add(new ToolCallEntry(tcId, tcName, tcArgs));
+            filteredTcList.add(tc);
 
             try {
                 listener.onToolCall(tcName, tcArgs);
@@ -1053,6 +1055,10 @@ public class AgentLoop {
             }
         }
 
+        // 使用过滤后的工具调用列表创建并行任务，确保 tcList 和 toolResults 数量严格一致
+        tcArray = filteredTcList.toArray(new ONode[0]);
+        int tcCount = tcArray.length;
+
         // 清空子代理用量收集器（task 工具会在 Future 中写入用量数据）
         site.sorghum.agent4j.bin.builtin.TaskTool.clearUsageCollector();
 
@@ -1061,12 +1067,19 @@ public class AgentLoop {
         final AtomicBoolean anySuppressed = new AtomicBoolean(false);
         final AtomicReference<HitlRequiredException> hitlRef =
                 new AtomicReference<>(null);
+        // 捕获当前 AgentOutput，用于传播到子代理（如 TaskTool）
+        final AgentOutput capturedOutput = this.output;
         for (int i = 0; i < tcCount; i++) {
             final int idx = i;
             futures[i] = CompletableFuture.supplyAsync(() -> {
                 // 沙箱旁路：在异步工作线程上设置 ThreadLocal
                 if (skipSandboxCheck) {
                     ToolContext.enableSandboxBypass();
+                }
+                // 将父 AgentOutput 设置到 TaskTool 的线程局部变量，
+                // 使得 TaskTool.execute() 中创建的 SubAgent 能通过同一输出通道实时推流
+                if (capturedOutput != null) {
+                    site.sorghum.agent4j.bin.builtin.TaskTool.setCurrentOutput(capturedOutput);
                 }
                 try {
                     ONode tc = tcArray[idx];
@@ -1100,6 +1113,7 @@ public class AgentLoop {
                     if (skipSandboxCheck) {
                         ToolContext.disableSandboxBypass();
                     }
+                    site.sorghum.agent4j.bin.builtin.TaskTool.clearCurrentOutput();
                 }
             });
         }

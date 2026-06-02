@@ -125,6 +125,63 @@
       </svg>
     </button>
 
+    <!-- 子代理浮窗入口按钮 -->
+    <button v-if="hasSubAgentOutput" class="sub-float-btn" @click="subAgentModalOpen = true">
+      🧩 子代理
+      <span class="badge">{{ subAgentSessions.length }}</span>
+    </button>
+
+    <!-- 子代理 Modal -->
+    <Teleport to="body">
+      <div v-if="subAgentModalOpen" class="sub-modal-overlay" @click.self="subAgentModalOpen = false">
+        <div class="sub-modal">
+          <div class="sub-modal-head">
+            <h3>🧩 子代理输出</h3>
+            <button class="sub-modal-close" @click="subAgentModalOpen = false">&times;</button>
+          </div>
+          <div class="sub-modal-body">
+            <template v-if="subAgentSessions.length === 0">
+              <div style="text-align:center;color:var(--fg-3);padding:40px 0;">暂无子代理输出</div>
+            </template>
+            <template v-for="(session, si) in subAgentSessions" :key="session.id">
+              <div class="sub-session">
+                <div class="sub-session-head">🧩 {{ session.taskName }}</div>
+                <div class="sub-session-body">
+                  <div v-for="(block, bi) in session.blocks" :key="bi">
+                    <div v-if="block.type === 'reasoning'" class="block-reasoning">
+                      <div class="reasoning-head" @click="block.showContent = !block.showContent">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <span>思考</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: block.showContent ? 'rotate(180deg)' : '' }"><polyline points="6 9 12 15 18 9"/></svg>
+                      </div>
+                      <div v-if="block.showContent" class="reasoning-text">{{ block.content }}</div>
+                    </div>
+                    <div v-else-if="block.type === 'content'" class="block-content" v-html="fmt(block.content)"></div>
+                    <div v-else-if="block.type === 'tool_call'" class="block-tool">
+                      <div class="tool-head" @click="block.expanded = !block.expanded">
+                        <span class="tool-icon" :class="block.status">
+                          <svg v-if="block.status === '执行中'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+                          <svg v-else-if="block.status === '成功'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                          <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+                        </span>
+                        <code class="tool-name">{{ block.name }}</code>
+                        <span class="tool-status" :class="block.status">{{ block.status }}</span>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: block.expanded ? 'rotate(180deg)' : '' }"><polyline points="6 9 12 15 18 9"/></svg>
+                      </div>
+                      <div v-if="block.expanded" class="tool-detail">
+                        <pre v-if="block.args"><code>{{ fmtArgs(block.args) }}</code></pre>
+                        <pre v-if="block.result"><code>{{ block.result }}</code></pre>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- 输入区（独立组件） -->
     <ChatInput
       v-model:inputText="inputText"
@@ -208,6 +265,15 @@ const loadUsage = async (override) => {
     }
   } catch {}
 }
+
+// ==================== 子代理 Modal 状态 ====================
+// 收集子代理的 sub_xxx 事件，在独立 Modal 中渲染，不占用主消息流
+const subAgentBlocks = ref([])        // 当前正在进行的子代理的 blocks
+const subAgentSessions = ref([])      // 已完成的子代理会话列表
+const subAgentModalOpen = ref(false)
+const subAgentModalTask = ref('')
+const subAgentSessionId = ref(0)      // 自增 ID
+const hasSubAgentOutput = computed(() => subAgentSessions.value.length > 0)
 
 // 日志通知列表（逐条堆叠，每条6秒后自动移除）
 const currentLogs = ref([])
@@ -459,7 +525,46 @@ const sendMessage = async () => {
 
         const msg = getMsg()
         if (!msg) return
-        if (data.type === 'reasoning') {
+        // ===== 子代理事件（独立通道，不占用主消息流） =====
+        if (data.type === 'sub_content') {
+          const lb = subAgentBlocks.value[subAgentBlocks.value.length - 1]
+          if (lb?.type === 'content') lb.content += (data.content || '')
+          else subAgentBlocks.value.push({ type: 'content', content: data.content || '' })
+        } else if (data.type === 'sub_reasoning') {
+          const lb = subAgentBlocks.value[subAgentBlocks.value.length - 1]
+          if (lb?.type === 'reasoning') lb.content += (data.content || '')
+          else subAgentBlocks.value.push({ type: 'reasoning', content: data.content || '', showContent: false })
+        } else if (data.type === 'sub_tool_call') {
+          let name = data.name || '', args = data.args || data.arguments || ''
+          if (typeof args === 'string') try { args = JSON.parse(args) } catch {}
+          subAgentBlocks.value.push({ type: 'tool_call', name: name || 'unknown', status: '执行中', args, result: '', expanded: false })
+        } else if (data.type === 'sub_tool_result') {
+          let result = data.result || data.content || ''
+          const rn = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
+          for (let i = subAgentBlocks.value.length - 1; i >= 0; i--) {
+            if (subAgentBlocks.value[i].type === 'tool_call' && !subAgentBlocks.value[i].result) {
+              subAgentBlocks.value[i].result = rn; subAgentBlocks.value[i].status = '成功'; break
+            }
+          }
+        } else if (data.type === 'sub_complete') {
+          // 子代理完成 → 将当前 blocks 归档为一个会话
+          if (subAgentBlocks.value.length > 0) {
+            subAgentSessionId.value++
+            const taskName = data?.task || data?.content?.task || '子代理'
+            subAgentSessions.value.push({
+              id: subAgentSessionId.value,
+              taskName: typeof taskName === 'string' ? taskName : '子代理',
+              blocks: [...subAgentBlocks.value]
+            })
+            subAgentBlocks.value = []
+          }
+        } else if (data.type === 'sub_error') {
+          const errText = data.error || data.content || '未知错误'
+          subAgentBlocks.value.push({ type: 'content', content: '❌ ' + errText })
+        } else if (data.type === 'sub_usage' || data.type === 'sub_choice' || data.type === 'sub_log') {
+          // 子代理用量/选择/日志暂不处理
+        // ===== 普通主代理事件 =====
+        } else if (data.type === 'reasoning') {
           const lb = msg.blocks[msg.blocks.length - 1]
           if (lb?.type === 'reasoning') lb.content += (data.content || '')
           else msg.blocks.push({ type: 'reasoning', content: data.content || '', showContent: true })
@@ -1144,5 +1249,137 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
 .log-bar-leave-to {
   opacity: 0;
   transform: translateY(-10px) scale(0.95);
+}
+
+/* ==================== 子代理 Modal ==================== */
+.sub-modal-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.sub-modal {
+  width: min(90vw, 860px);
+  height: min(85vh, 700px);
+  background: var(--bg);
+  border-radius: 12px;
+  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+.sub-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sub-modal-head h3 {
+  margin: 0;
+  font-size: 15px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.sub-modal-close {
+  background: none;
+  border: none;
+  color: var(--fg-3);
+  cursor: pointer;
+  font-size: 18px;
+  padding: 4px 8px;
+  border-radius: 4px;
+}
+.sub-modal-close:hover {
+  background: var(--bg-2);
+  color: var(--fg);
+}
+.sub-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* 子代理会话卡片 */
+.sub-session {
+  margin-bottom: 16px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+}
+.sub-session-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  font-size: 13px;
+  font-weight: 600;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-2);
+}
+.sub-session-body {
+  padding: 8px 12px;
+}
+.sub-session-body .block-content {
+  padding: 6px 0;
+  font-size: 13px;
+}
+.sub-session-body .block-reasoning {
+  margin: 4px 0;
+  background: var(--bg-2);
+  border-radius: 4px;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: var(--fg-3);
+}
+.sub-session-body .block-tool {
+  margin: 4px 0;
+}
+.sub-session-body .tool-head {
+  padding: 3px 8px;
+  font-size: 12px;
+}
+.sub-session-body .tool-detail {
+  font-size: 12px;
+}
+
+/* 浮动入口按钮 */
+.sub-float-btn {
+  position: fixed;
+  right: 24px;
+  bottom: 170px;
+  z-index: 100;
+  padding: 8px 14px;
+  border-radius: 20px;
+  background: var(--accent);
+  color: #fff;
+  border: none;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s ease;
+}
+.sub-float-btn:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
+}
+.sub-float-btn .badge {
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 10px;
+  padding: 0 6px;
+  font-size: 11px;
+  min-width: 18px;
+  text-align: center;
 }
 </style>

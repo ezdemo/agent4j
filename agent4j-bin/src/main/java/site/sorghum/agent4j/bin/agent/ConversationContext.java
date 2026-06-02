@@ -57,6 +57,10 @@ public class ConversationContext {
         boolean hasReasoning = reasoningContent != null && !reasoningContent.isEmpty();
         if (!hasContent && !hasToolCalls && !hasReasoning) {
             content = "";
+        } else if (!hasContent && !hasToolCalls && hasReasoning) {
+            // 只有 reasoning_content 没有 content/tool_calls → 保持 content 为 null，
+            // 让 toMap() 不输出 content 字段，避免 "content":"" 导致 API 400
+            content = null;
         }
         ChatMessage msg = ChatMessage.assistant(content, toolCalls, reasoningContent);
         history.add(msg);

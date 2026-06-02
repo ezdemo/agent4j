@@ -520,8 +520,23 @@ public class HttpModelClient implements ModelClient {
 
             ONode msg = msgs.addNew();
             msg.set("role", m.getRole());
-            if (m.hasContent()) msg.set("content", m.getContent());
-            if (m.hasToolCalls()) {
+
+            // 防御：assistant 消息必须有 content 或 tool_calls（OpenAI/DeepSeek API 要求）
+            boolean isAssistant = m.isAssistant();
+            boolean hasTc = m.hasToolCalls();
+            boolean hasContent = m.hasContent();
+            boolean hasReasoning = m.getReasoningContent() != null && !m.getReasoningContent().isEmpty();
+
+            if (isAssistant && !hasContent && !hasTc) {
+                // 既无 content 也无 tool_calls → 强制补空 content 防止 API 400
+                // 这种情况不应发生在正常流程中，但历史消息损坏或 Healer 遗漏时兜底
+                logger.warn("buildBody: 检测到空 assistant 消息（无 content 且无 tool_calls），强制补空");
+                msg.set("content", "");
+            } else {
+                if (hasContent) msg.set("content", m.getContent());
+            }
+
+            if (hasTc) {
                 ONode tcArray = msg.getOrNew("tool_calls").asArray();
                 for (ToolCallEntry tc : m.getToolCalls()) {
                     ONode tcNode = tcArray.addNew();

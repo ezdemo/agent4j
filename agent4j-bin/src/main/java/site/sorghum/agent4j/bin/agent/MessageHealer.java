@@ -58,12 +58,17 @@ public class MessageHealer {
 
             // 1.5 修复空 assistant 消息（用户中断/历史损坏）
             // assistant 消息必须至少包含 content、tool_calls 或 reasoning_content 之一
+            // 同时检查 content 为空字符串的情况（toMap 会输出 "content":""）
             if ("assistant".equals(role)
-                    && !msg.containsKey("content")
                     && !msg.containsKey("tool_calls")
                     && !msg.containsKey("reasoning_content")) {
-                msg = new LinkedHashMap<>(msg);
-                msg.put("content", "");
+                Object cv = msg.get("content");
+                boolean noContent = !msg.containsKey("content") || cv == null
+                        || (cv instanceof String && ((String) cv).isEmpty());
+                if (noContent) {
+                    msg = new LinkedHashMap<>(msg);
+                    msg.put("content", "");
+                }
             }
 
             // 2. fix tool_calls/tool pairing + 清除 name 为 null 的 tool_call
@@ -123,9 +128,17 @@ public class MessageHealer {
             Map<String, Object> m = out.get(lastAssistantWithTcIdx);
             Map<String, Object> stripped = new LinkedHashMap<>();
             stripped.put("role", "assistant");
-            if (m.containsKey("content")) stripped.put("content", m.get("content"));
-            if (m.containsKey("reasoning_content"))
-                stripped.put("reasoning_content", m.get("reasoning_content"));
+            // 必须有 content 或 reasoning_content 之一，否则补空 content 防止 API 400
+            boolean hasContent = m.containsKey("content") && m.get("content") != null
+                    && !(m.get("content") instanceof String && ((String) m.get("content")).isEmpty());
+            boolean hasReasoning = m.containsKey("reasoning_content") && m.get("reasoning_content") != null
+                    && !(m.get("reasoning_content") instanceof String && ((String) m.get("reasoning_content")).isEmpty());
+            if (hasContent) stripped.put("content", m.get("content"));
+            if (hasReasoning) stripped.put("reasoning_content", m.get("reasoning_content"));
+            // 兜底：原始消息只有 tool_calls 无 content，剥离后必须补 content
+            if (!hasContent && !hasReasoning) {
+                stripped.put("content", "");
+            }
             out.set(lastAssistantWithTcIdx, stripped);
             // 同步删除该 assistant 之后所有孤儿 tool 消息
             for (int i = out.size() - 1; i > lastAssistantWithTcIdx; i--) {

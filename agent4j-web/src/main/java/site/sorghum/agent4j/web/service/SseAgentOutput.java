@@ -87,4 +87,11 @@ public class SseAgentOutput implements AgentOutput {
             emitter.sendChoice(new ArrayList<>(options));
         }
     }
+
+    @Override
+    public void sendEvent(String type, String data) {
+        if (type != null && data != null) {
+            emitter.send(type, data);
+        }
+    }
 }
