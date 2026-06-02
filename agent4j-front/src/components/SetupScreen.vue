@@ -213,10 +213,24 @@ async function autoConnect() {
   } catch {}
   status.value = 'idle'
 }
+const isTauriEnv = ref(false)
 
+// 异步检测 Tauri 环境
+async function detectTauri() {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core')
+    await invoke('get_system_info')
+    isTauriEnv.value = true
+    console.log('[App] Tauri environment detected')
+  } catch {
+    isTauriEnv.value = false
+    console.log('[App] Browser environment detected')
+  }
+}
 onMounted(() => {
+  detectTauri()
   // Tauri 模式下 SplashScreen 处理，SetupScreen 不自动连接
-  if (!window.__TAURI__) {
+  if (!isTauriEnv.value) {
     autoConnect()
   }
 })

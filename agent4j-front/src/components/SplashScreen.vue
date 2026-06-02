@@ -174,6 +174,20 @@ async function checkEnvironment() {
     return
   }
 
+  // === 先尝试连接已运行的后端（比如 8097 或随机端口）===
+  startupMessage.value = '检测已有后端服务...'
+  const foundPort = await tryFindRunningBackend()
+  if (foundPort > 0) {
+    console.log('[Splash] Found running backend on port', foundPort)
+    localStorage.setItem('agent4j-port', String(foundPort))
+    localStorage.setItem('agent4j-api-base', `http://127.0.0.1:${foundPort}`)
+    phase.value = 'ready'
+    await sleep(500)
+    visible.value = false
+    emit('ready')
+    return
+  }
+
   // Tauri 环境：获取资源目录
   try {
     const dir = await agent4jWebService.getResourceDir()
@@ -186,6 +200,39 @@ async function checkEnvironment() {
 
   // 检查是否需要安装
   await checkInstall()
+}
+
+/** 尝试在常见端口上发现已在运行的后端 */
+async function tryFindRunningBackend() {
+  // 优先尝试 Rust 报告的端口
+  try {
+    const port = await invoke('get_agent4j_web_port')
+    if (port > 0) {
+      const ok = await checkHealth(port, 2, 1000)
+      if (ok) return port
+    }
+  } catch {}
+
+  // 尝试常见端口
+  for (const port of [8097, 8098, 8099, 8100, 18097]) {
+    const ok = await checkHealth(port, 1, 800)
+    if (ok) return port
+  }
+  return 0
+}
+
+/** 快速检查某端口是否健康 */
+async function checkHealth(port, attempts, intervalMs) {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const resp = await fetch(`http://127.0.0.1:${port}/api/system/health`, {
+        signal: AbortSignal.timeout(2000)
+      })
+      if (resp.ok) return true
+    } catch {}
+    await sleep(intervalMs)
+  }
+  return false
 }
 
 async function checkInstall() {

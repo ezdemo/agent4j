@@ -1,13 +1,18 @@
 ﻿<template>
   <div class="app" :data-theme="theme">
-    <!-- 连接设置（后端未连上时显示） -->
-    <SetupScreen v-if="showSetup" @connected="onConnected" @close="onSetupClose" />
-
     <!-- 启动画面 (仅 Tauri 环境) -->
     <SplashScreen
+      v-if="showSetup && isTauriEnv"
       ref="splashRef"
-      @ready="onServiceReady"
-      @error="onServiceError"
+      @ready="onSplashReady"
+      @error="onSplashError"
+    />
+
+    <!-- 连接设置（非 Tauri 环境，后端未连上时显示） -->
+    <SetupScreen
+      v-if="showSetup && !isTauriEnv"
+      @connected="onConnected"
+      @close="onSetupClose"
     />
 
     <!-- 自定义标题栏 -->
@@ -251,7 +256,21 @@ const usage = ref({})
 const tools = ref([])
 const config = ref({})
 const showTools = ref(false)
+const isTauriEnv = ref(false)
 const showSetup = ref(true)  // SplashScreen (Tauri) 或 SetupScreen (非Tauri) 成功后设为 false
+
+// 异步检测 Tauri 环境
+async function detectTauri() {
+  try {
+    const { invoke } = await import('@tauri-apps/api/core')
+    await invoke('get_system_info')
+    isTauriEnv.value = true
+    console.log('[App] Tauri environment detected')
+  } catch {
+    isTauriEnv.value = false
+    console.log('[App] Browser environment detected')
+  }
+}
 const showConfig = ref(false)
 const showSettings = ref(false)
 const gitOpen = ref(false)
@@ -350,7 +369,7 @@ const onSetupClose = () => {
 }
 
 // 服务就绪回调（SplashScreen 安装/启动完成后调用）
-const onServiceReady = () => {
+const onSplashReady = () => {
   console.log('Agent4j Web service is ready')
   showSetup.value = false
   loadData()
@@ -358,7 +377,7 @@ const onServiceReady = () => {
 }
 
 // 服务错误回调
-const onServiceError = (error) => {
+const onSplashError = (error) => {
   console.error('Agent4j Web service error:', error)
 }
 
@@ -529,7 +548,12 @@ const clearChat = async () => {
 }
 
 onMounted(async () => {
-  // 主题已由 store.initialize() 和 store watcher 设置到 DOM
+  // 先检测 Tauri 环境，再决定显示哪个启动屏
+  await detectTauri()
+  // 清空过期的 localStorage 端口（Tauri 每次启动端口都不同）
+  localStorage.removeItem('agent4j-port')
+  localStorage.removeItem('agent4j-api-base')
+  console.log('[App] Cleared stale port from localStorage')
 })
 
 onBeforeUnmount(() => {

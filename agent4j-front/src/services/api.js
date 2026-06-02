@@ -2,9 +2,13 @@
 
 import axios from 'axios'
 
+// 默认后端地址（浏览器模式用 8097，Tauri 模式由 Rust 动态分配）
+const DEFAULT_API_BASE = 'http://localhost:8097'
+
 // 读取持久化的 API 地址（用户在设置页配置的）
+// 浏览器模式下默认用 localhost:8097，避免相对路径走到前端端口
 function getCustomBaseURL() {
-  return localStorage.getItem('agent4j-api-base') || ''
+  return localStorage.getItem('agent4j-api-base') || DEFAULT_API_BASE
 }
 
 const api = axios.create({

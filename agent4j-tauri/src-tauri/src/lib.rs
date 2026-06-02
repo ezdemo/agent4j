@@ -267,25 +267,18 @@ impl Agent4jWebManager {
         let mut port_lock = self.port.lock().unwrap();
         *port_lock = port;
 
-        // 通过 shell 启动，确保 Java 进程挂在 shell 子进程下
-        let jvm_args = format!(
-            "-Dfile.encoding=UTF-8 -jar \"{}\" --server.port={}",
-            jar_path.to_string_lossy(),
-            port
-        );
+        // 直接 spawn java 进程，不经过 cmd / powershell / sh
+        // 参数以数组传递，避免 shell 引号/路径转义问题
+        let mut cmd = Command::new("java");
+        cmd.args(&[
+            "-Dfile.encoding=UTF-8",
+            "-jar",
+            &jar_path.to_string_lossy(),
+            "--server.port",
+            &port.to_string(),
+        ]);
 
-        let mut cmd = if cfg!(target_os = "windows") {
-            let mut c = Command::new("cmd");
-            c.args(&["/c", &format!("start /B java {}", jvm_args)]);
-            c
-        } else {
-            let mut c = Command::new("sh");
-            c.args(&["-c", &format!("exec java {}", jvm_args)]);
-            c
-        };
-
-        // 不在 Windows 上用 CREATE_NO_WINDOW（cmd 本身管理窗口）
-        // 设置进程组以便 kill 时清理整个子树
+        // Unix 下创建新进程组，方便 kill 时清理整个子树
         #[cfg(unix)]
         {
             use std::os::unix::process::CommandExt;
@@ -297,7 +290,7 @@ impl Agent4jWebManager {
 
         let child = cmd
             .spawn()
-            .map_err(|e| format!("Failed to start agent4j-web via shell: {}", e))?;
+            .map_err(|e| format!("Failed to start agent4j-web: {}", e))?;
 
         let pid = child.id();
 
