@@ -31,7 +31,7 @@ public class CommandTokenizer {
         for (int i = 0; i < cmd.length(); i++) {
             char ch = cmd.charAt(i);
             if (quote != null) {
-                if (ch == quote.charValue()) {
+                if (ch == quote) {
                     quote = null;
                 } else if (quote == '"' && i + 1 < cmd.length() && isDqEscape(ch, cmd.charAt(i + 1))) {
                     cur.append(cmd.charAt(++i));
@@ -45,7 +45,7 @@ public class CommandTokenizer {
                 continue;
             }
             if (ch == ' ' || ch == '\t') {
-                if (cur.length() > 0) {
+                if (!cur.isEmpty()) {
                     out.add(cur.toString());
                     cur.setLength(0);
                 }
@@ -56,7 +56,7 @@ public class CommandTokenizer {
         if (quote != null) {
             throw new IllegalArgumentException("unclosed " + quote + " in command");
         }
-        if (cur.length() > 0) {
+        if (!cur.isEmpty()) {
             out.add(cur.toString());
         }
         return out;

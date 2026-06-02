@@ -18,7 +18,7 @@ public class Agent4jWebApp {
         Solon.start(Agent4jWebApp.class, args);
 
         // 全局 CORS 处理（优先级 -1 确保最先执行）
-        Solon.app().filter(-1, new CrossFilter().allowedOrigins("*"));
+        Solon.app().router().filter(-1, new CrossFilter().allowedOrigins("*"));
         System.out.println("╔══════════════════════════════════════════╗");
         System.out.println("║    Agent4j Web API  — 已启动             ║");
         System.out.println("║    /api/chat       — 聊天接口            ║");

@@ -100,7 +100,7 @@ public class FileEdit {
             throws IOException {
         if (search == null || search.isEmpty()) throw new IOException("edit_file: search 不能为空");
         Path abs = resolveSafe(root, pathStr);
-        String before = new String(Files.readAllBytes(abs), StandardCharsets.UTF_8);
+        String before = Files.readString(abs);
 
         // 统一换行符
         String le = before.contains("\r\n") ? "\r\n" : "\n";
@@ -113,7 +113,7 @@ public class FileEdit {
         if (nextIdx >= 0) throw new IOException("edit_file: 搜索文本出现多次，请包含更多上下文以消除歧义");
 
         String after = before.substring(0, firstIdx) + adaptedReplace + before.substring(firstIdx + adaptedSearch.length());
-        Files.write(abs, after.getBytes(StandardCharsets.UTF_8));
+        Files.writeString(abs, after);
 
         // diff 摘要
         int sLines = adaptedSearch.split(le, -1).length;
@@ -160,7 +160,7 @@ public class FileEdit {
 
                 writtenFiles.add(abs);
                 rollbackContents.add(before);
-                Files.write(abs, after.getBytes(StandardCharsets.UTF_8));
+                Files.writeString(abs, after);
                 applied++;
             }
             String sign = totalDelta >= 0 ? "+" : "";
@@ -169,7 +169,7 @@ public class FileEdit {
             // 回滚
             for (int i = writtenFiles.size() - 1; i >= 0; i--) {
                 try {
-                    Files.write(writtenFiles.get(i), rollbackContents.get(i).getBytes(StandardCharsets.UTF_8));
+                    Files.writeString(writtenFiles.get(i), rollbackContents.get(i));
                 } catch (IOException ignored) {
                 }
             }
@@ -183,7 +183,7 @@ public class FileEdit {
     public static String writeFile(Path root, String pathStr, String content) throws IOException {
         Path abs = resolveSafe(root, pathStr);
         Files.createDirectories(abs.getParent());
-        Files.write(abs, content.getBytes(StandardCharsets.UTF_8));
+        Files.writeString(abs, content);
         return "wrote " + content.length() + " chars to " + pathStr;
     }
 
@@ -235,7 +235,7 @@ public class FileEdit {
             while (dir != null && dir.startsWith(root)) {
                 Path memFile = dir.resolve("AGENT4J.md");
                 if (Files.exists(memFile)) {
-                    String content = new String(Files.readAllBytes(memFile), java.nio.charset.StandardCharsets.UTF_8);
+                    String content = Files.readString(memFile);
                     return "[来自 " + root.relativize(memFile.getParent()).toString().replace('\\', '/')
                             + "/AGENT4J.md 的上下文]\n" + content.trim();
                 }

@@ -34,7 +34,7 @@ public class PlanCommand implements ChatCommand {
     }
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) throws Exception {
+    public CommandResult execute(String input, ChatCommandContext context) {
         context.getAgent().setPlanMode(true);
         context.getAgent().getOutput().onLog(LogLevel.INFO, "探索完成后使用 输入 /execute 开始执行");
         context.getAgent().getOutput().onReasoning(

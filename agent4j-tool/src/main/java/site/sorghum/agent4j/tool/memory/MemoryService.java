@@ -3,7 +3,6 @@ package site.sorghum.agent4j.tool.memory;
 import org.noear.solon.annotation.Component;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -60,14 +59,14 @@ public class MemoryService {
             appendJsonString(json, "priority", String.valueOf(priority));
         }
         json.append("}");
-        Files.write(memoryFile(name), json.toString().getBytes(StandardCharsets.UTF_8));
+        Files.writeString(memoryFile(name), json.toString());
         return "saved memory: " + name + " (" + description + ")";
     }
 
     public String recallMemory(String name) throws IOException {
         Path f = memoryFile(name);
         if (!Files.exists(f)) return "memory '" + name + "' not found";
-        return new String(Files.readAllBytes(f), StandardCharsets.UTF_8);
+        return Files.readString(f);
     }
 
     public String forget(String name) throws IOException {

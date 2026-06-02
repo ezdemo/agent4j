@@ -22,30 +22,37 @@ public class MultiEditTool extends AgentTool {
 
     @Override
     public String getDescription() {
-        return "Apply multiple SEARCH/REPLACE edits across one or more files atomically.\n"
-                + "Each edit has path, search, replace.\n"
-                + "Validates ALL edits first; writes ALL only if all pass.\n"
-                + "On write failure, rolls back files that may have been modified.";
+        return """
+                Apply multiple SEARCH/REPLACE edits across one or more files atomically.
+                Each edit has path, search, replace.
+                Validates ALL edits first; writes ALL only if all pass.
+                On write failure, rolls back files that may have been modified.""";
     }
 
     @Override
     public String toToolSpec() {
-        return "### multi_edit\n\n"
-                + "描述：跨一个或多个文件原子性地执行批量 SEARCH/REPLACE 编辑。\n\n"
-                + "## 关键规则\n\n"
-                + "1. **原子性**：先验证所有编辑项，全部通过验证后才执行写入。\n"
-                + "   如果某个编辑验证失败，所有编辑都不会执行。\n"
-                + "2. **回滚保护**：写入过程中如果某一步失败，已写入的文件会被回滚到原始状态。\n"
-                + "3. **每项的 search 必须唯一**：同 edit_file 规则。\n"
-                + "4. **适合场景**：需要同时修改多个文件（如重命名 API、重构），或者单个文件\n"
-                + "   多次编辑时可以用 multi_edit 替代多次 edit_file 调用。\n\n"
-                + "参数：\n"
-                + "  - edits (array, 必填): 编辑列表，每项包含:\n"
-                + "      - path (string): 文件路径\n"
-                + "      - search (string): 要搜索的精确文本\n"
-                + "      - replace (string): 替换后的文本\n\n"
-                + "只读：否\n"
-                + "风暴豁免：否";
+        return """
+                ### multi_edit
+                
+                描述：跨一个或多个文件原子性地执行批量 SEARCH/REPLACE 编辑。
+                
+                ## 关键规则
+                
+                1. **原子性**：先验证所有编辑项，全部通过验证后才执行写入。
+                   如果某个编辑验证失败，所有编辑都不会执行。
+                2. **回滚保护**：写入过程中如果某一步失败，已写入的文件会被回滚到原始状态。
+                3. **每项的 search 必须唯一**：同 edit_file 规则。
+                4. **适合场景**：需要同时修改多个文件（如重命名 API、重构），或者单个文件
+                   多次编辑时可以用 multi_edit 替代多次 edit_file 调用。
+                
+                参数：
+                  - edits (array, 必填): 编辑列表，每项包含:
+                      - path (string): 文件路径
+                      - search (string): 要搜索的精确文本
+                      - replace (string): 替换后的文本
+                
+                只读：否
+                风暴豁免：否""";
     }
 
     @Override

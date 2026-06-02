@@ -104,9 +104,9 @@ public class Agent4jAgent {
      * 适用于"一个会话一个 Agent"场景，减少资源消耗。
      *
      * @param b           Builder
-     * @param lightweight 标记为轻量级构建（未使用，仅用于区分构造函数）
+     * @param ignoredLightweight 标记为轻量级构建（未使用，仅用于区分构造函数）
      */
-    private Agent4jAgent(Builder b, boolean lightweight) {
+    private Agent4jAgent(Builder b, boolean ignoredLightweight) {
         this.commandRegistry = b.commandRegistry;
         this.workspace = b.workspace;
 
@@ -178,7 +178,7 @@ public class Agent4jAgent {
      * </p>
      */
     @SneakyThrows
-    public String chat(String message) throws IOException {
+    public String chat(String message) {
         // HITL 恢复（approve/deny 后传入 null 触发恢复）
         if (message == null) {
             return loop.run(null);
@@ -245,12 +245,8 @@ public class Agent4jAgent {
             }
             // 恢复该会话的 token 用量
             sessionService.restoreUsage(name);
-            try {
-                String existingTitle = getSessionStore().getTitle(name);
-                sessionService.setTitleGenerated(existingTitle != null && !existingTitle.isEmpty());
-            } catch (IOException e) {
-                sessionService.setTitleGenerated(false);
-            }
+            String existingTitle = getSessionStore().getTitle(name);
+            sessionService.setTitleGenerated(existingTitle != null && !existingTitle.isEmpty());
         }
     }
 

@@ -6,7 +6,6 @@ import org.noear.snack4.Options;
 import org.noear.snack4.json.JsonWriter;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -101,18 +100,6 @@ public class Agent4jConfig {
             // 加载后用默认配置补充缺失字段（适配旧版本 config.json）
             mergeDefaults(root, defaultConfigNode());
             return new Agent4jConfig(root);
-        } catch (Exception e) {
-            throw new IllegalStateException("读取配置文件失败: " + configPath, e);
-        }
-    }
-
-    /**
-     * 加载指定路径的配置。
-     */
-    public static Agent4jConfig load(Path configPath) {
-        try {
-            String json = String.join("\n", Files.readAllLines(configPath));
-            return new Agent4jConfig(ONode.ofJson(json));
         } catch (Exception e) {
             throw new IllegalStateException("读取配置文件失败: " + configPath, e);
         }

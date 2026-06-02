@@ -12,7 +12,6 @@ import java.util.Map;
  * 工具执行上下文——封装一次工具调用的全部入参。
  * <p>
  * 包含调用参数 Map 和一个可选的根目录路径，
- * 子类通过 {@link #getParam(String)} 等方法安全取值。
  * </p>
  *
  * @author Sorghum

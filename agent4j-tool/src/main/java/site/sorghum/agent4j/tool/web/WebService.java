@@ -23,7 +23,7 @@ public class WebService {
     /**
      * 通过 DuckDuckGo Lite 搜索互联网。
      */
-    public String webSearch(String query, Integer topK) throws IOException {
+    public String webSearch(String query, Integer topK) {
         try {
             String encoded = URLEncoder.encode(query, StandardCharsets.UTF_8);
             URL url = new URL("https://lite.duckduckgo.com/lite/?q=" + encoded);
@@ -46,7 +46,7 @@ public class WebService {
                     count++;
                 }
             }
-            return sb.length() > 0 ? sb.toString().trim() : "(no results)";
+            return !sb.isEmpty() ? sb.toString().trim() : "(no results)";
         } catch (Exception e) {
             return "[ERROR] web_search failed: " + e.getMessage();
         }
@@ -55,7 +55,7 @@ public class WebService {
     /**
      * 抓取 URL 内容并提取纯文本。
      */
-    public String webFetch(String urlStr) throws IOException {
+    public String webFetch(String urlStr) {
         try {
             HttpURLConnection conn = (HttpURLConnection) URI.create(urlStr).toURL().openConnection();
             conn.setConnectTimeout(15000);

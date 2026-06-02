@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.tool.terminal;
 
+import org.jspecify.annotations.NonNull;
+
 import java.util.ArrayList;
 import java.util.List;
 
@@ -22,16 +24,7 @@ public class CommandChainParser {
         SplitResult split = splitOnChainOps(cmd);
         List<ChainSegment> segments = new ArrayList<>();
         for (int i = 0; i < split.segs.size(); i++) {
-            String trimmed = split.segs.get(i).trim();
-            if (trimmed.isEmpty()) {
-                String op = i == 0 ? split.ops.get(0).text
-                        : i == split.segs.size() - 1 ? split.ops.get(i - 1).text
-                        : split.ops.get(i - 1).text + " " + split.ops.get(i).text;
-                String msg = i == 0 ? "empty segment before \"" + op + "\""
-                        : i == split.segs.size() - 1 ? "chain ends with \"" + op + "\""
-                        : "empty segment between operators";
-                throw new UnsupportedSyntaxException(msg);
-            }
+            String trimmed = getTrimmed(split, i);
             segments.add(parseSegment(trimmed));
         }
 
@@ -53,6 +46,20 @@ public class CommandChainParser {
         return new CommandChain(segments, split.ops);
     }
 
+    private static @NonNull String getTrimmed(SplitResult split, int i) {
+        String trimmed = split.segs.get(i).trim();
+        if (trimmed.isEmpty()) {
+            String op = i == 0 ? split.ops.get(0).text
+                    : i == split.segs.size() - 1 ? split.ops.get(i - 1).text
+                    : split.ops.get(i - 1).text + " " + split.ops.get(i).text;
+            String msg = i == 0 ? "empty segment before \"" + op + "\""
+                    : i == split.segs.size() - 1 ? "chain ends with \"" + op + "\""
+                    : "empty segment between operators";
+            throw new UnsupportedSyntaxException(msg);
+        }
+        return trimmed;
+    }
+
     private static SplitResult splitOnChainOps(String cmd) {
         List<String> segs = new ArrayList<>();
         List<ChainOp> ops = new ArrayList<>();
@@ -63,7 +70,7 @@ public class CommandChainParser {
         while (i < cmd.length()) {
             char ch = cmd.charAt(i);
             if (quote != null) {
-                if (ch == quote.charValue()) quote = null;
+                if (ch == quote) quote = null;
                 else if (quote == '"' && i + 1 < cmd.length() && isDqEscape(ch, cmd.charAt(i + 1))) i++;
                 i++;
                 atTokenStart = false;
@@ -113,7 +120,7 @@ public class CommandChainParser {
     }
 
     private static void flush(FlushState s) {
-        if (!s.curHasContent && s.cur.length() == 0) return;
+        if (!s.curHasContent && s.cur.isEmpty()) return;
         if (s.pending != null) {
             s.redirects.add(new Redirect(s.pending, s.cur.toString()));
             s.pending = null;
@@ -134,7 +141,7 @@ public class CommandChainParser {
         while (i < segStr.length()) {
             char ch = segStr.charAt(i);
             if (quote != null) {
-                if (ch == quote.charValue()) quote = null;
+                if (ch == quote) quote = null;
                 else if (quote == '"' && i + 1 < segStr.length() && isDqEscape(ch, segStr.charAt(i + 1))) {
                     state.cur.append(segStr.charAt(++i));
                     state.curHasContent = true;
@@ -156,7 +163,7 @@ public class CommandChainParser {
                 i++;
                 continue;
             }
-            if (state.cur.length() == 0 && !state.curHasContent) {
+            if (state.cur.isEmpty() && !state.curHasContent) {
                 String remaining = segStr.substring(i);
                 RedirectMatch m = matchRedirect(remaining);
                 if (m != null) {

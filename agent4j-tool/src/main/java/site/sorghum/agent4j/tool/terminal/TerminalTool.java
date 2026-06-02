@@ -31,21 +31,24 @@ public class TerminalTool extends AgentTool {
     private static final int DEFAULT_MAX_OUTPUT_CHARS = 32_000;
 
     private static final String DESCRIPTION =
-            "Run a shell command in the project root; returns combined stdout+stderr. "
-                    + "Allowlisted read-only / test / lint / typecheck commands run immediately; "
-                    + "mutating / network / install commands gate on user confirmation.\n\n"
-                    + "DO NOT use run_command for file operations — use write_file, edit_file, multi_edit, "
-                    + "copy_file, move_file, or delete_file instead. Shell utilities (echo, cp, sed, cat, tee, "
-                    + "perl, python -c, etc.) bypass validation, lack rollback, and will trigger user "
-                    + "confirmation gates that waste turns.\n\n"
-                    + "No real shell — argv parsed natively for cross-platform parity:\n"
-                    + "• Supported: chains `|`/`||`/`&&`/`;` (each segment allowlist-checked) "
-                    + "and file redirects `>`/`>>`/`<`/`2>`/`2>>`/`2>&1`/`&>`.\n"
-                    + "• Rejected: background `&`, heredoc `<<`, `$(…)`, subshells, `$VAR` expansion, "
-                    + "glob expansion. Quote operator chars as literals (`grep \"a|b\" file`).\n"
-                    + "• `cd` does NOT persist — between calls OR within a chain. Use "
-                    + "`npm --prefix <dir>`, `git -C <dir>`, `cargo -C <dir>` instead.\n"
-                    + "• Filter at source — `grep -c` / `wc -l` / narrower paths over unbounded dumps.";
+            """
+                    Run a shell command in the project root; returns combined stdout+stderr. \
+                    Allowlisted read-only / test / lint / typecheck commands run immediately; \
+                    mutating / network / install commands gate on user confirmation.
+                    
+                    DO NOT use run_command for file operations — use write_file, edit_file, multi_edit, \
+                    copy_file, move_file, or delete_file instead. Shell utilities (echo, cp, sed, cat, tee, \
+                    perl, python -c, etc.) bypass validation, lack rollback, and will trigger user \
+                    confirmation gates that waste turns.
+                    
+                    No real shell — argv parsed natively for cross-platform parity:
+                    • Supported: chains `|`/`||`/`&&`/`;` (each segment allowlist-checked) \
+                    and file redirects `>`/`>>`/`<`/`2>`/`2>>`/`2>&1`/`&>`.
+                    • Rejected: background `&`, heredoc `<<`, `$(…)`, subshells, `$VAR` expansion, \
+                    glob expansion. Quote operator chars as literals (`grep "a|b" file`).
+                    • `cd` does NOT persist — between calls OR within a chain. Use \
+                    `npm --prefix <dir>`, `git -C <dir>`, `cargo -C <dir>` instead.
+                    • Filter at source — `grep -c` / `wc -l` / narrower paths over unbounded dumps.""";
 
     private static final List<ToolParameter> PARAMETERS = Arrays.asList(
             new ToolParameter("command", "string", true,

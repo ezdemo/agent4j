@@ -222,10 +222,7 @@ public class SessionService {
      * 委托给底层 SessionStore.flush()，确保消息已持久化。
      */
     public void flush() {
-        try {
-            store.flush();
-        } catch (IOException ignored) {
-        }
+        store.flush();
     }
 
     /**

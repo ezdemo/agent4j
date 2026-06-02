@@ -4,7 +4,6 @@ import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.tool.file.FileSystemService;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -27,7 +26,7 @@ public class CodeQueryService {
 
     public String getSymbols(Path root, String pathStr) throws IOException {
         Path abs = new FileSystemService().resolveSafe(root, pathStr);
-        String content = new String(Files.readAllBytes(abs), StandardCharsets.UTF_8);
+        String content = Files.readString(abs);
         List<String> symbols = new ArrayList<>();
         Pattern classPat = Pattern.compile(
                 "(?:public|private|protected|static|abstract|final|sealed|non-sealed)?\\s*"
@@ -59,7 +58,7 @@ public class CodeQueryService {
 
     public String findInCode(Path root, String pathStr, String name) throws IOException {
         Path abs = new FileSystemService().resolveSafe(root, pathStr);
-        String content = new String(Files.readAllBytes(abs), StandardCharsets.UTF_8);
+        String content = Files.readString(abs);
         List<String> matches = new ArrayList<>();
         String stripped = content.replaceAll("//[^\n]*", "\n")
                 .replaceAll("/\\*[\\s\\S]*?\\*/", " ")
@@ -86,7 +85,7 @@ public class CodeQueryService {
                     .filter(p -> p.toString().replace('\\', '/').endsWith(pathPattern))
                     .findFirst();
             if (found.isPresent()) {
-                String content = new String(Files.readAllBytes(found.get()), StandardCharsets.UTF_8);
+                String content = Files.readString(found.get());
                 return content.substring(0, Math.min(content.length(), 50000));
             }
         }

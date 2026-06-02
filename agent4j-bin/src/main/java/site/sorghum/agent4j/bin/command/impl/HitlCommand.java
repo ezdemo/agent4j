@@ -32,7 +32,7 @@ public class HitlCommand implements ChatCommand {
     }
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) throws Exception {
+    public CommandResult execute(String input, ChatCommandContext context) {
         context.getAgent().toggleHitl();
         boolean on = context.getAgent().isHitlMode();
         if (on) {

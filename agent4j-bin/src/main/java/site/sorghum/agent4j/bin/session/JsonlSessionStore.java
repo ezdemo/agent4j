@@ -398,7 +398,7 @@ public class JsonlSessionStore implements SessionStore {
         Path file = sessionsDir.resolve(sanitize(name) + ".meta");
         if (!Files.exists(file)) return null;
         try {
-            String metaJson = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+            String metaJson = Files.readString(file);
             org.noear.snack4.ONode metaNode = org.noear.snack4.ONode.ofJson(metaJson);
             return metaNode.get("title").getString();
         } catch (Exception e) {
@@ -411,7 +411,7 @@ public class JsonlSessionStore implements SessionStore {
         Path file = sessionsDir.resolve(sanitize(name) + ".usage");
         if (!Files.exists(file)) return new long[]{0, 0, 0, 0, 0};
         try {
-            String json = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+            String json = Files.readString(file);
             org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson(json);
             return new long[]{
                     node.get("prompt").getLong(),
@@ -445,7 +445,7 @@ public class JsonlSessionStore implements SessionStore {
             }
         }
         Path file = sessionsDir.resolve(sanitize(name) + ".model_usage");
-        Files.write(file, root.toJson().getBytes(StandardCharsets.UTF_8));
+        Files.writeString(file, root.toJson());
     }
 
     @Override
@@ -454,7 +454,7 @@ public class JsonlSessionStore implements SessionStore {
         Path file = sessionsDir.resolve(sanitize(name) + ".model_usage");
         if (!Files.exists(file)) return result;
         try {
-            String json = new String(Files.readAllBytes(file), StandardCharsets.UTF_8);
+            String json = Files.readString(file);
             org.noear.snack4.ONode root = org.noear.snack4.ONode.ofJson(json);
             for (Map.Entry<String, org.noear.snack4.ONode> entry : root.getObject().entrySet()) {
                 org.noear.snack4.ONode arr = entry.getValue();

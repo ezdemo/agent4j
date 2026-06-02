@@ -34,18 +34,24 @@ public class RevisePlanTool extends AgentTool {
 
     @Override
     public String toToolSpec() {
-        return "### revise_plan\n\n"
-                + "描述：替换正在执行中的计划的剩余步骤。当在计划执行过程中发现需要调整时使用。\n\n"
-                + "## 使用指南\n\n"
-                + "1. **说明原因**：在 reason 中清楚说明为什么需要修订\n"
-                + "2. **提供新步骤**：用 remainingSteps 提供调整后的剩余步骤列表\n"
-                + "3. **与 submit_plan 的区别**：revise_plan 替换的是剩余步骤，\n"
-                + "   已完成的步骤不受影响\n\n"
-                + "参数：\n"
-                + "  - reason (string, 必填): 修订原因\n"
-                + "  - remainingSteps (array, 必填): 剩余步骤\n\n"
-                + "只读：否\n"
-                + "风暴豁免：否";
+        return """
+                ### revise_plan
+                
+                描述：替换正在执行中的计划的剩余步骤。当在计划执行过程中发现需要调整时使用。
+                
+                ## 使用指南
+                
+                1. **说明原因**：在 reason 中清楚说明为什么需要修订
+                2. **提供新步骤**：用 remainingSteps 提供调整后的剩余步骤列表
+                3. **与 submit_plan 的区别**：revise_plan 替换的是剩余步骤，
+                   已完成的步骤不受影响
+                
+                参数：
+                  - reason (string, 必填): 修订原因
+                  - remainingSteps (array, 必填): 剩余步骤
+                
+                只读：否
+                风暴豁免：否""";
     }
 
     @Override

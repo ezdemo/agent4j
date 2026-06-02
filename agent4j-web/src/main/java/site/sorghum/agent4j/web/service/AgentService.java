@@ -343,14 +343,6 @@ public class AgentService {
     // ==================== 聊天 ====================
 
     /**
-     * 获取默认 Agent 实例（兼容旧代码）
-     */
-    public Agent4jAgent getAgent() {
-        String defaultKey = generateSessionKey(null, null);
-        return getOrCreateAgent(defaultKey);
-    }
-
-    /**
      * 获取 Agent 整体状态（供前端状态面板使用）。
      *
      * @return 状态信息
@@ -565,11 +557,7 @@ public class AgentService {
         }
 
         // 直接以目标会话名创建/获取 Agent（switchTo 是惰性的，不创建文件）
-        try {
-            switchSession(workspacePath, sessionName);
-        } catch (IOException e) {
-            System.err.println("[web] 创建会话失败: " + e.getMessage());
-        }
+        switchSession(workspacePath, sessionName);
 
         return sessionName;
     }
@@ -625,7 +613,7 @@ public class AgentService {
      * @param sessionName   会话名称
      * @return 切换是否成功
      */
-    public boolean switchSession(String workspacePath, String sessionName) throws IOException {
+    public boolean switchSession(String workspacePath, String sessionName) {
         if (!isReady() || sessionName == null) {
             return false;
         }

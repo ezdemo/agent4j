@@ -38,9 +38,10 @@ public class TreeTool extends AgentTool {
     private static final String NAME = "tree";
 
     private static final String DESCRIPTION =
-            "生成工作区的目录树结构。\n"
-                    + "自动跳过 node_modules / .git / target 等无关目录。\n"
-                    + "可通过 maxDepth 控制输出深度，避免上下文过大。";
+            """
+                    生成工作区的目录树结构。
+                    自动跳过 node_modules / .git / target 等无关目录。
+                    可通过 maxDepth 控制输出深度，避免上下文过大。""";
 
     private static final List<ToolParameter> PARAMETERS = List.of(
             new ToolParameter("maxDepth", "int", false,
@@ -59,17 +60,23 @@ public class TreeTool extends AgentTool {
 
     @Override
     public String toToolSpec() {
-        return "### tree\n\n"
-                + "描述：生成工作区的目录树结构。自动跳过 node_modules / .git / target 等无关目录。\n\n"
-                + "## 使用指南\n\n"
-                + "- **maxDepth=3**（默认）：输出 3 层深度的目录树，适合快速了解项目结构\n"
-                + "- **maxDepth=0**：仅输出根目录（用于确认工作区位置）\n"
-                + "- **maxDepth=-1**：不限深度，输出完整目录树（可能很大，慎用）\n"
-                + "- **maxDepth=1**：仅输出根目录的直接子目录和文件\n\n"
-                + "参数：\n"
-                + "  - maxDepth (int, 可选): 最大递归深度，默认 3。0=仅根目录，-1=不限深度\n\n"
-                + "只读：是\n"
-                + "风暴豁免：是";
+        return """
+                ### tree
+                
+                描述：生成工作区的目录树结构。自动跳过 node_modules / .git / target 等无关目录。
+                
+                ## 使用指南
+                
+                - **maxDepth=3**（默认）：输出 3 层深度的目录树，适合快速了解项目结构
+                - **maxDepth=0**：仅输出根目录（用于确认工作区位置）
+                - **maxDepth=-1**：不限深度，输出完整目录树（可能很大，慎用）
+                - **maxDepth=1**：仅输出根目录的直接子目录和文件
+                
+                参数：
+                  - maxDepth (int, 可选): 最大递归深度，默认 3。0=仅根目录，-1=不限深度
+                
+                只读：是
+                风暴豁免：是""";
     }
 
     @Override

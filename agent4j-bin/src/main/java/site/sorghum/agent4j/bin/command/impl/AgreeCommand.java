@@ -37,7 +37,7 @@ public class AgreeCommand implements ChatCommand {
     }
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) throws Exception {
+    public CommandResult execute(String input, ChatCommandContext context) {
         if (context.getAgent().noPendingHITL()) {
             System.out.println("(当前没有待审批的工具调用)");
             return CommandResult.CONTINUE;

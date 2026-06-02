@@ -26,15 +26,16 @@ public class FileTool extends AgentTool {
     private static final String NAME = "file";
 
     private static final String DESCRIPTION =
-            "文件系统操作工具。\n"
-                    + "支持以下操作：\n"
-                    + "  create_dir  — 创建目录（含父目录）\n"
-                    + "  create_file — 创建/覆盖文件\n"
-                    + "  delete_file — 删除文件\n"
-                    + "  delete_dir  — 递归删除目录\n"
-                    + "  move        — 移动/重命名\n"
-                    + "  copy        — 复制文件或目录\n"
-                    + "  stat        — 查看文件/目录元信息";
+            """
+                    文件系统操作工具。
+                    支持以下操作：
+                      create_dir  — 创建目录（含父目录）
+                      create_file — 创建/覆盖文件
+                      delete_file — 删除文件
+                      delete_dir  — 递归删除目录
+                      move        — 移动/重命名
+                      copy        — 复制文件或目录
+                      stat        — 查看文件/目录元信息""";
 
     private static final List<ToolParameter> PARAMETERS = Arrays.asList(
             new ToolParameter("action", "string", true,
@@ -59,29 +60,37 @@ public class FileTool extends AgentTool {
 
     @Override
     public String toToolSpec() {
-        return "### file\n\n"
-                + "描述：工作区文件系统操作工具。\n\n"
-                + "## 支持的操作类型\n\n"
-                + "| 操作 | 说明 | 必填参数 |\n"
-                + "|------|------|---------|\n"
-                + "| create_dir | 创建目录（含父目录） | path |\n"
-                + "| create_file | 创建/覆盖文件 | path, content? |\n"
-                + "| delete_file | 删除文件 | path |\n"
-                + "| delete_dir | 递归删除目录 | path |\n"
-                + "| move | 移动/重命名 | path, destination |\n"
-                + "| copy | 复制文件或目录 | path, destination |\n"
-                + "| stat | 查看文件/目录元信息 | path |\n\n"
-                + "## 注意事项\n\n"
-                + "- 所有路径都是相对于工作区根目录的\n"
-                + "- create_file 如果不传 content，会创建空文件\n"
-                + "- delete_dir 会递归删除目录及其所有子文件和子目录\n\n"
-                + "参数：\n"
-                + "  - action (string, 必填): 操作类型\n"
-                + "  - path (string, 必填): 目标路径\n"
-                + "  - destination (string, 可选): 目标路径（move/copy 时必填）\n"
-                + "  - content (string, 可选): 文件内容（create_file 时使用）\n\n"
-                + "只读：否\n"
-                + "风暴豁免：否";
+        return """
+                ### file
+                
+                描述：工作区文件系统操作工具。
+                
+                ## 支持的操作类型
+                
+                | 操作 | 说明 | 必填参数 |
+                |------|------|---------|
+                | create_dir | 创建目录（含父目录） | path |
+                | create_file | 创建/覆盖文件 | path, content? |
+                | delete_file | 删除文件 | path |
+                | delete_dir | 递归删除目录 | path |
+                | move | 移动/重命名 | path, destination |
+                | copy | 复制文件或目录 | path, destination |
+                | stat | 查看文件/目录元信息 | path |
+                
+                ## 注意事项
+                
+                - 所有路径都是相对于工作区根目录的
+                - create_file 如果不传 content，会创建空文件
+                - delete_dir 会递归删除目录及其所有子文件和子目录
+                
+                参数：
+                  - action (string, 必填): 操作类型
+                  - path (string, 必填): 目标路径
+                  - destination (string, 可选): 目标路径（move/copy 时必填）
+                  - content (string, 可选): 文件内容（create_file 时使用）
+                
+                只读：否
+                风暴豁免：否""";
     }
 
     @Override
@@ -132,7 +141,7 @@ public class FileTool extends AgentTool {
 
     // ==== 内部操作 ====
 
-    private Path resolveSafe(Path root, String rel) throws IOException {
+    private Path resolveSafe(Path root, String rel) {
         Path resolved = root.resolve(rel).toAbsolutePath().normalize();
         Path rootAbs = root.toAbsolutePath().normalize();
         if (!resolved.startsWith(rootAbs)) {

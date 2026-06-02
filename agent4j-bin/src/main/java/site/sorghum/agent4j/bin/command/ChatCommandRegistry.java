@@ -77,20 +77,6 @@ public class ChatCommandRegistry {
     }
 
     /**
-     * 匹配并执行命令。
-     *
-     * @param input   用户输入
-     * @param context 执行上下文
-     * @return 执行结果，无匹配时返回 null
-     * @throws Exception 执行异常
-     */
-    public ChatCommand.CommandResult execute(String input, ChatCommandContext context) throws Exception {
-        ChatCommand cmd = match(input);
-        if (cmd == null) return null;
-        return cmd.execute(input, context);
-    }
-
-    /**
      * 获取所有命令的帮助文本列表（按命令名字母序排列）。
      */
     public List<String> getHelpLines() {
@@ -101,13 +87,6 @@ public class ChatCommandRegistry {
             lines.add(cmd.getDescription());
         }
         return lines;
-    }
-
-    /**
-     * 获取已注册的命令数量。
-     */
-    public int size() {
-        return sortedCommands.size();
     }
 
     /**

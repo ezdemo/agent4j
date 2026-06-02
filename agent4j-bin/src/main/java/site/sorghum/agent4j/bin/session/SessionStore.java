@@ -66,7 +66,7 @@ public interface SessionStore {
      * 刷入缓冲区数据到磁盘。
      * 调用后确保所有已追加的消息被持久化。
      */
-    void flush() throws IOException;
+    void flush();
 
     /**
      * 保存 token 用量
@@ -101,7 +101,7 @@ public interface SessionStore {
     /**
      * 获取会话标题，不存在则返回 null
      */
-    String getTitle(String name) throws IOException;
+    String getTitle(String name);
 
     /**
      * 会话元信息。

@@ -113,7 +113,7 @@ public class GitController {
                     new InputStreamReader(proc.getInputStream(), StandardCharsets.UTF_8))) {
                 String line;
                 while ((line = reader.readLine()) != null) {
-                    if (stdout.length() > 0) stdout.append('\n');
+                    if (!stdout.isEmpty()) stdout.append('\n');
                     stdout.append(line);
                 }
             }

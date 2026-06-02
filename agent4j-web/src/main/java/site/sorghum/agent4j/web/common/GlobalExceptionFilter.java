@@ -24,7 +24,7 @@ import site.sorghum.agent4j.web.model.ApiResponse;
 public class GlobalExceptionFilter implements Filter {
 
     @Override
-    public void doFilter(Context ctx, FilterChain chain) throws Throwable {
+    public void doFilter(Context ctx, FilterChain chain) {
         // CORS 头：所有响应都加上
         ctx.headerSet("Access-Control-Allow-Origin", "*");
         ctx.headerSet("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, PATCH, OPTIONS");

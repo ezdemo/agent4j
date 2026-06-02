@@ -35,7 +35,7 @@ public class HttpModelClient implements ModelClient {
     /**
      * reasoning_effort 取值: low / medium / high / max
      */
-    private String reasoningEffort;
+    private final String reasoningEffort;
     private volatile String model;
     /**
      * 流式中断标志（ReasonBreaker 触发时设置）

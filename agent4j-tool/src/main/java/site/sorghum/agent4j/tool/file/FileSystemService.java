@@ -56,10 +56,8 @@ public class FileSystemService {
         if (!Files.isDirectory(abs)) return "[NOT_DIR] " + pathStr;
         List<String> lines = new ArrayList<>();
         try (Stream<Path> stream = Files.list(abs)) {
-            stream.sorted().forEach(p -> {
-                lines.add(Files.isDirectory(p) ? p.getFileName().toString() + "/"
-                        : p.getFileName().toString());
-            });
+            stream.sorted().forEach(p -> lines.add(Files.isDirectory(p) ? p.getFileName().toString() + "/"
+                    : p.getFileName().toString()));
         }
         return lines.isEmpty() ? "(empty directory)" : String.join("\n", lines);
     }
@@ -95,7 +93,7 @@ public class FileSystemService {
      * 安全解析路径，防止路径穿越攻击。
      * 确保解析后的路径仍处于工作区根目录内。
      */
-    public Path resolveSafe(Path root, String raw) throws IOException {
+    public Path resolveSafe(Path root, String raw) {
         if (raw == null || raw.isEmpty()) return root;
         Path resolved = root.resolve(raw).toAbsolutePath().normalize();
         if (!resolved.startsWith(root.toAbsolutePath().normalize())) {

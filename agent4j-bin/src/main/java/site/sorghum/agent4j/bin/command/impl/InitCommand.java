@@ -33,7 +33,7 @@ public class InitCommand implements ChatCommand {
     }
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) throws Exception {
+    public CommandResult execute(String input, ChatCommandContext context) {
         System.out.println("正在分析项目...\n");
         context.getAgent().getOutput().onReasoning("正在分析项目...");
         String prompt = """

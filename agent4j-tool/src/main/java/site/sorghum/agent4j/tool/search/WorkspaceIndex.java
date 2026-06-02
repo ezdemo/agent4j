@@ -396,7 +396,7 @@ public class WorkspaceIndex {
 
     private void fullScan() throws IOException {
         fileIndex.clear();
-        Files.walkFileTree(root, new SimpleFileVisitor<Path>() {
+        Files.walkFileTree(root, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
                 String name = dir.getFileName().toString();
