@@ -1,7 +1,7 @@
 <template>
   <div class="setup-screen">
     <!-- 关闭按钮 -->
-    <button class="close-btn" @click="handleClose" title="跳过，直接进入">✕</button>
+    <button class="close-btn" @click="handleClose" title="关闭程序">✕</button>
 
     <div class="setup-content">
       <!-- Logo & 标题 -->
@@ -118,9 +118,23 @@ async function syncPortFromRust() {
   } catch { /* 非 Tauri 环境，忽略 */ }
 }
 
-// 关闭/跳过
-function handleClose() {
-  emit('close')
+// 关闭程序
+async function handleClose() {
+  // 尝试关闭 Tauri 窗口
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window')
+    const win = getCurrentWindow()
+    await win.close()
+    return
+  } catch {
+    // 非 Tauri 环境
+  }
+  // 浏览器环境：尝试关闭标签页
+  window.close()
+  // 大多数浏览器会拦截 window.close()，提示用户
+  setTimeout(() => {
+    alert('请手动关闭此浏览器标签页')
+  }, 200)
 }
 
 // 检测连接

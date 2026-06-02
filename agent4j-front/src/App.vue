@@ -342,7 +342,7 @@ const onConnected = () => {
   startHeartbeat()
 }
 
-// 用户关闭设置页：跳过，直接进入主界面
+// 用户关闭设置页（仅非 Tauri 浏览器环境走到这里）
 const onSetupClose = () => {
   showSetup.value = false
   loadData()

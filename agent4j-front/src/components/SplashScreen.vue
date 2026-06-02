@@ -1,5 +1,7 @@
 <template>
   <div class="splash-screen" v-if="visible">
+    <!-- 关闭按钮 -->
+    <button class="close-btn" @click="closeApp" title="关闭程序">✕</button>
     <div class="splash-content">
       <!-- Logo -->
       <div class="logo-container">
@@ -53,14 +55,19 @@
             <span class="java-text">{{ javaInfo }}</span>
           </div>
 
-          <button class="btn btn-primary btn-lg install-btn" @click="startInstall">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="7 10 12 15 17 10"/>
-              <line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            开始安装
-          </button>
+          <div class="confirm-actions">
+            <button class="btn btn-primary btn-lg install-btn" @click="startInstall">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/>
+                <line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              开始安装
+            </button>
+            <button class="btn btn-secondary btn-lg" @click="closeApp">
+              退出
+            </button>
+          </div>
         </div>
       </template>
 
@@ -112,9 +119,14 @@
           <span class="status-dot"></span>
           <span>{{ errorMessage }}</span>
         </div>
-        <button class="btn btn-primary" @click="retry">
-          重试
-        </button>
+        <div class="error-actions">
+          <button class="btn btn-primary" @click="retry">
+            重试
+          </button>
+          <button class="btn btn-secondary" @click="closeApp">
+            退出
+          </button>
+        </div>
       </template>
     </div>
   </div>
@@ -394,6 +406,23 @@ function retry() {
   checkEnvironment()
 }
 
+async function closeApp() {
+  // 尝试关闭 Tauri 窗口
+  try {
+    const { getCurrentWindow } = await import('@tauri-apps/api/window')
+    const win = getCurrentWindow()
+    await win.close()
+    return
+  } catch {
+    // 非 Tauri 环境
+  }
+  // 浏览器环境
+  window.close()
+  setTimeout(() => {
+    alert('请手动关闭此浏览器标签页')
+  }, 200)
+}
+
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
@@ -627,6 +656,50 @@ defineExpose({
 }
 .btn-primary:hover {
   opacity: 0.9;
+}
+.btn-secondary {
+  background: var(--bg-2);
+  color: var(--fg);
+  border-color: var(--border);
+}
+.btn-secondary:hover {
+  background: var(--bg-3);
+}
+.error-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  margin-top: 8px;
+}
+
+/* 关闭按钮 */
+.close-btn {
+  position: absolute;
+  top: 16px;
+  right: 16px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  background: var(--bg-2);
+  border-radius: 8px;
+  color: var(--fg-3);
+  font-size: 16px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--t);
+  z-index: 1;
+}
+.close-btn:hover {
+  background: var(--bg-3);
+  color: var(--fg);
 }
 .btn-lg {
   padding: 10px 36px;

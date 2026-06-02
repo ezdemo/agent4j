@@ -109,7 +109,12 @@ const toggleMaximize = async () => {
 }
 
 const closeWindow = async () => {
-  if (appWindow) await appWindow.close()
+  if (appWindow) {
+    await appWindow.close()
+  } else {
+    // 浏览器环境：尝试关闭标签页
+    window.close()
+  }
 }
 </script>
 
