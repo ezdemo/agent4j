@@ -319,9 +319,22 @@ const fmtArgs = a => {
 
 // 输入框事件已迁移到 ChatInput 组件
 
-const scroll = async () => {
+const SCROLL_THRESHOLD = 80 // px，用户在此阈值内才自动滚到底
+
+// 是否靠近底部
+const isNearBottom = () => {
+  const el = messagesContainer.value
+  if (!el) return true
+  return el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_THRESHOLD
+}
+
+const scroll = async (force = false) => {
   await nextTick()
-  if (messagesContainer.value) messagesContainer.value.scrollTop = messagesContainer.value.scrollHeight
+  const el = messagesContainer.value
+  if (!el) return
+  if (force || isNearBottom()) {
+    el.scrollTop = el.scrollHeight
+  }
 }
 
 /** 用户点击选项按钮 → 直接发送 value 作为消息，清理旧工具卡片 */
@@ -365,7 +378,7 @@ const sendMessage = async () => {
     messages.value.push({ id: Date.now(), role: 'user', content: text, time: now() })
   }
   inputText.value = ''
-  await scroll()
+  await scroll(true)  // 用户刚发送，强制滚到底
 
   streaming.value = true
   const mi = messages.value.length
@@ -557,7 +570,7 @@ const loadHistory = async (sessionName) => {
       }
       messages.value = merged
       // 加载完成后滚动到底部
-      await scroll()
+      await scroll(true)
     }
   } catch {}
 }
