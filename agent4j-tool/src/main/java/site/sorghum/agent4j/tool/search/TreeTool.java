@@ -63,20 +63,8 @@ public class TreeTool extends AgentTool {
         return """
                 ### tree
                 
-                描述：生成工作区的目录树结构。自动跳过 node_modules / .git / target 等无关目录。
-                
-                ## 使用指南
-                
-                - **maxDepth=3**（默认）：输出 3 层深度的目录树，适合快速了解项目结构
-                - **maxDepth=0**：仅输出根目录（用于确认工作区位置）
-                - **maxDepth=-1**：不限深度，输出完整目录树（可能很大，慎用）
-                - **maxDepth=1**：仅输出根目录的直接子目录和文件
-                
-                参数：
-                  - maxDepth (int, 可选): 最大递归深度，默认 3。0=仅根目录，-1=不限深度
-                
-                只读：是
-                风暴豁免：是""";
+                描述：生成工作区目录树，自动跳过 node_modules/.git/target 等。
+                参数: maxDepth(可选，默认3，0=仅根目录，-1=不限深度)。只读。""";
     }
 
     @Override
