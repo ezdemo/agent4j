@@ -255,16 +255,15 @@ onMounted(() => {
   // 监听消息容器滚动 + 初始检查
   const el = messagesContainer.value
   if (el) {
-    el.addEventListener('scroll', updateScrollBtn)
-    // 等一帧让内容渲染完再检查
-    requestAnimationFrame(() => updateScrollBtn())
+    el.addEventListener('scroll', onScroll)
+    requestAnimationFrame(() => onScroll())
   }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('copy-success', () => {})
   const el = messagesContainer.value
-  if (el) el.removeEventListener('scroll', updateScrollBtn)
+  if (el) el.removeEventListener('scroll', onScroll)
 })
 
 const suggestions = ['解释这段代码', '优化这个函数', '写个单元测试', '检查潜在问题']
@@ -338,30 +337,54 @@ const fmtArgs = a => {
 
 const showScrollBtn = ref(false)
 
-const SCROLL_THRESHOLD = 80 // px，用户在此阈值内才自动滚到底
+// 用户是否主动滚离了底部（区别于被内容推上去）
+let userScrolledAway = false
 
-// 是否靠近底部
+const SCROLL_THRESHOLD = 80
+
 const isNearBottom = () => {
   const el = messagesContainer.value
   if (!el) return true
   return el.scrollHeight - el.scrollTop - el.clientHeight < SCROLL_THRESHOLD
 }
 
-const scroll = async (force = false) => {
+const scroll = async (force = false, smooth = false) => {
   await nextTick()
   const el = messagesContainer.value
   if (!el) return
-  if (force || isNearBottom()) {
-    el.scrollTo({ top: el.scrollHeight, behavior: force ? 'smooth' : 'auto' })
+  // 流式渲染中只要用户没主动滚走就一直滚；否则按阈值
+  if (force || (streaming.value && !userScrolledAway) || isNearBottom()) {
+    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
   }
   updateScrollBtn()
 }
 
-const scrollToBottom = () => scroll(true)
+const scrollToBottom = () => {
+  userScrolledAway = false
+  scroll(true, true)
+}
 
-// 监听容器的滚动事件，更新按钮显示
+// 监听容器的滚动事件，检测用户是否主动滚离底部
 const updateScrollBtn = () => {
-  showScrollBtn.value = !isNearBottom()
+  const nearBottom = isNearBottom()
+  showScrollBtn.value = !nearBottom
+  if (!nearBottom && !streaming.value) {
+    // 不在流式时，用户滚走就算主动离开
+    userScrolledAway = true
+  }
+}
+
+// 额外监听 wheel / touch 事件：滚动中如果用户向上滚，标记为主动离开
+const onScroll = () => {
+  const el = messagesContainer.value
+  if (!el) return
+  const nearBottom = isNearBottom()
+  showScrollBtn.value = !nearBottom
+  if (!nearBottom) {
+    userScrolledAway = true
+  } else {
+    userScrolledAway = false
+  }
 }
 
 /** 用户点击选项按钮 → 直接发送 value 作为消息，清理旧工具卡片 */
@@ -404,6 +427,7 @@ const sendMessage = async () => {
   if (!isSilent) {
     messages.value.push({ id: Date.now(), role: 'user', content: text, time: now() })
   }
+  userScrolledAway = false
   inputText.value = ''
   await scroll(true)  // 用户刚发送，强制滚到底
 
