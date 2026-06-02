@@ -122,7 +122,7 @@
         </span>
         <span class="usage-item usage-cost-item" v-if="usage.hasPrice">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
           </svg>
           ¥{{ (usage.totalCost||0).toFixed(2) }}
         </span>
