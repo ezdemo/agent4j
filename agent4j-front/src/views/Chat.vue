@@ -117,6 +117,14 @@
       </div>
     </div>
 
+    <!-- 滚动到底部按钮（固定在消息区右下角） -->
+    <button v-show="showScrollBtn" class="scroll-bottom-btn" @click="scrollToBottom" title="滚动到底部">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="7 13 12 18 17 13"/>
+        <line x1="12" y1="18" x2="12" y2="6"/>
+      </svg>
+    </button>
+
     <!-- 输入区（独立组件） -->
     <ChatInput
       v-model:inputText="inputText"
@@ -244,10 +252,19 @@ onMounted(() => {
   window.addEventListener('copy-success', (e) => {
     addLog({ level: 'INFO', text: '✅ ' + (e.detail || '已复制'), time: Date.now() })
   })
+  // 监听消息容器滚动 + 初始检查
+  const el = messagesContainer.value
+  if (el) {
+    el.addEventListener('scroll', updateScrollBtn)
+    // 等一帧让内容渲染完再检查
+    requestAnimationFrame(() => updateScrollBtn())
+  }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('copy-success', () => {})
+  const el = messagesContainer.value
+  if (el) el.removeEventListener('scroll', updateScrollBtn)
 })
 
 const suggestions = ['解释这段代码', '优化这个函数', '写个单元测试', '检查潜在问题']
@@ -319,6 +336,8 @@ const fmtArgs = a => {
 
 // 输入框事件已迁移到 ChatInput 组件
 
+const showScrollBtn = ref(false)
+
 const SCROLL_THRESHOLD = 80 // px，用户在此阈值内才自动滚到底
 
 // 是否靠近底部
@@ -333,8 +352,16 @@ const scroll = async (force = false) => {
   const el = messagesContainer.value
   if (!el) return
   if (force || isNearBottom()) {
-    el.scrollTop = el.scrollHeight
+    el.scrollTo({ top: el.scrollHeight, behavior: force ? 'smooth' : 'auto' })
   }
+  updateScrollBtn()
+}
+
+const scrollToBottom = () => scroll(true)
+
+// 监听容器的滚动事件，更新按钮显示
+const updateScrollBtn = () => {
+  showScrollBtn.value = !isNearBottom()
 }
 
 /** 用户点击选项按钮 → 直接发送 value 作为消息，清理旧工具卡片 */
@@ -601,6 +628,7 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   flex-direction: column;
   height: 100%;
   background: var(--bg);
+  position: relative;
 }
 
 .chat-head {
@@ -618,6 +646,7 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   flex: 1;
   overflow-y: auto;
   padding: 16px;
+  position: relative;
 }
 
 /* 空状态 */
@@ -976,6 +1005,38 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
 .typing span:nth-child(3) { animation-delay: 0.4s; }
 
 /* 全部输入区样式已迁移到 ChatInput.vue 组件中（.input-area, .input-box, .usage-bar, .todo-*, .slash-popup, .model-selector 等） */
+
+/* 滚动到底部按钮（固定在消息区右下角，不随内容滚动） */
+.scroll-bottom-btn {
+  position: absolute;
+  right: 24px;
+  bottom: 110px;
+  z-index: 60;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: #fff;
+  border: 2px solid var(--bg);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.scroll-bottom-btn:hover {
+  transform: scale(1.1);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
+}
+.scroll-bottom-btn svg {
+  animation: bounce-down 1.5s ease-in-out infinite;
+}
+@keyframes bounce-down {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(3px); }
+}
+/* 使用 v-show 控制显隐 */
 
 /* ===== 日志堆叠容器 ===== */
 .log-stack {
