@@ -543,12 +543,20 @@ public class AgentLoop {
         }
 
         // 用户批准：先写入 assistant 消息，再并行执行工具
+        // 注意：工具结果尚未写入，与沙箱越界拦截配合时避免脏数据传给 LLM
         ctx.addAssistant(content, tcList, reasoningContent);
 
         dispatcher.resetStorm();
 
         // 并行执行暂存的工具调用
         ToolExecutionResult ter = executeToolCalls(toolCalls);
+
+        // 沙箱越界 HITL：暂停并等待用户审批（不写入占位结果，不继续 LLM 调用）
+        if (hitlState == HitlState.PENDING && pendingSandboxHITToolCalls != null) {
+            this.pendingSandboxHITContent = content;
+            this.pendingSandboxHITReasoning = reasoningContent;
+            return interceptForSandboxHITL();
+        }
 
         // 写入工具结果
         for (ChatMessage tr : ter.toolResults) {
@@ -1056,8 +1064,8 @@ public class AgentLoop {
         }
 
         // 使用过滤后的工具调用列表创建并行任务，确保 tcList 和 toolResults 数量严格一致
-        tcArray = filteredTcList.toArray(new ONode[0]);
-        int tcCount = tcArray.length;
+        final ONode[] finalTcArray = filteredTcList.toArray(new ONode[0]);
+        int tcCount = finalTcArray.length;
 
         // 清空子代理用量收集器（task 工具会在 Future 中写入用量数据）
         site.sorghum.agent4j.bin.builtin.TaskTool.clearUsageCollector();
@@ -1082,7 +1090,7 @@ public class AgentLoop {
                     site.sorghum.agent4j.bin.builtin.TaskTool.setCurrentOutput(capturedOutput);
                 }
                 try {
-                    ONode tc = tcArray[idx];
+                    ONode tc = finalTcArray[idx];
                     String tcId = tc.get("id").getString();
                     ONode func = tc.get("function");
                     String tcName = func.get("name").getString();
@@ -1146,7 +1154,7 @@ public class AgentLoop {
                 toolResults.add(f.get());
             } catch (CancellationException e) {
                 // 超时取消的，返回带有工具ID的占位错误
-                ONode tc = tcArray[i];
+                ONode tc = finalTcArray[i];
                 String tcId = tc.get("id").getString();
                 toolResults.add(toolResult(tcId, "{\"error\":\"工具执行超时（" + TOOL_TIMEOUT_SEC + "s）\",\"rejectedReason\":\"timeout\"}"));
             } catch (InterruptedException e) {

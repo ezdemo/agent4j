@@ -127,7 +127,7 @@
 
     <!-- 子代理浮窗入口按钮 -->
     <button v-if="hasSubAgentOutput" class="sub-float-btn" @click="subAgentModalOpen = true">
-      🧩 子代理
+      子代理
       <span class="badge">{{ subAgentSessions.length }}</span>
     </button>
 
@@ -136,16 +136,16 @@
       <div v-if="subAgentModalOpen" class="sub-modal-overlay" @click.self="subAgentModalOpen = false">
         <div class="sub-modal">
           <div class="sub-modal-head">
-            <h3>🧩 子代理输出</h3>
+            <h3>子代理输出</h3>
             <button class="sub-modal-close" @click="subAgentModalOpen = false">&times;</button>
           </div>
-          <div class="sub-modal-body">
+          <div class="sub-modal-body" ref="subModalBody">
             <template v-if="subAgentSessions.length === 0">
               <div style="text-align:center;color:var(--fg-3);padding:40px 0;">暂无子代理输出</div>
             </template>
             <template v-for="(session, si) in subAgentSessions" :key="session.id">
               <div class="sub-session">
-                <div class="sub-session-head">🧩 {{ session.taskName }}</div>
+                <div class="sub-session-head">{{ session.taskName }}</div>
                 <div class="sub-session-body">
                   <div v-for="(block, bi) in session.blocks" :key="bi">
                     <div v-if="block.type === 'reasoning'" class="block-reasoning">
@@ -274,6 +274,17 @@ const subAgentModalOpen = ref(false)
 const subAgentModalTask = ref('')
 const subAgentSessionId = ref(0)      // 自增 ID
 const hasSubAgentOutput = computed(() => subAgentSessions.value.length > 0)
+const subModalBody = ref(null)        // 子代理 Modal 容器 ref，用于自动滚底
+
+// Modal 内容变化时自动滚动到底部（打开瞬间 + 后续 SSE 数据流入）
+watch([subAgentSessions, subAgentBlocks], async () => {
+  if (subAgentModalOpen.value) {
+    await nextTick()
+    await nextTick() // 两层 nextTick 确保 Vue 渲染完成
+    const el = subModalBody.value
+    if (el) el.scrollTop = el.scrollHeight
+  }
+}, { deep: true })
 
 // 日志通知列表（逐条堆叠，每条6秒后自动移除）
 const currentLogs = ref([])

@@ -36,10 +36,10 @@ public class HitlCommand implements ChatCommand {
         context.getAgent().toggleHitl();
         boolean on = context.getAgent().isHitlMode();
         if (on) {
-            System.out.println("✅ HITL 模式已开启 — 非只读工具执行前需用户审批");
-            System.out.println("   使用 /agree 批准执行，/deny 拒绝执行");
+            context.getAgent().getOutput().onReasoning("✅ HITL 模式已开启 — 非只读工具执行前需用户审批\n");
+            context.getAgent().getOutput().onReasoning("   使用 /agree 批准执行，/deny 拒绝执行\n");
         } else {
-            System.out.println("❌ HITL 模式已关闭 — 工具将自动执行");
+            context.getAgent().getOutput().onReasoning("❌ HITL 模式已关闭 — 工具将自动执行\n");
         }
         return CommandResult.CONTINUE;
     }
