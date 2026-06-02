@@ -160,8 +160,8 @@
 </template>
 
 <script setup>
-import { ref, computed, watch, nextTick, onMounted, onBeforeUnmount } from 'vue'
-import { agentAPI, configAPI } from '../services/api'
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {agentAPI} from '../services/api'
 
 const props = defineProps({
   inputText: { type: String, default: '' },
@@ -303,7 +303,14 @@ const handleOutside = (e) => { if (!e.target.closest('.model-selector')) showMod
 // ============= Usage =============
 const fmt = (n) => { if (!n||n===0) return '0'; if (n>=1e6) return (n/1e6).toFixed(1)+'M'; if (n>=1e3) return (n/1e3).toFixed(1)+'K'; return String(n) }
 const cacheRate = computed(() => { const t=props.usage.cacheHit+props.usage.cacheMiss; return t===0?'0':((props.usage.cacheHit/t)*100).toFixed(1) })
-const ctxPct = computed(() => { const m=props.usage.maxContextTokens||128000, c=props.usage.lastPromptTokens||props.usage.promptTokens||0; return m===0?'0':((c/m)*100).toFixed(1) })
+const ctxPct = computed(() => {
+  const m = props.usage.maxContextTokens || 128000
+  const c = props.usage.lastPromptTokens || props.usage.promptTokens || 0
+  if (m <= 0 || c <= 0) return 0
+  const pct = Math.round((c / m) * 100)
+  // 小于 5% 时至少展示 5%，让填充条肉眼可见
+  return Math.max(5, Math.min(pct, 100))
+})
 
 onMounted(() => { loadCommands(); document.addEventListener('click', handleOutside) })
 onBeforeUnmount(() => document.removeEventListener('click', handleOutside))
@@ -393,9 +400,34 @@ defineExpose({ focus: () => inputField.value?.focus(), autoResize })
 .usage-item { display: inline-flex; align-items: center; gap: 3px; cursor: default; color: var(--fg-3); }
 .usage-item svg { color: var(--fg-4); flex-shrink: 0; }
 .usage-sep { color: var(--border); font-size: 14px; }
-.usage-context-wrap { display: flex; align-items: center; gap: 6px; }
-.usage-progress { width: 60px; height: 4px; background: var(--bg-3); border-radius: 2px; overflow: hidden; }
-.usage-progress-bar { height: 100%; background: var(--accent); border-radius: 2px; transition: width 0.3s ease; }
+
+.usage-context-wrap {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+
+.usage-progress {
+  display: inline-block;
+  width: 80px;
+  height: 5px;
+  background: var(--bg-3);
+  border-radius: 3px;
+  overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
+  vertical-align: middle;
+}
+
+.usage-progress-bar {
+  display: block;
+  height: 100%;
+  min-width: 2px;
+  background: var(--accent);
+  opacity: 0.65;
+  border-radius: 3px;
+  transition: width 0.5s ease;
+}
 .usage-progress-bar.medium { background: var(--yellow); }
 .usage-progress-bar.high { background: var(--red); }
 .usage-value { font-weight: 500; color: var(--fg-2); font-family: var(--mono); }

@@ -148,6 +148,7 @@ public class SseEmitter {
         node.set("totalTokens", totalTokens);
         node.set("cacheHit", cacheHit);
         node.set("cacheMiss", cacheMiss);
+        node.set("lastPromptTokens", promptTokens);
         send("usage", node.toJson());
     }
 
