@@ -91,12 +91,8 @@ public class ToolSystemInitializer {
             }
         }
 
-        // 3. 加载项目文档（agent4j.md / CLAUDE.md）
+        // 3. 加载基准系统提示词（编码代理身份规则）
         String systemPrompt = loadDefaultSystemPrompt(defaultSystemPrompt);
-        String projectMd = loadProjectMd(workspace);
-        if (!projectMd.isEmpty()) {
-            systemPrompt = projectMd + "\n\n---\n\n" + systemPrompt;
-        }
 
         // 4. 追加工具规范到 system prompt
         systemPrompt = systemPrompt + "\n\n" + toolSpecsBuilder.toString().trim();
@@ -114,10 +110,18 @@ public class ToolSystemInitializer {
             log.info("[skill] 已加载 skill 索引，共 {} 个 skill", skillStore.list().size());
         }
 
-        // 6. 注册 SkillStoreV2 到 Solon 容器
+        // 6. 项目文档后置到最底部 —— 最大化前缀缓存命中。
+        //    稳定的 system prompt（身份/规则/工具定义/Plan Mode/Skill 索引）保持在头部，
+        //    项目特定的 agent4j.md/CLAUDE.md 放在末尾，换项目时只需 discard 尾部缓存。
+        String projectMd = loadProjectMd(workspace);
+        if (!projectMd.isEmpty()) {
+            systemPrompt = systemPrompt + "\n\n---\n\n" + projectMd;
+        }
+
+        // 7. 注册 SkillStoreV2 到 Solon 容器
         Solon.context().wrapAndPut(SkillStoreV2.class, skillStore);
 
-        // 7. 构建 PromptPrefix（缓存优先）
+        // 8. 构建 PromptPrefix（缓存优先）
         PromptPrefix prefix = new PromptPrefix(systemPrompt, registry.toOpenAiTools());
 
         log.info("[init] 工具系统初始化完成 — 工具数: {}", agentTools.size());
