@@ -85,12 +85,7 @@
                 placeholder="输入消息... (Enter 发送, Tab 补全, / 命令)" rows="1"></textarea>
 
       <div class="input-actions">
-        <button class="btn-icon-sm" :class="{ active: planMode }" @click="$emit('togglePlan')" title="计划模式">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/>
-            <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
-          </svg>
-        </button>
+<!-- 计划模式按钮已移除 -->
         <button v-if="streaming" class="stop-btn" @click="$emit('abort')" title="停止生成 (Esc)">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
           <span class="stop-text">停止</span>
@@ -171,7 +166,6 @@ import { agentAPI, configAPI } from '../services/api'
 const props = defineProps({
   inputText: { type: String, default: '' },
   streaming: { type: Boolean, default: false },
-  planMode: { type: Boolean, default: false },
   todos: { type: Array, default: () => [] },
   usage: { type: Object, default: () => ({}) },
   currentModel: { type: String, default: '' },
@@ -180,7 +174,7 @@ const props = defineProps({
   sessionName: { type: String, default: null }
 })
 
-const emit = defineEmits(['update:inputText', 'send', 'abort', 'togglePlan', 'clear', 'export', 'fetchTodos', 'refreshUsage', 'switchModel'])
+const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'fetchTodos', 'refreshUsage', 'switchModel'])
 
 const inputField = ref(null)
 const inputFocused = ref(false)

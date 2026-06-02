@@ -129,7 +129,6 @@
     <ChatInput
       v-model:inputText="inputText"
       :streaming="streaming"
-      :planMode="planMode"
       :todos="todos"
       :usage="usage"
       :currentModel="currentModel"
@@ -138,7 +137,6 @@
       :sessionName="props.sessionName"
       @send="sendMessage"
       @abort="abortChat"
-      @togglePlan="togglePlan"
       @clear="clearChat"
       @export="exportChat"
       @fetchTodos="fetchTodos"
@@ -235,7 +233,7 @@ const fetchTodos = async () => {
     params.sessionName = props.sessionName || 'default'
     if (props.workspaceHash) params.workspaceHash = props.workspaceHash
     const res = await configAPI.getTodos(params)
-    if (res.success) { todos.value = res.data?.todos || [] }
+    if (res.success) { todos.value = res.data || [] }
   } catch (e) { todos.value = [] }
 }
 
