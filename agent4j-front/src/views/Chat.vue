@@ -7,6 +7,7 @@
       <div style="flex:1"></div>
       <button class="btn btn-ghost btn-sm" @click="clearChat">清空</button>
       <button class="btn btn-ghost btn-sm" @click="exportChat">导出</button>
+      <button :disabled="loadingPrompt" class="btn btn-ghost btn-sm" @click="viewSystemPrompt">提示词</button>
     </div>
 
     <!-- 悬浮日志通知（全局，不受消息滚动影响） -->
@@ -218,6 +219,27 @@
                 </template>
               </div>
             </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 系统提示词 Modal -->
+    <Teleport to="body">
+      <div v-if="promptModalOpen" class="prompt-modal-overlay" @click.self="promptModalOpen = false">
+        <div class="prompt-modal">
+          <div class="prompt-modal-head">
+            <h3>系统提示词</h3>
+            <span class="prompt-modal-size">{{ promptLength }} 字符</span>
+            <div style="flex:1"></div>
+            <button class="prompt-modal-close" @click="promptModalOpen = false">&times;</button>
+          </div>
+          <div class="prompt-modal-body">
+            <div class="prompt-modal-content" v-html="fmtPrompt(promptContent)"></div>
+          </div>
+          <div class="prompt-modal-foot">
+            <button class="btn btn-sm" @click="copyPrompt">复制</button>
+            <button class="btn btn-sm" @click="promptModalOpen = false">关闭</button>
           </div>
         </div>
       </div>
@@ -463,6 +485,12 @@ window.copyCode = (btn) => {
 }
 
 const fmt = c => {
+  if (!c) return ''
+  return marked(c)
+}
+
+// 提示词用 markdown 渲染
+const fmtPrompt = c => {
   if (!c) return ''
   return marked(c)
 }
@@ -847,6 +875,41 @@ const exportChat = () => {
   a.href = URL.createObjectURL(blob)
   a.download = `chat-${new Date().toISOString().slice(0, 10)}.txt`
   a.click()
+}
+
+// 查看系统提示词
+const loadingPrompt = ref(false)
+const promptModalOpen = ref(false)
+const promptContent = ref('')
+const promptLength = ref(0)
+
+const copyPrompt = () => {
+  if (!promptContent.value) return
+  navigator.clipboard.writeText(promptContent.value).then(() => {
+    addLog({level: 'INFO', text: '✅ 提示词已复制', time: Date.now()})
+  }).catch(() => {
+  })
+}
+
+const viewSystemPrompt = async () => {
+  loadingPrompt.value = true
+  try {
+    const params = {}
+    if (props.workspaceHash) params.workspaceHash = props.workspaceHash
+    if (props.sessionName) params.sessionName = props.sessionName
+    const res = await agentAPI.getSystemPrompt(params)
+    if (res.success && res.data) {
+      promptContent.value = res.data.content || ''
+      promptLength.value = res.data.length || 0
+      promptModalOpen.value = true
+    } else {
+      addLog({level: 'ERROR', text: '获取提示词失败', time: Date.now()})
+    }
+  } catch (e) {
+    addLog({level: 'ERROR', text: '获取提示词失败: ' + (e.message || '未知错误'), time: Date.now()})
+  } finally {
+    loadingPrompt.value = false
+  }
 }
 
 const togglePlan = async () => {
@@ -1841,5 +1904,148 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   font-size: 11px;
   min-width: 18px;
   text-align: center;
+}
+
+/* ===== 系统提示词弹窗 ===== */
+.prompt-modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.prompt-modal {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  width: 80vw;
+  max-width: 900px;
+  height: 80vh;
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+}
+
+.prompt-modal-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+}
+
+.prompt-modal-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.prompt-modal-size {
+  font-size: 11px;
+  color: var(--fg-4);
+  background: var(--bg-3);
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+}
+
+.prompt-modal-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--fg-3);
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.prompt-modal-close:hover {
+  color: var(--fg);
+}
+
+.prompt-modal-body {
+  flex: 1;
+  overflow: auto;
+  padding: 20px 24px;
+}
+
+.prompt-modal-content {
+  font-size: 14px;
+  line-height: 1.7;
+  word-break: break-word;
+  overflow-x: hidden;
+}
+
+.prompt-modal-content :deep(pre) {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 10px;
+  margin: 6px 0;
+  overflow-x: auto;
+}
+
+.prompt-modal-content :deep(code) {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.prompt-modal-content :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+
+.prompt-modal-content :deep(strong) {
+  font-weight: 600;
+}
+
+.prompt-modal-content :deep(a) {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.prompt-modal-content :deep(h1),
+.prompt-modal-content :deep(h2),
+.prompt-modal-content :deep(h3),
+.prompt-modal-content :deep(h4) {
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.prompt-modal-content :deep(ul),
+.prompt-modal-content :deep(ol) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.prompt-modal-content :deep(blockquote) {
+  margin: 0.5em 0;
+  padding: 0.5em 1em;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-3);
+  border-radius: 0 var(--r) var(--r) 0;
+}
+
+.prompt-modal-content :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+}
+
+.prompt-modal-content :deep(th),
+.prompt-modal-content :deep(td) {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.prompt-modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
 }
 </style>

@@ -120,6 +120,8 @@ public class Agent4jAgent {
                 b.workspace, b.apiUrl, b.apiKey,
                 b.disabledTools, b.blockedPaths, prompt);
         ToolRegistry registry = initResult.toolRegistry;
+        // 优先使用 initResult 中按工作区正确拼接的 PromptPrefix（含工作区特定的项目文档），
+        // 如果调用方传了 sharedPrefix 且工作区相同，也可以复用（由调用方控制）。
         PromptPrefix prefix = b.sharedPrefix != null ? b.sharedPrefix : initResult.promptPrefix;
 
         // 创建独立的会话上下文
@@ -474,9 +476,43 @@ public class Agent4jAgent {
         PromptPrefix sharedPrefix;
 
         /**
+         * 首次运行时自动安装默认系统提示词到 ~/.agent4j/agent4j.md。
+         * <p>
+         * 从 classpath 读取打包的 default-agent4j.md，写入用户目录。
+         * 如果目标文件已存在则跳过，不覆盖用户自定义内容。
+         * </p>
+         */
+        public static void installDefaultPromptIfNeeded() {
+            Path homeDir = Paths.get(System.getProperty("user.home"), ".agent4j");
+            Path target = homeDir.resolve("agent4j.md");
+            if (Files.exists(target)) {
+                return; // 用户已有自定义提示词，不覆盖
+            }
+            // 从 classpath 读取打包的默认提示词
+            try (var is = Agent4jAgent.class.getClassLoader().getResourceAsStream("default-agent4j.md")) {
+                if (is == null) {
+                    log.warn("[prompt] classpath 中未找到 default-agent4j.md，跳过自动安装");
+                    return;
+                }
+                String content = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+                if (content.trim().isEmpty()) {
+                    return;
+                }
+                Files.createDirectories(homeDir);
+                Files.writeString(target, content.trim());
+                log.info("[prompt] 已安装默认系统提示词到 ~/.agent4j/agent4j.md（{} 字符）", content.trim().length());
+            } catch (IOException e) {
+                log.error("[prompt] 安装默认系统提示词失败: {}", e.getMessage());
+            }
+        }
+
+        /**
          * 加载用户级默认系统提示词。
+         * 优先级：~/.agent4j/agent4j.md > 硬编码默认值
          */
         private static String loadDefaultSystemPrompt() {
+            // 先确保默认提示词文件已安装
+            installDefaultPromptIfNeeded();
             // 如果 ~/.agent4j/agent4j.md 存在，以其内容作为默认系统提示词
             Path homePrompt = Paths.get(System.getProperty("user.home"), ".agent4j", "agent4j.md");
             if (Files.exists(homePrompt)) {

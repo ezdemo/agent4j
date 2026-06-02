@@ -1,6 +1,4 @@
-﻿import { useAppStore } from '../stores/app'
-
-import axios from 'axios'
+﻿import axios from 'axios'
 
 // 默认后端地址（浏览器模式用 8097，Tauri 模式由 Rust 动态分配）
 const DEFAULT_API_BASE = 'http://localhost:8097'
@@ -267,6 +265,11 @@ export const agentAPI = {
   // 获取可用skill列表 - GET /api/agent/skills
   getSkills: () => {
     return api.get('/agent/skills')
+  },
+
+    // 获取当前会话的系统提示词 - GET /api/agent/prompt?workspaceHash=xxx&sessionName=xxx
+    getSystemPrompt: (params) => {
+        return api.get('/agent/prompt', {params: params || {}})
   }
 }
 

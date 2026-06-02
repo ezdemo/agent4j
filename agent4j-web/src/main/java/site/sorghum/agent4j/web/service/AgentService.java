@@ -89,9 +89,9 @@ public class AgentService {
     @Getter
     private volatile ToolRegistry sharedToolRegistry;
     /**
-     * 共享的 PromptPrefix（所有会话复用）
+     * 按工作区缓存的 PromptPrefix：key = 工作区绝对路径
      */
-    private volatile PromptPrefix sharedPrefix;
+    private final ConcurrentHashMap<String, PromptPrefix> workspacePrefixes = new ConcurrentHashMap<>();
     /**
      * 共享的 SkillStoreV2（所有会话复用）
      */
@@ -120,6 +120,8 @@ public class AgentService {
      * 优先级：~/.agent4j/agent4j.md > 硬编码默认值
      */
     private static String loadDefaultSystemPrompt() {
+        // 先确保默认提示词文件已安装（首运行自动从 classpath 复制）
+        Agent4jAgent.Builder.installDefaultPromptIfNeeded();
         // 如果 ~/.agent4j/agent4j.md 存在，以其内容作为默认系统提示词
         Path homePrompt = Paths.get(System.getProperty("user.home"), ".agent4j", "agent4j.md");
         if (java.nio.file.Files.exists(homePrompt)) {
@@ -198,8 +200,12 @@ public class AgentService {
                     disabledTools, blockedPaths,
                     loadDefaultSystemPrompt());
             this.sharedToolRegistry = initResult.toolRegistry;
-            this.sharedPrefix = initResult.promptPrefix;
             this.sharedSkillStore = initResult.skillStore;
+            // 保存按工作区缓存的 PromptPrefix
+            String initWs = config.workspaceDir() != null
+                    ? config.workspaceDir().toAbsolutePath().toString()
+                    : Paths.get(System.getProperty("user.home"), ".agent4j").toString();
+            workspacePrefixes.put(initWs, initResult.promptPrefix);
 
             System.out.println("[web] Agent 共享组件初始化完成 — 模型: " + model);
         } catch (Exception e) {
@@ -294,7 +300,7 @@ public class AgentService {
                         .commandRegistry(commandRegistry)
                         .hitl(hitlMode)  // 使用热更新后的 HITL 模式
                         .sharedModelClient(sharedModelClient)
-                        .sharedPrefix(sharedPrefix)
+                        .sharedPrefix(getOrCreateWorkspacePrefix(workspacePath, sessionName))
                         .sharedSystemPrompt(loadDefaultSystemPrompt());
 
                 agent = builder.buildLightweight();
@@ -337,10 +343,81 @@ public class AgentService {
      * 共享组件是否已初始化
      */
     public boolean isReady() {
-        return sharedModelClient != null && sharedToolRegistry != null && sharedPrefix != null;
+        return sharedModelClient != null && sharedToolRegistry != null && !workspacePrefixes.isEmpty();
+    }
+
+    /**
+     * 获取或创建指定会话的 PromptPrefix。
+     * <p>
+     * 以 "workspacePath::sessionName" 为缓存 key，每个会话有独立的 PromptPrefix
+     * （因会话可能在不同工作区，项目文档 agent4j.md/CLAUDE.md 不同）。
+     * 同一工作区+同一会话名的请求复用缓存，避免重复初始化。
+     * </p>
+     *
+     * @param workspacePath 工作区路径
+     * @param sessionName   会话名称
+     * @return PromptPrefix，缓存未命中时自动初始化
+     */
+    private PromptPrefix getOrCreateWorkspacePrefix(String workspacePath, String sessionName) {
+        // 标准化工作区路径
+        String ws = workspacePath != null ? workspacePath : getWorkspace();
+        if (ws == null && sharedConfig != null && sharedConfig.workspaceDir() != null) {
+            ws = sharedConfig.workspaceDir().toAbsolutePath().toString();
+        }
+        if (ws == null) {
+            ws = Paths.get(System.getProperty("user.home"), ".agent4j").toString();
+        }
+        String session = sessionName != null ? sessionName : "default";
+        String cacheKey = ws + "::" + session;
+
+        // 缓存命中直接返回
+        PromptPrefix existing = workspacePrefixes.get(cacheKey);
+        if (existing != null) {
+            return existing;
+        }
+        // 缓存未命中，为该工作区初始化
+        synchronized (this) {
+            existing = workspacePrefixes.get(cacheKey);
+            if (existing != null) return existing;
+            try {
+                Path workspaceDir = Paths.get(ws);
+                Set<String> disabledTools = sharedConfig != null ? sharedConfig.disabledTools() : Collections.emptySet();
+                List<String> blockedPaths = sharedConfig != null ? sharedConfig.blockedPaths() : Collections.emptyList();
+                ToolSystemInitializer.Result result = ToolSystemInitializer.initialize(
+                        workspaceDir, sharedApiUrl, sharedApiKey,
+                        disabledTools, blockedPaths,
+                        loadDefaultSystemPrompt());
+                workspacePrefixes.put(cacheKey, result.promptPrefix);
+                log.info("[prompt] 已初始化会话提示词: {} ({} 字符)", cacheKey, result.promptPrefix.system.length());
+                return result.promptPrefix;
+            } catch (Exception e) {
+                log.error("[prompt] 初始化会话提示词失败: {}", e.getMessage());
+                return null;
+            }
+        }
     }
 
     // ==================== 聊天 ====================
+
+    /**
+     * 获取当前会话的系统提示词。
+     * <p>
+     * 直接返回 {@link PromptPrefix#system}，即 Agent 运行时实际使用的完整提示词
+     *（含项目文档 + 基础提示词 + 工具定义 + Plan Mode 说明 + Skill 索引）。
+     * </p>
+     *
+     * @param workspacePath 工作区路径（预留，目前所有会话共享同一份 PromptPrefix）
+     * @param sessionName   会话名称（预留）
+     * @return PromptDTO，包含提示词内容和字符数
+     */
+    public PromptDTO getSystemPrompt(String workspacePath, String sessionName) {
+        // 获取该会话的 PromptPrefix（优先用缓存，未命中则自动初始化）
+        PromptPrefix prefix = getOrCreateWorkspacePrefix(workspacePath, sessionName);
+        if (prefix == null || prefix.system == null) {
+            return new PromptDTO("", 0);
+        }
+        return new PromptDTO(prefix.system, prefix.system.length());
+    }
 
     /**
      * 获取 Agent 整体状态（供前端状态面板使用）。

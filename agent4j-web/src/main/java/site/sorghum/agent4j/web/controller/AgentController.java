@@ -2,10 +2,7 @@ package site.sorghum.agent4j.web.controller;
 
 import org.noear.solon.annotation.*;
 import site.sorghum.agent4j.web.common.ServiceException;
-import site.sorghum.agent4j.web.model.AgentStatusDTO;
-import site.sorghum.agent4j.web.model.ApiResponse;
-import site.sorghum.agent4j.web.model.CommandMetaDTO;
-import site.sorghum.agent4j.web.model.SkillMetaDTO;
+import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
 
 import java.util.List;
@@ -76,5 +73,23 @@ public class AgentController {
             throw new ServiceException("Agent 未初始化");
         }
         return ApiResponse.ok(agentService.getSkillMetaList());
+    }
+
+    /**
+     * 获取当前会话的系统提示词 —— GET /api/agent/prompt?workspaceHash=xxx&sessionName=xxx
+     * <p>
+     * 返回完整的 PromptPrefix 内容（含基础提示词 + 工具定义 + Skill 索引 + Plan Mode 说明）。
+     * workspaceHash 为空时使用默认工作区，sessionName 为空时使用当前活跃会话。
+     * </p>
+     */
+    @Get
+    @Mapping("/prompt")
+    public ApiResponse<PromptDTO> prompt(@Param(value = "workspaceHash", required = false) String workspaceHash,
+                                         @Param(value = "sessionName", required = false) String sessionName) {
+        if (!agentService.isReady()) {
+            throw new ServiceException("Agent 未初始化");
+        }
+        String workspacePath = workspaceHash != null ? agentService.resolveWorkspacePath(workspaceHash) : null;
+        return ApiResponse.ok(agentService.getSystemPrompt(workspacePath, sessionName));
     }
 }

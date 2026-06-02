@@ -25,6 +25,7 @@
       @toggleSide="sideOpen = !sideOpen"
       @openSettings="showSettings = true"
       @toggleGit="gitOpen = !gitOpen"
+      @viewPrompt="viewSystemPrompt"
     />
 
     <!-- 主体区域 -->
@@ -182,6 +183,30 @@
       <GitPanel v-if="gitOpen" :workspace-hash="activeWorkspaceHash" @close="gitOpen = false" />
     </Transition>
 
+      <!-- 系统提示词 Modal -->
+      <Teleport to="body">
+        <div v-if="promptModalOpen" class="modal-mask" @click.self="promptModalOpen = false">
+          <div class="modal" style="width:80vw;max-width:900px;height:80vh;display:flex;flex-direction:column">
+            <div class="modal-head">
+              <span>系统提示词</span>
+              <span style="font-size:11px;color:var(--fg-4);background:var(--bg-3);padding:2px 8px;border-radius:4px">{{
+                  promptLength
+                }} 字符</span>
+              <div style="flex:1"></div>
+              <button class="btn-icon-sm" @click="promptModalOpen = false">×</button>
+            </div>
+            <div class="modal-body" style="flex:1;overflow:auto;padding:20px 24px">
+              <div class="prompt-rendered" v-html="fmtPrompt(promptContent)"></div>
+            </div>
+            <div class="modal-foot"
+                 style="display:flex;justify-content:flex-end;gap:8px;padding:10px 16px;border-top:1px solid var(--border)">
+              <button class="btn btn-sm" @click="copyPrompt">复制</button>
+              <button class="btn btn-sm" @click="promptModalOpen = false">关闭</button>
+            </div>
+          </div>
+        </div>
+      </Teleport>
+
     </div><!-- .app-body -->
 
     <!-- 工具弹窗 -->
@@ -251,6 +276,7 @@ import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import {message} from 'ant-design-vue'
 import {useConfirm} from './composables/useConfirm'
+import {marked} from 'marked'
 import {useAppStore} from './stores/app'
 import {agentAPI, configAPI, sessionsAPI, toolsAPI} from './services/api'
 import SetupScreen from './components/SetupScreen.vue'
@@ -297,6 +323,47 @@ const gitOpen = ref(false)
 const initialDataLoaded = ref(false)
 const chatRef = ref(null)
 const workspace = ref('')
+
+// 系统提示词弹窗
+const promptModalOpen = ref(false)
+const promptContent = ref('')
+const promptLength = ref(0)
+const loadingPrompt = ref(false)
+
+const viewSystemPrompt = async () => {
+  loadingPrompt.value = true
+  try {
+    const params = {}
+    if (activeWorkspaceHash.value) params.workspaceHash = activeWorkspaceHash.value
+    if (currentSession.value) params.sessionName = currentSession.value
+    const {agentAPI} = await import('./services/api')
+    const res = await agentAPI.getSystemPrompt(params)
+    if (res.success && res.data) {
+      promptContent.value = res.data.content || ''
+      promptLength.value = res.data.length || 0
+      promptModalOpen.value = true
+    } else {
+      message.error(res.message || '获取提示词失败')
+    }
+  } catch (e) {
+    message.error('获取提示词失败: ' + (e.message || '未知错误'))
+  } finally {
+    loadingPrompt.value = false
+  }
+}
+
+const fmtPrompt = c => {
+  if (!c) return ''
+  return marked(c)
+}
+
+const copyPrompt = () => {
+  if (!promptContent.value) return
+  navigator.clipboard.writeText(promptContent.value).then(() => {
+    message.success('提示词已复制')
+  }).catch(() => {
+  })
+}
 
 // 工作区相关
 const showWorkspacePicker = ref(false)
@@ -1064,5 +1131,101 @@ watch(showSettings, (newVal) => {
     transition: left 0.2s;
   }
   .sidebar:not(.collapsed) { left: 0; }
+}
+
+/* 提示词 Markdown 渲染样式 */
+.prompt-rendered {
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--fg);
+  overflow-x: hidden;
+}
+
+.prompt-rendered h1, .prompt-rendered h2, .prompt-rendered h3, .prompt-rendered h4 {
+  margin: 0.8em 0 0.4em;
+  font-weight: 600;
+}
+
+.prompt-rendered h1 {
+  font-size: 1.4em;
+}
+
+.prompt-rendered h2 {
+  font-size: 1.25em;
+}
+
+.prompt-rendered h3 {
+  font-size: 1.1em;
+}
+
+.prompt-rendered p {
+  margin: 0.6em 0;
+}
+
+.prompt-rendered ul, .prompt-rendered ol {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.prompt-rendered li {
+  margin: 0.25em 0;
+}
+
+.prompt-rendered pre {
+  margin: 0.8em 0;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow-x: auto;
+}
+
+.prompt-rendered code {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.prompt-rendered pre code {
+  background: none;
+  padding: 0;
+}
+
+.prompt-rendered strong {
+  font-weight: 600;
+}
+
+.prompt-rendered a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.prompt-rendered a:hover {
+  text-decoration: underline;
+}
+
+.prompt-rendered blockquote {
+  margin: 0.6em 0;
+  padding: 0.6em 1em;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-3);
+  border-radius: 0 var(--r) var(--r) 0;
+}
+
+.prompt-rendered table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.6em 0;
+}
+
+.prompt-rendered th, .prompt-rendered td {
+  border: 1px solid var(--border);
+  padding: 8px 12px;
+  text-align: left;
+}
+
+.prompt-rendered hr {
+  margin: 1em 0;
+  border: none;
+  border-top: 1px solid var(--border);
 }
 </style>

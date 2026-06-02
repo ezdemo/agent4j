@@ -147,7 +147,7 @@ public class ToolSystemInitializer {
     /**
      * 加载工作区根目录下的 agent4j.md 和 CLAUDE.md。
      */
-    private static String loadProjectMd(Path workspace) {
+    public static String loadProjectMd(Path workspace) {
         if (workspace == null) return "";
         StringBuilder sb = new StringBuilder();
         for (String name : new String[]{"agent4j.md", "CLAUDE.md"}) {
@@ -172,7 +172,14 @@ public class ToolSystemInitializer {
         public final ToolRegistry toolRegistry;
         public final PromptPrefix promptPrefix;
         public final SkillStoreV2 skillStore;
+        /**
+         * 完整系统提示词（含项目文档 + base + 工具定义 + Plan Mode + Skill 索引）
+         */
         public final String systemPrompt;
+        /**
+         * 后缀部分（工具定义 + Plan Mode + Skill 索引），不依赖于具体工作区的项目文档
+         */
+        public final String suffix;
 
         Result(ToolRegistry toolRegistry, PromptPrefix promptPrefix,
                SkillStoreV2 skillStore, String systemPrompt) {
@@ -180,6 +187,10 @@ public class ToolSystemInitializer {
             this.promptPrefix = promptPrefix;
             this.skillStore = skillStore;
             this.systemPrompt = systemPrompt;
+            // 从完整提示词中提取后缀：去掉项目文档和 base prompt 部分
+            // 工具定义以 "\n\n## 可用工具规范" 开头
+            int suffixStart = systemPrompt.indexOf("\n\n## 可用工具规范");
+            this.suffix = suffixStart >= 0 ? systemPrompt.substring(suffixStart) : "";
         }
     }
 }
