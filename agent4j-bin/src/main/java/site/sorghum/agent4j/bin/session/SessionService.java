@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.bin.session;
 
+import lombok.Getter;
+import lombok.Setter;
 import site.sorghum.agent4j.bin.agent.ChatMessage;
 import site.sorghum.agent4j.bin.agent.ConversationContext;
 import site.sorghum.agent4j.bin.agent.MessageHealer;
@@ -30,6 +32,11 @@ public class SessionService {
      * 按模型分别累计的 token 用量：model -> [prompt, completion, cacheHit, cacheMiss]
      */
     private final Map<String, long[]> modelUsage = new LinkedHashMap<>();
+    /**
+     * -- GETTER --
+     *  获取底层 SessionStore
+     */
+    @Getter
     private SessionStore store;
     private long sessionPromptTokens;
     private long sessionCompletionTokens;
@@ -41,15 +48,16 @@ public class SessionService {
     private long sessionLastPromptTokens;
     /**
      * 是否已生成会话标题
-     */
-    private boolean titleGenerated = false;
+     * -- GETTER --
+     *  检查是否已生成会话标题
+     * -- SETTER --
+     *  设置标题已生成标志
 
-    public SessionService(ConversationContext ctx, SessionStore store) {
-        this.ctx = ctx;
-        this.store = store;
-        this.sessionsDir = null;
-        ctx.setSessionStore(store);
-    }
+
+     */
+    @Setter
+    @Getter
+    private boolean titleGenerated = false;
 
     /**
      * 创建支持工作区隔离的 SessionService
@@ -62,20 +70,6 @@ public class SessionService {
         this.sessionsDir = sessionsDir;
         this.store = new JsonlSessionStore(sessionsDir);
         ctx.setSessionStore(store);
-    }
-
-    /**
-     * 检查是否已生成会话标题
-     */
-    public boolean isTitleGenerated() {
-        return titleGenerated;
-    }
-
-    /**
-     * 设置标题已生成标志
-     */
-    public void setTitleGenerated(boolean generated) {
-        this.titleGenerated = generated;
     }
 
     /**
@@ -129,14 +123,6 @@ public class SessionService {
         ctx.clearHistory();  // 仅清空内存历史，不重写旧会话文件
         resetUsage();
         titleGenerated = false; // 新会话，标题未生成
-    }
-
-    /**
-     * 删除指定会话的持久化文件（.jsonl / .usage / .meta）
-     */
-    public boolean deleteSession(String name) throws IOException {
-        if (name == null || name.isEmpty()) return false;
-        return store.delete(name);
     }
 
     /**
@@ -222,13 +208,6 @@ public class SessionService {
     }
 
     /**
-     * 获取 lastPromptTokens
-     */
-    public long getLastPromptTokens() {
-        return sessionLastPromptTokens;
-    }
-
-    /**
      * 重置 token 累计
      */
     public void resetUsage() {
@@ -247,13 +226,6 @@ public class SessionService {
             store.flush();
         } catch (IOException ignored) {
         }
-    }
-
-    /**
-     * 获取底层 SessionStore
-     */
-    public SessionStore getStore() {
-        return store;
     }
 
     /**

@@ -15,16 +15,6 @@ import java.util.Map;
  *
  * @author Sorghum
  */
-
-/**
- * 会话持久化仓库接口 —— 定义会话消息的 CRUD 契约。
- * <p>
- * 实现负责具体的存储格式（JSONL、数据库等），
- * 调用方仅依赖此接口以保证可替换性和可测试性。
- * </p>
- *
- * @author Sorghum
- */
 public interface SessionStore {
 
     /**
@@ -61,11 +51,6 @@ public interface SessionStore {
      * 重写整个会话文件
      */
     void rewrite(List<ChatMessage> messages) throws IOException;
-
-    /**
-     * 归档当前会话
-     */
-    String archive() throws IOException;
 
     /**
      * 列出所有活跃会话（最新在前）

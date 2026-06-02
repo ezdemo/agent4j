@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.bin.workspace;
 
+import lombok.Getter;
+
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
@@ -9,6 +11,7 @@ import java.nio.file.Paths;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -27,6 +30,7 @@ import java.util.List;
  *
  * @author Sorghum
  */
+@Getter
 public class WorkspaceManager {
 
     private static final Path WORKSPACES_DIR = Paths.get(
@@ -34,11 +38,17 @@ public class WorkspaceManager {
 
     /**
      * 当前活跃的工作区路径（工作目录的实际路径）
+     * -- GETTER --
+     *  获取当前工作区路径
+
      */
     private String currentWorkspacePath;
 
     /**
      * 当前工作区的 hash
+     * -- GETTER --
+     *  获取当前工作区 hash
+
      */
     private String currentWorkspaceHash;
 
@@ -120,7 +130,7 @@ public class WorkspaceManager {
         config.set("name", extractWorkspaceName(workspacePath));
         config.set("createdAt", System.currentTimeMillis());
         config.set("lastAccessedAt", System.currentTimeMillis());
-        Files.write(configPath, config.toJson().getBytes(StandardCharsets.UTF_8));
+        Files.writeString(configPath, config.toJson());
     }
 
     /**
@@ -157,7 +167,7 @@ public class WorkspaceManager {
                 if (!Files.exists(configPath)) continue;
 
                 try {
-                    String json = new String(Files.readAllBytes(configPath), StandardCharsets.UTF_8);
+                    String json = Files.readString(configPath);
                     org.noear.snack4.ONode config = org.noear.snack4.ONode.ofJson(json);
 
                     String path = config.get("path").getString();
@@ -170,7 +180,7 @@ public class WorkspaceManager {
                     int sessionCount = 0;
                     if (Files.isDirectory(sessionsDir)) {
                         try (DirectoryStream<Path> sessionDs = Files.newDirectoryStream(sessionsDir, "*.jsonl")) {
-                            for (Path sessionFile : sessionDs) {
+                            for (Path ignored : sessionDs) {
                                 sessionCount++;
                             }
                         }
@@ -187,14 +197,14 @@ public class WorkspaceManager {
         }
 
         // 按创建时间排序（固定顺序，不随切换跳动）
-        workspaces.sort((a, b) -> Long.compare(a.createdAt, b.createdAt));
+        workspaces.sort(Comparator.comparingLong(a -> a.createdAt));
         return workspaces;
     }
 
     /**
      * 切换到指定工作区
      */
-    public boolean switchWorkspace(String workspacePath) throws IOException {
+    public void switchWorkspace(String workspacePath) throws IOException {
         String hash = computeHash(workspacePath);
         Path workspaceDir = WORKSPACES_DIR.resolve(hash);
         Path configPath = workspaceDir.resolve("workspace.json");
@@ -210,7 +220,6 @@ public class WorkspaceManager {
         // 更新最后访问时间
         updateLastAccessed(workspacePath);
 
-        return true;
     }
 
     /**
@@ -220,10 +229,10 @@ public class WorkspaceManager {
         Path configPath = getWorkspaceConfigPath(workspacePath);
         if (!Files.exists(configPath)) return;
 
-        String json = new String(Files.readAllBytes(configPath), StandardCharsets.UTF_8);
+        String json = Files.readString(configPath);
         org.noear.snack4.ONode config = org.noear.snack4.ONode.ofJson(json);
         config.set("lastAccessedAt", System.currentTimeMillis());
-        Files.write(configPath, config.toJson().getBytes(StandardCharsets.UTF_8));
+        Files.writeString(configPath, config.toJson());
     }
 
     /**
@@ -250,29 +259,6 @@ public class WorkspaceManager {
             }
         }
         Files.delete(dir);
-    }
-
-    /**
-     * 获取当前工作区路径
-     */
-    public String getCurrentWorkspacePath() {
-        return currentWorkspacePath;
-    }
-
-    /**
-     * 获取当前工作区 hash
-     */
-    public String getCurrentWorkspaceHash() {
-        return currentWorkspaceHash;
-    }
-
-    /**
-     * 检查工作区是否存在
-     */
-    public boolean workspaceExists(String workspacePath) {
-        String hash = computeHash(workspacePath);
-        Path configPath = WORKSPACES_DIR.resolve(hash).resolve("workspace.json");
-        return Files.exists(configPath);
     }
 
     /**

@@ -36,13 +36,15 @@ public class InitCommand implements ChatCommand {
     public CommandResult execute(String input, ChatCommandContext context) throws Exception {
         System.out.println("正在分析项目...\n");
         context.getAgent().getOutput().onReasoning("正在分析项目...");
-        String prompt = "请全面分析这个项目的代码库，生成 agent4j.md 放在项目根目录。\n\n"
-                + "要求：\n"
-                + "1. 用 tree / glob 了解项目结构\n"
-                + "2. 阅读核心源文件\n"
-                + "3. agent4j.md 应包含：项目概述、目录结构树、技术栈表格、架构设计、全部工具列表、运行方式\n"
-                + "4. 用 write_file 写入 agent4j.md\n"
-                + "5. 完成后一句话总结";
+        String prompt = """
+                请全面分析这个项目的代码库，生成 agent4j.md 放在项目根目录。
+                
+                要求：
+                1. 用 tree / glob 了解项目结构
+                2. 阅读核心源文件
+                3. agent4j.md 应包含：项目概述、目录结构树、技术栈表格、架构设计、全部工具列表、运行方式
+                4. 用 write_file 写入 agent4j.md
+                5. 完成后一句话总结""";
         try {
             String reply = context.getAgent().chat(prompt);
             context.getAgent().getOutput().onReasoning(reply);

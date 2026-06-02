@@ -25,7 +25,7 @@ import java.util.Scanner;
 @SolonMain
 public class Agent4jApp {
 
-    public static void main(String[] args) throws Throwable {
+    public static void main(String[] args) {
         // 0. 启动 Solon IoC 容器
         Solon.start(Agent4jApp.class, args);
 
@@ -51,7 +51,7 @@ public class Agent4jApp {
         // 2. 获取命令注册表（Solon IoC 自动收集所有 ChatCommand Bean）
         ChatCommandRegistry cmdRegistry = Solon.context().getBean(ChatCommandRegistry.class);
 
-        printBanner(apiUrl, apiKey, model, config, cmdRegistry);
+        printBanner(apiUrl, model, config);
 
         Agent4jAgent agent = Agent4jAgent.builder()
                 .config(config)
@@ -117,8 +117,8 @@ public class Agent4jApp {
 
     // ========== 静态辅助方法 ==========
 
-    private static void printBanner(String apiUrl, String apiKey, String model,
-                                    Agent4jConfig config, ChatCommandRegistry cmdRegistry) {
+    private static void printBanner(String apiUrl, String model,
+                                    Agent4jConfig config) {
         System.out.println("╔══════════════════════════════════════════╗");
         System.out.println("║          Agent4j — 代码助手               ║");
         System.out.println("╠══════════════════════════════════════════╣");

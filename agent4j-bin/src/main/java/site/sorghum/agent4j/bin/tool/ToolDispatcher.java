@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.bin.tool;
 
+import lombok.Getter;
+import lombok.Setter;
 import org.noear.snack4.ONode;
 import site.sorghum.agent4j.bin.agent.StormBreaker;
 import site.sorghum.agent4j.bin.util.ONodeUtil;
@@ -22,22 +24,35 @@ public class ToolDispatcher {
     /**
      * Storm 断路器（每回合重置）
      */
+    @Getter
     private final StormBreaker stormBreaker = new StormBreaker();
     /**
      * Plan Mode — 开启后仅允许只读工具
      */
+    @Setter
+    @Getter
     private boolean planMode = false;
     /**
      * 工具调用前拦截器
      */
+    @Setter
     private Function<String, String> preDispatchHook = null;
     /**
      * 工具调用后拦截器
      */
+    @Setter
     private BiFunction<String, String, String> postDispatchHook = null;
     /**
      * 当前会话ID（注入到工具 args 中）
+     * -- GETTER --
+     *  获取当前会话ID
+     * -- SETTER --
+     *  设置当前会话ID
+
+
      */
+    @Setter
+    @Getter
     private volatile String sessionId;
 
     public ToolDispatcher(ToolRegistry registry) {
@@ -50,51 +65,17 @@ public class ToolDispatcher {
         return node.toJson();
     }
 
-    /**
-     * 获取当前会话ID
-     */
-    public String getSessionId() {
-        return sessionId;
-    }
-
     // ---- Plan Mode ----
-
-    /**
-     * 设置当前会话ID
-     */
-    public void setSessionId(String sessionId) {
-        this.sessionId = sessionId;
-    }
-
-    public boolean isPlanMode() {
-        return planMode;
-    }
 
     // ---- Hooks ----
 
-    public void setPlanMode(boolean on) {
-        this.planMode = on;
-    }
-
-    public void setPreDispatchHook(Function<String, String> hook) {
-        this.preDispatchHook = hook;
-    }
-
     // ---- Storm ----
-
-    public void setPostDispatchHook(BiFunction<String, String, String> hook) {
-        this.postDispatchHook = hook;
-    }
 
     public void resetStorm() {
         stormBreaker.reset();
     }
 
     // ---- Dispatch ----
-
-    public StormBreaker getStormBreaker() {
-        return stormBreaker;
-    }
 
     /**
      * 执行工具调用，返回结果字符串

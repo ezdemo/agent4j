@@ -111,13 +111,6 @@ public class ChatCommandRegistry {
     }
 
     /**
-     * 获取所有命令的只读列表。
-     */
-    public List<ChatCommand> getAll() {
-        return sortedCommands;
-    }
-
-    /**
      * 获取所有命令的元数据列表（供前端命令选择弹窗使用）。
      *
      * @return 命令元数据列表，每项包含 cmd、desc、type、argHint

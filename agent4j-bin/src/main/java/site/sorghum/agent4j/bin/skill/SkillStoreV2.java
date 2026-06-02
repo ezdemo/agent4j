@@ -169,7 +169,7 @@ public class SkillStoreV2 {
      */
     private SkillV2 parse(Path path, String stem, SkillV2.Scope scope) {
         try {
-            String raw = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
+            String raw = Files.readString(path);
             return parseContent(raw, stem, scope, path.toString());
         } catch (IOException e) {
             return null;

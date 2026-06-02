@@ -9,7 +9,6 @@ import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
 
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.*;
@@ -133,8 +132,8 @@ public class ToolSystemInitializer {
         Path homePrompt = Paths.get(System.getProperty("user.home"), ".agent4j", "agent4j.md");
         if (java.nio.file.Files.exists(homePrompt)) {
             try {
-                String content = new String(java.nio.file.Files.readAllBytes(homePrompt), StandardCharsets.UTF_8);
-                if (content != null && !content.trim().isEmpty()) {
+                String content = java.nio.file.Files.readString(homePrompt);
+                if (!content.trim().isEmpty()) {
                     log.info("[prompt] 从 ~/.agent4j/agent4j.md 加载默认系统提示词（{} 字符）", content.length());
                     return content.trim();
                 }
@@ -155,8 +154,8 @@ public class ToolSystemInitializer {
             Path file = workspace.resolve(name);
             if (java.nio.file.Files.exists(file)) {
                 try {
-                    String content = new String(java.nio.file.Files.readAllBytes(file), StandardCharsets.UTF_8);
-                    if (sb.length() > 0) sb.append("\n\n");
+                    String content = java.nio.file.Files.readString(file);
+                    if (!sb.isEmpty()) sb.append("\n\n");
                     sb.append("[来自 ").append(name).append(" 的项目上下文]\n");
                     sb.append(content.trim());
                 } catch (IOException ignored) {

@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.bin.skill;
 
+import org.jspecify.annotations.NonNull;
+
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
@@ -25,7 +27,7 @@ public record SkillV2Impl(String name, String description, String body, Scope sc
     }
 
     @Override
-    public String toString() {
+    public @NonNull String toString() {
         return String.format("Skill{name='%s', scope=%s, runAs=%s}", name, scope, runAs);
     }
 

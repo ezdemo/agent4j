@@ -33,16 +33,6 @@ public interface ModelClient {
                     StreamCallback callback);
 
     /**
-     * 获取推理力度。
-     */
-    String getReasoningEffort();
-
-    /**
-     * 设置推理力度（运行时切换）。
-     */
-    void setReasoningEffort(String effort);
-
-    /**
      * 获取当前模型名称。
      */
     String getModel();

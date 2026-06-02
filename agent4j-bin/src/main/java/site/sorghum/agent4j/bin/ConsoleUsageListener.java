@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin;
 
+import lombok.Getter;
 import site.sorghum.agent4j.bin.agent.Agent4jAgent;
 import site.sorghum.agent4j.bin.agent.AgentLoopListener;
 
@@ -10,6 +11,7 @@ import site.sorghum.agent4j.bin.agent.AgentLoopListener;
  */
 public class ConsoleUsageListener implements AgentLoopListener {
 
+    @Getter
     private final int[] lastUsage = {0, 0, 0, 0, 0};
     private final Agent4jAgent agent;
 
@@ -28,11 +30,4 @@ public class ConsoleUsageListener implements AgentLoopListener {
         agent.addUsage(model, promptTokens, completionTokens, cacheHit, cacheMiss);
     }
 
-    public int[] getLastUsage() {
-        return lastUsage;
-    }
-
-    public void resetUsage() {
-        lastUsage[0] = lastUsage[1] = lastUsage[2] = lastUsage[3] = lastUsage[4] = 0;
-    }
 }

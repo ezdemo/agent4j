@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.command;
 
+import lombok.Getter;
 import site.sorghum.agent4j.bin.agent.Agent4jAgent;
 
 import java.util.Scanner;
@@ -15,7 +16,17 @@ import java.util.Scanner;
  */
 public class ChatCommandContext {
 
+    /**
+     * -- GETTER --
+     *  获取 Agent4jAgent 实例
+     */
+    @Getter
     private final Agent4jAgent agent;
+    /**
+     * -- GETTER --
+     *  获取用户输入扫描器
+     */
+    @Getter
     private final Scanner scanner;
     private final Runnable exitHandler;
 
@@ -30,20 +41,6 @@ public class ChatCommandContext {
         this.agent = agent;
         this.scanner = scanner;
         this.exitHandler = exitHandler;
-    }
-
-    /**
-     * 获取 Agent4jAgent 实例
-     */
-    public Agent4jAgent getAgent() {
-        return agent;
-    }
-
-    /**
-     * 获取用户输入扫描器
-     */
-    public Scanner getScanner() {
-        return scanner;
     }
 
     /**

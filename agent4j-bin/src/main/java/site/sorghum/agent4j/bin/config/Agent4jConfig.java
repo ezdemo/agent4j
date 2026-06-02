@@ -30,22 +30,23 @@ public class Agent4jConfig {
      * 生成完整的默认配置 JSON
      */
     private static String defaultConfigJson() {
-        return "{\n"
-                + "  \"baseUrl\": \"http://localhost:11434/v1\",\n"
-                + "  \"apiKey\": \"sk-your-api-key\",\n"
-                + "  \"model\": \"mimo-v2.5\",\n"
-                + "  \"reasoningEffort\": \"high\",\n"
-                + "  \"hitl\": false,\n"
-                + "  \"price\": {\n"
-                + "    \"mimo-v2.5\": { \"input\": \"1\", \"cache\": \"0.02\", \"output\": \"2\" },\n"
-                + "    \"mimo-v2.5-pro\": { \"input\": \"3\", \"cache\": \"0.025\", \"output\": \"6\" },\n"
-                + "    \"deepseek-v4-flash\": { \"input\": \"1\", \"cache\": \"0.025\", \"output\": \"2\" },\n"
-                + "    \"deepseek-v4-pro\": { \"input\": \"3\", \"cache\": \"0.02\", \"output\": \"6\" }\n"
-                + "  },\n"
-                + "  \"disabledTools\": [],\n"
-                + "  \"blockedPaths\": [],\n"
-                + "  \"availableModels\": [\"deepseek-v4-flash\", \"deepseek-v4-pro\", \"mimo-v2.5\", \"mimo-v2.5-pro\"]\n"
-                + "}";
+        return """
+                {
+                  "baseUrl": "http://localhost:11434/v1",
+                  "apiKey": "sk-your-api-key",
+                  "model": "mimo-v2.5",
+                  "reasoningEffort": "high",
+                  "hitl": false,
+                  "price": {
+                    "mimo-v2.5": { "input": "1", "cache": "0.02", "output": "2" },
+                    "mimo-v2.5-pro": { "input": "3", "cache": "0.025", "output": "6" },
+                    "deepseek-v4-flash": { "input": "1", "cache": "0.025", "output": "2" },
+                    "deepseek-v4-pro": { "input": "3", "cache": "0.02", "output": "6" }
+                  },
+                  "disabledTools": [],
+                  "blockedPaths": [],
+                  "availableModels": ["deepseek-v4-flash", "deepseek-v4-pro", "mimo-v2.5", "mimo-v2.5-pro"]
+                }""";
     }
 
     /**
@@ -89,7 +90,7 @@ public class Agent4jConfig {
         if (!Files.exists(configPath)) {
             Files.createDirectories(configDir);
             String defaultConfig = defaultConfigJson();
-            Files.write(configPath, defaultConfig.getBytes(StandardCharsets.UTF_8));
+            Files.writeString(configPath, defaultConfig);
             System.err.println("[config] 已创建默认配置文件: " + configPath);
             System.err.println("[config] 请编辑 " + configPath + " 填入 apiKey 后重启");
             System.exit(1);
@@ -126,7 +127,7 @@ public class Agent4jConfig {
 
     /**
      * 获取 API 基础地址，不含 /chat/completions 后缀。
-     * 如 "https://api.deepseek.com/v1"。
+     * 如 "<a href="https://api.deepseek.com/v1">...</a>"。
      */
     public String baseUrl() {
         return root.select("$.baseUrl").getString();
@@ -324,7 +325,6 @@ public class Agent4jConfig {
      * 合并更新配置（只更新非空字段）。
      * 更新后自动保存到 config.json。
      */
-    @SuppressWarnings("unchecked")
     public void updateAndSave(Map<String, Object> updates) throws IOException {
         if (updates == null || updates.isEmpty()) return;
 
@@ -363,7 +363,7 @@ public class Agent4jConfig {
         mergeDefaults(root, defaultConfigNode());
         Path configPath = getConfigPath();
         String json = JsonWriter.write(root, Options.of(Feature.Write_PrettyFormat));
-        Files.write(configPath, json.getBytes(StandardCharsets.UTF_8));
+        Files.writeString(configPath, json);
     }
 
     @Override

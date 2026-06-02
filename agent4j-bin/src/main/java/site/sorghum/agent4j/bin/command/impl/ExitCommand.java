@@ -34,7 +34,7 @@ public class ExitCommand implements ChatCommand {
 
     @Override
     public String getCommandType() {
-        return "system";
+        return ChatCommand.super.getCommandType();
     }
 
     @Override

@@ -77,19 +77,6 @@ public class HttpModelClient implements ModelClient {
     }
 
     @Override
-    public String getReasoningEffort() {
-        return reasoningEffort;
-    }
-
-    /**
-     * 设置推理力度（运行时切换）。
-     */
-    @Override
-    public void setReasoningEffort(String effort) {
-        this.reasoningEffort = effort;
-    }
-
-    @Override
     public String getModel() {
         return model;
     }
@@ -516,7 +503,7 @@ public class HttpModelClient implements ModelClient {
      * 对 tool 消息做防御性检查（缺少 tool_call_id 时跳过）。
      */
     private String buildBody(List<ChatMessage> messages,
-                             List<Map<String, Object>> tools) throws IOException {
+                             List<Map<String, Object>> tools) {
         ONode body = new ONode(ONode.ofJson("{}").options()).asObject();
         body.set("model", model);
         if (reasoningEffort != null && !reasoningEffort.isEmpty()) {

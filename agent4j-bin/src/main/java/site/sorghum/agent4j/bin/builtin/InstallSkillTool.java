@@ -44,23 +44,29 @@ public class InstallSkillTool extends AgentTool {
 
     @Override
     public String toToolSpec() {
-        return "### install_skill\n\n" +
-                "描述：创建并保存新的 skill，供后续会话通过 run_skill 调用。\n\n" +
-                "## 使用指南\n\n" +
-                "1. **命名规范**：字母、数字、_、-、.，1-64 字符，字母开头\n" +
-                "2. **描述必须**：简短描述会出现在 skill 索引中\n" +
-                "3. **正文格式**：Markdown 格式的指令\n" +
-                "4. **运行模式**：\n" +
-                "   - inline（默认）：正文直接插入上下文\n" +
-                "   - subagent：隔离子代理运行，只返回结果\n\n" +
-                "参数：\n" +
-                "  - name (string, 必填): skill 名称\n" +
-                "  - description (string, 必填): 一句话描述\n" +
-                "  - body (string, 必填): Markdown 格式的指令正文\n" +
-                "  - scope (string, 可选): 'project' 或 'global'\n" +
-                "  - runAs (string, 可选): 'inline' 或 'subagent'\n\n" +
-                "只读：否\n" +
-                "风暴豁免：否";
+        return """
+                ### install_skill
+                
+                描述：创建并保存新的 skill，供后续会话通过 run_skill 调用。
+                
+                ## 使用指南
+                
+                1. **命名规范**：字母、数字、_、-、.，1-64 字符，字母开头
+                2. **描述必须**：简短描述会出现在 skill 索引中
+                3. **正文格式**：Markdown 格式的指令
+                4. **运行模式**：
+                   - inline（默认）：正文直接插入上下文
+                   - subagent：隔离子代理运行，只返回结果
+                
+                参数：
+                  - name (string, 必填): skill 名称
+                  - description (string, 必填): 一句话描述
+                  - body (string, 必填): Markdown 格式的指令正文
+                  - scope (string, 可选): 'project' 或 'global'
+                  - runAs (string, 可选): 'inline' 或 'subagent'
+                
+                只读：否
+                风暴豁免：否""";
     }
 
     @Override
@@ -126,7 +132,7 @@ public class InstallSkillTool extends AgentTool {
             // 使用第一个项目级目录
             targetDir = Solon.context().getBean(SkillStoreV2.class).getRoots().stream()
                     .filter(r -> r.scope() == SkillV2.Scope.PROJECT)
-                    .map(r -> r.dir())
+                    .map(SkillStoreV2.SkillRoot::dir)
                     .findFirst()
                     .orElse(Paths.get(System.getProperty("user.home"), ".agent4j", "skills"));
         }
@@ -154,7 +160,7 @@ public class InstallSkillTool extends AgentTool {
                         "skill \"" + name + "\" already exists at " + targetFile);
             }
 
-            Files.write(targetFile, content.toString().getBytes(StandardCharsets.UTF_8));
+            Files.writeString(targetFile, content.toString());
 
             return ToolResult.ok("✅ Skill \"" + name + "\" created at " + targetFile + "\n" +
                     "It will appear in the Skills index on next `/new` or launch.");

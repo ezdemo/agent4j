@@ -320,26 +320,6 @@ public class JsonlSessionStore implements SessionStore {
     }
 
     @Override
-    public String archive() throws IOException {
-        lock.lock();
-        try {
-            Path file = sessionPath(currentName);
-            if (!Files.exists(file)) return null;
-            // 关闭当前 writer
-            closeWriter();
-            String ts = new SimpleDateFormat("yyyyMMddHHmmss").format(new Date());
-            String archiveName = currentName + "__archive_" + ts;
-            Path archiveFile = sessionPath(archiveName);
-            Files.move(file, archiveFile);
-            // 创建新会话，不创建空文件——writer 仍为 null，延迟到首次 append 时创建
-            this.currentName = newSessionName();
-            return archiveName;
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    @Override
     public List<SessionInfo> list() throws IOException {
         if (!Files.isDirectory(sessionsDir)) return new ArrayList<>();
         List<SessionInfo> list = new ArrayList<>();
@@ -358,7 +338,7 @@ public class JsonlSessionStore implements SessionStore {
                 Path metaFile = sessionsDir.resolve(sanitize(name) + ".meta");
                 if (Files.exists(metaFile)) {
                     try {
-                        String metaJson = new String(Files.readAllBytes(metaFile), StandardCharsets.UTF_8);
+                        String metaJson = Files.readString(metaFile);
                         org.noear.snack4.ONode metaNode = org.noear.snack4.ONode.ofJson(metaJson);
                         title = metaNode.get("title").getString();
                     } catch (Exception ignored) {
@@ -402,7 +382,7 @@ public class JsonlSessionStore implements SessionStore {
         String json = "{\"prompt\":" + prompt + ",\"completion\":" + completion
                 + ",\"cacheHit\":" + cacheHit + ",\"cacheMiss\":" + cacheMiss
                 + ",\"lastPromptTokens\":" + lastPromptTokens + "}";
-        Files.write(file, json.getBytes(StandardCharsets.UTF_8));
+        Files.writeString(file, json);
     }
 
     @Override
@@ -410,11 +390,11 @@ public class JsonlSessionStore implements SessionStore {
         Path file = sessionsDir.resolve(sanitize(name) + ".meta");
         org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson("{}");
         node.set("title", title);
-        Files.write(file, node.toJson().getBytes(StandardCharsets.UTF_8));
+        Files.writeString(file, node.toJson());
     }
 
     @Override
-    public String getTitle(String name) throws IOException {
+    public String getTitle(String name) {
         Path file = sessionsDir.resolve(sanitize(name) + ".meta");
         if (!Files.exists(file)) return null;
         try {

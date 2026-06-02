@@ -71,7 +71,7 @@ public class Scavenger {
             if (jm.find()) {
                 String name = jm.group(1);
                 // 尝试从附近文本提取 arguments
-                String args = extractLooseArgs(lines, i, name);
+                String args = extractLooseArgs(lines, i);
                 String sig = name + "|" + args;
                 if (!seenSignatures.contains(sig)) {
                     ToolCall tc = new ToolCall(null, name, args);
@@ -96,7 +96,6 @@ public class Scavenger {
         Matcher m = paramPat.matcher(body);
         while (m.find()) {
             String pname = m.group(1);
-            boolean isStr = "true".equalsIgnoreCase(m.group(2));
             String val = m.group(3).trim();
             params.put(pname, val);
         }
@@ -117,11 +116,10 @@ public class Scavenger {
      * 从文本附近提取 arguments JSON（简化实现）。
      * 从当前行往后找 arguments 字段，最多 5 行。
      */
-    private static String extractLooseArgs(String[] lines, int idx, String name) {
-        StringBuilder sb = new StringBuilder();
+    private static String extractLooseArgs(String[] lines, int idx) {
         // 从当前行往后找 arguments 字段
         Pattern argPat = Pattern.compile(
-                "\"(?:arguments|tool_args)\"\\s*:\\s*(\\{[^}]+\\}|\\\"[^\\\"]+\\\")");
+                "\"(?:arguments|tool_args)\"\\s*:\\s*(\\{[^}]+}|\"[^\"]+\")");
         for (int j = idx; j < Math.min(idx + 5, lines.length); j++) {
             Matcher m = argPat.matcher(lines[j]);
             if (m.find()) {
