@@ -32,13 +32,11 @@ public class TerminalTool extends AgentTool {
 
     private static final String DESCRIPTION =
             """
-                    Run a shell command in the project root; returns combined stdout+stderr.
-                    Only read-only/test/lint/typecheck commands run immediately;
-                    mutating/network/install commands need user confirmation.
-                    DO NOT use for file editing — use edit_file/multi_edit/write_file instead.
-                    No real shell: supports |/||/&&/; chains and >/>>/< redirects.
-                    Rejected: &, <<, $(...), $VAR expansion, glob expansion.
-                    cd does NOT persist across calls — use --prefix/-C flags instead.
+                    ### run_command
+                    
+                    描述：在项目根目录执行 shell 命令，返回 stdout+stderr。只读/测试/lint 命令直接执行，
+                    写入/网络/安装命令需用户确认。禁止用于文件编辑（用 edit_file/multi_edit/write_file 替代）。
+                    支持 |/||/&&/; 链和 >/>>/< 重定向；不支持 &/<</$()/$VAR/glob 扩展。cd 不跨调用持久化。
                     参数: command(必填), timeoutSec(可选，默认60s)。可写。""";
 
     private static final List<ToolParameter> PARAMETERS = Arrays.asList(
