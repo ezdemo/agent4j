@@ -9,20 +9,21 @@
       <button class="btn btn-ghost btn-sm" @click="exportChat">导出</button>
     </div>
 
+    <!-- 悬浮日志通知（全局，不受消息滚动影响） -->
+    <div class="log-stack">
+      <TransitionGroup name="log-bar">
+        <div v-for="log in currentLogs" :key="log.id" :class="'log-' + (log.level || 'info').toLowerCase()"
+             class="log-bar"
+             @click="currentLogs = currentLogs.filter(l => l.id !== log.id)">
+          <span class="log-bar-icon">📋</span>
+          <span class="log-bar-text">{{ log.text }}</span>
+          <span class="log-bar-time">{{ formatTime(log.time) }}</span>
+        </div>
+      </TransitionGroup>
+    </div>
+
     <!-- 消息区 -->
-    <div class="messages" ref="messagesContainer">
-      <!-- 悬浮日志通知（堆叠） -->
-      <div class="log-stack">
-        <TransitionGroup name="log-bar">
-          <div v-for="log in currentLogs" :key="log.id" class="log-bar"
-               :class="'log-' + (log.level || 'info').toLowerCase()"
-               @click="currentLogs = currentLogs.filter(l => l.id !== log.id)">
-            <span class="log-bar-icon">📋</span>
-            <span class="log-bar-text">{{ log.text }}</span>
-            <span class="log-bar-time">{{ formatTime(log.time) }}</span>
-          </div>
-        </TransitionGroup>
-      </div>
+    <div ref="messagesContainer" class="messages">
       <!-- 空状态 -->
       <div v-if="messages.length === 0" class="empty">
         <div class="empty-icon">
@@ -1566,14 +1567,18 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 
 /* ===== 日志堆叠容器 ===== */
 .log-stack {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  padding: 12px 16px;
+  z-index: 100;
+  pointer-events: none;
   display: flex;
   flex-direction: column;
   gap: 4px;
-  position: sticky;
-  top: 0;
-  z-index: 50;
-  margin-bottom: 8px;
-  pointer-events: none;
+  /* 确保在消息滚动时仍固定在顶部 */
+  overflow: visible;
 }
 
 .log-stack > * {
