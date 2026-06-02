@@ -37,20 +37,9 @@ public class TodoWriteTool extends AgentTool {
         return """
                 ### todo_write
                 
-                描述：在会话中管理任务跟踪列表。适合 3 步以上的复杂工作流程。
-                
-                ## 使用指南
-                
-                1. **创建任务列表**：在开始复杂工作前，用 todo_write 创建任务清单
-                2. **更新进度**：修改 todos 中对应项的 status 来标记进度
-                3. **跟踪复杂工作**：适合需要多个步骤的工作，帮助 LLM 保持进度意识
-                4. **status 取值**：pending（待办）/ in_progress（进行中）/ completed（已完成）
-                
-                参数：
-                  - todos (array, 必填): Todo 列表，每项包含 status/content 等
-                
-                只读：否
-                风暴豁免：否""";
+                描述：在会话中管理任务跟踪列表，适合 3 步以上的复杂工作流。status 取值: pending/in_progress/completed。
+                参数: todos(必填，[{status, content}, ...])。可写。
+                """;
     }
 
     @Override

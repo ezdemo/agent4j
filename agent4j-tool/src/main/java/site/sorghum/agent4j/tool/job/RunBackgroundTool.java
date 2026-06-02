@@ -38,24 +38,9 @@ public class RunBackgroundTool extends AgentTool {
         return """
                 ### run_background
                 
-                描述：启动一个长时间运行的 shell 进程并分离。适用于开发服务器、文件监视器、
-                长时间安装等场景。返回 job id 和启动预览输出。
-                
-                ## 使用指南
-                
-                1. **启动服务**：如 `npm run dev`、`mvn spring-boot:run`
-                2. **启动监视器**：如 `npx tsc --watch`、`nodemon`
-                3. **查看输出**：使用 job_output 工具读取作业输出
-                4. **等待完成**：使用 wait_for_job 工具等待作业结束
-                5. **停止作业**：使用 stop_job 工具停止作业
-                
-                参数：
-                  - command (string, 必填): shell 命令
-                  - cwd (string, 可选): 工作目录（相对于项目根）
-                  - waitSec (int, 可选): 等待启动秒数（默认 0）
-                
-                只读：否
-                风暴豁免：否""";
+                描述：启动后台 shell 进程并分离，适用于开发服务器/监视器/长时间安装。返回 job id 和启动输出。
+                参数: command(必填), cwd(可选), waitSec(可选，默认0)。可写。
+                """;
     }
 
     @Override

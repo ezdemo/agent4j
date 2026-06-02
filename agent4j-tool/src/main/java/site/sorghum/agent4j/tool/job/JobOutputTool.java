@@ -36,28 +36,9 @@ public class JobOutputTool extends AgentTool {
         return """
                 ### job_output
                 
-                描述：读取后台作业的最新输出。配合 run_background 使用，轮询查看作业进展。
-                
-                ## 使用指南
-                
-                1. **首次读取**：传入 jobId 获取最近 80 行输出
-                2. **增量读取**：用 since 参数指定字节偏移量，只返回新内容
-                3. **行数控制**：用 tailLines 控制返回行数
-                
-                ## 相关工具
-                
-                - run_background — 启动后台作业
-                - wait_for_job — 等待作业完成
-                - stop_job — 停止作业
-                - list_jobs — 列出所有作业
-                
-                参数：
-                  - jobId (int, 必填): 后台作业 ID
-                  - since (int, 可选): 字节偏移量，用于增量读取
-                  - tailLines (int, 可选): 返回最后 N 行（默认 80）
-                
-                只读：是
-                风暴豁免：是""";
+                描述：读取后台作业的最新输出，配合 run_background 轮询使用。since 参数支持增量读取。
+                参数: jobId(必填), since(可选，字节偏移), tailLines(可选，默认80)。只读。
+                """;
     }
 
     @Override

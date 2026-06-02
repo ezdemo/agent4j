@@ -34,22 +34,9 @@ public class WriteFileTool extends AgentTool {
         return """
                 ### write_file
                 
-                描述：创建新文件或覆盖已有文件的内容。父目录会自动创建。
-                
-                ## 使用指南
-                
-                1. **创建新文件**：指定 path 和 content，父目录不存在时会自动创建
-                2. **覆盖已有文件**：会直接覆盖，不可恢复——确认文件内容后再使用
-                3. **编辑已有文件**：推荐使用 edit_file（SEARCH/REPLACE）而非 write_file，
-                   因为 edit_file 更精确且有验证
-                4. **大文件创建**：没有大小限制，但过大的文件会影响 LLM 上下文
-                
-                参数：
-                  - path (string, 必填): 文件路径（相对于工作区根目录）
-                  - content (string, 必填): 文件内容
-                
-                只读：否
-                风暴豁免：否""";
+                描述：创建新文件或覆盖已有文件。父目录自动创建。编辑已有文件推荐用 edit_file（SEARCH/REPLACE）更安全。
+                参数: path(必填), content(必填)。可写。
+                """;
     }
 
     @Override

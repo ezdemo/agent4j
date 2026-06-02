@@ -120,30 +120,8 @@ public class GrepTool extends AgentTool {
         return """
                 ### grep
                 
-                描述：在工作区文件中按正则表达式搜索内容。自动跳过二进制文件、大文件（>2MB）
-                和 denylist 目录（node_modules / .git / target 等）。首次调用自动构建索引并缓存。
-                
-                ## 使用指南
-                
-                1. **基本搜索**：`pattern` 参数支持标准正则表达式语法
-                2. **按文件类型过滤**：通过 `glob` 参数限定搜索范围，如 `*.java`、`*.{ts,tsx}`
-                3. **大小写控制**：`caseSensitive` 参数控制是否大小写敏感（默认 true）
-                4. **结果数量控制**：`maxResults` 控制最大返回条数（默认 200，上限 500）
-                
-                ## 常见用法
-                
-                - 搜索类定义：`grep({pattern: "class \\\\w+", glob: "*.java"})`
-                - 搜索函数调用：`grep({pattern: "hashline\\\\.read", glob: "*.{ts,js}"})`
-                - 搜索 TODO 注释：`grep({pattern: "TODO|FIXME", caseSensitive: false})`
-                
-                参数：
-                  - pattern (string, 必填): 搜索模式（正则表达式）
-                  - glob (string, 可选): 文件过滤 glob，如 "*.java"
-                  - caseSensitive (boolean, 可选): 是否大小写敏感，默认 true
-                  - maxResults (int, 可选): 最大返回条数，默认 200，上限 500
-                
-                只读：是
-                风暴豁免：是""";
+                描述：在工作区文件中按正则表达式搜索。自动跳过二进制/大文件/denylist 目录，首次调用构建索引缓存。
+                参数: pattern(必填，正则), glob(可选，文件过滤如 *.java), caseSensitive(可选，默认true), maxResults(可选，默认200)。只读。""";
     }
 
     @Override

@@ -37,25 +37,10 @@ public class RememberTool extends AgentTool {
         return """
                 ### remember
                 
-                描述：将信息持久化保存到 ~/.agent4j/memory/ 中，供未来的会话使用。
-                
-                ## 使用指南
-                
-                1. **保存用户偏好**：如语言偏好、工作习惯等
-                2. **保存项目信息**：项目架构决策、约定等
-                3. **scope 选择**：global=跨项目可用，project=仅当前项目
-                4. **type 选择**：user/feedback/project/reference
-                
-                参数：
-                  - name (string, 必填): 记忆标识
-                  - type (string, 必填): 类型: user/feedback/project/reference
-                  - scope (string, 必填): 作用域: global/project
-                  - description (string, 必填): 简短描述
-                  - content (string, 必填): 完整内容
-                  - priority (int, 可选): 优先级: 0=low,1=medium,2=high
-                
-                只读：否
-                风暴豁免：否""";
+                描述：持久化保存信息到 ~/.agent4j/memory/，供未来会话使用。
+                scope: global/project，type: user/feedback/project/reference。
+                参数: name(必填), type(必填), scope(必填), description(必填), content(必填), priority(可选)。可写。
+                """;
     }
 
     @Override

@@ -63,34 +63,9 @@ public class FileTool extends AgentTool {
         return """
                 ### file
                 
-                描述：工作区文件系统操作工具。
-                
-                ## 支持的操作类型
-                
-                | 操作 | 说明 | 必填参数 |
-                |------|------|---------|
-                | create_dir | 创建目录（含父目录） | path |
-                | create_file | 创建/覆盖文件 | path, content? |
-                | delete_file | 删除文件 | path |
-                | delete_dir | 递归删除目录 | path |
-                | move | 移动/重命名 | path, destination |
-                | copy | 复制文件或目录 | path, destination |
-                | stat | 查看文件/目录元信息 | path |
-                
-                ## 注意事项
-                
-                - 所有路径都是相对于工作区根目录的
-                - create_file 如果不传 content，会创建空文件
-                - delete_dir 会递归删除目录及其所有子文件和子目录
-                
-                参数：
-                  - action (string, 必填): 操作类型
-                  - path (string, 必填): 目标路径
-                  - destination (string, 可选): 目标路径（move/copy 时必填）
-                  - content (string, 可选): 文件内容（create_file 时使用）
-                
-                只读：否
-                风暴豁免：否""";
+                描述：文件系统操作。支持 create_dir / create_file / delete_file / delete_dir / move / copy / stat。
+                参数: action(必填), path(必填), destination/content(按操作可选)。可写。
+                """;
     }
 
     @Override

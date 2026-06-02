@@ -34,6 +34,16 @@ public class GetSymbolsTool extends AgentTool {
     }
 
     @Override
+    public String toToolSpec() {
+        return """
+                ### get_symbols
+                
+                描述：获取源文件的顶层符号大纲（类、方法、字段等），基于 tree-sitter。
+                参数: path(必填)。只读。
+                """;
+    }
+
+    @Override
     public List<ToolParameter> getParameters() {
         return Collections.singletonList(
                 new ToolParameter("path", "string", true, "文件路径")

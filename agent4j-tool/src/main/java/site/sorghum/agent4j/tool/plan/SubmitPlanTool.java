@@ -37,23 +37,9 @@ public class SubmitPlanTool extends AgentTool {
         return """
                 ### submit_plan
                 
-                描述：提交一份具体的执行计划供用户审查。在计划模式下（Plan Mode）使用，
-                先用只读工具探索代码库，然后提交计划。
-                
-                ## 使用指南
-                
-                1. **探索阶段**：先用 read_file / glob / grep / tree 了解代码结构
-                2. **制定计划**：确定修改内容，拆分为可执行的步骤
-                3. **提交计划**：使用 submit_plan 提交计划，用户审批后执行
-                4. **执行阶段**：用户输入 /execute 退出计划模式，开始执行
-                
-                参数：
-                  - summary (string, 可选): 计划标题/摘要
-                  - plan (string, 必填): Markdown 格式的计划内容
-                  - steps (array, 必填): 步骤列表，每项包含 id/title/action
-                
-                只读：是
-                风暴豁免：否""";
+                描述：提交执行计划供用户审查（计划模式下使用）。先用只读工具探索，再提交计划。
+                参数: summary(可选), plan(必填，Markdown), steps(必填，[{id,title,action}])。只读。
+                """;
     }
 
     @Override

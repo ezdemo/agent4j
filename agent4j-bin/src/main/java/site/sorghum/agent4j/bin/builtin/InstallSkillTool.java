@@ -46,26 +46,10 @@ public class InstallSkillTool extends AgentTool {
         return """
                 ### install_skill
                 
-                描述：创建并保存新的 skill，供后续会话通过 run_skill 调用。
-                
-                ## 使用指南
-                
-                1. **命名规范**：字母、数字、_、-、.，1-64 字符，字母开头
-                2. **描述必须**：简短描述会出现在 skill 索引中
-                3. **正文格式**：Markdown 格式的指令
-                4. **运行模式**：
-                   - inline（默认）：正文直接插入上下文
-                   - subagent：隔离子代理运行，只返回结果
-                
-                参数：
-                  - name (string, 必填): skill 名称
-                  - description (string, 必填): 一句话描述
-                  - body (string, 必填): Markdown 格式的指令正文
-                  - scope (string, 可选): 'project' 或 'global'
-                  - runAs (string, 可选): 'inline' 或 'subagent'
-                
-                只读：否
-                风暴豁免：否""";
+                描述：创建并保存新的 skill，后续可通过 run_skill 调用。命名: 字母/数字/_-., 1-64字符。
+                运行模式: inline(默认，正文插入上下文) / subagent(隔离子代理)。
+                参数: name(必填), description(必填), body(必填，Markdown), scope(可选), runAs(可选)。可写。
+                """;
     }
 
     @Override

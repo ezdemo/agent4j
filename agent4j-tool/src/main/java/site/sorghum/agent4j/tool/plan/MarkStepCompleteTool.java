@@ -37,21 +37,9 @@ public class MarkStepCompleteTool extends AgentTool {
         return """
                 ### mark_step_complete
                 
-                描述：标记已审批计划中的一个步骤为已完成。跟踪计划执行的进度。
-                
-                ## 使用指南
-                
-                1. **标记完成**：执行完计划中的某一步后，用此工具标记完成
-                2. **提供结果**：在 result 中描述该步骤的执行结果
-                3. **提供依据**：在 evidence 中提供验证依据（如文件路径、测试结果等）
-                
-                参数：
-                  - stepId (string, 必填): Step id
-                  - result (string, 可选): 结果描述
-                  - evidence (array, 可选): 验证依据
-                
-                只读：否
-                风暴豁免：否""";
+                描述：标记计划步骤为已完成，跟踪执行进度。
+                参数: stepId(必填), result(可选), evidence(可选)。可写。
+                """;
     }
 
     @Override

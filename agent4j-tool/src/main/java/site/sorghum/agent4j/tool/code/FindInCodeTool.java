@@ -34,6 +34,16 @@ public class FindInCodeTool extends AgentTool {
     }
 
     @Override
+    public String toToolSpec() {
+        return """
+                ### find_in_code
+                
+                描述：在单个文件中查找指定标识符，AST 过滤。
+                参数: path(必填)。只读。
+                """;
+    }
+
+    @Override
     public List<ToolParameter> getParameters() {
         return Collections.singletonList(
                 new ToolParameter("path", "string", true, "文件路径")

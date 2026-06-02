@@ -38,23 +38,9 @@ public class AskChoiceTool extends AgentTool {
         return """
                 ### ask_choice
                 
-                描述：向用户展示一个箭头键选择菜单（2-6 个选项），等待用户选择。
-                
-                ## 使用指南
-                
-                1. **展示选项**：question 显示问题，options 列出可选项
-                2. **自定义输入**：allowCustom=true 允许用户输入自定义值
-                3. **适用场景**：当需要用户做出选择时使用，如确认操作方式
-                
-                参数：
-                  - question (string, 必填): 问题
-                  - options (array, 必填): 选项列表，支持两种格式：
-                    - 简单字符串数组: ["选项1", "选项2"]
-                    - 对象数组: [{"title": "选项1", "summary": "说明"}, ...]
-                  - allowCustom (boolean, 可选): 是否允许自定义输入
-                
-                只读：否
-                风暴豁免：否""";
+                描述：向用户展示选择菜单（2-6 个选项），等待用户选择。allowCustom=true 允许自定义输入。
+                参数: question(必填), options(必填，支持字符串数组或对象数组), allowCustom(可选)。可写。
+                """;
     }
 
     @Override

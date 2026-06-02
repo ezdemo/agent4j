@@ -32,44 +32,10 @@ public class EditFileTool extends AgentTool {
         return """
                 ### edit_file
                 
-                描述：对已有文件执行 SEARCH/REPLACE 编辑。这是修改代码的主要工具。
-                
-                ## 关键规则（必须遵守）
-                
-                1. **search 必须唯一**：要搜索的文本在文件中只能出现一次，否则工具拒绝执行。
-                2. **精确匹配**：search 文本必须与文件中完全一致（包括空格和换行），不支持正则。
-                3. **保留上下文**：search 应包含足够的前后文（3-5行），确保唯一匹配，同时避免不必要的
-                   大段重复导致 token 浪费。
-                4. **缩进敏感**：search/replace 中的缩进必须与源文件完全一致（推荐复制粘贴原文）。
-                5. **一次性完成**：对于同一文件的多个修改，尽量一次提供完整的 replace 内容，
-                   而不是分多次调用 edit_file。
-                
-                ## 正确示例
-                
-                假设文件 `src/Hello.java` 内容为：
-                ```
-                public class Hello {
-                    public void greet() {
-                        System.out.println("Hello!");
-                    }
-                }
-                ```
-                
-                要修改 greet 方法的输出：
-                ```
-                search: |
-                        System.out.println("Hello!");
-                replace: |
-                        System.out.println("Hello, World!");
-                ```
-                
-                参数：
-                  - path (string, 必填): 文件路径
-                  - search (string, 必填): 要搜索替换的精确文本（必须唯一）
-                  - replace (string, 必填): 替换后的文本
-                
-                只读：否
-                风暴豁免：否""";
+                描述：对已有文件执行 SEARCH/REPLACE 编辑。search 必须在文件中唯一匹配（空格敏感），
+                包含充足前后文（3-5行）确保唯一性。同一文件的多次修改尽量一次完成。
+                参数: path(必填), search(必填，精确原文), replace(必填，替换后文本)。可写。
+                """;
     }
 
     @Override

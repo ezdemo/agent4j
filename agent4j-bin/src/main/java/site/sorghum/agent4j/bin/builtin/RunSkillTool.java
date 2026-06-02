@@ -42,25 +42,10 @@ public class RunSkillTool extends AgentTool {
         return """
                 ### run_skill
                 
-                描述：调用用户定义的 skill playbook。从系统提示中的 Skills 索引选择合适的 skill。
-                
-                ## 使用指南
-                
-                1. **查看索引**：系统提示中有所有可用 skill 的索引
-                2. **选择 skill**：根据任务描述选择最匹配的 skill
-                3. **传入参数**：将具体任务描述作为 arguments 传入
-                
-                ## Skill 类型
-                
-                - **普通 skill**：正文直接插入上下文，你阅读后执行
-                - **[🧬 subagent] skill**：在隔离子代理中运行，只返回最终结果
-                
-                参数：
-                  - name (string, 必填): skill 名称（如 'explore', 'my-skill'）
-                  - arguments (string, 可选): 具体任务描述
-                
-                只读：是
-                风暴豁免：是""";
+                描述：调用用户定义的 skill playbook。从系统提示中的 Skills 索引选择 skill。
+                inline skill 正文直接插入上下文；[🧬 subagent] skill 在隔离子代理中运行。
+                参数: name(必填), arguments(可选，任务描述)。只读。
+                """;
     }
 
     @Override

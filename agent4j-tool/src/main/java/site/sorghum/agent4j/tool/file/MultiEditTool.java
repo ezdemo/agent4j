@@ -34,25 +34,10 @@ public class MultiEditTool extends AgentTool {
         return """
                 ### multi_edit
                 
-                描述：跨一个或多个文件原子性地执行批量 SEARCH/REPLACE 编辑。
-                
-                ## 关键规则
-                
-                1. **原子性**：先验证所有编辑项，全部通过验证后才执行写入。
-                   如果某个编辑验证失败，所有编辑都不会执行。
-                2. **回滚保护**：写入过程中如果某一步失败，已写入的文件会被回滚到原始状态。
-                3. **每项的 search 必须唯一**：同 edit_file 规则。
-                4. **适合场景**：需要同时修改多个文件（如重命名 API、重构），或者单个文件
-                   多次编辑时可以用 multi_edit 替代多次 edit_file 调用。
-                
-                参数：
-                  - edits (array, 必填): 编辑列表，每项包含:
-                      - path (string): 文件路径
-                      - search (string): 要搜索的精确文本
-                      - replace (string): 替换后的文本
-                
-                只读：否
-                风暴豁免：否""";
+                描述：跨一个或多个文件原子执行批量 SEARCH/REPLACE 编辑。全部验证通过后才写入，
+                失败自动回滚。每项 search 必须唯一。适合同时修改多个文件或同一文件多次编辑。
+                参数: edits(必填，[{path, search, replace}, ...])。可写。
+                """;
     }
 
     @Override

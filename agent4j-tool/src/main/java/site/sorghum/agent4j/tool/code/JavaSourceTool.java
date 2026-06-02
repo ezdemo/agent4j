@@ -33,10 +33,20 @@ public class JavaSourceTool extends AgentTool {
     }
 
     @Override
+    public String toToolSpec() {
+        return """
+                ### java_source
+                
+                描述：通过全限定类名查找并返回 Java 源码。jarKeyword 限定 Jar 包范围。
+                参数: className(必填), jarKeyword(必填)。只读。
+                """;
+    }
+
+    @Override
     public List<ToolParameter> getParameters() {
         return Arrays.asList(
                 new ToolParameter("className", "string", true, "Fully qualified class name"),
-                new ToolParameter("jarKeyword", "string", false, "Keyword to filter jars")
+                new ToolParameter("jarKeyword", "string", true, "Keyword to filter jars")
         );
     }
 

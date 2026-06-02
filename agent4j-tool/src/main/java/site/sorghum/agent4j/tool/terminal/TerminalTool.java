@@ -32,23 +32,14 @@ public class TerminalTool extends AgentTool {
 
     private static final String DESCRIPTION =
             """
-                    Run a shell command in the project root; returns combined stdout+stderr. \
-                    Allowlisted read-only / test / lint / typecheck commands run immediately; \
-                    mutating / network / install commands gate on user confirmation.
-                    
-                    DO NOT use run_command for file operations — use write_file, edit_file, multi_edit, \
-                    copy_file, move_file, or delete_file instead. Shell utilities (echo, cp, sed, cat, tee, \
-                    perl, python -c, etc.) bypass validation, lack rollback, and will trigger user \
-                    confirmation gates that waste turns.
-                    
-                    No real shell — argv parsed natively for cross-platform parity:
-                    • Supported: chains `|`/`||`/`&&`/`;` (each segment allowlist-checked) \
-                    and file redirects `>`/`>>`/`<`/`2>`/`2>>`/`2>&1`/`&>`.
-                    • Rejected: background `&`, heredoc `<<`, `$(…)`, subshells, `$VAR` expansion, \
-                    glob expansion. Quote operator chars as literals (`grep "a|b" file`).
-                    • `cd` does NOT persist — between calls OR within a chain. Use \
-                    `npm --prefix <dir>`, `git -C <dir>`, `cargo -C <dir>` instead.
-                    • Filter at source — `grep -c` / `wc -l` / narrower paths over unbounded dumps.""";
+                    Run a shell command in the project root; returns combined stdout+stderr.
+                    Only read-only/test/lint/typecheck commands run immediately;
+                    mutating/network/install commands need user confirmation.
+                    DO NOT use for file editing — use edit_file/multi_edit/write_file instead.
+                    No real shell: supports |/||/&&/; chains and >/>>/< redirects.
+                    Rejected: &, <<, $(...), $VAR expansion, glob expansion.
+                    cd does NOT persist across calls — use --prefix/-C flags instead.
+                    参数: command(必填), timeoutSec(可选，默认60s)。可写。""";
 
     private static final List<ToolParameter> PARAMETERS = Arrays.asList(
             new ToolParameter("command", "string", true,
