@@ -44,6 +44,12 @@ public class CommandTokenizer {
                 quote = ch;
                 continue;
             }
+            // 反斜杠转义：\空格 → 空格字面量（不分割 token）
+            if (ch == '\\' && i + 1 < cmd.length() && (cmd.charAt(i + 1) == ' ' || cmd.charAt(i + 1) == '\t')) {
+                cur.append(' ');
+                i++; // 跳过下一个空格
+                continue;
+            }
             if (ch == ' ' || ch == '\t') {
                 if (!cur.isEmpty()) {
                     out.add(cur.toString());

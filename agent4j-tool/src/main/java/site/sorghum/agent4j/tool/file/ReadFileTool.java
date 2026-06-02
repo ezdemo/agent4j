@@ -60,6 +60,10 @@ public class ReadFileTool extends AgentTool {
             Integer tail = ctx.has("tail") ? ctx.getInt("tail", 0) : null;
             String result = FileEdit.readFile(ctx.getRootDir(), pathStr,
                     head, tail, ctx.getString("range"));
+            // NOT_FOUND / IS_DIR / REFUSED 等错误前缀时返回 fail
+            if (result.startsWith("[NOT_FOUND]") || result.startsWith("[IS_DIR]") || result.startsWith("[REFUSED]")) {
+                return ToolResult.fail(result.substring(1, result.indexOf("]")), result);
+            }
             return ToolResult.ok(result);
         } catch (IOException e) {
             return ToolResult.fail("IO_ERROR", e.getMessage());
