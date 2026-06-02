@@ -14,7 +14,9 @@
       <!-- 悬浮日志通知（堆叠） -->
       <div class="log-stack">
         <TransitionGroup name="log-bar">
-          <div v-for="log in currentLogs" :key="log.id" class="log-bar" :class="'log-' + (log.level || 'info').toLowerCase()" @click="currentLogs = currentLogs.filter(l => l.id !== log.id)">
+          <div v-for="log in currentLogs" :key="log.id" class="log-bar"
+               :class="'log-' + (log.level || 'info').toLowerCase()"
+               @click="currentLogs = currentLogs.filter(l => l.id !== log.id)">
             <span class="log-bar-icon">📋</span>
             <span class="log-bar-text">{{ log.text }}</span>
             <span class="log-bar-time">{{ formatTime(log.time) }}</span>
@@ -24,7 +26,9 @@
       <!-- 空状态 -->
       <div v-if="messages.length === 0" class="empty">
         <div class="empty-icon">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+          </svg>
         </div>
         <p class="empty-title">开始对话</p>
         <p class="empty-desc">输入问题或指令，Agent4j 将为您提供帮助</p>
@@ -54,9 +58,16 @@
                 <!-- 思考 -->
                 <div v-if="block.type === 'reasoning'" class="block-reasoning">
                   <div class="reasoning-head" @click="block.showContent = !block.showContent">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                      <line x1="12" y1="17" x2="12.01" y2="17"/>
+                    </svg>
                     <span>思考</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: block.showContent ? 'rotate(180deg)' : '' }"><polyline points="6 9 12 15 18 9"/></svg>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         :style="{ transform: block.showContent ? 'rotate(180deg)' : '' }">
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
                   </div>
                   <div v-if="block.showContent" class="reasoning-text">{{ block.content }}</div>
                 </div>
@@ -68,13 +79,20 @@
                 <div v-else-if="block.type === 'tool_call'" class="block-tool">
                   <div class="tool-head" @click="block.expanded = !block.expanded">
                     <span class="tool-icon" :class="block.status">
-                      <svg v-if="block.status === '执行中'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
-                      <svg v-else-if="block.status === '成功'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                      <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+                      <svg v-if="block.status === '执行中'" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                           stroke="currentColor" stroke-width="2" class="animate-spin"><path
+                          d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+                      <svg v-else-if="block.status === '成功'" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                           stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                      <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                           stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
                     </span>
                     <code class="tool-name">{{ block.name }}</code>
                     <span class="tool-status" :class="block.status">{{ block.status }}</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: block.expanded ? 'rotate(180deg)' : '' }"><polyline points="6 9 12 15 18 9"/></svg>
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                         :style="{ transform: block.expanded ? 'rotate(180deg)' : '' }">
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
                   </div>
                   <div v-if="block.expanded" class="tool-detail">
                     <pre v-if="block.args"><code>{{ fmtArgs(block.args) }}</code></pre>
@@ -143,16 +161,23 @@
             <template v-if="subAgentSessions.length === 0">
               <div style="text-align:center;color:var(--fg-3);padding:40px 0;">暂无子代理输出</div>
             </template>
-            <template v-for="(session, si) in subAgentSessions" :key="session.id">
-              <div class="sub-session">
-                <div class="sub-session-head">{{ session.taskName }}</div>
-                <div class="sub-session-body">
+            <div class="sub-session">
+              <div class="sub-session-body">
+                <template v-for="(session, si) in subAgentSessions" :key="session.id">
                   <div v-for="(block, bi) in session.blocks" :key="bi">
                     <div v-if="block.type === 'reasoning'" class="block-reasoning">
                       <div class="reasoning-head" @click="block.showContent = !block.showContent">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2">
+                          <circle cx="12" cy="12" r="10"/>
+                          <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
+                          <line x1="12" y1="17" x2="12.01" y2="17"/>
+                        </svg>
                         <span>思考</span>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: block.showContent ? 'rotate(180deg)' : '' }"><polyline points="6 9 12 15 18 9"/></svg>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" :style="{ transform: block.showContent ? 'rotate(180deg)' : '' }">
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
                       </div>
                       <div v-if="block.showContent" class="reasoning-text">{{ block.content }}</div>
                     </div>
@@ -160,13 +185,21 @@
                     <div v-else-if="block.type === 'tool_call'" class="block-tool">
                       <div class="tool-head" @click="block.expanded = !block.expanded">
                         <span class="tool-icon" :class="block.status">
-                          <svg v-if="block.status === '执行中'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
-                          <svg v-else-if="block.status === '成功'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                          <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+                          <svg v-if="block.status === '执行中'" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                               stroke="currentColor" stroke-width="2" class="animate-spin"><path
+                              d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+                          <svg v-else-if="block.status === '成功'" width="12" height="12" viewBox="0 0 24 24"
+                               fill="none" stroke="currentColor" stroke-width="2"><polyline
+                              points="20 6 9 17 4 12"/></svg>
+                          <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                               stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
                         </span>
                         <code class="tool-name">{{ block.name }}</code>
                         <span class="tool-status" :class="block.status">{{ block.status }}</span>
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: block.expanded ? 'rotate(180deg)' : '' }"><polyline points="6 9 12 15 18 9"/></svg>
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                             stroke-width="2" :style="{ transform: block.expanded ? 'rotate(180deg)' : '' }">
+                          <polyline points="6 9 12 15 18 9"/>
+                        </svg>
                       </div>
                       <div v-if="block.expanded" class="tool-detail">
                         <pre v-if="block.args"><code>{{ fmtArgs(block.args) }}</code></pre>
@@ -174,9 +207,9 @@
                       </div>
                     </div>
                   </div>
-                </div>
+                </template>
               </div>
-            </template>
+            </div>
           </div>
         </div>
       </div>
@@ -184,47 +217,51 @@
 
     <!-- 输入区（独立组件） -->
     <ChatInput
-      v-model:inputText="inputText"
-      :streaming="streaming"
-      :todos="todos"
-      :usage="usage"
-      :currentModel="currentModel"
-      :availableModels="availableModels"
-      :workspaceHash="props.workspaceHash"
-      :sessionName="props.sessionName"
-      @send="sendMessage"
-      @abort="abortChat"
-      @clear="clearChat"
-      @export="exportChat"
-      @fetchTodos="fetchTodos"
-      @refreshUsage="loadUsage"
-      @switchModel="handleSwitchModel"
+        v-model:inputText="inputText"
+        :streaming="streaming"
+        :todos="todos"
+        :usage="usage"
+        :currentModel="currentModel"
+        :availableModels="availableModels"
+        :workspaceHash="props.workspaceHash"
+        :sessionName="props.sessionName"
+        @send="sendMessage"
+        @abort="abortChat"
+        @clear="clearChat"
+        @export="exportChat"
+        @fetchTodos="fetchTodos"
+        @refreshUsage="loadUsage"
+        @switchModel="handleSwitchModel"
     />
   </div>
 </template>
 
 <script setup>
-import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
-import { chatAPI, agentAPI, configAPI } from '../services/api'
-import { marked } from 'marked'
+import {ref, computed, nextTick, onMounted, onBeforeUnmount, watch} from 'vue'
+import {chatAPI, agentAPI, configAPI} from '../services/api'
+import {marked} from 'marked'
 import ChatInput from '../components/ChatInput.vue'
 
 // ============= 模型切换 =============
 const handleSwitchModel = async (modelName) => {
   if (modelName === currentModel.value) return
   try {
-    const r = await configAPI.updateConfig({ model: modelName })
+    const r = await configAPI.updateConfig({model: modelName})
     if (r.success) {
       currentModel.value = modelName
-      availableModels.value.forEach(m => { m.active = m.name === modelName })
+      availableModels.value.forEach(m => {
+        m.active = m.name === modelName
+      })
     }
-  } catch (e) { console.error('切换模型失败:', e) }
+  } catch (e) {
+    console.error('切换模型失败:', e)
+  }
 }
 
-const props = defineProps({ 
-  hideHeader: { type: Boolean, default: false },
-  workspaceHash: { type: String, default: null },
-  sessionName: { type: String, default: null }
+const props = defineProps({
+  hideHeader: {type: Boolean, default: false},
+  workspaceHash: {type: String, default: null},
+  sessionName: {type: String, default: null}
 })
 
 const emit = defineEmits(['sessionUpdated'])
@@ -240,7 +277,14 @@ let currentAbortController = null
 const todos = ref([])
 
 // Usage 相关
-const usage = ref({ promptTokens: 0, completionTokens: 0, cacheHit: 0, cacheMiss: 0, maxContextTokens: 128000, lastPromptTokens: 0 })
+const usage = ref({
+  promptTokens: 0,
+  completionTokens: 0,
+  cacheHit: 0,
+  cacheMiss: 0,
+  maxContextTokens: 128000,
+  lastPromptTokens: 0
+})
 const currentModel = ref('')
 const availableModels = ref([])
 
@@ -251,19 +295,20 @@ const loadUsage = async (override) => {
     const sessName = override?.sessionName ?? props.sessionName
     if (wsHash) params.workspaceHash = wsHash
     if (sessName) params.sessionName = sessName
-    
+
     const [usageRes, modelsRes] = await Promise.allSettled([
       configAPI.getUsage(params),
       configAPI.getModels()
     ])
     if (usageRes.status === 'fulfilled' && usageRes.value.success) {
-      usage.value = { ...usage.value, ...usageRes.value.data }
+      usage.value = {...usage.value, ...usageRes.value.data}
     }
     if (modelsRes.status === 'fulfilled' && modelsRes.value.success) {
       currentModel.value = modelsRes.value.data?.current || ''
       availableModels.value = modelsRes.value.data?.models || []
     }
-  } catch {}
+  } catch {
+  }
 }
 
 // ==================== 子代理 Modal 状态 ====================
@@ -276,22 +321,41 @@ const subAgentSessionId = ref(0)      // 自增 ID
 const hasSubAgentOutput = computed(() => subAgentSessions.value.length > 0)
 const subModalBody = ref(null)        // 子代理 Modal 容器 ref，用于自动滚底
 
-// Modal 内容变化时自动滚动到底部（打开瞬间 + 后续 SSE 数据流入）
+// 子代理 Modal 内容变化时始终滚动到底部
+const scrollSubModalToBottom = async () => {
+  await nextTick()
+  await nextTick() // 两层 nextTick 确保 Vue 渲染完成
+  const el = subModalBody.value
+  if (el) el.scrollTop = el.scrollHeight
+}
+
 watch([subAgentSessions, subAgentBlocks], async () => {
   if (subAgentModalOpen.value) {
-    await nextTick()
-    await nextTick() // 两层 nextTick 确保 Vue 渲染完成
-    const el = subModalBody.value
-    if (el) el.scrollTop = el.scrollHeight
+    await scrollSubModalToBottom()
   }
-}, { deep: true })
+}, {deep: true})
+
+// 打开 Modal 时滚动到底部（显示最新内容）
+watch(subAgentModalOpen, async (open) => {
+  if (open) {
+    await scrollSubModalToBottom()
+  }
+})
+
+// 切换会话/清空时重置子代理状态
+const resetSubAgentState = () => {
+  subAgentBlocks.value = []
+  subAgentSessions.value = []
+  subAgentSessionId.value = 0
+  subAgentModalOpen.value = false
+}
 
 // 日志通知列表（逐条堆叠，每条6秒后自动移除）
 const currentLogs = ref([])
 
 const addLog = (log) => {
   const id = Date.now() + Math.random()
-  currentLogs.value.unshift({ ...log, id })
+  currentLogs.value.unshift({...log, id})
   setTimeout(() => {
     currentLogs.value = currentLogs.value.filter(l => l.id !== id)
   }, 6000)
@@ -300,7 +364,7 @@ const addLog = (log) => {
 const formatTime = (t) => {
   if (!t) return ''
   const d = new Date(t)
-  return d.toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  return d.toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'})
 }
 
 // 获取当前会话的 TODO 列表
@@ -310,14 +374,20 @@ const fetchTodos = async () => {
     params.sessionName = props.sessionName || 'default'
     if (props.workspaceHash) params.workspaceHash = props.workspaceHash
     const res = await configAPI.getTodos(params)
-    if (res.success) { todos.value = res.data || [] }
-  } catch (e) { todos.value = [] }
+    if (res.success) {
+      todos.value = res.data || []
+    }
+  } catch (e) {
+    todos.value = []
+  }
 }
 
 // 监听 workspace 和 session 变化，重新加载 usage
 watch([() => props.workspaceHash, () => props.sessionName], ([ws, sess]) => {
   if (ws || sess) {
-    if (sess) { loadUsage() }
+    if (sess) {
+      loadUsage()
+    }
   }
 })
 
@@ -325,7 +395,7 @@ onMounted(() => {
   if (props.sessionName) loadUsage()
   // 监听复制成功事件
   window.addEventListener('copy-success', (e) => {
-    addLog({ level: 'INFO', text: '✅ ' + (e.detail || '已复制'), time: Date.now() })
+    addLog({level: 'INFO', text: '✅ ' + (e.detail || '已复制'), time: Date.now()})
   })
   // 监听消息容器滚动 + 初始检查
   const el = messagesContainer.value
@@ -336,7 +406,8 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
-  window.removeEventListener('copy-success', () => {})
+  window.removeEventListener('copy-success', () => {
+  })
   const el = messagesContainer.value
   if (el) el.removeEventListener('scroll', onScroll)
 })
@@ -348,7 +419,7 @@ const SILENT_CMDS = new Set(['/agree', '/deny', '/exit'])
 
 const hasAssistant = computed(() => messages.value.some(m => m.role === 'assistant' && m.blocks?.length > 0))
 
-const now = () => new Date().toLocaleTimeString('zh-CN', { hour12: false, hour: '2-digit', minute: '2-digit' })
+const now = () => new Date().toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit'})
 
 // 配置marked选项 —— 代码块右上角悬浮复制按钮
 const markedRenderer = new marked.Renderer()
@@ -377,8 +448,9 @@ window.copyCode = (btn) => {
   const code = wrap?.querySelector('code')?.textContent || ''
   navigator.clipboard.writeText(code).then(() => {
     // 通过自定义事件通知 Vue 更新日志条
-    window.dispatchEvent(new CustomEvent('copy-success', { detail: '代码已复制' }))
-  }).catch(() => {})
+    window.dispatchEvent(new CustomEvent('copy-success', {detail: '代码已复制'}))
+  }).catch(() => {
+  })
 }
 
 const fmt = c => {
@@ -393,18 +465,25 @@ const copyMessage = (msg) => {
     text = msg.content || ''
   } else if (msg.role === 'assistant' && msg.blocks) {
     text = msg.blocks
-      .filter(b => b.type === 'content' || b.type === 'reasoning')
-      .map(b => b.content || '')
-      .join('\n\n')
+        .filter(b => b.type === 'content' || b.type === 'reasoning')
+        .map(b => b.content || '')
+        .join('\n\n')
   }
   if (!text) return
   navigator.clipboard.writeText(text).then(() => {
-    window.dispatchEvent(new CustomEvent('copy-success', { detail: '消息已复制' }))
-  }).catch(() => {})
+    window.dispatchEvent(new CustomEvent('copy-success', {detail: '消息已复制'}))
+  }).catch(() => {
+  })
 }
 
 const fmtArgs = a => {
-  if (typeof a === 'string') { try { return JSON.stringify(JSON.parse(a), null, 2) } catch { return a } }
+  if (typeof a === 'string') {
+    try {
+      return JSON.stringify(JSON.parse(a), null, 2)
+    } catch {
+      return a
+    }
+  }
   return JSON.stringify(a, null, 2)
 }
 
@@ -429,7 +508,7 @@ const scroll = async (force = false, smooth = false) => {
   if (!el) return
   // 流式渲染中只要用户没主动滚走就一直滚；否则按阈值
   if (force || (streaming.value && !userScrolledAway) || isNearBottom()) {
-    el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' })
+    el.scrollTo({top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto'})
   }
   updateScrollBtn()
 }
@@ -474,7 +553,7 @@ const sendChoice = (value, block) => {
   const last = messages.value[messages.value.length - 1]
   if (last?.role === 'assistant' && last.blocks) {
     last.blocks = last.blocks.filter(b =>
-      b === block || b.type !== 'tool_call'
+        b === block || b.type !== 'tool_call'
     )
   }
   inputText.value = value
@@ -498,9 +577,12 @@ const sendMessage = async () => {
   // 静默命令不显示用户气泡（系统命令、模式切换、HITL 审批等）
   const isSilent = SILENT_CMDS.has(firstWord)
 
+  // 每条新消息开始时重置子代理状态
+  resetSubAgentState()
+
   // 静默命令不显示用户气泡
   if (!isSilent) {
-    messages.value.push({ id: Date.now(), role: 'user', content: text, time: now() })
+    messages.value.push({id: Date.now(), role: 'user', content: text, time: now()})
   }
   userScrolledAway = false
   inputText.value = ''
@@ -511,7 +593,7 @@ const sendMessage = async () => {
 
   // 静默命令不预创建助手占位
   if (!isSilent) {
-    messages.value.push({ id: Date.now() + 1, role: 'assistant', time: now(), blocks: [] })
+    messages.value.push({id: Date.now() + 1, role: 'assistant', time: now(), blocks: []})
   }
 
   let getMsg = () => messages.value[isSilent ? -1 : mi] // 静默命令时 getMsg 返回 undefined
@@ -519,133 +601,162 @@ const sendMessage = async () => {
 
   try {
     const streamResult = chatAPI.sendMessageStream(text,
-      data => {
-        currentAbortController = streamResult
-        // 静默命令：首次收到有内容的数据时才创建助手气泡（只创建一次）
-        if (isSilent && !silentBubbleCreated) {
-          if (!data.type || data.type === 'done') return
-          const hasContent = (data.type === 'content' && data.content?.trim()) ||
-                             (data.type === 'reasoning' && data.content?.trim()) ||
-                             data.type === 'tool_call' || data.type === 'tool_result' || data.type === 'error'
-          if (!hasContent) return
-          // 有实际内容了，插入助手气泡
-          messages.value.push({ id: Date.now(), role: 'assistant', time: now(), blocks: [] })
-          silentBubbleCreated = true
-          getMsg = () => messages.value[messages.value.length - 1]
-        }
+        data => {
+          currentAbortController = streamResult
+          // 静默命令：首次收到有内容的数据时才创建助手气泡（只创建一次）
+          if (isSilent && !silentBubbleCreated) {
+            if (!data.type || data.type === 'done') return
+            const hasContent = (data.type === 'content' && data.content?.trim()) ||
+                (data.type === 'reasoning' && data.content?.trim()) ||
+                data.type === 'tool_call' || data.type === 'tool_result' || data.type === 'error'
+            if (!hasContent) return
+            // 有实际内容了，插入助手气泡
+            messages.value.push({id: Date.now(), role: 'assistant', time: now(), blocks: []})
+            silentBubbleCreated = true
+            getMsg = () => messages.value[messages.value.length - 1]
+          }
 
-        const msg = getMsg()
-        if (!msg) return
-        // ===== 子代理事件（独立通道，不占用主消息流） =====
-        if (data.type === 'sub_content') {
-          const lb = subAgentBlocks.value[subAgentBlocks.value.length - 1]
-          if (lb?.type === 'content') lb.content += (data.content || '')
-          else subAgentBlocks.value.push({ type: 'content', content: data.content || '' })
-        } else if (data.type === 'sub_reasoning') {
-          const lb = subAgentBlocks.value[subAgentBlocks.value.length - 1]
-          if (lb?.type === 'reasoning') lb.content += (data.content || '')
-          else subAgentBlocks.value.push({ type: 'reasoning', content: data.content || '', showContent: false })
-        } else if (data.type === 'sub_tool_call') {
-          let name = data.name || '', args = data.args || data.arguments || ''
-          if (typeof args === 'string') try { args = JSON.parse(args) } catch {}
-          subAgentBlocks.value.push({ type: 'tool_call', name: name || 'unknown', status: '执行中', args, result: '', expanded: false })
-        } else if (data.type === 'sub_tool_result') {
-          let result = data.result || data.content || ''
-          const rn = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
-          for (let i = subAgentBlocks.value.length - 1; i >= 0; i--) {
-            if (subAgentBlocks.value[i].type === 'tool_call' && !subAgentBlocks.value[i].result) {
-              subAgentBlocks.value[i].result = rn; subAgentBlocks.value[i].status = '成功'; break
+          const msg = getMsg()
+          if (!msg) return
+          // ===== 子代理事件（独立通道，不占用主消息流） =====
+          if (data.type === 'sub_content') {
+            const lb = subAgentBlocks.value[subAgentBlocks.value.length - 1]
+            if (lb?.type === 'content') lb.content += (data.content || '')
+            else subAgentBlocks.value.push({type: 'content', content: data.content || ''})
+          } else if (data.type === 'sub_reasoning') {
+            const lb = subAgentBlocks.value[subAgentBlocks.value.length - 1]
+            if (lb?.type === 'reasoning') lb.content += (data.content || '')
+            else subAgentBlocks.value.push({type: 'reasoning', content: data.content || '', showContent: true})
+          } else if (data.type === 'sub_tool_call') {
+            let name = data.name || '', args = data.args || data.arguments || ''
+            if (typeof args === 'string') try {
+              args = JSON.parse(args)
+            } catch {
             }
-          }
-        } else if (data.type === 'sub_complete') {
-          // 子代理完成 → 将当前 blocks 归档为一个会话
-          if (subAgentBlocks.value.length > 0) {
-            subAgentSessionId.value++
-            const taskName = data?.task || data?.content?.task || '子代理'
-            subAgentSessions.value.push({
-              id: subAgentSessionId.value,
-              taskName: typeof taskName === 'string' ? taskName : '子代理',
-              blocks: [...subAgentBlocks.value]
+            subAgentBlocks.value.push({
+              type: 'tool_call',
+              name: name || 'unknown',
+              status: '执行中',
+              args,
+              result: '',
+              expanded: false
             })
-            subAgentBlocks.value = []
-          }
-        } else if (data.type === 'sub_error') {
-          const errText = data.error || data.content || '未知错误'
-          subAgentBlocks.value.push({ type: 'content', content: '❌ ' + errText })
-        } else if (data.type === 'sub_usage' || data.type === 'sub_choice' || data.type === 'sub_log') {
-          // 子代理用量/选择/日志暂不处理
-        // ===== 普通主代理事件 =====
-        } else if (data.type === 'reasoning') {
-          const lb = msg.blocks[msg.blocks.length - 1]
-          if (lb?.type === 'reasoning') lb.content += (data.content || '')
-          else msg.blocks.push({ type: 'reasoning', content: data.content || '', showContent: true })
-        } else if (data.type === 'content') {
-          const lb = msg.blocks[msg.blocks.length - 1]
-          if (lb?.type === 'content') lb.content += (data.content || '')
-          else msg.blocks.push({ type: 'content', content: data.content || '' })
-        } else if (data.type === 'tool_call') {
-          let name = data.name || '', args = data.args || data.arguments || ''
-          if (typeof args === 'string') try { args = JSON.parse(args) } catch {}
-          msg.blocks.push({ type: 'tool_call', name: name || 'unknown', status: '执行中', args, result: '', expanded: false })
-        } else if (data.type === 'tool_result') {
-          let result = data.result || data.content || ''
-          const rn = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
-          for (let i = msg.blocks.length - 1; i >= 0; i--) {
-            if (msg.blocks[i].type === 'tool_call' && !msg.blocks[i].result) {
-              msg.blocks[i].result = rn; msg.blocks[i].status = '成功'; break
+          } else if (data.type === 'sub_tool_result') {
+            let result = data.result || data.content || ''
+            const rn = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
+            for (let i = subAgentBlocks.value.length - 1; i >= 0; i--) {
+              if (subAgentBlocks.value[i].type === 'tool_call' && !subAgentBlocks.value[i].result) {
+                subAgentBlocks.value[i].result = rn;
+                subAgentBlocks.value[i].status = '成功';
+                break
+              }
             }
+          } else if (data.type === 'sub_complete') {
+            // 子代理完成 → 将当前 blocks 归档为一个会话
+            if (subAgentBlocks.value.length > 0) {
+              subAgentSessionId.value++
+              const taskName = data?.task || data?.content?.task || '子代理'
+              subAgentSessions.value.push({
+                id: subAgentSessionId.value,
+                taskName: typeof taskName === 'string' ? taskName : '子代理',
+                blocks: [...subAgentBlocks.value]
+              })
+              subAgentBlocks.value = []
+            }
+          } else if (data.type === 'sub_error') {
+            const errText = data.error || data.content || '未知错误'
+            subAgentBlocks.value.push({type: 'content', content: '❌ ' + errText})
+          } else if (data.type === 'sub_usage' || data.type === 'sub_choice' || data.type === 'sub_log') {
+            // 子代理用量/选择/日志暂不处理
+            // ===== 普通主代理事件 =====
+          } else if (data.type === 'reasoning') {
+            const lb = msg.blocks[msg.blocks.length - 1]
+            if (lb?.type === 'reasoning') lb.content += (data.content || '')
+            else msg.blocks.push({type: 'reasoning', content: data.content || '', showContent: true})
+          } else if (data.type === 'content') {
+            const lb = msg.blocks[msg.blocks.length - 1]
+            if (lb?.type === 'content') lb.content += (data.content || '')
+            else msg.blocks.push({type: 'content', content: data.content || ''})
+          } else if (data.type === 'tool_call') {
+            let name = data.name || '', args = data.args || data.arguments || ''
+            if (typeof args === 'string') try {
+              args = JSON.parse(args)
+            } catch {
+            }
+            msg.blocks.push({
+              type: 'tool_call',
+              name: name || 'unknown',
+              status: '执行中',
+              args,
+              result: '',
+              expanded: false
+            })
+          } else if (data.type === 'tool_result') {
+            let result = data.result || data.content || ''
+            const rn = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
+            for (let i = msg.blocks.length - 1; i >= 0; i--) {
+              if (msg.blocks[i].type === 'tool_call' && !msg.blocks[i].result) {
+                msg.blocks[i].result = rn;
+                msg.blocks[i].status = '成功';
+                break
+              }
+            }
+          } else if (data.type === 'error') {
+            msg.blocks.push({type: 'content', content: '错误: ' + (data.error || data.content || '未知')})
+          } else if (data.type === 'usage') {
+            // 更新 usage 数据
+            if (data.promptTokens !== undefined) {
+              usage.value = {...usage.value, ...data}
+            }
+          } else if (data.type === 'choice') {
+            // 选项按钮（如 HITL 审批）
+            let options = data.options || []
+            if (typeof options === 'string') {
+              try {
+                options = JSON.parse(options)
+              } catch {
+              }
+            }
+            if (Array.isArray(options) && options.length > 0) {
+              msg.blocks.push({type: 'choice', options})
+            }
+          } else if (data.type === 'log') {
+            // 系统日志（如 [compact] 折叠结果）→ 仅展示 INFO 及以上级别
+            const level = (data.level || 'INFO').toUpperCase()
+            if (level === 'DEBUG') return
+            const text = data.message || data.content || ''
+            addLog({level, text, time: Date.now()})
           }
-        } else if (data.type === 'error') {
-          msg.blocks.push({ type: 'content', content: '错误: ' + (data.error || data.content || '未知') })
-        } else if (data.type === 'usage') {
-          // 更新 usage 数据
-          if (data.promptTokens !== undefined) {
-            usage.value = { ...usage.value, ...data }
+          scroll()
+        },
+        () => {
+          streaming.value = false
+          currentAbortController = null
+          // 流结束后清理空的助手气泡
+          const last = messages.value[messages.value.length - 1]
+          if (last?.role === 'assistant' && (!last.blocks || last.blocks.length === 0)) {
+            messages.value.pop()
           }
-        } else if (data.type === 'choice') {
-          // 选项按钮（如 HITL 审批）
-          let options = data.options || []
-          if (typeof options === 'string') {
-            try { options = JSON.parse(options) } catch {}
-          }
-          if (Array.isArray(options) && options.length > 0) {
-            msg.blocks.push({ type: 'choice', options })
-          }
-        } else if (data.type === 'log') {
-          // 系统日志（如 [compact] 折叠结果）→ 仅展示 INFO 及以上级别
-          const level = (data.level || 'INFO').toUpperCase()
-          if (level === 'DEBUG') return
-          const text = data.message || data.content || ''
-          addLog({ level, text, time: Date.now() })
+          // 刷新 usage 数据
+          loadUsage()
+          // 通知父组件刷新会话列表（标题可能已更新）
+          emit('sessionUpdated')
+        },
+        () => {
+          streaming.value = false
+          currentAbortController = null
+          const msg = getMsg()
+          if (msg && !msg.blocks.length) msg.blocks.push({type: 'content', content: '连接错误'})
+        },
+        // 传递工作区和会话信息
+        {
+          workspaceHash: props.workspaceHash,
+          sessionName: props.sessionName
         }
-        scroll()
-      },
-      () => {
-        streaming.value = false
-        currentAbortController = null
-        // 流结束后清理空的助手气泡
-        const last = messages.value[messages.value.length - 1]
-        if (last?.role === 'assistant' && (!last.blocks || last.blocks.length === 0)) {
-          messages.value.pop()
-        }
-        // 刷新 usage 数据
-        loadUsage()
-        // 通知父组件刷新会话列表（标题可能已更新）
-        emit('sessionUpdated')
-      },
-      () => {
-        streaming.value = false
-        currentAbortController = null
-        const msg = getMsg()
-        if (msg && !msg.blocks.length) msg.blocks.push({ type: 'content', content: '连接错误' })
-      },
-      // 传递工作区和会话信息
-      {
-        workspaceHash: props.workspaceHash,
-        sessionName: props.sessionName
-      }
     )
-  } catch { streaming.value = false }
+  } catch {
+    streaming.value = false
+  }
   await scroll()
 }
 
@@ -657,31 +768,51 @@ const abortChat = async () => {
   // 同时通知后端中断
   try {
     await chatAPI.abort()
-  } catch {}
+  } catch {
+  }
   streaming.value = false
 }
 
 const clearChat = async () => {
   messages.value = []
+  resetSubAgentState()
   // 发送 /new 给后端清空会话
   streaming.value = true
   try {
-    chatAPI.sendMessageStream('/new', () => {}, () => { streaming.value = false; loadUsage() }, () => { streaming.value = false })
-  } catch { streaming.value = false }
+    chatAPI.sendMessageStream('/new', () => {
+    }, () => {
+      streaming.value = false;
+      loadUsage()
+    }, () => {
+      streaming.value = false
+    })
+  } catch {
+    streaming.value = false
+  }
 }
 
 // 暴露给父组件的清空方法（/new 属于 SILENT_CMDS，不显示气泡）
 const clearMessages = () => {
   messages.value = []
+  resetSubAgentState()
   streaming.value = true
   try {
-    chatAPI.sendMessageStream('/new', () => {}, () => { streaming.value = false; loadUsage() }, () => { streaming.value = false })
-  } catch { streaming.value = false }
+    chatAPI.sendMessageStream('/new', () => {
+    }, () => {
+      streaming.value = false;
+      loadUsage()
+    }, () => {
+      streaming.value = false
+    })
+  } catch {
+    streaming.value = false
+  }
 }
 
 // 仅清空本地消息，不请求后端（配合 REST API 创建新会话时使用）
 const resetLocalMessages = () => {
   messages.value = []
+  resetSubAgentState()
 }
 
 const exportChat = () => {
@@ -695,7 +826,7 @@ const exportChat = () => {
     }
     return c
   }).join('\n---\n\n')
-  const blob = new Blob([text], { type: 'text/plain' })
+  const blob = new Blob([text], {type: 'text/plain'})
   const a = document.createElement('a')
   a.href = URL.createObjectURL(blob)
   a.download = `chat-${new Date().toISOString().slice(0, 10)}.txt`
@@ -717,19 +848,33 @@ const loadHistory = async (sessionName) => {
       const merged = []
       for (const m of raw) {
         if (m.role === 'tool') continue
-        const item = { id: Date.now() + merged.length, role: m.role, time: now(), blocks: [] }
+        const item = {id: Date.now() + merged.length, role: m.role, time: now(), blocks: []}
         // 用户消息：直接设置 content 属性（模板渲染用 msg.content）
         if (m.role === 'user') {
           item.content = m.content || ''
         } else {
           // 助手消息：使用 blocks 结构
-          if (m.reasoning_content) item.blocks.push({ type: 'reasoning', content: m.reasoning_content, showContent: false })
+          if (m.reasoning_content) item.blocks.push({
+            type: 'reasoning',
+            content: m.reasoning_content,
+            showContent: false
+          })
           if (m.tool_calls) for (const tc of m.tool_calls) {
             let name = tc.function?.name || tc.name || '', args = tc.function?.arguments || tc.arguments || ''
-            if (typeof args === 'string') try { args = JSON.parse(args) } catch {}
-            item.blocks.push({ type: 'tool_call', name, status: tr[tc.id] ? '成功' : '执行中', args, result: tr[tc.id] || '', expanded: false })
+            if (typeof args === 'string') try {
+              args = JSON.parse(args)
+            } catch {
+            }
+            item.blocks.push({
+              type: 'tool_call',
+              name,
+              status: tr[tc.id] ? '成功' : '执行中',
+              args,
+              result: tr[tc.id] || '',
+              expanded: false
+            })
           }
-          if (m.content) item.blocks.push({ type: 'content', content: m.content })
+          if (m.content) item.blocks.push({type: 'content', content: m.content})
         }
         merged.push(item)
       }
@@ -737,27 +882,34 @@ const loadHistory = async (sessionName) => {
       // 加载完成后滚动到底部
       await scroll(true)
     }
-  } catch {}
+  } catch {
+  }
 }
 
 const loadSession = async (name, workspaceHash) => {
   try {
-    const { sessionsAPI } = await import('../services/api')
+    resetSubAgentState()
+    const {sessionsAPI} = await import('../services/api')
     await sessionsAPI.switchSession(name)
     await loadHistory(name)   // 显式传 sessionName，避免 props 尚未更新的时序问题
     // 切换会话后刷新 usage 数据（传入 sessionName 和 workspaceHash）
-    await loadUsage({ sessionName: name, workspaceHash })
-  } catch (e) { console.error('切换会话失败:', e) }
+    await loadUsage({sessionName: name, workspaceHash})
+  } catch (e) {
+    console.error('切换会话失败:', e)
+  }
 }
 
-const sendCommand = async cmd => { inputText.value = cmd; await sendMessage() }
+const sendCommand = async cmd => {
+  inputText.value = cmd;
+  await sendMessage()
+}
 
 // 加载历史消息（仅在明确选了 session 时）
-onMounted(() => { 
+onMounted(() => {
   if (props.sessionName) loadHistory()
 })
 
-defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, exportChat })
+defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, exportChat})
 </script>
 
 <style scoped>
@@ -776,8 +928,16 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   padding: 8px 16px;
   border-bottom: 1px solid var(--border);
 }
-.chat-head-title { font-size: 14px; font-weight: 600; }
-.chat-head-count { font-size: 12px; color: var(--fg-4); }
+
+.chat-head-title {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.chat-head-count {
+  font-size: 12px;
+  color: var(--fg-4);
+}
 
 /* 消息区 */
 .messages {
@@ -797,6 +957,7 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   color: var(--fg-3);
   text-align: center;
 }
+
 .empty-icon {
   width: 48px;
   height: 48px;
@@ -808,9 +969,27 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   margin-bottom: 12px;
   color: var(--fg-4);
 }
-.empty-title { font-size: 16px; font-weight: 600; color: var(--fg); margin-bottom: 4px; }
-.empty-desc { font-size: 13px; color: var(--fg-3); margin-bottom: 16px; }
-.empty-suggestions { display: flex; gap: 6px; flex-wrap: wrap; justify-content: center; }
+
+.empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg);
+  margin-bottom: 4px;
+}
+
+.empty-desc {
+  font-size: 13px;
+  color: var(--fg-3);
+  margin-bottom: 16px;
+}
+
+.empty-suggestions {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
 .suggestion {
   padding: 4px 10px;
   font-size: 12px;
@@ -820,13 +999,25 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   color: var(--fg-2);
   transition: all var(--t);
 }
-.suggestion:hover { border-color: var(--accent); color: var(--accent); }
+
+.suggestion:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 /* 消息 */
-.msg { margin-bottom: 12px; }
-.msg.user { display: flex; justify-content: flex-end; }
+.msg {
+  margin-bottom: 12px;
+}
 
-.msg-body { max-width: 80%; }
+.msg.user {
+  display: flex;
+  justify-content: flex-end;
+}
+
+.msg-body {
+  max-width: 80%;
+}
 
 .user-body {
   background: var(--accent);
@@ -834,11 +1025,18 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   padding: 8px 12px;
   border-radius: var(--r);
 }
+
 .user-body ::selection {
   background: rgba(255, 255, 255, 0.35);
   color: #000;
 }
-.user-body .msg-time { font-size: 10px; opacity: 0.7; margin-top: 4px; text-align: right; }
+
+.user-body .msg-time {
+  font-size: 10px;
+  opacity: 0.7;
+  margin-top: 4px;
+  text-align: right;
+}
 
 .assistant-body {
   background: var(--bg-2);
@@ -846,13 +1044,24 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   border-radius: var(--r);
   padding: 8px 12px;
 }
+
 .assistant-body ::selection {
   background: var(--accent);
   color: #fff;
 }
-.assistant-body .msg-time { font-size: 10px; color: var(--fg-4); margin-top: 4px; }
 
-.msg-text { font-size: 14px; line-height: 1.6; white-space: pre-wrap; word-break: break-word; }
+.assistant-body .msg-time {
+  font-size: 10px;
+  color: var(--fg-4);
+  margin-top: 4px;
+}
+
+.msg-text {
+  font-size: 14px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
 
 /* 消息底部栏（时间 + 复制按钮） */
 .msg-footer {
@@ -862,6 +1071,7 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   margin-top: 4px;
   gap: 8px;
 }
+
 .copy-msg-btn {
   opacity: 0;
   background: none;
@@ -874,12 +1084,15 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   line-height: 1;
   color: var(--fg-3);
 }
+
 .user-body .copy-msg-btn {
   color: rgba(255, 255, 255, 0.7);
 }
+
 .msg-body:hover .copy-msg-btn {
   opacity: 0.7;
 }
+
 .copy-msg-btn:hover {
   opacity: 1 !important;
 }
@@ -888,10 +1101,12 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
 .block-content :deep(.code-block-wrap) {
   margin: 8px 0;
 }
+
 .block-content :deep(.code-block-wrap pre) {
   position: relative;
   margin: 0 !important;
 }
+
 .block-content :deep(.code-copy-btn) {
   position: absolute;
   top: 6px;
@@ -907,16 +1122,22 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   line-height: 1;
   z-index: 2;
 }
+
 .block-content :deep(.code-block-wrap pre:hover .code-copy-btn) {
   opacity: 0.7;
 }
+
 .block-content :deep(.code-copy-btn:hover) {
   opacity: 1 !important;
   background: var(--bg);
 }
 
 /* 消息块 */
-.msg-blocks { display: flex; flex-direction: column; gap: 8px; }
+.msg-blocks {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
 
 /* 思考块 */
 .block-reasoning {
@@ -925,6 +1146,7 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   border-radius: var(--r);
   overflow: hidden;
 }
+
 .reasoning-head {
   display: flex;
   align-items: center;
@@ -935,7 +1157,11 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   color: var(--fg-3);
   cursor: pointer;
 }
-.reasoning-head svg:last-child { transition: transform var(--t); }
+
+.reasoning-head svg:last-child {
+  transition: transform var(--t);
+}
+
 .reasoning-text {
   padding: 0 10px 8px;
   font-size: 12px;
@@ -951,6 +1177,7 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   line-height: 1.6;
   color: var(--fg);
 }
+
 .block-content :deep(pre) {
   background: var(--bg);
   border: 1px solid var(--border);
@@ -959,29 +1186,89 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   margin: 6px 0;
   overflow-x: auto;
 }
+
 .block-content :deep(code) {
   font-family: var(--mono);
   font-size: 12px;
 }
-.block-content :deep(pre code) { background: none; padding: 0; }
-.block-content :deep(strong) { font-weight: 600; }
-.block-content :deep(a) { color: var(--accent); text-decoration: none; }
-.block-content :deep(a:hover) { text-decoration: underline; }
+
+.block-content :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+
+.block-content :deep(strong) {
+  font-weight: 600;
+}
+
+.block-content :deep(a) {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.block-content :deep(a:hover) {
+  text-decoration: underline;
+}
 
 /* Markdown标题样式 */
-.block-content :deep(h1) { font-size: 1.5em; margin: 0.5em 0; font-weight: 600; }
-.block-content :deep(h2) { font-size: 1.3em; margin: 0.5em 0; font-weight: 600; }
-.block-content :deep(h3) { font-size: 1.1em; margin: 0.5em 0; font-weight: 600; }
-.block-content :deep(h4) { font-size: 1em; margin: 0.5em 0; font-weight: 600; }
-.block-content :deep(h5) { font-size: 0.9em; margin: 0.5em 0; font-weight: 600; }
-.block-content :deep(h6) { font-size: 0.8em; margin: 0.5em 0; font-weight: 600; }
+.block-content :deep(h1) {
+  font-size: 1.5em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.block-content :deep(h2) {
+  font-size: 1.3em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.block-content :deep(h3) {
+  font-size: 1.1em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.block-content :deep(h4) {
+  font-size: 1em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.block-content :deep(h5) {
+  font-size: 0.9em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.block-content :deep(h6) {
+  font-size: 0.8em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
 
 /* 列表样式 */
-.block-content :deep(ul) { margin: 0.5em 0; padding-left: 1.5em; }
-.block-content :deep(ol) { margin: 0.5em 0; padding-left: 1.5em; }
-.block-content :deep(li) { margin: 0.25em 0; }
-.block-content :deep(li > ul) { margin: 0.25em 0; }
-.block-content :deep(li > ol) { margin: 0.25em 0; }
+.block-content :deep(ul) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.block-content :deep(ol) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.block-content :deep(li) {
+  margin: 0.25em 0;
+}
+
+.block-content :deep(li > ul) {
+  margin: 0.25em 0;
+}
+
+.block-content :deep(li > ol) {
+  margin: 0.25em 0;
+}
 
 /* 引用块样式 */
 .block-content :deep(blockquote) {
@@ -998,12 +1285,14 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   width: 100%;
   margin: 0.5em 0;
 }
+
 .block-content :deep(th),
 .block-content :deep(td) {
   border: 1px solid var(--border);
   padding: 6px 10px;
   text-align: left;
 }
+
 .block-content :deep(th) {
   background: var(--bg-3);
   font-weight: 600;
@@ -1017,15 +1306,28 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
 }
 
 /* 段落 */
-.block-content :deep(p) { margin: 0.5em 0; }
-.block-content :deep(p:first-child) { margin-top: 0; }
-.block-content :deep(p:last-child) { margin-bottom: 0; }
+.block-content :deep(p) {
+  margin: 0.5em 0;
+}
+
+.block-content :deep(p:first-child) {
+  margin-top: 0;
+}
+
+.block-content :deep(p:last-child) {
+  margin-bottom: 0;
+}
 
 /* 斜体 */
-.block-content :deep(em) { font-style: italic; }
+.block-content :deep(em) {
+  font-style: italic;
+}
 
 /* 删除线 */
-.block-content :deep(del) { text-decoration: line-through; color: var(--fg-3); }
+.block-content :deep(del) {
+  text-decoration: line-through;
+  color: var(--fg-3);
+}
 
 /* 工具块 */
 .block-tool {
@@ -1034,6 +1336,7 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   border-radius: var(--r);
   overflow: hidden;
 }
+
 .tool-head {
   display: flex;
   align-items: center;
@@ -1042,7 +1345,10 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   cursor: pointer;
   transition: background var(--t);
 }
-.tool-head:hover { background: var(--bg-2); }
+
+.tool-head:hover {
+  background: var(--bg-2);
+}
 
 .tool-icon {
   display: flex;
@@ -1052,8 +1358,14 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   height: 20px;
   border-radius: var(--r-sm);
 }
-.tool-icon.执行中 { color: var(--yellow); }
-.tool-icon.成功 { color: var(--green); }
+
+.tool-icon.执行中 {
+  color: var(--yellow);
+}
+
+.tool-icon.成功 {
+  color: var(--green);
+}
 
 .tool-name {
   font-size: 12px;
@@ -1066,15 +1378,28 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   padding: 1px 4px;
   border-radius: var(--r-sm);
 }
-.tool-status.执行中 { background: var(--yellow-bg); color: var(--yellow); }
-.tool-status.成功 { background: var(--green-bg); color: var(--green); }
 
-.tool-head svg:last-child { margin-left: auto; transition: transform var(--t); color: var(--fg-4); }
+.tool-status.执行中 {
+  background: var(--yellow-bg);
+  color: var(--yellow);
+}
+
+.tool-status.成功 {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.tool-head svg:last-child {
+  margin-left: auto;
+  transition: transform var(--t);
+  color: var(--fg-4);
+}
 
 .tool-detail {
   padding: 0 10px 8px;
   border-top: 1px solid var(--border);
 }
+
 .tool-detail pre {
   background: var(--bg-2);
   border: 1px solid var(--border);
@@ -1090,11 +1415,13 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
 .block-choice {
   margin: 4px 0;
 }
+
 .choice-buttons {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
 }
+
 .choice-btn {
   padding: 6px 16px;
   border: 1px solid var(--accent);
@@ -1106,10 +1433,12 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   cursor: pointer;
   transition: all var(--t);
 }
+
 .choice-btn:hover {
   background: var(--accent);
   color: #fff;
 }
+
 .choice-resolved {
   display: flex;
   align-items: center;
@@ -1118,9 +1447,11 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   font-size: 13px;
   color: var(--fg-3);
 }
+
 .choice-label {
   font-weight: 500;
 }
+
 .choice-value {
   color: var(--accent);
   font-weight: 600;
@@ -1132,6 +1463,7 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   gap: 4px;
   padding: 4px 0;
 }
+
 .typing span {
   width: 6px;
   height: 6px;
@@ -1139,8 +1471,14 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   border-radius: 50%;
   animation: pulse 1.4s infinite;
 }
-.typing span:nth-child(2) { animation-delay: 0.2s; }
-.typing span:nth-child(3) { animation-delay: 0.4s; }
+
+.typing span:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.typing span:nth-child(3) {
+  animation-delay: 0.4s;
+}
 
 /* 全部输入区样式已迁移到 ChatInput.vue 组件中（.input-area, .input-box, .usage-bar, .todo-*, .slash-popup, .model-selector 等） */
 
@@ -1163,17 +1501,25 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   cursor: pointer;
   transition: all 0.2s ease;
 }
+
 .scroll-bottom-btn:hover {
   transform: scale(1.1);
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3);
 }
+
 .scroll-bottom-btn svg {
   animation: bounce-down 1.5s ease-in-out infinite;
 }
+
 @keyframes bounce-down {
-  0%, 100% { transform: translateY(0); }
-  50% { transform: translateY(3px); }
+  0%, 100% {
+    transform: translateY(0);
+  }
+  50% {
+    transform: translateY(3px);
+  }
 }
+
 /* 使用 v-show 控制显隐 */
 
 /* ===== 日志堆叠容器 ===== */
@@ -1187,6 +1533,7 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   margin-bottom: 8px;
   pointer-events: none;
 }
+
 .log-stack > * {
   pointer-events: auto;
 }
@@ -1211,22 +1558,27 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   transition: all 0.25s ease;
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
 }
+
 .log-bar:hover {
   background: rgba(40, 40, 55, 0.92);
   border-radius: 10px;
   padding: 8px 20px;
 }
+
 .log-bar.log-warn {
   border-color: rgba(245, 158, 11, 0.5);
 }
+
 .log-bar.log-error {
   border-color: rgba(239, 68, 68, 0.5);
 }
+
 .log-bar-icon {
   flex-shrink: 0;
   font-size: 14px;
   line-height: 1;
 }
+
 .log-bar-text {
   min-width: 0;
   max-width: 50ch;
@@ -1237,26 +1589,32 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   font-weight: 500;
   transition: max-width 0.3s ease;
 }
+
 .log-bar:hover .log-bar-text {
   max-width: 100ch;
 }
+
 .log-bar-time {
   flex-shrink: 0;
   font-size: 10px;
   opacity: 0.4;
   font-family: var(--mono);
 }
+
 /* 进出动画：从顶部滑入 + 淡入 */
 .log-bar-enter-active {
   transition: all 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 }
+
 .log-bar-leave-active {
   transition: all 0.2s ease;
 }
+
 .log-bar-enter-from {
   opacity: 0;
   transform: translateY(-16px) scale(0.92);
 }
+
 .log-bar-leave-to {
   opacity: 0;
   transform: translateY(-10px) scale(0.95);
@@ -1272,6 +1630,7 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   align-items: center;
   justify-content: center;
 }
+
 .sub-modal {
   width: min(90vw, 860px);
   height: min(85vh, 700px);
@@ -1282,6 +1641,7 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   flex-direction: column;
   overflow: hidden;
 }
+
 .sub-modal-head {
   display: flex;
   align-items: center;
@@ -1290,6 +1650,7 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   border-bottom: 1px solid var(--border);
   flex-shrink: 0;
 }
+
 .sub-modal-head h3 {
   margin: 0;
   font-size: 15px;
@@ -1298,6 +1659,7 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   align-items: center;
   gap: 6px;
 }
+
 .sub-modal-close {
   background: none;
   border: none;
@@ -1307,10 +1669,12 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   padding: 4px 8px;
   border-radius: 4px;
 }
+
 .sub-modal-close:hover {
   background: var(--bg-2);
   color: var(--fg);
 }
+
 .sub-modal-body {
   flex: 1;
   overflow-y: auto;
@@ -1324,6 +1688,7 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   border-radius: 8px;
   overflow: hidden;
 }
+
 .sub-session-head {
   display: flex;
   align-items: center;
@@ -1335,13 +1700,16 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   border-bottom: 1px solid var(--border);
   color: var(--fg-2);
 }
+
 .sub-session-body {
   padding: 8px 12px;
 }
+
 .sub-session-body .block-content {
   padding: 6px 0;
   font-size: 13px;
 }
+
 .sub-session-body .block-reasoning {
   margin: 4px 0;
   background: var(--bg-2);
@@ -1350,13 +1718,16 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   font-size: 12px;
   color: var(--fg-3);
 }
+
 .sub-session-body .block-tool {
   margin: 4px 0;
 }
+
 .sub-session-body .tool-head {
   padding: 3px 8px;
   font-size: 12px;
 }
+
 .sub-session-body .tool-detail {
   font-size: 12px;
 }
@@ -1381,10 +1752,12 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
   gap: 6px;
   transition: all 0.2s ease;
 }
+
 .sub-float-btn:hover {
   transform: scale(1.05);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
 }
+
 .sub-float-btn .badge {
   background: rgba(255, 255, 255, 0.25);
   border-radius: 10px;
