@@ -143,6 +143,13 @@
       </svg>
     </button>
 
+    <!-- 刷新按钮（固定在消息区左上角） -->
+    <button v-show="messages.length > 0" class="refresh-history-btn" title="从后端刷新历史" @click="refreshHistory">
+      <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+        <path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+      </svg>
+    </button>
+
     <!-- 子代理浮窗入口按钮 -->
     <button v-if="hasSubAgentOutput" class="sub-float-btn" @click="subAgentModalOpen = true">
       子代理
@@ -237,10 +244,11 @@
 </template>
 
 <script setup>
-import {ref, computed, nextTick, onMounted, onBeforeUnmount, watch} from 'vue'
-import {chatAPI, agentAPI, configAPI} from '../services/api'
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {agentAPI, chatAPI, configAPI} from '../services/api'
 import {marked} from 'marked'
 import ChatInput from '../components/ChatInput.vue'
+import {useAppStore} from '../stores/app'
 
 // ============= 模型切换 =============
 const handleSwitchModel = async (modelName) => {
@@ -265,13 +273,13 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['sessionUpdated'])
+const store = useAppStore()
 
 const messagesContainer = ref(null)
 const inputText = ref('')
-const messages = ref([])
-const streaming = ref(false)
+const messages = computed(() => store.getSessionMessages(props.sessionName))
+const streaming = computed(() => store.getSessionStreaming(props.sessionName))
 const planMode = ref(false)
-let currentAbortController = null
 
 // TODO 相关状态
 const todos = ref([])
@@ -572,6 +580,8 @@ const sendChoice = (value, block) => {
 const sendMessage = async () => {
   const text = inputText.value.trim()
   if (!text || streaming.value) return
+  const sessionName = props.sessionName
+  if (!sessionName) return
 
   const firstWord = text.split(/\s+/)[0].toLowerCase()
   // 静默命令不显示用户气泡（系统命令、模式切换、HITL 审批等）
@@ -582,27 +592,34 @@ const sendMessage = async () => {
 
   // 静默命令不显示用户气泡
   if (!isSilent) {
-    messages.value.push({id: Date.now(), role: 'user', content: text, time: now()})
+    store.addSessionMessage(sessionName, {id: Date.now(), role: 'user', content: text, time: now()})
   }
   userScrolledAway = false
   inputText.value = ''
   await scroll(true)  // 用户刚发送，强制滚到底
 
-  streaming.value = true
-  const mi = messages.value.length
+  store.setSessionStreaming(sessionName, true)
+
+  // 使用唯一 ID 追踪当前 assistant 消息
+  const assistantId = Date.now() + 1
+  let silentAssistantId = null
 
   // 静默命令不预创建助手占位
   if (!isSilent) {
-    messages.value.push({id: Date.now() + 1, role: 'assistant', time: now(), blocks: []})
+    store.addSessionMessage(sessionName, {id: assistantId, role: 'assistant', time: now(), blocks: []})
   }
 
-  let getMsg = () => messages.value[isSilent ? -1 : mi] // 静默命令时 getMsg 返回 undefined
-  let silentBubbleCreated = false // 静默命令首次收到内容时创建气泡，之后复用
+  let getMsg = () => {
+    if (isSilent) return null
+    const msgs = store.getSessionMessages(sessionName)
+    const targetId = silentAssistantId || assistantId
+    return msgs.find(m => m.id === targetId)
+  }
+  let silentBubbleCreated = false
 
   try {
     const streamResult = chatAPI.sendMessageStream(text,
         data => {
-          currentAbortController = streamResult
           // 静默命令：首次收到有内容的数据时才创建助手气泡（只创建一次）
           if (isSilent && !silentBubbleCreated) {
             if (!data.type || data.type === 'done') return
@@ -611,9 +628,9 @@ const sendMessage = async () => {
                 data.type === 'tool_call' || data.type === 'tool_result' || data.type === 'error'
             if (!hasContent) return
             // 有实际内容了，插入助手气泡
-            messages.value.push({id: Date.now(), role: 'assistant', time: now(), blocks: []})
+            silentAssistantId = Date.now()
+            store.addSessionMessage(sessionName, {id: silentAssistantId, role: 'assistant', time: now(), blocks: []})
             silentBubbleCreated = true
-            getMsg = () => messages.value[messages.value.length - 1]
           }
 
           const msg = getMsg()
@@ -730,12 +747,12 @@ const sendMessage = async () => {
           scroll()
         },
         () => {
-          streaming.value = false
-          currentAbortController = null
+          store.setSessionStreaming(sessionName, false)
           // 流结束后清理空的助手气泡
-          const last = messages.value[messages.value.length - 1]
+          const msgs = store.getSessionMessages(sessionName)
+          const last = msgs[msgs.length - 1]
           if (last?.role === 'assistant' && (!last.blocks || last.blocks.length === 0)) {
-            messages.value.pop()
+            store.setSessionMessages(sessionName, msgs.slice(0, -1))
           }
           // 刷新 usage 数据
           loadUsage()
@@ -743,75 +760,73 @@ const sendMessage = async () => {
           emit('sessionUpdated')
         },
         () => {
-          streaming.value = false
-          currentAbortController = null
+          store.setSessionStreaming(sessionName, false)
           const msg = getMsg()
           if (msg && !msg.blocks.length) msg.blocks.push({type: 'content', content: '连接错误'})
         },
         // 传递工作区和会话信息
         {
           workspaceHash: props.workspaceHash,
-          sessionName: props.sessionName
+          sessionName
         }
     )
+    store.setSessionController(sessionName, streamResult)
   } catch {
-    streaming.value = false
+    store.setSessionStreaming(sessionName, false)
   }
   await scroll()
 }
 
 const abortChat = async () => {
-  if (currentAbortController) {
-    currentAbortController.abort()
-    currentAbortController = null
-  }
+  const ctrl = store.getSessionController(props.sessionName)
+  if (ctrl) ctrl.abort()
   // 同时通知后端中断
   try {
     await chatAPI.abort()
   } catch {
   }
-  streaming.value = false
+  store.setSessionStreaming(props.sessionName, false)
 }
 
 const clearChat = async () => {
-  messages.value = []
+  store.clearSessionMessages(props.sessionName)
   resetSubAgentState()
   // 发送 /new 给后端清空会话
-  streaming.value = true
+  store.setSessionStreaming(props.sessionName, true)
   try {
     chatAPI.sendMessageStream('/new', () => {
     }, () => {
-      streaming.value = false;
+      store.setSessionStreaming(props.sessionName, false);
       loadUsage()
     }, () => {
-      streaming.value = false
+      store.setSessionStreaming(props.sessionName, false)
     })
   } catch {
-    streaming.value = false
+    store.setSessionStreaming(props.sessionName, false)
   }
 }
 
 // 暴露给父组件的清空方法（/new 属于 SILENT_CMDS，不显示气泡）
 const clearMessages = () => {
-  messages.value = []
+  store.clearSessionMessages(props.sessionName)
   resetSubAgentState()
-  streaming.value = true
+  store.setSessionStreaming(props.sessionName, true)
   try {
     chatAPI.sendMessageStream('/new', () => {
     }, () => {
-      streaming.value = false;
+      store.setSessionStreaming(props.sessionName, false);
       loadUsage()
     }, () => {
-      streaming.value = false
+      store.setSessionStreaming(props.sessionName, false)
     })
   } catch {
-    streaming.value = false
+    store.setSessionStreaming(props.sessionName, false)
   }
 }
 
 // 仅清空本地消息，不请求后端（配合 REST API 创建新会话时使用）
 const resetLocalMessages = () => {
-  messages.value = []
+  store.clearSessionMessages(props.sessionName)
   resetSubAgentState()
 }
 
@@ -839,9 +854,19 @@ const togglePlan = async () => {
   await sendMessage()
 }
 
-const loadHistory = async (sessionName) => {
+const loadHistory = async (sessionName, force = false) => {
+  const targetSession = sessionName || props.sessionName
+  if (!targetSession) return
+  
+  // 如果 force=true 强制从后端刷新，跳过缓存
+  const existing = store.getSessionMessages(targetSession)
+  if (!force && existing.length > 0) {
+    await scroll(true)
+    return
+  }
+  
   try {
-    const r = await agentAPI.getHistory(props.workspaceHash, sessionName || props.sessionName)
+    const r = await agentAPI.getHistory(props.workspaceHash, targetSession)
     if (r.success && r.data) {
       const raw = r.data, tr = {}
       for (const m of raw) if (m.role === 'tool' && m.tool_call_id) tr[m.tool_call_id] = m.content || ''
@@ -849,11 +874,9 @@ const loadHistory = async (sessionName) => {
       for (const m of raw) {
         if (m.role === 'tool') continue
         const item = {id: Date.now() + merged.length, role: m.role, time: now(), blocks: []}
-        // 用户消息：直接设置 content 属性（模板渲染用 msg.content）
         if (m.role === 'user') {
           item.content = m.content || ''
         } else {
-          // 助手消息：使用 blocks 结构
           if (m.reasoning_content) item.blocks.push({
             type: 'reasoning',
             content: m.reasoning_content,
@@ -878,11 +901,24 @@ const loadHistory = async (sessionName) => {
         }
         merged.push(item)
       }
-      messages.value = merged
-      // 加载完成后滚动到底部
+      store.setSessionMessages(targetSession, merged)
       await scroll(true)
     }
   } catch {
+  }
+}
+
+// 强制从后端刷新指定会话的历史（跳过缓存）
+// 不传 name 则刷新当前会话，并滚动到底部
+const refreshHistory = async (name) => {
+  const target = name || props.sessionName
+  if (!target) return
+  try {
+    await loadHistory(target, true)
+    if (!name) await scroll(true)
+    addLog({level: 'INFO', text: '聊天记录已刷新', time: Date.now()})
+  } catch (e) {
+    addLog({level: 'ERROR', text: '刷新失败: ' + (e.message || '未知错误'), time: Date.now()})
   }
 }
 
@@ -891,8 +927,14 @@ const loadSession = async (name, workspaceHash) => {
     resetSubAgentState()
     const {sessionsAPI} = await import('../services/api')
     await sessionsAPI.switchSession(name)
-    await loadHistory(name)   // 显式传 sessionName，避免 props 尚未更新的时序问题
-    // 切换会话后刷新 usage 数据（传入 sessionName 和 workspaceHash）
+    // 如果 store 中已经有该会话的数据，直接使用缓存（流式中的消息比后端更新）
+    const existing = store.getSessionMessages(name)
+    if (existing.length === 0) {
+      await loadHistory(name)
+    } else {
+      // 缓存命中，直接滚动到底部
+      await scroll(true)
+    }
     await loadUsage({sessionName: name, workspaceHash})
   } catch (e) {
     console.error('切换会话失败:', e)
@@ -909,7 +951,7 @@ onMounted(() => {
   if (props.sessionName) loadHistory()
 })
 
-defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, exportChat})
+defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, exportChat, refreshHistory})
 </script>
 
 <style scoped>
@@ -1618,6 +1660,35 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 .log-bar-leave-to {
   opacity: 0;
   transform: translateY(-10px) scale(0.95);
+}
+
+/* ===== 刷新按钮 ===== */
+.refresh-history-btn {
+  position: absolute;
+  right: 24px;
+  top: 16px;
+  z-index: 60;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  color: var(--fg-3);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.refresh-history-btn:hover {
+  background: var(--bg-3);
+  color: var(--accent);
+  border-color: var(--accent);
+  transform: scale(1.05);
+}
+.refresh-history-btn:active {
+  transform: scale(0.95);
 }
 
 /* ==================== 子代理 Modal ==================== */

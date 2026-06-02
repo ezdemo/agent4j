@@ -98,6 +98,15 @@
         </div>
       </div>
 
+      <div class="sidebar-list-head">
+        <span>会话</span>
+        <button class="btn-icon-sm" title="刷新会话列表" @click="refreshSessionList">
+          <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+            <path d="M23 4v6h-6"/>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>
+        </button>
+      </div>
       <div class="sidebar-list">
         <div>
           <div
@@ -112,9 +121,20 @@
             <div class="session-name">{{ s.title || s.summary || formatName(s.name) }}</div>
             <div class="session-meta">{{ s.messageCount || 0 }}条 · {{ timeAgo(s.mtime) }}</div>
           </div>
-          <button class="btn-icon-sm session-del" @click.stop="deleteSession(s.name)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-          </button>
+            <div class="session-item-actions">
+              <button class="btn-icon-sm session-refresh" title="刷新聊天记录" @click.stop="refreshSessionChat(s.name)">
+                <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+                  <path d="M23 4v6h-6"/>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+              </button>
+              <button class="btn-icon-sm session-del" @click.stop="deleteSession(s.name)">
+                <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+                  <line x1="18" x2="6" y1="6" y2="18"/>
+                  <line x1="6" x2="18" y1="6" y2="18"/>
+                </svg>
+              </button>
+            </div>
         </div>
         </div>
         <div v-if="filteredSessions.length === 0" class="sidebar-empty">
@@ -227,12 +247,12 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch, nextTick } from 'vue'
-import { useRouter } from 'vue-router'
-import { message } from 'ant-design-vue'
-import { useConfirm } from './composables/useConfirm'
-import { useAppStore } from './stores/app'
-import { agentAPI, sessionsAPI, toolsAPI, configAPI } from './services/api'
+import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {useRouter} from 'vue-router'
+import {message} from 'ant-design-vue'
+import {useConfirm} from './composables/useConfirm'
+import {useAppStore} from './stores/app'
+import {agentAPI, configAPI, sessionsAPI, toolsAPI} from './services/api'
 import SetupScreen from './components/SetupScreen.vue'
 import TitleBar from './components/TitleBar.vue'
 import SplashScreen from './components/SplashScreen.vue'
@@ -515,6 +535,21 @@ const loadSession = name => {
   chatRef.value?.loadSession(name, null)
 }
 
+// 刷新侧边栏会话列表
+const refreshSessionList = async () => {
+  try {
+    await loadSessions()
+    message.success('会话列表已刷新')
+  } catch (e) {
+    message.error('刷新失败: ' + (e.message || '未知错误'))
+  }
+}
+
+// 刷新指定会话的聊天记录（强制从后端加载）
+const refreshSessionChat = async (name) => {
+  chatRef.value?.refreshHistory(name)
+}
+
 const deleteSession = async name => {
   const ok = await confirm({ message: `确定要删除此会话吗？` })
   if (!ok) return
@@ -665,6 +700,28 @@ watch(showSettings, (newVal) => {
 }
 .sidebar-search input::placeholder { color: var(--fg-4); }
 
+.sidebar-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px 2px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.sidebar-list-head button {
+  opacity: 0.4;
+  transition: all 0.15s;
+}
+
+.sidebar-list-head button:hover {
+  opacity: 1;
+  color: var(--accent);
+}
+
 .sidebar-list {
   flex: 1;
   overflow-y: auto;
@@ -714,11 +771,25 @@ watch(showSettings, (newVal) => {
   margin-top: 1px;
 }
 
+.session-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.session-refresh,
 .session-del {
   opacity: 0;
   transition: opacity var(--t);
 }
+
+.session-item:hover .session-refresh,
 .session-item:hover .session-del { opacity: 1; }
+
+.session-refresh:hover {
+  color: var(--accent);
+}
 .session-del:hover { color: var(--red); }
 
 .sidebar-foot {

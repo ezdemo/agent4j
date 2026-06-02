@@ -1,5 +1,5 @@
-import { defineStore } from 'pinia'
-import { ref, computed, watch } from 'vue'
+import {defineStore} from 'pinia'
+import {computed, ref, watch} from 'vue'
 
 export const useAppStore = defineStore('app', () => {
   // 连接状态
@@ -305,7 +305,80 @@ export const useAppStore = defineStore('app', () => {
   const setLoading = (loading) => {
     isLoading.value = loading
   }
-  
+
+    // ========== 会话隔离的消息/流状态 ==========
+    const sessionMessages = ref({})
+    const sessionStreaming = ref({})
+    const sessionControllers = ref({})
+
+    function ensureSession(name) {
+        if (!name) return
+        if (!sessionMessages.value[name]) {
+            sessionMessages.value[name] = []
+        }
+    }
+
+    /** 获取指定会话的消息列表 */
+    function getSessionMessages(name) {
+        if (!name) return []
+        ensureSession(name)
+        return sessionMessages.value[name]
+    }
+
+    /** 设置指定会话的消息列表（用于 loadHistory） */
+    function setSessionMessages(name, msgs) {
+        if (!name) return
+        sessionMessages.value[name] = msgs || []
+    }
+
+    /** 向指定会话追加一条消息 */
+    function addSessionMessage(name, msg) {
+        if (!name) return
+        ensureSession(name)
+        sessionMessages.value[name].push(msg)
+    }
+
+    /** 更新指定会话中的某条消息（通过 id 查找）
+     *  @param updater 回调，接收消息对象，直接修改它
+     */
+    function updateSessionMessage(name, msgId, updater) {
+        if (!name) return
+        const arr = sessionMessages.value[name]
+        if (!arr) return
+        const idx = arr.findIndex(m => m.id === msgId)
+        if (idx === -1) return
+        updater(arr[idx])
+        // 替换数组引用触发 computed
+        sessionMessages.value[name] = [...arr]
+    }
+
+    /** 清空指定会话的消息 */
+    function clearSessionMessages(name) {
+        if (!name) return
+        sessionMessages.value[name] = []
+        sessionStreaming.value[name] = false
+    }
+
+    /** 设置指定会话的流状态 */
+    function setSessionStreaming(name, val) {
+        if (name) sessionStreaming.value[name] = val
+    }
+
+    /** 获取指定会话的流状态 */
+    function getSessionStreaming(name) {
+        return name ? (sessionStreaming.value[name] ?? false) : false
+    }
+
+    /** 设置指定会话的 AbortController */
+    function setSessionController(name, ctrl) {
+        if (name) sessionControllers.value[name] = ctrl
+    }
+
+    /** 获取指定会话的 AbortController */
+    function getSessionController(name) {
+        return name ? sessionControllers.value[name] : null
+    }
+
   // 初始化
   const initialize = () => {
     loadSettings()
@@ -382,6 +455,20 @@ export const useAppStore = defineStore('app', () => {
     markNotificationRead,
     clearNotifications,
     setLoading,
-    initialize
+      initialize,
+      // 会话隔离
+      sessionMessages,
+      sessionStreaming,
+      sessionControllers,
+      ensureSession,
+      getSessionMessages,
+      setSessionMessages,
+      addSessionMessage,
+      updateSessionMessage,
+      clearSessionMessages,
+      setSessionStreaming,
+      getSessionStreaming,
+      setSessionController,
+      getSessionController
   }
 })
