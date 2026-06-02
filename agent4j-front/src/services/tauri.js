@@ -13,7 +13,7 @@ async function tryInvoke(command, args) {
   }
 }
 
-// 获取当前后端端口
+// 获取当前后端端口（Rust 动态分配，不再硬编码 8097）
 async function getCurrentPort() {
   const port = await tryInvoke('get_agent4j_web_port')
   if (port > 0) {
@@ -24,7 +24,7 @@ async function getCurrentPort() {
   const stored = parseInt(localStorage.getItem('agent4j-port') || '', 10)
   if (stored > 0) return stored
 
-  return 8097
+  return 0
 }
 
 // agent4j-web 服务管理 API
@@ -78,7 +78,7 @@ export const agent4jWebService = {
   },
 
   /**
-   * 启动 agent4j-web 服务（返回端口号）
+   * 启动 agent4j-web 服务（随机端口，返回端口号）
    * @returns {Promise<number>}
    */
   async start() {

@@ -246,7 +246,7 @@ impl Agent4jWebManager {
         let _ = self.stop();
     }
 
-    // 启动 agent4j-web 服务（通过 shell 启动，进程挂在 shell 子进程下）
+    // 启动 agent4j-web 服务（随机端口）
     fn start(&self) -> Result<u32, String> {
         self.cleanup_stale();
 
@@ -268,14 +268,13 @@ impl Agent4jWebManager {
         *port_lock = port;
 
         // 直接 spawn java 进程，不经过 cmd / powershell / sh
-        // 参数以数组传递，避免 shell 引号/路径转义问题
+        // -D 系统属性必须在 -jar 之前，Solon 通过 -Dserver.port 读取端口
         let mut cmd = Command::new("java");
         cmd.args(&[
             "-Dfile.encoding=UTF-8",
+            &format!("-Dserver.port={}", port),
             "-jar",
             &jar_path.to_string_lossy(),
-            "--server.port",
-            &port.to_string(),
         ]);
 
         // Unix 下创建新进程组，方便 kill 时清理整个子树
@@ -286,6 +285,13 @@ impl Agent4jWebManager {
                 libc::setsid();
                 Ok(())
             })};
+        }
+
+        // Windows 下隐藏控制台窗口
+        #[cfg(target_os = "windows")]
+        {
+            use std::os::windows::process::CommandExt;
+            cmd.creation_flags(0x08000000);
         }
 
         let child = cmd

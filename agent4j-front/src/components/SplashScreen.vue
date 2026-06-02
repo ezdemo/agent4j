@@ -174,20 +174,6 @@ async function checkEnvironment() {
     return
   }
 
-  // === 先尝试连接已运行的后端（比如 8097 或随机端口）===
-  startupMessage.value = '检测已有后端服务...'
-  const foundPort = await tryFindRunningBackend()
-  if (foundPort > 0) {
-    console.log('[Splash] Found running backend on port', foundPort)
-    localStorage.setItem('agent4j-port', String(foundPort))
-    localStorage.setItem('agent4j-api-base', `http://127.0.0.1:${foundPort}`)
-    phase.value = 'ready'
-    await sleep(500)
-    visible.value = false
-    emit('ready')
-    return
-  }
-
   // Tauri 环境：获取资源目录
   try {
     const dir = await agent4jWebService.getResourceDir()
@@ -200,39 +186,6 @@ async function checkEnvironment() {
 
   // 检查是否需要安装
   await checkInstall()
-}
-
-/** 尝试在常见端口上发现已在运行的后端 */
-async function tryFindRunningBackend() {
-  // 优先尝试 Rust 报告的端口
-  try {
-    const port = await invoke('get_agent4j_web_port')
-    if (port > 0) {
-      const ok = await checkHealth(port, 2, 1000)
-      if (ok) return port
-    }
-  } catch {}
-
-  // 尝试常见端口
-  for (const port of [8097, 8098, 8099, 8100, 18097]) {
-    const ok = await checkHealth(port, 1, 800)
-    if (ok) return port
-  }
-  return 0
-}
-
-/** 快速检查某端口是否健康 */
-async function checkHealth(port, attempts, intervalMs) {
-  for (let i = 0; i < attempts; i++) {
-    try {
-      const resp = await fetch(`http://127.0.0.1:${port}/api/system/health`, {
-        signal: AbortSignal.timeout(2000)
-      })
-      if (resp.ok) return true
-    } catch {}
-    await sleep(intervalMs)
-  }
-  return false
 }
 
 async function checkInstall() {
@@ -342,11 +295,14 @@ async function startService() {
         localStorage.setItem('agent4j-api-base', `http://127.0.0.1:${port}`)
         startupMessage.value = `Java 服务已启动，端口 ${port}，等待健康检查...`
       } else {
-        // 非 Tauri：尝试默认端口
-        port = 8097
-        localStorage.setItem('agent4j-port', '8097')
-        localStorage.setItem('agent4j-api-base', 'http://127.0.0.1:8097')
-        startupMessage.value = '尝试连接默认端口 8097...'
+        // 非 Tauri：Rust 未返回端口，使用 localStorage 缓存的端口
+        port = parseInt(localStorage.getItem('agent4j-port') || '0', 10)
+        if (port > 0) {
+          localStorage.setItem('agent4j-api-base', `http://127.0.0.1:${port}`)
+          startupMessage.value = `尝试连接端口 ${port}...`
+        } else {
+          startupMessage.value = '未找到可用端口，请检查服务是否已启动'
+        }
       }
     }
 
@@ -408,10 +364,6 @@ async function pollHealthCheck(port, maxAttempts = 20, intervalMs = 1500) {
 async function waitForService() {
   // 非 Tauri 环境：尝试连接已有服务，或提示用户手动启动
   try {
-    // 先尝试默认端口
-    localStorage.setItem('agent4j-api-base', 'http://127.0.0.1:8097')
-    localStorage.setItem('agent4j-port', '8097')
-    
     const ready = await agent4jWebService.waitForReady(3, 1500)
     if (ready) {
       phase.value = 'ready'
@@ -427,7 +379,7 @@ async function waitForService() {
       port = await invoke('get_agent4j_web_port')
     } catch {}
 
-    if (port > 0 && port !== 8097) {
+    if (port > 0) {
       localStorage.setItem('agent4j-api-base', `http://127.0.0.1:${port}`)
       localStorage.setItem('agent4j-port', String(port))
       const ready2 = await agent4jWebService.waitForReady(3, 1000)
@@ -442,7 +394,7 @@ async function waitForService() {
 
     // 都不行：显示错误，让用户手动启动
     phase.value = 'error'
-    errorMessage.value = '无法连接服务，请确认 agent4j-web 已启动（默认端口 8097）'
+    errorMessage.value = '无法连接服务，请确认 agent4j-web 已启动'
   } catch (e) {
     phase.value = 'error'
     errorMessage.value = e.message || '连接服务失败'
