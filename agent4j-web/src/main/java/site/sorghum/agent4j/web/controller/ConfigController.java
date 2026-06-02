@@ -118,6 +118,11 @@ public class ConfigController {
     public ApiResponse<UsageDTO> getUsage(@Param(value = "workspaceHash", required = false) String workspaceHash,
                                           @Param(value = "sessionName", required = false) String sessionName) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
+        if (workspaceHash == null){
+            return ApiResponse.fail(
+              "workspaceHash 不能为空"
+            );
+        }
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
         return ApiResponse.ok(agentService.getSessionUsageMap(workspacePath, sessionName));

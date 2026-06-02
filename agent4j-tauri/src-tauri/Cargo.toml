@@ -23,6 +23,7 @@ dirs = "5"
 flate2 = "1"
 tar = "0.4"
 sha2 = "0.10"
+libc = "0.2"
 
 [target.'cfg(windows)'.dependencies]
 winreg = "0.52"

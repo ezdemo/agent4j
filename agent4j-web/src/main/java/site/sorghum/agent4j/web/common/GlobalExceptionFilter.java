@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.web.common;
 
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.core.handle.Context;
 import org.noear.solon.core.handle.Filter;
@@ -21,6 +22,7 @@ import site.sorghum.agent4j.web.model.ApiResponse;
  * @author Sorghum
  */
 @Component(index = 0)
+@Slf4j
 public class GlobalExceptionFilter implements Filter {
 
     @Override
@@ -40,13 +42,10 @@ public class GlobalExceptionFilter implements Filter {
         try {
             chain.doFilter(ctx);
         } catch (ServiceException e) {
-            // 已知业务异常 → 4xx
-            ctx.status(e.getCode());
             ctx.outputAsJson(ApiResponse.fail(e.getMessage()).toString());
         } catch (Throwable e) {
             // 未预期的系统异常 → 500（避免泄露内部细节）
-            e.printStackTrace();
-            ctx.status(500);
+            log.error("GlobalExceptionFilter error", e);
             ctx.outputAsJson(ApiResponse.fail("服务器内部错误").toString());
         }
     }

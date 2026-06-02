@@ -246,7 +246,7 @@ impl Agent4jWebManager {
         let _ = self.stop();
     }
 
-    // 启动 agent4j-web 服务
+    // 启动 agent4j-web 服务（通过 shell 启动，进程挂在 shell 子进程下）
     fn start(&self) -> Result<u32, String> {
         self.cleanup_stale();
 
@@ -267,23 +267,37 @@ impl Agent4jWebManager {
         let mut port_lock = self.port.lock().unwrap();
         *port_lock = port;
 
-        let mut cmd = Command::new("java");
-        cmd.args(&[
-            "-Dfile.encoding=UTF-8",
-            "-jar",
-            jar_path.to_str().unwrap(),
-            &format!("--server.port={}", port),
-        ]);
+        // 通过 shell 启动，确保 Java 进程挂在 shell 子进程下
+        let jvm_args = format!(
+            "-Dfile.encoding=UTF-8 -jar \"{}\" --server.port={}",
+            jar_path.to_string_lossy(),
+            port
+        );
 
-        #[cfg(target_os = "windows")]
+        let mut cmd = if cfg!(target_os = "windows") {
+            let mut c = Command::new("cmd");
+            c.args(&["/c", &format!("start /B java {}", jvm_args)]);
+            c
+        } else {
+            let mut c = Command::new("sh");
+            c.args(&["-c", &format!("exec java {}", jvm_args)]);
+            c
+        };
+
+        // 不在 Windows 上用 CREATE_NO_WINDOW（cmd 本身管理窗口）
+        // 设置进程组以便 kill 时清理整个子树
+        #[cfg(unix)]
         {
-            use std::os::windows::process::CommandExt;
-            cmd.creation_flags(0x08000000);
+            use std::os::unix::process::CommandExt;
+            unsafe { cmd.pre_exec(|| {
+                libc::setsid();
+                Ok(())
+            })};
         }
 
         let child = cmd
             .spawn()
-            .map_err(|e| format!("Failed to start agent4j-web: {}", e))?;
+            .map_err(|e| format!("Failed to start agent4j-web via shell: {}", e))?;
 
         let pid = child.id();
 
@@ -331,15 +345,33 @@ impl Agent4jWebManager {
         Ok(port as u32)
     }
 
-    // 停止服务
+    // 停止服务（递归杀死进程树）
     fn stop(&self) -> Result<(), String> {
         let mut child_lock = self.child.lock().unwrap();
 
         if let Some(ref mut child) = *child_lock {
-            child.kill()
-                .map_err(|e| format!("Failed to kill process: {}", e))?;
-            child.wait()
-                .map_err(|e| format!("Failed to wait for process: {}", e))?;
+            let pid = child.id();
+
+            // Windows: taskkill /T 递归杀进程树
+            #[cfg(target_os = "windows")]
+            {
+                let _ = Command::new("taskkill")
+                    .args(&["/F", "/T", "/PID", &pid.to_string()])
+                    .output();
+            }
+
+            // Unix: kill 负 PGID 杀整个进程组
+            #[cfg(unix)]
+            {
+                use std::os::unix::process::CommandExt as _;
+                // 用 kill(2) 杀进程组（由 setsid() 建立的会话）
+                unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+                std::thread::sleep(std::time::Duration::from_millis(200));
+                unsafe { libc::kill(pid as i32, libc::SIGKILL); }
+            }
+
+            // 等进程退出
+            let _ = child.wait();
         }
 
         *child_lock = None;

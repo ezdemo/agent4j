@@ -931,6 +931,7 @@ public class AgentService {
 
     /**
      * 切换工作区（兼容旧接口）。
+     * 更新当前工作区并持久化到 config.json，下次启动默认打开此工作区。
      *
      * @param path 新的工作区路径
      * @return 切换成功返回 true
@@ -941,9 +942,17 @@ public class AgentService {
         }
         // 更新当前活跃工作区路径
         this.currentActiveWorkspace = Paths.get(path).toAbsolutePath().normalize().toString();
+        // 持久化到 config.json，下次启动默认加载此工作区
+        try {
+            Agent4jConfig config = Agent4jConfig.load();
+            config.updateAndSave(Collections.singletonMap("workspaceDir", currentActiveWorkspace));
+            log.info("[web] 工作区已持久化到 config.json: {}", currentActiveWorkspace);
+        } catch (Exception e) {
+            log.warn("[web] 持久化工作区到 config.json 失败: {}", e.getMessage());
+        }
         // 清除默认会话的缓存，让下次访问时使用新路径
         evictAgent(null, null);
-        System.out.println("[web] 工作区已切换: " + currentActiveWorkspace);
+        log.info("[web] 工作区已切换: {}", currentActiveWorkspace);
         return true;
     }
 
