@@ -173,7 +173,7 @@ agent4j/
 ├── agent4j-web/                             # ★ Web REST API 模块
 │   ├── pom.xml
 │   └── src/main/java/site/sorghum/agent4j/web/
-│       ├── Agent4jWebApp.java               # Web 入口（端口 8080）
+│       ├── Agent4jWebApp.java               # Web 入口（端口 8097）
 │       ├── controller/
 │       │   ├── ChatController.java          # 聊天 API（POST 同步 + GET SSE）
 │       │   ├── SessionController.java       # 会话管理 API
@@ -260,7 +260,7 @@ agent4j/
 │              入口层 · Presentation                         │
 │                                                          │
 │  CLI:  Agent4jApp     (main + Scanner 交互循环)          │
-│  Web:  Agent4jWebApp  (REST API, Solon-Web, 端口 8080)  │
+│  Web:  Agent4jWebApp  (REST API, Solon-Web, 端口 8097)  │
 │  Desktop: Tauri       (Rust WebView + Vue 前端)          │
 └────────────────────────┬─────────────────────────────────┘
                          │
@@ -273,7 +273,7 @@ agent4j/
 │    ├── 加载项目文档 (agent4j.md / CLAUDE.md)               │
 │    └── 构建缓存优先 PromptPrefix                          │
 │                                                          │
-│  AgentLoop (推理循环引擎 · 1248 行)                        │
+│  AgentLoop (推理循环引擎 · ~1300 行)                       │
 │    ├── prepareMessages   → 构建 + Heal + Fold + 工具指引  │
 │    ├── streamLLM         → 流式调用 (CountDownLatch)      │
 │    ├── scavengeToolCalls → 回收丢失的调用                 │
@@ -282,7 +282,7 @@ agent4j/
 │    └── HITL 拦截         → 写入前审批 + 沙箱越界审批      │
 │                                                          │
 │  ConversationContext (会话上下文)                          │
-│    ├── 内存历史: List<Map<String,Object>>                 │
+│    ├── 内存历史: List<ChatMessage>                       │
 │    ├── PromptPrefix: 不可变前缀 (缓存优先)                 │
 │    └── SessionStore: JSONL 持久化                         │
 │                                                          │
@@ -511,7 +511,7 @@ SessionService
 {
   "baseUrl": "https://api.deepseek.com/v1",
   "apiKey": "sk-your-api-key",
-  "model": "deepseek-v4-flash",
+  "model": "deepseek-chat",
   "workspaceDir": ".",
   "editMode": "auto",
   "reasoningEffort": "max",
@@ -519,7 +519,7 @@ SessionService
   "hitl": false,
   "disabledTools": [],
   "blockedPaths": [],
-  "availableModels": ["deepseek-v4-flash", "gpt-4o", "claude-3.5-sonnet"]
+  "availableModels": ["deepseek-chat", "gpt-4o", "claude-3.5-sonnet"]
 }
 ```
 
@@ -550,7 +550,7 @@ mvn compile -pl agent4j-tool,agent4j-bin
 mvn exec:java -pl agent4j-bin \
   -Dexec.mainClass="site.sorghum.agent4j.bin.Agent4jApp"
 
-# Web 模式（REST API，默认端口 8080）
+# Web 模式（REST API，默认端口 8097）
 mvn exec:java -pl agent4j-web \
   -Dexec.mainClass="site.sorghum.agent4j.web.Agent4jWebApp"
 
@@ -647,6 +647,56 @@ agent4j (父 POM · pom)
 12. **路径穿越防护** — resolveSafe() 严格校验 + 屏蔽目录列表 + 沙箱越界 HITL
 13. **Skill 系统 V2** — 用户可定义可复用的 Skill playbook，支持 inline 和 subagent 两种运行模式
 14. **多端交付** — CLI / Web REST API / Vue 3 前端 / Tauri 桌面端，四端共享同一核心
+
+---
+
+## Agent4j Web
+
+> AI 编码代理 Web 服务 — 通过 REST API 暴露全部 Agent 功能
+
+### 快速开始
+
+1. **配置 API Key**
+   编辑 `~/.agent4j/config.json`，填入你的 LLM API Key：
+   ```json
+   {
+     "baseUrl": "https://api.deepseek.com/v1",
+     "apiKey": "sk-your-api-key",
+     "model": "deepseek-chat"
+   }
+   ```
+
+2. **启动服务**
+   ```bash
+   agent4j-web
+   ```
+
+3. **访问 API**
+   - 默认地址：http://localhost:8097
+   - 聊天接口：POST /api/chat
+   - 会话管理：GET/POST /api/sessions
+   - 工具列表：GET /api/tools
+   - Agent 控制：GET /api/agent
+   - 配置查询：GET /api/config
+
+### API 接口
+
+**POST /api/chat**
+```json
+{
+  "message": "帮我分析这个项目",
+  "sessionId": "optional-session-id"
+}
+```
+
+**GET /api/chat/stream?message=xxx**
+返回 Server-Sent Events 流：
+```
+data: {"type":"content","content":"正在分析..."}
+data: {"type":"tool_call","name":"read_file","args":{...}}
+data: {"type":"tool_result","result":"..."}
+data: {"type":"done"}
+```
 
 ---
 
