@@ -117,198 +117,26 @@
       </div>
     </div>
 
-    <!-- 输入区 -->
-    <div class="input-area">
-      <!-- 斜杠命令弹窗 -->
-      <Transition name="slash-popup">
-        <div v-if="slashPopupOpen" class="slash-popup">
-          <div class="slash-popup-header">
-            <span class="slash-popup-title">可用命令</span>
-            <span class="slash-popup-hint">输入 / 触发</span>
-          </div>
-          <div v-if="!commandsLoaded" class="slash-popup-loading">
-            <span class="loading-dot"></span> 加载命令中...
-          </div>
-          <div v-else-if="filteredSlashCmds.length === 0" class="slash-popup-empty">
-            无匹配命令
-          </div>
-          <div v-else class="slash-popup-list">
-            <div
-              v-for="(cmd, index) in filteredSlashCmds"
-              :key="cmd.cmd"
-              class="slash-popup-item"
-              :class="{ active: index === activePopupIdx }"
-              @click="selectSlashCmd(cmd)"
-              @mouseenter="activePopupIdx = index"
-            >
-              <div class="slash-popup-icon">{{ getSlashIcon(cmd.cmd) }}</div>
-              <div class="slash-popup-info">
-                <div class="slash-popup-cmd">
-                  {{ cmd.cmd }}
-                  <span v-if="cmd.type === 'skill'" class="slash-popup-badge skill">skill</span>
-                  <span v-else-if="cmd.type === 'mode'" class="slash-popup-badge mode">模式</span>
-                  <span v-else-if="cmd.type === 'session'" class="slash-popup-badge session">会话</span>
-                </div>
-                <div class="slash-popup-desc">{{ cmd.desc }}</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </Transition>
-      <div class="input-box" :class="{ focused: inputFocused }">
-        <!-- TODO 图标按钮 -->
-        <div class="todo-trigger" 
-             @mouseenter="handleTodoMouseEnter" 
-             @mouseleave="handleTodoMouseLeave">
-          <button class="todo-btn" :class="{ 'has-todos': todoStats.pending + todoStats.inProgress > 0 }">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M9 11l3 3L22 4"/>
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-            </svg>
-            <span v-if="todoStats.pending + todoStats.inProgress > 0" class="todo-badge">{{ todoStats.pending + todoStats.inProgress }}</span>
-          </button>
-          
-          <!-- TODO Tooltip -->
-          <Transition name="tooltip">
-            <div v-if="todoTooltipVisible" class="todo-tooltip"
-                 @mouseenter="handleTooltipMouseEnter"
-                 @mouseleave="handleTooltipMouseLeave">
-              <div class="todo-tooltip-header">
-                <span class="todo-tooltip-title">任务列表</span>
-                <span class="todo-tooltip-stats">
-                  {{ todoStats.completed }}/{{ todoStats.total }} 完成
-                </span>
-              </div>
-              <div v-if="todos.length === 0" class="todo-tooltip-empty">
-                暂无任务
-              </div>
-              <div v-else class="todo-tooltip-list">
-                <!-- 未完成的任务（按原顺序） -->
-                <div v-for="(todo, index) in incompleteTodos" :key="'incomplete-' + index" class="todo-tooltip-item">
-                  <span class="todo-status-icon" :class="todo.status">
-                    <svg v-if="todo.status === 'in_progress'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <circle cx="12" cy="12" r="10"/>
-                      <polyline points="12 6 12 12 16 14"/>
-                    </svg>
-                    <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                    </svg>
-                  </span>
-                  <span class="todo-content" :class="todo.status">{{ todo.content }}</span>
-                </div>
-                
-                <!-- 已完成的任务（折叠） -->
-                <div v-if="completedTodos.length > 0" class="todo-completed-section">
-                  <div class="todo-completed-toggle" @click="showCompleted = !showCompleted">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: showCompleted ? 'rotate(90deg)' : '' }">
-                      <polyline points="9 18 15 12 9 6"/>
-                    </svg>
-                    <span>{{ completedTodos.length }} 项已完成</span>
-                  </div>
-                  <Transition name="collapse">
-                    <div v-if="showCompleted" class="todo-completed-list">
-                      <div v-for="(todo, index) in completedTodos" :key="'completed-' + index" class="todo-tooltip-item completed">
-                        <span class="todo-status-icon completed">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="20 6 9 17 4 12"/>
-                          </svg>
-                        </span>
-                        <span class="todo-content completed">{{ todo.content }}</span>
-                      </div>
-                    </div>
-                  </Transition>
-                </div>
-              </div>
-              <div v-if="todoStats.total > 0" class="todo-tooltip-footer">
-                <div class="todo-progress-bar">
-                  <div class="todo-progress-fill" :style="{ width: (todoStats.completed / todoStats.total * 100) + '%' }"></div>
-                </div>
-              </div>
-            </div>
-          </Transition>
-        </div>
-        
-        <textarea
-          ref="inputField"
-          v-model="inputText"
-          @keydown="handleEnter"
-          @focus="inputFocused = true"
-          @blur="handleInputBlur"
-          @input="handleInputChange"
-          placeholder="输入消息... (Enter 发送, Tab 补全, / 命令)"
-          rows="1"
-        ></textarea>
-        <div class="input-actions">
-          <button class="btn-icon-sm" :class="{ active: planMode }" @click="togglePlan" title="计划模式">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
-          </button>
-          <button v-if="streaming" class="stop-btn" @click="abortChat" title="停止生成 (Esc)">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
-            <span class="stop-text">停止</span>
-          </button>
-          <button
-            v-else
-            class="send-btn"
-            :class="{ active: inputText.trim() && !streaming }"
-            @click="sendMessage"
-            :disabled="!inputText.trim() || streaming"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
-          </button>
-        </div>
-      </div>
-      <!-- Token 用量统计 -->
-      <div class="usage-bar">
-        <div class="usage-stats">
-          <span class="usage-item" :title="'输入 Token: ' + formatTokens(usage.promptTokens)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
-            输入 {{ formatTokens(usage.promptTokens) }}
-          </span>
-          <span class="usage-item" :title="'输出 Token: ' + formatTokens(usage.completionTokens)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            输出 {{ formatTokens(usage.completionTokens) }}
-          </span>
-          <span class="usage-item" :title="'缓存命中: ' + formatTokens(usage.cacheHit) + ' / 未命中: ' + formatTokens(usage.cacheMiss)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-            缓存 {{ cacheRate }}%
-          </span>
-          <span class="usage-item usage-cost-item" v-if="usage.hasPrice" :title="'费用: 输入¥' + (usage.inputCost||0).toFixed(4) + ' 缓存¥' + (usage.cacheCost||0).toFixed(4) + ' 输出¥' + (usage.outputCost||0).toFixed(4)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
-            ¥{{ formatCost(usage.totalCost) }}
-          </span>
-          <span class="usage-sep">|</span>
-          <span class="usage-context-wrap" :title="'上下文使用: ' + formatTokens(usage.lastPromptTokens || usage.promptTokens) + ' / ' + formatTokens(usage.maxContextTokens)">
-            上下文
-            <span class="usage-progress">
-              <span class="usage-progress-bar" :style="{ width: Math.min(contextPercent, 100) + '%' }" :class="{ high: contextPercent >= 80, medium: contextPercent >= 50 && contextPercent < 80 }"></span>
-            </span>
-            <span class="usage-value" :class="{ high: contextPercent >= 80, medium: contextPercent >= 50 && contextPercent < 80 }">{{ contextPercent }}%</span>
-          </span>
-          <button class="usage-refresh" @click="loadUsage" title="刷新用量">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-          </button>
-        </div>
-        <div class="model-selector" v-if="currentModel">
-          <button class="model-btn" @click="showModelPicker = !showModelPicker" :title="'当前模型: ' + currentModel">
-            {{ currentModel }}
-            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-          </button>
-          <div class="model-dropdown" v-if="showModelPicker">
-            <div class="model-dropdown-title">切换模型</div>
-            <div 
-              v-for="m in availableModels" 
-              :key="m.name" 
-              class="model-option" 
-              :class="{ active: m.active }"
-              @click="switchModel(m.name)"
-            >
-              <span class="model-option-name">{{ m.name }}</span>
-              <svg v-if="m.active" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
+    <!-- 输入区（独立组件） -->
+    <ChatInput
+      v-model:inputText="inputText"
+      :streaming="streaming"
+      :planMode="planMode"
+      :todos="todos"
+      :usage="usage"
+      :currentModel="currentModel"
+      :availableModels="availableModels"
+      :workspaceHash="props.workspaceHash"
+      :sessionName="props.sessionName"
+      @send="sendMessage"
+      @abort="abortChat"
+      @togglePlan="togglePlan"
+      @clear="clearChat"
+      @export="exportChat"
+      @fetchTodos="fetchTodos"
+      @refreshUsage="loadUsage"
+      @switchModel="handleSwitchModel"
+    />
   </div>
 </template>
 
@@ -316,113 +144,18 @@
 import { ref, computed, nextTick, onMounted, onBeforeUnmount, watch } from 'vue'
 import { chatAPI, agentAPI, configAPI } from '../services/api'
 import { marked } from 'marked'
+import ChatInput from '../components/ChatInput.vue'
 
-// ============= 斜杠命令相关 =============
-const slashPopupOpen = ref(false)
-const slashQuery = ref('')
-const activePopupIdx = ref(0)
-const backendCommands = ref([])
-const backendSkills = ref([])
-const commandsLoaded = ref(false)
-
-// 默认命令列表
-const defaultSlashCmds = [
-  { cmd: '/new', desc: '新建对话', type: 'session' },
-  { cmd: '/clear', desc: '清空对话', type: 'session' },
-  { cmd: '/retry', desc: '重试最后一条', type: 'session' },
-  { cmd: '/compact', desc: '折叠上下文', type: 'session' },
-  { cmd: '/export', desc: '导出对话', type: 'session' },
-  { cmd: '/plan', desc: '进入计划模式', type: 'mode' },
-  { cmd: '/execute', desc: '退出计划模式', type: 'mode' },
-  { cmd: '/sessions', desc: '列出历史会话', type: 'session' },
-  { cmd: '/help', desc: '显示帮助信息', type: 'system' },
-  { cmd: '/exit', desc: '退出', type: 'system' },
-  { cmd: '/hitl', desc: '切换 HITL 模式', type: 'mode' },
-  { cmd: '/agree', desc: '批准待执行工具', type: 'mode' },
-  { cmd: '/deny', desc: '拒绝待执行工具', type: 'mode' },
-  { cmd: '/init', desc: '初始化项目文档', type: 'system' }
-]
-
-// 合并后端命令
-const mergedCommands = computed(() => {
-  if (backendCommands.value.length > 0) {
-    return backendCommands.value.map(cmd => ({
-      cmd: cmd.cmd,
-      desc: cmd.desc || '',
-      type: cmd.type || 'system',
-      argHint: cmd.argHint
-    }))
-  }
-  return defaultSlashCmds
-})
-
-// Skill 列表转换为命令格式
-const skillCommands = computed(() => {
-  return backendSkills.value.map(skill => ({
-    cmd: `/skill:${skill.name}`,
-    desc: skill.description || '运行 skill',
-    type: 'skill',
-    runAs: skill.runAs
-  }))
-})
-
-// 所有可用命令（命令 + skill）
-const allSlashCmds = computed(() => [...mergedCommands.value, ...skillCommands.value])
-
-// 过滤后的命令
-const filteredSlashCmds = computed(() => {
-  if (!slashQuery.value) return allSlashCmds.value
-  const query = slashQuery.value.toLowerCase()
-  return allSlashCmds.value.filter(cmd =>
-    cmd.cmd.toLowerCase().includes(query) ||
-    cmd.desc.toLowerCase().includes(query)
-  )
-})
-
-// 获取命令图标
-const getSlashIcon = (cmd) => {
-  if (!cmd) return '🔧'
-  const icons = {
-    '/new': '✨', '/clear': '🗑️', '/retry': '🔄', '/compact': '📦',
-    '/export': '📥', '/plan': '📋', '/execute': '⚡', '/sessions': '📂',
-    '/load': '📂', '/rewind': '⏪', '/init': '🔧', '/hitl': '🛡',
-    '/agree': '✅', '/deny': '❌', '/help': '❓', '/exit': '👋'
-  }
-  if (cmd.startsWith('/skill:')) return '🧩'
-  return icons[cmd] || '🔧'
-}
-
-// 加载命令和 skill 列表
-const loadCommandAndSkills = async () => {
-  if (commandsLoaded.value) return
+// ============= 模型切换 =============
+const handleSwitchModel = async (modelName) => {
+  if (modelName === currentModel.value) return
   try {
-    const [cmdRes, skillRes] = await Promise.allSettled([
-      agentAPI.getCommands(),
-      agentAPI.getSkills()
-    ])
-    if (cmdRes.status === 'fulfilled' && cmdRes.value.success && cmdRes.value.data) {
-      backendCommands.value = cmdRes.value.data
+    const r = await configAPI.updateConfig({ model: modelName })
+    if (r.success) {
+      currentModel.value = modelName
+      availableModels.value.forEach(m => { m.active = m.name === modelName })
     }
-    if (skillRes.status === 'fulfilled' && skillRes.value.success && skillRes.value.data) {
-      backendSkills.value = skillRes.value.data
-    }
-  } catch (e) {
-    console.warn('[Chat] 加载命令/skill列表失败:', e)
-  } finally {
-    commandsLoaded.value = true
-  }
-}
-
-// 选择斜杠命令
-const selectSlashCmd = (cmd) => {
-  slashPopupOpen.value = false
-  slashQuery.value = ''
-  // 不管是命令还是 skill，都只补全到输入框，不发送
-  // 用户按 Enter 才会真正发送，Tab 仅负责补全
-  inputText.value = cmd.cmd + ' '
-  nextTick(() => {
-    inputField.value?.focus()
-  })
+  } catch (e) { console.error('切换模型失败:', e) }
 }
 
 const props = defineProps({ 
@@ -434,53 +167,19 @@ const props = defineProps({
 const emit = defineEmits(['sessionUpdated'])
 
 const messagesContainer = ref(null)
-const inputField = ref(null)
 const inputText = ref('')
 const messages = ref([])
 const streaming = ref(false)
 const planMode = ref(false)
-const inputFocused = ref(false)
 let currentAbortController = null
 
 // TODO 相关状态
 const todos = ref([])
-const todoTooltipVisible = ref(false)
-const todoTooltipTimer = ref(null)
-const showCompleted = ref(false)
 
 // Usage 相关
 const usage = ref({ promptTokens: 0, completionTokens: 0, cacheHit: 0, cacheMiss: 0, maxContextTokens: 128000, lastPromptTokens: 0 })
 const currentModel = ref('')
 const availableModels = ref([])
-const showModelPicker = ref(false)
-let usageTimer = null
-
-const formatTokens = (n) => {
-  if (!n || n === 0) return '0'
-  if (n >= 1000000) return (n / 1000000).toFixed(1) + 'M'
-  if (n >= 1000) return (n / 1000).toFixed(1) + 'K'
-  return String(n)
-}
-
-const formatCost = (cost) => {
-  if (cost === undefined || cost === null) return '0.00'
-  if (cost === 0) return '0.00'
-  if (cost < 0.01) return cost.toFixed(4)
-  return cost.toFixed(2)
-}
-
-const cacheRate = computed(() => {
-  const total = usage.value.cacheHit + usage.value.cacheMiss
-  if (total === 0) return '0'
-  return ((usage.value.cacheHit / total) * 100).toFixed(1)
-})
-
-const contextPercent = computed(() => {
-  const max = usage.value.maxContextTokens || 128000
-  const current = usage.value.lastPromptTokens || usage.value.promptTokens || 0
-  if (max === 0) return '0'
-  return ((current / max) * 100).toFixed(1)
-})
 
 const loadUsage = async (override) => {
   try {
@@ -525,133 +224,29 @@ const formatTime = (t) => {
 const fetchTodos = async () => {
   try {
     const params = {}
-    // 使用当前会话名，如果没有则使用 'default'
     params.sessionName = props.sessionName || 'default'
     if (props.workspaceHash) params.workspaceHash = props.workspaceHash
-    console.log('[fetchTodos] 请求参数:', params)
     const res = await configAPI.getTodos(params)
-    console.log('[fetchTodos] 响应:', res)
-    if (res.success) {
-      todos.value = res.data?.todos || []
-    }
-  } catch (e) {
-    console.error('[fetchTodos] 错误:', e)
-    todos.value = []
-  }
-}
-
-// TODO tooltip 处理
-const handleTodoMouseEnter = () => {
-  clearTimeout(todoTooltipTimer.value)
-  todoTooltipTimer.value = setTimeout(() => {
-    todoTooltipVisible.value = true
-    fetchTodos()
-  }, 300)
-}
-
-const handleTodoMouseLeave = () => {
-  clearTimeout(todoTooltipTimer.value)
-  todoTooltipTimer.value = setTimeout(() => {
-    todoTooltipVisible.value = false
-  }, 50)
-}
-
-// Tooltip 自身的鼠标事件
-const handleTooltipMouseEnter = () => {
-  clearTimeout(todoTooltipTimer.value)
-}
-
-const handleTooltipMouseLeave = () => {
-  todoTooltipTimer.value = setTimeout(() => {
-    todoTooltipVisible.value = false
-  }, 300)
-}
-
-// 计算 TODO 统计
-const todoStats = computed(() => {
-  const total = todos.value.length
-  const completed = todos.value.filter(t => t.status === 'completed').length
-  const inProgress = todos.value.filter(t => t.status === 'in_progress').length
-  const pending = todos.value.filter(t => t.status === 'pending').length
-  return { total, completed, inProgress, pending }
-})
-
-// 未完成的任务（按原顺序）
-const incompleteTodos = computed(() => {
-  return todos.value.filter(t => t.status !== 'completed')
-})
-
-// 已完成的任务
-const completedTodos = computed(() => {
-  return todos.value.filter(t => t.status === 'completed')
-})
-
-const switchModel = async (modelName) => {
-  if (modelName === currentModel.value) {
-    showModelPicker.value = false
-    return
-  }
-  try {
-    const r = await configAPI.updateConfig({ model: modelName })
-    if (r.success) {
-      currentModel.value = modelName
-      // 更新 availableModels 中的 active 状态
-      availableModels.value.forEach(m => {
-        m.active = m.name === modelName
-      })
-      showModelPicker.value = false
-    }
-  } catch (e) {
-    console.error('切换模型失败:', e)
-  }
-}
-
-// 点击外部关闭模型选择器
-const handleClickOutside = (e) => {
-  if (!e.target.closest('.model-selector')) {
-    showModelPicker.value = false
-  }
-}
-
-// 只加载模型列表（不加载 usage，除非明确选了 session）
-const loadModels = async () => {
-  try {
-    const r = await configAPI.getModels()
-    if (r.success) {
-      currentModel.value = r.data?.current || ''
-      availableModels.value = r.data?.models || []
-    }
-  } catch {}
+    if (res.success) { todos.value = res.data?.todos || [] }
+  } catch (e) { todos.value = [] }
 }
 
 // 监听 workspace 和 session 变化，重新加载 usage
 watch([() => props.workspaceHash, () => props.sessionName], ([ws, sess]) => {
   if (ws || sess) {
-    if (sess) {
-      loadUsage()
-    }
+    if (sess) { loadUsage() }
   }
 })
 
 onMounted(() => {
-  // 仅加载模型列表；usage 在明确选择 session 后才查询
-  loadModels()
   if (props.sessionName) loadUsage()
-  usageTimer = setInterval(() => {
-    if (props.sessionName) loadUsage()
-    else loadModels()
-  }, 30000)
-  document.addEventListener('click', handleClickOutside)
-  // 监听复制成功事件，更新日志通知条
+  // 监听复制成功事件
   window.addEventListener('copy-success', (e) => {
     addLog({ level: 'INFO', text: '✅ ' + (e.detail || '已复制'), time: Date.now() })
   })
 })
 
 onBeforeUnmount(() => {
-  document.removeEventListener('click', handleClickOutside)
-  if (usageTimer) clearInterval(usageTimer)
-  window.removeEventListener('terminal-clear', clearChat)
   window.removeEventListener('copy-success', () => {})
 })
 
@@ -722,37 +317,7 @@ const fmtArgs = a => {
   return JSON.stringify(a, null, 2)
 }
 
-const autoResize = () => {
-  const el = inputField.value
-  if (el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 160) + 'px' }
-}
-
-const handleInputChange = () => {
-  autoResize()
-  // 检测斜杠命令
-  const value = inputText.value
-  const slashMatch = value.match(/(^|\s)(\/)([^\s]*)$/)
-  if (slashMatch) {
-    slashPopupOpen.value = true
-    slashQuery.value = slashMatch[3] || ''
-    activePopupIdx.value = 0
-    // 如果后端数据还没加载，触发加载
-    if (!commandsLoaded.value || (backendCommands.value.length === 0 && backendSkills.value.length === 0)) {
-      commandsLoaded.value = false // 重置以允许重试
-      loadCommandAndSkills()
-    }
-  } else {
-    slashPopupOpen.value = false
-  }
-}
-
-const handleInputBlur = () => {
-  inputFocused.value = false
-  // 延迟关闭弹窗，允许点击命令
-  setTimeout(() => {
-    slashPopupOpen.value = false
-  }, 200)
-}
+// 输入框事件已迁移到 ChatInput 组件
 
 const scroll = async () => {
   await nextTick()
@@ -778,39 +343,7 @@ const sendChoice = (value, block) => {
   sendMessage()
 }
 
-const handleEnter = e => {
-  // 斜杠命令弹窗导航
-  if (slashPopupOpen.value) {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault()
-      activePopupIdx.value = (activePopupIdx.value + 1) % filteredSlashCmds.value.length
-      return
-    }
-    if (e.key === 'ArrowUp') {
-      e.preventDefault()
-      activePopupIdx.value = (activePopupIdx.value - 1 + filteredSlashCmds.value.length) % filteredSlashCmds.value.length
-      return
-    }
-    if (e.key === 'Escape') {
-      e.preventDefault()
-      slashPopupOpen.value = false
-      return
-    }
-    if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
-      e.preventDefault()
-      if (filteredSlashCmds.value.length > 0) {
-        selectSlashCmd(filteredSlashCmds.value[activePopupIdx.value])
-      }
-      return
-    }
-  }
-  if (e.key === 'Escape' && streaming.value) {
-    e.preventDefault()
-    abortChat()
-    return
-  }
-  if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage() }
-}
+// 键盘事件已迁移到 ChatInput 组件
 
 /**
  * 核心发送逻辑：
@@ -832,7 +365,6 @@ const sendMessage = async () => {
     messages.value.push({ id: Date.now(), role: 'user', content: text, time: now() })
   }
   inputText.value = ''
-  autoResize()
   await scroll()
 
   streaming.value = true
@@ -1042,10 +574,9 @@ const loadSession = async (name, workspaceHash) => {
 
 const sendCommand = async cmd => { inputText.value = cmd; await sendMessage() }
 
-// 加载历史消息（仅在明确选了 session 时）和命令列表
+// 加载历史消息（仅在明确选了 session 时）
 onMounted(() => { 
   if (props.sessionName) loadHistory()
-  loadCommandAndSkills()
 })
 
 defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, exportChat })
@@ -1431,481 +962,9 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
 .typing span:nth-child(2) { animation-delay: 0.2s; }
 .typing span:nth-child(3) { animation-delay: 0.4s; }
 
-/* 输入区 */
-.input-area {
-  padding: 12px 16px;
-  border-top: 1px solid var(--border);
-  background: var(--bg);
-}
+/* 全部输入区样式已迁移到 ChatInput.vue 组件中（.input-area, .input-box, .usage-bar, .todo-*, .slash-popup, .model-selector 等） */
 
-.input-box {
-  display: flex;
-  align-items: flex-end;
-  gap: 8px;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  padding: 6px 8px;
-  transition: border-color var(--t);
-}
-.input-box.focused { border-color: var(--accent); }
-
-.input-box textarea {
-  flex: 1;
-  min-height: 22px;
-  max-height: 160px;
-  padding: 0;
-  background: none;
-  border: none;
-  outline: none;
-  font-size: 14px;
-  line-height: 1.5;
-  color: var(--fg);
-  resize: none;
-}
-.input-box textarea::placeholder { color: var(--fg-4); }
-
-.input-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.send-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--r);
-  color: var(--fg-4);
-  transition: all var(--t);
-}
-.send-btn.active {
-  background: var(--accent);
-  color: #fff;
-}
-.send-btn.active:hover { background: var(--blue-dark); }
-
-.stop-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 4px 8px;
-  background: var(--red);
-  color: #fff;
-  border-radius: var(--r);
-  font-size: 12px;
-  font-weight: 500;
-  transition: all var(--t);
-  animation: pulse-red 1.5s infinite;
-}
-.stop-btn:hover {
-  background: var(--red-dark);
-  transform: scale(1.05);
-}
-.stop-btn svg {
-  animation: spin 1s linear infinite;
-}
-.stop-text {
-  margin-left: 2px;
-}
-
-@keyframes spin {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
-}
-
-@keyframes pulse-red {
-  0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4); }
-  50% { box-shadow: 0 0 0 4px rgba(239, 68, 68, 0); }
-}
-
-.btn-icon-sm.active { background: var(--accent-bg); color: var(--accent); }
-
-/* Token 用量统计 */
-.usage-bar {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 6px 12px;
-  font-size: 12px;
-  color: var(--fg-3);
-  border-top: 1px solid var(--border);
-  background: var(--bg-2);
-}
-
-.usage-stats {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-
-.usage-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 3px;
-  cursor: default;
-  color: var(--fg-3);
-}
-
-.usage-item svg {
-  color: var(--fg-4);
-  flex-shrink: 0;
-}
-
-.usage-value {
-  font-weight: 500;
-  color: var(--fg-2);
-  font-family: var(--mono);
-}
-
-.usage-sep {
-  color: var(--border);
-  font-size: 14px;
-}
-
-.usage-context-wrap {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.usage-progress {
-  width: 60px;
-  height: 4px;
-  background: var(--bg-3);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.usage-progress-bar {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
-.usage-progress-bar.medium {
-  background: var(--yellow);
-}
-
-.usage-progress-bar.high {
-  background: var(--red);
-}
-
-.usage-value.high {
-  color: var(--red);
-  font-weight: 600;
-}
-
-.usage-value.medium {
-  color: var(--yellow);
-}
-
-.usage-refresh {
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--r-sm);
-  color: var(--fg-4);
-  font-size: 14px;
-  transition: all var(--t);
-  cursor: pointer;
-}
-
-.usage-refresh:hover {
-  background: var(--bg-3);
-  color: var(--fg-2);
-}
-
-.usage-cost-item {
-  color: var(--yellow);
-  font-weight: 500;
-  font-family: var(--mono);
-}
-
-.usage-cost-item svg {
-  color: var(--yellow);
-}
-
-/* 模型选择器 */
-.model-selector {
-  position: relative;
-}
-
-.model-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--fg-2);
-  font-family: var(--mono);
-  padding: 2px 6px;
-  border-radius: var(--r-sm);
-  transition: all var(--t);
-  cursor: pointer;
-}
-
-.model-btn:hover {
-  background: var(--bg-3);
-}
-
-.model-btn svg {
-  transition: transform var(--t);
-}
-
-.model-btn:has(+ .model-dropdown) svg {
-  transform: rotate(180deg);
-}
-
-.model-dropdown {
-  position: absolute;
-  bottom: 100%;
-  right: 0;
-  margin-bottom: 4px;
-  min-width: 200px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  box-shadow: var(--shadow);
-  z-index: 100;
-  overflow: hidden;
-}
-
-.model-dropdown-title {
-  padding: 8px 12px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--fg-4);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid var(--border);
-}
-
-.model-option {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-family: var(--mono);
-  color: var(--fg-2);
-  cursor: pointer;
-  transition: all var(--t);
-}
-
-.model-option:hover {
-  background: var(--bg-2);
-}
-
-.model-option.active {
-  color: var(--accent);
-  font-weight: 500;
-}
-
-.model-option svg {
-  color: var(--accent);
-}
-
-@keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.4; } }
-
-/* TODO 触发器 */
-.todo-trigger {
-  position: relative;
-  flex-shrink: 0;
-}
-
-.todo-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: var(--r-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--fg-4);
-  transition: all var(--t);
-  position: relative;
-}
-
-.todo-btn:hover {
-  background: var(--bg-3);
-  color: var(--fg-2);
-}
-
-.todo-btn.has-todos {
-  color: var(--accent);
-}
-
-.todo-badge {
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  min-width: 14px;
-  height: 14px;
-  padding: 0 3px;
-  background: var(--accent);
-  color: white;
-  font-size: 9px;
-  font-weight: 700;
-  border-radius: 7px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-/* TODO Tooltip */
-.todo-tooltip {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 0;
-  width: 280px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  box-shadow: var(--shadow);
-  z-index: 100;
-  overflow: hidden;
-}
-
-.todo-tooltip-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: var(--bg-2);
-  border-bottom: 1px solid var(--border);
-}
-
-.todo-tooltip-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--fg-2);
-  letter-spacing: 0.02em;
-}
-
-.todo-tooltip-stats {
-  font-size: 11px;
-  color: var(--fg-4);
-  background: var(--bg-3);
-  padding: 2px 6px;
-  border-radius: var(--r-sm);
-}
-
-.todo-tooltip-empty {
-  padding: 16px;
-  text-align: center;
-  color: var(--fg-4);
-  font-size: 12px;
-}
-
-.todo-tooltip-list {
-  max-height: 200px;
-  overflow-y: auto;
-  padding: 4px;
-}
-
-.todo-tooltip-item {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  border-radius: var(--r-sm);
-  transition: background var(--t);
-}
-
-.todo-tooltip-item:hover {
-  background: var(--bg-2);
-}
-
-.todo-status-icon {
-  flex-shrink: 0;
-  font-size: 11px;
-  line-height: 1.5;
-}
-
-.todo-content {
-  font-size: 12px;
-  color: var(--fg-2);
-  line-height: 1.5;
-}
-
-.todo-content.completed {
-  text-decoration: line-through;
-  color: var(--fg-4);
-}
-
-.todo-content.in_progress {
-  color: var(--accent);
-  font-weight: 500;
-}
-
-.todo-tooltip-footer {
-  padding: 6px 12px 8px;
-  border-top: 1px solid var(--border);
-}
-
-.todo-progress-bar {
-  height: 3px;
-  background: var(--bg-3);
-  border-radius: 2px;
-  overflow: hidden;
-}
-
-.todo-progress-fill {
-  height: 100%;
-  background: var(--accent);
-  border-radius: 2px;
-  transition: width 0.3s ease;
-}
-
-/* 已完成部分折叠 */
-.todo-completed-section {
-  border-top: 1px solid var(--border);
-  margin-top: 4px;
-}
-
-.todo-completed-toggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  font-size: 11px;
-  color: var(--fg-4);
-  cursor: pointer;
-  transition: all var(--t);
-}
-
-.todo-completed-toggle:hover {
-  color: var(--fg-2);
-  background: var(--bg-2);
-}
-
-.todo-completed-toggle svg {
-  transition: transform 0.2s ease;
-}
-
-.todo-completed-list {
-  overflow: hidden;
-}
-
-/* 折叠动画 */
-.collapse-enter-active,
-.collapse-leave-active {
-  transition: all 0.2s ease;
-  max-height: 200px;
-}
-
-.collapse-enter-from,
-.collapse-leave-to {
-  max-height: 0;
-  opacity: 0;
-}
-
-/* 日志堆叠容器 */
+/* ===== 日志堆叠容器 ===== */
 .log-stack {
   display: flex;
   flex-direction: column;
@@ -1989,184 +1048,5 @@ defineExpose({ clearMessages, resetLocalMessages, loadSession, sendCommand, expo
 .log-bar-leave-to {
   opacity: 0;
   transform: translateY(-10px) scale(0.95);
-}
-
-/* Tooltip 动画 */
-.tooltip-enter-active,
-.tooltip-leave-active {
-  transition: all 0.2s ease;
-}
-
-.tooltip-enter-from,
-.tooltip-leave-to {
-  opacity: 0;
-  transform: translateY(4px);
-}
-
-/* 输入框内 textarea 需要 flex: 1 */
-.input-box textarea {
-  flex: 1;
-}
-
-/* ============= 斜杠命令弹窗 ============= */
-.input-area {
-  position: relative;
-}
-
-.slash-popup {
-  position: absolute;
-  bottom: 100%;
-  left: 16px;
-  right: 16px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
-  z-index: 100;
-  overflow: hidden;
-  margin-bottom: 4px;
-}
-
-.slash-popup-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 8px 12px;
-  background: var(--bg-2);
-  border-bottom: 1px solid var(--border);
-}
-
-.slash-popup-title {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--fg-2);
-}
-
-.slash-popup-hint {
-  font-size: 11px;
-  color: var(--fg-4);
-}
-
-.slash-popup-list {
-  max-height: 280px;
-  overflow-y: auto;
-  padding: 4px;
-}
-
-.slash-popup-loading,
-.slash-popup-empty {
-  padding: 24px 16px;
-  text-align: center;
-  font-size: 13px;
-  color: var(--fg-4);
-}
-
-.slash-popup-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  color: var(--accent);
-}
-
-.slash-popup-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border-radius: var(--r-sm);
-  cursor: pointer;
-  transition: background var(--t);
-}
-
-.slash-popup-item:hover,
-.slash-popup-item.active {
-  background: var(--bg-2);
-}
-
-.slash-popup-icon {
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 14px;
-  background: var(--bg-3);
-  border-radius: var(--r-sm);
-  flex-shrink: 0;
-}
-
-.slash-popup-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.slash-popup-cmd {
-  font-size: 13px;
-  font-weight: 600;
-  font-family: var(--mono);
-  color: var(--fg);
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.slash-popup-badge {
-  display: inline-flex;
-  align-items: center;
-  padding: 0 4px;
-  font-size: 10px;
-  font-weight: 500;
-  border-radius: var(--r-sm);
-  line-height: 1.4;
-}
-
-.slash-popup-badge.skill {
-  background: #dcfce7;
-  color: #16a34a;
-}
-
-.slash-popup-badge.mode {
-  background: #dbeafe;
-  color: #2563eb;
-}
-
-.slash-popup-badge.session {
-  background: #fef3c7;
-  color: #d97706;
-}
-
-.slash-popup-desc {
-  font-size: 11px;
-  color: var(--fg-4);
-  margin-top: 1px;
-}
-
-/* 深色模式 badge 颜色调整 */
-[data-theme="dark"] .slash-popup-badge.skill {
-  background: #052e16;
-  color: #4ade80;
-}
-
-[data-theme="dark"] .slash-popup-badge.mode {
-  background: #1e3a5f;
-  color: #60a5fa;
-}
-
-[data-theme="dark"] .slash-popup-badge.session {
-  background: #422006;
-  color: #fbbf24;
-}
-
-/* 弹窗动画 */
-.slash-popup-enter-active,
-.slash-popup-leave-active {
-  transition: all 0.15s ease;
-}
-
-.slash-popup-enter-from,
-.slash-popup-leave-to {
-  opacity: 0;
-  transform: translateY(8px) scale(0.98);
 }
 </style>
