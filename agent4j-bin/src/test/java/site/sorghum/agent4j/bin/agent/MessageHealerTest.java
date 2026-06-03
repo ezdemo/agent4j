@@ -39,7 +39,8 @@ class MessageHealerTest {
 
     @Test
     void emptyMessagesReturnsEmpty() {
-        List<ChatMessage> result = MessageHealer.heal(new ArrayList<>(), false);
+        var hr = MessageHealer.heal(new ArrayList<>(), false);
+        List<ChatMessage> result = hr.messages();
         assertNotNull(result);
         assertTrue(result.isEmpty());
     }
@@ -51,7 +52,8 @@ class MessageHealerTest {
         msgs.add(msg("user", "hi"));
         msgs.add(msg("assistant", "hello!"));
 
-        List<ChatMessage> result = MessageHealer.heal(msgs, false);
+        var hr = MessageHealer.heal(msgs, false);
+        List<ChatMessage> result = hr.messages();
         assertEquals(3, result.size());
         assertEquals("system", result.get(0).getRole());
         assertEquals("user", result.get(1).getRole());
@@ -66,7 +68,8 @@ class MessageHealerTest {
         msgs.add(toolMsg("tc_1", "result"));
         msgs.add(msg("assistant", "ok"));
 
-        List<ChatMessage> result = MessageHealer.heal(msgs, false);
+        var hr = MessageHealer.heal(msgs, false);
+        List<ChatMessage> result = hr.messages();
         assertEquals(2, result.size());
         assertEquals("user", result.get(0).getRole());
         assertEquals("assistant", result.get(1).getRole());
@@ -84,7 +87,8 @@ class MessageHealerTest {
 
         msgs.add(msg("assistant", "done"));
 
-        List<ChatMessage> result = MessageHealer.heal(msgs, false);
+        var hr = MessageHealer.heal(msgs, false);
+        List<ChatMessage> result = hr.messages();
         assertEquals(4, result.size());
         assertEquals("tool", result.get(2).getRole());
     }
@@ -102,7 +106,8 @@ class MessageHealerTest {
         ChatMessage toolMsg = ChatMessage.tool(null, "result");
         msgs.add(toolMsg);
 
-        List<ChatMessage> result = MessageHealer.heal(msgs, false);
+        var hr = MessageHealer.heal(msgs, false);
+        List<ChatMessage> result = hr.messages();
         assertEquals(3, result.size());
         // tool 消息应被补上 tool_call_id
         assertNotNull(result.get(2).getToolCallId());
@@ -116,7 +121,8 @@ class MessageHealerTest {
         ChatMessage assistant = ChatMessage.assistant("hello", null, null);
         msgs.add(assistant);
 
-        List<ChatMessage> result = MessageHealer.heal(msgs, true);
+        var hr = MessageHealer.heal(msgs, true);
+        List<ChatMessage> result = hr.messages();
         assertEquals(2, result.size());
         assertEquals("", result.get(1).getReasoningContent());
     }
@@ -129,7 +135,8 @@ class MessageHealerTest {
         ChatMessage assistant = ChatMessage.assistant("hello", null, "thinking...");
         msgs.add(assistant);
 
-        List<ChatMessage> result = MessageHealer.heal(msgs, true);
+        var hr = MessageHealer.heal(msgs, true);
+        List<ChatMessage> result = hr.messages();
         assertEquals("thinking...", result.get(1).getReasoningContent());
     }
 
@@ -146,7 +153,8 @@ class MessageHealerTest {
         msgs.add(toolMsg("tc_1", "result1"));
         // tc_2 的结果缺失
 
-        List<ChatMessage> result = MessageHealer.heal(msgs, false);
+        var hr = MessageHealer.heal(msgs, false);
+        List<ChatMessage> result = hr.messages();
         assertEquals(2, result.size());
         // assistant 的 tool_calls 应被剥离
         ChatMessage assistant = result.get(1);
@@ -170,7 +178,8 @@ class MessageHealerTest {
         }
         msgs.add(toolMsg("tc_1", bigContent.toString()));
 
-        List<ChatMessage> result = MessageHealer.heal(msgs, false);
+        var hr = MessageHealer.heal(msgs, false);
+        List<ChatMessage> result = hr.messages();
         assertEquals(3, result.size());
         String content = result.get(2).getContent();
         assertTrue(content.contains("truncated"), "超大结果应被截断");

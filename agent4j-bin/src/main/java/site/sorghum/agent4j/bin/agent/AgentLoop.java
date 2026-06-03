@@ -97,6 +97,18 @@ public class AgentLoop {
      * 用户主动中断标志（前端点击停止按钮时设置）
      */
     private volatile boolean userAbortRequested = false;
+
+    /**
+     * 流式错误重试次数（每回合重置）
+     */
+    private int streamErrorRetryCount = 0;
+
+    /**
+     * 流式错误最大重试次数
+     */
+    private static final int MAX_STREAM_ERROR_RETRIES = 10;
+    private static final int[] RETRY_DELAYS_SEC = {1, 1, 1, 3, 3, 3, 5, 7, 10, 10};
+
     /**
      * 当前会话ID（用于传递给工具执行上下文）
      * -- GETTER --
@@ -333,6 +345,7 @@ public class AgentLoop {
         dispatcher.resetStorm();
         reasonBreaker.reset();
         resetUserAbort(); // 重置用户中断标志
+        streamErrorRetryCount = 0;
         int selfCorrectionAttempts = 0;
         List<Map<String, Object>> tools = ctx.tools();
         boolean isThinkingMode = client.isThinkingMode();
@@ -382,7 +395,7 @@ public class AgentLoop {
 
             // 3. 流式错误恢复
             if (sr.error) {
-                if (recoverFromStreamError(messages, prepared.foldedThisStep)) {
+                if (recoverFromStreamError()) {
                     continue;
                 }
                 throw new IOException("[stream] API error during streaming");
@@ -668,6 +681,7 @@ public class AgentLoop {
     private String continueConversationLoop() throws IOException {
         boolean isThinkingMode = client.isThinkingMode();
         List<Map<String, Object>> tools = ctx.tools();
+        streamErrorRetryCount = 0;
         int selfCorrectionAttempts = 0;
 
         for (int step = 0; ; step++) {
@@ -704,7 +718,7 @@ public class AgentLoop {
             }
 
             if (sr.error) {
-                if (recoverFromStreamError(messages, prepared.foldedThisStep)) continue;
+                if (recoverFromStreamError()) continue;
                 throw new IOException("[stream] API error during streaming");
             }
             try {
@@ -761,7 +775,8 @@ public class AgentLoop {
      */
     private PreparedMessages prepareMessages(int step, boolean isThinkingMode) throws IOException {
         List<ChatMessage> messages = ctx.buildMessages();
-        messages = MessageHealer.heal(messages, isThinkingMode);
+        MessageHealer.HealResult healResult = MessageHealer.heal(messages, isThinkingMode);
+        messages = healResult.messages();
 
         // 预检：token 数接近上下文窗口 80% 时折叠
         boolean foldedThisStep = false;
@@ -941,19 +956,28 @@ public class AgentLoop {
      *
      * @return true 表示已恢复（应 continue 重试），false 表示无法恢复（应抛异常）
      */
-    private boolean recoverFromStreamError(List<ChatMessage> messages, boolean foldedThisStep) throws IOException {
-        if (!foldedThisStep && ContextFolding.estimateChars(messages) > 50_000) {
+    private boolean recoverFromStreamError() throws IOException {
+        streamErrorRetryCount++;
+        if (streamErrorRetryCount <= MAX_STREAM_ERROR_RETRIES) {
+            int delay = RETRY_DELAYS_SEC[streamErrorRetryCount - 1];
             try {
-                output.onLog(LogLevel.INFO, "[recover] API 错误，尝试折叠上下文后重试...");
+                output.onLog(LogLevel.WARN, "[recover] API 流式错误，第 " + streamErrorRetryCount
+                        + "/" + MAX_STREAM_ERROR_RETRIES + " 次重试，等待 " + delay + " 秒...");
             } catch (Exception e) {
                 // 忽略异常
             }
-            int limit = Math.max(50_000, ContextFolding.estimateChars(messages) / 2);
-            List<ChatMessage> recovered = ContextFolding.fold(
-                    messages, limit, KEEP_TAIL_CHARS, client);
-            ctx.compact(recovered);
-            lastPromptTokens = 0; // 折叠后重置
+            try {
+                Thread.sleep(delay * 1000L);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return false;
+            }
             return true;
+        }
+        try {
+            output.onLog(LogLevel.ERROR, "[recover] 流式错误已达重试上限（" + MAX_STREAM_ERROR_RETRIES + "次），放弃");
+        } catch (Exception e) {
+            // 忽略异常
         }
         return false;
     }
@@ -980,7 +1004,12 @@ public class AgentLoop {
         ONode fakeTcArray = ONode.ofJson("[]").asArray();
         for (Scavenger.ToolCall tc : scavenged) {
             ONode tcn = fakeTcArray.addNew();
-            tcn.set("id", tc.id() != null ? tc.id() : "scavenged_" + tc.name());
+            // 使用参数 hash + 纳秒时间戳确保每个 scavenged ID 唯一。
+            // hash 保证同名不同参时 ID 不同；时间戳保证同名同参连续调用仍唯一。
+            String idSuffix = tc.id() != null ? ""
+                    : "_" + Integer.toHexString(tc.arguments().hashCode())
+                    + "_" + System.nanoTime();
+            tcn.set("id", tc.id() != null ? tc.id() : "scavenged_" + tc.name() + idSuffix);
             tcn.set("type", "function");
             ONode fn = tcn.getOrNew("function");
             fn.set("name", tc.name());
@@ -1267,4 +1296,5 @@ public class AgentLoop {
                                        List<ChatMessage> toolResults,
                                        boolean anySuppressed) {
     }
+
 }

@@ -87,7 +87,8 @@ public class SessionService {
             }
             // 仅在明确指定会话时才加载历史和恢复用量
             List<ChatMessage> loaded = store.load();
-            loaded = MessageHealer.heal(loaded, false);
+            var healResult = MessageHealer.heal(loaded, false);
+            loaded = healResult.messages();
             for (ChatMessage m : loaded) {
                 ctx.injectHistory(m);
             }
