@@ -148,16 +148,6 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
           工具
         </button>
-        <button class="foot-btn" @click="showOpenApi = true">
-          <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-            <path d="M16 3h5v5M8 3H3v5M3 16v5h5M16 21h5v-5"/>
-            <line x1="21" x2="12" y1="3" y2="12"/>
-            <line x1="3" x2="12" y1="3" y2="12"/>
-            <line x1="21" x2="12" y1="21" y2="12"/>
-            <line x1="3" x2="12" y1="21" y2="12"/>
-          </svg>
-          OpenAPI
-        </button>
         <button class="foot-btn" @click="toggleTheme">
           <!-- 浅色：月亮图标 -->
           <svg v-if="theme === 'light'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
@@ -277,14 +267,6 @@
     </Teleport>
 
     <!-- OpenAPI 管理弹窗 -->
-    <Teleport to="body">
-      <div v-if="showOpenApi" class="modal-mask" @click.self="showOpenApi = false">
-        <div class="modal" style="padding:0;width:auto">
-          <OpenApiView/>
-        </div>
-      </div>
-    </Teleport>
-
     <!-- 确认对话框 -->
     <ConfirmDialog />
   </div>
@@ -305,7 +287,6 @@ import ConfirmDialog from './components/ConfirmDialog.vue'
 import GitPanel from './components/GitPanel.vue'
 import ChatView from './views/Chat.vue'
 import SettingsView from './views/Settings.vue'
-import OpenApiView from './views/OpenApi.vue'
 
 const store = useAppStore()
 const router = useRouter()
@@ -339,7 +320,6 @@ async function detectTauri() {
 }
 const showConfig = ref(false)
 const showSettings = ref(false)
-const showOpenApi = ref(false)
 const gitOpen = ref(false)
 const initialDataLoaded = ref(false)
 const chatRef = ref(null)
