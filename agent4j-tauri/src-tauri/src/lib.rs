@@ -39,22 +39,208 @@ impl Agent4jWebManager {
         jar_path.exists()
     }
 
-    // 检查 Java 是否可用且版本 >= 17
+    // ── Java 版本解析（从 java -version 输出的 stderr 中提取） ──
+    fn parse_java_version(stderr: &str) -> Result<(i32, String), String> {
+        let major = stderr.split('"').nth(1)
+            .and_then(|v| v.split('.').next())
+            .and_then(|v| v.parse::<i32>().ok())
+            .unwrap_or(0);
+        let ver_line = stderr.lines().next().unwrap_or("unknown").to_string();
+        if major < 17 {
+            Err(format!("Java 17+ required, found version {}", major))
+        } else {
+            Ok((major, ver_line))
+        }
+    }
+
+    // 检查系统 Java（通过 PATH 中的 java 命令）
     fn check_java() -> Result<String, String> {
         let output = Command::new("java")
             .args(&["-version"])
             .output()
-            .map_err(|_| "Java not found, please install JDK 17+ from https://adoptium.net/".to_string())?;
+            .map_err(|_| "Java not found in PATH".to_string())?;
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let (_, ver) = Self::parse_java_version(&stderr)?;
+        Ok(ver)
+    }
 
-        let ver_str = String::from_utf8_lossy(&output.stderr);
-        let major = ver_str.split('"').nth(1)
-            .and_then(|v| v.split('.').next())
-            .and_then(|v| v.parse::<i32>().ok())
-            .unwrap_or(0);
-        if major < 17 {
-            return Err(format!("Java 17+ required, found version {}", major));
+    // 检查指定路径的 Java
+    fn check_java_at(path: &Path) -> Result<String, String> {
+        let output = Command::new(path)
+            .args(&["-version"])
+            .output()
+            .map_err(|_| format!("Java not found at {}", path.display()))?;
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        let (_, ver) = Self::parse_java_version(&stderr)?;
+        Ok(ver)
+    }
+
+    // ── Java 自动安装相关 ──
+
+    // 获取 ~/.agent4j/jdk/bin/java 路径
+    fn get_bundled_java_path(install_dir: &Path) -> PathBuf {
+        let mut p = install_dir.join("jdk").join("bin").join("java");
+        if cfg!(windows) {
+            p.set_extension("exe");
         }
-        Ok(ver_str.lines().next().unwrap_or("unknown").to_string())
+        p
+    }
+
+    // 将目录添加到当前进程的 PATH 最前面
+    fn prepend_to_path(dir: &Path) {
+        let dir_str = dir.to_string_lossy();
+        let current = std::env::var("PATH").unwrap_or_default();
+        if !current.contains(dir_str.as_ref()) {
+            let new_path = format!("{}:{}", dir_str, current);
+            std::env::set_var("PATH", new_path);
+        }
+    }
+
+    // 确保 Java 可用：系统 → 已捆绑 → 自动下载
+    fn ensure_java(&self) -> Result<String, String> {
+        // 1) 系统 Java
+        if let Ok(ver) = Self::check_java() {
+            return Ok(ver);
+        }
+        // 2) 已捆绑的 JDK
+        let install_dir = self.get_install_dir();
+        let bundled_path = Self::get_bundled_java_path(&install_dir);
+        if bundled_path.exists() {
+            if let Ok(ver) = Self::check_java_at(&bundled_path) {
+                Self::prepend_to_path(bundled_path.parent().unwrap());
+                return Ok(format!("{} (bundled)", ver));
+            }
+        }
+        // 3) 自动下载
+        let ver = self.download_and_install_jdk()?;
+        Ok(format!("{} (auto-installed)", ver))
+    }
+
+    // ── Adoptium API 对接 ──
+    fn adoptium_os() -> &'static str {
+        match std::env::consts::OS {
+            "macos" => "mac",
+            "windows" => "windows",
+            _ => "linux",
+        }
+    }
+    fn adoptium_arch() -> &'static str {
+        match std::env::consts::ARCH {
+            "x86_64" => "x64",
+            "aarch64" => "aarch64",
+            "x86" => "x86",
+            _ => "x64",
+        }
+    }
+
+    // 从 Adoptium API 获取 JDK 17 下载地址
+    fn get_adoptium_download_url() -> Result<String, String> {
+        let os = Self::adoptium_os();
+        let arch = Self::adoptium_arch();
+        let api_url = format!(
+            "https://api.adoptium.net/v3/assets/feature_releases/17/ga?architecture={}&image_type=jdk&os={}&page_size=1",
+            arch, os
+        );
+        let resp = ureq::get(&api_url)
+            .call()
+            .map_err(|e| format!("查询 Adoptium API 失败: {}", e))?;
+        let reader = resp.into_reader();
+        let json: serde_json::Value = serde_json::from_reader(reader)
+            .map_err(|e| format!("解析 API 响应失败: {}", e))?;
+        json[0]["binaries"][0]["package"]["link"]
+            .as_str()
+            .map(|s: &str| s.to_string())
+            .ok_or("API 返回中未找到下载链接".to_string())
+    }
+
+    // 下载并安装 JDK 17 到 ~/.agent4j/jdk/
+    fn download_and_install_jdk(&self) -> Result<String, String> {
+        let install_dir = self.get_install_dir();
+        let jdk_dir = install_dir.join("jdk");
+        let tmp_dir = install_dir.join(".tmp-jdk");
+
+        // 清理残留
+        if tmp_dir.exists() {
+            fs::remove_dir_all(&tmp_dir).ok();
+        }
+        fs::create_dir_all(&tmp_dir)
+            .map_err(|e| format!("创建临时目录失败: {}", e))?;
+
+        // 获取下载地址
+        let url = Self::get_adoptium_download_url()?;
+        let filename = url.rsplit('/').next().ok_or("无效的下载地址")?.to_string();
+        let archive_path = tmp_dir.join(&filename);
+
+        // 下载
+        let resp = ureq::get(&url)
+            .call()
+            .map_err(|e| format!("下载 JDK 失败: {}", e))?;
+        let mut reader = resp.into_reader();
+        let mut file = fs::File::create(&archive_path)
+            .map_err(|e| format!("创建文件失败: {}", e))?;
+        std::io::copy(&mut reader, &mut file)
+            .map_err(|e| format!("写入下载文件失败: {}", e))?;
+        drop(file);
+
+        // 解压
+        let extract_dir = tmp_dir.join("extract");
+        fs::create_dir_all(&extract_dir)
+            .map_err(|e| format!("创建解压目录失败: {}", e))?;
+
+        if filename.ends_with(".tar.gz") || filename.ends_with(".tgz") {
+            let gz = flate2::read::GzDecoder::new(
+                fs::File::open(&archive_path)
+                    .map_err(|e| format!("打开压缩包失败: {}", e))?
+            );
+            let mut archive = tar::Archive::new(gz);
+            archive.unpack(&extract_dir)
+                .map_err(|e| format!("解压 tar.gz 失败: {}", e))?;
+        } else if cfg!(windows) && filename.ends_with(".zip") {
+            #[cfg(windows)]
+            {
+                let zf = fs::File::open(&archive_path)
+                    .map_err(|e| format!("打开 zip 失败: {}", e))?;
+                let mut archive = zip::ZipArchive::new(zf)
+                    .map_err(|e| format!("读取 zip 失败: {}", e))?;
+                archive.extract(&extract_dir)
+                    .map_err(|e| format!("解压 zip 失败: {}", e))?;
+            }
+            #[cfg(not(windows))]
+            return Err("ZIP 解压仅在 Windows 下支持".to_string());
+        } else {
+            return Err(format!("不支持的压缩格式: {}", filename));
+        }
+
+        // 找到 JDK 顶层目录（解压后唯一的子目录）
+        let entries: Vec<_> = fs::read_dir(&extract_dir)
+            .map_err(|e| e.to_string())?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+            .collect();
+        let jdk_subdir = entries.into_iter().next()
+            .ok_or("解压后未找到 JDK 目录")?;
+
+        // 移动到最终位置
+        if jdk_dir.exists() {
+            fs::remove_dir_all(&jdk_dir)
+                .map_err(|e| format!("清理旧 JDK 失败: {}", e))?;
+        }
+        fs::rename(jdk_subdir.path(), &jdk_dir)
+            .map_err(|e| format!("移动 JDK 目录失败: {}", e))?;
+
+        // 清理临时文件
+        fs::remove_dir_all(&tmp_dir).ok();
+
+        // 验证
+        let java_bin = Self::get_bundled_java_path(&install_dir);
+        let ver = Self::check_java_at(&java_bin)?;
+
+        // 更新当前进程 PATH
+        if let Some(bin_dir) = java_bin.parent() {
+            Self::prepend_to_path(bin_dir);
+        }
+
+        Ok(ver)
     }
 
     // 配置 PATH 环境变量
@@ -157,35 +343,49 @@ impl Agent4jWebManager {
         Err("bin/agent4j-web.jar not found in archive".to_string())
     }
 
-    // 从资源中安装 agent4j-web（返回详细进度信息）
-    fn install_from_resource(&self, resource_dir: &Path) -> Result<Vec<String>, String> {
-        let mut steps = Vec::new();
+    // 步骤1：确保 Java 可用（系统 → 已捆绑 → 自动下载）
+    fn install_step1_check_java(&self, resource_dir: &Path) -> Result<String, String> {
+        // 确保 Java 可用（如果系统没有，自动下载安装到 ~/.agent4j/jdk/）
+        let java_ver = self.ensure_java()?;
 
-        // 1) 检查 Java
-        steps.push("检查 Java 环境...".to_string());
-        let java_ver = Self::check_java()?;
-        steps.push(format!("Java: {}", java_ver));
-
-        let install_dir = self.get_install_dir();
+        // 验证安装包存在
         let archive_path = resource_dir.join("agent4j-web-dist.tar.gz");
-
         if !archive_path.exists() {
             return Err(format!("Resource not found: {:?}", archive_path));
         }
 
-        // 2) 解压
-        steps.push("解压安装包...".to_string());
+        Ok(java_ver)
+    }
+
+    // 步骤2：解压安装包
+    fn install_step2_extract(&self, resource_dir: &Path) -> Result<String, String> {
+        let install_dir = self.get_install_dir();
+        let archive_path = resource_dir.join("agent4j-web-dist.tar.gz");
         let temp_dir = install_dir.join(".tmp-install");
+
+        // 清理可能的残留
         if temp_dir.exists() {
-            let _ = fs::remove_dir_all(&temp_dir);
+            fs::remove_dir_all(&temp_dir)
+                .map_err(|e| format!("Failed to clean temp dir: {}", e))?;
         }
         fs::create_dir_all(&temp_dir)
             .map_err(|e| format!("Failed to create temp dir: {}", e))?;
-        self.extract_tar_gz(&archive_path, &temp_dir)?;
-        steps.push("解压完成".to_string());
 
-        // 3) 复制 bin/
-        steps.push("复制文件...".to_string());
+        self.extract_tar_gz(&archive_path, &temp_dir)?;
+
+        Ok("解压完成".to_string())
+    }
+
+    // 步骤3：复制文件到安装目录
+    fn install_step3_copy_files(&self, _resource_dir: &Path) -> Result<String, String> {
+        let install_dir = self.get_install_dir();
+        let temp_dir = install_dir.join(".tmp-install");
+
+        if !temp_dir.exists() {
+            return Err("请先执行解压步骤".to_string());
+        }
+
+        // 复制 bin/
         let target_bin = install_dir.join("bin");
         fs::create_dir_all(&target_bin)
             .map_err(|e| format!("Failed to create bin dir: {}", e))?;
@@ -202,7 +402,7 @@ impl Agent4jWebManager {
             }
         }
 
-        // 4) 复制 agent4j.md（保留已有的）
+        // 复制 agent4j.md（不覆盖已有的）
         for name in &["agent4j.md"] {
             let src = temp_dir.join(name);
             let target = install_dir.join(name);
@@ -210,19 +410,27 @@ impl Agent4jWebManager {
                 let _ = fs::copy(&src, &target);
             }
         }
-        steps.push("文件复制完成".to_string());
 
-        // 5) 创建启动脚本 + 配置 PATH
-        steps.push("配置环境...".to_string());
+        Ok("文件复制完成".to_string())
+    }
+
+    // 步骤4：创建启动脚本 + 配置 PATH + 清理临时文件
+    fn install_step4_configure_env(&self, _resource_dir: &Path) -> Result<String, String> {
+        let install_dir = self.get_install_dir();
+        let temp_dir = install_dir.join(".tmp-install");
+        let target_bin = install_dir.join("bin");
+
+        // 创建启动脚本
         Self::create_launcher(&target_bin);
+        // 配置 PATH 环境变量
         Self::setup_path(&target_bin);
-        steps.push("环境配置完成".to_string());
 
-        // 6) 清理
-        let _ = fs::remove_dir_all(&temp_dir);
-        steps.push("安装完成！".to_string());
+        // 清理临时目录
+        if temp_dir.exists() {
+            let _ = fs::remove_dir_all(&temp_dir);
+        }
 
-        Ok(steps)
+        Ok("环境配置完成".to_string())
     }
 
     // 解压 tar.gz
@@ -448,16 +656,30 @@ fn check_install_needed(state: tauri::State<'_, Agent4jWebManager>, resource_dir
     }
 }
 
-// 执行安装（返回步骤列表）
-#[tauri::command]
-fn install_agent4j_web(state: tauri::State<'_, Agent4jWebManager>, resource_dir: String) -> Result<serde_json::Value, String> {
-    let resource_path = PathBuf::from(&resource_dir);
-    let steps = state.install_from_resource(&resource_path)?;
+// ========== 分步安装命令（前端逐步调用） ==========
 
-    Ok(serde_json::json!({
-        "success": true,
-        "steps": steps
-    }))
+// 步骤1：检查 Java 环境
+#[tauri::command]
+fn install_step1_check_java(state: tauri::State<'_, Agent4jWebManager>, resource_dir: String) -> Result<String, String> {
+    state.install_step1_check_java(&PathBuf::from(&resource_dir))
+}
+
+// 步骤2：解压安装包
+#[tauri::command]
+fn install_step2_extract(state: tauri::State<'_, Agent4jWebManager>, resource_dir: String) -> Result<String, String> {
+    state.install_step2_extract(&PathBuf::from(&resource_dir))
+}
+
+// 步骤3：复制文件
+#[tauri::command]
+fn install_step3_copy_files(state: tauri::State<'_, Agent4jWebManager>, resource_dir: String) -> Result<String, String> {
+    state.install_step3_copy_files(&PathBuf::from(&resource_dir))
+}
+
+// 步骤4：配置环境
+#[tauri::command]
+fn install_step4_configure_env(state: tauri::State<'_, Agent4jWebManager>, resource_dir: String) -> Result<String, String> {
+    state.install_step4_configure_env(&PathBuf::from(&resource_dir))
 }
 
 // 启动服务（返回端口号）
@@ -522,7 +744,10 @@ pub fn run() {
             get_resource_dir,
             get_agent4j_web_status,
             check_install_needed,
-            install_agent4j_web,
+            install_step1_check_java,
+            install_step2_extract,
+            install_step3_copy_files,
+            install_step4_configure_env,
             start_agent4j_web,
             stop_agent4j_web,
             get_agent4j_web_port

@@ -94,6 +94,7 @@
               <span v-else class="step-spinner"></span>
             </span>
             <span class="step-label">{{ step.label }}</span>
+            <span class="step-detail" v-if="step.detail">{{ step.detail }}</span>
           </div>
         </div>
 
@@ -240,24 +241,37 @@ async function startInstall() {
   ]
 
   try {
-    const result = await agent4jWebService.install(resourceDir.value)
-    console.log('[Splash] Install result:', result)
+    // 步骤1：检查 Java 环境
+    installSteps.value[0].status = 'active'
+    const javaVer = await agent4jWebService.step1CheckJava(resourceDir.value)
+    installSteps.value[0].status = 'done'
+    installSteps.value[0].detail = javaVer
+    installProgress.value = 25
+    await sleep(200)
 
-    if (result.success && result.steps) {
-      // 根据返回的步骤更新状态
-      const stepsData = result.steps
-      for (let i = 0; i < installSteps.value.length; i++) {
-        installSteps.value[i].status = 'done'
-        installProgress.value = ((i + 1) / installSteps.value.length) * 100
-        // 模拟每步的延迟感
-        await sleep(200)
-      }
-      installProgress.value = 100
-      await sleep(300)
+    // 步骤2：解压安装包
+    installSteps.value[1].status = 'active'
+    await agent4jWebService.step2Extract(resourceDir.value)
+    installSteps.value[1].status = 'done'
+    installProgress.value = 50
+    await sleep(200)
 
-      // 安装完成，启动服务
-      await startService()
-    }
+    // 步骤3：复制文件
+    installSteps.value[2].status = 'active'
+    await agent4jWebService.step3CopyFiles(resourceDir.value)
+    installSteps.value[2].status = 'done'
+    installProgress.value = 75
+    await sleep(200)
+
+    // 步骤4：配置环境
+    installSteps.value[3].status = 'active'
+    await agent4jWebService.step4ConfigureEnv(resourceDir.value)
+    installSteps.value[3].status = 'done'
+    installProgress.value = 100
+    await sleep(300)
+
+    // 安装完成，启动服务
+    await startService()
   } catch (e) {
     console.error('[Splash] Install failed:', e)
     // 标记当前步骤为错误
@@ -636,6 +650,15 @@ defineExpose({
 .step-label {
   flex: 1;
   text-align: left;
+}
+
+.step-detail {
+  font-size: 11px;
+  color: var(--fg-4);
+  max-width: 140px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* 按钮 */

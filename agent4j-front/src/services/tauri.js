@@ -95,6 +95,34 @@ export const agent4jWebService = {
   },
 
   /**
+   * 步骤1：检查 Java 环境
+   */
+  async step1CheckJava(resourceDir) {
+    return await mustInvoke('install_step1_check_java', { resourceDir })
+  },
+
+  /**
+   * 步骤2：解压安装包
+   */
+  async step2Extract(resourceDir) {
+    return await mustInvoke('install_step2_extract', { resourceDir })
+  },
+
+  /**
+   * 步骤3：复制文件
+   */
+  async step3CopyFiles(resourceDir) {
+    return await mustInvoke('install_step3_copy_files', { resourceDir })
+  },
+
+  /**
+   * 步骤4：配置环境
+   */
+  async step4ConfigureEnv(resourceDir) {
+    return await mustInvoke('install_step4_configure_env', { resourceDir })
+  },
+
+  /**
    * 停止 agent4j-web 服务
    */
   async stop() {
