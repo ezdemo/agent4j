@@ -11,6 +11,8 @@ import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -623,6 +625,91 @@ class WorkspaceIndexTest {
                 List<String> files = index.glob("*.java");
                 assertEquals(3, files.size(), "第 " + (i + 1) + " 次调用结果不一致");
             }
+        }
+
+        @Test
+        @DisplayName("多线程并发调用 glob 不应抛出异常")
+        void concurrentGlobShouldNotThrow(@TempDir Path tempDir) throws Exception {
+            // 创建较多文件，保证索引有足够数据
+            for (int i = 0; i < 50; i++) {
+                createFiles(tempDir, "file" + i + ".txt", "content " + i);
+            }
+            for (int i = 0; i < 20; i++) {
+                createFiles(tempDir, "sub/dir/file" + i + ".java", "class File" + i + " {}");
+            }
+
+            WorkspaceIndex index = new WorkspaceIndex(tempDir);
+            index.refresh();
+
+            int threadCount = 8;
+            ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+            AtomicInteger errors = new AtomicInteger(0);
+
+            try {
+                for (int t = 0; t < threadCount; t++) {
+                    executor.submit(() -> {
+                        for (int i = 0; i < 30; i++) {
+                            try {
+                                // glob, grep, tree 交替调用
+                                index.glob("*.txt");
+                                index.glob("**/*.java");
+                                index.grep("content");
+                                index.tree(3);
+                                index.fileCount();
+                                index.totalSize();
+                            } catch (Exception e) {
+                                errors.incrementAndGet();
+                            }
+                        }
+                    });
+                }
+            } finally {
+                executor.shutdown();
+                executor.awaitTermination(30, TimeUnit.SECONDS);
+            }
+
+            assertEquals(0, errors.get(), "并发调用应无异常");
+        }
+
+        @Test
+        @DisplayName("并发 glob 与 refresh 不应冲突")
+        void concurrentGlobAndRefreshShouldNotConflict(@TempDir Path tempDir) throws Exception {
+            createFiles(tempDir,
+                    "a.java", "b.java", "c.java", "d.java", "e.java",
+                    "sub/x.java", "sub/y.java");
+
+            WorkspaceIndex index = new WorkspaceIndex(tempDir);
+            index.refresh();
+
+            int threadCount = 6;
+            ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+            AtomicInteger errors = new AtomicInteger(0);
+
+            try {
+                // 一半线程读，一半线程刷新
+                for (int t = 0; t < threadCount; t++) {
+                    final boolean isReader = t < threadCount / 2;
+                    executor.submit(() -> {
+                        for (int i = 0; i < 20; i++) {
+                            try {
+                                if (isReader) {
+                                    index.glob("**/*.java");
+                                    index.grep("class");
+                                } else {
+                                    index.refresh();
+                                }
+                            } catch (Exception e) {
+                                errors.incrementAndGet();
+                            }
+                        }
+                    });
+                }
+            } finally {
+                executor.shutdown();
+                executor.awaitTermination(30, TimeUnit.SECONDS);
+            }
+
+            assertEquals(0, errors.get(), "并发读写应无异常");
         }
     }
 }

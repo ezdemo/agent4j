@@ -196,7 +196,7 @@ public class WorkspaceIndex {
      * @param maxDepth 最大递归深度，0 表示仅根目录
      * @return 缩进树格式的字符串
      */
-    public String tree(int maxDepth) throws IOException {
+    public synchronized String tree(int maxDepth) throws IOException {
         ensureInitialized();
 
         // 构建树节点
@@ -237,7 +237,7 @@ public class WorkspaceIndex {
      * @param glob glob 模式，如 "src/**​/*.java"
      * @return 匹配的文件相对路径列表（按修改时间倒序）
      */
-    public List<String> glob(String glob) throws IOException {
+    public synchronized List<String> glob(String glob) throws IOException {
         ensureInitialized();
 
         Pattern regex = globToRegex(glob);
@@ -262,7 +262,7 @@ public class WorkspaceIndex {
      * @param includeDirs 是否包含目录
      * @return 匹配的路径列表
      */
-    public List<String> glob(String glob, boolean includeDirs) throws IOException {
+    public synchronized List<String> glob(String glob, boolean includeDirs) throws IOException {
         ensureInitialized();
 
         Pattern regex = globToRegex(glob);
@@ -286,7 +286,7 @@ public class WorkspaceIndex {
     /**
      * @return 匹配的文件数量
      */
-    public int globCount(String glob) throws IOException {
+    public synchronized int globCount(String glob) throws IOException {
         return glob(glob).size();
     }
 
@@ -297,7 +297,7 @@ public class WorkspaceIndex {
      * @param fileGlob 文件过滤 glob（如 "*.java"），null 或 "*" 表示所有文本文件
      * @return 匹配列表（上限 {@value #MAX_GREP_MATCHES}）
      */
-    public List<SearchMatch> grep(String pattern, String fileGlob) throws IOException {
+    public synchronized List<SearchMatch> grep(String pattern, String fileGlob) throws IOException {
         ensureInitialized();
 
         Pattern contentPattern;
@@ -341,14 +341,14 @@ public class WorkspaceIndex {
     /**
      * 搜索所有文本文件（不限 glob）。
      */
-    public List<SearchMatch> grep(String pattern) throws IOException {
+    public synchronized List<SearchMatch> grep(String pattern) throws IOException {
         return grep(pattern, null);
     }
 
     /**
      * 索引中文件总数（不含目录）。
      */
-    public int fileCount() throws IOException {
+    public synchronized int fileCount() throws IOException {
         ensureInitialized();
         return (int) fileIndex.values().stream().filter(m -> !m.directory()).count();
     }
@@ -356,7 +356,7 @@ public class WorkspaceIndex {
     /**
      * 索引中总文件大小（字节）。
      */
-    public long totalSize() throws IOException {
+    public synchronized long totalSize() throws IOException {
         ensureInitialized();
         return fileIndex.values().stream()
                 .filter(m -> !m.directory())
@@ -371,14 +371,14 @@ public class WorkspaceIndex {
         return root;
     }
 
-    // ==================== 内部：扫描 ====================
-
     /**
      * 是否已初始化。
      */
-    public boolean isInitialized() {
+    public synchronized boolean isInitialized() {
         return initialized;
     }
+
+    // ==================== 内部：扫描 ====================
 
     private void fullScan() throws IOException {
         fileIndex.clear();

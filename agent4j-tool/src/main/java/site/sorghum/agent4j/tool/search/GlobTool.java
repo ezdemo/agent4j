@@ -113,9 +113,9 @@ public class GlobTool extends AgentTool {
 
             return ToolResult.ok(sb.toString().trim(), files);
         } catch (IOException e) {
-            return ToolResult.fail("IO_ERROR", e.getMessage());
+            return ToolResult.fail("IO_ERROR", "[" + e.getClass().getSimpleName() + "] " + e.getMessage());
         } catch (Exception e) {
-            return ToolResult.fail("INTERNAL_ERROR", e.getMessage());
+            return ToolResult.fail("INTERNAL_ERROR", "[" + e.getClass().getSimpleName() + "] " + e.getMessage());
         }
     }
 

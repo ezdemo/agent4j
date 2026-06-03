@@ -13,7 +13,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
+import java.util.concurrent.*;
+import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -370,6 +373,137 @@ class SearchToolsTest {
 
             assertTrue(result.success());
             assertTrue(result.text().contains(".java"));
+            @SuppressWarnings("unchecked")
+            List<String> files = (List<String>) result.data();
+            assertEquals(2, files.size());
+        }
+
+        @Test
+        @DisplayName("应匹配深层嵌套文件 **/*.java")
+        void shouldMatchDeeplyNestedFiles(@TempDir Path tempDir) throws IOException {
+            createFiles(tempDir,
+                    "src/main/java/com/example/Foo.java",
+                    "src/test/java/com/example/FooTest.java",
+                    "pom.xml",
+                    "README.md");
+
+            GlobTool tool = new GlobTool();
+            Map<String, Object> params = new HashMap<>();
+            params.put("pattern", "**/*.java");
+
+            ToolResult result = tool.execute(new ToolContext(params, tempDir));
+
+            assertTrue(result.success());
+            assertTrue(result.text().contains("Foo.java"));
+            assertTrue(result.text().contains("FooTest.java"));
+            @SuppressWarnings("unchecked")
+            List<String> files = (List<String>) result.data();
+            assertEquals(2, files.size());
+        }
+
+        @Test
+        @DisplayName("应支持 {a,b} 分支扩展")
+        void shouldSupportBraceExpansion(@TempDir Path tempDir) throws IOException {
+            createFiles(tempDir,
+                    "README.md",
+                    "CHANGELOG.md",
+                    "config.xml",
+                    "app.java");
+
+            GlobTool tool = new GlobTool();
+            Map<String, Object> params = new HashMap<>();
+            params.put("pattern", "*.{md,xml}");
+
+            ToolResult result = tool.execute(new ToolContext(params, tempDir));
+
+            assertTrue(result.success());
+            @SuppressWarnings("unchecked")
+            List<String> files = (List<String>) result.data();
+            assertEquals(3, files.size());
+            assertTrue(result.text().contains("README.md"));
+            assertTrue(result.text().contains("CHANGELOG.md"));
+            assertTrue(result.text().contains("config.xml"));
+        }
+
+        @Test
+        @DisplayName("精确路径匹配应返回单个文件")
+        void shouldExactPathMatch(@TempDir Path tempDir) throws IOException {
+            createFiles(tempDir,
+                    "src/main/java/Foo.java",
+                    "src/main/java/Bar.java");
+
+            GlobTool tool = new GlobTool();
+            Map<String, Object> params = new HashMap<>();
+            params.put("pattern", "src/main/java/Foo.java");
+
+            ToolResult result = tool.execute(new ToolContext(params, tempDir));
+
+            assertTrue(result.success());
+            @SuppressWarnings("unchecked")
+            List<String> files = (List<String>) result.data();
+            assertEquals(1, files.size());
+            assertEquals("src/main/java/Foo.java", files.get(0));
+        }
+
+        @Test
+        @DisplayName("无匹配应返回空结果")
+        void shouldReturnEmptyOnNoMatch(@TempDir Path tempDir) throws IOException {
+            createFiles(tempDir, "pom.xml");
+
+            GlobTool tool = new GlobTool();
+            Map<String, Object> params = new HashMap<>();
+            params.put("pattern", "*.rs");
+
+            ToolResult result = tool.execute(new ToolContext(params, tempDir));
+
+            assertTrue(result.success());
+            assertTrue(result.text().contains("无匹配"));
+        }
+
+        @Test
+        @DisplayName("maxResults 截断应生效")
+        void shouldRespectMaxResults(@TempDir Path tempDir) throws IOException {
+            for (int i = 0; i < 20; i++) {
+                createFiles(tempDir, "file" + i + ".txt");
+            }
+
+            GlobTool tool = new GlobTool();
+            Map<String, Object> params = new HashMap<>();
+            params.put("pattern", "*.txt");
+            params.put("maxResults", 5);
+
+            ToolResult result = tool.execute(new ToolContext(params, tempDir));
+
+            assertTrue(result.success());
+            @SuppressWarnings("unchecked")
+            List<String> files = (List<String>) result.data();
+            assertEquals(5, files.size());
+        }
+
+        @Test
+        @DisplayName("文件名含特殊字符应能匹配")
+        void shouldHandleSpecialCharsInFilename(@TempDir Path tempDir) throws IOException {
+            createFiles(tempDir,
+                    "my file.txt",
+                    "test(1).java",
+                    "foo-bar.js");
+
+            GlobTool tool = new GlobTool();
+            Map<String, Object> params = new HashMap<>();
+
+            params.put("pattern", "my file.txt");
+            ToolResult r1 = tool.execute(new ToolContext(params, tempDir));
+            assertTrue(r1.success());
+            @SuppressWarnings("unchecked")
+            List<String> r1Files = (List<String>) r1.data();
+            assertEquals(1, r1Files.size());
+
+            params.put("pattern", "test(1).java");
+            ToolResult r2 = tool.execute(new ToolContext(params, tempDir));
+            assertTrue(r2.success());
+            @SuppressWarnings("unchecked")
+            List<String> r2Files = (List<String>) r2.data();
+            assertEquals(1, r2Files.size());
         }
 
         @Test
@@ -428,6 +562,59 @@ class SearchToolsTest {
             ToolResult result = glob.execute(new ToolContext(globParams, tempDir));
             assertTrue(result.success());
             assertTrue(result.text().contains("Test.java"));
+        }
+
+        @Test
+        @DisplayName("多线程并发执行 GlobTool 不应抛出异常")
+        void concurrentGlobToolExecution(@TempDir Path tempDir) throws Exception {
+            // 创建较多文件
+            for (int i = 0; i < 30; i++) {
+                createFiles(tempDir, "file" + i + ".txt", "content");
+            }
+            for (int i = 0; i < 20; i++) {
+                createFiles(tempDir, "sub/File" + i + ".java", "class File" + i + " {}");
+            }
+
+            // 预热索引
+            GlobTool warmup = new GlobTool();
+            Map<String, Object> warmupParams = new HashMap<>();
+            warmupParams.put("pattern", "*.txt");
+            warmup.execute(new ToolContext(warmupParams, tempDir));
+
+            int threadCount = 6;
+            ExecutorService executor = Executors.newFixedThreadPool(threadCount);
+            AtomicInteger errors = new AtomicInteger(0);
+
+            try {
+                for (int t = 0; t < threadCount; t++) {
+                    executor.submit(() -> {
+                        GlobTool tool = new GlobTool();
+                        for (int i = 0; i < 20; i++) {
+                            try {
+                                Map<String, Object> params = new HashMap<>();
+                                if (i % 3 == 0) {
+                                    params.put("pattern", "*.txt");
+                                } else if (i % 3 == 1) {
+                                    params.put("pattern", "**/*.java");
+                                } else {
+                                    params.put("pattern", "**/*");
+                                }
+                                ToolResult r = tool.execute(new ToolContext(params, tempDir));
+                                if (!r.success()) {
+                                    errors.incrementAndGet();
+                                }
+                            } catch (Exception e) {
+                                errors.incrementAndGet();
+                            }
+                        }
+                    });
+                }
+            } finally {
+                executor.shutdown();
+                executor.awaitTermination(30, TimeUnit.SECONDS);
+            }
+
+            assertEquals(0, errors.get(), "并发执行 GlobTool 应无异常和错误");
         }
     }
 }

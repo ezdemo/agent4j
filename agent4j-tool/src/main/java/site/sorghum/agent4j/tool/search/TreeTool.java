@@ -92,9 +92,9 @@ public class TreeTool extends AgentTool {
 
             return ToolResult.ok(tree + stats, tree);
         } catch (IOException e) {
-            return ToolResult.fail("IO_ERROR", e.getMessage());
+            return ToolResult.fail("IO_ERROR", "[" + e.getClass().getSimpleName() + "] " + e.getMessage());
         } catch (Exception e) {
-            return ToolResult.fail("INTERNAL_ERROR", e.getMessage());
+            return ToolResult.fail("INTERNAL_ERROR", "[" + e.getClass().getSimpleName() + "] " + e.getMessage());
         }
     }
 
