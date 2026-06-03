@@ -66,8 +66,12 @@ class WorkspaceIndexTest {
         }
 
         @Test
-        @DisplayName("应自动跳过 denylist 目录")
+        @DisplayName("应通过 .gitignore 跳过目录")
         void shouldSkipDenylistDirs(@TempDir Path tempDir) throws IOException {
+            // 写入 .gitignore，替代原来的硬编码 BUILTIN_DENY
+            Files.write(tempDir.resolve(".gitignore"),
+                    Arrays.asList("node_modules/", ".git/", "target/"));
+
             createFiles(tempDir,
                     "pom.xml",
                     "node_modules/lodash/index.js",
@@ -78,10 +82,10 @@ class WorkspaceIndexTest {
             index.refresh();
 
             List<String> files = index.glob("*");
-            // 只有 pom.xml 不在 denylist 中
-            boolean onlyPomXml = files.size() == 1 && files.get(0).equals("pom.xml");
-            assertTrue(onlyPomXml,
-                    "应只有 pom.xml，实际: " + files);
+            // .gitignore 自身 + pom.xml
+            assertEquals(2, files.size(), "应只有 .gitignore 和 pom.xml，实际: " + files);
+            assertTrue(files.contains(".gitignore"));
+            assertTrue(files.contains("pom.xml"));
         }
 
         @Test

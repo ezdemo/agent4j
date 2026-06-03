@@ -24,7 +24,7 @@
     <fileSets>
         <!-- 安装脚本（根目录） -->
         <fileSet>
-            <directory>src/dist</directory>
+            <directory>src/installDist</directory>
             <outputDirectory>.</outputDirectory>
             <includes>
                 <include>install.ps1</include>
@@ -37,7 +37,7 @@
 
         <!-- 安装脚本可执行权限 -->
         <fileSet>
-            <directory>src/dist</directory>
+            <directory>src/installDist</directory>
             <outputDirectory>.</outputDirectory>
             <includes>
                 <include>install.sh</include>
@@ -47,7 +47,7 @@
 
         <!-- 卸载脚本（bin 目录） -->
         <fileSet>
-            <directory>src/dist/bin</directory>
+            <directory>src/installDist/bin</directory>
             <outputDirectory>bin</outputDirectory>
             <includes>
                 <include>uninstall.ps1</include>
@@ -58,7 +58,7 @@
 
         <!-- 卸载脚本可执行权限 -->
         <fileSet>
-            <directory>src/dist/bin</directory>
+            <directory>src/installDist/bin</directory>
             <outputDirectory>bin</outputDirectory>
             <includes>
                 <include>uninstall.sh</include>

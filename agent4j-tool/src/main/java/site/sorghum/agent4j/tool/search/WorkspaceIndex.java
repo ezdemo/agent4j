@@ -14,7 +14,7 @@ import java.util.regex.PatternSyntaxException;
  * 工作区文件索引——目录树缓存 + grep/glob/tree 的共享引擎。
  * <p>
  * 首次访问时全量扫描工作区目录，后续通过 mtime 增量刷新。
- * 自动跳过内置 denylist 中的目录，并读取 {@code .gitignore} 规则。
+ * 读取 {@code .gitignore} 规则排除文件/目录（符合 Git 规范：无斜杠模式匹配任意深度）。
  * </p>
  *
  * <h3>典型用法：</h3>
@@ -35,20 +35,6 @@ import java.util.regex.PatternSyntaxException;
  * @author Sorghum
  */
 public class WorkspaceIndex {
-
-    /**
-     * 内置忽略目录（始终跳过，不进入扫描）
-     */
-    private static final Set<String> BUILTIN_DENY = new HashSet<>(Arrays.asList(
-            ".git", ".svn", ".hg",
-            "node_modules",
-            "target", "build", "dist", "out",
-            ".idea", ".vscode", ".eclipse",
-            "__pycache__", ".mypy_cache", ".pytest_cache",
-            ".next", ".nuxt", ".turbo", ".vercel",
-            "coverage", ".cache",
-            "venv", ".venv"
-    ));
 
     /**
      * 二进制/大文件的典型扩展名（跳过 grep）
@@ -399,8 +385,7 @@ public class WorkspaceIndex {
         Files.walkFileTree(root, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
-                String name = dir.getFileName().toString();
-                if (BUILTIN_DENY.contains(name) || isGitignored(dir) || isBlockedDir(dir)) {
+                if (isGitignored(dir) || isBlockedDir(dir)) {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
                 String rel = relativize(dir);
@@ -443,13 +428,37 @@ public class WorkspaceIndex {
         for (String line : lines) {
             String trimmed = line.trim();
             if (trimmed.isEmpty() || trimmed.startsWith("#")) continue;
-            // 移除前导 /
-            if (trimmed.startsWith("/")) trimmed = trimmed.substring(1);
-            // 移除尾随 /
-            if (trimmed.endsWith("/")) trimmed = trimmed.substring(0, trimmed.length() - 1);
+
+            // 取反模式（! 前缀）暂不处理，跳过避免误匹配
+            if (trimmed.startsWith("!")) continue;
+
+            // 尾随 / → 仅匹配目录，剥离后不影响路径匹配逻辑
+            if (trimmed.endsWith("/")) {
+                trimmed = trimmed.substring(0, trimmed.length() - 1);
+            }
             if (trimmed.isEmpty()) continue;
+
+            // 前导 / → 锚定到项目根目录
+            boolean anchored = trimmed.startsWith("/");
+            if (anchored) trimmed = trimmed.substring(1);
+
+            // 是否包含内部分隔符（决定匹配范围的关键）
+            boolean hasSeparator = trimmed.contains("/");
+
             try {
-                gitignorePatterns.add(globToRegex(trimmed));
+                Pattern regex;
+                if (!anchored && !hasSeparator) {
+                    // Git 规范：无斜杠模式 → 匹配任意深度的文件名/目录名
+                    // 如 "target" 匹配 "target", "sub/target", "a/b/target"
+                    Pattern base = globToRegex(trimmed);
+                    String p = base.pattern(); // "^...$"
+                    String inner = p.substring(1, p.length() - 1);
+                    regex = Pattern.compile("^(?:.*/)?" + inner + "$");
+                } else {
+                    // 有斜杠或锚定模式 → 匹配完整相对路径
+                    regex = globToRegex(trimmed);
+                }
+                gitignorePatterns.add(regex);
             } catch (Exception ignored) {
                 // 不支持的 pattern 跳过
             }

@@ -5,10 +5,7 @@ target/
 .kotlin
 
 ### IntelliJ IDEA ###
-.idea/modules.xml
-.idea/jarRepositories.xml
-.idea/compiler.xml
-.idea/libraries/
+.idea/
 *.iws
 *.iml
 *.ipr
@@ -21,6 +18,7 @@ target/
 .settings
 .springBeans
 .sts4-cache
+.eclipse/
 
 ### NetBeans ###
 /nbproject/private/
@@ -39,3 +37,34 @@ build/
 .DS_Store
 *.log
 /presentation/**
+
+### Dependency directories ###
+node_modules/
+jspm_packages/
+.pnp
+.pnp.js
+
+### Build cache / output ###
+out/
+dist/
+.coverage
+.cache/
+
+### Other VCS ###
+.svn/
+.hg/
+
+### Python ###
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+venv/
+.venv/
+
+### Frontend build tools ###
+.next/
+.nuxt/
+.turbo/
+.vercel/
