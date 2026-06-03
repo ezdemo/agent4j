@@ -907,8 +907,10 @@ async function loadOpenApiData() {
   try {
     const sr = await openApiAPI.getSources()
     openapiSources.value = (sr.data || []).filter(s => s.docUrl)
+    message.success('刷新成功')
   } catch (e) {
     openapiError.value = e.message || '加载失败'
+    message.error('刷新失败: ' + (e.message || ''))
   } finally {
     openapiLoading.value = false
   }
@@ -1031,13 +1033,15 @@ async function refreshSource(source) {
         source.authType || 'none',
         source.authConfig || null
     )
-    if (res.success !== false) {
+    console.log('刷新响应:', res)
+    if (res && res.success !== false) {
       message.success('刷新成功')
       await loadOpenApiData()
     } else {
-      message.error(res.error || '刷新失败')
+      message.error(res?.error || '刷新失败')
     }
   } catch (e) {
+    console.error('刷新失败:', e)
     message.error('刷新失败: ' + (e.message || ''))
   } finally {
     openapiLoading.value = false
