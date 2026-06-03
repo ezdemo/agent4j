@@ -35,15 +35,6 @@
           <p class="header-desc">{{ currentTab?.description }}</p>
         </div>
         <div v-if="activeTab !== 'openapi'" class="header-actions">
-          <button :disabled="loading" class="btn btn-ghost" @click="resetToDefaults">
-            <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-              <path d="M21 3v5h-5"/>
-              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-              <path d="M8 16H3v5"/>
-            </svg>
-            重置默认
-          </button>
           <button :disabled="loading || !hasChanges" class="btn btn-primary" @click="saveSettings">
             <svg v-if="!loading" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
                  width="14">
@@ -332,10 +323,11 @@
                   <p class="setting-hint">防止工具调用死循环（滑动窗口去重）</p>
                 </div>
                 <div class="setting-control">
-                  <label class="toggle-switch">
-                    <input v-model="settings.security.stormBreaker" type="checkbox"/>
+                  <label class="toggle-switch disabled">
+                    <input v-model="settings.security.stormBreaker" disabled type="checkbox"/>
                     <span class="toggle-slider"></span>
                   </label>
+                  <span class="setting-status">已启用</span>
                 </div>
               </div>
 
@@ -345,10 +337,11 @@
                   <p class="setting-hint">阻止访问工作区外的文件</p>
                 </div>
                 <div class="setting-control">
-                  <label class="toggle-switch">
-                    <input v-model="settings.security.pathTraversal" type="checkbox"/>
+                  <label class="toggle-switch disabled">
+                    <input v-model="settings.security.pathTraversal" disabled type="checkbox"/>
                     <span class="toggle-slider"></span>
                   </label>
+                  <span class="setting-status">已启用</span>
                 </div>
               </div>
 
@@ -358,10 +351,11 @@
                   <p class="setting-hint">只允许执行白名单中的命令</p>
                 </div>
                 <div class="setting-control">
-                  <label class="toggle-switch">
-                    <input v-model="settings.security.commandWhitelist" type="checkbox"/>
+                  <label class="toggle-switch disabled">
+                    <input v-model="settings.security.commandWhitelist" disabled type="checkbox"/>
                     <span class="toggle-slider"></span>
                   </label>
+                  <span class="setting-status">已启用</span>
                 </div>
               </div>
 
@@ -371,10 +365,11 @@
                   <p class="setting-hint">记录所有工具调用操作</p>
                 </div>
                 <div class="setting-control">
-                  <label class="toggle-switch">
-                    <input v-model="settings.security.auditLog" type="checkbox"/>
+                  <label class="toggle-switch disabled">
+                    <input v-model="settings.security.auditLog" disabled type="checkbox"/>
                     <span class="toggle-slider"></span>
                   </label>
+                  <span class="setting-status">已启用</span>
                 </div>
               </div>
             </div>
@@ -840,14 +835,6 @@ const checkServerConnection = async () => {
   checkingConnection.value = false
 }
 
-// 重置为默认设置
-const resetToDefaults = () => {
-  if (confirm('确定要重置所有设置为默认值吗？此操作不可撤销。')) {
-    store.resetSettings()
-    loadSettings()
-    message.success('设置已重置为默认值')
-  }
-}
 
 // ==================== OpenAPI ====================
 const openapiLoading = ref(false)
@@ -1904,6 +1891,25 @@ onMounted(() => {
 
 .toggle-switch input:checked + .toggle-slider:before {
   transform: translateX(20px);
+}
+
+.toggle-switch.disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.toggle-switch.disabled .toggle-slider {
+  background: var(--bg-3);
+}
+
+.toggle-switch.disabled input:checked + .toggle-slider {
+  background: var(--fg-3);
+}
+
+.setting-status {
+  margin-left: 8px;
+  font-size: 12px;
+  color: var(--fg-3);
 }
 
 /* 单选按钮组 */
