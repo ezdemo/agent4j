@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.web.controller;
 
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
 import org.noear.solon.annotation.Controller;
 import org.noear.solon.annotation.Get;
 import org.noear.solon.annotation.Mapping;
@@ -9,13 +11,10 @@ import site.sorghum.agent4j.web.model.SystemVersionDTO;
 
 /**
  * 系统管理端点 —— 健康检查、版本查询。
- * <p>
- * 这些端点不依赖 Agent 初始化，在服务未就绪时也能访问，
- * 供前端连接设置页用于检测后端可达性。
- * </p>
  *
  * @author Sorghum
  */
+@Api(tags = "系统")
 @Controller
 @Mapping("/api/system")
 public class SystemController {
@@ -23,18 +22,14 @@ public class SystemController {
     private static final String VERSION = "1.0-SNAPSHOT";
     private static final String BUILD_TIME = "2025-01-01";
 
-    /**
-     * 健康检查 —— GET /api/system/health
-     */
+    @ApiOperation(value = "健康检查", notes = "返回服务是否正常运行，无需 Agent 初始化即可访问")
     @Get
     @Mapping("/health")
     public ApiResponse<SystemHealthDTO> health() {
         return ApiResponse.ok(new SystemHealthDTO("ok", VERSION, BUILD_TIME));
     }
 
-    /**
-     * 获取版本信息 —— GET /api/system/version
-     */
+    @ApiOperation(value = "获取版本信息", notes = "返回当前 Agent4j 的版本号和构建时间")
     @Get
     @Mapping("/version")
     public ApiResponse<SystemVersionDTO> version() {

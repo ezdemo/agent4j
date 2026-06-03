@@ -1,5 +1,8 @@
 package site.sorghum.agent4j.web.controller;
 
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import org.noear.solon.annotation.*;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.*;
@@ -10,15 +13,10 @@ import java.util.List;
 
 /**
  * Agent 状态查询 API。
- * <p>
- * 注意：retry/rewind/compact/plan/hitl 等命令操作不再在此处冗余实现。
- * 这些逻辑已由 {@link site.sorghum.agent4j.bin.agent.Agent4jAgent#chat(String)}
- * 通过 {@link site.sorghum.agent4j.bin.command.ChatCommandRegistry} 统一处理。
- * 前端直接发送命令字符串（如 "/retry"、"/compact"）到 {@code /api/chat} 即可。
- * </p>
  *
  * @author Sorghum
  */
+@Api(tags = "Agent 控制")
 @Controller
 @Mapping("/api/agent")
 public class AgentController {
@@ -26,9 +24,7 @@ public class AgentController {
     @Inject
     private AgentService agentService;
 
-    /**
-     * 获取 Agent 状态 —— GET /api/agent/status
-     */
+    @ApiOperation(value = "获取 Agent 状态", notes = "返回当前 Agent 的运行状态，包括模型、工作区、会话等信息")
     @Get
     @Mapping("/status")
     public ApiResponse<AgentStatusDTO> status() {
@@ -38,13 +34,12 @@ public class AgentController {
         return ApiResponse.ok(agentService.getStatus());
     }
 
-    /**
-     * 获取历史消息 —— GET /api/agent/history?workspaceHash=xxx&sessionName=xxx
-     */
+    @ApiOperation(value = "获取历史消息", notes = "根据工作区 hash 和会话名称获取历史消息列表")
     @Get
     @Mapping("/history")
-    public ApiResponse<List<?>> history(@Param(value = "workspaceHash", required = true) String workspaceHash,
-                                        @Param(value = "sessionName", required = true) String sessionName) {
+    public ApiResponse<List<?>> history(
+            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
+            @ApiParam(value = "会话名称", required = true) @Param(value = "sessionName", required = true) String sessionName) {
         if (!agentService.isReady()) {
             throw new ServiceException("Agent 未初始化");
         }
@@ -52,9 +47,7 @@ public class AgentController {
         return ApiResponse.ok(agentService.getHistory(workspacePath, sessionName));
     }
 
-    /**
-     * 获取可用命令列表 —— GET /api/agent/commands
-     */
+    @ApiOperation(value = "获取可用命令列表", notes = "返回所有可用的聊天命令（如 /help、/retry、/compact 等）")
     @Get
     @Mapping("/commands")
     public ApiResponse<List<CommandMetaDTO>> commands() {
@@ -64,9 +57,7 @@ public class AgentController {
         return ApiResponse.ok(agentService.getCommandMetaList());
     }
 
-    /**
-     * 获取可用 skill 列表 —— GET /api/agent/skills
-     */
+    @ApiOperation(value = "获取可用 skill 列表", notes = "返回当前已注册的所有 skill")
     @Get
     @Mapping("/skills")
     public ApiResponse<List<SkillMetaDTO>> skills() {
@@ -76,17 +67,12 @@ public class AgentController {
         return ApiResponse.ok(Collections.emptyList());
     }
 
-    /**
-     * 获取当前会话的系统提示词 —— GET /api/agent/prompt?workspaceHash=xxx&sessionName=xxx
-     * <p>
-     * 返回完整的 PromptPrefix 内容（含基础提示词 + 工具定义 + Skill 索引 + Plan Mode 说明）。
-     * workspaceHash 为空时使用默认工作区，sessionName 为空时使用当前活跃会话。
-     * </p>
-     */
+    @ApiOperation(value = "获取当前会话的系统提示词", notes = "返回完整的 PromptPrefix 内容（含基础提示词 + 工具定义 + Skill 索引 + Plan Mode 说明）")
     @Get
     @Mapping("/prompt")
-    public ApiResponse<PromptDTO> prompt(@Param(value = "workspaceHash", required = false) String workspaceHash,
-                                         @Param(value = "sessionName", required = false) String sessionName) {
+    public ApiResponse<PromptDTO> prompt(
+            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @ApiParam(value = "会话名称") @Param(value = "sessionName", required = false) String sessionName) {
         if (!agentService.isReady()) {
             throw new ServiceException("Agent 未初始化");
         }

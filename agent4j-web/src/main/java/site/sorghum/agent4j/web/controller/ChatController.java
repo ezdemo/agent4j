@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.web.controller;
 
+import io.swagger.annotations.*;
 import org.noear.solon.annotation.*;
 import org.noear.solon.core.handle.Context;
 import site.sorghum.agent4j.web.model.ApiResponse;
@@ -13,6 +14,7 @@ import site.sorghum.agent4j.web.service.SseEmitter;
  *
  * @author Sorghum
  */
+@Api(tags = "聊天")
 @Controller
 @Mapping("/api/chat")
 public class ChatController {
@@ -20,12 +22,10 @@ public class ChatController {
     @Inject
     private AgentService agentService;
 
-    /**
-     * 同步聊天 —— POST /api/chat
-     */
+    @ApiOperation(value = "同步聊天", notes = "发送消息并等待完整回复，返回回复内容、耗时和 Token 用量")
     @Post
     @Mapping("")
-    public ApiResponse<ChatResultDTO> chat(@Body ChatRequest request) throws Exception {
+    public ApiResponse<ChatResultDTO> chat(@ApiParam(value = "聊天请求（含消息、工作区、会话）") @Body ChatRequest request) throws Exception {
         if (!agentService.isReady()) {
             return ApiResponse.fail("Agent 未初始化，请检查 ~/.agent4j/config.json");
         }
@@ -45,9 +45,7 @@ public class ChatController {
         return ApiResponse.ok(data);
     }
 
-    /**
-     * 中断当前聊天 —— POST /api/chat/abort
-     */
+    @ApiOperation(value = "中断当前聊天", notes = "发送中断信号给正在进行的聊天会话")
     @Post
     @Mapping("/abort")
     public ApiResponse<String> abort() {
@@ -55,9 +53,12 @@ public class ChatController {
         return ApiResponse.ok("已发送中断请求");
     }
 
-    /**
-     * SSE 流式聊天 —— POST /api/chat/stream
-     */
+    @ApiOperation(value = "SSE 流式聊天", notes = "通过 Server-Sent Events 流式返回聊天回复，支持实时推送内容片段")
+    @ApiImplicitParams({
+            @ApiImplicitParam(name = "message", value = "用户消息", required = true),
+            @ApiImplicitParam(name = "workspaceHash", value = "工作区 hash"),
+            @ApiImplicitParam(name = "sessionName", value = "会话名称")
+    })
     @Post
     @Mapping("/stream")
     public void chatStream(@Body ChatRequest request, Context ctx) throws Exception {

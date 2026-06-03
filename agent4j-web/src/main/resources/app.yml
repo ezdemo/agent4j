@@ -6,3 +6,11 @@ server:
 
 solon.logging:
   level: "INFO"
+
+knife4j.enable: true
+knife4j.basic.enable: true
+knife4j.basic.username: admin
+knife4j.basic.password: 123456
+knife4j.setting.enableOpenApi: false
+knife4j.setting.enableSwaggerModels: false
+knife4j.setting.enableFooter: false

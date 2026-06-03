@@ -499,6 +499,29 @@ export const systemAPI = {
   }
 }
 
+// OpenAPI 管理 API
+export const openApiAPI = {
+    getSources: () => {
+        return api.get('/openapi/sources')
+    },
+
+    searchApis: (keyword) => {
+        return api.get('/openapi/search', {params: {keyword}})
+    },
+
+    addSource: (docUrl, headers, authType, authConfig) => {
+        return api.post('/openapi/sources', {docUrl, headers, authType, authConfig})
+    },
+
+    removeSource: (docUrl) => {
+        return api.delete('/openapi/sources', {data: {docUrl}})
+    },
+
+    refreshSource: (docUrl, headers, authType, authConfig) => {
+        return api.put('/openapi/sources/refresh', {docUrl, headers, authType, authConfig})
+    }
+}
+
 // Git API
 export const gitAPI = {
   // 获取当前分支和变更文件列表 - GET /api/git/diff?workspaceHash=xxx

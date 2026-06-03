@@ -1,5 +1,8 @@
 package site.sorghum.agent4j.web.controller;
 
+import io.swagger.annotations.Api;
+import io.swagger.annotations.ApiOperation;
+import io.swagger.annotations.ApiParam;
 import org.noear.solon.annotation.*;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.ApiResponse;
@@ -20,6 +23,7 @@ import java.util.List;
  *
  * @author Sorghum
  */
+@Api(tags = "Git")
 @Controller
 @Mapping("/api/git")
 public class GitController {
@@ -27,26 +31,24 @@ public class GitController {
     @Inject
     private AgentService agentService;
 
-    /**
-     * 当前分支 —— GET /api/git/branch?workspaceHash=xxx
-     */
+    @ApiOperation(value = "获取当前 Git 分支", notes = "返回工作区所在 Git 仓库的当前分支名称")
     @Get
     @Mapping("/branch")
-    public ApiResponse<GitBranchDTO> branch(@Param(value = "workspaceHash", required = false) String workspaceHash) {
+    public ApiResponse<GitBranchDTO> branch(
+            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
         String workspacePath = resolveWorkspace(workspaceHash);
         String branch = runGit(workspacePath, "rev-parse", "--abbrev-ref", "HEAD");
         if (branch == null) {
-            throw new ServiceException("无法获取 Git 分部信息，目录可能不是 Git 仓库");
+            throw new ServiceException("无法获取 Git 分支信息，目录可能不是 Git 仓库");
         }
         return ApiResponse.ok(new GitBranchDTO(branch.trim()));
     }
 
-    /**
-     * 变更文件列表 —— GET /api/git/diff?workspaceHash=xxx
-     */
+    @ApiOperation(value = "获取 Git 变更文件列表", notes = "返回暂存、未暂存和未跟踪的文件变更列表")
     @Get
     @Mapping("/diff")
-    public ApiResponse<GitDiffDTO> diff(@Param(value = "workspaceHash", required = false) String workspaceHash) {
+    public ApiResponse<GitDiffDTO> diff(
+            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
         String workspacePath = resolveWorkspace(workspaceHash);
 
         String branch = runGit(workspacePath, "rev-parse", "--abbrev-ref", "HEAD");

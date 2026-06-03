@@ -3,7 +3,7 @@ package site.sorghum.agent4j.bin.tool;
 import org.noear.solon.Solon;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.solon.SolonToTools;
-import site.sorghum.agent4j.tool.solon.cli.Agent4JSkillProvider;
+import site.sorghum.agent4j.tool.solon.common.Agent4JSkillProvider;
 
 import java.nio.file.Path;
 import java.util.ArrayList;
@@ -64,20 +64,25 @@ public class ToolScanUtil {
         StringBuilder content = new StringBuilder();
         // 1. 加载 Skill 工具（从文件系统读取）
         if (workspace != null) {
-            try {
-                SolonToTools solonToTools = Agent4JSkillProvider.getOrCreate(
-                        workspace.toAbsolutePath().normalize().toString());
-                content.append("\n").append(solonToTools.getSystemPrompt());
-            } catch (Exception e) {
-                System.err.println("[tool-scan] Skill 工具扫描失败: " + e.getMessage());
-            }
+            SolonToTools solonToTools = Agent4JSkillProvider.getOrCreate(
+                    workspace.toAbsolutePath().normalize().toString());
+            append(content, solonToTools.getSystemPrompt());
         }
 
         // 2. 加载SolonToSKill
         List<SolonToTools> solonToTools = Solon.context().getBeansOfType(SolonToTools.class);
         solonToTools.forEach(
-                it -> content.append("\n").append(it.getSystemPrompt())
+                it -> {
+                    append(content, it.getSystemPrompt());
+                }
         );
         return content.toString();
+    }
+
+    private static void append(StringBuilder builder, String content) {
+        if (content == null || content.trim().isBlank()) {
+            return;
+        }
+        builder.append("\n").append(content);
     }
 }
