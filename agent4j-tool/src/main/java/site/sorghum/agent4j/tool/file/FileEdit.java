@@ -38,9 +38,6 @@ public class FileEdit {
         Path abs = resolveSafe(root, pathStr);
         if (!Files.exists(abs)) return "[NOT_FOUND] 文件不存在: " + pathStr;
 
-        // 子目录 AGENT4J.md 注入
-        String subdirMemory = findSubdirMemory(root, abs);
-        String prefix = subdirMemory != null ? subdirMemory + "\n\n" : "";
         if (Files.isDirectory(abs)) return "[IS_DIR] 路径是目录: " + pathStr;
 
         long size = Files.size(abs);
@@ -90,7 +87,7 @@ public class FileEdit {
         }
 
         // 全量返回文件内容
-        return prefix + joinLines(lines);
+        return joinLines(lines);
     }
 
     /**
