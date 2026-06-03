@@ -93,7 +93,8 @@ public class ToolSystemInitializer {
 
         // 4. 加载基准系统提示词（编码代理身份规则）
         String systemPrompt = loadDefaultSystemPrompt(defaultSystemPrompt);
-
+        // 4.1 加载solon skill 基准提示词
+        systemPrompt  = systemPrompt + "\n\n" + ToolScanUtil.getSkillToolDescription(workspace);
         // 5. 追加工具规范到 system prompt
         systemPrompt = systemPrompt + "\n\n" + toolSpecsBuilder.toString().trim();
 

@@ -59,4 +59,25 @@ public class ToolScanUtil {
         agentTools.sort(Comparator.comparing(it -> it.getClass().getName()));
         return agentTools;
     }
+
+    public static String getSkillToolDescription(Path workspace){
+        StringBuilder content = new StringBuilder();
+        // 1. 加载 Skill 工具（从文件系统读取）
+        if (workspace != null) {
+            try {
+                SolonToTools solonToTools = Agent4JSkillProvider.getOrCreate(
+                        workspace.toAbsolutePath().normalize().toString());
+                content.append("\n").append(solonToTools.getSystemPrompt());
+            } catch (Exception e) {
+                System.err.println("[tool-scan] Skill 工具扫描失败: " + e.getMessage());
+            }
+        }
+
+        // 2. 加载SolonToSKill
+        List<SolonToTools> solonToTools = Solon.context().getBeansOfType(SolonToTools.class);
+        solonToTools.forEach(
+                it -> content.append("\n").append(it.getSystemPrompt())
+        );
+        return content.toString();
+    }
 }

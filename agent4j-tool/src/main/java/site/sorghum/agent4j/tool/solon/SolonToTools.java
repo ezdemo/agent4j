@@ -8,4 +8,6 @@ import java.util.*;
 public interface SolonToTools {
 
     List<AgentTool> getTools();
+
+    String getSystemPrompt();
 }

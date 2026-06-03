@@ -16,6 +16,7 @@ import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.session.JsonlSessionStore;
 import site.sorghum.agent4j.bin.session.SessionStore;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
+import site.sorghum.agent4j.bin.tool.ToolScanUtil;
 import site.sorghum.agent4j.bin.tool.ToolSystemInitializer;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
 import site.sorghum.agent4j.web.model.*;
