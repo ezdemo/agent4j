@@ -4,13 +4,18 @@
 
 import { invoke } from '@tauri-apps/api/core'
 
-// 直接尝试 invoke，失败说明不在 Tauri 环境或命令不可用
+// 用于"探测" Tauri 环境——未确认 Tauri 环境时，优雅降级
 async function tryInvoke(command, args) {
   try {
     return await invoke(command, args)
   } catch {
-    return undefined  // invoke 失败 = 非 Tauri 环境
+    return undefined  // invoke 失败 = 非 Tauri 环境或命令不可用
   }
+}
+
+// 用于"已确认 Tauri 环境"的场景——必须透传真实错误
+async function mustInvoke(command, args) {
+  return await invoke(command, args)
 }
 
 // 获取当前后端端口（Rust 动态分配，不再硬编码 8097）
@@ -67,41 +72,34 @@ export const agent4jWebService = {
 
   /**
    * 执行安装（解压 tar.gz、复制文件、创建脚本）
+   * 注意：安装流程只在已确认的 Tauri 环境下调用，
+   * 必须使用 mustInvoke 让真实错误透传，不要吞掉异常。
    * @param {string} resourceDir - 资源目录路径
    * @returns {Promise<{success: boolean, steps: string[]}>}
    */
   async install(resourceDir) {
-    const result = await tryInvoke('install_agent4j_web', { resourceDir })
-    if (result) return result
-
-    throw new Error('Not in Tauri environment')
+    // 这里用 mustInvoke 替代 tryInvoke，确保 Rust 端的真实错误能透传给前端
+    return await mustInvoke('install_agent4j_web', { resourceDir })
   },
 
   /**
    * 启动 agent4j-web 服务（随机端口，返回端口号）
+   * 注意：同样使用 mustInvoke 透传真实错误
    * @returns {Promise<number>}
    */
   async start() {
-    const port = await tryInvoke('start_agent4j_web')
-    if (port > 0) {
-      console.log('Agent4j Web started on port:', port)
-      localStorage.setItem('agent4j-port', String(port))
-      return port
-    }
-    console.warn('Not in Tauri environment, skipping start')
-    return 0
+    const port = await mustInvoke('start_agent4j_web')
+    console.log('Agent4j Web started on port:', port)
+    localStorage.setItem('agent4j-port', String(port))
+    return port
   },
 
   /**
    * 停止 agent4j-web 服务
    */
   async stop() {
-    const result = await tryInvoke('stop_agent4j_web')
-    if (result !== undefined) {
-      console.log('Agent4j Web stopped')
-      return
-    }
-    console.warn('Not in Tauri environment, skipping stop')
+    await mustInvoke('stop_agent4j_web')
+    console.log('Agent4j Web stopped')
   },
 
   /**
