@@ -34,7 +34,7 @@
           <h2>{{ currentTab?.label || '设置' }}</h2>
           <p class="header-desc">{{ currentTab?.description }}</p>
         </div>
-        <div class="header-actions">
+        <div v-if="activeTab !== 'openapi'" class="header-actions">
           <button :disabled="loading" class="btn btn-ghost" @click="resetToDefaults">
             <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
               <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
@@ -51,7 +51,8 @@
               <polyline points="17 21 17 13 7 13 7 21"/>
               <polyline points="7 3 7 8 15 8"/>
             </svg>
-            <svg v-else class="animate-spin" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+            <svg v-else class="animate-spin" fill="none" height="14" stroke="currentColor" stroke-width="2"
+                 viewBox="0 0 24 24"
                  width="14">
               <path d="M21 12a9 9 0 11-6.219-8.56"/>
             </svg>
@@ -380,26 +381,246 @@
           </div>
         </section>
 
+        <!-- OpenAPI 设置 -->
+        <section v-if="activeTab === 'openapi'" class="settings-section">
+          <div class="section-card">
+            <div class="card-header">
+              <div class="openapi-header">
+                <div>
+                  <h3>OpenAPI 接口源</h3>
+                  <p>管理 OpenAPI 接口源</p>
+                </div>
+                <div class="openapi-actions">
+                  <button class="btn btn-primary btn-sm" @click="openAdd">
+                    <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+                      <line x1="12" x2="12" y1="5" y2="19"/>
+                      <line x1="5" x2="19" y1="12" y2="12"/>
+                    </svg>
+                    添加
+                  </button>
+                  <button :disabled="openapiLoading" class="btn btn-sm" @click="loadOpenApiData">
+                    <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+                      <path d="M23 4v6h-6"/>
+                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                    </svg>
+                    刷新
+                  </button>
+                </div>
+              </div>
+            </div>
+            <div class="card-body">
+              <!-- 接口搜索 -->
+              <div class="openapi-search">
+                <div class="search-row">
+                  <input v-model="searchKeyword" class="form-input" placeholder="搜索接口文档（多关键词用空格分隔）"
+                         type="text" @keyup.enter="doSearch"/>
+                  <button :disabled="searching || !searchKeyword.trim()" class="btn btn-primary btn-sm"
+                          @click="doSearch">
+                    <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+                      <circle cx="11" cy="11" r="8"/>
+                      <line x1="21" x2="16.65" y1="21" y2="16.65"/>
+                    </svg>
+                    搜索
+                  </button>
+                </div>
+
+                <!-- 搜索结果 -->
+                <div v-if="searchResult" class="search-result">
+                  <div class="result-head">
+                    <span>搜索结果</span>
+                    <button class="btn-icon-xs" @click="clearSearch">×</button>
+                  </div>
+                  <div v-if="searching" class="result-loading">搜索中...</div>
+                  <div v-else-if="Array.isArray(searchResult) && searchResult.length === 0" class="result-empty">
+                    未找到匹配的接口
+                  </div>
+                  <div v-else-if="typeof searchResult === 'string'" class="result-empty">{{ searchResult }}</div>
+                  <div v-else class="result-list">
+                    <div v-for="(item, i) in searchResult" :key="i" class="result-item">
+                      <div class="ri-head">
+                        <code class="ri-name">{{ item.api_name }}</code>
+                        <span class="ri-cat">{{ item.category }}</span>
+                      </div>
+                      <div class="ri-desc">{{ item.description }}</div>
+                      <div class="ri-endpoint"><code>{{ item.endpoint }}</code></div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 加载 / 错误 -->
+              <div v-if="openapiLoading && openapiSources.length === 0" class="state-box">
+                <div class="spinner"></div>
+                <p>加载中...</p>
+              </div>
+              <div v-else-if="openapiError" class="state-box error">
+                <p>{{ openapiError }}</p>
+                <button class="btn btn-sm" @click="loadOpenApiData">重试</button>
+              </div>
+
+
+            </div>
+          </div>
+          <!-- 源卡片列表 -->
+          <div v-if="openapiSources.length > 0" class="openapi-card-list">
+            <div v-for="source in openapiSources" :key="source.docUrl" class="openapi-source-card">
+              <div class="card-head">
+                <div :class="source.status" class="status-tag">
+                  <span class="dot"></span>
+                  {{ statusLabel(source.status) }}
+                </div>
+                <div class="card-actions">
+                  <button class="btn-icon-xs" title="编辑" @click="openEdit(source)">
+                    <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+                      <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                      <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                    </svg>
+                  </button>
+                  <button :disabled="openapiLoading" class="btn-icon-xs" title="刷新" @click="refreshSource(source)">
+                    <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+                      <path d="M23 4v6h-6"/>
+                      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                    </svg>
+                  </button>
+                  <button class="btn-icon-xs danger" title="删除" @click="removeSource(source)">
+                    <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+              <div class="card-body">
+                <div class="info-rows">
+                  <div class="row">
+                    <span class="label">文档</span>
+                    <code class="val">{{ source.docUrl }}</code>
+                  </div>
+                  <div v-if="source.authType && source.authType !== 'none'" class="row">
+                    <span class="label">认证</span>
+                    <code class="val">{{ authLabel(source) }}</code>
+                  </div>
+                  <div v-if="source.headers && Object.keys(source.headers).length" class="row">
+                    <span class="label">请求头</span>
+                    <code class="val">{{ JSON.stringify(source.headers) }}</code>
+                  </div>
+                </div>
+              </div>
+              <div v-if="source.status === 'error' && source.errorMessage" class="card-error">
+                <svg fill="none" height="11" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="11">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="15" x2="9" y1="9" y2="15"/>
+                  <line x1="9" x2="15" y1="9" y2="15"/>
+                </svg>
+                {{ source.errorMessage }}
+              </div>
+            </div>
+          </div>
+
+          <div v-if="openapiSources.length === 0 && !openapiLoading" class="state-box">
+            <p style="color:var(--fg-3)">暂无接口源，点击上方「添加」按钮注册一个 OpenAPI 文档</p>
+          </div>
+        </section>
 
       </div>
     </main>
   </div>
+
+  <!-- 添加/编辑对话框 -->
+  <Teleport to="body">
+    <div v-if="showAddDialog" class="add-mask" @click.self="showAddDialog = false">
+      <div class="add-dialog">
+        <div class="add-head">
+          <span>{{ editingSource ? '编辑 OpenAPI 接口源' : '添加 OpenAPI 接口源' }}</span>
+          <button class="btn-icon-xs" @click="showAddDialog = false">×</button>
+        </div>
+        <div class="add-body">
+          <div class="field">
+            <label>文档地址 <span class="req">*</span></label>
+            <input v-model="form.docUrl" class="form-input" placeholder="https://petstore.swagger.io/v2/swagger.json"
+                   type="text"/>
+            <p class="hint">支持 http://、https:// 和 classpath: 开头</p>
+          </div>
+          <div class="field">
+            <label>请求头（可选）</label>
+            <div class="header-list">
+              <div v-for="(h, i) in form.headerList" :key="i" class="header-row">
+                <input v-model="h.key" class="form-input" placeholder="名称" type="text"/>
+                <input v-model="h.value" class="form-input" placeholder="值" type="text"/>
+                <button class="btn-icon-xs" @click="form.headerList.splice(i, 1)">×</button>
+              </div>
+              <button class="btn btn-text btn-sm" @click="form.headerList.push({ key: '', value: '' })">+ 添加请求头
+              </button>
+            </div>
+          </div>
+
+          <!-- 认证方式 -->
+          <div class="field">
+            <label>认证方式</label>
+            <div class="auth-tabs">
+              <button :class="{ active: form.authType === 'none' }" class="auth-tab" @click="form.authType = 'none'">
+                无
+              </button>
+              <button :class="{ active: form.authType === 'bearer' }" class="auth-tab"
+                      @click="form.authType = 'bearer'">Bearer Token
+              </button>
+              <button :class="{ active: form.authType === 'apikey' }" class="auth-tab"
+                      @click="form.authType = 'apikey'">API Key
+              </button>
+              <button :class="{ active: form.authType === 'basic' }" class="auth-tab" @click="form.authType = 'basic'">
+                用户名/密码
+              </button>
+            </div>
+          </div>
+
+          <div v-if="form.authType === 'bearer'" class="field">
+            <label>Token <span class="req">*</span></label>
+            <input v-model="form.bearerToken" class="form-input" placeholder="sk-xxxxxx" type="text"/>
+          </div>
+
+          <div v-if="form.authType === 'apikey'" class="field">
+            <label>Header 名称 <span class="req">*</span></label>
+            <input v-model="form.apiKeyName" class="form-input" placeholder="X-API-Key" type="text"/>
+            <label style="margin-top:8px">Header 值 <span class="req">*</span></label>
+            <input v-model="form.apiKeyValue" class="form-input" placeholder="your-api-key" type="text"/>
+          </div>
+
+          <div v-if="form.authType === 'basic'" class="field">
+            <label>用户名 <span class="req">*</span></label>
+            <input v-model="form.basicUser" class="form-input" placeholder="admin" type="text"/>
+            <label style="margin-top:8px">密码 <span class="req">*</span></label>
+            <input v-model="form.basicPass" class="form-input" placeholder="password" type="password"/>
+          </div>
+        </div>
+        <div class="add-foot">
+          <button class="btn" @click="showAddDialog = false">取消</button>
+          <button :disabled="openapiSubmitting" class="btn btn-primary" @click="submitAdd">
+            {{ openapiSubmitting ? '提交中...' : (editingSource ? '保存' : '添加') }}
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
 import {computed, onMounted, reactive, ref, watch} from 'vue'
 import {message} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
-import {configAPI} from '../services/api'
+import {configAPI, openApiAPI} from '../services/api'
 
 const store = useAppStore()
 
 // 主题直接绑定 store
 const settings = reactive({
-  get theme() { return store.settings.theme },
-  set theme(v) { store.settings.theme = v },
-  server: { apiBaseUrl: '', autoConnect: true },
-  ai: { baseUrl: '', apiKey: '', model: '', reasoningEffort: 'max', availableModelsText: '' },
+  get theme() {
+    return store.settings.theme
+  },
+  set theme(v) {
+    store.settings.theme = v
+  },
+  server: {apiBaseUrl: '', autoConnect: true},
+  ai: {baseUrl: '', apiKey: '', model: '', reasoningEffort: 'max', availableModelsText: ''},
   workspace: {dir: '', mode: false},
   security: {
     stormBreaker: true,
@@ -460,15 +681,27 @@ const tabs = [
     icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
     </svg>`
+  },
+  {
+    id: 'openapi',
+    label: 'OpenAPI',
+    description: '管理 OpenAPI 接口源',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M16 3h5v5M8 3H3v5M3 16v5h5M16 21h5v-5"/>
+      <line x1="21" x2="12" y1="3" y2="12"/>
+      <line x1="3" x2="12" y1="3" y2="12"/>
+      <line x1="21" x2="12" y1="21" y2="12"/>
+      <line x1="3" x2="12" y1="21" y2="12"/>
+    </svg>`
   }
 ]
 
 // 主题选项
 const themes = [
-  { value: 'light', label: '浅色' },
-  { value: 'dark', label: '深色' },
-  { value: 'retro', label: '复古绿' },
-  { value: 'retro-yellow', label: '复古黄' }
+  {value: 'light', label: '浅色'},
+  {value: 'dark', label: '深色'},
+  {value: 'retro', label: '复古绿'},
+  {value: 'retro-yellow', label: '复古黄'}
 ]
 
 // 计算属性
@@ -525,10 +758,10 @@ const loadSettings = async () => {
     settings.workspace.dir = '.'
     settings.workspace.mode = false
     availableModels.value = [
-      { name: 'deepseek-v4-flash', active: true },
-      { name: 'gpt-4', active: false },
-      { name: 'gpt-4-turbo', active: false },
-      { name: 'gpt-3.5-turbo', active: false }
+      {name: 'deepseek-v4-flash', active: true},
+      {name: 'gpt-4', active: false},
+      {name: 'gpt-4-turbo', active: false},
+      {name: 'gpt-3.5-turbo', active: false}
     ]
   } finally {
     loading.value = false
@@ -602,7 +835,7 @@ const checkServerConnection = async () => {
   } catch {
     connectionOk.value = false
   }
-  
+
   connectionChecked.value = true
   checkingConnection.value = false
 }
@@ -616,10 +849,220 @@ const resetToDefaults = () => {
   }
 }
 
+// ==================== OpenAPI ====================
+const openapiLoading = ref(false)
+const openapiError = ref('')
+const openapiSubmitting = ref(false)
+const showAddDialog = ref(false)
+const editingSource = ref(null)
+const openapiSources = ref([])
+
+// 搜索
+const searchKeyword = ref('')
+const searchResult = ref(null)
+const searching = ref(false)
+
+const form = ref({
+  docUrl: '', headerList: [],
+  authType: 'none', authConfig: {},
+  bearerToken: '', apiKeyName: '', apiKeyValue: '', basicUser: '', basicPass: ''
+})
+
+function statusLabel(s) {
+  return {loaded: '已加载', error: '失败', disabled: '禁用'}[s] || s
+}
+
+function authLabel(source) {
+  if (!source.authType || source.authType === 'none') return ''
+  const c = source.authConfig || {}
+  if (source.authType === 'bearer') return 'Bearer Token'
+  if (source.authType === 'apikey') return `API Key (${c.name || ''})`
+  if (source.authType === 'basic') return `Basic (${c.username || ''})`
+  return source.authType
+}
+
+// 搜索
+async function doSearch() {
+  const kw = searchKeyword.value.trim()
+  if (!kw) return
+  searching.value = true
+  try {
+    const res = await openApiAPI.searchApis(kw)
+    searchResult.value = res.data
+  } catch (e) {
+    searchResult.value = '搜索失败: ' + (e.message || '')
+  } finally {
+    searching.value = false
+  }
+}
+
+function clearSearch() {
+  searchKeyword.value = ''
+  searchResult.value = null
+}
+
+async function loadOpenApiData() {
+  openapiLoading.value = true
+  openapiError.value = ''
+  try {
+    const sr = await openApiAPI.getSources()
+    openapiSources.value = (sr.data || []).filter(s => s.docUrl)
+  } catch (e) {
+    openapiError.value = e.message || '加载失败'
+  } finally {
+    openapiLoading.value = false
+  }
+}
+
+// 打开对话框
+function openAdd() {
+  editingSource.value = null
+  resetForm()
+  showAddDialog.value = true
+}
+
+function openEdit(source) {
+  editingSource.value = source
+  form.value.docUrl = source.docUrl || ''
+
+  const hl = []
+  if (source.headers) {
+    for (const [k, v] of Object.entries(source.headers)) {
+      hl.push({key: k, value: v})
+    }
+  }
+  form.value.headerList = hl
+
+  const authType = source.authType || 'none'
+  form.value.authType = authType
+  const ac = source.authConfig || {}
+  form.value.bearerToken = ac.token || ''
+  form.value.apiKeyName = ac.name || ''
+  form.value.apiKeyValue = ac.value || ''
+  form.value.basicUser = ac.username || ''
+  form.value.basicPass = ac.password || ''
+
+  showAddDialog.value = true
+}
+
+function resetForm() {
+  form.value = {
+    docUrl: '', headerList: [],
+    authType: 'none', authConfig: {},
+    bearerToken: '', apiKeyName: '', apiKeyValue: '', basicUser: '', basicPass: ''
+  }
+}
+
+// 提交
+async function submitAdd() {
+  if (!form.value.docUrl) {
+    message.warning('请填写文档地址')
+    return
+  }
+  openapiSubmitting.value = true
+  try {
+    const headers = {}
+    form.value.headerList.forEach(h => {
+      if (h.key && h.value) headers[h.key] = h.value
+    })
+
+    let authType = form.value.authType || 'none'
+    let authConfig = null
+    if (authType === 'bearer' && form.value.bearerToken) {
+      authConfig = {token: form.value.bearerToken}
+    } else if (authType === 'apikey' && form.value.apiKeyName && form.value.apiKeyValue) {
+      authConfig = {name: form.value.apiKeyName, value: form.value.apiKeyValue}
+    } else if (authType === 'basic' && form.value.basicUser && form.value.basicPass) {
+      authConfig = {username: form.value.basicUser, password: form.value.basicPass}
+    } else {
+      authType = 'none'
+    }
+
+    if (editingSource.value) {
+      const oldDocUrl = editingSource.value.docUrl
+      if (oldDocUrl === form.value.docUrl) {
+        const res = await openApiAPI.refreshSource(form.value.docUrl, headers, authType, authConfig)
+        if (res.success !== false) {
+          message.success('修改成功')
+        } else {
+          message.error(res.error || '修改失败')
+          openapiSubmitting.value = false
+          return
+        }
+      } else {
+        await openApiAPI.removeSource(oldDocUrl)
+        const res = await openApiAPI.addSource(form.value.docUrl, headers, authType, authConfig)
+        if (res.success !== false) {
+          message.success('修改成功')
+        } else {
+          message.error(res.error || '修改失败')
+          openapiSubmitting.value = false
+          return
+        }
+      }
+    } else {
+      const res = await openApiAPI.addSource(form.value.docUrl, headers, authType, authConfig)
+      if (res.success !== false) {
+        message.success('添加成功')
+      } else {
+        message.error(res.error || '添加失败')
+        openapiSubmitting.value = false
+        return
+      }
+    }
+
+    showAddDialog.value = false
+    resetForm()
+    editingSource.value = null
+    await loadOpenApiData()
+  } catch (e) {
+    message.error('操作失败: ' + (e.message || ''))
+  } finally {
+    openapiSubmitting.value = false
+  }
+}
+
+async function refreshSource(source) {
+  openapiLoading.value = true
+  try {
+    const res = await openApiAPI.refreshSource(
+        source.docUrl,
+        source.headers || {},
+        source.authType || 'none',
+        source.authConfig || null
+    )
+    if (res.success !== false) {
+      message.success('刷新成功')
+      await loadOpenApiData()
+    } else {
+      message.error(res.error || '刷新失败')
+    }
+  } catch (e) {
+    message.error('刷新失败: ' + (e.message || ''))
+  } finally {
+    openapiLoading.value = false
+  }
+}
+
+async function removeSource(source) {
+  if (!confirm(`确定移除接口源「${source.docUrl}」？`)) return
+  try {
+    const res = await openApiAPI.removeSource(source.docUrl)
+    if (res.success !== false) {
+      message.success('已移除')
+      await loadOpenApiData()
+    } else {
+      message.error(res.error || '移除失败')
+    }
+  } catch (e) {
+    message.error('移除失败: ' + (e.message || ''))
+  }
+}
 
 // 初始化
 onMounted(() => {
   loadSettings()
+  loadOpenApiData()
 })
 </script>
 
@@ -771,6 +1214,369 @@ onMounted(() => {
 
 .settings-section {
   max-width: 800px;
+}
+
+/* OpenAPI 样式 */
+.openapi-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+}
+
+.openapi-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.openapi-search {
+  margin: 16px;
+}
+
+.search-row {
+  display: flex;
+  gap: 8px;
+}
+
+.search-row .form-input {
+  flex: 1;
+}
+
+.search-result {
+  margin-top: 12px;
+  padding: 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+
+.result-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.result-loading, .result-empty {
+  padding: 12px 0;
+  color: var(--fg-3);
+  font-size: 13px;
+  text-align: center;
+}
+
+.result-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-height: 200px;
+  overflow-y: auto;
+}
+
+.result-item {
+  padding: 8px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+}
+
+.ri-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.ri-name {
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.ri-cat {
+  font-size: 11px;
+  color: var(--fg-3);
+}
+
+.ri-desc {
+  font-size: 12px;
+  color: var(--fg-2);
+  margin-bottom: 4px;
+}
+
+.ri-endpoint {
+  font-size: 11px;
+  color: var(--fg-3);
+}
+
+.ri-endpoint code {
+  background: var(--bg-3);
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+}
+
+.state-box {
+  padding: 24px;
+  text-align: center;
+  color: var(--fg-3);
+}
+
+.state-box.error {
+  color: var(--red);
+}
+
+.spinner {
+  width: 24px;
+  height: 24px;
+  border: 2px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin: 0 auto 8px;
+}
+
+.openapi-card-list {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.openapi-source-card {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+}
+
+.openapi-source-card .card-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+}
+
+.status-tag {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.status-tag .dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-tag.loaded {
+  color: var(--green);
+}
+
+.status-tag.loaded .dot {
+  background: var(--green);
+}
+
+.status-tag.error {
+  color: var(--red);
+}
+
+.status-tag.error .dot {
+  background: var(--red);
+}
+
+.status-tag.disabled {
+  color: var(--fg-3);
+}
+
+.status-tag.disabled .dot {
+  background: var(--fg-3);
+}
+
+.card-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.btn-icon-xs {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  border: none;
+  color: var(--fg-2);
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  transition: all var(--t);
+}
+
+.btn-icon-xs:hover {
+  background: var(--bg-3);
+  color: var(--fg);
+}
+
+.btn-icon-xs.danger:hover {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.openapi-source-card .card-body {
+  padding: 12px 16px;
+}
+
+.info-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.info-rows .row {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+}
+
+.info-rows .label {
+  color: var(--fg-3);
+  min-width: 40px;
+}
+
+.info-rows .val {
+  color: var(--fg-2);
+  word-break: break-all;
+}
+
+.info-rows .val code {
+  background: var(--bg-3);
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+}
+
+.card-error {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  background: var(--red-bg);
+  color: var(--red);
+  font-size: 12px;
+  border-top: 1px solid var(--border);
+}
+
+/* 添加对话框 */
+.add-mask {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.add-dialog {
+  width: 480px;
+  max-width: 90vw;
+  max-height: 80vh;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.add-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  font-weight: 600;
+}
+
+.add-body {
+  padding: 20px;
+  overflow-y: auto;
+  flex: 1;
+}
+
+.add-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 16px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.field {
+  margin-bottom: 16px;
+}
+
+.field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+}
+
+.field .req {
+  color: var(--red);
+}
+
+.field .hint {
+  font-size: 11px;
+  color: var(--fg-3);
+  margin-top: 4px;
+}
+
+.header-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.header-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.header-row .form-input {
+  flex: 1;
+}
+
+.auth-tabs {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.auth-tab {
+  padding: 6px 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--t);
+}
+
+.auth-tab:hover {
+  border-color: var(--accent);
+}
+
+.auth-tab.active {
+  background: var(--accent-bg);
+  border-color: var(--accent);
+  color: var(--accent);
 }
 
 /* 设置卡片 */
