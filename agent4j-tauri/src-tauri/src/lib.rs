@@ -571,13 +571,12 @@ impl Agent4jWebManager {
             #[cfg(unix)]
             {
                 use std::os::unix::process::CommandExt as _;
-                // 用 kill(2) 杀进程组（由 setsid() 建立的会话）
                 unsafe { libc::kill(pid as i32, libc::SIGTERM); }
                 std::thread::sleep(std::time::Duration::from_millis(200));
                 unsafe { libc::kill(pid as i32, libc::SIGKILL); }
             }
 
-            // 等进程退出
+            // 后台线程中等待退出，不阻塞任何界面
             let _ = child.wait();
         }
 
@@ -765,10 +764,14 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { .. } = event {
-                let manager = window.state::<Agent4jWebManager>();
-                if let Err(e) = manager.stop() {
-                    eprintln!("Failed to stop Agent4j Web: {}", e);
-                }
+                // 后台线程清理 Java 进程，不阻塞窗口关闭
+                let handle = window.app_handle().clone();
+                std::thread::spawn(move || {
+                    let manager = handle.state::<Agent4jWebManager>();
+                    if let Err(e) = manager.stop() {
+                        eprintln!("Failed to stop Agent4j Web: {}", e);
+                    }
+                });
             }
         })
         .run(tauri::generate_context!())
