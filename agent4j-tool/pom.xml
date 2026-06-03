@@ -15,6 +15,11 @@
     <dependencies>
         <dependency>
             <groupId>org.noear</groupId>
+            <artifactId>solon-ai-harness</artifactId>
+            <version>${solon.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.noear</groupId>
             <artifactId>solon-lib</artifactId>
         </dependency>
         <dependency>

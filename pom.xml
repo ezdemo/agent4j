@@ -16,10 +16,10 @@
     </modules>
 
     <properties>
+        <solon.version>4.0.0-M1</solon.version>
         <maven.compiler.source>17</maven.compiler.source>
         <maven.compiler.target>17</maven.compiler.target>
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
-        <solon.version>3.9.6</solon.version>
         <lombok.version>1.18.34</lombok.version>
         <junit.version>5.10.3</junit.version>
     </properties>

@@ -4,9 +4,10 @@ import org.noear.solon.Solon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import site.sorghum.agent4j.bin.agent.PromptPrefix;
-import site.sorghum.agent4j.bin.skill.SkillStoreV2;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
+import site.sorghum.agent4j.tool.solon.cli.Agent4JSkillProvider;
+import site.sorghum.agent4j.tool.solon.SolonToTools;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -69,8 +70,12 @@ public class ToolSystemInitializer {
         StringBuilder toolSpecsBuilder = new StringBuilder();
         toolSpecsBuilder.append("\n\n## 可用工具规范\n\n");
 
+        // 加载solon的skill工具
+        SolonToTools solonToTools = Agent4JSkillProvider.getOrCreate(workspace.toAbsolutePath().normalize().toString());
         // 通过 Solon IoC 获取所有 AgentTool Bean
         List<AgentTool> agentTools = new ArrayList<>(Solon.context().getBeansOfType(AgentTool.class));
+        agentTools.addAll(solonToTools.getTools());
+
         agentTools.sort(Comparator.comparing(it -> it.getClass().getName()));
         for (AgentTool tool : agentTools) {
             String toolSpec = tool.toToolSpec();
@@ -100,15 +105,6 @@ public class ToolSystemInitializer {
         // 4.5. 追加 Plan Mode 说明（永久存在于 system prompt 中）
         systemPrompt = systemPrompt + "\n\n" + PLAN_MODE_DESCRIPTION;
 
-        // 5. 初始化 SkillStoreV2 并加载 skill 索引
-        SkillStoreV2 skillStore = new SkillStoreV2(workspace,
-                Paths.get(System.getProperty("user.home")),
-                Collections.emptyList());
-        String skillsIndex = skillStore.buildSkillsIndex();
-        if (!skillsIndex.isEmpty()) {
-            systemPrompt = systemPrompt + "\n\n" + skillsIndex;
-            log.info("[skill] 已加载 skill 索引，共 {} 个 skill", skillStore.list().size());
-        }
 
         // 6. 项目文档后置到最底部 —— 最大化前缀缓存命中。
         //    稳定的 system prompt（身份/规则/工具定义/Plan Mode/Skill 索引）保持在头部，
@@ -118,14 +114,11 @@ public class ToolSystemInitializer {
             systemPrompt = systemPrompt + "\n\n---\n\n" + projectMd;
         }
 
-        // 7. 注册 SkillStoreV2 到 Solon 容器
-        Solon.context().wrapAndPut(SkillStoreV2.class, skillStore);
-
         // 8. 构建 PromptPrefix（缓存优先）
         PromptPrefix prefix = new PromptPrefix(systemPrompt, registry.toOpenAiTools());
 
         log.info("[init] 工具系统初始化完成 — 工具数: {}", agentTools.size());
-        return new Result(registry, prefix, skillStore, systemPrompt);
+        return new Result(registry, prefix, systemPrompt);
     }
 
     /**
@@ -175,7 +168,6 @@ public class ToolSystemInitializer {
     public static class Result {
         public final ToolRegistry toolRegistry;
         public final PromptPrefix promptPrefix;
-        public final SkillStoreV2 skillStore;
         /**
          * 完整系统提示词（含项目文档 + base + 工具定义 + Plan Mode + Skill 索引）
          */
@@ -186,10 +178,9 @@ public class ToolSystemInitializer {
         public final String suffix;
 
         Result(ToolRegistry toolRegistry, PromptPrefix promptPrefix,
-               SkillStoreV2 skillStore, String systemPrompt) {
+               String systemPrompt) {
             this.toolRegistry = toolRegistry;
             this.promptPrefix = promptPrefix;
-            this.skillStore = skillStore;
             this.systemPrompt = systemPrompt;
             // 从完整提示词中提取后缀：去掉项目文档和 base prompt 部分
             // 工具定义以 "\n\n## 可用工具规范" 开头

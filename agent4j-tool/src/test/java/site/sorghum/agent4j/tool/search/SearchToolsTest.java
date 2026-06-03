@@ -386,7 +386,6 @@ class SearchToolsTest {
                     "src/test/java/com/example/FooTest.java",
                     "pom.xml",
                     "README.md");
-
             GlobTool tool = new GlobTool();
             Map<String, Object> params = new HashMap<>();
             params.put("pattern", "**/*.java");

@@ -15,7 +15,6 @@ import site.sorghum.agent4j.bin.model.HttpModelClient;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.session.JsonlSessionStore;
 import site.sorghum.agent4j.bin.session.SessionStore;
-import site.sorghum.agent4j.bin.skill.SkillStoreV2;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.tool.ToolSystemInitializer;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
@@ -92,10 +91,6 @@ public class AgentService {
      * 按工作区缓存的 PromptPrefix：key = 工作区绝对路径
      */
     private final ConcurrentHashMap<String, PromptPrefix> workspacePrefixes = new ConcurrentHashMap<>();
-    /**
-     * 共享的 SkillStoreV2（所有会话复用）
-     */
-    private volatile SkillStoreV2 sharedSkillStore;
     /**
      * 共享的 Agent4jConfig
      */
@@ -200,7 +195,6 @@ public class AgentService {
                     disabledTools, blockedPaths,
                     loadDefaultSystemPrompt());
             this.sharedToolRegistry = initResult.toolRegistry;
-            this.sharedSkillStore = initResult.skillStore;
             // 保存按工作区缓存的 PromptPrefix
             String initWs = config.workspaceDir() != null
                     ? config.workspaceDir().toAbsolutePath().toString()
@@ -1185,26 +1179,5 @@ public class AgentService {
                         (String) m.get("argHint")
                 ))
                 .collect(Collectors.toList());
-    }
-
-    /**
-     * 获取所有 skill 的元数据列表（供前端 skill 选择弹窗使用）。
-     *
-     * @return skill 元数据列表
-     */
-    public List<SkillMetaDTO> getSkillMetaList() {
-        if (sharedSkillStore == null) {
-            return Collections.emptyList();
-        }
-        List<SkillMetaDTO> result = new ArrayList<>();
-        for (site.sorghum.agent4j.bin.skill.SkillV2 skill : sharedSkillStore.list()) {
-            result.add(new SkillMetaDTO(
-                    skill.name(),
-                    skill.description() != null ? skill.description() : "",
-                    skill.scope().name().toLowerCase(),
-                    skill.runAs().name().toLowerCase()
-            ));
-        }
-        return result;
     }
 }

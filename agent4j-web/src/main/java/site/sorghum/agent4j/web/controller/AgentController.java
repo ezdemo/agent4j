@@ -5,6 +5,7 @@ import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
 
+import java.util.Collections;
 import java.util.List;
 
 /**
@@ -72,7 +73,7 @@ public class AgentController {
         if (!agentService.isReady()) {
             throw new ServiceException("Agent 未初始化");
         }
-        return ApiResponse.ok(agentService.getSkillMetaList());
+        return ApiResponse.ok(Collections.emptyList());
     }
 
     /**
