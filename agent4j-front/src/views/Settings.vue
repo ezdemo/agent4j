@@ -1,182 +1,412 @@
 <template>
   <div class="settings-page">
-    <!-- 左侧 tab 导航 -->
-    <div class="settings-sidebar">
-      <div class="sidebar-title">设置</div>
-      <button
-        v-for="tab in tabs"
-        :key="tab.id"
-        class="sidebar-tab"
-        :class="{ active: activeTab === tab.id }"
-        @click="activeTab = tab.id"
-      >
-        <span>{{ tab.icon }}</span>
-        <span>{{ tab.label }}</span>
-      </button>
-    </div>
-
-    <!-- 右侧内容 -->
-    <div class="settings-main">
-      <!-- 右上操作按钮 -->
-      <div class="settings-top-actions">
-        <a-button size="small" @click="openConfigFile"><FileOutlined /></a-button>
-        <a-button size="small" @click="exportSettings"><DownloadOutlined /></a-button>
-        <a-button type="primary" size="small" @click="saveSettings" :loading="loading" style="margin-left:4px">
-          <template #icon><SaveOutlined /></template>
-          {{ loading ? '保存…' : '保存' }}
-        </a-button>
+    <!-- 左侧导航 -->
+    <nav class="settings-nav">
+      <div class="nav-header">
+        <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
+          <circle cx="12" cy="12" r="3"/>
+          <path
+              d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+        <span>设置</span>
       </div>
 
-      <!-- 内容区（滚动） -->
-      <div class="settings-body">
+      <div class="nav-items">
+        <button
+            v-for="tab in tabs"
+            :key="tab.id"
+            :class="{ active: activeTab === tab.id }"
+            class="nav-item"
+            @click="activeTab = tab.id"
+        >
+          <span class="nav-icon" v-html="tab.icon"></span>
+          <span class="nav-label">{{ tab.label }}</span>
+          <span v-if="tab.badge" class="nav-badge">{{ tab.badge }}</span>
+        </button>
+      </div>
+    </nav>
+
+    <!-- 主内容区 -->
+    <main class="settings-main">
+      <!-- 顶部操作栏 -->
+      <header class="settings-header">
+        <div class="header-title">
+          <h2>{{ currentTab?.label || '设置' }}</h2>
+          <p class="header-desc">{{ currentTab?.description }}</p>
+        </div>
+        <div class="header-actions">
+          <button :disabled="loading" class="btn btn-ghost" @click="resetToDefaults">
+            <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+              <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
+              <path d="M21 3v5h-5"/>
+              <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
+              <path d="M8 16H3v5"/>
+            </svg>
+            重置默认
+          </button>
+          <button :disabled="loading || !hasChanges" class="btn btn-primary" @click="saveSettings">
+            <svg v-if="!loading" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+                 width="14">
+              <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+              <polyline points="17 21 17 13 7 13 7 21"/>
+              <polyline points="7 3 7 8 15 8"/>
+            </svg>
+            <svg v-else class="animate-spin" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+                 width="14">
+              <path d="M21 12a9 9 0 11-6.219-8.56"/>
+            </svg>
+            {{ loading ? '保存中...' : '保存设置' }}
+          </button>
+        </div>
+      </header>
+
+      <!-- 设置内容区 -->
+      <div class="settings-content">
         <!-- 基本设置 -->
-        <div v-if="activeTab === 'general'">
-          <h4 style="margin: 0 0 4px">基本设置</h4>
-          <p class="section-desc">界面主题与显示选项</p>
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">主题</div>
-              <div class="setting-description">界面主题风格</div>
+        <section v-if="activeTab === 'general'" class="settings-section">
+          <div class="section-card">
+            <div class="card-header">
+              <h3>外观设置</h3>
+              <p>自定义界面主题</p>
             </div>
-            <div class="setting-control">
-              <a-button v-for="theme in themes" :key="theme.value" :type="settings.theme === theme.value ? 'primary' : 'default'" @click="settings.theme = theme.value" style="margin-right: 8px">{{ theme.label }}</a-button>
+            <div class="card-body">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">界面主题</label>
+                  <p class="setting-hint">选择适合你的视觉风格</p>
+                </div>
+                <div class="setting-control">
+                  <div class="theme-grid">
+                    <button
+                        v-for="theme in themes"
+                        :key="theme.value"
+                        :class="{ active: settings.theme === theme.value }"
+                        class="theme-option"
+                        @click="settings.theme = theme.value"
+                    >
+                      <span :class="theme.value" class="theme-preview"></span>
+                      <span class="theme-name">{{ theme.label }}</span>
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
 
         <!-- 服务器设置 -->
-        <div v-if="activeTab === 'server'">
-          <h4 style="margin: 0 0 4px">服务器设置</h4>
-          <p class="section-desc">配置后端 Agent4j 服务的连接地址</p>
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">后端 API 地址</div>
-              <div class="setting-description">留空使用默认代理（localhost:8097）</div>
+        <section v-if="activeTab === 'server'" class="settings-section">
+          <div class="section-card">
+            <div class="card-header">
+              <h3>连接设置</h3>
+              <p>配置后端 Agent4j 服务的连接参数</p>
             </div>
-            <div class="setting-control">
-              <a-input v-model:value="settings.server.apiBaseUrl" placeholder="留空 = 默认 http://localhost:8097" />
+            <div class="card-body">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">API 地址</label>
+                  <p class="setting-hint">留空使用默认代理（localhost:8097）</p>
+                </div>
+                <div class="setting-control">
+                  <div class="input-group">
+                    <input
+                        v-model="settings.server.apiBaseUrl"
+                        class="form-input"
+                        placeholder="http://localhost:8097"
+                        type="text"
+                    />
+                    <button
+                        :disabled="checkingConnection"
+                        class="btn btn-secondary"
+                        @click="checkServerConnection"
+                    >
+                      <svg v-if="checkingConnection" class="animate-spin" fill="none" height="14" stroke="currentColor"
+                           stroke-width="2" viewBox="0 0 24 24" width="14">
+                        <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                      </svg>
+                      <svg v-else fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+                           width="14">
+                        <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                        <polyline points="22 4 12 14.01 9 11.01"/>
+                      </svg>
+                      {{ checkingConnection ? '检测中...' : '测试连接' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div v-if="connectionChecked" class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">连接状态</label>
+                </div>
+                <div class="setting-control">
+                  <div :class="{ ok: connectionOk, error: !connectionOk }" class="connection-status">
+                    <span class="status-dot"></span>
+                    <span>{{ connectionOk ? '连接成功' : '连接失败' }}</span>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">连接状态</div>
-              <div class="setting-description">测试后端服务是否可达</div>
-            </div>
-            <div class="setting-control">
-              <a-button @click="checkServerConnection" :loading="checkingConnection">检测连接</a-button>
-              <span style="margin-left: 8px; font-size: 13px;" :style="{ color: connectionOk ? '#52c41a' : '#ff4d4f' }" v-if="connectionChecked">{{ connectionOk ? '✓ 连接成功' : '✗ 连接失败' }}</span>
-            </div>
-          </div>
-        </div>
+        </section>
 
         <!-- AI 设置 -->
-        <div v-if="activeTab === 'ai'">
-          <h4 style="margin: 0 0 4px">AI 模型设置</h4>
-          <p class="section-desc">配置 LLM API 连接与模型参数</p>
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">API 地址</div>
-              <div class="setting-description">OpenAI 兼容 API 的基础 URL</div>
+        <section v-if="activeTab === 'ai'" class="settings-section">
+          <div class="section-card">
+            <div class="card-header">
+              <h3>模型配置</h3>
+              <p>配置 LLM API 连接与模型参数</p>
             </div>
-            <div class="setting-control">
-              <a-input v-model:value="settings.ai.baseUrl" placeholder="https://api.openai.com/v1" />
+            <div class="card-body">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">API 地址</label>
+                  <p class="setting-hint">OpenAI 兼容 API 的基础 URL</p>
+                </div>
+                <div class="setting-control">
+                  <input
+                      v-model="settings.ai.baseUrl"
+                      class="form-input"
+                      placeholder="https://api.openai.com/v1"
+                      type="text"
+                  />
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">API 密钥</label>
+                  <p class="setting-hint">用于身份验证的密钥</p>
+                </div>
+                <div class="setting-control">
+                  <div class="input-with-toggle">
+                    <input
+                        v-model="settings.ai.apiKey"
+                        :type="showApiKey ? 'text' : 'password'"
+                        class="form-input"
+                        placeholder="sk-..."
+                    />
+                    <button
+                        :title="showApiKey ? '隐藏' : '显示'"
+                        class="toggle-visibility"
+                        @click="showApiKey = !showApiKey"
+                    >
+                      <svg v-if="showApiKey" fill="none" height="14" stroke="currentColor" stroke-width="2"
+                           viewBox="0 0 24 24" width="14">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                      </svg>
+                      <svg v-else fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+                           width="14">
+                        <path
+                            d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                        <line x1="1" x2="23" y1="1" y2="23"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">模型</label>
+                  <p class="setting-hint">选择要使用的 AI 模型</p>
+                </div>
+                <div class="setting-control">
+                  <div class="select-wrapper">
+                    <select v-model="settings.ai.model" class="form-select">
+                      <option v-for="model in availableModels" :key="model.name" :value="model.name">
+                        {{ model.name }}
+                      </option>
+                    </select>
+                    <svg class="select-arrow" fill="none" height="12" stroke="currentColor" stroke-width="2"
+                         viewBox="0 0 24 24" width="12">
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">推理强度</label>
+                  <p class="setting-hint">AI 推理的详细程度</p>
+                </div>
+                <div class="setting-control">
+                  <div class="select-wrapper">
+                    <select v-model="settings.ai.reasoningEffort" class="form-select">
+                      <option value="low">低 - 快速响应</option>
+                      <option value="medium">中 - 平衡模式</option>
+                      <option value="high">高 - 深度思考</option>
+                      <option value="max">最大 - 极致推理</option>
+                    </select>
+                    <svg class="select-arrow" fill="none" height="12" stroke="currentColor" stroke-width="2"
+                         viewBox="0 0 24 24" width="12">
+                      <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">可用模型列表</label>
+                  <p class="setting-hint">每行一个模型名称</p>
+                </div>
+                <div class="setting-control">
+                  <textarea
+                      v-model="settings.ai.availableModelsText"
+                      class="form-textarea"
+                      placeholder="deepseek-v4-flash&#10;gpt-4&#10;gpt-4-turbo"
+                      rows="4"
+                  ></textarea>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">API 密钥</div>
-              <div class="setting-description">用于身份验证的 API 密钥</div>
-            </div>
-            <div class="setting-control">
-              <a-input-password v-model:value="settings.ai.apiKey" :visible="showApiKey" @update:visible="showApiKey = $event" placeholder="sk-..." />
-            </div>
-          </div>
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">模型</div>
-              <div class="setting-description">使用的 AI 模型</div>
-            </div>
-            <div class="setting-control">
-              <a-select v-model:value="settings.ai.model" style="width: 200px">
-                <a-select-option v-for="model in availableModels" :key="model.name" :value="model.name">{{ model.name }}</a-select-option>
-              </a-select>
-            </div>
-          </div>
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">推理强度</div>
-              <div class="setting-description">AI 推理的详细程度</div>
-            </div>
-            <div class="setting-control">
-              <a-select v-model:value="settings.ai.reasoningEffort" style="width: 200px">
-                <a-select-option value="low">低</a-select-option>
-                <a-select-option value="medium">中</a-select-option>
-                <a-select-option value="high">高</a-select-option>
-                <a-select-option value="max">最大</a-select-option>
-              </a-select>
-            </div>
-          </div>
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">可用模型列表</div>
-              <div class="setting-description">每行一个模型名称</div>
-            </div>
-            <div class="setting-control">
-              <a-textarea v-model:value="settings.ai.availableModelsText" placeholder="deepseek-v4-flash&#10;gpt-4&#10;gpt-4-turbo" :rows="4" />
-            </div>
-          </div>
-        </div>
+        </section>
 
         <!-- 工作区设置 -->
-        <div v-if="activeTab === 'workspace'">
-          <h4 style="margin: 0 0 4px">工作区设置</h4>
-          <p class="section-desc">配置工作目录与编辑行为</p>
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">工作区路径</div>
-              <div class="setting-description">默认工作目录</div>
+        <section v-if="activeTab === 'workspace'" class="settings-section">
+          <div class="section-card">
+            <div class="card-header">
+              <h3>工作目录</h3>
+              <p>配置工作目录与编辑行为</p>
             </div>
-            <div class="setting-control">
-              <a-input v-model:value="settings.workspace.dir" placeholder="." />
+            <div class="card-body">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">工作区路径</label>
+                  <p class="setting-hint">默认工作目录</p>
+                </div>
+                <div class="setting-control">
+                  <input
+                      v-model="settings.workspace.dir"
+                      class="form-input"
+                      placeholder="."
+                      type="text"
+                  />
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">编辑模式</label>
+                  <p class="setting-hint">手动模式需要审批写入操作</p>
+                </div>
+                <div class="setting-control">
+                  <div class="radio-group">
+                    <label :class="{ active: settings.workspace.mode === true }" class="radio-option">
+                      <input v-model="settings.workspace.mode" :value="true" type="radio"/>
+                      <span class="radio-label">
+                        <span class="radio-title">手动模式</span>
+                        <span class="radio-desc">写入操作需审批</span>
+                      </span>
+                    </label>
+                    <label :class="{ active: settings.workspace.mode === false }" class="radio-option">
+                      <input v-model="settings.workspace.mode" :value="false" type="radio"/>
+                      <span class="radio-label">
+                        <span class="radio-title">自由模式</span>
+                        <span class="radio-desc">直接执行写入</span>
+                      </span>
+                    </label>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
-          <div class="setting-item">
-            <div class="setting-info">
-              <div class="setting-label">编辑模式</div>
-              <div class="setting-description">手动 = 写入操作需审批，自由 = 直接执行</div>
+        </section>
+
+        <!-- 安全设置 -->
+        <section v-if="activeTab === 'security'" class="settings-section">
+          <div class="section-card">
+            <div class="card-header">
+              <h3>安全防护</h3>
+              <p>配置安全策略和防护机制</p>
             </div>
-            <div class="setting-control">
-              <a-select v-model:value="settings.workspace.mode" style="width: 200px">
-                <a-select-option :value="true">手动</a-select-option>
-                <a-select-option :value="false">自由</a-select-option>
-              </a-select>
+            <div class="card-body">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">风暴断路器</label>
+                  <p class="setting-hint">防止工具调用死循环（滑动窗口去重）</p>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input v-model="settings.security.stormBreaker" type="checkbox"/>
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">路径穿越防护</label>
+                  <p class="setting-hint">阻止访问工作区外的文件</p>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input v-model="settings.security.pathTraversal" type="checkbox"/>
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">命令白名单</label>
+                  <p class="setting-hint">只允许执行白名单中的命令</p>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input v-model="settings.security.commandWhitelist" type="checkbox"/>
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">审计日志</label>
+                  <p class="setting-hint">记录所有工具调用操作</p>
+                </div>
+                <div class="setting-control">
+                  <label class="toggle-switch">
+                    <input v-model="settings.security.auditLog" type="checkbox"/>
+                    <span class="toggle-slider"></span>
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        </section>
+
+
       </div>
-    </div>
+    </main>
   </div>
 </template>
 
 <script setup>
-import { ref, reactive, watch, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
-import { SaveOutlined, DownloadOutlined, FileOutlined } from '@ant-design/icons-vue'
-import { useAppStore } from '../stores/app'
-import { configAPI } from '../services/api'
+import {computed, onMounted, reactive, ref, watch} from 'vue'
+import {message} from 'ant-design-vue'
+import {useAppStore} from '../stores/app'
+import {configAPI} from '../services/api'
 
 const store = useAppStore()
 
-// theme 直接绑定 store，不再独立管理
+// 主题直接绑定 store
 const settings = reactive({
-  language: 'zh-CN',
   get theme() { return store.settings.theme },
   set theme(v) { store.settings.theme = v },
-  fontSize: 14,
-  animations: true,
   server: { apiBaseUrl: '', autoConnect: true },
   ai: { baseUrl: '', apiKey: '', model: '', reasoningEffort: 'max', availableModelsText: '' },
-  workspace: { dir: '', mode: false }
+  workspace: {dir: '', mode: false},
+  security: {
+    stormBreaker: true,
+    pathTraversal: true,
+    commandWhitelist: true,
+    auditLog: true
+  }
 })
 
 const activeTab = ref('general')
@@ -186,14 +416,54 @@ const availableModels = ref([])
 const checkingConnection = ref(false)
 const connectionOk = ref(false)
 const connectionChecked = ref(false)
+const hasChanges = ref(false)
 
+// 标签页配置
 const tabs = [
-  { id: 'general', label: '基本', icon: '⚙️' },
-  { id: 'server', label: '服务器', icon: '🌐' },
-  { id: 'ai', label: 'AI 模型', icon: '🤖' },
-  { id: 'workspace', label: '工作区', icon: '📁' }
+  {
+    id: 'general',
+    label: '基本设置',
+    description: '界面主题设置',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+    </svg>`
+  },
+  {
+    id: 'server',
+    label: '服务器',
+    description: '后端服务连接配置',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/>
+    </svg>`
+  },
+  {
+    id: 'ai',
+    label: 'AI 模型',
+    description: 'LLM API 和模型参数配置',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a2 2 0 0 1 0 4h-1.17A7 7 0 0 1 14 22h-4a7 7 0 0 1-6.83-4H2a2 2 0 0 1 0-4h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/>
+      <circle cx="12" cy="14" r="3"/>
+    </svg>`
+  },
+  {
+    id: 'workspace',
+    label: '工作区',
+    description: '工作目录和编辑行为配置',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+    </svg>`
+  },
+  {
+    id: 'security',
+    label: '安全',
+    description: '安全策略和防护机制',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+    </svg>`
+  }
 ]
 
+// 主题选项
 const themes = [
   { value: 'light', label: '浅色' },
   { value: 'dark', label: '深色' },
@@ -201,8 +471,15 @@ const themes = [
   { value: 'retro-yellow', label: '复古黄' }
 ]
 
-// theme 通过 getter/setter 直接绑定 store，无需额外 watch
+// 计算属性
+const currentTab = computed(() => tabs.find(t => t.id === activeTab.value))
 
+// 监听设置变化
+watch(settings, () => {
+  hasChanges.value = true
+}, {deep: true})
+
+// 加载设置
 const loadSettings = async () => {
   loading.value = true
   try {
@@ -210,39 +487,38 @@ const loadSettings = async () => {
       configAPI.getConfig(),
       configAPI.getModels()
     ])
+
     if (configResponse.success && configResponse.data) {
       const config = configResponse.data
-      // 优先读 localStorage 中实际连接的地址（SplashScreen/SetupScreen 设置的）
+      // 优先读 localStorage 中实际连接的地址
       settings.server.apiBaseUrl = localStorage.getItem('agent4j-api-base') || config.serverApiBaseUrl || ''
       settings.ai.baseUrl = config.baseUrl || ''
       settings.ai.model = config.model || ''
       settings.ai.reasoningEffort = config.reasoningEffort || 'max'
+
       if (config.availableModels && Array.isArray(config.availableModels)) {
         settings.ai.availableModelsText = config.availableModels.join('\n')
       }
+
       settings.workspace.dir = config.workspaceDir || config.workspace || '.'
       settings.workspace.mode = config.hitl === true
-      if (config.lang) {
-        settings.language = config.lang === 'ZH' ? 'zh-CN' : 'en-US'
-      }
-      const savedPrefs = localStorage.getItem('agent4j-ui-preferences')
-      if (savedPrefs) {
-        try {
-          const prefs = JSON.parse(savedPrefs)
-          // theme 已由 store 管理，不再从 ui-preferences 覆盖
-          if (prefs.fontSize) settings.fontSize = prefs.fontSize
-          if (prefs.animations !== undefined) settings.animations = prefs.animations
-        } catch (e) { /* ignore */ }
+
+      // 加载安全设置
+      if (config.security) {
+        Object.assign(settings.security, config.security)
       }
     } else {
       message.error(configResponse.error || '加载配置失败')
     }
+
     if (modelsResponse.success && modelsResponse.data) {
       availableModels.value = modelsResponse.data.models || []
     }
   } catch (err) {
     console.error('加载配置失败:', err)
     message.error('加载配置失败: ' + err.message)
+
+    // 设置默认值
     settings.ai.baseUrl = 'https://api.deepseek.com/v1'
     settings.ai.model = 'deepseek-v4-flash'
     settings.ai.reasoningEffort = 'max'
@@ -256,18 +532,20 @@ const loadSettings = async () => {
     ]
   } finally {
     loading.value = false
+    hasChanges.value = false
   }
 }
 
+// 保存设置
 const saveSettings = async () => {
   loading.value = true
   try {
-    const uiPrefs = { fontSize: settings.fontSize, animations: settings.animations }
-    localStorage.setItem('agent4j-ui-preferences', JSON.stringify(uiPrefs))
     // 同步更新 localStorage 中的实际连接地址
     if (settings.server.apiBaseUrl && settings.server.apiBaseUrl.trim()) {
       localStorage.setItem('agent4j-api-base', settings.server.apiBaseUrl.trim())
     }
+
+    // 准备配置更新
     const configToUpdate = {
       baseUrl: settings.ai.baseUrl,
       apiKey: settings.ai.apiKey,
@@ -275,15 +553,26 @@ const saveSettings = async () => {
       reasoningEffort: settings.ai.reasoningEffort,
       availableModels: settings.ai.availableModelsText.split('\n').map(s => s.trim()).filter(s => s),
       hitl: settings.workspace.mode === true,
-      lang: settings.language === 'zh-CN' ? 'ZH' : 'EN'
+      security: {...settings.security}
     }
+
     const response = await configAPI.updateConfig(configToUpdate)
+
     if (response.success) {
+      // 切换工作目录
       if (settings.workspace.dir && settings.workspace.dir.trim()) {
-        try { await configAPI.switchWorkspace(settings.workspace.dir.trim()) } catch (e) { console.warn('切换工作目录失败:', e) }
+        try {
+          await configAPI.switchWorkspace(settings.workspace.dir.trim())
+        } catch (e) {
+          console.warn('切换工作目录失败:', e)
+        }
       }
-      const serverMsg = typeof response.data === 'string' ? response.data : (response.data?.message || '设置已保存')
+
+      const serverMsg = typeof response.data === 'string'
+          ? response.data
+          : (response.data?.message || '设置已保存')
       message.success(serverMsg)
+      hasChanges.value = false
     } else {
       message.error(response.error || '保存失败')
     }
@@ -295,204 +584,733 @@ const saveSettings = async () => {
   }
 }
 
+// 测试服务器连接
 const checkServerConnection = async () => {
   checkingConnection.value = true
   connectionChecked.value = false
+
   try {
     const baseUrl = settings.server.apiBaseUrl.trim() || '/api'
-    const url = baseUrl.endsWith('/api') ? baseUrl + '/agent/status' : baseUrl.replace(/\/+$/, '') + '/api/agent/status'
-    const resp = await fetch(url, { signal: AbortSignal.timeout(5000) })
+    const url = baseUrl.endsWith('/api')
+        ? baseUrl + '/agent/status'
+        : baseUrl.replace(/\/+$/, '') + '/api/agent/status'
+
+    const resp = await fetch(url, {
+      signal: AbortSignal.timeout(5000)
+    })
     connectionOk.value = resp.ok
-  } catch { connectionOk.value = false }
+  } catch {
+    connectionOk.value = false
+  }
+  
   connectionChecked.value = true
   checkingConnection.value = false
 }
 
-const exportSettings = () => {
-  const blob = new Blob([JSON.stringify({ ...settings, exportedAt: new Date().toISOString() }, null, 2)], { type: 'application/json' })
-  const a = document.createElement('a')
-  a.href = URL.createObjectURL(blob)
-  a.download = `agent4j-settings-${new Date().toISOString().slice(0, 10)}.json`
-  a.click()
-  URL.revokeObjectURL(blob)
-  message.success('设置已导出')
+// 重置为默认设置
+const resetToDefaults = () => {
+  if (confirm('确定要重置所有设置为默认值吗？此操作不可撤销。')) {
+    store.resetSettings()
+    loadSettings()
+    message.success('设置已重置为默认值')
+  }
 }
 
-const openConfigFile = () => { message.info('配置文件: ~/.agent4j/config.json') }
 
+// 初始化
 onMounted(() => {
   loadSettings()
-  const savedPrefs = localStorage.getItem('agent4j-ui-preferences')
-  if (savedPrefs) {
-    try {
-      const prefs = JSON.parse(savedPrefs)
-      if (prefs.fontSize) settings.fontSize = prefs.fontSize
-      if (prefs.animations !== undefined) settings.animations = prefs.animations
-    } catch (e) { /* ignore */ }
-  }
 })
 </script>
 
 <style scoped>
+/* 基础布局 */
 .settings-page {
   display: flex;
-  height: 100%;
-  background: var(--bg-primary);
+  height: 600px;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--sans);
 }
-.settings-sidebar {
-  width: 160px;
+
+/* 左侧导航 */
+.settings-nav {
+  width: 220px;
   flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--bg-2);
   border-right: 1px solid var(--border);
-  background: var(--bg-secondary);
   padding: 16px 0;
 }
-.sidebar-title {
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--fg-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  padding: 0 16px 12px;
-}
-.sidebar-tab {
+
+.nav-header {
   display: flex;
   align-items: center;
-  gap: 8px;
-  width: 100%;
-  padding: 10px 16px;
+  gap: 10px;
+  padding: 0 20px 20px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 8px;
+}
+
+.nav-items {
+  flex: 1;
+  padding: 8px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
   border: none;
   background: transparent;
+  color: var(--fg-2);
   font-size: 13px;
-  color: var(--fg-secondary);
+  font-weight: 500;
+  border-radius: var(--r);
   cursor: pointer;
+  transition: all var(--t);
   text-align: left;
-  transition: all 0.15s;
+  width: 100%;
 }
-.sidebar-tab:hover {
-  background: var(--surface-hover);
+
+.nav-item:hover {
+  background: var(--bg-3);
   color: var(--fg);
 }
-.sidebar-tab.active {
-  background: var(--surface);
-  color: var(--brand-primary);
+
+.nav-item.active {
+  background: var(--accent-bg);
+  color: var(--accent);
   font-weight: 600;
-  border-right: 2px solid var(--brand-primary);
 }
+
+.nav-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.8;
+}
+
+.nav-item.active .nav-icon {
+  opacity: 1;
+}
+
+.nav-label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.nav-badge {
+  padding: 2px 6px;
+  font-size: 10px;
+  font-weight: 600;
+  background: var(--accent);
+  color: white;
+  border-radius: 10px;
+  line-height: 1;
+}
+
+/* 主内容区 */
 .settings-main {
   flex: 1;
   display: flex;
-  height: 500px;
   flex-direction: column;
   min-width: 0;
+  overflow: hidden;
 }
-.settings-top-actions {
-  flex-shrink: 0;
-  display: flex;
-  justify-content: flex-end;
-  padding: 8px 16px;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-secondary);
-}
-.settings-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 24px;
-}
-.section-desc {
-  color: var(--fg-muted);
-  font-size: 13px;
-  margin: 0 0 20px;
-}
-.setting-item {
+
+.settings-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  gap: 24px;
-  padding: 16px;
-  background: var(--surface);
+  padding: 16px 24px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg);
+  flex-shrink: 0;
+}
+
+.header-title h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.header-desc {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--fg-3);
+}
+
+.header-actions {
+  display: flex;
+  gap: 8px;
+}
+
+/* 设置内容区 */
+.settings-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px;
+  min-height: 0;
+}
+
+.settings-section {
+  max-width: 800px;
+}
+
+/* 设置卡片 */
+.section-card {
+  background: var(--bg);
   border: 1px solid var(--border);
-  border-radius: 8px;
-  margin-bottom: 12px;
+  border-radius: var(--r-lg);
+  margin-bottom: 24px;
+  overflow: hidden;
 }
-.setting-item:hover {
-  border-color: var(--border-focus);
+
+.section-card.danger-zone {
+  border-color: var(--red);
 }
+
+.card-header {
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.card-header h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.card-header p {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--fg-3);
+}
+
+.card-body {
+  padding: 0;
+}
+
+/* 设置行 */
+.setting-row {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+}
+
+.setting-row:last-child {
+  border-bottom: none;
+}
+
 .setting-info {
   flex: 1;
   min-width: 0;
 }
+
 .setting-label {
-  font-size: 14px;
+  display: block;
+  font-size: 13px;
   font-weight: 600;
   color: var(--fg);
-  margin-bottom: 2px;
+  margin-bottom: 4px;
 }
-.setting-description {
+
+.setting-hint {
+  margin: 0;
   font-size: 12px;
-  color: var(--fg-muted);
+  color: var(--fg-3);
+  line-height: 1.4;
 }
+
 .setting-control {
   flex-shrink: 0;
   min-width: 200px;
   display: flex;
   align-items: center;
 }
-[data-theme="dark"] .setting-item,
-[data-theme="retro"] .setting-item,
-[data-theme="retro-yellow"] .setting-item {
-  background: var(--bg-secondary);
-}
-[data-theme="dark"] .sidebar-tab.active,
-[data-theme="retro"] .sidebar-tab.active,
-[data-theme="retro-yellow"] .sidebar-tab.active {
-  background: var(--bg-tertiary);
-}
-[data-theme="dark"] .settings-sidebar,
-[data-theme="retro"] .settings-sidebar,
-[data-theme="retro-yellow"] .settings-sidebar {
-  background: var(--bg-tertiary);
-}
-[data-theme="dark"] .settings-top-actions,
-[data-theme="retro"] .settings-top-actions,
-[data-theme="retro-yellow"] .settings-top-actions {
-  background: var(--bg-tertiary);
-}
-</style>
 
-<style>
-[data-theme="dark"] .ant-btn-default,
-[data-theme="retro"] .ant-btn-default,
-[data-theme="retro-yellow"] .ant-btn-default {
-  background: var(--bg-tertiary);
-  border-color: var(--border);
+/* 表单控件 */
+.form-input,
+.form-select,
+.form-textarea {
+  width: 100%;
+  padding: 8px 12px;
+  font-size: 13px;
+  font-family: var(--sans);
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  outline: none;
+  transition: all var(--t);
+}
+
+.form-input:focus,
+.form-select:focus,
+.form-textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-bg);
+}
+
+.form-input::placeholder,
+.form-textarea::placeholder {
+  color: var(--fg-4);
+}
+
+.form-textarea {
+  resize: vertical;
+  min-height: 80px;
+}
+
+/* 输入组 */
+.input-group {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+}
+
+.input-group .form-input {
+  flex: 1;
+}
+
+/* 带切换的输入 */
+.input-with-toggle {
+  position: relative;
+  width: 100%;
+}
+
+.input-with-toggle .form-input {
+  padding-right: 40px;
+}
+
+.toggle-visibility {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  padding: 4px;
+  background: transparent;
+  border: none;
+  color: var(--fg-3);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color var(--t);
+}
+
+.toggle-visibility:hover {
   color: var(--fg);
 }
-[data-theme="dark"] .ant-btn-default:hover,
-[data-theme="retro"] .ant-btn-default:hover,
-[data-theme="retro-yellow"] .ant-btn-default:hover {
-  background: var(--bg-secondary);
-  border-color: var(--brand-primary);
-  color: var(--brand-primary);
+
+/* 选择框 */
+.select-wrapper {
+  position: relative;
+  width: 100%;
 }
-[data-theme="dark"] .ant-input-affix-wrapper,
-[data-theme="dark"] .ant-input,
-[data-theme="retro"] .ant-input-affix-wrapper,
-[data-theme="retro"] .ant-input,
-[data-theme="retro-yellow"] .ant-input-affix-wrapper,
-[data-theme="retro-yellow"] .ant-input {
-  background: var(--bg-tertiary) !important;
-  border-color: var(--border) !important;
-  color: var(--fg) !important;
+
+.form-select {
+  appearance: none;
+  padding-right: 32px;
+  cursor: pointer;
 }
-[data-theme="dark"] .ant-select-selector,
-[data-theme="retro"] .ant-select-selector,
-[data-theme="retro-yellow"] .ant-select-selector {
-  background: var(--bg-tertiary) !important;
-  border-color: var(--border) !important;
+
+.select-arrow {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--fg-3);
+  pointer-events: none;
 }
-[data-theme="dark"] .ant-select-selection-item,
-[data-theme="retro"] .ant-select-selection-item,
-[data-theme="retro-yellow"] .ant-select-selection-item {
-  color: var(--fg) !important;
+
+/* 主题选择 */
+.theme-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 8px;
+  width: 100%;
+}
+
+.theme-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: all var(--t);
+}
+
+.theme-option:hover {
+  border-color: var(--accent);
+}
+
+.theme-option.active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.theme-preview {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.theme-preview.light {
+  background: linear-gradient(135deg, #ffffff 50%, #f3f4f6 50%);
+}
+
+.theme-preview.dark {
+  background: linear-gradient(135deg, #0c0c0c 50%, #1f1f1f 50%);
+}
+
+.theme-preview.retro {
+  background: linear-gradient(135deg, #0a1f0a 50%, #1a3a1a 50%);
+}
+
+.theme-preview.retro-yellow {
+  background: linear-gradient(135deg, #1a1a0a 50%, #2a2a1a 50%);
+}
+
+.theme-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-2);
+}
+
+.theme-option.active .theme-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* 范围滑块 */
+.range-control {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+}
+
+.form-range {
+  flex: 1;
+  height: 4px;
+  background: var(--border);
+  border-radius: 2px;
+  outline: none;
+  appearance: none;
+  cursor: pointer;
+}
+
+.form-range::-webkit-slider-thumb {
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  background: var(--accent);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: transform var(--t);
+}
+
+.form-range::-webkit-slider-thumb:hover {
+  transform: scale(1.2);
+}
+
+.range-value {
+  min-width: 40px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+  text-align: right;
+}
+
+/* 开关 */
+.toggle-switch {
+  position: relative;
+  display: inline-block;
+  width: 44px;
+  height: 24px;
+  cursor: pointer;
+}
+
+.toggle-switch input {
+  opacity: 0;
+  width: 0;
+  height: 0;
+}
+
+.toggle-slider {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: var(--border);
+  border-radius: 12px;
+  transition: all var(--t);
+}
+
+.toggle-slider:before {
+  content: '';
+  position: absolute;
+  width: 18px;
+  height: 18px;
+  left: 3px;
+  bottom: 3px;
+  background: white;
+  border-radius: 50%;
+  transition: all var(--t);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.toggle-switch input:checked + .toggle-slider {
+  background: var(--accent);
+}
+
+.toggle-switch input:checked + .toggle-slider:before {
+  transform: translateX(20px);
+}
+
+/* 单选按钮组 */
+.radio-group {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+}
+
+.radio-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: all var(--t);
+}
+
+.radio-option:hover {
+  border-color: var(--accent);
+}
+
+.radio-option.active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.radio-option input[type="radio"] {
+  margin-top: 2px;
+  accent-color: var(--accent);
+}
+
+.radio-label {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.radio-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.radio-desc {
+  font-size: 11px;
+  color: var(--fg-3);
+}
+
+.radio-option.active .radio-title {
+  color: var(--accent);
+}
+
+/* 连接状态 */
+.connection-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 12px;
+  border-radius: var(--r);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.connection-status.ok {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.connection-status.error {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+/* 按钮 */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: var(--sans);
+  border: 1px solid transparent;
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: all var(--t);
+  white-space: nowrap;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--accent);
+  color: white;
+  border-color: var(--accent);
+}
+
+.btn-primary:hover:not(:disabled) {
+  background: var(--blue-dark);
+  border-color: var(--blue-dark);
+}
+
+.btn-secondary {
+  background: var(--bg);
+  color: var(--fg-2);
+  border-color: var(--border);
+}
+
+.btn-secondary:hover:not(:disabled) {
+  background: var(--bg-2);
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--fg-2);
+  border-color: transparent;
+}
+
+.btn-ghost:hover:not(:disabled) {
+  background: var(--bg-2);
+  color: var(--fg);
+}
+
+.btn-danger {
+  background: var(--red);
+  color: white;
+  border-color: var(--red);
+}
+
+.btn-danger:hover:not(:disabled) {
+  background: #b91c1c;
+  border-color: #b91c1c;
+}
+
+/* 动画 */
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* 响应式设计 */
+@media (max-width: 768px) {
+  .settings-page {
+    flex-direction: column;
+  }
+
+  .settings-nav {
+    width: 100%;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 12px 0;
+  }
+
+  .nav-items {
+    flex-direction: row;
+    overflow-x: auto;
+    padding: 0 12px;
+    gap: 4px;
+  }
+
+  .nav-item {
+    padding: 8px 12px;
+    white-space: nowrap;
+  }
+
+  .settings-header {
+    flex-direction: column;
+    gap: 12px;
+    align-items: flex-start;
+  }
+
+  .header-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .setting-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+
+  .setting-control {
+    min-width: 100%;
+  }
+
+  .theme-grid {
+    grid-template-columns: repeat(4, 1fr);
+  }
+
+  .input-group {
+    flex-direction: column;
+  }
 }
 </style>
