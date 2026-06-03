@@ -1,5 +1,9 @@
 package site.sorghum.agent4j.bin.tool;
 
+import site.sorghum.agent4j.tool.AgentTool;
+import site.sorghum.agent4j.tool.ToolContext;
+
+import java.nio.file.Path;
 import java.util.*;
 
 /**
@@ -17,6 +21,12 @@ public class ToolRegistry {
     private final ToolSchemaFlattener flattener = new ToolSchemaFlattener();
     private Set<String> disabledTools = Collections.emptySet();
 
+    // ==================== 动态刷新上下文 ====================
+    private Path workspace;
+    private String apiUrl;
+    private String apiKey;
+    private List<String> blockedPaths = Collections.emptyList();
+
     /**
      * 设置被禁用的工具名称集合。
      * 被禁用的工具在 register 时会被跳过，不会出现在 LLM 的工具列表中。
@@ -31,6 +41,53 @@ public class ToolRegistry {
      */
     public boolean isToolEnabled(String name) {
         return !disabledTools.contains(name);
+    }
+
+    /**
+     * 设置动态刷新的上下文参数。
+     * 调用 {@link #refresh()} 时会使用这些参数重新扫描并注册工具。
+     */
+    public ToolRegistry setRefreshContext(Path workspace, String apiUrl, String apiKey, List<String> blockedPaths) {
+        this.workspace = workspace;
+        this.apiUrl = apiUrl;
+        this.apiKey = apiKey;
+        this.blockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
+        return this;
+    }
+
+    /**
+     * 动态刷新工具列表 —— 使用 {@link ToolScanUtil} 统一重新扫描，
+     * 将最新发现的工具重新注册到注册表中。
+     * <p>
+     * 此方法不改变系统提示词，只影响后续 API 请求中的工具挂载列表。
+     * </p>
+     */
+    public void refresh() {
+        tools.clear();
+
+        // 使用 ToolScanUtil 统一扫描（Solon IoC + Skill 文件系统）
+        List<AgentTool> agentTools = ToolScanUtil.scanTools(workspace);
+
+        for (AgentTool tool : agentTools) {
+            if (disabledTools.contains(tool.getName())) {
+                continue; // 跳过禁用工具
+            }
+            String toolSpec = tool.toToolSpec();
+            ToolDef def = new ToolDef(
+                    tool.getName(),
+                    tool.getDescription(),
+                    ToolDefHelper.toParamDefs(tool.getParameters()),
+                    args -> {
+                        String sessionId = args != null ? (String) args.remove("__sessionId__") : null;
+                        return ToolDefHelper.formatResult(tool.execute(
+                                new ToolContext(args, workspace, apiUrl, apiKey, this, blockedPaths, sessionId)));
+                    },
+                    tool.isReadOnly(),
+                    tool.isStormExempt(),
+                    toolSpec
+            );
+            tools.put(def.name(), def);
+        }
     }
 
     public ToolRegistry register(ToolDef def) {

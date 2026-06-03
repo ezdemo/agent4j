@@ -53,6 +53,7 @@ public class AgentLoop {
     private final ModelClient client;
     // 无固定步数限制：循环直到模型返回纯文本
     private final ToolDispatcher dispatcher;
+    private final ToolRegistry registry;
     /**
      * -- GETTER --
      * 获取上下文（用于访问 SessionStore）
@@ -183,6 +184,7 @@ public class AgentLoop {
     public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx, boolean hitlDefault) {
         this.client = client;
         this.dispatcher = new ToolDispatcher(registry);
+        this.registry = registry;
         this.ctx = ctx;
         this.hitlMode = hitlDefault;
     }
@@ -278,6 +280,15 @@ public class AgentLoop {
      * 构建动态工具使用指引（作为 user 消息注入，不持久化到历史）。
      * Plan mode 规则已永久在 system prompt 中描述，此处仅注入通用工具使用提示。
      */
+    /**
+     * 动态刷新工具列表 —— 在每一步推理前重新扫描工具并同步到 LLM 请求。
+     * 仅更新工具挂载，不改变系统提示词。
+     */
+    private List<Map<String, Object>> refreshTools() {
+        registry.refresh();
+        return registry.toOpenAiTools();
+    }
+
     private String buildToolInstructions() {
         return """
                 编辑文件时使用 edit_file（SEARCH/REPLACE，search 必须唯一）。
@@ -347,7 +358,6 @@ public class AgentLoop {
         resetUserAbort(); // 重置用户中断标志
         streamErrorRetryCount = 0;
         int selfCorrectionAttempts = 0;
-        List<Map<String, Object>> tools = ctx.tools();
         boolean isThinkingMode = client.isThinkingMode();
 
         for (int step = 0; ; step++) {
@@ -366,6 +376,8 @@ public class AgentLoop {
                 return "⏹️ 已停止生成";
             }
 
+            // 0.5. 动态刷新工具列表（每个 step 前重新扫描，确保工具列表最新）
+            List<Map<String, Object>> tools = refreshTools();
             // 1. 准备消息：构建 + Healing + 折叠 + 注入工具指引
             PreparedMessages prepared = prepareMessages(step, isThinkingMode);
             List<ChatMessage> messages = prepared.messages;
@@ -680,7 +692,6 @@ public class AgentLoop {
      */
     private String continueConversationLoop() throws IOException {
         boolean isThinkingMode = client.isThinkingMode();
-        List<Map<String, Object>> tools = ctx.tools();
         streamErrorRetryCount = 0;
         int selfCorrectionAttempts = 0;
 
@@ -698,6 +709,8 @@ public class AgentLoop {
                 return "⏹️ 已停止生成";
             }
 
+            // 0.5. 动态刷新工具列表（每个 step 前重新扫描，确保工具列表最新）
+            List<Map<String, Object>> tools = refreshTools();
             PreparedMessages prepared = prepareMessages(step, isThinkingMode);
             List<ChatMessage> messages = prepared.messages;
 

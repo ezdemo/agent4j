@@ -1,13 +1,10 @@
 package site.sorghum.agent4j.bin.tool;
 
-import org.noear.solon.Solon;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import site.sorghum.agent4j.bin.agent.PromptPrefix;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
-import site.sorghum.agent4j.tool.solon.cli.Agent4JSkillProvider;
-import site.sorghum.agent4j.tool.solon.SolonToTools;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -59,6 +56,8 @@ public class ToolSystemInitializer {
         // 1. 创建 ToolRegistry 并设置禁用工具
         final ToolRegistry registry = new ToolRegistry();
         registry.setDisabledTools(effectiveDisabledTools);
+        // 保存刷新上下文，供后续动态刷新工具列表使用
+        registry.setRefreshContext(workspace, apiUrl, apiKey, effectiveBlockedPaths);
         if (!effectiveDisabledTools.isEmpty()) {
             log.info("[config] 已禁用工具: {}", String.join(", ", effectiveDisabledTools));
         }
@@ -66,17 +65,13 @@ public class ToolSystemInitializer {
             log.info("[config] 已屏蔽目录: {}", String.join(", ", effectiveBlockedPaths));
         }
 
-        // 2. 收集工具规范文本
+        // 2. 使用 ToolScanUtil 统一扫描工具（Solon IoC + Skill 文件系统）
+        List<AgentTool> agentTools = ToolScanUtil.scanTools(workspace);
+
+        // 3. 收集工具规范文本 & 注册工具
         StringBuilder toolSpecsBuilder = new StringBuilder();
         toolSpecsBuilder.append("\n\n## 可用工具规范\n\n");
 
-        // 加载solon的skill工具
-        SolonToTools solonToTools = Agent4JSkillProvider.getOrCreate(workspace.toAbsolutePath().normalize().toString());
-        // 通过 Solon IoC 获取所有 AgentTool Bean
-        List<AgentTool> agentTools = new ArrayList<>(Solon.context().getBeansOfType(AgentTool.class));
-        agentTools.addAll(solonToTools.getTools());
-
-        agentTools.sort(Comparator.comparing(it -> it.getClass().getName()));
         for (AgentTool tool : agentTools) {
             String toolSpec = tool.toToolSpec();
             registry.register(new ToolDef(
@@ -96,17 +91,16 @@ public class ToolSystemInitializer {
             }
         }
 
-        // 3. 加载基准系统提示词（编码代理身份规则）
+        // 4. 加载基准系统提示词（编码代理身份规则）
         String systemPrompt = loadDefaultSystemPrompt(defaultSystemPrompt);
 
-        // 4. 追加工具规范到 system prompt
+        // 5. 追加工具规范到 system prompt
         systemPrompt = systemPrompt + "\n\n" + toolSpecsBuilder.toString().trim();
 
-        // 4.5. 追加 Plan Mode 说明（永久存在于 system prompt 中）
+        // 6. 追加 Plan Mode 说明（永久存在于 system prompt 中）
         systemPrompt = systemPrompt + "\n\n" + PLAN_MODE_DESCRIPTION;
 
-
-        // 6. 项目文档后置到最底部 —— 最大化前缀缓存命中。
+        // 7. 项目文档后置到最底部 —— 最大化前缀缓存命中。
         //    稳定的 system prompt（身份/规则/工具定义/Plan Mode/Skill 索引）保持在头部，
         //    项目特定的 agent4j.md/CLAUDE.md 放在末尾，换项目时只需 discard 尾部缓存。
         String projectMd = loadProjectMd(workspace);

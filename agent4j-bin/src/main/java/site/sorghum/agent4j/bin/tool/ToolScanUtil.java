@@ -1,0 +1,62 @@
+package site.sorghum.agent4j.bin.tool;
+
+import org.noear.solon.Solon;
+import site.sorghum.agent4j.tool.AgentTool;
+import site.sorghum.agent4j.tool.solon.SolonToTools;
+import site.sorghum.agent4j.tool.solon.cli.Agent4JSkillProvider;
+
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.Comparator;
+import java.util.List;
+
+/**
+ * 工具扫描工具类 —— 统一管理工具扫描逻辑。
+ * <p>
+ * 封装 Solon IoC 容器 AgentTool Bean 发现 + Skill 文件系统扫描，
+ * 供 {@link ToolSystemInitializer} 初始化和 {@link ToolRegistry#refresh()} 动态刷新共用，
+ * 消除扫描逻辑的重复。
+ * </p>
+ *
+ * @author Sorghum
+ */
+public class ToolScanUtil {
+
+    /**
+     * 扫描并返回所有可用工具，已按类名排序。
+     * <p>
+     * 扫描来源：
+     * <ol>
+     *   <li>Solon IoC 容器中所有 {@code AgentTool} 接口的实现 Bean</li>
+     *   <li>Skill 文件系统中注册的工具（通过 {@link Agent4JSkillProvider} 加载）</li>
+     * </ol>
+     * </p>
+     *
+     * @param workspace 工作区根目录，用于加载 Skill 工具。传 null 则跳过 Skill 扫描。
+     * @return 已排序的 AgentTool 列表
+     */
+    public static List<AgentTool> scanTools(Path workspace) {
+        // 1. 通过 Solon IoC 获取所有 AgentTool Bean
+        List<AgentTool> agentTools = new ArrayList<>(Solon.context().getBeansOfType(AgentTool.class));
+
+        // 2. 加载 Skill 工具（从文件系统读取）
+        if (workspace != null) {
+            try {
+                SolonToTools solonToTools = Agent4JSkillProvider.getOrCreate(
+                        workspace.toAbsolutePath().normalize().toString());
+                agentTools.addAll(solonToTools.getTools());
+            } catch (Exception e) {
+                System.err.println("[tool-scan] Skill 工具扫描失败: " + e.getMessage());
+            }
+        }
+
+        // 3. 加载SolonToSKill
+        List<SolonToTools> solonToTools = Solon.context().getBeansOfType(SolonToTools.class);
+        agentTools.addAll(solonToTools.stream().map(SolonToTools::getTools).flatMap(Collection::stream).toList());
+
+        // 4. 按类名排序，保证顺序稳定
+        agentTools.sort(Comparator.comparing(it -> it.getClass().getName()));
+        return agentTools;
+    }
+}
