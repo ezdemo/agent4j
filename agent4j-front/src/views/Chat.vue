@@ -971,7 +971,23 @@ const loadHistory = async (sessionName, force = false) => {
         if (m.role === 'tool') continue
         const item = {id: Date.now() + merged.length, role: m.role, time: now(), blocks: []}
         if (m.role === 'user') {
-          item.content = m.content || ''
+          // 多模态消息：contentParts 为 [{type:'text',...},{type:'image_url',...}] 数组
+          const parts = m.contentParts || (Array.isArray(m.content) ? m.content : null)
+          if (parts && parts.length > 0) {
+            const texts = []
+            const imgs = []
+            for (const part of parts) {
+              if (part.type === 'text' && part.text) texts.push(part.text)
+              if (part.type === 'image_url') {
+                const url = part.image_url?.url || part.imageUrl?.url
+                if (url) imgs.push(url)
+              }
+            }
+            item.content = texts.join('\n')
+            if (imgs.length > 0) item.images = imgs
+          } else {
+            item.content = m.content || ''
+          }
         } else {
           if (m.reasoning_content) item.blocks.push({
             type: 'reasoning',

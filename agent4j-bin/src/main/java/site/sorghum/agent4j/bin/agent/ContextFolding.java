@@ -379,7 +379,16 @@ public class ContextFolding {
     public static int estimateChars(ChatMessage m) {
         int n = 0;
         if (m.getRole() != null) n += m.getRole().length();
-        if (m.getContent() != null) n += m.getContent().length();
+        if (m.getContentParts() != null && !m.getContentParts().isEmpty()) {
+            for (ChatMessage.ContentPart part : m.getContentParts()) {
+                if (part.getText() != null) n += part.getText().length();
+                if (part.getImageUrl() != null && part.getImageUrl().getUrl() != null) {
+                    n += part.getImageUrl().getUrl().length();
+                }
+            }
+        } else if (m.getContent() != null) {
+            n += m.getContent().length();
+        }
         if (m.hasToolCalls()) n += m.getToolCalls().toString().length();
         if (m.getReasoningContent() != null) n += m.getReasoningContent().length();
         return n;

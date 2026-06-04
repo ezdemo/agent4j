@@ -34,7 +34,6 @@
     <aside class="sidebar" :class="{ collapsed: !sideOpen }">
       <div class="sidebar-head">
         <div class="logo">
-          <img src="./assets/logo.png" alt="Agent4j Logo" class="sidebar-logo-img" />
           <span>Agent4j</span>
         </div>
         <button class="btn-icon-sm" @click="sideOpen = !sideOpen">
@@ -761,12 +760,6 @@ watch(showSettings, (newVal) => {
   font-size: 14px;
   font-weight: 600;
   color: var(--fg);
-}
-
-.sidebar-logo-img {
-  width: 24px;
-  height: 24px;
-  object-fit: contain;
 }
 
 .new-btn {

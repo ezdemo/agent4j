@@ -93,7 +93,24 @@ public class JsonlSessionStore implements SessionStore {
     public static String serializeMessage(ChatMessage msg) {
         org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson("{}");
         node.set("role", msg.getRole());
-        if (msg.getContent() != null) {
+        // 多模态 contentParts 优先序列化为 JSON array（与 OpenAI API 格式一致）
+        if (msg.getContentParts() != null && !msg.getContentParts().isEmpty()) {
+            org.noear.snack4.ONode contentArr = node.getOrNew("content").asArray();
+            for (ChatMessage.ContentPart part : msg.getContentParts()) {
+                org.noear.snack4.ONode partNode = contentArr.addNew();
+                partNode.set("type", part.getType());
+                if ("text".equals(part.getType())) {
+                    partNode.set("text", part.getText() != null ? part.getText() : "");
+                } else if ("image_url".equals(part.getType())) {
+                    ChatMessage.ContentPart.ImageUrl iu = part.getImageUrl();
+                    if (iu != null) {
+                        org.noear.snack4.ONode urlNode = partNode.getOrNew("image_url");
+                        urlNode.set("url", iu.getUrl() != null ? iu.getUrl() : "");
+                        if (iu.getDetail() != null) urlNode.set("detail", iu.getDetail());
+                    }
+                }
+            }
+        } else if (msg.getContent() != null) {
             node.set("content", msg.getContent());
         }
         if (msg.getReasoningContent() != null) {
