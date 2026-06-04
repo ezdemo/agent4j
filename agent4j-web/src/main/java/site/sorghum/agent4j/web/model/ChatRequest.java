@@ -1,10 +1,13 @@
 package site.sorghum.agent4j.web.model;
 
+import lombok.Data;
+
 /**
  * 聊天请求体。
  *
  * @author Sorghum
  */
+@Data
 public class ChatRequest {
 
     /**

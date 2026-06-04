@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.web.model;
 
+import lombok.Data;
+
 import java.util.Map;
 
 /**
@@ -7,6 +9,7 @@ import java.util.Map;
  *
  * @author Sorghum
  */
+@Data
 public class OpenApiSourceDTO {
 
     /**

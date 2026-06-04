@@ -1,10 +1,13 @@
 package site.sorghum.agent4j.web.model;
 
+import lombok.Data;
+
 /**
  * OpenAPI 工具信息 DTO —— 描述一个从 OpenAPI 文档解析出的接口工具。
  *
  * @author Sorghum
  */
+@Data
 public class OpenApiToolDTO {
 
     /**

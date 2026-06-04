@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.web.model;
 
+import lombok.Data;
 import org.noear.snack4.ONode;
 
 /**
@@ -7,6 +8,7 @@ import org.noear.snack4.ONode;
  *
  * @author Sorghum
  */
+@Data
 public class ApiResponse<T> {
 
     public boolean success;

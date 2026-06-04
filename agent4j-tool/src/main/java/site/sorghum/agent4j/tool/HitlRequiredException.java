@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.tool;
 
+import lombok.Getter;
+
 import java.util.Map;
 
 /**
@@ -11,11 +13,16 @@ import java.util.Map;
  *
  * @author Sorghum
  */
+@Getter
 public class HitlRequiredException extends RuntimeException {
 
+    /** 触发审批的工具名 */
     private final String toolName;
+    /** 简短原因码（如 "SANDBOX_ESCAPE"） */
     private final String reason;
+    /** 详细描述（给用户看的审批提示） */
     private final String details;
+    /** 工具调用时的原始参数（审批通过后用于重放执行） */
     private final Map<String, Object> toolArgs;
 
     /**
@@ -30,21 +37,5 @@ public class HitlRequiredException extends RuntimeException {
         this.reason = reason;
         this.details = details;
         this.toolArgs = toolArgs;
-    }
-
-    public String toolName() {
-        return toolName;
-    }
-
-    public String reason() {
-        return reason;
-    }
-
-    public String details() {
-        return details;
-    }
-
-    public Map<String, Object> toolArgs() {
-        return toolArgs;
     }
 }

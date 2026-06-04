@@ -1157,7 +1157,7 @@ public class AgentLoop {
                     } catch (HitlRequiredException e) {
                         // 沙箱越界 → 暂存 HITL 信息，不执行
                         hitlRef.set(e);
-                        return ChatMessage.tool(tcId, "[HITL_PENDING:" + e.reason() + "] " + e.details());
+                        return ChatMessage.tool(tcId, "[HITL_PENDING:" + e.getReason() + "] " + e.getDetails());
                     }
                 } finally {
                     if (skipSandboxCheck) {
@@ -1211,11 +1211,11 @@ public class AgentLoop {
         HitlRequiredException hitlEx = hitlRef.get();
         if (hitlEx != null) {
             this.pendingSandboxHITToolCalls = toolCalls;
-            this.pendingSandboxHITDetails = hitlEx.details();
+            this.pendingSandboxHITDetails = hitlEx.getDetails();
             this.hitlState = HitlState.PENDING;
             try {
                 output.onLog(LogLevel.WARN,
-                        "[hitl] 沙箱越界触发强制审批: " + hitlEx.details());
+                        "[hitl] 沙箱越界触发强制审批: " + hitlEx.getDetails());
             } catch (Exception e) {
                 // 忽略异常
             }
