@@ -615,5 +615,44 @@ export const utils = {
   }
 }
 
+// 技能市场 API
+export const skillMarketAPI = {
+  // 获取可用市场列表 - GET /api/skill-market/markets
+  getMarkets: () => {
+    return api.get('/skill-market/markets')
+  },
+
+  // 浏览/搜索技能 - GET /api/skill-market/proxy
+  proxy: (params) => {
+    return api.get('/skill-market/proxy', { params })
+  },
+
+  // 获取技能详情 - GET /api/skill-market/detail
+  getDetail: (slug, marketName) => {
+    const params = { slug }
+    if (marketName) params.marketName = marketName
+    return api.get('/skill-market/detail', { params })
+  },
+
+  // 安装技能 - POST /api/skill-market/install
+  install: (slug, marketName) => {
+    const params = new URLSearchParams()
+    params.append('slug', slug)
+    if (marketName) params.append('marketName', marketName)
+    return api.post('/skill-market/install', params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    })
+  },
+
+  // 卸载技能 - POST /api/skill-market/uninstall
+  uninstall: (slug) => {
+    const params = new URLSearchParams()
+    params.append('slug', slug)
+    return api.post('/skill-market/uninstall', params, {
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+    })
+  }
+}
+
 export default api
 

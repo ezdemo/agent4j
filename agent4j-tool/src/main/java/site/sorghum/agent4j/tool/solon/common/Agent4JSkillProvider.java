@@ -55,13 +55,12 @@ public class Agent4JSkillProvider extends CliSkillProvider implements SolonToToo
 
     @Override
     public String getSystemPrompt() {
-        ArrayList<Skill> skills = new ArrayList<>(this.getSkills());
-        skills.add(pdfSkill);
-        skills.add(nodejsSkill);
-        skills.add(pythonSkill);
-        return skills.stream().filter(it -> !(it instanceof TerminalSkill)).map(
-                it -> it.getInstruction(null)
-        ).collect(Collectors.joining("\n"));
+        return """
+                ## 技能库执行规约
+                ### 运行模式: 路径导航
+                优先使用合适的技能解决问题（不确定用什么技能时，可通过 skillsearch 搜索）。注意：在执行任务中，请务必通过 skillread 读取或回顾规约。
+                当前技能较多，仅展示路径索引（没有描述）。请推断功能并调用 skillread。如果不确定，请使用 skillsearch 检索
+                """;
     }
 
 }

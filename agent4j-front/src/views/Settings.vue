@@ -34,7 +34,7 @@
           <h2>{{ currentTab?.label || '设置' }}</h2>
           <p class="header-desc">{{ currentTab?.description }}</p>
         </div>
-        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp'" class="header-actions">
+        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'skill-market'" class="header-actions">
           <button :disabled="loading || !hasChanges" class="btn btn-primary" @click="saveSettings">
             <svg v-if="!loading" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
                  width="14">
@@ -865,6 +865,131 @@ X-Custom-Header=value"
           </div>
         </section>
 
+        <!-- ==================== 技能市场 ==================== -->
+        <section v-if="activeTab === 'skill-market'" class="settings-section">
+          <div class="section-card">
+            <div class="card-header">
+              <h3>技能市场</h3>
+              <p>从社区浏览、搜索和安装技能</p>
+            </div>
+            <div class="card-body">
+              <!-- 工具栏 -->
+              <div style="display:flex;gap:8px;margin-bottom:12px;align-items:center">
+                <!-- 市场选择 -->
+                <select v-model="skillMarket.currentMarket" @change="loadSkillItems" class="form-select" style="width:160px">
+                  <option v-for="m in skillMarket.markets" :key="m.name" :value="m.name">{{ m.name }}</option>
+                </select>
+                <!-- 搜索框 -->
+                <div class="input-group" style="flex:1">
+                  <input
+                    v-model="skillMarket.searchQuery"
+                    class="form-input"
+                    placeholder="搜索技能..."
+                    type="text"
+                    @keyup.enter="searchSkills"
+                  />
+                  <button class="btn btn-secondary" @click="searchSkills">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="11" cy="11" r="8"/>
+                      <line x1="21" y1="21" x2="16.65" y2="16.65"/>
+                    </svg>
+                  </button>
+                </div>
+                <!-- 刷新 -->
+                <button class="btn btn-secondary" :disabled="skillMarket.loading" @click="loadSkillItems">
+                  <svg :class="{ 'animate-spin': skillMarket.loading }" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                  </svg>
+                </button>
+              </div>
+
+              <!-- 加载状态 -->
+              <div v-if="skillMarket.loading" class="state-box">
+                <svg class="animate-spin" fill="none" height="24" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="24">
+                  <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                </svg>
+                <p>加载中...</p>
+              </div>
+
+              <!-- 错误状态 -->
+              <div v-else-if="skillMarket.error" class="state-box" style="color:var(--red)">
+                <svg fill="none" height="32" stroke="var(--red)" stroke-width="1.5" viewBox="0 0 24 24" width="32">
+                  <circle cx="12" cy="12" r="10"/>
+                  <line x1="15" y1="9" x2="9" y2="15"/>
+                  <line x1="9" y1="9" x2="15" y2="15"/>
+                </svg>
+                <p>{{ skillMarket.error }}</p>
+              </div>
+
+              <!-- 空状态 -->
+              <div v-else-if="skillMarket.items.length === 0" class="state-box">
+                <svg fill="none" height="32" stroke="var(--fg-3)" stroke-width="1.5" viewBox="0 0 24 24" width="32">
+                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+                </svg>
+                <p>暂无结果</p>
+              </div>
+
+              <!-- 技能列表 -->
+              <div v-else class="skill-list">
+                <div
+                  v-for="item in skillMarket.items"
+                  :key="item.slug || item.name"
+                  class="skill-item"
+                >
+                  <div class="skill-icon">{{ (item.displayName || item.name || 'SK').substring(0, 2).toUpperCase() }}</div>
+                  <div class="skill-info">
+                    <div class="skill-name">
+                      {{ item.displayName || item.name }}
+                      <span v-if="isSkillInstalled(item.slug || item.name)" class="skill-installed-badge">已安装</span>
+                    </div>
+                    <div v-if="item.summary || item.description" class="skill-desc">{{ (item.summary || item.description).length > 80 ? (item.summary || item.description).substring(0, 80) + '...' : (item.summary || item.description) }}</div>
+                    <div class="skill-meta">
+                      <span v-if="item.installs > 0">{{ item.installs >= 1000 ? (item.installs / 1000).toFixed(1) + 'k' : item.installs }} 安装</span>
+                      <span v-if="item.stars > 0">⭐ {{ item.stars >= 1000 ? (item.stars / 1000).toFixed(1) + 'k' : item.stars }}</span>
+                      <span v-if="item.ownerHandle">{{ item.ownerHandle }}</span>
+                    </div>
+                  </div>
+                  <div class="skill-actions">
+                    <button
+                      v-if="!isSkillInstalled(item.slug || item.name)"
+                      class="btn btn-primary btn-sm"
+                      :disabled="skillMarket.installing === (item.slug || item.name)"
+                      @click="installSkill(item.slug || item.name, item.displayName)"
+                    >
+                      <svg v-if="skillMarket.installing === (item.slug || item.name)" class="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                      </svg>
+                      <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                        <polyline points="7 10 12 15 17 10"/>
+                        <line x1="12" y1="15" x2="12" y2="3"/>
+                      </svg>
+                      {{ skillMarket.installing === (item.slug || item.name) ? '安装中...' : '安装' }}
+                    </button>
+                    <button
+                      v-else
+                      class="btn btn-ghost btn-sm"
+                      :disabled="skillMarket.installing === (item.slug || item.name)"
+                      @click="uninstallSkill(item.slug || item.name, item.displayName)"
+                      title="卸载"
+                    >
+                      <svg v-if="skillMarket.installing === (item.slug || item.name)" class="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                      </svg>
+                      <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="3 6 5 6 21 6"/>
+                        <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                      </svg>
+                      {{ skillMarket.installing === (item.slug || item.name) ? '卸载中...' : '卸载' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
       </div>
     </main>
   </div>
@@ -950,7 +1075,7 @@ X-Custom-Header=value"
 import {computed, onMounted, reactive, ref, watch} from 'vue'
 import {message} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
-import {configAPI, openApiAPI, mcpAPI} from '../services/api'
+import {configAPI, openApiAPI, mcpAPI, skillMarketAPI, agentAPI} from '../services/api'
 
 const store = useAppStore()
 
@@ -981,6 +1106,124 @@ const checkingConnection = ref(false)
 const connectionOk = ref(false)
 const connectionChecked = ref(false)
 const hasChanges = ref(false)
+
+// 技能市场状态
+const skillMarket = reactive({
+  markets: [],
+  currentMarket: '',
+  items: [],
+  loading: false,
+  error: '',
+  searchQuery: '',
+  searchActive: false,
+  installing: null  // 正在安装的 slug
+})
+
+// 加载技能市场列表
+async function loadSkillMarkets() {
+  try {
+    const res = await skillMarketAPI.getMarkets()
+    if (res.success && res.data && res.data.length > 0) {
+      skillMarket.markets = res.data
+      skillMarket.currentMarket = res.data[0].name
+      loadSkillItems()
+    }
+  } catch (err) {
+    console.warn('加载技能市场失败:', err)
+  }
+}
+
+// 加载热门技能
+async function loadSkillItems() {
+  skillMarket.loading = true
+  skillMarket.error = ''
+  try {
+    const params = {
+      action: skillMarket.searchActive && skillMarket.searchQuery ? 'search' : 'trending',
+      limit: 50,
+      marketName: skillMarket.currentMarket
+    }
+    if (skillMarket.searchActive && skillMarket.searchQuery) {
+      params.q = skillMarket.searchQuery
+    }
+    const res = await skillMarketAPI.proxy(params)
+    if (res.success && res.data) {
+      skillMarket.items = res.data
+    } else {
+      skillMarket.error = res.error || '加载失败'
+      skillMarket.items = []
+    }
+  } catch (err) {
+    skillMarket.error = '请求失败: ' + (err.message || err)
+    skillMarket.items = []
+  } finally {
+    skillMarket.loading = false
+  }
+}
+
+// 搜索技能
+function searchSkills() {
+  const q = skillMarket.searchQuery.trim()
+  skillMarket.searchActive = !!q
+  loadSkillItems()
+}
+
+// 安装技能
+async function installSkill(slug, displayName) {
+  skillMarket.installing = slug
+  try {
+    const res = await skillMarketAPI.install(slug, skillMarket.currentMarket)
+    if (res.success) {
+      message.success(`技能「${displayName || slug}」安装成功！`)
+      // 立即更新本地的已安装集合
+      installedSkills.add(slug)
+      // 重新从后端拉取已安装列表，确保同步
+      await loadInstalledSkills()
+    } else {
+      message.error(res.error || '安装失败')
+    }
+  } catch (err) {
+    message.error('安装失败: ' + (err.message || err))
+  } finally {
+    skillMarket.installing = null
+  }
+}
+
+// 卸载技能
+async function uninstallSkill(slug, displayName) {
+  skillMarket.installing = slug
+  try {
+    const res = await skillMarketAPI.uninstall(slug)
+    if (res.success) {
+      message.success(`技能「${displayName || slug}」已卸载`)
+      installedSkills.delete(slug)
+      await loadInstalledSkills()
+    } else {
+      message.error(res.error || '卸载失败')
+    }
+  } catch (err) {
+    message.error('卸载失败: ' + (err.message || err))
+  } finally {
+    skillMarket.installing = null
+  }
+}
+
+// 获取已安装的技能列表
+let installedSkills = new Set()
+async function loadInstalledSkills() {
+  try {
+    const res = await agentAPI.getSkills()
+    if (res.success && res.data) {
+      installedSkills = new Set(res.data.map(s => s.name))
+    }
+  } catch (err) {
+    console.warn('加载已安装技能失败:', err)
+  }
+}
+
+function isSkillInstalled(slug) {
+  return installedSkills.has(slug)
+}
 
 // 标签页配置
 const tabs = [
@@ -1047,6 +1290,14 @@ const tabs = [
       <circle cx="6" cy="12" r="1.5" fill="currentColor"/>
       <circle cx="6" cy="18" r="1.5" fill="currentColor"/>
     </svg>`
+  },
+  {
+    id: 'skill-market',
+    label: '技能市场',
+    description: '浏览、搜索和安装社区技能',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
+    </svg>`
   }
 ]
 
@@ -1067,9 +1318,14 @@ watch(settings, () => {
 }, {deep: true})
 
 // 监听 Tab 切换
-watch(activeTab, (tab) => {
+watch(activeTab, async (tab) => {
   if (tab === 'mcp' && mcpServers.value.length === 0) {
     loadMcpServers()
+  }
+  if (tab === 'skill-market') {
+    // 先加载已安装技能列表，确保渲染市场列表时就有安装状态
+    await loadInstalledSkills()
+    loadSkillMarkets()
   }
 })
 
@@ -2313,7 +2569,7 @@ onMounted(() => {
 }
 
 .card-body {
-  padding: 0;
+  padding: 12px;
 }
 
 /* 设置行 */
@@ -3227,5 +3483,99 @@ onMounted(() => {
 
 .form-textarea:focus {
   border-color: var(--accent);
+}
+
+/* ==================== 技能市场 ==================== */
+.skill-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.skill-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  transition: all var(--t);
+}
+
+.skill-item:hover {
+  border-color: var(--accent);
+}
+
+.skill-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 12px;
+  flex-shrink: 0;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.skill-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.skill-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.skill-installed-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 1px 6px;
+  border-radius: 4px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  white-space: nowrap;
+}
+
+.skill-desc {
+  font-size: 12px;
+  color: var(--fg-3);
+  margin-top: 2px;
+  line-height: 1.4;
+}
+
+.skill-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--fg-3);
+}
+
+.skill-actions {
+  flex-shrink: 0;
+}
+
+.state-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--fg-3);
+  font-size: 13px;
 }
 </style>

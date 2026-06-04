@@ -83,6 +83,7 @@ public class ToolScanUtil {
         if (content == null || content.trim().isBlank()) {
             return;
         }
+        content = content.trim();
         builder.append("\n").append(content);
     }
 }
