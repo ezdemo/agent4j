@@ -9,11 +9,10 @@ import site.sorghum.agent4j.tool.solon.ToolManager;
 import java.util.List;
 
 @Component
-public class Agent4JMcpSkill implements SolonToTools {
-    McpGatewaySkill mcpGatewaySkill = new McpGatewaySkill();
+public class Agent4JMcpSkill extends McpGatewaySkill implements SolonToTools {
 
     @Override
     public List<AgentTool> getTools() {
-        return ToolManager.getToolsFromSKill(List.of(mcpGatewaySkill));
+        return ToolManager.getToolsFromSKill(List.of(this));
     }
 }
