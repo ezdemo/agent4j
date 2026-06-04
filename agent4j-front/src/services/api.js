@@ -567,10 +567,65 @@ export const mcpAPI = {
 
 // Git API
 export const gitAPI = {
-  // 获取当前分支和变更文件列表 - GET /api/git/diff?workspaceHash=xxx
+  // 获取当前分支 - GET /api/git/branch?workspaceHash=xxx
+  branch: (workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.get('/git/branch', { params })
+  },
+
+  // 获取变更文件列表 - GET /api/git/diff?workspaceHash=xxx
   diff: (workspaceHash) => {
     const params = workspaceHash ? { workspaceHash } : {}
     return api.get('/git/diff', { params })
+  },
+
+  // 综合状态检测（git 可用性 + 仓库状态 + 分支 + 变更文件） - GET /api/git/status?workspaceHash=xxx
+  status: (workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.get('/git/status', { params })
+  },
+
+  // 初始化 Git 仓库 - POST /api/git/init?workspaceHash=xxx&initialCommit=true
+  init: (workspaceHash, initialCommit) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    if (initialCommit !== undefined) params.initialCommit = initialCommit
+    return api.post('/git/init', null, { params })
+  },
+
+  // 获取 Diff 内容（unified diff 文本 + stat 摘要） - GET /api/git/diff-content?workspaceHash=xxx&path=xxx
+  diffContent: (workspaceHash, path) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    if (path) params.path = path
+    return api.get('/git/diff-content', { params })
+  },
+
+  // 暂存文件 - POST /api/git/stage?workspaceHash=xxx  body: { path }
+  stage: (workspaceHash, path) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.post('/git/stage', { path }, { params })
+  },
+
+  // 取消暂存文件 - POST /api/git/unstage?workspaceHash=xxx  body: { path }
+  unstage: (workspaceHash, path) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.post('/git/unstage', { path }, { params })
+  },
+
+  // 获取 Git 仓库中指定版本的文件内容 - GET /api/git/file-content?workspaceHash=xxx&path=xxx&ref=HEAD
+  fileContent: (workspaceHash, path, ref) => {
+    const params = {}
+    if (workspaceHash) params.workspaceHash = workspaceHash
+    if (path) params.path = path
+    if (ref) params.ref = ref
+    return api.get('/git/file-content', { params })
+  },
+
+  // Git 提交 - POST /api/git/commit?workspaceHash=xxx  body: { message, files }
+  commit: (workspaceHash, message, files) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    const body = { message }
+    if (files && files.length) body.files = files
+    return api.post('/git/commit', body, { params })
   }
 }
 

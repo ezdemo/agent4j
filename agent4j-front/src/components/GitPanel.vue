@@ -1,12 +1,13 @@
 <template>
   <div class="git-panel">
+    <!-- 头部 -->
     <div class="git-head">
       <div class="git-title">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>
         <span>源代码管理</span>
       </div>
       <div class="git-head-actions">
-        <button class="btn-icon-sm" @click="load" title="刷新">
+        <button class="btn-icon-sm" @click="loadStatus" title="刷新">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
         <button class="btn-icon-sm" @click="$emit('close')" title="关闭">
@@ -15,87 +16,150 @@
       </div>
     </div>
 
-    <!-- 分支信息 -->
-    <div class="git-branch" v-if="branch && branch !== 'unknown'">
-      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
-      <span class="branch-name">{{ branch }}</span>
-      <span class="change-count" v-if="hasChanges">{{ staged.length + unstaged.length + untracked.length }}</span>
-    </div>
-
-    <div class="git-branch" v-else-if="!loading && !error">
-      <span class="branch-empty">非 Git 仓库</span>
-    </div>
+    <!-- 操作反馈 -->
+    <div v-if="feedback" class="git-feedback" :class="feedback.type">{{ feedback.message }}</div>
 
     <!-- 加载中 -->
     <div v-if="loading" class="git-loading">
       <div class="loading-spinner"></div>
     </div>
 
-    <!-- 错误 -->
+    <!-- 其他错误 -->
     <div v-else-if="error" class="git-error">{{ error }}</div>
 
-    <!-- 文件列表 -->
-    <div v-else-if="hasChanges" class="git-files">
-      <!-- 未暂存变更（默认展开） -->
-      <template v-if="unstaged.length">
-        <div class="git-section-header" @click="showUnstaged = !showUnstaged">
-          <div class="section-left">
-            <svg class="chevron" :class="{ open: showUnstaged }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-            <span>未暂存的变更</span>
-          </div>
-          <span class="section-count">{{ unstaged.length }}</span>
-        </div>
-        <template v-if="showUnstaged">
-          <div v-for="f in unstaged" :key="'u-'+f.path" class="git-file">
-            <span class="file-status" :class="f.status">{{ f.status }}</span>
-            <span class="file-path" :title="f.path">{{ f.path }}</span>
-          </div>
-        </template>
-      </template>
-      <!-- 已暂存变更（默认折叠） -->
-      <template v-if="staged.length">
-        <div class="git-section-header" @click="showStaged = !showStaged">
-          <div class="section-left">
-            <svg class="chevron" :class="{ open: showStaged }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-            <span>已暂存的变更</span>
-          </div>
-          <span class="section-count">{{ staged.length }}</span>
-        </div>
-        <template v-if="showStaged">
-          <div v-for="f in staged" :key="'s-'+f.path" class="git-file">
-            <span class="file-status" :class="f.status">{{ f.status }}</span>
-            <span class="file-path" :title="f.path">{{ f.path }}</span>
-          </div>
-        </template>
-      </template>
-      <!-- 未跟踪文件（默认折叠） -->
-      <template v-if="untracked.length">
-        <div class="git-section-header" @click="showUntracked = !showUntracked">
-          <div class="section-left">
-            <svg class="chevron" :class="{ open: showUntracked }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-            <span>未跟踪文件</span>
-          </div>
-          <span class="section-count">{{ untracked.length }}</span>
-        </div>
-        <template v-if="showUntracked">
-          <div v-for="f in untracked" :key="'n-'+f.path" class="git-file">
-            <span class="file-status U">?</span>
-            <span class="file-path" :title="f.path">{{ f.path }}</span>
-          </div>
-        </template>
-      </template>
-    </div>
+    <!-- 三态界面 -->
+    <template v-else>
+      <!-- 状态 1: Git 不可用 -->
+      <div v-if="!gitAvailable" class="git-state-unavailable">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>
+        <p>Git 未安装或不可用</p>
+        <span class="hint">请安装 Git 后重启应用</span>
+      </div>
 
-    <!-- 空状态 -->
-    <div v-else-if="branch && branch !== 'unknown'" class="git-empty">
-      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-      <span>工作区干净</span>
-    </div>
+      <!-- 状态 2: 仓库未初始化 -->
+      <div v-else-if="!initialized" class="git-state-uninit">
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>
+        <p>当前目录尚未初始化为 Git 仓库</p>
+        <label class="init-checkbox">
+          <input type="checkbox" v-model="initCommit" />
+          <span>初始化后创建首次提交</span>
+        </label>
+        <button class="btn-init" @click="handleInit" :disabled="initLoading">
+          {{ initLoading ? '初始化中...' : '初始化 Git 仓库' }}
+        </button>
+      </div>
+
+      <!-- 状态 3: 正常 -->
+      <template v-else>
+        <!-- 分支信息 -->
+        <div class="git-branch">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+          <span class="branch-name">{{ branchName }}</span>
+          <span class="change-count" v-if="hasChanges">{{ stagedFiles.length + unstagedFiles.length + untrackedFiles.length }}</span>
+        </div>
+
+        <!-- 提交区域 -->
+        <div class="commit-area" v-if="stagedFiles.length > 0">
+          <textarea
+            class="commit-input"
+            placeholder="提交信息（按 Enter 提交）..."
+            v-model="commitMessage"
+            rows="2"
+            @keydown.enter.exact.prevent="handleCommit"
+          ></textarea>
+          <button
+            class="commit-button"
+            @click="handleCommit"
+            :disabled="committing || !commitMessage.trim()"
+          >
+            {{ committing ? '提交中...' : `提交 (${stagedFiles.length})` }}
+          </button>
+        </div>
+
+        <!-- 文件列表 -->
+        <div class="git-files" v-if="hasChanges">
+          <!-- 已暂存 -->
+          <template v-if="stagedFiles.length">
+            <div class="git-section-header staged" @click="showStaged = !showStaged">
+              <div class="section-left">
+                <svg class="chevron" :class="{ open: showStaged }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                <span>已暂存的变更</span>
+              </div>
+              <span class="section-count">{{ stagedFiles.length }}</span>
+            </div>
+            <template v-if="showStaged">
+              <div v-for="f in stagedFiles" :key="'s-'+f.path" class="git-file" @click="openDiff(f.path)">
+                <span class="file-status" :class="(f.status || f.index || 'M')">{{ (f.status || f.index || 'M') }}</span>
+                <span class="file-path" :title="f.path">{{ f.path }}</span>
+                <button class="file-action-btn unstage-btn" @click.stop="handleUnstage(f.path)" title="取消暂存">−</button>
+              </div>
+            </template>
+          </template>
+
+          <!-- 未暂存变更 -->
+          <template v-if="unstagedFiles.length">
+            <div class="git-section-header" @click="showUnstaged = !showUnstaged">
+              <div class="section-left">
+                <svg class="chevron" :class="{ open: showUnstaged }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                <span>未暂存的变更</span>
+              </div>
+              <span class="section-count">{{ unstagedFiles.length }}</span>
+            </div>
+            <template v-if="showUnstaged">
+              <div v-for="f in unstagedFiles" :key="'u-'+f.path" class="git-file" @click="openDiff(f.path)">
+                <span class="file-status" :class="(f.status || f.workTree || 'M')">{{ (f.status || f.workTree || 'M') }}</span>
+                <span class="file-path" :title="f.path">{{ f.path }}</span>
+                <button class="file-action-btn stage-btn" @click.stop="handleStage(f.path)" title="暂存">+</button>
+              </div>
+            </template>
+          </template>
+
+          <!-- 未跟踪文件 -->
+          <template v-if="untrackedFiles.length">
+            <div class="git-section-header untracked" @click="showUntracked = !showUntracked">
+              <div class="section-left">
+                <svg class="chevron" :class="{ open: showUntracked }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                <span>未跟踪文件</span>
+              </div>
+              <span class="section-count">{{ untrackedFiles.length }}</span>
+            </div>
+            <template v-if="showUntracked">
+              <div v-for="f in untrackedFiles" :key="'n-'+f.path" class="git-file" @click="openDiff(f.path)">
+                <span class="file-status U">?</span>
+                <span class="file-path" :title="f.path">{{ f.path }}</span>
+                <button class="file-action-btn stage-btn" @click.stop="handleStage(f.path)" title="暂存">+</button>
+              </div>
+            </template>
+          </template>
+        </div>
+
+        <!-- 空状态 -->
+        <div v-else class="git-empty">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          <span>工作区干净，没有待提交的更改</span>
+        </div>
+
+        <!-- Diff 预览弹层 -->
+        <div v-if="diffViewer.open" class="diff-overlay" @click.self="closeDiffViewer">
+          <div class="diff-viewer">
+            <div class="diff-viewer-head">
+              <span class="diff-viewer-file">{{ diffViewer.file }}</span>
+              <span class="diff-viewer-stat" v-if="diffViewer.stat">{{ diffViewer.stat }}</span>
+              <button class="btn-icon-sm" @click="closeDiffViewer" title="关闭">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+              </button>
+            </div>
+            <pre class="diff-viewer-content" v-if="diffViewer.diff"><code v-html="renderDiff(diffViewer.diff)"></code></pre>
+            <div v-else class="diff-viewer-empty">无变更</div>
+          </div>
+        </div>
+      </template>
+    </template>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
+import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { gitAPI } from '../services/api'
 
 const props = defineProps({
@@ -104,49 +168,197 @@ const props = defineProps({
 
 defineEmits(['close'])
 
-const branch = ref('')
-const staged = ref([])
-const unstaged = ref([])
-const untracked = ref([])
+// ---- 状态 ----
 const loading = ref(false)
 const error = ref('')
-const showUnstaged = ref(true)
+const gitAvailable = ref(false)
+const initialized = ref(false)
+const branchName = ref('')
+const stagedFiles = ref([])
+const unstagedFiles = ref([])
+const untrackedFiles = ref([])
+
+// 折叠控制
 const showStaged = ref(false)
+const showUnstaged = ref(true)
 const showUntracked = ref(false)
 
-const hasChanges = computed(() => staged.value.length || unstaged.value.length || untracked.value.length)
+// 提交
+const commitMessage = ref('')
+const committing = ref(false)
 
-const load = async () => {
+// 初始化
+const initLoading = ref(false)
+const initCommit = ref(true)
+
+// 反馈
+const feedback = ref(null)
+
+// Diff 预览
+const diffViewer = ref({ open: false, file: '', diff: '', stat: '' })
+
+const hasChanges = computed(() => stagedFiles.value.length || unstagedFiles.value.length || untrackedFiles.value.length)
+
+// ---- 加载状态 ----
+const loadStatus = async () => {
   loading.value = true
   error.value = ''
   try {
-    const r = await gitAPI.diff(props.workspaceHash)
+    const r = await gitAPI.status(props.workspaceHash)
     if (r.success && r.data) {
-      branch.value = r.data.branch || ''
-      staged.value = r.data.staged || []
-      unstaged.value = r.data.unstaged || []
-      untracked.value = r.data.untracked || []
+      const d = r.data
+      gitAvailable.value = d.gitAvailable
+      initialized.value = d.initialized
+      branchName.value = d.branch || ''
+      stagedFiles.value = d.staged || []
+      unstagedFiles.value = d.changed || []
+      untrackedFiles.value = d.untracked || []
     } else {
-      error.value = r.error || '加载失败'
+      // 回退到 diff 接口
+      await loadDiffFallback()
     }
   } catch (e) {
-    error.value = e.message || '加载失败'
+    await loadDiffFallback()
   } finally {
     loading.value = false
   }
 }
 
-onMounted(load)
+const loadDiffFallback = async () => {
+  try {
+    const r = await gitAPI.diff(props.workspaceHash)
+    if (r.success && r.data) {
+      gitAvailable.value = true
+      initialized.value = true
+      branchName.value = r.data.branch || ''
+      stagedFiles.value = r.data.staged || []
+      unstagedFiles.value = r.data.unstaged || []
+      untrackedFiles.value = r.data.untracked || []
+    } else {
+      error.value = r.error || '加载失败'
+    }
+  } catch (e) {
+    error.value = e.message || '加载失败'
+  }
+}
 
-// 工作区切换时刷新
+// ---- 操作 ----
+const showFeedback = (type, message) => {
+  feedback.value = { type, message }
+  setTimeout(() => { feedback.value = null }, 3000)
+}
+
+const handleInit = async () => {
+  initLoading.value = true
+  try {
+    const r = await gitAPI.init(props.workspaceHash, initCommit.value)
+    if (r.success) {
+      showFeedback('success', 'Git 仓库初始化成功')
+      await loadStatus()
+    } else {
+      showFeedback('error', r.error || '初始化失败')
+    }
+  } catch (e) {
+    showFeedback('error', e.message || '初始化失败')
+  } finally {
+    initLoading.value = false
+  }
+}
+
+const handleStage = async (path) => {
+  try {
+    const r = await gitAPI.stage(props.workspaceHash, path)
+    if (r.success) {
+      showFeedback('success', `已暂存: ${path}`)
+      await loadStatus()
+    } else {
+      showFeedback('error', r.error || '暂存失败')
+    }
+  } catch (e) {
+    showFeedback('error', e.message || '暂存失败')
+  }
+}
+
+const handleUnstage = async (path) => {
+  try {
+    const r = await gitAPI.unstage(props.workspaceHash, path)
+    if (r.success) {
+      showFeedback('success', `已取消暂存: ${path}`)
+      await loadStatus()
+    } else {
+      showFeedback('error', r.error || '取消暂存失败')
+    }
+  } catch (e) {
+    showFeedback('error', e.message || '取消暂存失败')
+  }
+}
+
+const handleCommit = async () => {
+  if (!commitMessage.value.trim() || committing.value) return
+  committing.value = true
+  try {
+    const r = await gitAPI.commit(props.workspaceHash, commitMessage.value.trim())
+    if (r.success) {
+      showFeedback('success', '提交成功')
+      commitMessage.value = ''
+      await loadStatus()
+    } else {
+      showFeedback('error', r.error || '提交失败')
+    }
+  } catch (e) {
+    showFeedback('error', e.message || '提交失败')
+  } finally {
+    committing.value = false
+  }
+}
+
+const openDiff = async (path) => {
+  diffViewer.value = { open: true, file: path, diff: '', stat: '' }
+  try {
+    const r = await gitAPI.diffContent(props.workspaceHash, path)
+    if (r.success && r.data) {
+      diffViewer.value.diff = r.data.diff || ''
+      diffViewer.value.stat = r.data.stat || ''
+    }
+  } catch (e) {
+    diffViewer.value.diff = '加载 diff 失败: ' + (e.message || '')
+  }
+}
+
+const closeDiffViewer = () => {
+  diffViewer.value = { open: false, file: '', diff: '', stat: '' }
+}
+
+// ---- Diff 渲染 ----
+const renderDiff = (text) => {
+  if (!text) return ''
+  const lines = text.split('\n')
+  return lines.map(line => {
+    let cls = ''
+    if (line.startsWith('+') && !line.startsWith('+++')) cls = 'diff-add'
+    else if (line.startsWith('-') && !line.startsWith('---')) cls = 'diff-del'
+    else if (line.startsWith('@@')) cls = 'diff-hunk'
+    else if (line.startsWith('diff ') || line.startsWith('index ') ||
+             line.startsWith('---') || line.startsWith('+++')) cls = 'diff-meta'
+    return `<span class="${cls}">${escapeHtml(line)}</span>`
+  }).join('\n')
+}
+
+const escapeHtml = (s) => {
+  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+}
+
+// ---- 生命周期 ----
+onMounted(loadStatus)
+
 watch(() => props.workspaceHash, () => {
-  if (props.workspaceHash) load()
+  if (props.workspaceHash) loadStatus()
 })
 </script>
 
 <style scoped>
 .git-panel {
-  width: 260px;
+  width: 280px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -155,6 +367,7 @@ watch(() => props.workspaceHash, () => {
   overflow: hidden;
 }
 
+/* 头部 */
 .git-head {
   display: flex;
   align-items: center;
@@ -162,13 +375,7 @@ watch(() => props.workspaceHash, () => {
   padding: 10px 12px;
   border-bottom: 1px solid var(--border);
 }
-
-.git-head-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
+.git-head-actions { display: flex; align-items: center; gap: 2px; }
 .git-title {
   display: flex;
   align-items: center;
@@ -179,6 +386,65 @@ watch(() => props.workspaceHash, () => {
 }
 .git-title svg { color: var(--fg-3); }
 
+/* 反馈 */
+.git-feedback {
+  padding: 6px 12px;
+  font-size: 11px;
+  text-align: center;
+  border-bottom: 1px solid var(--border);
+}
+.git-feedback.success { background: #d1fae5; color: #065f46; }
+.git-feedback.error { background: #fee2e2; color: #991b1b; }
+[data-theme="dark"] .git-feedback.success { background: #052e16; color: #4ade80; }
+[data-theme="dark"] .git-feedback.error { background: #450a0a; color: #f87171; }
+
+/* 加载 */
+.git-loading { display: flex; align-items: center; justify-content: center; padding: 24px; }
+.git-error { padding: 12px; font-size: 12px; color: var(--red); text-align: center; }
+
+/* 三态 */
+.git-state-unavailable,
+.git-state-uninit {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  padding: 32px 16px;
+  text-align: center;
+}
+.git-state-unavailable svg { color: var(--fg-4); }
+.git-state-unavailable p { font-size: 13px; color: var(--fg-3); margin: 0; }
+.git-state-unavailable .hint { font-size: 11px; color: var(--fg-4); }
+
+.git-state-uninit svg { color: var(--accent); }
+.git-state-uninit p { font-size: 13px; color: var(--fg-2); margin: 0; }
+
+.init-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: var(--fg-3);
+  cursor: pointer;
+}
+.init-checkbox input { accent-color: var(--accent); }
+
+.btn-init {
+  margin-top: 4px;
+  padding: 6px 18px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--t);
+}
+.btn-init:hover { opacity: 0.85; }
+.btn-init:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* 分支 */
 .git-branch {
   display: flex;
   align-items: center;
@@ -188,15 +454,7 @@ watch(() => props.workspaceHash, () => {
   font-size: 12px;
 }
 .git-branch svg { color: var(--fg-4); flex-shrink: 0; }
-
-.branch-name {
-  font-weight: 600;
-  font-family: var(--mono);
-  color: var(--accent);
-}
-.branch-empty {
-  color: var(--fg-4);
-}
+.branch-name { font-weight: 600; font-family: var(--mono); color: var(--accent); }
 .change-count {
   margin-left: auto;
   background: var(--accent-bg);
@@ -207,26 +465,40 @@ watch(() => props.workspaceHash, () => {
   border-radius: 8px;
 }
 
-.git-loading {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-}
-
-.git-error {
-  padding: 12px;
+/* 提交区域 */
+.commit-area { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.commit-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  color: var(--fg);
   font-size: 12px;
-  color: var(--red);
-  text-align: center;
+  font-family: var(--mono);
+  resize: vertical;
+  box-sizing: border-box;
 }
-
-.git-files {
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px 0;
+.commit-input::placeholder { color: var(--fg-4); }
+.commit-input:focus { outline: none; border-color: var(--accent); }
+.commit-button {
+  width: 100%;
+  margin-top: 6px;
+  padding: 5px 0;
+  border: none;
+  border-radius: 4px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--t);
 }
+.commit-button:hover { opacity: 0.85; }
+.commit-button:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* 文件列表 */
+.git-files { flex: 1; overflow-y: auto; padding: 4px 0; }
 .git-section-header {
   display: flex;
   align-items: center;
@@ -243,32 +515,18 @@ watch(() => props.workspaceHash, () => {
 .git-section-header:hover { color: var(--fg-2); }
 .git-section-header.staged { color: var(--green); }
 .git-section-header.untracked { color: var(--fg-4); }
-.section-left {
-  display: flex;
-  align-items: center;
-  gap: 5px;
-}
-.chevron {
-  transition: transform 0.15s ease;
-  flex-shrink: 0;
-}
-.chevron.open {
-  transform: rotate(90deg);
-}
-.section-count {
-  font-size: 10px;
-  background: var(--bg-3);
-  padding: 0 5px;
-  border-radius: 8px;
-  font-weight: 600;
-}
+.section-left { display: flex; align-items: center; gap: 5px; }
+.chevron { transition: transform 0.15s ease; flex-shrink: 0; }
+.chevron.open { transform: rotate(90deg); }
+.section-count { font-size: 10px; background: var(--bg-3); padding: 0 5px; border-radius: 8px; font-weight: 600; }
 
 .git-file {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 5px 12px;
+  gap: 6px;
+  padding: 4px 12px;
   font-size: 12px;
+  cursor: pointer;
   transition: background var(--t);
 }
 .git-file:hover { background: var(--bg-3); }
@@ -318,6 +576,29 @@ watch(() => props.workspaceHash, () => {
   font-family: var(--mono);
 }
 
+.file-action-btn {
+  flex-shrink: 0;
+  width: 18px;
+  height: 18px;
+  border: none;
+  border-radius: 3px;
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  opacity: 0;
+  transition: opacity var(--t);
+}
+.git-file:hover .file-action-btn { opacity: 1; }
+.stage-btn { background: #d1fae5; color: #065f46; }
+.unstage-btn { background: #fee2e2; color: #991b1b; }
+[data-theme="dark"] .stage-btn { background: #052e16; color: #4ade80; }
+[data-theme="dark"] .unstage-btn { background: #450a0a; color: #f87171; }
+
+/* 空状态 */
 .git-empty {
   display: flex;
   flex-direction: column;
@@ -328,4 +609,72 @@ watch(() => props.workspaceHash, () => {
   color: var(--fg-4);
 }
 .git-empty svg { color: var(--green); }
+
+/* Diff 预览弹层 */
+.diff-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.diff-viewer {
+  width: min(90vw, 800px);
+  max-height: 80vh;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: 0 8px 32px rgba(0,0,0,0.2);
+}
+.diff-viewer-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-2);
+}
+.diff-viewer-file { font-size: 12px; font-family: var(--mono); color: var(--fg); font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diff-viewer-stat { font-size: 11px; color: var(--fg-4); white-space: nowrap; }
+.diff-viewer-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 8px 12px;
+  margin: 0;
+  font-size: 12px;
+  font-family: var(--mono);
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: var(--fg-2);
+  background: var(--bg);
+}
+.diff-viewer-content code { font-family: var(--mono); }
+.diff-viewer-content :deep(.diff-add) {
+  background: rgba(16, 185, 129, 0.12);
+  color: #065f46;
+  display: block;
+}
+.diff-viewer-content :deep(.diff-del) {
+  background: rgba(239, 68, 68, 0.12);
+  color: #991b1b;
+  display: block;
+}
+.diff-viewer-content :deep(.diff-hunk) {
+  color: var(--accent);
+  font-weight: 600;
+  display: block;
+}
+.diff-viewer-content :deep(.diff-meta) {
+  color: var(--fg-4);
+  display: block;
+}
+[data-theme="dark"] .diff-viewer-content :deep(.diff-add) { color: #4ade80; }
+[data-theme="dark"] .diff-viewer-content :deep(.diff-del) { color: #f87171; }
+.diff-viewer-empty { padding: 32px; text-align: center; font-size: 12px; color: var(--fg-4); }
 </style>
