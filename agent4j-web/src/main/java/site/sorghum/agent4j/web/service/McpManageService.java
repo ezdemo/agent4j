@@ -1,15 +1,25 @@
 package site.sorghum.agent4j.web.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.noear.snack4.Feature;
+import org.noear.snack4.ONode;
+import org.noear.snack4.Options;
+import org.noear.snack4.json.JsonWriter;
 import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.ai.mcp.client.McpClientProvider;
 import org.noear.solon.annotation.Component;
+import org.noear.solon.annotation.Init;
 import org.noear.solon.annotation.Inject;
 import site.sorghum.agent4j.tool.solon.mcp.Agent4JMcpSkill;
 import site.sorghum.agent4j.web.model.McpServerDTO;
 import site.sorghum.agent4j.web.model.McpToolInfoDTO;
 import site.sorghum.agent4j.web.model.McpToolListDTO;
 
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.time.Duration;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
@@ -20,6 +30,7 @@ import java.util.stream.Collectors;
  * <p>
  * 基于 Agent4JMcpSkill（McpGatewaySkill）实现 MCP 服务器的增删改查、
  * 启停控制、连接检测及工具权限管理。
+ * 配置持久化到 <code>~/.agent4j/mcp-servers.json</code>，服务重启后自动恢复。
  * </p>
  *
  * @author Sorghum
@@ -28,14 +39,47 @@ import java.util.stream.Collectors;
 @Component
 public class McpManageService {
 
+    private static final String CONFIG_FILE = "mcp-servers.json";
+
     @Inject
     private Agent4JMcpSkill agent4JMcpSkill;
 
-    /** 内存存储：服务器名称 → 配置（持久化待实现） */
+    /** 内存存储：服务器名称 → 配置 */
     private final Map<String, McpServerDTO> serverStore = new ConcurrentHashMap<>();
 
-    /** 内存存储：服务器名称 → 禁用工具列表 */
+    /** 内存存储：服务器名称 → 禁用工具名称集合 */
     private final Map<String, Set<String>> disallowedToolsStore = new ConcurrentHashMap<>();
+
+    /**
+     * 初始化：从持久化文件加载已注册的 MCP 服务器，并注册到 skill。
+     */
+    @Init
+    public void init() {
+        McpPersistenceData data = loadFromFile();
+        if (data != null) {
+            // 恢复禁用工具配置
+            if (data.disallowedTools != null) {
+                data.disallowedTools.forEach((name, list) -> {
+                    if (list != null) {
+                        disallowedToolsStore.put(name, new LinkedHashSet<>(list));
+                    }
+                });
+            }
+            // 恢复服务器并注册到 skill
+            if (data.servers != null) {
+                for (McpServerDTO server : data.servers) {
+                    try {
+                        registerToSkill(server);
+                        serverStore.put(server.name, server);
+                        log.debug("自动加载 MCP 服务器: {} (type={})", server.name, server.type);
+                    } catch (Exception e) {
+                        log.warn("自动加载 MCP 服务器失败: {}", server.name, e);
+                    }
+                }
+            }
+            log.info("MCP 服务器加载完成: {} 个", serverStore.size());
+        }
+    }
 
     // ==================== 服务器 CRUD ====================
 
@@ -43,7 +87,6 @@ public class McpManageService {
      * 获取所有 MCP 服务器列表。
      */
     public List<McpServerDTO> listServers() {
-        // 从 serverStore 返回，确保与 skill 注册状态同步
         return new ArrayList<>(serverStore.values());
     }
 
@@ -51,49 +94,10 @@ public class McpManageService {
      * 新增 MCP 服务器。
      */
     public McpServerDTO addServer(McpServerDTO server) {
-        try {
-            // 构建 McpClientProvider 并注册到 skill
-            var builder = McpClientProvider.builder()
-                    .name(server.name);
-
-            if ("stdio".equals(server.type)) {
-                builder.channel("stdio")
-                        .command(server.command);
-                if (server.args != null && !server.args.isEmpty()) {
-                    builder.args(server.args);
-                }
-                if (server.env != null && !server.env.isEmpty()) {
-                    builder.env(server.env);
-                }
-            } else {
-                // sse / streamable
-                builder.channel(server.type)
-                        .url(server.url);
-                if (server.headers != null && !server.headers.isEmpty()) {
-                    builder.headers(server.headers);
-                }
-                if (server.timeout != null && !server.timeout.isBlank()) {
-                    try {
-                        String t = server.timeout.trim();
-                        if (t.endsWith("s")) {
-                            builder.timeout(Duration.ofSeconds(Long.parseLong(t.substring(0, t.length() - 1))));
-                        } else {
-                            builder.timeout(Duration.parse("PT" + t));
-                        }
-                    } catch (Exception e) {
-                        log.warn("解析超时配置失败: {}", server.timeout);
-                    }
-                }
-            }
-
-            McpClientProvider provider = builder.build();
-            agent4JMcpSkill.addMcpServer(server.name, provider);
-            serverStore.put(server.name, server);
-            log.info("MCP 服务器已新增并注册: {} (type={})", server.name, server.type);
-        } catch (Exception e) {
-            log.error("MCP 服务器注册失败: {}", server.name, e);
-            throw new RuntimeException("MCP 服务器注册失败: " + e.getMessage(), e);
-        }
+        registerToSkill(server);
+        serverStore.put(server.name, server);
+        saveToFile();
+        log.info("MCP 服务器已新增并注册: {} (type={})", server.name, server.type);
         return server;
     }
 
@@ -101,16 +105,24 @@ public class McpManageService {
      * 更新 MCP 服务器配置（先移除旧配置，再注册新配置）。
      */
     public McpServerDTO updateServer(String originalName, McpServerDTO server) {
-        // 先移除旧的（如果名称变了）
+        // 先移除旧的
         if (originalName != null && !originalName.equals(server.name)) {
             removeMcpServerFromSkill(originalName);
             serverStore.remove(originalName);
+            Set<String> disallowed = disallowedToolsStore.remove(originalName);
+            if (disallowed != null) {
+                disallowedToolsStore.put(server.name, disallowed);
+            }
         } else if (originalName != null) {
             removeMcpServerFromSkill(originalName);
         }
 
         // 注册新的
-        return addServer(server);
+        registerToSkill(server);
+        serverStore.put(server.name, server);
+        saveToFile();
+        log.info("MCP 服务器已更新: {} -> {}", originalName, server.name);
+        return server;
     }
 
     /**
@@ -120,6 +132,7 @@ public class McpManageService {
         removeMcpServerFromSkill(name);
         serverStore.remove(name);
         disallowedToolsStore.remove(name);
+        saveToFile();
         log.info("MCP 服务器已删除: {}", name);
     }
 
@@ -133,14 +146,13 @@ public class McpManageService {
         if (server == null) return null;
 
         if (enabled) {
-            // 启用：重新注册
-            addServer(server);
+            registerToSkill(server);
         } else {
-            // 禁用：从 skill 移除
             removeMcpServerFromSkill(name);
         }
 
         server.setEnabled(enabled);
+        saveToFile();
         log.info("MCP 服务器 {} 已{}", name, enabled ? "启用" : "禁用");
         return server;
     }
@@ -149,7 +161,6 @@ public class McpManageService {
 
     /**
      * 检测 MCP 服务器连接是否可达。
-     * 通过尝试构建 Provider 并获取工具列表来验证连通性。
      */
     public boolean checkConnection(McpServerDTO server) {
         try {
@@ -165,7 +176,6 @@ public class McpManageService {
                 if (server.env != null && !server.env.isEmpty()) {
                     builder.env(server.env);
                 }
-                // stdio 检测：超时设短一些
                 builder.timeout(Duration.ofSeconds(5));
             } else {
                 builder.channel(server.type)
@@ -177,7 +187,6 @@ public class McpManageService {
             }
 
             McpClientProvider provider = builder.build();
-            // 尝试获取工具列表，若成功则连接正常
             Collection<FunctionTool> tools = provider.getTools();
             provider.close();
             log.info("MCP 服务器连接检测成功: {} (type={}, tools={})", server.name, server.type, tools.size());
@@ -201,7 +210,6 @@ public class McpManageService {
 
         Set<String> disallowed = disallowedToolsStore.getOrDefault(serverName, Collections.emptySet());
 
-        // 从 skill 获取已注册的 provider 来获取工具列表
         try {
             McpClientProvider provider = agent4JMcpSkill.getMcpServer(serverName);
             if (provider == null) {
@@ -227,11 +235,49 @@ public class McpManageService {
         disallowedToolsStore.put(serverName, disallowedTools != null
                 ? new LinkedHashSet<>(disallowedTools)
                 : Collections.emptySet());
+        saveToFile();
         log.info("MCP 服务器 {} 工具权限已保存, 禁用 {} 个工具", serverName,
                 disallowedTools != null ? disallowedTools.size() : 0);
     }
 
-    // ==================== 私有辅助 ====================
+    // ==================== 注册到 Skill ====================
+
+    private void registerToSkill(McpServerDTO server) {
+        var builder = McpClientProvider.builder()
+                .name(server.name);
+
+        if ("stdio".equals(server.type)) {
+            builder.channel("stdio")
+                    .command(server.command);
+            if (server.args != null && !server.args.isEmpty()) {
+                builder.args(server.args);
+            }
+            if (server.env != null && !server.env.isEmpty()) {
+                builder.env(server.env);
+            }
+        } else {
+            builder.channel(server.type)
+                    .url(server.url);
+            if (server.headers != null && !server.headers.isEmpty()) {
+                builder.headers(server.headers);
+            }
+            if (server.timeout != null && !server.timeout.isBlank()) {
+                try {
+                    String t = server.timeout.trim();
+                    if (t.endsWith("s")) {
+                        builder.timeout(Duration.ofSeconds(Long.parseLong(t.substring(0, t.length() - 1))));
+                    } else {
+                        builder.timeout(Duration.parse("PT" + t));
+                    }
+                } catch (Exception e) {
+                    log.warn("解析超时配置失败: {}", server.timeout);
+                }
+            }
+        }
+
+        McpClientProvider provider = builder.build();
+        agent4JMcpSkill.addMcpServer(server.name, provider);
+    }
 
     private void removeMcpServerFromSkill(String name) {
         try {
@@ -239,5 +285,56 @@ public class McpManageService {
         } catch (Exception e) {
             log.warn("从 Skill 移除 MCP 服务器失败: {}", name, e);
         }
+    }
+
+    // ==================== 文件持久化 ====================
+
+    private Path configPath() {
+        return Paths.get(System.getProperty("user.home"), ".agent4j", CONFIG_FILE);
+    }
+
+    private void saveToFile() {
+        try {
+            Path path = configPath();
+            Files.createDirectories(path.getParent());
+
+            McpPersistenceData data = new McpPersistenceData();
+            data.servers = new ArrayList<>(serverStore.values());
+            data.disallowedTools = new LinkedHashMap<>();
+            disallowedToolsStore.forEach((name, set) ->
+                    data.disallowedTools.put(name, new ArrayList<>(set))
+            );
+
+            String json = JsonWriter.write(
+                    ONode.ofBean(data),
+                    Options.of(Feature.Write_PrettyFormat));
+            Files.writeString(path, json, StandardCharsets.UTF_8);
+        } catch (IOException e) {
+            log.error("保存 MCP 配置失败", e);
+        }
+    }
+
+    private McpPersistenceData loadFromFile() {
+        Path path = configPath();
+        if (!Files.exists(path)) {
+            return null;
+        }
+        try {
+            String json = Files.readString(path, StandardCharsets.UTF_8);
+            return ONode.ofJson(json).toBean(McpPersistenceData.class);
+        } catch (Exception e) {
+            log.warn("读取 MCP 配置失败: {}", path, e);
+            return null;
+        }
+    }
+
+    // ==================== 内部数据模型 ====================
+
+    /**
+     * 持久化数据结构：包含服务器列表和禁用工具配置。
+     */
+    public static class McpPersistenceData {
+        public List<McpServerDTO> servers;
+        public Map<String, List<String>> disallowedTools;
     }
 }

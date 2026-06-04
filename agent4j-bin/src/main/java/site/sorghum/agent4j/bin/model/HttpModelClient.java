@@ -131,7 +131,7 @@ public class HttpModelClient implements ModelClient {
             } catch (NumberFormatException ignored) {
             }
         }
-        if (model == null) return 128_000;
+        if (model == null) return 200_000;
         String m = model.toLowerCase();
         // Gemini 系列支持 1M
         if (m.contains("gemini")) return 1_000_000;
@@ -141,6 +141,7 @@ public class HttpModelClient implements ModelClient {
         if (m.contains("reasoner")) return 64_000;
         if (m.contains("deepseek")) return 1_000_000;
         if (m.contains("mimo")) return 1_000_000;
+        if (m.contains("m3")) return 512_000;
         // GPT-4 / o1 系列 128K
         if (m.contains("gpt-4") || m.contains("o1") || m.contains("o3")) return 128_000;
         // 默认

@@ -12,6 +12,18 @@
         <span class="tool-count">{{ filteredTools.length }} 个工具</span>
       </div>
       <div class="header-actions">
+        <button 
+          class="refresh-btn"
+          :class="{ refreshing }"
+          @click="loadTools"
+          :disabled="loading || refreshing"
+          title="刷新工具列表"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="23 4 23 10 17 10"/>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>
+        </button>
         <div class="search-box">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <circle cx="11" cy="11" r="8"/>
@@ -235,6 +247,7 @@ const searchQuery = ref('')
 const activeFilter = ref('all')
 const expandedTools = ref([])
 const loading = ref(false)
+const refreshing = ref(false)
 const error = ref('')
 const tools = ref([])
 
@@ -283,7 +296,13 @@ const filteredTools = computed(() => {
 
 // 方法
 const loadTools = async () => {
-  loading.value = true
+  // 已有数据则为刷新模式，否则首次加载
+  const isRefresh = tools.value.length > 0
+  if (isRefresh) {
+    refreshing.value = true
+  } else {
+    loading.value = true
+  }
   error.value = ''
   
   try {
@@ -315,6 +334,7 @@ const loadTools = async () => {
     tools.value = getDefaultTools()
   } finally {
     loading.value = false
+    refreshing.value = false
   }
 }
 
@@ -463,6 +483,43 @@ onMounted(() => {
 .header-actions {
   display: flex;
   gap: var(--space-3);
+  align-items: center;
+}
+
+/* 刷新按钮 */
+.refresh-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.refresh-btn:hover {
+  color: var(--brand-primary);
+  border-color: var(--brand-primary);
+  background: var(--accent-soft);
+}
+
+.refresh-btn:active {
+  transform: scale(0.95);
+}
+
+.refresh-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.refresh-btn.refreshing svg {
+  animation: spin 0.8s linear infinite;
 }
 
 /* 搜索框 */

@@ -41,6 +41,7 @@ public class ToolController {
     public ApiResponse<List<ToolInfoDTO>> list() {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         List<ToolInfoDTO> tools = new ArrayList<>();
+        agentService.getSharedToolRegistry().refresh();
         for (ToolDef def : agentService.getSharedToolRegistry().all().values()) {
             tools.add(toToolInfoDTO(def));
         }

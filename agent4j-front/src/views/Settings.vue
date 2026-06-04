@@ -581,7 +581,7 @@
                           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                         </svg>
                       </button>
-                      <label class="toggle-switch" @click.prevent>
+                      <label class="toggle-switch">
                         <input type="checkbox" :checked="svr.enabled" @change="toggleMcpServer(svr)"/>
                         <span class="toggle-slider"></span>
                       </label>
@@ -611,7 +611,6 @@
                   <input
                     id="mcpName"
                     v-model="mcpForm.name"
-                    :readonly="!!mcpEditName"
                     class="form-input"
                     placeholder="my-mcp-server"
                     type="text"
@@ -1740,6 +1739,17 @@ async function saveMcpTools() {
     const res = await mcpAPI.saveToolPermissions(mcpToolsServerName.value, mcpDisallowedTools.value)
     if (res.success !== false) {
       message.success('工具权限已保存')
+      // 保存后刷新工具列表
+      mcpToolsLoading.value = true
+      try {
+        const refresh = await mcpAPI.listTools(mcpToolsServerName.value)
+        if (refresh.success !== false) {
+          const d = refresh.data || {}
+          mcpTools.value = d.tools || []
+          mcpDisallowedTools.value = d.disallowedTools || []
+        }
+      } catch (_) {}
+      mcpToolsLoading.value = false
     } else {
       message.error(res.error || '保存失败')
     }

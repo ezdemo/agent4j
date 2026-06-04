@@ -215,7 +215,21 @@
         <div class="modal">
           <div class="modal-head">
             <span>工具列表</span>
-            <button class="btn-icon-sm" @click="showTools = false">×</button>
+            <div class="modal-head-actions">
+              <button
+                class="btn-icon-sm refresh-tools-btn"
+                :class="{ refreshing: refreshingTools }"
+                @click="refreshTools"
+                :disabled="refreshingTools"
+                title="刷新工具列表"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="23 4 23 10 17 10"/>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+              </button>
+              <button class="btn-icon-sm" @click="showTools = false">×</button>
+            </div>
           </div>
           <div class="modal-body">
             <div v-for="t in tools" :key="t.name" class="tool-row">
@@ -303,6 +317,7 @@ const usage = ref({})
 const tools = ref([])
 const config = ref({})
 const showTools = ref(false)
+const refreshingTools = ref(false)
 const isTauriEnv = ref(false)
 const showSetup = ref(true)  // SplashScreen (Tauri) 或 SetupScreen (非Tauri) 成功后设为 false
 
@@ -492,6 +507,16 @@ const loadData = async () => {
   await loadWorkspaces()
   await loadSessions()
   initialDataLoaded.value = true
+}
+
+// 刷新工具列表（不干扰其他数据）
+const refreshTools = async () => {
+  refreshingTools.value = true
+  try {
+    const r = await toolsAPI.list()
+    if (r.success) tools.value = r.data || []
+  } catch {}
+  refreshingTools.value = false
 }
 
 const loadSessions = async () => {
@@ -1080,6 +1105,26 @@ watch(showSettings, (newVal) => {
   margin-bottom: 8px;
   padding-bottom: 4px;
   border-bottom: 1px solid var(--border);
+}
+
+.modal-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.refresh-tools-btn {
+  transition: all var(--transition-fast);
+}
+.refresh-tools-btn:hover {
+  color: var(--accent);
+}
+.refresh-tools-btn.refreshing svg {
+  animation: spin 0.8s linear infinite;
+}
+.refresh-tools-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .tool-row {
