@@ -41,6 +41,7 @@ public class Agent4JSkillProvider extends CliSkillProvider implements SolonToToo
         nodejsSkill = nodejsSkillMap.computeIfAbsent(workDir, k -> new NodejsSkill(workDir));
         pythonSkill = pythonSkillMap.computeIfAbsent(workDir, k -> new PythonSkill(workDir));
         zipSkill = zipSkillMap.computeIfAbsent(workDir, k -> new ZipSkill(workDir));
+        this.sandboxMode(false);
     }
 
     public static Agent4JSkillProvider getOrCreate(String rootDir) {
