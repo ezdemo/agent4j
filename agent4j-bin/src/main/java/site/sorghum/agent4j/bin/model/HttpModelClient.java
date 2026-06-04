@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.model;
 
+import okhttp3.*;
 import org.noear.snack4.ONode;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -7,17 +8,17 @@ import site.sorghum.agent4j.bin.agent.ChatMessage;
 import site.sorghum.agent4j.bin.agent.ToolCallEntry;
 
 import java.io.*;
-import java.net.HttpURLConnection;
-import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
- * OpenAI 兼容 API 的 HTTP 客户端 —— {@link ModelClient} 的 HTTP 实现。
+ * OpenAI 兼容 API 的 HTTP 客户端 —— {@link ModelClient} 的 OkHttp 实现。
  * <p>
  * 支持非流式 ({@link #chat}) 和流式 ({@link #chatStream}) 两种调用。
+ * 底层基于 OkHttp，支持连接池、超时控制和请求中断。
  * </p>
  *
  * @author Sorghum
@@ -25,11 +26,14 @@ import java.util.Map;
 public class HttpModelClient implements ModelClient {
 
     private static final Logger logger = LoggerFactory.getLogger(HttpModelClient.class);
+    private static final MediaType MEDIA_TYPE_JSON = MediaType.parse("application/json; charset=utf-8");
+
     /**
      * 重试间隔（秒），共 10 次：1,1,1,2,2,2,3,3,6,10 — 总计约 31 秒。
      * 指数退避策略，应对 API 临时故障。
      */
     private static final int[] RETRY_DELAYS = {1, 1, 1, 2, 2, 2, 3, 3, 6, 10};
+
     private final String apiUrl;
     private final String apiKey;
     /**
@@ -42,9 +46,14 @@ public class HttpModelClient implements ModelClient {
      */
     private volatile boolean abortRequested = false;
     /**
-     * 当前活跃的 HTTP 连接（用于中断）
+     * 当前活跃的 OkHttp Call（用于中断）
      */
-    private volatile HttpURLConnection activeConnection;
+    private volatile Call activeCall;
+
+    /**
+     * OkHttp 客户端（带连接池和超时配置）
+     */
+    private final OkHttpClient client;
 
     public HttpModelClient(String apiUrl, String apiKey, String model) {
         this(apiUrl, apiKey, model, "high");
@@ -55,6 +64,12 @@ public class HttpModelClient implements ModelClient {
         this.apiKey = apiKey;
         this.model = model;
         this.reasoningEffort = reasoningEffort;
+        this.client = new OkHttpClient.Builder()
+                .connectTimeout(30, TimeUnit.SECONDS)
+                .readTimeout(10, TimeUnit.MINUTES)
+                .writeTimeout(30, TimeUnit.SECONDS)
+                .retryOnConnectionFailure(false) // 由我们自己的重试逻辑控制
+                .build();
     }
 
     /**
@@ -63,17 +78,6 @@ public class HttpModelClient implements ModelClient {
      */
     private static boolean retryable(int status) {
         return status >= 500 || status == 0;
-    }
-
-    private static String readFully(InputStream is) throws IOException {
-        StringBuilder sb = new StringBuilder();
-        try (BufferedReader r = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = r.readLine()) != null) {
-                sb.append(line);
-            }
-        }
-        return sb.toString();
     }
 
     @Override
@@ -107,13 +111,10 @@ public class HttpModelClient implements ModelClient {
     @Override
     public void abortStream() {
         abortRequested = true;
-        HttpURLConnection conn = activeConnection;
-        if (conn != null) {
-            try {
-                conn.disconnect();
-            } catch (Exception ignored) {
-                // 忽略断开异常
-            }
+        Call call = activeCall;
+        if (call != null && !call.isCanceled()) {
+            call.cancel();
+            logger.debug("已取消当前 OkHttp Call");
         }
     }
 
@@ -160,29 +161,20 @@ public class HttpModelClient implements ModelClient {
         jsonBody = bodyWithStream.toJson();
 
         for (int attempt = 0; ; attempt++) {
-            HttpURLConnection conn = null;
-            try {
-                conn = (HttpURLConnection) URI.create(apiUrl).toURL().openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json");
-                conn.setRequestProperty("Authorization", "Bearer " + apiKey);
-                conn.setDoOutput(true);
-                conn.setConnectTimeout(30_000);
-                conn.setReadTimeout(600_000);
+            Request request = new Request.Builder()
+                    .url(apiUrl)
+                    .post(RequestBody.create(jsonBody, MEDIA_TYPE_JSON))
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Authorization", "Bearer " + apiKey)
+                    .build();
 
-                try (OutputStream os = conn.getOutputStream()) {
-                    os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
-                }
+            try (Response response = client.newCall(request).execute()) {
+                int status = response.code();
+                ResponseBody responseBody = response.body();
+                String responseText = responseBody != null ? responseBody.string() : "";
 
                 logger.debug("发送API请求到 {}，模型: {}，消息数: {}，工具数: {}",
                         apiUrl, model, messages.size(), tools != null ? tools.size() : 0);
-
-                int status = conn.getResponseCode();
-                InputStream is = status >= 200 && status < 300
-                        ? conn.getInputStream()
-                        : conn.getErrorStream();
-                String responseText = readFully(is);
-
                 logger.debug("收到API响应（完整响应）: {}", responseText);
 
                 if (retryable(status) && attempt < RETRY_DELAYS.length) {
@@ -202,6 +194,7 @@ public class HttpModelClient implements ModelClient {
                     throw new IOException("No choices in response: " + responseText);
                 }
                 return choices.get(0).get("message");
+
             } catch (IOException e) {
                 logger.error("非流式API调用IO异常: {}", e.getMessage(), e);
                 if (attempt < RETRY_DELAYS.length) {
@@ -219,8 +212,6 @@ public class HttpModelClient implements ModelClient {
                 logger.error("非流式API调用被中断", e);
                 Thread.currentThread().interrupt();
                 throw new IOException("Interrupted during retry", e);
-            } finally {
-                if (conn != null) conn.disconnect();
             }
         }
     }
@@ -249,32 +240,31 @@ public class HttpModelClient implements ModelClient {
         }
 
         for (int attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
-            HttpURLConnection conn = null;
-            try {
-                conn = (HttpURLConnection) URI.create(apiUrl).toURL().openConnection();
-                conn.setRequestMethod("POST");
-                conn.setRequestProperty("Content-Type", "application/json");
-                conn.setRequestProperty("Authorization", "Bearer " + apiKey);
-                conn.setDoOutput(true);
-                conn.setConnectTimeout(30_000);
-                conn.setReadTimeout(600_000);
+            Request request = new Request.Builder()
+                    .url(apiUrl)
+                    .post(RequestBody.create(jsonBody, MEDIA_TYPE_JSON))
+                    .addHeader("Content-Type", "application/json")
+                    .addHeader("Authorization", "Bearer " + apiKey)
+                    .build();
 
-                try (OutputStream os = conn.getOutputStream()) {
-                    os.write(jsonBody.getBytes(StandardCharsets.UTF_8));
-                }
+            Call call = client.newCall(request);
+            activeCall = call;
 
+            try (Response response = call.execute()) {
                 logger.debug("发送流式API请求到 {}，模型: {}，消息数: {}，工具数: {}",
                         apiUrl, model, messages.size(), tools != null ? tools.size() : 0);
 
-                int status = conn.getResponseCode();
+                int status = response.code();
                 if (retryable(status) && attempt < RETRY_DELAYS.length) {
                     int delay = RETRY_DELAYS[attempt];
                     System.err.println("[retry] HTTP " + status + "，第" + (attempt + 1) + "次重试，等待" + delay + "s...");
                     Thread.sleep(delay * 1000L);
+                    activeCall = null;
                     continue;
                 }
                 if (status >= 400) {
-                    String err = readFully(conn.getErrorStream() != null ? conn.getErrorStream() : conn.getInputStream());
+                    ResponseBody errorBody = response.body();
+                    String err = errorBody != null ? errorBody.string() : "unknown error";
                     try {
                         callback.onError("API error " + status + ": " + err);
                     } catch (Exception e) {
@@ -284,14 +274,23 @@ public class HttpModelClient implements ModelClient {
                     return;
                 }
 
+                ResponseBody body = response.body();
+                if (body == null) {
+                    try {
+                        callback.onError("Empty response body");
+                    } catch (Exception e) {
+                        logger.debug("onError回调异常: {}", e.getMessage());
+                    }
+                    return;
+                }
+
                 try (BufferedReader reader = new BufferedReader(
-                        new InputStreamReader(conn.getInputStream(), StandardCharsets.UTF_8))) {
+                        new InputStreamReader(body.byteStream(), StandardCharsets.UTF_8))) {
                     String line;
                     StringBuilder contentBuf = new StringBuilder();
                     StringBuilder reasoningBuf = new StringBuilder();
                     ONode toolCallsAccum = null;
 
-                    activeConnection = conn;
                     while ((line = reader.readLine()) != null) {
                         if (abortRequested) {
                             logger.debug("流式请求被 ReasonBreaker 中断");
@@ -440,9 +439,6 @@ public class HttpModelClient implements ModelClient {
                         // SSE连接断开时忽略异常，继续执行
                         logger.debug("onDone回调异常（可能SSE连接已断开）: {}", e.getMessage());
                     }
-                } finally {
-                    activeConnection = null;
-                    abortRequested = false;
                 }
                 return; // success
 
@@ -450,7 +446,6 @@ public class HttpModelClient implements ModelClient {
                 if (abortRequested) {
                     // 主动中断，不重试，不报错
                     logger.debug("流式请求已被中断，跳过重试");
-                    activeConnection = null;
                     abortRequested = false;
                     return;
                 }
@@ -493,7 +488,7 @@ public class HttpModelClient implements ModelClient {
                 }
                 return;
             } finally {
-                if (conn != null) conn.disconnect();
+                activeCall = null;
             }
         }
     }
