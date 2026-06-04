@@ -1,21 +1,25 @@
 package site.sorghum.agent4j.web.service;
 
 import lombok.extern.slf4j.Slf4j;
+import org.noear.solon.ai.chat.tool.FunctionTool;
+import org.noear.solon.ai.mcp.client.McpClientProvider;
 import org.noear.solon.annotation.Component;
+import org.noear.solon.annotation.Inject;
+import site.sorghum.agent4j.tool.solon.mcp.Agent4JMcpSkill;
 import site.sorghum.agent4j.web.model.McpServerDTO;
+import site.sorghum.agent4j.web.model.McpToolInfoDTO;
 import site.sorghum.agent4j.web.model.McpToolListDTO;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.time.Duration;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Collectors;
 
 /**
  * MCP 服务器管理服务。
  * <p>
- * 管理 MCP 服务器配置的增删改查、启停控制、连接检测及工具权限管理。
- * TODO: 业务逻辑待实现，目前仅提供空壳方法，后续接入 MCP 客户端库。
+ * 基于 Agent4JMcpSkill（McpGatewaySkill）实现 MCP 服务器的增删改查、
+ * 启停控制、连接检测及工具权限管理。
  * </p>
  *
  * @author Sorghum
@@ -24,11 +28,14 @@ import java.util.concurrent.ConcurrentHashMap;
 @Component
 public class McpManageService {
 
-    /** 内存存储：服务器名称 → 配置 */
+    @Inject
+    private Agent4JMcpSkill agent4JMcpSkill;
+
+    /** 内存存储：服务器名称 → 配置（持久化待实现） */
     private final Map<String, McpServerDTO> serverStore = new ConcurrentHashMap<>();
 
     /** 内存存储：服务器名称 → 禁用工具列表 */
-    private final Map<String, List<String>> disallowedToolsStore = new ConcurrentHashMap<>();
+    private final Map<String, Set<String>> disallowedToolsStore = new ConcurrentHashMap<>();
 
     // ==================== 服务器 CRUD ====================
 
@@ -36,7 +43,7 @@ public class McpManageService {
      * 获取所有 MCP 服务器列表。
      */
     public List<McpServerDTO> listServers() {
-        // TODO: 从持久化存储加载
+        // 从 serverStore 返回，确保与 skill 注册状态同步
         return new ArrayList<>(serverStore.values());
     }
 
@@ -44,33 +51,73 @@ public class McpManageService {
      * 新增 MCP 服务器。
      */
     public McpServerDTO addServer(McpServerDTO server) {
-        // TODO: 实现服务器注册逻辑
-        serverStore.put(server.name, server);
-        log.info("MCP 服务器已新增: {}", server.name);
+        try {
+            // 构建 McpClientProvider 并注册到 skill
+            var builder = McpClientProvider.builder()
+                    .name(server.name);
+
+            if ("stdio".equals(server.type)) {
+                builder.channel("stdio")
+                        .command(server.command);
+                if (server.args != null && !server.args.isEmpty()) {
+                    builder.args(server.args);
+                }
+                if (server.env != null && !server.env.isEmpty()) {
+                    builder.env(server.env);
+                }
+            } else {
+                // sse / streamable
+                builder.channel(server.type)
+                        .url(server.url);
+                if (server.headers != null && !server.headers.isEmpty()) {
+                    builder.headers(server.headers);
+                }
+                if (server.timeout != null && !server.timeout.isBlank()) {
+                    try {
+                        String t = server.timeout.trim();
+                        if (t.endsWith("s")) {
+                            builder.timeout(Duration.ofSeconds(Long.parseLong(t.substring(0, t.length() - 1))));
+                        } else {
+                            builder.timeout(Duration.parse("PT" + t));
+                        }
+                    } catch (Exception e) {
+                        log.warn("解析超时配置失败: {}", server.timeout);
+                    }
+                }
+            }
+
+            McpClientProvider provider = builder.build();
+            agent4JMcpSkill.addMcpServer(server.name, provider);
+            serverStore.put(server.name, server);
+            log.info("MCP 服务器已新增并注册: {} (type={})", server.name, server.type);
+        } catch (Exception e) {
+            log.error("MCP 服务器注册失败: {}", server.name, e);
+            throw new RuntimeException("MCP 服务器注册失败: " + e.getMessage(), e);
+        }
         return server;
     }
 
     /**
-     * 更新 MCP 服务器配置。
-     *
-     * @param originalName 原名称（用于查找）
-     * @param server       新的配置数据
+     * 更新 MCP 服务器配置（先移除旧配置，再注册新配置）。
      */
     public McpServerDTO updateServer(String originalName, McpServerDTO server) {
-        // TODO: 实现服务器更新逻辑
+        // 先移除旧的（如果名称变了）
         if (originalName != null && !originalName.equals(server.name)) {
+            removeMcpServerFromSkill(originalName);
             serverStore.remove(originalName);
+        } else if (originalName != null) {
+            removeMcpServerFromSkill(originalName);
         }
-        serverStore.put(server.name, server);
-        log.info("MCP 服务器已更新: {} -> {}", originalName, server.name);
-        return server;
+
+        // 注册新的
+        return addServer(server);
     }
 
     /**
      * 删除 MCP 服务器。
      */
     public void removeServer(String name) {
-        // TODO: 实现服务器删除逻辑
+        removeMcpServerFromSkill(name);
         serverStore.remove(name);
         disallowedToolsStore.remove(name);
         log.info("MCP 服务器已删除: {}", name);
@@ -82,12 +129,19 @@ public class McpManageService {
      * 启用或禁用 MCP 服务器。
      */
     public McpServerDTO toggleServer(String name, boolean enabled) {
-        // TODO: 实现启停逻辑（连接/断开 MCP 服务器）
         McpServerDTO server = serverStore.get(name);
-        if (server != null) {
-            server.setEnabled(enabled);
-            log.info("MCP 服务器 {} 已{}", name, enabled ? "启用" : "禁用");
+        if (server == null) return null;
+
+        if (enabled) {
+            // 启用：重新注册
+            addServer(server);
+        } else {
+            // 禁用：从 skill 移除
+            removeMcpServerFromSkill(name);
         }
+
+        server.setEnabled(enabled);
+        log.info("MCP 服务器 {} 已{}", name, enabled ? "启用" : "禁用");
         return server;
     }
 
@@ -95,14 +149,43 @@ public class McpManageService {
 
     /**
      * 检测 MCP 服务器连接是否可达。
-     *
-     * @param server 服务器配置（基于当前表单输入实时组装）
-     * @return true 表示连接成功，false 表示连接失败
+     * 通过尝试构建 Provider 并获取工具列表来验证连通性。
      */
     public boolean checkConnection(McpServerDTO server) {
-        // TODO: 实现连接检测逻辑（启动进程或发送 HTTP 请求测试）
-        log.info("检测 MCP 服务器连接: {} (type={})", server.name, server.type);
-        return false;
+        try {
+            var builder = McpClientProvider.builder()
+                    .name(server.name + "-check");
+
+            if ("stdio".equals(server.type)) {
+                builder.channel("stdio")
+                        .command(server.command);
+                if (server.args != null && !server.args.isEmpty()) {
+                    builder.args(server.args);
+                }
+                if (server.env != null && !server.env.isEmpty()) {
+                    builder.env(server.env);
+                }
+                // stdio 检测：超时设短一些
+                builder.timeout(Duration.ofSeconds(5));
+            } else {
+                builder.channel(server.type)
+                        .url(server.url);
+                if (server.headers != null && !server.headers.isEmpty()) {
+                    builder.headers(server.headers);
+                }
+                builder.timeout(Duration.ofSeconds(5));
+            }
+
+            McpClientProvider provider = builder.build();
+            // 尝试获取工具列表，若成功则连接正常
+            Collection<FunctionTool> tools = provider.getTools();
+            provider.close();
+            log.info("MCP 服务器连接检测成功: {} (type={}, tools={})", server.name, server.type, tools.size());
+            return true;
+        } catch (Exception e) {
+            log.warn("MCP 服务器连接检测失败: {} (type={}): {}", server.name, server.type, e.getMessage());
+            return false;
+        }
     }
 
     // ==================== 工具管理 ====================
@@ -111,26 +194,50 @@ public class McpManageService {
      * 获取指定服务器的工具列表及权限状态。
      */
     public McpToolListDTO listTools(String serverName) {
-        // TODO: 实现工具列表获取逻辑（连接 MCP 服务器查询工具清单）
         McpServerDTO server = serverStore.get(serverName);
-        if (server == null || !server.isEnabled()) {
-            return new McpToolListDTO(false, Collections.emptyList(),
-                    disallowedToolsStore.getOrDefault(serverName, Collections.emptyList()));
+        if (server == null) {
+            return new McpToolListDTO(false, Collections.emptyList(), Collections.emptyList());
         }
-        List<String> disallowed = disallowedToolsStore.getOrDefault(serverName, Collections.emptyList());
-        return new McpToolListDTO(true, Collections.emptyList(), disallowed);
+
+        Set<String> disallowed = disallowedToolsStore.getOrDefault(serverName, Collections.emptySet());
+
+        // 从 skill 获取已注册的 provider 来获取工具列表
+        try {
+            McpClientProvider provider = agent4JMcpSkill.getMcpServer(serverName);
+            if (provider == null) {
+                return new McpToolListDTO(false, Collections.emptyList(), new ArrayList<>(disallowed));
+            }
+
+            Collection<FunctionTool> tools = provider.getTools();
+            List<McpToolInfoDTO> toolList = tools.stream()
+                    .map(t -> new McpToolInfoDTO(t.name(), t.description() != null ? t.description() : ""))
+                    .collect(Collectors.toList());
+
+            return new McpToolListDTO(true, toolList, new ArrayList<>(disallowed));
+        } catch (Exception e) {
+            log.warn("获取 MCP 服务器工具列表失败: {}", serverName, e);
+            return new McpToolListDTO(false, Collections.emptyList(), new ArrayList<>(disallowed));
+        }
     }
 
     /**
      * 保存工具权限配置。
-     *
-     * @param serverName      服务器名称
-     * @param disallowedTools 需禁用的工具名称列表
      */
     public void saveToolPermissions(String serverName, List<String> disallowedTools) {
-        // TODO: 实现工具权限持久化逻辑
-        disallowedToolsStore.put(serverName, disallowedTools != null ? disallowedTools : Collections.emptyList());
+        disallowedToolsStore.put(serverName, disallowedTools != null
+                ? new LinkedHashSet<>(disallowedTools)
+                : Collections.emptySet());
         log.info("MCP 服务器 {} 工具权限已保存, 禁用 {} 个工具", serverName,
                 disallowedTools != null ? disallowedTools.size() : 0);
+    }
+
+    // ==================== 私有辅助 ====================
+
+    private void removeMcpServerFromSkill(String name) {
+        try {
+            agent4JMcpSkill.removeMcpServer(name);
+        } catch (Exception e) {
+            log.warn("从 Skill 移除 MCP 服务器失败: {}", name, e);
+        }
     }
 }
