@@ -34,7 +34,7 @@
           <h2>{{ currentTab?.label || '设置' }}</h2>
           <p class="header-desc">{{ currentTab?.description }}</p>
         </div>
-        <div v-if="activeTab !== 'openapi'" class="header-actions">
+        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp'" class="header-actions">
           <button :disabled="loading || !hasChanges" class="btn btn-primary" @click="saveSettings">
             <svg v-if="!loading" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
                  width="14">
@@ -517,6 +517,355 @@
           </div>
         </section>
 
+        <!-- MCP 服务器管理 -->
+        <section v-if="activeTab === 'mcp'" class="settings-section">
+          <div class="section-card mcp-card">
+            <!-- ========== 列表视图 ========== -->
+            <template v-if="currentMcpView === 'list'">
+              <div class="card-header">
+                <div class="mcp-list-header">
+                  <div>
+                    <h3>MCP 服务器</h3>
+                    <p>管理 MCP (Model Context Protocol) 服务器配置与工具权限</p>
+                  </div>
+                  <button class="btn btn-primary btn-sm" @click="openMcpAdd">
+                    <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+                      <line x1="12" x2="12" y1="5" y2="19"/>
+                      <line x1="5" x2="19" y1="12" y2="12"/>
+                    </svg>
+                    添加服务器
+                  </button>
+                </div>
+              </div>
+              <div class="card-body">
+                <!-- 加载中 -->
+                <div v-if="mcpLoading" class="mcp-state-box">
+                  <svg class="animate-spin" fill="none" height="24" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="24">
+                    <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                  </svg>
+                  <p>加载中...</p>
+                </div>
+
+                <!-- 空状态 -->
+                <div v-else-if="mcpServers.length === 0" class="mcp-state-box">
+                  <svg fill="none" height="48" stroke="var(--fg-3)" stroke-width="1.5" viewBox="0 0 24 24" width="48">
+                    <rect x="2" y="2" width="20" height="8" rx="2" ry="2"/>
+                    <rect x="2" y="14" width="20" height="8" rx="2" ry="2"/>
+                    <line x1="6" y1="6" x2="6.01" y2="6"/>
+                    <line x1="6" y1="18" x2="6.01" y2="18"/>
+                  </svg>
+                  <h4>暂无 MCP 服务器</h4>
+                  <p>MCP 服务器可扩展 AI 的工具能力，如文件系统访问、数据库查询、API 调用等</p>
+                </div>
+
+                <!-- 服务器列表 -->
+                <div v-else class="mcp-server-list">
+                  <div
+                    v-for="svr in mcpServers"
+                    :key="svr.name"
+                    class="mcp-server-item"
+                    @click="openMcpTools(svr)"
+                  >
+                    <div class="mcp-item-icon" :class="'type-' + svr.type">
+                      {{ typeIcon(svr.type) }}
+                    </div>
+                    <div class="mcp-item-info">
+                      <div class="mcp-item-name">{{ svr.name }}</div>
+                      <span class="mcp-type-tag">{{ typeLabel(svr.type) }}</span>
+                      <div class="mcp-item-detail">{{ svr.type === 'stdio' ? svr.command : svr.url }}</div>
+                    </div>
+                    <div class="mcp-item-actions" @click.stop>
+                      <button class="btn-icon-xs" title="编辑" @click="openMcpEdit(svr)">
+                        <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                          <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
+                          <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                        </svg>
+                      </button>
+                      <label class="toggle-switch" @click.prevent>
+                        <input type="checkbox" :checked="svr.enabled" @change="toggleMcpServer(svr)"/>
+                        <span class="toggle-slider"></span>
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </template>
+
+            <!-- ========== 新增/编辑表单视图 ========== -->
+            <template v-if="currentMcpView === 'form'">
+              <div class="card-header">
+                <div class="mcp-form-header">
+                  <button class="btn btn-ghost btn-sm" @click="backToMcpList">
+                    <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                    返回
+                  </button>
+                  <h3>{{ mcpEditName ? '编辑 MCP 服务器' : '新增 MCP 服务器' }}</h3>
+                </div>
+              </div>
+              <div class="card-body">
+                <!-- 名称 -->
+                <div class="mcp-field">
+                  <label>名称 <span class="req">*</span></label>
+                  <input
+                    id="mcpName"
+                    v-model="mcpForm.name"
+                    :readonly="!!mcpEditName"
+                    class="form-input"
+                    placeholder="my-mcp-server"
+                    type="text"
+                  />
+                  <p class="mcp-hint">仅允许字母、数字、下划线和连字符</p>
+                </div>
+
+                <!-- 类型选择 -->
+                <div class="mcp-field">
+                  <label>类型 <span class="req">*</span></label>
+                  <div class="mcp-type-toggle">
+                    <button
+                      :class="{ active: mcpForm.type === 'stdio' }"
+                      class="type-btn"
+                      @click="mcpForm.type = 'stdio'"
+                    >stdio</button>
+                    <button
+                      :class="{ active: mcpForm.type === 'sse' }"
+                      class="type-btn"
+                      @click="mcpForm.type = 'sse'"
+                    >http sse</button>
+                    <button
+                      :class="{ active: mcpForm.type === 'streamable' }"
+                      class="type-btn"
+                      @click="mcpForm.type = 'streamable'"
+                    >http streamable</button>
+                  </div>
+                </div>
+
+                <!-- stdio 配置 -->
+                <template v-if="mcpForm.type === 'stdio'">
+                  <div class="mcp-field">
+                    <label>命令 <span class="req">*</span></label>
+                    <input
+                      id="mcpCommand"
+                      v-model="mcpForm.command"
+                      class="form-input"
+                      placeholder="npx -y @modelcontextprotocol/server-filesystem /path"
+                      type="text"
+                    />
+                  </div>
+                  <div class="mcp-field">
+                    <label>参数（可选）</label>
+                    <textarea
+                      id="mcpArgs"
+                      v-model="mcpForm.argsText"
+                      class="form-textarea"
+                      placeholder="/path/to/dir
+--option value"
+                      rows="3"
+                    ></textarea>
+                    <p class="mcp-hint">每行一个参数</p>
+                  </div>
+                  <div class="mcp-field">
+                    <label>环境变量（可选）</label>
+                    <textarea
+                      id="mcpEnv"
+                      v-model="mcpForm.envText"
+                      class="form-textarea"
+                      placeholder="API_KEY=xxx
+DEBUG=true"
+                      rows="3"
+                    ></textarea>
+                    <p class="mcp-hint">每行一个 KEY=VALUE</p>
+                  </div>
+                </template>
+
+                <!-- 远程配置 -->
+                <template v-if="mcpForm.type === 'sse' || mcpForm.type === 'streamable'">
+                  <div class="mcp-field">
+                    <label>URL <span class="req">*</span></label>
+                    <input
+                      id="mcpRemoteUrl"
+                      v-model="mcpForm.url"
+                      class="form-input"
+                      placeholder="http://localhost:3001/sse"
+                      type="text"
+                    />
+                    <p class="mcp-hint">必须以 http:// 或 https:// 开头</p>
+                  </div>
+                  <div class="mcp-field">
+                    <label>请求头（可选）</label>
+                    <textarea
+                      id="mcpHeaders"
+                      v-model="mcpForm.headersText"
+                      class="form-textarea"
+                      placeholder="Authorization=Bearer xxx
+X-Custom-Header=value"
+                      rows="3"
+                    ></textarea>
+                    <p class="mcp-hint">每行一个 KEY=VALUE</p>
+                  </div>
+                  <div class="mcp-field">
+                    <label>超时时间（可选）</label>
+                    <input
+                      id="mcpTimeout"
+                      v-model="mcpForm.timeout"
+                      class="form-input"
+                      placeholder="30s"
+                      style="width:120px"
+                      type="text"
+                    />
+                  </div>
+                </template>
+
+                <!-- 连接检测 -->
+                <div class="mcp-field">
+                  <button
+                    id="mcpCheckBtn"
+                    :disabled="mcpChecking || !mcpFormValid"
+                    class="btn btn-secondary"
+                    @click="checkMcpConnection"
+                  >
+                    <svg v-if="mcpChecking" class="animate-spin" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                    </svg>
+                    <svg v-else fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                      <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                    {{ mcpChecking ? '检测中...' : '检测连接' }}
+                  </button>
+                  <div v-if="mcpCheckResult" class="mcp-check-result" :class="mcpCheckResult.ok ? 'ok' : 'error'">
+                    <svg v-if="mcpCheckResult.ok" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                      <polyline points="22 4 12 14.01 9 11.01"/>
+                    </svg>
+                    <svg v-else fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="15" x2="9" y1="9" y2="15"/>
+                      <line x1="9" x2="15" y1="9" y2="15"/>
+                    </svg>
+                    <span>{{ mcpCheckResult.message }}</span>
+                  </div>
+                </div>
+
+                <!-- 操作按钮 -->
+                <div class="mcp-form-actions">
+                  <button class="btn" @click="backToMcpList">取消</button>
+                  <button
+                    v-if="mcpEditName"
+                    class="btn btn-secondary"
+                    @click="copyMcpServer"
+                  >复制</button>
+                  <button
+                    v-if="mcpEditName"
+                    class="btn btn-danger"
+                    @click="deleteMcpServer(mcpEditName)"
+                  >删除</button>
+                  <button
+                    :disabled="mcpSaving || !mcpFormValid"
+                    class="btn btn-primary"
+                    @click="saveMcpServer"
+                  >{{ mcpSaving ? '保存中...' : '保存' }}</button>
+                </div>
+              </div>
+            </template>
+
+            <!-- ========== 工具列表视图 ========== -->
+            <template v-if="currentMcpView === 'tools'">
+              <div class="card-header">
+                <div class="mcp-tools-header">
+                  <button class="btn btn-ghost btn-sm" @click="backToMcpList">
+                    <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <polyline points="15 18 9 12 15 6"/>
+                    </svg>
+                    返回
+                  </button>
+                  <h3>{{ mcpToolsServerName }} - 工具列表</h3>
+                </div>
+              </div>
+              <div class="card-body">
+                <!-- 加载中 -->
+                <div v-if="mcpToolsLoading" class="mcp-state-box">
+                  <svg class="animate-spin" fill="none" height="24" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="24">
+                    <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                  </svg>
+                  <p>加载中...</p>
+                </div>
+
+                <!-- 服务器未连接 -->
+                <div v-else-if="!mcpToolsConnected" class="mcp-state-box">
+                  <svg fill="none" height="40" stroke="var(--red)" stroke-width="1.5" viewBox="0 0 24 24" width="40">
+                    <circle cx="12" cy="12" r="10"/>
+                    <line x1="15" x2="9" y1="9" y2="15"/>
+                    <line x1="9" x2="15" y1="9" y2="15"/>
+                  </svg>
+                  <h4>服务器未连接</h4>
+                  <p>请先启用并确保该 MCP 服务器可正常连接</p>
+                </div>
+
+                <!-- 无工具 -->
+                <div v-else-if="mcpTools.length === 0" class="mcp-state-box">
+                  <svg fill="none" height="40" stroke="var(--fg-3)" stroke-width="1.5" viewBox="0 0 24 24" width="40">
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                    <polyline points="14 2 14 8 20 8"/>
+                    <line x1="16" x2="8" y1="13" y2="13"/>
+                    <line x1="16" x2="8" y1="17" y2="17"/>
+                  </svg>
+                  <h4>暂无工具</h4>
+                  <p>该 MCP 服务器未提供任何工具</p>
+                </div>
+
+                <!-- 工具列表 -->
+                <template v-else>
+                  <!-- 工具栏 -->
+                  <div id="mcpToolsToolbar" class="mcp-tools-toolbar">
+                    <label class="mcp-checkbox-label">
+                      <input
+                        :checked="mcpAllToolsChecked"
+                        class="mcp-checkbox"
+                        type="checkbox"
+                        @change="toggleAllMcpTools"
+                      />
+                      <span class="mcp-checkbox-custom"></span>
+                      全选
+                    </label>
+                    <span class="mcp-tools-count">{{ mcpEnabledCount }} / {{ mcpTools.length }} 已启用</span>
+                    <button
+                      :disabled="mcpToolsSaving"
+                      class="btn btn-primary btn-sm"
+                      @click="saveMcpTools"
+                    >{{ mcpToolsSaving ? '保存中...' : '保存' }}</button>
+                  </div>
+
+                  <!-- 工具列表项 -->
+                  <div class="mcp-tools-list">
+                    <div
+                      v-for="tool in mcpTools"
+                      :key="tool.name"
+                      class="mcp-tool-item"
+                    >
+                      <label class="mcp-checkbox-label">
+                        <input
+                          :checked="!mcpDisallowedSet.has(tool.name)"
+                          class="mcp-checkbox"
+                          type="checkbox"
+                          @change="toggleMcpTool(tool.name)"
+                        />
+                        <span class="mcp-checkbox-custom"></span>
+                      </label>
+                      <div class="mcp-tool-icon">T</div>
+                      <div class="mcp-tool-info">
+                        <div class="mcp-tool-name">{{ tool.name }}</div>
+                        <div v-if="tool.description" class="mcp-tool-desc">{{ tool.description }}</div>
+                      </div>
+                    </div>
+                  </div>
+                </template>
+              </div>
+            </template>
+          </div>
+        </section>
+
       </div>
     </main>
   </div>
@@ -602,7 +951,7 @@
 import {computed, onMounted, reactive, ref, watch} from 'vue'
 import {message} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
-import {configAPI, openApiAPI} from '../services/api'
+import {configAPI, openApiAPI, mcpAPI} from '../services/api'
 
 const store = useAppStore()
 
@@ -688,6 +1037,17 @@ const tabs = [
       <line x1="21" x2="12" y1="21" y2="12"/>
       <line x1="3" x2="12" y1="21" y2="12"/>
     </svg>`
+  },
+  {
+    id: 'mcp',
+    label: 'MCP 服务器',
+    description: '管理 MCP 服务器配置与工具权限',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M4 6h16M4 12h16M4 18h16"/>
+      <circle cx="6" cy="6" r="1.5" fill="currentColor"/>
+      <circle cx="6" cy="12" r="1.5" fill="currentColor"/>
+      <circle cx="6" cy="18" r="1.5" fill="currentColor"/>
+    </svg>`
   }
 ]
 
@@ -706,6 +1066,13 @@ const currentTab = computed(() => tabs.find(t => t.id === activeTab.value))
 watch(settings, () => {
   hasChanges.value = true
 }, {deep: true})
+
+// 监听 Tab 切换
+watch(activeTab, (tab) => {
+  if (tab === 'mcp' && mcpServers.value.length === 0) {
+    loadMcpServers()
+  }
+})
 
 // 加载设置
 const loadSettings = async () => {
@@ -1047,6 +1414,339 @@ async function removeSource(source) {
     }
   } catch (e) {
     message.error('移除失败: ' + (e.message || ''))
+  }
+}
+
+// ==================== MCP 服务器管理 ====================
+const mcpLoading = ref(false)
+const mcpSaving = ref(false)
+const mcpChecking = ref(false)
+const mcpCheckResult = ref(null)
+const mcpServers = ref([])
+const currentMcpView = ref('list') // list | form | tools
+const mcpEditName = ref(null)
+
+const mcpForm = reactive({
+  name: '',
+  type: 'stdio',
+  command: '',
+  argsText: '',
+  envText: '',
+  url: '',
+  headersText: '',
+  timeout: '',
+  enabled: true
+})
+
+// 工具管理
+const mcpToolsLoading = ref(false)
+const mcpToolsSaving = ref(false)
+const mcpToolsServerName = ref('')
+const mcpToolsConnected = ref(false)
+const mcpTools = ref([])
+const mcpDisallowedTools = ref([])
+
+// 计算属性
+const mcpDisallowedSet = computed(() => new Set(mcpDisallowedTools.value))
+
+const mcpEnabledCount = computed(() => {
+  return mcpTools.value.filter(t => !mcpDisallowedSet.value.has(t.name)).length
+})
+
+const mcpAllToolsChecked = computed(() => {
+  return mcpTools.value.length > 0 && mcpEnabledCount.value === mcpTools.value.length
+})
+
+const mcpFormValid = computed(() => {
+  if (!mcpForm.name || !/^[a-zA-Z0-9_-]+$/.test(mcpForm.name)) return false
+  if (!mcpForm.type) return false
+  if (mcpForm.type === 'stdio') {
+    return !!mcpForm.command
+  }
+  if (mcpForm.type === 'sse' || mcpForm.type === 'streamable') {
+    return !!mcpForm.url && (mcpForm.url.startsWith('http://') || mcpForm.url.startsWith('https://'))
+  }
+  return false
+})
+
+// 辅助函数
+function typeIcon(type) {
+  return {stdio: 'S', sse: 'R', streamable: 'H'}[type] || '?'
+}
+
+function typeLabel(type) {
+  return {stdio: 'stdio', sse: 'sse', streamable: 'streamable'}[type] || type
+}
+
+function resetMcpForm() {
+  mcpForm.name = ''
+  mcpForm.type = 'stdio'
+  mcpForm.command = ''
+  mcpForm.argsText = ''
+  mcpForm.envText = ''
+  mcpForm.url = ''
+  mcpForm.headersText = ''
+  mcpForm.timeout = ''
+  mcpForm.enabled = true
+  mcpCheckResult.value = null
+}
+
+// 解析表单数据为后端格式
+function buildMcpServerData() {
+  const data = {
+    name: mcpForm.name,
+    type: mcpForm.type,
+    enabled: mcpForm.enabled
+  }
+  if (mcpForm.type === 'stdio') {
+    data.command = mcpForm.command
+    data.args = mcpForm.argsText
+      ? mcpForm.argsText.split('\n').map(s => s.trim()).filter(s => s)
+      : []
+    data.env = {}
+    mcpForm.envText.split('\n').forEach(line => {
+      const idx = line.indexOf('=')
+      if (idx > 0) {
+        const k = line.substring(0, idx).trim()
+        const v = line.substring(idx + 1).trim()
+        if (k) data.env[k] = v
+      }
+    })
+  } else {
+    data.url = mcpForm.url
+    data.headers = {}
+    mcpForm.headersText.split('\n').forEach(line => {
+      const idx = line.indexOf('=')
+      if (idx > 0) {
+        const k = line.substring(0, idx).trim()
+        const v = line.substring(idx + 1).trim()
+        if (k) data.headers[k] = v
+      }
+    })
+    data.timeout = mcpForm.timeout || ''
+  }
+  return data
+}
+
+// 加载服务器列表
+async function loadMcpServers() {
+  mcpLoading.value = true
+  try {
+    const res = await mcpAPI.listServers()
+    if (res.success !== false) {
+      mcpServers.value = res.data || []
+    } else {
+      message.error(res.error || '加载 MCP 服务器列表失败')
+    }
+  } catch (e) {
+    console.error('加载 MCP 服务器列表失败:', e)
+    message.error('加载失败: ' + (e.message || ''))
+  } finally {
+    mcpLoading.value = false
+  }
+}
+
+// 打开新增表单
+function openMcpAdd() {
+  mcpEditName.value = null
+  resetMcpForm()
+  currentMcpView.value = 'form'
+}
+
+// 打开编辑表单
+function openMcpEdit(svr) {
+  mcpEditName.value = svr.name
+  mcpForm.name = svr.name
+  mcpForm.type = svr.type || 'stdio'
+  mcpForm.enabled = svr.enabled !== false
+  if (svr.type === 'stdio') {
+    mcpForm.command = svr.command || ''
+    mcpForm.argsText = (svr.args || []).join('\n')
+    mcpForm.envText = ''
+    if (svr.env) {
+      mcpForm.envText = Object.entries(svr.env)
+        .map(([k, v]) => `${k}=${v}`)
+        .join('\n')
+    }
+    mcpForm.url = ''
+    mcpForm.headersText = ''
+    mcpForm.timeout = ''
+  } else {
+    mcpForm.url = svr.url || ''
+    mcpForm.headersText = ''
+    if (svr.headers) {
+      mcpForm.headersText = Object.entries(svr.headers)
+        .map(([k, v]) => `${k}=${v}`)
+        .join('\n')
+    }
+    mcpForm.timeout = svr.timeout || ''
+    mcpForm.command = ''
+    mcpForm.argsText = ''
+    mcpForm.envText = ''
+  }
+  mcpCheckResult.value = null
+  currentMcpView.value = 'form'
+}
+
+// 返回列表
+function backToMcpList() {
+  currentMcpView.value = 'list'
+  mcpCheckResult.value = null
+  loadMcpServers()
+}
+
+// 保存服务器
+async function saveMcpServer() {
+  if (!mcpFormValid.value) {
+    message.warning('请完善必填字段')
+    return
+  }
+  mcpSaving.value = true
+  try {
+    const data = buildMcpServerData()
+    let res
+    if (mcpEditName.value) {
+      res = await mcpAPI.updateServer(mcpEditName.value, data)
+    } else {
+      res = await mcpAPI.addServer(data)
+    }
+    if (res.success !== false) {
+      message.success(mcpEditName.value ? '修改成功' : '添加成功')
+      backToMcpList()
+    } else {
+      message.error(res.error || '操作失败')
+    }
+  } catch (e) {
+    message.error('操作失败: ' + (e.message || ''))
+  } finally {
+    mcpSaving.value = false
+  }
+}
+
+// 删除服务器
+async function deleteMcpServer(name) {
+  if (!confirm(`确定删除 MCP 服务器「${name}」？`)) return
+  try {
+    const res = await mcpAPI.removeServer(name)
+    if (res.success !== false) {
+      message.success('已删除')
+      backToMcpList()
+    } else {
+      message.error(res.error || '删除失败')
+    }
+  } catch (e) {
+    message.error('删除失败: ' + (e.message || ''))
+  }
+}
+
+// 复制服务器
+async function copyMcpServer() {
+  const newName = mcpForm.name + '-copy'
+  mcpEditName.value = null
+  mcpForm.name = newName
+  message.success('已创建副本，可修改后保存')
+}
+
+// 启用/禁用
+async function toggleMcpServer(svr) {
+  const newEnabled = !svr.enabled
+  try {
+    const res = await mcpAPI.toggleServer(svr.name, newEnabled)
+    if (res.success !== false) {
+      svr.enabled = newEnabled
+    } else {
+      message.error(res.error || '操作失败')
+    }
+  } catch (e) {
+    message.error('操作失败: ' + (e.message || ''))
+  }
+}
+
+// 检测连接
+async function checkMcpConnection() {
+  if (!mcpFormValid.value) {
+    message.warning('请先完善必填字段')
+    return
+  }
+  mcpChecking.value = true
+  mcpCheckResult.value = null
+  try {
+    const data = buildMcpServerData()
+    const res = await mcpAPI.checkConnection(data)
+    if (res.success !== false) {
+      mcpCheckResult.value = {ok: true, message: '连接成功'}
+    } else {
+      mcpCheckResult.value = {ok: false, message: res.error || '连接失败，请检查服务器配置'}
+    }
+  } catch (e) {
+    mcpCheckResult.value = {ok: false, message: e.message || '连接超时，请检查服务器是否可达'}
+  } finally {
+    mcpChecking.value = false
+  }
+}
+
+// 打开工具列表
+async function openMcpTools(svr) {
+  mcpToolsServerName.value = svr.name
+  mcpToolsLoading.value = true
+  mcpTools.value = []
+  mcpToolsConnected.value = false
+  mcpDisallowedTools.value = []
+  currentMcpView.value = 'tools'
+  try {
+    const res = await mcpAPI.listTools(svr.name)
+    if (res.success !== false) {
+      const d = res.data || {}
+      mcpToolsConnected.value = d.connected !== false
+      mcpTools.value = d.tools || []
+      mcpDisallowedTools.value = d.disallowedTools || []
+    } else {
+      message.error(res.error || '加载工具列表失败')
+    }
+  } catch (e) {
+    message.error('加载失败: ' + (e.message || ''))
+  } finally {
+    mcpToolsLoading.value = false
+  }
+}
+
+// 切换单个工具
+function toggleMcpTool(name) {
+  const set = new Set(mcpDisallowedTools.value)
+  if (set.has(name)) {
+    set.delete(name)
+  } else {
+    set.add(name)
+  }
+  mcpDisallowedTools.value = Array.from(set)
+}
+
+// 全选/取消全选
+function toggleAllMcpTools() {
+  if (mcpAllToolsChecked.value) {
+    // 全部禁用
+    mcpDisallowedTools.value = mcpTools.value.map(t => t.name)
+  } else {
+    // 全部启用
+    mcpDisallowedTools.value = []
+  }
+}
+
+// 保存工具权限
+async function saveMcpTools() {
+  if (!mcpToolsServerName.value) return
+  mcpToolsSaving.value = true
+  try {
+    const res = await mcpAPI.saveToolPermissions(mcpToolsServerName.value, mcpDisallowedTools.value)
+    if (res.success !== false) {
+      message.success('工具权限已保存')
+    } else {
+      message.error(res.error || '保存失败')
+    }
+  } catch (e) {
+    message.error('保存失败: ' + (e.message || ''))
+  } finally {
+    mcpToolsSaving.value = false
   }
 }
 
@@ -2128,5 +2828,394 @@ onMounted(() => {
   .input-group {
     flex-direction: column;
   }
+}
+
+/* ==================== MCP 服务器管理 ==================== */
+.mcp-card .card-body {
+  min-height: 200px;
+  margin: 12px;
+}
+
+.mcp-list-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  width: 100%;
+  gap: 16px;
+}
+
+.mcp-list-header h3 {
+  margin: 0 0 4px;
+  font-size: 15px;
+}
+
+.mcp-list-header p {
+  margin: 0;
+  font-size: 12px;
+  color: var(--fg-3);
+}
+
+.mcp-state-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 2rem;
+  text-align: center;
+  gap: 12px;
+  color: var(--fg-3);
+}
+
+.mcp-state-box h4 {
+  margin: 0;
+  font-size: 16px;
+  color: var(--fg-2);
+}
+
+.mcp-state-box p {
+  margin: 0;
+  font-size: 13px;
+  max-width: 360px;
+}
+
+.mcp-server-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.mcp-server-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: all var(--t);
+}
+
+.mcp-server-item:hover {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.mcp-item-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 13px;
+  flex-shrink: 0;
+  background: var(--bg-2);
+  color: var(--fg-2);
+  border: 1px solid var(--border);
+}
+
+.mcp-item-icon.type-stdio {
+  background: #e0f2fe;
+  color: #0369a1;
+  border-color: #7dd3fc;
+}
+
+.mcp-item-icon.type-sse {
+  background: #dcfce7;
+  color: #15803d;
+  border-color: #86efac;
+}
+
+.mcp-item-icon.type-streamable {
+  background: #fef3c7;
+  color: #a16207;
+  border-color: #fcd34d;
+}
+
+.mcp-item-info {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.mcp-item-name {
+  font-weight: 600;
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.mcp-type-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  font-size: 10px;
+  border-radius: 4px;
+  background: var(--bg-2);
+  color: var(--fg-3);
+  border: 1px solid var(--border);
+  font-weight: 500;
+}
+
+.mcp-item-detail {
+  width: 100%;
+  font-size: 11px;
+  color: var(--fg-3);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mcp-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.mcp-form-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mcp-form-header h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.mcp-field {
+  margin-bottom: 16px;
+}
+
+.mcp-field > label {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--fg-2);
+}
+
+.mcp-field .req {
+  color: var(--red);
+}
+
+.mcp-hint {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: var(--fg-3);
+}
+
+.mcp-type-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  overflow: hidden;
+  width: fit-content;
+}
+
+.mcp-type-toggle .type-btn {
+  padding: 7px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  border: none;
+  background: var(--bg);
+  color: var(--fg-2);
+  cursor: pointer;
+  transition: all var(--t);
+  font-family: var(--sans);
+}
+
+.mcp-type-toggle .type-btn:not(:last-child) {
+  border-right: 1px solid var(--border);
+}
+
+.mcp-type-toggle .type-btn.active {
+  background: var(--accent);
+  color: white;
+}
+
+.mcp-type-toggle .type-btn:hover:not(.active) {
+  background: var(--bg-2);
+}
+
+.mcp-check-result {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 8px 12px;
+  border-radius: var(--r);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.mcp-check-result.ok {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.mcp-check-result.error {
+  background: var(--red-bg);
+  color: var(--red);
+}
+
+.mcp-form-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+}
+
+.mcp-tools-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.mcp-tools-header h3 {
+  margin: 0;
+  font-size: 15px;
+}
+
+.mcp-tools-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  margin-bottom: 12px;
+}
+
+.mcp-tools-count {
+  flex: 1;
+  font-size: 12px;
+  color: var(--fg-3);
+}
+
+.mcp-tools-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.mcp-tool-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 12px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  transition: all var(--t);
+}
+
+.mcp-tool-item:hover {
+  border-color: var(--accent);
+}
+
+.mcp-tool-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 700;
+  font-size: 11px;
+  flex-shrink: 0;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+}
+
+.mcp-tool-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mcp-tool-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  font-family: monospace;
+}
+
+.mcp-tool-desc {
+  font-size: 11px;
+  color: var(--fg-3);
+  margin-top: 2px;
+}
+
+.mcp-checkbox-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  user-select: none;
+}
+
+.mcp-checkbox {
+  display: none;
+}
+
+.mcp-checkbox-custom {
+  width: 18px;
+  height: 18px;
+  border: 2px solid var(--border);
+  border-radius: 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--t);
+  flex-shrink: 0;
+}
+
+.mcp-checkbox:checked + .mcp-checkbox-custom {
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.mcp-checkbox:checked + .mcp-checkbox-custom::after {
+  content: '';
+  width: 5px;
+  height: 9px;
+  border: solid white;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+  margin-top: -1px;
+}
+
+.mcp-checkbox-label:hover .mcp-checkbox-custom {
+  border-color: var(--accent);
+}
+
+.form-textarea {
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 12px;
+  font-family: var(--mono, monospace);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--bg);
+  color: var(--fg);
+  resize: vertical;
+  outline: none;
+  transition: border-color var(--t);
+  box-sizing: border-box;
+}
+
+.form-textarea:focus {
+  border-color: var(--accent);
 }
 </style>

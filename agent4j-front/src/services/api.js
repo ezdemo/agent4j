@@ -522,6 +522,49 @@ export const openApiAPI = {
     }
 }
 
+// MCP 服务器管理 API
+export const mcpAPI = {
+    // 获取所有 MCP 服务器列表 - GET /api/mcp/servers
+    listServers: () => {
+        return api.get('/mcp/servers')
+    },
+
+    // 新增 MCP 服务器 - POST /api/mcp/servers/add
+    addServer: (server) => {
+        return api.post('/mcp/servers/add', server)
+    },
+
+    // 更新 MCP 服务器 - POST /api/mcp/servers/update
+    updateServer: (originalName, server) => {
+        return api.post('/mcp/servers/update', { originalName, server })
+    },
+
+    // 删除 MCP 服务器 - POST /api/mcp/servers/remove
+    removeServer: (name) => {
+        return api.post('/mcp/servers/remove', { name })
+    },
+
+    // 启用/禁用 MCP 服务器 - POST /api/mcp/servers/toggle
+    toggleServer: (name, enabled) => {
+        return api.post('/mcp/servers/toggle', { name, enabled })
+    },
+
+    // 检测 MCP 服务器连接 - POST /api/mcp/servers/check
+    checkConnection: (server) => {
+        return api.post('/mcp/servers/check', server)
+    },
+
+    // 查看服务器工具列表 - GET /api/mcp/servers/tools?name=xxx
+    listTools: (name) => {
+        return api.get('/mcp/servers/tools', { params: { name } })
+    },
+
+    // 保存工具权限 - POST /api/mcp/servers/tools/save
+    saveToolPermissions: (serverName, disallowedTools) => {
+        return api.post('/mcp/servers/tools/save', { serverName, disallowedTools })
+    }
+}
+
 // Git API
 export const gitAPI = {
   // 获取当前分支和变更文件列表 - GET /api/git/diff?workspaceHash=xxx
