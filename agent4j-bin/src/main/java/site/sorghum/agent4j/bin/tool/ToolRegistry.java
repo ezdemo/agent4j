@@ -154,6 +154,39 @@ public class ToolRegistry {
     }
 
     /**
+     * 复制当前注册表的全部配置及工具列表到新实例。
+     * <p>
+     * 继承父级的所有设置：configService、disabledTools、
+     * refreshContext、blockedPaths 以及全部已注册的工具。
+     * 调用方可在返回后自行调用 {@link #setForceDenyTools} 设置强制禁止名单。
+     * </p>
+     *
+     * @return 新的 ToolRegistry 实例，包含全部配置和工具
+     */
+    public ToolRegistry copy() {
+        ToolRegistry copy = new ToolRegistry();
+        // 复制 ConfigService 引用（同一实例，线程安全）
+        copy.configService = this.configService;
+        // 复制禁用工具快照
+        copy.disabledToolsSnapshot = this.disabledToolsSnapshot.isEmpty()
+                ? Collections.emptySet()
+                : new HashSet<>(this.disabledToolsSnapshot);
+        copy.useSnapshot = this.useSnapshot;
+        // 复制刷新上下文
+        copy.workspace = this.workspace;
+        copy.apiUrl = this.apiUrl;
+        copy.apiKey = this.apiKey;
+        copy.blockedPaths = this.blockedPaths.isEmpty()
+                ? Collections.emptyList()
+                : new ArrayList<>(this.blockedPaths);
+        // 注册所有工具
+        for (ToolDef def : this.tools.values()) {
+            copy.tools.put(def.name(), def);
+        }
+        return copy;
+    }
+
+    /**
      * 返回所有工具的不可变视图。
      */
     public Map<String, ToolDef> all() {

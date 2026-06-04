@@ -1,10 +1,7 @@
 package site.sorghum.agent4j.bin.agent;
 
 import lombok.Getter;
-import org.noear.snack4.ONode;
-import org.noear.solon.annotation.To;
 import site.sorghum.agent4j.bin.model.ModelClient;
-import site.sorghum.agent4j.bin.tool.ToolDef;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 
 import java.io.IOException;
@@ -84,17 +81,13 @@ public class SubAgent {
     public SubAgent(ModelClient client, ToolRegistry parentRegistry, String systemPrompt) {
         this.client = client;
         // 创建独立注册表，通过 forceDenyTools 硬性过滤（禁止递归 spawn 等）
-        this.registry = ONode.ofBean(parentRegistry).toBean(ToolRegistry.class);
+        this.registry = parentRegistry.copy();
         this.registry.setForceDenyTools(SUB_AGENT_DENY);
         this.systemPrompt = systemPrompt;
     }
 
     /**
      * 设置父代理的 AgentOutput，使子代理的流式输出能通过父代理的通道实时推送给用户。
-     * <p>
-     * 由 {@link site.sorghum.agent4j.bin.builtin.TaskTool#execute(ToolContext)} 在创建 SubAgent 后调用，
-     * 传入 {@link site.sorghum.agent4j.bin.agent.AgentLoop} 中持有的 {@link AgentOutput}。
-     * </p>
      *
      * @param output 父代理的输出接口（ConsoleAgentOutput / SseAgentOutput 等）
      */
