@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.tool;
 
+import lombok.Getter;
 import site.sorghum.agent4j.bin.config.ConfigService;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
@@ -28,6 +29,14 @@ public class ToolRegistry {
     /** true=使用静态快照，false=使用 ConfigService 实时读取 */
     private boolean useSnapshot = false;
 
+    /**
+     * 强制禁止的工具名集合 — 独立于用户配置的 disabledTools。
+     * 由子代理等场景设置，用于在注册表层面硬性排除某些工具（如禁止递归 spawn）。
+     * register() 和 refresh() 都会检查此集合。
+     */
+    @Getter
+    private Set<String> forceDenyTools = Collections.emptySet();
+
     // ==================== 动态刷新上下文 ====================
     private Path workspace;
     private String apiUrl;
@@ -37,10 +46,9 @@ public class ToolRegistry {
     /**
      * 设置 ConfigService 引用（运行时实时读取禁用列表）。
      */
-    public ToolRegistry setConfigService(ConfigService configService) {
+    public void setConfigService(ConfigService configService) {
         this.configService = configService;
         this.useSnapshot = false;
-        return this;
     }
 
     /**
@@ -64,15 +72,26 @@ public class ToolRegistry {
     }
 
     /**
+     * 设置强制禁止的工具名称集合。
+     * 与 {@link #setDisabledTools} 不同，此集合不由用户配置控制，
+     * 而是由代码逻辑（如子代理）硬性指定，独立于用户配置始终生效。
+     *
+     * @param denyTools 强制禁止的工具名称集合，传 null 视为空集
+     */
+    public void setForceDenyTools(Set<String> denyTools) {
+        this.forceDenyTools = denyTools != null ? new HashSet<>(denyTools) : Collections.emptySet();
+    }
+
+
+    /**
      * 设置动态刷新的上下文参数。
      * 调用 {@link #refresh()} 时会使用这些参数重新扫描并注册工具。
      */
-    public ToolRegistry setRefreshContext(Path workspace, String apiUrl, String apiKey, List<String> blockedPaths) {
+    public void setRefreshContext(Path workspace, String apiUrl, String apiKey, List<String> blockedPaths) {
         this.workspace = workspace;
         this.apiUrl = apiUrl;
         this.apiKey = apiKey;
         this.blockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
-        return this;
     }
 
     /**
@@ -93,6 +112,9 @@ public class ToolRegistry {
             if (disabled.contains(tool.getName())) {
                 continue; // 跳过禁用工具
             }
+            if (forceDenyTools.contains(tool.getName())) {
+                continue; // 跳过强制禁止工具
+            }
             String toolSpec = tool.toToolSpec();
             ToolDef def = new ToolDef(
                     tool.getName(),
@@ -111,13 +133,16 @@ public class ToolRegistry {
         }
     }
 
-    public ToolRegistry register(ToolDef def) {
+    public void register(ToolDef def) {
         if (getCurrentDisabledTools().contains(def.name())) {
             System.err.println("[registry] 工具已禁用，跳过注册: " + def.name());
-            return this;
+            return;
+        }
+        if (forceDenyTools.contains(def.name())) {
+            System.err.println("[registry] 工具被强制禁止，跳过注册: " + def.name());
+            return;
         }
         tools.put(def.name(), def);
-        return this;
     }
 
     public ToolDef get(String name) {

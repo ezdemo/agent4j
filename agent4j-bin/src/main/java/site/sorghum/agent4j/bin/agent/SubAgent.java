@@ -1,6 +1,8 @@
 package site.sorghum.agent4j.bin.agent;
 
 import lombok.Getter;
+import org.noear.snack4.ONode;
+import org.noear.solon.annotation.To;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.tool.ToolDef;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
@@ -22,9 +24,17 @@ public class SubAgent {
 
     /**
      * 子代理禁止使用的工具名集合（全局维护，新增工具自动对子代理可用）。
-     * <p>排除：递归 spawn、计划管理、用户交互、会话任务跟踪。</p>
+     * <p>排除：递归 spawn（task 工具）、计划管理、用户交互、会话任务跟踪。</p>
+     * <p>子代理创建时复制父工具集时过滤此名单：</p>
+     * <ul>
+     *   <li><b>task</b> — 防止递归子代理 spawn（子代理不应再创建子代理）</li>
+     *   <li>submit_plan / mark_step_complete / revise_plan — 计划管理，主代理专用</li>
+     *   <li>ask_choice — 用户交互，主代理专用（子代理无用户交互）</li>
+     *   <li>todo_write — 会话任务跟踪，主代理专用</li>
+     * </ul>
+     * <p>public 可见性供 {@code TaskTool} 构建子代理 system prompt 时保持一致的过滤逻辑。</p>
      */
-    private static final Set<String> SUB_AGENT_DENY = new HashSet<>(Arrays.asList(
+    public static final Set<String> SUB_AGENT_DENY = new HashSet<>(Arrays.asList(
             "task",                // 防止递归子代理 spawn
             "submit_plan",         // 计划管理（主代理专用）
             "mark_step_complete",  // 计划管理（主代理专用）
@@ -73,12 +83,9 @@ public class SubAgent {
      */
     public SubAgent(ModelClient client, ToolRegistry parentRegistry, String systemPrompt) {
         this.client = client;
-        this.registry = new ToolRegistry();
-        for (Map.Entry<String, ToolDef> e : parentRegistry.all().entrySet()) {
-            if (!SUB_AGENT_DENY.contains(e.getKey())) {
-                registry.register(e.getValue());
-            }
-        }
+        // 创建独立注册表，通过 forceDenyTools 硬性过滤（禁止递归 spawn 等）
+        this.registry = ONode.ofBean(parentRegistry).toBean(ToolRegistry.class);
+        this.registry.setForceDenyTools(SUB_AGENT_DENY);
         this.systemPrompt = systemPrompt;
     }
 
