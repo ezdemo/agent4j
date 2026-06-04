@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.web.controller;
 
+import lombok.Data;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -560,6 +561,7 @@ public class GitController {
     /**
      * Git 进程执行结果。
      */
+    @Data
     static class ProcessResult {
         int exitCode;
         String stdout;

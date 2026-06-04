@@ -277,10 +277,6 @@ public class AgentLoop {
     }
 
     /**
-     * 构建动态工具使用指引（作为 user 消息注入，不持久化到历史）。
-     * Plan mode 规则已永久在 system prompt 中描述，此处仅注入通用工具使用提示。
-     */
-    /**
      * 动态刷新工具列表 —— 在每一步推理前重新扫描工具并同步到 LLM 请求。
      * 仅更新工具挂载，不改变系统提示词。
      */
@@ -969,7 +965,7 @@ public class AgentLoop {
      *
      * @return true 表示已恢复（应 continue 重试），false 表示无法恢复（应抛异常）
      */
-    private boolean recoverFromStreamError() throws IOException {
+    private boolean recoverFromStreamError() {
         streamErrorRetryCount++;
         if (streamErrorRetryCount <= MAX_STREAM_ERROR_RETRIES) {
             int delay = RETRY_DELAYS_SEC[streamErrorRetryCount - 1];

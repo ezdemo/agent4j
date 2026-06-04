@@ -15,7 +15,7 @@ class CommandChainParserTest {
 
     @Test
     @DisplayName("简单命令（无操作符时返回 null）")
-    void simpleCommand() throws Exception {
+    void simpleCommand() {
         var chain = CommandChainParser.parse("ls -la");
         // 无操作符时返回 null
         assertNull(chain);
@@ -23,7 +23,7 @@ class CommandChainParserTest {
 
     @Test
     @DisplayName("管道连接")
-    void pipeCommand() throws Exception {
+    void pipeCommand() {
         var chain = CommandChainParser.parse("grep foo | wc -l");
         assertNotNull(chain);
         assertEquals(2, chain.segments().size());
@@ -33,7 +33,7 @@ class CommandChainParserTest {
 
     @Test
     @DisplayName("&& 链")
-    void andChain() throws Exception {
+    void andChain() {
         // cd 会被拦截，用 git -C 代替
         var chain = CommandChainParser.parse("make && make test");
         assertNotNull(chain);
@@ -43,7 +43,7 @@ class CommandChainParserTest {
 
     @Test
     @DisplayName("|| 链")
-    void orChain() throws Exception {
+    void orChain() {
         var chain = CommandChainParser.parse("make || echo failed");
         assertNotNull(chain);
         assertEquals(2, chain.segments().size());
@@ -52,7 +52,7 @@ class CommandChainParserTest {
 
     @Test
     @DisplayName("分号分隔")
-    void semicolonChain() throws Exception {
+    void semicolonChain() {
         // 分号被 tokenizer 保留在 token 内，不被解析为链操作符
         var chain = CommandChainParser.parse("echo a ; echo b");
         assertNotNull(chain);
@@ -62,7 +62,7 @@ class CommandChainParserTest {
 
     @Test
     @DisplayName("三连链: && ||")
-    void tripleChain() throws Exception {
+    void tripleChain() {
         var chain = CommandChainParser.parse("make && make test || echo failed");
         assertNotNull(chain);
         assertEquals(3, chain.segments().size());
@@ -73,7 +73,7 @@ class CommandChainParserTest {
 
     @Test
     @DisplayName("复杂管道链")
-    void complexPipeChain() throws Exception {
+    void complexPipeChain() {
         var chain = CommandChainParser.parse("cat data.txt | grep error | sort | uniq -c");
         assertNotNull(chain);
         assertEquals(4, chain.segments().size());
@@ -85,7 +85,7 @@ class CommandChainParserTest {
 
     @Test
     @DisplayName("重定向输出")
-    void redirectOut() throws Exception {
+    void redirectOut() {
         var chain = CommandChainParser.parse("echo hello > output.txt");
         assertNotNull(chain);
         assertEquals(1, chain.segments().size());
@@ -97,7 +97,7 @@ class CommandChainParserTest {
 
     @Test
     @DisplayName("重定向追加")
-    void redirectAppend() throws Exception {
+    void redirectAppend() {
         var chain = CommandChainParser.parse("echo log >> file.log");
         assertNotNull(chain);
         var seg = chain.segments().get(0);
@@ -106,7 +106,7 @@ class CommandChainParserTest {
 
     @Test
     @DisplayName("输入重定向")
-    void redirectIn() throws Exception {
+    void redirectIn() {
         var chain = CommandChainParser.parse("sort < input.txt");
         assertNotNull(chain);
         var seg = chain.segments().get(0);
@@ -116,7 +116,7 @@ class CommandChainParserTest {
 
     @Test
     @DisplayName("错误重定向")
-    void redirectErr() throws Exception {
+    void redirectErr() {
         var chain = CommandChainParser.parse("grep foo 2> error.log");
         assertNotNull(chain);
         var seg = chain.segments().get(0);
@@ -125,7 +125,7 @@ class CommandChainParserTest {
 
     @Test
     @DisplayName("错误合并 2>&1")
-    void redirectErrMerge() throws Exception {
+    void redirectErrMerge() {
         var chain = CommandChainParser.parse("cmd 2>&1");
         assertNotNull(chain);
         var seg = chain.segments().get(0);
@@ -134,7 +134,7 @@ class CommandChainParserTest {
 
     @Test
     @DisplayName("混合管道和重定向")
-    void pipeWithRedirect() throws Exception {
+    void pipeWithRedirect() {
         var chain = CommandChainParser.parse("cat log.txt | grep error > errors.txt");
         assertNotNull(chain);
         assertEquals(2, chain.segments().size());

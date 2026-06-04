@@ -290,7 +290,7 @@ public class Agent4jAgent {
     /**
      * /retry 撤回最后一条消息并重试
      */
-    public String retryLast() throws IOException {
+    public String retryLast() {
         String msg = ctx.retryLastUser();
         return msg != null ? chat(msg) : null;
     }
@@ -298,7 +298,7 @@ public class Agent4jAgent {
     /**
      * /rewind N 回退到第 N 轮
      */
-    public String rewind(int n) throws IOException {
+    public String rewind(int n) {
         String msg = ctx.rewindToUser(n);
         return msg != null ? chat(msg) : null;
     }

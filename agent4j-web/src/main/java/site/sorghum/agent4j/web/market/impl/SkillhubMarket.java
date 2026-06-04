@@ -186,7 +186,7 @@ public class SkillhubMarket implements Market {
 
     // ==================== 内部工具方法 ====================
 
-    private String httpGet(String url) throws Exception {
+    private String httpGet(String url) {
         return HttpUtils.http(url)
                 .header("User-Agent", USER_AGENT)
                 .timeout(15000)

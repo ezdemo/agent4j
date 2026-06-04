@@ -516,7 +516,7 @@ public class AgentService {
      * @param sessionName   会话名称（可选）
      * @return 聊天回复
      */
-    public String chat(String message, String workspacePath, String sessionName) throws IOException {
+    public String chat(String message, String workspacePath, String sessionName) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         ReentrantLock lock = getSessionLock(sessionKey);
         lock.lock();
