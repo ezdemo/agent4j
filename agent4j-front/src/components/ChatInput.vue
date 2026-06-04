@@ -90,12 +90,21 @@
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
           <span class="stop-text">停止</span>
         </button>
-        <button v-else class="send-btn" :class="{ active: localText.trim() && !streaming }"
-                @click="handleSend" :disabled="!localText.trim() || streaming">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
-          </svg>
-        </button>
+        <template v-else>
+          <button :disabled="!hasHistory" class="continue-btn" title="让 AI 继续生成" @click="$emit('continue')">
+            <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
+              <polyline points="5 4 15 12 5 20"/>
+              <line x1="19" x2="19" y1="5" y2="19"/>
+            </svg>
+          </button>
+          <button :class="{ active: localText.trim() && !streaming }" :disabled="!localText.trim() || streaming"
+                  class="send-btn" @click="handleSend">
+            <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
+              <line x1="22" x2="11" y1="2" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
+        </template>
       </div>
     </div>
 
@@ -171,10 +180,11 @@ const props = defineProps({
   currentModel: { type: String, default: '' },
   availableModels: { type: Array, default: () => [] },
   workspaceHash: { type: String, default: null },
-  sessionName: { type: String, default: null }
+  sessionName: {type: String, default: null},
+  hasHistory: {type: Boolean, default: false}
 })
 
-const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'fetchTodos', 'refreshUsage', 'switchModel'])
+const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'fetchTodos', 'refreshUsage', 'switchModel', 'continue'])
 
 const inputField = ref(null)
 const inputFocused = ref(false)
@@ -200,6 +210,7 @@ const defaultSlashCmds = [
   { cmd: '/export', desc: '导出对话', type: 'session' },
   { cmd: '/plan', desc: '进入计划模式', type: 'mode' },
   { cmd: '/execute', desc: '退出计划模式', type: 'mode' },
+  {cmd: '/continue', desc: '继续生成', type: 'mode'},
   { cmd: '/sessions', desc: '列出历史会话', type: 'session' },
   { cmd: '/help', desc: '显示帮助信息', type: 'system' },
   { cmd: '/exit', desc: '退出', type: 'system' },
@@ -225,7 +236,7 @@ const filteredSlashCmds = computed(() => {
 
 const getSlashIcon = (cmd) => {
   const icons = { '/new':'✨','/clear':'🗑️','/retry':'🔄','/compact':'📦','/export':'📥','/plan':'📋',
-    '/execute':'⚡','/sessions':'📂','/load':'📂','/rewind':'⏪','/init':'🔧','/hitl':'🛡',
+    '/execute': '⚡', '/continue': '▶️', '/sessions': '📂', '/load': '📂', '/rewind': '⏪', '/init': '🔧', '/hitl': '🛡',
     '/agree':'✅','/deny':'❌','/help':'❓','/exit':'👋' }
   if (cmd?.startsWith('/skill:')) return '🧩'
   return icons[cmd] || '🔧'
@@ -333,6 +344,28 @@ defineExpose({ focus: () => inputField.value?.focus(), autoResize })
 .send-btn.active { background: var(--accent); color: #fff; }
 .send-btn.active:hover { background: var(--blue-dark); }
 .send-btn:disabled { cursor: not-allowed; opacity: 0.5; }
+
+.continue-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r);
+  color: var(--fg-4);
+  transition: all var(--t);
+  cursor: pointer;
+}
+
+.continue-btn:hover {
+  background: var(--bg-3);
+  color: var(--accent);
+}
+
+.continue-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
 .stop-btn { display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: var(--red); color: #fff; border-radius: var(--r); font-size: 12px; font-weight: 500; cursor: pointer; transition: all var(--t); animation: pulse-red 1.5s infinite; }
 .stop-btn:hover { background: var(--red-dark); transform: scale(1.05); }
 .stop-btn svg { animation: spin 1s linear infinite; }

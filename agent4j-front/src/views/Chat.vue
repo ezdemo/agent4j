@@ -255,6 +255,7 @@
         :availableModels="availableModels"
         :workspaceHash="props.workspaceHash"
         :sessionName="props.sessionName"
+        :hasHistory="hasHistory"
         @send="sendMessage"
         @abort="abortChat"
         @clear="clearChat"
@@ -262,6 +263,7 @@
         @fetchTodos="fetchTodos"
         @refreshUsage="loadUsage"
         @switchModel="handleSwitchModel"
+        @continue="continueChat"
     />
   </div>
 </template>
@@ -302,6 +304,7 @@ const messagesContainer = ref(null)
 const inputText = ref('')
 const messages = computed(() => store.getSessionMessages(props.sessionName))
 const streaming = computed(() => store.getSessionStreaming(props.sessionName))
+const hasHistory = computed(() => messages.value.length > 0)
 const planMode = ref(false)
 
 // TODO 相关状态
@@ -446,7 +449,7 @@ onBeforeUnmount(() => {
 const suggestions = ['解释这段代码', '优化这个函数', '写个单元测试', '检查潜在问题']
 
 // 不在聊天区显示的静默命令（只发给后端，不加用户消息气泡）
-const SILENT_CMDS = new Set(['/agree', '/deny', '/exit'])
+const SILENT_CMDS = new Set(['/agree', '/deny', '/exit', '/continue'])
 
 const hasAssistant = computed(() => messages.value.some(m => m.role === 'assistant' && m.blocks?.length > 0))
 
@@ -851,6 +854,13 @@ const clearMessages = () => {
   } catch {
     store.setSessionStreaming(props.sessionName, false)
   }
+}
+
+/** 继续生成：发送 /continue 命令让 AI 继续推理，复用以有的 SSE 流式逻辑 */
+const continueChat = async () => {
+  if (!props.sessionName || streaming.value) return
+  inputText.value = '/continue'
+  nextTick(() => sendMessage())
 }
 
 // 仅清空本地消息，不请求后端（配合 REST API 创建新会话时使用）

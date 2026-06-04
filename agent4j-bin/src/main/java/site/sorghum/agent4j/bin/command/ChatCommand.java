@@ -144,6 +144,10 @@ public interface ChatCommand {
         /**
          * 命令已处理，主循环应退出（如 /exit）
          */
-        EXIT
+        EXIT,
+        /**
+         * 继续走主流程
+         */
+        LOOP
     }
 }

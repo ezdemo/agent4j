@@ -206,8 +206,10 @@ public class Agent4jAgent {
                 if (cmd.isSilent()) {
                     return null;
                 }
-                // 返回执行确认（Web 模式下前端需要看到回复，CLI 模式也便于追踪）
-                return "✅ 已执行 " + message + " 命令";
+                if (result != ChatCommand.CommandResult.LOOP) {
+                    // 返回执行确认（Web 模式下前端需要看到回复，CLI 模式也便于追踪）
+                    return "✅ 已执行 " + message + " 命令";
+                }
             }
             // 未匹配到命令："/" 开头但不是命令，降级为普通聊天消息
         }

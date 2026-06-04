@@ -139,8 +139,8 @@ export const chatAPI = {
   abort: () => {
     return api.post('/chat/abort')
   },
-  
-  // SSE流式聊天 - POST /api/chat/stream
+
+    // SSE流式聊天 - POST /api/chat/stream
   sendMessageStream: (message, onMessage, onDone, onError, options = {}) => {
     const abortController = new AbortController()
 
