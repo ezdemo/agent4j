@@ -13,6 +13,6 @@ public class Agent4JOpenApiSkill extends OpenApiSkill implements SolonToTools {
 
     @Override
     public List<AgentTool> getTools() {
-        return ToolManager.getTools(List.of(this));
+        return ToolManager.getToolsFromSKill(List.of(this));
     }
 }

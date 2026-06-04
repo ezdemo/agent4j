@@ -3,7 +3,6 @@ package site.sorghum.agent4j.tool.solon;
 import lombok.AllArgsConstructor;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.skill.Skill;
-import org.noear.solon.ai.chat.skill.SkillProvider;
 import org.noear.solon.ai.chat.tool.FunctionTool;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
@@ -25,11 +24,23 @@ public class ToolManager {
      * 【你要完善的方法】
      * 将所有 Skill 中的 FunctionTool 统一适配为 AgentTool。
      */
-    public static List<AgentTool> getTools(Collection<Skill> skills) {
+    public static List<AgentTool> getToolsFromSKill(Collection<Skill> skills) {
         return skills.stream()
                 .map(skill -> skill.getTools(null))          // Skill → Collection<FunctionTool>
                 .filter(Objects::nonNull)
                 .flatMap(Collection::stream)                  // 扁平化为 FunctionTool 流
+                .map(FunctionToolAdapter::new)                // 适配为 AgentTool
+                .collect(Collectors.toList());
+    }
+
+    /**
+     * 【你要完善的方法】
+     * 将所有 Skill 中的 FunctionTool 统一适配为 AgentTool。
+     */
+    @SafeVarargs
+    public static List<AgentTool> getToolsFromTools(Collection<FunctionTool> ...tools) {
+        return Arrays.stream(tools).flatMap(Collection::stream)
+                .filter(Objects::nonNull)
                 .map(FunctionToolAdapter::new)                // 适配为 AgentTool
                 .collect(Collectors.toList());
     }

@@ -15,6 +15,21 @@
     <dependencies>
         <dependency>
             <groupId>org.noear</groupId>
+            <artifactId>solon-ai-skill-file</artifactId>
+            <version>${solon.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.noear</groupId>
+            <artifactId>solon-ai-skill-sys</artifactId>
+            <version>${solon.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.noear</groupId>
+            <artifactId>solon-ai-skill-web</artifactId>
+            <version>${solon.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.noear</groupId>
             <artifactId>solon-ai-skill-pdf</artifactId>
             <version>${solon.version}</version>
         </dependency>
