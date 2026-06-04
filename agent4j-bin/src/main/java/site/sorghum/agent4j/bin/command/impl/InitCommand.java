@@ -2,6 +2,7 @@ package site.sorghum.agent4j.bin.command.impl;
 
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.agent.LogLevel;
+import site.sorghum.agent4j.bin.agent.UserMessage;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.bin.command.MessageWrapper;
@@ -47,7 +48,7 @@ public class InitCommand implements ChatCommand {
                 4. 用 write_file 写入 agent4j.md
                 5. 完成后一句话总结""";
         try {
-            String reply = context.getAgent().chat(prompt);
+            String reply = context.getAgent().chat(UserMessage.of(prompt));
             context.getAgent().getOutput().onReasoning(reply);
         } catch (Exception e) {
             context.getAgent().getOutput().onLog(LogLevel.ERROR, "分析项目失败: " + e.getMessage());

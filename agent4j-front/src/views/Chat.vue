@@ -45,6 +45,9 @@
         <template v-if="msg.role === 'user'">
           <div class="msg-body user-body">
             <div class="msg-text">{{ msg.content }}</div>
+            <div v-if="msg.images && msg.images.length > 0" class="user-images">
+              <img v-for="(img, i) in msg.images" :key="i" :src="img" class="user-image" @click="previewImage(img)"/>
+            </div>
             <div class="msg-footer">
               <span class="msg-time">{{ msg.time }}</span>
               <button class="copy-msg-btn" @click="copyMessage(msg)" title="复制消息" v-html="COPY_ICON"></button>
@@ -245,6 +248,14 @@
       </div>
     </Teleport>
 
+    <!-- 图片预览弹窗 -->
+    <Teleport to="body">
+      <div v-if="imagePreviewOpen" class="image-preview-overlay" @click="imagePreviewOpen = false">
+        <img :src="imagePreviewUrl" class="image-preview-full" @click.stop/>
+        <button class="image-preview-close" @click="imagePreviewOpen = false">&times;</button>
+      </div>
+    </Teleport>
+
     <!-- 输入区（独立组件） -->
     <ChatInput
         v-model:inputText="inputText"
@@ -256,7 +267,7 @@
         :workspaceHash="props.workspaceHash"
         :sessionName="props.sessionName"
         :hasHistory="hasHistory"
-        @send="sendMessage"
+        @send="(imgs) => sendMessage(imgs)"
         @abort="abortChat"
         @clear="clearChat"
         @export="exportChat"
@@ -302,6 +313,14 @@ const store = useAppStore()
 
 const messagesContainer = ref(null)
 const inputText = ref('')
+
+// 图片预览
+const imagePreviewUrl = ref('')
+const imagePreviewOpen = ref(false)
+const previewImage = (url) => {
+  imagePreviewUrl.value = url
+  imagePreviewOpen.value = true
+}
 const messages = computed(() => store.getSessionMessages(props.sessionName))
 const streaming = computed(() => store.getSessionStreaming(props.sessionName))
 const hasHistory = computed(() => messages.value.length > 0)
@@ -609,9 +628,9 @@ const sendChoice = (value, block) => {
  *   收到有内容的 SSE 事件时才创建助手气泡
  * - /skill: 命令：显示用户气泡 + 助手气泡（正常流程）
  */
-const sendMessage = async () => {
+const sendMessage = async (images = []) => {
   const text = inputText.value.trim()
-  if (!text || streaming.value) return
+  if ((!text || streaming.value) && images.length === 0) return
   const sessionName = props.sessionName
   if (!sessionName) return
 
@@ -624,7 +643,9 @@ const sendMessage = async () => {
 
   // 静默命令不显示用户气泡
   if (!isSilent) {
-    store.addSessionMessage(sessionName, {id: Date.now(), role: 'user', content: text, time: now()})
+    const userMsg = {id: Date.now(), role: 'user', content: text, time: now()}
+    if (images.length > 0) userMsg.images = images
+    store.addSessionMessage(sessionName, userMsg)
   }
   userScrolledAway = false
   inputText.value = ''
@@ -796,10 +817,11 @@ const sendMessage = async () => {
           const msg = getMsg()
           if (msg && !msg.blocks.length) msg.blocks.push({type: 'content', content: '连接错误'})
         },
-        // 传递工作区和会话信息
+        // 传递工作区、会话和图片信息
         {
           workspaceHash: props.workspaceHash,
-          sessionName
+          sessionName,
+          images
         }
     )
     store.setSessionController(sessionName, streamResult)
@@ -1177,6 +1199,71 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   line-height: 1.6;
   white-space: pre-wrap;
   word-break: break-word;
+}
+
+/* 用户消息中的图片 */
+.user-images {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.user-image {
+  width: 80px;
+  height: 80px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  cursor: pointer;
+  transition: transform 0.15s, box-shadow 0.15s;
+}
+
+.user-image:hover {
+  transform: scale(1.05);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+/* 图片预览弹窗 */
+.image-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+}
+
+.image-preview-full {
+  max-width: 90vw;
+  max-height: 90vh;
+  object-fit: contain;
+  border-radius: 8px;
+  cursor: default;
+}
+
+.image-preview-close {
+  position: fixed;
+  top: 16px;
+  right: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  font-size: 28px;
+  border: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.image-preview-close:hover {
+  background: rgba(255, 255, 255, 0.3);
 }
 
 /* 消息底部栏（时间 + 复制按钮） */

@@ -43,10 +43,28 @@ public class ConversationContext {
 
     // ---- 写入 ----
 
+    /**
+     * 添加用户消息（支持纯文本和多模态）。
+     *
+     * @param msg 用户消息对象（纯文本或文本+图片）
+     */
+    public void addUser(UserMessage msg) {
+        ChatMessage chatMsg;
+        if (msg != null && msg.hasImages()) {
+            chatMsg = ChatMessage.userWithImages(msg.getText(), msg.getImages());
+        } else {
+            String text = msg != null ? msg.getText() : null;
+            chatMsg = ChatMessage.user(text);
+        }
+        history.add(chatMsg);
+        persist(chatMsg);
+    }
+
+    /**
+     * 添加纯文本用户消息（便捷方法，内部调用 {@link #addUser(UserMessage)}）。
+     */
     public void addUser(String content) {
-        ChatMessage msg = ChatMessage.user(content);
-        history.add(msg);
-        persist(msg);
+        addUser(UserMessage.of(content));
     }
 
     public void addAssistant(String content, List<ToolCallEntry> toolCalls, String reasoningContent) {

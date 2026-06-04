@@ -150,6 +150,10 @@ export const chatAPI = {
         // 添加工作区和会话信息
         if (options.workspaceHash) requestBody.workspaceHash = options.workspaceHash
         if (options.sessionName) requestBody.sessionName = options.sessionName
+          // 添加图片（base64 Data URI 列表）
+          if (options.images && options.images.length > 0) {
+              requestBody.images = options.images
+          }
         
         const base = getCustomBaseURL() || ''
         const url = base ? `${base}/api/chat/stream` : '/api/chat/stream'

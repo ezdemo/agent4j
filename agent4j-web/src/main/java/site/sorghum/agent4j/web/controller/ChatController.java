@@ -3,6 +3,7 @@ package site.sorghum.agent4j.web.controller;
 import io.swagger.annotations.*;
 import org.noear.solon.annotation.*;
 import org.noear.solon.core.handle.Context;
+import site.sorghum.agent4j.bin.agent.UserMessage;
 import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.model.ChatRequest;
 import site.sorghum.agent4j.web.model.ChatResultDTO;
@@ -35,7 +36,8 @@ public class ChatController {
         long t0 = System.currentTimeMillis();
         String workspacePath = agentService.resolveWorkspacePath(request.workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
-        String reply = agentService.chat(request.message.trim(), workspacePath, request.sessionName);
+        UserMessage userMsg = UserMessage.of(request.message.trim(), request.images);
+        String reply = agentService.chat(userMsg, workspacePath, request.sessionName);
         long elapsed = System.currentTimeMillis() - t0;
 
         ChatResultDTO data = new ChatResultDTO(
@@ -72,7 +74,7 @@ public class ChatController {
         }
 
         SseEmitter emitter = new SseEmitter(ctx);
-        final String message = request.message.trim();
+        final UserMessage userMsg = UserMessage.of(request.message.trim(), request.images);
         String workspacePath = agentService.resolveWorkspacePath(request.workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
         final String resolvedPath = workspacePath;
@@ -80,7 +82,7 @@ public class ChatController {
 
         Thread chatThread = new Thread(() -> {
             try {
-                agentService.chatStream(message, resolvedPath, sessionName, emitter);
+                agentService.chatStream(userMsg, resolvedPath, sessionName, emitter);
             } catch (Exception e) {
                 try {
                     emitter.sendError(e.getMessage());

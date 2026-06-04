@@ -309,7 +309,7 @@ public class AgentLoop {
      * 下一个回合调用时，上下文已包含上一轮的全部消息。
      * </p>
      */
-    public String run(String userMessage) throws IOException {
+    public String run(UserMessage userMessage) throws IOException {
         // ---- HITL 恢复：用户已审批 / 拒绝 ----
         if (hitlState == HitlState.APPROVED) {
             hitlState = HitlState.NONE;

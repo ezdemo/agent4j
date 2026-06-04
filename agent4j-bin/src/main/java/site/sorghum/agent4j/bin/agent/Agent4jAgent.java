@@ -179,25 +179,33 @@ public class Agent4jAgent {
      * 新增命令只需实现 {@link ChatCommand} 接口并标注 {@code @Component}，
      * 即可被 IoC 容器收集并在此处自动匹配执行。
      * </p>
+     * <p>
+     * {@link UserMessage} 支持纯文本和多模态（文本+图片）输入。
+     * 传递 {@code null} 用于 HITL 恢复。
+     * </p>
      */
     @SneakyThrows
-    public String chat(String message) {
+    public String chat(UserMessage userMessage) {
 
         // HITL 恢复（approve/deny 后传入 null 触发恢复）
-        if (message == null) {
+        if (userMessage == null) {
             return loop.run(null);
         }
-        MessageWrapper messageWrapper = MessageWrapper.builder().message(message).build();
+        String text = userMessage.getText();
+        MessageWrapper messageWrapper = MessageWrapper.builder().message(text).build();
         // === 命令处理（通过 IoC 注册的命令接口自动分发）===
-        if (message.startsWith("/") && commandRegistry != null) {
-            ChatCommand cmd = commandRegistry.match(message);
+        if (text != null && text.startsWith("/") && commandRegistry != null) {
+            ChatCommand cmd = commandRegistry.match(text);
             if (cmd != null) {
                 // 构造命令上下文：命令通过此上下文访问 agent 与退出机制
                 ChatCommandContext cmdContext = new ChatCommandContext(
                         this, null, () -> this.terminated = true);
                 ChatCommand.CommandResult result = cmd.execute(messageWrapper, cmdContext);
                 // 重新赋值
-                message = messageWrapper.getMessage();
+                String newText = messageWrapper.getMessage();
+                // 命令可能修改了文本内容，重建 UserMessage（保留图片）
+                userMessage = UserMessage.of(newText, userMessage.getImages());
+                text = newText;
                 // 命令执行后自动刷入会话与保存用量
                 flushSession();
                 saveUsage();
@@ -212,7 +220,7 @@ public class Agent4jAgent {
                 }
                 if (result != ChatCommand.CommandResult.LOOP) {
                     // 返回执行确认（Web 模式下前端需要看到回复，CLI 模式也便于追踪）
-                    return "✅ 已执行 " + message + " 命令";
+                    return "✅ 已执行 " + text + " 命令";
                 }
             }
             // 未匹配到命令："/" 开头但不是命令，降级为普通聊天消息
@@ -220,11 +228,11 @@ public class Agent4jAgent {
 
         // === 普通聊天逻辑 ===
         // 如果是第一条用户消息，自动生成会话标题
-        generateSessionTitleIfNeeded(message);
+        generateSessionTitleIfNeeded(text);
         // 设置当前会话ID到 AgentLoop（用于工具执行上下文）
         String currentSessionId = sessionService != null ? sessionService.getStore().currentName() : null;
         loop.setSessionId(currentSessionId);
-        return loop.run(message);
+        return loop.run(userMessage);
     }
 
     public void newSession() {
@@ -298,7 +306,7 @@ public class Agent4jAgent {
      */
     public String retryLast() {
         String msg = ctx.retryLastUser();
-        return msg != null ? chat(msg) : null;
+        return msg != null ? chat(UserMessage.of(msg)) : null;
     }
 
     /**
@@ -306,7 +314,7 @@ public class Agent4jAgent {
      */
     public String rewind(int n) {
         String msg = ctx.rewindToUser(n);
-        return msg != null ? chat(msg) : null;
+        return msg != null ? chat(UserMessage.of(msg)) : null;
     }
 
     public void setListener(AgentLoopListener listener) {

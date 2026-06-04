@@ -2,6 +2,8 @@ package site.sorghum.agent4j.web.model;
 
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * 聊天请求体。
  *
@@ -29,4 +31,11 @@ public class ChatRequest {
      * 会话名称（用于多会话隔离）
      */
     public String sessionName;
+
+    /**
+     * 图片列表（可选）。
+     * 支持公开 URL 和 Base64 Data URI 两种格式。
+     * 与 message 配合生成多模态消息。
+     */
+    public List<String> images;
 }

@@ -5,10 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
 import org.noear.solon.annotation.Inject;
-import site.sorghum.agent4j.bin.agent.Agent4jAgent;
-import site.sorghum.agent4j.bin.agent.AgentOutput;
-import site.sorghum.agent4j.bin.agent.ChatMessage;
-import site.sorghum.agent4j.bin.agent.PromptPrefix;
+import site.sorghum.agent4j.bin.agent.*;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
@@ -517,6 +514,13 @@ public class AgentService {
      * @return 聊天回复
      */
     public String chat(String message, String workspacePath, String sessionName) {
+        return chat(UserMessage.of(message), workspacePath, sessionName);
+    }
+
+    /**
+     * 同步聊天（多模态）—— 使用 {@link UserMessage} 统一表示文本+图片。
+     */
+    public String chat(UserMessage userMessage, String workspacePath, String sessionName) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         ReentrantLock lock = getSessionLock(sessionKey);
         lock.lock();
@@ -535,7 +539,7 @@ public class AgentService {
             // 设置会话ID到 AgentLoop
             String sessionId = sessionName != null ? sessionName : "default";
             agent.setSessionId(sessionId);
-            return agent.chat(message);
+            return agent.chat(userMessage);
         } finally {
             // 清理 ThreadLocal
             currentSessionName.remove();
@@ -561,6 +565,13 @@ public class AgentService {
      * @param emitter       SSE 发射器
      */
     public void chatStream(String message, String workspacePath, String sessionName, SseEmitter emitter) {
+        chatStream(UserMessage.of(message), workspacePath, sessionName, emitter);
+    }
+
+    /**
+     * 流式聊天（多模态）—— 使用 {@link UserMessage} 统一表示文本+图片。
+     */
+    public void chatStream(UserMessage userMessage, String workspacePath, String sessionName, SseEmitter emitter) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         ReentrantLock lock = getSessionLock(sessionKey);
         lock.lock();
@@ -582,7 +593,7 @@ public class AgentService {
             // 设置会话ID到 AgentLoop
             String sessionId = sessionName != null ? sessionName : "default";
             agent.setSessionId(sessionId);
-            String reply = agent.chat(message);
+            String reply = agent.chat(userMessage);
 
             // 发送最终完整回复（使用 complete 事件，与增量 content 事件区分）
             // HITL 待审批时跳过：interceptForHITL/interceptForSandboxHITL 已通过

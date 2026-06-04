@@ -164,6 +164,6 @@ public class SubAgent {
             }
         };
         subLoop.setListener(capturingListener);
-        return subLoop.run(task);
+        return subLoop.run(UserMessage.of(task));
     }
 }

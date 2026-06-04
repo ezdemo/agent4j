@@ -14,6 +14,14 @@ import java.util.Map;
  * <p>
  * 统一表示 OpenAI 兼容 API 的四种消息角色：system / user / assistant / tool。
  * </p>
+ * <p>
+ * {@link #content} 支持两种模式：
+ * <ul>
+ *   <li>纯文本模式 —— {@code content} 为普通字符串</li>
+ *   <li>多模态模式 —— {@link #contentParts} 非空时，{@code content} 被忽略，
+ *       序列化为 JSON 数组 {@code [{"type":"text",...},{"type":"image_url",...}]}</li>
+ * </ul>
+ * </p>
  *
  * @author Sorghum
  */
@@ -25,6 +33,12 @@ public class ChatMessage {
     @ONodeAttr(name = "content")
     private String content;
 
+    /**
+     * 多模态内容段（图片 + 文本）。
+     * 非空时优先于 {@link #content} 序列化。
+     */
+    private List<ContentPart> contentParts;
+
     @ONodeAttr(name = "tool_calls")
     private List<ToolCallEntry> toolCalls;
 
@@ -34,6 +48,14 @@ public class ChatMessage {
     @ONodeAttr(name = "reasoning_content")
     private String reasoningContent;
 
+    // ==================== 内容段模型 ====================
+
+    public static ChatMessage user(String content) {
+        ChatMessage msg = new ChatMessage("user");
+        msg.content = content;
+        return msg;
+    }
+
     // ==================== 工厂方法 ====================
 
     public static ChatMessage system(String content) {
@@ -42,35 +64,57 @@ public class ChatMessage {
         return msg;
     }
 
-    public static ChatMessage user(String content) {
+    /**
+     * 创建多模态用户消息（文本 + 图片）。
+     *
+     * @param text   文本内容
+     * @param images 图片 URL 列表（公开 URL 或 Base64 Data URI）
+     * @return 用户消息
+     */
+    public static ChatMessage userWithImages(String text, List<String> images) {
         ChatMessage msg = new ChatMessage("user");
-        msg.content = content;
+        msg.contentParts = new ArrayList<>();
+        for (String img : images) {
+            msg.contentParts.add(ContentPart.imageUrl(img));
+        }
+        if (text != null && !text.isEmpty()) {
+            msg.contentParts.add(ContentPart.text(text));
+        }
         return msg;
     }
-
-    public static ChatMessage assistant(String content, List<ToolCallEntry> toolCalls, String reasoningContent) {
-        ChatMessage msg = new ChatMessage("assistant");
-        msg.content = content;
-        msg.toolCalls = toolCalls;
-        msg.reasoningContent = reasoningContent;
-        return msg;
-    }
-
-    public static ChatMessage tool(String toolCallId, String content) {
-        ChatMessage msg = new ChatMessage("tool");
-        msg.toolCallId = toolCallId;
-        msg.content = content != null ? content : "(empty)";
-        return msg;
-    }
-
-    // ==================== 便捷判断 ====================
 
     @SuppressWarnings("unchecked")
     public static ChatMessage fromMap(Map<String, Object> m) {
         String role = String.valueOf(m.getOrDefault("role", "user"));
         ChatMessage msg = new ChatMessage(role);
         Object content = m.get("content");
-        msg.content = content != null ? content.toString() : null;
+        if (content instanceof List) {
+            // 多模态内容段：[{"type":"text",...},{"type":"image_url",...}]
+            List<Map<String, Object>> parts = (List<Map<String, Object>>) content;
+            msg.contentParts = new ArrayList<>();
+            for (Map<String, Object> part : parts) {
+                String type = String.valueOf(part.get("type"));
+                ContentPart cp = new ContentPart();
+                cp.setType(type);
+                if ("text".equals(type)) {
+                    Object textVal = part.get("text");
+                    cp.setText(textVal != null ? textVal.toString() : null);
+                } else if ("image_url".equals(type)) {
+                    Map<String, Object> iuMap = (Map<String, Object>) part.get("image_url");
+                    if (iuMap != null) {
+                        ContentPart.ImageUrl iu = new ContentPart.ImageUrl();
+                        Object urlVal = iuMap.get("url");
+                        iu.setUrl(urlVal != null ? urlVal.toString() : null);
+                        Object detailVal = iuMap.get("detail");
+                        iu.setDetail(detailVal != null ? detailVal.toString() : null);
+                        cp.setImageUrl(iu);
+                    }
+                }
+                msg.contentParts.add(cp);
+            }
+        } else {
+            msg.content = content != null ? content.toString() : null;
+        }
         Object reasoning = m.get("reasoning_content");
         msg.reasoningContent = reasoning != null ? reasoning.toString() : null;
         Object toolCallId = m.get("tool_call_id");
@@ -107,6 +151,60 @@ public class ChatMessage {
         return msg;
     }
 
+    public static ChatMessage assistant(String content, List<ToolCallEntry> toolCalls, String reasoningContent) {
+        ChatMessage msg = new ChatMessage("assistant");
+        msg.content = content;
+        msg.toolCalls = toolCalls;
+        msg.reasoningContent = reasoningContent;
+        return msg;
+    }
+
+    public static ChatMessage tool(String toolCallId, String content) {
+        ChatMessage msg = new ChatMessage("tool");
+        msg.toolCallId = toolCallId;
+        msg.content = content != null ? content : "(empty)";
+        return msg;
+    }
+
+    // ==================== 便捷判断 ====================
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("role", role);
+        if (contentParts != null && !contentParts.isEmpty()) {
+            List<Map<String, Object>> partsList = new ArrayList<>();
+            for (ContentPart part : contentParts) {
+                Map<String, Object> partMap = new LinkedHashMap<>();
+                partMap.put("type", part.getType());
+                if ("text".equals(part.getType())) {
+                    partMap.put("text", part.getText());
+                } else if ("image_url".equals(part.getType())) {
+                    Map<String, Object> urlMap = new LinkedHashMap<>();
+                    ContentPart.ImageUrl iu = part.getImageUrl();
+                    if (iu != null) {
+                        urlMap.put("url", iu.getUrl());
+                        if (iu.getDetail() != null) urlMap.put("detail", iu.getDetail());
+                    }
+                    partMap.put("image_url", urlMap);
+                }
+                partsList.add(partMap);
+            }
+            m.put("content", partsList);
+        } else if (content != null) {
+            m.put("content", content);
+        }
+        if (toolCallId != null) m.put("tool_call_id", toolCallId);
+        if (reasoningContent != null) m.put("reasoning_content", reasoningContent);
+        if (toolCalls != null && !toolCalls.isEmpty()) {
+            List<Map<String, Object>> tcMaps = new ArrayList<>();
+            for (ToolCallEntry tc : toolCalls) {
+                tcMaps.add(tc.toMap());
+            }
+            m.put("tool_calls", tcMaps);
+        }
+        return m;
+    }
+
     public boolean isSystem() {
         return "system".equals(role);
     }
@@ -135,19 +233,58 @@ public class ChatMessage {
 
     // ==================== 序列化 ====================
 
-    public Map<String, Object> toMap() {
-        Map<String, Object> m = new LinkedHashMap<>();
-        m.put("role", role);
-        if (content != null) m.put("content", content);
-        if (toolCallId != null) m.put("tool_call_id", toolCallId);
-        if (reasoningContent != null) m.put("reasoning_content", reasoningContent);
-        if (toolCalls != null && !toolCalls.isEmpty()) {
-            List<Map<String, Object>> tcMaps = new ArrayList<>();
-            for (ToolCallEntry tc : toolCalls) {
-                tcMaps.add(tc.toMap());
-            }
-            m.put("tool_calls", tcMaps);
+    /**
+     * OpenAI 多模态消息中的一个内容段。
+     * 支持 text 和 image_url 两种类型。
+     */
+    @lombok.Data
+    public static class ContentPart {
+        /**
+         * 类型: "text" 或 "image_url"
+         */
+        private String type;
+        /**
+         * text 类型时的文本内容
+         */
+        private String text;
+        /**
+         * image_url 类型时的图片信息
+         */
+        private ImageUrl imageUrl;
+
+        public static ContentPart text(String text) {
+            ContentPart part = new ContentPart();
+            part.setType("text");
+            part.setText(text);
+            return part;
         }
-        return m;
+
+        public static ContentPart imageUrl(String url) {
+            return imageUrl(url, null);
+        }
+
+        public static ContentPart imageUrl(String url, String detail) {
+            ContentPart part = new ContentPart();
+            part.setType("image_url");
+            ImageUrl iu = new ImageUrl();
+            iu.setUrl(url);
+            iu.setDetail(detail);
+            part.setImageUrl(iu);
+            return part;
+        }
+
+        @lombok.Data
+        public static class ImageUrl {
+            /**
+             * 图片 URL，可以是：
+             * - 公开的 HTTP/HTTPS 地址
+             * - Base64 Data URI: {@code data:image/jpeg;base64,...}
+             */
+            private String url;
+            /**
+             * 图片细节级别："auto" / "low" / "high"（可选）
+             */
+            private String detail;
+        }
     }
 }

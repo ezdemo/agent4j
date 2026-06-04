@@ -81,8 +81,16 @@
       </div>
 
       <textarea ref="inputField" v-model="localText" @keydown="handleKeydown"
-                @focus="inputFocused=true" @blur="handleBlur" @input="handleInput"
-                placeholder="输入消息... (Enter 发送, Tab 补全, / 命令)" rows="1"></textarea>
+                placeholder="输入消息... (Enter 发送, Tab 补全, / 命令，粘贴图片)" rows="1" @blur="handleBlur" @focus="inputFocused=true"
+                @input="handleInput" @paste="handlePaste"></textarea>
+
+      <!-- 图片预览 -->
+      <div v-if="images.length > 0" class="image-preview-bar">
+        <div v-for="(img, idx) in images" :key="idx" class="image-preview-item">
+          <img :src="img" alt="粘贴的图片" class="image-preview-thumb"/>
+          <button class="image-preview-remove" title="移除图片" @click="removeImage(idx)">&times;</button>
+        </div>
+      </div>
 
       <div class="input-actions">
 <!-- 计划模式按钮已移除 -->
@@ -189,6 +197,7 @@ const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export'
 const inputField = ref(null)
 const inputFocused = ref(false)
 const localText = ref(props.inputText)
+const images = ref([]) // 粘贴的图片 base64 Data URI 列表
 
 // 同步 props 到本地
 watch(() => props.inputText, v => localText.value = v)
@@ -296,7 +305,60 @@ const handleKeydown = (e) => {
   if (e.key==='Enter' && !e.shiftKey) { e.preventDefault(); handleSend() }
 }
 
-const handleSend = () => { if (localText.value.trim() && !props.streaming) emit('send') }
+const handleSend = () => {
+  if (localText.value.trim() && !props.streaming) {
+    emit('send', images.value)
+    // 发送后清空图片，localText 由父组件 v-model 清空
+    images.value = []
+  }
+}
+
+/**
+ * 粘贴事件处理：从剪贴板捕获图片，转为 base64 Data URI。
+ */
+const handlePaste = async (e) => {
+  const items = e.clipboardData?.items
+  if (!items) return
+
+  for (const item of items) {
+    if (item.type.startsWith('image/')) {
+      e.preventDefault() // 阻止默认粘贴文本
+      const file = item.getAsFile()
+      if (!file) continue
+
+      try {
+        const dataUrl = await fileToDataUrl(file)
+        // 限制图片数量（防止请求体过大）
+        if (images.value.length >= 10) {
+          console.warn('图片数量已达上限（10张），跳过')
+          continue
+        }
+        images.value.push(dataUrl)
+      } catch (err) {
+        console.error('图片转换失败:', err)
+      }
+    }
+  }
+}
+
+/**
+ * 移除已粘贴的图片
+ */
+const removeImage = (idx) => {
+  images.value.splice(idx, 1)
+}
+
+/**
+ * 将 File 对象转为 base64 Data URI
+ */
+const fileToDataUrl = (file) => {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader()
+    reader.onload = () => resolve(reader.result)
+    reader.onerror = reject
+    reader.readAsDataURL(file)
+  })
+}
 
 const autoResize = () => { const el = inputField.value; if (el) { el.style.height='auto'; el.style.height=Math.min(el.scrollHeight,160)+'px' } }
 
@@ -336,6 +398,57 @@ defineExpose({ focus: () => inputField.value?.focus(), autoResize })
 .input-box.focused { border-color: var(--accent); }
 .input-box textarea { flex: 1; min-height: 22px; max-height: 160px; padding: 0; background: none; border: none; outline: none; font-size: 14px; line-height: 1.5; color: var(--fg); resize: none; }
 .input-box textarea::placeholder { color: var(--fg-4); }
+
+/* 图片预览 */
+.image-preview-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 0 4px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 4px;
+}
+
+.image-preview-item {
+  position: relative;
+  width: 56px;
+  height: 56px;
+  border-radius: 6px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.image-preview-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.image-preview-remove {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 12px;
+  line-height: 18px;
+  text-align: center;
+  cursor: pointer;
+  border: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s;
+}
+
+.image-preview-remove:hover {
+  background: rgba(239, 68, 68, 0.9);
+}
 .input-actions { display: flex; align-items: center; gap: 4px; }
 .btn-icon-sm { width: 28px; height: 28px; display: flex; align-items: center; justify-content: center; border-radius: var(--r); color: var(--fg-4); transition: all var(--t); cursor: pointer; }
 .btn-icon-sm:hover { background: var(--bg-3); color: var(--fg-2); }

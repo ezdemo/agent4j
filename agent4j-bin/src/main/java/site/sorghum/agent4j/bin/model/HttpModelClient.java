@@ -7,7 +7,9 @@ import org.slf4j.LoggerFactory;
 import site.sorghum.agent4j.bin.agent.ChatMessage;
 import site.sorghum.agent4j.bin.agent.ToolCallEntry;
 
-import java.io.*;
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
@@ -521,11 +523,29 @@ public class HttpModelClient implements ModelClient {
             boolean isAssistant = m.isAssistant();
             boolean hasTc = m.hasToolCalls();
             boolean hasContent = m.hasContent();
+            boolean hasContentParts = m.getContentParts() != null && !m.getContentParts().isEmpty();
             boolean hasReasoning = m.getReasoningContent() != null && !m.getReasoningContent().isEmpty();
 
-            if (isAssistant && !hasContent && !hasTc) {
+            // 多模态 contentParts 序列化为 JSON array
+            if (hasContentParts) {
+                ONode contentArray = msg.getOrNew("content").asArray();
+                for (ChatMessage.ContentPart part : m.getContentParts()) {
+                    ONode partNode = contentArray.addNew();
+                    partNode.set("type", part.getType());
+                    if ("text".equals(part.getType())) {
+                        partNode.set("text", part.getText() != null ? part.getText() : "");
+                    } else if ("image_url".equals(part.getType())) {
+                        ChatMessage.ContentPart.ImageUrl iu = part.getImageUrl();
+                        if (iu != null) {
+                            ONode urlNode = partNode.getOrNew("image_url");
+                            urlNode.set("url", iu.getUrl() != null ? iu.getUrl() : "");
+                            if (iu.getDetail() != null) urlNode.set("detail", iu.getDetail());
+                        }
+                    }
+                }
+            } else if (isAssistant && !hasContent && !hasTc) {
                 // 既无 content 也无 tool_calls → 强制补空 content 防止 API 400
-                // 这种情况不应发生在正常流程中，但历史消息损坏或 Healer 遗漏时兜底
+                // 这种情况不应出现在正常流程中，但历史消息损坏或 Healer 遗漏时兜底
                 logger.warn("buildBody: 检测到空 assistant 消息（无 content 且无 tool_calls），强制补空");
                 msg.set("content", "");
             } else {
