@@ -639,9 +639,9 @@ const sendMessage = async () => {
   }
 
   let getMsg = () => {
-    if (isSilent) return null
     const msgs = store.getSessionMessages(sessionName)
     const targetId = silentAssistantId || assistantId
+    if (!targetId) return null
     return msgs.find(m => m.id === targetId)
   }
   let silentBubbleCreated = false
