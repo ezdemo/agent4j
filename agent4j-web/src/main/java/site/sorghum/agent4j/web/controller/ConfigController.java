@@ -6,6 +6,7 @@ import io.swagger.annotations.ApiParam;
 import lombok.SneakyThrows;
 import org.noear.solon.annotation.*;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
+import site.sorghum.agent4j.bin.config.ConfigService;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
@@ -29,20 +30,21 @@ public class ConfigController {
     @Inject
     private AgentService agentService;
 
+    @Inject
+    private ConfigService configService;
+
     @ApiOperation(value = "获取当前配置", notes = "返回 API 地址、模型、工作区等配置（apiKey 已脱敏）")
     @SneakyThrows
     @Get
     @Mapping("/config")
     public ApiResponse<ConfigDTO> getConfig() {
-        Agent4jConfig config = Agent4jConfig.load();
+        Agent4jConfig cfg = configService.getConfig();
         String workspace = null;
         if (agentService.isReady()) {
             workspace = agentService.getWorkspace();
-        } else if (config.workspaceDir() != null) {
-            workspace = config.workspaceDir().toString();
         }
 
-        String apiKey = config.apiKey();
+        String apiKey = cfg.apiKey();
         String maskedKey;
         if (apiKey != null && apiKey.length() > 8) {
             maskedKey = apiKey.substring(0, 4) + "****" + apiKey.substring(apiKey.length() - 4);
@@ -51,16 +53,16 @@ public class ConfigController {
         }
 
         ConfigDTO data = new ConfigDTO(
-                config.baseUrl(),
-                config.model(),
-                config.availableModels(),
+                cfg.baseUrl(),
+                cfg.model(),
+                cfg.availableModels(),
                 workspace,
-                config.editMode(),
-                config.reasoningEffort(),
-                config.lang(),
-                config.hitl(),
-                config.disabledTools(),
-                config.blockedPaths(),
+                cfg.editMode(),
+                cfg.reasoningEffort(),
+                cfg.lang(),
+                cfg.hitl(),
+                configService.getDisabledTools(),
+                cfg.blockedPaths(),
                 maskedKey
         );
         return ApiResponse.ok(data);
@@ -71,8 +73,7 @@ public class ConfigController {
     @Put
     @Mapping("/config")
     public ApiResponse<String> updateConfig(@ApiParam(value = "配置项 Map") @Body Map<String, Object> body) {
-        Agent4jConfig config = Agent4jConfig.load();
-        config.updateAndSave(body);
+        configService.updateConfig(body);
 
         if (body.containsKey("model") && agentService.isReady()) {
             String newModel = body.get("model").toString();
@@ -93,9 +94,9 @@ public class ConfigController {
     @Get
     @Mapping("/models")
     public ApiResponse<ModelListDTO> getModels() {
-        Agent4jConfig config = Agent4jConfig.load();
-        String currentModel = config.model();
-        List<String> available = config.availableModels();
+        Agent4jConfig cfg = configService.getConfig();
+        String currentModel = cfg.model();
+        List<String> available = cfg.availableModels();
 
         Set<String> modelSet = new LinkedHashSet<>();
         modelSet.add(currentModel);

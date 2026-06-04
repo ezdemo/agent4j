@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.tool;
 
+import site.sorghum.agent4j.bin.config.ConfigService;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
 
@@ -19,7 +20,13 @@ public class ToolRegistry {
 
     private final Map<String, ToolDef> tools = new LinkedHashMap<>();
     private final ToolSchemaFlattener flattener = new ToolSchemaFlattener();
-    private Set<String> disabledTools = Collections.emptySet();
+
+    /** ConfigService 引用（同模块，运行时实时读取禁用列表） */
+    private ConfigService configService;
+    /** 静态快照（setDisabledTools 方式设置时使用，兼容 CLI/测试） */
+    private Set<String> disabledToolsSnapshot = Collections.emptySet();
+    /** true=使用静态快照，false=使用 ConfigService 实时读取 */
+    private boolean useSnapshot = false;
 
     // ==================== 动态刷新上下文 ====================
     private Path workspace;
@@ -28,19 +35,32 @@ public class ToolRegistry {
     private List<String> blockedPaths = Collections.emptyList();
 
     /**
-     * 设置被禁用的工具名称集合。
-     * 被禁用的工具在 register 时会被跳过，不会出现在 LLM 的工具列表中。
+     * 设置 ConfigService 引用（运行时实时读取禁用列表）。
      */
-    public ToolRegistry setDisabledTools(Set<String> disabledTools) {
-        this.disabledTools = disabledTools != null ? disabledTools : Collections.emptySet();
+    public ToolRegistry setConfigService(ConfigService configService) {
+        this.configService = configService;
+        this.useSnapshot = false;
         return this;
     }
 
     /**
-     * 判断指定工具是否已禁用。
+     * 设置被禁用的工具名称集合（静态快照，用于 CLI 模式 / 测试）。
      */
-    public boolean isToolEnabled(String name) {
-        return !disabledTools.contains(name);
+    public ToolRegistry setDisabledTools(Set<String> disabledTools) {
+        this.disabledToolsSnapshot = disabledTools != null ? new HashSet<>(disabledTools) : Collections.emptySet();
+        this.useSnapshot = true;
+        return this;
+    }
+
+    /**
+     * 获取当前生效的禁用工具列表。
+     * 优先使用 ConfigService 实时读取，否则回退到静态快照。
+     */
+    private Set<String> getCurrentDisabledTools() {
+        if (!useSnapshot && configService != null) {
+            return configService.getDisabledTools();
+        }
+        return disabledToolsSnapshot;
     }
 
     /**
@@ -63,13 +83,14 @@ public class ToolRegistry {
      * </p>
      */
     public void refresh() {
+        Set<String> disabled = getCurrentDisabledTools();
         tools.clear();
 
         // 使用 ToolScanUtil 统一扫描（Solon IoC + Skill 文件系统）
         List<AgentTool> agentTools = ToolScanUtil.scanTools(workspace);
 
         for (AgentTool tool : agentTools) {
-            if (disabledTools.contains(tool.getName())) {
+            if (disabled.contains(tool.getName())) {
                 continue; // 跳过禁用工具
             }
             String toolSpec = tool.toToolSpec();
@@ -91,7 +112,7 @@ public class ToolRegistry {
     }
 
     public ToolRegistry register(ToolDef def) {
-        if (disabledTools.contains(def.name())) {
+        if (getCurrentDisabledTools().contains(def.name())) {
             System.err.println("[registry] 工具已禁用，跳过注册: " + def.name());
             return this;
         }

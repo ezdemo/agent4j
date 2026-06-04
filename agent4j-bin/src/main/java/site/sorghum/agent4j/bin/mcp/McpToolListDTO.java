@@ -1,4 +1,6 @@
-package site.sorghum.agent4j.web.model;
+package site.sorghum.agent4j.bin.mcp;
+
+import lombok.Data;
 
 import java.util.List;
 
@@ -7,6 +9,7 @@ import java.util.List;
  *
  * @author Sorghum
  */
+@Data
 public class McpToolListDTO {
 
     /** 服务器是否已连接 */
@@ -25,13 +28,4 @@ public class McpToolListDTO {
         this.tools = tools;
         this.disallowedTools = disallowedTools;
     }
-
-    public boolean isConnected() { return connected; }
-    public void setConnected(boolean connected) { this.connected = connected; }
-
-    public List<McpToolInfoDTO> getTools() { return tools; }
-    public void setTools(List<McpToolInfoDTO> tools) { this.tools = tools; }
-
-    public List<String> getDisallowedTools() { return disallowedTools; }
-    public void setDisallowedTools(List<String> disallowedTools) { this.disallowedTools = disallowedTools; }
 }

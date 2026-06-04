@@ -1,4 +1,4 @@
-package site.sorghum.agent4j.web.service;
+package site.sorghum.agent4j.bin.mcp;
 
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.Feature;
@@ -10,10 +10,8 @@ import org.noear.solon.ai.mcp.client.McpClientProvider;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
 import org.noear.solon.annotation.Inject;
+import site.sorghum.agent4j.bin.config.ConfigService;
 import site.sorghum.agent4j.tool.solon.mcp.Agent4JMcpSkill;
-import site.sorghum.agent4j.web.model.McpServerDTO;
-import site.sorghum.agent4j.web.model.McpToolInfoDTO;
-import site.sorghum.agent4j.web.model.McpToolListDTO;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -44,11 +42,11 @@ public class McpManageService {
     @Inject
     private Agent4JMcpSkill agent4JMcpSkill;
 
+    @Inject
+    private ConfigService configService;
+
     /** 内存存储：服务器名称 → 配置 */
     private final Map<String, McpServerDTO> serverStore = new ConcurrentHashMap<>();
-
-    /** 内存存储：服务器名称 → 禁用工具名称集合 */
-    private final Map<String, Set<String>> disallowedToolsStore = new ConcurrentHashMap<>();
 
     /**
      * 初始化：从持久化文件加载已注册的 MCP 服务器，并注册到 skill。
@@ -57,14 +55,6 @@ public class McpManageService {
     public void init() {
         McpPersistenceData data = loadFromFile();
         if (data != null) {
-            // 恢复禁用工具配置
-            if (data.disallowedTools != null) {
-                data.disallowedTools.forEach((name, list) -> {
-                    if (list != null) {
-                        disallowedToolsStore.put(name, new LinkedHashSet<>(list));
-                    }
-                });
-            }
             // 恢复服务器并注册到 skill
             if (data.servers != null) {
                 for (McpServerDTO server : data.servers) {
@@ -109,10 +99,6 @@ public class McpManageService {
         if (originalName != null && !originalName.equals(server.name)) {
             removeMcpServerFromSkill(originalName);
             serverStore.remove(originalName);
-            Set<String> disallowed = disallowedToolsStore.remove(originalName);
-            if (disallowed != null) {
-                disallowedToolsStore.put(server.name, disallowed);
-            }
         } else if (originalName != null) {
             removeMcpServerFromSkill(originalName);
         }
@@ -131,7 +117,6 @@ public class McpManageService {
     public void removeServer(String name) {
         removeMcpServerFromSkill(name);
         serverStore.remove(name);
-        disallowedToolsStore.remove(name);
         saveToFile();
         log.info("MCP 服务器已删除: {}", name);
     }
@@ -208,12 +193,12 @@ public class McpManageService {
             return new McpToolListDTO(false, Collections.emptyList(), Collections.emptyList());
         }
 
-        Set<String> disallowed = disallowedToolsStore.getOrDefault(serverName, Collections.emptySet());
+        Set<String> globallyDisabled = configService.getDisabledTools();
 
         try {
             McpClientProvider provider = agent4JMcpSkill.getMcpServer(serverName);
             if (provider == null) {
-                return new McpToolListDTO(false, Collections.emptyList(), new ArrayList<>(disallowed));
+                return new McpToolListDTO(false, Collections.emptyList(), new ArrayList<>(globallyDisabled));
             }
 
             Collection<FunctionTool> tools = provider.getTools();
@@ -221,10 +206,10 @@ public class McpManageService {
                     .map(t -> new McpToolInfoDTO(t.name(), t.description() != null ? t.description() : ""))
                     .collect(Collectors.toList());
 
-            return new McpToolListDTO(true, toolList, new ArrayList<>(disallowed));
+            return new McpToolListDTO(true, toolList, new ArrayList<>(globallyDisabled));
         } catch (Exception e) {
             log.warn("获取 MCP 服务器工具列表失败: {}", serverName, e);
-            return new McpToolListDTO(false, Collections.emptyList(), new ArrayList<>(disallowed));
+            return new McpToolListDTO(false, Collections.emptyList(), new ArrayList<>(globallyDisabled));
         }
     }
 
@@ -232,11 +217,25 @@ public class McpManageService {
      * 保存工具权限配置。
      */
     public void saveToolPermissions(String serverName, List<String> disallowedTools) {
-        disallowedToolsStore.put(serverName, disallowedTools != null
-                ? new LinkedHashSet<>(disallowedTools)
-                : Collections.emptySet());
-        saveToFile();
-        log.info("MCP 服务器 {} 工具权限已保存, 禁用 {} 个工具", serverName,
+        // 1. 先清除该服务器所有工具的旧禁用状态
+        try {
+            McpClientProvider provider = agent4JMcpSkill.getMcpServer(serverName);
+            if (provider != null) {
+                List<String> serverToolNames = provider.getTools().stream()
+                        .map(FunctionTool::name)
+                        .collect(Collectors.toList());
+                configService.removeDisabledTools(serverToolNames);
+            }
+        } catch (Exception e) {
+            log.warn("获取 MCP 服务器工具列表失败，跳过清理: {}", e.getMessage());
+        }
+
+        // 2. 添加新禁用的工具（自动去重）
+        if (disallowedTools != null && !disallowedTools.isEmpty()) {
+            configService.addDisabledTools(disallowedTools);
+        }
+
+        log.info("[mcp] 工具权限已保存 (server={}), 禁用 {} 个工具", serverName,
                 disallowedTools != null ? disallowedTools.size() : 0);
     }
 
@@ -300,10 +299,6 @@ public class McpManageService {
 
             McpPersistenceData data = new McpPersistenceData();
             data.servers = new ArrayList<>(serverStore.values());
-            data.disallowedTools = new LinkedHashMap<>();
-            disallowedToolsStore.forEach((name, set) ->
-                    data.disallowedTools.put(name, new ArrayList<>(set))
-            );
 
             String json = JsonWriter.write(
                     ONode.ofBean(data),
@@ -335,6 +330,5 @@ public class McpManageService {
      */
     public static class McpPersistenceData {
         public List<McpServerDTO> servers;
-        public Map<String, List<String>> disallowedTools;
     }
 }

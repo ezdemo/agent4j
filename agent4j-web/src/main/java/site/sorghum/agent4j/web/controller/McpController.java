@@ -4,9 +4,11 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.noear.solon.annotation.*;
+import site.sorghum.agent4j.bin.mcp.McpManageService;
+import site.sorghum.agent4j.bin.mcp.McpServerDTO;
+import site.sorghum.agent4j.bin.mcp.McpToolListDTO;
 import site.sorghum.agent4j.web.common.ServiceException;
-import site.sorghum.agent4j.web.model.*;
-import site.sorghum.agent4j.web.service.McpManageService;
+import site.sorghum.agent4j.web.model.ApiResponse;
 
 import java.util.List;
 

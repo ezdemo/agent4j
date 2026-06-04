@@ -79,6 +79,9 @@ public class AgentService {
     private final java.util.concurrent.ConcurrentLinkedDeque<String> accessOrder = new java.util.concurrent.ConcurrentLinkedDeque<>();
     @Inject
     ChatCommandRegistry commandRegistry;
+
+    @Inject
+    private site.sorghum.agent4j.bin.config.ConfigService configService;
     /**
      * 共享的 ModelClient（所有会话复用）
      */
@@ -196,6 +199,8 @@ public class AgentService {
                     disabledTools, blockedPaths,
                     loadDefaultSystemPrompt());
             this.sharedToolRegistry = initResult.toolRegistry;
+            // 设置 ConfigService 引用 —— ToolRegistry 实时读取禁用列表
+            this.sharedToolRegistry.setConfigService(configService);
             // 保存按工作区缓存的 PromptPrefix
             String initWs = config.workspaceDir() != null
                     ? config.workspaceDir().toAbsolutePath().toString()

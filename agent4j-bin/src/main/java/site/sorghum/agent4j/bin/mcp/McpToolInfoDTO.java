@@ -1,10 +1,13 @@
-package site.sorghum.agent4j.web.model;
+package site.sorghum.agent4j.bin.mcp;
+
+import lombok.Data;
 
 /**
  * MCP 工具信息 DTO。
  *
  * @author Sorghum
  */
+@Data
 public class McpToolInfoDTO {
 
     /** 工具唯一名称 */
@@ -19,10 +22,4 @@ public class McpToolInfoDTO {
         this.name = name;
         this.description = description;
     }
-
-    public String getName() { return name; }
-    public void setName(String name) { this.name = name; }
-
-    public String getDescription() { return description; }
-    public void setDescription(String description) { this.description = description; }
 }
