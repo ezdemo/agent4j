@@ -43,12 +43,4 @@ public class ChatCommandContext {
         this.exitHandler = exitHandler;
     }
 
-    /**
-     * 触发退出回调（通常由 /exit 命令调用）
-     */
-    public void exit() {
-        if (exitHandler != null) {
-            exitHandler.run();
-        }
-    }
 }

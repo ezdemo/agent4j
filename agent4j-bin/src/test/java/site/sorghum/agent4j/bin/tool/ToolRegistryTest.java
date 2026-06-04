@@ -9,7 +9,7 @@ import static org.junit.jupiter.api.Assertions.*;
 class ToolRegistryTest {
 
     private ToolDef createTool(String name, boolean readOnly, boolean stormExempt) {
-        return new ToolDef(name, "desc " + name, new ArrayList<ToolDef.ParamDef>(),
+        return new ToolDef(name, "desc " + name, new ArrayList<>(),
                 args -> "ok", readOnly, stormExempt, null);
     }
 
@@ -32,7 +32,7 @@ class ToolRegistryTest {
     @Test
     void disabledToolNotRegistered() {
         ToolRegistry reg = new ToolRegistry();
-        Set<String> disabled = new HashSet<String>();
+        Set<String> disabled = new HashSet<>();
         disabled.add("disabled_tool");
         reg.setDisabledTools(disabled);
         reg.register(createTool("disabled_tool", false, false));
@@ -42,7 +42,7 @@ class ToolRegistryTest {
     @Test
     void enabledToolStillRegisteredWhenOthersDisabled() {
         ToolRegistry reg = new ToolRegistry();
-        Set<String> disabled = new HashSet<String>();
+        Set<String> disabled = new HashSet<>();
         disabled.add("disabled_tool");
         reg.setDisabledTools(disabled);
         reg.register(createTool("enabled_tool", false, false));
@@ -54,9 +54,7 @@ class ToolRegistryTest {
         ToolRegistry reg = new ToolRegistry();
         reg.register(createTool("t1", false, false));
         Map<String, ToolDef> all = reg.all();
-        assertThrows(UnsupportedOperationException.class, () -> {
-            all.put("new", createTool("new", false, false));
-        });
+        assertThrows(UnsupportedOperationException.class, () -> all.put("new", createTool("new", false, false)));
     }
 
     @Test

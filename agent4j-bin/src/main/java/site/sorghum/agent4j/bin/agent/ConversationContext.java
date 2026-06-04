@@ -7,7 +7,6 @@ import site.sorghum.agent4j.bin.session.SessionStore;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 会话上下文 —— 在内存中管理消息历史。
@@ -97,14 +96,6 @@ public class ConversationContext {
         List<ChatMessage> msgs = prefix.toMessages();
         msgs.addAll(history);
         return msgs;
-    }
-
-    /**
-     * 获取工具定义快照（来自 PromptPrefix 的稳定引用）。
-     * 跨 turn 不变，用于 DeepSeek 前缀缓存。
-     */
-    public List<Map<String, Object>> tools() {
-        return prefix.tools();
     }
 
     /**

@@ -13,16 +13,12 @@ import static org.junit.jupiter.api.Assertions.*;
 class MessageHealerTest {
 
     private static ChatMessage msg(String role, String content) {
-        switch (role) {
-            case "system":
-                return ChatMessage.system(content);
-            case "user":
-                return ChatMessage.user(content);
-            case "assistant":
-                return ChatMessage.assistant(content, null, null);
-            default:
-                return ChatMessage.user(content);
-        }
+        return switch (role) {
+            case "system" -> ChatMessage.system(content);
+            case "user" -> ChatMessage.user(content);
+            case "assistant" -> ChatMessage.assistant(content, null, null);
+            default -> ChatMessage.user(content);
+        };
     }
 
     private static ChatMessage toolMsg(String toolCallId, String content) {
@@ -173,9 +169,7 @@ class MessageHealerTest {
 
         // 创建一个超大 tool 结果（> 8000 tokens ≈ > 16000 字符）
         StringBuilder bigContent = new StringBuilder();
-        for (int i = 0; i < 20000; i++) {
-            bigContent.append("x");
-        }
+        bigContent.append("x".repeat(20000));
         msgs.add(toolMsg("tc_1", bigContent.toString()));
 
         var hr = MessageHealer.heal(msgs, false);

@@ -16,13 +16,13 @@ class ToolDispatcherTest {
     void setUp() {
         registry = new ToolRegistry();
         // 注册一个普通写入工具
-        registry.register(new ToolDef("edit_file", "edit", new ArrayList<ToolDef.ParamDef>(),
+        registry.register(new ToolDef("edit_file", "edit", new ArrayList<>(),
                 args -> "edited:" + args.get("path"), false, false, null));
         // 注册一个只读工具
-        registry.register(new ToolDef("read_file", "read", new ArrayList<ToolDef.ParamDef>(),
+        registry.register(new ToolDef("read_file", "read", new ArrayList<>(),
                 args -> "content_of:" + args.get("path"), true, true, null));
         // 注册一个 storm 豁免工具
-        registry.register(new ToolDef("glob", "glob", new ArrayList<ToolDef.ParamDef>(),
+        registry.register(new ToolDef("glob", "glob", new ArrayList<>(),
                 args -> "match", true, true, null));
         dispatcher = new ToolDispatcher(registry);
     }

@@ -4,14 +4,13 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class ConversationContextTest {
 
     private ConversationContext createContext() {
-        PromptPrefix prefix = new PromptPrefix("system prompt", new ArrayList<Map<String, Object>>());
+        PromptPrefix prefix = new PromptPrefix("system prompt", new ArrayList<>());
         return new ConversationContext(prefix);
     }
 

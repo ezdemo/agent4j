@@ -72,9 +72,7 @@ public class ToolScanUtil {
         // 2. 加载SolonToSKill
         List<SolonToTools> solonToTools = Solon.context().getBeansOfType(SolonToTools.class);
         solonToTools.forEach(
-                it -> {
-                    append(content, it.getSystemPrompt());
-                }
+                it -> append(content, it.getSystemPrompt())
         );
         return content.toString();
     }

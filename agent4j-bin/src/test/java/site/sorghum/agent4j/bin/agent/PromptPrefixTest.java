@@ -38,8 +38,6 @@ class PromptPrefixTest {
 
     @Test
     void nullSystemThrows() {
-        assertThrows(NullPointerException.class, () -> {
-            new PromptPrefix(null, new java.util.ArrayList<>());
-        });
+        assertThrows(NullPointerException.class, () -> new PromptPrefix(null, new java.util.ArrayList<>()));
     }
 }

@@ -33,7 +33,7 @@ public class RetryCommand implements ChatCommand {
     }
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) throws Exception {
+    public CommandResult execute(String input, ChatCommandContext context) {
         context.getAgent().getOutput().onLog(LogLevel.INFO, "重试上一条消息...");
         String reply = context.getAgent().retryLast();
         if (reply != null) {

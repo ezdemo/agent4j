@@ -44,7 +44,7 @@ public class RewindCommand implements ChatCommand {
     }
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) throws Exception {
+    public CommandResult execute(String input, ChatCommandContext context) {
         String numPart = input.trim().substring(8).trim(); // 去掉 "/rewind "
         try {
             int n = Integer.parseInt(numPart);

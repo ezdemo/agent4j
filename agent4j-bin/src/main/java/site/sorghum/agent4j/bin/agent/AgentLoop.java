@@ -135,7 +135,7 @@ public class AgentLoop {
     @Getter
     private volatile boolean hitlMode;
     /**
-     * HITL 当前审批状态
+     * HITL 当前审批状态 — 见 {@link HitlState}
      */
     private volatile HitlState hitlState = HitlState.NONE;
     /**
@@ -1274,11 +1274,6 @@ public class AgentLoop {
                 + "或直接用文本回答。]");
         return selfCorrectionAttempts; // 信号：继续循环
     }
-
-    /**
-     * HITL 审批状态
-     */
-    private enum HitlState {NONE, PENDING, APPROVED, DENIED}
 
     // ==================== 常量 ====================
 

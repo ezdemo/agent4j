@@ -570,13 +570,6 @@ public class Agent4jAgent {
             return this;
         }
 
-        public Agent4jAgent build() {
-            Objects.requireNonNull(apiUrl, "apiUrl is required");
-            Objects.requireNonNull(apiKey, "apiKey is required");
-            systemPrompt = loadDefaultSystemPrompt();
-            return new Agent4jAgent(this);
-        }
-
         /**
          * 单独设置共享的 ModelClient
          */

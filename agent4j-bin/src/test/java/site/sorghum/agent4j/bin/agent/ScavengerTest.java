@@ -12,13 +12,13 @@ class ScavengerTest {
 
     @Test
     void emptyContentReturnsNothing() {
-        List<Scavenger.ToolCall> result = Scavenger.scavenge(null, null, new ArrayList<Scavenger.ToolCall>());
+        List<Scavenger.ToolCall> result = Scavenger.scavenge(null, null, new ArrayList<>());
         assertTrue(result.isEmpty());
     }
 
     @Test
     void noToolCallsInContent() {
-        List<Scavenger.ToolCall> result = Scavenger.scavenge("just thinking", "regular reply", new ArrayList<Scavenger.ToolCall>());
+        List<Scavenger.ToolCall> result = Scavenger.scavenge("just thinking", "regular reply", new ArrayList<>());
         assertTrue(result.isEmpty());
     }
 
@@ -26,7 +26,7 @@ class ScavengerTest {
     void existingCallsDeduplicated() {
         String content = "I will use read_file";
         Scavenger.ToolCall existing = new Scavenger.ToolCall("tc1", "read_file", "{}");
-        List<Scavenger.ToolCall> existingList = new ArrayList<Scavenger.ToolCall>();
+        List<Scavenger.ToolCall> existingList = new ArrayList<>();
         existingList.add(existing);
         List<Scavenger.ToolCall> result = Scavenger.scavenge(null, content, existingList);
         for (Scavenger.ToolCall tc : result) {
