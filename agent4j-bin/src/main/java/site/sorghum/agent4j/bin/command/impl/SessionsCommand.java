@@ -3,6 +3,7 @@ package site.sorghum.agent4j.bin.command.impl;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
+import site.sorghum.agent4j.bin.command.MessageWrapper;
 import site.sorghum.agent4j.bin.session.SessionStore;
 
 import java.text.SimpleDateFormat;
@@ -37,7 +38,7 @@ public class SessionsCommand implements ChatCommand {
     }
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) throws Exception {
+    public CommandResult execute(MessageWrapper input, ChatCommandContext context) throws Exception {
         SessionStore store = context.getAgent().getSessionStore();
         if (store == null) {
             System.out.println("(会话存储未启用)");

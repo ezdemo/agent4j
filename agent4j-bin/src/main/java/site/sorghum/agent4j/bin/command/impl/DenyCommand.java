@@ -3,6 +3,7 @@ package site.sorghum.agent4j.bin.command.impl;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
+import site.sorghum.agent4j.bin.command.MessageWrapper;
 
 /**
  * /deny — 拒绝 HITL 待执行的工具调用。
@@ -37,7 +38,7 @@ public class DenyCommand implements ChatCommand {
     }
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) {
+    public CommandResult execute(MessageWrapper input, ChatCommandContext context) {
         if (context.getAgent().noPendingHITL()) {
             System.out.println("(当前没有待审批的工具调用)");
             return CommandResult.CONTINUE;

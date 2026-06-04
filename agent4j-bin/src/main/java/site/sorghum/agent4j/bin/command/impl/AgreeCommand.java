@@ -1,8 +1,10 @@
 package site.sorghum.agent4j.bin.command.impl;
 
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
+import site.sorghum.agent4j.bin.command.MessageWrapper;
 
 /**
  * /agree — 批准 HITL 待执行的工具调用。
@@ -14,6 +16,7 @@ import site.sorghum.agent4j.bin.command.ChatCommandContext;
  * @author Sorghum
  */
 @Component
+@Slf4j
 public class AgreeCommand implements ChatCommand {
 
     @Override
@@ -32,34 +35,14 @@ public class AgreeCommand implements ChatCommand {
     }
 
     @Override
-    public boolean isSilent() {
-        return true;
-    }
-
-    @Override
-    public CommandResult execute(String input, ChatCommandContext context) {
+    public CommandResult execute(MessageWrapper input, ChatCommandContext context) {
         if (context.getAgent().noPendingHITL()) {
-            System.out.println("(当前没有待审批的工具调用)");
+            log.warn("当前没有待审批的工具调用");
             return CommandResult.CONTINUE;
         }
 
         context.getAgent().approveHITL();
-        try {
-            long t0 = System.currentTimeMillis();
-            String reply = context.getAgent().chat(null);
-            long elapsed = System.currentTimeMillis() - t0;
-            System.out.println();
-            if (reply == null || reply.isEmpty()) {
-                System.out.println("(模型返回空内容)");
-            } else {
-                System.out.println(reply);
-            }
-            System.out.println("[" + (elapsed / 1000.0) + "s]");
-            context.getAgent().saveUsage();
-            context.getAgent().flushSession();
-        } catch (Exception e) {
-            System.err.println("错误: " + e.getMessage());
-        }
-        return CommandResult.CONTINUE;
+        input.setMessage(null);
+        return CommandResult.LOOP;
     }
 }

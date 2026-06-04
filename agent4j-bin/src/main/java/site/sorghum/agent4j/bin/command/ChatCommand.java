@@ -131,7 +131,7 @@ public interface ChatCommand {
      * {@link CommandResult#EXIT} 退出主循环
      * @throws Exception 执行异常
      */
-    CommandResult execute(String input, ChatCommandContext context) throws Exception;
+    CommandResult execute(MessageWrapper input, ChatCommandContext context) throws Exception;
 
     /**
      * 命令执行结果枚举。

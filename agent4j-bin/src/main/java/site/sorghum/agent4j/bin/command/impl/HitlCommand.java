@@ -3,6 +3,7 @@ package site.sorghum.agent4j.bin.command.impl;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
+import site.sorghum.agent4j.bin.command.MessageWrapper;
 
 /**
  * /hitl — 切换 HITL（Human-In-The-Loop）模式。
@@ -32,7 +33,7 @@ public class HitlCommand implements ChatCommand {
     }
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) {
+    public CommandResult execute(MessageWrapper input, ChatCommandContext context) {
         context.getAgent().toggleHitl();
         boolean on = context.getAgent().isHitlMode();
         if (on) {

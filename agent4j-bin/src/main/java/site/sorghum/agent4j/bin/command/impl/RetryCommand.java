@@ -4,6 +4,7 @@ import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.agent.LogLevel;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
+import site.sorghum.agent4j.bin.command.MessageWrapper;
 
 /**
  * /retry — 撤回最后一条消息并重试。
@@ -33,7 +34,7 @@ public class RetryCommand implements ChatCommand {
     }
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) {
+    public CommandResult execute(MessageWrapper input, ChatCommandContext context) {
         context.getAgent().getOutput().onLog(LogLevel.INFO, "重试上一条消息...");
         String reply = context.getAgent().retryLast();
         if (reply != null) {

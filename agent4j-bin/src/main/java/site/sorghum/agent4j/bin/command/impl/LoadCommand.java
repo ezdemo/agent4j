@@ -4,6 +4,7 @@ import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.agent.ChatMessage;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
+import site.sorghum.agent4j.bin.command.MessageWrapper;
 import site.sorghum.agent4j.bin.session.SessionStore;
 
 import java.util.List;
@@ -48,14 +49,14 @@ public class LoadCommand implements ChatCommand {
     }
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) throws Exception {
+    public CommandResult execute(MessageWrapper input, ChatCommandContext context) throws Exception {
         SessionStore store = context.getAgent().getSessionStore();
         if (store == null) {
             System.out.println("(会话存储未启用)");
             return CommandResult.CONTINUE;
         }
 
-        String numPart = input.trim().substring(6).trim(); // 去掉 "/load "
+        String numPart = input.getMessage().trim().substring(6).trim(); // 去掉 "/load "
         try {
             int n = Integer.parseInt(numPart);
             List<SessionStore.SessionInfo> sessions = store.list();

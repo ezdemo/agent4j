@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
+import site.sorghum.agent4j.bin.command.MessageWrapper;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
 import site.sorghum.agent4j.bin.model.ModelClient;
@@ -181,11 +182,12 @@ public class Agent4jAgent {
      */
     @SneakyThrows
     public String chat(String message) {
+
         // HITL 恢复（approve/deny 后传入 null 触发恢复）
         if (message == null) {
             return loop.run(null);
         }
-
+        MessageWrapper messageWrapper = MessageWrapper.builder().message(message).build();
         // === 命令处理（通过 IoC 注册的命令接口自动分发）===
         if (message.startsWith("/") && commandRegistry != null) {
             ChatCommand cmd = commandRegistry.match(message);
@@ -193,7 +195,9 @@ public class Agent4jAgent {
                 // 构造命令上下文：命令通过此上下文访问 agent 与退出机制
                 ChatCommandContext cmdContext = new ChatCommandContext(
                         this, null, () -> this.terminated = true);
-                ChatCommand.CommandResult result = cmd.execute(message, cmdContext);
+                ChatCommand.CommandResult result = cmd.execute(messageWrapper, cmdContext);
+                // 重新赋值
+                message = messageWrapper.getMessage();
                 // 命令执行后自动刷入会话与保存用量
                 flushSession();
                 saveUsage();

@@ -4,6 +4,7 @@ import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.agent.LogLevel;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
+import site.sorghum.agent4j.bin.command.MessageWrapper;
 
 /**
  * /init — 自动分析项目生成 agent4j.md。
@@ -33,7 +34,7 @@ public class InitCommand implements ChatCommand {
     }
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) {
+    public CommandResult execute(MessageWrapper input, ChatCommandContext context) {
         System.out.println("正在分析项目...\n");
         context.getAgent().getOutput().onReasoning("正在分析项目...");
         String prompt = """

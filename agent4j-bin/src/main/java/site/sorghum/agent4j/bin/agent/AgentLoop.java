@@ -348,7 +348,9 @@ public class AgentLoop {
             return resumeAfterHITL(false);
         }
 
-        ctx.addUser(userMessage);
+        if (userMessage != null) {
+            ctx.addUser(userMessage);
+        }
         dispatcher.resetStorm();
         reasonBreaker.reset();
         resetUserAbort(); // 重置用户中断标志

@@ -3,6 +3,7 @@ package site.sorghum.agent4j.bin.command.impl;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
+import site.sorghum.agent4j.bin.command.MessageWrapper;
 
 /**
  * /rewind N — 回退到第 N 轮对话。
@@ -44,8 +45,8 @@ public class RewindCommand implements ChatCommand {
     }
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) {
-        String numPart = input.trim().substring(8).trim(); // 去掉 "/rewind "
+    public CommandResult execute(MessageWrapper input, ChatCommandContext context) {
+        String numPart = input.getMessage().trim().substring(8).trim(); // 去掉 "/rewind "
         try {
             int n = Integer.parseInt(numPart);
             System.out.println("回退到第 " + n + " 轮...");

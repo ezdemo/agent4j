@@ -3,6 +3,7 @@ package site.sorghum.agent4j.bin.command.impl;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
+import site.sorghum.agent4j.bin.command.MessageWrapper;
 
 /**
  * /continue — 让 AI 继续推理循环。
@@ -34,11 +35,12 @@ public class ContinueCommand implements ChatCommand {
 
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) {
+    public CommandResult execute(MessageWrapper input, ChatCommandContext context) {
         // 有 HITL 待审批 → 批准并恢复（同 /agree）
         if (!context.getAgent().noPendingHITL()) {
             context.getAgent().approveHITL();
         }
+        input.setMessage(null);
         return CommandResult.LOOP;
     }
 }

@@ -4,6 +4,7 @@ import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.agent.LogLevel;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
+import site.sorghum.agent4j.bin.command.MessageWrapper;
 
 /**
  * /plan — 进入计划模式（仅允许只读操作）。
@@ -34,7 +35,7 @@ public class PlanCommand implements ChatCommand {
     }
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) {
+    public CommandResult execute(MessageWrapper input, ChatCommandContext context) {
         context.getAgent().setPlanMode(true);
         context.getAgent().getOutput().onLog(LogLevel.INFO, "探索完成后使用 输入 /execute 开始执行");
         context.getAgent().getOutput().onReasoning(

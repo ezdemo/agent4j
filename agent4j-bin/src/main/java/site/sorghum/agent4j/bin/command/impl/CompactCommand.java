@@ -4,6 +4,7 @@ import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.agent.Agent4jAgent;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
+import site.sorghum.agent4j.bin.command.MessageWrapper;
 
 /**
  * /compact — 折叠历史消息。
@@ -33,7 +34,7 @@ public class CompactCommand implements ChatCommand {
     }
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) throws Exception {
+    public CommandResult execute(MessageWrapper input, ChatCommandContext context) throws Exception {
         Agent4jAgent agent = context.getAgent();
         int before = agent.historySize();
         agent.compact();

@@ -6,6 +6,7 @@ import site.sorghum.agent4j.bin.agent.LogLevel;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
+import site.sorghum.agent4j.bin.command.MessageWrapper;
 
 import java.util.List;
 
@@ -37,7 +38,7 @@ public class HelpCommand implements ChatCommand {
     }
 
     @Override
-    public CommandResult execute(String input, ChatCommandContext context) {
+    public CommandResult execute(MessageWrapper input, ChatCommandContext context) {
         // 通过 Solon IoC 获取注册表
         ChatCommandRegistry registry = Solon.context().getBean(ChatCommandRegistry.class);
         if (registry == null) {
