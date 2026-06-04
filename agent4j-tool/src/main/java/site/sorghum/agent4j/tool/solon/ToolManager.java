@@ -156,34 +156,90 @@ public class ToolManager {
             return Collections.emptyList();
         }
 
-        List<ToolParameter> result = new ArrayList<>();
-
         try {
             // 转为 Map 操作，避免 ONode 特定 API 的兼容问题
             Map<String, Object> schema = ONode.ofJson(inputSchemaJson).toBean(Map.class);
 
-            // 1. 提取 required 列表
+            // 提取 required 列表
             List<String> requiredList = (List<String>) schema.getOrDefault("required", Collections.emptyList());
             Set<String> requiredSet = new HashSet<>(requiredList);
 
-            // 2. 遍历 properties
+            // 遍历 properties 并递归解析
             Map<String, Object> properties = (Map<String, Object>) schema.get("properties");
             if (properties != null) {
-                for (Map.Entry<String, Object> entry : properties.entrySet()) {
-                    String paramName = entry.getKey();
-                    Map<String, Object> paramSchema = (Map<String, Object>) entry.getValue();
-
-                    String type = (String) paramSchema.getOrDefault("type", "string");
-                    String description = (String) paramSchema.get("description");
-                    boolean required = requiredSet.contains(paramName);
-
-                    result.add(new ToolParameter(paramName, type, required, description));
-                }
+                return parseProperties(properties, requiredSet);
             }
         } catch (Exception e) {
             System.err.println("[WARN] 解析 Tool 参数 Schema 失败: " + toolName + " - " + e.getMessage());
         }
 
+        return Collections.emptyList();
+    }
+
+    /**
+     * 递归解析 properties 对象，支持 object/array 嵌套结构。
+     *
+     * @param properties  JSON Schema 的 properties 映射
+     * @param requiredSet 当前层级的必填字段集合
+     * @return 解析后的 ToolParameter 列表
+     */
+    @SuppressWarnings("unchecked")
+    private static List<ToolParameter> parseProperties(Map<String, Object> properties, Set<String> requiredSet) {
+        List<ToolParameter> result = new ArrayList<>();
+
+        for (Map.Entry<String, Object> entry : properties.entrySet()) {
+            String paramName = entry.getKey();
+            Map<String, Object> paramSchema = (Map<String, Object>) entry.getValue();
+
+            String type = (String) paramSchema.getOrDefault("type", "string");
+            String description = (String) paramSchema.get("description");
+            boolean required = requiredSet.contains(paramName);
+
+            // 处理 object 类型：递归解析嵌套 properties
+            if ("object".equals(type) && paramSchema.containsKey("properties")) {
+                List<String> nestedRequired = (List<String>) paramSchema.getOrDefault("required", Collections.emptyList());
+                Map<String, Object> nestedProps = (Map<String, Object>) paramSchema.get("properties");
+                List<ToolParameter> nested = parseProperties(nestedProps, new HashSet<>(nestedRequired));
+                result.add(ToolParameter.objectParam(paramName, required, description, nested));
+                continue;
+            }
+
+            // 处理 array 类型：递归解析 items
+            if ("array".equals(type) && paramSchema.containsKey("items")) {
+                Map<String, Object> itemSchema = (Map<String, Object>) paramSchema.get("items");
+                ToolParameter item = parseSingleParam("", itemSchema);
+                result.add(ToolParameter.arrayParam(paramName, required, description, item));
+                continue;
+            }
+
+            // 扁平参数
+            result.add(new ToolParameter(paramName, type, required, description));
+        }
+
         return result;
+    }
+
+    /**
+     * 解析单个参数 schema（用于 array 的 items 定义）。
+     */
+    @SuppressWarnings("unchecked")
+    private static ToolParameter parseSingleParam(String name, Map<String, Object> schema) {
+        String type = (String) schema.getOrDefault("type", "string");
+        String description = (String) schema.get("description");
+
+        if ("object".equals(type) && schema.containsKey("properties")) {
+            List<String> nestedRequired = (List<String>) schema.getOrDefault("required", Collections.emptyList());
+            Map<String, Object> nestedProps = (Map<String, Object>) schema.get("properties");
+            List<ToolParameter> nested = parseProperties(nestedProps, new HashSet<>(nestedRequired));
+            return ToolParameter.objectParam(name, false, description, nested);
+        }
+
+        if ("array".equals(type) && schema.containsKey("items")) {
+            Map<String, Object> itemSchema = (Map<String, Object>) schema.get("items");
+            ToolParameter item = parseSingleParam("", itemSchema);
+            return ToolParameter.arrayParam(name, false, description, item);
+        }
+
+        return new ToolParameter(name, type, false, description);
     }
 }

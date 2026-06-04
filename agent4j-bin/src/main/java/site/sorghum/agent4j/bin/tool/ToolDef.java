@@ -38,10 +38,7 @@ public record ToolDef(String name, String description, List<ParamDef> params, To
         Map<String, Object> props = new LinkedHashMap<>();
         List<String> required = new java.util.ArrayList<>();
         for (ParamDef p : params) {
-            Map<String, Object> prop = new LinkedHashMap<>();
-            prop.put("type", p.type());
-            prop.put("description", p.description());
-            props.put(p.name(), prop);
+            props.put(p.name(), p.toSchemaProp());
             if (p.required()) required.add(p.name());
         }
 
@@ -69,15 +66,81 @@ public record ToolDef(String name, String description, List<ParamDef> params, To
     }
 
     /**
-     * 参数定义
+     * 参数定义——支持扁平及嵌套结构（object 类型含 properties，array 类型含 items）。
      */
-    public record ParamDef(String name, String type, String description, boolean required) {
+    public record ParamDef(String name, String type, String description, boolean required,
+                           List<ParamDef> properties, ParamDef items) {
+
+        // ==================== 扁平参数工厂（向后兼容） ====================
+
         public static ParamDef of(String name, String type, String description) {
-            return new ParamDef(name, type, description, false);
+            return new ParamDef(name, type, description, false, null, null);
         }
 
         public static ParamDef required(String name, String type, String description) {
-            return new ParamDef(name, type, description, true);
+            return new ParamDef(name, type, description, true, null, null);
+        }
+
+        // ==================== 嵌套参数工厂 ====================
+
+        /**
+         * 创建 object 类型参数。
+         *
+         * @param name        参数名
+         * @param description 参数描述
+         * @param required    是否必填
+         * @param properties  子参数定义
+         * @return object 类型的 ParamDef
+         */
+        public static ParamDef object(String name, String description, boolean required,
+                                      List<ParamDef> properties) {
+            return new ParamDef(name, "object", description, required, properties, null);
+        }
+
+        /**
+         * 创建 array 类型参数。
+         *
+         * @param name        参数名
+         * @param description 参数描述
+         * @param required    是否必填
+         * @param items       数组元素的参数定义
+         * @return array 类型的 ParamDef
+         */
+        public static ParamDef array(String name, String description, boolean required, ParamDef items) {
+            return new ParamDef(name, "array", description, required, null, items);
+        }
+
+        // ==================== JSON Schema 输出 ====================
+
+        /**
+         * 将当前参数定义转为 JSON Schema 属性对象。
+         */
+        @SuppressWarnings("unchecked")
+        public Map<String, Object> toSchemaProp() {
+            Map<String, Object> prop = new LinkedHashMap<>();
+            prop.put("type", type);
+            prop.put("description", description);
+
+            // object 类型：递归生成子 properties
+            if ("object".equals(type) && properties != null && !properties.isEmpty()) {
+                Map<String, Object> nestedProps = new LinkedHashMap<>();
+                List<String> nestedRequired = new java.util.ArrayList<>();
+                for (ParamDef sub : properties) {
+                    nestedProps.put(sub.name(), sub.toSchemaProp());
+                    if (sub.required()) nestedRequired.add(sub.name());
+                }
+                prop.put("properties", nestedProps);
+                if (!nestedRequired.isEmpty()) {
+                    prop.put("required", nestedRequired);
+                }
+            }
+
+            // array 类型：递归生成 items
+            if ("array".equals(type) && items != null) {
+                prop.put("items", items.toSchemaProp());
+            }
+
+            return prop;
         }
     }
 }
