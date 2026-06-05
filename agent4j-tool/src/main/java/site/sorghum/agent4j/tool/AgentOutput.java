@@ -1,11 +1,13 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.tool;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Agent 输出抽象接口 —— 所有 Agent 向外输出的内容都通过此接口发送。
  * <p>
- * 将"输出"与"业务逻辑"解耦，当前实现 {@link ConsoleAgentOutput} 打印到控制台。
+ * 将"输出"与"业务逻辑"解耦，当前实现 {@code ConsoleAgentOutput} 打印到控制台。
  * 可替换为其他实现（如 WebSocket SSE、日志文件、测试 Mock 等），
  * 实现不同场景下的输出处理。
  * </p>
@@ -86,14 +88,63 @@ public interface AgentOutput {
      */
     void onChoice(List<ChoiceOption> options);
 
+    // ==================== 交互式询问 ====================
+
+    /**
+     * 向用户展示问题并等待选择回答。
+     * <p>
+     * 默认实现格式化问题与选项并通过 {@link #onLog} 输出，返回格式化文本。
+     * 各输出实现可覆盖此方法以提供真正的交互式体验：
+     * <ul>
+     *   <li>{@code ConsoleAgentOutput} → 打印选项 + 读取 stdin</li>
+     *   <li>{@code SseAgentOutput} → 通过 SSE 推送 + 等待用户回复</li>
+     * </ul>
+     * </p>
+     *
+     * @param question    问题描述
+     * @param options     选项列表，每项为 {@code {"title":"...", "summary":"..."}} 或字符串
+     * @param allowCustom 是否允许用户自定义输入
+     * @return 用户的选择结果
+     */
+    default String ask(String question, List<Map<String, Object>> options, boolean allowCustom) {
+        // 1. 统一转为 ChoiceOption 列表，通过 onChoice() 渲染
+        //    自定义输出实现（如 SseAgentOutput）可通过重写 onChoice() 接管 UI 展示
+        List<ChoiceOption> choiceOptions = new ArrayList<>();
+        for (Map<String, Object> opt : options) {
+            String title = (String) opt.getOrDefault("title", "");
+            String value = (String) opt.getOrDefault("value", title);
+            choiceOptions.add(new ChoiceOption(value, title));
+        }
+        if (!choiceOptions.isEmpty()) {
+            onChoice(choiceOptions);
+        }
+
+        // 2. 默认 fallback：格式化问题与选项为纯文本
+        StringBuilder sb = new StringBuilder();
+        sb.append("┌─ ").append(question).append("\n");
+        for (int i = 0; i < options.size(); i++) {
+            Map<String, Object> opt = options.get(i);
+            String label = (String) opt.getOrDefault("title", "option-" + (i + 1));
+            sb.append("│ ").append(i + 1).append(". ").append(label);
+            String summary = (String) opt.get("summary");
+            if (summary != null) sb.append(" — ").append(summary);
+            sb.append("\n");
+        }
+        if (allowCustom) {
+            sb.append("│ 0. (type your own answer)\n");
+        }
+        sb.append("└─ 输入编号选择");
+        String text = sb.toString();
+        onLog(LogLevel.INFO, text);
+        return text;
+    }
+
     // ==================== 自定义事件 ====================
 
     /**
      * 发送自定义事件（如 sub_start / sub_end 子代理边界事件）。
      * <p>
      * 默认无操作，各实现类可覆盖此方法实现特定处理。
-     * <li>{@link ConsoleAgentOutput} → 打印到控制台</li>
-     * <li>{@link SseAgentOutput} → 通过 SSE 发送</li>
      * </p>
      *
      * @param type 事件类型，如 "sub_start", "sub_end"

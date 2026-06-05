@@ -1,11 +1,11 @@
 package site.sorghum.agent4j.bin.command.impl;
 
 import org.noear.solon.annotation.Component;
-import site.sorghum.agent4j.bin.agent.LogLevel;
 import site.sorghum.agent4j.bin.agent.UserMessage;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.bin.command.MessageWrapper;
+import site.sorghum.agent4j.tool.LogLevel;
 
 /**
  * /init — 自动分析项目生成 agent4j.md。

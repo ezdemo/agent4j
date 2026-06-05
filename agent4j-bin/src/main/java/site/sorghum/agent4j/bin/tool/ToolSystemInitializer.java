@@ -9,7 +9,9 @@ import site.sorghum.agent4j.tool.ToolContext;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.*;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 
 /**
  * 工具系统初始化器 —— 抽取 Agent4jAgent 与 AgentService 中的重复代码。
@@ -81,7 +83,7 @@ public class ToolSystemInitializer {
                     args -> {
                         String sessionId = args != null ? (String) args.remove("__sessionId__") : null;
                         return ToolDefHelper.formatResult(tool.execute(
-                                new ToolContext(args, workspace, apiUrl, apiKey, registry, effectiveBlockedPaths, sessionId)));
+                                new ToolContext(args, workspace, apiUrl, apiKey, registry, effectiveBlockedPaths, sessionId, false)));
                     },
                     tool.isReadOnly(),
                     tool.isStormExempt(),

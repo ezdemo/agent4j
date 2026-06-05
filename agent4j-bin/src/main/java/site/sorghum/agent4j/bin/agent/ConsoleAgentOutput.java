@@ -1,5 +1,9 @@
 package site.sorghum.agent4j.bin.agent;
 
+import site.sorghum.agent4j.tool.AgentOutput;
+import site.sorghum.agent4j.tool.ChoiceOption;
+import site.sorghum.agent4j.tool.LogLevel;
+
 /**
  * 控制台输出实现 —— {@link AgentOutput} 的默认实现。
  * <p>

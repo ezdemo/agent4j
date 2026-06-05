@@ -2,9 +2,9 @@ package site.sorghum.agent4j.web.service;
 
 import org.noear.snack4.ONode;
 import site.sorghum.agent4j.bin.agent.Agent4jAgent;
-import site.sorghum.agent4j.bin.agent.AgentOutput;
-import site.sorghum.agent4j.bin.agent.ChoiceOption;
-import site.sorghum.agent4j.bin.agent.LogLevel;
+import site.sorghum.agent4j.tool.AgentOutput;
+import site.sorghum.agent4j.tool.ChoiceOption;
+import site.sorghum.agent4j.tool.LogLevel;
 
 import java.util.ArrayList;
 import java.util.List;

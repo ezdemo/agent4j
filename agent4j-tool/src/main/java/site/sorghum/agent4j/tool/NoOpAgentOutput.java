@@ -1,12 +1,9 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.tool;
 
 import java.util.List;
 
 /**
  * AgentOutput 的无操作空实现 —— 关闭所有输出。
- * <p>
- * 替代原来在 AgentOutput 接口中的匿名类实例 {@code AgentOutput.NOOP}。
- * </p>
  *
  * @author Sorghum
  */

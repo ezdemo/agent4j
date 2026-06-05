@@ -1,5 +1,9 @@
 package site.sorghum.agent4j.bin.agent;
 
+import site.sorghum.agent4j.tool.AgentOutput;
+import site.sorghum.agent4j.tool.ChoiceOption;
+import site.sorghum.agent4j.tool.LogLevel;
+
 import java.util.List;
 
 /**

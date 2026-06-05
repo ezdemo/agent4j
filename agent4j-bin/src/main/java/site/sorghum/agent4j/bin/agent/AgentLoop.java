@@ -10,8 +10,7 @@ import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.tool.ToolDispatcher;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
-import site.sorghum.agent4j.tool.HitlRequiredException;
-import site.sorghum.agent4j.tool.ToolContext;
+import site.sorghum.agent4j.tool.*;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -31,7 +30,7 @@ import java.util.concurrent.atomic.AtomicReference;
  * @author Sorghum
  */
 @Slf4j
-public class AgentLoop {
+public class AgentLoop implements AgentLoopController {
 
     // ==================== 配置读取（带 null-safe 默认值） ====================
 
@@ -191,6 +190,28 @@ public class AgentLoop {
 
     public void setOutput(AgentOutput output) {
         this.output = output != null ? output : AgentOutput.NOOP;
+    }
+
+    // ==================== AgentLoopController 实现 ====================
+
+    @Override
+    public AgentOutput getOutput() {
+        return this.output;
+    }
+
+    @Override
+    public void requestStop() {
+        userAbortRequested = true;
+        client.abortStream();
+        log.info("[loop] 工具请求停止推理循环");
+    }
+
+    @Override
+    public void injectUserMessage(String message) {
+        if (message == null || message.isEmpty()) return;
+        ctx.addUser("[系统注入] " + message);
+        log.info("[loop] 工具注入用户消息: {}...",
+                message.length() > 80 ? message.substring(0, 80) + "..." : message);
     }
 
     // ==================== 内部辅助方法 ====================
@@ -764,7 +785,7 @@ public class AgentLoop {
                     String tcArgs = func.get("arguments").getString();
                     if (tcArgs == null) tcArgs = "{}";
                     try {
-                        String result = dispatcher.dispatch(tcName, tcArgs);
+                        String result = dispatcher.dispatch(tcName, tcArgs, AgentLoop.this);
                         if (result != null && result.contains("\"rejectedReason\":\"storm\"")) {
                             anySuppressed.set(true);
                         }

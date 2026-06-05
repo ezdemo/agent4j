@@ -1,11 +1,7 @@
 package site.sorghum.agent4j.tool.interact;
 
 import org.noear.solon.annotation.Component;
-import org.noear.solon.annotation.Inject;
-import site.sorghum.agent4j.tool.AgentTool;
-import site.sorghum.agent4j.tool.ToolContext;
-import site.sorghum.agent4j.tool.ToolParameter;
-import site.sorghum.agent4j.tool.ToolResult;
+import site.sorghum.agent4j.tool.*;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -13,15 +9,12 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 用户选择菜单工具 —— 向用户展示多选菜单。
+ * 用户选择菜单工具 —— 通过 {@link AgentOutput#ask} 向用户展示多选菜单。
  *
  * @author Sorghum
  */
 @Component
 public class AskChoiceTool extends AgentTool {
-
-    @Inject
-    private InteractionService interactionService;
 
     @Override
     public String getName() {
@@ -54,17 +47,29 @@ public class AskChoiceTool extends AgentTool {
 
     @Override
     public ToolResult execute(ToolContext ctx) {
+        // 通过 AgentLoopController 获取输出通道
+        AgentLoopController ctrl = ctx.getLoopController();
+        if (ctrl == null) {
+            return ToolResult.fail("NO_CONTROLLER", "没有可用的 AgentLoop 控制器，无法展示选择菜单");
+        }
+        AgentOutput output = ctrl.getOutput();
+        if (output == null) {
+            return ToolResult.fail("NO_OUTPUT", "没有可用的输出通道，无法展示选择菜单");
+        }
+
         List<?> rawOptions = (List<?>) ctx.getParams().get("options");
         List<Map<String, Object>> options = normalizeOptions(rawOptions);
-        return ToolResult.ok(interactionService.askChoice(ctx.getString("question"),
-                options, ctx.getBool("allowCustom", false)));
+        String result = output.ask(
+                ctx.getString("question"),
+                options,
+                ctx.getBool("allowCustom", false)
+        );
+        ctrl.requestStop();
+        return ToolResult.ok(result);
     }
 
     /**
-     * 将 options 统一转换为 List<Map<String, Object>> 格式。
-     * 兼容两种输入：
-     * 1. 字符串数组 ["选项1", "选项2"] → [{"title": "选项1"}, {"title": "选项2"}]
-     * 2. 对象数组 [{"title": "选项1", "summary": "说明"}] → 保持不变
+     * 将 options 统一转换为 List&lt;Map&lt;String, Object&gt;&gt; 格式。
      */
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> normalizeOptions(List<?> raw) {
@@ -78,7 +83,6 @@ public class AskChoiceTool extends AgentTool {
                 opt.put("title", item);
                 result.add(opt);
             } else {
-                // 其他类型转为字符串处理
                 Map<String, Object> opt = new java.util.HashMap<>();
                 opt.put("title", String.valueOf(item));
                 result.add(opt);

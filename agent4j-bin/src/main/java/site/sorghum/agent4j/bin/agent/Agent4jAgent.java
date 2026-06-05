@@ -15,6 +15,7 @@ import site.sorghum.agent4j.bin.session.SessionStore;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.tool.ToolSystemInitializer;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
+import site.sorghum.agent4j.tool.AgentOutput;
 
 import java.io.IOException;
 import java.nio.file.Files;
