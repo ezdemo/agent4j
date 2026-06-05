@@ -99,7 +99,25 @@
         </div>
 
         <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: installProgress + '%' }"></div>
+          <div class="progress-fill" :style="{ width: downloadProgress && downloadProgress.percent ? downloadProgress.percent + '%' : installProgress + '%' }"></div>
+        </div>
+
+        <!-- JDK 下载详情 -->
+        <div v-if="downloadProgress && downloadProgress.phase === 'downloading'" class="download-detail">
+          <div class="download-info-row">
+            <span class="download-label">下载进度</span>
+            <span class="download-value">{{ downloadProgress.percent || 0 }}%</span>
+          </div>
+          <div class="download-info-row">
+            <span class="download-label">{{ formatFileSize(downloadProgress.downloaded) }} / {{ formatFileSize(downloadProgress.total) }}</span>
+            <span class="download-value">{{ formatFileSize(downloadProgress.speed) }}/s</span>
+          </div>
+          <div class="download-message" v-if="downloadProgress.message">
+            {{ downloadProgress.message }}
+          </div>
+        </div>
+        <div v-else-if="downloadProgress && (downloadProgress.phase === 'extracting' || downloadProgress.phase === 'installing' || downloadProgress.phase === 'resolving')" class="download-detail">
+          <div class="download-message">{{ downloadProgress.message }}</div>
         </div>
       </template>
 
@@ -134,7 +152,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { agent4jWebService } from '@/services/tauri'
 import { invoke } from '@tauri-apps/api/core'
 
@@ -151,6 +169,10 @@ const resourceDir = ref('')
 // 安装步骤和进度
 const installSteps = ref([])
 const installProgress = ref(0)
+
+// JDK 下载进度（事件驱动）
+const downloadProgress = ref(null)
+let downloadUnlisten = null
 
 // 是否在 Tauri 环境中
 const isTauri = ref(false)
@@ -231,6 +253,7 @@ async function checkInstall() {
 async function startInstall() {
   phase.value = 'installing'
   installProgress.value = 0
+  downloadProgress.value = null
 
   // 初始化步骤
   installSteps.value = [
@@ -240,22 +263,74 @@ async function startInstall() {
   ]
 
   try {
-    // 步骤1：检查 Java 环境
+    // ===== 步骤1：快速检查 Java 环境 =====
     installSteps.value[0].status = 'active'
-    const javaVer = await agent4jWebService.step1CheckJava(resourceDir.value)
+    const javaStatus = await agent4jWebService.checkJavaQuick()
+
+    if (!javaStatus.found) {
+      // Java 未安装，启动异步下载（带进度事件）
+      const { listen } = await import('@tauri-apps/api/event')
+      downloadUnlisten = await listen('java-download-progress', (event) => {
+        downloadProgress.value = event.payload
+
+        // 实时更新步骤详情
+        const msg = event.payload.message || ''
+        if (event.payload.phase === 'downloading' && event.payload.total > 0) {
+          const pct = event.payload.percent || 0
+          installSteps.value[0].detail = `${pct}% - ${formatFileSize(event.payload.downloaded)} / ${formatFileSize(event.payload.total)}`
+        } else {
+          installSteps.value[0].detail = msg
+        }
+
+        // 下载出错
+        if (event.payload.phase === 'error') {
+          throw new Error(event.payload.error || 'JDK 下载失败')
+        }
+      })
+
+      // 启动异步下载
+      await agent4jWebService.startJavaDownload()
+
+      // 等待下载完成（由 done 事件驱动）
+      await new Promise((resolve, reject) => {
+        const checkDone = setInterval(() => {
+          const dp = downloadProgress.value
+          if (!dp) return
+          if (dp.phase === 'done') {
+            clearInterval(checkDone)
+            resolve()
+          } else if (dp.phase === 'error') {
+            clearInterval(checkDone)
+            reject(new Error(dp.error || 'JDK 下载失败'))
+          }
+        }, 300)
+      })
+
+      // 清理事件监听
+      if (downloadUnlisten) {
+        downloadUnlisten()
+        downloadUnlisten = null
+      }
+
+      const ver = downloadProgress.value?.version || ''
+      installSteps.value[0].detail = ver ? `JDK ${ver}` : '完成'
+    } else {
+      // Java 已存在
+      installSteps.value[0].detail = javaStatus.version || '已安装'
+    }
+
     installSteps.value[0].status = 'done'
-    installSteps.value[0].detail = javaVer
     installProgress.value = 33
     await sleep(200)
 
-    // 步骤2：解压安装包
+    // ===== 步骤2：解压安装包 =====
     installSteps.value[1].status = 'active'
     await agent4jWebService.step2Extract(resourceDir.value)
     installSteps.value[1].status = 'done'
     installProgress.value = 66
     await sleep(200)
 
-    // 步骤3：复制文件
+    // ===== 步骤3：复制文件 =====
     installSteps.value[2].status = 'active'
     await agent4jWebService.step3CopyFiles(resourceDir.value)
     installSteps.value[2].status = 'done'
@@ -273,6 +348,11 @@ async function startInstall() {
     }
     phase.value = 'error'
     errorMessage.value = `安装失败: ${e.message || e}`
+  } finally {
+    if (downloadUnlisten) {
+      downloadUnlisten()
+      downloadUnlisten = null
+    }
   }
 }
 
@@ -430,6 +510,18 @@ async function closeApp() {
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
+}
+
+function formatFileSize(bytes) {
+  if (!bytes || bytes === 0) return '0 B'
+  const units = ['B', 'KB', 'MB', 'GB']
+  let i = 0
+  let size = bytes
+  while (size >= 1024 && i < units.length - 1) {
+    size /= 1024
+    i++
+  }
+  return i === 0 ? `${size} ${units[i]}` : `${size.toFixed(1)} ${units[i]}`
 }
 
 defineExpose({
@@ -718,5 +810,37 @@ defineExpose({
 .btn-lg {
   padding: 10px 36px;
   font-size: 14px;
+}
+
+/* JDK 下载详情 */
+.download-detail {
+  margin-top: 16px;
+  padding: 10px 16px;
+  background: var(--bg-2);
+  border-radius: 8px;
+  font-size: 12px;
+}
+
+.download-info-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.download-label {
+  color: var(--fg-4);
+}
+
+.download-value {
+  color: var(--fg);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.download-message {
+  color: var(--fg-4);
+  font-size: 11px;
+  margin-top: 4px;
 }
 </style>

@@ -116,6 +116,22 @@ export const agent4jWebService = {
   },
 
   /**
+   * 快速检查 Java 环境（不触发下载）
+   * @returns {Promise<{found: boolean, version?: string, source?: string}>}
+   */
+  async checkJavaQuick() {
+    return await mustInvoke('check_java_quick')
+  },
+
+  /**
+   * 启动异步 JDK 下载（后台线程执行，通过事件推送进度）
+   * @returns {Promise<string>} 'started'
+   */
+  async startJavaDownload() {
+    return await mustInvoke('start_java_download')
+  },
+
+  /**
    * 停止 agent4j-web 服务
    */
   async stop() {

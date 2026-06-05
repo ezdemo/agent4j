@@ -1,10 +1,12 @@
 // windows_subsystem 属性已在 main.rs 中设置（binary crate专属）
 
 use std::fs;
+use std::io::{Read, Write};
 use std::net::TcpListener;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command};
 use std::sync::Mutex;
+use tauri::Emitter;
 use tauri::Manager;
 
 // agent4j-web 进程管理器
@@ -53,17 +55,6 @@ impl Agent4jWebManager {
         }
     }
 
-    // 检查系统 Java（通过 PATH 中的 java 命令）
-    fn check_java() -> Result<String, String> {
-        let output = Command::new("java")
-            .args(&["-version"])
-            .output()
-            .map_err(|_| "Java not found in PATH".to_string())?;
-        let stderr = String::from_utf8_lossy(&output.stderr);
-        let (_, ver) = Self::parse_java_version(&stderr)?;
-        Ok(ver)
-    }
-
     // 检查指定路径的 Java
     fn check_java_at(path: &Path) -> Result<String, String> {
         let output = Command::new(path)
@@ -77,46 +68,29 @@ impl Agent4jWebManager {
 
     // ── Java 自动安装相关 ──
 
-    // 获取 ~/.agent4j/jdk/bin/java 路径
+    // 获取 ~/.agent4j/jre25/bin/java 路径
     fn get_bundled_java_path(install_dir: &Path) -> PathBuf {
-        let mut p = install_dir.join("jdk").join("bin").join("java");
+        let mut p = install_dir.join("jre25").join("bin").join("java");
         if cfg!(windows) {
             p.set_extension("exe");
         }
         p
     }
 
-    // 将目录添加到当前进程的 PATH 最前面
-    fn prepend_to_path(dir: &Path) {
-        let dir_str = dir.to_string_lossy();
-        let current = std::env::var("PATH").unwrap_or_default();
-        if !current.contains(dir_str.as_ref()) {
-            let new_path = format!("{}:{}", dir_str, current);
-            std::env::set_var("PATH", new_path);
-        }
-    }
-
-    // 确保 Java 可用：系统 → 已捆绑 → 自动下载
+    // 确保 Java 可用：仅检查 ~/.agent4j/jre25/bin/java
     fn ensure_java(&self) -> Result<String, String> {
-        // 1) 系统 Java
-        if let Ok(ver) = Self::check_java() {
-            return Ok(ver);
-        }
-        // 2) 已捆绑的 JDK
         let install_dir = self.get_install_dir();
         let bundled_path = Self::get_bundled_java_path(&install_dir);
         if bundled_path.exists() {
             if let Ok(ver) = Self::check_java_at(&bundled_path) {
-                Self::prepend_to_path(bundled_path.parent().unwrap());
                 return Ok(format!("{} (bundled)", ver));
             }
         }
-        // 3) 自动下载
         let ver = self.download_and_install_jdk()?;
         Ok(format!("{} (auto-installed)", ver))
     }
 
-    // ── Adoptium API 对接 ──
+    // ── 从清华镜像下载 JDK 25（通过 Adoptium API 获取最新版本号） ──
     fn adoptium_os() -> &'static str {
         match std::env::consts::OS {
             "macos" => "mac",
@@ -133,30 +107,50 @@ impl Agent4jWebManager {
         }
     }
 
-    // 从 Adoptium API 获取 JDK 17 下载地址
-    fn get_adoptium_download_url() -> Result<String, String> {
+    // 从清华镜像下载 JDK 25（通过 Adoptium API 获取文件名后构造镜像 URL）
+    fn get_jdk_download_url() -> Result<String, String> {
+        let os = Self::adoptium_os();
+        let arch = Self::adoptium_arch();
+
+        // 从 Adoptium API 获取最新 JDK 的包名
+        let package_name = Self::fetch_jdk_package_name().unwrap_or_else(|_| {
+            // API 不可用时使用兜底文件名
+            format!("OpenJDK25U-jre_{}_{}_hotspot_25.0.0_1.{}", arch, os,
+                if os == "windows" { "zip" } else { "tar.gz" })
+        });
+
+        let url = format!(
+            "https://mirrors.tuna.tsinghua.edu.cn/Adoptium/25/jre/{}/{}/{}",
+            arch, os, package_name
+        );
+        Ok(url)
+    }
+
+    // 从 Adoptium API 获取最新 JDK 25 的包文件名
+    fn fetch_jdk_package_name() -> Result<String, String> {
         let os = Self::adoptium_os();
         let arch = Self::adoptium_arch();
         let api_url = format!(
-            "https://api.adoptium.net/v3/assets/feature_releases/17/ga?architecture={}&image_type=jdk&os={}&page_size=1",
+            "https://api.adoptium.net/v3/assets/feature_releases/25/ga?architecture={}&image_type=jre&os={}&page_size=1",
             arch, os
         );
         let resp = ureq::get(&api_url)
             .call()
-            .map_err(|e| format!("查询 Adoptium API 失败: {}", e))?;
+            .map_err(|e| format!("查询 Adoptium 失败: {}", e))?;
         let reader = resp.into_reader();
         let json: serde_json::Value = serde_json::from_reader(reader)
-            .map_err(|e| format!("解析 API 响应失败: {}", e))?;
-        json[0]["binaries"][0]["package"]["link"]
+            .map_err(|e| format!("解析响应失败: {}", e))?;
+
+        json[0]["binaries"][0]["package"]["name"]
             .as_str()
             .map(|s: &str| s.to_string())
-            .ok_or("API 返回中未找到下载链接".to_string())
+            .ok_or("API 返回中未找到包名".to_string())
     }
 
-    // 下载并安装 JDK 17 到 ~/.agent4j/jdk/
+    // 下载并安装 JRE 25 到 ~/.agent4j/jre25/
     fn download_and_install_jdk(&self) -> Result<String, String> {
         let install_dir = self.get_install_dir();
-        let jdk_dir = install_dir.join("jdk");
+        let jdk_dir = install_dir.join("jre25");
         let tmp_dir = install_dir.join(".tmp-jdk");
 
         // 清理残留
@@ -167,7 +161,7 @@ impl Agent4jWebManager {
             .map_err(|e| format!("创建临时目录失败: {}", e))?;
 
         // 获取下载地址
-        let url = Self::get_adoptium_download_url()?;
+        let url = Self::get_jdk_download_url()?;
         let filename = url.rsplit('/').next().ok_or("无效的下载地址")?.to_string();
         let archive_path = tmp_dir.join(&filename);
 
@@ -235,12 +229,162 @@ impl Agent4jWebManager {
         let java_bin = Self::get_bundled_java_path(&install_dir);
         let ver = Self::check_java_at(&java_bin)?;
 
-        // 更新当前进程 PATH
-        if let Some(bin_dir) = java_bin.parent() {
-            Self::prepend_to_path(bin_dir);
+        Ok(ver)
+    }
+
+    // ── 带进度事件的 JDK 下载（在后台线程调用，通过 Tauri 事件通知前端） ──
+    fn download_java_with_progress(install_dir: &Path, app: &tauri::AppHandle) -> Result<String, String> {
+        let jdk_dir = install_dir.join("jre25");
+        let tmp_dir = install_dir.join(".tmp-jre");
+
+        // 清理残留
+        if tmp_dir.exists() {
+            fs::remove_dir_all(&tmp_dir).ok();
+        }
+        fs::create_dir_all(&tmp_dir)
+            .map_err(|e| format!("创建临时目录失败: {}", e))?;
+
+        // 获取下载地址
+        let _ = app.emit("java-download-progress", serde_json::json!({
+            "phase": "resolving", "downloaded": 0, "total": 0, "percent": 0,
+            "message": "正在获取 JDK 下载地址..."
+        }));
+        let url = Self::get_jdk_download_url()?;
+        let filename = url.rsplit('/').next().ok_or("无效的下载地址")?.to_string();
+        let archive_path = tmp_dir.join(&filename);
+
+        // 下载
+        let _ = app.emit("java-download-progress", serde_json::json!({
+            "phase": "downloading", "downloaded": 0, "total": 0, "percent": 0,
+            "message": "正在连接下载服务器..."
+        }));
+        let resp = ureq::get(&url)
+            .call()
+            .map_err(|e| format!("下载 JDK 失败: {}", e))?;
+
+        let total_size: u64 = resp.header("Content-Length")
+            .and_then(|v| v.parse().ok())
+            .unwrap_or(0);
+
+        let mut reader = resp.into_reader();
+        let mut file = fs::File::create(&archive_path)
+            .map_err(|e| format!("创建文件失败: {}", e))?;
+
+        let mut downloaded: u64 = 0;
+        let mut buffer = [0u8; 65536]; // 64KB 分块
+        let start_time = std::time::Instant::now();
+        let mut last_emit = std::time::Instant::now();
+
+        loop {
+            let n = reader.read(&mut buffer)
+                .map_err(|e| format!("读取下载流失败: {}", e))?;
+            if n == 0 {
+                break;
+            }
+            file.write_all(&buffer[..n])
+                .map_err(|e| format!("写入文件失败: {}", e))?;
+            downloaded += n as u64;
+
+            // 每 200ms 或最后一块时发射进度事件
+            if last_emit.elapsed().as_millis() >= 200 || n < buffer.len() {
+                let elapsed = start_time.elapsed().as_secs().max(1);
+                let speed = downloaded / elapsed;
+                let percent = if total_size > 0 {
+                    (downloaded as f64 / total_size as f64 * 100.0) as u32
+                } else {
+                    0
+                };
+                let _ = app.emit("java-download-progress", serde_json::json!({
+                    "phase": "downloading",
+                    "downloaded": downloaded,
+                    "total": total_size,
+                    "percent": percent.min(99),
+                    "speed": speed,
+                    "message": format!("正在下载 JDK ({}/s)", Self::format_file_size(speed))
+                }));
+                last_emit = std::time::Instant::now();
+            }
+        }
+        drop(file);
+
+        // 解压
+        let _ = app.emit("java-download-progress", serde_json::json!({
+            "phase": "extracting", "downloaded": 0, "total": 0, "percent": 0,
+            "message": "正在解压 JDK 压缩包..."
+        }));
+        let extract_dir = tmp_dir.join("extract");
+        fs::create_dir_all(&extract_dir)
+            .map_err(|e| format!("创建解压目录失败: {}", e))?;
+
+        if filename.ends_with(".tar.gz") || filename.ends_with(".tgz") {
+            let gz = flate2::read::GzDecoder::new(
+                fs::File::open(&archive_path)
+                    .map_err(|e| format!("打开压缩包失败: {}", e))?
+            );
+            let mut archive = tar::Archive::new(gz);
+            archive.unpack(&extract_dir)
+                .map_err(|e| format!("解压 tar.gz 失败: {}", e))?;
+        } else if cfg!(windows) && filename.ends_with(".zip") {
+            #[cfg(windows)]
+            {
+                let zf = fs::File::open(&archive_path)
+                    .map_err(|e| format!("打开 zip 失败: {}", e))?;
+                let mut archive = zip::ZipArchive::new(zf)
+                    .map_err(|e| format!("读取 zip 失败: {}", e))?;
+                archive.extract(&extract_dir)
+                    .map_err(|e| format!("解压 zip 失败: {}", e))?;
+            }
+            #[cfg(not(windows))]
+            return Err("ZIP 解压仅在 Windows 下支持".to_string());
+        } else {
+            return Err(format!("不支持的压缩格式: {}", filename));
         }
 
+        // 找到 JDK 顶层目录
+        let entries: Vec<_> = fs::read_dir(&extract_dir)
+            .map_err(|e| e.to_string())?
+            .filter_map(|e| e.ok())
+            .filter(|e| e.file_type().map(|t| t.is_dir()).unwrap_or(false))
+            .collect();
+        let jdk_subdir = entries.into_iter().next()
+            .ok_or("解压后未找到 JDK 目录")?;
+
+        // 移动到最终位置
+        let _ = app.emit("java-download-progress", serde_json::json!({
+            "phase": "installing", "downloaded": 0, "total": 0, "percent": 0,
+            "message": "正在安装 JDK..."
+        }));
+        if jdk_dir.exists() {
+            fs::remove_dir_all(&jdk_dir)
+                .map_err(|e| format!("清理旧 JDK 失败: {}", e))?;
+        }
+        fs::rename(jdk_subdir.path(), &jdk_dir)
+            .map_err(|e| format!("移动 JDK 目录失败: {}", e))?;
+
+        // 清理临时文件
+        fs::remove_dir_all(&tmp_dir).ok();
+
+        // 验证
+        let java_bin = Self::get_bundled_java_path(install_dir);
+        let ver = Self::check_java_at(&java_bin)?;
+
         Ok(ver)
+    }
+
+    // 格式化文件大小（如 "12.5 MB"）
+    fn format_file_size(bytes: u64) -> String {
+        const KB: u64 = 1024;
+        const MB: u64 = KB * 1024;
+        const GB: u64 = MB * 1024;
+        if bytes >= GB {
+            format!("{:.1} GB", bytes as f64 / GB as f64)
+        } else if bytes >= MB {
+            format!("{:.1} MB", bytes as f64 / MB as f64)
+        } else if bytes >= KB {
+            format!("{:.0} KB", bytes as f64 / KB as f64)
+        } else {
+            format!("{} B", bytes)
+        }
     }
 
     // 创建启动脚本
@@ -305,7 +449,7 @@ impl Agent4jWebManager {
 
     // 步骤1：确保 Java 可用（系统 → 已捆绑 → 自动下载）
     fn install_step1_check_java(&self, resource_dir: &Path) -> Result<String, String> {
-        // 确保 Java 可用（如果系统没有，自动下载安装到 ~/.agent4j/jdk/）
+        // 确保 Java 可用（自动下载安装到 ~/.agent4j/jre25/）
         let java_ver = self.ensure_java()?;
 
         // 验证安装包存在
@@ -456,9 +600,12 @@ impl Agent4jWebManager {
         let mut port_lock = self.port.lock().unwrap();
         *port_lock = port;
 
-        // 直接 spawn java 进程，不经过 cmd / powershell / sh
-        // -D 系统属性必须在 -jar 之前，Solon 通过 -Dserver.port 读取端口
-        let mut cmd = Command::new("java");
+        // 直接使用下载的 JRE，不依赖 PATH 环境变量
+        let jre_java = install_dir.join("jre25").join("bin").join("java");
+        if !jre_java.exists() {
+            return Err(format!("JRE not found at {:?}", jre_java));
+        }
+        let mut cmd = Command::new(jre_java);
         cmd.args(&[
             "-Dfile.encoding=UTF-8",
             &format!("-Dserver.port={}", port),
@@ -704,6 +851,51 @@ fn get_system_info() -> serde_json::Value {
     })
 }
 
+// ── Java 异步下载进度命令 ──
+
+// 快速检查 jre25 是否已安装（不复用系统 Java）
+#[tauri::command]
+fn check_java_quick(state: tauri::State<'_, Agent4jWebManager>) -> serde_json::Value {
+    let install_dir = state.get_install_dir();
+    let bundled_path = Agent4jWebManager::get_bundled_java_path(&install_dir);
+    if bundled_path.exists() {
+        if let Ok(ver) = Agent4jWebManager::check_java_at(&bundled_path) {
+            return serde_json::json!({"found": true, "version": ver, "source": "bundled"});
+        }
+    }
+    serde_json::json!({"found": false})
+}
+
+// 启动异步 JDK 下载（在后台线程执行，通过事件推送进度）
+#[tauri::command]
+fn start_java_download(app: tauri::AppHandle) -> Result<String, String> {
+    let install_dir = dirs::home_dir()
+        .unwrap_or_else(|| std::path::PathBuf::from("."))
+        .join(".agent4j");
+
+    std::thread::spawn(move || {
+        match Agent4jWebManager::download_java_with_progress(&install_dir, &app) {
+            Ok(ver) => {
+                let _ = app.emit("java-download-progress", serde_json::json!({
+                    "phase": "done",
+                    "percent": 100,
+                    "version": ver,
+                    "message": format!("JDK 安装完成: {}", ver)
+                }));
+            }
+            Err(e) => {
+                let _ = app.emit("java-download-progress", serde_json::json!({
+                    "phase": "error",
+                    "error": e,
+                    "message": format!("JDK 下载失败: {}", e)
+                }));
+            }
+        }
+    });
+
+    Ok("started".to_string())
+}
+
 // ========== Entry ==========
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -724,7 +916,9 @@ pub fn run() {
             install_step3_copy_files,
             start_agent4j_web,
             stop_agent4j_web,
-            get_agent4j_web_port
+            get_agent4j_web_port,
+            check_java_quick,
+            start_java_download
         ])
         .setup(|app| {
             // 窗口标题
