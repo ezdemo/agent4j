@@ -580,7 +580,7 @@ impl Agent4jWebManager {
     }
 
     // 启动 agent4j-web 服务（随机端口）
-    fn start(&self) -> Result<u32, String> {
+    fn start(&self, app: Option<&tauri::AppHandle>) -> Result<u32, String> {
         self.cleanup_stale();
 
         let install_dir = self.get_install_dir();
@@ -600,10 +600,14 @@ impl Agent4jWebManager {
         let mut port_lock = self.port.lock().unwrap();
         *port_lock = port;
 
-        // 直接使用下载的 JRE，不依赖 PATH 环境变量
-        let jre_java =  Agent4jWebManager::get_bundled_java_path(&install_dir);
+        // 自动确保 JRE 可用：不存在则异步下载（带进度）
+        let jre_java = Agent4jWebManager::get_bundled_java_path(&install_dir);
         if !jre_java.exists() {
-            return Err(format!("JRE not found at {:?}", jre_java));
+            println!("JRE not found, downloading...");
+            match app {
+                Some(handle) => Agent4jWebManager::download_java_with_progress(&install_dir, handle)?,
+                None => self.download_and_install_jdk()?,
+            };
         }
         let mut cmd = Command::new(jre_java);
         cmd.args(&[
@@ -806,8 +810,8 @@ fn install_step3_copy_files(state: tauri::State<'_, Agent4jWebManager>, resource
 
 // 启动服务（返回端口号）
 #[tauri::command]
-fn start_agent4j_web(state: tauri::State<'_, Agent4jWebManager>) -> Result<u32, String> {
-    state.start()
+fn start_agent4j_web(app: tauri::AppHandle, state: tauri::State<'_, Agent4jWebManager>) -> Result<u32, String> {
+    state.start(Some(&app))
 }
 
 // 获取当前端口号
