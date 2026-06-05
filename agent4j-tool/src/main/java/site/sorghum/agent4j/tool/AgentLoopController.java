@@ -29,7 +29,7 @@ public interface AgentLoopController {
     AgentOutput getOutput();
 
     /**
-     * 停止推理循环 —— 等效于用户点击"停止"按钮。
+     * 停止推理循环
      */
     void requestStop();
 

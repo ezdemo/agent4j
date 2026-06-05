@@ -5,7 +5,7 @@ server:
   port: 8097
 
 solon.logging:
-  level: "INFO"
+  level: "DEBUG"
 
 knife4j.enable: true
 knife4j.basic.enable: true

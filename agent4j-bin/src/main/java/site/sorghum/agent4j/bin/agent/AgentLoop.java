@@ -201,10 +201,10 @@ public class AgentLoop implements AgentLoopController {
 
     @Override
     public void requestStop() {
-        userAbortRequested = true;
         client.abortStream();
         log.info("[loop] 工具请求停止推理循环");
     }
+
 
     @Override
     public void injectUserMessage(String message) {
