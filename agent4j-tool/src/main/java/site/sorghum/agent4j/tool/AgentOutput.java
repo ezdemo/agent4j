@@ -115,9 +115,6 @@ public interface AgentOutput {
             String value = (String) opt.getOrDefault("value", title);
             choiceOptions.add(new ChoiceOption(value, title));
         }
-        if (!choiceOptions.isEmpty()) {
-            onChoice(choiceOptions);
-        }
 
         // 2. 默认 fallback：格式化问题与选项为纯文本
         StringBuilder sb = new StringBuilder();
@@ -134,9 +131,11 @@ public interface AgentOutput {
             sb.append("│ 0. (type your own answer)\n");
         }
         sb.append("└─ 输入编号选择");
-        String text = sb.toString();
-        onLog(LogLevel.INFO, text);
-        return text;
+
+        if (!choiceOptions.isEmpty()) {
+            onChoice(choiceOptions);
+        }
+        return sb.toString();
     }
 
     // ==================== 自定义事件 ====================

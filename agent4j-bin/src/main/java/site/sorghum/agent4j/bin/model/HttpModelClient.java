@@ -295,6 +295,7 @@ public class HttpModelClient implements ModelClient {
 
                     while ((line = reader.readLine()) != null) {
                         if (abortRequested) {
+                            abortRequested = false;
                             logger.debug("流式请求被 ReasonBreaker 中断");
                             break;
                         }
