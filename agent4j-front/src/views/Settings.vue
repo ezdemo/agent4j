@@ -256,20 +256,19 @@
                     ></textarea>
                     <button
                         :disabled="remoteModelsLoading"
-                        class="btn btn-secondary h-full"
-                        style="white-space:nowrap;align-self:flex-end;"
+                        class="btn btn-secondary"
+                        style="padding:6px;"
                         @click="openRemoteModelsDialog"
                         title="查看远端模型列表"
                     >
-                      <svg v-if="remoteModelsLoading" class="animate-spin" fill="none" height="14" stroke="currentColor"
-                           stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <svg v-if="remoteModelsLoading" class="animate-spin" fill="none" height="16" stroke="currentColor"
+                           stroke-width="2" viewBox="0 0 24 24" width="16">
                         <path d="M21 12a9 9 0 11-6.219-8.56"/>
                       </svg>
-                      <svg v-else fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
-                           width="14">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                      <svg v-else fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+                           width="16">
+                        <path d="M17.5 19H9a7 7 0 1 1 6.71-9h1.79a4.5 4.5 0 1 1 0 9z"/>
                       </svg>
-                      {{ remoteModelsLoading ? '获取中...' : '查看远端模型' }}
                     </button>
                   </div>
                 </div>
@@ -2820,6 +2819,10 @@ onMounted(() => {
 
 .input-group .form-input {
   flex: 1;
+}
+
+.h-full {
+  height: 100%;
 }
 
 /* 带切换的输入 */
