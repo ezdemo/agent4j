@@ -243,15 +243,35 @@
               <div class="setting-row">
                 <div class="setting-info">
                   <label class="setting-label">可用模型列表</label>
-                  <p class="setting-hint">每行一个模型名称</p>
+                  <p class="setting-hint">每行一个模型名称，可查看远端模型后勾选填入</p>
                 </div>
                 <div class="setting-control">
-                  <textarea
-                      v-model="settings.ai.availableModelsText"
-                      class="form-textarea"
-                      placeholder="deepseek-v4-flash&#10;gpt-4&#10;gpt-4-turbo"
-                      rows="4"
-                  ></textarea>
+                  <div class="input-group" style="align-items:stretch;">
+                    <textarea
+                        v-model="settings.ai.availableModelsText"
+                        class="form-textarea"
+                        placeholder="deepseek-v4-flash&#10;gpt-4&#10;gpt-4-turbo"
+                        rows="4"
+                        style="flex:1;"
+                    ></textarea>
+                    <button
+                        :disabled="remoteModelsLoading"
+                        class="btn btn-secondary h-full"
+                        style="white-space:nowrap;align-self:flex-end;"
+                        @click="openRemoteModelsDialog"
+                        title="查看远端模型列表"
+                    >
+                      <svg v-if="remoteModelsLoading" class="animate-spin" fill="none" height="14" stroke="currentColor"
+                           stroke-width="2" viewBox="0 0 24 24" width="14">
+                        <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                      </svg>
+                      <svg v-else fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+                           width="14">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+                      </svg>
+                      {{ remoteModelsLoading ? '获取中...' : '查看远端模型' }}
+                    </button>
+                  </div>
                 </div>
               </div>
             </div>
@@ -1069,6 +1089,70 @@ X-Custom-Header=value"
       </div>
     </div>
   </Teleport>
+
+  <!-- 远端模型选择弹窗 -->
+  <Teleport to="body">
+    <div v-if="showRemoteModelsDialog" class="remote-models-mask" @click.self="showRemoteModelsDialog = false">
+      <div class="remote-models-dialog">
+        <div class="remote-models-head">
+          <span>远端模型列表</span>
+          <span class="remote-models-count">{{ remoteModelList.length }} 个模型</span>
+          <button class="btn-icon-xs" @click="showRemoteModelsDialog = false">×</button>
+        </div>
+        <div class="remote-models-body">
+          <div v-if="remoteModelsLoading" class="remote-models-loading">
+            <span class="loading-dot"></span> 正在获取远端模型...
+          </div>
+          <div v-else-if="remoteModelList.length === 0" class="remote-models-empty">
+            暂无可用模型
+          </div>
+          <template v-else>
+            <div class="remote-models-toolbar">
+              <label class="remote-check-all">
+                <input
+                    type="checkbox"
+                    :checked="selectedRemoteModels.size === remoteModelList.length"
+                    :indeterminate="selectedRemoteModels.size > 0 && selectedRemoteModels.size < remoteModelList.length"
+                    @change="toggleSelectAll"
+                />
+                <span>全选 / 取消</span>
+              </label>
+              <span class="remote-selected-count">已选 {{ selectedRemoteModels.size }} 项</span>
+              <input
+                  v-model="remoteSearchQuery"
+                  class="form-input"
+                  placeholder="搜索模型..."
+                  style="width:200px;"
+              />
+            </div>
+            <div class="remote-models-list">
+              <div
+                  v-for="m in filteredRemoteModelList"
+                  :key="m"
+                  class="remote-model-item"
+                  :class="{ checked: selectedRemoteModels.has(m) }"
+                  @click="toggleModel(m)"
+              >
+                <input type="checkbox" :checked="selectedRemoteModels.has(m)" />
+                <span class="remote-model-name">{{ m }}</span>
+                <span v-if="m === settings.ai.model" class="remote-model-badge">当前</span>
+              </div>
+            </div>
+          </template>
+        </div>
+        <div class="remote-models-foot">
+          <button class="btn" @click="showRemoteModelsDialog = false">取消</button>
+          <button
+              :disabled="selectedRemoteModels.size === 0"
+              class="btn btn-primary"
+              @click="confirmRemoteModels"
+          >
+            确认填入 ({{ selectedRemoteModels.size }})
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -1106,6 +1190,12 @@ const checkingConnection = ref(false)
 const connectionOk = ref(false)
 const connectionChecked = ref(false)
 const hasChanges = ref(false)
+const remoteModelsLoading = ref(false)
+// 远端模型弹窗状态
+const showRemoteModelsDialog = ref(false)
+const remoteModelList = ref([])
+const selectedRemoteModels = ref(new Set())
+const remoteSearchQuery = ref('')
 
 // 技能市场状态
 const skillMarket = reactive({
@@ -1456,6 +1546,81 @@ const checkServerConnection = async () => {
   connectionChecked.value = true
   checkingConnection.value = false
 }
+
+// 从远程 API 获取模型列表并打开弹窗
+const openRemoteModelsDialog = async () => {
+  remoteModelsLoading.value = true
+  showRemoteModelsDialog.value = true
+  try {
+    const res = await configAPI.getRemoteModels()
+    if (res.success && res.data && res.data.length > 0) {
+      remoteModelList.value = res.data
+      // 默认选中已在文本域中的模型
+      const existing = new Set(
+          settings.ai.availableModelsText.split('\n').map(s => s.trim()).filter(s => s)
+      )
+      selectedRemoteModels.value = new Set(
+          res.data.filter(m => existing.has(m))
+      )
+    } else {
+      remoteModelList.value = []
+      selectedRemoteModels.value = new Set()
+      message.error(res.error || '获取远端模型列表失败')
+    }
+  } catch (err) {
+    console.error('获取远端模型列表失败:', err)
+    message.error('获取远端模型列表失败: ' + (err.message || err))
+    showRemoteModelsDialog.value = false
+  } finally {
+    remoteModelsLoading.value = false
+  }
+}
+
+// 勾选/取消单个模型
+const toggleModel = (name) => {
+  const s = new Set(selectedRemoteModels.value)
+  if (s.has(name)) {
+    s.delete(name)
+  } else {
+    s.add(name)
+  }
+  selectedRemoteModels.value = s
+}
+
+// 全选/取消全选
+const toggleSelectAll = () => {
+  if (selectedRemoteModels.value.size === filteredRemoteModelList.value.length) {
+    // 全部已选 → 取消全选（仅取消当前过滤列表中的项）
+    const s = new Set(selectedRemoteModels.value)
+    filteredRemoteModelList.value.forEach(m => s.delete(m))
+    selectedRemoteModels.value = s
+  } else {
+    // 选中过滤列表中的所有项
+    const s = new Set(selectedRemoteModels.value)
+    filteredRemoteModelList.value.forEach(m => s.add(m))
+    selectedRemoteModels.value = s
+  }
+}
+
+// 确认填入文本域
+const confirmRemoteModels = () => {
+  const selected = Array.from(selectedRemoteModels.value).sort()
+  settings.ai.availableModelsText = selected.join('\n')
+  // 同步更新 model 下拉列表
+  availableModels.value = selected.map(name => ({
+    name,
+    active: name === settings.ai.model
+  }))
+  message.success(`已填入 ${selected.length} 个模型`)
+  showRemoteModelsDialog.value = false
+}
+
+// 搜索过滤后的模型列表
+const filteredRemoteModelList = computed(() => {
+  const q = remoteSearchQuery.value.trim().toLowerCase()
+  if (!q) return remoteModelList.value
+  return remoteModelList.value.filter(m => m.toLowerCase().includes(q))
+})
 
 
 // ==================== OpenAPI ====================
@@ -3577,5 +3742,153 @@ onMounted(() => {
   text-align: center;
   color: var(--fg-3);
   font-size: 13px;
+}
+
+/* ==================== 远端模型弹窗 ==================== */
+.remote-models-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.remote-models-dialog {
+  width: min(600px, 92vw);
+  max-height: 80vh;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  display: flex;
+  flex-direction: column;
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .remote-models-dialog {
+  background: var(--bg-2);
+}
+
+.remote-models-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  font-weight: 600;
+  flex-shrink: 0;
+}
+
+.remote-models-head .remote-models-count {
+  flex: 1;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--fg-3);
+}
+
+.remote-models-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 20px;
+  min-height: 200px;
+}
+
+.remote-models-loading,
+.remote-models-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  color: var(--fg-3);
+  font-size: 13px;
+}
+
+.remote-models-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+
+.remote-check-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  user-select: none;
+}
+
+.remote-check-all input[type="checkbox"] {
+  cursor: pointer;
+}
+
+.remote-selected-count {
+  flex: 1;
+  font-size: 12px;
+  color: var(--fg-3);
+}
+
+.remote-models-list {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  max-height: 360px;
+  overflow-y: auto;
+}
+
+.remote-model-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  border-radius: var(--r);
+  cursor: pointer;
+  transition: background 0.12s;
+  font-size: 13px;
+}
+
+.remote-model-item:hover {
+  background: var(--bg-3);
+}
+
+.remote-model-item.checked {
+  background: color-mix(in srgb, var(--primary) 10%, transparent);
+}
+
+.remote-model-item input[type="checkbox"] {
+  pointer-events: none;
+  cursor: pointer;
+}
+
+.remote-model-name {
+  flex: 1;
+  font-family: monospace;
+  font-size: 13px;
+}
+
+.remote-model-badge {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--primary);
+  color: #fff;
+  flex-shrink: 0;
+}
+
+.remote-models-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.remote-models-foot .btn {
+  min-width: 100px;
 }
 </style>
