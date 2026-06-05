@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.bin.agent;
 
+import lombok.Getter;
+
 import java.util.Collections;
 import java.util.List;
 
@@ -17,7 +19,17 @@ import java.util.List;
  */
 public class UserMessage {
 
+    /**
+     * -- GETTER --
+     * 文本内容（可能为 null）
+     */
+    @Getter
     private final String text;
+    /**
+     * -- GETTER --
+     * 图片 URL 列表（不可变，不会为 null）
+     */
+    @Getter
     private final List<String> images;
 
     private UserMessage(String text, List<String> images) {
@@ -57,20 +69,12 @@ public class UserMessage {
         return !images.isEmpty();
     }
 
-    // ==================== Getter ====================
 
     /**
-     * 文本内容（可能为 null）
+     * 是否包含内容（文本或图片）
      */
-    public String getText() {
-        return text;
-    }
-
-    /**
-     * 图片 URL 列表（不可变，不会为 null）
-     */
-    public List<String> getImages() {
-        return images;
+    public boolean hasContent() {
+        return text != null && !text.isEmpty() && images != null && !images.isEmpty();
     }
 
     @Override

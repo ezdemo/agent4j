@@ -22,48 +22,10 @@
 
     <!-- 包含脚本和配置 -->
     <fileSets>
-        <!-- 安装脚本（根目录） -->
         <fileSet>
             <directory>src/installDist</directory>
             <outputDirectory>.</outputDirectory>
-            <includes>
-                <include>install.ps1</include>
-                <include>install.sh</include>
-                <include>config.json</include>
-                <include>agent4j.md</include>
-            </includes>
             <fileMode>0644</fileMode>
-        </fileSet>
-
-        <!-- 安装脚本可执行权限 -->
-        <fileSet>
-            <directory>src/installDist</directory>
-            <outputDirectory>.</outputDirectory>
-            <includes>
-                <include>install.sh</include>
-            </includes>
-            <fileMode>0755</fileMode>
-        </fileSet>
-
-        <!-- 卸载脚本（bin 目录） -->
-        <fileSet>
-            <directory>src/installDist/bin</directory>
-            <outputDirectory>bin</outputDirectory>
-            <includes>
-                <include>uninstall.ps1</include>
-                <include>uninstall.sh</include>
-            </includes>
-            <fileMode>0644</fileMode>
-        </fileSet>
-
-        <!-- 卸载脚本可执行权限 -->
-        <fileSet>
-            <directory>src/installDist/bin</directory>
-            <outputDirectory>bin</outputDirectory>
-            <includes>
-                <include>uninstall.sh</include>
-            </includes>
-            <fileMode>0755</fileMode>
         </fileSet>
     </fileSets>
 

@@ -23,7 +23,6 @@ import java.util.concurrent.atomic.AtomicReference;
 /**
  * Agent 循环 —— 编排 prompt → LLM → 工具调用 → 反馈结果 → LLM 的循环。
  * <p>
- * 每次 {@link #run(String)} 调用代表一个用户回合。
  * 消息历史通过 {@link ConversationContext} 在内存中累积跨回合持久化。
  * </p>
  * <p>
@@ -67,8 +66,7 @@ public class AgentLoop {
     /**
      * 会话服务引用（用于同步 lastPromptTokens 到 usage 文件）
      * -- SETTER --
-     *  设置会话服务（用于同步 lastPromptTokens）
-
+     * 设置会话服务（用于同步 lastPromptTokens）
      */
     @Setter
     private SessionService sessionService;
@@ -79,8 +77,7 @@ public class AgentLoop {
     /**
      * 输出接口（默认为控制台输出，可替换为其他实现）
      * -- GETTER --
-     *  获取当前输出接口
-
+     * 获取当前输出接口
      */
     @Getter
     private AgentOutput output = new ConsoleAgentOutput();
@@ -89,8 +86,7 @@ public class AgentLoop {
     /**
      * 最近一次 API 返回的 prompt_tokens（0 = 尚无数据，回退到字符估算）
      * -- GETTER --
-     *  获取最近一次 API 返回的 prompt_tokens
-
+     * 获取最近一次 API 返回的 prompt_tokens
      */
     @Getter
     private int lastPromptTokens = 0;
@@ -113,11 +109,9 @@ public class AgentLoop {
     /**
      * 当前会话ID（用于传递给工具执行上下文）
      * -- GETTER --
-     *  获取当前会话ID
+     * 获取当前会话ID
      * -- SETTER --
-     *  设置当前会话ID（用于传递给工具执行上下文）
-
-
+     * 设置当前会话ID（用于传递给工具执行上下文）
      */
     @Setter
     @Getter
@@ -125,11 +119,9 @@ public class AgentLoop {
     /**
      * HITL 模式开关（true = 执行非只读工具前需用户审批）
      * -- GETTER --
-     *  获取 HITL 模式状态
+     * 获取 HITL 模式状态
      * -- SETTER --
-     *  直接设置 HITL 模式（用于配置热更新）
-
-
+     * 直接设置 HITL 模式（用于配置热更新）
      */
     @Setter
     @Getter
@@ -155,8 +147,7 @@ public class AgentLoop {
     /**
      * HITL 暂存的解析后工具调用列表
      * -- GETTER --
-     *  获取待审批的工具调用列表（用于 /agree 命令显示）
-
+     * 获取待审批的工具调用列表（用于 /agree 命令显示）
      */
     @Getter
     private volatile List<ToolCallEntry> pendingHITTcList;
@@ -348,9 +339,10 @@ public class AgentLoop {
             return resumeAfterHITL(false);
         }
 
-        if (userMessage != null) {
+        if (userMessage != null && !userMessage.hasContent()) {
             ctx.addUser(userMessage);
         }
+
         dispatcher.resetStorm();
         reasonBreaker.reset();
         resetUserAbort(); // 重置用户中断标志

@@ -65,8 +65,20 @@ public class TaskTool extends AgentTool {
 
     /**
      * 全局用量收集队列，AgentLoop 在 dispatch 前清空、dispatch 后读取
+     * package-private 可见性，供 {@link MultiTaskTool} 汇总多子代理用量时写入。
      */
-    private static final ConcurrentLinkedQueue<UsageRecord> subAgentUsageCollector = new ConcurrentLinkedQueue<>();
+    static final ConcurrentLinkedQueue<UsageRecord> subAgentUsageCollector = new ConcurrentLinkedQueue<>();
+
+    /**
+     * 添加用量记录（供 {@link MultiTaskTool} 等工具使用）
+     *
+     * @param record 用量记录
+     */
+    public static void addUsageRecord(UsageRecord record) {
+        if (record != null) {
+            subAgentUsageCollector.add(record);
+        }
+    }
     @Inject
     private ModelClient modelClient;
 

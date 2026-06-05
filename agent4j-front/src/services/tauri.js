@@ -116,13 +116,6 @@ export const agent4jWebService = {
   },
 
   /**
-   * 步骤4：配置环境
-   */
-  async step4ConfigureEnv(resourceDir) {
-    return await mustInvoke('install_step4_configure_env', { resourceDir })
-  },
-
-  /**
    * 停止 agent4j-web 服务
    */
   async stop() {

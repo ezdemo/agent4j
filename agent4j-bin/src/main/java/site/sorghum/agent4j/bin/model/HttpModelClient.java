@@ -516,16 +516,21 @@ public class HttpModelClient implements ModelClient {
                 continue;
             }
 
-            ONode msg = msgs.addNew();
+            ONode msg = new ONode();
             msg.set("role", m.getRole());
+            boolean skip = false;
 
             // 防御：assistant 消息必须有 content 或 tool_calls（OpenAI/DeepSeek API 要求）
             boolean isAssistant = m.isAssistant();
+            boolean isUser = m.isUser();
             boolean hasTc = m.hasToolCalls();
             boolean hasContent = m.hasContent();
             boolean hasContentParts = m.getContentParts() != null && !m.getContentParts().isEmpty();
             boolean hasReasoning = m.getReasoningContent() != null && !m.getReasoningContent().isEmpty();
 
+            if (isUser && !hasContent && !hasReasoning && !hasTc && !hasContentParts){
+                continue;
+            }
             // 多模态 contentParts 序列化为 JSON array
             if (hasContentParts) {
                 ONode contentArray = msg.getOrNew("content").asArray();
@@ -546,8 +551,9 @@ public class HttpModelClient implements ModelClient {
             } else if (isAssistant && !hasContent && !hasTc) {
                 // 既无 content 也无 tool_calls → 强制补空 content 防止 API 400
                 // 这种情况不应出现在正常流程中，但历史消息损坏或 Healer 遗漏时兜底
-                logger.warn("buildBody: 检测到空 assistant 消息（无 content 且无 tool_calls），强制补空");
+                logger.warn("buildBody: 检测到空 assistant 消息（无 content 且无 tool_calls），强制删除");
                 msg.set("content", "");
+                skip = true;
             } else {
                 if (hasContent) msg.set("content", m.getContent());
             }
@@ -576,6 +582,9 @@ public class HttpModelClient implements ModelClient {
             }
             if (m.getReasoningContent() != null) msg.set("reasoning_content", m.getReasoningContent());
             if (m.getToolCallId() != null) msg.set("tool_call_id", m.getToolCallId());
+            if (!skip) {
+                msgs.add(msg);
+            }
         }
 
         if (tools != null && !tools.isEmpty()) {

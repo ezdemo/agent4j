@@ -243,46 +243,6 @@ impl Agent4jWebManager {
         Ok(ver)
     }
 
-    // 配置 PATH 环境变量
-    fn setup_path(bin_dir: &Path) {
-        let bin_str = bin_dir.to_string_lossy().to_string();
-
-        #[cfg(target_os = "windows")]
-        {
-            use std::os::windows::process::CommandExt;
-            let key = winreg::RegKey::predef(winreg::enums::HKEY_CURRENT_USER)
-                .open_subkey_with_flags("Environment", winreg::enums::KEY_READ | winreg::enums::KEY_WRITE)
-                .ok();
-            if let Some(key) = key {
-                let current: String = key.get_value("Path").unwrap_or_default();
-                if !current.contains(&bin_str) {
-                    let new_path = if current.is_empty() { bin_str.clone() } else { format!("{};{}", current, bin_str) };
-                    let _ = key.set_value("Path", &new_path);
-                    let _ = Command::new("powershell")
-                        .args(&["-NoProfile", "-Command", "[Environment]::SetEnvironmentVariable('Path', $env:Path, 'User')"])
-                        .creation_flags(0x08000000)
-                        .output();
-                }
-            }
-        }
-
-        #[cfg(not(target_os = "windows"))]
-        {
-            let profile = dirs::home_dir().map(|h| h.join(".profile"));
-            if let Some(path) = profile {
-                if let Ok(content) = fs::read_to_string(&path) {
-                    if !content.contains(&bin_str) {
-                        let _ = fs::write(&path, format!(
-                            "{}\n# Agent4j Web\nexport PATH=\"$PATH:{}\"\n", content, bin_str
-                        ));
-                    }
-                } else {
-                    let _ = fs::write(&path, format!("# Agent4j Web\nexport PATH=\"$PATH:{}\"\n", bin_str));
-                }
-            }
-        }
-    }
-
     // 创建启动脚本
     fn create_launcher(bin_dir: &Path) {
         let jar_path = bin_dir.join("agent4j-web.jar");
@@ -376,6 +336,31 @@ impl Agent4jWebManager {
         Ok("解压完成".to_string())
     }
 
+    // 递归复制目录（支持覆盖已有文件）
+    fn copy_dir_recursive(src: &Path, dst: &Path) -> Result<(), String> {
+        if !src.exists() {
+            return Ok(());
+        }
+        fs::create_dir_all(dst)
+            .map_err(|e| format!("Failed to create dir {}: {}", dst.display(), e))?;
+
+        for entry in fs::read_dir(src).map_err(|e| format!("Failed to read dir {}: {}", src.display(), e))? {
+            let entry = entry.map_err(|e| format!("Failed to read entry: {}", e))?;
+            let file_type = entry.file_type().map_err(|e| format!("Failed to get file type: {}", e))?;
+            let src_path = entry.path();
+            let dst_path = dst.join(entry.file_name());
+
+            if file_type.is_dir() {
+                Self::copy_dir_recursive(&src_path, &dst_path)?;
+            } else {
+                let _ = fs::remove_file(&dst_path);
+                fs::copy(&src_path, &dst_path)
+                    .map_err(|e| format!("Failed to copy {}: {}", entry.file_name().to_string_lossy(), e))?;
+            }
+        }
+        Ok(())
+    }
+
     // 步骤3：复制文件到安装目录
     fn install_step3_copy_files(&self, _resource_dir: &Path) -> Result<String, String> {
         let install_dir = self.get_install_dir();
@@ -402,6 +387,13 @@ impl Agent4jWebManager {
             }
         }
 
+        // 复制 plugin/（递归，支持覆盖）
+        let src_plugin = temp_dir.join("plugin");
+        if src_plugin.exists() {
+            let target_plugin = install_dir.join("plugin");
+            Self::copy_dir_recursive(&src_plugin, &target_plugin)?;
+        }
+
         // 复制 agent4j.md（不覆盖已有的）
         for name in &["agent4j.md"] {
             let src = temp_dir.join(name);
@@ -411,26 +403,15 @@ impl Agent4jWebManager {
             }
         }
 
-        Ok("文件复制完成".to_string())
-    }
-
-    // 步骤4：创建启动脚本 + 配置 PATH + 清理临时文件
-    fn install_step4_configure_env(&self, _resource_dir: &Path) -> Result<String, String> {
-        let install_dir = self.get_install_dir();
-        let temp_dir = install_dir.join(".tmp-install");
-        let target_bin = install_dir.join("bin");
-
         // 创建启动脚本
         Self::create_launcher(&target_bin);
-        // 配置 PATH 环境变量
-        Self::setup_path(&target_bin);
 
         // 清理临时目录
         if temp_dir.exists() {
             let _ = fs::remove_dir_all(&temp_dir);
         }
 
-        Ok("环境配置完成".to_string())
+        Ok("安装完成".to_string())
     }
 
     // 解压 tar.gz
@@ -675,12 +656,6 @@ fn install_step3_copy_files(state: tauri::State<'_, Agent4jWebManager>, resource
     state.install_step3_copy_files(&PathBuf::from(&resource_dir))
 }
 
-// 步骤4：配置环境
-#[tauri::command]
-fn install_step4_configure_env(state: tauri::State<'_, Agent4jWebManager>, resource_dir: String) -> Result<String, String> {
-    state.install_step4_configure_env(&PathBuf::from(&resource_dir))
-}
-
 // 启动服务（返回端口号）
 #[tauri::command]
 fn start_agent4j_web(state: tauri::State<'_, Agent4jWebManager>) -> Result<u32, String> {
@@ -746,7 +721,6 @@ pub fn run() {
             install_step1_check_java,
             install_step2_extract,
             install_step3_copy_files,
-            install_step4_configure_env,
             start_agent4j_web,
             stop_agent4j_web,
             get_agent4j_web_port

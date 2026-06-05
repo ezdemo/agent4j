@@ -236,8 +236,7 @@ async function startInstall() {
   installSteps.value = [
     { label: '检查 Java 环境', status: 'pending' },
     { label: '解压安装包', status: 'pending' },
-    { label: '复制文件', status: 'pending' },
-    { label: '配置环境', status: 'pending' },
+    { label: '复制文件并完成安装', status: 'pending' },
   ]
 
   try {
@@ -246,29 +245,22 @@ async function startInstall() {
     const javaVer = await agent4jWebService.step1CheckJava(resourceDir.value)
     installSteps.value[0].status = 'done'
     installSteps.value[0].detail = javaVer
-    installProgress.value = 25
+    installProgress.value = 33
     await sleep(200)
 
     // 步骤2：解压安装包
     installSteps.value[1].status = 'active'
     await agent4jWebService.step2Extract(resourceDir.value)
     installSteps.value[1].status = 'done'
-    installProgress.value = 50
+    installProgress.value = 66
     await sleep(200)
 
     // 步骤3：复制文件
     installSteps.value[2].status = 'active'
     await agent4jWebService.step3CopyFiles(resourceDir.value)
     installSteps.value[2].status = 'done'
-    installProgress.value = 75
-    await sleep(200)
-
-    // 步骤4：配置环境
-    installSteps.value[3].status = 'active'
-    await agent4jWebService.step4ConfigureEnv(resourceDir.value)
-    installSteps.value[3].status = 'done'
     installProgress.value = 100
-    await sleep(300)
+    await sleep(200)
 
     // 安装完成，启动服务
     await startService()

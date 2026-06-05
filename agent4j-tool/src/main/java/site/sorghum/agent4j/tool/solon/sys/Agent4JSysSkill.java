@@ -1,7 +1,5 @@
 package site.sorghum.agent4j.tool.solon.sys;
 
-import org.noear.solon.ai.skills.file.ZipSkill;
-import org.noear.solon.ai.skills.sys.NodejsSkill;
 import org.noear.solon.ai.skills.sys.SystemClockSkill;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.tool.AgentTool;

@@ -33,6 +33,7 @@ public class SubAgent {
      */
     public static final Set<String> SUB_AGENT_DENY = new HashSet<>(Arrays.asList(
             "task",                // 防止递归子代理 spawn
+            "multi_task",          // 防止递归多子代理 spawn
             "submit_plan",         // 计划管理（主代理专用）
             "mark_step_complete",  // 计划管理（主代理专用）
             "revise_plan",         // 计划管理（主代理专用）
