@@ -1,4 +1,4 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.tool;
 
 /**
  * 选项记录 —— 从 AgentOutput 接口提取为独立类型。

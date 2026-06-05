@@ -5,6 +5,8 @@ import lombok.Setter;
 import org.noear.snack4.ONode;
 import site.sorghum.agent4j.bin.agent.StormBreaker;
 import site.sorghum.agent4j.bin.util.ONodeUtil;
+import site.sorghum.agent4j.tool.AgentLoopController;
+import site.sorghum.agent4j.tool.ToolContext;
 
 import java.util.Map;
 import java.util.function.BiFunction;
@@ -78,9 +80,21 @@ public class ToolDispatcher {
     // ---- Dispatch ----
 
     /**
-     * 执行工具调用，返回结果字符串
+     * 执行工具调用（无 AgentLoopController），返回结果字符串
      */
     public String dispatch(String name, String argumentsJson) {
+        return dispatch(name, argumentsJson, null);
+    }
+
+    /**
+     * 执行工具调用，返回结果字符串
+     *
+     * @param name           工具名称
+     * @param argumentsJson  参数 JSON
+     * @param controller     AgentLoop 控制器（可选），通过 ThreadLocal 注入到当前线程
+     * @return 工具执行结果
+     */
+    public String dispatch(String name, String argumentsJson, AgentLoopController controller) {
         if (name == null || name.equals("null")) {
             return error("请重新思考,调用方式错误，工具名不能为null。");
         }
@@ -125,6 +139,11 @@ public class ToolDispatcher {
             args.put("__sessionId__", sessionId);
         }
 
+        // 通过 ThreadLocal 注入 AgentLoopController，替代 args 传递
+        if (controller != null) {
+            ToolContext.setCurrentController(controller);
+        }
+
         try {
             String result = tool.fn().call(args);
             result = result != null ? result : "(ok)";
@@ -139,6 +158,10 @@ public class ToolDispatcher {
             throw e; // 向上传播到 AgentLoop 触发 HITL 审批
         } catch (Exception e) {
             return error(name + ": " + e.getMessage());
+        } finally {
+            if (controller != null) {
+                ToolContext.clearCurrentController();
+            }
         }
     }
 

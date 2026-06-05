@@ -4,6 +4,8 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
+import site.sorghum.agent4j.tool.AgentOutput;
+import site.sorghum.agent4j.tool.ChoiceOption;
 
 import java.util.ArrayList;
 import java.util.Arrays;

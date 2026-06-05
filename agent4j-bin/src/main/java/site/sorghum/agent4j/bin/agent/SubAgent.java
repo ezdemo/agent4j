@@ -3,6 +3,7 @@ package site.sorghum.agent4j.bin.agent;
 import lombok.Getter;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
+import site.sorghum.agent4j.tool.AgentOutput;
 
 import java.io.IOException;
 import java.util.*;

@@ -2,15 +2,11 @@ package site.sorghum.agent4j.bin.builtin;
 
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
-import site.sorghum.agent4j.bin.agent.AgentOutput;
 import site.sorghum.agent4j.bin.agent.SubAgent;
 import site.sorghum.agent4j.bin.model.ModelClient;
-import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.tool.ToolDef;
-import site.sorghum.agent4j.tool.AgentTool;
-import site.sorghum.agent4j.tool.ToolContext;
-import site.sorghum.agent4j.tool.ToolParameter;
-import site.sorghum.agent4j.tool.ToolResult;
+import site.sorghum.agent4j.bin.tool.ToolRegistry;
+import site.sorghum.agent4j.tool.*;
 
 import java.io.IOException;
 import java.util.*;

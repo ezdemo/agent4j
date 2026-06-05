@@ -2,11 +2,11 @@ package site.sorghum.agent4j.bin.command.impl;
 
 import org.noear.solon.Solon;
 import org.noear.solon.annotation.Component;
-import site.sorghum.agent4j.bin.agent.LogLevel;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.command.MessageWrapper;
+import site.sorghum.agent4j.tool.LogLevel;
 
 import java.util.List;
 

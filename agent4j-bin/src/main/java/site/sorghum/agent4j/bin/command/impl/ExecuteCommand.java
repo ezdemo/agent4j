@@ -1,10 +1,10 @@
 package site.sorghum.agent4j.bin.command.impl;
 
 import org.noear.solon.annotation.Component;
-import site.sorghum.agent4j.bin.agent.LogLevel;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.bin.command.MessageWrapper;
+import site.sorghum.agent4j.tool.LogLevel;
 
 /**
  * /execute — 退出计划模式（允许全部操作）。
