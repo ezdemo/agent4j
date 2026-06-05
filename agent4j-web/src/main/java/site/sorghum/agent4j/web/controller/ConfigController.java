@@ -11,10 +11,13 @@ import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
 
-import java.util.LinkedHashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import org.noear.snack4.ONode;
+
+import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 /**
@@ -107,6 +110,65 @@ public class ConfigController {
                 .collect(Collectors.toList());
 
         return ApiResponse.ok(new ModelListDTO(currentModel, models));
+    }
+
+    @ApiOperation(value = "从远程 API 获取模型列表", notes = "调用配置的 API 地址 + /models，携带 API Key 获取远程模型列表")
+    @SneakyThrows
+    @Get
+    @Mapping("/remote-models")
+    public ApiResponse<List<String>> getRemoteModels() {
+        Agent4jConfig cfg = configService.getConfig();
+        String baseUrl = cfg.baseUrl();
+        String apiKey = cfg.apiKey();
+
+        if (baseUrl == null || baseUrl.isEmpty()) {
+            return ApiResponse.fail("API 地址未配置");
+        }
+        if (apiKey == null || apiKey.isEmpty()) {
+            return ApiResponse.fail("API 密钥未配置");
+        }
+
+        // 构造 /models URL
+        String modelsUrl = baseUrl.replaceAll("/+$", "") + "/models";
+
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(15, TimeUnit.SECONDS)
+                .readTimeout(30, TimeUnit.SECONDS)
+                .build();
+
+        Request request = new Request.Builder()
+                .url(modelsUrl)
+                .header("Authorization", "Bearer " + apiKey)
+                .header("Content-Type", "application/json")
+                .get()
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                String body = response.body() != null ? response.body().string() : "";
+                return ApiResponse.fail("远程 API 返回错误 (" + response.code() + "): " + body);
+            }
+
+            String json = response.body() != null ? response.body().string() : "[]";
+            ONode root = ONode.ofJson(json);
+            ONode dataArr = root.select("$.data");
+
+            List<String> modelNames = new ArrayList<>();
+            if (dataArr != null && dataArr.isArray()) {
+                for (ONode item : dataArr.getArray()) {
+                    String id = item.get("id").getString();
+                    if (id != null && !id.isEmpty()) {
+                        modelNames.add(id);
+                    }
+                }
+            }
+
+            // 按字母排序
+            Collections.sort(modelNames);
+            return ApiResponse.ok(modelNames);
+        } catch (Exception e) {
+            return ApiResponse.fail("获取远程模型列表失败: " + e.getMessage());
+        }
     }
 
     @ApiOperation(value = "获取 Token 用量统计", notes = "根据工作区和会话查询 Token 用量")

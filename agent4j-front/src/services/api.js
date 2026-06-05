@@ -374,6 +374,11 @@ export const configAPI = {
   getModels: () => {
     return api.get('/models')
   },
+
+  // 从远程 API 获取模型列表 - GET /api/remote-models
+  getRemoteModels: () => {
+    return api.get('/remote-models')
+  },
   
   // 获取Token用量统计 - GET /api/usage?workspaceHash=xxx&sessionName=xxx
   getUsage: (params) => {
