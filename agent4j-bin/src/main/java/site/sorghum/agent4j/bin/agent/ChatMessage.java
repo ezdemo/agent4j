@@ -229,6 +229,24 @@ public class ChatMessage {
         return toolCalls != null && !toolCalls.isEmpty();
     }
 
+    /**
+     * 创建当前消息的浅拷贝（用于 MessageHealer 的复制后修改）。
+     * toolCalls 列表是独立副本，但 ToolCallEntry 本身不可变。
+     */
+    public ChatMessage copy() {
+        ChatMessage copy = new ChatMessage(this.role);
+        copy.content = this.content;
+        if (this.contentParts != null) {
+            copy.contentParts = new ArrayList<>(this.contentParts);
+        }
+        if (this.toolCalls != null) {
+            copy.toolCalls = new ArrayList<>(this.toolCalls);
+        }
+        copy.toolCallId = this.toolCallId;
+        copy.reasoningContent = this.reasoningContent;
+        return copy;
+    }
+
     // ==================== 反序列化 ====================
 
     // ==================== 序列化 ====================

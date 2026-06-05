@@ -67,4 +67,4 @@ venv/
 .next/
 .nuxt/
 .turbo/
-.vercel/
+.vercel/"_script_*.bat"  

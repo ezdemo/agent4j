@@ -14,15 +14,40 @@ import java.util.stream.Collectors;
 
 /**
  * 从 {@code ~/.agent4j/config.json} 读取 LLM 和工作区配置。
+ * 提供静态单例 {@link #getInstance()} 供各处访问。
  *
  * @author Sorghum
  */
 public class Agent4jConfig {
 
+    private static volatile Agent4jConfig INSTANCE;
+
     private final ONode root;
 
     private Agent4jConfig(ONode root) {
         this.root = root;
+    }
+
+    /**
+     * 获取配置单例，首次加载会从文件读取。
+     */
+    public static Agent4jConfig getInstance() throws IOException {
+        if (INSTANCE == null) {
+            synchronized (Agent4jConfig.class) {
+                if (INSTANCE == null) {
+                    INSTANCE = load();
+                }
+            }
+        }
+        return INSTANCE;
+    }
+
+    /**
+     * 强制重新加载配置（热更新场景使用）
+     */
+    public static synchronized Agent4jConfig reload() throws IOException {
+        INSTANCE = load();
+        return INSTANCE;
     }
 
     /**
@@ -34,8 +59,22 @@ public class Agent4jConfig {
                   "baseUrl": "http://localhost:11434/v1",
                   "apiKey": "sk-your-api-key",
                   "model": "mimo-v2.5",
+                  "workspaceDir": "",
+                  "editMode": "auto",
                   "reasoningEffort": "high",
+                  "lang": "ZH",
                   "hitl": false,
+                  "maxContextChars": 200000,
+                  "keepTailChars": 80000,
+                  "toolTimeoutSec": 360,
+                  "maxSelfCorrectionAttempts": 5,
+                  "maxStreamErrorRetries": 10,
+                  "flushIntervalSec": 30,
+                  "foldHeadCharsLimit": 60000,
+                  "stormWindowSize": 6,
+                  "stormThreshold": 3,
+                  "toolResultTruncateChars": 16000,
+                  "toolResultKeepChars": 12000,
                   "price": {
                     "mimo-v2.5": { "input": "1", "cache": "0.02", "output": "2" },
                     "mimo-v2.5-pro": { "input": "3", "cache": "0.025", "output": "6" },
@@ -114,7 +153,7 @@ public class Agent4jConfig {
 
     /**
      * 获取 API 基础地址，不含 /chat/completions 后缀。
-     * 如 "<a href="https://api.deepseek.com/v1">...</a>"。
+     * 如 "https://api.deepseek.com/v1"。
      */
     public String baseUrl() {
         return root.select("$.baseUrl").getString();
@@ -288,6 +327,96 @@ public class Agent4jConfig {
             }
         }
         return result;
+    }
+
+    // ==================== 可调优参数（原硬编码常量） ====================
+
+    /**
+     * 获取消息总字符数阈值（超出时触发折叠），约 200KB
+     */
+    public int maxContextChars() {
+        ONode n = root.select("$.maxContextChars");
+        return n != null && !n.isNull() ? n.getInt() : 200_000;
+    }
+
+    /**
+     * 获取折叠时保留的尾部预算（字符数），约 80KB
+     */
+    public int keepTailChars() {
+        ONode n = root.select("$.keepTailChars");
+        return n != null && !n.isNull() ? n.getInt() : 80_000;
+    }
+
+    /**
+     * 获取工具执行超时（秒），单个工具调用最长等待时间
+     */
+    public int toolTimeoutSec() {
+        ONode n = root.select("$.toolTimeoutSec");
+        return n != null && !n.isNull() ? n.getInt() : 360;
+    }
+
+    /**
+     * 获取最大自愈尝试次数（每回合重置）
+     */
+    public int maxSelfCorrectionAttempts() {
+        ONode n = root.select("$.maxSelfCorrectionAttempts");
+        return n != null && !n.isNull() ? n.getInt() : 5;
+    }
+
+    /**
+     * 获取流式错误最大重试次数
+     */
+    public int maxStreamErrorRetries() {
+        ONode n = root.select("$.maxStreamErrorRetries");
+        return n != null && !n.isNull() ? n.getInt() : 10;
+    }
+
+    /**
+     * 获取定时刷入间隔（秒）
+     */
+    public int flushIntervalSec() {
+        ONode n = root.select("$.flushIntervalSec");
+        return n != null && !n.isNull() ? n.getInt() : 30;
+    }
+
+    /**
+     * 获取折叠头部字符限制
+     */
+    public int foldHeadCharsLimit() {
+        ONode n = root.select("$.foldHeadCharsLimit");
+        return n != null && !n.isNull() ? n.getInt() : 60_000;
+    }
+
+    /**
+     * 获取风暴断路器滑动窗口大小
+     */
+    public int stormWindowSize() {
+        ONode n = root.select("$.stormWindowSize");
+        return n != null && !n.isNull() ? n.getInt() : 6;
+    }
+
+    /**
+     * 获取风暴断路器触发阈值
+     */
+    public int stormThreshold() {
+        ONode n = root.select("$.stormThreshold");
+        return n != null && !n.isNull() ? n.getInt() : 3;
+    }
+
+    /**
+     * 获取 tool 结果截断字符数
+     */
+    public int toolResultTruncateChars() {
+        ONode n = root.select("$.toolResultTruncateChars");
+        return n != null && !n.isNull() ? n.getInt() : 16_000;
+    }
+
+    /**
+     * 获取 tool 结果保留字符数（截断后保留长度）
+     */
+    public int toolResultKeepChars() {
+        ONode n = root.select("$.toolResultKeepChars");
+        return n != null && !n.isNull() ? n.getInt() : 12_000;
     }
 
     /**

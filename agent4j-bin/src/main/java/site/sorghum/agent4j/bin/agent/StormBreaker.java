@@ -13,9 +13,36 @@ import java.util.LinkedList;
  */
 public class StormBreaker {
 
-    private static final int WINDOW_SIZE = 6;
-    private static final int THRESHOLD = 3;
+    private final int windowSize;
+    private final int threshold;
     private final LinkedList<Entry> recent = new LinkedList<>();
+
+    /**
+     * 使用默认参数（WINDOW_SIZE=6, THRESHOLD=3）构造
+     */
+    public StormBreaker() {
+        this(6, 3);
+    }
+
+    /**
+     * 使用指定参数构造
+     */
+    public StormBreaker(int windowSize, int threshold) {
+        this.windowSize = windowSize;
+        this.threshold = threshold;
+    }
+
+    /**
+     * 从配置初始化参数
+     */
+    public static StormBreaker fromConfig(site.sorghum.agent4j.bin.config.Agent4jConfig config) {
+        int ws = 6, th = 3;
+        if (config != null) {
+            ws = config.stormWindowSize();
+            th = config.stormThreshold();
+        }
+        return new StormBreaker(ws, th);
+    }
 
     /**
      * 计算工具调用的指纹，用于检测重复调用。
@@ -120,7 +147,7 @@ public class StormBreaker {
         }
 
         // 额外防线：指纹相同但 raw 长度差异 > 10% → 参数大概率不同，不抑制
-        if (count >= THRESHOLD - 1) {
+        if (count >= threshold - 1) {
             int prevLen = 0;
             for (Entry e : recent) {
                 if (e.name.equals(name) && e.argsFingerprint.equals(fp) && e.rawLength > prevLen) {
@@ -131,7 +158,7 @@ public class StormBreaker {
             if (prevLen > 0 && diff > prevLen / 10) {
                 // 长度差异过大，可能是截断碰撞，放行
                 recent.addLast(new Entry(name, fp, readOnly, rawLen));
-                while (recent.size() > WINDOW_SIZE) recent.removeFirst();
+                while (recent.size() > windowSize) recent.removeFirst();
                 return new SuppressResult(false, null);
             }
 
@@ -146,7 +173,7 @@ public class StormBreaker {
         }
 
         recent.addLast(new Entry(name, fp, readOnly, rawLen));
-        while (recent.size() > WINDOW_SIZE) {
+        while (recent.size() > windowSize) {
             recent.removeFirst();
         }
         return new SuppressResult(false, null);

@@ -37,6 +37,9 @@ public class ContextFolding {
             List<ChatMessage> messages,
             int maxChars, int keepChars,
             ModelClient client) throws IOException {
+        // 快速检查阈值，未超时直接返回原列表避免转换开销
+        int total = estimateChars(messages);
+        if (total <= maxChars) return messages;
         // 转换为 Map 进行内部处理
         List<Map<String, Object>> mapMessages = toMapList(messages);
         List<Map<String, Object>> result = foldInternal(mapMessages, maxChars, keepChars, client);
