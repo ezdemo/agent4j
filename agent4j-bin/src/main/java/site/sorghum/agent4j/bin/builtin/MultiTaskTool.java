@@ -7,6 +7,7 @@ import site.sorghum.agent4j.bin.agent.SubAgent;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.tool.ToolDef;
+import site.sorghum.agent4j.bin.workspace.SharedWorkspace;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
@@ -38,6 +39,9 @@ public class MultiTaskTool extends AgentTool {
     @Inject
     private ModelClient modelClient;
 
+    @Inject
+    private SharedWorkspace sharedWorkspace;
+
     @Override
     public String getName() {
         return "multi_task";
@@ -61,6 +65,7 @@ public class MultiTaskTool extends AgentTool {
                 适用于同时需要处理多个独立任务的场景，如同时分析多个文件、并行执行多个独立的功能开发。
                 参数: tasks(必填, JSON数组)，每个任务包含 name(必填), arguments(可选), systemPrompt(可选)。可写。
                 注意：子代理不可再创建子代理（task/multi_task 工具对子代理不可用）。
+                提示：子代理自动获得 workspace_write/workspace_read/workspace_list 工具，可通过共享工作区协作。
                 """;
     }
 
@@ -161,7 +166,7 @@ public class MultiTaskTool extends AgentTool {
         try {
             String systemPrompt = buildSystemPrompt(name, arguments, customSystemPrompt, registry);
 
-            SubAgent sub = new SubAgent(modelClient, registry, systemPrompt);
+            SubAgent sub = new SubAgent(modelClient, registry, systemPrompt, sharedWorkspace);
 
             // 传播父 AgentOutput 实现实时流式输出
             if (parentOutput != null) {
