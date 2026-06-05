@@ -98,9 +98,7 @@ public class MessageHealer {
                     && current.getReasoningContent() == null) {
                 boolean noContent = !current.hasContent();
                 if (noContent) {
-                    if (current == msg) {
-                        current = msg.copy();
-                    }
+                    current = msg.copy();
                     current.setContent("");
                     changed = true;
                 }
