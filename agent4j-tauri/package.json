@@ -1,6 +1,6 @@
 {
   "name": "agent4j-tauri",
-  "version": "2026.6.5",
+  "version": "26.6.5",
   "private": true,
   "type": "module",
   "description": "Agent4j - 桌面端 AI 代码助手 (Tauri)",
