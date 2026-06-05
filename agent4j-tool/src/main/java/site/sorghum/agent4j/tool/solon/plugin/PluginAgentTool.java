@@ -2,6 +2,7 @@ package site.sorghum.agent4j.tool.solon.plugin;
 
 import lombok.AllArgsConstructor;
 import lombok.Getter;
+import lombok.RequiredArgsConstructor;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
@@ -22,17 +23,13 @@ import java.util.List;
  * @author Sorghum
  */
 @Getter
-@AllArgsConstructor
+@RequiredArgsConstructor
 public class PluginAgentTool extends AgentTool {
 
     private final String name;
     private final String description;
     private final Path skillDir;
-
-    @Override
-    public List<ToolParameter> getParameters() {
-        return Collections.emptyList();
-    }
+    private List<ToolParameter> parameters;
 
     @Override
     public ToolResult execute(ToolContext ctx) {
@@ -49,5 +46,14 @@ public class PluginAgentTool extends AgentTool {
             return ToolResult.fail("PLUGIN_EXEC_ERROR",
                     "执行插件工具 [" + name + "] 失败: " + e.getMessage());
         }
+    }
+
+    @Override
+    public String toToolSpec() {
+        return """
+                ### %s
+                
+                描述：%s
+                """.formatted(getName(), getDescription());
     }
 }
