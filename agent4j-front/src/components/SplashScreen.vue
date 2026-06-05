@@ -217,21 +217,19 @@ async function checkInstall() {
   if (!resourceDir.value) {
     // 无法获取资源目录，尝试直接启动
     console.warn('[Splash] No resource dir, trying to start directly')
-    await startService()
+    await ensureJreBeforeStart()
     return
   }
 
   try {
-    // 先检查 Java
-    const status = await agent4jWebService.getStatus()
-
     // 检查是否需要安装
     const result = await agent4jWebService.checkInstallNeeded(resourceDir.value)
     console.log('[Splash] Install check:', result)
 
     if (!result.needed) {
       // 已安装且版本匹配，直接启动
-      await startService()
+      // 但先确保 JRE 存在（不存在则自动下载带进度）
+      await ensureJreBeforeStart()
       return
     }
 
@@ -246,7 +244,7 @@ async function checkInstall() {
   } catch (e) {
     console.error('[Splash] Check install failed:', e)
     // 回退：尝试直接启动
-    await startService()
+    await ensureJreBeforeStart()
   }
 }
 
@@ -353,6 +351,50 @@ async function startInstall() {
       downloadUnlisten()
       downloadUnlisten = null
     }
+  }
+}
+
+// 启动前确保 JRE 存在（不存在则异步下载带进度）
+async function ensureJreBeforeStart() {
+  try {
+    const javaStatus = await agent4jWebService.checkJavaQuick()
+    if (javaStatus.found) {
+      // JRE 已存在，直接启动
+      await startService()
+      return
+    }
+
+    // JRE 不存在 → 显示安装 UI 并下载
+    phase.value = 'installing'
+    downloadProgress.value = null
+
+    const { listen } = await import('@tauri-apps/api/event')
+    let unlisten = await listen('java-download-progress', (event) => {
+      downloadProgress.value = event.payload
+    })
+
+    await agent4jWebService.startJavaDownload()
+
+    // 等待下载完成
+    await new Promise((resolve, reject) => {
+      const checkDone = setInterval(() => {
+        const dp = downloadProgress.value
+        if (!dp) return
+        if (dp.phase === 'done') {
+          clearInterval(checkDone)
+          resolve()
+        } else if (dp.phase === 'error') {
+          clearInterval(checkDone)
+          reject(new Error(dp.error || 'JRE 下载失败'))
+        }
+      }, 300)
+    })
+
+    unlisten()
+    await startService()
+  } catch (e) {
+    console.error('[Splash] JRE check failed, trying direct start:', e)
+    await startService()
   }
 }
 
