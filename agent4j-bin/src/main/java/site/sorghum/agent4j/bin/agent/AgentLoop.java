@@ -260,7 +260,7 @@ public class AgentLoop implements AgentLoopController {
         }
 
         // ---- 追加用户消息 ----
-        if (userMessage != null && !userMessage.hasContent()) {
+        if (userMessage != null && userMessage.hasContent()) {
             ctx.addUser(userMessage);
         }
 
