@@ -501,3 +501,114 @@ textarea { resize: none; }
     --header-height: 44px;
   }
 }
+
+/* ========== Ant Design Modal 主题适配 ========== */
+/* 覆盖 ant-modal 的背景/文字/边框，跟随主题 CSS 变量 */
+[data-theme="dark"] .ant-modal-content,
+[data-theme="retro"] .ant-modal-content,
+[data-theme="retro-yellow"] .ant-modal-content {
+  background: var(--bg-2);
+  color: var(--fg);
+  border: 1px solid var(--border);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+  border-radius: var(--r-lg);
+}
+[data-theme="dark"] .ant-modal-header,
+[data-theme="retro"] .ant-modal-header,
+[data-theme="retro-yellow"] .ant-modal-header {
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  border-radius: var(--r-lg) var(--r-lg) 0 0;
+}
+[data-theme="dark"] .ant-modal-title,
+[data-theme="retro"] .ant-modal-title,
+[data-theme="retro-yellow"] .ant-modal-title {
+  color: var(--fg);
+}
+[data-theme="dark"] .ant-modal-close,
+[data-theme="retro"] .ant-modal-close,
+[data-theme="retro-yellow"] .ant-modal-close {
+  color: var(--fg-3);
+}
+[data-theme="dark"] .ant-modal-close:hover,
+[data-theme="retro"] .ant-modal-close:hover,
+[data-theme="retro-yellow"] .ant-modal-close:hover {
+  color: var(--fg);
+  background: var(--bg-3);
+}
+[data-theme="dark"] .ant-modal-body,
+[data-theme="retro"] .ant-modal-body,
+[data-theme="retro-yellow"] .ant-modal-body {
+  color: var(--fg-2);
+}
+[data-theme="dark"] .ant-modal-footer,
+[data-theme="retro"] .ant-modal-footer,
+[data-theme="retro-yellow"] .ant-modal-footer {
+  background: var(--bg-2);
+  border-top: 1px solid var(--border);
+  border-radius: 0 0 var(--r-lg) var(--r-lg);
+}
+/* Modal.confirm 内标题与正文 */
+[data-theme="dark"] .ant-modal-confirm-title,
+[data-theme="retro"] .ant-modal-confirm-title,
+[data-theme="retro-yellow"] .ant-modal-confirm-title {
+  color: var(--fg) !important;
+}
+[data-theme="dark"] .ant-modal-confirm-content,
+[data-theme="retro"] .ant-modal-confirm-content,
+[data-theme="retro-yellow"] .ant-modal-confirm-content {
+  color: var(--fg-2) !important;
+}
+/* 确认弹窗的图标保持可见性 */
+[data-theme="dark"] .ant-modal-confirm-body > .anticon,
+[data-theme="retro"] .ant-modal-confirm-body > .anticon,
+[data-theme="retro-yellow"] .ant-modal-confirm-body > .anticon {
+  color: var(--warning);
+}
+/* Modal 中的按钮 — 覆盖 footer 和 confirm 弹窗两种场景 */
+/* 注意：Ant Design Vue 4 使用 CSS-in-JS hash class，需用 !important 覆盖 */
+[data-theme="dark"] .ant-modal-confirm-btns .ant-btn,
+[data-theme="dark"] .ant-modal-footer .ant-btn,
+[data-theme="retro"] .ant-modal-confirm-btns .ant-btn,
+[data-theme="retro"] .ant-modal-footer .ant-btn,
+[data-theme="retro-yellow"] .ant-modal-confirm-btns .ant-btn,
+[data-theme="retro-yellow"] .ant-modal-footer .ant-btn {
+  background: var(--bg) !important;
+  color: var(--fg-2) !important;
+  border-color: var(--border) !important;
+}
+/* 确认按钮（ant-btn-primary）保持 accent 色 */
+[data-theme="dark"] .ant-modal-confirm-btns .ant-btn-primary,
+[data-theme="dark"] .ant-modal-footer .ant-btn-primary,
+[data-theme="retro"] .ant-modal-confirm-btns .ant-btn-primary,
+[data-theme="retro"] .ant-modal-footer .ant-btn-primary,
+[data-theme="retro-yellow"] .ant-modal-confirm-btns .ant-btn-primary,
+[data-theme="retro-yellow"] .ant-modal-footer .ant-btn-primary {
+  background: var(--accent) !important;
+  border-color: var(--accent) !important;
+  color: #fff !important;
+}
+[data-theme="dark"] .ant-modal-confirm-btns .ant-btn:not(.ant-btn-primary):hover,
+[data-theme="dark"] .ant-modal-footer .ant-btn:not(.ant-btn-primary):hover,
+[data-theme="retro"] .ant-modal-confirm-btns .ant-btn:not(.ant-btn-primary):hover,
+[data-theme="retro"] .ant-modal-footer .ant-btn:not(.ant-btn-primary):hover,
+[data-theme="retro-yellow"] .ant-modal-confirm-btns .ant-btn:not(.ant-btn-primary):hover,
+[data-theme="retro-yellow"] .ant-modal-footer .ant-btn:not(.ant-btn-primary):hover {
+  background: var(--bg-3) !important;
+  border-color: var(--border-2) !important;
+}
+[data-theme="dark"] .ant-modal-confirm-btns .ant-btn-primary:hover,
+[data-theme="dark"] .ant-modal-footer .ant-btn-primary:hover,
+[data-theme="retro"] .ant-modal-confirm-btns .ant-btn-primary:hover,
+[data-theme="retro"] .ant-modal-footer .ant-btn-primary:hover,
+[data-theme="retro-yellow"] .ant-modal-confirm-btns .ant-btn-primary:hover,
+[data-theme="retro-yellow"] .ant-modal-footer .ant-btn-primary:hover {
+  background: var(--blue-dark, var(--accent)) !important;
+  border-color: var(--blue-dark, var(--accent)) !important;
+}
+/* Modal 遮罩 */
+[data-theme="dark"] .ant-modal-mask,
+[data-theme="retro"] .ant-modal-mask,
+[data-theme="retro-yellow"] .ant-modal-mask {
+  background-color: rgba(0, 0, 0, 0.6);
+}
