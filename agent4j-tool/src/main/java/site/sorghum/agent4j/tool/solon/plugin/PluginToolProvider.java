@@ -86,16 +86,7 @@ public class PluginToolProvider implements SolonToTools {
                 if (desc == null || desc.isBlank()) desc = fallbackDesc(config, dirName);
                 return new NameDesc(tc.getToolName(), desc);
             }
-            String prefix = config.getName() != null ? config.getName() : "";
-            return new NameDesc(autoName(prefix, dirName), fallbackDesc(config, dirName));
-        }
-        // 单工具模式
-        if (config.getToolName() != null && !config.getToolName().isBlank()) {
-            return new NameDesc(config.getToolName(), fallbackDesc(config, dirName));
-        }
-        // 自动生成
-        if (config.getName() != null && !config.getName().isBlank()) {
-            return new NameDesc(autoName(config.getName(), dirName), fallbackDesc(config, dirName));
+            return null;
         }
         return null;
     }

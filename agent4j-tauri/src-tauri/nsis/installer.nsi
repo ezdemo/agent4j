@@ -116,7 +116,7 @@ Section "创建开始菜单快捷方式" SecStartMenu
 SectionEnd
 
 Section "开机自启动" SecAutoStart
-  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${APP_NAME}" "$INSTDIR\${APP_NAME.exe} --minimized"
+  WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${APP_NAME}" "$INSTDIR\${APP_NAME}.exe --minimized"
 SectionEnd
 
 ; ============================================

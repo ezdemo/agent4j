@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.web.controller;
 
 import io.swagger.annotations.*;
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.*;
 import org.noear.solon.core.handle.Context;
 import site.sorghum.agent4j.bin.agent.UserMessage;
@@ -10,15 +11,28 @@ import site.sorghum.agent4j.web.model.ChatResultDTO;
 import site.sorghum.agent4j.web.service.AgentService;
 import site.sorghum.agent4j.web.service.SseEmitter;
 
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
 /**
  * 聊天 API 控制器 —— 同步聊天 + SSE 流式聊天。
  *
  * @author Sorghum
  */
+@Slf4j
 @Api(tags = "聊天")
 @Controller
 @Mapping("/api/chat")
 public class ChatController {
+
+    /**
+     * SSE 流式聊天线程池 — 隔离流式任务，防止 new Thread() 无限创建导致资源耗尽。
+     */
+    private final ExecutorService chatExecutor = Executors.newCachedThreadPool(r -> {
+        Thread t = new Thread(r, "agent4j-chat-stream");
+        t.setDaemon(true);
+        return t;
+    });
 
     @Inject
     private AgentService agentService;
@@ -80,19 +94,17 @@ public class ChatController {
         final String resolvedPath = workspacePath;
         final String sessionName = request.sessionName;
 
-        Thread chatThread = new Thread(() -> {
+        chatExecutor.submit(() -> {
             try {
                 agentService.chatStream(userMsg, resolvedPath, sessionName, emitter);
             } catch (Exception e) {
                 try {
                     emitter.sendError(e.getMessage());
                 } catch (Exception ex) {
-                    System.err.println("[web] 发送错误信息失败（可能SSE连接已断开）: " + ex.getMessage());
+                    log.warn("[web] 发送错误信息失败（可能SSE连接已断开）: {}", ex.getMessage());
                 }
             }
-        }, "agent4j-chat-stream");
-        chatThread.setDaemon(true);
-        chatThread.start();
+        });
 
         // ★ 关键：阻塞 handler 线程直到 SSE 流结束，防止 Solon 提前关闭 OutputStream
         emitter.awaitCompletion();

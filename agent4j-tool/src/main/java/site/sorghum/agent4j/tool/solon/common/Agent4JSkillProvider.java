@@ -15,6 +15,7 @@ public class Agent4JSkillProvider extends CliSkillProvider implements SolonToToo
     public static Map<String, Agent4JSkillProvider> cliSkillProviderMap = new ConcurrentHashMap<>();
     public static PoolManager poolManager = new PoolManager() {{
         register("@skill", "~/.claude/skills");
+        register("@superpowers-skill", "~/.agent4j/plugin/superpowers");
     }};
 
     public Agent4JSkillProvider(String workDir) {

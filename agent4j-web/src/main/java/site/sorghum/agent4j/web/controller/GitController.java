@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.web.controller;
 
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
@@ -23,6 +24,7 @@ import java.util.concurrent.TimeUnit;
  *
  * @author Sorghum
  */
+@Slf4j
 @Api(tags = "Git")
 @Controller
 @Mapping("/api/git")
@@ -512,7 +514,7 @@ public class GitController {
             if (exit != 0) return null;
             return stdout.toString();
         } catch (Exception e) {
-            System.err.println("[git] 执行失败: " + e.getMessage());
+            log.warn("[git] 执行失败: {}", e.getMessage());
             return null;
         }
     }

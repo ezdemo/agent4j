@@ -1,13 +1,12 @@
 package site.sorghum.agent4j.tool.memory;
 
+import org.noear.snack4.ONode;
 import org.noear.solon.annotation.Component;
 
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.LinkedHashMap;
-import java.util.Map;
 
 /**
  * 记忆服务 —— 持久化键值记忆的 CRUD。
@@ -24,42 +23,19 @@ public class MemoryService {
         return MEMORY_DIR.resolve(name.replaceAll("[^a-zA-Z0-9_\\-.]", "_") + ".json");
     }
 
-    private static void appendJsonString(StringBuilder sb, String key, String value) {
-        sb.append("\"").append(key).append("\":\"");
-        if (value != null) {
-            sb.append(value.replace("\\", "\\\\").replace("\"", "\\\"")
-                    .replace("\n", "\\n").replace("\r", "\\r").replace("\t", "\\t"));
-        }
-        sb.append("\"");
-    }
-
     public String remember(String name, String type, String scope, String description,
                            String content, Integer priority) throws IOException {
         Files.createDirectories(MEMORY_DIR);
-        Map<String, Object> mem = new LinkedHashMap<>();
-        mem.put("name", name);
-        mem.put("type", type);
-        mem.put("scope", scope);
-        mem.put("description", description);
-        mem.put("content", content);
-        if (priority != null) mem.put("priority", priority);
-        StringBuilder json = new StringBuilder();
-        json.append("{");
-        appendJsonString(json, "name", name);
-        json.append(",");
-        appendJsonString(json, "type", type);
-        json.append(",");
-        appendJsonString(json, "scope", scope);
-        json.append(",");
-        appendJsonString(json, "description", description);
-        json.append(",");
-        appendJsonString(json, "content", content);
+        ONode json = new ONode()
+                .set("name", name)
+                .set("type", type)
+                .set("scope", scope)
+                .set("description", description)
+                .set("content", content);
         if (priority != null) {
-            json.append(",");
-            appendJsonString(json, "priority", String.valueOf(priority));
+            json.set("priority", priority);
         }
-        json.append("}");
-        Files.writeString(memoryFile(name), json.toString());
+        Files.writeString(memoryFile(name), json.toJson());
         return "saved memory: " + name + " (" + description + ")";
     }
 

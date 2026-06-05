@@ -623,7 +623,7 @@ public class AgentService {
                 emitter.complete();
             } catch (Exception ex) {
                 // SSE连接可能已断开，忽略异常
-                System.err.println("[web] 完成SSE流失败（可能SSE连接已断开）: " + ex.getMessage());
+                log.warn("[web] 完成SSE流失败（可能SSE连接已断开）: {}", ex.getMessage());
             }
 
             lock.unlock();
@@ -909,10 +909,10 @@ public class AgentService {
             SessionStore store = new JsonlSessionStore(sessionsDir);
             boolean ok = store.delete(sessionName);
             if (ok) {
-                System.out.println("[web] 已删除会话文件: " + sessionName);
+                log.info("[web] 已删除会话文件: {}", sessionName);
             }
         } catch (Exception e) {
-            System.err.println("[web] 删除会话文件失败: " + e.getMessage());
+            log.warn("[web] 删除会话文件失败: {}", e.getMessage());
         }
     }
 
@@ -929,7 +929,7 @@ public class AgentService {
                     agent.flushSession();
                     agent.saveUsage();
                 } catch (Exception e) {
-                    System.err.println("[web] 清除 Agent 失败: " + e.getMessage());
+                    log.warn("[web] 清除 Agent 失败: {}", e.getMessage());
                 }
             }
         }
@@ -937,7 +937,7 @@ public class AgentService {
         accessOrder.clear();
         sessionLocks.clear();
         currentSessionNames.clear();
-        System.out.println("[web] 已清除所有 Agent 缓存");
+        log.info("[web] 已清除所有 Agent 缓存");
     }
 
     /**
@@ -999,7 +999,7 @@ public class AgentService {
         if (sharedModelClient != null) {
             sharedModelClient.setModel(model);
             this.sharedModel = model;
-            System.out.println("[web] 模型已更新: " + model);
+            log.info("[web] 模型已更新: {}", model);
         }
     }
 
@@ -1014,7 +1014,7 @@ public class AgentService {
         }
         // 更新共享配置引用，确保后续新建的 Agent 也使用新值
         this.hitlMode = hitl;
-        System.out.println("[web] HITL 模式已更新: " + (hitl ? "手动(需审批)" : "自由(直接执行)"));
+        log.info("[web] HITL 模式已更新: {}", hitl ? "手动(需审批)" : "自由(直接执行)");
     }
 
     /**
@@ -1068,7 +1068,7 @@ public class AgentService {
                 ));
             }
         } catch (IOException e) {
-            System.err.println("[web] 获取工作区列表失败: " + e.getMessage());
+            log.warn("[web] 获取工作区列表失败: {}", e.getMessage());
             // 回退到旧逻辑：从缓存中收集
             Set<String> workspacePaths = new HashSet<>();
             for (String key : agentCache.keySet()) {
@@ -1113,7 +1113,7 @@ public class AgentService {
                 }
             }
         } catch (IOException e) {
-            System.err.println("[web] 查询工作区失败: " + e.getMessage());
+            log.warn("[web] 查询工作区失败: {}", e.getMessage());
         }
         // 兼容：从缓存中查找
         for (String key : agentCache.keySet()) {
@@ -1168,13 +1168,13 @@ public class AgentService {
             WorkspaceManager wm = new WorkspaceManager();
             boolean deleted = wm.deleteWorkspace(hash);
             if (deleted) {
-                System.out.println("[web] 已删除工作区数据目录: " + hash);
+                log.info("[web] 已删除工作区数据目录: {}", hash);
             }
         } catch (Exception e) {
-            System.err.println("[web] 删除工作区数据目录失败: " + e.getMessage());
+            log.warn("[web] 删除工作区数据目录失败: {}", e.getMessage());
         }
 
-        System.out.println("[web] 已删除工作区: " + hash + "，清除了 " + keysToRemove.size() + " 个 Agent");
+        log.info("[web] 已删除工作区: {}，清除了 {} 个 Agent", hash, keysToRemove.size());
         return !keysToRemove.isEmpty();
     }
 

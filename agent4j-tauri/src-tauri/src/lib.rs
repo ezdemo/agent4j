@@ -1,4 +1,4 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+// windows_subsystem 属性已在 main.rs 中设置（binary crate专属）
 
 use std::fs;
 use std::net::TcpListener;
@@ -552,9 +552,10 @@ impl Agent4jWebManager {
             #[cfg(unix)]
             {
                 use std::os::unix::process::CommandExt as _;
-                unsafe { libc::kill(pid as i32, libc::SIGTERM); }
+                // 使用负 PID 杀死整个进程组（start() 中通过 setsid() 创建了新 session）
+                unsafe { libc::kill(-(pid as i32), libc::SIGTERM); }
                 std::thread::sleep(std::time::Duration::from_millis(200));
-                unsafe { libc::kill(pid as i32, libc::SIGKILL); }
+                unsafe { libc::kill(-(pid as i32), libc::SIGKILL); }
             }
 
             // 后台线程中等待退出，不阻塞任何界面
