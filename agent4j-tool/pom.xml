@@ -7,7 +7,7 @@
     <parent>
         <groupId>site.sorghum.agent</groupId>
         <artifactId>agent4j</artifactId>
-        <version>1.0-SNAPSHOT</version>
+        <version>26.6.5</version>
     </parent>
 
     <artifactId>agent4j-tool</artifactId>
@@ -16,17 +16,14 @@
         <dependency>
             <groupId>org.noear</groupId>
             <artifactId>solon-ai-skill-sys</artifactId>
-            <version>${solon.version}</version>
         </dependency>
         <dependency>
             <groupId>org.noear</groupId>
             <artifactId>solon-ai-skill-web</artifactId>
-            <version>${solon.version}</version>
         </dependency>
         <dependency>
             <groupId>org.noear</groupId>
             <artifactId>solon-ai-harness</artifactId>
-            <version>${solon.version}</version>
         </dependency>
         <dependency>
             <groupId>org.noear</groupId>

@@ -61,6 +61,40 @@ if ($c -ne $old) {
     Write-Host "  [OK] package.json"
 } else { Write-Host "  [--] package.json (unchanged)" }
 
+# 5. agent4j-bin/pom.xml
+$path = Join-Path $root "agent4j-bin/pom.xml"
+$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+$old = $c
+$re = [regex]'(?<=<artifactId>agent4j</artifactId>\s*\r?\n\s*<version>)\d[\d.]*-?[A-Z]*(?=</version>)'
+$c = $re.Replace($c, $Version)
+if ($c -ne $old) {
+    $c = $c.TrimStart("`u{FEFF}")
+    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
+    Write-Host "  [OK] agent4j-bin/pom.xml"
+} else { Write-Host "  [--] agent4j-bin/pom.xml (unchanged)" }
+
+# 6. agent4j-tool/pom.xml
+$path = Join-Path $root "agent4j-tool/pom.xml"
+$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+$old = $c
+$c = $re.Replace($c, $Version)
+if ($c -ne $old) {
+    $c = $c.TrimStart("`u{FEFF}")
+    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
+    Write-Host "  [OK] agent4j-tool/pom.xml"
+} else { Write-Host "  [--] agent4j-tool/pom.xml (unchanged)" }
+
+# 7. agent4j-web/pom.xml
+$path = Join-Path $root "agent4j-web/pom.xml"
+$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+$old = $c
+$c = $re.Replace($c, $Version)
+if ($c -ne $old) {
+    $c = $c.TrimStart("`u{FEFF}")
+    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
+    Write-Host "  [OK] agent4j-web/pom.xml"
+} else { Write-Host "  [--] agent4j-web/pom.xml (unchanged)" }
+
 Write-Host ""
 Write-Host "Done! Version unified to $Version"
 Write-Host "Run: git diff to review, then commit."
