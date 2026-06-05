@@ -476,8 +476,16 @@ public class HttpModelClient implements ModelClient {
             } catch (IOException e) {
                 if (abortRequested) {
                     // 主动中断，不重试，不报错
+                    // ★ 必须回调 onDone() 释放 AgentLoop.streamLLM() 中的 streamLatch，
+                    //    否则调用方线程会永久阻塞在 CountDownLatch.await() 上，
+                    //    导致 AgentService 的会话锁（ReentrantLock）永远无法释放。
                     logger.debug("流式请求已被中断，跳过重试");
                     abortRequested = false;
+                    try {
+                        callback.onDone();
+                    } catch (Exception ignored) {
+                        logger.debug("onDone回调异常（可能SSE连接已断开）: {}", ignored.getMessage());
+                    }
                     return;
                 }
                 logger.error("流式API调用IO异常: {}", e.getMessage(), e);

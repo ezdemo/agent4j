@@ -40,7 +40,7 @@ public class ContinueCommand implements ChatCommand {
         if (!context.getAgent().noPendingHITL()) {
             context.getAgent().approveHITL();
         }
-        input.setMessage(null);
+        input.setMessage("继续");
         return CommandResult.LOOP;
     }
 }
