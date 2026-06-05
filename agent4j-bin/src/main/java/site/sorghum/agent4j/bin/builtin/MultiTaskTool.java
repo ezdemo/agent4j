@@ -7,7 +7,6 @@ import site.sorghum.agent4j.bin.agent.SubAgent;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.tool.ToolDef;
-import site.sorghum.agent4j.bin.workspace.SharedWorkspace;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
@@ -38,9 +37,6 @@ public class MultiTaskTool extends AgentTool {
 
     @Inject
     private ModelClient modelClient;
-
-    @Inject
-    private SharedWorkspace sharedWorkspace;
 
     @Override
     public String getName() {
@@ -166,7 +162,7 @@ public class MultiTaskTool extends AgentTool {
         try {
             String systemPrompt = buildSystemPrompt(name, arguments, customSystemPrompt, registry);
 
-            SubAgent sub = new SubAgent(modelClient, registry, systemPrompt, sharedWorkspace);
+            SubAgent sub = new SubAgent(modelClient, registry, systemPrompt);
 
             // 传播父 AgentOutput 实现实时流式输出
             if (parentOutput != null) {

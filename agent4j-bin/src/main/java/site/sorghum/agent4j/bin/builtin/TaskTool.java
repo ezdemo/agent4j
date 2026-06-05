@@ -7,7 +7,6 @@ import site.sorghum.agent4j.bin.agent.SubAgent;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.tool.ToolDef;
-import site.sorghum.agent4j.bin.workspace.SharedWorkspace;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
@@ -82,9 +81,6 @@ public class TaskTool extends AgentTool {
     }
     @Inject
     private ModelClient modelClient;
-
-    @Inject
-    private SharedWorkspace sharedWorkspace;
 
     /**
      * 清空收集器（在并行 dispatch 前调用）
@@ -174,7 +170,7 @@ public class TaskTool extends AgentTool {
                 systemPrompt = sb.toString();
             }
 
-            SubAgent sub = new SubAgent(modelClient, registry, systemPrompt, sharedWorkspace);
+            SubAgent sub = new SubAgent(modelClient, registry, systemPrompt);
 
             // 将父 Agent 的 AgentOutput 传递给子代理，使其流式输出能实时推送给用户
             AgentOutput parentOutput = getCurrentOutput();
