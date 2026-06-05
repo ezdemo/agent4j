@@ -1211,7 +1211,7 @@ X-Custom-Header=value"
 
 <script setup>
 import {computed, onMounted, reactive, ref, watch} from 'vue'
-import {message} from 'ant-design-vue'
+import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
 import {configAPI, openApiAPI, mcpAPI, skillMarketAPI, agentAPI} from '../services/api'
 
@@ -1244,6 +1244,11 @@ const checkingConnection = ref(false)
 const connectionOk = ref(false)
 const connectionChecked = ref(false)
 const hasChanges = ref(false)
+// 保存原始值，用于检测 baseUrl/apiKey 是否变更（变更需弹警告并重建 Agent）
+const originalBaseUrl = ref('')
+// apiKey 从服务端返回的是脱敏值，通过 localStorage 持久化最近一次保存的 apiKey 用于对比
+const getLastSavedApiKey = () => localStorage.getItem('agent4j-last-apikey') || ''
+const setLastSavedApiKey = (key) => localStorage.setItem('agent4j-last-apikey', key)
 const remoteModelsLoading = ref(false)
 // 远端模型弹窗状态
 const showRemoteModelsDialog = ref(false)
@@ -1487,6 +1492,13 @@ const loadSettings = async () => {
       // 优先读 localStorage 中实际连接的地址
       settings.server.apiBaseUrl = localStorage.getItem('agent4j-api-base') || config.serverApiBaseUrl || ''
       settings.ai.baseUrl = config.baseUrl || ''
+      // 记录原始值，用于检测 baseUrl/apiKey 是否变更
+      originalBaseUrl.value = settings.ai.baseUrl
+      // 从 localStorage 读取上次保存的 apiKey，用于后续对比
+      const savedKey = getLastSavedApiKey()
+      if (savedKey) {
+        settings.ai.apiKey = savedKey
+      }
       settings.ai.model = config.model || ''
       settings.ai.reasoningEffort = config.reasoningEffort || 'max'
 
@@ -1532,6 +1544,26 @@ const loadSettings = async () => {
 
 // 保存设置
 const saveSettings = async () => {
+  // 检测 baseUrl 或 apiKey 是否变更（变更会触发 Agent 重建，当前会话将丢失）
+  const lastSavedApiKey = getLastSavedApiKey()
+  const baseUrlChanged = settings.ai.baseUrl !== originalBaseUrl.value
+  const apiKeyChanged = settings.ai.apiKey !== lastSavedApiKey
+
+  if (baseUrlChanged || apiKeyChanged) {
+    // 弹出确认对话框
+    const confirm = await new Promise((resolve) => {
+      Modal.confirm({
+        title: '更改 API 地址或密钥将重置 Agent',
+        content: '修改 API 地址或密钥后，系统将重新初始化 Agent，当前活跃的会话将被保存并关闭。\n\n要继续保存吗？',
+        okText: '确认保存',
+        cancelText: '取消',
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false)
+      })
+    })
+    if (!confirm) return
+  }
+
   loading.value = true
   try {
     // 同步更新 localStorage 中的实际连接地址
@@ -1553,6 +1585,10 @@ const saveSettings = async () => {
     const response = await configAPI.updateConfig(configToUpdate)
 
     if (response.success) {
+      // 记录本次保存的值，用于下次对比
+      originalBaseUrl.value = settings.ai.baseUrl
+      setLastSavedApiKey(settings.ai.apiKey)
+
       // 切换工作目录
       if (settings.workspace.dir && settings.workspace.dir.trim()) {
         try {
@@ -1697,6 +1733,19 @@ const confirmAutoFill = async () => {
     message.warning('请填写 API 地址和密钥')
     return
   }
+
+  // 弹出确认警告（与保存设置行为一致）
+  const confirm = await new Promise((resolve) => {
+    Modal.confirm({
+      title: '更改 API 地址或密钥将重置 Agent',
+      content: '修改 API 地址或密钥后，系统将重新初始化 Agent，当前活跃的会话将被保存并关闭。\n\n要继续自动填入吗？',
+      okText: '确认填入',
+      cancelText: '取消',
+      onOk: () => resolve(true),
+      onCancel: () => resolve(false)
+    })
+  })
+  if (!confirm) return
 
   // 填入并保存基础配置（保存后才可正确获取远端模型）
   settings.ai.baseUrl = url

@@ -214,6 +214,71 @@ public class AgentService {
     }
 
     /**
+     * 销毁所有缓存的 Agent 和共享组件，然后重新从 config.json 初始化。
+     * <p>
+     * 适用于 baseUrl / apiKey 等不可热更新的配置变更后调用，
+     * 下次聊天请求时 {@link #getOrCreateAgent} 会按全新配置重建 Agent。
+     * </p>
+     */
+    public synchronized void reinitialize() {
+        log.info("[config] 开始重新初始化 AgentService...");
+
+        // 1. 先 flush 所有缓存的 Agent，避免数据丢失
+        for (Agent4jAgent agent : agentCache.values()) {
+            try {
+                agent.flushSession();
+                agent.saveUsage();
+            } catch (Exception e) {
+                log.warn("[config] flush 淘汰 Agent 时异常: {}", e.getMessage());
+            }
+        }
+
+        // 2. 清空所有缓存
+        agentCache.clear();
+        accessOrder.clear();
+        sessionLocks.clear();
+        workspacePrefixes.clear();
+
+        // 3. 重新从 config.json 加载配置
+        try {
+            Agent4jConfig config = Agent4jConfig.load();
+            String apiUrl = envOr("OPENAI_BASE_URL", config.chatApiUrl());
+            String apiKey = envOr("OPENAI_API_KEY", config.apiKey());
+            String model = envOr("MODEL", config.model());
+
+            // 4. 更新共享配置变量
+            this.sharedConfig = config;
+            this.sharedApiUrl = apiUrl;
+            this.sharedApiKey = apiKey;
+            this.sharedModel = model;
+            this.hitlMode = config.hitl();
+
+            // 5. 创建全新的 HttpModelClient（旧实例的 apiUrl/apiKey 是 final 不可复用）
+            this.sharedModelClient = new HttpModelClient(apiUrl, apiKey, model);
+
+            // 6. 重新初始化 ToolRegistry
+            Set<String> disabledTools = config.disabledTools();
+            List<String> blockedPaths = config.blockedPaths();
+            ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
+                    config.workspaceDir(), apiUrl, apiKey,
+                    disabledTools, blockedPaths,
+                    loadDefaultSystemPrompt());
+            this.sharedToolRegistry = initResult.toolRegistry;
+            this.sharedToolRegistry.setConfigService(configService);
+
+            // 7. 缓存当前工作区的 PromptPrefix
+            String initWs = config.workspaceDir() != null
+                    ? config.workspaceDir().toAbsolutePath().toString()
+                    : Paths.get(System.getProperty("user.home"), ".agent4j").toString();
+            workspacePrefixes.put(initWs, initResult.promptPrefix);
+
+            log.info("[config] AgentService 重新初始化完成 — 模型: {}, API: {}", model, apiUrl);
+        } catch (Exception e) {
+            log.error("[config] 重新初始化 AgentService 失败", e);
+        }
+    }
+
+    /**
      * 生成会话唯一标识。
      *
      * @param workspacePath 工作区路径

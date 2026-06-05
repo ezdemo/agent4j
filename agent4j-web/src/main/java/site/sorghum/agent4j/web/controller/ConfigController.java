@@ -78,6 +78,12 @@ public class ConfigController {
     public ApiResponse<String> updateConfig(@ApiParam(value = "配置项 Map") @Body Map<String, Object> body) {
         configService.updateConfig(body);
 
+        // baseUrl 或 apiKey 变更 → 销毁重建（因 HttpModelClient 的 apiUrl/apiKey 为 final）
+        if ((body.containsKey("baseUrl") || body.containsKey("apiKey")) && agentService.isReady()) {
+            agentService.reinitialize();
+            return ApiResponse.ok("API 地址/密钥已更新，Agent 已重新初始化");
+        }
+
         if (body.containsKey("model") && agentService.isReady()) {
             String newModel = body.get("model").toString();
             agentService.updateModel(newModel);
