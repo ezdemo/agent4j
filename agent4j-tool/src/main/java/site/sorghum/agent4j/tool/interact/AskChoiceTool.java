@@ -54,7 +54,6 @@ public class AskChoiceTool extends AgentTool {
 
     @Override
     public ToolResult execute(ToolContext ctx) {
-        @SuppressWarnings("unchecked")
         List<?> rawOptions = (List<?>) ctx.getParams().get("options");
         List<Map<String, Object>> options = normalizeOptions(rawOptions);
         return ToolResult.ok(interactionService.askChoice(ctx.getString("question"),
