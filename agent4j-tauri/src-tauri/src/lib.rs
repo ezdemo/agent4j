@@ -387,6 +387,89 @@ impl Agent4jWebManager {
         }
     }
 
+    // ── JPID 文件管理（持久化 PID，即使 Tauri 崩溃也能在下次启动时清理） ──
+
+    // ~/.agent4j/bin/.jpid 路径
+    fn get_jpid_path(&self) -> PathBuf {
+        self.get_install_dir().join("bin").join(".jpid")
+    }
+
+    // 读取 JPID 文件中的 PID（文件不存在或格式错误时返回 None）
+    fn read_jpid(&self) -> Option<u32> {
+        let path = self.get_jpid_path();
+        if !path.exists() {
+            return None;
+        }
+        let content = fs::read_to_string(path).ok()?;
+        let pid: u32 = content.trim().parse().ok()?;
+        if pid < 2 {
+            return None;
+        }
+        Some(pid)
+    }
+
+    // 保存 PID 到 JPID 文件
+    fn save_jpid(&self, pid: u32) {
+        let path = self.get_jpid_path();
+        if let Some(parent) = path.parent() {
+            fs::create_dir_all(parent).ok();
+        }
+        fs::write(&path, pid.to_string()).ok();
+        println!("JPID saved: {} -> {}", path.display(), pid);
+    }
+
+    // 删除 JPID 文件
+    fn remove_jpid(&self) {
+        let path = self.get_jpid_path();
+        if path.exists() {
+            fs::remove_file(&path).ok();
+            println!("JPID file removed: {}", path.display());
+        }
+    }
+
+    // 根据 PID 杀死整个进程组（跨平台）
+    // 返回 true 表示进程已死或已被杀死，false 表示杀失败
+    fn kill_pid(pid: u32) -> bool {
+        #[cfg(unix)]
+        {
+            unsafe {
+                // 先检查进程是否存在（kill 0 不发送信号，只检查存在性）
+                let exists = libc::kill(pid as i32, 0);
+                if exists != 0 {
+                    // ESRCH = 进程不存在，算成功
+                    return true;
+                }
+                // 用负 PID 杀整个进程组（与 start() 中的 setsid() 配套）
+                println!("Killing process group -{} with SIGTERM", pid);
+                libc::kill(-(pid as i32), libc::SIGTERM);
+                std::thread::sleep(std::time::Duration::from_millis(500));
+                println!("Killing process group -{} with SIGKILL", pid);
+                libc::kill(-(pid as i32), libc::SIGKILL);
+                return true;
+            }
+        }
+
+        #[cfg(windows)]
+        {
+            println!("Killing PID {} with taskkill /T", pid);
+            let output = Command::new("taskkill")
+                .args(&["/F", "/T", "/PID", &pid.to_string()])
+                .output();
+            match output {
+                Ok(o) => {
+                    if o.status.success() {
+                        true
+                    } else {
+                        let stderr = String::from_utf8_lossy(&o.stderr);
+                        // 进程已不存在也算成功
+                        stderr.contains("not found") || stderr.contains("不存在")
+                    }
+                }
+                Err(_) => false,
+            }
+        }
+    }
+
     // 创建启动脚本
     fn create_launcher(bin_dir: &Path) {
         let jar_path = bin_dir.join("agent4j-web.jar");
@@ -581,6 +664,13 @@ impl Agent4jWebManager {
 
     // 启动 agent4j-web 服务（随机端口）
     fn start(&self, app: Option<&tauri::AppHandle>) -> Result<u32, String> {
+        // 先读 JPID 文件，杀死旧进程（应对 Tauri 崩溃后重启的场景）
+        if let Some(old_pid) = self.read_jpid() {
+            println!("Found stale JPID {}, cleaning up...", old_pid);
+            Self::kill_pid(old_pid);
+            self.remove_jpid();
+        }
+
         self.cleanup_stale();
 
         let install_dir = self.get_install_dir();
@@ -644,6 +734,9 @@ impl Agent4jWebManager {
         *child_lock = Some(child);
         drop(child_lock);
 
+        // 保存 PID 到 JPID 文件（持久化，关闭时或下次启动时可恢复）
+        self.save_jpid(pid);
+
         // 等待就绪（最长 15 秒）
         let start = std::time::Instant::now();
         let timeout = std::time::Duration::from_secs(15);
@@ -687,7 +780,9 @@ impl Agent4jWebManager {
     // 停止服务（递归杀死进程树）
     fn stop(&self) -> Result<(), String> {
         let mut child_lock = self.child.lock().unwrap();
+        let mut killed = false;
 
+        // 方式一：通过 Child 句柄杀（进程组方式，最干净）
         if let Some(ref mut child) = *child_lock {
             let pid = child.id();
 
@@ -702,8 +797,6 @@ impl Agent4jWebManager {
             // Unix: kill 负 PGID 杀整个进程组
             #[cfg(unix)]
             {
-                use std::os::unix::process::CommandExt as _;
-                // 使用负 PID 杀死整个进程组（start() 中通过 setsid() 创建了新 session）
                 unsafe { libc::kill(-(pid as i32), libc::SIGTERM); }
                 std::thread::sleep(std::time::Duration::from_millis(200));
                 unsafe { libc::kill(-(pid as i32), libc::SIGKILL); }
@@ -711,9 +804,21 @@ impl Agent4jWebManager {
 
             // 后台线程中等待退出，不阻塞任何界面
             let _ = child.wait();
+            killed = true;
+            println!("Stopped Java process via Child handle (PID {})", pid);
         }
 
         *child_lock = None;
+
+        // 方式二：通过 JPID 文件杀（兜底，应对 Child 句柄丢失或 Tauri 重启）
+        if let Some(jpid) = self.read_jpid() {
+            if !killed {
+                println!("Child handle not available, killing via JPID {}...", jpid);
+                Self::kill_pid(jpid);
+            }
+            self.remove_jpid();
+        }
+
         Ok(())
     }
 
