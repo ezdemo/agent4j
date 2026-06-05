@@ -7,10 +7,13 @@ $root = $PSScriptRoot
 if (-not $root) { $root = Split-Path -Parent $MyInvocation.MyCommand.Path }
 if (-not $root) { $root = Get-Location }
 
+# UTF8 without BOM to avoid breaking JSON parsers
+$utf8NoBom = New-Object System.Text.UTF8Encoding $false
+
 Write-Host "[bump] Updating version to $Version"
 Write-Host ""
 
-# 1. pom.xml - project root version (after <artifactId>agent4j</artifactId>)
+# 1. pom.xml
 $path = Join-Path $root "pom.xml"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
@@ -18,7 +21,7 @@ $re = [regex]'(?<=<artifactId>agent4j</artifactId>\s*\r?\n\s*<version>)\d[\d.]*-
 $c = $re.Replace($c, $Version)
 if ($c -ne $old) {
     $c = $c.TrimStart("`u{FEFF}")
-    [System.IO.File]::WriteAllText($path, $c, [System.Text.Encoding]::UTF8)
+    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
     Write-Host "  [OK] pom.xml"
 } else { Write-Host "  [--] pom.xml (unchanged)" }
 
@@ -28,7 +31,7 @@ $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
 $c = [regex]::Replace($c, '(?<="version"\s*:\s*")[\d.]+(?=")', $Version)
 if ($c -ne $old) {
-    [System.IO.File]::WriteAllText($path, $c, [System.Text.Encoding]::UTF8)
+    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
     Write-Host "  [OK] tauri.conf.json"
 } else { Write-Host "  [--] tauri.conf.json (unchanged)" }
 
@@ -44,7 +47,7 @@ for ($i = 0; $i -lt $lines.Length; $i++) {
     }
 }
 if ($changed) {
-    [System.IO.File]::WriteAllLines($path, $lines, [System.Text.Encoding]::UTF8)
+    [System.IO.File]::WriteAllText($path, ($lines -join "`r`n"), $utf8NoBom)
     Write-Host "  [OK] Cargo.toml"
 } else { Write-Host "  [--] Cargo.toml (unchanged)" }
 
@@ -54,7 +57,7 @@ $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
 $c = [regex]::Replace($c, '(?<="version"\s*:\s*")[\d.]+(?=")', $Version)
 if ($c -ne $old) {
-    [System.IO.File]::WriteAllText($path, $c, [System.Text.Encoding]::UTF8)
+    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
     Write-Host "  [OK] package.json"
 } else { Write-Host "  [--] package.json (unchanged)" }
 
