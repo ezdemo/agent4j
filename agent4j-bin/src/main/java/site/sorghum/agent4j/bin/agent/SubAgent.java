@@ -3,6 +3,7 @@ package site.sorghum.agent4j.bin.agent;
 import lombok.Getter;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
+import site.sorghum.agent4j.bin.workspace.SharedWorkspace;
 
 import java.io.IOException;
 import java.util.*;
@@ -38,7 +39,8 @@ public class SubAgent {
             "mark_step_complete",  // 计划管理（主代理专用）
             "revise_plan",         // 计划管理（主代理专用）
             "ask_choice",          // 用户交互（主代理专用）
-            "todo_write"           // 会话任务跟踪（主代理专用）
+            "todo_write",          // 会话任务跟踪（主代理专用）
+            "workspace_watch"      // 子代理不允许阻塞式 watch
     ));
 
     private final ModelClient client;
@@ -85,6 +87,21 @@ public class SubAgent {
         this.registry = parentRegistry.copy();
         this.registry.setForceDenyTools(SUB_AGENT_DENY);
         this.systemPrompt = systemPrompt;
+    }
+
+    /**
+     * 构造函数（带 SharedWorkspace 支持）
+     * <p>注册 workspace 工具到子代理的注册表，使子代理能读写共享工作区。</p>
+     *
+     * @param workspace 共享工作区实例
+     */
+    public SubAgent(ModelClient client, ToolRegistry parentRegistry, String systemPrompt,
+                    SharedWorkspace workspace) {
+        this(client, parentRegistry, systemPrompt);
+        // 注册 workspace 工具到子代理的注册表
+        this.registry.register(new site.sorghum.agent4j.bin.builtin.WorkspaceWriteTool(workspace));
+        this.registry.register(new site.sorghum.agent4j.bin.builtin.WorkspaceReadTool(workspace));
+        this.registry.register(new site.sorghum.agent4j.bin.builtin.WorkspaceListTool(workspace));
     }
 
     /**
