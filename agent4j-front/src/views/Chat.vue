@@ -714,11 +714,26 @@ const sendMessage = async (images = []) => {
           } else if (data.type === 'sub_tool_result') {
             let result = data.result || data.content || ''
             const rn = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
-            for (let i = subAgentBlocks.value.length - 1; i >= 0; i--) {
-              if (subAgentBlocks.value[i].type === 'tool_call' && !subAgentBlocks.value[i].result) {
-                subAgentBlocks.value[i].result = rn;
-                subAgentBlocks.value[i].status = '成功';
-                break
+            let targetName = data.name || ''
+            // 优先按 name 匹配（异步执行时完成顺序与调用顺序可能不同）
+            let matched = false
+            if (targetName) {
+              for (let i = subAgentBlocks.value.length - 1; i >= 0; i--) {
+                if (subAgentBlocks.value[i].type === 'tool_call' && subAgentBlocks.value[i].name === targetName && !subAgentBlocks.value[i].result) {
+                  subAgentBlocks.value[i].result = rn;
+                  subAgentBlocks.value[i].status = '成功';
+                  matched = true
+                  break
+                }
+              }
+            }
+            if (!matched) {
+              for (let i = subAgentBlocks.value.length - 1; i >= 0; i--) {
+                if (subAgentBlocks.value[i].type === 'tool_call' && !subAgentBlocks.value[i].result) {
+                  subAgentBlocks.value[i].result = rn;
+                  subAgentBlocks.value[i].status = '成功';
+                  break
+                }
               }
             }
           } else if (data.type === 'sub_complete') {
@@ -764,11 +779,27 @@ const sendMessage = async (images = []) => {
           } else if (data.type === 'tool_result') {
             let result = data.result || data.content || ''
             const rn = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
-            for (let i = msg.blocks.length - 1; i >= 0; i--) {
-              if (msg.blocks[i].type === 'tool_call' && !msg.blocks[i].result) {
-                msg.blocks[i].result = rn;
-                msg.blocks[i].status = '成功';
-                break
+            let targetName = data.name || ''
+            // 优先按 name 匹配（异步执行时完成顺序与调用顺序可能不同）
+            let matched = false
+            if (targetName) {
+              for (let i = msg.blocks.length - 1; i >= 0; i--) {
+                if (msg.blocks[i].type === 'tool_call' && msg.blocks[i].name === targetName && !msg.blocks[i].result) {
+                  msg.blocks[i].result = rn;
+                  msg.blocks[i].status = '成功';
+                  matched = true
+                  break
+                }
+              }
+            }
+            // 按 name 没匹配到，fallback 到从后往前找第一个无结果的
+            if (!matched) {
+              for (let i = msg.blocks.length - 1; i >= 0; i--) {
+                if (msg.blocks[i].type === 'tool_call' && !msg.blocks[i].result) {
+                  msg.blocks[i].result = rn;
+                  msg.blocks[i].status = '成功';
+                  break
+                }
               }
             }
           } else if (data.type === 'error') {
