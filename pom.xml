@@ -6,7 +6,7 @@
 
     <groupId>site.sorghum.agent</groupId>
     <artifactId>agent4j</artifactId>
-    <version>2026.06.05</version>
+    <version>1.0.0</version>
     <packaging>pom</packaging>
 
     <modules>
