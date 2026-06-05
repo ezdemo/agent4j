@@ -4,9 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Agent4j — Java AI Agent 框架</title>
-    <meta name="description" content="Agent4j 是一个纯 Java 8 实现的 AI 编码代理框架。推理循环 · 工具调度 · 流式输出 · 会话持久化 · 子代理隔离 — 将 LLM 与可扩展工具系统结合，形成自主工作的编码代理。" />
+    <meta name="description" content="Agent4j 是一个纯 Java 17 实现的 AI 编码代理框架。推理循环 · 工具调度 · 流式输出 · 会话持久化 · 子代理隔离 — 将 LLM 与可扩展工具系统结合，通过 CLI / Web / Desktop 三种界面，形成自主工作的编码代理。" />
     <meta property="og:title" content="Agent4j — Java AI Agent Framework" />
-    <meta property="og:description" content="纯 Java AI 代理框架：推理循环、工具调用、会话管理、流式输出，一个自主工作的编码代理。" />
+    <meta property="og:description" content="纯 Java 17 AI 代理框架：推理循环、工具调用、会话管理、流式输出，CLI / Web / Desktop 三端自主工作的编码代理。" />
     <meta property="og:type" content="website" />
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>☕</text></svg>" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
@@ -990,8 +990,8 @@
             <span class="accent">AI 编码代理</span>
         </h1>
         <p class="hero-subtitle">
-            将大语言模型与可扩展工具系统深度融合，打造自主推理、自主调用、自主完成的编码代理框架。
-            支持 Skill 系统 V2、HITL 人机协同、多端交付（CLI / Web / Tauri 桌面端），5 个 Maven 模块协同运作。
+            将大语言模型与 40+ 可扩展工具深度融合，打造自主推理、自动调用的编码代理框架。
+            支持 CLI 控制台、Vue3 Web UI、Tauri 桌面端三种运行模式，5 个 Maven 模块协同运作。
         </p>
 
         <!-- Terminal demo -->
@@ -1005,7 +1005,7 @@
             <div class="terminal-body">
                 <div class="line"><span class="prompt">❯</span> <span class="cmd">java -jar agent4j-bin.jar</span></div>
                 <div class="line"><span class="comment"># Agent4j v1.0-SNAPSHOT 启动中…</span></div>
-                <div class="line"><span class="comment"># 加载工具: 5 核心 + 23 内置 + 3 Skill → 就绪</span></div>
+                <div class="line"><span class="comment"># 加载工具: 40+ 内置工具覆盖全开发场景 → 就绪</span></div>
                 <div class="line"><span class="comment"># Skill V2 · HITL 双模式 · ReasonBreaker 已激活</span></div>
                 <div class="line"><span class="prompt">❯</span> <span class="cmd">帮我重构 UserService 模块</span><span class="cursor"></span></div>
             </div>
@@ -1018,7 +1018,7 @@
 
         <div class="hero-stats">
             <div class="hero-stat">
-                <span class="num">31<span class="unit">+</span></span>
+                <span class="num">40<span class="unit">+</span></span>
                 <span class="label">内置工具</span>
             </div>
             <div class="hero-stat">
@@ -1105,7 +1105,7 @@
             <div class="cap-card reveal">
                 <div class="icon blue">✏️</div>
                 <h3>原子批量编辑</h3>
-                <p>multi_edit — 全验证→全写入→失败回滚，确保跨文件编辑的数据一致性与原子性。</p>
+                <p>edit — 精准 SEARCH/REPLACE 替换，原子性写入：所有编辑成功才写入，否则全部回滚，确保跨文件编辑的数据一致性与原子性。</p>
             </div>
             <div class="cap-card reveal">
                 <div class="icon amber">🧠</div>
@@ -1123,9 +1123,29 @@
                 <p>用户可定义可复用的 Skill playbook，支持 inline 和 subagent 两种运行模式，跨会话持久化。</p>
             </div>
             <div class="cap-card reveal">
+                <div class="icon green">⚡</div>
+                <h3>SSE 快慢双路径解析</h3>
+                <p>SSEDualPath — 快速路径字符串扫描提取 content 数据块，慢速路径完整 JSON 解析，消除冗余反序列化开销。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon blue">📤</div>
+                <h3>异步会话写入</h3>
+                <p>AsyncBuffer — 独立的缓冲区 + 后台消费者线程，将会话写入与推理循环解耦，显著提升吞吐量。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon amber">🛠️</div>
+                <h3>消息自愈·零拷贝</h3>
+                <p>MessageHealer 直接操作 ChatMessage 对象，无需序列化往返，修复 tool_calls 配对和 reasoning 补充更高效。</p>
+            </div>
+            <div class="cap-card reveal">
+                <div class="icon green">⚙️</div>
+                <h3>配置外部化</h3>
+                <p>config.json 驱动 12+ 可调参数：maxContextChars、toolTimeoutSec、stormWindowSize 等，无需重新编译。</p>
+            </div>
+            <div class="cap-card reveal">
                 <div class="icon amber">🖥️</div>
                 <h3>多端交付</h3>
-                <p>CLI 命令行 + Web REST API + Vue 3 前端 + Tauri 桌面端，四端统一核心，一次编写处处运行。</p>
+                <p>CLI 控制台 + Vue3 Web UI + Tauri 桌面端，三种运行模式统一核心，一次编写处处运行。</p>
             </div>
         </div>
     </div>
@@ -1250,6 +1270,16 @@
                 <div class="pattern-loc">ToolContext</div>
                 <p>ThreadLocal 控制沙箱越界权限，HITL 审批通过后临时提升，审批结束自动恢复隔离。</p>
             </div>
+            <div class="pattern-card reveal">
+                <div class="pattern-name">异步缓冲区 · AsyncBuffer</div>
+                <div class="pattern-loc">AsyncSessionStore</div>
+                <p>独立缓冲区 + 后台消费者线程，将会话持久化写入与推理主循环解耦，避免 I/O 阻塞推理流程。</p>
+            </div>
+            <div class="pattern-card reveal">
+                <div class="pattern-name">SSE 快慢双路径 · SSEDualPath</div>
+                <div class="pattern-loc">SSEDualPathParser</div>
+                <p>快速路径字符串扫描直接提取 content 块，慢速路径兜底完整 JSON 解析；消除冗余反序列化，显著降低流式解析开销。</p>
+            </div>
         </div>
     </div>
 </section>
@@ -1258,9 +1288,9 @@
 <section class="section" id="tools" style="background: var(--bg-surface);">
     <div class="container">
         <div class="section-label reveal">// 工具系统</div>
-        <h2 class="reveal">31+ 工具，覆盖<span style="color:var(--neon);">全开发场景</span></h2>
+        <h2 class="reveal">40+ 工具，覆盖<span style="color:var(--neon);">全开发场景</span></h2>
         <p class="section-desc reveal">
-            5 个核心工具 + 23 个内置工具 + 3 个 Skill 工具，分为文件操作、代码分析、网络搜索、记忆管理、后台作业、计划交互、Skill 系统七大类。
+            42 个内置工具，分为文件操作、终端、后台作业、Web/API、记忆、计划、交互、工作区、子代理、工具管理、其他共十一大类。
         </p>
 
         <div class="tools-categories">
@@ -1276,89 +1306,33 @@
                 </div>
                 <div class="tool-cat-body">
                     <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">read_file</span><span class="tool-desc">完整读取文件内容</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">edit_file</span><span class="tool-desc">SEARCH/REPLACE 编辑</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">write_file</span><span class="tool-desc">创建/覆盖文件</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">multi_edit</span><span class="tool-desc">批量原子编辑</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">copy_file</span><span class="tool-desc">复制文件或目录</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">get_file_info</span><span class="tool-desc">查看元信息 (JSON)</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">read</span><span class="tool-desc">读取文件内容（支持分页）</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">write</span><span class="tool-desc">创建新文件或覆盖现有文件</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">edit</span><span class="tool-desc">精准 SEARCH/REPLACE 替换</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">glob</span><span class="tool-desc">通配符模式搜索文件</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">ls</span><span class="tool-desc">列出目录内容 / 递归树</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">grep</span><span class="tool-desc">递归内容搜索</span><span class="badge read">只读</span></div>
                     </div>
                 </div>
             </div>
 
-            <!-- 代码分析 -->
+            <!-- 终端 -->
             <div class="tool-cat reveal">
                 <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
                     <div class="left">
-                        <span class="emoji">🔍</span>
-                        <h4>代码分析</h4>
-                        <span class="count">3 tools</span>
-                    </div>
-                    <span class="chevron">▾</span>
-                </div>
-                <div class="tool-cat-body">
-                    <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">get_symbols</span><span class="tool-desc">AST 符号大纲</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">find_in_code</span><span class="tool-desc">标识符查找</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">java_source</span><span class="tool-desc">全限定类名定位</span><span class="badge read">只读</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 核心工具 -->
-            <div class="tool-cat reveal">
-                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
-                    <div class="left">
-                        <span class="emoji">⚙️</span>
-                        <h4>核心工具库</h4>
+                        <span class="emoji">💻</span>
+                        <h4>终端</h4>
                         <span class="count">5 tools</span>
                     </div>
                     <span class="chevron">▾</span>
                 </div>
                 <div class="tool-cat-body">
                     <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">run_command</span><span class="tool-desc">Shell 命令执行</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">file</span><span class="tool-desc">文件系统操作</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">glob</span><span class="tool-desc">文件名匹配 (缓存)</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">grep</span><span class="tool-desc">正则内容搜索</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">tree</span><span class="tool-desc">目录树生成</span><span class="badge read">只读</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 网络 -->
-            <div class="tool-cat reveal">
-                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
-                    <div class="left">
-                        <span class="emoji">🌐</span>
-                        <h4>网络搜索</h4>
-                        <span class="count">2 tools</span>
-                    </div>
-                    <span class="chevron">▾</span>
-                </div>
-                <div class="tool-cat-body">
-                    <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">web_search</span><span class="tool-desc">DuckDuckGo 搜索</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">web_fetch</span><span class="tool-desc">网页内容抓取</span><span class="badge read">只读</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 记忆 -->
-            <div class="tool-cat reveal">
-                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
-                    <div class="left">
-                        <span class="emoji">🧠</span>
-                        <h4>记忆服务</h4>
-                        <span class="count">3 tools</span>
-                    </div>
-                    <span class="chevron">▾</span>
-                </div>
-                <div class="tool-cat-body">
-                    <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">remember</span><span class="tool-desc">持久化保存记忆</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">recall_memory</span><span class="tool-desc">读取完整记忆</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">forget</span><span class="tool-desc">删除记忆</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">bash</span><span class="tool-desc">非交互式 Shell 指令执行</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">bash_start</span><span class="tool-desc">启动 Shell 命令会话</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">bash_stdin</span><span class="tool-desc">向运行中会话写入 stdin</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">bash_stop</span><span class="tool-desc">终止运行中的命令会话</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">bash_wait</span><span class="tool-desc">等待命令会话新增输出</span><span class="badge read">只读</span></div>
                     </div>
                 </div>
             </div>
@@ -1375,41 +1349,64 @@
                 </div>
                 <div class="tool-cat-body">
                     <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">run_background</span><span class="tool-desc">启动后台进程</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">job_output</span><span class="tool-desc">读取作业输出</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">wait_for_job</span><span class="tool-desc">等待作业完成</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">stop_job</span><span class="tool-desc">停止作业</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">list_jobs</span><span class="tool-desc">列出所有作业</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">run_background</span><span class="tool-desc">启动后台 Shell 进程</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">job_output</span><span class="tool-desc">读取后台作业最新输出</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">wait_for_job</span><span class="tool-desc">等待后台作业完成</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">stop_job</span><span class="tool-desc">停止后台作业</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">list_jobs</span><span class="tool-desc">列出所有后台作业</span><span class="badge read">只读</span></div>
                     </div>
                 </div>
             </div>
 
-            <!-- Skill 系统 -->
+            <!-- Web/API -->
             <div class="tool-cat reveal">
                 <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
                     <div class="left">
-                        <span class="emoji">📦</span>
-                        <h4>Skill 系统</h4>
+                        <span class="emoji">🌐</span>
+                        <h4>Web / API</h4>
+                        <span class="count">7 tools</span>
+                    </div>
+                    <span class="chevron">▾</span>
+                </div>
+                <div class="tool-cat-body">
+                    <div class="tool-list">
+                        <div class="tool-item"><span class="tool-name">webfetch</span><span class="tool-desc">网页内容抓取</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">codesearch</span><span class="tool-desc">Exa Code 语义搜索</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">resolve-library-id</span><span class="tool-desc">解析库/包名到 Context7 ID</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">query-docs</span><span class="tool-desc">Context7 文档/代码示例查询</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">search_apis</span><span class="tool-desc">关键词搜索 API 接口</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">get_api_detail</span><span class="tool-desc">获取 API 参数定义与结构</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">call_api</span><span class="tool-desc">执行 REST API 调用</span><span class="badge write">写入</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 记忆 -->
+            <div class="tool-cat reveal">
+                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="left">
+                        <span class="emoji">🧠</span>
+                        <h4>记忆</h4>
                         <span class="count">3 tools</span>
                     </div>
                     <span class="chevron">▾</span>
                 </div>
                 <div class="tool-cat-body">
                     <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">install_skill</span><span class="tool-desc">创建/保存 Skill</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">run_skill</span><span class="tool-desc">调用用户 Skill</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">task</span><span class="tool-desc">子代理任务委派</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">remember</span><span class="tool-desc">持久化保存记忆</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">recall_memory</span><span class="tool-desc">读取完整记忆内容</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">forget</span><span class="tool-desc">删除指定记忆</span><span class="badge write">写入</span></div>
                     </div>
                 </div>
             </div>
 
-            <!-- 计划交互 -->
+            <!-- 计划 -->
             <div class="tool-cat reveal">
                 <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
                     <div class="left">
                         <span class="emoji">📋</span>
-                        <h4>计划 & 交互</h4>
-                        <span class="count">5 tools</span>
+                        <h4>计划</h4>
+                        <span class="count">3 tools</span>
                     </div>
                     <span class="chevron">▾</span>
                 </div>
@@ -1418,8 +1415,99 @@
                         <div class="tool-item"><span class="tool-name">submit_plan</span><span class="tool-desc">提交执行计划</span><span class="badge write">写入</span></div>
                         <div class="tool-item"><span class="tool-name">revise_plan</span><span class="tool-desc">修订剩余步骤</span><span class="badge write">写入</span></div>
                         <div class="tool-item"><span class="tool-name">mark_step_complete</span><span class="tool-desc">标记步骤完成</span><span class="badge write">写入</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 交互 -->
+            <div class="tool-cat reveal">
+                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="left">
+                        <span class="emoji">💬</span>
+                        <h4>交互</h4>
+                        <span class="count">2 tools</span>
+                    </div>
+                    <span class="chevron">▾</span>
+                </div>
+                <div class="tool-cat-body">
+                    <div class="tool-list">
                         <div class="tool-item"><span class="tool-name">ask_choice</span><span class="tool-desc">用户选择菜单</span><span class="badge write">写入</span></div>
                         <div class="tool-item"><span class="tool-name">todo_write</span><span class="tool-desc">任务跟踪列表</span><span class="badge write">写入</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 工作区 -->
+            <div class="tool-cat reveal">
+                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="left">
+                        <span class="emoji">📂</span>
+                        <h4>工作区</h4>
+                        <span class="count">4 tools</span>
+                    </div>
+                    <span class="chevron">▾</span>
+                </div>
+                <div class="tool-cat-body">
+                    <div class="tool-list">
+                        <div class="tool-item"><span class="tool-name">workspace_list</span><span class="tool-desc">列出工作区条目键</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">workspace_read</span><span class="tool-desc">读取工作区 KV/文档条目</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">workspace_watch</span><span class="tool-desc">监听工作区文件变化</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">workspace_write</span><span class="tool-desc">写入工作区 KV/文档条目</span><span class="badge write">写入</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 子代理 -->
+            <div class="tool-cat reveal">
+                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="left">
+                        <span class="emoji">🧬</span>
+                        <h4>子代理</h4>
+                        <span class="count">2 tools</span>
+                    </div>
+                    <span class="chevron">▾</span>
+                </div>
+                <div class="tool-cat-body">
+                    <div class="tool-list">
+                        <div class="tool-item"><span class="tool-name">task</span><span class="tool-desc">子代理任务委派</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">multi_task</span><span class="tool-desc">并行多子代理任务</span><span class="badge write">写入</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 工具管理 -->
+            <div class="tool-cat reveal">
+                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="left">
+                        <span class="emoji">📦</span>
+                        <h4>工具管理</h4>
+                        <span class="count">4 tools</span>
+                    </div>
+                    <span class="chevron">▾</span>
+                </div>
+                <div class="tool-cat-body">
+                    <div class="tool-list">
+                        <div class="tool-item"><span class="tool-name">skilllist</span><span class="tool-desc">列出可用技能清单</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">skillread</span><span class="tool-desc">读取技能详细说明书</span><span class="badge read">只读</span></div>
+                        <div class="tool-item"><span class="tool-name">skillrefresh</span><span class="tool-desc">重新扫描挂载池更新技能</span><span class="badge write">写入</span></div>
+                        <div class="tool-item"><span class="tool-name">using-superpowers</span><span class="tool-desc">编排多个技能完成复杂任务</span><span class="badge read">只读</span></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 其他 -->
+            <div class="tool-cat reveal">
+                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
+                    <div class="left">
+                        <span class="emoji">🕐</span>
+                        <h4>其他</h4>
+                        <span class="count">1 tool</span>
+                    </div>
+                    <span class="chevron">▾</span>
+                </div>
+                <div class="tool-cat-body">
+                    <div class="tool-list">
+                        <div class="tool-item"><span class="tool-name">get_current_time</span><span class="tool-desc">获取系统当前日期时间</span><span class="badge read">只读</span></div>
                     </div>
                 </div>
             </div>
@@ -1508,7 +1596,7 @@
         <div class="highlight-item"><span class="check">✓</span> 双断路器防护，杜绝死循环</div>
         <div class="highlight-item"><span class="check">✓</span> Skill 系统 V2，可复用 playbook</div>
         <div class="highlight-item"><span class="check">✓</span> HITL 双模式，安全人机协同</div>
-        <div class="highlight-item"><span class="check">✓</span> 四端交付：CLI / Web / Tauri</div>
+        <div class="highlight-item"><span class="check">✓</span> 三端交付：CLI 控制台 / Vue3 Web UI / Tauri 桌面端</div>
     </div>
 </div>
 
@@ -1538,7 +1626,15 @@
   <span class="s">"hitl"</span><span class="p">:</span> <span class="k">false</span><span class="p">,</span>
   <span class="s">"disabledTools"</span><span class="p">:</span> <span class="p">[],</span>
   <span class="s">"blockedPaths"</span><span class="p">:</span> <span class="p">[],</span>
-  <span class="s">"availableModels"</span><span class="p">:</span> <span class="p">[</span><span class="s">"deepseek-v4-flash"</span><span class="p">,</span> <span class="s">"gpt-4o"</span><span class="p">,</span> <span class="s">"claude-3.5-sonnet"</span><span class="p">]</span>
+  <span class="s">"availableModels"</span><span class="p">:</span> <span class="p">[</span><span class="s">"deepseek-v4-flash"</span><span class="p">,</span> <span class="s">"gpt-4o"</span><span class="p">,</span> <span class="s">"claude-3.5-sonnet"</span><span class="p">],</span>
+  <span class="s">"maxContextChars"</span><span class="p">:</span> <span class="n">128000</span><span class="p">,</span>
+  <span class="s">"keepTailChars"</span><span class="p">:</span> <span class="n">32000</span><span class="p">,</span>
+  <span class="s">"toolTimeoutSec"</span><span class="p">:</span> <span class="n">120</span><span class="p">,</span>
+  <span class="s">"maxSelfCorrectionAttempts"</span><span class="p">:</span> <span class="n">3</span><span class="p">,</span>
+  <span class="s">"maxStreamErrorRetries"</span><span class="p">:</span> <span class="n">3</span><span class="p">,</span>
+  <span class="s">"flushIntervalSec"</span><span class="p">:</span> <span class="n">30</span><span class="p">,</span>
+  <span class="s">"stormWindowSize"</span><span class="p">:</span> <span class="n">12</span><span class="p">,</span>
+  <span class="s">"stormThreshold"</span><span class="p">:</span> <span class="n">8</span>
 <span class="p">}</span></pre>
             </div>
         </div>
@@ -1588,8 +1684,8 @@ mvn <span class="k">exec</span><span class="p">:</span>java <span class="p">-pl<
             <div>
                 <div class="footer-brand"><span class="bracket">[</span>Agent4j<span class="bracket">]</span></div>
                 <p class="footer-desc">
-                    纯 Java AI 代理框架 — 推理循环 · 工具调度 · Skill 系统 · 多端交付。<br />
-                    CLI + Web REST + Vue 3 前端 + Tauri 桌面端，将 LLM 与可扩展工具系统结合，形成自主工作的编码代理。
+                    纯 Java AI 代理框架 — 推理循环 · 工具调度 · Skill 系统 · 三端交付。<br />
+                    CLI 控制台 + Vue3 Web UI + Tauri 桌面端，将 LLM 与可扩展工具系统结合，形成自主工作的编码代理。
                 </p>
             </div>
             <div class="footer-col">
