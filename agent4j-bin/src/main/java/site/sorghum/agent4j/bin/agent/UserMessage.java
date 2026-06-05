@@ -74,7 +74,7 @@ public class UserMessage {
      * 是否包含内容（文本或图片）
      */
     public boolean hasContent() {
-        return text != null && !text.isEmpty() && images != null && !images.isEmpty();
+        return (text != null && !text.isEmpty()) || !images.isEmpty();
     }
 
     @Override
