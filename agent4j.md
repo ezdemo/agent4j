@@ -22,13 +22,13 @@ Agent4j 是一个纯 Java 17 实现的 AI 编码代理框架，将 LLM 与可扩
 | 能力 | 说明 |
 |------|------|
 | 🤖 **推理循环** | 多轮对话上下文中自主思考 → 调用工具 → 观察结果 → 继续推理 |
-| 🔧 **工具系统** | 30+ 内置工具（文件/代码/终端/网络/记忆/作业/计划/子代理/工作区），支持 Plugin/Skill/MCP/OpenAPI 扩展 |
+| 🔧 **工具系统** | 40+ 内置工具（文件/终端/后台作业/记忆/计划/交互/子代理/工作区/工具管理/Web API），支持 Plugin/Skill/MCP/OpenAPI 扩展 |
 | 🔌 **模型无关** | OpenAI 兼容 API，可对接 DeepSeek、Ollama、OpenAI、Claude、Gemini 等 |
 | 📋 **计划模式** | 只读探索 → 提交计划 → 审批后执行，安全可控 |
 | 🛡️ **安全机制** | 风暴断路器（防循环调用）、路径穿越防护、原子编辑回滚、HITL 人工审批、ReasonBreaker |
 | 💾 **会话管理** | JSONL 持久化、异步缓冲写入、定时刷入、语义折叠、Token 用量追踪 |
 | 🧩 **子代理** | 复杂任务委派（单任务/多任务并行），隔离执行上下文，AgentOutput 传播 |
-| 🔍 **代码分析** | 源码定位、符号大纲、标识符查找、正则/glob 搜索 |
+| 🔍 **代码分析** | glob/grep/ls 文件搜索、文件读写与精准编辑 |
 | 🌐 **联网能力** | 网页抓取、代码搜索 |
 | 📝 **记忆服务** | 跨会话持久化键值记忆（global/project 双作用域） |
 | 🔌 **MCP 协议** | 支持 Model Context Protocol 工具注册 |
@@ -465,7 +465,7 @@ JsonlSessionStore
 | **风暴断路器（StormBreaker）** | 滑动窗口检测重复工具调用（可配窗口6次，阈值3次），自动抑制并提示 |
 | **推理断路器（ReasonBreaker）** | 滑动窗口检测 reasoning 文本循环（200字符窗口，重复3次触发） |
 | **路径穿越防护** | 所有文件操作通过 ToolContext 路径校验，禁止越界访问 |
-| **原子编辑回滚** | multi_edit 全验证→全写入→失败回滚，保证数据一致性 |
+| **原子编辑回滚** | edit 全验证→全写入→失败回滚，保证数据一致性 |
 | **HITL 审批** | 非只读工具执行前可要求用户审批；沙箱越界工具强制审批 |
 | **计划模式** | 只读模式限制：仅允许只读工具 |
 | **消息修复器（MessageHealer）** | 发送前自动修复 tool_calls/tool 配对、重复 ID、孤立消息 |
@@ -476,57 +476,57 @@ JsonlSessionStore
 
 ## 5. 全部工具列表
 
-### 文件操作（来自 Skill 系统）
+### 文件操作
 
 | 工具名 | 只读 | 说明 |
 |--------|:----:|------|
-| `read` | ✅ | 读取文件（支持行范围/头/尾） |
 | `write` | ❌ | 创建新文件或覆盖现有文件 |
-| `edit` | ❌ | SEARCH/REPLACE 精准文本替换（search 必须唯一） |
-| `multi_edit`（别名） | ❌ | 批量原子编辑（全验证→全写入→失败回滚） |
-| `glob` | ✅ | 按 glob 通配符模式搜索文件 |
-| `grep` | ✅ | 递归搜索文件内容（返回路径:行号:内容） |
-| `ls` | ✅ | 列出目录内容（支持递归 Tree 展示） |
-| `get_file_info`（别名） | ✅ | 文件/目录元信息 |
-| `copy_file`（别名） | ❌ | 复制文件或目录 |
+| `read` | ✅ | 读取文件内容（支持大文件分页，支持逻辑路径） |
+| `edit` | ❌ | SEARCH/REPLACE 精准文本替换（支持一次调用多处编辑，原子性回滚） |
+| `glob` | ✅ | 按 glob 通配符模式搜索文件（支持逻辑路径） |
+| `ls` | ✅ | 列出目录内容（支持递归 Tree 展示，支持逻辑路径） |
+| `grep` | ✅ | 递归搜索文件内容（返回路径:行号:内容，支持逻辑路径） |
 
 ### 终端
 
 | 工具名 | 只读 | 说明 |
 |--------|:----:|------|
-| `bash` | ❌ | 执行非交互式 Shell 指令（多行脚本） |
+| `bash` | ❌ | 执行非交互式 Shell 指令（多行脚本，支持逻辑路径） |
 | `bash_start` | ❌ | 启动 shell 命令会话（超时不终止，返回 session_id） |
-| `bash_wait` | ❌ | 继续等待仍在运行的命令会话 |
-| `bash_stdin` | ❌ | 向运行中的会话写入 stdin |
-| `bash_stop` | ❌ | 终止运行中的命令会话及其子进程 |
-| `run_background` | ❌ | 启动后台进程并分离 |
-| `job_output` | ✅ | 读取后台作业最新输出（支持增量） |
-| `wait_for_job` | ❌ | 等待作业完成 |
-| `stop_job` | ❌ | 停止作业（SIGTERM → SIGKILL） |
-| `list_jobs` | ✅ | 列出所有活跃后台作业 |
+| `bash_stdin` | ❌ | 向运行中的会话写入 stdin 并等待新增输出 |
+| `bash_stop` | ❌ | 终止运行中的命令会话及其子进程树 |
+| `bash_wait` | ❌ | 继续等待仍在运行的命令会话，返回新增输出 |
 
-### 网络
+### 后台作业
 
 | 工具名 | 只读 | 说明 |
 |--------|:----:|------|
-| `webfetch` | ✅ | 从 URL 获取网页内容（markdown/text/html） |
-| `codesearch` | ✅ | Exa Code API 搜索编程相关上下文 |
+| `run_background` | ❌ | 启动后台进程并分离（适用于开发服务器/监视器） |
+| `job_output` | ✅ | 读取后台作业最新输出（支持增量读取） |
+| `wait_for_job` | ❌ | 阻塞等待后台作业完成 |
+| `stop_job` | ❌ | 停止作业（SIGTERM → SIGKILL） |
+| `list_jobs` | ✅ | 列出当前会话所有活跃后台作业 |
 
 ### 记忆
 
 | 工具名 | 只读 | 说明 |
 |--------|:----:|------|
 | `remember` | ❌ | 持久化保存到 ~/.agent4j/memory/（scope: global/project） |
-| `recall_memory` | ✅ | 读取记忆内容 |
-| `forget` | ❌ | 删除记忆 |
+| `recall_memory` | ✅ | 读取记忆完整内容 |
+| `forget` | ❌ | 删除指定记忆 |
 
-### 计划与交互
+### 计划
 
 | 工具名 | 只读 | 说明 |
 |--------|:----:|------|
 | `submit_plan` | ❌ | 提交计划供用户审查 |
 | `revise_plan` | ❌ | 修订进行中的计划 |
 | `mark_step_complete` | ❌ | 标记计划步骤为已完成 |
+
+### 交互
+
+| 工具名 | 只读 | 说明 |
+|--------|:----:|------|
 | `ask_choice` | ❌ | 用户选择菜单（2-6 个选项） |
 | `todo_write` | ❌ | 任务跟踪列表 |
 
@@ -534,32 +534,44 @@ JsonlSessionStore
 
 | 工具名 | 只读 | 说明 |
 |--------|:----:|------|
-| `task` | ❌ | 创建隔离子代理处理复杂多步任务（单任务） |
+| `task` | ❌ | 创建隔离子代理处理复杂多步任务 |
 | `multi_task` | ❌ | 并行创建多个隔离子代理（各自独立执行） |
 
-### 工作区共享
+### 工作区
 
 | 工具名 | 只读 | 说明 |
 |--------|:----:|------|
-| `workspace_list` | ✅ | 列出共享工作区中的条目键 |
+| `workspace_list` | ✅ | 列出共享工作区中的条目键（支持前缀过滤） |
 | `workspace_read` | ✅ | 读取 KV 或文档条目（优先 KV，其次文档） |
 | `workspace_write` | ❌ | 写入 KV 或文档条目 |
 | `workspace_watch` | ❌ | 阻塞等待工作区键变更事件（通配符匹配） |
 
-### 系统
-
-| 工具名 | 只读 | 说明 |
-|--------|:----:|------|
-| `get_current_time` | ✅ | 获取系统当前日期、精确时间、时区 |
-
-### 技能系统
+### 工具管理
 
 | 工具名 | 只读 | 说明 |
 |--------|:----:|------|
 | `skilllist` | ✅ | 列出所有挂载池中的可用技能 |
-| `skillread` | ✅ | 读取技能详细说明书 |
+| `skillread` | ✅ | 读取技能详细说明书（参数规约/文件别名） |
 | `skillrefresh` | ❌ | 重新扫描所有挂载池，更新技能列表 |
-| `using-superpowers` | ❌ | 使用超级能力技能组合完成复杂任务 |
+| `using-superpowers` | ❌ | 组合编排多个超级能力技能完成复杂任务 |
+
+### Web/API
+
+| 工具名 | 只读 | 说明 |
+|--------|:----:|------|
+| `webfetch` | ✅ | 从 URL 获取网页内容（markdown/text/html） |
+| `codesearch` | ✅ | Exa Code API 搜索编程相关上下文 |
+| `resolve-library-id` | ✅ | 解析库/包名为 Context7 兼容的 library ID |
+| `query-docs` | ✅ | 查询 Context7 编程库最新文档和代码示例 |
+| `search_apis` | ✅ | 通过关键词搜索 API 库中的接口 |
+| `get_api_detail` | ✅ | 获取 API 接口的完整参数定义和返回值结构 |
+| `call_api` | ❌ | 执行 REST API 调用 |
+
+### 其他
+
+| 工具名 | 只读 | 说明 |
+|--------|:----:|------|
+| `get_current_time` | ✅ | 获取系统当前日期、精确时间、时区 |
 
 ### MCP / OpenAPI / 插件（动态注册）
 
@@ -567,14 +579,11 @@ JsonlSessionStore
 |------|------|
 | **MCP 服务器** | 通过 Model Context Protocol 注册的外部工具 |
 | **OpenAPI 规范** | 通过 OpenAPI 规范自动导入为 API 工具 |
-| **插件系统** | `~/.agent4j/plugin/` 目录下的插件自动发现为工具 |
-| **代码搜索** | `codesearch` — Exa Code API 编程上下文搜索 |
-| **API 查询** | `search_apis` / `get_api_detail` / `call_api` |
-| **文档查询** | `resolve-library-id` / `query-docs` — Context7 文档查询 |
+| **插件系统** | `~/.agent4j/plugin/` 下的插件自动发现注册 |
 
 ### 工具总数
 
-稳定内置工具约 **30+** 个，加上通过 MCP/OpenAPI/Plugin/Skill 动态注册的工具，总数可按需扩展。
+稳定内置工具约 **40+** 个，加上通过 MCP/OpenAPI/Plugin/Skill 动态注册的工具，总数可按需扩展。
 
 ---
 
@@ -815,7 +824,7 @@ JsonlSessionStore
 - **延迟文件创建** — 空白会话不落盘，首次写入消息才创建 `.jsonl` 文件
 - **消息直接操作** — MessageHealer 直接操作 `List<ChatMessage>`，消除序列化往返；`ContextFolding.fold()` 未超阈值返回原始列表（零拷贝）
 - **配置外部化** — 所有可调优参数从硬编码常量集中到 `~/.agent4j/config.json`，支持运行时热更新
-- **原子编辑** — multi_edit 全验证→全写入→失败回滚，确保数据一致性
+- **原子编辑** — edit 全验证→全写入→失败回滚，确保数据一致性
 - **安全防护** — 路径校验 + 风暴断路器 + 推理断路器 + HITL + plan mode + forceDenyTools 多层防御
 - **子代理隔离** — 独立循环上下文，排除递归工具和用户交互工具，AgentOutput 通过 ThreadLocal 传播
 - **工作区共享** — SharedWorkspace 支持 KV/文档存储，事件总线通知变更，子代理间数据协作
