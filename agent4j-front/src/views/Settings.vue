@@ -35,6 +35,13 @@
           <p class="header-desc">{{ currentTab?.description }}</p>
         </div>
         <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'skill-market'" class="header-actions">
+          <button v-if="activeTab === 'ai'" class="btn btn-secondary" style="padding:6px 12px;" @click="showAutoFillDialog = true" title="自动填入配置">
+            <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+              <polyline points="1 4 1 10 7 10"/>
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+            </svg>
+            自动填入
+          </button>
           <button :disabled="loading || !hasChanges" class="btn btn-primary" @click="saveSettings">
             <svg v-if="!loading" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
                  width="14">
@@ -1152,6 +1159,54 @@ X-Custom-Header=value"
       </div>
     </div>
   </Teleport>
+
+  <!-- 自动填入配置弹窗 -->
+  <Teleport to="body">
+    <div v-if="showAutoFillDialog" class="auto-fill-mask" @click.self="showAutoFillDialog = false">
+      <div class="auto-fill-dialog">
+        <div class="auto-fill-head">
+          <span>自动填入配置</span>
+          <button class="btn-icon-xs" @click="showAutoFillDialog = false">×</button>
+        </div>
+        <div class="auto-fill-body">
+          <div class="auto-fill-field">
+            <label class="auto-fill-label">选择服务商</label>
+            <div class="select-wrapper">
+              <select v-model="autoFillPreset" class="form-select" @change="onPresetChange">
+                <option value="">自定义地址</option>
+                <option value="https://api.deepseek.com">DeepSeek</option>
+                <option value="https://api.xiaomimimo.com/v1">小米</option>
+                <option value="https://token-plan-cn.xiaomimimo.com/v1">小米TokenPlan</option>
+                <option value="https://openrouter.ai/api/v1">OpenRouter</option>
+                <option value="https://opencode.ai/zen/go/v1">OpenCode Go</option>
+              </select>
+              <svg class="select-arrow" fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
+          </div>
+          <div class="auto-fill-field">
+            <label class="auto-fill-label">API 地址</label>
+            <input v-model="autoFillUrl" class="form-input" placeholder="https://api.openai.com/v1" type="text" />
+          </div>
+          <div class="auto-fill-field">
+            <label class="auto-fill-label">API 密钥</label>
+            <input v-model="autoFillApiKey" class="form-input" placeholder="sk-..." type="password" />
+          </div>
+        </div>
+        <div class="auto-fill-foot">
+          <button class="btn" @click="showAutoFillDialog = false">取消</button>
+          <button
+              :disabled="!autoFillUrl || !autoFillApiKey"
+              class="btn btn-primary"
+              @click="confirmAutoFill"
+          >
+            自动填入
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -1621,8 +1676,60 @@ const filteredRemoteModelList = computed(() => {
   return remoteModelList.value.filter(m => m.toLowerCase().includes(q))
 })
 
+// ==================== 自动填入配置 ====================
+const autoFillUrl = ref('')
+const autoFillApiKey = ref('')
+const autoFillPreset = ref('')
+const showAutoFillDialog = ref(false)
 
-// ==================== OpenAPI ====================
+// 选择预设服务商时自动填充 URL
+const onPresetChange = () => {
+  if (autoFillPreset.value) {
+    autoFillUrl.value = autoFillPreset.value
+  }
+}
+
+// 确认自动填入
+const confirmAutoFill = async () => {
+  const url = autoFillUrl.value.trim().replace(/\/+$/, '')
+  const key = autoFillApiKey.value.trim()
+  if (!url || !key) {
+    message.warning('请填写 API 地址和密钥')
+    return
+  }
+
+  // 填入并保存基础配置（保存后才可正确获取远端模型）
+  settings.ai.baseUrl = url
+  settings.ai.apiKey = key
+  hasChanges.value = true
+
+  try {
+    await configAPI.updateConfig({
+      baseUrl: url,
+      apiKey: key
+    })
+  } catch {
+    // 保存失败不阻断流程
+  }
+
+  // 尝试获取远端模型列表
+  try {
+    const res = await configAPI.getRemoteModels()
+    if (res.success && res.data && res.data.length > 0) {
+      settings.ai.availableModelsText = res.data.join('\n')
+      if (res.data.length > 0) {
+        settings.ai.model = res.data[0]
+      }
+      message.success(`已自动填入 ${url}，发现 ${res.data.length} 个模型`)
+    } else {
+      message.success(`已填入 API 地址和密钥，可手动添加模型列表`)
+    }
+  } catch {
+    message.success(`已填入 API 地址和密钥，可手动添加模型列表`)
+  }
+
+  showAutoFillDialog.value = false
+}
 const openapiLoading = ref(false)
 const openapiError = ref('')
 const openapiSubmitting = ref(false)
@@ -3892,6 +3999,90 @@ onMounted(() => {
 }
 
 .remote-models-foot .btn {
+  min-width: 100px;
+}
+
+/* ==================== 自动填入配置弹窗 ==================== */
+.auto-fill-mask {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.4);
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.auto-fill-dialog {
+  width: min(460px, 92vw);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+}
+
+[data-theme="dark"] .auto-fill-dialog {
+  background: var(--bg-2);
+}
+
+.auto-fill-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.auto-fill-head .btn-icon-xs {
+  margin-left: auto;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r);
+  color: var(--fg-3);
+  transition: all var(--t);
+  font-size: 16px;
+  background: none;
+  border: none;
+  cursor: pointer;
+}
+.auto-fill-head .btn-icon-xs:hover {
+  background: var(--bg-2);
+  color: var(--fg);
+}
+
+.auto-fill-body {
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.auto-fill-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.auto-fill-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg-2);
+}
+
+.auto-fill-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+
+.auto-fill-foot .btn {
   min-width: 100px;
 }
 </style>
