@@ -914,13 +914,16 @@ public class AgentLoop implements AgentLoopController {
 
     /** 用户中断后：将 streamLLM 已产出的内容写入上下文并返回 */
     private String handleAbortAfterStream(StreamResult sr) {
+        String abortMarker = "\n\n<<用户主动停止生成>>";
         if (sr.content() != null && !sr.content().isEmpty()) {
-            ctx.addAssistant(sr.content(), null, sr.reasoningContent());
-            return sr.content();
+            String markedContent = sr.content() + abortMarker;
+            ctx.addAssistant(markedContent, null, sr.reasoningContent());
+            return markedContent;
         }
         if (sr.reasoningContent() != null && !sr.reasoningContent().isEmpty()) {
-            ctx.addAssistant(null, null, sr.reasoningContent());
-            return sr.reasoningContent();
+            String markedReasoning = sr.reasoningContent() + abortMarker;
+            ctx.addAssistant(null, null, markedReasoning);
+            return markedReasoning;
         }
         return "⏹️ 已停止生成";
     }
