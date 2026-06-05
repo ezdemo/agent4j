@@ -601,7 +601,7 @@ impl Agent4jWebManager {
         *port_lock = port;
 
         // 直接使用下载的 JRE，不依赖 PATH 环境变量
-        let jre_java = install_dir.join("jre25").join("bin").join("java");
+        let jre_java =  Agent4jWebManager::get_bundled_java_path(&install_dir);
         if !jre_java.exists() {
             return Err(format!("JRE not found at {:?}", jre_java));
         }
