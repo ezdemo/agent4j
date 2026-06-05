@@ -62,7 +62,6 @@ public class PluginToolProvider implements SolonToTools {
         } catch (IOException e) {
             log.error("扫描插件目录失败: {}", root, e);
         }
-        log.info("插件系统加载完成，共注册 {} 个工具", tools.size());
         return tools;
     }
 

@@ -3,9 +3,11 @@ package site.sorghum.agent4j.web.controller;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import org.noear.solon.ai.skills.cli.SkillDir;
 import org.noear.solon.annotation.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import site.sorghum.agent4j.tool.solon.common.Agent4JSkillProvider;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
@@ -13,11 +15,10 @@ import site.sorghum.agent4j.web.service.AgentService;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.stream.Stream;
+import java.util.stream.Collectors;
 
 /**
  * Agent 状态查询 API。
@@ -75,41 +76,17 @@ public class AgentController {
             throw new ServiceException("Agent 未初始化");
         }
         try {
-            List<SkillMetaDTO> result = new ArrayList<>();
-            
-            // 扫描 ~/.claude/skills 目录中的技能
-            Path skillsDir = Paths.get(System.getProperty("user.home"), ".claude", "skills");
-            if (Files.exists(skillsDir)) {
-                try (Stream<Path> dirs = Files.list(skillsDir)) {
-                    dirs.filter(Files::isDirectory).forEach(dir -> {
-                        Path skillFile = dir.resolve("SKILL.md");
-                        if (Files.exists(skillFile)) {
-                            String name = dir.getFileName().toString();
-                            String description = readSkillDescription(skillFile);
-                            result.add(new SkillMetaDTO(name, description, "global", "inline"));
-                        }
-                    });
-                }
-            }
+            Agent4JSkillProvider skillProvider = Agent4JSkillProvider.getOrCreate("~");
+            Collection<SkillDir> skills = skillProvider.getPoolManager().getSkills();
 
-            // 扫描 ~/.agent4j/skills 目录中的技能
-            Path agent4jSkillsDir = Paths.get(System.getProperty("user.home"), ".agent4j", "skills");
-            if (Files.exists(agent4jSkillsDir)) {
-                try (Stream<Path> dirs = Files.list(agent4jSkillsDir)) {
-                    dirs.filter(Files::isDirectory).forEach(dir -> {
-                        Path skillFile = dir.resolve("SKILL.md");
-                        if (Files.exists(skillFile)) {
-                            String name = dir.getFileName().toString();
-                            // 避免重复
-                            boolean exists = result.stream().anyMatch(s -> s.name().equals(name));
-                            if (!exists) {
-                                String description = readSkillDescription(skillFile);
-                                result.add(new SkillMetaDTO(name, description, "global", "inline"));
-                            }
-                        }
-                    });
-                }
-            }
+            List<SkillMetaDTO> result = skills.stream()
+                    .map(s -> new SkillMetaDTO(
+                            s.getName(),
+                            s.getDescription(),
+                            s.getPoolAlias(),
+                            ""
+                    ))
+                    .collect(Collectors.toList());
 
             return ApiResponse.ok(result);
         } catch (Exception e) {
