@@ -2,61 +2,9 @@
   "name": "superpower",
   "description": "Agent4j 超级能力插件集——提供多种高级 AI 编码辅助能力",
   "tools": {
-    "brainstorming": {
-      "toolName": "superpower_brainstorm",
-      "description": "头脑风暴：发散思维，从多角度分析问题并生成多种解决方案"
-    },
-    "dispatching-parallel-agents": {
-      "toolName": "superpower_dispatch_agents",
-      "description": "并行派发子代理：同时创建多个隔离子代理并行执行独立任务"
-    },
-    "executing-plans": {
-      "toolName": "superpower_execute_plan",
-      "description": "执行计划：按照已提交的审批计划逐步推进并完成任务"
-    },
-    "finishing-a-development-branch": {
-      "toolName": "superpower_finish_branch",
-      "description": "完成开发分支：收尾当前分支的开发工作，确保代码质量和提交规范"
-    },
-    "receiving-code-review": {
-      "toolName": "superpower_receive_review",
-      "description": "接收代码审查：处理他人提交的 CR 意见，理解反馈并优化代码"
-    },
-    "requesting-code-review": {
-      "toolName": "superpower_request_review",
-      "description": "请求代码审查：创建代码审查请求，生成摘要并通知团队成员"
-    },
-    "subagent-driven-development": {
-      "toolName": "superpower_subagent_dev",
-      "description": "子代理驱动开发：将大型开发任务分解为多个子任务委派给子代理并行执行"
-    },
-    "systematic-debugging": {
-      "toolName": "superpower_debug",
-      "description": "系统化调试：按照结构化步骤逐层排查并修复代码缺陷"
-    },
-    "test-driven-development": {
-      "toolName": "superpower_tdd",
-      "description": "测试驱动开发：遵循红-绿-重构循环，先写测试再实现功能"
-    },
-    "using-git-worktrees": {
-      "toolName": "superpower_git_worktree",
-      "description": "使用 Git Worktree：利用 Git Worktree 机制并行处理多个分支"
-    },
     "using-superpowers": {
       "toolName": "superpower_meta",
       "description": "使用超级能力：学习如何组合和编排多个超级能力技能完成复杂任务"
-    },
-    "verification-before-completion": {
-      "toolName": "superpower_verify",
-      "description": "完成前验证：在完成任务前执行系统性验证检查确保质量"
-    },
-    "writing-plans": {
-      "toolName": "superpower_write_plan",
-      "description": "编写计划：分析需求并制定详细的执行计划，包含步骤和行动项"
-    },
-    "writing-skills": {
-      "toolName": "superpower_write_skill",
-      "description": "编写技能：创建和编辑 SKILL.md 文件，为 Agent4j 添加自定义技能"
     }
   }
 }
