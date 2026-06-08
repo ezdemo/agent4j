@@ -706,7 +706,10 @@ onMounted(async () => {
   await detectTauri()
   // 清空过期的 localStorage 端口（Tauri 每次启动端口都不同）
   localStorage.removeItem('agent4j-port')
-  localStorage.removeItem('agent4j-api-base')
+  if (isTauriEnv.value) {
+    // 仅 Tauri 环境清除 api-base（端口每次启动都变，由 SplashScreen 重新检测）
+    localStorage.removeItem('agent4j-api-base')
+  }
   console.log('[App] Cleared stale port from localStorage')
 })
 
