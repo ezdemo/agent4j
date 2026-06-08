@@ -72,10 +72,10 @@ download_jre25() {
 
     local package_name=""
     if command -v curl &> /dev/null; then
-        # 只取 tar.gz 包（跳过 macOS 的 .pkg）
-        package_name=$(curl -fsSL "$api_url" 2>/dev/null | grep -o '"name": *"[^"]*\.tar\.gz"' | cut -d'"' -f4 | tr -d '\r')
+        # 匹配 name 中含 jre 且以 .tar.gz 结尾的字段（跳过 source 和 .pkg）
+        package_name=$(curl -fsSL "$api_url" 2>/dev/null | grep -o '"name": *"[^"]*jre[^"]*\.tar\.gz"' | cut -d'"' -f4 | tr -d '\r' | head -1)
     elif command -v wget &> /dev/null; then
-        package_name=$(wget -qO- "$api_url" 2>/dev/null | grep -o '"name": *"[^"]*\.tar\.gz"' | cut -d'"' -f4 | tr -d '\r')
+        package_name=$(wget -qO- "$api_url" 2>/dev/null | grep -o '"name": *"[^"]*jre[^"]*\.tar\.gz"' | cut -d'"' -f4 | tr -d '\r' | head -1)
     fi
 
     # 2. 兜底文件名（API 不可用时）
