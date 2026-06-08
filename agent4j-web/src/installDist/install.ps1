@@ -80,7 +80,7 @@ function Install-JRE25 {
     # 2. 兜底文件名
     if (-not $packageName) {
         $ext = if ($os -eq "windows") { "zip" } else { "tar.gz" }
-        $packageName = "OpenJDK25U-jre_${arch}_${os}_hotspot_25.0.0_1.${ext}"
+        $packageName = "OpenJDK25U-jre_${arch}_${os}_hotspot_25.0.3_9.${ext}"
         Write-Host "      API unavailable, using fallback name: $packageName" -ForegroundColor Yellow
     } else {
         Write-Host "      Latest package: $packageName" -ForegroundColor Gray

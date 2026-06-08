@@ -72,16 +72,17 @@ download_jre25() {
 
     local package_name=""
     if command -v curl &> /dev/null; then
-        package_name=$(curl -fsSL "$api_url" 2>/dev/null | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
+        # 精确匹配含 "jre" 的 name 字段（兼容 "name":"val" 和 "name": "val"）
+        package_name=$(curl -fsSL "$api_url" 2>/dev/null | grep -o '"name": *"[^"]*jre[^"]*"' | cut -d'"' -f4)
     elif command -v wget &> /dev/null; then
-        package_name=$(wget -qO- "$api_url" 2>/dev/null | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
+        package_name=$(wget -qO- "$api_url" 2>/dev/null | grep -o '"name": *"[^"]*jre[^"]*"' | cut -d'"' -f4)
     fi
 
     # 2. 兜底文件名（API 不可用时）
     if [ -z "$package_name" ]; then
         local ext="tar.gz"
         [ "$os" = "windows" ] && ext="zip"
-        package_name="OpenJDK25U-jre_${arch}_${os}_hotspot_25.0.0_1.${ext}"
+        package_name="OpenJDK25U-jre_${arch}_${os}_hotspot_25.0.3_9.${ext}"
         echo -e "      ${YELLOW}API unavailable, using fallback name: ${package_name}${NC}"
     else
         echo -e "      Latest package: ${package_name}"
