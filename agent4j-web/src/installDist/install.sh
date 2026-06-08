@@ -72,16 +72,20 @@ download_jre25() {
 
     local package_name=""
     if command -v curl &> /dev/null; then
-        # 精确匹配含 "jre" 的 name 字段（兼容 "name":"val" 和 "name": "val"）
-        package_name=$(curl -fsSL "$api_url" 2>/dev/null | grep -o '"name": *"[^"]*jre[^"]*"' | cut -d'"' -f4)
+        # 只取 tar.gz 包（跳过 macOS 的 .pkg）
+        package_name=$(curl -fsSL "$api_url" 2>/dev/null | grep -o '"name": *"[^"]*\.tar\.gz"' | cut -d'"' -f4 | tr -d '\r')
     elif command -v wget &> /dev/null; then
-        package_name=$(wget -qO- "$api_url" 2>/dev/null | grep -o '"name": *"[^"]*jre[^"]*"' | cut -d'"' -f4)
+        package_name=$(wget -qO- "$api_url" 2>/dev/null | grep -o '"name": *"[^"]*\.tar\.gz"' | cut -d'"' -f4 | tr -d '\r')
     fi
 
     # 2. 兜底文件名（API 不可用时）
     if [ -z "$package_name" ]; then
-        local ext="tar.gz"
-        [ "$os" = "windows" ] && ext="zip"
+        local ext
+        case "$os" in
+            mac)     ext="tar.gz" ;;
+            windows) ext="zip"    ;;
+            *)       ext="tar.gz" ;;
+        esac
         package_name="OpenJDK25U-jre_${arch}_${os}_hotspot_25.0.3_9.${ext}"
         echo -e "      ${YELLOW}API unavailable, using fallback name: ${package_name}${NC}"
     else
@@ -89,7 +93,7 @@ download_jre25() {
     fi
 
     # 3. 从清华镜像下载
-    local mirror_url="https://mirrors.tuna.tsinghua.edu.cn/Adoptium/25/jre/${arch}/${os}/${package_name}"
+    local download_url="https://mirrors.tuna.tsinghua.edu.cn/Adoptium/25/jre/${arch}/${os}/${package_name}"
     local tmp_dir="$TARGET_DIR/.tmp-jre"
     local archive_path="$tmp_dir/$package_name"
 
@@ -98,9 +102,9 @@ download_jre25() {
 
     echo -e "      Downloading from Tsinghua mirror..."
     if command -v curl &> /dev/null; then
-        curl -fSL --progress-bar "$mirror_url" -o "$archive_path"
+        curl -fSL --progress-bar "$download_url" -o "$archive_path"
     else
-        wget -q --show-progress "$mirror_url" -O "$archive_path"
+        wget -q --show-progress "$download_url" -O "$archive_path"
     fi
 
     # 4. 解压
