@@ -20,7 +20,7 @@ public class Agent4jWebApp {
         // 全局 CORS 处理（优先级 -1 确保最先执行）
         Solon.app().router().filter(-1, new CrossFilter().allowedOrigins("*"));
         System.out.printf("""
-                http://127.0.0.1:%s/index.html
+                启动成功：http://127.0.0.1:%s/index.html
                 %n""", Solon.cfg().serverPort());
     }
 }

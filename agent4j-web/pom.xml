@@ -28,6 +28,17 @@
         <dependency>
             <groupId>org.noear</groupId>
             <artifactId>solon-web</artifactId>
+            <exclusions>
+                <exclusion>
+                    <artifactId>solon-server-smarthttp</artifactId>
+                    <groupId>org.noear</groupId>
+                </exclusion>
+            </exclusions>
+        </dependency>
+        <dependency>
+            <groupId>org.noear</groupId>
+            <artifactId>solon-server-jetty</artifactId>
+            <version>${solon.version}</version>
         </dependency>
         <dependency>
             <groupId>org.noear</groupId>
@@ -71,10 +82,11 @@
 
         <!-- Test -->
         <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <scope>test</scope>
+            <groupId>org.noear</groupId>
+            <artifactId>solon-test-junit5</artifactId>
+            <version>${solon.version}</version>
         </dependency>
+
     </dependencies>
 
     <build>
