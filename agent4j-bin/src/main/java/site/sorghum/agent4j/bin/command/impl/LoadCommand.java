@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.command.impl;
 
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.agent.ChatMessage;
 import site.sorghum.agent4j.bin.command.ChatCommand;
@@ -19,6 +20,7 @@ import java.util.List;
  * @author Sorghum
  */
 @Component
+@Slf4j
 public class LoadCommand implements ChatCommand {
 
     @Override
@@ -52,7 +54,7 @@ public class LoadCommand implements ChatCommand {
     public CommandResult execute(MessageWrapper input, ChatCommandContext context) throws Exception {
         SessionStore store = context.getAgent().getSessionStore();
         if (store == null) {
-            System.out.println("(会话存储未启用)");
+            log.info("(会话存储未启用)");
             return CommandResult.CONTINUE;
         }
 
@@ -61,7 +63,7 @@ public class LoadCommand implements ChatCommand {
             int n = Integer.parseInt(numPart);
             List<SessionStore.SessionInfo> sessions = store.list();
             if (n < 0 || n >= sessions.size()) {
-                System.out.println("(无效编号)");
+                log.info("(无效编号)");
                 return CommandResult.CONTINUE;
             }
             String name = sessions.get(n).name();
@@ -78,9 +80,9 @@ public class LoadCommand implements ChatCommand {
                 context.getAgent().injectHistory(m);
             }
 
-            System.out.println("(已加载会话: " + name + ", " + loaded.size() + " 条消息)");
+            log.info("(已加载会话: " + name + ", " + loaded.size() + " 条消息)");
         } catch (NumberFormatException e) {
-            System.out.println("用法: /load N");
+            log.info("用法: /load N");
         }
         return CommandResult.CONTINUE;
     }

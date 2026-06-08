@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.command.impl;
 
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
@@ -15,6 +16,7 @@ import site.sorghum.agent4j.bin.command.MessageWrapper;
  * @author Sorghum
  */
 @Component
+@Slf4j
 public class RewindCommand implements ChatCommand {
 
     @Override
@@ -49,16 +51,15 @@ public class RewindCommand implements ChatCommand {
         String numPart = input.getMessage().trim().substring(8).trim(); // 去掉 "/rewind "
         try {
             int n = Integer.parseInt(numPart);
-            System.out.println("回退到第 " + n + " 轮...");
+            log.info("回退到第 {} 轮...",n);
             String reply = context.getAgent().rewind(n);
             if (reply != null) {
-                System.out.println();
-                System.out.println(reply);
+                log.info(reply);
             } else {
-                System.out.println("(无效的轮次)");
+                log.info("(无效的轮次)");
             }
         } catch (NumberFormatException e) {
-            System.out.println("用法: /rewind N");
+            log.info("用法: /rewind N");
         }
         return CommandResult.CONTINUE;
     }

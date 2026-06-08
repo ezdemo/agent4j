@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.command.impl;
 
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.agent.UserMessage;
 import site.sorghum.agent4j.bin.command.ChatCommand;
@@ -17,6 +18,7 @@ import site.sorghum.agent4j.tool.LogLevel;
  * @author Sorghum
  */
 @Component
+@Slf4j
 public class InitCommand implements ChatCommand {
 
     @Override
@@ -36,7 +38,7 @@ public class InitCommand implements ChatCommand {
 
     @Override
     public CommandResult execute(MessageWrapper input, ChatCommandContext context) {
-        System.out.println("正在分析项目...\n");
+        log.info("正在分析项目...\n");
         context.getAgent().getOutput().onReasoning("正在分析项目...");
         String prompt = """
                 请全面分析这个项目的代码库，生成 agent4j.md 放在项目根目录。

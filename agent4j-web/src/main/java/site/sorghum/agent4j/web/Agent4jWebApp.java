@@ -19,14 +19,8 @@ public class Agent4jWebApp {
 
         // 全局 CORS 处理（优先级 -1 确保最先执行）
         Solon.app().router().filter(-1, new CrossFilter().allowedOrigins("*"));
-        System.out.println("╔══════════════════════════════════════════╗");
-        System.out.println("║    Agent4j Web API  — 已启动             ║");
-        System.out.println("║    /api/chat       — 聊天接口            ║");
-        System.out.println("║    /api/sessions   — 会话管理            ║");
-        System.out.println("║    /api/tools      — 工具管理            ║");
-        System.out.println("║    /api/openapi    — OpenAPI 管理        ║");
-        System.out.println("║    /api/agent      — Agent 控制          ║");
-        System.out.println("║    /api/config     — 配置查询            ║");
-        System.out.println("╚══════════════════════════════════════════╝");
+        System.out.printf("""
+                http://127.0.0.1:%s/index.html
+                %n""", Solon.cfg().serverPort());
     }
 }

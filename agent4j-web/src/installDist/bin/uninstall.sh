@@ -1,12 +1,12 @@
 #!/bin/bash
 # =============================================
-#  Agent4j Web Uninstall Script (Linux / macOS)
-#  完全卸载 Agent4j Web，包括配置目录
+#  Agent4j Uninstall Script (Linux / macOS)
+#  完全卸载 Agent4j，包括配置目录
 # =============================================
 
 echo ""
 echo "============================================"
-echo "   Agent4j Web Uninstaller"
+echo "   Agent4j Uninstaller"
 echo "============================================"
 echo ""
 
@@ -14,13 +14,13 @@ INSTALL_DIR="$HOME/.agent4j"
 
 # 检查是否已安装
 if [ ! -d "$INSTALL_DIR" ]; then
-    echo "[Info] Agent4j Web is not installed."
+    echo "[Info] Agent4j is not installed."
     echo "       Directory not found: $INSTALL_DIR"
     exit 0
 fi
 
 # 确认卸载
-echo "This will remove Agent4j Web completely:"
+echo "This will remove Agent4j completely:"
 echo "  - Executables and configuration"
 echo "  - Sessions and memory data"
 echo "  - Skills modules"
@@ -93,21 +93,21 @@ echo ""
 echo "[2/4] Removing command symlinks..."
 
 # 系统级链接
-if [ -L "/usr/local/bin/agent4j-web" ] || [ -f "/usr/local/bin/agent4j-web" ]; then
+if [ -L "/usr/local/bin/agent4j" ] || [ -f "/usr/local/bin/agent4j" ]; then
     if [ "$(id -u)" -eq 0 ]; then
-        rm -f /usr/local/bin/agent4j-web 2>/dev/null && echo "      Removed /usr/local/bin/agent4j-web"
+        rm -f /usr/local/bin/agent4j 2>/dev/null && echo "      Removed /usr/local/bin/agent4j"
     elif command -v sudo &> /dev/null; then
-        sudo rm -f /usr/local/bin/agent4j-web 2>/dev/null && echo "      Removed /usr/local/bin/agent4j-web"
+        sudo rm -f /usr/local/bin/agent4j 2>/dev/null && echo "      Removed /usr/local/bin/agent4j"
     fi
 fi
 
 # 用户级链接 (homebrew 或用户 bin)
-if [ -L "$HOME/.local/bin/agent4j-web" ] || [ -f "$HOME/.local/bin/agent4j-web" ]; then
-    rm -f "$HOME/.local/bin/agent4j-web" 2>/dev/null && echo "      Removed ~/.local/bin/agent4j-web"
+if [ -L "$HOME/.local/bin/agent4j" ] || [ -f "$HOME/.local/bin/agent4j" ]; then
+    rm -f "$HOME/.local/bin/agent4j" 2>/dev/null && echo "      Removed ~/.local/bin/agent4j"
 fi
 
-if [ -L "$HOME/bin/agent4j-web" ] || [ -f "$HOME/bin/agent4j-web" ]; then
-    rm -f "$HOME/bin/agent4j-web" 2>/dev/null && echo "      Removed ~/bin/agent4j-web"
+if [ -L "$HOME/bin/agent4j" ] || [ -f "$HOME/bin/agent4j" ]; then
+    rm -f "$HOME/bin/agent4j" 2>/dev/null && echo "      Removed ~/bin/agent4j"
 fi
 
 # ============================================
@@ -174,10 +174,10 @@ echo "============================================"
 echo ""
 
 if [[ $KEEP_CONFIG =~ ^[Yy]$ ]]; then
-    echo "  Agent4j Web has been removed."
+    echo "  Agent4j has been removed."
     echo "  Configuration files preserved at: $INSTALL_DIR"
 else
-    echo "  Agent4j Web has been fully removed."
+    echo "  Agent4j has been fully removed."
 fi
 
 echo ""

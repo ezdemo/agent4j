@@ -172,13 +172,39 @@ Write-Host "      Found agent4j-web.jar" -ForegroundColor Gray
 # [5/5] 创建启动脚本并配置 PATH
 # =============================================
 Write-Host ""
-Write-Host "[5/5] Setting up 'agent4j-web' command..." -ForegroundColor Yellow
+Write-Host "[5/5] Setting up 'agent4j' command..." -ForegroundColor Yellow
 
-# 创建 PowerShell 启动脚本 (agent4j-web.ps1)
-$LAUNCHER_PS1 = Join-Path $TARGET_BIN_DIR "agent4j-web.ps1"
+# 创建 PowerShell 启动脚本 (agent4j.ps1)
+$LAUNCHER_PS1 = Join-Path $TARGET_BIN_DIR "agent4j.ps1"
 $LAUNCHER_CONTENT = @'
-# Agent4j Web Launcher for PowerShell
+# Agent4j Launcher for PowerShell
 param([Parameter(ValueFromRemainingArguments)]$RestArgs)
+
+# 显示帮助
+$ShowHelp = ($RestArgs.Count -eq 0)
+if (-not $ShowHelp -and $RestArgs.Count -ge 1) {
+    $first = $RestArgs[0]
+    if ($first -eq '-h' -or $first -eq '--help' -or $first -eq 'help') {
+        $ShowHelp = $true
+    }
+}
+if ($ShowHelp) {
+    Write-Host "Agent4j — AI Coding Assistant" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "Usage:" -ForegroundColor Yellow
+    Write-Host "  agent4j web [port]    Start the web server"
+    Write-Host ""
+    Write-Host "Options:" -ForegroundColor Yellow
+    Write-Host "  port    0 = random port, 8097 = default, or any port number"
+    Write-Host ""
+    Write-Host "Examples:" -ForegroundColor Yellow
+    Write-Host "  agent4j web           Start on default port (8097)"
+    Write-Host "  agent4j web 0         Start on a random available port"
+    Write-Host "  agent4j web 9636      Start on port 9636"
+    Write-Host ""
+    Write-Host "  agent4j -h            Show this help"
+    exit 0
+}
 
 $JarDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
 $JarFile = Join-Path $JarDir "agent4j-web.jar"
@@ -222,20 +248,62 @@ try {
     # 版本检测失败时忽略，继续执行
 }
 
+# 解析 "web [port]" 子命令
+$PassThroughArgs = @()
+$i = 0
+while ($i -lt $RestArgs.Count) {
+    if ($RestArgs[$i] -eq 'web' -and $i -eq 0) {
+        $PassThroughArgs += "--solon.logging.appender.console.enable=false"
+        $i++
+        if ($i -lt $RestArgs.Count -and $RestArgs[$i] -match '^\d+$') {
+            $PassThroughArgs += "--server.port=$($RestArgs[$i])"
+            $i++
+        }
+    } else {
+        $PassThroughArgs += $RestArgs[$i]
+        $i++
+    }
+}
+
 # 运行 Java 程序
-& java @JavaArgs -jar $JarFile @RestArgs
+& java @JavaArgs -jar $JarFile @PassThroughArgs
 '@
 
 Set-Content -Path $LAUNCHER_PS1 -Value $LAUNCHER_CONTENT -Encoding UTF8
-Write-Host "      Created: agent4j-web.ps1" -ForegroundColor Gray
+Write-Host "      Created: agent4j.ps1" -ForegroundColor Gray
 
-# 创建 CMD/.bat 启动脚本 (agent4j-web.bat)
-$LAUNCHER_BAT = Join-Path $TARGET_BIN_DIR "agent4j-web.bat"
+# 创建 CMD/.bat 启动脚本 (agent4j.bat)
+$LAUNCHER_BAT = Join-Path $TARGET_BIN_DIR "agent4j.bat"
 $LAUNCHER_BAT_CONTENT = @'
 @echo off
-rem Agent4j Web Launcher for CMD
+rem Agent4j Launcher for CMD
 setlocal enabledelayedexpansion
 
+rem 显示帮助（无参数 或 -h/--help/help）
+if "%~1"=="" goto :show_help
+if "%~1"=="-h" goto :show_help
+if "%~1"=="--help" goto :show_help
+if "%~1"=="help" goto :show_help
+goto :parse_args
+
+:show_help
+echo Agent4j — AI Coding Assistant
+echo.
+echo Usage:
+echo   agent4j web [port]    Start the web server
+echo.
+echo Options:
+echo   port    0 = random port, 8097 = default, or any port number
+echo.
+echo Examples:
+echo   agent4j web           Start on default port (8097)
+echo   agent4j web 0         Start on a random available port
+echo   agent4j web 9636      Start on port 9636
+echo.
+echo   agent4j -h            Show this help
+goto :end
+
+:parse_args
 rem 获取脚本所在目录
 set "SCRIPT_DIR=%~dp0"
 set "JAR_FILE=%SCRIPT_DIR%agent4j-web.jar"
@@ -259,18 +327,62 @@ for /f "tokens=3" %%v in ('java -version 2^>^&1 ^| findstr /i version') do (
     )
 )
 
+rem 解析 "web [port]" 子命令
+set "PASS_ARGS="
+set "NEXT_IS_PORT="
+set "FIRST_ARG=1"
+for %%a in (%*) do (
+    if "!FIRST_ARG!"=="1" (
+        if "%%a"=="web" (
+            set "PASS_ARGS=!PASS_ARGS! --solon.logging.appender.console.enable=false"
+            set "NEXT_IS_PORT=1"
+        ) else (
+            set "PASS_ARGS=!PASS_ARGS! %%a"
+        )
+        set "FIRST_ARG=0"
+    ) else (
+        if defined NEXT_IS_PORT (
+            set "PASS_ARGS=!PASS_ARGS! --server.port=%%a"
+            set "NEXT_IS_PORT="
+        ) else (
+            set "PASS_ARGS=!PASS_ARGS! %%a"
+        )
+    )
+)
+
 rem 运行 Java 程序
-java %JAVA_OPTS% -jar "%JAR_FILE%" %*
+java %JAVA_OPTS% -jar "%JAR_FILE%" %PASS_ARGS%
+
+:end
 '@
 
 New-Item -Path $LAUNCHER_BAT -Value $LAUNCHER_BAT_CONTENT -Force | Out-Null
-Write-Host "      Created: agent4j-web.bat" -ForegroundColor Gray
+Write-Host "      Created: agent4j.bat" -ForegroundColor Gray
 
-# 创建 Git Bash 启动脚本 (agent4j-web)
-$LAUNCHER_SH = Join-Path $TARGET_BIN_DIR "agent4j-web"
+# 创建 Git Bash 启动脚本 (agent4j)
+$LAUNCHER_SH = Join-Path $TARGET_BIN_DIR "agent4j"
 $LAUNCHER_SH_CONTENT = @'
 #!/bin/bash
-# Agent4j Web Launcher for Git Bash / WSL
+# Agent4j Launcher for Git Bash / WSL
+
+# 显示帮助（无参数 或 -h/--help/help）
+if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$1" = "help" ]; then
+    echo -e "\033[0;36mAgent4j — AI Coding Assistant\033[0m"
+    echo ""
+    echo -e "\033[0;33mUsage:\033[0m"
+    echo "  agent4j web [port]    Start the web server"
+    echo ""
+    echo -e "\033[0;33mOptions:\033[0m"
+    echo "  port    0 = random port, 8097 = default, or any port number"
+    echo ""
+    echo -e "\033[0;33mExamples:\033[0m"
+    echo "  agent4j web           Start on default port (8097)"
+    echo "  agent4j web 0         Start on a random available port"
+    echo "  agent4j web 9636      Start on port 9636"
+    echo ""
+    echo "  agent4j -h            Show this help"
+    exit 0
+fi
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 
@@ -284,11 +396,30 @@ if [ -n "$JAVA_VER" ] && [ "$JAVA_VER" -ge 21 ]; then
     JAVA_OPTS="$JAVA_OPTS --enable-native-access=ALL-UNNAMED"
 fi
 
-java $JAVA_OPTS -jar "$SCRIPT_DIR/agent4j-web.jar" "$@"
+# 解析 "web [port]" 子命令
+PASSTHROUGH_ARGS=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        web)
+            PASSTHROUGH_ARGS+=("--solon.logging.appender.console.enable=false")
+            shift
+            if [ $# -gt 0 ] && echo "$1" | grep -qE '^[0-9]+$'; then
+                PASSTHROUGH_ARGS+=("--server.port=$1")
+                shift
+            fi
+            ;;
+        *)
+            PASSTHROUGH_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
+java $JAVA_OPTS -jar "$SCRIPT_DIR/agent4j-web.jar" "${PASSTHROUGH_ARGS[@]}"
 '@
 
 Set-Content -Path $LAUNCHER_SH -Value $LAUNCHER_SH_CONTENT -Encoding UTF8 -NoNewline
-Write-Host "      Created: agent4j-web (for Git Bash)" -ForegroundColor Gray
+Write-Host "      Created: agent4j (for Git Bash)" -ForegroundColor Gray
 
 # =============================================
 # 配置 PATH 环境变量
@@ -320,7 +451,9 @@ Write-Host "  Java version: $javaVersion" -ForegroundColor White
 Write-Host ""
 Write-Host "  Usage:" -ForegroundColor Cyan
 Write-Host "    1. Open a NEW terminal window (PowerShell or Git Bash)"
-Write-Host "    2. Run: 'agent4j-web'"
+Write-Host "    2. Run: 'agent4j web'        (default port 8097)"
+Write-Host "       Run: 'agent4j web 0'      (random port)"
+Write-Host "       Run: 'agent4j web 9636'   (specify port 9636)"
 Write-Host ""
 Write-Host "  Directory structure:" -ForegroundColor Cyan
 Write-Host "    $env:USERPROFILE\.agent4j\"
@@ -328,15 +461,15 @@ Write-Host "    +-- config.json      (configuration, preserved)"
 Write-Host "    +-- agent4j.md       (project docs, preserved)"
 Write-Host "    +-- bin/             (executables)"
 Write-Host "    |   +-- agent4j-web.jar"
-Write-Host "    |   +-- agent4j-web.ps1   (PowerShell launcher)"
-Write-Host "    |   +-- agent4j-web.bat   (CMD launcher)"
-Write-Host "    |   +-- agent4j-web       (Git Bash launcher)"
+Write-Host "    |   +-- agent4j.ps1       (PowerShell launcher)"
+Write-Host "    |   +-- agent4j.bat       (CMD launcher)"
+Write-Host "    |   +-- agent4j           (Git Bash launcher)"
 Write-Host "    |   +-- uninstall.ps1     (uninstall script)"
 Write-Host ""
 Write-Host "  API Endpoint:" -ForegroundColor Cyan
 Write-Host "    http://localhost:8097"
 Write-Host ""
-Write-Host "  [Tip] To use agent4j-web immediately in current terminal:" -ForegroundColor Yellow
+Write-Host "  [Tip] To use agent4j immediately in current terminal:" -ForegroundColor Yellow
 Write-Host "    PowerShell: `$env:Path = [Environment]::GetEnvironmentVariable('Path','User')"
 Write-Host ""
 
