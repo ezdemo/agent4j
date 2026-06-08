@@ -411,18 +411,19 @@ Set-Content -Path $LAUNCHER_PS1 -Value $LAUNCHER_PS1_CONTENT -Encoding UTF8
 Write-Host "      Created: agent4j.ps1" -ForegroundColor Gray
 
 # —— CMD/.bat 启动脚本 (agent4j.bat) ——
+# NOTE: .bat must be ASCII-only (no Chinese), written in system default encoding (GBK on zh-CN Windows)
 $LAUNCHER_BAT = Join-Path $TARGET_BIN_DIR "agent4j.bat"
 $LAUNCHER_BAT_CONTENT = @'
 @echo off
-rem Agent4j Launcher for CMD — uses bundled JRE 25
+rem Agent4j Launcher for CMD - uses bundled JRE 25
 setlocal enabledelayedexpansion
 
-rem 获取脚本所在目录并定位 JRE
+rem Locate script dir and JRE
 set "SCRIPT_DIR=%~dp0"
 set "AGENT4J_HOME=%SCRIPT_DIR%.."
 set "JAVA_BIN=%AGENT4J_HOME%\jre25\bin\java.exe"
 
-rem 如果捆绑 JRE 不存在，回退到系统 Java
+rem Fallback to system Java if bundled JRE missing
 if not exist "%JAVA_BIN%" (
     where java >nul 2>&1
     if %ERRORLEVEL% equ 0 (
@@ -435,7 +436,7 @@ if not exist "%JAVA_BIN%" (
     )
 )
 
-rem 显示帮助（无参数 或 -h/--help/help）
+rem Show help (no args / -h / --help / help)
 if "%~1"=="" goto :show_help
 if "%~1"=="-h" goto :show_help
 if "%~1"=="--help" goto :show_help
@@ -443,7 +444,7 @@ if "%~1"=="help" goto :show_help
 goto :parse_args
 
 :show_help
-echo Agent4j — AI Coding Assistant
+echo Agent4j - AI Coding Assistant
 echo.
 echo Usage:
 echo   agent4j web [port]    Start the web server
@@ -468,10 +469,10 @@ if not exist "%JAR_FILE%" (
     exit /b 1
 )
 
-rem 设置 Java 编码参数
+rem Java encoding options
 set "JAVA_OPTS=-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dstdin.encoding=UTF-8"
 
-rem 检测 Java 版本，如果是 21+ 则添加 --enable-native-access 参数
+rem Add --enable-native-access for Java 21+
 for /f "tokens=3" %%v in ('"%JAVA_BIN%" -version 2^>^&1 ^| findstr /i version') do (
     set "VER=%%v"
     set "VER=!VER:~1!"
@@ -480,7 +481,7 @@ for /f "tokens=3" %%v in ('"%JAVA_BIN%" -version 2^>^&1 ^| findstr /i version') 
     )
 )
 
-rem 解析 "web [port]" 子命令
+rem Parse "web [port]" subcommand
 set "PASS_ARGS="
 set "NEXT_IS_PORT="
 set "FIRST_ARG=1"
@@ -509,13 +510,14 @@ for %%a in (%*) do (
     )
 )
 
-rem 运行 Java 程序（使用捆绑 JRE）
+rem Run Java with bundled JRE
 "%JAVA_BIN%" %JAVA_OPTS% -jar "%JAR_FILE%" %PASS_ARGS%
 
 :end
 '@
 
-New-Item -Path $LAUNCHER_BAT -Value $LAUNCHER_BAT_CONTENT -Force | Out-Null
+# Write .bat in system default encoding (GBK on zh-CN Windows) to avoid garbled chars in CMD
+[System.IO.File]::WriteAllText($LAUNCHER_BAT, $LAUNCHER_BAT_CONTENT, [System.Text.Encoding]::Default)
 Write-Host "      Created: agent4j.bat" -ForegroundColor Gray
 
 # —— Git Bash 启动脚本 (agent4j) ——
