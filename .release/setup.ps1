@@ -5,7 +5,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$VERSION = "v26.6.8"
+$VERSION = "v26.6.8.1"
 $PACKAGE_URL = "https://gitee.com/ezdemo/agent4j/releases/download/$VERSION/agent4j-web-dist.tar.gz"
 $TEMP_DIR = Join-Path $env:TEMP "agent4j-install"
 

@@ -1,6 +1,6 @@
-import { defineConfig } from 'vite'
+import {defineConfig} from 'vite'
 import vue from '@vitejs/plugin-vue'
-import { resolve } from 'path'
+import {resolve} from 'path'
 
 export default defineConfig({
   plugins: [
@@ -28,7 +28,14 @@ export default defineConfig({
     port: 3000,
     host: '0.0.0.0',
     open: true,
-    cors: true
+      cors: true,
+      // 开发环境下将 /api 请求代理到后端，避免跨域
+      proxy: {
+          '/api': {
+              target: 'http://localhost:4567',
+              changeOrigin: true
+          }
+      }
   },
   
   build: {
