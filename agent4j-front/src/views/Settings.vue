@@ -104,14 +104,14 @@
               <div class="setting-row">
                 <div class="setting-info">
                   <label class="setting-label">API 地址</label>
-                  <p class="setting-hint">留空使用默认代理（localhost:8097）</p>
+                  <p class="setting-hint">留空使用默认值（{{ DEFAULT_API_BASE }}）</p>
                 </div>
                 <div class="setting-control">
                   <div class="input-group">
                     <input
                         v-model="settings.server.apiBaseUrl"
                         class="form-input"
-                        placeholder="http://localhost:8097"
+                        :placeholder="DEFAULT_API_BASE"
                         type="text"
                     />
                     <button
@@ -1213,7 +1213,7 @@ X-Custom-Header=value"
 import {computed, onMounted, reactive, ref, watch} from 'vue'
 import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
-import {configAPI, openApiAPI, mcpAPI, skillMarketAPI, agentAPI} from '../services/api'
+import {configAPI, openApiAPI, mcpAPI, skillMarketAPI, agentAPI, DEFAULT_API_BASE} from '../services/api'
 
 const store = useAppStore()
 

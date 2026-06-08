@@ -29,7 +29,7 @@
           <input
             v-model="serverUrl"
             class="form-input"
-            placeholder="http://localhost:8097"
+            :placeholder="DEFAULT_API_BASE"
             @keyup.enter="handleConnect"
           />
         </div>
@@ -55,7 +55,7 @@
 
 <script setup>
 import { ref, onMounted } from 'vue'
-import { systemAPI } from '../services/api'
+import { systemAPI, DEFAULT_API_BASE } from '../services/api'
 import { invoke } from '@tauri-apps/api/core'
 
 

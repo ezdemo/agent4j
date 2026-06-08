@@ -5,9 +5,13 @@ import 'ant-design-vue/dist/reset.css'
 import App from './App.vue'
 import router from './router'
 import './assets/styles/main.css'
+import { initConfig } from './services/api'
 
 // 初始化应用
 const initApp = async () => {
+  // 优先从 public/config.json 加载运行时配置
+  await initConfig()
+
   // 创建应用实例
   const app = createApp(App)
 
