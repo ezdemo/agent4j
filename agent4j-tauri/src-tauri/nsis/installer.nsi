@@ -1,62 +1,66 @@
 ; ============================================
-; Agent4j Desktop — 自定义 NSIS 安装界面
+; Agent4j Desktop — NSIS Installer
+; ============================================
+;  Overview:
+;    Per-user install (no admin required), MUI2-based,
+;    with optional desktop/start-menu shortcuts and auto-start.
 ; ============================================
 
 !include "MUI2.nsh"
 !include "FileFunc.nsh"
 !include "nsDialogs.nsh"
 
-; ── Tauri 定义（由 Tauri 自动注入） ──
-!define APP_NAME "${PRODUCT_NAME}"
-!define APP_VERSION "${VERSION}"
+; ── Tauri-injected defines ──
+!define APP_NAME      "${PRODUCT_NAME}"
+!define APP_VERSION   "${VERSION}"
 !define APP_PUBLISHER "Agent4j"
-!define APP_WEB_SITE "https://github.com/ezdemo/agent4j"
-!define APP_DIR_REGKEY "Software\Microsoft\Windows\CurrentVersion\App Paths\${APP_NAME}.exe"
-!define APP_UNINST_KEY "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
+!define APP_WEB_SITE  "https://gitee.com/ezdemo/agent4j"
+!define APP_DIR_REGKEY  "Software\Microsoft\Windows\CurrentVersion\App Paths\${APP_NAME}.exe"
+!define APP_UNINST_KEY  "Software\Microsoft\Windows\CurrentVersion\Uninstall\${APP_NAME}"
 
-; ── 安装目录 ──
+; ── Install directory ──
 !define INSTALL_DIR "$LOCALAPPDATA\${APP_NAME}"
 
-; ── 图标 ──
-!define MUI_ICON "icons\icon.ico"
-!define MUI_UNICON "icons\icon.ico"
+; ── Icons ──
+!define MUI_ICON    "icons\icon.ico"
+!define MUI_UNICON  "icons\icon.ico"
 
-; ── 欢迎页面 ──
-!define MUI_WELCOMEFINISHPAGE_BITMAP "icons\128x128.png"
-!define MUI_UNWELCOMEFINISHPAGE_BITMAP "icons\128x128.png"
+; ── Welcome / finish bitmaps ──
+!define MUI_WELCOMEFINISHPAGE_BITMAP    "icons\128x128.png"
+!define MUI_UNWELCOMEFINISHPAGE_BITMAP  "icons\128x128.png"
 
-; ── 标题 ──
+; ── Abort warning ──
 !define MUI_ABORTWARNING
 !define MUI_UNABORTWARNING
 
-; ── 仅当前用户安装，不需要管理员权限 ──
+; ── Per-user install (no admin rights needed) ──
 RequestExecutionLevel user
 
 ; ============================================
-; 界面
+; UI Strings
 ; ============================================
 
-; 欢迎页
-!define MUI_WELCOMEPAGE_TITLE "欢迎安装 Agent4j"
-!define MUI_WELCOMEPAGE_TEXT "Agent4j 是一款基于 Java 的 AI 编码代理桌面客户端。$\r$\n$\r$\n点击下一步继续安装。"
+; Welcome page
+!define MUI_WELCOMEPAGE_TITLE "Welcome to Agent4j Setup"
+!define MUI_WELCOMEPAGE_TEXT  "Agent4j is a Java-based AI coding agent desktop client.$\r$\n$\r$\nThis setup will install Agent4j for the current user (no administrator privileges required).$\r$\n$\r$\nClick Next to continue."
 
-; 安装完成页
-!define MUI_FINISHPAGE_TITLE "安装完成"
-!define MUI_FINISHPAGE_TEXT "Agent4j 已成功安装到您的计算机。$\r$\n$\r$\n点击完成启动应用。"
-!define MUI_FINISHPAGE_RUN "$INSTDIR\${APP_NAME}.exe"
-!define MUI_FINISHPAGE_RUN_TEXT "启动 Agent4j"
-!define MUI_FINISHPAGE_LINK "访问项目主页"
+; Finish page
+!define MUI_FINISHPAGE_TITLE      "Installation Complete"
+!define MUI_FINISHPAGE_TEXT       "Agent4j has been installed successfully.$\r$\n$\r$\nClick Finish to launch the application."
+!define MUI_FINISHPAGE_RUN        "$INSTDIR\${APP_NAME}.exe"
+!define MUI_FINISHPAGE_RUN_TEXT   "Launch Agent4j"
+!define MUI_FINISHPAGE_LINK       "Visit Project Homepage"
 !define MUI_FINISHPAGE_LINK_LOCATION "${APP_WEB_SITE}"
 
-; 卸载完成页
-!define MUI_UNFINISHPAGE_TITLE "卸载完成"
-!define MUI_UNFINISHPAGE_TEXT "Agent4j 已从您的计算机中移除。"
+; Uninstall finish page
+!define MUI_UNFINISHPAGE_TITLE "Uninstall Complete"
+!define MUI_UNFINISHPAGE_TEXT  "Agent4j has been removed from your computer."
 
 ; ============================================
-; 页面
+; Pages
 ; ============================================
 !insertmacro MUI_PAGE_WELCOME
-!insertmacro MUI_PAGE_LICENSE "license.txt"
+!insertmacro MUI_PAGE_LICENSE    "license.txt"
 !insertmacro MUI_PAGE_COMPONENTS
 !insertmacro MUI_PAGE_DIRECTORY
 !insertmacro MUI_PAGE_INSTFILES
@@ -68,84 +72,82 @@ RequestExecutionLevel user
 !insertmacro MUI_UNPAGE_FINISH
 
 ; ============================================
-; 语言
+; Languages
 ; ============================================
-!insertmacro MUI_LANGUAGE "SimpChinese"
 !insertmacro MUI_LANGUAGE "English"
+!insertmacro MUI_LANGUAGE "SimpChinese"
 
 ; ============================================
-; 安装区段
+; Install Sections
 ; ============================================
 
-Section "Agent4j 主程序 (必选)" SecMain
+Section "Agent4j (required)" SecMain
   SectionIn RO
 
-  ; 设置输出路径
   SetOutPath "$INSTDIR"
 
-  ; 安装文件（由 Tauri 自动填充）
-  ; File "release\*.*"
+  ; Files are injected by Tauri at build time.
+  ; File /r "release\*.*"
 
-  ; 写入卸载程序
   WriteUninstaller "$INSTDIR\uninstall.exe"
 
-  ; 注册卸载信息
-  WriteRegStr HKCU "${APP_UNINST_KEY}" "DisplayName" "${APP_NAME}"
-  WriteRegStr HKCU "${APP_UNINST_KEY}" "UninstallString" "$INSTDIR\uninstall.exe"
-  WriteRegStr HKCU "${APP_UNINST_KEY}" "DisplayIcon" "$INSTDIR\${APP_NAME}.exe"
-  WriteRegStr HKCU "${APP_UNINST_KEY}" "DisplayVersion" "${APP_VERSION}"
-  WriteRegStr HKCU "${APP_UNINST_KEY}" "Publisher" "${APP_PUBLISHER}"
-  WriteRegStr HKCU "${APP_UNINST_KEY}" "URLInfoAbout" "${APP_WEB_SITE}"
-  WriteRegDWORD HKCU "${APP_UNINST_KEY}" "NoModify" 1
-  WriteRegDWORD HKCU "${APP_UNINST_KEY}" "NoRepair" 1
+  ; ── Register uninstall info ──
+  WriteRegStr   HKCU "${APP_UNINST_KEY}" "DisplayName"     "${APP_NAME}"
+  WriteRegStr   HKCU "${APP_UNINST_KEY}" "UninstallString" "$INSTDIR\uninstall.exe"
+  WriteRegStr   HKCU "${APP_UNINST_KEY}" "DisplayIcon"     "$INSTDIR\${APP_NAME}.exe"
+  WriteRegStr   HKCU "${APP_UNINST_KEY}" "DisplayVersion"  "${APP_VERSION}"
+  WriteRegStr   HKCU "${APP_UNINST_KEY}" "Publisher"       "${APP_PUBLISHER}"
+  WriteRegStr   HKCU "${APP_UNINST_KEY}" "URLInfoAbout"    "${APP_WEB_SITE}"
+  WriteRegDWORD HKCU "${APP_UNINST_KEY}" "NoModify"        1
+  WriteRegDWORD HKCU "${APP_UNINST_KEY}" "NoRepair"        1
 
-  ; 计算安装大小
+  ; ── Estimated size ──
   ${GetSize} "$INSTDIR" "/S=0K" $0 $1 $2
   IntFmt $0 "0x%08X" $0
   WriteRegDWORD HKCU "${APP_UNINST_KEY}" "EstimatedSize" "$0"
 SectionEnd
 
-Section "创建桌面快捷方式" SecDesktop
+Section "Desktop Shortcut" SecDesktop
   CreateShortCut "$DESKTOP\${APP_NAME}.lnk" "$INSTDIR\${APP_NAME}.exe" "" "$INSTDIR\${APP_NAME}.exe" 0
 SectionEnd
 
-Section "创建开始菜单快捷方式" SecStartMenu
+Section "Start Menu Shortcuts" SecStartMenu
   CreateDirectory "$SMPROGRAMS\${APP_NAME}"
-  CreateShortCut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk" "$INSTDIR\${APP_NAME}.exe" "" "$INSTDIR\${APP_NAME}.exe" 0
-  CreateShortCut "$SMPROGRAMS\${APP_NAME}\卸载 ${APP_NAME}.lnk" "$INSTDIR\uninstall.exe"
+  CreateShortCut "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"           "$INSTDIR\${APP_NAME}.exe"  "" "$INSTDIR\${APP_NAME}.exe" 0
+  CreateShortCut "$SMPROGRAMS\${APP_NAME}\Uninstall ${APP_NAME}.lnk" "$INSTDIR\uninstall.exe"
 SectionEnd
 
-Section "开机自启动" SecAutoStart
+Section "Auto-start with Windows" SecAutoStart
   WriteRegStr HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${APP_NAME}" "$INSTDIR\${APP_NAME}.exe --minimized"
 SectionEnd
 
 ; ============================================
-; 区段描述
+; Section Descriptions
 ; ============================================
 !insertmacro MUI_FUNCTION_DESCRIPTION_BEGIN
-  !insertmacro MUI_DESCRIPTION_TEXT ${SecMain}      "安装 Agent4j 主程序文件（必需）"
-  !insertmacro MUI_DESCRIPTION_TEXT ${SecDesktop}   "在桌面创建快捷方式"
-  !insertmacro MUI_DESCRIPTION_TEXT ${SecStartMenu} "在开始菜单创建程序组"
-  !insertmacro MUI_DESCRIPTION_TEXT ${SecAutoStart} "Windows 启动时自动运行"
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecMain}      "Install Agent4j core files (required)."
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecDesktop}   "Create a shortcut on the desktop."
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecStartMenu} "Create shortcuts in the Start Menu."
+  !insertmacro MUI_DESCRIPTION_TEXT ${SecAutoStart} "Launch Agent4j automatically when Windows starts."
 !insertmacro MUI_FUNCTION_DESCRIPTION_END
 
 ; ============================================
-; 卸载区段
+; Uninstall Section
 ; ============================================
 
 Section "Uninstall"
-  ; 删除文件
+  ; ── Remove installed files ──
   Delete "$INSTDIR\${APP_NAME}.exe"
   Delete "$INSTDIR\uninstall.exe"
+  ; Remove extra resources if present
+  RMDir /r "$INSTDIR\resources"
   RMDir "$INSTDIR"
 
-  ; 删除快捷方式
+  ; ── Remove shortcuts ──
   Delete "$DESKTOP\${APP_NAME}.lnk"
-  Delete "$SMPROGRAMS\${APP_NAME}\${APP_NAME}.lnk"
-  Delete "$SMPROGRAMS\${APP_NAME}\卸载 ${APP_NAME}.lnk"
-  RMDir "$SMPROGRAMS\${APP_NAME}"
+  RMDir /r "$SMPROGRAMS\${APP_NAME}"
 
-  ; 删除注册表项
-  DeleteRegKey HKCU "${APP_UNINST_KEY}"
+  ; ── Remove registry entries ──
+  DeleteRegKey   HKCU "${APP_UNINST_KEY}"
   DeleteRegValue HKCU "Software\Microsoft\Windows\CurrentVersion\Run" "${APP_NAME}"
 SectionEnd
