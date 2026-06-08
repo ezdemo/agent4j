@@ -6,7 +6,9 @@ server:
 
 solon.logging:
   level: "DEBUG"
-
+#添加MIME印射（如果有需要？）
+solon.mime:
+  json: "application/json"
 knife4j.enable: true
 knife4j.basic.enable: true
 knife4j.basic.username: admin

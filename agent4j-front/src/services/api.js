@@ -1,10 +1,23 @@
 ﻿import axios from 'axios'
 
-// 默认后端地址（浏览器模式用 8097，Tauri 模式由 Rust 动态分配）
-const DEFAULT_API_BASE = 'http://localhost:8097'
+/** 硬编码兜底默认值，运行时优先读 public/config.json */
+export const DEFAULT_API_BASE = 'http://localhost:8097'
+
+/** 应用启动时调用一次，从 public/config.json 加载默认地址到 localStorage */
+export async function initConfig() {
+  try {
+    const resp = await fetch('/config.json')
+    if (resp.ok) {
+      const cfg = await resp.json()
+      if (cfg.apiBase && !localStorage.getItem('agent4j-api-base')) {
+        localStorage.setItem('agent4j-api-base', cfg.apiBase)
+      }
+    }
+  } catch { /* 加载失败则用 DEFAULT_API_BASE */ }
+}
 
 // 读取持久化的 API 地址（用户在设置页配置的）
-// 浏览器模式下默认用 localhost:8097，避免相对路径走到前端端口
+// 优先级：localStorage 用户设置 > config.json > 硬编码
 function getCustomBaseURL() {
   return localStorage.getItem('agent4j-api-base') || DEFAULT_API_BASE
 }
