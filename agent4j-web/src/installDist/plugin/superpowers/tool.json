@@ -1,10 +1,4 @@
 {
   "name": "superpower",
-  "description": "Agent4j 超级能力插件集——提供多种高级 AI 编码辅助能力",
-  "tools": {
-    "using-superpowers": {
-      "toolName": "superpower_meta",
-      "description": "使用超级能力：学习如何组合和编排多个超级能力技能完成复杂任务"
-    }
-  }
+  "description": "Agent4j 超级能力插件集——提供多种高级 AI 编码辅助能力"
 }
