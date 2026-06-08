@@ -1,7 +1,12 @@
 package site.sorghum.agent4j.tool.solon.common;
 
-import org.noear.solon.ai.skills.cli.CliSkillProvider;
-import org.noear.solon.ai.skills.cli.PoolManager;
+import lombok.Getter;
+import org.noear.solon.ai.talents.cli.SkillTalent;
+import org.noear.solon.ai.talents.cli.TerminalTalent;
+import org.noear.solon.ai.talents.cli.TerminalTalentProxy;
+import org.noear.solon.ai.talents.mount.MountDir;
+import org.noear.solon.ai.talents.mount.MountManager;
+import org.noear.solon.ai.talents.mount.MountType;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.solon.SolonToTools;
 import site.sorghum.agent4j.tool.solon.ToolManager;
@@ -10,17 +15,23 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class Agent4JSkillProvider extends CliSkillProvider implements SolonToTools {
-
+public class Agent4JSkillProvider implements SolonToTools {
+    SkillTalent skillTalent;
+    TerminalTalentProxy terminalTalentProxy;
     public static Map<String, Agent4JSkillProvider> cliSkillProviderMap = new ConcurrentHashMap<>();
-    public static PoolManager poolManager = new PoolManager() {{
-        register("@skill", "~/.claude/skills");
-        register("@superpowers-skill", "~/.agent4j/plugin/superpowers");
-    }};
+    @Getter
+    public MountManager poolManager;
 
     public Agent4JSkillProvider(String workDir) {
-        super(workDir, poolManager);
-        this.sandboxMode(false);
+        poolManager = new MountManager(workDir) {{
+            register(MountDir.builder().type(MountType.SKILLS).alias("@claude-skills").path("~/.claude/skills").build());
+            register(MountDir.builder().type(MountType.SKILLS).alias("@agent4j-skills").path("~/.agent4j/skills").build());
+            register(MountDir.builder().type(MountType.SKILLS).alias("@superpowers-skill").path("~/.agent4j/plugin/superpowers").build());
+        }};
+        skillTalent = new SkillTalent(poolManager);
+        TerminalTalent terminalTalent = new TerminalTalent(poolManager);
+        terminalTalentProxy = new TerminalTalentProxy(terminalTalent);
+        terminalTalent.setSandboxMode(false);
     }
 
     public static Agent4JSkillProvider getOrCreate(String rootDir) {
@@ -29,7 +40,10 @@ public class Agent4JSkillProvider extends CliSkillProvider implements SolonToToo
 
     @Override
     public List<AgentTool> getTools() {
-        return ToolManager.getToolsFromSKill(this.getSkills());
+        return ToolManager.getToolsFromSKill(List.of(
+                skillTalent,
+                terminalTalentProxy
+        ));
     }
 
     @Override

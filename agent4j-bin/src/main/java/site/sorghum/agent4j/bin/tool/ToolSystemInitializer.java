@@ -145,16 +145,9 @@ public class ToolSystemInitializer {
         if (workspace == null) return "";
         StringBuilder sb = new StringBuilder();
         for (String name : new String[]{"agent4j.md", "CLAUDE.md"}) {
-            Path file = workspace.resolve(name);
-            if (java.nio.file.Files.exists(file)) {
-                try {
-                    String content = java.nio.file.Files.readString(file);
-                    if (!sb.isEmpty()) sb.append("\n\n");
-                    sb.append("[来自 ").append(name).append(" 的项目上下文]\n");
-                    sb.append(content.trim());
-                } catch (IOException ignored) {
-                }
-            }
+            sb.append("""
+                    按需加载: 项目文档（%s）
+                    """.formatted(name));
         }
         return sb.toString();
     }

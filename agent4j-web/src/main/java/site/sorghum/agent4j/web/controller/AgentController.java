@@ -3,7 +3,7 @@ package site.sorghum.agent4j.web.controller;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
-import org.noear.solon.ai.skills.cli.SkillDir;
+import org.noear.solon.ai.talents.mount.SkillDir;
 import org.noear.solon.annotation.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,7 +83,7 @@ public class AgentController {
                     .map(s -> new SkillMetaDTO(
                             s.getName(),
                             s.getDescription(),
-                            s.getPoolAlias(),
+                            s.getAliasPath(),
                             ""
                     ))
                     .collect(Collectors.toList());

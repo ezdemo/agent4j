@@ -14,6 +14,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.stream.Collectors;
 
 /**
  * 插件工具提供者——自动扫描 ~/.agent4j/plugin/ 下的插件，
@@ -28,6 +29,8 @@ import java.util.List;
 public class PluginToolProvider implements SolonToTools {
 
     private static final String CONFIG_FILE = "tool.json";
+
+    List<PluginConfig> configs = new ArrayList<>();
 
     private Path pluginRoot() {
         return Paths.get(System.getProperty("user.home", "."), ".agent4j", "plugin");
@@ -44,7 +47,7 @@ public class PluginToolProvider implements SolonToTools {
                 if (!Files.isDirectory(pluginDir)) continue;
                 PluginConfig config = readConfig(pluginDir);
                 if (config == null) continue;
-
+                configs.add(config);
                 int count = 0;
                 try (DirectoryStream<Path> skills = Files.newDirectoryStream(pluginDir)) {
                     for (Path skillDir : skills) {
@@ -63,6 +66,14 @@ public class PluginToolProvider implements SolonToTools {
             log.error("扫描插件目录失败: {}", root, e);
         }
         return tools;
+    }
+
+    @Override
+    public String getSystemPrompt() {
+        log.info("configs: {}", configs);
+        return configs.stream().map(
+                c -> "### " + c.getName() + "\n" + c.getDescription() + "\n"
+        ).collect(Collectors.joining("\n"));
     }
 
     private PluginConfig readConfig(Path pluginDir) {

@@ -5,7 +5,7 @@ import org.noear.snack4.Feature;
 import org.noear.snack4.ONode;
 import org.noear.snack4.Options;
 import org.noear.snack4.json.JsonWriter;
-import org.noear.solon.ai.skills.openapi.ApiAuthenticator;
+import org.noear.solon.ai.talents.gateway.openapi.ApiAuthenticator;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
 import org.noear.solon.annotation.Inject;
