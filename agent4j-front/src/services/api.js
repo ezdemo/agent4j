@@ -167,8 +167,10 @@ export const chatAPI = {
           if (options.images && options.images.length > 0) {
               requestBody.images = options.images
           }
-        
-        const base = getCustomBaseURL() || ''
+
+          // 剔除尾部斜杠，防止 apiBase 为 '/' 时产生协议相对 URL
+          const base = (getCustomBaseURL() || '').replace(/\/+$/, '')
+          // base 剔除斜杠后若为空，使用相对路径（由 Vite 代理转发到后端）
         const url = base ? `${base}/api/chat/stream` : '/api/chat/stream'
         const res = await fetch(url, {
           method: 'POST',
