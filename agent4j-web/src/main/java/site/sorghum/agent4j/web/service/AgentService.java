@@ -985,6 +985,25 @@ public class AgentService {
         }
     }
 
+    /**
+     * 清空所有会话：清除所有 Agent 缓存 + 删除所有会话磁盘文件。
+     *
+     * @param workspacePath 工作区路径（可选）
+     */
+    public void clearAllSessions(String workspacePath) {
+        // 1. 清除所有 Agent 缓存
+        evictAllAgents();
+        // 2. 删除所有会话磁盘文件
+        String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+        if (resolvedPath == null) return;
+        WorkspaceManager wm = new WorkspaceManager();
+        Path sessionsDir = wm.getSessionsDir(resolvedPath);
+        if (sessionsDir == null || !java.nio.file.Files.exists(sessionsDir)) return;
+        SessionStore store = new JsonlSessionStore(sessionsDir);
+        store.clearAll();
+        log.info("[web] 已清空所有会话");
+    }
+
     // ==================== 兼容旧接口 ====================
 
     /**

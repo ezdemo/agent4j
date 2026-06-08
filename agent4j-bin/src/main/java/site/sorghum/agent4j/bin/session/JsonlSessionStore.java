@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.session;
 
+import lombok.SneakyThrows;
 import site.sorghum.agent4j.bin.agent.ChatMessage;
 import site.sorghum.agent4j.bin.agent.ToolCallEntry;
 import site.sorghum.agent4j.bin.util.ONodeUtil;
@@ -94,7 +95,8 @@ public class JsonlSessionStore implements SessionStore {
      *
      * @param sessionsDir 会话目录路径
      */
-    public JsonlSessionStore(Path sessionsDir) throws IOException {
+    @SneakyThrows
+    public JsonlSessionStore(Path sessionsDir){
         this.sessionsDir = sessionsDir;
         Files.createDirectories(sessionsDir);
         // 不自动分配会话名 —— 等用户主动选择或首次写入时才确定
@@ -476,6 +478,30 @@ public class JsonlSessionStore implements SessionStore {
         Files.deleteIfExists(usage);
         Files.deleteIfExists(meta);
         return deleted;
+    }
+
+    @SneakyThrows
+    @Override
+    public void clearAll(){
+        flush();
+        if (!Files.isDirectory(sessionsDir)) return;
+        try (DirectoryStream<Path> ds = Files.newDirectoryStream(sessionsDir)) {
+            for (Path p : ds) {
+                String name = p.getFileName().toString();
+                // 只删除会话相关文件：.jsonl / .usage / .meta / .model_usage
+                if (name.endsWith(".jsonl") || name.endsWith(".usage")
+                        || name.endsWith(".meta") || name.endsWith(".model_usage")) {
+                    try {
+                        Files.deleteIfExists(p);
+                    } catch (IOException ignored) {
+                        // 忽略单个文件删除失败
+                    }
+                }
+            }
+        }
+        // 重置当前会话状态
+        currentName = null;
+        closeWriter();
     }
 
     @Override
