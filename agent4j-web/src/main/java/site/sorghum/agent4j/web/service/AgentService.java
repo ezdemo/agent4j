@@ -127,11 +127,11 @@ public class AgentService {
             try {
                 String content = java.nio.file.Files.readString(homePrompt);
                 if (!content.trim().isEmpty()) {
-                    System.err.println("[prompt] 从 ~/.agent4j/agent4j.md 加载默认系统提示词（" + content.length() + " 字符）");
+                    log.info("[prompt] 从 ~/.agent4j/agent4j.md 加载默认系统提示词（" + content.length() + " 字符）");
                     return content.trim();
                 }
             } catch (IOException e) {
-                System.err.println("[prompt] 读取 ~/.agent4j/agent4j.md 失败: " + e.getMessage());
+                log.error("[prompt] 读取 ~/.agent4j/agent4j.md 失败: {}", e.getMessage());
             }
         }
         return "你是一个智能体助手，名为Agent4J\n";
