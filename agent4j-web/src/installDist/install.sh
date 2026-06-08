@@ -224,10 +224,16 @@ PASSTHROUGH_ARGS=()
 while [ $# -gt 0 ]; do
     case "$1" in
         web)
-            PASSTHROUGH_ARGS+=("--solon.logging.logger.root.level=INFO")
+            PASSTHROUGH_ARGS+=("--solon.logging.appender.console.enable=false")
             shift
             if [ $# -gt 0 ] && echo "$1" | grep -qE '^[0-9]+$'; then
-                PASSTHROUGH_ARGS+=("--server.port=$1")
+                if [ "$1" = "0" ]; then
+                    PORT=$(( RANDOM % 55536 + 10000 ))
+                    echo "Random port: $PORT"
+                    PASSTHROUGH_ARGS+=("--server.port=$PORT")
+                else
+                    PASSTHROUGH_ARGS+=("--server.port=$1")
+                fi
                 shift
             fi
             ;;
