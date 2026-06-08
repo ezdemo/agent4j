@@ -50,13 +50,13 @@
 **Windows** (PowerShell)：
 
 ```powershell
-irm http://agent4j.sorghum.site/setup.ps1 | iex
+irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex
 ```
 
 **Mac / Linux**：
 
 ```bash
-curl -fsSL http://agent4j.sorghum.site/setup.sh | bash
+curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash
 ```
 
 安装完成后输入 `agent4j web` 即可启动。自动下载 JRE 25，无需手动安装 Java。
