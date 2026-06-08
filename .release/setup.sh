@@ -63,6 +63,16 @@ if [ -z "$INSTALL_SCRIPT" ]; then
     exit 1
 fi
 
+# Fix: Some packages have Windows (CRLF) line endings in shell scripts,
+# which causes "command not found" errors on Linux/macOS.
+# Strip carriage return characters before running.
+if grep -rl $'\r' "$INSTALL_SCRIPT" &>/dev/null; then
+    warn "Detected CRLF line endings in installer, converting to Unix format..."
+    tr -d '\r' < "$INSTALL_SCRIPT" > "${INSTALL_SCRIPT}.fix"
+    mv "${INSTALL_SCRIPT}.fix" "$INSTALL_SCRIPT"
+    chmod +x "$INSTALL_SCRIPT"
+fi
+
 info "Running installer..."
 
 # Set environment variable to tell install.sh not to wait
