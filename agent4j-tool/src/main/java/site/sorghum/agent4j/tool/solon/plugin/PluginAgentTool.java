@@ -47,13 +47,4 @@ public class PluginAgentTool extends AgentTool {
                     "执行插件工具 [" + name + "] 失败: " + e.getMessage());
         }
     }
-
-    @Override
-    public String toToolSpec() {
-        return """
-                ### %s
-                
-                描述：%s
-                """.formatted(getName(), getDescription());
-    }
 }
