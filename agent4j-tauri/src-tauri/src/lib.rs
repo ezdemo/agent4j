@@ -115,7 +115,7 @@ impl Agent4jWebManager {
         // 从 Adoptium API 获取最新 JDK 的包名
         let package_name = Self::fetch_jdk_package_name().unwrap_or_else(|_| {
             // API 不可用时使用兜底文件名
-            format!("OpenJDK25U-jre_{}_{}_hotspot_25.0.0_1.{}", arch, os,
+            format!("OpenJDK25U-jre_{}_{}_hotspot_25.0.3_9.{}", arch, os,
                 if os == "windows" { "zip" } else { "tar.gz" })
         });
 
