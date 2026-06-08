@@ -403,6 +403,61 @@ public class GitController {
         return ApiResponse.ok(new GitCommitResultDTO(commitResult.stdout));
     }
 
+    /**
+     * 切换文件状态：
+     * - 未追踪 → 变更：git add
+     * - 变更 → 未追踪：git rm --cached（仅对新文件有效）
+     */
+    @ApiOperation(value = "切换文件状态", notes = "未追踪文件变为变更状态，或变更文件变为未追踪状态")
+    @Post
+    @Mapping("/toggle")
+    public ApiResponse<Map<String, Object>> toggle(
+            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @Body String body) throws Exception {
+        File workspaceDir = new File(resolveWorkspace(workspaceHash));
+        ProcessResult check = runGit(workspaceDir, "git", "rev-parse", "--is-inside-work-tree");
+        if (check.exitCode != 0) {
+            return ApiResponse.fail("Not a git repository");
+        }
+
+        String path = extractPath(body);
+        if (path == null) {
+            return ApiResponse.fail("Path is required");
+        }
+
+        // 检查文件当前状态
+        ProcessResult statusResult = runGit(workspaceDir, "git", "status", "--porcelain", "--", path);
+        String statusLine = statusResult.stdout.trim();
+        
+        ProcessResult result;
+        String newState;
+        
+        // 状态码为空格开头表示已暂存，? 表示未追踪
+        if (statusLine.isEmpty() || statusLine.startsWith("M") || statusLine.startsWith("A") || 
+            statusLine.startsWith("D") || statusLine.startsWith("R")) {
+            // 已暂存或已追踪的变更 → 取消暂存
+            result = runGit(workspaceDir, "git", "reset", "HEAD", "--", path);
+            newState = "untracked";
+        } else if (statusLine.startsWith("?")) {
+            // 未追踪 → 暂存
+            result = runGit(workspaceDir, "git", "add", "--", path);
+            newState = "changed";
+        } else {
+            // 其他情况（如  M 未暂存修改）→ 暂存
+            result = runGit(workspaceDir, "git", "add", "--", path);
+            newState = "changed";
+        }
+
+        if (result.exitCode != 0) {
+            return ApiResponse.fail("git toggle failed: " + result.stderr);
+        }
+
+        Map<String, Object> data = new LinkedHashMap<>();
+        data.put("path", path);
+        data.put("newState", newState);
+        return ApiResponse.ok(data);
+    }
+
     // ==================== 工具方法 ====================
 
     private String resolveWorkspace(String workspaceHash) {
