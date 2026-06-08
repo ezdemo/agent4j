@@ -95,6 +95,26 @@ if ($c -ne $old) {
     Write-Host "  [OK] agent4j-web/pom.xml"
 } else { Write-Host "  [--] agent4j-web/pom.xml (unchanged)" }
 
+# 8. agent4j/.release/setup.sh
+$path = Join-Path $root "agent4j/.release/setup.sh"
+$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+$old = $c
+$c = [regex]::Replace($c, '(?<=VERSION=")v[\d.]+(?=")', "v$Version")
+if ($c -ne $old) {
+    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
+    Write-Host "  [OK] agent4j/.release/setup.sh"
+} else { Write-Host "  [--] agent4j/.release/setup.sh (unchanged)" }
+
+# 9. agent4j/.release/setup.ps1
+$path = Join-Path $root "agent4j/.release/setup.ps1"
+$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+$old = $c
+$c = [regex]::Replace($c, '(?<=\$VERSION = ")v[\d.]+(?=")', "v$Version")
+if ($c -ne $old) {
+    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
+    Write-Host "  [OK] agent4j/.release/setup.ps1"
+} else { Write-Host "  [--] agent4j/.release/setup.ps1 (unchanged)" }
+
 Write-Host ""
 Write-Host "Done! Version unified to $Version"
 Write-Host "Run: git diff to review, then commit."
