@@ -100,12 +100,20 @@
 
       <div class="sidebar-list-head">
         <span>会话</span>
-        <button class="btn-icon-sm" title="刷新会话列表" @click="refreshSessionList">
-          <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-            <path d="M23 4v6h-6"/>
-            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-          </svg>
-        </button>
+        <div class="sidebar-list-actions">
+          <button class="btn-icon-sm" title="清空所有会话" @click="clearAllSessions" :disabled="sessions.length === 0">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+          <button class="btn-icon-sm" title="刷新会话列表" @click="refreshSessionList">
+            <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+              <path d="M23 4v6h-6"/>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+          </button>
+        </div>
       </div>
       <div class="sidebar-list">
         <div>
@@ -654,6 +662,25 @@ const deleteSession = async name => {
   }
 }
 
+const clearAllSessions = async () => {
+  const ok = await confirm({ message: '确定要清空所有会话吗？此操作不可恢复。' })
+  if (!ok) return
+  try {
+    let workspaceHash = null
+    const activeWorkspace = workspaces.value.find(w => w.isActive)
+    if (activeWorkspace) {
+      workspaceHash = activeWorkspace.hash
+    }
+    await sessionsAPI.clearAll(workspaceHash)
+    sessions.value = []
+    currentSession.value = ''
+    chatRef.value?.resetLocalMessages()
+    message.success('所有会话已清空')
+  } catch (e) {
+    message.error('清空会话失败: ' + e.message)
+  }
+}
+
 const clearChat = async () => {
   const ok = await confirm({ message: '确定要清空当前对话吗？' })
   if (!ok) return
@@ -796,6 +823,24 @@ watch(showSettings, (newVal) => {
   color: var(--fg-4);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+.sidebar-list-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.sidebar-list-actions .btn-icon-sm {
+  opacity: 0.6;
+  transition: opacity 0.15s;
+}
+.sidebar-list-actions .btn-icon-sm:hover {
+  opacity: 1;
+}
+.sidebar-list-actions .btn-icon-sm:disabled {
+  opacity: 0.25;
+  cursor: not-allowed;
 }
 
 .sidebar-list-head button {

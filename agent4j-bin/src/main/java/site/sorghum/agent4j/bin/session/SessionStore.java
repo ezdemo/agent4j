@@ -63,6 +63,11 @@ public interface SessionStore {
     boolean delete(String name) throws IOException;
 
     /**
+     * 清空所有会话，删除所有会话文件（.jsonl / .usage / .meta）。
+     */
+    void clearAll() ;
+
+    /**
      * 刷入缓冲区数据到磁盘。
      * 调用后确保所有已追加的消息被持久化。
      */

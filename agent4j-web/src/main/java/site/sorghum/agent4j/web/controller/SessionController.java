@@ -85,6 +85,19 @@ public class SessionController {
         throw new ServiceException("会话不存在: " + name);
     }
 
+    @ApiOperation(value = "清空所有会话", notes = "清除指定工作区下的所有会话磁盘文件和缓存")
+    @Delete
+    @Mapping("")
+    public ApiResponse<SessionDeleteDTO> clearAllSessions(
+            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
+        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
+        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
+        if (workspacePath == null) workspacePath = agentService.getWorkspace();
+        agentService.clearAllSessions(workspacePath);
+        String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
+        return ApiResponse.ok(new SessionDeleteDTO("所有会话已清空", resolvedHash, null));
+    }
+
     @ApiOperation(value = "删除会话", notes = "根据会话名称和工作区删除指定会话")
     @Delete
     @Mapping("/{name}")

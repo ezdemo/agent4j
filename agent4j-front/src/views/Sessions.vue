@@ -19,6 +19,13 @@
           </svg>
           刷新
         </button>
+        <button class="btn btn-danger btn-sm" @click="clearAllSessions" :disabled="sessions.length === 0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="3 6 5 6 21 6"/>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+          </svg>
+          清空所有
+        </button>
         <button class="btn btn-primary btn-sm" @click="createNewSession">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19"/>
@@ -444,6 +451,42 @@ const deleteSession = async (sessionId) => {
       console.error('删除会话失败:', err)
       error.value = '删除会话失败: ' + err.message
     }
+  }
+}
+
+const clearAllSessions = async () => {
+  if (!confirm('确定要清空所有会话吗？此操作不可恢复。')) return
+  
+  let workspaceHash = null
+  try {
+    const workspacesResponse = await configAPI.listWorkspaces()
+    if (workspacesResponse && workspacesResponse.data) {
+      const activeWorkspace = workspacesResponse.data.find(w => w.isActive)
+      if (activeWorkspace) {
+        workspaceHash = activeWorkspace.hash
+      }
+    }
+  } catch (err) {
+    console.warn('获取工作区信息失败:', err)
+  }
+  
+  try {
+    loading.value = true
+    // 直接调用 clearAll API
+    await sessionsAPI.clearAll(workspaceHash)
+    sessions.value = []
+    loading.value = false
+    
+    window.dispatchEvent(new CustomEvent('terminal-output', { 
+      detail: { 
+        type: 'system', 
+        text: '所有会话已清空' 
+      }
+    }))
+  } catch (err) {
+    console.error('清空会话失败:', err)
+    error.value = '清空会话失败: ' + err.message
+    loading.value = false
   }
 }
 
