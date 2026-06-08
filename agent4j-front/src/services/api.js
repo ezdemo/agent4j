@@ -614,18 +614,6 @@ export const gitAPI = {
     return api.get('/git/diff-content', { params })
   },
 
-  // 暂存文件 - POST /api/git/stage?workspaceHash=xxx  body: { path }
-  stage: (workspaceHash, path) => {
-    const params = workspaceHash ? { workspaceHash } : {}
-    return api.post('/git/stage', { path }, { params })
-  },
-
-  // 取消暂存文件 - POST /api/git/unstage?workspaceHash=xxx  body: { path }
-  unstage: (workspaceHash, path) => {
-    const params = workspaceHash ? { workspaceHash } : {}
-    return api.post('/git/unstage', { path }, { params })
-  },
-
   // 获取 Git 仓库中指定版本的文件内容 - GET /api/git/file-content?workspaceHash=xxx&path=xxx&ref=HEAD
   fileContent: (workspaceHash, path, ref) => {
     const params = {}

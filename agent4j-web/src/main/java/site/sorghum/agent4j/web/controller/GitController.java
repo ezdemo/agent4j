@@ -58,8 +58,7 @@ public class GitController {
         String branch = runGitSimple(workspacePath, "rev-parse", "--abbrev-ref", "HEAD");
         String raw = runGitSimple(workspacePath, "status", "--porcelain");
 
-        List<GitFileChangeDTO> staged = new ArrayList<>();
-        List<GitFileChangeDTO> unstaged = new ArrayList<>();
+        List<GitFileChangeDTO> changed = new ArrayList<>();
         List<GitFileChangeDTO> untracked = new ArrayList<>();
 
         if (raw != null && !raw.trim().isEmpty()) {
@@ -75,23 +74,25 @@ public class GitController {
                     filename = parts[1];
                 }
 
+                // 去掉文件名前后的引号（用于文件名包含空格的情况）
+                if (filename.startsWith("\"") && filename.endsWith("\"")) {
+                    filename = filename.substring(1, filename.length() - 1);
+                }
+
                 if (indexStatus.equals("?") && workStatus.equals("?")) {
-                    untracked.add(new GitFileChangeDTO(filename, indexStatus, workStatus, null));
+                    untracked.add(new GitFileChangeDTO(filename, indexStatus, workStatus, "U"));
                 } else {
-                    if (!indexStatus.equals(" ") && !indexStatus.equals("?")) {
-                        staged.add(new GitFileChangeDTO(filename, indexStatus, workStatus, indexStatus));
-                    }
-                    if (!workStatus.equals(" ") && !workStatus.equals("?")) {
-                        unstaged.add(new GitFileChangeDTO(filename, indexStatus, workStatus, workStatus));
-                    }
+                    // 有变更（不管是否暂存）
+                    String status = !indexStatus.equals(" ") && !indexStatus.equals("?") ? indexStatus : workStatus;
+                    changed.add(new GitFileChangeDTO(filename, indexStatus, workStatus, status));
                 }
             }
         }
 
         return ApiResponse.ok(new GitDiffDTO(
                 branch != null ? branch.trim() : "unknown",
-                staged, unstaged, untracked,
-                staged.size() + unstaged.size() + untracked.size()
+                changed, untracked,
+                changed.size() + untracked.size()
         ));
     }
 
@@ -112,18 +113,18 @@ public class GitController {
             ProcessResult checkGit = runGit(workspaceDir, "git", "--version");
             if (checkGit.exitCode != 0) {
                 return ApiResponse.ok(new GitStatusDTO(false, false, null,
-                        workspaceDir.getAbsolutePath(), List.of(), List.of(), List.of()));
+                        workspaceDir.getAbsolutePath(), List.of(), List.of()));
             }
         } catch (Exception e) {
             return ApiResponse.ok(new GitStatusDTO(false, false, null,
-                    workspaceDir.getAbsolutePath(), List.of(), List.of(), List.of()));
+                    workspaceDir.getAbsolutePath(), List.of(), List.of()));
         }
 
         // 2. 检测是否是 git 仓库
         ProcessResult checkRepo = runGit(workspaceDir, "git", "rev-parse", "--is-inside-work-tree");
         if (checkRepo.exitCode != 0) {
             return ApiResponse.ok(new GitStatusDTO(true, false, null,
-                    workspaceDir.getAbsolutePath(), List.of(), List.of(), List.of()));
+                    workspaceDir.getAbsolutePath(), List.of(), List.of()));
         }
 
         // 3. 获取分支名
@@ -134,14 +135,24 @@ public class GitController {
         // 4. 解析 git status --porcelain=v1
         ProcessResult statusResult = runGit(workspaceDir, "git", "status", "--porcelain=v1");
         List<GitFileChangeDTO> changed = new ArrayList<>();
-        List<GitFileChangeDTO> staged = new ArrayList<>();
         List<GitFileChangeDTO> untracked = new ArrayList<>();
 
         for (String line : statusResult.stdout.split("\n")) {
             if (line.length() < 4) continue;
             String x = line.substring(0, 1);
             String y = line.substring(1, 2);
-            String filePath = line.substring(3);
+            String filePath = line.substring(3).trim();
+
+            // 处理重命名的情况：R  old -> new
+            if (filePath.contains(" -> ")) {
+                String[] parts = filePath.split(" -> ", 2);
+                filePath = parts[1];
+            }
+
+            // 去掉文件名前后的引号（用于文件名包含空格的情况）
+            if (filePath.startsWith("\"") && filePath.endsWith("\"")) {
+                filePath = filePath.substring(1, filePath.length() - 1);
+            }
 
             if (filePath.endsWith("/")) {
                 filePath = filePath.substring(0, filePath.length() - 1);
@@ -150,15 +161,14 @@ public class GitController {
             if ("?".equals(x) && "?".equals(y)) {
                 untracked.add(new GitFileChangeDTO(filePath, x, y, "U"));
             } else {
-                if (!" ".equals(x) && !"?".equals(x))
-                    staged.add(new GitFileChangeDTO(filePath, x, y, x));
-                if (!" ".equals(y) && !"?".equals(y))
-                    changed.add(new GitFileChangeDTO(filePath, x, y, y));
+                // 有变更（不管是否暂存）
+                String status = !" ".equals(x) && !"?".equals(x) ? x : y;
+                changed.add(new GitFileChangeDTO(filePath, x, y, status));
             }
         }
 
         return ApiResponse.ok(new GitStatusDTO(true, true, branch,
-                workspaceDir.getAbsolutePath(), changed, staged, untracked));
+                workspaceDir.getAbsolutePath(), changed, untracked));
     }
 
     /**
@@ -314,65 +324,7 @@ public class GitController {
         return ApiResponse.ok(data);
     }
 
-    /**
-     * 将指定文件添加到 Git 暂存区（git add）。
-     */
-    @ApiOperation(value = "暂存文件", notes = "将指定文件添加到 Git 暂存区（git add）")
-    @Post
-    @Mapping("/stage")
-    public ApiResponse<Map<String, Object>> stage(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
-            @Body String body) throws Exception {
-        File workspaceDir = new File(resolveWorkspace(workspaceHash));
-        ProcessResult check = runGit(workspaceDir, "git", "rev-parse", "--is-inside-work-tree");
-        if (check.exitCode != 0) {
-            return ApiResponse.fail("Not a git repository");
-        }
 
-        String path = extractPath(body);
-        if (path == null) {
-            return ApiResponse.fail("Path is required");
-        }
-
-        ProcessResult addResult = runGit(workspaceDir, "git", "add", "--", path);
-        if (addResult.exitCode != 0) {
-            return ApiResponse.fail("git add failed: " + addResult.stderr);
-        }
-
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("path", path);
-        return ApiResponse.ok(data);
-    }
-
-    /**
-     * 将指定文件移出 Git 暂存区（git reset HEAD -- path）。
-     */
-    @ApiOperation(value = "取消暂存文件", notes = "将指定文件移出 Git 暂存区（git reset HEAD -- path）")
-    @Post
-    @Mapping("/unstage")
-    public ApiResponse<Map<String, Object>> unstage(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
-            @Body String body) throws Exception {
-        File workspaceDir = new File(resolveWorkspace(workspaceHash));
-        ProcessResult check = runGit(workspaceDir, "git", "rev-parse", "--is-inside-work-tree");
-        if (check.exitCode != 0) {
-            return ApiResponse.fail("Not a git repository");
-        }
-
-        String path = extractPath(body);
-        if (path == null) {
-            return ApiResponse.fail("Path is required");
-        }
-
-        ProcessResult resetResult = runGit(workspaceDir, "git", "reset", "HEAD", "--", path);
-        if (resetResult.exitCode != 0) {
-            return ApiResponse.fail("git reset failed: " + resetResult.stderr);
-        }
-
-        Map<String, Object> data = new LinkedHashMap<>();
-        data.put("path", path);
-        return ApiResponse.ok(data);
-    }
 
     /**
      * Git 提交 —— 支持精确文件列表或全量 add -A。

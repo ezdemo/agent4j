@@ -7,8 +7,7 @@ import java.util.List;
  */
 public record GitDiffDTO(
         String branch,
-        List<GitFileChangeDTO> staged,
-        List<GitFileChangeDTO> unstaged,
+        List<GitFileChangeDTO> changed,
         List<GitFileChangeDTO> untracked,
         int count
 ) {
