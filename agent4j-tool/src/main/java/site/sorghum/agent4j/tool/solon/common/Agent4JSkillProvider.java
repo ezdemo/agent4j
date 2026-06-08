@@ -17,7 +17,7 @@ import java.util.concurrent.ConcurrentHashMap;
 
 public class Agent4JSkillProvider implements SolonToTools {
     SkillTalent skillTalent;
-    TerminalTalentProxy terminalTalentProxy;
+    TerminalTalent terminalTalent;
     public static Map<String, Agent4JSkillProvider> cliSkillProviderMap = new ConcurrentHashMap<>();
     @Getter
     public MountManager poolManager;
@@ -29,9 +29,9 @@ public class Agent4JSkillProvider implements SolonToTools {
             register(MountDir.builder().type(MountType.SKILLS).alias("@superpowers-skill").path("~/.agent4j/plugin/superpowers").build());
         }};
         skillTalent = new SkillTalent(poolManager);
-        TerminalTalent terminalTalent = new TerminalTalent(poolManager);
-        terminalTalentProxy = new TerminalTalentProxy(terminalTalent);
+        terminalTalent = new TerminalTalent(poolManager);
         terminalTalent.setSandboxMode(false);
+        terminalTalent.setBashAsyncEnabled(true);
     }
 
     public static Agent4JSkillProvider getOrCreate(String rootDir) {
@@ -42,7 +42,7 @@ public class Agent4JSkillProvider implements SolonToTools {
     public List<AgentTool> getTools() {
         return ToolManager.getToolsFromSKill(List.of(
                 skillTalent,
-                terminalTalentProxy
+                terminalTalent
         ));
     }
 
