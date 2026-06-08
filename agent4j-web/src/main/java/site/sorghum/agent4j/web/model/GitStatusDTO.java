@@ -13,7 +13,6 @@ public record GitStatusDTO(
         String branch,
         String workspacePath,
         List<GitFileChangeDTO> changed,
-        List<GitFileChangeDTO> staged,
         List<GitFileChangeDTO> untracked
 ) {
 }

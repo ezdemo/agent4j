@@ -55,11 +55,11 @@
         <div class="git-branch">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
           <span class="branch-name">{{ branchName }}</span>
-          <span class="change-count" v-if="hasChanges">{{ stagedFiles.length + unstagedFiles.length + untrackedFiles.length }}</span>
+          <span class="change-count" v-if="hasChanges">{{ changedCount + untrackedCount }}</span>
         </div>
 
         <!-- 提交区域 -->
-        <div class="commit-area" v-if="stagedFiles.length > 0">
+        <div class="commit-area" v-if="changedCount > 0">
           <textarea
             class="commit-input"
             placeholder="提交信息（按 Enter 提交）..."
@@ -72,62 +72,42 @@
             @click="handleCommit"
             :disabled="committing || !commitMessage.trim()"
           >
-            {{ committing ? '提交中...' : `提交 (${stagedFiles.length})` }}
+            {{ committing ? '提交中...' : `提交 (${changedCount})` }}
           </button>
         </div>
 
         <!-- 文件列表 -->
         <div class="git-files" v-if="hasChanges">
-          <!-- 已暂存 -->
-          <template v-if="stagedFiles.length">
-            <div class="git-section-header staged" @click="showStaged = !showStaged">
+          <!-- 变更文件 -->
+          <template v-if="changedCount > 0">
+            <div class="git-section-header changed" @click="showChanged = !showChanged">
               <div class="section-left">
-                <svg class="chevron" :class="{ open: showStaged }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                <span>已暂存的变更</span>
+                <svg class="chevron" :class="{ open: showChanged }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                <span>变更</span>
               </div>
-              <span class="section-count">{{ stagedFiles.length }}</span>
+              <span class="section-count">{{ changedCount }}</span>
             </div>
-            <template v-if="showStaged">
-              <div v-for="f in stagedFiles" :key="'s-'+f.path" class="git-file" @click="openDiff(f.path)">
-                <span class="file-status" :class="(f.status || f.index || 'M')">{{ (f.status || f.index || 'M') }}</span>
+            <template v-if="showChanged">
+              <div v-for="f in changedFiles" :key="'c-'+f.path" class="git-file" @click="openDiff(f.path)">
+                <span class="file-status" :class="(f.status || f.index || f.workTree || 'M')">{{ (f.status || f.index || f.workTree || 'M') }}</span>
                 <span class="file-path" :title="f.path">{{ f.path }}</span>
-                <button class="file-action-btn unstage-btn" @click.stop="handleUnstage(f.path)" title="取消暂存">−</button>
-              </div>
-            </template>
-          </template>
-
-          <!-- 未暂存变更 -->
-          <template v-if="unstagedFiles.length">
-            <div class="git-section-header" @click="showUnstaged = !showUnstaged">
-              <div class="section-left">
-                <svg class="chevron" :class="{ open: showUnstaged }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                <span>未暂存的变更</span>
-              </div>
-              <span class="section-count">{{ unstagedFiles.length }}</span>
-            </div>
-            <template v-if="showUnstaged">
-              <div v-for="f in unstagedFiles" :key="'u-'+f.path" class="git-file" @click="openDiff(f.path)">
-                <span class="file-status" :class="(f.status || f.workTree || 'M')">{{ (f.status || f.workTree || 'M') }}</span>
-                <span class="file-path" :title="f.path">{{ f.path }}</span>
-                <button class="file-action-btn stage-btn" @click.stop="handleStage(f.path)" title="暂存">+</button>
               </div>
             </template>
           </template>
 
           <!-- 未跟踪文件 -->
-          <template v-if="untrackedFiles.length">
+          <template v-if="untrackedCount > 0">
             <div class="git-section-header untracked" @click="showUntracked = !showUntracked">
               <div class="section-left">
                 <svg class="chevron" :class="{ open: showUntracked }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
                 <span>未跟踪文件</span>
               </div>
-              <span class="section-count">{{ untrackedFiles.length }}</span>
+              <span class="section-count">{{ untrackedCount }}</span>
             </div>
             <template v-if="showUntracked">
               <div v-for="f in untrackedFiles" :key="'n-'+f.path" class="git-file" @click="openDiff(f.path)">
                 <span class="file-status U">?</span>
                 <span class="file-path" :title="f.path">{{ f.path }}</span>
-                <button class="file-action-btn stage-btn" @click.stop="handleStage(f.path)" title="暂存">+</button>
               </div>
             </template>
           </template>
@@ -174,13 +154,11 @@ const error = ref('')
 const gitAvailable = ref(false)
 const initialized = ref(false)
 const branchName = ref('')
-const stagedFiles = ref([])
-const unstagedFiles = ref([])
+const changedFiles = ref([])
 const untrackedFiles = ref([])
 
 // 折叠控制
-const showStaged = ref(false)
-const showUnstaged = ref(true)
+const showChanged = ref(true)
 const showUntracked = ref(false)
 
 // 提交
@@ -197,7 +175,13 @@ const feedback = ref(null)
 // Diff 预览
 const diffViewer = ref({ open: false, file: '', diff: '', stat: '' })
 
-const hasChanges = computed(() => stagedFiles.value.length || unstagedFiles.value.length || untrackedFiles.value.length)
+const hasChanges = computed(() => {
+  const c = changedFiles.value || []
+  const u = untrackedFiles.value || []
+  return c.length + u.length > 0
+})
+const changedCount = computed(() => (changedFiles.value || []).length)
+const untrackedCount = computed(() => (untrackedFiles.value || []).length)
 
 // ---- 加载状态 ----
 const loadStatus = async () => {
@@ -210,8 +194,7 @@ const loadStatus = async () => {
       gitAvailable.value = d.gitAvailable
       initialized.value = d.initialized
       branchName.value = d.branch || ''
-      stagedFiles.value = d.staged || []
-      unstagedFiles.value = d.changed || []
+      changedFiles.value = d.changed || []
       untrackedFiles.value = d.untracked || []
     } else {
       // 回退到 diff 接口
@@ -231,8 +214,7 @@ const loadDiffFallback = async () => {
       gitAvailable.value = true
       initialized.value = true
       branchName.value = r.data.branch || ''
-      stagedFiles.value = r.data.staged || []
-      unstagedFiles.value = r.data.unstaged || []
+      changedFiles.value = r.data.changed || []
       untrackedFiles.value = r.data.untracked || []
     } else {
       error.value = r.error || '加载失败'
@@ -262,34 +244,6 @@ const handleInit = async () => {
     showFeedback('error', e.message || '初始化失败')
   } finally {
     initLoading.value = false
-  }
-}
-
-const handleStage = async (path) => {
-  try {
-    const r = await gitAPI.stage(props.workspaceHash, path)
-    if (r.success) {
-      showFeedback('success', `已暂存: ${path}`)
-      await loadStatus()
-    } else {
-      showFeedback('error', r.error || '暂存失败')
-    }
-  } catch (e) {
-    showFeedback('error', e.message || '暂存失败')
-  }
-}
-
-const handleUnstage = async (path) => {
-  try {
-    const r = await gitAPI.unstage(props.workspaceHash, path)
-    if (r.success) {
-      showFeedback('success', `已取消暂存: ${path}`)
-      await loadStatus()
-    } else {
-      showFeedback('error', r.error || '取消暂存失败')
-    }
-  } catch (e) {
-    showFeedback('error', e.message || '取消暂存失败')
   }
 }
 
