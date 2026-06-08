@@ -1,6 +1,7 @@
 #
 # Agent4j Web Installer for Windows PowerShell
 # 支持重复安装，保留已有 config.json
+# 自动下载 JRE 25（无需系统 Java）
 #
 $ErrorActionPreference = "Stop"
 
@@ -8,50 +9,6 @@ Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host "   Agent4j Web Installer (PowerShell)" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host ""
-
-# =============================================
-# 检查 Java 是否安装
-# =============================================
-Write-Host "[Pre-check] Verifying Java installation..." -ForegroundColor Yellow
-
-$javaPath = Get-Command java -ErrorAction SilentlyContinue
-if (-not $javaPath) {
-    Write-Host ""
-    Write-Host "[Error] Java is not installed or not in PATH" -ForegroundColor Red
-    Write-Host ""
-    Write-Host "  Please install Java 17 or later:" -ForegroundColor White
-    Write-Host "    - Download from: https://adoptium.net/" -ForegroundColor White
-    Write-Host ""
-    Read-Host "Press Enter to exit"
-    exit 1
-}
-
-# 获取 Java 版本
-$process = New-Object System.Diagnostics.Process
-$process.StartInfo.FileName = "java"
-$process.StartInfo.Arguments = "-version"
-$process.StartInfo.RedirectStandardError = $true
-$process.StartInfo.RedirectStandardOutput = $true
-$process.StartInfo.UseShellExecute = $false
-$process.Start() | Out-Null
-$javaVersionOutput = $process.StandardError.ReadToEnd()
-$process.WaitForExit()
-$javaVersion = ($javaVersionOutput -split "`n" | Where-Object { $_ -match "version" } | Select-Object -First 1).Trim()
-Write-Host "      $javaVersion" -ForegroundColor Gray
-
-# 检查 Java 版本是否 >= 17
-if ($javaVersionOutput -match '"(\d+)') {
-    $javaMajor = [int]$Matches[1]
-    if ($javaMajor -lt 17) {
-        Write-Host ""
-        Write-Host "[Error] Java 17 or later is required (found: Java $javaMajor)" -ForegroundColor Red
-        Write-Host ""
-        Read-Host "Press Enter to exit"
-        exit 1
-    }
-}
-
 Write-Host ""
 
 # =============================================
@@ -68,6 +25,163 @@ $TARGET_DIR = Join-Path $env:USERPROFILE ".agent4j"
 $TARGET_BIN_DIR = Join-Path $TARGET_DIR "bin"
 $TARGET_CONFIG = Join-Path $TARGET_DIR "config.json"
 $TARGET_AGENTS = Join-Path $TARGET_DIR "agent4j.md"
+$JRE25_DIR = Join-Path $TARGET_DIR "jre25"
+
+# =============================================
+# 检测 OS / ARCH
+# =============================================
+function Get-AdoptiumOS {
+    if ($IsMacOS) { return "mac" }
+    if ($IsLinux) { return "linux" }
+    return "windows"
+}
+
+function Get-AdoptiumArch {
+    $arch = (Get-CimInstance Win32_Processor).Architecture
+    # 常见: 9=x64/AMD64, 12=ARM64, 5=ARM, 0=x86
+    if ($arch -eq 9 -or $arch -eq 12) {
+        # 进一步判断
+        $envArch = $env:PROCESSOR_ARCHITECTURE
+        if ($envArch -eq "ARM64") { return "aarch64" }
+        if ($envArch -eq "AMD64" -or $envArch -eq "x86_64") { return "x64" }
+    }
+    # 通过环境变量判断
+    switch ($env:PROCESSOR_ARCHITECTURE) {
+        "ARM64"   { return "aarch64" }
+        "AMD64"   { return "x64" }
+        "x86_64"  { return "x64" }
+        default   { return "x64" }
+    }
+}
+
+# =============================================
+# 下载并安装 JRE 25 到 ~/.agent4j/jre25/
+# 参考 lib.rs: Adoptium API → 清华镜像
+# =============================================
+function Install-JRE25 {
+    $os = Get-AdoptiumOS
+    $arch = Get-AdoptiumArch
+
+    Write-Host "[JRE 25] Downloading JRE 25 for $arch/$os..." -ForegroundColor Yellow
+
+    # 1. 从 Adoptium API 获取最新包名
+    $apiUrl = "https://api.adoptium.net/v3/assets/feature_releases/25/ga?architecture=$arch&image_type=jre&os=$os&page_size=1"
+    Write-Host "      Querying Adoptium API..." -ForegroundColor Gray
+
+    $packageName = $null
+    try {
+        $apiResponse = Invoke-WebRequest -Uri $apiUrl -UseBasicParsing -TimeoutSec 10
+        $json = $apiResponse.Content | ConvertFrom-Json
+        $packageName = $json[0].binaries[0].package.name
+    } catch {
+        Write-Host "      API request failed: $_" -ForegroundColor DarkGray
+    }
+
+    # 2. 兜底文件名
+    if (-not $packageName) {
+        $ext = if ($os -eq "windows") { "zip" } else { "tar.gz" }
+        $packageName = "OpenJDK25U-jre_${arch}_${os}_hotspot_25.0.0_1.${ext}"
+        Write-Host "      API unavailable, using fallback name: $packageName" -ForegroundColor Yellow
+    } else {
+        Write-Host "      Latest package: $packageName" -ForegroundColor Gray
+    }
+
+    # 3. 从清华镜像下载
+    $mirrorUrl = "https://mirrors.tuna.tsinghua.edu.cn/Adoptium/25/jre/$arch/$os/$packageName"
+    $tmpDir = Join-Path $TARGET_DIR ".tmp-jre"
+
+    if (Test-Path $tmpDir) { Remove-Item -Recurse -Force $tmpDir }
+    New-Item -ItemType Directory -Path $tmpDir -Force | Out-Null
+
+    $archivePath = Join-Path $tmpDir $packageName
+
+    Write-Host "      Downloading from Tsinghua mirror..." -ForegroundColor Gray
+    try {
+        Invoke-WebRequest -Uri $mirrorUrl -OutFile $archivePath -UseBasicParsing
+    } catch {
+        Write-Host "[ERROR] Download failed: $_" -ForegroundColor Red
+        Write-Host "      URL: $mirrorUrl" -ForegroundColor Gray
+        exit 1
+    }
+
+    # 4. 解压
+    Write-Host "      Extracting..." -ForegroundColor Gray
+    $extractDir = Join-Path $tmpDir "extract"
+    New-Item -ItemType Directory -Path $extractDir -Force | Out-Null
+
+    if ($packageName -match "\.(tar\.gz|tgz)$") {
+        tar -xzf $archivePath -C $extractDir
+    } elseif ($packageName -match "\.zip$") {
+        Expand-Archive -Path $archivePath -DestinationPath $extractDir -Force
+    } else {
+        Write-Host "[ERROR] Unknown archive format: $packageName" -ForegroundColor Red
+        exit 1
+    }
+
+    # 5. 找到 JRE 顶层目录
+    $subDirs = Get-ChildItem -Path $extractDir -Directory | Select-Object -First 1
+    $jreSource = if ($subDirs) { $subDirs.FullName } else { $extractDir }
+
+    # 6. 移动到最终位置
+    if (Test-Path $JRE25_DIR) { Remove-Item -Recurse -Force $JRE25_DIR }
+    Move-Item -Path $jreSource -Destination $JRE25_DIR
+
+    # 7. 清理
+    Remove-Item -Recurse -Force $tmpDir -ErrorAction SilentlyContinue
+
+    # 8. 验证
+    $javaExe = if ($os -eq "windows") { Join-Path $JRE25_DIR "bin\java.exe" } else { Join-Path $JRE25_DIR "bin/java" }
+    if (-not (Test-Path $javaExe)) {
+        Write-Host "[ERROR] JRE 25 installation failed: java not found at $javaExe" -ForegroundColor Red
+        exit 1
+    }
+
+    $process = New-Object System.Diagnostics.Process
+    $process.StartInfo.FileName = $javaExe
+    $process.StartInfo.Arguments = "-version"
+    $process.StartInfo.RedirectStandardError = $true
+    $process.StartInfo.RedirectStandardOutput = $true
+    $process.StartInfo.UseShellExecute = $false
+    $process.Start() | Out-Null
+    $jreVer = $process.StandardError.ReadToEnd().Trim()
+    $process.WaitForExit() | Out-Null
+    Write-Host "      JRE 25 installed: $($jreVer -split "`n" | Select-Object -First 1)" -ForegroundColor Green
+}
+
+# =============================================
+# 确保 JRE 25 可用
+# =============================================
+function Ensure-Java {
+    $javaExe = if ((Get-AdoptiumOS) -eq "windows") {
+        Join-Path $JRE25_DIR "bin\java.exe"
+    } else {
+        Join-Path $JRE25_DIR "bin\java"
+    }
+
+    if (Test-Path $javaExe) {
+        $process = New-Object System.Diagnostics.Process
+        $process.StartInfo.FileName = $javaExe
+        $process.StartInfo.Arguments = "-version"
+        $process.StartInfo.RedirectStandardError = $true
+        $process.StartInfo.RedirectStandardOutput = $true
+        $process.StartInfo.UseShellExecute = $false
+        $process.Start() | Out-Null
+        $ver = ($process.StandardError.ReadToEnd() -split "`n" | Select-Object -First 1).Trim()
+        $process.WaitForExit() | Out-Null
+        Write-Host "[Pre-check] Bundled JRE 25 found: $ver" -ForegroundColor Green
+        return
+    }
+
+    Write-Host "[Pre-check] JRE 25 not found, will download automatically..." -ForegroundColor Yellow
+    Write-Host ""
+    Install-JRE25
+    Write-Host ""
+}
+
+# =============================================
+# 执行 Pre-check
+# =============================================
+Ensure-Java
 
 # =============================================
 # 检查源目录是否存在
@@ -86,7 +200,6 @@ Write-Host "[1/5] Checking for existing configuration..." -ForegroundColor Yello
 $CONFIG_BACKUP = $null
 $AGENTS_BACKUP = $null
 
-# 备份现有的配置文件
 if (Test-Path $TARGET_CONFIG) {
     $CONFIG_BACKUP = Join-Path $env:TEMP "agent4j_config_backup_$(Get-Random).json"
     Copy-Item $TARGET_CONFIG $CONFIG_BACKUP -Force
@@ -120,17 +233,14 @@ Write-Host "      Created directory structure" -ForegroundColor Gray
 Write-Host ""
 Write-Host "[3/5] Copying files to target directory..." -ForegroundColor Yellow
 
-# 复制 bin 目录内容
 Copy-Item -Path "$SOURCE_BIN_DIR\*" -Destination $TARGET_BIN_DIR -Recurse -Force
 Write-Host "      Copied bin/ directory" -ForegroundColor Gray
 
-# 复制 config.json（从根目录）
 if (Test-Path $SOURCE_CONFIG) {
     Copy-Item $SOURCE_CONFIG $TARGET_CONFIG -Force
     Write-Host "      Copied config.json" -ForegroundColor Gray
 }
 
-# 复制 agent4j.md（从根目录）
 if (Test-Path $SOURCE_AGENTS) {
     Copy-Item $SOURCE_AGENTS $TARGET_AGENTS -Force
     Write-Host "      Copied agent4j.md" -ForegroundColor Gray
@@ -144,21 +254,18 @@ Write-Host "      Files copied successfully" -ForegroundColor Green
 Write-Host ""
 Write-Host "[4/5] Finalizing installation..." -ForegroundColor Yellow
 
-# 恢复 config.json 备份（如果之前存在）
 if ($CONFIG_BACKUP -and (Test-Path $CONFIG_BACKUP)) {
     Copy-Item $CONFIG_BACKUP $TARGET_CONFIG -Force
     Remove-Item $CONFIG_BACKUP -Force
     Write-Host "      Preserved existing config.json" -ForegroundColor Gray
 }
 
-# 恢复 agent4j.md 备份（如果之前存在）
 if ($AGENTS_BACKUP -and (Test-Path $AGENTS_BACKUP)) {
     Copy-Item $AGENTS_BACKUP $TARGET_AGENTS -Force
     Remove-Item $AGENTS_BACKUP -Force
     Write-Host "      Preserved existing agent4j.md" -ForegroundColor Gray
 }
 
-# 检查 jar 文件是否存在
 $JAR_FILE = Join-Path $TARGET_BIN_DIR "agent4j-web.jar"
 if (-not (Test-Path $JAR_FILE)) {
     Write-Host ""
@@ -169,16 +276,34 @@ if (-not (Test-Path $JAR_FILE)) {
 Write-Host "      Found agent4j-web.jar" -ForegroundColor Gray
 
 # =============================================
-# [5/5] 创建启动脚本并配置 PATH
+# [5/5] 创建启动脚本并配置 PATH（使用捆绑 JRE 25）
 # =============================================
 Write-Host ""
 Write-Host "[5/5] Setting up 'agent4j' command..." -ForegroundColor Yellow
 
-# 创建 PowerShell 启动脚本 (agent4j.ps1)
+# —— PowerShell 启动脚本 (agent4j.ps1) ——
 $LAUNCHER_PS1 = Join-Path $TARGET_BIN_DIR "agent4j.ps1"
-$LAUNCHER_CONTENT = @'
-# Agent4j Launcher for PowerShell
+$LAUNCHER_PS1_CONTENT = @'
+# Agent4j Launcher for PowerShell — uses bundled JRE 25
 param([Parameter(ValueFromRemainingArguments)]$RestArgs)
+
+$ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$Agent4jHome = Split-Path -Parent $ScriptDir
+$JreDir = Join-Path $Agent4jHome "jre25"
+$JavaBin = Join-Path $JreDir "bin\java.exe"
+
+# 如果捆绑 JRE 不存在，回退到系统 Java
+if (-not (Test-Path $JavaBin)) {
+    $sysJava = Get-Command java -ErrorAction SilentlyContinue
+    if ($sysJava) {
+        $JavaBin = $sysJava.Source
+    } else {
+        Write-Host "[ERROR] No Java found." -ForegroundColor Red
+        Write-Host "  Expected bundled JRE at: $JavaBin" -ForegroundColor Gray
+        Write-Host "  Please re-run the installer to download JRE 25." -ForegroundColor Gray
+        exit 1
+    }
+}
 
 # 显示帮助
 $ShowHelp = ($RestArgs.Count -eq 0)
@@ -206,8 +331,7 @@ if ($ShowHelp) {
     exit 0
 }
 
-$JarDir = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$JarFile = Join-Path $JarDir "agent4j-web.jar"
+$JarFile = Join-Path $ScriptDir "agent4j-web.jar"
 
 if (-not (Test-Path $JarFile)) {
     Write-Host "[Error] agent4j-web.jar not found" -ForegroundColor Red
@@ -220,16 +344,14 @@ try {
     $OutputEncoding = [System.Text.Encoding]::UTF8
     [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
     [Console]::InputEncoding = [System.Text.Encoding]::UTF8
-} catch {
-    # 某些终端环境不支持设置编码，忽略错误
-}
+} catch { }
 
 # 检测 Java 版本，如果是 21+ 则添加 --enable-native-access 参数
 $JavaArgs = @("-Dfile.encoding=UTF-8", "-Dstdout.encoding=UTF-8", "-Dstderr.encoding=UTF-8", "-Dstdin.encoding=UTF-8")
 
 try {
     $VerProcess = New-Object System.Diagnostics.Process
-    $VerProcess.StartInfo.FileName = "java"
+    $VerProcess.StartInfo.FileName = $JavaBin
     $VerProcess.StartInfo.Arguments = "-version"
     $VerProcess.StartInfo.RedirectStandardError = $true
     $VerProcess.StartInfo.RedirectStandardOutput = $true
@@ -244,9 +366,7 @@ try {
             $JavaArgs += "--enable-native-access=ALL-UNNAMED"
         }
     }
-} catch {
-    # 版本检测失败时忽略，继续执行
-}
+} catch { }
 
 # 解析 "web [port]" 子命令
 $PassThroughArgs = @()
@@ -258,7 +378,6 @@ while ($i -lt $RestArgs.Count) {
         if ($i -lt $RestArgs.Count -and $RestArgs[$i] -match '^\d+$') {
             $portArg = $RestArgs[$i]
             if ($portArg -eq '0') {
-                # 随机找一个可用端口
                 $found = $false
                 for ($n = 0; $n -lt 30; $n++) {
                     $candidate = Get-Random -Minimum 1024 -Maximum 65535
@@ -284,19 +403,37 @@ while ($i -lt $RestArgs.Count) {
     }
 }
 
-# 运行 Java 程序
-& java @JavaArgs -jar $JarFile @PassThroughArgs
+# 运行 Java 程序（使用捆绑 JRE）
+& $JavaBin @JavaArgs -jar $JarFile @PassThroughArgs
 '@
 
-Set-Content -Path $LAUNCHER_PS1 -Value $LAUNCHER_CONTENT -Encoding UTF8
+Set-Content -Path $LAUNCHER_PS1 -Value $LAUNCHER_PS1_CONTENT -Encoding UTF8
 Write-Host "      Created: agent4j.ps1" -ForegroundColor Gray
 
-# 创建 CMD/.bat 启动脚本 (agent4j.bat)
+# —— CMD/.bat 启动脚本 (agent4j.bat) ——
 $LAUNCHER_BAT = Join-Path $TARGET_BIN_DIR "agent4j.bat"
 $LAUNCHER_BAT_CONTENT = @'
 @echo off
-rem Agent4j Launcher for CMD
+rem Agent4j Launcher for CMD — uses bundled JRE 25
 setlocal enabledelayedexpansion
+
+rem 获取脚本所在目录并定位 JRE
+set "SCRIPT_DIR=%~dp0"
+set "AGENT4J_HOME=%SCRIPT_DIR%.."
+set "JAVA_BIN=%AGENT4J_HOME%\jre25\bin\java.exe"
+
+rem 如果捆绑 JRE 不存在，回退到系统 Java
+if not exist "%JAVA_BIN%" (
+    where java >nul 2>&1
+    if %ERRORLEVEL% equ 0 (
+        set "JAVA_BIN=java"
+    ) else (
+        echo [ERROR] No Java found.
+        echo   Expected bundled JRE at: %JAVA_BIN%
+        echo   Please re-run the installer to download JRE 25.
+        exit /b 1
+    )
+)
 
 rem 显示帮助（无参数 或 -h/--help/help）
 if "%~1"=="" goto :show_help
@@ -323,11 +460,8 @@ echo   agent4j -h            Show this help
 goto :end
 
 :parse_args
-rem 获取脚本所在目录
-set "SCRIPT_DIR=%~dp0"
 set "JAR_FILE=%SCRIPT_DIR%agent4j-web.jar"
 
-rem 检查 jar 文件是否存在
 if not exist "%JAR_FILE%" (
     echo [Error] agent4j-web.jar not found
     echo Expected path: %JAR_FILE%
@@ -338,7 +472,7 @@ rem 设置 Java 编码参数
 set "JAVA_OPTS=-Dfile.encoding=UTF-8 -Dstdout.encoding=UTF-8 -Dstderr.encoding=UTF-8 -Dstdin.encoding=UTF-8"
 
 rem 检测 Java 版本，如果是 21+ 则添加 --enable-native-access 参数
-for /f "tokens=3" %%v in ('java -version 2^>^&1 ^| findstr /i version') do (
+for /f "tokens=3" %%v in ('"%JAVA_BIN%" -version 2^>^&1 ^| findstr /i version') do (
     set "VER=%%v"
     set "VER=!VER:~1!"
     for /f "tokens=1 delims=." %%j in ("!VER!") do (
@@ -375,8 +509,8 @@ for %%a in (%*) do (
     )
 )
 
-rem 运行 Java 程序
-java %JAVA_OPTS% -jar "%JAR_FILE%" %PASS_ARGS%
+rem 运行 Java 程序（使用捆绑 JRE）
+"%JAVA_BIN%" %JAVA_OPTS% -jar "%JAR_FILE%" %PASS_ARGS%
 
 :end
 '@
@@ -384,11 +518,27 @@ java %JAVA_OPTS% -jar "%JAR_FILE%" %PASS_ARGS%
 New-Item -Path $LAUNCHER_BAT -Value $LAUNCHER_BAT_CONTENT -Force | Out-Null
 Write-Host "      Created: agent4j.bat" -ForegroundColor Gray
 
-# 创建 Git Bash 启动脚本 (agent4j)
+# —— Git Bash 启动脚本 (agent4j) ——
 $LAUNCHER_SH = Join-Path $TARGET_BIN_DIR "agent4j"
 $LAUNCHER_SH_CONTENT = @'
 #!/bin/bash
-# Agent4j Launcher for Git Bash / WSL
+# Agent4j Launcher for Git Bash / WSL — uses bundled JRE 25
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+AGENT4J_HOME="$(cd "$SCRIPT_DIR/.." && pwd)"
+JAVA_BIN="$AGENT4J_HOME/jre25/bin/java"
+
+# 如果捆绑 JRE 不存在，回退到系统 Java
+if [ ! -f "$JAVA_BIN" ]; then
+    if command -v java &> /dev/null; then
+        JAVA_BIN="java"
+    else
+        echo "[ERROR] No Java found."
+        echo "  Expected bundled JRE at: $AGENT4J_HOME/jre25/bin/java"
+        echo "  Please re-run the installer to download JRE 25."
+        exit 1
+    fi
+fi
 
 # 显示帮助（无参数 或 -h/--help/help）
 if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$1" = "help" ]; then
@@ -409,12 +559,10 @@ if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$1" = "help" ]; 
     exit 0
 fi
 
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-
 # 检测 Java 版本，如果是 21+ 则添加 --enable-native-access 参数
-JAVA_VER=$(java -version 2>&1 | head -n1 | grep -oE '"[0-9]+' | grep -oE '[0-9]+' | head -1)
+JAVA_VER=$("$JAVA_BIN" -version 2>&1 | head -n1 | grep -oE '"[0-9]+' | grep -oE '[0-9]+' | head -1)
 if [ -z "$JAVA_VER" ]; then
-    JAVA_VER=$(java -version 2>&1 | head -n1 | cut -d'"' -f2 | cut -d'.' -f1)
+    JAVA_VER=$("$JAVA_BIN" -version 2>&1 | head -n1 | cut -d'"' -f2 | cut -d'.' -f1)
 fi
 JAVA_OPTS="-Dfile.encoding=UTF-8"
 if [ -n "$JAVA_VER" ] && [ "$JAVA_VER" -ge 21 ]; then
@@ -446,7 +594,7 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-java $JAVA_OPTS -jar "$SCRIPT_DIR/agent4j-web.jar" "${PASSTHROUGH_ARGS[@]}"
+"$JAVA_BIN" $JAVA_OPTS -jar "$SCRIPT_DIR/agent4j-web.jar" "${PASSTHROUGH_ARGS[@]}"
 '@
 
 Set-Content -Path $LAUNCHER_SH -Value $LAUNCHER_SH_CONTENT -Encoding UTF8 -NoNewline
@@ -458,12 +606,10 @@ Write-Host "      Created: agent4j (for Git Bash)" -ForegroundColor Gray
 Write-Host ""
 Write-Host "Configuring PATH..." -ForegroundColor Yellow
 
-# 检查是否已在 PATH 中
 $USER_PATH = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($USER_PATH -like "*$TARGET_BIN_DIR*") {
     Write-Host "      Already in user PATH" -ForegroundColor Gray
 } else {
-    # 添加到用户 PATH
     $NEW_PATH = if ($USER_PATH) { "$USER_PATH;$TARGET_BIN_DIR" } else { $TARGET_BIN_DIR }
     [Environment]::SetEnvironmentVariable("Path", $NEW_PATH, "User")
     Write-Host "      Added to user PATH" -ForegroundColor Green
@@ -478,7 +624,7 @@ Write-Host "   Installation Complete!" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Install path: $TARGET_DIR" -ForegroundColor White
-Write-Host "  Java version: $javaVersion" -ForegroundColor White
+Write-Host "  JRE path:     $JRE25_DIR" -ForegroundColor White
 Write-Host ""
 Write-Host "  Usage:" -ForegroundColor Cyan
 Write-Host "    1. Open a NEW terminal window (PowerShell or Git Bash)"
@@ -490,6 +636,9 @@ Write-Host "  Directory structure:" -ForegroundColor Cyan
 Write-Host "    $env:USERPROFILE\.agent4j\"
 Write-Host "    +-- config.json      (configuration, preserved)"
 Write-Host "    +-- agent4j.md       (project docs, preserved)"
+Write-Host "    +-- jre25/           (bundled JRE 25)"
+Write-Host "    |   +-- bin/java.exe"
+Write-Host "    |   +-- ..."
 Write-Host "    +-- bin/             (executables)"
 Write-Host "    |   +-- agent4j-web.jar"
 Write-Host "    |   +-- agent4j.ps1       (PowerShell launcher)"
