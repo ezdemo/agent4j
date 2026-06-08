@@ -40,12 +40,11 @@
             <version>${snack4.version}</version>
         </dependency>
 
-        <!-- solon-logging-logback 已提供 SLF4J 实现，不再需要 slf4j-nop -->
-
         <!-- OkHttp HTTP 客户端 -->
         <dependency>
             <groupId>com.squareup.okhttp3</groupId>
             <artifactId>okhttp</artifactId>
+            <version>${okhttp.version}</version>
         </dependency>
         <dependency>
             <groupId>org.noear</groupId>

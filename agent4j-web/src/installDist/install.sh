@@ -224,7 +224,7 @@ PASSTHROUGH_ARGS=()
 while [ $# -gt 0 ]; do
     case "$1" in
         web)
-            PASSTHROUGH_ARGS+=("--solon.logging.logger.root.level=ERROR")
+            PASSTHROUGH_ARGS+=("--solon.logging.logger.root.level=INFO")
             shift
             if [ $# -gt 0 ] && echo "$1" | grep -qE '^[0-9]+$'; then
                 PASSTHROUGH_ARGS+=("--server.port=$1")

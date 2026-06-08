@@ -253,7 +253,7 @@ $PassThroughArgs = @()
 $i = 0
 while ($i -lt $RestArgs.Count) {
     if ($RestArgs[$i] -eq 'web' -and $i -eq 0) {
-        $PassThroughArgs += "--solon.logging.logger.root.level=ERROR"
+        $PassThroughArgs += "--solon.logging.logger.root.level=INFO"
         $i++
         if ($i -lt $RestArgs.Count -and $RestArgs[$i] -match '^\d+$') {
             $PassThroughArgs += "--server.port=$($RestArgs[$i])"
@@ -334,7 +334,7 @@ set "FIRST_ARG=1"
 for %%a in (%*) do (
     if "!FIRST_ARG!"=="1" (
         if "%%a"=="web" (
-            set "PASS_ARGS=!PASS_ARGS! --solon.logging.logger.root.level=ERROR"
+            set "PASS_ARGS=!PASS_ARGS! --solon.logging.logger.root.level=INFO"
             set "NEXT_IS_PORT=1"
         ) else (
             set "PASS_ARGS=!PASS_ARGS! %%a"
@@ -401,7 +401,7 @@ PASSTHROUGH_ARGS=()
 while [ $# -gt 0 ]; do
     case "$1" in
         web)
-            PASSTHROUGH_ARGS+=("--solon.logging.logger.root.level=ERROR")
+            PASSTHROUGH_ARGS+=("--solon.logging.logger.root.level=INFO")
             shift
             if [ $# -gt 0 ] && echo "$1" | grep -qE '^[0-9]+$'; then
                 PASSTHROUGH_ARGS+=("--server.port=$1")
