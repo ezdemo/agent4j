@@ -45,7 +45,23 @@
 
 ## 🚀 快速开始
 
-### 前置条件
+### 🚀 一键安装
+
+**Windows** (PowerShell)：
+
+```powershell
+irm http://agent4j.sorghum.site/setup.ps1 | iex
+```
+
+**Mac / Linux**：
+
+```bash
+curl -fsSL http://agent4j.sorghum.site/setup.sh | bash
+```
+
+安装完成后输入 `agent4j web` 即可启动。自动下载 JRE 25，无需手动安装 Java。
+
+### 前置条件（源码编译）
 
 - **JDK 17+**（推荐 Eclipse Temurin / Amazon Corretto）
 - **Maven 3.x**
