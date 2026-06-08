@@ -371,8 +371,7 @@ public class GitController {
             return ApiResponse.fail("Commit message is required");
         }
 
-        // git add：有指定文件时精确暂存，否则 add -A
-        ProcessResult addResult;
+        // git add：有指定文件时精确暂存，否则只提交已暂存的文件
         if (files != null && !files.isEmpty()) {
             // 先清空暂存区，避免之前已暂存的非选中文件被一起提交
             runGit(workspaceDir, "git", "reset", "HEAD", "--");
@@ -382,13 +381,12 @@ public class GitController {
             addCmd.add("add");
             addCmd.add("--");
             addCmd.addAll(files);
-            addResult = runGit(workspaceDir, addCmd.toArray(new String[0]));
-        } else {
-            addResult = runGit(workspaceDir, "git", "add", "-A");
+            ProcessResult addResult = runGit(workspaceDir, addCmd.toArray(new String[0]));
+            if (addResult.exitCode != 0) {
+                return ApiResponse.fail("git add failed: " + addResult.stderr);
+            }
         }
-        if (addResult.exitCode != 0) {
-            return ApiResponse.fail("git add failed: " + addResult.stderr);
-        }
+        // 不指定文件时，只提交已暂存的文件，不自动 add 未追踪的文件
 
         // git commit
         ProcessResult commitResult = runGit(workspaceDir, "git",

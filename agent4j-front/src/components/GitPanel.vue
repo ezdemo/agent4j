@@ -59,7 +59,11 @@
         </div>
 
         <!-- 提交区域 -->
-        <div class="commit-area" v-if="changedCount > 0">
+        <div class="commit-area" v-if="hasChanges">
+          <div class="commit-select-all">
+            <input type="checkbox" class="git-checkbox" :checked="isAllSelected" @change="toggleSelectAll">
+            <span class="select-all-label">全选 ({{ selectedCount }}/{{ totalCount }})</span>
+          </div>
           <textarea
             class="commit-input"
             placeholder="提交信息（按 Enter 提交）..."
@@ -70,9 +74,9 @@
           <button
             class="commit-button"
             @click="handleCommit"
-            :disabled="committing || !commitMessage.trim()"
+            :disabled="committing || !commitMessage.trim() || selectedCount === 0"
           >
-            {{ committing ? '提交中...' : `提交 (${changedCount})` }}
+            {{ committing ? '提交中...' : `提交 (${selectedCount})` }}
           </button>
         </div>
 
@@ -89,6 +93,7 @@
             </div>
             <template v-if="showChanged">
               <div v-for="f in changedFiles" :key="'c-'+f.path" class="git-file" @click="openDiff(f.path)">
+                <input type="checkbox" class="git-checkbox" :checked="selectedFiles.has(f.path)" @click.stop @change="toggleSelect(f.path)">
                 <span class="file-status" :class="(f.status || f.index || f.workTree || 'M')">{{ (f.status || f.index || f.workTree || 'M') }}</span>
                 <span class="file-path" :title="f.path">{{ f.path }}</span>
                 <button class="file-action-btn toggle-btn" @click.stop="handleToggle(f.path)" title="取消暂存">×</button>
@@ -107,6 +112,7 @@
             </div>
             <template v-if="showUntracked">
               <div v-for="f in untrackedFiles" :key="'n-'+f.path" class="git-file" @click="openDiff(f.path)">
+                <input type="checkbox" class="git-checkbox" :checked="selectedFiles.has(f.path)" @click.stop @change="toggleSelect(f.path)">
                 <span class="file-status U">?</span>
                 <span class="file-path" :title="f.path">{{ f.path }}</span>
                 <button class="file-action-btn toggle-btn add" @click.stop="handleToggle(f.path)" title="添加到变更">+</button>
@@ -163,6 +169,9 @@ const untrackedFiles = ref([])
 const showChanged = ref(true)
 const showUntracked = ref(false)
 
+// 文件选择
+const selectedFiles = ref(new Set())
+
 // 提交
 const commitMessage = ref('')
 const committing = ref(false)
@@ -184,6 +193,30 @@ const hasChanges = computed(() => {
 })
 const changedCount = computed(() => (changedFiles.value || []).length)
 const untrackedCount = computed(() => (untrackedFiles.value || []).length)
+const totalCount = computed(() => changedCount.value + untrackedCount.value)
+const selectedCount = computed(() => selectedFiles.value.size)
+const isAllSelected = computed(() => selectedCount.value === totalCount.value && totalCount.value > 0)
+
+const toggleSelect = (path) => {
+  const newSet = new Set(selectedFiles.value)
+  if (newSet.has(path)) {
+    newSet.delete(path)
+  } else {
+    newSet.add(path)
+  }
+  selectedFiles.value = newSet
+}
+
+const toggleSelectAll = () => {
+  if (isAllSelected.value) {
+    selectedFiles.value = new Set()
+  } else {
+    const newSet = new Set()
+    ;(changedFiles.value || []).forEach(f => newSet.add(f.path))
+    ;(untrackedFiles.value || []).forEach(f => newSet.add(f.path))
+    selectedFiles.value = newSet
+  }
+}
 
 // ---- 加载状态 ----
 const loadStatus = async () => {
@@ -265,13 +298,15 @@ const handleToggle = async (path) => {
 }
 
 const handleCommit = async () => {
-  if (!commitMessage.value.trim() || committing.value) return
+  if (!commitMessage.value.trim() || committing.value || selectedCount.value === 0) return
   committing.value = true
   try {
-    const r = await gitAPI.commit(props.workspaceHash, commitMessage.value.trim())
+    const files = Array.from(selectedFiles.value)
+    const r = await gitAPI.commit(props.workspaceHash, commitMessage.value.trim(), files)
     if (r.success) {
-      showFeedback('success', '提交成功')
+      showFeedback('success', `提交成功 (${files.length} 个文件)`)
       commitMessage.value = ''
+      selectedFiles.value = new Set()
       await loadStatus()
     } else {
       showFeedback('error', r.error || '提交失败')
@@ -438,6 +473,18 @@ watch(() => props.workspaceHash, () => {
 
 /* 提交区域 */
 .commit-area { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.commit-select-all {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+  font-size: 11px;
+  color: var(--fg-3);
+}
+.select-all-label {
+  cursor: pointer;
+  user-select: none;
+}
 .commit-input {
   width: 100%;
   padding: 6px 8px;
@@ -536,6 +583,14 @@ watch(() => props.workspaceHash, () => {
 [data-theme="retro-yellow"] .file-status.D { background: #f5e0d8; color: #8b2500; }
 [data-theme="retro-yellow"] .file-status.R { background: #e0e8f0; color: #4a5a7a; }
 [data-theme="retro-yellow"] .file-status.U { background: #ede0f5; color: #6b3a8a; }
+
+.git-checkbox {
+  flex-shrink: 0;
+  width: 14px;
+  height: 14px;
+  cursor: pointer;
+  accent-color: var(--accent);
+}
 
 .file-path {
   flex: 1;
