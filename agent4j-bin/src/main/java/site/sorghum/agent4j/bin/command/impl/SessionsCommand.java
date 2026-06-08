@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.command.impl;
 
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
@@ -20,6 +21,7 @@ import java.util.List;
  * @author Sorghum
  */
 @Component
+@Slf4j
 public class SessionsCommand implements ChatCommand {
 
     @Override
@@ -41,22 +43,22 @@ public class SessionsCommand implements ChatCommand {
     public CommandResult execute(MessageWrapper input, ChatCommandContext context) throws Exception {
         SessionStore store = context.getAgent().getSessionStore();
         if (store == null) {
-            System.out.println("(会话存储未启用)");
+            log.info("(会话存储未启用)");
             return CommandResult.CONTINUE;
         }
         List<SessionStore.SessionInfo> sessions = store.list();
         if (sessions.isEmpty()) {
-            System.out.println("(无历史会话)");
+            log.info("(无历史会话)");
             return CommandResult.CONTINUE;
         }
-        System.out.println("会话列表：");
+        log.info("会话列表：");
         SimpleDateFormat sdf = new SimpleDateFormat("MM-dd HH:mm");
         for (int i = 0; i < Math.min(sessions.size(), 20); i++) {
             SessionStore.SessionInfo s = sessions.get(i);
-            System.out.println("  " + i + ". " + s.name() + " (" + s.messageCount() + " 条消息, "
+            log.info("  " + i + ". " + s.name() + " (" + s.messageCount() + " 条消息, "
                     + sdf.format(new Date(s.mtime())) + ")");
         }
-        System.out.println("使用 /load N 加载");
+        log.info("使用 /load N 加载");
         return CommandResult.CONTINUE;
     }
 }

@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.command.impl;
 
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
@@ -15,6 +16,7 @@ import site.sorghum.agent4j.bin.command.MessageWrapper;
  * @author Sorghum
  */
 @Component
+@Slf4j
 public class DenyCommand implements ChatCommand {
 
     @Override
@@ -40,23 +42,22 @@ public class DenyCommand implements ChatCommand {
     @Override
     public CommandResult execute(MessageWrapper input, ChatCommandContext context) {
         if (context.getAgent().noPendingHITL()) {
-            System.out.println("(当前没有待审批的工具调用)");
+            log.info("(当前没有待审批的工具调用)");
             return CommandResult.CONTINUE;
         }
 
         context.getAgent().denyHITL();
         try {
             String reply = context.getAgent().chat(null);
-            System.out.println();
             if (reply == null || reply.isEmpty()) {
-                System.out.println("(模型返回空内容)");
+                log.info("(模型返回空内容)");
             } else {
-                System.out.println(reply);
+                log.info(reply);
             }
             context.getAgent().saveUsage();
             context.getAgent().flushSession();
         } catch (Exception e) {
-            System.err.println("错误: " + e.getMessage());
+            log.error("错误: {}" , e.getMessage());
         }
         return CommandResult.CONTINUE;
     }

@@ -1,5 +1,5 @@
 #
-# Agent4j Web Uninstaller for Windows PowerShell
+# Agent4j Uninstaller for Windows PowerShell
 # 完全卸载 Agent4j Web，包括配置目录
 #
 
@@ -7,7 +7,7 @@ $ErrorActionPreference = "Stop"
 
 Write-Host ""
 Write-Host "============================================" -ForegroundColor Cyan
-Write-Host "   Agent4j Web Uninstaller (PowerShell)" -ForegroundColor Cyan
+Write-Host "   Agent4j Uninstaller (PowerShell)" -ForegroundColor Cyan
 Write-Host "============================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -26,14 +26,14 @@ $INSTALL_DIR = Join-Path $env:USERPROFILE ".agent4j"
 # 检查是否已安装
 if (-not (Test-Path $INSTALL_DIR)) {
     Write-Host ""
-    Write-Host "[Info] Agent4j Web is not installed." -ForegroundColor Yellow
+    Write-Host "[Info] Agent4j is not installed." -ForegroundColor Yellow
     Write-Host "       Directory not found: $INSTALL_DIR" -ForegroundColor Gray
     Read-Host "Press Enter to exit"
     exit 0
 }
 
 Write-Host ""
-Write-Host "This will remove Agent4j Web completely:" -ForegroundColor White
+Write-Host "This will remove Agent4j completely:" -ForegroundColor White
 Write-Host "  - Executables and configuration"
 Write-Host "  - Sessions and memory data"
 Write-Host "  - Skills modules"
@@ -146,10 +146,10 @@ Write-Host "============================================" -ForegroundColor Green
 Write-Host ""
 
 if ($KEEP_CONFIG_BOOL) {
-    Write-Host "  Agent4j Web has been removed." -ForegroundColor White
+    Write-Host "  Agent4j has been removed." -ForegroundColor White
     Write-Host "  Configuration files preserved at: $INSTALL_DIR" -ForegroundColor White
 } else {
-    Write-Host "  Agent4j Web has been fully removed." -ForegroundColor White
+    Write-Host "  Agent4j has been fully removed." -ForegroundColor White
 }
 
 Write-Host ""

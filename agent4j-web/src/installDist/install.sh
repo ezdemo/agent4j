@@ -166,14 +166,14 @@ fi
 echo "      Found agent4j-web.jar"
 
 # =============================================
-# [5/5] 创建 agent4j-web 命令脚本
+# [5/5] 创建 agent4j 命令脚本
 # =============================================
 echo ""
-echo "[5/5] Creating 'agent4j-web' command..."
+echo "[5/5] Creating 'agent4j' command..."
 
-cat > "$TARGET_BIN_DIR/agent4j-web" << 'LAUNCHER_EOF'
+cat > "$TARGET_BIN_DIR/agent4j" << 'LAUNCHER_EOF'
 #!/bin/bash
-# Agent4j Web Launcher
+# Agent4j Launcher
 
 # 获取脚本真实路径（兼容软链接）
 SCRIPT_PATH="$0"
@@ -189,6 +189,25 @@ while [ -L "$SCRIPT_PATH" ]; do
 done
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 
+# 显示帮助（无参数 或 -h/--help/help）
+if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$1" = "help" ]; then
+    echo "Agent4j — AI Coding Assistant"
+    echo ""
+    echo "Usage:"
+    echo "  agent4j web [port]    Start the web server"
+    echo ""
+    echo "Options:"
+    echo "  port    0 = random port, 8097 = default, or any port number"
+    echo ""
+    echo "Examples:"
+    echo "  agent4j web           Start on default port (8097)"
+    echo "  agent4j web 0         Start on a random available port"
+    echo "  agent4j web 9636      Start on port 9636"
+    echo ""
+    echo "  agent4j -h            Show this help"
+    exit 0
+fi
+
 # 检测 Java 版本，如果是 21+ 则添加 --enable-native-access 参数
 JAVA_VER=$(java -version 2>&1 | head -n1 | grep -oE '"[0-9]+' | grep -oE '[0-9]+' | head -1)
 if [ -z "$JAVA_VER" ]; then
@@ -200,19 +219,38 @@ if [ -n "$JAVA_VER" ] && [ "$JAVA_VER" -ge 21 ]; then
     JAVA_OPTS="$JAVA_OPTS --enable-native-access=ALL-UNNAMED"
 fi
 
+# 解析 "web [port]" 子命令
+PASSTHROUGH_ARGS=()
+while [ $# -gt 0 ]; do
+    case "$1" in
+        web)
+            PASSTHROUGH_ARGS+=("--solon.logging.appender.console.enable=false")
+            shift
+            if [ $# -gt 0 ] && echo "$1" | grep -qE '^[0-9]+$'; then
+                PASSTHROUGH_ARGS+=("--server.port=$1")
+                shift
+            fi
+            ;;
+        *)
+            PASSTHROUGH_ARGS+=("$1")
+            shift
+            ;;
+    esac
+done
+
 # Git Bash / MSYS terminals on Windows often need winpty for correct line editing.
 if [ -n "$MSYSTEM" ]; then
     JAVA_OPTS="$JAVA_OPTS -Djline.terminal.type=xterm-256color"
     if [ -t 0 ] && [ -t 1 ] && command -v winpty >/dev/null 2>&1; then
-        exec winpty java $JAVA_OPTS -jar "$SCRIPT_DIR/agent4j-web.jar" "$@"
+        exec winpty java $JAVA_OPTS -jar "$SCRIPT_DIR/agent4j-web.jar" "${PASSTHROUGH_ARGS[@]}"
     fi
 fi
 
-java $JAVA_OPTS -jar "$SCRIPT_DIR/agent4j-web.jar" "$@"
+java $JAVA_OPTS -jar "$SCRIPT_DIR/agent4j-web.jar" "${PASSTHROUGH_ARGS[@]}"
 LAUNCHER_EOF
 
-chmod +x "$TARGET_BIN_DIR/agent4j-web"
-echo "      Created: $TARGET_BIN_DIR/agent4j-web"
+chmod +x "$TARGET_BIN_DIR/agent4j"
+echo "      Created: $TARGET_BIN_DIR/agent4j"
 
 # =============================================
 # 配置 PATH 环境变量（兼容多种 shell 和系统）
@@ -301,20 +339,20 @@ done
 # 尝试创建软链接到 /usr/local/bin（可选）
 # =============================================
 SYMLINK_CREATED=false
-if [ ! -e "/usr/local/bin/agent4j-web" ]; then
+if [ ! -e "/usr/local/bin/agent4j" ]; then
     if [ -w "/usr/local/bin" ] 2>/dev/null; then
         # 有写权限，直接创建
-        ln -sf "$TARGET_BIN_DIR/agent4j-web" /usr/local/bin/agent4j-web 2>/dev/null && SYMLINK_CREATED=true
+        ln -sf "$TARGET_BIN_DIR/agent4j" /usr/local/bin/agent4j 2>/dev/null && SYMLINK_CREATED=true
     elif command -v sudo >/dev/null 2>&1; then
         # 尝试用 sudo（非交互式，静默失败）
         if sudo -n true 2>/dev/null; then
-            sudo ln -sf "$TARGET_BIN_DIR/agent4j-web" /usr/local/bin/agent4j-web 2>/dev/null && SYMLINK_CREATED=true
+            sudo ln -sf "$TARGET_BIN_DIR/agent4j" /usr/local/bin/agent4j 2>/dev/null && SYMLINK_CREATED=true
         fi
     fi
 fi
 
 if [ "$SYMLINK_CREATED" = true ]; then
-    echo "      Created symlink: /usr/local/bin/agent4j-web"
+    echo "      Created symlink: /usr/local/bin/agent4j"
 fi
 
 # =============================================
@@ -330,13 +368,15 @@ echo "  Java version: $JAVA_VERSION"
 echo ""
 
 if [ "$SYMLINK_CREATED" = true ]; then
-    echo -e "  ${CYAN}Symlink created: /usr/local/bin/agent4j-web${NC}"
-    echo -e "  You can run ${CYAN}agent4j-web${NC} directly now!"
+    echo -e "  ${CYAN}Symlink created: /usr/local/bin/agent4j${NC}"
+    echo -e "  You can run ${CYAN}agent4j web${NC} directly now!"
 else
     echo -e "  ${CYAN}Usage:${NC}"
     echo "    1. Run: source ~/.${USER_SHELL}rc"
     echo "    2. Or restart your terminal"
-    echo "    3. Then run: 'agent4j-web'"
+    echo "    3. Then run: 'agent4j web'         (default port 8097)"
+    echo "                'agent4j web 0'       (random port)"
+    echo "                'agent4j web 9636'    (specify port 9636)"
 fi
 
 echo ""
@@ -346,13 +386,13 @@ echo "    ├── config.json      (configuration, preserved if exists)"
 echo "    ├── agent4j.md       (project docs, preserved if exists)"
 echo "    ├── bin/             (executables)"
 echo "    │   ├── agent4j-web.jar"
-echo "    │   ├── agent4j-web       (launcher)"
+echo "    │   ├── agent4j           (launcher)"
 echo "    │   └── uninstall.sh      (uninstall script)"
 echo ""
 echo -e "  ${CYAN}API Endpoint:${NC}"
 echo "    http://localhost:8097"
 echo ""
-echo -e "  ${YELLOW}[Tip]${NC} To use agent4j-web immediately in current terminal:"
+echo -e "  ${YELLOW}[Tip]${NC} To use agent4j immediately in current terminal:"
 echo "    source ~/.${USER_SHELL}rc"
 echo ""
 

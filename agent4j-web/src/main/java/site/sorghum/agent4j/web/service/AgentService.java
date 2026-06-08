@@ -164,7 +164,7 @@ public class AgentService {
             String model = envOr("MODEL", config.model());
 
             if (apiKey == null || apiKey.isEmpty()) {
-                System.err.println("[web] 未配置 apiKey，Agent 未初始化");
+                log.error("[web] 未配置 apiKey，Agent 未初始化");
                 return;
             }
 
@@ -185,13 +185,13 @@ public class AgentService {
             Set<String> disabledTools = config.disabledTools();
             if (disabledTools != null && !disabledTools.isEmpty()) {
                 sharedToolRegistry.setDisabledTools(disabledTools);
-                System.err.println("[config] 已禁用工具: " + String.join(", ", disabledTools));
+                log.info("[config] 已禁用工具: " + String.join(", ", disabledTools));
             }
 
             // 屏蔽目录列表
             final List<String> blockedPaths = config.blockedPaths();
             if (blockedPaths != null && !blockedPaths.isEmpty()) {
-                System.err.println("[config] 已屏蔽目录: " + String.join(", ", blockedPaths));
+                log.info("[config] 已屏蔽目录: " + String.join(", ", blockedPaths));
             }
 
             // 使用 ToolSystemInitializer 统一初始化（消除重复代码）
@@ -208,9 +208,8 @@ public class AgentService {
                     : Paths.get(System.getProperty("user.home"), ".agent4j").toString();
             workspacePrefixes.put(initWs, initResult.promptPrefix);
 
-            System.out.println("[web] Agent 共享组件初始化完成 — 模型: " + model);
+            log.info("[web] Agent 共享组件初始化完成 — 模型: {}" , model);
         } catch (Exception e) {
-            System.err.println("[web] Agent 共享组件初始化失败: " + e.getMessage());
             log.error(
                     "Agent 共享组件初始化失败: ", e
             );
@@ -348,9 +347,9 @@ public class AgentService {
                             removed.flushSession();
                             removed.saveUsage();
                         } catch (Exception e) {
-                            System.err.println("[web] 淘汰 Agent 失败: " + e.getMessage());
+                            log.info("[web] 淘汰 Agent 失败: " + e.getMessage());
                         }
-                        System.out.println("[web] LRU 淘汰 Agent: " + oldestKey);
+                        log.info("[web] LRU 淘汰 Agent: " + oldestKey);
                     }
                 }
             }
@@ -383,10 +382,9 @@ public class AgentService {
                 // 缓存 Agent
                 agentCache.put(sessionKey, agent);
 
-                System.out.println("[web] 创建新 Agent: " + sessionKey);
+                log.info("[web] 创建新 Agent: " + sessionKey);
                 return agent;
             } catch (Exception e) {
-                System.err.println("[web] 创建 Agent 失败: " + e.getMessage());
                 log.error(
                         "Agent 共享组件初始化失败: ", e
                 );
@@ -955,7 +953,7 @@ public class AgentService {
             // 如果清除的是当前活跃会话，清理追踪记录
             String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
             currentSessionNames.remove(resolvedPath, sessionName);
-            System.out.println("[web] 已清除 Agent: " + sessionKey);
+            log.info("[web] 已清除 Agent: " + sessionKey);
         }
     }
 

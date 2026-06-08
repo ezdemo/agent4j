@@ -16,7 +16,6 @@ package site.sorghum.agent4j.bin.command;
  *     public String getCommand() { return "mycmd"; }
  *     public String getDescription() { return "/mycmd       执行我的自定义命令"; }
  *     public CommandResult execute(String input, ChatCommandContext ctx) {
- *         System.out.println("执行 mycmd！");
  *         return CommandResult.CONTINUE;
  *     }
  * }

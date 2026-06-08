@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.command.impl;
 
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
@@ -16,6 +17,7 @@ import site.sorghum.agent4j.tool.LogLevel;
  * @author Sorghum
  */
 @Component
+@Slf4j
 public class RetryCommand implements ChatCommand {
 
     @Override
@@ -38,8 +40,7 @@ public class RetryCommand implements ChatCommand {
         context.getAgent().getOutput().onLog(LogLevel.INFO, "重试上一条消息...");
         String reply = context.getAgent().retryLast();
         if (reply != null) {
-            System.out.println();
-            System.out.println(reply);
+            log.info(reply);
             context.getAgent().getOutput().onReasoning(
                     "重试消息:" + reply + "\n"
             );
