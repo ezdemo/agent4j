@@ -2,6 +2,7 @@
 # =============================================
 #  Agent4j Web Installer (Linux / macOS)
 #  支持重复安装，保留已有 config.json
+#  自动下载 JRE 25（无需系统 Java）
 #  兼容 bash, zsh, sh 等多种 shell
 # =============================================
 
@@ -21,57 +22,155 @@ echo "============================================"
 echo ""
 
 # =============================================
-# 检查 Java 是否安装
-# =============================================
-echo -e "${YELLOW}[Pre-check]${NC} Verifying Java installation..."
-
-if ! command -v java &> /dev/null; then
-    echo ""
-    echo -e "${RED}[Error] Java is not installed or not in PATH${NC}"
-    echo ""
-    echo "  Please install Java 17 or later:"
-    echo "    - Download from: https://adoptium.net/"
-    echo ""
-    if [ -z "$AGENT4J_SETUP" ]; then
-        echo "Press Enter to exit..."
-        read -r
-    fi
-    exit 1
-fi
-
-# 获取 Java 版本
-JAVA_VERSION=$(java -version 2>&1 | head -n 1)
-echo -e "      ${JAVA_VERSION}${NC}"
-
-# 检查 Java 版本是否 >= 17
-JAVA_MAJOR=$(java -version 2>&1 | head -n1 | grep -oE '"[0-9]+' | grep -oE '[0-9]+' | head -1)
-if [ -z "$JAVA_MAJOR" ]; then
-    JAVA_MAJOR=$(java -version 2>&1 | head -n1 | cut -d'"' -f2 | cut -d'.' -f1)
-fi
-if [ -n "$JAVA_MAJOR" ] && [ "$JAVA_MAJOR" -lt 17 ]; then
-    echo ""
-    echo -e "${RED}[Error] Java 17 or later is required (found: Java $JAVA_MAJOR)${NC}"
-    echo ""
-    if [ -z "$AGENT4J_SETUP" ]; then
-        echo "Press Enter to exit..."
-        read -r
-    fi
-    exit 1
-fi
-
-echo ""
-
 # 源目录（脚本所在目录）
+# =============================================
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 # 目标目录
 TARGET_DIR="$HOME/.agent4j"
 TARGET_BIN_DIR="$TARGET_DIR/bin"
+JRE25_DIR="$TARGET_DIR/jre25"
+JRE25_JAVA="$JRE25_DIR/bin/java"
 
 # 源目录
 SOURCE_BIN_DIR="$SOURCE_DIR/bin"
 SOURCE_CONFIG="$SOURCE_DIR/config.json"
 SOURCE_AGENTS="$SOURCE_DIR/agent4j.md"
+
+# =============================================
+# 检测 OS / ARCH（与 Adoptium API 对齐）
+# =============================================
+detect_os() {
+    case "$(uname -s)" in
+        Darwin)  echo "mac" ;;
+        Linux)   echo "linux" ;;
+        *)       echo "linux" ;;  # fallback
+    esac
+}
+
+detect_arch() {
+    case "$(uname -m)" in
+        x86_64|amd64) echo "x64" ;;
+        aarch64|arm64) echo "aarch64" ;;
+        *)             echo "x64" ;;  # fallback
+    esac
+}
+
+# =============================================
+# 下载并安装 JRE 25 到 ~/.agent4j/jre25/
+# 参考 lib.rs: Adoptium API → 清华镜像
+# =============================================
+download_jre25() {
+    local os=$(detect_os)
+    local arch=$(detect_arch)
+
+    echo -e "${YELLOW}[JRE 25]${NC} Downloading JRE 25 for ${os}/${arch}..."
+
+    # 1. 从 Adoptium API 获取最新包名
+    local api_url="https://api.adoptium.net/v3/assets/feature_releases/25/ga?architecture=${arch}&image_type=jre&os=${os}&page_size=1"
+    echo -e "      Querying Adoptium API..."
+
+    local package_name=""
+    if command -v curl &> /dev/null; then
+        package_name=$(curl -fsSL "$api_url" 2>/dev/null | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
+    elif command -v wget &> /dev/null; then
+        package_name=$(wget -qO- "$api_url" 2>/dev/null | grep -o '"name":"[^"]*"' | head -1 | cut -d'"' -f4)
+    fi
+
+    # 2. 兜底文件名（API 不可用时）
+    if [ -z "$package_name" ]; then
+        local ext="tar.gz"
+        [ "$os" = "windows" ] && ext="zip"
+        package_name="OpenJDK25U-jre_${arch}_${os}_hotspot_25.0.0_1.${ext}"
+        echo -e "      ${YELLOW}API unavailable, using fallback name: ${package_name}${NC}"
+    else
+        echo -e "      Latest package: ${package_name}"
+    fi
+
+    # 3. 从清华镜像下载
+    local mirror_url="https://mirrors.tuna.tsinghua.edu.cn/Adoptium/25/jre/${arch}/${os}/${package_name}"
+    local tmp_dir="$TARGET_DIR/.tmp-jre"
+    local archive_path="$tmp_dir/$package_name"
+
+    rm -rf "$tmp_dir"
+    mkdir -p "$tmp_dir"
+
+    echo -e "      Downloading from Tsinghua mirror..."
+    if command -v curl &> /dev/null; then
+        curl -fSL --progress-bar "$mirror_url" -o "$archive_path"
+    else
+        wget -q --show-progress "$mirror_url" -O "$archive_path"
+    fi
+
+    # 4. 解压
+    echo -e "      Extracting..."
+    local extract_dir="$tmp_dir/extract"
+    mkdir -p "$extract_dir"
+
+    case "$package_name" in
+        *.tar.gz|*.tgz)
+            tar -xzf "$archive_path" -C "$extract_dir" ;;
+        *.zip)
+            if command -v unzip &> /dev/null; then
+                unzip -q "$archive_path" -d "$extract_dir"
+            else
+                echo -e "${RED}[ERROR]${NC} unzip is required to extract .zip files"
+                exit 1
+            fi
+            ;;
+        *)
+            echo -e "${RED}[ERROR]${NC} Unknown archive format: $package_name"
+            exit 1
+            ;;
+    esac
+
+    # 5. 找到 JRE 顶层目录（解压后唯一的子目录）
+    local jre_subdir=$(ls -d "$extract_dir"/*/ 2>/dev/null | head -1)
+    if [ -z "$jre_subdir" ]; then
+        # 可能直接解压到了 extract_dir 根目录
+        jre_subdir="$extract_dir"
+    fi
+
+    # 6. 移动到最终位置
+    if [ -d "$JRE25_DIR" ]; then
+        rm -rf "$JRE25_DIR"
+    fi
+    mkdir -p "$(dirname "$JRE25_DIR")"
+    mv "$jre_subdir" "$JRE25_DIR"
+
+    # 7. 清理
+    rm -rf "$tmp_dir"
+
+    # 8. 验证
+    if [ ! -f "$JRE25_JAVA" ]; then
+        echo -e "${RED}[ERROR]${NC} JRE 25 installation failed: java binary not found at $JRE25_JAVA"
+        exit 1
+    fi
+
+    local jre_ver=$("$JRE25_JAVA" -version 2>&1 | head -1)
+    echo -e "      ${GREEN}JRE 25 installed: ${jre_ver}${NC}"
+}
+
+# =============================================
+# 确保 JRE 25 可用
+# =============================================
+ensure_java() {
+    if [ -f "$JRE25_JAVA" ]; then
+        local ver=$("$JRE25_JAVA" -version 2>&1 | head -1)
+        echo -e "${GREEN}[Pre-check]${NC} Bundled JRE 25 found: ${ver}"
+        return 0
+    fi
+
+    echo -e "${YELLOW}[Pre-check]${NC} JRE 25 not found, will download automatically..."
+    echo ""
+    download_jre25
+    echo ""
+}
+
+# =============================================
+# 执行 Pre-check
+# =============================================
+ensure_java
 
 # =============================================
 # 检查源目录是否存在
@@ -166,28 +265,42 @@ fi
 echo "      Found agent4j-web.jar"
 
 # =============================================
-# [5/5] 创建 agent4j 命令脚本
+# [5/5] 创建 agent4j 命令脚本（使用捆绑 JRE 25）
 # =============================================
 echo ""
 echo "[5/5] Creating 'agent4j' command..."
 
 cat > "$TARGET_BIN_DIR/agent4j" << 'LAUNCHER_EOF'
 #!/bin/bash
-# Agent4j Launcher
+# Agent4j Launcher — uses bundled JRE 25
 
 # 获取脚本真实路径（兼容软链接）
 SCRIPT_PATH="$0"
-# 解析软链接（兼容 macOS 和 Linux）
 while [ -L "$SCRIPT_PATH" ]; do
     SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
     SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
-    # 如果是相对路径，转换为绝对路径
     case "$SCRIPT_PATH" in
-        /*) ;;  # 已经是绝对路径
+        /*) ;;
         *)  SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH" ;;
     esac
 done
 SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+
+# 捆绑的 JRE 25 路径
+AGENT4J_HOME="$(cd "$SCRIPT_DIR/.." && pwd)"
+JAVA_BIN="$AGENT4J_HOME/jre25/bin/java"
+
+# 如果捆绑 JRE 不存在，回退到系统 Java
+if [ ! -f "$JAVA_BIN" ]; then
+    if command -v java &> /dev/null; then
+        JAVA_BIN="java"
+    else
+        echo "[ERROR] No Java found."
+        echo "  Expected bundled JRE at: $AGENT4J_HOME/jre25/bin/java"
+        echo "  Please re-run the installer to download JRE 25."
+        exit 1
+    fi
+fi
 
 # 显示帮助（无参数 或 -h/--help/help）
 if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$1" = "help" ]; then
@@ -209,10 +322,9 @@ if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$1" = "help" ]; 
 fi
 
 # 检测 Java 版本，如果是 21+ 则添加 --enable-native-access 参数
-JAVA_VER=$(java -version 2>&1 | head -n1 | grep -oE '"[0-9]+' | grep -oE '[0-9]+' | head -1)
+JAVA_VER=$("$JAVA_BIN" -version 2>&1 | head -n1 | grep -oE '"[0-9]+' | grep -oE '[0-9]+' | head -1)
 if [ -z "$JAVA_VER" ]; then
-    # 如果提取失败，尝试另一种方式
-    JAVA_VER=$(java -version 2>&1 | head -n1 | cut -d'"' -f2 | cut -d'.' -f1)
+    JAVA_VER=$("$JAVA_BIN" -version 2>&1 | head -n1 | cut -d'"' -f2 | cut -d'.' -f1)
 fi
 JAVA_OPTS="-Dfile.encoding=UTF-8"
 if [ -n "$JAVA_VER" ] && [ "$JAVA_VER" -ge 21 ]; then
@@ -244,15 +356,15 @@ while [ $# -gt 0 ]; do
     esac
 done
 
-# Git Bash / MSYS terminals on Windows often need winpty for correct line editing.
+# Git Bash / MSYS terminals on Windows often need winpty
 if [ -n "$MSYSTEM" ]; then
     JAVA_OPTS="$JAVA_OPTS -Djline.terminal.type=xterm-256color"
     if [ -t 0 ] && [ -t 1 ] && command -v winpty >/dev/null 2>&1; then
-        exec winpty java $JAVA_OPTS -jar "$SCRIPT_DIR/agent4j-web.jar" "${PASSTHROUGH_ARGS[@]}"
+        exec winpty "$JAVA_BIN" $JAVA_OPTS -jar "$SCRIPT_DIR/agent4j-web.jar" "${PASSTHROUGH_ARGS[@]}"
     fi
 fi
 
-java $JAVA_OPTS -jar "$SCRIPT_DIR/agent4j-web.jar" "${PASSTHROUGH_ARGS[@]}"
+"$JAVA_BIN" $JAVA_OPTS -jar "$SCRIPT_DIR/agent4j-web.jar" "${PASSTHROUGH_ARGS[@]}"
 LAUNCHER_EOF
 
 chmod +x "$TARGET_BIN_DIR/agent4j"
@@ -276,32 +388,22 @@ declare -a CONFIG_FILES=()
 
 case "$USER_SHELL" in
     zsh)
-        # Zsh: 优先 .zshrc
         CONFIG_FILES+=("$HOME/.zshrc")
         ;;
     bash)
-        # Bash: 不同系统读取不同文件
-        # macOS 默认读取 .bash_profile
-        # Linux 通常读取 .bashrc
         if [[ "$(uname -s)" == "Darwin" ]]; then
-            # macOS
             CONFIG_FILES+=("$HOME/.bash_profile")
-            # 同时也写入 .bashrc 以兼容非登录 shell
             CONFIG_FILES+=("$HOME/.bashrc")
         else
-            # Linux
             CONFIG_FILES+=("$HOME/.bashrc")
-            # 同时也写入 .bash_profile 以兼容登录 shell
             CONFIG_FILES+=("$HOME/.bash_profile")
         fi
         ;;
     fish)
-        # Fish shell
         CONFIG_FILES+=("$HOME/.config/fish/config.fish")
         PATH_LINE='set -gx PATH $PATH $HOME/.agent4j/bin'
         ;;
     *)
-        # 未知 shell，尝试写入多个文件
         CONFIG_FILES+=("$HOME/.profile")
         CONFIG_FILES+=("$HOME/.bashrc")
         CONFIG_FILES+=("$HOME/.zshrc")
@@ -311,14 +413,12 @@ esac
 # 写入配置文件
 CONFIG_UPDATED=false
 for CONFIG_FILE in "${CONFIG_FILES[@]}"; do
-    # 确保 Fish 使用正确的配置语法
     if [[ "$USER_SHELL" == "fish" && "$CONFIG_FILE" == *".fish" ]]; then
         PATH_LINE='set -gx PATH $PATH $HOME/.agent4j/bin'
     else
         PATH_LINE='export PATH="$PATH:$HOME/.agent4j/bin"'
     fi
-    
-    # 检查文件是否已包含配置（使用 .agent4j/bin 作为匹配关键词）
+
     if [ -f "$CONFIG_FILE" ]; then
         if grep -qF '.agent4j/bin' "$CONFIG_FILE" 2>/dev/null; then
             echo "      PATH already configured in $(basename "$CONFIG_FILE")"
@@ -326,14 +426,12 @@ for CONFIG_FILE in "${CONFIG_FILES[@]}"; do
             continue
         fi
     fi
-    
-    # 创建目录（针对 Fish 等需要子目录的情况）
+
     CONFIG_DIR=$(dirname "$CONFIG_FILE")
     if [ ! -d "$CONFIG_DIR" ]; then
         mkdir -p "$CONFIG_DIR" 2>/dev/null || continue
     fi
-    
-    # 追加配置
+
     echo "" >> "$CONFIG_FILE" 2>/dev/null || continue
     echo "$PATH_MARKER" >> "$CONFIG_FILE" 2>/dev/null || continue
     echo "$PATH_LINE" >> "$CONFIG_FILE" 2>/dev/null || continue
@@ -347,10 +445,8 @@ done
 SYMLINK_CREATED=false
 if [ ! -e "/usr/local/bin/agent4j" ]; then
     if [ -w "/usr/local/bin" ] 2>/dev/null; then
-        # 有写权限，直接创建
         ln -sf "$TARGET_BIN_DIR/agent4j" /usr/local/bin/agent4j 2>/dev/null && SYMLINK_CREATED=true
     elif command -v sudo >/dev/null 2>&1; then
-        # 尝试用 sudo（非交互式，静默失败）
         if sudo -n true 2>/dev/null; then
             sudo ln -sf "$TARGET_BIN_DIR/agent4j" /usr/local/bin/agent4j 2>/dev/null && SYMLINK_CREATED=true
         fi
@@ -370,7 +466,7 @@ echo -e "${GREEN}   Installation Complete!${NC}"
 echo -e "${GREEN}============================================${NC}"
 echo ""
 echo "  Install path: $TARGET_DIR"
-echo "  Java version: $JAVA_VERSION"
+echo "  JRE path:     $JRE25_DIR"
 echo ""
 
 if [ "$SYMLINK_CREATED" = true ]; then
@@ -390,6 +486,9 @@ echo -e "  ${CYAN}Directory structure:${NC}"
 echo "    ~/.agent4j/"
 echo "    ├── config.json      (configuration, preserved if exists)"
 echo "    ├── agent4j.md       (project docs, preserved if exists)"
+echo "    ├── jre25/           (bundled JRE 25)"
+echo "    │   ├── bin/java"
+echo "    │   └── ..."
 echo "    ├── bin/             (executables)"
 echo "    │   ├── agent4j-web.jar"
 echo "    │   ├── agent4j           (launcher)"
