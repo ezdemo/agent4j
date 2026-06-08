@@ -143,6 +143,17 @@ download_jre25() {
     mkdir -p "$(dirname "$JRE25_DIR")"
     mv "$jre_subdir" "$JRE25_DIR"
 
+    # macOS: JRE tar.gz 解出来是 Contents/Home/bin/java 而不是 bin/java
+    # 把 Contents/Home 的内容提到 jre25/ 根目录，和 Linux 保持一致
+    if [ ! -f "$JRE25_JAVA" ] && [ -d "$JRE25_DIR/Contents/Home" ]; then
+        local mac_tmp="$tmp_dir/mac-flatten"
+        mkdir -p "$mac_tmp"
+        mv "$JRE25_DIR/Contents/Home/"* "$mac_tmp/" 2>/dev/null || true
+        mv "$JRE25_DIR/Contents/Home/".* "$mac_tmp/" 2>/dev/null || true
+        rm -rf "$JRE25_DIR"
+        mv "$mac_tmp" "$JRE25_DIR"
+    fi
+
     # 7. 清理
     rm -rf "$tmp_dir"
 
@@ -294,6 +305,11 @@ SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
 # 捆绑的 JRE 25 路径
 AGENT4J_HOME="$(cd "$SCRIPT_DIR/.." && pwd)"
 JAVA_BIN="$AGENT4J_HOME/jre25/bin/java"
+
+# macOS: JRE 有时在 Contents/Home 下
+if [ ! -f "$JAVA_BIN" ] && [ -f "$AGENT4J_HOME/jre25/Contents/Home/bin/java" ]; then
+    JAVA_BIN="$AGENT4J_HOME/jre25/Contents/Home/bin/java"
+fi
 
 # 如果捆绑 JRE 不存在，回退到系统 Java
 if [ ! -f "$JAVA_BIN" ]; then
