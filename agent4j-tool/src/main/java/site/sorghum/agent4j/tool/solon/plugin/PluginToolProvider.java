@@ -14,6 +14,8 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 /**
@@ -30,7 +32,7 @@ public class PluginToolProvider implements SolonToTools {
 
     private static final String CONFIG_FILE = "tool.json";
 
-    List<PluginConfig> configs = new ArrayList<>();
+    Map<Path, PluginConfig> configs = new ConcurrentHashMap<>();
 
     private Path pluginRoot() {
         return Paths.get(System.getProperty("user.home", "."), ".agent4j", "plugin");
@@ -47,7 +49,7 @@ public class PluginToolProvider implements SolonToTools {
                 if (!Files.isDirectory(pluginDir)) continue;
                 PluginConfig config = readConfig(pluginDir);
                 if (config == null) continue;
-                configs.add(config);
+
                 int count = 0;
                 try (DirectoryStream<Path> skills = Files.newDirectoryStream(pluginDir)) {
                     for (Path skillDir : skills) {
@@ -71,16 +73,20 @@ public class PluginToolProvider implements SolonToTools {
     @Override
     public String getSystemPrompt() {
         log.info("configs: {}", configs);
-        return configs.stream().map(
+        return configs.values().stream().sorted().map(
                 c -> "### " + c.getName() + "\n" + c.getDescription() + "\n"
         ).collect(Collectors.joining("\n"));
     }
 
     private PluginConfig readConfig(Path pluginDir) {
+        PluginConfig config = configs.get(pluginDir);
+        if (config != null) return config;
         Path cfg = pluginDir.resolve(CONFIG_FILE);
         if (!Files.exists(cfg) || !Files.isRegularFile(cfg)) return null;
         try {
-            return ONode.ofJson(Files.readString(cfg)).toBean(PluginConfig.class);
+            config = ONode.ofJson(Files.readString(cfg)).toBean(PluginConfig.class);
+            configs.put(pluginDir, config);
+            return config;
         } catch (Exception e) {
             log.warn("读取配置失败: {} - {}", cfg, e.getMessage());
             return null;
