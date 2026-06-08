@@ -4,26 +4,16 @@ solon.app:
 server:
   port: 8097
 
-# 记录器级别的配置示例
-solon.logging.logger:
-  root:  #默认记录器配置
-    level: ERROR
-
 solon.logging.appender:
   console:
-    level: ERROR
     enable: false
   file:
-    name: "logs/${solon.app.name}"
-    level: INFO
-    enable: true
-    extension: ".log"
-    maxFileSize: "10 MB"
-    maxHistory: "7"
+    level: DEBUG
+    name: ".soloncode/logs/${solon.app.name}"
 
-#添加MIME印射（如果有需要？）
 solon.mime:
   json: "application/json"
+
 knife4j.enable: true
 knife4j.basic.enable: true
 knife4j.basic.username: admin
