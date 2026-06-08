@@ -91,6 +91,7 @@
               <div v-for="f in changedFiles" :key="'c-'+f.path" class="git-file" @click="openDiff(f.path)">
                 <span class="file-status" :class="(f.status || f.index || f.workTree || 'M')">{{ (f.status || f.index || f.workTree || 'M') }}</span>
                 <span class="file-path" :title="f.path">{{ f.path }}</span>
+                <button class="file-action-btn toggle-btn" @click.stop="handleToggle(f.path)" title="取消暂存">×</button>
               </div>
             </template>
           </template>
@@ -108,6 +109,7 @@
               <div v-for="f in untrackedFiles" :key="'n-'+f.path" class="git-file" @click="openDiff(f.path)">
                 <span class="file-status U">?</span>
                 <span class="file-path" :title="f.path">{{ f.path }}</span>
+                <button class="file-action-btn toggle-btn add" @click.stop="handleToggle(f.path)" title="添加到变更">+</button>
               </div>
             </template>
           </template>
@@ -244,6 +246,21 @@ const handleInit = async () => {
     showFeedback('error', e.message || '初始化失败')
   } finally {
     initLoading.value = false
+  }
+}
+
+const handleToggle = async (path) => {
+  try {
+    const r = await gitAPI.toggle(props.workspaceHash, path)
+    if (r.success) {
+      const newState = r.data?.newState === 'changed' ? '已添加到变更' : '已移至未跟踪'
+      showFeedback('success', newState + ': ' + path)
+      await loadStatus()
+    } else {
+      showFeedback('error', r.error || '切换失败')
+    }
+  } catch (e) {
+    showFeedback('error', e.message || '切换失败')
   }
 }
 
@@ -547,10 +564,10 @@ watch(() => props.workspaceHash, () => {
   transition: opacity var(--t);
 }
 .git-file:hover .file-action-btn { opacity: 1; }
-.stage-btn { background: #d1fae5; color: #065f46; }
-.unstage-btn { background: #fee2e2; color: #991b1b; }
-[data-theme="dark"] .stage-btn { background: #052e16; color: #4ade80; }
-[data-theme="dark"] .unstage-btn { background: #450a0a; color: #f87171; }
+.toggle-btn { background: #fee2e2; color: #991b1b; }
+.toggle-btn.add { background: #d1fae5; color: #065f46; }
+[data-theme="dark"] .toggle-btn { background: #450a0a; color: #f87171; }
+[data-theme="dark"] .toggle-btn.add { background: #052e16; color: #4ade80; }
 
 /* 空状态 */
 .git-empty {

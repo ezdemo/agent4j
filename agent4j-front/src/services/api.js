@@ -629,6 +629,12 @@ export const gitAPI = {
     const body = { message }
     if (files && files.length) body.files = files
     return api.post('/git/commit', body, { params })
+  },
+
+  // 切换文件状态 - POST /api/git/toggle?workspaceHash=xxx  body: { path }
+  toggle: (workspaceHash, path) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.post('/git/toggle', { path }, { params })
   }
 }
 
