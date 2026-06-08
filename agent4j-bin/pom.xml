@@ -7,7 +7,7 @@
     <parent>
         <groupId>site.sorghum.agent</groupId>
         <artifactId>agent4j</artifactId>
-        <version>26.6.5</version>
+        <version>26.6.8</version>
     </parent>
 
     <artifactId>agent4j-bin</artifactId>
@@ -32,12 +32,12 @@
         <dependency>
             <groupId>org.noear</groupId>
             <artifactId>snack4</artifactId>
-            <version>4.0.49</version>
+            <version>${snack4.version}</version>
         </dependency>
         <dependency>
             <groupId>org.noear</groupId>
             <artifactId>snack4-jsonpath</artifactId>
-            <version>4.0.49</version>
+            <version>${snack4.version}</version>
         </dependency>
 
         <!-- solon-logging-logback 已提供 SLF4J 实现，不再需要 slf4j-nop -->
@@ -56,15 +56,5 @@
         </dependency>
 
     </dependencies>
-
-    <build>
-        <plugins>
-            <plugin>
-                <groupId>org.noear</groupId>
-                <artifactId>solon-maven-plugin</artifactId>
-                <version>${solon.version}</version>
-            </plugin>
-        </plugins>
-    </build>
 
 </project>
