@@ -71,13 +71,27 @@
             rows="2"
             @keydown.enter.exact.prevent="handleCommit"
           ></textarea>
-          <button
-            class="commit-button"
-            @click="handleCommit"
-            :disabled="committing || !commitMessage.trim() || selectedCount === 0"
-          >
-            {{ committing ? '提交中...' : `提交 (${selectedCount})` }}
-          </button>
+          <div class="commit-actions">
+            <button
+              class="generate-btn"
+              @click="handleGenerateMessage"
+              :disabled="generating || selectedCount === 0"
+              title="AI 自动生成提交消息"
+            >
+              <svg v-if="!generating" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+              </svg>
+              <span v-else class="generate-spinner"></span>
+              {{ generating ? '生成中...' : 'AI 生成' }}
+            </button>
+            <button
+              class="commit-button"
+              @click="handleCommit"
+              :disabled="committing || !commitMessage.trim() || selectedCount === 0"
+            >
+              {{ committing ? '提交中...' : `提交 (${selectedCount})` }}
+            </button>
+          </div>
         </div>
 
         <!-- 文件列表 -->
@@ -175,6 +189,7 @@ const selectedFiles = ref(new Set())
 // 提交
 const commitMessage = ref('')
 const committing = ref(false)
+const generating = ref(false)
 
 // 初始化
 const initLoading = ref(false)
@@ -315,6 +330,25 @@ const handleCommit = async () => {
     showFeedback('error', e.message || '提交失败')
   } finally {
     committing.value = false
+  }
+}
+
+const handleGenerateMessage = async () => {
+  if (generating.value || selectedCount.value === 0) return
+  generating.value = true
+  try {
+    const files = Array.from(selectedFiles.value)
+    const r = await gitAPI.generateCommitMessage(props.workspaceHash, files)
+    if (r.success && r.data && r.data.message) {
+      commitMessage.value = r.data.message
+      showFeedback('success', `AI 已生成提交消息（基于 ${files.length} 个文件）`)
+    } else {
+      showFeedback('error', r.error || '生成失败')
+    }
+  } catch (e) {
+    showFeedback('error', e.message || '生成失败')
+  } finally {
+    generating.value = false
   }
 }
 
@@ -499,9 +533,45 @@ watch(() => props.workspaceHash, () => {
 }
 .commit-input::placeholder { color: var(--fg-4); }
 .commit-input:focus { outline: none; border-color: var(--accent); }
-.commit-button {
-  width: 100%;
+.commit-actions {
+  display: flex;
+  gap: 6px;
   margin-top: 6px;
+}
+.generate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-2);
+  color: var(--fg-2);
+  font-size: 11px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background var(--t), border-color var(--t);
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.generate-btn:hover { background: var(--bg-3); border-color: var(--accent); color: var(--accent); }
+.generate-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.generate-btn svg { flex-shrink: 0; }
+.generate-spinner {
+  display: inline-block;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--fg-4);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: gen-spin 0.6s linear infinite;
+  flex-shrink: 0;
+}
+@keyframes gen-spin {
+  to { transform: rotate(360deg); }
+}
+.commit-button {
+  flex: 1;
   padding: 5px 0;
   border: none;
   border-radius: 4px;
