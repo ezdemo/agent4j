@@ -6,6 +6,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import site.sorghum.agent4j.bin.builtin.TaskTool;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
+import site.sorghum.agent4j.bin.goal.Goal;
+import site.sorghum.agent4j.bin.goal.GoalStatus;
+import site.sorghum.agent4j.bin.goal.GoalStep;
+import site.sorghum.agent4j.bin.goal.GoalStore;
+import site.sorghum.agent4j.bin.goal.StepStatus;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.tool.ToolDispatcher;
@@ -13,6 +18,10 @@ import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.tool.*;
 
 import java.io.IOException;
+import java.nio.file.DirectoryStream;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -272,7 +281,55 @@ public class AgentLoop implements AgentLoopController {
         streamErrorRetryCount = 0;
 
         // ---- 进入统一的主推理循环 ----
-        return mainLoop(client.isThinkingMode(), 0);
+        String result = mainLoop(client.isThinkingMode(), 0);
+
+        // === 目标巡检检查 ===
+        // 每次 LLM 消息处理后，触发一次 patrol 检查
+        try {
+            if (sessionService != null) {
+                String sessionId = sessionService.getStore().currentName();
+                if (sessionId != null) {
+                    // 通过 workspace 路径构造 GoalStore
+                    Path workspaceDir = Paths.get(System.getProperty("user.home"), ".agent4j", "workspace");
+                    // Try to find the workspace directory by searching for session file
+                    GoalStore goalStore = null;
+                    try (DirectoryStream<Path> ds = Files.newDirectoryStream(workspaceDir)) {
+                        for (Path wsDir : ds) {
+                            if (Files.isDirectory(wsDir)) {
+                                Path goalFile = wsDir.resolve("goals").resolve(sessionId + ".jsonl");
+                                if (Files.exists(goalFile)) {
+                                    goalStore = new site.sorghum.agent4j.bin.goal.JsonlGoalStore(wsDir);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+
+                    if (goalStore != null) {
+                        Goal goal = goalStore.findBySession(sessionId);
+                        if (goal != null && goal.getStatus() == GoalStatus.ACTIVE) {
+                            for (GoalStep step : goal.getSteps()) {
+                                if (step.getStatus() == StepStatus.FAILED
+                                        && step.getRetryCount() < goal.getMaxRetries()) {
+                                    log.info("[goal] 检测到失败步骤，自动重试: step={}, retry={}/{}",
+                                            step.getIndex() + 1, step.getRetryCount(), goal.getMaxRetries());
+
+                                    step.setStatus(StepStatus.PENDING);
+                                    step.setRetryCount(step.getRetryCount() + 1);
+                                    goal.setUpdatedAt(java.time.Instant.now());
+                                    goalStore.save(goal);
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[goal] 巡检检查失败", e);
+        }
+
+        return result;
     }
 
     // ==================== 统一主推理循环 ====================
