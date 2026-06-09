@@ -52,8 +52,20 @@
 
       <!-- 工作区选择器 -->
       <div class="sidebar-section-title">
-        <span>Projects</span>
+        <span>项目</span>
         <div class="sidebar-section-actions">
+          <button
+            class="btn-icon-sm"
+            :title="allProjectsExpanded ? '折叠所有项目会话' : '展开所有项目会话'"
+            @click="toggleAllProjects"
+          >
+            <svg
+              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+              :style="{ transform: allProjectsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s' }"
+            >
+              <polyline points="18 15 12 9 6 15"/>
+            </svg>
+          </button>
           <button class="btn-icon-sm" title="刷新项目列表" @click="refreshSessionList">
             <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
               <path d="M23 4v6h-6"/>
@@ -365,6 +377,7 @@ const { confirm } = useConfirm()
 // 主题：统一从 Pinia store 读写，确保设置页和主页一致
 const theme = computed({ get: () => store.settings.theme, set: (v) => { store.settings.theme = v } })
 const sideOpen = ref(true)
+const allProjectsExpanded = ref(true)
 const searchQuery = ref('')
 const sessions = ref([])
 const currentSession = ref('')
@@ -736,6 +749,18 @@ const toggleProject = (hash) => {
   } else {
     s.add(hash)
   }
+  expandedWorkspaces.value = s
+}
+
+// 一键展开/折叠所有项目会话
+const toggleAllProjects = () => {
+  allProjectsExpanded.value = !allProjectsExpanded.value
+  const s = new Set()
+  if (allProjectsExpanded.value) {
+    // 展开所有
+    workspaces.value.forEach(w => s.add(w.hash))
+  }
+  // 折叠所有：s 为空 Set
   expandedWorkspaces.value = s
 }
 
