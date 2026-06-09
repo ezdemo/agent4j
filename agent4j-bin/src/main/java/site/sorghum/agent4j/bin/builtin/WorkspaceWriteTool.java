@@ -52,12 +52,13 @@ public class WorkspaceWriteTool extends AgentTool {
 
     @Override
     public String getDescription() {
-        return "Write entries to the shared workspace. Supports two modes:\n"
-                + "- KV mode: store a value under a key (key + value)\n"
-                + "- Document mode: store document content under a key (key + content + optional type)\n"
-                + "Key is always required. If 'value' is provided, KV mode is used. "
-                + "If 'content' is provided, document mode is used. "
-                + "If both 'value' and 'content' are provided, KV mode takes precedence.";
+        return """
+                Write entries to the shared workspace. Supports two modes:
+                - KV mode: store a value under a key (key + value)
+                - Document mode: store document content under a key (key + content + optional type)
+                Key is always required. If 'value' is provided, KV mode is used.
+                If 'content' is provided, document mode is used.
+                If both 'value' and 'content' are provided, KV mode takes precedence.""";
     }
 
     @Override
@@ -122,7 +123,9 @@ public class WorkspaceWriteTool extends AgentTool {
                 workspace.writeDoc(key, content, mimeType, creator);
                 return ToolResult.ok("Successfully wrote document entry: " + key + " (type: " + mimeType + ")");
             } catch (Exception e) {
-                return ToolResult.fail("WRITE_FAILED", "Failed to write document entry '" + key + "': " + e.getMessage());
+                return ToolResult.fail("WRITE_FAILED",
+                        "Failed to write document entry '" + key
+                                + "': " + e.getMessage());
             }
         } else {
             // value 和 content 都为空

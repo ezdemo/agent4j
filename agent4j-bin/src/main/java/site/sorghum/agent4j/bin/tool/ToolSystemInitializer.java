@@ -83,7 +83,9 @@ public class ToolSystemInitializer {
                     args -> {
                         String sessionId = args != null ? (String) args.remove("__sessionId__") : null;
                         return ToolDefHelper.formatResult(tool.execute(
-                                new ToolContext(args, workspace, apiUrl, apiKey, registry, effectiveBlockedPaths, sessionId, false)));
+                                new ToolContext(args, workspace, apiUrl, apiKey,
+                                        registry, effectiveBlockedPaths,
+                                        sessionId, false)));
                     },
                     tool.isReadOnly(),
                     tool.isStormExempt(),

@@ -54,12 +54,13 @@ public class WorkspaceReadTool extends AgentTool {
 
     @Override
     public String getDescription() {
-        return "Read entries from the shared workspace. Supports two modes:\n"
-                + "- KV mode: read a value stored under a key (key)\n"
-                + "- Document mode: read document content and metadata under a key (key)\n"
-                + "Key is always required. KV mode is tried first; if no KV entry is found, "
-                + "document mode is attempted. If neither exists, returns NOT_FOUND with suggestions "
-                + "for similar keys.";
+        return """
+                Read entries from the shared workspace. Supports two modes:
+                - KV mode: read a value stored under a key (key)
+                - Document mode: read document content and metadata under a key (key)
+                Key is always required. KV mode is tried first; if no KV entry is found,
+                document mode is attempted. If neither exists, returns NOT_FOUND with suggestions
+                for similar keys.""";
     }
 
     @Override
@@ -163,17 +164,21 @@ public class WorkspaceReadTool extends AgentTool {
         // 收集所有相似 key
         Set<String> similarKeys = findSimilarKeys(key);
         if (similarKeys.isEmpty()) {
-            return "No similar keys found in workspace. Use workspace_write to create entries, "
-                    + "or check available keys via workspace administration tools.";
+            return """
+                    No similar keys found in workspace. Use workspace_write to create entries, 
+                    or check available keys via workspace administration tools.
+                    """;
         }
 
         // 按"相似度"排序：先按编辑距离，再按字母序
         String normalizedKey = key.toLowerCase(Locale.ROOT);
         List<String> sorted = similarKeys.stream()
-                .sorted(Comparator.<String, Integer>comparing(k -> levenshteinDistance(normalizedKey, k.toLowerCase(Locale.ROOT)))
+                .sorted(Comparator.<String, Integer>comparing(
+                                k -> levenshteinDistance(normalizedKey,
+                                        k.toLowerCase(Locale.ROOT)))
                         .thenComparing(String::compareTo))
                 .limit(10)
-                .collect(Collectors.toList());
+                .toList();
 
         StringBuilder sb = new StringBuilder();
         sb.append("Similar keys found in workspace (").append(sorted.size()).append("):\n");

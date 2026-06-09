@@ -189,7 +189,8 @@ public class WorkspaceManager {
                     String hash = dir.getFileName().toString();
                     boolean isActive = hash.equals(currentWorkspaceHash);
 
-                    workspaces.add(new WorkspaceInfo(hash, name, path, createdAt, lastAccessedAt, sessionCount, isActive));
+                    workspaces.add(new WorkspaceInfo(hash, name, path,
+                            createdAt, lastAccessedAt, sessionCount, isActive));
                 } catch (Exception e) {
                     System.err.println("[workspace] 读取工作区配置失败: " + dir + " - " + e.getMessage());
                 }

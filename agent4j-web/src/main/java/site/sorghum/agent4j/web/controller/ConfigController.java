@@ -203,7 +203,8 @@ public class ConfigController {
     @ApiOperation(value = "切换工作目录", notes = "切换到指定路径的工作目录")
     @Post
     @Mapping("/workspace")
-    public ApiResponse<WorkspaceSwitchDTO> switchWorkspace(@ApiParam(value = "{\"path\":\"...\"}") @Body Map<String, String> body) {
+    public ApiResponse<WorkspaceSwitchDTO> switchWorkspace(
+            @ApiParam @Body Map<String, String> body) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String path = body.get("path");
         if (path == null || path.isEmpty()) {
@@ -229,7 +230,8 @@ public class ConfigController {
     @ApiOperation(value = "切换到指定工作区", notes = "根据 hash 切换到对应工作区")
     @Post
     @Mapping("/workspaces/switch")
-    public ApiResponse<WorkspaceSwitchDTO> switchToWorkspace(@ApiParam(value = "{\"hash\":\"...\"}") @Body Map<String, String> body) {
+    public ApiResponse<WorkspaceSwitchDTO> switchToWorkspace(
+            @ApiParam(value = "{\"hash\":\"...\"}") @Body Map<String, String> body) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String hash = body.get("hash");
         if (hash == null || hash.isEmpty()) {

@@ -40,7 +40,8 @@ public class ChatController {
     @ApiOperation(value = "同步聊天", notes = "发送消息并等待完整回复，返回回复内容、耗时和 Token 用量")
     @Post
     @Mapping("")
-    public ApiResponse<ChatResultDTO> chat(@ApiParam(value = "聊天请求（含消息、工作区、会话）") @Body ChatRequest request) throws Exception {
+    public ApiResponse<ChatResultDTO> chat(
+            @ApiParam(value = "聊天请求（含消息、工作区、会话）") @Body ChatRequest request) throws Exception {
         if (!agentService.isReady()) {
             return ApiResponse.fail("Agent 未初始化，请检查 ~/.agent4j/config.json");
         }

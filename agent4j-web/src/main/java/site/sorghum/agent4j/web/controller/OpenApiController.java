@@ -32,7 +32,8 @@ public class OpenApiController {
         return ApiResponse.ok(openApiManageService.getSources());
     }
 
-    @ApiOperation(value = "关键词搜索接口文档", notes = "通过关键词在已注册的 OpenAPI 文档中搜索匹配的接口。支持多关键词空格分隔（如 '订单 查询'），按 AND 逻辑匹配")
+    @ApiOperation(value = "关键词搜索接口文档",
+            notes = "通过关键词在已注册的 OpenAPI 文档中搜索匹配的接口。支持多关键词空格分隔（如 '订单 查询'），按 AND 逻辑匹配")
     @Get
     @Mapping("/search")
     public ApiResponse<Object> searchApis(
@@ -44,7 +45,8 @@ public class OpenApiController {
         return ApiResponse.ok(openApiManageService.searchApis(keyword));
     }
 
-    @ApiOperation(value = "注册 OpenAPI 源", notes = "注册一个新的 OpenAPI (Swagger) 接口源，支持 Bearer Token / API Key / Basic 三种认证")
+    @ApiOperation(value = "注册 OpenAPI 源",
+            notes = "注册一个新的 OpenAPI (Swagger) 接口源，支持 Bearer Token / API Key / Basic 三种认证")
     @Post
     @Mapping("/sources")
     public ApiResponse<OpenApiSourceDTO> addSource(@ApiParam(value = "注册请求体") @Body OpenApiAddRequest request) {
@@ -64,7 +66,8 @@ public class OpenApiController {
     @ApiOperation(value = "移除 OpenAPI 源", notes = "根据 docUrl 移除一个已注册的 OpenAPI 接口源")
     @Delete
     @Mapping("/sources")
-    public ApiResponse<Void> removeSource(@ApiParam(value = "{\"docUrl\":\"...\"}") @Body OpenApiRemoveRequest request) {
+    public ApiResponse<Void> removeSource(
+            @ApiParam(value = "{\"docUrl\":\"...\"}") @Body OpenApiRemoveRequest request) {
         if (request.docUrl == null || request.docUrl.isBlank()) {
             throw new ServiceException("docUrl 不能为空");
         }

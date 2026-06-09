@@ -49,8 +49,12 @@ public class AgentController {
     @Get
     @Mapping("/history")
     public ApiResponse<List<?>> history(
-            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
-            @ApiParam(value = "会话名称", required = true) @Param(value = "sessionName", required = true) String sessionName) {
+            @ApiParam(value = "工作区 hash", required = true)
+            @Param(value = "workspaceHash", required = true)
+            String workspaceHash,
+            @ApiParam(value = "会话名称", required = true)
+            @Param(value = "sessionName", required = true)
+            String sessionName) {
         if (!agentService.isReady()) {
             throw new ServiceException("Agent 未初始化");
         }
@@ -119,7 +123,8 @@ public class AgentController {
         return "";
     }
 
-    @ApiOperation(value = "获取当前会话的系统提示词", notes = "返回完整的 PromptPrefix 内容（含基础提示词 + 工具定义 + Skill 索引 + Plan Mode 说明）")
+    @ApiOperation(value = "获取当前会话的系统提示词",
+            notes = "返回完整的 PromptPrefix 内容（含基础提示词 + 工具定义 + Skill 索引 + Plan Mode 说明）")
     @Get
     @Mapping("/prompt")
     public ApiResponse<PromptDTO> prompt(

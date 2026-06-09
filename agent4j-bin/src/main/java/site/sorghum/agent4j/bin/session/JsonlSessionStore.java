@@ -510,7 +510,8 @@ public class JsonlSessionStore implements SessionStore {
     }
 
     @Override
-    public void saveUsage(String name, long prompt, long completion, long cacheHit, long cacheMiss, long lastPromptTokens) throws IOException {
+    public void saveUsage(String name, long prompt, long completion,
+                          long cacheHit, long cacheMiss, long lastPromptTokens) throws IOException {
         Path file = sessionsDir.resolve(sanitize(name) + ".usage");
 
         // 如果所有值都是 0，则删除文件（如果存在），避免创建空文件
