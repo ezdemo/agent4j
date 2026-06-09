@@ -39,7 +39,14 @@ public class GoalEngine {
      */
     public Goal createGoal(String description, String verifyCmd, ChatCommandContext ctx) {
         Agent4jAgent agent = ctx.getAgent();
-        String sessionId = agent.getSessionStore().currentName();
+        String sessionId = agent.getSessionStore() != null ? agent.getSessionStore().currentName() : null;
+        if (sessionId == null) {
+            throw new IllegalStateException("会话未初始化，无法创建目标");
+        }
+        String workspaceHash = workspaceManager.getCurrentWorkspaceHash();
+        if (workspaceHash == null) {
+            throw new IllegalStateException("工作区未初始化，请先初始化工作区");
+        }
 
         String breakdownPrompt = """
                 请将以下目标拆解为 3-8 个具体的、可执行的步骤，每个步骤应是一个独立可验证的任务。
@@ -64,7 +71,7 @@ public class GoalEngine {
         Goal goal = Goal.builder()
                 .id(UUID.randomUUID().toString().substring(0, 8))
                 .sessionId(sessionId)
-                .workspaceHash(workspaceManager.getCurrentWorkspaceHash())
+                .workspaceHash(workspaceHash)
                 .title(description.length() > 50 ? description.substring(0, 50) + "..." : description)
                 .description(description)
                 .status(GoalStatus.ACTIVE)
@@ -81,65 +88,89 @@ public class GoalEngine {
     /**
      * 持久化目标并输出通知。
      */
-    public void activateGoal(Goal goal, ChatCommandContext ctx) throws Exception {
-        GoalStore store = workspaceManager.getGoalStore();
-        store.save(goal);
-        log.info("[goal] 目标已保存: {} - {}", goal.getId(), goal.getTitle());
+    public void activateGoal(Goal goal, ChatCommandContext ctx) {
+        try {
+            GoalStore store = workspaceManager.getGoalStore();
+            store.save(goal);
+            log.info("[goal] 目标已保存: {} - {}", goal.getId(), goal.getTitle());
 
-        String stepsText = IntStream.range(0, goal.getSteps().size())
-                .mapToObj(i -> {
-                    GoalStep s = goal.getSteps().get(i);
-                    return "  [" + (i + 1) + "] " + s.getDescription() + " (" + s.getStatus() + ")";
-                })
-                .collect(Collectors.joining("\n"));
+            String stepsText = IntStream.range(0, goal.getSteps().size())
+                    .mapToObj(i -> {
+                        GoalStep s = goal.getSteps().get(i);
+                        return "  [" + (i + 1) + "] " + s.getDescription() + " (" + s.getStatus() + ")";
+                    })
+                    .collect(Collectors.joining("\n"));
 
-        ctx.getAgent().getOutput().onLog(LogLevel.INFO,
-                "🎯 目标已创建: " + goal.getTitle() + "\n步骤:\n" + stepsText);
+            ctx.getAgent().getOutput().onLog(LogLevel.INFO,
+                    "🎯 目标已创建: " + goal.getTitle() + "\n步骤:\n" + stepsText);
+        } catch (Exception e) {
+            log.error("[goal] 激活目标失败: {}", e.getMessage());
+            ctx.getAgent().getOutput().onLog(LogLevel.ERROR,
+                    "❌ 目标创建失败: " + e.getMessage());
+        }
     }
 
     /**
      * 获取当前会话的目标。
      */
-    public Goal getCurrentGoal(ChatCommandContext ctx) throws Exception {
-        String sessionId = ctx.getAgent().getSessionStore().currentName();
-        GoalStore store = workspaceManager.getGoalStore();
-        return store.findBySession(sessionId);
+    public Goal getCurrentGoal(ChatCommandContext ctx) {
+        try {
+            String sessionId = ctx.getAgent().getSessionStore().currentName();
+            if (sessionId == null) return null;
+            GoalStore store = workspaceManager.getGoalStore();
+            return store.findBySession(sessionId);
+        } catch (Exception e) {
+            log.warn("[goal] 获取当前目标失败: {}", e.getMessage());
+            return null;
+        }
     }
 
     /**
      * 暂停目标。
      */
-    public void pause(Goal goal, ChatCommandContext ctx) throws Exception {
-        goal.setStatus(GoalStatus.PAUSED);
-        goal.setUpdatedAt(Instant.now());
-        workspaceManager.getGoalStore().save(goal);
+    public void pause(Goal goal, ChatCommandContext ctx) {
+        try {
+            goal.setStatus(GoalStatus.PAUSED);
+            goal.setUpdatedAt(Instant.now());
+            workspaceManager.getGoalStore().save(goal);
+        } catch (Exception e) {
+            log.warn("[goal] 暂停目标失败: {}", e.getMessage());
+        }
     }
 
     /**
      * 恢复目标。
      */
-    public void resume(Goal goal, ChatCommandContext ctx) throws Exception {
-        goal.setStatus(GoalStatus.ACTIVE);
-        goal.setUpdatedAt(Instant.now());
-        workspaceManager.getGoalStore().save(goal);
+    public void resume(Goal goal, ChatCommandContext ctx) {
+        try {
+            goal.setStatus(GoalStatus.ACTIVE);
+            goal.setUpdatedAt(Instant.now());
+            workspaceManager.getGoalStore().save(goal);
+        } catch (Exception e) {
+            log.warn("[goal] 恢复目标失败: {}", e.getMessage());
+        }
     }
 
     /**
      * 标记某步骤已完成。
      */
-    public void markStepDone(Goal goal, int stepIndex, ChatCommandContext ctx) throws Exception {
-        if (stepIndex < 0 || stepIndex >= goal.getSteps().size()) return;
-        GoalStep step = goal.getSteps().get(stepIndex);
-        step.setStatus(StepStatus.DONE);
-        step.setCompletedAt(Instant.now());
-        goal.setUpdatedAt(Instant.now());
+    public void markStepDone(Goal goal, int stepIndex, ChatCommandContext ctx) {
+        try {
+            if (stepIndex < 0 || stepIndex >= goal.getSteps().size()) return;
+            GoalStep step = goal.getSteps().get(stepIndex);
+            step.setStatus(StepStatus.DONE);
+            step.setCompletedAt(Instant.now());
+            goal.setUpdatedAt(Instant.now());
 
-        if (goal.isAllDone()) {
-            goal.setStatus(GoalStatus.COMPLETED);
-            goal.setCompletedAt(Instant.now());
+            if (goal.isAllDone()) {
+                goal.setStatus(GoalStatus.COMPLETED);
+                goal.setCompletedAt(Instant.now());
+            }
+
+            workspaceManager.getGoalStore().save(goal);
+        } catch (Exception e) {
+            log.warn("[goal] 标记步骤完成失败: {}", e.getMessage());
         }
-
-        workspaceManager.getGoalStore().save(goal);
     }
 
     /**

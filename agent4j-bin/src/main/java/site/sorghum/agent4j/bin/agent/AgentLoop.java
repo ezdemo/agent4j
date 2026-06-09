@@ -52,7 +52,7 @@ public class AgentLoop implements AgentLoopController {
     }
 
     private int toolTimeoutSec() {
-        return config != null ? config.toolTimeoutSec() : 360;
+        return config != null ? config.toolTimeoutSec() : 1080;
     }
 
     private int maxSelfCorrectionAttempts() {
@@ -873,7 +873,7 @@ public class AgentLoop implements AgentLoopController {
 
         // 3. 等待全部完成（带超时保护）
         try {
-            CompletableFuture.allOf(futures).get(9999, TimeUnit.SECONDS);
+            CompletableFuture.allOf(futures).get(toolTimeoutSec(), TimeUnit.SECONDS);
         } catch (TimeoutException e) {
             try {
                 output.onLog(LogLevel.WARN, "[tool] 工具执行超时（" + toolTimeoutSec() + "s），取消未完成的调用");

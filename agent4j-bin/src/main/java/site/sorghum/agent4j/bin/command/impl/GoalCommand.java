@@ -113,7 +113,14 @@ public class GoalCommand implements ChatCommand {
         }
 
         // 创建目标（LLM 拆解步骤）
-        Goal goal = goalEngine.createGoal(description, verifyCmd, ctx);
+        Goal goal;
+        try {
+            goal = goalEngine.createGoal(description, verifyCmd, ctx);
+        } catch (IllegalStateException e) {
+            ctx.getAgent().getOutput().onLog(LogLevel.ERROR,
+                    "❌ " + e.getMessage());
+            return CommandResult.CONTINUE;
+        }
 
         // 持久化并激活
         goalEngine.activateGoal(goal, ctx);
@@ -141,7 +148,7 @@ public class GoalCommand implements ChatCommand {
         return CommandResult.LOOP;
     }
 
-    private CommandResult handleStatus(ChatCommandContext ctx) throws Exception {
+    private CommandResult handleStatus(ChatCommandContext ctx) {
         Goal goal = goalEngine.getCurrentGoal(ctx);
         if (goal == null) {
             ctx.getAgent().getOutput().onLog(LogLevel.INFO,
