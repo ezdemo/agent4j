@@ -950,6 +950,17 @@ fn get_app_info() -> serde_json::Value {
     })
 }
 
+#[tauri::command]
+fn pick_folder() -> Result<String, String> {
+    let folder = rfd::FileDialog::new()
+        .set_title("选择项目文件夹")
+        .pick_folder();
+    match folder {
+        Some(path) => Ok(path.to_string_lossy().to_string()),
+        None => Err("未选择文件夹".to_string())
+    }
+}
+
 // 获取系统信息
 #[tauri::command]
 fn get_system_info() -> serde_json::Value {
@@ -1018,6 +1029,7 @@ pub fn run() {
             get_app_info,
             get_system_info,
             get_resource_dir,
+            pick_folder,
             get_agent4j_web_status,
             check_install_needed,
             install_step1_check_java,

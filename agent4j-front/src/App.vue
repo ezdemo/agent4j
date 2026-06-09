@@ -445,26 +445,30 @@ const newWorkspacePath = ref('')
 const workspacePathInput = ref(null)
 const folderPicker = ref(null)
 
-// 打开文件夹选择器
-const openFolderPicker = () => {
-  folderPicker.value?.click()
+// 打开文件夹选择器（Tauri桌面端用原生对话框，浏览器用输入框）
+const openFolderPicker = async () => {
+  if (isTauriEnv.value) {
+    try {
+      const { invoke } = await import('@tauri-apps/api/core')
+      const path = await invoke('pick_folder')
+      if (path) {
+        newWorkspacePath.value = path
+      }
+    } catch (e) {
+      console.error('选择文件夹失败:', e)
+    }
+  } else {
+    // 浏览器环境：聚焦输入框让用户手动输入
+    workspacePathInput.value?.focus()
+  }
 }
 
-// 文件夹选中回调
+// 文件夹选中回调（浏览器回退方案）
 const onFolderPicked = (e) => {
   const files = e.target.files
   if (files && files.length > 0) {
-    // Tauri 环境下 file.path 提供完整路径
-    if (files[0].path) {
-      newWorkspacePath.value = files[0].path
-    } else {
-      // 浏览器环境：从 webkitRelativePath 提取文件夹名
-      const relPath = files[0].webkitRelativePath || ''
-      const folderName = relPath.split('/')[0]
-      if (folderName) newWorkspacePath.value = folderName
-    }
+    newWorkspacePath.value = files[0].webkitRelativePath.split('/')[0] || ''
   }
-  // 重置 input，允许重复选择同一文件夹
   e.target.value = ''
 }
 
