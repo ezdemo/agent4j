@@ -1,2 +1,0 @@
-@chcp 65001 > nul
-cd /d C:\Users\sorghum\IdeaProjects\agent4j && git add -A && git commit -m "feat: add AgentLoop timer-based patrol - 30s interval daemon thread, auto-starts when goal active, concurrent-safe with running flag"
