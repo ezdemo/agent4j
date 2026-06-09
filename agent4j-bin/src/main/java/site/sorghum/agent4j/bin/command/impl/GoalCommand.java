@@ -36,9 +36,6 @@ public class GoalCommand implements ChatCommand {
     @Inject
     private GoalEngine goalEngine;
 
-    @Inject
-    private site.sorghum.agent4j.bin.workspace.WorkspaceManager workspaceManager;
-
     @Override
     public String getCommand() {
         return "goal";
@@ -138,7 +135,8 @@ public class GoalCommand implements ChatCommand {
                 步骤计划：
                 %s
                 
-                请开始执行第一步。每完成一步，更新目标进度。
+                请逐条执行以上步骤。
+                每完成一步，**必须**调用 goal_mark_step 工具通知系统，参数 stepIndex 从 1 开始。
                 如果有步骤失败，自动重试（最多 %d 次）。
                 全部完成后总结汇报。
                 """
@@ -179,7 +177,7 @@ public class GoalCommand implements ChatCommand {
         }
         sb.append("──────────────────────────────────────");
 
-        ctx.getAgent().getOutput().onLog(LogLevel.INFO, sb.toString());
+        ctx.getAgent().getOutput().onReasoning(sb.toString());
         return CommandResult.CONTINUE;
     }
 
@@ -226,9 +224,9 @@ public class GoalCommand implements ChatCommand {
         step.setCompletedAt(null);
         goal.setUpdatedAt(Instant.now());
         goal.getSteps().set(stepIndex, step);
-        workspaceManager.getGoalStore().save(goal);
+        ctx.getAgent().getWorkspaceManager().getGoalStore().save(goal);
 
-        ctx.getAgent().getOutput().onLog(LogLevel.INFO,
+        ctx.getAgent().getOutput().onReasoning(
                 "🔄 步骤 " + (stepIndex + 1) + " 已重置为待执行状态，请继续工作。");
         return CommandResult.CONTINUE;
     }
@@ -263,7 +261,7 @@ public class GoalCommand implements ChatCommand {
             goal.setCompletedAt(Instant.now());
         }
 
-        workspaceManager.getGoalStore().save(goal);
+        ctx.getAgent().getWorkspaceManager().getGoalStore().save(goal);
         ctx.getAgent().getOutput().onLog(LogLevel.INFO,
                 "⏭️ 已跳过步骤 " + (stepIndex + 1) + "：" + step.getDescription());
         return CommandResult.CONTINUE;
@@ -273,13 +271,13 @@ public class GoalCommand implements ChatCommand {
         Goal goal = goalEngine.getCurrentGoal(ctx);
         if (goal == null) return noGoalResponse(ctx);
 
-        workspaceManager.getGoalStore().delete(goal.getSessionId());
+        ctx.getAgent().getWorkspaceManager().getGoalStore().delete(goal.getSessionId());
         ctx.getAgent().getOutput().onLog(LogLevel.INFO, "🗑️ 目标已清除：" + goal.getTitle());
         return CommandResult.CONTINUE;
     }
 
     private CommandResult handleHelp(ChatCommandContext ctx) {
-        ctx.getAgent().getOutput().onLog(LogLevel.INFO,
+        ctx.getAgent().getOutput().onReasoning(
                 """
                 /goal 子命令：
                   /goal set <描述> [--verify "命令"]    设定新目标
