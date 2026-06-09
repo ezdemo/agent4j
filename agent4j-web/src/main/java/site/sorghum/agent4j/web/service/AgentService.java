@@ -19,6 +19,7 @@ import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.tool.ToolSystemInitializer;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
 import site.sorghum.agent4j.tool.AgentOutput;
+import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.*;
 
 import java.io.IOException;
@@ -1030,35 +1031,70 @@ public class AgentService {
     /**
      * 通过 workspaceHash 反查工作区路径。
      * <p>
-     * 遍历缓存的 Agent key + 默认工作区，返回匹配的路径。
-     * 未匹配时返回 hash 本身（兼容直接传路径的旧调用方式）。
+     * 优先使用 {@link WorkspaceManager#listWorkspaces()} 从磁盘读取 hash→path 映射，
+     * 不依赖 agentCache，在缓存为空时也能正确解析。
+     * 兜底检查默认工作区和 agentCache（兼容旧版）。
      * </p>
      *
      * @param hash 工作区 hash（或路径本身）
-     * @return 解析后的工作区路径
+     * @return 解析后的工作区路径，找不到时返回 null
      */
     public String resolveWorkspacePath(String hash) {
         if (hash == null || hash.isEmpty()) {
             return null;
         }
-        // 1. 检查默认工作区
+        // 1. 优先使用 WorkspaceManager 的磁盘索引（可靠，不依赖 agentCache）
+        try {
+            WorkspaceManager wm = new WorkspaceManager();
+            List<WorkspaceManager.WorkspaceInfo> workspaces = wm.listWorkspaces();
+            for (WorkspaceManager.WorkspaceInfo ws : workspaces) {
+                if (hash.equals(ws.hash())) {
+                    return ws.path();
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[web] 读取工作区列表失败: {}", e.getMessage());
+        }
+
+        // 2. 检查默认工作区
         String defaultPath = getWorkspace();
-        if (hash.equals(WorkspaceManager.computeHash(defaultPath))) {
+        if (defaultPath != null && hash.equals(WorkspaceManager.computeHash(defaultPath))) {
             return defaultPath;
         }
-        // 2. 遍历缓存的 Agent key
+
+        // 3. 遍历缓存的 Agent key（兼容旧版）
         for (String key : agentCache.keySet()) {
             String workspacePath = key.split("::", 2)[0];
             if (hash.equals(WorkspaceManager.computeHash(workspacePath))) {
                 return workspacePath;
             }
         }
-        // 3. 兼容：hash 可能就是路径本身（旧前端直接传路径）
+
+        // 4. 兼容：hash 可能就是路径本身（旧前端直接传路径）
         if (hash.contains("/") || hash.contains("\\")) {
             return hash;
         }
-        // 4. 无法解析，返回 null 让调用方使用默认值
+
+        // 5. 无法解析
         return null;
+    }
+
+    /**
+     * 校验并解析工作区 hash，解析失败时抛异常（不再静默 fallback）。
+     *
+     * @param workspaceHash 工作区 hash
+     * @return 工作区绝对路径
+     * @throws ServiceException hash 无效或找不到对应工作区
+     */
+    public String resolveWorkspaceHashOrThrow(String workspaceHash) {
+        if (workspaceHash == null || workspaceHash.isEmpty()) {
+            throw new ServiceException("workspaceHash 不能为空");
+        }
+        String path = resolveWorkspacePath(workspaceHash);
+        if (path == null) {
+            throw new ServiceException("工作区不存在: " + workspaceHash);
+        }
+        return path;
     }
 
     /**

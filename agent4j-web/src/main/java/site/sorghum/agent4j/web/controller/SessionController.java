@@ -93,12 +93,12 @@ public class SessionController {
     @Delete
     @Mapping("")
     public ApiResponse<SessionDeleteDTO> clearAllSessions(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
+            @ApiParam(value = "工作区 hash", required = true)
+            @Param(value = "workspaceHash", required = true) String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
-        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
-        if (workspacePath == null) workspacePath = agentService.getWorkspace();
+        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
         agentService.clearAllSessions(workspacePath);
-        String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
+        String resolvedHash = AgentService.computeWorkspaceHash(workspacePath);
         return ApiResponse.ok(new SessionDeleteDTO("所有会话已清空", resolvedHash, null));
     }
 
