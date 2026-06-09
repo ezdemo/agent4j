@@ -436,7 +436,7 @@ const formatName = n => {
   return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}` : n.replace(/[-_]+/g, ' ').slice(0, 24)
 }
 
-const themeOrder = ['retro-yellow', 'light', 'dark', 'retro']
+const themeOrder = ['light', 'dark', 'retro', 'retro-yellow']
 const toggleTheme = () => {
   const idx = themeOrder.indexOf(store.settings.theme)
   store.settings.theme = themeOrder[(idx + 1) % themeOrder.length]
