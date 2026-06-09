@@ -1,6 +1,6 @@
 import { ref, watch } from 'vue'
 
-const theme = ref('retro-yellow')
+const theme = ref('light')
 
 function loadTheme() {
   const saved = localStorage.getItem('agent4j-theme')
