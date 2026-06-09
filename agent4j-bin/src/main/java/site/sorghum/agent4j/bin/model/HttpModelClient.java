@@ -104,6 +104,11 @@ public class HttpModelClient implements ModelClient {
                 model.contains("reasoner")
                         || model.equals("deepseek-v4-flash")
                         || model.equals("deepseek-v4-pro")
+                        || model.contains("mimo")
+                        || model.contains("minimax")
+                        || model.contains("gpt")
+                        || model.contains("glm")
+                        || model.contains("agnes")
         );
     }
 
@@ -629,6 +634,7 @@ public class HttpModelClient implements ModelClient {
         body.set("model", model);
         if (reasoningEffort != null && !reasoningEffort.isEmpty()) {
             body.set("reasoning_effort", reasoningEffort);
+            body.set("chat_template_kwargs",ONode.ofJson("{}").set("enable_thinking",true));
         }
 
         ONode msgs = body.getOrNew("messages").asArray();
