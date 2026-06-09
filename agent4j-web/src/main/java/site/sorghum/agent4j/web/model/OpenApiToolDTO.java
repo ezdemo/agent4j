@@ -13,40 +13,40 @@ public class OpenApiToolDTO {
     /**
      * 接口名称（用作 call_api 的 api_name）
      */
-    public String name;
+    private String name;
 
     /**
      * 功能描述
      */
-    public String description;
+    private String description;
 
     /**
      * 所属业务分组
      */
-    public String category;
+    private String category;
 
     /**
      * HTTP 方法（GET/POST/PUT/DELETE 等）
      */
-    public String method;
+    private String method;
 
     /**
      * 接口路径
      */
-    public String path;
+    private String path;
 
     /**
      * 来源文档地址
      */
-    public String docUrl;
+    private String docUrl;
 
     /**
      * 接口基地址
      */
-    public String baseUrl;
+    private String baseUrl;
 
     /**
      * 是否已弃用
      */
-    public boolean deprecated;
+    private boolean deprecated;
 }

@@ -3,8 +3,7 @@ package site.sorghum.agent4j.web.market;
 import org.noear.snack4.ONode;
 import org.noear.solon.net.http.HttpResponse;
 import org.noear.solon.net.http.HttpUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.BufferedInputStream;
 import java.net.URLEncoder;
@@ -23,9 +22,8 @@ import java.util.zip.ZipInputStream;
  *
  * @author Sorghum
  */
+@Slf4j
 public abstract class AbstractZipMarket implements Market {
-
-    protected final Logger log = LoggerFactory.getLogger(getClass());
 
     @Override
     public String install(String slug, Path skillsDir) throws Exception {

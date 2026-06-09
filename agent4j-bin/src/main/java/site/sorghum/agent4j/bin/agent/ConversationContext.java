@@ -5,6 +5,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.bin.session.SessionStore;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -110,7 +111,7 @@ public class ConversationContext {
         if (sessionStore != null) {
             try {
                 sessionStore.append(msg);
-            } catch (Exception e) {
+            } catch (IOException e) {
                 log.error("[session] jsonl 写入失败: {}", e.getMessage());
             }
         }
@@ -202,7 +203,7 @@ public class ConversationContext {
         if (sessionStore != null) {
             try {
                 sessionStore.rewrite(history);
-            } catch (Exception e) {
+            } catch (IOException e) {
                 log.error("[session] rewrite 失败: {}", e.getMessage());
             }
         }

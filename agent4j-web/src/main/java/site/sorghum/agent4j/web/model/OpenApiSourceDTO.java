@@ -15,37 +15,37 @@ public class OpenApiSourceDTO {
     /**
      * OpenAPI 定义文档地址（http://... 或 classpath:...）
      */
-    public String docUrl;
+    private String docUrl;
 
     /**
      * 请求头
      */
-    public Map<String, String> headers;
+    private Map<String, String> headers;
 
     /**
      * 认证方式：none / bearer / apikey / basic
      */
-    public String authType;
+    private String authType;
 
     /**
      * 认证配置（不同 authType 含义不同）
      */
-    public Map<String, String> authConfig;
+    private Map<String, String> authConfig;
 
     /**
      * 是否启用
      */
-    public boolean enabled = true;
+    private boolean enabled = true;
 
     /**
      * 状态：loaded / error / disabled
      */
-    public String status = "loaded";
+    private String status = "loaded";
 
     /**
      * 加载失败时的错误信息
      */
-    public String errorMessage;
+    private String errorMessage;
 
     public static OpenApiSourceDTO ok(String docUrl,
                                       Map<String, String> headers,
@@ -70,3 +70,4 @@ public class OpenApiSourceDTO {
         return dto;
     }
 }
+

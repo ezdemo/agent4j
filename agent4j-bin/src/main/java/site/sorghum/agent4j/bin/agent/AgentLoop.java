@@ -18,10 +18,7 @@ import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.tool.*;
 
 import java.io.IOException;
-import java.nio.file.DirectoryStream;
-import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -43,28 +40,35 @@ public class AgentLoop implements AgentLoopController {
 
     // ==================== 配置读取（带 null-safe 默认值） ====================
 
+    private static final int DEFAULT_MAX_CONTEXT_CHARS = 200_000;
+    private static final int DEFAULT_KEEP_TAIL_CHARS = 80_000;
+    private static final int DEFAULT_TOOL_TIMEOUT_SEC = 1080;
+    private static final int DEFAULT_MAX_SELF_CORRECTION = 5;
+    private static final int DEFAULT_MAX_STREAM_RETRIES = 10;
+    private static final int[] DEFAULT_RETRY_DELAYS_SEC = {1, 1, 1, 3, 3, 3, 5, 7, 10, 10};
+
     private int maxTotalChars() {
-        return config != null ? config.maxContextChars() : 200_000;
+        return config != null ? config.maxContextChars() : DEFAULT_MAX_CONTEXT_CHARS;
     }
 
     private int keepTailChars() {
-        return config != null ? config.keepTailChars() : 80_000;
+        return config != null ? config.keepTailChars() : DEFAULT_KEEP_TAIL_CHARS;
     }
 
     private int toolTimeoutSec() {
-        return config != null ? config.toolTimeoutSec() : 1080;
+        return config != null ? config.toolTimeoutSec() : DEFAULT_TOOL_TIMEOUT_SEC;
     }
 
     private int maxSelfCorrectionAttempts() {
-        return config != null ? config.maxSelfCorrectionAttempts() : 5;
+        return config != null ? config.maxSelfCorrectionAttempts() : DEFAULT_MAX_SELF_CORRECTION;
     }
 
     private int maxStreamErrorRetries() {
-        return config != null ? config.maxStreamErrorRetries() : 10;
+        return config != null ? config.maxStreamErrorRetries() : DEFAULT_MAX_STREAM_RETRIES;
     }
 
     private int[] retryDelaysSec() {
-        return new int[]{1, 1, 1, 3, 3, 3, 5, 7, 10, 10};
+        return DEFAULT_RETRY_DELAYS_SEC;
     }
 
     // ==================== 核心字段 ====================
@@ -103,11 +107,8 @@ public class AgentLoop implements AgentLoopController {
 
     /** ==================== 定时巡检 ==================== */
 
-    /** 定时巡检调度器 */
-    private ScheduledExecutorService patrolScheduler;
-
-    /** 巡检是否正在运行 */
-    private volatile boolean patrolRunning = false;
+    /** 巡检管理器（goals / retry / patrol） */
+    private final GoalPatrolManager patrolManager;
 
     /** 主循环是否正在执行中（防止巡检线程与主循环冲突） */
     private final AtomicBoolean running = new AtomicBoolean(false);
@@ -130,6 +131,7 @@ public class AgentLoop implements AgentLoopController {
         this.config = config;
         this.dispatcher = new ToolDispatcher(registry);
         this.hitlManager = new HitlManager(hitlDefault);
+        this.patrolManager = new GoalPatrolManager(null, ctx, running);
     }
 
     // ==================== 公共控制 API ====================
@@ -316,12 +318,12 @@ public class AgentLoop implements AgentLoopController {
         // 每次 mainLoop 结束后，检查是否有需要重试的目标步骤
         boolean hasActiveGoal = false;
         while (true) {
-            GoalAndStore gs = findRetriableGoal();
+            GoalPatrolManager.GoalAndStore gs = patrolManager.findRetriableGoal();
             if (gs == null) break;
 
             hasActiveGoal = true;
-            Goal goal = gs.goal;
-            GoalStore goalStore = gs.goalStore;
+            Goal goal = gs.goal();
+            GoalStore goalStore = gs.goalStore();
 
             // 找到第一个 FAILED 且未超重试次数的步骤
             GoalStep failedStep = null;
@@ -363,164 +365,30 @@ public class AgentLoop implements AgentLoopController {
         // === 巡检生命周期管理 ===
         if (!hasActiveGoal) {
             // 本次没找到活跃目标，检查是否还有 goal 需要巡检（可能定时器已过期但 goal 还在）
-            if (patrolRunning) {
+            if (patrolManager.isRunning()) {
                 // 快速检查一次，决定是否停止巡检
-                patrolTick();
+                patrolManager.tick();
             }
         } else {
             // 有活跃目标 → 确保定时巡检已启动
-            startGoalPatrol();
+            patrolManager.startPatrol();
         }
 
         return result;
     }
 
     /**
-     * 查找是否有需要自动重试的目标和步骤。
-     */
-    private GoalAndStore findRetriableGoal() {
-        try {
-            if (sessionService == null) return null;
-            String sessionId = sessionService.getStore().currentName();
-            if (sessionId == null) return null;
-
-            GoalStore goalStore = resolveGoalStore(sessionId);
-            if (goalStore == null) return null;
-
-            Goal goal = goalStore.findBySession(sessionId);
-            if (goal == null || goal.getStatus() != GoalStatus.ACTIVE) return null;
-
-            // 检查是否有需要重试的步骤
-            boolean hasRetriable = false;
-            for (GoalStep s : goal.getSteps()) {
-                if (s.getStatus() == StepStatus.FAILED
-                        && s.getRetryCount() < goal.getMaxRetries()) {
-                    hasRetriable = true;
-                    break;
-                }
-            }
-            if (!hasRetriable) return null;
-
-            return new GoalAndStore(goal, goalStore);
-        } catch (Exception e) {
-            log.warn("[goal] 查找可重试目标失败: {}", e.getMessage());
-            return null;
-        }
-    }
-
-    /**
-     * 通过会话 ID 查找对应的 GoalStore。
-     */
-    private GoalStore resolveGoalStore(String sessionId) {
-        try {
-            Path workspaceDir = Paths.get(System.getProperty("user.home"), ".agent4j", "workspace");
-            if (!Files.isDirectory(workspaceDir)) return null;
-            try (DirectoryStream<Path> ds = Files.newDirectoryStream(workspaceDir)) {
-                for (Path wsDir : ds) {
-                    if (Files.isDirectory(wsDir)) {
-                        Path goalFile = wsDir.resolve("goals").resolve(sessionId + ".jsonl");
-                        if (Files.exists(goalFile)) {
-                            return new site.sorghum.agent4j.bin.goal.JsonlGoalStore(wsDir);
-                        }
-                    }
-                }
-            }
-        } catch (Exception e) {
-            log.warn("[goal] 解析 GoalStore 失败: {}", e.getMessage());
-        }
-        return null;
-    }
-
-    /**
-     * 目标和其存储的临时容器。
-     */
-    private record GoalAndStore(Goal goal, GoalStore goalStore) {}
-
-    // ==================== 定时巡检 ====================
-
-    /**
-     * 启动定时巡检（30 秒间隔）。
-     * 定期扫描目标状态，将 FAILED 步骤重置为 PENDING，
-     * 并注入上下文让 LLM 在下一轮推理中重新执行。
+     * 委托给 {@link GoalPatrolManager#startPatrol()}。
      */
     public synchronized void startGoalPatrol() {
-        if (patrolRunning) return;
-        patrolRunning = true;
-        patrolScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "goal-patrol");
-            t.setDaemon(true);
-            return t;
-        });
-        patrolScheduler.scheduleAtFixedRate(this::patrolTick,
-                30, 30, TimeUnit.SECONDS);
-        log.info("[goal] 定时巡检已启动（间隔 30 秒）");
+        patrolManager.startPatrol();
     }
 
     /**
-     * 停止定时巡检。
+     * 委托给 {@link GoalPatrolManager#stopPatrol()}。
      */
     public synchronized void stopGoalPatrol() {
-        if (!patrolRunning) return;
-        patrolRunning = false;
-        if (patrolScheduler != null && !patrolScheduler.isShutdown()) {
-            patrolScheduler.shutdown();
-        }
-        log.info("[goal] 定时巡检已停止");
-    }
-
-    /**
-     * 巡检周期任务：检查目标状态，重置失败步骤。
-     * 运行在后台线程，不阻塞主流程。
-     */
-    private void patrolTick() {
-        try {
-            // 主循环正在执行中，跳过本轮巡检避免并发冲突
-            if (running.get()) return;
-
-            if (sessionService == null) return;
-            String sid = sessionService.getStore().currentName();
-            if (sid == null) return;
-
-            GoalStore goalStore = resolveGoalStore(sid);
-            if (goalStore == null) {
-                // 没有活跃目标，停止巡检
-                stopGoalPatrol();
-                return;
-            }
-
-            Goal goal = goalStore.findBySession(sid);
-            if (goal == null || goal.getStatus() == GoalStatus.COMPLETED
-                    || goal.getStatus() == GoalStatus.FAILED) {
-                // 目标已完成或失败，停止巡检
-                stopGoalPatrol();
-                return;
-            }
-
-            // 检查是否有 FAILED 步骤需要重置
-            boolean hasWork = false;
-            for (GoalStep step : goal.getSteps()) {
-                if (step.getStatus() == StepStatus.FAILED
-                        && step.getRetryCount() < goal.getMaxRetries()) {
-                    hasWork = true;
-                    step.setStatus(StepStatus.PENDING);
-                    step.setRetryCount(step.getRetryCount() + 1);
-                    log.info("[goal] [定时巡检] 检测到失败步骤，重置为 PENDING: step={}, retry={}/{}",
-                            step.getIndex() + 1, step.getRetryCount(), goal.getMaxRetries());
-                }
-            }
-
-            if (hasWork) {
-                goal.setUpdatedAt(java.time.Instant.now());
-                goalStore.save(goal);
-                // 注入上下文通知，下轮推理时 LLM 会看到
-                ctx.addUser(
-                        "⏰ [定时巡检] 检测到有步骤执行失败，已自动重置。\n"
-                        + "当前进度：" + goal.progressText() + "\n"
-                        + "请检查失败原因并继续执行。");
-            }
-        } catch (Exception e) {
-            log.warn("[goal] 定时巡检异常: {}", e.getMessage());
-        }
+        patrolManager.stopPatrol();
     }
 
     // ==================== 统一主推理循环 ====================

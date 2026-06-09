@@ -5,8 +5,7 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.noear.solon.ai.talents.mount.SkillDir;
 import org.noear.solon.annotation.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.tool.solon.common.Agent4JSkillProvider;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.*;
@@ -28,9 +27,8 @@ import java.util.stream.Collectors;
 @Api(tags = "Agent 控制")
 @Controller
 @Mapping("/api/agent")
+@Slf4j
 public class AgentController {
-
-    private static final Logger log = LoggerFactory.getLogger(AgentController.class);
 
     @Inject
     private AgentService agentService;

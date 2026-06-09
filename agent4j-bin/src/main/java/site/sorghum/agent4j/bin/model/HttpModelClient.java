@@ -1,9 +1,8 @@
 package site.sorghum.agent4j.bin.model;
 
+import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import org.noear.snack4.ONode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 import site.sorghum.agent4j.bin.agent.ChatMessage;
 import site.sorghum.agent4j.bin.agent.ToolCallEntry;
 
@@ -26,9 +25,9 @@ import java.util.concurrent.TimeUnit;
  *
  * @author Sorghum
  */
+@Slf4j
 public class HttpModelClient implements ModelClient {
 
-    private static final Logger logger = LoggerFactory.getLogger(HttpModelClient.class);
     private static final MediaType MEDIA_TYPE_JSON = MediaType.parse("application/json; charset=utf-8");
 
     /**
@@ -36,6 +35,31 @@ public class HttpModelClient implements ModelClient {
      * 指数退避策略，应对 API 临时故障。
      */
     private static final int[] RETRY_DELAYS = {1, 1, 1, 2, 2, 2, 3, 3, 6, 10};
+
+    // ==================== OpenAI API JSON 字段名常量 ====================
+
+    private static final String FIELD_CONTENT = "content";
+    private static final String FIELD_REASONING_CONTENT = "reasoning_content";
+    private static final String FIELD_TOOL_CALLS = "tool_calls";
+    private static final String FIELD_CHOICES = "choices";
+    private static final String FIELD_DELTA = "delta";
+    private static final String FIELD_ROLE = "role";
+    private static final String FIELD_FUNCTION = "function";
+    private static final String FIELD_NAME = "name";
+    private static final String FIELD_ARGUMENTS = "arguments";
+    private static final String FIELD_ID = "id";
+    private static final String FIELD_TYPE = "type";
+    private static final String FIELD_MODEL = "model";
+    private static final String FIELD_MESSAGES = "messages";
+    private static final String FIELD_TOOLS = "tools";
+    private static final String FIELD_USAGE = "usage";
+    private static final String FIELD_REASONING_TOKENS = "reasoning_tokens";
+    private static final String FIELD_CACHED_TOKENS = "cached_tokens";
+    private static final String FIELD_STREAM = "stream";
+    private static final String FIELD_MESSAGE = "message";
+    private static final String FIELD_INDEX = "index";
+
+    // ==================== 核心字段 ====================
 
     private final String apiUrl;
     private final String apiKey;
@@ -122,7 +146,7 @@ public class HttpModelClient implements ModelClient {
         Call call = activeCall;
         if (call != null && !call.isCanceled()) {
             call.cancel();
-            logger.debug("已取消当前 OkHttp Call");
+            log.debug("已取消当前 OkHttp Call");
         }
     }
 
@@ -181,9 +205,9 @@ public class HttpModelClient implements ModelClient {
                 ResponseBody responseBody = response.body();
                 String responseText = responseBody != null ? responseBody.string() : "";
 
-                logger.debug("发送API请求到 {}，模型: {}，消息数: {}，工具数: {}",
+                log.debug("发送API请求到 {}，模型: {}，消息数: {}，工具数: {}",
                         apiUrl, model, messages.size(), tools != null ? tools.size() : 0);
-                logger.debug("收到API响应（完整响应）: {}", responseText);
+                log.debug("收到API响应（完整响应）: {}", responseText);
 
                 if (retryable(status) && attempt < RETRY_DELAYS.length) {
                     int delay = RETRY_DELAYS[attempt];
@@ -206,7 +230,7 @@ public class HttpModelClient implements ModelClient {
                 return choices.get(0).get("message");
 
             } catch (IOException e) {
-                logger.error("非流式API调用IO异常: {}", e.getMessage(), e);
+                log.error("非流式API调用IO异常: {}", e.getMessage(), e);
                 if (attempt < RETRY_DELAYS.length) {
                     int delay = RETRY_DELAYS[attempt];
                     System.err.println("[retry] " + e.getMessage() + "，第" + (attempt + 1) + "次重试，等待" + delay + "s...");
@@ -219,7 +243,7 @@ public class HttpModelClient implements ModelClient {
                 }
                 throw e;
             } catch (InterruptedException e) {
-                logger.error("非流式API调用被中断", e);
+                log.error("非流式API调用被中断", e);
                 Thread.currentThread().interrupt();
                 throw new IOException("Interrupted during retry", e);
             }
@@ -230,7 +254,7 @@ public class HttpModelClient implements ModelClient {
      * 流式调用 — 通过回调逐 token 推送，5xx / IO 异常自动重试最多 10 次。
      * <p>
      * 解析 OpenAI SSE 格式：
-     * {@code data: {"choices":[{"delta":{"content":"..."}}]}}
+     * {@code data: {"choices":[{"delta":{FIELD_CONTENT:"..."}}]}}
      * 支持 reasoning_content 和 tool_calls。
      * </p>
      */
@@ -261,7 +285,7 @@ public class HttpModelClient implements ModelClient {
             activeCall = call;
 
             try (Response response = call.execute()) {
-                logger.debug("发送流式API请求到 {}，模型: {}，消息数: {}，工具数: {}",
+                log.debug("发送流式API请求到 {}，模型: {}，消息数: {}，工具数: {}",
                         apiUrl, model, messages.size(), tools != null ? tools.size() : 0);
 
                 int status = response.code();
@@ -279,7 +303,7 @@ public class HttpModelClient implements ModelClient {
                         callback.onError("API error " + status + ": " + err);
                     } catch (Exception e) {
                         // SSE连接断开时忽略异常
-                        logger.debug("onError回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                        log.debug("onError回调异常（可能SSE连接已断开）: {}", e.getMessage());
                     }
                     return;
                 }
@@ -289,7 +313,7 @@ public class HttpModelClient implements ModelClient {
                     try {
                         callback.onError("Empty response body");
                     } catch (Exception e) {
-                        logger.debug("onError回调异常: {}", e.getMessage());
+                        log.debug("onError回调异常: {}", e.getMessage());
                     }
                     return;
                 }
@@ -304,13 +328,13 @@ public class HttpModelClient implements ModelClient {
                     while ((line = reader.readLine()) != null) {
                         if (abortRequested) {
                             abortRequested = false;
-                            logger.debug("流式请求被 ReasonBreaker 中断");
+                            log.debug("流式请求被 ReasonBreaker 中断");
                             break;
                         }
                         if (!line.startsWith("data: ")) continue;
                         String data = line.substring(6).trim();
                         if ("[DONE]".equals(data)) {
-                            logger.debug("收到SSE流结束标记");
+                            log.debug("收到SSE流结束标记");
                             break;
                         }
 
@@ -321,31 +345,31 @@ public class HttpModelClient implements ModelClient {
 
                         if (!hasComplexFields && isShortEnough) {
                             // content 提取（高频路径）
-                            String content = extractJsonStringField(data, "content");
+                            String content = extractJsonStringField(data, FIELD_CONTENT);
                             if (content != null && !content.isEmpty()) {
                                 contentBuf.append(content);
-                                logger.debug("收到content: {}", content);
+                                log.debug("收到content: {}", content);
                                 try {
                                     callback.onContentDelta(content);
                                 } catch (Exception e) {
-                                    logger.debug("onContentDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                                    log.debug("onContentDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
                                 }
                             }
                             // reasoning_content 与 content 可能共存
                             String reasoning = extractJsonStringField(data, "reasoning_content");
                             if (reasoning != null && !reasoning.isEmpty()) {
                                 reasoningBuf.append(reasoning);
-                                logger.debug("收到reasoning_content: {}", reasoning);
+                                log.debug("收到reasoning_content: {}", reasoning);
                                 try {
                                     callback.onReasoningDelta(reasoning);
                                 } catch (Exception e) {
-                                    logger.debug("onReasoningDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                                    log.debug("onReasoningDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
                                 }
                             }
                         } else {
                             // ---- 慢路径：完整 ONode 解析（usage / tool_calls / 超大 chunk） ----
                             ONode chunk = ONode.ofJson(data);
-                            logger.debug("收到SSE数据块，大小: {} 字符", data.length());
+                            log.debug("收到SSE数据块，大小: {} 字符", data.length());
 
                             // 捕获 usage
                             if (data.contains("\"usage\"")) {
@@ -390,14 +414,14 @@ public class HttpModelClient implements ModelClient {
                                                 .get("reasoning_tokens")
                                                 .getInt();
                                         if (reasoningTokens > 0) {
-                                            logger.debug("推理 token 消耗: {}", reasoningTokens);
+                                            log.debug("推理 token 消耗: {}", reasoningTokens);
                                         }
                                     }
-                                    logger.debug("收到usage数据（完整API响应）: {}", chunk.toJson());
+                                    log.debug("收到usage数据（完整API响应）: {}", chunk.toJson());
                                     try {
                                         callback.onUsage(pt, ct, tt, ch, cm);
                                     } catch (Exception e) {
-                                        logger.debug("onUsage回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                                        log.debug("onUsage回调异常（可能SSE连接已断开）: {}", e.getMessage());
                                     }
                                 }
                             }
@@ -411,32 +435,32 @@ public class HttpModelClient implements ModelClient {
                                 String tok = rd.getString();
                                 if (tok != null && !tok.isEmpty()) {
                                     reasoningBuf.append(tok);
-                                    logger.debug("收到reasoning_content: {}", tok);
+                                    log.debug("收到reasoning_content: {}", tok);
                                     try {
                                         callback.onReasoningDelta(tok);
                                     } catch (Exception e) {
-                                        logger.debug("onReasoningDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                                        log.debug("onReasoningDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
                                     }
                                 }
                             }
 
-                            ONode cd = delta.get("content");
+                            ONode cd = delta.get(FIELD_CONTENT);
                             if (cd != null && cd.isString()) {
                                 String tok = cd.getString();
                                 if (tok != null && !tok.isEmpty()) {
                                     contentBuf.append(tok);
-                                    logger.debug("收到content: {}", tok);
+                                    log.debug("收到content: {}", tok);
                                     try {
                                         callback.onContentDelta(tok);
                                     } catch (Exception e) {
-                                        logger.debug("onContentDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                                        log.debug("onContentDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
                                     }
                                 }
                             }
 
                             ONode tcDelta = delta.get("tool_calls");
                             if (tcDelta != null && tcDelta.isArray()) {
-                                logger.debug("收到tool_calls数据，数量: {}", tcDelta.getArray().size());
+                                log.debug("收到tool_calls数据，数量: {}", tcDelta.getArray().size());
                                 for (ONode tcd : tcDelta.getArray()) {
                                     int idx = tcd.get("index").isNull() ? 0 : tcd.get("index").getInt();
                                     ONode func = tcd.get("function");
@@ -457,7 +481,7 @@ public class HttpModelClient implements ModelClient {
                                         existing.getOrNew("function").set("arguments",
                                                 (prev != null ? prev : "") + (add != null ? add : ""));
                                     }
-                                    logger.debug("tool_calls索引: {}, 函数名: {}", idx,
+                                    log.debug("tool_calls索引: {}, 函数名: {}", idx,
                                             func.get("name").isNull() ? "null" : func.get("name").getString());
                                 }
                             }
@@ -488,12 +512,12 @@ public class HttpModelClient implements ModelClient {
                                 copyFn.set("name", v.get("function").get("name").getString());
                                 copyFn.set("arguments", v.get("function").get("arguments").getString());
                             }
-                            logger.debug("完成tool_calls累积，共 {} 个有效调用", valid.size());
+                            log.debug("完成tool_calls累积，共 {} 个有效调用", valid.size());
                             try {
                                 callback.onToolCalls(filtered);
                             } catch (Exception e) {
                                 // SSE连接断开时忽略异常，继续执行
-                                logger.debug("onToolCalls回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                                log.debug("onToolCalls回调异常（可能SSE连接已断开）: {}", e.getMessage());
                             }
                         }
                     }
@@ -501,7 +525,7 @@ public class HttpModelClient implements ModelClient {
                         callback.onDone();
                     } catch (Exception e) {
                         // SSE连接断开时忽略异常，继续执行
-                        logger.debug("onDone回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                        log.debug("onDone回调异常（可能SSE连接已断开）: {}", e.getMessage());
                     }
                 }
                 return; // success
@@ -512,16 +536,16 @@ public class HttpModelClient implements ModelClient {
                     // ★ 必须回调 onDone() 释放 AgentLoop.streamLLM() 中的 streamLatch，
                     //    否则调用方线程会永久阻塞在 CountDownLatch.await() 上，
                     //    导致 AgentService 的会话锁（ReentrantLock）永远无法释放。
-                    logger.debug("流式请求已被中断，跳过重试");
+                    log.debug("流式请求已被中断，跳过重试");
                     abortRequested = false;
                     try {
                         callback.onDone();
                     } catch (Exception ignored) {
-                        logger.debug("onDone回调异常（可能SSE连接已断开）: {}", ignored.getMessage());
+                        log.debug("onDone回调异常（可能SSE连接已断开）: {}", ignored.getMessage());
                     }
                     return;
                 }
-                logger.error("流式API调用IO异常: {}", e.getMessage(), e);
+                log.error("流式API调用IO异常: {}", e.getMessage(), e);
                 if (attempt < RETRY_DELAYS.length) {
                     int delay = RETRY_DELAYS[attempt];
                     System.err.println("[retry] " + e.getMessage() + "，第" + (attempt + 1) + "次重试，等待" + delay + "s...");
@@ -536,27 +560,27 @@ public class HttpModelClient implements ModelClient {
                     callback.onError(e.getMessage());
                 } catch (Exception ex) {
                     // SSE连接断开时忽略异常
-                    logger.debug("onError回调异常（可能SSE连接已断开）: {}", ex.getMessage());
+                    log.debug("onError回调异常（可能SSE连接已断开）: {}", ex.getMessage());
                 }
                 return;
             } catch (InterruptedException e) {
-                logger.error("流式API调用被中断", e);
+                log.error("流式API调用被中断", e);
                 Thread.currentThread().interrupt();
                 try {
                     callback.onError("Interrupted during retry");
                 } catch (Exception ex) {
                     // SSE连接断开时忽略异常
-                    logger.debug("onError回调异常（可能SSE连接已断开）: {}", ex.getMessage());
+                    log.debug("onError回调异常（可能SSE连接已断开）: {}", ex.getMessage());
                 }
                 return;
             } catch (Exception e) {
-                logger.error("流式API调用异常: {}", e.getMessage(), e);
+                log.error("流式API调用异常: {}", e.getMessage(), e);
                 // 非 IO 异常（如 JSON 解析错误），不重试
                 try {
                     callback.onError(e.getMessage());
                 } catch (Exception ex) {
                     // SSE连接断开时忽略异常
-                    logger.debug("onError回调异常（可能SSE连接已断开）: {}", ex.getMessage());
+                    log.debug("onError回调异常（可能SSE连接已断开）: {}", ex.getMessage());
                 }
                 return;
             } finally {
@@ -642,7 +666,7 @@ public class HttpModelClient implements ModelClient {
         for (ChatMessage m : messages) {
             // 防御：tool 消息必须有 tool_call_id，缺少时跳过该消息
             if (m.isTool() && (m.getToolCallId() == null || m.getToolCallId().isEmpty())) {
-                logger.warn("buildBody: 跳过没有tool_call_id的tool消息");
+                log.warn("buildBody: 跳过没有tool_call_id的tool消息");
                 continue;
             }
 
@@ -663,7 +687,7 @@ public class HttpModelClient implements ModelClient {
             }
             // 多模态 contentParts 序列化为 JSON array
             if (hasContentParts) {
-                ONode contentArray = msg.getOrNew("content").asArray();
+                ONode contentArray = msg.getOrNew(FIELD_CONTENT).asArray();
                 for (ChatMessage.ContentPart part : m.getContentParts()) {
                     ONode partNode = contentArray.addNew();
                     partNode.set("type", part.getType());
@@ -681,11 +705,11 @@ public class HttpModelClient implements ModelClient {
             } else if (isAssistant && !hasContent && !hasTc) {
                 // 既无 content 也无 tool_calls → 强制补空 content 防止 API 400
                 // 这种情况不应出现在正常流程中，但历史消息损坏或 Healer 遗漏时兜底
-                logger.warn("buildBody: 检测到空 assistant 消息（无 content 且无 tool_calls），强制删除");
-                msg.set("content", "");
+                log.warn("buildBody: 检测到空 assistant 消息（无 content 且无 tool_calls），强制删除");
+                msg.set(FIELD_CONTENT, "");
                 skip = true;
             } else {
-                if (hasContent) msg.set("content", m.getContent());
+                if (hasContent) msg.set(FIELD_CONTENT, m.getContent());
             }
 
             if (hasTc) {
@@ -728,7 +752,7 @@ public class HttpModelClient implements ModelClient {
         }
 
         String jsonBody = body.toJson();
-        logger.debug("构建请求体: 大小={} 字符, 工具数={}, 消息数={}",
+        log.debug("构建请求体: 大小={} 字符, 工具数={}, 消息数={}",
                 jsonBody.length(), tools != null ? tools.size() : 0, messages.size());
         return jsonBody;
     }
