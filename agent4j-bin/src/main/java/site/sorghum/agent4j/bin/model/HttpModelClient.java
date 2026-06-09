@@ -181,7 +181,9 @@ public class HttpModelClient implements ModelClient {
 
                 if (retryable(status) && attempt < RETRY_DELAYS.length) {
                     int delay = RETRY_DELAYS[attempt];
-                    System.err.println("[retry] HTTP " + status + " (非流式)，第" + (attempt + 1) + "次重试，等待" + delay + "s...");
+                    System.err.println("[retry] HTTP " + status
+                            + " (非流式)，第" + (attempt + 1)
+                            + "次重试，等待" + delay + "s...");
                     Thread.sleep(delay * 1000L);
                     continue;
                 }
@@ -343,21 +345,44 @@ public class HttpModelClient implements ModelClient {
                             if (data.contains("\"usage\"")) {
                                 ONode usage = chunk.get("usage");
                                 if (usage != null && !usage.isNull()) {
-                                    int pt = usage.get("prompt_tokens").isNull() ? 0 : usage.get("prompt_tokens").getInt();
-                                    int ct = usage.get("completion_tokens").isNull() ? 0 : usage.get("completion_tokens").getInt();
-                                    int tt = usage.get("total_tokens").isNull() ? 0 : usage.get("total_tokens").getInt();
-                                    int ch = usage.get("prompt_cache_hit_tokens").isNull() ? 0 : usage.get("prompt_cache_hit_tokens").getInt();
-                                    int cm = usage.get("prompt_cache_miss_tokens").isNull() ? 0 : usage.get("prompt_cache_miss_tokens").getInt();
+                                    int pt = usage.get("prompt_tokens").isNull()
+                                            ? 0
+                                            : usage.get("prompt_tokens").getInt();
+                                    int ct = usage.get("completion_tokens").isNull()
+                                            ? 0
+                                            : usage.get("completion_tokens").getInt();
+                                    int tt = usage.get("total_tokens").isNull()
+                                            ? 0
+                                            : usage.get("total_tokens").getInt();
+                                    int ch = usage.get("prompt_cache_hit_tokens")
+                                            .isNull()
+                                            ? 0
+                                            : usage.get("prompt_cache_hit_tokens")
+                                            .getInt();
+                                    int cm = usage.get("prompt_cache_miss_tokens")
+                                            .isNull()
+                                            ? 0
+                                            : usage.get("prompt_cache_miss_tokens")
+                                            .getInt();
                                     if (ch == 0 && cm == 0) {
                                         ONode ptDetails = usage.get("prompt_tokens_details");
                                         if (ptDetails != null && !ptDetails.isNull()) {
-                                            ch = ptDetails.get("cached_tokens").isNull() ? 0 : ptDetails.get("cached_tokens").getInt();
+                                            ch = ptDetails.get("cached_tokens")
+                                                    .isNull()
+                                                    ? 0
+                                                    : ptDetails.get("cached_tokens")
+                                                    .getInt();
                                             cm = Math.max(0, pt - ch);
                                         }
                                     }
                                     ONode ctDetails = usage.get("completion_tokens_details");
                                     if (ctDetails != null && !ctDetails.isNull()) {
-                                        int reasoningTokens = ctDetails.get("reasoning_tokens").isNull() ? 0 : ctDetails.get("reasoning_tokens").getInt();
+                                        int reasoningTokens = ctDetails
+                                                .get("reasoning_tokens").isNull()
+                                                ? 0
+                                                : ctDetails
+                                                .get("reasoning_tokens")
+                                                .getInt();
                                         if (reasoningTokens > 0) {
                                             logger.debug("推理 token 消耗: {}", reasoningTokens);
                                         }
@@ -440,7 +465,9 @@ public class HttpModelClient implements ModelClient {
                             ONode fn = tc.get("function");
                             if (fn != null && !fn.isNull()) {
                                 ONode nm = fn.get("name");
-                                if (nm != null && nm.isString() && nm.getString() != null && !nm.getString().isEmpty()) {
+                                if (nm != null && nm.isString()
+                                        && nm.getString() != null
+                                        && !nm.getString().isEmpty()) {
                                     valid.add(tc);
                                 }
                             }
@@ -588,7 +615,7 @@ public class HttpModelClient implements ModelClient {
                 val.append(c);
             }
         }
-        return val.length() > 0 ? val.toString() : "";
+        return !val.isEmpty() ? val.toString() : "";
     }
 
     /**

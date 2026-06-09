@@ -102,7 +102,8 @@ public class AgentLoop implements AgentLoopController {
         this(client, registry, ctx, hitlDefault, null);
     }
 
-    public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx, boolean hitlDefault, Agent4jConfig config) {
+    public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx,
+                     boolean hitlDefault, Agent4jConfig config) {
         this.client = client;
         this.registry = registry;
         this.ctx = ctx;
@@ -839,7 +840,9 @@ public class AgentLoop implements AgentLoopController {
             } catch (CancellationException e) {
                 ONode tc = finalTcArray[i];
                 String tcId = tc.get("id").getString();
-                toolResults.add(toolResult(tcId, "{\"error\":\"工具执行超时（" + toolTimeoutSec() + "s）\",\"rejectedReason\":\"timeout\"}"));
+                toolResults.add(toolResult(tcId,
+                        "{\"error\":\"工具执行超时（" + toolTimeoutSec()
+                                + "s）\",\"rejectedReason\":\"timeout\"}"));
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 toolResults.add(toolResult("?", "[ERROR] Interrupted"));

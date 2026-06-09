@@ -104,7 +104,8 @@ public class GitController {
     @Get
     @Mapping("/status")
     public ApiResponse<GitStatusDTO> status(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) throws Exception {
+            @ApiParam(value = "工作区 hash")
+            @Param(value = "workspaceHash", required = false) String workspaceHash) throws Exception {
         Map<String, Object> data = new LinkedHashMap<>();
         File workspaceDir = new File(resolveWorkspace(workspaceHash));
 
@@ -180,7 +181,8 @@ public class GitController {
     @Mapping("/diff-content")
     public ApiResponse<GitDiffContentDTO> diffContent(
             @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
-            @ApiParam(value = "可选的文件路径，用于查看指定文件的 diff") @Param(value = "path", required = false) String path) throws Exception {
+            @ApiParam(value = "可选的文件路径，用于查看指定文件的 diff")
+            @Param(value = "path", required = false) String path) throws Exception {
         File workspaceDir = new File(resolveWorkspace(workspaceHash));
 
         // 安全校验：防止路径穿越
@@ -242,7 +244,8 @@ public class GitController {
     public ApiResponse<GitFileContentDTO> fileContent(
             @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
             @ApiParam(value = "文件路径（相对于仓库根目录）") @Param("path") String path,
-            @ApiParam(value = "Git 引用（分支名、标签、提交哈希等），默认为 HEAD") @Param(value = "ref", required = false) String ref) throws Exception {
+            @ApiParam(value = "Git 引用（分支名、标签、提交哈希等），默认为 HEAD")
+            @Param(value = "ref", required = false) String ref) throws Exception {
         File workspaceDir = new File(resolveWorkspace(workspaceHash));
 
         if (path == null || path.contains("..") || path.startsWith("/")) {
@@ -270,7 +273,8 @@ public class GitController {
     @Mapping("/init")
     public ApiResponse<Map<String, Object>> init(
             @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
-            @ApiParam(value = "是否执行初始提交，默认为 false") @Param(value = "initialCommit", required = false) Boolean initialCommit) throws Exception {
+            @ApiParam(value = "是否执行初始提交，默认为 false")
+            @Param(value = "initialCommit", required = false) Boolean initialCommit) throws Exception {
         File workspaceDir = new File(resolveWorkspace(workspaceHash));
 
         // 安全校验：确认不是已有仓库

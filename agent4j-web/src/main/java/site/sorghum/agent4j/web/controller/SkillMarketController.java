@@ -50,10 +50,14 @@ public class SkillMarketController {
     @Get
     @Mapping("/proxy")
     public ApiResponse<List<MarketItem>> proxy(
-            @ApiParam(value = "操作类型：trending 获取热门 | search 搜索") @Param(value = "action", defaultValue = "trending") String action,
-            @ApiParam(value = "搜索关键词（action=search 时使用）") @Param(value = "q", defaultValue = "") String query,
-            @ApiParam(value = "返回数量限制") @Param(value = "limit", defaultValue = "50") int limit,
-            @ApiParam(value = "市场名称（可选，默认使用 skillhub.cn）") @Param(value = "marketName", defaultValue = "") String marketName) {
+            @ApiParam(value = "操作类型：trending 获取热门 | search 搜索")
+            @Param(value = "action", defaultValue = "trending") String action,
+            @ApiParam(value = "搜索关键词（action=search 时使用）")
+            @Param(value = "q", defaultValue = "") String query,
+            @ApiParam(value = "返回数量限制")
+            @Param(value = "limit", defaultValue = "50") int limit,
+            @ApiParam(value = "市场名称（可选，默认使用 skillhub.cn）")
+            @Param(value = "marketName", defaultValue = "") String marketName) {
         try {
             Market market = marketManager.getMarketByName(marketName);
             List<MarketItem> items;
@@ -134,7 +138,9 @@ public class SkillMarketController {
 
             if (!Files.exists(targetDir)) {
                 // 也尝试其它可能的技能目录
-                Path altDir = Paths.get(System.getProperty("user.home"), ".agent4j", "skills", slug);
+                Path altDir = Paths.get(
+                        System.getProperty("user.home"),
+                        ".agent4j", "skills", slug);
                 if (Files.exists(altDir)) {
                     targetDir = altDir;
                 } else {

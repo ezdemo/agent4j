@@ -67,12 +67,14 @@ public class WorkspaceWatchTool extends AgentTool {
 
     @Override
     public String getDescription() {
-        return "Subscribe to workspace events matching a key pattern and block until an event occurs.\n"
-                + "Returns the event details (key, event type, value) when a matching key is written, updated, or deleted.\n"
-                + "Supports wildcard patterns: * matches single level (no /), ** matches multi-level (including /).\n"
-                + "A timeout can be specified (default 30 seconds, max 300 seconds). "
-                + "If no event occurs within the timeout, returns TIMEOUT.\n"
-                + "This tool blocks the calling thread until an event is received or the timeout expires.";
+        return """
+                Subscribe to workspace events matching a key pattern and block until an event occurs.
+                Returns the event details (key, event type, value)
+                 when a matching key is written, updated, or deleted.
+                Supports wildcard patterns: * matches single level (no /), ** matches multi-level (including /).
+                A timeout can be specified (default 30 seconds, max 300 seconds).
+                If no event occurs within the timeout, returns TIMEOUT.
+                This tool blocks the calling thread until an event is received or the timeout expires.""";
     }
 
     @Override

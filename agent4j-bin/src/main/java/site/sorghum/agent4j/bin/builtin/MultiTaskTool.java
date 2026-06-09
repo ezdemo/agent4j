@@ -65,15 +65,27 @@ public class MultiTaskTool extends AgentTool {
     public List<ToolParameter> getParameters() {
         return Arrays.asList(
                 ToolParameter.arrayParam("tasks", true,
-                        "JSON array of task objects. Each task must have 'name' (required), " +
-                                "'arguments' (optional task description), 'systemPrompt' (optional custom system prompt). " +
-                                "Example: [{\"name\":\"analyze\",\"arguments\":\"分析 src/main 下的所有 Java 文件\"}, " +
-                                "{\"name\":\"test\",\"arguments\":\"运行测试\"}]",
+                        """
+                                JSON array of task objects. Each task must have
+                                 'name' (required), 
+                                'arguments' (optional task description),
+                                 'systemPrompt' (optional custom system prompt). 
+                                Example: [{"name":"analyze",\
+                                "arguments":"分析 src/main 下的所有 Java 文件"}, 
+                                {"name":"test","arguments":"运行测试"}]""",
                         ToolParameter.objectParam("task", true, "A sub-agent task definition",
                                 Arrays.asList(
-                                        new ToolParameter("name", "string", true, "Task name / identifier for this sub-agent"),
-                                        new ToolParameter("arguments", "string", false, "Task arguments / description, as initial instruction for the sub-agent"),
-                                        new ToolParameter("systemPrompt", "string", false, "Optional custom system prompt for this sub-agent, empty to auto-generate")
+                                        new ToolParameter("name", "string",
+                                                true,
+                                                "Task name / identifier for this sub-agent"),
+                                        new ToolParameter("arguments", "string",
+                                                false,
+                                                "Task arguments / description,"
+                                                        + " as initial instruction for the sub-agent"),
+                                        new ToolParameter("systemPrompt", "string",
+                                                false,
+                                                "Optional custom system prompt"
+                                                        + " for this sub-agent, empty to auto-generate")
                                 )
                         )
                 )
@@ -168,7 +180,9 @@ public class MultiTaskTool extends AgentTool {
             String result = sub.run(arguments, new SubAgentListener());
 
             // 收集用量
-            Map<String, long[]> usage = sub.hasUsage() ? new LinkedHashMap<>(sub.getModelUsage()) : Collections.emptyMap();
+            Map<String, long[]> usage = sub.hasUsage()
+                    ? new LinkedHashMap<>(sub.getModelUsage())
+                    : Collections.emptyMap();
 
             return new SubAgentResult(name, true, result, null, usage);
 

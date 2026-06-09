@@ -123,7 +123,8 @@ public class ToolRegistry {
                     args -> {
                         String sessionId = args != null ? (String) args.remove("__sessionId__") : null;
                         return ToolDefHelper.formatResult(tool.execute(
-                                new ToolContext(args, workspace, apiUrl, apiKey, this, blockedPaths, sessionId, false)));
+                                new ToolContext(args, workspace, apiUrl, apiKey,
+                                        this, blockedPaths, sessionId, false)));
                     },
                     tool.isReadOnly(),
                     tool.isStormExempt(),

@@ -32,7 +32,8 @@ public class SessionController {
     @Get
     @Mapping("")
     public ApiResponse<List<SessionInfoDTO>> list(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) throws Exception {
+            @ApiParam(value = "工作区 hash")
+            @Param(value = "workspaceHash", required = false) String workspaceHash) throws Exception {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
@@ -57,7 +58,8 @@ public class SessionController {
     @Mapping("/new")
     public ApiResponse<SessionCreateDTO> createNew(
             @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
-            @ApiParam(value = "会话名称（可选，自动生成）") @Param(value = "sessionName", required = false) String sessionName) {
+            @ApiParam(value = "会话名称（可选，自动生成）")
+            @Param(value = "sessionName", required = false) String sessionName) {
         if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
@@ -79,8 +81,10 @@ public class SessionController {
         boolean ok = agentService.switchSession(workspacePath, name);
         if (ok) {
             String confirmedName = agentService.getCurrentSessionName(workspacePath);
-            String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
-            return ApiResponse.ok(new SessionSwitchDTO(resolvedHash, confirmedName != null ? confirmedName : name, true));
+            String resolvedHash = workspaceHash != null
+                    ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
+            return ApiResponse.ok(
+                    new SessionSwitchDTO(resolvedHash, confirmedName != null ? confirmedName : name, true));
         }
         throw new ServiceException("会话不存在: " + name);
     }

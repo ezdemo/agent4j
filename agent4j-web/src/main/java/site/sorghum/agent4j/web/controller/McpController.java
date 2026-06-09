@@ -81,7 +81,8 @@ public class McpController {
     @ApiOperation(value = "启用/禁用 MCP 服务器", notes = "切换 MCP 服务器的启用状态，实时生效无需保存")
     @Post
     @Mapping("/servers/toggle")
-    public ApiResponse<McpServerDTO> toggleServer(@ApiParam(value = "{\"name\":\"...\", \"enabled\":true}") @Body McpToggleRequest request) {
+    public ApiResponse<McpServerDTO> toggleServer(
+            @ApiParam @Body McpToggleRequest request) {
         if (request.name == null || request.name.isBlank()) {
             throw new ServiceException("名称不能为空");
         }
@@ -125,7 +126,8 @@ public class McpController {
     @ApiOperation(value = "保存工具权限", notes = "保存指定 MCP 服务器的工具启用/禁用配置")
     @Post
     @Mapping("/servers/tools/save")
-    public ApiResponse<String> saveToolPermissions(@ApiParam(value = "工具权限保存请求") @Body McpToolsSaveRequest request) {
+    public ApiResponse<String> saveToolPermissions(
+            @ApiParam(value = "工具权限保存请求") @Body McpToolsSaveRequest request) {
         if (request.serverName == null || request.serverName.isBlank()) {
             throw new ServiceException("serverName 不能为空");
         }
