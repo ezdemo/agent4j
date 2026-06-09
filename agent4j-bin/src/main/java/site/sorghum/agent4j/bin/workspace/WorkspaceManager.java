@@ -14,6 +14,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.goal.GoalStore;
 import site.sorghum.agent4j.bin.goal.JsonlGoalStore;
 
@@ -34,6 +35,7 @@ import site.sorghum.agent4j.bin.goal.JsonlGoalStore;
  * @author Sorghum
  */
 @Getter
+@Component
 public class WorkspaceManager {
 
     private static final Path WORKSPACES_DIR = Paths.get(
@@ -105,8 +107,13 @@ public class WorkspaceManager {
 
     /**
      * 获取工作区的目标存储。
+     *
+     * @throws IllegalStateException 如果工作区未初始化
      */
     public GoalStore getGoalStore() {
+        if (currentWorkspacePath == null) {
+            throw new IllegalStateException("工作区未初始化，请先初始化工作区");
+        }
         Path workspaceDir = getWorkspaceDir(currentWorkspacePath);
         return new JsonlGoalStore(workspaceDir);
     }
