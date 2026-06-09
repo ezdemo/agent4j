@@ -935,6 +935,15 @@ public class AgentService {
     }
 
     /**
+     * 获取共享的 ModelClient（用于 Git 提交消息生成等后台 AI 调用）。
+     *
+     * @return 共享的 ModelClient 实例，可能为 null（未配置 API Key 时）
+     */
+    public ModelClient getSharedModelClient() {
+        return sharedModelClient;
+    }
+
+    /**
      * 清除指定会话的 Agent 缓存。
      *
      * @param workspacePath 工作区路径（可选）

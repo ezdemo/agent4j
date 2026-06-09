@@ -650,6 +650,14 @@ export const gitAPI = {
   toggle: (workspaceHash, path) => {
     const params = workspaceHash ? { workspaceHash } : {}
     return api.post('/git/toggle', { path }, { params })
+  },
+
+  // AI 自动生成提交消息 - POST /api/git/generate-commit-message?workspaceHash=xxx  body: { files }
+  generateCommitMessage: (workspaceHash, files) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    const body = {}
+    if (files && files.length) body.files = files
+    return api.post('/git/generate-commit-message', body, { params })
   }
 }
 

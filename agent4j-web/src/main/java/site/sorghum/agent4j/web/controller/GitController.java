@@ -7,6 +7,8 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.noear.solon.annotation.*;
 import org.noear.snack4.ONode;
+import site.sorghum.agent4j.bin.agent.ChatMessage;
+import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
@@ -458,6 +460,134 @@ public class GitController {
         data.put("path", path);
         data.put("newState", newState);
         return ApiResponse.ok(data);
+    }
+
+    // ==================== AI 辅助 ====================
+
+    /**
+     * AI 自动生成 Git 提交消息 —— 获取当前变更内容及近 10 条提交日志，
+     * 调用 LLM 生成符合项目提交风格的提交消息。
+     * 支持传入 files 数组仅针对选中文件生成。
+     */
+    @ApiOperation(value = "AI 自动生成 Git 提交消息",
+            notes = "根据当前 git diff 和近 10 条提交日志，调用 AI 生成符合风格的提交消息。支持传入 files 数组仅针对选中文件生成")
+    @Post
+    @Mapping("/generate-commit-message")
+    public ApiResponse<GitGenerateMessageDTO> generateCommitMessage(
+            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @Body String body) throws Exception {
+        File workspaceDir = new File(resolveWorkspace(workspaceHash));
+
+        // 安全校验：确认是 git 仓库
+        ProcessResult check = runGit(workspaceDir, "git", "rev-parse", "--is-inside-work-tree");
+        if (check.exitCode != 0) {
+            return ApiResponse.fail("Not a git repository");
+        }
+
+        // 获取 AI 模型客户端
+        ModelClient modelClient = agentService.getSharedModelClient();
+        if (modelClient == null) {
+            return ApiResponse.fail("AI 模型未配置，请先设置 OPENAI_API_KEY 环境变量");
+        }
+
+        // 解析可选的 files 参数
+        List<String> files = null;
+        if (body != null && !body.trim().isEmpty()) {
+            try {
+                ONode json = ONode.ofJson(body);
+                if (json != null && json.isObject()) {
+                    ONode filesNode = json.get("files");
+                    if (filesNode != null && filesNode.isArray()) {
+                        files = new ArrayList<>();
+                        for (ONode f : filesNode.getArray()) {
+                            files.add(f.getString());
+                        }
+                    }
+                }
+            } catch (Exception ignored) { }
+        }
+
+        // 1. 获取近 10 条提交日志（用于风格参考）
+        String recentLog = runGitSimple(workspaceDir.getAbsolutePath(),
+                "log", "--oneline", "-10");
+        if (recentLog == null) recentLog = "";
+
+        // 2. 获取变更（支持按文件过滤）
+        String fullDiff;
+        if (files != null && !files.isEmpty()) {
+            // 仅获取选中文件的 diff
+            StringBuilder sb = new StringBuilder();
+            for (String f : files) {
+                try {
+                    ProcessResult sr = runGit(workspaceDir, "git", "diff", "--cached", "--", f);
+                    if (sr.stdout != null && !sr.stdout.isEmpty()) sb.append(sr.stdout).append("\n");
+                } catch (Exception ignored) { }
+                try {
+                    ProcessResult ur = runGit(workspaceDir, "git", "diff", "--", f);
+                    if (ur.stdout != null && !ur.stdout.isEmpty()) sb.append(ur.stdout).append("\n");
+                } catch (Exception ignored) { }
+            }
+            fullDiff = sb.toString().trim();
+        } else {
+            // 全部变更
+            String stagedDiff = "";
+            String unstagedDiff = "";
+            try {
+                ProcessResult sr = runGit(workspaceDir, "git", "diff", "--cached");
+                stagedDiff = sr.stdout != null ? sr.stdout : "";
+            } catch (Exception ignored) { }
+            try {
+                ProcessResult ur = runGit(workspaceDir, "git", "diff");
+                unstagedDiff = ur.stdout != null ? ur.stdout : "";
+            } catch (Exception ignored) { }
+            fullDiff = (stagedDiff + "\n" + unstagedDiff).trim();
+        }
+
+        if (fullDiff.isEmpty()) {
+            return ApiResponse.fail("没有待提交的变更");
+        }
+
+        // 截断 diff 防止超出模型上下文窗口（最多 8000 字符）
+        if (fullDiff.length() > 8000) {
+            fullDiff = fullDiff.substring(0, 8000)
+                    + "\n\n... (diff 过长，已截断至前 8000 字符)";
+        }
+
+        // 3. 构建 AI 提示词
+        String systemPrompt = "你是一个 Git 提交消息生成助手。"
+                + "根据 git diff 内容生成一条简洁、描述性的提交消息。"
+                + "严格遵循以下规约：\n"
+                + "- 参考「近 10 条提交」的风格（如前缀、格式、语言等）\n"
+                + "- 消息长度不超过 72 字符（中文不超过 50 字）\n"
+                + "- 使用中文或英文取决于近期提交的语言\n"
+                + "- 仅输出提交消息本身，不要任何解释、引号或 markdown 格式";
+
+        String userPrompt = "近 10 条提交（风格参考）：\n"
+                + (recentLog.isEmpty() ? "（无历史提交）" : recentLog) + "\n\n"
+                + "当前变更（git diff）：\n" + fullDiff + "\n\n"
+                + "请生成提交消息：";
+
+        // 4. 调用 AI 模型
+        List<ChatMessage> messages = new ArrayList<>();
+        messages.add(ChatMessage.system(systemPrompt));
+        messages.add(ChatMessage.user(userPrompt));
+
+        try {
+            ONode response = modelClient.chat(messages, null);
+            String content = response.get("content").getString();
+            if (content == null || content.trim().isEmpty()) {
+                return ApiResponse.fail("AI 未能生成提交消息");
+            }
+            // 清理多余的引号和空白
+            String message = content.trim()
+                    .replaceAll("^[\"']+|[\"']+$", "")
+                    .replaceAll("^```[a-z]*\\s*|```$", "")
+                    .trim();
+            return ApiResponse.ok(new GitGenerateMessageDTO(message));
+        } catch (Exception e) {
+            log.error("[git] AI 生成提交消息失败: {}", e.getMessage());
+            return ApiResponse.fail("AI 调用失败: " + e.getMessage());
+        }
     }
 
     // ==================== 工具方法 ====================
