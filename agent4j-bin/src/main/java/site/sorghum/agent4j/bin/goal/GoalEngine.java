@@ -31,9 +31,6 @@ import java.util.stream.IntStream;
 @RequiredArgsConstructor
 public class GoalEngine {
 
-    @Inject
-    private WorkspaceManager workspaceManager;
-
     /**
      * 创建新目标：调用 LLM 拆解步骤。
      */
@@ -43,7 +40,7 @@ public class GoalEngine {
         if (sessionId == null) {
             throw new IllegalStateException("会话未初始化，无法创建目标");
         }
-        String workspaceHash = workspaceManager.getCurrentWorkspaceHash();
+        String workspaceHash = agent.getWorkspaceManager().getCurrentWorkspaceHash();
         if (workspaceHash == null) {
             throw new IllegalStateException("工作区未初始化，请先初始化工作区");
         }
@@ -90,7 +87,7 @@ public class GoalEngine {
      */
     public void activateGoal(Goal goal, ChatCommandContext ctx) {
         try {
-            GoalStore store = workspaceManager.getGoalStore();
+            GoalStore store = ctx.getAgent().getWorkspaceManager().getGoalStore();
             store.save(goal);
             log.info("[goal] 目标已保存: {} - {}", goal.getId(), goal.getTitle());
 
@@ -117,7 +114,7 @@ public class GoalEngine {
         try {
             String sessionId = ctx.getAgent().getSessionStore().currentName();
             if (sessionId == null) return null;
-            GoalStore store = workspaceManager.getGoalStore();
+            GoalStore store = ctx.getAgent().getWorkspaceManager().getGoalStore();
             return store.findBySession(sessionId);
         } catch (Exception e) {
             log.warn("[goal] 获取当前目标失败: {}", e.getMessage());
@@ -132,7 +129,7 @@ public class GoalEngine {
         try {
             goal.setStatus(GoalStatus.PAUSED);
             goal.setUpdatedAt(Instant.now());
-            workspaceManager.getGoalStore().save(goal);
+            ctx.getAgent().getWorkspaceManager().getGoalStore().save(goal);
         } catch (Exception e) {
             log.warn("[goal] 暂停目标失败: {}", e.getMessage());
         }
@@ -145,7 +142,7 @@ public class GoalEngine {
         try {
             goal.setStatus(GoalStatus.ACTIVE);
             goal.setUpdatedAt(Instant.now());
-            workspaceManager.getGoalStore().save(goal);
+            ctx.getAgent().getWorkspaceManager().getGoalStore().save(goal);
         } catch (Exception e) {
             log.warn("[goal] 恢复目标失败: {}", e.getMessage());
         }
@@ -167,7 +164,7 @@ public class GoalEngine {
                 goal.setCompletedAt(Instant.now());
             }
 
-            workspaceManager.getGoalStore().save(goal);
+            ctx.getAgent().getWorkspaceManager().getGoalStore().save(goal);
         } catch (Exception e) {
             log.warn("[goal] 标记步骤完成失败: {}", e.getMessage());
         }

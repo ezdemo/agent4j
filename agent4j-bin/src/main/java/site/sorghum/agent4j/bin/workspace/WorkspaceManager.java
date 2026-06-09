@@ -35,7 +35,6 @@ import site.sorghum.agent4j.bin.goal.JsonlGoalStore;
  * @author Sorghum
  */
 @Getter
-@Component
 public class WorkspaceManager {
 
     private static final Path WORKSPACES_DIR = Paths.get(
