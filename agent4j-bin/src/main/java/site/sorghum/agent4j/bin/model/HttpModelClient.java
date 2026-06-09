@@ -14,6 +14,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -632,7 +633,7 @@ public class HttpModelClient implements ModelClient {
                              List<Map<String, Object>> tools) {
         ONode body = new ONode(ONode.ofJson("{}").options()).asObject();
         body.set("model", model);
-        if (reasoningEffort != null && !reasoningEffort.isEmpty()) {
+        if (reasoningEffort != null && !reasoningEffort.isEmpty() && !Objects.equals(reasoningEffort, "none")) {
             body.set("reasoning_effort", reasoningEffort);
             body.set("chat_template_kwargs",ONode.ofJson("{}").set("enable_thinking",true));
         }
