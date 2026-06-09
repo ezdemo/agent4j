@@ -71,14 +71,14 @@ public class JobRegistry {
                 synchronized (e.output) {
                     if (e.output.length() > lastLen) break;
                 }
-                Thread.sleep(200);
+                Thread.sleep(JobConstants.POLL_INTERVAL_MS);
             }
         } else {
             while (System.currentTimeMillis() < deadline && e.running) {
-                Thread.sleep(200);
+                Thread.sleep(JobConstants.POLL_INTERVAL_MS);
             }
         }
-        return new WaitResult(e, 2000);
+        return new WaitResult(e, JobConstants.RECENT_CHARS_FOR_WAIT);
     }
 
     public ReadResult stop(int id) {
@@ -89,6 +89,7 @@ public class JobRegistry {
         try {
             e.process.waitFor(3, TimeUnit.SECONDS);
         } catch (InterruptedException ignored) {
+            // 等待超时，忽略中断异常
         }
         return new ReadResult(e, 0, 0);
     }
@@ -118,10 +119,12 @@ public class JobRegistry {
                         }
                     }
                 } catch (IOException ignored) {
+                    // 读取进程输出时发生IO异常，忽略
                 }
                 try {
                     exitCode = process.waitFor();
                 } catch (InterruptedException ignored) {
+                    // 等待进程结束时被中断，忽略
                 }
                 running = false;
             }, "job-" + id);

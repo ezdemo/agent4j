@@ -167,8 +167,12 @@ public class CommandChainParser {
                 String remaining = segStr.substring(i);
                 RedirectMatch m = matchRedirect(remaining);
                 if (m != null) {
-                    if (state.pending != null) throw new UnsupportedSyntaxException(
-                            "redirect \"" + state.pending.text + "\" is missing a target file before \"" + m.kind.text + "\"");
+                    if (state.pending != null) {
+                        throw new UnsupportedSyntaxException(
+                                "redirect \"" + state.pending.text
+                                        + "\" is missing a target file before \""
+                                        + m.kind.text + "\"");
+                    }
                     if (m.kind == RedirectKind.ERR_MERGE) {
                         redirects.add(new Redirect(RedirectKind.ERR_MERGE, ""));
                     } else {

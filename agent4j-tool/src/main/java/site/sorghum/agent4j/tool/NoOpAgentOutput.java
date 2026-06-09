@@ -43,7 +43,8 @@ public final class NoOpAgentOutput implements AgentOutput {
     }
 
     @Override
-    public void onUsage(String model, int promptTokens, int completionTokens, int totalTokens, int cacheHit, int cacheMiss) {
+    public void onUsage(String model, int promptTokens, int completionTokens,
+                        int totalTokens, int cacheHit, int cacheMiss) {
     }
 
     @Override

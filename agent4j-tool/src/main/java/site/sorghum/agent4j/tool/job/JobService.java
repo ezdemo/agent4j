@@ -23,10 +23,11 @@ public class JobService {
         String preview = null;
         if (waitSec != null && waitSec > 0) {
             try {
-                Thread.sleep(waitSec * 1000L);
+                Thread.sleep(waitSec * JobConstants.MILLIS_PER_SECOND);
             } catch (InterruptedException ignored) {
+                // 等待启动时被中断，忽略
             }
-            JobRegistry.ReadResult r = JOB_REGISTRY.read(entry.id, 0, 10);
+            JobRegistry.ReadResult r = JOB_REGISTRY.read(entry.id, 0, JobConstants.MIN_TAIL_LINES);
             preview = r != null ? r.output : null;
         }
         String status = entry.running
@@ -39,7 +40,7 @@ public class JobService {
 
     public String jobOutput(int id, Integer since, Integer tailLines) {
         JobRegistry.ReadResult r = JOB_REGISTRY.read(id, since != null ? since : 0,
-                tailLines != null ? tailLines : 80);
+                tailLines != null ? tailLines : JobConstants.DEFAULT_TAIL_LINES);
         if (r == null) return "job " + id + ": not found (use list_jobs)";
         String status = r.running ? "running" : r.exitCode != null ? "exited " + r.exitCode : "stopped";
         return "[job " + id + " · " + status + " · byteLength=" + r.byteLength + "]\n$ " + r.command
@@ -47,7 +48,9 @@ public class JobService {
     }
 
     public String waitForJob(int id, Integer timeoutMs, String waitFor) throws InterruptedException {
-        long ms = timeoutMs != null ? Math.min(timeoutMs, 300000) : 5000;
+        long ms = timeoutMs != null
+                ? Math.min(timeoutMs, JobConstants.MAX_WAIT_TIMEOUT_MS)
+                : JobConstants.DEFAULT_WAIT_TIMEOUT_MS;
         JobRegistry.WaitResult r = JOB_REGISTRY.waitForJob(id, ms, waitFor);
         if (r == null) return "job " + id + ": not found (use list_jobs)";
         return "{\"jobId\":" + id + ",\"exited\":" + r.exited + ",\"exitCode\":" + r.exitCode
