@@ -66,7 +66,8 @@ public class ConfigController {
                 cfg.hitl(),
                 configService.getDisabledTools(),
                 cfg.blockedPaths(),
-                maskedKey
+                maskedKey,
+                cfg.price()
         );
         return ApiResponse.ok(data);
     }

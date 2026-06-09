@@ -283,6 +283,96 @@
               </div>
             </div>
           </div>
+
+          <!-- 模型价格配置 -->
+          <div class="section-card" style="margin-top:16px;">
+            <div class="card-header">
+              <h3>模型价格（元/百万 tokens）</h3>
+              <p>配置各模型的输入/缓存/输出价格，用于费用统计</p>
+            </div>
+            <div class="card-body">
+              <div class="price-table-wrap">
+                <table class="price-table" v-if="Object.keys(settings.ai.prices).length > 0">
+                  <thead>
+                    <tr>
+                      <th class="price-th-model">模型名称</th>
+                      <th class="price-th-num">输入 (input)</th>
+                      <th class="price-th-num">缓存 (cache)</th>
+                      <th class="price-th-num">输出 (output)</th>
+                      <th class="price-th-action"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    <tr v-for="(price, modelName) in settings.ai.prices" :key="modelName">
+                      <td class="price-td-model">
+                        <input
+                          :value="modelName"
+                          class="form-input price-model-input"
+                          :placeholder="'模型名称'"
+                          @input="e => renamePriceModel(modelName, e.target.value)"
+                        />
+                      </td>
+                      <td class="price-td-num">
+                        <input
+                          :value="price.input"
+                          class="form-input price-num-input"
+                          placeholder="0"
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          @input="updatePriceValue(modelName, 'input', $event.target.value)"
+                        />
+                      </td>
+                      <td class="price-td-num">
+                        <input
+                          :value="price.cache"
+                          class="form-input price-num-input"
+                          placeholder="0"
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          @input="updatePriceValue(modelName, 'cache', $event.target.value)"
+                        />
+                      </td>
+                      <td class="price-td-num">
+                        <input
+                          :value="price.output"
+                          class="form-input price-num-input"
+                          placeholder="0"
+                          type="number"
+                          min="0"
+                          step="0.001"
+                          @input="updatePriceValue(modelName, 'output', $event.target.value)"
+                        />
+                      </td>
+                      <td class="price-td-action">
+                        <button class="btn-icon-xs" style="color:var(--danger);" @click="removePriceModel(modelName)" title="删除此模型价格">×</button>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+                <div v-else class="price-empty">
+                  <p>暂无价格配置。添加模型价格以启用费用统计。</p>
+                </div>
+                <div class="price-actions">
+                  <button class="btn btn-sm" @click="addPriceModel">
+                    <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12" style="margin-right:4px;">
+                      <line x1="12" x2="12" y1="5" y2="19"/>
+                      <line x1="5" x2="19" y1="12" y2="12"/>
+                    </svg>
+                    添加模型价格
+                  </button>
+                  <button class="btn btn-sm" @click="fillPricesFromModels">
+                    <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12" style="margin-right:4px;">
+                      <polyline points="1 4 1 10 7 10"/>
+                      <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                    </svg>
+                    从模型列表生成
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
         </section>
 
         <!-- 工作区设置 -->
@@ -1208,6 +1298,40 @@ X-Custom-Header=value"
       </div>
     </div>
   </Teleport>
+
+  <!-- 添加模型价格弹窗 -->
+  <Teleport to="body">
+    <div v-if="showAddPriceDialog" class="auto-fill-mask" @click.self="showAddPriceDialog = false">
+      <div class="auto-fill-dialog">
+        <div class="auto-fill-head">
+          <span>添加模型价格</span>
+          <button class="btn-icon-xs" @click="showAddPriceDialog = false">×</button>
+        </div>
+        <div class="auto-fill-body">
+          <div class="auto-fill-field">
+            <label class="auto-fill-label">模型名称</label>
+            <input
+              v-model="newPriceModelName"
+              class="form-input"
+              placeholder="例如: gpt-4"
+              type="text"
+              @keyup.enter="confirmAddPrice"
+            />
+          </div>
+        </div>
+        <div class="auto-fill-foot">
+          <button class="btn" @click="showAddPriceDialog = false">取消</button>
+          <button
+            :disabled="!newPriceModelName.trim()"
+            class="btn btn-primary"
+            @click="confirmAddPrice"
+          >
+            确认添加
+          </button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
@@ -1227,7 +1351,7 @@ const settings = reactive({
     store.settings.theme = v
   },
   server: {apiBaseUrl: '', autoConnect: true},
-  ai: {baseUrl: '', apiKey: '', model: '', reasoningEffort: 'max', availableModelsText: ''},
+  ai: {baseUrl: '', apiKey: '', model: '', reasoningEffort: 'max', availableModelsText: '', prices: {}},
   workspace: {dir: '', mode: false},
   security: {
     stormBreaker: true,
@@ -1510,6 +1634,11 @@ const loadSettings = async () => {
       settings.workspace.dir = config.workspaceDir || config.workspace || '.'
       settings.workspace.mode = config.hitl === true
 
+      // 加载模型价格
+      if (config.price && typeof config.price === 'object') {
+        settings.ai.prices = JSON.parse(JSON.stringify(config.price))
+      }
+
       // 加载安全设置
       if (config.security) {
         Object.assign(settings.security, config.security)
@@ -1580,7 +1709,8 @@ const saveSettings = async () => {
       reasoningEffort: settings.ai.reasoningEffort,
       availableModels: settings.ai.availableModelsText.split('\n').map(s => s.trim()).filter(s => s),
       hitl: settings.workspace.mode === true,
-      security: {...settings.security}
+      security: {...settings.security},
+      price: settings.ai.prices
     }
 
     const response = await configAPI.updateConfig(configToUpdate)
@@ -1719,6 +1849,10 @@ const autoFillApiKey = ref('')
 const autoFillPreset = ref('')
 const showAutoFillDialog = ref(false)
 
+// 添加模型价格弹窗状态
+const showAddPriceDialog = ref(false)
+const newPriceModelName = ref('')
+
 // 选择预设服务商时自动填充 URL
 const onPresetChange = () => {
   if (autoFillPreset.value) {
@@ -1780,6 +1914,84 @@ const confirmAutoFill = async () => {
 
   showAutoFillDialog.value = false
 }
+
+// ==================== 模型价格操作 ====================
+
+// 添加模型价格行
+const addPriceModel = () => {
+  newPriceModelName.value = ''
+  showAddPriceDialog.value = true
+}
+
+const confirmAddPrice = () => {
+  const name = newPriceModelName.value.trim()
+  if (!name) {
+    message.warning('请输入模型名称')
+    return
+  }
+  if (settings.ai.prices[name]) {
+    message.warning('该模型已存在价格配置')
+    return
+  }
+  settings.ai.prices = {
+    ...settings.ai.prices,
+    [name]: {input: 0, cache: 0, output: 0}
+  }
+  hasChanges.value = true
+  showAddPriceDialog.value = false
+}
+
+// 删除模型价格行
+const removePriceModel = (modelName) => {
+  const newPrices = {...settings.ai.prices}
+  delete newPrices[modelName]
+  settings.ai.prices = newPrices
+  hasChanges.value = true
+}
+
+// 重命名模型
+const renamePriceModel = (oldName, newName) => {
+  if (!newName || !newName.trim() || oldName === newName.trim()) return
+  const key = newName.trim()
+  const newPrices = {...settings.ai.prices}
+  newPrices[key] = newPrices[oldName]
+  delete newPrices[oldName]
+  settings.ai.prices = newPrices
+  hasChanges.value = true
+}
+
+// 更新价格值
+const updatePriceValue = (modelName, field, value) => {
+  const num = parseFloat(value)
+  if (isNaN(num)) return
+  settings.ai.prices = {
+    ...settings.ai.prices,
+    [modelName]: {
+      ...settings.ai.prices[modelName],
+      [field]: num
+    }
+  }
+  hasChanges.value = true
+}
+
+// 从模型列表生成价格条目（用默认价格 0）
+const fillPricesFromModels = () => {
+  const models = settings.ai.availableModelsText.split('\n').map(s => s.trim()).filter(s => s)
+  if (models.length === 0) {
+    message.warning('请先在"可用模型列表"中填写模型名称')
+    return
+  }
+  const newPrices = {...settings.ai.prices}
+  models.forEach(m => {
+    if (!newPrices[m]) {
+      newPrices[m] = {input: 0, cache: 0, output: 0}
+    }
+  })
+  settings.ai.prices = newPrices
+  hasChanges.value = true
+  message.success(`已从模型列表生成 ${models.length} 个价格条目`)
+}
+
 const openapiLoading = ref(false)
 const openapiError = ref('')
 const openapiSubmitting = ref(false)
@@ -4134,5 +4346,96 @@ onMounted(() => {
 
 .auto-fill-foot .btn {
   min-width: 100px;
+}
+
+/* 模型价格表格 */
+.price-table-wrap {
+  overflow-x: auto;
+}
+
+.price-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.price-table th,
+.price-table td {
+  padding: 8px 6px;
+  text-align: left;
+  border-bottom: 1px solid var(--border);
+}
+
+.price-table thead th {
+  font-weight: 600;
+  color: var(--fg-2);
+  white-space: nowrap;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+
+.price-th-model {
+  min-width: 140px;
+}
+
+.price-th-num {
+  min-width: 80px;
+  text-align: right;
+}
+
+.price-th-action {
+  width: 36px;
+}
+
+.price-td-model {
+  vertical-align: middle;
+}
+
+.price-model-input {
+  width: 100%;
+  min-width: 120px;
+  font-size: 13px;
+  padding: 4px 8px;
+}
+
+.price-td-num {
+  vertical-align: middle;
+}
+
+.price-num-input {
+  width: 75px;
+  text-align: right;
+  font-size: 13px;
+  padding: 4px 6px;
+  -moz-appearance: textfield;
+}
+
+.price-num-input::-webkit-inner-spin-button,
+.price-num-input::-webkit-outer-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.price-td-action {
+  text-align: center;
+  vertical-align: middle;
+}
+
+.price-empty {
+  text-align: center;
+  padding: 24px 0;
+  color: var(--fg-3);
+  font-size: 13px;
+}
+
+.price-empty p {
+  margin: 0;
+}
+
+.price-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 12px;
 }
 </style>

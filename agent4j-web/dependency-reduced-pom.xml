@@ -3,7 +3,7 @@
   <parent>
     <artifactId>agent4j</artifactId>
     <groupId>site.sorghum.agent</groupId>
-    <version>26.6.9.1</version>
+    <version>26.6.9.2</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
   <artifactId>agent4j-web</artifactId>
