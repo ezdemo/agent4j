@@ -159,13 +159,6 @@
       </svg>
     </button>
 
-    <!-- 刷新按钮（固定在消息区左上角） -->
-    <button v-show="messages.length > 0" class="refresh-history-btn" title="从后端刷新历史" @click="refreshHistory">
-      <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-        <path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-      </svg>
-    </button>
-
     <!-- 子代理浮窗入口按钮 -->
     <button v-if="hasSubAgentOutput" class="sub-float-btn" @click="subAgentModalOpen = true">
       子代理
@@ -1895,34 +1888,6 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   transform: translateY(-10px) scale(0.95);
 }
 
-/* ===== 刷新按钮 ===== */
-.refresh-history-btn {
-  position: absolute;
-  right: 24px;
-  top: 16px;
-  z-index: 60;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  color: var(--fg-3);
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-.refresh-history-btn:hover {
-  background: var(--bg-3);
-  color: var(--accent);
-  border-color: var(--accent);
-  transform: scale(1.05);
-}
-.refresh-history-btn:active {
-  transform: scale(0.95);
-}
 
 /* ==================== 子代理 Modal ==================== */
 .sub-modal-overlay {
