@@ -14,6 +14,9 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 
+import site.sorghum.agent4j.bin.goal.GoalStore;
+import site.sorghum.agent4j.bin.goal.JsonlGoalStore;
+
 /**
  * 工作区管理器 —— 管理多个工作区的生命周期。
  * <p>
@@ -98,6 +101,14 @@ public class WorkspaceManager {
      */
     public Path getSessionsDir(String workspacePath) {
         return getWorkspaceDir(workspacePath).resolve("sessions");
+    }
+
+    /**
+     * 获取工作区的目标存储。
+     */
+    public GoalStore getGoalStore() {
+        Path workspaceDir = getWorkspaceDir(currentWorkspacePath);
+        return new JsonlGoalStore(workspaceDir);
     }
 
     /**
