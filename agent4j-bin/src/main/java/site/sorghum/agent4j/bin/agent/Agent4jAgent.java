@@ -25,6 +25,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import site.sorghum.agent4j.bin.goal.Goal;
+import site.sorghum.agent4j.bin.goal.GoalStatus;
+import site.sorghum.agent4j.bin.goal.GoalStore;
 
 /**
  * Agent4j 工厂——组装 ModelClient + ToolRegistry → AgentLoop。
@@ -225,6 +228,31 @@ public class Agent4jAgent {
                 }
             }
             // 未匹配到命令："/" 开头但不是命令，降级为普通聊天消息
+        }
+
+        // === 目标恢复检测 ===
+        // 会话加载后，检查是否有未完成的活跃目标
+        if (sessionService != null && workspaceManager != null) {
+            try {
+                String currentSessionId = sessionService.getStore().currentName();
+                if (currentSessionId != null) {
+                    GoalStore goalStore = workspaceManager.getGoalStore();
+                    Goal pendingGoal = goalStore.findBySession(currentSessionId);
+                    if (pendingGoal != null
+                            && (pendingGoal.getStatus() == GoalStatus.ACTIVE
+                                || pendingGoal.getStatus() == GoalStatus.PAUSED)) {
+                        // 注入系统消息提醒
+                        ctx.addSystemMessage(
+                                "📋 检测到未完成的目标：「" + pendingGoal.getTitle() + "」\n"
+                                + "进度：" + pendingGoal.progressText() + "\n"
+                                + "使用 /goal status 查看详情，或直接继续执行。");
+                        log.info("[goal] 会话恢复，发现未完成目标: {} - {}",
+                                pendingGoal.getId(), pendingGoal.getTitle());
+                    }
+                }
+            } catch (Exception e) {
+                log.warn("[goal] 目标恢复检测失败", e);
+            }
         }
 
         // === 普通聊天逻辑 ===
