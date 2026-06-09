@@ -60,7 +60,7 @@ public interface ModelClient {
      * 默认 128K，子类可按模型名返回更准确的值。
      */
     default int getMaxContextTokens() {
-        return 128_000;
+        return 256_000;
     }
 
     /**

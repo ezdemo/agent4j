@@ -154,7 +154,7 @@ public class HttpModelClient implements ModelClient {
         // GPT-4 / o1 系列 128K
         if (m.contains("gpt-4") || m.contains("o1") || m.contains("o3")) return 128_000;
         // 默认
-        return 128_000;
+        return 256_000;
     }
 
     /**
