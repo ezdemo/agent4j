@@ -1,0 +1,2 @@
+@chcp 65001 > nul
+cd /d C:\Users\sorghum\IdeaProjects\agent4j && git add -A && git commit -m "feat: replace post-message patrol with auto-retry loop in AgentLoop - auto retries failed steps by injecting context and re-running mainLoop"

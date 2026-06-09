@@ -13,7 +13,10 @@ import java.security.NoSuchAlgorithmException;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
 
+import lombok.SneakyThrows;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.goal.GoalStore;
 import site.sorghum.agent4j.bin.goal.JsonlGoalStore;
@@ -40,21 +43,18 @@ public class WorkspaceManager {
     private static final Path WORKSPACES_DIR = Paths.get(
             System.getProperty("user.home"), ".agent4j", "workspace");
 
+
+    private static final Map<String, WorkspaceManager> WORKSPACE_MANAGERS = new ConcurrentHashMap<>();
+
     /**
      * 当前活跃的工作区路径（工作目录的实际路径）
-     * -- GETTER --
-     *  获取当前工作区路径
-
      */
     private String currentWorkspacePath;
-
     /**
      * 当前工作区的 hash
-     * -- GETTER --
-     *  获取当前工作区 hash
-
      */
     private String currentWorkspaceHash;
+
 
     public WorkspaceManager() {
         try {
@@ -118,9 +118,22 @@ public class WorkspaceManager {
     }
 
     /**
+     * 获取或创建工作区管理器
+     */
+    public static WorkspaceManager getOrCreate(String workspacePath){
+        if (WORKSPACE_MANAGERS.containsKey(workspacePath)){
+            return WORKSPACE_MANAGERS.get(workspacePath);
+        }
+        WorkspaceManager manager = new WorkspaceManager();
+        manager.initWorkspace(workspacePath);
+        WORKSPACE_MANAGERS.put(workspacePath, manager);
+        return manager;
+    }
+    /**
      * 初始化或加载工作区
      */
-    public void initWorkspace(String workspacePath) throws IOException {
+    @SneakyThrows
+    public void initWorkspace(String workspacePath){
         this.currentWorkspacePath = workspacePath;
         this.currentWorkspaceHash = computeHash(workspacePath);
 

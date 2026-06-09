@@ -25,8 +25,6 @@ import java.util.List;
 @Component
 public class GoalMarkDoneTool extends AgentTool {
 
-    @Inject
-    private WorkspaceManager workspaceManager;
 
     @Override
     public String getName() {
@@ -63,7 +61,8 @@ public class GoalMarkDoneTool extends AgentTool {
         } else if (v instanceof String str) {
             try {
                 stepIndex = Integer.parseInt(str);
-            } catch (NumberFormatException ignored) {}
+            } catch (NumberFormatException ignored) {
+            }
         }
         if (stepIndex == null) {
             return ToolResult.fail("PARAM_MISSING", "缺少必填参数 'stepIndex'，请传入已完成的步骤序号（从 1 开始）");
@@ -78,7 +77,7 @@ public class GoalMarkDoneTool extends AgentTool {
         }
 
         try {
-            GoalStore goalStore = workspaceManager.getGoalStore();
+            GoalStore goalStore = WorkspaceManager.getOrCreate(ctx.getRootDir().toAbsolutePath().toString()).getGoalStore();
             Goal goal = goalStore.findBySession(sessionId);
             if (goal == null) {
                 return ToolResult.fail("GOAL_NOT_FOUND",
