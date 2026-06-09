@@ -129,25 +129,18 @@ public class GoalCommand implements ChatCommand {
             stepsText.append("  ").append(i + 1).append(". [ ] ").append(step.getDescription()).append("\n");
         }
 
-        // 启动巡检子代理的命令
-        String spawnPatrolCmd = goalEngine.buildSpawnPatrolCommand(goal);
-
         String prompt = """
                 当前会话已设定目标：「%s」
                 
                 步骤计划：
                 %s
                 
-                在开始执行步骤之前，**首先**使用 task 工具启动巡检子代理：
-                
-                %s
-                
-                巡检子代理启动后，请逐条执行以上步骤。
+                请逐条执行以上步骤。
                 每完成一步，**必须**调用 goal_mark_step 工具通知系统，参数 stepIndex 从 1 开始。
-                如果有步骤失败，巡检子代理会自动重试（最多 %d 次）。
+                如果有步骤失败，系统会自动重试（最多 %d 次）。
                 全部完成后总结汇报。
                 """
-                .formatted(goal.getTitle(), stepsText.toString(), spawnPatrolCmd, goal.getMaxRetries());
+                .formatted(goal.getTitle(), stepsText.toString(), goal.getMaxRetries());
 
         input.setMessage(prompt);
         return CommandResult.LOOP;
