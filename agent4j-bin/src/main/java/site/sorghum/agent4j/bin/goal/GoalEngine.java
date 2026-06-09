@@ -170,23 +170,6 @@ public class GoalEngine {
         }
     }
 
-    /**
-     * 生成 spawn 巡检子代理的命令文本（由 GoalCommand 注入到 LLM）。
-     */
-    public String buildSpawnPatrolCommand(Goal goal) {
-        return String.format("""
-                请使用 task 工具启动一个巡检子代理，名称为 "goal-patrol-%s"，参数为 "开始巡检目标 %s"。
-                
-                巡检子代理的 system prompt 如下：
-                ---
-                %s
-                ---
-                """,
-                goal.getSessionId(),
-                goal.getId(),
-                GoalPatrolPrompt.build(goal.getWorkspaceHash(), goal.getSessionId()));
-    }
-
     private List<GoalStep> parseSteps(String llmResponse, String fallbackDescription) {
         try {
             String json = llmResponse;
