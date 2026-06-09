@@ -78,7 +78,7 @@ public class WorkspaceReadTool extends AgentTool {
 
     @Override
     public List<ToolParameter> getParameters() {
-        return Arrays.asList(
+        return List.of(
                 new ToolParameter("key", "string", true,
                         "Entry path / key for the workspace entry to read"),
                 new ToolParameter("scope", "string", false,

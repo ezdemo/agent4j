@@ -63,7 +63,7 @@ public class MultiTaskTool extends AgentTool {
 
     @Override
     public List<ToolParameter> getParameters() {
-        return Arrays.asList(
+        return List.of(
                 ToolParameter.arrayParam("tasks", true,
                         """
                                 JSON array of task objects. Each task must have
@@ -74,7 +74,7 @@ public class MultiTaskTool extends AgentTool {
                                 "arguments":"分析 src/main 下的所有 Java 文件"}, 
                                 {"name":"test","arguments":"运行测试"}]""",
                         ToolParameter.objectParam("task", true, "A sub-agent task definition",
-                                Arrays.asList(
+                                List.of(
                                         new ToolParameter("name", "string",
                                                 true,
                                                 "Task name / identifier for this sub-agent"),

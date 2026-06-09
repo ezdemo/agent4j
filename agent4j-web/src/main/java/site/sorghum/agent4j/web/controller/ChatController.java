@@ -2,6 +2,7 @@ package site.sorghum.agent4j.web.controller;
 
 import io.swagger.annotations.*;
 import lombok.extern.slf4j.Slf4j;
+import org.noear.snack4.ONode;
 import org.noear.solon.annotation.*;
 import org.noear.solon.core.handle.Context;
 import site.sorghum.agent4j.bin.agent.UserMessage;
@@ -13,6 +14,8 @@ import site.sorghum.agent4j.web.service.SseEmitter;
 
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 聊天 API 控制器 —— 同步聊天 + SSE 流式聊天。
@@ -25,14 +28,14 @@ import java.util.concurrent.Executors;
 @Mapping("/api/chat")
 public class ChatController {
 
+    /** 流式聊天并发上限 */
+    private static final int CHAT_STREAM_MAX_THREADS = 16;
+
     /**
-     * SSE 流式聊天线程池 — 隔离流式任务，防止 new Thread() 无限创建导致资源耗尽。
+     * SSE 流式聊天线程池 — 有界固定大小，避免无限制线程创建导致资源耗尽。
      */
-    private final ExecutorService chatExecutor = Executors.newCachedThreadPool(r -> {
-        Thread t = new Thread(r, "agent4j-chat-stream");
-        t.setDaemon(true);
-        return t;
-    });
+    private final ExecutorService chatExecutor = Executors.newFixedThreadPool(
+            CHAT_STREAM_MAX_THREADS, new ChatStreamThreadFactory());
 
     @Inject
     private AgentService agentService;
@@ -80,11 +83,11 @@ public class ChatController {
     @Mapping("/stream")
     public void chatStream(@Body ChatRequest request, Context ctx) throws Exception {
         if (!agentService.isReady()) {
-            ctx.outputAsJson("{\"success\":false,\"error\":\"Agent 未初始化\"}");
+            ctx.outputAsJson(jsonError("Agent 未初始化"));
             return;
         }
         if (request == null || request.message == null || request.message.trim().isEmpty()) {
-            ctx.outputAsJson("{\"success\":false,\"error\":\"message 不能为空\"}");
+            ctx.outputAsJson(jsonError("message 不能为空"));
             return;
         }
 
@@ -109,5 +112,22 @@ public class ChatController {
 
         // ★ 关键：阻塞 handler 线程直到 SSE 流结束，防止 Solon 提前关闭 OutputStream
         emitter.awaitCompletion();
+    }
+
+    /** 构建 JSON 错误响应字符串。 */
+    private static String jsonError(String message) {
+        return ONode.ofJson("{}").asObject().set("success", false).set("error", message).toJson();
+    }
+
+    /** 流式聊天线程命名工厂。 */
+    private static final class ChatStreamThreadFactory implements ThreadFactory {
+        private final AtomicInteger counter = new AtomicInteger(0);
+
+        @Override
+        public Thread newThread(Runnable r) {
+            final Thread t = new Thread(r, "agent4j-chat-stream-" + counter.incrementAndGet());
+            t.setDaemon(true);
+            return t;
+        }
     }
 }

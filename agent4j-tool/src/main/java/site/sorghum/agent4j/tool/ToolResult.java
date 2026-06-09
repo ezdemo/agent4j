@@ -24,39 +24,36 @@ public record ToolResult(boolean success, String text, Object data,
                          String errorCode, String suggestion,
                          boolean shouldRetry, String retryView) {
 
-    public ToolResult(boolean success, String text, Object data,
-                      String errorCode, String suggestion,
-                      boolean shouldRetry, String retryView) {
-        this.success = success;
-        this.text = text;
-        this.data = data;
-        this.errorCode = errorCode;
-        this.suggestion = suggestion;
-        this.shouldRetry = shouldRetry;
-        this.retryView = retryView;
-    }
-
     // ---- 工厂方法 ----
 
     /**
      * 纯文本成功结果。
+     *
+     * @param text 结果文本，为 null 时自动转为空字符串
      */
     public static ToolResult ok(String text) {
-        return new ToolResult(true, text, null, null, null, false, null);
+        return new ToolResult(true, text != null ? text : "", null, null, null, false, null);
     }
 
     /**
      * 带结构化数据的成功结果。
+     *
+     * @param text 结果文本，为 null 时自动转为空字符串
+     * @param data 结构化数据（可选）
      */
     public static ToolResult ok(String text, Object data) {
-        return new ToolResult(true, text, data, null, null, false, null);
+        return new ToolResult(true, text != null ? text : "", data, null, null, false, null);
     }
 
     /**
      * 失败结果。
+     *
+     * @param errorCode 错误码，为 null 时使用 "ERROR"
+     * @param text      错误描述，为 null 时自动转为空字符串
      */
     public static ToolResult fail(String errorCode, String text) {
-        return new ToolResult(false, text, null, errorCode, null, false, null);
+        return new ToolResult(false, text != null ? text : "", null,
+                errorCode != null ? errorCode : "ERROR", null, false, null);
     }
 
     /**

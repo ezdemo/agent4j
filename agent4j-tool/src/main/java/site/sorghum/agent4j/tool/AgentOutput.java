@@ -107,23 +107,26 @@ public interface AgentOutput {
      * @return 用户的选择结果
      */
     default String ask(String question, List<Map<String, Object>> options, boolean allowCustom) {
+        if (options == null) {
+            return "[no options provided]";
+        }
         // 1. 统一转为 ChoiceOption 列表，通过 onChoice() 渲染
         //    自定义输出实现（如 SseAgentOutput）可通过重写 onChoice() 接管 UI 展示
-        List<ChoiceOption> choiceOptions = new ArrayList<>();
+        final List<ChoiceOption> choiceOptions = new ArrayList<>();
         for (Map<String, Object> opt : options) {
-            String title = (String) opt.getOrDefault("title", "");
-            String value = (String) opt.getOrDefault("value", title);
+            final String title = (String) opt.getOrDefault("title", "");
+            final String value = (String) opt.getOrDefault("value", title);
             choiceOptions.add(new ChoiceOption(value, title));
         }
 
         // 2. 默认 fallback：格式化问题与选项为纯文本
-        StringBuilder sb = new StringBuilder();
+        final StringBuilder sb = new StringBuilder();
         sb.append("┌─ ").append(question).append("\n");
         for (int i = 0; i < options.size(); i++) {
-            Map<String, Object> opt = options.get(i);
-            String label = (String) opt.getOrDefault("title", "option-" + (i + 1));
+            final Map<String, Object> opt = options.get(i);
+            final String label = (String) opt.getOrDefault("title", "option-" + (i + 1));
             sb.append("│ ").append(i + 1).append(". ").append(label);
-            String summary = (String) opt.get("summary");
+            final String summary = (String) opt.get("summary");
             if (summary != null) sb.append(" — ").append(summary);
             sb.append("\n");
         }

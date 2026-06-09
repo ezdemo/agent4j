@@ -7,7 +7,6 @@ import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -44,7 +43,7 @@ public class MarkStepCompleteTool extends AgentTool {
 
     @Override
     public List<ToolParameter> getParameters() {
-        return Arrays.asList(
+        return List.of(
                 new ToolParameter("stepId", "string", true, "Step id"),
                 new ToolParameter("result", "string", false, "结果描述"),
                 new ToolParameter("evidence", "array", false, "验证依据")

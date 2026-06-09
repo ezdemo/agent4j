@@ -10,7 +10,6 @@ import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
 
 import java.time.Instant;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -42,7 +41,7 @@ public class GoalMarkDoneTool extends AgentTool {
 
     @Override
     public List<ToolParameter> getParameters() {
-        return Arrays.asList(
+        return List.of(
                 new ToolParameter("stepIndex", "integer", true,
                         "已完成的步骤序号，从 1 开始计数（第一步为 1，第二步为 2，依此类推）"),
                 new ToolParameter("output", "string", false,

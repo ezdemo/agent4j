@@ -261,13 +261,13 @@ public class ToolContext {
         if (blockedPaths.isEmpty() || rootDir == null || target == null) {
             return false;
         }
-        Path rootAbs = rootDir.toAbsolutePath().normalize();
-        Path targetAbs = target.toAbsolutePath().normalize();
+        final Path rootAbs = rootDir.toAbsolutePath().normalize();
+        final Path targetAbs = target.toAbsolutePath().normalize();
         if (!targetAbs.startsWith(rootAbs)) {
             return false; // 路径越界由 resolveSafe 处理
         }
         for (String blocked : blockedPaths) {
-            Path blockedPath = rootAbs.resolve(blocked).normalize();
+            final Path blockedPath = rootAbs.resolve(blocked).normalize();
             if (targetAbs.equals(blockedPath) || targetAbs.startsWith(blockedPath)) {
                 return true;
             }
