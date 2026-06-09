@@ -7,7 +7,6 @@ import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -49,7 +48,7 @@ public class SubmitPlanTool extends AgentTool {
 
     @Override
     public List<ToolParameter> getParameters() {
-        return Arrays.asList(
+        return List.of(
                 new ToolParameter("summary", "string", false, "计划标题"),
                 new ToolParameter("plan", "string", true, "Markdown 计划内容"),
                 new ToolParameter("steps", "array", true, "步骤列表")

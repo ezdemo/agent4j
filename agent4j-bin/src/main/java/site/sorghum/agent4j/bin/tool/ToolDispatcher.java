@@ -45,13 +45,7 @@ public class ToolDispatcher {
     @Setter
     private BiFunction<String, String, String> postDispatchHook = null;
     /**
-     * 当前会话ID（注入到工具 args 中）
-     * -- GETTER --
-     *  获取当前会话ID
-     * -- SETTER --
-     *  设置当前会话ID
-
-
+     * 当前会话 ID —— 自动注入到工具调用上下文中。
      */
     @Setter
     @Getter
@@ -61,18 +55,14 @@ public class ToolDispatcher {
         this.registry = registry;
     }
 
+    /** 构建 JSON 错误字符串。 */
     private static String error(String msg) {
         ONode node = ONode.ofJson("{}").asObject();
         node.set("error", msg);
         return node.toJson();
     }
 
-    // ---- Plan Mode ----
-
-    // ---- Hooks ----
-
-    // ---- Storm ----
-
+    /** 重置 Storm 断路器（每回合开始时调用）。 */
     public void resetStorm() {
         stormBreaker.reset();
     }
@@ -80,19 +70,24 @@ public class ToolDispatcher {
     // ---- Dispatch ----
 
     /**
-     * 执行工具调用（无 AgentLoopController），返回结果字符串
+     * 执行工具调用（无 AgentLoopController），返回结果字符串。
+     *
+     * @param name          工具名称
+     * @param argumentsJson 参数 JSON 字符串
+     * @return 工具执行结果字符串
      */
     public String dispatch(String name, String argumentsJson) {
         return dispatch(name, argumentsJson, null);
     }
 
     /**
-     * 执行工具调用，返回结果字符串
+     * 执行工具调用，依次经过 预拦截 → Plan Mode 门控 → Storm 检测 →
+     * 参数解析 → 实际调用 → 后拦截，最终返回结果字符串。
      *
-     * @param name           工具名称
-     * @param argumentsJson  参数 JSON
-     * @param controller     AgentLoop 控制器（可选），通过 ThreadLocal 注入到当前线程
-     * @return 工具执行结果
+     * @param name          工具名称
+     * @param argumentsJson 参数 JSON 字符串
+     * @param controller    AgentLoop 控制器（可选，通过 ThreadLocal 注入当前线程）
+     * @return 工具执行结果字符串
      */
     public String dispatch(String name, String argumentsJson, AgentLoopController controller) {
         if (name == null || name.equals("null")) {
@@ -164,6 +159,4 @@ public class ToolDispatcher {
             }
         }
     }
-
-
 }

@@ -10,7 +10,6 @@ import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -44,7 +43,7 @@ public class AskChoiceTool extends AgentTool {
 
     @Override
     public List<ToolParameter> getParameters() {
-        return Arrays.asList(
+        return List.of(
                 new ToolParameter("question", "string", true, "问题"),
                 new ToolParameter("options", "array", true, "选项列表"),
                 new ToolParameter("allowCustom", "boolean", false, "是否允许自定义输入")

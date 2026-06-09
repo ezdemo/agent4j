@@ -9,7 +9,6 @@ import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.tool.*;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
@@ -123,7 +122,7 @@ public class TaskTool extends AgentTool {
 
     @Override
     public List<ToolParameter> getParameters() {
-        return Arrays.asList(
+        return List.of(
                 new ToolParameter("name", "string", true, "技能/任务名称，用于标识子代理的任务类型"),
                 new ToolParameter("arguments", "string", false, "技能参数描述/任务详情，作为子代理的初始指令"),
                 new ToolParameter("systemPrompt", "string", false, "可选的子代理系统提示词覆盖，为空时自动生成")

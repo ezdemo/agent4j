@@ -8,7 +8,6 @@ import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -69,7 +68,7 @@ public class WorkspaceListTool extends AgentTool {
 
     @Override
     public List<ToolParameter> getParameters() {
-        return Arrays.asList(
+        return List.of(
                 new ToolParameter("prefix", "string", false,
                         "Optional prefix to filter keys. Only keys starting with this prefix will be returned."),
                 new ToolParameter("scope", "string", false,

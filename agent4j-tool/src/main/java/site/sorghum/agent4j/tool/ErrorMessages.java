@@ -27,19 +27,12 @@ public final class ErrorMessages {
     public static final String NO_ACTIVE_PLAN = "{\"error\":\"no active plan\"}";
 
     /**
-     * 步骤未找到
-     */
-    public static final String STEP_NOT_FOUND_PREFIX = "{\"error\":\"step not found: ";
-
-    /**
-     * 步骤未找到后缀
-     */
-    public static final String STEP_NOT_FOUND_SUFFIX = "\"}";
-
-    /**
-     * 生成步骤未找到的错误消息
+     * 生成"步骤未找到"的错误消息。
+     *
+     * @param stepId 未找到的步骤标识
+     * @return JSON 格式的错误消息
      */
     public static String stepNotFound(String stepId) {
-        return STEP_NOT_FOUND_PREFIX + stepId + STEP_NOT_FOUND_SUFFIX;
+        return String.format("{\"error\":\"step not found: %s\"}", stepId);
     }
 }

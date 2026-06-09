@@ -9,7 +9,6 @@ import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -46,7 +45,7 @@ public class RunBackgroundTool extends AgentTool {
 
     @Override
     public List<ToolParameter> getParameters() {
-        return Arrays.asList(
+        return List.of(
                 new ToolParameter("command", "string", true, "shell 命令"),
                 new ToolParameter("cwd", "string", false, "工作目录（相对于项目根）"),
                 new ToolParameter("waitSec", "int", false, "等待启动秒数（默认 0）")

@@ -74,79 +74,73 @@ public class Agent4jAgent {
         this.commandRegistry = b.commandRegistry;
         this.workspace = b.workspace;
 
-        ModelClient client = new HttpModelClient(b.apiUrl, b.apiKey, b.model);
-
-        // 初始化技能存储（V2 - Claude Code 风格）
-
-        // 使用 ToolSystemInitializer 统一初始化（消除重复代码）
-        ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
+        final ModelClient client = new HttpModelClient(b.apiUrl, b.apiKey, b.model);
+        final ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
                 b.workspace, b.apiUrl, b.apiKey,
                 b.disabledTools, b.blockedPaths, b.systemPrompt);
-        ToolRegistry registry = initResult.toolRegistry;
         this.ctx = new ConversationContext(initResult.promptPrefix);
-
-        // 会话持久化 — 委托 SessionService（支持工作区隔离）
-        try {
-            String workspacePath = b.workspace != null
-                    ? b.workspace.toAbsolutePath().toString()
-                    : Paths.get(System.getProperty("user.home"), ".agent4j").toString();
-            this.workspaceManager = WorkspaceManager.getOrCreate(workspacePath);
-            Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
-            this.sessionService = new SessionService(ctx, sessionsDir);
-            sessionService.loadOrCreate(System.getenv("AGENT4J_SESSION"));
-        } catch (IOException e) {
-            log.error("[session] 初始化失败: {}", e.getMessage());
-        }
-
-        this.loop = new AgentLoop(client, registry, ctx, b.hitl);
-        // 设置 SessionService 引用，用于同步 lastPromptTokens
-        this.loop.setSessionService(this.sessionService);
+        this.loop = initSessionAndLoop(client, initResult.toolRegistry, b.hitl);
     }
 
     /**
-     * 轻量级构造函数 —— 共享 ModelClient、ToolRegistry 和 PromptPrefix。
-     * 适用于"一个会话一个 Agent"场景，减少资源消耗。
+     * 轻量级构造函数 —— 共享 ModelClient 和 PromptPrefix，
+     * 仅创建独立的会话上下文。适用于"一个会话一个 Agent"场景，减少资源消耗。
      *
      * @param b                  Builder
-     * @param ignoredLightweight 标记为轻量级构建（未使用，仅用于区分构造函数）
+     * @param ignoredLightweight 标记为轻量级构建（仅用于区分构造函数重载）
      */
     private Agent4jAgent(Builder b, boolean ignoredLightweight) {
         this.commandRegistry = b.commandRegistry;
         this.workspace = b.workspace;
 
-        // 共享 ModelClient（无状态 HTTP 客户端），但每个 Agent 创建独立的 ToolRegistry
-        ModelClient client = b.sharedModelClient;
-
-        // 为当前工作区创建独立的 ToolRegistry 和 SkillStore
-        String prompt = b.systemPrompt != null ? b.systemPrompt
-                : (b.sharedSystemPrompt != null ? b.sharedSystemPrompt : "你是一个智能体助手，名为Agent4J\n");
-        ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
+        final ModelClient client = b.sharedModelClient;
+        final String prompt = resolvePrompt(b);
+        final ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
                 b.workspace, b.apiUrl, b.apiKey,
                 b.disabledTools, b.blockedPaths, prompt);
-        ToolRegistry registry = initResult.toolRegistry;
-        // 优先使用 initResult 中按工作区正确拼接的 PromptPrefix（含工作区特定的项目文档），
-        // 如果调用方传了 sharedPrefix 且工作区相同，也可以复用（由调用方控制）。
-        PromptPrefix prefix = b.sharedPrefix != null ? b.sharedPrefix : initResult.promptPrefix;
-
-        // 创建独立的会话上下文
+        final PromptPrefix prefix = b.sharedPrefix != null ? b.sharedPrefix : initResult.promptPrefix;
         this.ctx = new ConversationContext(prefix);
+        this.loop = initSessionAndLoop(client, initResult.toolRegistry, b.hitl);
+    }
 
-        // 会话持久化 — 委托 SessionService（支持工作区隔离）
+    /**
+     * 解析系统提示词：优先使用显式设置的 systemPrompt，
+     * 其次使用共享的 sharedSystemPrompt，最后回退到硬编码默认值。
+     */
+    private static String resolvePrompt(Builder b) {
+        if (b.systemPrompt != null) return b.systemPrompt;
+        if (b.sharedSystemPrompt != null) return b.sharedSystemPrompt;
+        return "你是一个智能体助手，名为Agent4J\n";
+    }
+
+    /**
+     * 初始化会话持久化和 Agent 推理循环（两个构造函数共享的逻辑）。
+     * <p>
+     * 完成 WorkspaceManager 初始化、SessionService 创建、
+     * 历史会话加载以及 AgentLoop 的构造与 SessionService 绑定。
+     * </p>
+     *
+     * @param client   模型客户端（HttpModelClient 或共享实例）
+     * @param registry 工具注册表
+     * @param hitl     是否启用人工审批
+     * @return 构造完成的 AgentLoop 实例
+     */
+    private AgentLoop initSessionAndLoop(ModelClient client, ToolRegistry registry, boolean hitl) {
         try {
-            String workspacePath = b.workspace != null
-                    ? b.workspace.toAbsolutePath().toString()
+            final String workspacePath = this.workspace != null
+                    ? this.workspace.toAbsolutePath().toString()
                     : Paths.get(System.getProperty("user.home"), ".agent4j").toString();
             this.workspaceManager = WorkspaceManager.getOrCreate(workspacePath);
-            Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
+            final Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
             this.sessionService = new SessionService(ctx, sessionsDir);
             sessionService.loadOrCreate(System.getenv("AGENT4J_SESSION"));
         } catch (IOException e) {
             log.error("[session] 初始化失败: {}", e.getMessage());
         }
 
-        this.loop = new AgentLoop(client, registry, ctx, b.hitl);
-        // 设置 SessionService 引用，用于同步 lastPromptTokens
-        this.loop.setSessionService(this.sessionService);
+        final AgentLoop agentLoop = new AgentLoop(client, registry, ctx, hitl);
+        agentLoop.setSessionService(this.sessionService);
+        return agentLoop;
     }
 
     // 使用 ToolDefHelper 提供的公共方法

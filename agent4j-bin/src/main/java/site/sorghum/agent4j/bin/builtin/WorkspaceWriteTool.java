@@ -8,7 +8,6 @@ import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
 
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -76,7 +75,7 @@ public class WorkspaceWriteTool extends AgentTool {
 
     @Override
     public List<ToolParameter> getParameters() {
-        return Arrays.asList(
+        return List.of(
                 new ToolParameter("key", "string", true,
                         "Entry path / key for the workspace entry"),
                 new ToolParameter("value", "string", false,
