@@ -85,7 +85,13 @@ public class AgentService {
     private site.sorghum.agent4j.bin.config.ConfigService configService;
     /**
      * 共享的 ModelClient（所有会话复用）
+     * -- GETTER --
+     *  获取共享的 ModelClient（用于 Git 提交消息生成等后台 AI 调用）。
+     *
+     * @return 共享的 ModelClient 实例，可能为 null（未配置 API Key 时）
+
      */
+    @Getter
     private volatile ModelClient sharedModelClient;
     /**
      * 共享的 ToolRegistry（所有会话复用）
@@ -932,15 +938,6 @@ public class AgentService {
      */
     public int getCacheSize() {
         return agentCache.size();
-    }
-
-    /**
-     * 获取共享的 ModelClient（用于 Git 提交消息生成等后台 AI 调用）。
-     *
-     * @return 共享的 ModelClient 实例，可能为 null（未配置 API Key 时）
-     */
-    public ModelClient getSharedModelClient() {
-        return sharedModelClient;
     }
 
     /**
