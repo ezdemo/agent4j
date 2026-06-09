@@ -101,6 +101,17 @@ public class AgentLoop implements AgentLoopController {
     @Getter
     private volatile String sessionId;
 
+    /** ==================== 定时巡检 ==================== */
+
+    /** 定时巡检调度器 */
+    private ScheduledExecutorService patrolScheduler;
+
+    /** 巡检是否正在运行 */
+    private volatile boolean patrolRunning = false;
+
+    /** 主循环是否正在执行中（防止巡检线程与主循环冲突） */
+    private final AtomicBoolean running = new AtomicBoolean(false);
+
     // ==================== 构造器 ====================
 
     public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx) {
@@ -253,6 +264,16 @@ public class AgentLoop implements AgentLoopController {
      * </p>
      */
     public String run(UserMessage userMessage) throws IOException {
+        // ---- 标记运行中，防止巡检线程并发冲突 ----
+        running.set(true);
+        try {
+            return doRun(userMessage);
+        } finally {
+            running.set(false);
+        }
+    }
+
+    private String doRun(UserMessage userMessage) throws IOException {
         // ---- HITL 恢复：用户已审批 / 拒绝 ----
         if (hitlManager.getState() == HitlState.APPROVED) {
             hitlManager.resetState();
@@ -293,10 +314,12 @@ public class AgentLoop implements AgentLoopController {
 
         // === 自动重试闭环 ===
         // 每次 mainLoop 结束后，检查是否有需要重试的目标步骤
+        boolean hasActiveGoal = false;
         while (true) {
             GoalAndStore gs = findRetriableGoal();
             if (gs == null) break;
 
+            hasActiveGoal = true;
             Goal goal = gs.goal;
             GoalStore goalStore = gs.goalStore;
 
@@ -322,7 +345,7 @@ public class AgentLoop implements AgentLoopController {
                     failedStep.getRetryCount(),
                     goal.getMaxRetries());
 
-            // 注入系统消息说明重试原因，让 LLM 在下轮推理中看到完整上下文
+            // 注入系统消息说明重试原因
             ctx.addUser(
                     "⚠️ [系统自动重试] 上一步执行失败，正在重试（"
                     + failedStep.getRetryCount() + "/" + goal.getMaxRetries() + "）。\n\n"
@@ -335,6 +358,18 @@ public class AgentLoop implements AgentLoopController {
 
             // 继续 LLM 循环
             result = mainLoop(client.isThinkingMode(), 0);
+        }
+
+        // === 巡检生命周期管理 ===
+        if (!hasActiveGoal) {
+            // 本次没找到活跃目标，检查是否还有 goal 需要巡检（可能定时器已过期但 goal 还在）
+            if (patrolRunning) {
+                // 快速检查一次，决定是否停止巡检
+                patrolTick();
+            }
+        } else {
+            // 有活跃目标 → 确保定时巡检已启动
+            startGoalPatrol();
         }
 
         return result;
@@ -400,6 +435,93 @@ public class AgentLoop implements AgentLoopController {
      * 目标和其存储的临时容器。
      */
     private record GoalAndStore(Goal goal, GoalStore goalStore) {}
+
+    // ==================== 定时巡检 ====================
+
+    /**
+     * 启动定时巡检（30 秒间隔）。
+     * 定期扫描目标状态，将 FAILED 步骤重置为 PENDING，
+     * 并注入上下文让 LLM 在下一轮推理中重新执行。
+     */
+    public synchronized void startGoalPatrol() {
+        if (patrolRunning) return;
+        patrolRunning = true;
+        patrolScheduler = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "goal-patrol");
+            t.setDaemon(true);
+            return t;
+        });
+        patrolScheduler.scheduleAtFixedRate(this::patrolTick,
+                30, 30, TimeUnit.SECONDS);
+        log.info("[goal] 定时巡检已启动（间隔 30 秒）");
+    }
+
+    /**
+     * 停止定时巡检。
+     */
+    public synchronized void stopGoalPatrol() {
+        if (!patrolRunning) return;
+        patrolRunning = false;
+        if (patrolScheduler != null && !patrolScheduler.isShutdown()) {
+            patrolScheduler.shutdown();
+        }
+        log.info("[goal] 定时巡检已停止");
+    }
+
+    /**
+     * 巡检周期任务：检查目标状态，重置失败步骤。
+     * 运行在后台线程，不阻塞主流程。
+     */
+    private void patrolTick() {
+        try {
+            // 主循环正在执行中，跳过本轮巡检避免并发冲突
+            if (running.get()) return;
+
+            if (sessionService == null) return;
+            String sid = sessionService.getStore().currentName();
+            if (sid == null) return;
+
+            GoalStore goalStore = resolveGoalStore(sid);
+            if (goalStore == null) {
+                // 没有活跃目标，停止巡检
+                stopGoalPatrol();
+                return;
+            }
+
+            Goal goal = goalStore.findBySession(sid);
+            if (goal == null || goal.getStatus() == GoalStatus.COMPLETED
+                    || goal.getStatus() == GoalStatus.FAILED) {
+                // 目标已完成或失败，停止巡检
+                stopGoalPatrol();
+                return;
+            }
+
+            // 检查是否有 FAILED 步骤需要重置
+            boolean hasWork = false;
+            for (GoalStep step : goal.getSteps()) {
+                if (step.getStatus() == StepStatus.FAILED
+                        && step.getRetryCount() < goal.getMaxRetries()) {
+                    hasWork = true;
+                    step.setStatus(StepStatus.PENDING);
+                    step.setRetryCount(step.getRetryCount() + 1);
+                    log.info("[goal] [定时巡检] 检测到失败步骤，重置为 PENDING: step={}, retry={}/{}",
+                            step.getIndex() + 1, step.getRetryCount(), goal.getMaxRetries());
+                }
+            }
+
+            if (hasWork) {
+                goal.setUpdatedAt(java.time.Instant.now());
+                goalStore.save(goal);
+                // 注入上下文通知，下轮推理时 LLM 会看到
+                ctx.addUser(
+                        "⏰ [定时巡检] 检测到有步骤执行失败，已自动重置。\n"
+                        + "当前进度：" + goal.progressText() + "\n"
+                        + "请检查失败原因并继续执行。");
+            }
+        } catch (Exception e) {
+            log.warn("[goal] 定时巡检异常: {}", e.getMessage());
+        }
+    }
 
     // ==================== 统一主推理循环 ====================
 
