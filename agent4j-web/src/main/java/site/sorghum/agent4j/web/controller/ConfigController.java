@@ -8,6 +8,7 @@ import org.noear.solon.annotation.*;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.bin.config.ConfigService;
 import site.sorghum.agent4j.web.common.ServiceException;
+import site.sorghum.agent4j.web.common.WebErrorMessages;
 import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
 
@@ -36,7 +37,12 @@ public class ConfigController {
     @Inject
     private ConfigService configService;
 
-    @ApiOperation(value = "获取当前配置", notes = "返回 API 地址、模型、工作区等配置（apiKey 已脱敏）")
+    // 脱敏相关常量
+    private static final int MASK_MIN_LENGTH = 8;
+    private static final int MASK_KEEP_LENGTH = 4;
+    // 超时相关常量
+    private static final int REMOTE_CONNECT_TIMEOUT_SEC = 15;
+    private static final int REMOTE_READ_TIMEOUT_SEC = 30;
     @SneakyThrows
     @Get
     @Mapping("/config")
@@ -49,8 +55,8 @@ public class ConfigController {
 
         String apiKey = cfg.apiKey();
         String maskedKey;
-        if (apiKey != null && apiKey.length() > 8) {
-            maskedKey = apiKey.substring(0, 4) + "****" + apiKey.substring(apiKey.length() - 4);
+        if (apiKey != null && apiKey.length() > MASK_MIN_LENGTH) {
+            maskedKey = apiKey.substring(0, MASK_KEEP_LENGTH) + "****" + apiKey.substring(apiKey.length() - MASK_KEEP_LENGTH);
         } else {
             maskedKey = "****";
         }
@@ -139,8 +145,8 @@ public class ConfigController {
         String modelsUrl = baseUrl.replaceAll("/+$", "") + "/models";
 
         OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(15, TimeUnit.SECONDS)
-                .readTimeout(30, TimeUnit.SECONDS)
+                .connectTimeout(REMOTE_CONNECT_TIMEOUT_SEC, TimeUnit.SECONDS)
+                .readTimeout(REMOTE_READ_TIMEOUT_SEC, TimeUnit.SECONDS)
                 .build();
 
         Request request = new Request.Builder()
@@ -184,7 +190,7 @@ public class ConfigController {
     public ApiResponse<UsageDTO> getUsage(
             @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
             @ApiParam(value = "会话名称") @Param(value = "sessionName", required = false) String sessionName) {
-        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         if (workspaceHash == null){
             return ApiResponse.fail("workspaceHash 不能为空");
         }
@@ -197,7 +203,7 @@ public class ConfigController {
     @Get
     @Mapping("/workspace")
     public ApiResponse<String> getWorkspace() {
-        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         return ApiResponse.ok(agentService.getWorkspace());
     }
 
@@ -206,7 +212,7 @@ public class ConfigController {
     @Mapping("/workspace")
     public ApiResponse<WorkspaceSwitchDTO> switchWorkspace(
             @ApiParam @Body Map<String, String> body) {
-        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         String path = body.get("path");
         if (path == null || path.isEmpty()) {
             throw new ServiceException("路径不能为空");
@@ -224,7 +230,7 @@ public class ConfigController {
     @Get
     @Mapping("/workspaces")
     public ApiResponse<List<WorkspaceInfoDTO>> listWorkspaces() {
-        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         return ApiResponse.ok(agentService.listWorkspaces());
     }
 
@@ -233,10 +239,10 @@ public class ConfigController {
     @Mapping("/workspaces/switch")
     public ApiResponse<WorkspaceSwitchDTO> switchToWorkspace(
             @ApiParam(value = "{\"hash\":\"...\"}") @Body Map<String, String> body) {
-        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         String hash = body.get("hash");
         if (hash == null || hash.isEmpty()) {
-            throw new ServiceException("工作区 hash 不能为空");
+            throw new ServiceException(WebErrorMessages.WORKSPACE_HASH_REQUIRED);
         }
         boolean ok = agentService.switchToWorkspaceByHash(hash);
         if (ok) {
@@ -251,9 +257,9 @@ public class ConfigController {
     @Delete
     @Mapping("/workspaces/{hash}")
     public ApiResponse<String> deleteWorkspace(@ApiParam(value = "工作区 hash") @Param("hash") String hash) {
-        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         if (hash == null || hash.isEmpty()) {
-            throw new ServiceException("工作区 hash 不能为空");
+            throw new ServiceException(WebErrorMessages.WORKSPACE_HASH_REQUIRED);
         }
         boolean ok = agentService.deleteWorkspace(hash);
         if (ok) {

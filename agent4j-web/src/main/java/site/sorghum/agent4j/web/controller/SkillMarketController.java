@@ -163,6 +163,7 @@ public class SkillMarketController {
                     try {
                         Files.delete(p);
                     } catch (Exception ignored) {
+                        log.debug("删除技能文件失败: {}", p);
                     }
                 });
     }

@@ -61,7 +61,7 @@ public class AgentService {
     /**
      * 当前线程正在处理的会话名称（用于工具执行时获取 sessionId）
      */
-    private static final ThreadLocal<String> currentSessionName = new ThreadLocal<>();
+    private static final ThreadLocal<String> CURRENT_SESSION_NAME = new ThreadLocal<>();
     /**
      * 会话级 Agent 缓存：key = workspacePath::sessionName
      */
@@ -555,7 +555,7 @@ public class AgentService {
                 try {
                     return store.load();
                 } catch (IOException e) {
-                    System.err.println("[web] 加载会话历史失败: " + e.getMessage());
+                    log.warn("[web] 加载会话历史失败: {}", e.getMessage());
                 }
             }
         }
@@ -601,7 +601,7 @@ public class AgentService {
 
         // 设置当前会话名称到 ThreadLocal，供工具执行时获取
         String effectiveSessionName = sessionName != null ? sessionName : "default";
-        currentSessionName.set(effectiveSessionName);
+        CURRENT_SESSION_NAME.set(effectiveSessionName);
 
         try {
             Agent4jAgent agent = getOrCreateAgent(sessionKey);
@@ -616,7 +616,7 @@ public class AgentService {
             return agent.chat(userMessage);
         } finally {
             // 清理 ThreadLocal
-            currentSessionName.remove();
+            CURRENT_SESSION_NAME.remove();
             // 刷入会话数据
             Agent4jAgent agent = agentCache.get(sessionKey);
             if (agent != null) {
@@ -652,7 +652,7 @@ public class AgentService {
 
         // 设置当前会话名称到 ThreadLocal，供工具执行时获取
         String effectiveSessionName = sessionName != null ? sessionName : "default";
-        currentSessionName.set(effectiveSessionName);
+        CURRENT_SESSION_NAME.set(effectiveSessionName);
 
         try {
             Agent4jAgent agent = getOrCreateAgent(sessionKey);
@@ -680,11 +680,11 @@ public class AgentService {
                 emitter.sendError(e.getMessage());
             } catch (Exception ex) {
                 // SSE连接可能已断开，忽略异常
-                System.err.println("[web] 发送错误信息失败（可能SSE连接已断开）: " + ex.getMessage());
+                log.warn("[web] 发送错误信息失败（可能SSE连接已断开）: {}", ex.getMessage());
             }
         } finally {
             // 清理 ThreadLocal
-            currentSessionName.remove();
+            CURRENT_SESSION_NAME.remove();
             // 恢复 Agent 输出
             Agent4jAgent agent = agentCache.get(sessionKey);
             if (agent != null) {
@@ -858,8 +858,10 @@ public class AgentService {
             currentModel = config.model();
             Map<String, Map<String, Double>> prices = config.price();
 
-            // 获取按模型分别累计的用量
-            assert agent != null;
+            if (agent == null) {
+                log.warn("[usage] Agent 为 null，无法获取模型用量");
+                return new UsageDTO(0, 0, 0, 0, 0, maxContextTokens, 0, null, false, 0, 0, 0, 0, null);
+            }
             Map<String, long[]> mu = agent.getModelUsage();
 
             if (mu != null && !mu.isEmpty()) {
@@ -954,7 +956,7 @@ public class AgentService {
                 removed.flushSession();
                 removed.saveUsage();
             } catch (Exception e) {
-                System.err.println("[web] 清除 Agent 失败: " + e.getMessage());
+                log.warn("[web] 清除 Agent 失败: {}", e.getMessage());
             }
             accessOrder.remove(sessionKey);
             sessionLocks.remove(sessionKey);

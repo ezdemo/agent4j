@@ -3,7 +3,6 @@ package site.sorghum.agent4j.web.controller;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
-import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.*;
 import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.GitService;
@@ -20,7 +19,6 @@ import java.util.Map;
  *
  * @author Sorghum
  */
-@Slf4j
 @Api(tags = "Git")
 @Controller
 @Mapping("/api/git")

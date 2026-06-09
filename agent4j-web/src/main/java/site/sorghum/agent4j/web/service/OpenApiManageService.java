@@ -194,7 +194,7 @@ public class OpenApiManageService {
                 String password = authConfig.get("password");
                 if (username != null && !username.isEmpty() && password != null) {
                     String encoded = Base64.getEncoder()
-                            .encodeToString((username + ":" + password).getBytes());
+                            .encodeToString((username + ":" + password).getBytes(StandardCharsets.UTF_8));
                     yield (http, tool) -> http.header("Authorization", "Basic " + encoded);
                 }
                 yield null;
