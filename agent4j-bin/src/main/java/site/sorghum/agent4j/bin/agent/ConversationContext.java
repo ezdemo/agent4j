@@ -67,6 +67,18 @@ public class ConversationContext {
         addUser(UserMessage.of(content));
     }
 
+    /**
+     * 添加系统消息到上下文（用于系统通知、目标恢复提醒等）。
+     * 消息角色为 "system"，将被包含在历史中发送给模型。
+     *
+     * @param content 系统消息内容
+     */
+    public void addSystemMessage(String content) {
+        ChatMessage msg = ChatMessage.system(content);
+        history.add(msg);
+        persist(msg);
+    }
+
     public void addAssistant(String content, List<ToolCallEntry> toolCalls, String reasoningContent) {
         // 防御：assistant 消息必须至少包含 content、tool_calls 或 reasoning_content 之一
         boolean hasContent = content != null && !content.isEmpty();
