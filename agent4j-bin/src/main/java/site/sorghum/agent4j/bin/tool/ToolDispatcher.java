@@ -22,6 +22,11 @@ import java.util.function.Function;
  */
 public class ToolDispatcher {
 
+    /** Plan Mode 拒绝原因标识 */
+    public static final String REJECTED_REASON_PLAN_MODE = "plan-mode";
+    /** Storm 断路器拒绝原因标识 */
+    public static final String REJECTED_REASON_STORM = "storm";
+
     private final ToolRegistry registry;
     /**
      * Storm 断路器（每回合重置）
@@ -110,14 +115,14 @@ public class ToolDispatcher {
                     + ": 计划模式下不可用——当前为只读探索阶段。"
                     + "请使用 read_file / glob / grep / tree / get_file_info 调查代码。"
                     + "准备好后调用 submit_plan 提交计划供审批。"
-                    + "\",\"rejectedReason\":\"plan-mode\"}";
+                    + "\",\"rejectedReason\":\"" + REJECTED_REASON_PLAN_MODE + "\"}";
         }
 
         // Storm Breaker 检查
         if (!tool.stormExempt()) {
             StormBreaker.SuppressResult sr = stormBreaker.inspect(name, argumentsJson, tool.readOnly());
             if (sr.suppressed) {
-                return "{\"error\":\"" + sr.reason + "\",\"rejectedReason\":\"storm\"}";
+                return "{\"error\":\"" + sr.reason + "\",\"rejectedReason\":\"" + REJECTED_REASON_STORM + "\"}";
             }
         }
 

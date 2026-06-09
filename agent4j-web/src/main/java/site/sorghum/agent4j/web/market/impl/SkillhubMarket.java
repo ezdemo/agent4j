@@ -107,15 +107,15 @@ public class SkillhubMarket extends AbstractZipMarket {
             ownerHandle = getStringValue(ownerNode, "handle");
         }
 
-        MarketDetail detail = new MarketDetail()
-                .slug(resolvedSlug)
-                .displayName(displayName)
-                .summary(summary)
-                .description(summary)
-                .ownerHandle(ownerHandle)
-                .installs(installs)
-                .stars(stars)
-                .installSlug(resolvedSlug);
+        MarketDetail detail = new MarketDetail();
+        detail.setSlug(resolvedSlug)
+                .setDisplayName(displayName)
+                .setSummary(summary)
+                .setDescription(summary)
+                .setOwnerHandle(ownerHandle)
+                .setInstalls(installs)
+                .setStars(stars)
+                .setInstallSlug(resolvedSlug);
 
         return detail;
     }
@@ -131,19 +131,19 @@ public class SkillhubMarket extends AbstractZipMarket {
         List<MarketItem> result = new ArrayList<>();
         for (ONode node : resultsNode.getArray()) {
             MarketItem item = new MarketItem()
-                    .slug(getStringValue(node, "slug"))
-                    .name(getStringValue(node, "slug"))
-                    .displayName(getStringValue(node, "displayName"))
-                    .summary(getStringValue(node, "summary"))
-                    .description(firstNonEmpty(
+                    .setSlug(getStringValue(node, "slug"))
+                    .setName(getStringValue(node, "slug"))
+                    .setDisplayName(getStringValue(node, "displayName"))
+                    .setSummary(getStringValue(node, "summary"))
+                    .setDescription(firstNonEmpty(
                             getStringValue(node, "description_zh"),
                             getStringValue(node, "description")))
-                    .ownerHandle(getStringValue(node, "owner_name"))
-                    .url(firstNonEmpty(
+                    .setOwnerHandle(getStringValue(node, "owner_name"))
+                    .setUrl(firstNonEmpty(
                             getStringValue(node, "url"),
                             "https://skillhub.cn/skills/" + getStringValue(node, "slug")))
-                    .installs(getLongValue(node, "installs"))
-                    .stars(getLongValue(node, "stars"));
+                    .setInstalls(getLongValue(node, "installs"))
+                    .setStars(getLongValue(node, "stars"));
 
             result.add(item);
         }

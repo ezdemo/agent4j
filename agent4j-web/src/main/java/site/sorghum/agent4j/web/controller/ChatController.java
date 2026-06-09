@@ -48,19 +48,19 @@ public class ChatController {
         if (!agentService.isReady()) {
             return ApiResponse.fail("Agent 未初始化，请检查 ~/.agent4j/config.json");
         }
-        if (request == null || request.message == null || request.message.trim().isEmpty()) {
+        if (request == null || request.getMessage() == null || request.getMessage().trim().isEmpty()) {
             return ApiResponse.fail("message 不能为空");
         }
         long t0 = System.currentTimeMillis();
-        String workspacePath = agentService.resolveWorkspacePath(request.workspaceHash);
+        String workspacePath = agentService.resolveWorkspacePath(request.getWorkspaceHash());
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
-        UserMessage userMsg = UserMessage.of(request.message.trim(), request.images);
-        String reply = agentService.chat(userMsg, workspacePath, request.sessionName);
+        UserMessage userMsg = UserMessage.of(request.getMessage().trim(), request.getImages());
+        String reply = agentService.chat(userMsg, workspacePath, request.getSessionName());
         long elapsed = System.currentTimeMillis() - t0;
 
         ChatResultDTO data = new ChatResultDTO(
                 reply, elapsed,
-                agentService.getSessionUsageMap(workspacePath, request.sessionName)
+                agentService.getSessionUsageMap(workspacePath, request.getSessionName())
         );
         return ApiResponse.ok(data);
     }
@@ -86,17 +86,17 @@ public class ChatController {
             ctx.outputAsJson(jsonError("Agent 未初始化"));
             return;
         }
-        if (request == null || request.message == null || request.message.trim().isEmpty()) {
+        if (request == null || request.getMessage() == null || request.getMessage().trim().isEmpty()) {
             ctx.outputAsJson(jsonError("message 不能为空"));
             return;
         }
 
         SseEmitter emitter = new SseEmitter(ctx);
-        final UserMessage userMsg = UserMessage.of(request.message.trim(), request.images);
-        String workspacePath = agentService.resolveWorkspacePath(request.workspaceHash);
+        final UserMessage userMsg = UserMessage.of(request.getMessage().trim(), request.getImages());
+        String workspacePath = agentService.resolveWorkspacePath(request.getWorkspaceHash());
         if (workspacePath == null) workspacePath = agentService.getWorkspace();
         final String resolvedPath = workspacePath;
-        final String sessionName = request.sessionName;
+        final String sessionName = request.getSessionName();
 
         chatExecutor.submit(() -> {
             try {

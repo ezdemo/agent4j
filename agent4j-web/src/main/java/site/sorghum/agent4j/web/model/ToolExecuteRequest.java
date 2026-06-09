@@ -15,5 +15,5 @@ public class ToolExecuteRequest {
     /**
      * 工具参数（JSON Map）
      */
-    public Map<String, Object> arguments;
+    private Map<String, Object> arguments;
 }

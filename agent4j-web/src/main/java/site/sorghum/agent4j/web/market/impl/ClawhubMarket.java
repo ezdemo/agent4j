@@ -90,18 +90,18 @@ public class ClawhubMarket extends AbstractZipMarket {
             throw new RuntimeException("技能不存在: " + slug);
         }
 
-        MarketDetail detail = new MarketDetail()
-                .slug(getStringValue(skillNode, "slug"))
-                .displayName(getStringValue(skillNode, "displayName"))
-                .summary(getStringValue(skillNode, "summary"))
-                .description(getStringValue(skillNode, "description"))
-                .ownerHandle(getStringValue(skillNode, "ownerHandle"))
-                .installSlug(getStringValue(skillNode, "slug"));
+        MarketDetail detail = new MarketDetail();
+        detail.setSlug(getStringValue(skillNode, "slug"))
+                .setDisplayName(getStringValue(skillNode, "displayName"))
+                .setSummary(getStringValue(skillNode, "summary"))
+                .setDescription(getStringValue(skillNode, "description"))
+                .setOwnerHandle(getStringValue(skillNode, "ownerHandle"))
+                .setInstallSlug(getStringValue(skillNode, "slug"));
 
         ONode statsNode = skillNode.get("stats");
         if (statsNode != null && !statsNode.isNull()) {
-            detail.installs(getLongValue(statsNode, "installsCurrent"));
-            detail.stars(getLongValue(statsNode, "stars"));
+            detail.setInstalls(getLongValue(statsNode, "installsCurrent"));
+            detail.setStars(getLongValue(statsNode, "stars"));
         }
 
         return detail;
@@ -125,18 +125,18 @@ public class ClawhubMarket extends AbstractZipMarket {
             String detailUrl = (apiUrl != null) ? apiUrl : BASE_URL + "/skills/" + slug;
 
             MarketItem item = new MarketItem()
-                    .slug(slug)
-                    .name(slug)
-                    .displayName(getStringValue(node, "displayName"))
-                    .summary(getStringValue(node, "summary"))
-                    .description(getStringValue(node, "description"))
-                    .ownerHandle(getStringValue(node, "ownerHandle"))
-                    .url(detailUrl);
+                    .setSlug(slug)
+                    .setName(slug)
+                    .setDisplayName(getStringValue(node, "displayName"))
+                    .setSummary(getStringValue(node, "summary"))
+                    .setDescription(getStringValue(node, "description"))
+                    .setOwnerHandle(getStringValue(node, "ownerHandle"))
+                    .setUrl(detailUrl);
 
             ONode statsNode = node.get("stats");
             if (statsNode != null && !statsNode.isNull()) {
-                item.installs(getLongValue(statsNode, "installsCurrent"));
-                item.stars(getLongValue(statsNode, "stars"));
+                item.setInstalls(getLongValue(statsNode, "installsCurrent"));
+                item.setStars(getLongValue(statsNode, "stars"));
             }
 
             result.add(item);

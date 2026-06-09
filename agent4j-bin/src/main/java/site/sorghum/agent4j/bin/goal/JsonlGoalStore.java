@@ -1,8 +1,7 @@
 package site.sorghum.agent4j.bin.goal;
 
+import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.file.*;
@@ -20,9 +19,8 @@ import java.util.List;
  *
  * @author Sorghum
  */
+@Slf4j
 public class JsonlGoalStore implements GoalStore {
-
-    private static final Logger log = LoggerFactory.getLogger(JsonlGoalStore.class);
 
     private final Path goalsDir;
 

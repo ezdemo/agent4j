@@ -45,13 +45,13 @@ public class OpenApiManageService {
         List<OpenApiSourceDTO> sources = loadFromFile();
         for (OpenApiSourceDTO src : sources) {
             try {
-                String apiBaseUrl = deriveBaseUrl(src.docUrl);
-                ApiAuthenticator authenticator = buildAuthenticator(src.authType, src.authConfig);
-                openApiSkill.addApi(src.docUrl, apiBaseUrl, src.headers, authenticator);
-                registeredSources.put(src.docUrl, src);
-                log.debug("自动加载 OpenAPI 源: {}", src.docUrl);
+                String apiBaseUrl = deriveBaseUrl(src.getDocUrl());
+                ApiAuthenticator authenticator = buildAuthenticator(src.getAuthType(), src.getAuthConfig());
+                openApiSkill.addApi(src.getDocUrl(), apiBaseUrl, src.getHeaders(), authenticator);
+                registeredSources.put(src.getDocUrl(), src);
+                log.debug("自动加载 OpenAPI 源: {}", src.getDocUrl());
             } catch (Exception e) {
-                log.warn("自动加载 OpenAPI 源失败: {}", src.docUrl, e);
+                log.warn("自动加载 OpenAPI 源失败: {}", src.getDocUrl(), e);
             }
         }
         log.info("OpenAPI 源加载完成: {} 个", sources.size());
@@ -76,8 +76,8 @@ public class OpenApiManageService {
         } catch (Exception e) {
             log.error("OpenAPI 源注册失败: {}", docUrl, e);
             OpenApiSourceDTO dto = OpenApiSourceDTO.error(docUrl, e.getMessage());
-            dto.authType = authType;
-            dto.authConfig = authConfig;
+            dto.setAuthType(authType);
+            dto.setAuthConfig(authConfig);
             registeredSources.put(docUrl, dto);
             saveToFile();
             return dto;

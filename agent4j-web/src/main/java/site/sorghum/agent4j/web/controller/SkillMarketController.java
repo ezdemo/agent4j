@@ -4,8 +4,7 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.noear.solon.annotation.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.market.Market;
 import site.sorghum.agent4j.web.market.MarketDetail;
@@ -29,9 +28,8 @@ import java.util.List;
 @Api(tags = "技能市场")
 @Controller
 @Mapping("/api/skill-market")
+@Slf4j
 public class SkillMarketController {
-
-    private static final Logger LOG = LoggerFactory.getLogger(SkillMarketController.class);
 
     private final MarketManager marketManager;
 
@@ -68,7 +66,7 @@ public class SkillMarketController {
             }
             return ApiResponse.ok(items);
         } catch (Exception e) {
-            LOG.warn("SkillMarketProxy error: {}", e.getMessage());
+            log.warn("SkillMarketProxy error: {}", e.getMessage());
             return ApiResponse.fail("操作失败: " + e.getMessage());
         }
     }
@@ -87,7 +85,7 @@ public class SkillMarketController {
             MarketDetail detail = market.detail(slug);
             return ApiResponse.ok(detail);
         } catch (Exception e) {
-            LOG.warn("SkillMarketDetail error: {}", e.getMessage());
+            log.warn("SkillMarketDetail error: {}", e.getMessage());
             return ApiResponse.fail("获取详情失败: " + e.getMessage());
         }
     }
@@ -110,10 +108,10 @@ public class SkillMarketController {
 
             String displayName = market.install(slug, skillsDir);
 
-            LOG.info("技能安装成功: {} ({})", displayName, slug);
+            log.info("技能安装成功: {} ({})", displayName, slug);
             return ApiResponse.ok(displayName);
         } catch (Exception e) {
-            LOG.warn("SkillMarketInstall error: {}", e.getMessage(), e);
+            log.warn("SkillMarketInstall error: {}", e.getMessage(), e);
             return ApiResponse.fail("安装失败: " + e.getMessage());
         }
     }
@@ -149,10 +147,10 @@ public class SkillMarketController {
             }
 
             deleteDirectory(targetDir);
-            LOG.info("技能卸载成功: {}", slug);
+            log.info("技能卸载成功: {}", slug);
             return ApiResponse.ok(null);
         } catch (Exception e) {
-            LOG.warn("SkillMarketUninstall error: {}", e.getMessage(), e);
+            log.warn("SkillMarketUninstall error: {}", e.getMessage(), e);
             return ApiResponse.fail("卸载失败: " + e.getMessage());
         }
     }
