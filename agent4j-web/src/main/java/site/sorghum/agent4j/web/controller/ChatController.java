@@ -6,6 +6,7 @@ import org.noear.snack4.ONode;
 import org.noear.solon.annotation.*;
 import org.noear.solon.core.handle.Context;
 import site.sorghum.agent4j.bin.agent.UserMessage;
+import site.sorghum.agent4j.web.common.WebErrorMessages;
 import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.model.ChatRequest;
 import site.sorghum.agent4j.web.model.ChatResultDTO;
@@ -83,11 +84,11 @@ public class ChatController {
     @Mapping("/stream")
     public void chatStream(@Body ChatRequest request, Context ctx) throws Exception {
         if (!agentService.isReady()) {
-            ctx.outputAsJson(jsonError("Agent 未初始化"));
+            ctx.outputAsJson(jsonError(WebErrorMessages.AGENT_NOT_READY));
             return;
         }
         if (request == null || request.getMessage() == null || request.getMessage().trim().isEmpty()) {
-            ctx.outputAsJson(jsonError("message 不能为空"));
+            ctx.outputAsJson(jsonError(WebErrorMessages.MESSAGE_REQUIRED));
             return;
         }
 
