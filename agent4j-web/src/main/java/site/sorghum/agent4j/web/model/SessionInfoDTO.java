@@ -7,6 +7,7 @@ public record SessionInfoDTO(
         String name,
         String title,
         long messageCount,
-        boolean current
+        boolean current,
+        long mtime
 ) {
 }

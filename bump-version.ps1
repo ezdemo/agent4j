@@ -10,6 +10,13 @@ if (-not $root) { $root = Get-Location }
 # UTF8 without BOM to avoid breaking JSON parsers
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 
+# For Tauri-related files, only keep first 3 version parts (e.g. 26.6.9.1 -> 26.6.9)
+$versionParts = $Version.Split('.')
+$tauriVersion = $versionParts[0..2] -join '.'
+if ($versionParts.Length -gt 3) {
+    Write-Host "[bump] Full version: $Version, Tauri version (first 3 parts): $tauriVersion"
+}
+
 Write-Host "[bump] Updating version to $Version"
 Write-Host ""
 
@@ -29,7 +36,7 @@ if ($c -ne $old) {
 $path = Join-Path $root "agent4j-tauri/src-tauri/tauri.conf.json"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
-$c = [regex]::Replace($c, '(?<="version"\s*:\s*")[\d.]+(?=")', $Version)
+$c = [regex]::Replace($c, '(?<="version"\s*:\s*")[\d.]+(?=")', $tauriVersion)
 if ($c -ne $old) {
     [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
     Write-Host "  [OK] tauri.conf.json"
@@ -41,7 +48,7 @@ $lines = [System.IO.File]::ReadAllLines($path, [System.Text.Encoding]::UTF8)
 $changed = $false
 for ($i = 0; $i -lt $lines.Length; $i++) {
     if ($lines[$i] -match '^version\s*=\s*"[\d.]+"') {
-        $lines[$i] = 'version = "' + $Version + '"'
+        $lines[$i] = 'version = "' + $tauriVersion + '"'
         $changed = $true
         break
     }
@@ -55,7 +62,7 @@ if ($changed) {
 $path = Join-Path $root "agent4j-tauri/package.json"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
-$c = [regex]::Replace($c, '(?<="version"\s*:\s*")[\d.]+(?=")', $Version)
+$c = [regex]::Replace($c, '(?<="version"\s*:\s*")[\d.]+(?=")', $tauriVersion)
 if ($c -ne $old) {
     [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
     Write-Host "  [OK] package.json"

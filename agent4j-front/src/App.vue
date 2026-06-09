@@ -41,7 +41,7 @@
         </button>
       </div>
 
-      <button class="btn btn-secondary btn-sm new-btn" @click="newChat">
+      <button class="btn btn-secondary btn-sm new-btn" @click="showWorkspacePicker = true">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         新建对话
       </button>
@@ -51,102 +51,90 @@
       </div>
 
       <!-- 工作区选择器 -->
-      <div class="workspace-section">
-        <div class="workspace-header" @click="showWorkspacePicker = !showWorkspacePicker">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-          </svg>
-          <span class="workspace-name">{{ workspaceName }}</span>
-          <svg class="workspace-chevron" :class="{ open: showWorkspacePicker }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
-        </div>
-        <div v-if="showWorkspacePicker" class="workspace-dropdown">
-          <div v-if="workspaces.length === 0 && !initialDataLoaded" class="workspace-loading">加载中...</div>
-          <div v-else-if="workspaces.length === 0" class="workspace-empty">暂无工作区记录</div>
-          <div
-            v-for="w in workspaces"
-            :key="w.hash"
-            class="workspace-item"
-            :class="{ active: w.isActive }"
-            @click="handleSwitchWorkspace(w.hash)"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-            </svg>
-            <div class="workspace-info">
-              <div class="workspace-item-name">{{ w.name }}</div>
-              <div class="workspace-item-path">{{ w.path }}</div>
-            </div>
-            <span class="workspace-item-count">{{ w.sessionCount }}</span>
-            <button class="btn-icon-sm workspace-del" @click.stop="handleDeleteWorkspace(w.hash)" title="删除">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-            </button>
-          </div>
-          <div class="workspace-add">
-            <input 
-              v-model="newWorkspacePath" 
-              placeholder="输入新工作区路径..."
-              @keyup.enter="handleAddWorkspace"
-            />
-            <button class="btn-icon-sm" @click="handleAddWorkspace" :disabled="!newWorkspacePath.trim()">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
-              </svg>
-            </button>
-          </div>
-        </div>
-      </div>
-
-      <div class="sidebar-list-head">
-        <span>会话</span>
-        <div class="sidebar-list-actions">
-          <button class="btn-icon-sm" title="清空所有会话" @click="clearAllSessions" :disabled="sessions.length === 0">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
-            </svg>
-          </button>
-          <button class="btn-icon-sm" title="刷新会话列表" @click="refreshSessionList">
+      <div class="sidebar-section-title">
+        <span>Projects</span>
+        <div class="sidebar-section-actions">
+          <button class="btn-icon-sm" title="刷新项目列表" @click="refreshSessionList">
             <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
               <path d="M23 4v6h-6"/>
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
             </svg>
           </button>
+          <button class="btn-icon-sm" title="添加项目" @click="showWorkspacePicker = true">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
         </div>
       </div>
-      <div class="sidebar-list">
-        <div>
-          <div
-            v-for="s in filteredSessions"
-            :key="s.name"
-            class="session-item"
-            :class="{ active: s.name === currentSession }"
-            @click="loadSession(s.name)"
-          >
-          <span class="session-dot" :class="{ on: s.name === currentSession }"></span>
-          <div class="session-info">
-            <div class="session-name">{{ s.title || s.summary || formatName(s.name) }}</div>
-            <div class="session-meta">{{ s.messageCount || 0 }}条 · {{ timeAgo(s.mtime) }}</div>
-          </div>
-            <div class="session-item-actions">
-              <button class="btn-icon-sm session-refresh" title="刷新聊天记录" @click.stop="refreshSessionChat(s.name)">
-                <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
-                  <path d="M23 4v6h-6"/>
-                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                </svg>
-              </button>
-              <button class="btn-icon-sm session-del" @click.stop="deleteSession(s.name)">
-                <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
-                  <line x1="18" x2="6" y1="6" y2="18"/>
-                  <line x1="6" x2="18" y1="6" y2="18"/>
-                </svg>
-              </button>
+
+      <div class="project-list">
+        <div v-for="p in projectsData" :key="p.workspace.hash" class="project-item">
+          <div class="project-header" :class="{ active: p.workspace.isActive }" @click="toggleProject(p.workspace.hash)">
+            <svg class="project-chevron" :class="{ open: expandedWorkspaces.has(p.workspace.hash) }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="9 18 15 12 9 6"/>
+            </svg>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="project-icon">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+            </svg>
+            <div class="project-info">
+              <div class="project-name">{{ p.workspace.name }}</div>
+              <div class="project-meta-row">
+                <span class="project-path">{{ truncatePath(p.workspace.path) }}</span>
+                <span class="project-sep">·</span>
+                <span class="project-time">{{ relativeTime(p.workspace.lastAccessedAt) }}</span>
+              </div>
             </div>
+            <button class="btn-icon-sm project-new" title="新建会话" @click.stop="newProjectChat(p.workspace.hash)">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            </button>
+            <button class="btn-icon-sm project-refresh" title="刷新该项目会话" @click.stop="refreshProjectSessions(p.workspace.hash)">
+              <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+                <path d="M23 4v6h-6"/>
+                <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+              </svg>
+            </button>
+            <button class="btn-icon-sm project-clear" title="清空该项目所有会话" @click.stop="clearProjectSessions(p.workspace.hash)" :disabled="p.sessions.length === 0">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="3 6 5 6 21 6"/>
+                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              </svg>
+            </button>
+          </div>
+          <div v-if="expandedWorkspaces.has(p.workspace.hash)" class="project-sessions">
+            <div v-if="p.sessions.length === 0" class="project-empty">暂无会话</div>
+            <div
+              v-for="s in p.sessions"
+              :key="s.name"
+              class="session-item"
+              :class="{ active: s.name === currentSession && activeWorkspaceHash === p.workspace.hash }"
+              @click="loadProjectSession(p.workspace.hash, s.name)"
+            >
+              <span class="session-dot" :class="{ on: s.name === currentSession && activeWorkspaceHash === p.workspace.hash }"></span>
+              <div class="session-info">
+                <div class="session-name">{{ s.title || formatName(s.name) }}</div>
+                <div class="session-meta">{{ s.messageCount || 0 }}条 · {{ relativeTime(s.mtime) }}</div>
+              </div>
+              <div class="session-item-actions">
+                <button class="btn-icon-sm session-refresh" title="刷新" @click.stop="refreshSessionChat(s.name)">
+                  <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+                    <path d="M23 4v6h-6"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                  </svg>
+                </button>
+                <button class="btn-icon-sm session-del" @click.stop="deleteProjectSession(p.workspace.hash, s.name)">
+                  <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+                    <line x1="18" x2="6" y1="6" y2="18"/>
+                    <line x1="6" x2="18" y1="6" y2="18"/>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
         </div>
+        <div v-if="workspaces.length === 0 && initialDataLoaded" class="sidebar-empty">
+          暂无项目
         </div>
-        <div v-if="filteredSessions.length === 0" class="sidebar-empty">
-          {{ !initialDataLoaded ? '加载中...' : (searchQuery ? '无匹配' : '暂无会话') }}
+        <div v-if="!initialDataLoaded" class="sidebar-empty">
+          加载中...
         </div>
       </div>
 
@@ -215,6 +203,67 @@
       </Teleport>
 
     </div><!-- .app-body -->
+
+    <!-- 工作区选择弹窗 -->
+    <Teleport to="body">
+      <div v-if="showWorkspacePicker" class="modal-mask" @click.self="showWorkspacePicker = false">
+        <div class="modal">
+          <div class="modal-head">
+            <span>项目管理</span>
+            <button class="btn-icon-sm" @click="showWorkspacePicker = false">×</button>
+          </div>
+          <div class="modal-body">
+            <div class="workspace-list">
+              <div v-if="workspaces.length === 0" class="modal-empty">暂无项目记录</div>
+              <div
+                v-for="w in workspaces"
+                :key="w.hash"
+                class="workspace-item"
+                :class="{ active: w.isActive }"
+                @click="handleSwitchWorkspace(w.hash)"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+                <div class="workspace-info">
+                  <div class="workspace-item-name">{{ w.name }}</div>
+                  <div class="workspace-item-path">{{ w.path }}</div>
+                </div>
+                <span class="workspace-item-count">{{ w.sessionCount }}</span>
+                <button class="btn-icon-sm workspace-del" @click.stop="handleDeleteWorkspace(w.hash)" title="删除">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+            </div>
+            <div class="workspace-add">
+              <input 
+                ref="workspacePathInput"
+                v-model="newWorkspacePath" 
+                placeholder="输入新项目路径..."
+                @keyup.enter="handleAddWorkspace"
+              />
+              <input
+                ref="folderPicker"
+                type="file"
+                webkitdirectory
+                style="display:none"
+                @change="onFolderPicked"
+              />
+              <button v-if="isTauriEnv" class="btn-icon-sm" title="选择文件夹（仅桌面端）" @click="openFolderPicker">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+                </svg>
+              </button>
+              <button class="btn-icon-sm" @click="handleAddWorkspace" :disabled="!newWorkspacePath.trim()">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
+                </svg>
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- 工具弹窗 -->
     <Teleport to="body">
@@ -319,6 +368,7 @@ const sideOpen = ref(true)
 const searchQuery = ref('')
 const sessions = ref([])
 const currentSession = ref('')
+const expandedWorkspaces = ref(new Set())
 const status = ref({})
 const usage = ref({})
 const tools = ref([])
@@ -392,12 +442,53 @@ const copyPrompt = () => {
 const showWorkspacePicker = ref(false)
 const workspaces = ref([])
 const newWorkspacePath = ref('')
+const workspacePathInput = ref(null)
+const folderPicker = ref(null)
 
-const filteredSessions = computed(() => {
-  if (!searchQuery.value) return sessions.value
+// 打开文件夹选择器
+const openFolderPicker = () => {
+  folderPicker.value?.click()
+}
+
+// 文件夹选中回调
+const onFolderPicked = (e) => {
+  const files = e.target.files
+  if (files && files.length > 0) {
+    // Tauri 环境下 file.path 提供完整路径
+    if (files[0].path) {
+      newWorkspacePath.value = files[0].path
+    } else {
+      // 浏览器环境：从 webkitRelativePath 提取文件夹名
+      const relPath = files[0].webkitRelativePath || ''
+      const folderName = relPath.split('/')[0]
+      if (folderName) newWorkspacePath.value = folderName
+    }
+  }
+  // 重置 input，允许重复选择同一文件夹
+  e.target.value = ''
+}
+
+const projectsData = computed(() => {
+  if (!workspaces.value.length) return []
+  // 按搜索过滤
+  if (!searchQuery.value) {
+    return workspaces.value.map(w => ({
+      workspace: w,
+      sessions: workspaceSessions.value[w.hash] || []
+    }))
+  }
   const q = searchQuery.value.toLowerCase()
-  return sessions.value.filter(s => (s.title || s.summary || s.name).toLowerCase().includes(q))
+  return workspaces.value
+    .map(w => ({
+      workspace: w,
+      sessions: (workspaceSessions.value[w.hash] || [])
+        .filter(s => (s.title || s.name || '').toLowerCase().includes(q))
+    }))
+    .filter(p => p.workspace.name.toLowerCase().includes(q) || p.sessions.length > 0)
 })
+
+// 按工作区 hash 分组的会话
+const workspaceSessions = ref({})
 
 const currentSessionTitle = computed(() => {
   if (!currentSession.value) return '新对话'
@@ -419,16 +510,21 @@ const activeWorkspaceHash = computed(() => {
 
 const fmtTokens = n => !n ? '0' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n)
 
-const timeAgo = t => {
+const relativeTime = t => {
   if (!t) return ''
-  const d = Date.now() - Date.parse(t)
+  const d = Date.now() - (typeof t === 'number' ? t : Date.parse(t))
   if (!Number.isFinite(d)) return ''
-  const m = d / 6e4
-  if (m < 1) return '刚刚'
-  if (m < 60) return Math.floor(m) + '分钟前'
-  const h = m / 60
-  if (h < 24) return Math.floor(h) + '小时前'
-  return Math.floor(h / 24) + '天前'
+  // 使用缩写格式：刚刚 / Xm / Xh / Xd / Xw / Xmo
+  const min = d / 6e4
+  if (min < 1) return '刚刚'
+  if (min < 60) return Math.floor(min) + 'm'
+  const hour = min / 60
+  if (hour < 24) return Math.floor(hour) + 'h'
+  const day = hour / 24
+  if (day < 7) return Math.floor(day) + 'd'
+  if (day < 30) return Math.floor(day / 7) + 'w'
+  if (day < 365) return Math.floor(day / 30) + 'mo'
+  return Math.floor(day / 365) + 'y'
 }
 
 const formatName = n => {
@@ -528,15 +624,33 @@ const refreshTools = async () => {
 
 const loadSessions = async () => {
   try {
-    // 获取当前活跃的工作区 hash
-    let workspaceHash = null
-    const activeWorkspace = workspaces.value.find(w => w.isActive)
-    if (activeWorkspace) {
-      workspaceHash = activeWorkspace.hash
+    // 获取所有工作区
+    const wsList = workspaces.value
+    if (wsList.length === 0) {
+      workspaceSessions.value = {}
+      return
     }
     
-    const r = await sessionsAPI.list(workspaceHash)
-    if (r.success) sessions.value = r.data || []
+    // 并行加载每个工作区的会话
+    const results = await Promise.all(
+      wsList.map(w =>
+        sessionsAPI.list(w.hash)
+          .then(r => r.success ? (r.data || []) : [])
+          .catch(() => [])
+      )
+    )
+    
+    const grouped = {}
+    wsList.forEach((w, i) => {
+      grouped[w.hash] = results[i] || []
+    })
+    workspaceSessions.value = grouped
+    
+    // 也更新 flat sessions（兼容旧代码）
+    const activeWs = wsList.find(w => w.isActive)
+    if (activeWs) {
+      sessions.value = grouped[activeWs.hash] || []
+    }
   } catch {}
 }
 
@@ -608,6 +722,111 @@ const handleDeleteWorkspace = async (hash) => {
   } catch (e) {
     message.error('删除工作区失败: ' + e.message)
   }
+}
+
+// 展开/折叠项目
+const toggleProject = (hash) => {
+  const s = new Set(expandedWorkspaces.value)
+  if (s.has(hash)) {
+    s.delete(hash)
+  } else {
+    s.add(hash)
+  }
+  expandedWorkspaces.value = s
+}
+
+// 加载指定项目下的会话
+const loadProjectSession = async (wsHash, sessionName) => {
+  // 切换到对应的工作区
+  const targetWs = workspaces.value.find(w => w.hash === wsHash)
+  if (targetWs && !targetWs.isActive) {
+    await handleSwitchWorkspace(wsHash)
+  }
+  currentSession.value = sessionName
+  chatRef.value?.loadSession(sessionName, wsHash)
+}
+
+// 删除指定项目下的会话
+const deleteProjectSession = async (wsHash, sessionName) => {
+  const ok = await confirm({ message: `确定要删除此会话吗？` })
+  if (!ok) return
+  try {
+    await sessionsAPI.deleteSession(sessionName)
+    await loadSessions()
+    message.success('会话已删除')
+  } catch (e) {
+    message.error('删除会话失败: ' + e.message)
+  }
+}
+
+// 在指定项目中创建新会话
+const newProjectChat = async (wsHash) => {
+  if (!wsHash) return
+  try {
+    const r = await sessionsAPI.createNew({ workspaceHash: wsHash })
+    if (r.success && r.data?.sessionName) {
+      // 切换到这个工作区
+      await handleSwitchWorkspace(wsHash)
+      currentSession.value = r.data.sessionName
+      chatRef.value?.resetLocalMessages()
+      await loadSessions()
+      message.success('已新建对话')
+    } else {
+      message.error('新建对话失败')
+    }
+  } catch (e) {
+    console.error('新建会话失败:', e)
+    message.error('新建对话失败: ' + e.message)
+  }
+}
+
+// 刷新指定项目的会话列表
+const refreshProjectSessions = async (wsHash) => {
+  if (!wsHash) return
+  try {
+    const r = await sessionsAPI.list(wsHash)
+    if (r.success) {
+      const grouped = { ...workspaceSessions.value }
+      grouped[wsHash] = r.data || []
+      workspaceSessions.value = grouped
+      // 更新 flat sessions
+      const activeWs = workspaces.value.find(w => w.isActive)
+      if (activeWs && activeWs.hash === wsHash) {
+        sessions.value = grouped[wsHash] || []
+      }
+    }
+    message.success('会话列表已刷新')
+  } catch (e) {
+    message.error('刷新失败: ' + (e.message || '未知错误'))
+  }
+}
+
+// 清空指定项目（或当前活跃项目）的所有会话
+const clearProjectSessions = async (wsHash) => {
+  const hash = wsHash || activeWorkspaceHash.value
+  if (!hash) return
+  const ws = workspaces.value.find(w => w.hash === hash)
+  const name = ws ? ws.name : hash
+  const ok = await confirm({ message: `确定要清空「${name}」的所有会话吗？此操作不可恢复。` })
+  if (!ok) return
+  try {
+    await sessionsAPI.clearAll(hash)
+    await loadSessions()
+    if (activeWorkspaceHash.value === hash) {
+      currentSession.value = ''
+      chatRef.value?.resetLocalMessages()
+    }
+    message.success('会话已清空')
+  } catch (e) {
+    message.error('清空会话失败: ' + e.message)
+  }
+}
+
+// 截断长路径
+const truncatePath = (p) => {
+  if (!p) return ''
+  if (p.length <= 40) return p
+  return p.slice(0, 36) + '...'
 }
 
 const newChat = async (skipReload = false) => {
@@ -816,50 +1035,256 @@ watch(showSettings, (newVal) => {
 }
 .sidebar-search input::placeholder { color: var(--fg-4); }
 
-.sidebar-list-head {
+/* 侧边栏项目列表 */
+.sidebar-section-title {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 6px 12px 2px;
+  padding: 8px 12px 4px;
   font-size: 12px;
-  font-weight: 600;
+  font-weight: 700;
   color: var(--fg-4);
   text-transform: uppercase;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--border);
 }
 
-.sidebar-list-actions {
+.sidebar-section-title button {
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.sidebar-section-title button:hover {
+  opacity: 1;
+  color: var(--accent);
+}
+.sidebar-section-title button:disabled {
+  opacity: 0.2;
+  cursor: not-allowed;
+}
+
+.sidebar-section-actions {
   display: flex;
   align-items: center;
   gap: 2px;
 }
 
-.sidebar-list-actions .btn-icon-sm {
-  opacity: 0.6;
-  transition: opacity 0.15s;
-}
-.sidebar-list-actions .btn-icon-sm:hover {
-  opacity: 1;
-}
-.sidebar-list-actions .btn-icon-sm:disabled {
-  opacity: 0.25;
-  cursor: not-allowed;
+.project-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
 }
 
-.sidebar-list-head button {
-  opacity: 0.4;
-  transition: all 0.15s;
+.project-item + .project-item {
+  border-top: 1px solid var(--border);
 }
 
-.sidebar-list-head button:hover {
-  opacity: 1;
+.project-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background var(--t);
+  user-select: none;
+}
+.project-header:hover {
+  background: var(--bg-3);
+}
+.project-header.active {
+  border-left: 2px solid var(--accent);
+  background: transparent;
+}
+.project-header.active .project-name {
   color: var(--accent);
 }
 
-.sidebar-list {
+.project-chevron {
+  flex-shrink: 0;
+  color: var(--fg-4);
+  transition: transform 0.2s;
+}
+.project-chevron.open {
+  transform: rotate(90deg);
+}
+
+.project-icon {
+  flex-shrink: 0;
+  color: var(--fg-3);
+}
+
+.project-info {
   flex: 1;
-  overflow-y: auto;
-  padding: 4px 8px;
+  min-width: 0;
+}
+
+.project-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-meta-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+  color: var(--fg-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.project-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.project-sep {
+  flex-shrink: 0;
+}
+
+.project-time {
+  flex-shrink: 0;
+}
+
+.project-count {
+  font-size: 11px;
+  color: var(--fg-3);
+  background: var(--bg-3);
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  flex-shrink: 0;
+}
+
+.project-clear,
+.project-refresh,
+.project-new {
+  opacity: 0;
+  flex-shrink: 0;
+  transition: opacity var(--t);
+}
+.project-clear:hover {
+  color: var(--red);
+}
+.project-refresh:hover {
+  color: var(--accent);
+}
+.project-new:hover {
+  color: var(--green);
+}
+.project-header:hover .project-clear,
+.project-header:hover .project-refresh,
+.project-header:hover .project-new {
+  opacity: 0.6;
+}
+.project-header:hover .project-clear:hover,
+.project-header:hover .project-refresh:hover,
+.project-header:hover .project-new:hover {
+  opacity: 1;
+}
+
+.project-sessions {
+  padding: 0 0 4px;
+}
+
+.project-empty {
+  padding: 8px 16px 8px 32px;
+  font-size: 12px;
+  color: var(--fg-4);
+}
+
+.project-sessions .session-item {
+  padding: 5px 12px 5px 38px;
+}
+
+/* 工作区选择弹窗 */
+.workspace-list {
+  margin-bottom: 8px;
+}
+
+.modal .workspace-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: var(--r);
+  transition: background var(--t);
+}
+.modal .workspace-item:hover {
+  background: var(--bg-2);
+}
+.modal .workspace-item.active {
+  background: var(--accent-bg);
+}
+.modal .workspace-item svg {
+  color: var(--fg-3);
+  flex-shrink: 0;
+}
+.modal .workspace-item .workspace-info {
+  flex: 1;
+  min-width: 0;
+}
+.modal .workspace-item .workspace-item-name {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.modal .workspace-item .workspace-item-path {
+  font-size: 11px;
+  color: var(--fg-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.modal .workspace-item .workspace-item-count {
+  font-size: 11px;
+  color: var(--fg-3);
+  background: var(--bg-3);
+  padding: 1px 5px;
+  border-radius: var(--r-sm);
+}
+.modal .workspace-item .workspace-del {
+  opacity: 0;
+  transition: opacity var(--t);
+}
+.modal .workspace-item:hover .workspace-del {
+  opacity: 1;
+}
+.modal .workspace-item .workspace-del:hover {
+  color: var(--red);
+}
+
+.modal .workspace-add {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 8px 0 0;
+  border-top: 1px solid var(--border);
+}
+.modal .workspace-add input {
+  flex: 1;
+  padding: 5px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  font-size: 12px;
+  color: var(--fg);
+}
+.modal .workspace-add input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.modal .workspace-add input::placeholder {
+  color: var(--fg-4);
 }
 
 .sidebar-empty {
@@ -914,7 +1339,7 @@ watch(showSettings, (newVal) => {
 
 .session-refresh,
 .session-del {
-  opacity: 0;
+  opacity: 0.3;
   transition: opacity var(--t);
 }
 
@@ -1018,121 +1443,7 @@ watch(showSettings, (newVal) => {
   color: var(--fg-4);
 }
 
-/* 工作区选择器 */
-.workspace-section {
-  border-bottom: 1px solid var(--border);
-  position: relative;
-}
-
-.workspace-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 10px 12px;
-  cursor: pointer;
-  transition: background var(--t);
-}
-.workspace-header:hover { background: var(--bg-3); }
-.workspace-header svg { color: var(--fg-3); flex-shrink: 0; }
-.workspace-name {
-  flex: 1;
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--fg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.workspace-chevron {
-  transition: transform 0.2s;
-}
-.workspace-chevron.open {
-  transform: rotate(180deg);
-}
-
-.workspace-dropdown {
-  background: var(--bg);
-  border-bottom: 1px solid var(--border);
-  max-height: 300px;
-  overflow-y: auto;
-}
-
-.workspace-loading,
-.workspace-empty {
-  padding: 12px;
-  text-align: center;
-  font-size: 12px;
-  color: var(--fg-4);
-}
-
-.workspace-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
-  transition: background var(--t);
-}
-.workspace-item:hover { background: var(--bg-2); }
-.workspace-item.active { background: var(--accent-bg); }
-.workspace-item svg { color: var(--fg-3); flex-shrink: 0; }
-
-.workspace-info {
-  flex: 1;
-  min-width: 0;
-}
-.workspace-item-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--fg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.workspace-item-path {
-  font-size: 11px;
-  color: var(--fg-4);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.workspace-item-count {
-  font-size: 11px;
-  color: var(--fg-3);
-  background: var(--bg-3);
-  padding: 1px 5px;
-  border-radius: var(--r-sm);
-}
-
-.workspace-del {
-  opacity: 0;
-  transition: opacity var(--t);
-}
-.workspace-item:hover .workspace-del { opacity: 1; }
-.workspace-del:hover { color: var(--red); }
-
-.workspace-add {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 12px;
-  border-top: 1px solid var(--border);
-}
-.workspace-add input {
-  flex: 1;
-  padding: 5px 8px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  font-size: 12px;
-  color: var(--fg);
-}
-.workspace-add input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-.workspace-add input::placeholder { color: var(--fg-4); }
+/* 当前工作区 CSS 已迁移到 .modal .workspace-* 下 */
 
 /* 工作目录切换 */
 .config-section {

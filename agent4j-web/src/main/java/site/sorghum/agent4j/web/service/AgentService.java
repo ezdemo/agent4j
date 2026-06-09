@@ -755,7 +755,8 @@ public class AgentService {
                     sessionInfo.name(),
                     store.getTitle(sessionInfo.name()),
                     sessionInfo.messageCount(),
-                    sessionInfo.name().equals(activeSession)
+                    sessionInfo.name().equals(activeSession),
+                    sessionInfo.mtime()
             ));
         }
         return sessions;
