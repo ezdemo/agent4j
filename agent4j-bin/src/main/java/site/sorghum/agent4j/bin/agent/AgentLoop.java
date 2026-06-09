@@ -280,57 +280,126 @@ public class AgentLoop implements AgentLoopController {
         resetUserAbort();
         streamErrorRetryCount = 0;
 
-        // ---- 进入统一的主推理循环 ----
+        // ---- 进入统一的主推理循环（含自动重试闭环） ----
+        return runWithAutoRetry();
+    }
+
+    /**
+     * 执行主推理循环，并在完成后检查目标步骤是否需要自动重试。
+     * 如果发现 FAILED 且未超重试次数的步骤，自动注入重试消息并继续循环。
+     */
+    private String runWithAutoRetry() throws IOException {
         String result = mainLoop(client.isThinkingMode(), 0);
 
-        // === 目标巡检检查 ===
-        // 每次 LLM 消息处理后，触发一次 patrol 检查
+        // === 自动重试闭环 ===
+        // 每次 mainLoop 结束后，检查是否有需要重试的目标步骤
+        while (true) {
+            GoalAndStore gs = findRetriableGoal();
+            if (gs == null) break;
+
+            Goal goal = gs.goal;
+            GoalStore goalStore = gs.goalStore;
+
+            // 找到第一个 FAILED 且未超重试次数的步骤
+            GoalStep failedStep = null;
+            for (GoalStep s : goal.getSteps()) {
+                if (s.getStatus() == StepStatus.FAILED
+                        && s.getRetryCount() < goal.getMaxRetries()) {
+                    failedStep = s;
+                    break;
+                }
+            }
+            if (failedStep == null) break;
+
+            // 重置为 PENDING 并递增重试计数
+            failedStep.setStatus(StepStatus.PENDING);
+            failedStep.setRetryCount(failedStep.getRetryCount() + 1);
+            goal.setUpdatedAt(java.time.Instant.now());
+            goalStore.save(goal);
+
+            log.info("[goal] 自动重试: step={}, retry={}/{}",
+                    failedStep.getIndex() + 1,
+                    failedStep.getRetryCount(),
+                    goal.getMaxRetries());
+
+            // 注入系统消息说明重试原因，让 LLM 在下轮推理中看到完整上下文
+            ctx.addUser(
+                    "⚠️ [系统自动重试] 上一步执行失败，正在重试（"
+                    + failedStep.getRetryCount() + "/" + goal.getMaxRetries() + "）。\n\n"
+                    + "### 需要重试的步骤\n"
+                    + "步骤 " + (failedStep.getIndex() + 1) + "：" + failedStep.getDescription() + "\n"
+                    + (failedStep.getLastError() != null
+                        ? "### 上一次失败原因\n" + failedStep.getLastError() + "\n"
+                        : "")
+                    + "\n请重新执行此步骤。注意分析上次失败的原因，避免同样的错误。");
+
+            // 继续 LLM 循环
+            result = mainLoop(client.isThinkingMode(), 0);
+        }
+
+        return result;
+    }
+
+    /**
+     * 查找是否有需要自动重试的目标和步骤。
+     */
+    private GoalAndStore findRetriableGoal() {
         try {
-            if (sessionService != null) {
-                String sessionId = sessionService.getStore().currentName();
-                if (sessionId != null) {
-                    // 通过 workspace 路径构造 GoalStore
-                    Path workspaceDir = Paths.get(System.getProperty("user.home"), ".agent4j", "workspace");
-                    // Try to find the workspace directory by searching for session file
-                    GoalStore goalStore = null;
-                    try (DirectoryStream<Path> ds = Files.newDirectoryStream(workspaceDir)) {
-                        for (Path wsDir : ds) {
-                            if (Files.isDirectory(wsDir)) {
-                                Path goalFile = wsDir.resolve("goals").resolve(sessionId + ".jsonl");
-                                if (Files.exists(goalFile)) {
-                                    goalStore = new site.sorghum.agent4j.bin.goal.JsonlGoalStore(wsDir);
-                                    break;
-                                }
-                            }
-                        }
-                    }
+            if (sessionService == null) return null;
+            String sessionId = sessionService.getStore().currentName();
+            if (sessionId == null) return null;
 
-                    if (goalStore != null) {
-                        Goal goal = goalStore.findBySession(sessionId);
-                        if (goal != null && goal.getStatus() == GoalStatus.ACTIVE) {
-                            for (GoalStep step : goal.getSteps()) {
-                                if (step.getStatus() == StepStatus.FAILED
-                                        && step.getRetryCount() < goal.getMaxRetries()) {
-                                    log.info("[goal] 检测到失败步骤，自动重试: step={}, retry={}/{}",
-                                            step.getIndex() + 1, step.getRetryCount(), goal.getMaxRetries());
+            GoalStore goalStore = resolveGoalStore(sessionId);
+            if (goalStore == null) return null;
 
-                                    step.setStatus(StepStatus.PENDING);
-                                    step.setRetryCount(step.getRetryCount() + 1);
-                                    goal.setUpdatedAt(java.time.Instant.now());
-                                    goalStore.save(goal);
-                                    break;
-                                }
-                            }
+            Goal goal = goalStore.findBySession(sessionId);
+            if (goal == null || goal.getStatus() != GoalStatus.ACTIVE) return null;
+
+            // 检查是否有需要重试的步骤
+            boolean hasRetriable = false;
+            for (GoalStep s : goal.getSteps()) {
+                if (s.getStatus() == StepStatus.FAILED
+                        && s.getRetryCount() < goal.getMaxRetries()) {
+                    hasRetriable = true;
+                    break;
+                }
+            }
+            if (!hasRetriable) return null;
+
+            return new GoalAndStore(goal, goalStore);
+        } catch (Exception e) {
+            log.warn("[goal] 查找可重试目标失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 通过会话 ID 查找对应的 GoalStore。
+     */
+    private GoalStore resolveGoalStore(String sessionId) {
+        try {
+            Path workspaceDir = Paths.get(System.getProperty("user.home"), ".agent4j", "workspace");
+            if (!Files.isDirectory(workspaceDir)) return null;
+            try (DirectoryStream<Path> ds = Files.newDirectoryStream(workspaceDir)) {
+                for (Path wsDir : ds) {
+                    if (Files.isDirectory(wsDir)) {
+                        Path goalFile = wsDir.resolve("goals").resolve(sessionId + ".jsonl");
+                        if (Files.exists(goalFile)) {
+                            return new site.sorghum.agent4j.bin.goal.JsonlGoalStore(wsDir);
                         }
                     }
                 }
             }
         } catch (Exception e) {
-            log.warn("[goal] 巡检检查失败", e);
+            log.warn("[goal] 解析 GoalStore 失败: {}", e.getMessage());
         }
-
-        return result;
+        return null;
     }
+
+    /**
+     * 目标和其存储的临时容器。
+     */
+    private record GoalAndStore(Goal goal, GoalStore goalStore) {}
 
     // ==================== 统一主推理循环 ====================
 

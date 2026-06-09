@@ -8,6 +8,9 @@ import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.command.MessageWrapper;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
+import site.sorghum.agent4j.bin.goal.Goal;
+import site.sorghum.agent4j.bin.goal.GoalStatus;
+import site.sorghum.agent4j.bin.goal.GoalStore;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.session.SessionService;
@@ -25,9 +28,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
-import site.sorghum.agent4j.bin.goal.Goal;
-import site.sorghum.agent4j.bin.goal.GoalStatus;
-import site.sorghum.agent4j.bin.goal.GoalStore;
 
 /**
  * Agent4j 工厂——组装 ModelClient + ToolRegistry → AgentLoop。
@@ -87,11 +87,10 @@ public class Agent4jAgent {
 
         // 会话持久化 — 委托 SessionService（支持工作区隔离）
         try {
-            this.workspaceManager = new WorkspaceManager();
             String workspacePath = b.workspace != null
                     ? b.workspace.toAbsolutePath().toString()
                     : Paths.get(System.getProperty("user.home"), ".agent4j").toString();
-            workspaceManager.initWorkspace(workspacePath);
+            this.workspaceManager = WorkspaceManager.getOrCreate(workspacePath);
             Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
             this.sessionService = new SessionService(ctx, sessionsDir);
             sessionService.loadOrCreate(System.getenv("AGENT4J_SESSION"));
@@ -108,7 +107,7 @@ public class Agent4jAgent {
      * 轻量级构造函数 —— 共享 ModelClient、ToolRegistry 和 PromptPrefix。
      * 适用于"一个会话一个 Agent"场景，减少资源消耗。
      *
-     * @param b           Builder
+     * @param b                  Builder
      * @param ignoredLightweight 标记为轻量级构建（未使用，仅用于区分构造函数）
      */
     private Agent4jAgent(Builder b, boolean ignoredLightweight) {
@@ -134,11 +133,10 @@ public class Agent4jAgent {
 
         // 会话持久化 — 委托 SessionService（支持工作区隔离）
         try {
-            this.workspaceManager = new WorkspaceManager();
             String workspacePath = b.workspace != null
                     ? b.workspace.toAbsolutePath().toString()
                     : Paths.get(System.getProperty("user.home"), ".agent4j").toString();
-            workspaceManager.initWorkspace(workspacePath);
+            this.workspaceManager = WorkspaceManager.getOrCreate(workspacePath);
             Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
             this.sessionService = new SessionService(ctx, sessionsDir);
             sessionService.loadOrCreate(System.getenv("AGENT4J_SESSION"));
@@ -240,12 +238,12 @@ public class Agent4jAgent {
                     Goal pendingGoal = goalStore.findBySession(currentSessionId);
                     if (pendingGoal != null
                             && (pendingGoal.getStatus() == GoalStatus.ACTIVE
-                                || pendingGoal.getStatus() == GoalStatus.PAUSED)) {
+                            || pendingGoal.getStatus() == GoalStatus.PAUSED)) {
                         // 注入系统消息提醒
                         ctx.addSystemMessage(
                                 "📋 检测到未完成的目标：「" + pendingGoal.getTitle() + "」\n"
-                                + "进度：" + pendingGoal.progressText() + "\n"
-                                + "使用 /goal status 查看详情，或直接继续执行。");
+                                        + "进度：" + pendingGoal.progressText() + "\n"
+                                        + "使用 /goal status 查看详情，或直接继续执行。");
                         log.info("[goal] 会话恢复，发现未完成目标: {} - {}",
                                 pendingGoal.getId(), pendingGoal.getTitle());
                     }
