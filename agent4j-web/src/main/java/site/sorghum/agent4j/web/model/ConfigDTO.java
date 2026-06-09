@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.web.model;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -17,6 +18,7 @@ public record ConfigDTO(
         boolean hitl,
         Set<String> disabledTools,
         List<String> blockedPaths,
-        String apiKey
+        String apiKey,
+        Map<String, Map<String, Double>> price
 ) {
 }

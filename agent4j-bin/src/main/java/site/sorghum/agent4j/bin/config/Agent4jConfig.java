@@ -461,6 +461,30 @@ public class Agent4jConfig {
                         arr.add(item.toString());
                     }
                 }
+            } else if (value instanceof Map<?, ?> map) {
+                // 嵌套对象（如 price）：递归创建子 ONode
+                ONode sub = root.getOrNew(key).asObject();
+                sub.clear();
+                for (Map.Entry<?, ?> me : map.entrySet()) {
+                    String subKey = me.getKey() != null ? me.getKey().toString() : "";
+                    Object subVal = me.getValue();
+                    if (subVal instanceof Map<?, ?> nested) {
+                        ONode nestedNode = sub.getOrNew(subKey).asObject();
+                        for (Map.Entry<?, ?> ne : nested.entrySet()) {
+                            String nk = ne.getKey() != null ? ne.getKey().toString() : "";
+                            Object nv = ne.getValue();
+                            if (nv instanceof Number num) {
+                                nestedNode.set(nk, num.doubleValue());
+                            } else {
+                                nestedNode.set(nk, nv != null ? nv.toString() : "");
+                            }
+                        }
+                    } else if (subVal instanceof Number num) {
+                        sub.set(subKey, num.doubleValue());
+                    } else {
+                        sub.set(subKey, subVal != null ? subVal.toString() : "");
+                    }
+                }
             } else {
                 root.set(key, value);
             }
