@@ -25,8 +25,19 @@
 
     <!-- 消息区 -->
     <div ref="messagesContainer" class="messages">
-      <!-- 空状态 -->
-      <div v-if="messages.length === 0" class="empty">
+      <!-- 空状态：无会话 -->
+      <div v-if="!props.sessionName" class="empty">
+        <div class="empty-icon">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+          </svg>
+        </div>
+        <p class="empty-title">未选择会话</p>
+        <p class="empty-desc">请从左侧选择一个已有会话，或点击「新建对话」开始新会话</p>
+      </div>
+
+      <!-- 空状态：有会话但无消息 -->
+      <div v-else-if="messages.length === 0" class="empty">
         <div class="empty-icon">
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
@@ -256,8 +267,18 @@
       </div>
     </Teleport>
 
+    <!-- 无会话时：禁用输入框占位 -->
+    <div v-if="!props.sessionName" class="no-session-input-bar">
+      <div class="no-session-input-placeholder">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+          <path d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+        </svg>
+        <span>请先选择或新建一个会话</span>
+      </div>
+    </div>
+
     <!-- 输入区（独立组件） -->
-    <ChatInput
+    <ChatInput v-else
         v-model:inputText="inputText"
         :streaming="streaming"
         :todos="todos"
@@ -2191,5 +2212,28 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   gap: 8px;
   padding: 10px 16px;
   border-top: 1px solid var(--border);
+}
+
+/* ===== 无会话时禁用输入条 ===== */
+.no-session-input-bar {
+  display: flex;
+  align-items: center;
+  padding: 12px 16px;
+  border-top: 1px solid var(--border);
+  background: var(--bg);
+}
+
+.no-session-input-placeholder {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 14px;
+  border: 1px dashed var(--border-2);
+  border-radius: var(--r);
+  color: var(--fg-4);
+  font-size: 13px;
+  cursor: default;
+  user-select: none;
 }
 </style>
