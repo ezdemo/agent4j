@@ -2,6 +2,8 @@ package site.sorghum.agent4j.bin.goal;
 
 /**
  * 目标状态枚举。
+ *
+ * @author Sorghum
  */
 public enum GoalStatus {
     /** 活跃：正在执行中 */

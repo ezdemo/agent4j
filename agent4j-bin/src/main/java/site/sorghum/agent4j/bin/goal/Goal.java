@@ -6,14 +6,16 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.List;
 
 /**
  * Goal — 会话目标。
  * <p>
- * 绑定到会话，持久化在 workspace/{hash}/goals/{sessionId}.jsonl。
  * 每个会话同时最多一个活跃目标。
  * </p>
+ *
+ * @author Sorghum
  */
 @Data
 @Builder
@@ -39,7 +41,8 @@ public class Goal {
     private String verifyCommand;
 
     /** 步骤列表 */
-    private List<GoalStep> steps;
+    @Builder.Default
+    private List<GoalStep> steps = new ArrayList<>();
 
     /** 创建时间 */
     private Instant createdAt;
@@ -62,7 +65,7 @@ public class Goal {
      * 判断是否全部完成。
      */
     public boolean isAllDone() {
-        return steps != null && steps.stream().allMatch(
+        return steps != null && !steps.isEmpty() && steps.stream().allMatch(
                 s -> s.getStatus() == StepStatus.DONE || s.getStatus() == StepStatus.SKIPPED);
     }
 }

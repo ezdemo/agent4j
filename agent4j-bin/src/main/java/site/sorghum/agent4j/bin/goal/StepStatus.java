@@ -2,6 +2,8 @@ package site.sorghum.agent4j.bin.goal;
 
 /**
  * 步骤状态枚举。
+ *
+ * @author Sorghum
  */
 public enum StepStatus {
     /** 待执行 */
