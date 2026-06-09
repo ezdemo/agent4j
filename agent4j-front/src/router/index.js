@@ -1,4 +1,4 @@
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 
 // 路由配置
 const routes = [
@@ -69,7 +69,7 @@ const routes = [
 
 // 创建路由实例
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(),
   routes,
   scrollBehavior(to, from, savedPosition) {
     // 如果有保存的位置，恢复到该位置

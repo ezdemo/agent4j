@@ -16,12 +16,15 @@
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js"/>
   <img src="https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri"/>
   <img src="https://img.shields.io/badge/license-MIT-green"/>
-  <img src="https://img.shields.io/badge/version-26.6.8.1-lightgrey"/>
+  <img src="https://img.shields.io/badge/version-26.6.9.2-lightgrey"/>
+  <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-📋-brightgreen"/></a>
 </p>
 
 ---
 
 ## 🚀 快速开始
+
+> 📋 [更新日志](CHANGELOG.md) — 查看各版本变更记录
 
 ### 一键安装
 

@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.builtin;
 
+import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.bin.agent.AgentLoopListener;
 
 /**
@@ -8,11 +9,12 @@ import site.sorghum.agent4j.bin.agent.AgentLoopListener;
  *
  * @author Sorghum
  */
+@Slf4j
 public class SubAgentListener implements AgentLoopListener {
 
     @Override
     public void onReasoning(String r) {
-        System.err.println("[sub] " + r);
+        log.info("[sub] {}", r);
     }
 
     @Override
@@ -23,6 +25,6 @@ public class SubAgentListener implements AgentLoopListener {
     @Override
     public void onToolResult(String n, String r) {
         String d = r != null && r.length() > 100 ? r.substring(0, 100) + "…" : r;
-        System.err.println("[sub] 📦 " + n + " → " + d);
+        log.info("[sub] 📦 " + n + " → " + d);
     }
 }
