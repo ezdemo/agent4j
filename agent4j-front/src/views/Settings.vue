@@ -491,6 +491,86 @@
               </div>
             </div>
           </div>
+
+          <!-- 禁用工具 -->
+          <div class="section-card" style="margin-top:16px;">
+            <div class="card-header">
+              <h3>禁用工具</h3>
+              <p>禁用的工具将被 Agent 忽略，每行一个工具名称</p>
+            </div>
+            <div class="card-body">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">已禁用的工具</label>
+                  <p class="setting-hint">留空表示不禁用任何工具</p>
+                </div>
+                <div class="setting-control">
+                  <div class="input-group" style="align-items:stretch;">
+                    <textarea
+                      v-model="settings.security.disabledToolsText"
+                      class="form-textarea"
+                      placeholder="tool_write&#10;tool_delete&#10;bash"
+                      rows="4"
+                      style="flex:1;"
+                    ></textarea>
+                    <button
+                      :disabled="loadingTools"
+                      class="btn btn-secondary"
+                      style="padding:6px;"
+                      @click="fetchAndFillTools"
+                      title="从已有工具中获取"
+                    >
+                      <svg v-if="loadingTools" class="animate-spin" fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
+                        <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                      </svg>
+                      <svg v-else fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
+                        <polyline points="1 4 1 10 7 10"/>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                      </svg>
+                      从已有工具获取
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <!-- 工具有多选弹窗 -->
+              <Teleport to="body">
+                <div v-if="showToolPicker" class="remote-models-mask" @click.self="showToolPicker = false">
+                  <div class="remote-models-dialog">
+                    <div class="remote-models-head">
+                      <span>选择要禁用的工具</span>
+                      <button class="btn-icon-xs" @click="showToolPicker = false">×</button>
+                    </div>
+                    <div class="remote-models-body">
+                      <div class="remote-models-search">
+                        <input v-model="toolSearchQuery" class="form-input" placeholder="搜索工具..." type="text" />
+                      </div>
+                      <div v-if="allTools.length === 0" class="remote-models-empty">暂无可用工具</div>
+                      <div v-else class="remote-models-list">
+                        <label
+                          v-for="tool in filteredTools"
+                          :key="tool.name || tool"
+                          class="remote-model-item"
+                        >
+                          <input
+                            :checked="selectedDisabledTools.has(tool.name || tool)"
+                            type="checkbox"
+                            @change="toggleDisabledTool(tool.name || tool)"
+                          />
+                          <span class="remote-model-name">{{ tool.name || tool }}</span>
+                          <span v-if="tool.description" class="remote-model-desc">{{ tool.description }}</span>
+                        </label>
+                      </div>
+                    </div>
+                    <div class="remote-models-foot">
+                      <button class="btn" @click="showToolPicker = false">取消</button>
+                      <button class="btn btn-primary" @click="confirmDisabledTools">确认禁用 ({{ selectedDisabledTools.size }})</button>
+                    </div>
+                  </div>
+                </div>
+              </Teleport>
+            </div>
+          </div>
         </section>
 
         <!-- OpenAPI 设置 -->
@@ -1338,7 +1418,7 @@ X-Custom-Header=value"
 import {computed, onMounted, reactive, ref, watch} from 'vue'
 import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
-import {configAPI, openApiAPI, mcpAPI, skillMarketAPI, agentAPI, DEFAULT_API_BASE} from '../services/api'
+import {configAPI, openApiAPI, mcpAPI, skillMarketAPI, agentAPI, toolsAPI, DEFAULT_API_BASE} from '../services/api'
 
 const store = useAppStore()
 
@@ -1357,7 +1437,8 @@ const settings = reactive({
     stormBreaker: true,
     pathTraversal: true,
     commandWhitelist: true,
-    auditLog: true
+    auditLog: true,
+    disabledToolsText: ''
   }
 })
 
@@ -1380,6 +1461,19 @@ const showRemoteModelsDialog = ref(false)
 const remoteModelList = ref([])
 const selectedRemoteModels = ref(new Set())
 const remoteSearchQuery = ref('')
+
+// 禁用工具状态
+const loadingTools = ref(false)
+const showToolPicker = ref(false)
+const allTools = ref([])
+const selectedDisabledTools = ref(new Set())
+const toolSearchQuery = ref('')
+
+const filteredTools = computed(() => {
+  const q = toolSearchQuery.value.trim().toLowerCase()
+  if (!q) return allTools.value
+  return allTools.value.filter(t => (t.name || t).toLowerCase().includes(q))
+})
 
 // 技能市场状态
 const skillMarket = reactive({
@@ -1643,6 +1737,11 @@ const loadSettings = async () => {
       if (config.security) {
         Object.assign(settings.security, config.security)
       }
+
+      // 加载禁用工具列表
+      if (config.disabledTools && Array.isArray(config.disabledTools)) {
+        settings.security.disabledToolsText = config.disabledTools.join('\n')
+      }
     } else {
       message.error(configResponse.error || '加载配置失败')
     }
@@ -1710,7 +1809,8 @@ const saveSettings = async () => {
       availableModels: settings.ai.availableModelsText.split('\n').map(s => s.trim()).filter(s => s),
       hitl: settings.workspace.mode === true,
       security: {...settings.security},
-      price: settings.ai.prices
+      price: settings.ai.prices,
+      disabledTools: settings.security.disabledToolsText.split('\n').map(s => s.trim()).filter(s => s)
     }
 
     const response = await configAPI.updateConfig(configToUpdate)
@@ -1990,6 +2090,50 @@ const fillPricesFromModels = () => {
   settings.ai.prices = newPrices
   hasChanges.value = true
   message.success(`已从模型列表生成 ${models.length} 个价格条目`)
+}
+
+// ==================== 禁用工具操作 ====================
+
+// 从已有工具中获取并打开选择弹窗
+const fetchAndFillTools = async () => {
+  loadingTools.value = true
+  try {
+    const res = await toolsAPI.list()
+    if (res.success && res.data) {
+      allTools.value = res.data
+    } else {
+      allTools.value = res.data || []
+    }
+  } catch (err) {
+    console.error('获取工具列表失败:', err)
+    message.error('获取工具列表失败: ' + (err.message || err))
+    allTools.value = []
+  } finally {
+    loadingTools.value = false
+  }
+
+  // 初始化已选状态
+  const currentDisabled = settings.security.disabledToolsText.split('\n').map(s => s.trim()).filter(s => s)
+  selectedDisabledTools.value = new Set(currentDisabled)
+  toolSearchQuery.value = ''
+  showToolPicker.value = true
+}
+
+const toggleDisabledTool = (toolName) => {
+  const set = selectedDisabledTools.value
+  if (set.has(toolName)) {
+    set.delete(toolName)
+  } else {
+    set.add(toolName)
+  }
+  // 触发响应式更新
+  selectedDisabledTools.value = new Set(set)
+}
+
+const confirmDisabledTools = () => {
+  settings.security.disabledToolsText = Array.from(selectedDisabledTools.value).join('\n')
+  hasChanges.value = true
+  showToolPicker.value = false
 }
 
 const openapiLoading = ref(false)
