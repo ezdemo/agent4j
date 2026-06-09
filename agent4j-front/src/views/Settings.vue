@@ -234,6 +234,7 @@
                 <div class="setting-control">
                   <div class="select-wrapper">
                     <select v-model="settings.ai.reasoningEffort" class="form-select">
+                      <option value="none">无 - 不推理</option>
                       <option value="low">低 - 快速响应</option>
                       <option value="medium">中 - 平衡模式</option>
                       <option value="high">高 - 深度思考</option>
