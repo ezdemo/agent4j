@@ -310,6 +310,8 @@ const handleSend = () => {
     emit('send', images.value)
     // 发送后清空图片，localText 由父组件 v-model 清空
     images.value = []
+    // 等待父组件清空文本后，重置 textarea 高度
+    nextTick(() => autoResize())
   }
 }
 
