@@ -5,6 +5,7 @@ import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.talent.Talent;
 import org.noear.solon.ai.chat.tool.FunctionTool;
 import site.sorghum.agent4j.tool.AgentTool;
+import site.sorghum.agent4j.tool.ErrorCodes;
 import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
@@ -96,7 +97,7 @@ public class ToolManager {
                         = functionTool.call(ctx.getParams());     // ← 用了 getParams()
                 if (solonResult.isError()){
                     return ToolResult.fail(
-                            "SOLON_TOOL_EXEC_ERROR",
+                            ErrorCodes.SOLON_TOOL_EXEC_ERROR,
                             solonResult.getContent()
                     );
                 }
@@ -108,7 +109,7 @@ public class ToolManager {
 
                 return ToolResult.ok(text);                       // ← 你的 ToolResult
             } catch (Throwable e) {
-                return ToolResult.fail("TOOL_EXEC_ERROR",         // ← 你的 ToolResult
+                return ToolResult.fail(ErrorCodes.TOOL_EXEC_ERROR,         // ← 你的 ToolResult
                         "工具执行失败 [" + getName() + "]: " + e.getMessage());
             }
         }
@@ -197,7 +198,8 @@ public class ToolManager {
 
             // 处理 object 类型：递归解析嵌套 properties
             if ("object".equals(type) && paramSchema.containsKey("properties")) {
-                List<String> nestedRequired = (List<String>) paramSchema.getOrDefault("required", Collections.emptyList());
+                List<String> nestedRequired = (List<String>) paramSchema
+                        .getOrDefault("required", Collections.emptyList());
                 Map<String, Object> nestedProps = (Map<String, Object>) paramSchema.get("properties");
                 List<ToolParameter> nested = parseProperties(nestedProps, new HashSet<>(nestedRequired));
                 result.add(ToolParameter.objectParam(paramName, required, description, nested));

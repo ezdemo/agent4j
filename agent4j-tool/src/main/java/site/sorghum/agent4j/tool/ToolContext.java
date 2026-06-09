@@ -169,6 +169,7 @@ public class ToolContext {
             try {
                 return Integer.parseInt(str);
             } catch (NumberFormatException ignored) {
+                // 字符串无法解析为整数，返回默认值
             }
         }
         return defaultValue;

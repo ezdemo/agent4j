@@ -28,6 +28,7 @@ public class SmartDecoder {
             utf8.onUnmappableCharacter(CodingErrorAction.REPORT);
             return utf8.decode(ByteBuffer.wrap(bytes)).toString();
         } catch (CharacterCodingException ignored) {
+            // UTF-8 解码失败，尝试其他编码
         }
 
         // 2. Windows → GB18030 (GBK 的超集)
@@ -35,6 +36,7 @@ public class SmartDecoder {
             try {
                 return new String(bytes, Charset.forName("GB18030"));
             } catch (Exception ignored) {
+                // GB18030 解码失败，回退到 lossy UTF-8
             }
         }
 

@@ -3,6 +3,7 @@ package site.sorghum.agent4j.tool.job;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import site.sorghum.agent4j.tool.AgentTool;
+import site.sorghum.agent4j.tool.ErrorCodes;
 import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
@@ -59,7 +60,7 @@ public class RunBackgroundTool extends AgentTool {
             return ToolResult.ok(jobService.runBackground(ctx.getRootDir(), ctx.getString("command"),
                     ctx.getString("cwd"), waitSec));
         } catch (IOException e) {
-            return ToolResult.fail("IO_ERROR", e.getMessage());
+            return ToolResult.fail(ErrorCodes.IO_ERROR, e.getMessage());
         }
     }
 }

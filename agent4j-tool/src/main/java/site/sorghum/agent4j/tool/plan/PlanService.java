@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.tool.plan;
 
 import org.noear.solon.annotation.Component;
+import site.sorghum.agent4j.tool.ErrorMessages;
 
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -20,7 +21,7 @@ public class PlanService {
     @SuppressWarnings("unchecked")
     public String submitPlan(String summary, String planBody, List<Map<String, Object>> stepsRaw) {
         if (stepsRaw == null || stepsRaw.isEmpty())
-            return "{\"error\":\"submit_plan requires at least one step\"}";
+            return ErrorMessages.SUBMIT_PLAN_REQUIRES_STEPS;
         currentPlan = new LinkedHashMap<>();
         currentPlanStepIndex = 0;
         for (Map<String, Object> s : stepsRaw) {
@@ -34,9 +35,9 @@ public class PlanService {
 
     public String markStepComplete(String stepId, String result,
                                    List<Map<String, Object>> evidence) {
-        if (currentPlan == null) return "{\"error\":\"no active plan\"}";
+        if (currentPlan == null) return ErrorMessages.NO_ACTIVE_PLAN;
         PlanStep step = currentPlan.get(stepId);
-        if (step == null) return "{\"error\":\"step not found: " + stepId + "\"}";
+        if (step == null) return ErrorMessages.stepNotFound(stepId);
         step.completed = true;
         currentPlanStepIndex++;
         return "step " + stepId + " (" + step.title + ") marked complete: "
@@ -44,7 +45,7 @@ public class PlanService {
     }
 
     public String revisePlan(String reason, List<Map<String, Object>> remainingSteps) {
-        if (currentPlan == null) return "{\"error\":\"no active plan\"}";
+        if (currentPlan == null) return ErrorMessages.NO_ACTIVE_PLAN;
         currentPlan.values().stream().filter(s -> !s.completed).forEach(s -> s.completed = true);
         for (Map<String, Object> s : remainingSteps) {
             String id = (String) s.getOrDefault("id", "step-" + (currentPlan.size() + 1));

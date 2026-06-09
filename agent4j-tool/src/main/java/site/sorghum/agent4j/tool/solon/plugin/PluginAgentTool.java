@@ -4,6 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 import site.sorghum.agent4j.tool.AgentTool;
+import site.sorghum.agent4j.tool.ErrorCodes;
 import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
@@ -36,14 +37,14 @@ public class PluginAgentTool extends AgentTool {
         try {
             Path skillMd = skillDir.resolve("skill.md");
             if (!Files.exists(skillMd)) {
-                return ToolResult.fail("SKILL_NOT_FOUND",
+                return ToolResult.fail(ErrorCodes.SKILL_NOT_FOUND,
                         "未在 " + skillDir.toAbsolutePath() + " 下找到 skill.md");
             }
             String content = Files.readString(skillMd, StandardCharsets.UTF_8);
             String dirPath = skillDir.toAbsolutePath().normalize().toString();
             return ToolResult.ok("=== 技能目录: " + dirPath + " ===\n\n" + content + "\n\n=== 文件目录 ===\n" + dirPath);
         } catch (Exception e) {
-            return ToolResult.fail("PLUGIN_EXEC_ERROR",
+            return ToolResult.fail(ErrorCodes.PLUGIN_EXEC_ERROR,
                     "执行插件工具 [" + name + "] 失败: " + e.getMessage());
         }
     }

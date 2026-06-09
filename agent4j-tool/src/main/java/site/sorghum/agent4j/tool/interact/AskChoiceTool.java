@@ -1,7 +1,13 @@
 package site.sorghum.agent4j.tool.interact;
 
 import org.noear.solon.annotation.Component;
-import site.sorghum.agent4j.tool.*;
+import site.sorghum.agent4j.tool.AgentLoopController;
+import site.sorghum.agent4j.tool.AgentOutput;
+import site.sorghum.agent4j.tool.AgentTool;
+import site.sorghum.agent4j.tool.ErrorCodes;
+import site.sorghum.agent4j.tool.ToolContext;
+import site.sorghum.agent4j.tool.ToolParameter;
+import site.sorghum.agent4j.tool.ToolResult;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -50,11 +56,11 @@ public class AskChoiceTool extends AgentTool {
         // 通过 AgentLoopController 获取输出通道
         AgentLoopController ctrl = ctx.getLoopController();
         if (ctrl == null) {
-            return ToolResult.fail("NO_CONTROLLER", "没有可用的 AgentLoop 控制器，无法展示选择菜单");
+            return ToolResult.fail(ErrorCodes.NO_CONTROLLER, "没有可用的 AgentLoop 控制器，无法展示选择菜单");
         }
         AgentOutput output = ctrl.getOutput();
         if (output == null) {
-            return ToolResult.fail("NO_OUTPUT", "没有可用的输出通道，无法展示选择菜单");
+            return ToolResult.fail(ErrorCodes.NO_OUTPUT, "没有可用的输出通道，无法展示选择菜单");
         }
 
         List<?> rawOptions = (List<?>) ctx.getParams().get("options");

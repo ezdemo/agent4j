@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.tool.interact;
 
 import org.noear.solon.annotation.Component;
+import site.sorghum.agent4j.tool.ErrorMessages;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -30,7 +31,7 @@ public class InteractionService {
     public String askChoice(String question, List<Map<String, Object>> options,
                             Boolean allowCustom) {
         if (options == null || options.isEmpty())
-            return "{\"error\":\"ask_choice requires at least one option\"}";
+            return ErrorMessages.ASK_CHOICE_REQUIRES_OPTIONS;
         StringBuilder sb = new StringBuilder();
         sb.append("┌─ ").append(question).append("\n");
         for (int i = 0; i < options.size(); i++) {
