@@ -186,10 +186,12 @@ export class ApiClient {
 
     /**
      * 删除会话
-     * DELETE /api/sessions/{name}
+     * DELETE /api/sessions/{name}?workspaceHash=xxx
      */
-    deleteSession(name: string): Promise<ApiResponse<void>> {
-        return this.delete_<void>(`/sessions/${encodeURIComponent(name)}`);
+    deleteSession(name: string, workspaceHash?: string): Promise<ApiResponse<void>> {
+        return this.delete_<void>(`/sessions/${encodeURIComponent(name)}`, {
+            params: { workspaceHash },
+        });
     }
 
     /**

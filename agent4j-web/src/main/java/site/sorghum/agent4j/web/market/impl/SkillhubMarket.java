@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.web.market.impl;
 
+import lombok.SneakyThrows;
 import org.noear.snack4.ONode;
 import site.sorghum.agent4j.web.market.AbstractZipMarket;
 import site.sorghum.agent4j.web.market.MarketDetail;
@@ -29,15 +30,16 @@ public class SkillhubMarket extends AbstractZipMarket {
         return "专为中国用户优化的技能社区";
     }
 
+    @SneakyThrows
     @Override
-    protected String buildDownloadUrl(String slug) throws Exception {
+    protected String buildDownloadUrl(String slug){
         return BASE_URL + "/api/v1/download?slug=" + URLEncoder.encode(slug, "UTF-8");
     }
 
     // ==================== 列表与搜索 ====================
 
     @Override
-    public List<MarketItem> trending(int limit) throws Exception {
+    public List<MarketItem> trending(int limit){
         String url = BASE_URL + "/api/v1/search?q=&limit=" + limit;
         String body = httpGet(url);
         ONode root = ONode.ofJson(body);
@@ -48,8 +50,9 @@ public class SkillhubMarket extends AbstractZipMarket {
         return parseResults(root);
     }
 
+    @SneakyThrows
     @Override
-    public List<MarketItem> search(String query, int limit) throws Exception {
+    public List<MarketItem> search(String query, int limit){
         if (query == null || query.isEmpty()) {
             return trending(limit);
         }
@@ -66,8 +69,9 @@ public class SkillhubMarket extends AbstractZipMarket {
 
     // ==================== 详情 ====================
 
+    @SneakyThrows
     @Override
-    public MarketDetail detail(String slug) throws Exception {
+    public MarketDetail detail(String slug){
         if (slug == null || slug.isEmpty()) {
             throw new IllegalArgumentException("slug is required");
         }
