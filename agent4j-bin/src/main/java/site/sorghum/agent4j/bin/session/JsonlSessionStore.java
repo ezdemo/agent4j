@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.bin.session;
 
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.bin.agent.ChatMessage;
 import site.sorghum.agent4j.bin.agent.ToolCallEntry;
 import site.sorghum.agent4j.bin.util.ONodeUtil;
@@ -30,6 +31,7 @@ import java.util.concurrent.locks.ReentrantLock;
  *
  * @author Sorghum
  */
+@Slf4j
 public class JsonlSessionStore implements SessionStore {
 
     private static final Path DEFAULT_SESSIONS_DIR = Paths.get(
@@ -241,7 +243,7 @@ public class JsonlSessionStore implements SessionStore {
                 writer.newLine();
             }
         } catch (IOException e) {
-            System.err.println("[jsonl] 批量写入失败: " + e.getMessage());
+            log.error("[jsonl] 批量写入失败: {}", e.getMessage());
         } finally {
             lock.unlock();
         }
@@ -256,11 +258,13 @@ public class JsonlSessionStore implements SessionStore {
             if (writer != null) {
                 try {
                     writer.flush();
-                } catch (IOException ignored) {
+                } catch (IOException e) {
+                    log.warn("[jsonl] flush 关闭前失败: {}", e.getMessage());
                 }
                 try {
                     writer.close();
-                } catch (IOException ignored) {
+                } catch (IOException e) {
+                    log.warn("[jsonl] close 关闭前失败: {}", e.getMessage());
                 }
                 writer = null;
             }
@@ -294,8 +298,9 @@ public class JsonlSessionStore implements SessionStore {
             scheduler.shutdown();
             try {
                 scheduler.awaitTermination(2, TimeUnit.SECONDS);
-            } catch (InterruptedException ignored) {
+            } catch (InterruptedException e) {
                 scheduler.shutdownNow();
+                Thread.currentThread().interrupt();
             }
         }
     }
@@ -310,7 +315,8 @@ public class JsonlSessionStore implements SessionStore {
             try {
                 consumerThread.interrupt();
                 consumerThread.join(2000);
-            } catch (InterruptedException ignored) {
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
             }
         }
         stopPeriodicFlush();
@@ -379,7 +385,7 @@ public class JsonlSessionStore implements SessionStore {
                 writer.flush();
             }
         } catch (IOException e) {
-            System.err.println("[jsonl] flush 失败: " + e.getMessage());
+            log.error("[jsonl] flush 失败: {}", e.getMessage());
         } finally {
             lock.unlock();
         }
@@ -402,7 +408,8 @@ public class JsonlSessionStore implements SessionStore {
             try {
                 org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson(line);
                 messages.add(ChatMessage.fromMap(ONodeUtil.toMap(node)));
-            } catch (Exception ignored) {
+            } catch (Exception e) {
+                log.warn("[jsonl] 解析消息行失败: {}", e.getMessage());
             }
         }
         return messages;
@@ -457,7 +464,8 @@ public class JsonlSessionStore implements SessionStore {
                         String metaJson = Files.readString(metaFile);
                         org.noear.snack4.ONode metaNode = org.noear.snack4.ONode.ofJson(metaJson);
                         title = metaNode.get("title").getString();
-                    } catch (Exception ignored) {
+                    } catch (Exception e) {
+                        log.warn("[jsonl] 读取会话元数据失败: {}", e.getMessage());
                     }
                 }
                 list.add(new SessionInfo(name, size, lines, attr.lastModifiedTime().toMillis(), title));
@@ -493,8 +501,8 @@ public class JsonlSessionStore implements SessionStore {
                         || name.endsWith(".meta") || name.endsWith(".model_usage")) {
                     try {
                         Files.deleteIfExists(p);
-                    } catch (IOException ignored) {
-                        // 忽略单个文件删除失败
+                    } catch (IOException e) {
+                        log.warn("[jsonl] 删除文件失败 {}: {}", name, e.getMessage());
                     }
                 }
             }
@@ -520,10 +528,13 @@ public class JsonlSessionStore implements SessionStore {
             return;
         }
 
-        String json = "{\"prompt\":" + prompt + ",\"completion\":" + completion
-                + ",\"cacheHit\":" + cacheHit + ",\"cacheMiss\":" + cacheMiss
-                + ",\"lastPromptTokens\":" + lastPromptTokens + "}";
-        Files.writeString(file, json);
+        org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson("{}").asObject();
+        node.set("prompt", prompt);
+        node.set("completion", completion);
+        node.set("cacheHit", cacheHit);
+        node.set("cacheMiss", cacheMiss);
+        node.set("lastPromptTokens", lastPromptTokens);
+        Files.writeString(file, node.toJson());
     }
 
     @Override

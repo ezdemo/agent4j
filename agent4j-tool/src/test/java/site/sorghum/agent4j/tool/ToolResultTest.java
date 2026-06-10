@@ -111,4 +111,34 @@ class ToolResultTest {
         ToolResult r = ToolResult.retry("ERR", "锁住", "解锁后重试", "");
         assertTrue(r.toString().contains("解锁后重试"));
     }
+
+    @Test
+    @DisplayName("ok(null) 应将 null text 转为空字符串")
+    void ok_shouldHandleNullText() {
+        ToolResult r = ToolResult.ok(null);
+        assertTrue(r.success());
+        assertEquals("", r.text());
+    }
+
+    @Test
+    @DisplayName("fail(null errorCode) 应使用默认 ERROR 码")
+    void fail_shouldDefaultNullErrorCode() {
+        ToolResult r = ToolResult.fail(null, "something wrong");
+        assertEquals("ERROR", r.errorCode());
+    }
+
+    @Test
+    @DisplayName("fail(null text) 应将 null text 转为空字符串")
+    void fail_shouldHandleNullText() {
+        ToolResult r = ToolResult.fail("E", null);
+        assertEquals("", r.text());
+    }
+
+    @Test
+    @DisplayName("toMap() 应返回不可修改的 Map")
+    void toMap_shouldReturnUnmodifiableMap() {
+        ToolResult r = ToolResult.ok("test");
+        Map<String, Object> map = r.toMap();
+        assertThrows(UnsupportedOperationException.class, () -> map.put("newKey", "value"));
+    }
 }

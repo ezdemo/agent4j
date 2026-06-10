@@ -8,6 +8,7 @@ import site.sorghum.agent4j.bin.session.SessionStore;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Objects;
 
 /**
  * 会话上下文 —— 在内存中管理消息历史。
@@ -39,7 +40,7 @@ public class ConversationContext {
     private SessionStore sessionStore = null;
 
     public ConversationContext(PromptPrefix prefix) {
-        this.prefix = prefix;
+        this.prefix = Objects.requireNonNull(prefix, "prefix must not be null");
     }
 
     // ---- 写入 ----
@@ -80,6 +81,22 @@ public class ConversationContext {
         persist(msg);
     }
 
+    /**
+     * 添加 assistant 消息到上下文。
+     * <p>
+     * 防御性逻辑（四分支）：
+     * <ol>
+     *   <li>三者皆空（content/toolCalls/reasoning 都无）→ content 设为 "" 避免空消息</li>
+     *   <li>仅有 reasoning（无 content 无 toolCalls）→ content 保持 null，
+     *       让 {@code toMap()} 不输出 content 字段，避免 {@code "content":""} 导致 API 400</li>
+     *   <li>有 content 或 toolCalls → 正常传递</li>
+     * </ol>
+     * </p>
+     *
+     * @param content         文本内容（可为 null）
+     * @param toolCalls       工具调用列表（可为 null）
+     * @param reasoningContent 推理内容（可为 null）
+     */
     public void addAssistant(String content, List<ToolCallEntry> toolCalls, String reasoningContent) {
         // 防御：assistant 消息必须至少包含 content、tool_calls 或 reasoning_content 之一
         boolean hasContent = content != null && !content.isEmpty();
@@ -159,24 +176,35 @@ public class ConversationContext {
     }
 
     /**
-     * 撤回最后一条用户消息及其后的所有消息，返回被撤回的用户消息内容。
-     * 用于 /retry 命令。同时同步持久化。
+     * 从末尾反向查找第 N 条用户消息（0=最后一条），移除该消息及其后所有消息。
+     * 同时同步持久化。
      */
-    public String retryLastUser() {
+    private String removeFromNthUserFromEnd(int nFromEnd) {
+        int count = 0;
         for (int i = history.size() - 1; i >= 0; i--) {
             if (history.get(i).isUser()) {
-                String text = history.get(i).getContent();
-                history.subList(i, history.size()).clear();
-                // 同步持久化：回写文件以移除被撤回的消息
-                rewriteStore();
-                return text;
+                if (count == nFromEnd) {
+                    String text = history.get(i).getContent();
+                    history.subList(i, history.size()).clear();
+                    rewriteStore();
+                    return text;
+                }
+                count++;
             }
         }
         return null;
     }
 
     /**
-     * 回退到第 N 条用户消息，移除之后的所有消息。
+     * 撤回最后一条用户消息及其后的所有消息，返回被撤回的用户消息内容。
+     * 用于 /retry 命令。同时同步持久化。
+     */
+    public String retryLastUser() {
+        return removeFromNthUserFromEnd(0);
+    }
+
+    /**
+     * 回退到第 N 条用户消息（从前往后数，0-based），移除之后的所有消息。
      * 用于 /rewind N 命令。同时同步持久化。
      */
     public String rewindToUser(int userIndex) {
@@ -186,7 +214,6 @@ public class ConversationContext {
                 if (count == userIndex) {
                     String text = history.get(i).getContent();
                     history.subList(i, history.size()).clear();
-                    // 同步持久化：回写文件以移除被回退的消息
                     rewriteStore();
                     return text;
                 }

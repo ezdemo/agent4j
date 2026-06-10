@@ -27,6 +27,24 @@ public class ToolDispatcher {
     /** Storm 断路器拒绝原因标识 */
     public static final String REJECTED_REASON_STORM = "storm";
 
+    /**
+     * 工具调用前拦截器：接收工具名称，返回拦截结果（null 表示放行）。
+     */
+    @FunctionalInterface
+    public interface PreDispatchHook {
+        /** @return 拦截结果字符串，或 null 表示放行继续执行 */
+        String apply(String toolName);
+    }
+
+    /**
+     * 工具调用后拦截器：接收工具名称和结果，返回修改后的结果。
+     */
+    @FunctionalInterface
+    public interface PostDispatchHook {
+        /** @return 修改后的结果字符串 */
+        String apply(String toolName, String result);
+    }
+
     private final ToolRegistry registry;
     /**
      * Storm 断路器（每回合重置）
@@ -43,12 +61,23 @@ public class ToolDispatcher {
      * 工具调用前拦截器
      */
     @Setter
-    private Function<String, String> preDispatchHook = null;
+    private PreDispatchHook preDispatchHook = null;
+
+    /** 向后兼容：接受 {@link java.util.function.Function} 并包装为 {@link PreDispatchHook} */
+    public void setPreDispatchHook(Function<String, String> hook) {
+        this.preDispatchHook = hook != null ? hook::apply : null;
+    }
+
     /**
      * 工具调用后拦截器
      */
     @Setter
-    private BiFunction<String, String, String> postDispatchHook = null;
+    private PostDispatchHook postDispatchHook = null;
+
+    /** 向后兼容：接受 {@link java.util.function.BiFunction} 并包装为 {@link PostDispatchHook} */
+    public void setPostDispatchHook(BiFunction<String, String, String> hook) {
+        this.postDispatchHook = hook != null ? hook::apply : null;
+    }
     /**
      * 当前会话 ID —— 自动注入到工具调用上下文中。
      */
@@ -64,6 +93,14 @@ public class ToolDispatcher {
     private static String error(String msg) {
         ONode node = ONode.ofJson("{}").asObject();
         node.set("error", msg);
+        return node.toJson();
+    }
+
+    /** 构建含 rejectedReason 的 JSON 拒绝响应。 */
+    private static String rejected(String msg, String reason) {
+        ONode node = ONode.ofJson("{}").asObject();
+        node.set("error", msg);
+        node.set("rejectedReason", reason);
         return node.toJson();
     }
 
@@ -111,18 +148,18 @@ public class ToolDispatcher {
 
         // Plan Mode 门控
         if (planMode && !tool.readOnly()) {
-            return "{\"error\":\"" + name
+            return rejected(name
                     + ": 计划模式下不可用——当前为只读探索阶段。"
                     + "请使用 read_file / glob / grep / tree / get_file_info 调查代码。"
-                    + "准备好后调用 submit_plan 提交计划供审批。"
-                    + "\",\"rejectedReason\":\"" + REJECTED_REASON_PLAN_MODE + "\"}";
+                    + "准备好后调用 submit_plan 提交计划供审批。",
+                    REJECTED_REASON_PLAN_MODE);
         }
 
         // Storm Breaker 检查
         if (!tool.stormExempt()) {
             StormBreaker.SuppressResult sr = stormBreaker.inspect(name, argumentsJson, tool.readOnly());
             if (sr.suppressed) {
-                return "{\"error\":\"" + sr.reason + "\",\"rejectedReason\":\"" + REJECTED_REASON_STORM + "\"}";
+                return rejected(sr.reason, REJECTED_REASON_STORM);
             }
         }
 

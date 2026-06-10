@@ -32,7 +32,7 @@ public class SubAgent {
      * </ul>
      * <p>public 可见性供 {@code TaskTool} 构建子代理 system prompt 时保持一致的过滤逻辑。</p>
      */
-    public static final Set<String> SUB_AGENT_DENY = new HashSet<>(Arrays.asList(
+    public static final Set<String> SUB_AGENT_DENY = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "task",                // 防止递归子代理 spawn
             "multi_task",          // 防止递归多子代理 spawn
             "submit_plan",         // 计划管理（主代理专用）
@@ -41,7 +41,7 @@ public class SubAgent {
             "ask_choice",          // 用户交互（主代理专用）
             "todo_write",          // 会话任务跟踪（主代理专用）
             "workspace_watch"      // 子代理不允许阻塞式 watch
-    ));
+    )));
 
     private final ModelClient client;
     private final ToolRegistry registry;
@@ -82,9 +82,9 @@ public class SubAgent {
      * 构造函数（接受 ModelClient 接口，便于 DI）
      */
     public SubAgent(ModelClient client, ToolRegistry parentRegistry, String systemPrompt) {
-        this.client = client;
+        this.client = Objects.requireNonNull(client, "client must not be null");
         // 创建独立注册表，通过 forceDenyTools 硬性过滤（禁止递归 spawn 等）
-        this.registry = parentRegistry.copy();
+        this.registry = Objects.requireNonNull(parentRegistry, "parentRegistry must not be null").copy();
         this.registry.setForceDenyTools(SUB_AGENT_DENY);
         this.systemPrompt = systemPrompt;
     }

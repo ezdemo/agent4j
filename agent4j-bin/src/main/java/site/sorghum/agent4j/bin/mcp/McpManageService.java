@@ -317,7 +317,7 @@ public class McpManageService {
         try {
             String json = Files.readString(path, StandardCharsets.UTF_8);
             return ONode.ofJson(json).toBean(McpPersistenceData.class);
-        } catch (Exception e) {
+        } catch (IOException e) {
             log.warn("读取 MCP 配置失败: {}", path, e);
             return null;
         }

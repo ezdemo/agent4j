@@ -32,7 +32,7 @@ public class PluginToolProvider implements SolonToTools {
 
     private static final String CONFIG_FILE = "tool.json";
 
-    Map<Path, PluginConfig> configs = new ConcurrentHashMap<>();
+    final Map<Path, PluginConfig> configs = new ConcurrentHashMap<>();
 
     private Path pluginRoot() {
         return Paths.get(System.getProperty("user.home", "."), ".agent4j", "plugin");
