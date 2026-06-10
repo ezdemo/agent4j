@@ -745,5 +745,14 @@ export const skillMarketAPI = {
   }
 }
 
+// LSP 服务器管理 API
+export const lspAPI = {
+    listServers: () => api.get('/lsp/servers'),
+    addServer: (server) => api.post('/lsp/servers/add', server),
+    updateServer: (originalName, server) => api.post('/lsp/servers/update', { originalName, server }),
+    removeServer: (name) => api.post('/lsp/servers/remove', { name }),
+    toggleServer: (name, enabled) => api.post('/lsp/servers/toggle', { name, enabled }),
+}
+
 export default api
 
