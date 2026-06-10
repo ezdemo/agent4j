@@ -1,7 +1,6 @@
 package site.sorghum.agent4j.bin.workspace;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -19,9 +18,8 @@ import java.util.regex.Pattern;
  *
  * @author Sorghum
  */
+@Slf4j
 public class WorkspaceEventBus {
-
-    private static final Logger log = LoggerFactory.getLogger(WorkspaceEventBus.class);
 
     private final ConcurrentHashMap<String, Watcher> watchers = new ConcurrentHashMap<>();
     private final AtomicInteger idCounter = new AtomicInteger(1);

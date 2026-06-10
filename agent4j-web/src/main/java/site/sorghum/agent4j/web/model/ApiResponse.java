@@ -11,9 +11,9 @@ import org.noear.snack4.ONode;
 @Data
 public class ApiResponse<T> {
 
-    public boolean success;
-    public String error;
-    public T data;
+    private boolean success;
+    private String error;
+    private T data;
 
     public static <T> ApiResponse<T> ok(T data) {
         ApiResponse<T> r = new ApiResponse<>();

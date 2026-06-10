@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.web.market.impl;
 
+import lombok.SneakyThrows;
 import org.noear.snack4.ONode;
 import site.sorghum.agent4j.web.market.AbstractZipMarket;
 import site.sorghum.agent4j.web.market.MarketDetail;
@@ -27,15 +28,16 @@ public class ClawhubMarket extends AbstractZipMarket {
         return "ClawHub 国际技能市场";
     }
 
+    @SneakyThrows
     @Override
-    protected String buildDownloadUrl(String slug) throws Exception {
+    protected String buildDownloadUrl(String slug){
         return BASE_URL + "/api/v1/download?slug=" + URLEncoder.encode(slug, "UTF-8");
     }
 
     // ==================== 列表与搜索 ====================
 
     @Override
-    public List<MarketItem> trending(int limit) throws Exception {
+    public List<MarketItem> trending(int limit){
         String url = BASE_URL + "/api/v1/skills?limit=" + limit + "&sort=trending";
         String body = httpGet(url);
         ONode root = ONode.ofJson(body);
@@ -47,8 +49,9 @@ public class ClawhubMarket extends AbstractZipMarket {
         return parseItems(root);
     }
 
+    @SneakyThrows
     @Override
-    public List<MarketItem> search(String query, int limit) throws Exception {
+    public List<MarketItem> search(String query, int limit){
         if (query == null || query.isEmpty()) {
             return trending(limit);
         }
@@ -71,8 +74,9 @@ public class ClawhubMarket extends AbstractZipMarket {
 
     // ==================== 详情 ====================
 
+    @SneakyThrows
     @Override
-    public MarketDetail detail(String slug) throws Exception {
+    public MarketDetail detail(String slug){
         if (slug == null || slug.isEmpty()) {
             throw new IllegalArgumentException("slug is required");
         }
@@ -90,18 +94,18 @@ public class ClawhubMarket extends AbstractZipMarket {
             throw new RuntimeException("技能不存在: " + slug);
         }
 
-        MarketDetail detail = new MarketDetail()
-                .slug(getStringValue(skillNode, "slug"))
-                .displayName(getStringValue(skillNode, "displayName"))
-                .summary(getStringValue(skillNode, "summary"))
-                .description(getStringValue(skillNode, "description"))
-                .ownerHandle(getStringValue(skillNode, "ownerHandle"))
-                .installSlug(getStringValue(skillNode, "slug"));
+        MarketDetail detail = new MarketDetail();
+        detail.setSlug(getStringValue(skillNode, "slug"))
+                .setDisplayName(getStringValue(skillNode, "displayName"))
+                .setSummary(getStringValue(skillNode, "summary"))
+                .setDescription(getStringValue(skillNode, "description"))
+                .setOwnerHandle(getStringValue(skillNode, "ownerHandle"))
+                .setInstallSlug(getStringValue(skillNode, "slug"));
 
         ONode statsNode = skillNode.get("stats");
         if (statsNode != null && !statsNode.isNull()) {
-            detail.installs(getLongValue(statsNode, "installsCurrent"));
-            detail.stars(getLongValue(statsNode, "stars"));
+            detail.setInstalls(getLongValue(statsNode, "installsCurrent"));
+            detail.setStars(getLongValue(statsNode, "stars"));
         }
 
         return detail;
@@ -125,18 +129,18 @@ public class ClawhubMarket extends AbstractZipMarket {
             String detailUrl = (apiUrl != null) ? apiUrl : BASE_URL + "/skills/" + slug;
 
             MarketItem item = new MarketItem()
-                    .slug(slug)
-                    .name(slug)
-                    .displayName(getStringValue(node, "displayName"))
-                    .summary(getStringValue(node, "summary"))
-                    .description(getStringValue(node, "description"))
-                    .ownerHandle(getStringValue(node, "ownerHandle"))
-                    .url(detailUrl);
+                    .setSlug(slug)
+                    .setName(slug)
+                    .setDisplayName(getStringValue(node, "displayName"))
+                    .setSummary(getStringValue(node, "summary"))
+                    .setDescription(getStringValue(node, "description"))
+                    .setOwnerHandle(getStringValue(node, "ownerHandle"))
+                    .setUrl(detailUrl);
 
             ONode statsNode = node.get("stats");
             if (statsNode != null && !statsNode.isNull()) {
-                item.installs(getLongValue(statsNode, "installsCurrent"));
-                item.stars(getLongValue(statsNode, "stars"));
+                item.setInstalls(getLongValue(statsNode, "installsCurrent"));
+                item.setStars(getLongValue(statsNode, "stars"));
             }
 
             result.add(item);

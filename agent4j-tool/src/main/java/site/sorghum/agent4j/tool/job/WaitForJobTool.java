@@ -7,7 +7,6 @@ import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
 
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -33,7 +32,7 @@ public class WaitForJobTool extends AgentTool {
 
     @Override
     public List<ToolParameter> getParameters() {
-        return Arrays.asList(
+        return List.of(
                 new ToolParameter("jobId", "int", true, "Job id"),
                 new ToolParameter("timeoutMs", "int", false, "Max wait in ms (default 5000)"),
                 new ToolParameter("waitFor", "string", false, "'exit' or 'output-or-exit' (default 'exit')")

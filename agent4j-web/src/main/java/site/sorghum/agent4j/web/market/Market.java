@@ -26,22 +26,22 @@ public interface Market {
     /**
      * 获取热门技能列表
      */
-    List<MarketItem> trending(int limit) throws Exception;
+    List<MarketItem> trending(int limit);
 
     /**
      * 搜索技能
      */
-    List<MarketItem> search(String query, int limit) throws Exception;
+    List<MarketItem> search(String query, int limit);
 
     /**
      * 获取技能详情
      */
-    MarketDetail detail(String slug) throws Exception;
+    MarketDetail detail(String slug);
 
     /**
      * 安装技能 — 下载并解压到指定目录
      *
      * @return 安装的技能显示名称
      */
-    String install(String slug, Path skillsDir) throws Exception;
+    String install(String slug, Path skillsDir);
 }

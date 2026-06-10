@@ -1,8 +1,7 @@
 package site.sorghum.agent4j.bin.workspace;
 
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.Comparator;
 import java.util.LinkedHashSet;
@@ -22,10 +21,9 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
  *
  * @author Sorghum
  */
+@Slf4j
 @Component
 public class SharedWorkspace {
-
-    private static final Logger log = LoggerFactory.getLogger(SharedWorkspace.class);
 
     /** KV 存储 */
     private final ConcurrentHashMap<String, KVBucket> kvStore = new ConcurrentHashMap<>();
@@ -40,7 +38,7 @@ public class SharedWorkspace {
     private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
 
     /** 最大条目数（单个存储类型），默认 1000 */
-    private int maxEntries;
+    private final int maxEntries;
 
     public SharedWorkspace() {
         this(1000);

@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.tool.terminal;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.nio.ByteBuffer;
 import java.nio.charset.*;
 
@@ -10,6 +12,7 @@ import java.nio.charset.*;
  * UTF-8 → Windows GBK/GB18030 fallback → lossy UTF-8。
  * </p>
  */
+@Slf4j
 public class SmartDecoder {
 
     /**
@@ -27,16 +30,16 @@ public class SmartDecoder {
             utf8.onMalformedInput(CodingErrorAction.REPORT);
             utf8.onUnmappableCharacter(CodingErrorAction.REPORT);
             return utf8.decode(ByteBuffer.wrap(bytes)).toString();
-        } catch (CharacterCodingException ignored) {
-            // UTF-8 解码失败，尝试其他编码
+        } catch (CharacterCodingException e) {
+            log.debug("UTF-8 严格解码失败，尝试其他编码: {}", e.getMessage());
         }
 
         // 2. Windows → GB18030 (GBK 的超集)
         if (isWindows()) {
             try {
                 return new String(bytes, Charset.forName("GB18030"));
-            } catch (Exception ignored) {
-                // GB18030 解码失败，回退到 lossy UTF-8
+            } catch (Exception e) {
+                log.debug("GB18030 解码失败，回退到 lossy UTF-8: {}", e.getMessage());
             }
         }
 

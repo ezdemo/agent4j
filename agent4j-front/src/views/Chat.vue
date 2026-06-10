@@ -723,7 +723,7 @@ const sendMessage = async (images = []) => {
               status: '执行中',
               args,
               result: '',
-              expanded: false
+              expanded: true
             })
           } else if (data.type === 'sub_tool_result') {
             let result = data.result || data.content || ''
@@ -788,7 +788,7 @@ const sendMessage = async (images = []) => {
               status: '执行中',
               args,
               result: '',
-              expanded: false
+              expanded: true
             })
           } else if (data.type === 'tool_result') {
             let result = data.result || data.content || ''
@@ -1037,7 +1037,7 @@ const loadHistory = async (sessionName, force = false) => {
           if (m.reasoning_content) item.blocks.push({
             type: 'reasoning',
             content: m.reasoning_content,
-            showContent: false
+            showContent: true
           })
           if (m.tool_calls) for (const tc of m.tool_calls) {
             let name = tc.function?.name || tc.name || '', args = tc.function?.arguments || tc.arguments || ''
@@ -1051,7 +1051,7 @@ const loadHistory = async (sessionName, force = false) => {
               status: tr[tc.id] ? '成功' : '执行中',
               args,
               result: tr[tc.id] || '',
-              expanded: false
+              expanded: true
             })
           }
           if (m.content) item.blocks.push({type: 'content', content: m.content})
@@ -1083,8 +1083,7 @@ const loadSession = async (name, workspaceHash) => {
   try {
     resetSubAgentState()
     const {sessionsAPI} = await import('../services/api')
-    await sessionsAPI.switchSession(name)
-    // 如果 store 中已经有该会话的数据，直接使用缓存（流式中的消息比后端更新）
+    await sessionsAPI.switchSession(name, workspaceHash)
     const existing = store.getSessionMessages(name)
     if (existing.length === 0) {
       await loadHistory(name)

@@ -19,7 +19,7 @@ public class SubAgentListener implements AgentLoopListener {
 
     @Override
     public void onToolCall(String n, String a) {
-        System.err.println("[sub] 🔧 " + n);
+        log.info("[sub] \uD83D\uDD27 {}", n);
     }
 
     @Override

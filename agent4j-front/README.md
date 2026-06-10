@@ -62,7 +62,6 @@ agent4j-front/
 │   │       └── main.css      # 全局样式和设计系统
 │   ├── components/           # 组件目录
 │   │   ├── Composer.vue      # 输入组件
-│   │   ├── Sidebar.vue       # 侧边栏组件
 │   │   ├── StatusBar.vue     # 状态栏组件
 │   │   ├── TabBar.vue        # 标签栏组件
 │   │   └── TitleBar.vue      # 标题栏组件

@@ -1,7 +1,6 @@
 package site.sorghum.agent4j.bin.tool;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.bin.agent.PromptPrefix;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
@@ -22,9 +21,8 @@ import java.util.Set;
  *
  * @author Sorghum
  */
+@Slf4j
 public class ToolSystemInitializer {
-
-    private static final Logger log = LoggerFactory.getLogger(ToolSystemInitializer.class);
     /**
      * Plan Mode 说明（永久存在于 system prompt 中，不随模式切换动态注入）
      */

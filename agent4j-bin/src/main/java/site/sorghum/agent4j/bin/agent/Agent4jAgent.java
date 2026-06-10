@@ -8,6 +8,9 @@ import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.command.MessageWrapper;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
+import site.sorghum.agent4j.bin.goal.Goal;
+import site.sorghum.agent4j.bin.goal.GoalStatus;
+import site.sorghum.agent4j.bin.goal.GoalStore;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.session.SessionService;
@@ -51,7 +54,7 @@ public class Agent4jAgent {
      * 获取当前工作目录
      */
     @Getter
-    private volatile Path workspace;
+    private final Path workspace;
     /**
      * -- GETTER --
      * 获取工作区管理器
@@ -71,81 +74,74 @@ public class Agent4jAgent {
         this.commandRegistry = b.commandRegistry;
         this.workspace = b.workspace;
 
-        ModelClient client = new HttpModelClient(b.apiUrl, b.apiKey, b.model);
-
-        // 初始化技能存储（V2 - Claude Code 风格）
-
-        // 使用 ToolSystemInitializer 统一初始化（消除重复代码）
-        ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
+        final ModelClient client = new HttpModelClient(b.apiUrl, b.apiKey, b.model);
+        final ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
                 b.workspace, b.apiUrl, b.apiKey,
                 b.disabledTools, b.blockedPaths, b.systemPrompt);
-        ToolRegistry registry = initResult.toolRegistry;
         this.ctx = new ConversationContext(initResult.promptPrefix);
-
-        // 会话持久化 — 委托 SessionService（支持工作区隔离）
-        try {
-            this.workspaceManager = new WorkspaceManager();
-            String workspacePath = b.workspace != null
-                    ? b.workspace.toAbsolutePath().toString()
-                    : Paths.get(System.getProperty("user.home"), ".agent4j").toString();
-            workspaceManager.initWorkspace(workspacePath);
-            Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
-            this.sessionService = new SessionService(ctx, sessionsDir);
-            sessionService.loadOrCreate(System.getenv("AGENT4J_SESSION"));
-        } catch (IOException e) {
-            log.error("[session] 初始化失败: {}", e.getMessage());
-        }
-
-        this.loop = new AgentLoop(client, registry, ctx, b.hitl);
-        // 设置 SessionService 引用，用于同步 lastPromptTokens
-        this.loop.setSessionService(this.sessionService);
+        this.loop = initSessionAndLoop(client, initResult.toolRegistry, b.hitl);
     }
 
     /**
-     * 轻量级构造函数 —— 共享 ModelClient、ToolRegistry 和 PromptPrefix。
-     * 适用于"一个会话一个 Agent"场景，减少资源消耗。
+     * 轻量级构造函数 —— 共享 ModelClient 和 PromptPrefix，
+     * 仅创建独立的会话上下文。适用于"一个会话一个 Agent"场景，减少资源消耗。
      *
-     * @param b           Builder
-     * @param ignoredLightweight 标记为轻量级构建（未使用，仅用于区分构造函数）
+     * @param b                  Builder
+     * @param ignoredLightweight 标记为轻量级构建（仅用于区分构造函数重载）
      */
     private Agent4jAgent(Builder b, boolean ignoredLightweight) {
         this.commandRegistry = b.commandRegistry;
         this.workspace = b.workspace;
 
-        // 共享 ModelClient（无状态 HTTP 客户端），但每个 Agent 创建独立的 ToolRegistry
-        ModelClient client = b.sharedModelClient;
-
-        // 为当前工作区创建独立的 ToolRegistry 和 SkillStore
-        String prompt = b.systemPrompt != null ? b.systemPrompt
-                : (b.sharedSystemPrompt != null ? b.sharedSystemPrompt : "你是一个智能体助手，名为Agent4J\n");
-        ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
+        final ModelClient client = b.sharedModelClient;
+        final String prompt = resolvePrompt(b);
+        final ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
                 b.workspace, b.apiUrl, b.apiKey,
                 b.disabledTools, b.blockedPaths, prompt);
-        ToolRegistry registry = initResult.toolRegistry;
-        // 优先使用 initResult 中按工作区正确拼接的 PromptPrefix（含工作区特定的项目文档），
-        // 如果调用方传了 sharedPrefix 且工作区相同，也可以复用（由调用方控制）。
-        PromptPrefix prefix = b.sharedPrefix != null ? b.sharedPrefix : initResult.promptPrefix;
-
-        // 创建独立的会话上下文
+        final PromptPrefix prefix = b.sharedPrefix != null ? b.sharedPrefix : initResult.promptPrefix;
         this.ctx = new ConversationContext(prefix);
+        this.loop = initSessionAndLoop(client, initResult.toolRegistry, b.hitl);
+    }
 
-        // 会话持久化 — 委托 SessionService（支持工作区隔离）
+    /**
+     * 解析系统提示词：优先使用显式设置的 systemPrompt，
+     * 其次使用共享的 sharedSystemPrompt，最后回退到硬编码默认值。
+     */
+    private static String resolvePrompt(Builder b) {
+        if (b.systemPrompt != null) return b.systemPrompt;
+        if (b.sharedSystemPrompt != null) return b.sharedSystemPrompt;
+        return "你是一个智能体助手，名为Agent4J\n";
+    }
+
+    /**
+     * 初始化会话持久化和 Agent 推理循环（两个构造函数共享的逻辑）。
+     * <p>
+     * 完成 WorkspaceManager 初始化、SessionService 创建、
+     * 历史会话加载以及 AgentLoop 的构造与 SessionService 绑定。
+     * </p>
+     *
+     * @param client   模型客户端（HttpModelClient 或共享实例）
+     * @param registry 工具注册表
+     * @param hitl     是否启用人工审批
+     * @return 构造完成的 AgentLoop 实例
+     */
+    private AgentLoop initSessionAndLoop(ModelClient client, ToolRegistry registry, boolean hitl) {
         try {
-            this.workspaceManager = new WorkspaceManager();
-            String workspacePath = b.workspace != null
-                    ? b.workspace.toAbsolutePath().toString()
+            final String workspacePath = this.workspace != null
+                    ? this.workspace.toAbsolutePath().toString()
                     : Paths.get(System.getProperty("user.home"), ".agent4j").toString();
-            workspaceManager.initWorkspace(workspacePath);
-            Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
+            this.workspaceManager = WorkspaceManager.getOrCreate(workspacePath);
+            final Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
             this.sessionService = new SessionService(ctx, sessionsDir);
             sessionService.loadOrCreate(System.getenv("AGENT4J_SESSION"));
         } catch (IOException e) {
-            log.error("[session] 初始化失败: {}", e.getMessage());
+            log.error("[session] 初始化失败: {}", e.getMessage(), e);
+            throw new RuntimeException("[session] Agent4j 会话初始化失败，无法继续运行", e);
         }
 
-        this.loop = new AgentLoop(client, registry, ctx, b.hitl);
-        // 设置 SessionService 引用，用于同步 lastPromptTokens
-        this.loop.setSessionService(this.sessionService);
+        final AgentLoop agentLoop = new AgentLoop(client, registry, ctx, hitl);
+        agentLoop.setSessionService(this.sessionService);
+        return agentLoop;
     }
 
     // 使用 ToolDefHelper 提供的公共方法
@@ -187,59 +183,111 @@ public class Agent4jAgent {
      */
     @SneakyThrows
     public String chat(UserMessage userMessage) {
-
         // HITL 恢复（approve/deny 后传入 null 触发恢复）
         if (userMessage == null) {
             return loop.run(null);
         }
-        String text = userMessage.getText();
-        MessageWrapper messageWrapper = MessageWrapper.builder().message(text).build();
-        // === 命令处理（通过 IoC 注册的命令接口自动分发）===
-        if (text != null && text.startsWith("/") && commandRegistry != null) {
-            ChatCommand cmd = commandRegistry.match(text);
-            if (cmd != null) {
-                // 构造命令上下文：命令通过此上下文访问 agent 与退出机制
-                ChatCommandContext cmdContext = new ChatCommandContext(
-                        this, null, () -> this.terminated = true);
-                ChatCommand.CommandResult result = cmd.execute(messageWrapper, cmdContext);
-                // 重新赋值
-                String newText = messageWrapper.getMessage();
-                // 命令可能修改了文本内容，重建 UserMessage（保留图片）
-                userMessage = UserMessage.of(newText, userMessage.getImages());
-                text = newText;
-                // 命令执行后自动刷入会话与保存用量
-                flushSession();
-                saveUsage();
-                if (result == ChatCommand.CommandResult.EXIT) {
-                    this.terminated = true;
-                    return "/exit";
-                }
-                // 静默命令（如 /agree、/deny）不返回确认消息，
-                // 它们的实际输出已在命令内部通过 AgentOutput/SSE 发送
-                if (cmd.isSilent()) {
-                    return null;
-                }
-                if (result != ChatCommand.CommandResult.LOOP) {
-                    // 返回执行确认（Web 模式下前端需要看到回复，CLI 模式也便于追踪）
-                    return "✅ 已执行 " + text + " 命令";
-                }
+
+        // 尝试命令路由
+        CommandHandleResult cmdResult = tryHandleCommand(userMessage);
+        if (cmdResult != null) {
+            if (cmdResult.result() != null) {
+                return cmdResult.result();
             }
-            // 未匹配到命令："/" 开头但不是命令，降级为普通聊天消息
+            // 命令修改了消息内容，继续用修改后的消息走聊天流程
+            if (cmdResult.modifiedMessage() != null) {
+                userMessage = cmdResult.modifiedMessage();
+            }
         }
 
-        // === 普通聊天逻辑 ===
-        // 如果是第一条用户消息，自动生成会话标题
+        // 目标恢复检测
+        detectAndNotifyPendingGoal();
+
+        // 普通聊天逻辑
+        String text = userMessage.getText();
         generateSessionTitleIfNeeded(text);
-        // 设置当前会话ID到 AgentLoop（用于工具执行上下文）
         String currentSessionId = sessionService != null ? sessionService.getStore().currentName() : null;
         loop.setSessionId(currentSessionId);
         return loop.run(userMessage);
     }
 
+    /** 命令处理结果：result 为返回给用户的字符串（null=继续聊天），modifiedMessage 为命令修改后的消息 */
+    private record CommandHandleResult(String result, UserMessage modifiedMessage) {}
+
+    /**
+     * 尝试将输入路由到斜杠命令。
+     *
+     * @return 命令处理结果；若未匹配到命令返回 {@code null}
+     */
+    @SneakyThrows
+    private CommandHandleResult tryHandleCommand(UserMessage userMessage) {
+        String text = userMessage.getText();
+        if (text == null || !text.startsWith("/") || commandRegistry == null) {
+            return null;
+        }
+
+        ChatCommand cmd = commandRegistry.match(text);
+        if (cmd == null) {
+            return null; // "/" 开头但不是已知命令，降级为普通聊天消息
+        }
+
+        MessageWrapper wrapper = MessageWrapper.builder().message(text).build();
+        ChatCommandContext cmdContext = new ChatCommandContext(
+                this, null, () -> this.terminated = true);
+        ChatCommand.CommandResult result = cmd.execute(wrapper, cmdContext);
+
+        // 命令可能修改了文本内容
+        String newText = wrapper.getMessage();
+        UserMessage updated = UserMessage.of(newText, userMessage.getImages());
+
+        flushSession();
+        saveUsage();
+
+        if (result == ChatCommand.CommandResult.EXIT) {
+            this.terminated = true;
+            return new CommandHandleResult("/exit", null);
+        }
+        if (cmd.isSilent()) {
+            return new CommandHandleResult(null, null); // 静默命令不返回确认消息
+        }
+        if (result != ChatCommand.CommandResult.LOOP) {
+            return new CommandHandleResult("✅ 已执行 " + newText + " 命令", null);
+        }
+        // LOOP: 命令已修改消息，继续走正常聊天流程
+        return new CommandHandleResult(null, updated);
+    }
+
+    /**
+     * 检查当前会话是否有未完成的活跃目标，若有则注入系统消息提醒用户。
+     */
+    private void detectAndNotifyPendingGoal() {
+        if (sessionService == null || workspaceManager == null) return;
+        try {
+            String currentSessionId = sessionService.getStore().currentName();
+            if (currentSessionId == null) return;
+
+            GoalStore goalStore = workspaceManager.getGoalStore();
+            Goal pendingGoal = goalStore.findBySession(currentSessionId);
+            if (pendingGoal != null
+                    && (pendingGoal.getStatus() == GoalStatus.ACTIVE
+                    || pendingGoal.getStatus() == GoalStatus.PAUSED)) {
+                ctx.addSystemMessage(
+                        "📋 检测到未完成的目标：「" + pendingGoal.getTitle() + "」\n"
+                                + "进度：" + pendingGoal.progressText() + "\n"
+                                + "使用 /goal status 查看详情，或直接继续执行。");
+                log.info("[goal] 会话恢复，发现未完成目标: {} - {}",
+                        pendingGoal.getId(), pendingGoal.getTitle());
+            }
+        } catch (Exception e) {
+            log.warn("[goal] 目标恢复检测失败", e);
+        }
+    }
+
     public void newSession() {
         try {
             sessionService.newSession();
-        } catch (IOException ignored) {
+        } catch (IOException e) {
+            log.warn("[session] 创建新会话失败: {}", e.getMessage());
         }
     }
 
@@ -295,11 +343,14 @@ public class Agent4jAgent {
         return sessionService.getModelUsage();
     }
 
+    /** getMaxContextTokens 回退默认值（模型客户端不可用时的保守值） */
+    private static final int DEFAULT_FALLBACK_MAX_TOKENS = 128000;
+
     /**
      * 获取模型最大上下文窗口 token 数
      */
     public int getMaxContextTokens() {
-        return loop != null ? loop.getMaxContextTokens() : 128000;
+        return loop != null ? loop.getMaxContextTokens() : DEFAULT_FALLBACK_MAX_TOKENS;
     }
 
     /**

@@ -21,6 +21,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
  */
 public class SseEmitter {
 
+    /** 可打印字符的最小边界（ASCII 控制字符截止于 0x1F） */
+    private static final char MIN_PRINTABLE_CHAR = 0x20;
+
     private final OutputStream out;
     private final AtomicBoolean completed = new AtomicBoolean(false);
     private final CompletableFuture<Void> completionFuture = new CompletableFuture<>();
@@ -58,7 +61,7 @@ public class SseEmitter {
                     sb.append("\\t");
                     break;
                 default:
-                    if (c < 0x20) {
+                    if (c < MIN_PRINTABLE_CHAR) {
                         sb.append(String.format("\\u%04x", (int) c));
                     } else {
                         sb.append(c);
@@ -79,9 +82,9 @@ public class SseEmitter {
     public synchronized void send(String eventType, String data) {
         if (completed.get()) return;
         try {
-            String sb = "event: " + eventType + "\n" +
+            String frame = "event: " + eventType + "\n" +
                     "data: " + data + "\n\n";
-            out.write(sb.getBytes(StandardCharsets.UTF_8));
+            out.write(frame.getBytes(StandardCharsets.UTF_8));
             out.flush();
         } catch (Exception e) {
             // IOException 或 RuntimeException（如 OutputStream 已关闭时抛出的 IllegalStateException）
@@ -154,12 +157,8 @@ public class SseEmitter {
 
     public void complete() {
         if (completed.compareAndSet(false, true)) {
-            try {
-                // 尝试发送完成事件，如果OutputStream已关闭则忽略异常
-                send("done", "{}");
-            } catch (Exception ignored) {
-                // send方法内部已处理异常，此处捕获以防万一
-            }
+            // send 方法内部已处理所有异常，无需额外捕获
+            send("done", "{}");
             try {
                 out.flush();
                 out.close();
@@ -194,7 +193,10 @@ public class SseEmitter {
     public void awaitCompletion() {
         try {
             completionFuture.get();
-        } catch (InterruptedException | ExecutionException ignored) {
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException ignored) {
+            // 正常完成路径，忽略
         }
     }
 
@@ -204,7 +206,10 @@ public class SseEmitter {
     public void awaitCompletion(long timeoutMs) {
         try {
             completionFuture.get(timeoutMs, TimeUnit.MILLISECONDS);
-        } catch (InterruptedException | ExecutionException | TimeoutException ignored) {
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        } catch (ExecutionException | TimeoutException ignored) {
+            // 超时或正常完成路径，忽略
         }
     }
 }

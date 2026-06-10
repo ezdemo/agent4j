@@ -9,7 +9,6 @@ import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
 
 import java.io.IOException;
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -46,7 +45,7 @@ public class RememberTool extends AgentTool {
 
     @Override
     public List<ToolParameter> getParameters() {
-        return Arrays.asList(
+        return List.of(
                 new ToolParameter("name", "string", true, "记忆标识"),
                 new ToolParameter("type", "string", true, "类型: user/feedback/project/reference"),
                 new ToolParameter("scope", "string", true, "作用域: global/project"),

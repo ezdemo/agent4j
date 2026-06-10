@@ -57,8 +57,8 @@ public class OpenApiController {
         OpenApiSourceDTO result = openApiManageService.addSource(
                 request.docUrl, request.headers,
                 authType, request.authConfig);
-        if ("error".equals(result.status)) {
-            return ApiResponse.fail("OpenAPI 源注册失败: " + result.errorMessage);
+        if ("error".equals(result.getStatus())) {
+            return ApiResponse.fail("OpenAPI 源注册失败: " + result.getErrorMessage());
         }
         return ApiResponse.ok(result);
     }
@@ -89,8 +89,8 @@ public class OpenApiController {
         OpenApiSourceDTO result = openApiManageService.refreshSource(
                 request.docUrl, request.headers,
                 authType, request.authConfig);
-        if ("error".equals(result.status)) {
-            return ApiResponse.fail("OpenAPI 源刷新失败: " + result.errorMessage);
+        if ("error".equals(result.getStatus())) {
+            return ApiResponse.fail("OpenAPI 源刷新失败: " + result.getErrorMessage());
         }
         return ApiResponse.ok(result);
     }

@@ -1,1775 +1,1119 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Agent4j — Java AI Agent 框架</title>
-    <meta name="description" content="Agent4j 是一个纯 Java 17 实现的 AI 编码代理框架。推理循环 · 工具调度 · 流式输出 · 会话持久化 · 子代理隔离 — 将 LLM 与可扩展工具系统结合，通过 CLI / Web / Desktop 三种界面，形成自主工作的编码代理。" />
-    <meta property="og:title" content="Agent4j — Java AI Agent Framework" />
-    <meta property="og:description" content="纯 Java 17 AI 代理框架：推理循环、工具调用、会话管理、流式输出，CLI / Web / Desktop 三端自主工作的编码代理。" />
-    <meta property="og:type" content="website" />
-    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>☕</text></svg>" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900;1,9..40,400&family=Orbitron:wght@400;500;600;700;800;900&display=swap" rel="stylesheet" />
+    <meta charset="UTF-8"/>
+    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+    <title>Agent4j — 纯 Java 的 AI 编码代理 | Java AI Agent Framework</title>
+    <meta content="Agent4j 是一个纯 Java 17 实现的 AI 编码代理框架。推理循环 · 工具调度 · 流式输出 · 会话持久化 · 子代理隔离 — 将 LLM 与可扩展工具系统结合，通过 CLI / Web / Desktop 三种界面，形成自主工作的编码代理。"
+          name="description"/>
+    <meta content="Agent4j, Java AI Agent, Java 编码代理, AI 编码代理, Claude Code Java, Solon框架, AI工具调用, 推理循环"
+          name="keywords"/>
+    <meta content="Sorghum" name="author"/>
+    <meta content="index, follow" name="robots"/>
 
-    <style>
-        /* ============================================================
-           Agent4j — 官网介绍页 | v1.0
-           美学方向: 终端未来主义 · Terminal Futurism
-           深色基底 + 霓虹代码绿 + Java 琥珀暖色
-           ============================================================ */
+    <!-- Open Graph -->
+    <meta content="Agent4j — 纯 Java 的 AI 编码代理 | Java AI Agent Framework" property="og:title"/>
+    <meta content="纯 Java 17 AI 代理框架：推理循环、工具调用、会话管理、流式输出，CLI / Web / Desktop 三端自主工作的编码代理。"
+          property="og:description"/>
+    <meta content="website" property="og:type"/>
+    <meta content="assets/logo.png" property="og:image"/>
+    <meta content="https://agent4j.site" property="og:url"/>
+    <meta content="zh_CN" property="og:locale"/>
 
-        /* ---------- CSS 变量 ---------- */
-        :root {
-            /* 主色调 */
-            --bg-deep:      #080c10;
-            --bg-surface:   #0d1419;
-            --bg-elevated:  #141c24;
-            --bg-overlay:   #1a2330;
+    <!-- Twitter Card -->
+    <meta content="summary_large_image" name="twitter:card"/>
+    <meta content="Agent4j — 纯 Java 的 AI 编码代理" name="twitter:title"/>
+    <meta content="纯 Java 17 AI 代理框架：推理循环、工具调用、会话管理，CLI/Web/Desktop 三端自主工作。"
+          name="twitter:description"/>
 
-            /* 霓虹绿 (代码/终端) */
-            --neon:         #00e676;
-            --neon-dim:     #00c853;
-            --neon-glow:    rgba(0,230,118,0.18);
-            --neon-soft:    rgba(0,230,118,0.08);
+    <meta content="#080c10" name="theme-color"/>
+    <link href="assets/favicon.svg" rel="icon" type="image/svg+xml"/>
+    <link href="assets/favicon.png" rel="icon" type="image/png"/>
+    <link href="https://fonts.googleapis.com" rel="preconnect"/>
+    <link crossorigin href="https://fonts.gstatic.com" rel="preconnect"/>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900;1,9..40,400&family=Orbitron:wght@400;500;600;700;800;900&display=swap"
+          rel="stylesheet"/>
+    <link href="css/styles.css" rel="stylesheet"/>
 
-            /* Java 琥珀 */
-            --amber:        #f0a500;
-            --amber-dim:    #c68400;
-            --amber-glow:   rgba(240,165,0,0.15);
+    <!-- Preload critical assets -->
+    <link as="image" href="assets/logo.png" rel="preload"/>
 
-            /* 冷蓝 */
-            --blue:         #64b5f6;
-            --blue-glow:    rgba(100,181,246,0.12);
-
-            /* 灰阶 */
-            --text-primary: #e8edf2;
-            --text-secondary:#9aa4b2;
-            --text-muted:   #5a6678;
-            --border:       #1e2a38;
-            --border-light: #2a3848;
-
-            /* 间距 */
-            --gap: 24px;
-            --radius: 8px;
-            --radius-lg: 14px;
-        }
-
-        /* ---------- Reset & Base ---------- */
-        *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
-
-        html {
-            scroll-behavior: smooth;
-            font-size: 16px;
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
-
-        body {
-            font-family: 'DM Sans', -apple-system, sans-serif;
-            background: var(--bg-deep);
-            color: var(--text-primary);
-            line-height: 1.7;
-            overflow-x: hidden;
-            min-height: 100vh;
-        }
-
-        /* Grid background texture */
-        body::before {
-            content: '';
-            position: fixed;
-            inset: 0;
-            z-index: 0;
-            pointer-events: none;
-            background-image:
-                    radial-gradient(circle at 20% 30%, rgba(0,230,118,0.03) 0%, transparent 50%),
-                    radial-gradient(circle at 80% 70%, rgba(240,165,0,0.03) 0%, transparent 50%),
-                    radial-gradient(circle at 50% 10%, rgba(100,181,246,0.03) 0%, transparent 40%);
-        }
-
-        /* Dot grid overlay */
-        body::after {
-            content: '';
-            position: fixed;
-            inset: 0;
-            z-index: 0;
-            pointer-events: none;
-            opacity: 0.06;
-            background-image: radial-gradient(circle, var(--text-muted) 1px, transparent 1px);
-            background-size: 28px 28px;
-        }
-
-        /* ---------- Container ---------- */
-        .container {
-            position: relative;
-            z-index: 1;
-            max-width: 1200px;
-            margin: 0 auto;
-            padding: 0 32px;
-        }
-
-        /* ---------- Nav ---------- */
-        .nav {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            z-index: 100;
-            padding: 16px 0;
-            transition: background 0.3s, box-shadow 0.3s, backdrop-filter 0.3s;
-        }
-        .nav.scrolled {
-            background: rgba(8,12,16,0.85);
-            backdrop-filter: blur(20px) saturate(120%);
-            -webkit-backdrop-filter: blur(20px) saturate(120%);
-            box-shadow: 0 1px 0 var(--border), 0 4px 24px rgba(0,0,0,0.4);
-        }
-        .nav .container {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-        .nav-logo {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-family: 'Orbitron', 'JetBrains Mono', monospace;
-            font-weight: 700;
-            font-size: 1.2rem;
-            color: var(--text-primary);
-            text-decoration: none;
-            letter-spacing: 0.03em;
-        }
-        .nav-logo .bracket { color: var(--neon); font-weight: 400; }
-        .nav-logo .version {
-            font-size: 0.65rem;
-            color: var(--text-muted);
-            padding: 2px 8px;
-            border: 1px solid var(--border);
-            border-radius: 100px;
-            font-family: 'JetBrains Mono', monospace;
-            letter-spacing: 0;
-        }
-        .nav-links {
-            display: flex;
-            gap: 28px;
-            list-style: none;
-            align-items: center;
-        }
-        .nav-links a {
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.9rem;
-            font-weight: 500;
-            transition: color 0.2s;
-            position: relative;
-        }
-        .nav-links a:hover { color: var(--text-primary); }
-        .nav-links a::after {
-            content: '';
-            position: absolute;
-            bottom: -4px;
-            left: 0;
-            right: 0;
-            height: 1.5px;
-            background: var(--neon);
-            transform: scaleX(0);
-            transition: transform 0.2s;
-        }
-        .nav-links a:hover::after { transform: scaleX(1); }
-        .btn-ghost {
-            padding: 8px 20px;
-            border: 1px solid var(--border-light);
-            border-radius: 100px;
-            color: var(--text-primary);
-            font-size: 0.85rem;
-            font-weight: 600;
-            text-decoration: none;
-            transition: all 0.25s;
-            background: transparent;
-            cursor: pointer;
-            font-family: inherit;
-        }
-        .btn-ghost:hover {
-            border-color: var(--neon);
-            background: var(--neon-soft);
-            color: var(--neon);
-            box-shadow: 0 0 20px var(--neon-glow);
-        }
-
-        /* ---------- Hero ---------- */
-        .hero {
-            padding: 160px 0 100px;
-            position: relative;
-            z-index: 1;
-        }
-        .hero-badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 8px;
-            padding: 6px 16px;
-            border-radius: 100px;
-            background: var(--bg-elevated);
-            border: 1px solid var(--border);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.78rem;
-            color: var(--text-secondary);
-            margin-bottom: 32px;
-            animation: fadeInUp 0.6s ease-out;
-        }
-        .hero-badge .dot {
-            width: 7px;
-            height: 7px;
-            border-radius: 50%;
-            background: var(--neon);
-            box-shadow: 0 0 8px var(--neon-glow);
-            animation: pulse-dot 2s infinite;
-        }
-        @keyframes pulse-dot {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.4; }
-        }
-        .hero h1 {
-            font-family: 'Orbitron', sans-serif;
-            font-weight: 800;
-            font-size: clamp(2.8rem, 6vw, 5rem);
-            line-height: 1.08;
-            letter-spacing: -0.02em;
-            margin-bottom: 8px;
-            animation: fadeInUp 0.6s ease-out 0.1s both;
-        }
-        .hero h1 .accent { color: var(--neon); }
-        .hero h1 .java-accent { color: var(--amber); }
-        .hero-subtitle {
-            font-size: 1.25rem;
-            color: var(--text-secondary);
-            font-weight: 400;
-            max-width: 640px;
-            margin-bottom: 24px;
-            animation: fadeInUp 0.6s ease-out 0.2s both;
-            line-height: 1.6;
-        }
-        .hero-terminal {
-            background: var(--bg-overlay);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            overflow: hidden;
-            max-width: 700px;
-            margin-bottom: 40px;
-            box-shadow: 0 8px 40px rgba(0,0,0,0.5), 0 0 0 1px rgba(0,230,118,0.06);
-            animation: fadeInUp 0.6s ease-out 0.3s both;
-        }
-        .terminal-header {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 12px 16px;
-            background: var(--bg-elevated);
-            border-bottom: 1px solid var(--border);
-        }
-        .terminal-dot {
-            width: 11px;
-            height: 11px;
-            border-radius: 50%;
-        }
-        .terminal-dot.red { background: #ff5f56; }
-        .terminal-dot.yellow { background: #ffbd2e; }
-        .terminal-dot.green { background: #27c93f; }
-        .terminal-title {
-            margin-left: 8px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.72rem;
-            color: var(--text-muted);
-        }
-        .terminal-body {
-            padding: 20px 24px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.82rem;
-            line-height: 1.8;
-            position: relative;
-        }
-        .terminal-body .line {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-        }
-        .terminal-body .prompt { color: var(--neon); font-weight: 600; }
-        .terminal-body .cmd { color: var(--text-primary); }
-        .terminal-body .comment { color: var(--text-muted); font-style: italic; }
-        .terminal-body .cursor {
-            display: inline-block;
-            width: 8px;
-            height: 17px;
-            background: var(--neon);
-            margin-left: 2px;
-            animation: blink 1s step-end infinite;
-        }
-        @keyframes blink {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0; }
-        }
-        .hero-cta {
-            display: flex;
-            gap: 14px;
-            flex-wrap: wrap;
-            animation: fadeInUp 0.6s ease-out 0.4s both;
-        }
-        .btn-primary {
-            padding: 12px 30px;
-            border-radius: 100px;
-            background: var(--neon);
-            color: #000;
-            font-weight: 700;
-            font-size: 0.95rem;
-            text-decoration: none;
-            border: none;
-            cursor: pointer;
-            transition: all 0.25s;
-            font-family: inherit;
-            letter-spacing: 0.01em;
-        }
-        .btn-primary:hover {
-            box-shadow: 0 0 40px var(--neon-glow), 0 4px 20px rgba(0,230,118,0.3);
-            transform: translateY(-1px);
-        }
-        .btn-secondary {
-            padding: 12px 28px;
-            border-radius: 100px;
-            background: transparent;
-            border: 1px solid var(--border-light);
-            color: var(--text-primary);
-            font-weight: 600;
-            font-size: 0.95rem;
-            text-decoration: none;
-            cursor: pointer;
-            transition: all 0.25s;
-            font-family: inherit;
-        }
-        .btn-secondary:hover {
-            border-color: var(--amber);
-            background: var(--amber-glow);
-            color: var(--amber);
-        }
-
-        /* Stats row */
-        .hero-stats {
-            display: flex;
-            gap: 48px;
-            margin-top: 60px;
-            padding-top: 32px;
-            border-top: 1px solid var(--border);
-            animation: fadeInUp 0.6s ease-out 0.5s both;
-        }
-        .hero-stat {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-        .hero-stat .num {
-            font-family: 'Orbitron', 'JetBrains Mono', monospace;
-            font-size: 1.8rem;
-            font-weight: 700;
-            color: var(--text-primary);
-            letter-spacing: 0.02em;
-        }
-        .hero-stat .num .unit { color: var(--neon); }
-        .hero-stat .label {
-            font-size: 0.78rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-            font-weight: 500;
-        }
-
-        /* ---------- Section Common ---------- */
-        .section {
-            padding: 100px 0;
-            position: relative;
-            z-index: 1;
-        }
-        .section-label {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.72rem;
-            color: var(--neon);
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            margin-bottom: 12px;
-            font-weight: 500;
-        }
-        .section h2 {
-            font-family: 'Orbitron', sans-serif;
-            font-weight: 700;
-            font-size: clamp(1.8rem, 3vw, 2.4rem);
-            letter-spacing: -0.01em;
-            margin-bottom: 16px;
-            color: var(--text-primary);
-        }
-        .section-desc {
-            font-size: 1.05rem;
-            color: var(--text-secondary);
-            max-width: 600px;
-            margin-bottom: 48px;
-            line-height: 1.7;
-        }
-
-        /* ---------- Capability Cards ---------- */
-        .capabilities-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-            gap: var(--gap);
-        }
-        .cap-card {
-            background: var(--bg-surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            padding: 28px;
-            transition: all 0.3s;
-            position: relative;
-            overflow: hidden;
-        }
-        .cap-card::before {
-            content: '';
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            height: 2px;
-            background: linear-gradient(90deg, transparent, var(--neon), transparent);
-            opacity: 0;
-            transition: opacity 0.3s;
-        }
-        .cap-card:hover {
-            border-color: var(--border-light);
-            transform: translateY(-2px);
-            box-shadow: 0 8px 32px rgba(0,0,0,0.4), 0 0 0 1px rgba(0,230,118,0.06);
-        }
-        .cap-card:hover::before { opacity: 1; }
-        .cap-card .icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 10px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 1.3rem;
-            margin-bottom: 18px;
-        }
-        .cap-card .icon.green { background: var(--neon-soft); color: var(--neon); }
-        .cap-card .icon.amber { background: var(--amber-glow); color: var(--amber); }
-        .cap-card .icon.blue { background: var(--blue-glow); color: var(--blue); }
-        .cap-card h3 {
-            font-weight: 700;
-            font-size: 1.05rem;
-            margin-bottom: 8px;
-            color: var(--text-primary);
-        }
-        .cap-card p {
-            font-size: 0.88rem;
-            color: var(--text-secondary);
-            line-height: 1.6;
-        }
-
-        /* ---------- Architecture Section ---------- */
-        .arch-wrapper {
-            background: var(--bg-surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            padding: 40px;
-            overflow-x: auto;
-        }
-        .arch-diagram {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            gap: 12px;
-            min-width: 700px;
-        }
-        .arch-row {
-            display: flex;
-            gap: 12px;
-            align-items: center;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        .arch-box {
-            background: var(--bg-elevated);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 14px 20px;
-            text-align: center;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.78rem;
-            font-weight: 500;
-            color: var(--text-primary);
-            transition: all 0.3s;
-            white-space: nowrap;
-        }
-        .arch-box:hover {
-            border-color: var(--neon);
-            background: var(--neon-soft);
-            box-shadow: 0 0 16px var(--neon-glow);
-        }
-        .arch-box.highlight {
-            border-color: var(--neon);
-            color: var(--neon);
-            font-weight: 700;
-        }
-        .arch-box.secondary {
-            border-color: var(--amber);
-            color: var(--amber);
-        }
-        .arch-arrow {
-            color: var(--text-muted);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9rem;
-            padding: 0 4px;
-        }
-        .arch-arrow-down {
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            color: var(--text-muted);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.9rem;
-            gap: 0;
-            line-height: 1;
-        }
-        .arch-divider {
-            width: 100%;
-            height: 1px;
-            background: var(--border);
-            margin: 8px 0;
-        }
-        .arch-label {
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            font-family: 'JetBrains Mono', monospace;
-            margin-bottom: 8px;
-        }
-
-        /* ---------- Tools Section ---------- */
-        .tools-categories {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-            gap: var(--gap);
-        }
-        .tool-cat {
-            background: var(--bg-surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            overflow: hidden;
-            transition: all 0.3s;
-        }
-        .tool-cat:hover {
-            border-color: var(--border-light);
-        }
-        .tool-cat-header {
-            padding: 20px 24px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            cursor: pointer;
-            user-select: none;
-            transition: background 0.2s;
-        }
-        .tool-cat-header:hover { background: var(--bg-elevated); }
-        .tool-cat-header .left {
-            display: flex;
-            align-items: center;
-            gap: 12px;
-        }
-        .tool-cat-header .emoji { font-size: 1.3rem; }
-        .tool-cat-header h4 {
-            font-weight: 700;
-            font-size: 0.95rem;
-            color: var(--text-primary);
-        }
-        .tool-cat-header .count {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            background: var(--bg-elevated);
-            padding: 3px 10px;
-            border-radius: 100px;
-        }
-        .tool-cat-header .chevron {
-            color: var(--text-muted);
-            font-size: 0.8rem;
-            transition: transform 0.3s;
-        }
-        .tool-cat.open .tool-cat-header .chevron { transform: rotate(180deg); }
-        .tool-cat-body {
-            max-height: 0;
-            overflow: hidden;
-            transition: max-height 0.4s ease;
-        }
-        .tool-cat.open .tool-cat-body { max-height: 600px; }
-        .tool-list {
-            padding: 0 24px 20px;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .tool-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 8px 12px;
-            border-radius: 6px;
-            background: var(--bg-elevated);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.75rem;
-        }
-        .tool-item .tool-name {
-            color: var(--neon);
-            font-weight: 500;
-            min-width: 120px;
-        }
-        .tool-item .tool-desc {
-            color: var(--text-secondary);
-            font-size: 0.72rem;
-            font-family: 'DM Sans', sans-serif;
-        }
-        .tool-item .badge {
-            padding: 2px 8px;
-            border-radius: 100px;
-            font-size: 0.65rem;
-            font-weight: 600;
-            text-transform: uppercase;
-            letter-spacing: 0.04em;
-            margin-left: auto;
-            flex-shrink: 0;
-        }
-        .badge.read { background: var(--neon-soft); color: var(--neon); }
-        .badge.write { background: var(--amber-glow); color: var(--amber); }
-
-        /* ---------- Tech Stack ---------- */
-        .tech-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-            gap: var(--gap);
-        }
-        .tech-card {
-            background: var(--bg-surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 24px 20px;
-            text-align: center;
-            transition: all 0.3s;
-        }
-        .tech-card:hover {
-            border-color: var(--border-light);
-            transform: translateY(-3px);
-            box-shadow: 0 8px 24px rgba(0,0,0,0.3);
-        }
-        .tech-card .tech-name {
-            font-family: 'Orbitron', 'JetBrains Mono', monospace;
-            font-weight: 700;
-            font-size: 0.9rem;
-            color: var(--text-primary);
-            margin-bottom: 6px;
-        }
-        .tech-card .tech-ver {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.7rem;
-            color: var(--neon);
-            margin-bottom: 4px;
-        }
-        .tech-card .tech-role {
-            font-size: 0.75rem;
-            color: var(--text-muted);
-        }
-
-        /* ---------- Design Patterns ---------- */
-        .patterns-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-            gap: var(--gap);
-        }
-        .pattern-card {
-            background: var(--bg-surface);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            padding: 22px;
-            transition: all 0.3s;
-            position: relative;
-        }
-        .pattern-card:hover {
-            border-color: var(--border-light);
-            box-shadow: 0 4px 20px rgba(0,0,0,0.3);
-        }
-        .pattern-card .pattern-name {
-            font-family: 'JetBrains Mono', monospace;
-            font-weight: 600;
-            font-size: 0.85rem;
-            color: var(--amber);
-            margin-bottom: 6px;
-        }
-        .pattern-card .pattern-loc {
-            font-size: 0.72rem;
-            color: var(--text-muted);
-            font-family: 'JetBrains Mono', monospace;
-            margin-bottom: 8px;
-        }
-        .pattern-card p {
-            font-size: 0.82rem;
-            color: var(--text-secondary);
-            line-height: 1.6;
-        }
-
-        /* ---------- Quick Start ---------- */
-        .code-block-wrapper {
-            background: var(--bg-overlay);
-            border: 1px solid var(--border);
-            border-radius: var(--radius-lg);
-            overflow: hidden;
-            position: relative;
-            box-shadow: 0 8px 40px rgba(0,0,0,0.5);
-        }
-        .code-block-header {
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 12px 16px;
-            background: var(--bg-elevated);
-            border-bottom: 1px solid var(--border);
-        }
-        .code-block-lang {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.7rem;
-            color: var(--text-muted);
-            text-transform: uppercase;
-            letter-spacing: 0.06em;
-        }
-        .btn-copy {
-            padding: 4px 14px;
-            border-radius: 100px;
-            background: transparent;
-            border: 1px solid var(--border);
-            color: var(--text-secondary);
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.68rem;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-        .btn-copy:hover {
-            border-color: var(--neon);
-            color: var(--neon);
-        }
-        .btn-copy.copied {
-            background: var(--neon-soft);
-            border-color: var(--neon);
-            color: var(--neon);
-        }
-        .code-block-body {
-            padding: 24px;
-            overflow-x: auto;
-        }
-        .code-block-body pre {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.78rem;
-            line-height: 1.8;
-            color: var(--text-primary);
-            margin: 0;
-        }
-        .code-block-body .k { color: #c792ea; } /* keyword */
-        .code-block-body .s { color: #c3e88d; } /* string */
-        .code-block-body .c { color: #546e7a; font-style: italic; } /* comment */
-        .code-block-body .f { color: #82aaff; } /* function */
-        .code-block-body .n { color: #f78c6c; } /* number */
-        .code-block-body .p { color: #89ddff; } /* punctuation */
-
-        /* ---------- Highlight Bar ---------- */
-        .highlight-bar {
-            padding: 48px 0;
-            border-top: 1px solid var(--border);
-            border-bottom: 1px solid var(--border);
-            background: var(--bg-surface);
-            position: relative;
-            z-index: 1;
-        }
-        .highlight-bar .container {
-            display: flex;
-            gap: 36px;
-            align-items: center;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-        .highlight-item {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            font-size: 0.9rem;
-            color: var(--text-secondary);
-        }
-        .highlight-item .check {
-            color: var(--neon);
-            font-weight: 700;
-            font-size: 1.1rem;
-        }
-
-        /* ---------- CTA Section ---------- */
-        .cta-section {
-            padding: 100px 0;
-            text-align: center;
-            position: relative;
-            z-index: 1;
-        }
-        .cta-section h2 {
-            font-family: 'Orbitron', sans-serif;
-            font-weight: 700;
-            font-size: clamp(1.8rem, 3vw, 2.4rem);
-            margin-bottom: 12px;
-        }
-        .cta-section p {
-            color: var(--text-secondary);
-            font-size: 1.05rem;
-            margin-bottom: 32px;
-        }
-        .cta-buttons {
-            display: flex;
-            gap: 14px;
-            justify-content: center;
-            flex-wrap: wrap;
-        }
-
-        /* ---------- Footer ---------- */
-        .footer {
-            padding: 48px 0;
-            border-top: 1px solid var(--border);
-            background: var(--bg-surface);
-            position: relative;
-            z-index: 1;
-        }
-        .footer-grid {
-            display: grid;
-            grid-template-columns: 2fr 1fr 1fr 1fr;
-            gap: 40px;
-        }
-        .footer-brand {
-            font-family: 'Orbitron', sans-serif;
-            font-weight: 700;
-            font-size: 1.1rem;
-            color: var(--text-primary);
-        }
-        .footer-brand .bracket { color: var(--neon); }
-        .footer-desc {
-            margin-top: 12px;
-            font-size: 0.82rem;
-            color: var(--text-muted);
-            line-height: 1.7;
-        }
-        .footer-col h5 {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.68rem;
-            text-transform: uppercase;
-            letter-spacing: 0.08em;
-            color: var(--text-muted);
-            margin-bottom: 16px;
-            font-weight: 600;
-        }
-        .footer-col ul {
-            list-style: none;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-        .footer-col ul a {
-            color: var(--text-secondary);
-            text-decoration: none;
-            font-size: 0.85rem;
-            transition: color 0.2s;
-        }
-        .footer-col ul a:hover { color: var(--neon); }
-        .footer-bottom {
-            margin-top: 40px;
-            padding-top: 24px;
-            border-top: 1px solid var(--border);
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            font-size: 0.78rem;
-            color: var(--text-muted);
-            flex-wrap: wrap;
-            gap: 12px;
-        }
-        .footer-bottom .love { color: var(--amber); }
-
-        /* ---------- Animations ---------- */
-        @keyframes fadeInUp {
-            from { opacity: 0; transform: translateY(24px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .reveal {
-            opacity: 0;
-            transform: translateY(30px);
-            transition: opacity 0.7s ease, transform 0.7s ease;
-        }
-        .reveal.visible {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        /* ---------- Responsive ---------- */
-        @media (max-width: 900px) {
-            .nav-links { display: none; }
-            .hero { padding: 120px 0 60px; }
-            .hero-stats { gap: 28px; flex-wrap: wrap; }
-            .footer-grid { grid-template-columns: 1fr 1fr; }
-            .tools-categories { grid-template-columns: 1fr; }
-            .arch-wrapper { padding: 20px; }
-            .arch-diagram { min-width: auto; }
-            .arch-box { font-size: 0.7rem; padding: 10px 14px; }
-        }
-        @media (max-width: 500px) {
-            .container { padding: 0 18px; }
-            .hero h1 { font-size: 2rem; }
-            .hero-cta { flex-direction: column; }
-            .btn-primary, .btn-secondary { text-align: center; }
-            .footer-grid { grid-template-columns: 1fr; }
-        }
-
-        /* ---------- Glow orb decorations ---------- */
-        .glow-orb {
-            position: absolute;
-            border-radius: 50%;
-            filter: blur(100px);
-            pointer-events: none;
-            z-index: 0;
-            opacity: 0.25;
-        }
-        .glow-orb.green {
-            width: 400px; height: 400px;
-            background: var(--neon);
-            top: -100px; right: -120px;
-        }
-        .glow-orb.amber {
-            width: 300px; height: 300px;
-            background: var(--amber);
-            bottom: -80px; left: -80px;
-        }
-
-        /* Selection */
-        ::selection {
-            background: var(--neon-soft);
-            color: var(--neon);
-        }
-    </style>
+    <!-- Structured Data -->
+    <script type="application/ld+json">
+        {
+            "@context": "https://schema.org",
+            "@type": "SoftwareApplication",
+            "name": "Agent4j",
+            "applicationCategory": "DeveloperApplication",
+            "operatingSystem": "Windows, macOS, Linux",
+            "description": "纯 Java 17 的 AI 编码代理框架，提供推理循环、工具调用、会话管理等功能",
+            "version": "26.6.9.2",
+            "license": "MIT",
+            "programmingLanguage": "Java 17",
+            "author": {
+                "@type": "Person",
+                "name": "Sorghum"
+            }
+        }
+    </script>
 </head>
 <body>
 
-<!-- ============ NAV ============ -->
+<!-- ==================== NAV ==================== -->
 <nav class="nav" id="nav">
     <div class="container">
         <a href="#" class="nav-logo">
+            <img alt="Agent4j Logo" height="28" src="assets/logo.png" width="28"/>
             <span class="bracket">[</span>Agent4j<span class="bracket">]</span>
-            <span class="version">v1.0</span>
+            <span class="version">v26.6.9.2</span>
         </a>
         <ul class="nav-links">
-            <li><a href="#capabilities">能力</a></li>
-            <li><a href="#architecture">架构</a></li>
-            <li><a href="#tools">工具</a></li>
+            <li><a href="#features">功能</a></li>
+            <li><a href="#capabilities">核心能力</a></li>
             <li><a href="#quickstart">快速开始</a></li>
-            <li><a href="https://gitee.com/ezdemo/agent4j" class="btn-ghost" target="_blank">GitHub ↗</a></li>
+            <li><a href="#techstack">技术栈</a></li>
+            <li><a href="#interfaces">界面</a></li>
+            <li><a href="#config-docs">配置</a></li>
+            <li><a href="#docs">文档</a></li>
+            <li>
+                <a class="btn btn-ghost btn-sm" href="https://github.com/ezdemo/agent4j" rel="noopener" target="_blank">
+                    <svg fill="currentColor" height="16" viewBox="0 0 24 24" width="16">
+                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+                    </svg>
+                    GitHub
+                </a>
+            </li>
         </ul>
+        <button aria-label="菜单" class="nav-toggle">
+            <span></span>
+            <span></span>
+            <span></span>
+        </button>
     </div>
 </nav>
 
-<!-- ============ HERO ============ -->
+<!-- ==================== HERO ==================== -->
 <section class="hero" id="hero">
-    <div class="glow-orb green"></div>
     <div class="container">
-        <div class="hero-badge">
-            <span class="dot"></span> 纯 Java 17 · 多模块 · Maven 构建
-        </div>
-        <h1>
-            Java 世界的<br />
-            <span class="accent">AI 编码代理</span>
-        </h1>
-        <p class="hero-subtitle">
-            将大语言模型与 40+ 可扩展工具深度融合，打造自主推理、自动调用的编码代理框架。
-            支持 CLI 控制台、Vue3 Web UI、Tauri 桌面端三种运行模式，5 个 Maven 模块协同运作。
-        </p>
-
-        <!-- Terminal demo -->
-        <div class="hero-terminal">
+        <div class="hero-content">
+            <div class="hero-left">
+                <div class="hero-badge">
+                    <span class="dot"></span>
+                    纯 Java · AI 编码代理 · MIT
+                </div>
+                <h1>
+                    写代码的<br/>
+                    <span class="accent">AI 代理</span>，<br/>
+                    用 <span class="java-accent">Java</span> 写
+                </h1>
+                <p class="hero-subtitle">
+                    类似 Claude Code / Codex / OpenCode / Reasonix，<br/>
+                    但纯 Java 17 实现。推理循环 · 工具调用 · 流式输出 · 会话管理
+                </p>
+                <div class="hero-comparison">
+                    <span class="highlight">Java 17 ✅</span>
+                    <span>推理循环</span>
+                    <span>工具系统</span>
+                    <span>子代理</span>
+                    <span>MCP 协议</span>
+                    <span>CLI / Web / Desktop</span>
+                </div>
+                <div class="hero-actions">
+                    <a class="btn btn-primary btn-lg" href="#quickstart">
+                        <svg class="icon-svg" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                            <polyline points="17 6 23 6 23 12"/>
+                        </svg>
+                        快速安装
+                    </a>
+                    <a class="btn btn-outline btn-lg" href="#capabilities">
+                        <svg class="icon-svg" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 16v-4"/>
+                            <path d="M12 8h.01"/>
+                        </svg>
+                        了解更多
+                    </a>
+                    <a class="btn btn-ghost btn-lg" href="https://github.com/ezdemo/agent4j" rel="noopener"
+                       target="_blank">
+                        <svg class="icon-svg" fill="currentColor" viewBox="0 0 24 24">
+                            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+                        </svg>
+                        GitHub
+                    </a>
+                </div>
+            </div>
+            <div class="hero-right">
+                <div class="terminal-card">
             <div class="terminal-header">
                 <span class="terminal-dot red"></span>
                 <span class="terminal-dot yellow"></span>
                 <span class="terminal-dot green"></span>
-                <span class="terminal-title">agent4j — zsh</span>
+                <span class="terminal-title">agent4j@reasoning-loop:~/project — bash</span>
             </div>
             <div class="terminal-body">
-                <div class="line"><span class="prompt">❯</span> <span class="cmd">java -jar agent4j-bin.jar</span></div>
-                <div class="line"><span class="comment"># Agent4j v1.0-SNAPSHOT 启动中…</span></div>
-                <div class="line"><span class="comment"># 加载工具: 40+ 内置工具覆盖全开发场景 → 就绪</span></div>
-                <div class="line"><span class="comment"># Skill V2 · HITL 双模式 · ReasonBreaker 已激活</span></div>
-                <div class="line"><span class="prompt">❯</span> <span class="cmd">帮我重构 UserService 模块</span><span class="cursor"></span></div>
+                <div class="line"><span class="prompt">❯</span><span class="cmd">agent4j web 0</span></div>
+                <div class="line"><span class="comment"># 启动 AI 编码代理 ...</span></div>
+                <div class="line"><span class="prompt">❯</span><span class="cmd">重构 UserService 的数据库查询</span>
+                </div>
+                <div class="line"><span class="output">🤔 让我先了解一下现状...</span></div>
+                <div class="line"><span class="prompt">🔧</span><span class="arrow"> → </span><span class="cmd">grep "SELECT.*FROM.*users" src/</span>
+                </div>
+                <div class="line"><span class="prompt">🔧</span><span class="arrow"> → </span><span class="cmd">write src/main/java/UserService.java</span>
+                </div>
+                <div class="line"><span class="success">✅ 重构完成！涉及 3 个文件、已通过测试。</span><span
+                        class="terminal-cursor"></span></div>
             </div>
-        </div>
-
-        <div class="hero-cta">
-            <a href="#quickstart" class="btn-primary">快速开始</a>
-            <a href="#architecture" class="btn-secondary">了解架构</a>
-        </div>
-
-        <div class="hero-stats">
-            <div class="hero-stat">
-                <span class="num">40<span class="unit">+</span></span>
-                <span class="label">内置工具</span>
-            </div>
-            <div class="hero-stat">
-                <span class="num">90<span class="unit">+</span></span>
-                <span class="label">Java 源文件</span>
-            </div>
-            <div class="hero-stat">
-                <span class="num">5</span>
-                <span class="label">Maven 模块</span>
-            </div>
-            <div class="hero-stat">
-                <span class="num">14</span>
-                <span class="label">设计模式</span>
+                </div>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ============ CAPABILITIES ============ -->
+<!-- ==================== STATS BANNER ==================== -->
+<section class="section" style="padding: 40px 0;">
+    <div class="container">
+        <div class="performance-grid reveal" style="grid-template-columns: repeat(4, 1fr);">
+            <div class="perf-card" style="padding: 20px;">
+                <div class="perf-value" data-target="97" style="font-size:1.8rem;">97%</div>
+                <div class="perf-label" style="font-size:0.78rem;">DeepSeek 缓存命中率</div>
+            </div>
+            <div class="perf-card" style="padding: 20px;">
+                <div class="perf-value" data-target="98" style="font-size:1.8rem;">98%</div>
+                <div class="perf-label" style="font-size:0.78rem;">Mimo 缓存命中率</div>
+            </div>
+            <div class="perf-card" style="padding: 20px;">
+                <div class="perf-value" style="font-size:1.8rem;color:var(--amber);">Java 17</div>
+                <div class="perf-label" style="font-size:0.78rem;">纯 Java 实现</div>
+            </div>
+            <div class="perf-card" style="padding: 20px;">
+                <div class="perf-value" style="font-size:1.8rem;color:var(--blue);">3 端</div>
+                <div class="perf-label" style="font-size:0.78rem;">CLI / Web / Desktop</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== COMPARISON ==================== -->
+<section class="section" style="padding-top:20px;">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>🏆 对比竞品</h2>
+            <p class="subtitle">Agent4j 是唯一纯 Java 实现的 AI 编码代理</p>
+        </div>
+        <div class="cache-table-wrap reveal" style="max-width: 800px; margin: 0 auto;">
+            <table class="cache-table">
+                <thead>
+                <tr>
+                    <th>特性</th>
+                    <th>Claude Code</th>
+                    <th>Codex</th>
+                    <th>OpenCode</th>
+                    <th style="color:var(--neon);">Agent4j ✅</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td>编程语言</td>
+                    <td>TypeScript</td>
+                    <td>TypeScript</td>
+                    <td>Go</td>
+                    <td style="color:var(--neon);font-weight:bold;">Java 17</td>
+                </tr>
+                <tr>
+                    <td>推理循环</td>
+                    <td>✓</td>
+                    <td>✓</td>
+                    <td>✓</td>
+                    <td style="color:var(--neon);">✓</td>
+                </tr>
+                <tr>
+                    <td>工具系统</td>
+                    <td>✓</td>
+                    <td>✓</td>
+                    <td>✓</td>
+                    <td style="color:var(--neon);">✓</td>
+                </tr>
+                <tr>
+                    <td>子代理</td>
+                    <td>✓</td>
+                    <td>✗</td>
+                    <td>✗</td>
+                    <td style="color:var(--neon);">✓</td>
+                </tr>
+                <tr>
+                    <td>MCP 协议</td>
+                    <td>✓</td>
+                    <td>✓</td>
+                    <td>✗</td>
+                    <td style="color:var(--neon);">✓</td>
+                </tr>
+                <tr>
+                    <td>OpenAPI 集成</td>
+                    <td>✓</td>
+                    <td>✗</td>
+                    <td>✗</td>
+                    <td style="color:var(--neon);">✓</td>
+                </tr>
+                <tr>
+                    <td>桌面端</td>
+                    <td>✗ (仅 CLI)</td>
+                    <td>✓ (VS Code)</td>
+                    <td>✗ (仅 CLI)</td>
+                    <td style="color:var(--neon);">✓ Tauri 原生</td>
+                </tr>
+                <tr>
+                    <td>开源</td>
+                    <td>✗</td>
+                    <td>✓</td>
+                    <td>✓</td>
+                    <td style="color:var(--neon);">✓ MIT</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== FEATURES ==================== -->
+<section class="section" id="features">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>六大核心特性</h2>
+            <p class="subtitle">Agent4j 将 LLM 与可扩展工具系统结合，形成自主工作的编码代理</p>
+        </div>
+        <div class="features-grid">
+            <div class="feature-card reveal">
+                <div class="icon-wrap">🤖</div>
+                <h3>推理循环</h3>
+                <p>Prompt → LLM → 工具 → 结果 →
+                    LLM，自动迭代直到任务完成。实时流式推送每一步的思考和执行过程，全透明可追踪。</p>
+            </div>
+            <div class="feature-card reveal">
+                <div class="icon-wrap">🛠️</div>
+                <h3>工具系统</h3>
+                <p>声明式 AgentTool 基类 + Solon @Component 自动注册。支持 MCP 协议、OpenAPI 集成、技能市场在线装/卸。16+
+                    内置工具开箱即用。</p>
+            </div>
+            <div class="feature-card reveal">
+                <div class="icon-wrap">🔀</div>
+                <h3>子代理</h3>
+                <p>隔离执行环境，每个子代理有独立上下文和推理循环。并行处理独立任务互不干扰，由主代理统一调度汇总。</p>
+            </div>
+            <div class="feature-card reveal">
+                <div class="icon-wrap">👤</div>
+                <h3>人工审批</h3>
+                <p>HITL 机制：写操作前等待你批准或拒绝。<code>/agree</code> / <code>/deny</code> 快速决策。支持
+                    <code>auto</code>（需确认）和 <code>yolo</code>（直接干）两种模式。</p>
+            </div>
+            <div class="feature-card reveal">
+                <div class="icon-wrap">💬</div>
+                <h3>会话管理</h3>
+                <p>多会话创建、切换、搜索、删除。JSONL 格式持久化，会话自动生成标题，每次操作记录 token 用量，透明可审计。</p>
+        </div>
+            <div class="feature-card reveal">
+                <div class="icon-wrap">⚡</div>
+                <h3>前缀缓存</h3>
+                <p>系统提示词、工具定义等重复内容直接命中 KV cache。DeepSeek ≥97%，Mimo ≥98% 命中率，输入 token 费用降至
+                    2%~3%。</p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== CAPABILITIES ==================== -->
 <section class="section" id="capabilities">
     <div class="container">
-        <div class="section-label reveal">// 核心能力</div>
-        <h2 class="reveal">不只是对话，是<span style="color:var(--neon);">自主工作</span></h2>
-        <p class="section-desc reveal">
-            Agent4j 将 LLM 推理与工具系统深度绑定，形成一个能自主完成复杂编码任务的智能代理。
-        </p>
-
-        <div class="capabilities-grid">
-            <div class="cap-card reveal">
-                <div class="icon green">🔄</div>
-                <h3>对话式推理循环</h3>
-                <p>多轮上下文自动保持，流式 SSE 调用 OpenAI 兼容 API。思考过程实时打印，工具调用自动收集分发。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon green">⚡</div>
-                <h3>并行工具执行</h3>
-                <p>CompletableFuture.allOf 并行分发工具调用，最大化吞吐量。非阻塞等待，CAS 替代锁。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon amber">🛡️</div>
-                <h3>双断路器防护</h3>
-                <p>StormBreaker（滑动窗口 + JSON 指纹）+ ReasonBreaker（流式循环检测），双保险防止 LLM 死循环消耗 token。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon amber">📋</div>
-                <h3>计划模式</h3>
-                <p>Plan Mode — 只读探索代码库，制定执行计划，用户审批后切换执行模式，安全可控。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon blue">🧠</div>
-                <h3>上下文折叠</h3>
-                <p>ContextFolding — 长对话语义压缩，将历史消息折叠为摘要，避免上下文窗口溢出。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon blue">🔧</div>
-                <h3>消息自愈</h3>
-                <p>MessageHealer — 发送前自动修复消息序列：配对 tool_calls、补充 reasoning、截断过长的 tool 结果。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon green">🕵️</div>
-                <h3>工具调用回收</h3>
-                <p>Scavenger — 从 reasoning_content 中回收因 API 格式问题丢失的 tool_calls，提高调用成功率。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon amber">🧬</div>
-                <h3>子代理隔离</h3>
-                <p>SubAgent — 创建独立循环的子代理处理复杂任务，排除递归 spawn 和用户交互工具，结果自动返回。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon blue">💾</div>
-                <h3>会话持久化</h3>
-                <p>JSONL 文件存储 + BufferedWriter 缓冲写入 + 定时自动刷入，ReentrantLock 保证线程安全。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon green">📊</div>
-                <h3>Token 用量追踪</h3>
-                <p>精确统计每次 API 调用的 token 消耗，支持缓存命中率分析，帮助优化成本和性能。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon amber">🔒</div>
-                <h3>路径穿越防护</h3>
-                <p>所有文件操作通过 resolveSafe() 严格校验路径，杜绝目录穿越攻击，确保工作区安全。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon blue">✏️</div>
-                <h3>原子批量编辑</h3>
-                <p>edit — 精准 SEARCH/REPLACE 替换，原子性写入：所有编辑成功才写入，否则全部回滚，确保跨文件编辑的数据一致性与原子性。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon amber">🧠</div>
-                <h3>推理断路器</h3>
-                <p>ReasonBreaker — 流式检测 LLM 思考循环，发现重复推理模式时提前终止，节省 token 消耗。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon green">👤</div>
-                <h3>HITL 人机协同</h3>
-                <p>双模式审批 — 写入操作需确认 + 沙箱越界强制拦截（独立管道），安全可控的人机协作。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon blue">📦</div>
-                <h3>Skill 系统 V2</h3>
-                <p>用户可定义可复用的 Skill playbook，支持 inline 和 subagent 两种运行模式，跨会话持久化。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon green">⚡</div>
-                <h3>SSE 快慢双路径解析</h3>
-                <p>SSEDualPath — 快速路径字符串扫描提取 content 数据块，慢速路径完整 JSON 解析，消除冗余反序列化开销。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon blue">📤</div>
-                <h3>异步会话写入</h3>
-                <p>AsyncBuffer — 独立的缓冲区 + 后台消费者线程，将会话写入与推理循环解耦，显著提升吞吐量。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon amber">🛠️</div>
-                <h3>消息自愈·零拷贝</h3>
-                <p>MessageHealer 直接操作 ChatMessage 对象，无需序列化往返，修复 tool_calls 配对和 reasoning 补充更高效。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon green">⚙️</div>
-                <h3>配置外部化</h3>
-                <p>config.json 驱动 12+ 可调参数：maxContextChars、toolTimeoutSec、stormWindowSize 等，无需重新编译。</p>
-            </div>
-            <div class="cap-card reveal">
-                <div class="icon amber">🖥️</div>
-                <h3>多端交付</h3>
-                <p>CLI 控制台 + Vue3 Web UI + Tauri 桌面端，三种运行模式统一核心，一次编写处处运行。</p>
-            </div>
+        <div class="section-header reveal">
+            <h2>深入核心能力</h2>
+            <p class="subtitle">从推理到工具，从子代理到审批，Agent4j 提供企业级 AI 代理所需的一切</p>
         </div>
-    </div>
-</section>
 
-<!-- ============ ARCHITECTURE ============ -->
-<section class="section" id="architecture" style="background: var(--bg-surface);">
-    <div class="container">
-        <div class="section-label reveal">// 架构设计</div>
-        <h2 class="reveal">分层解耦，<span style="color:var(--amber);">职责清晰</span></h2>
-        <p class="section-desc reveal">
-            五层模块 + 三大核心引擎，每个组件专注做好一件事。
-        </p>
-
-        <div class="arch-wrapper reveal">
-            <div class="arch-diagram">
-                <!-- Layer 1 -->
-                <div class="arch-label">入口层 · Presentation</div>
-                <div class="arch-row">
-                    <div class="arch-box highlight">Agent4jApp (CLI)</div>
-                    <div class="arch-arrow">→</div>
-                    <div class="arch-box highlight">Agent4jWebApp (REST)</div>
-                    <div class="arch-arrow">→</div>
-                    <div class="arch-box highlight">Tauri (Desktop)</div>
+        <div class="detail-features">
+            <!-- 1. 推理循环 -->
+            <div class="detail-feature reveal">
+                <div class="detail-text">
+                    <h3><span class="icon-inline">🤖</span> 推理循环 <span class="accent">Reasoning Loop</span></h3>
+                    <p>Agent4j 的核心是一个自动迭代的推理循环。用户给出任务后，LLM 思考、调用工具、观察结果、再思考…
+                        直到任务完成。整个过程流式实时推送。</p>
+                    <ul>
+                        <li><strong>自动循环</strong> — Prompt → LLM → 工具 → 结果 → LLM，自动迭代</li>
+                        <li><strong>流式输出</strong> — 实时推送思考过程、工具调用和结果</li>
+                        <li><strong>上下文折叠</strong> — 旧消息自动摘要，不机械截断，保留关键信息</li>
+                        <li><strong>消息自愈</strong> — 自动修复被截断的 JSON 和 tool_calls</li>
+                        <li><strong>风暴断路器</strong> — 检测重复工具调用，防止死循环</li>
+                        <li><strong>推理模型支持</strong> — 原生支持展示思考过程</li>
+                    </ul>
                 </div>
-                <div class="arch-arrow-down">│</div>
-                <!-- Layer 2 -->
-                <div class="arch-label">核心层 · Core</div>
-                <div class="arch-row">
-                    <div class="arch-box highlight">Agent4jAgent</div>
-                    <div class="arch-arrow">→</div>
-                    <div class="arch-box">AgentLoop</div>
-                    <div class="arch-arrow">←</div>
-                    <div class="arch-box secondary">ToolDispatcher</div>
-                </div>
-                <div class="arch-arrow-down">│</div>
-                <!-- Layer 3 -->
-                <div class="arch-label">基础层 · Infrastructure</div>
-                <div class="arch-row">
-                    <div class="arch-box">ModelClient</div>
-                    <div class="arch-arrow">·</div>
-                    <div class="arch-box">ToolRegistry</div>
-                    <div class="arch-arrow">·</div>
-                    <div class="arch-box">SessionStore</div>
-                    <div class="arch-arrow">·</div>
-                    <div class="arch-box">JobRegistry</div>
-                </div>
-                <div class="arch-divider"></div>
-                <!-- Module row -->
-                <div class="arch-label">模块划分 · Modules</div>
-                <div class="arch-row">
-                    <div class="arch-box highlight">agent4j-tool</div>
-                    <div class="arch-arrow">◂</div>
-                    <div class="arch-box highlight">agent4j-bin</div>
-                    <div class="arch-arrow">◂</div>
-                    <div class="arch-box highlight">agent4j-web</div>
-                    <div class="arch-arrow">◂</div>
-                    <div class="arch-box highlight">agent4j-front</div>
-                    <div class="arch-arrow">◂</div>
-                    <div class="arch-box highlight">agent4j-tauri</div>
-                </div>
+                <div class="detail-visual">
+                    <div class="flow-diagram">
+                        <div class="flow-step active">
+                            <span class="step-icon">🎯</span>
+                            <span class="step-label">用户任务</span>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-step">
+                            <span class="step-icon">🧠</span>
+                            <span class="step-label">LLM 思考</span>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-step">
+                            <span class="step-icon">🔧</span>
+                            <span class="step-label">调用工具</span>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-step">
+                            <span class="step-icon">📊</span>
+                            <span class="step-label">观察结果</span>
+                        </div>
+                        <span class="flow-arrow">→</span>
+                        <div class="flow-step active">
+                            <span class="step-icon">✅</span>
+                            <span class="step-label">任务完成</span>
+                        </div>
             </div>
-        </div>
-    </div>
-</section>
-
-<!-- ============ DESIGN PATTERNS ============ -->
-<section class="section">
-    <div class="container">
-        <div class="section-label reveal">// 设计模式</div>
-        <h2 class="reveal">十几种经典模式的<span style="color:var(--neon);">Java 实践</span></h2>
-        <p class="section-desc reveal">每个组件都经过精心设计，追求高内聚低耦合。</p>
-
-        <div class="patterns-grid">
-            <div class="pattern-card reveal">
-                <div class="pattern-name">不可变前缀 · Caching</div>
-                <div class="pattern-loc">PromptPrefix</div>
-                <p>System prompt + tool specs 跨 turn 不变，最大化 DeepSeek 前缀缓存命中，显著降低延迟。</p>
-            </div>
-            <div class="pattern-card reveal">
-                <div class="pattern-name">双断路器 · Circuit Breaker</div>
-                <div class="pattern-loc">StormBreaker + ReasonBreaker</div>
-                <p>StormBreaker 滑动窗口 + JSON 指纹去重；ReasonBreaker 流式检测思考循环。双保险防死循环。</p>
-            </div>
-            <div class="pattern-card reveal">
-                <div class="pattern-name">工厂模式 · Factory</div>
-                <div class="pattern-loc">Agent4jAgent.Builder</div>
-                <p>链式 Builder 构建复杂对象，可读性强，支持灵活配置 ModelClient、ToolRegistry 等组件。</p>
-            </div>
-            <div class="pattern-card reveal">
-                <div class="pattern-name">观察者模式 · Observer</div>
-                <div class="pattern-loc">AgentLoopListener</div>
-                <p>推理过程、工具调用、用量统计的事件回调，支持实时监控和自定义处理逻辑。</p>
-            </div>
-            <div class="pattern-card reveal">
-                <div class="pattern-name">策略模式 · Strategy</div>
-                <div class="pattern-loc">ModelClient 接口</div>
-                <p>可替换的 LLM API 实现，默认 HttpModelClient 支持所有 OpenAI 兼容端点。</p>
-            </div>
-            <div class="pattern-card reveal">
-                <div class="pattern-name">命令模式 · Command</div>
-                <div class="pattern-loc">ChatCommandRegistry</div>
-                <p>"/" 命令通过 Solon IoC 自动注册，新增命令只需实现接口标注 @Component。</p>
-            </div>
-            <div class="pattern-card reveal">
-                <div class="pattern-name">模板方法 · Template</div>
-                <div class="pattern-loc">AgentTool</div>
-                <p>子类实现 getName/getDescription/getParameters/execute，框架负责调度和生命周期。</p>
-            </div>
-            <div class="pattern-card reveal">
-                <div class="pattern-name">缓冲写入 · Buffered I/O</div>
-                <div class="pattern-loc">JsonlSessionStore</div>
-                <p>BufferedWriter 保持打开 + flush() 显式刷入 + 30s 定时刷入，ReentrantLock 保证线程安全。</p>
-            </div>
-            <div class="pattern-card reveal">
-                <div class="pattern-name">享元模式 · Flyweight</div>
-                <div class="pattern-loc">PromptPrefix</div>
-                <p>共享 system prompt + tool defs，多个 Agent 实例复用同一不可变前缀，减少内存和构建开销。</p>
-            </div>
-            <div class="pattern-card reveal">
-                <div class="pattern-name">沙箱旁路 · ThreadLocal</div>
-                <div class="pattern-loc">ToolContext</div>
-                <p>ThreadLocal 控制沙箱越界权限，HITL 审批通过后临时提升，审批结束自动恢复隔离。</p>
-            </div>
-            <div class="pattern-card reveal">
-                <div class="pattern-name">异步缓冲区 · AsyncBuffer</div>
-                <div class="pattern-loc">AsyncSessionStore</div>
-                <p>独立缓冲区 + 后台消费者线程，将会话持久化写入与推理主循环解耦，避免 I/O 阻塞推理流程。</p>
-            </div>
-            <div class="pattern-card reveal">
-                <div class="pattern-name">SSE 快慢双路径 · SSEDualPath</div>
-                <div class="pattern-loc">SSEDualPathParser</div>
-                <p>快速路径字符串扫描直接提取 content 块，慢速路径兜底完整 JSON 解析；消除冗余反序列化，显著降低流式解析开销。</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ============ TOOLS ============ -->
-<section class="section" id="tools" style="background: var(--bg-surface);">
-    <div class="container">
-        <div class="section-label reveal">// 工具系统</div>
-        <h2 class="reveal">40+ 工具，覆盖<span style="color:var(--neon);">全开发场景</span></h2>
-        <p class="section-desc reveal">
-            42 个内置工具，分为文件操作、终端、后台作业、Web/API、记忆、计划、交互、工作区、子代理、工具管理、其他共十一大类。
-        </p>
-
-        <div class="tools-categories">
-            <!-- 文件操作 -->
-            <div class="tool-cat reveal">
-                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
-                    <div class="left">
-                        <span class="emoji">📁</span>
-                        <h4>文件操作</h4>
-                        <span class="count">6 tools</span>
-                    </div>
-                    <span class="chevron">▾</span>
-                </div>
-                <div class="tool-cat-body">
-                    <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">read</span><span class="tool-desc">读取文件内容（支持分页）</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">write</span><span class="tool-desc">创建新文件或覆盖现有文件</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">edit</span><span class="tool-desc">精准 SEARCH/REPLACE 替换</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">glob</span><span class="tool-desc">通配符模式搜索文件</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">ls</span><span class="tool-desc">列出目录内容 / 递归树</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">grep</span><span class="tool-desc">递归内容搜索</span><span class="badge read">只读</span></div>
-                    </div>
                 </div>
             </div>
 
-            <!-- 终端 -->
-            <div class="tool-cat reveal">
-                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
-                    <div class="left">
-                        <span class="emoji">💻</span>
-                        <h4>终端</h4>
-                        <span class="count">5 tools</span>
-                    </div>
-                    <span class="chevron">▾</span>
+            <!-- 2. 工具系统 -->
+            <div class="detail-feature reveal">
+                <div class="detail-visual">
+                    <div class="tool-showcase">
+                        <div class="tool-item"><span class="tool-icon">📄</span> read / write / edit</div>
+                        <div class="tool-item"><span class="tool-icon">🔍</span> glob / grep / ls</div>
+                        <div class="tool-item"><span class="tool-icon">💻</span> bash</div>
+                        <div class="tool-item"><span class="tool-icon">📋</span> bash_start / wait / stdin / stop</div>
+                        <div class="tool-item"><span class="tool-icon">🔀</span> task / multi_task</div>
+                        <div class="tool-item"><span class="tool-icon">📂</span> workspace_read / write / list / watch
+                        </div>
+                        <div class="tool-item"><span class="tool-icon">🌐</span> webfetch</div>
+                        <div class="tool-item"><span class="tool-icon">🔎</span> codesearch</div>
+                        <div class="tool-item"><span class="tool-icon">📞</span> call_api</div>
+                        <div class="tool-item"><span class="tool-icon">🧠</span> remember / recall_memory</div>
+                        <div class="tool-item"><span class="tool-icon">📋</span> submit_plan / revise_plan</div>
+                        <div class="tool-item"><span class="tool-icon">💬</span> ask_choice / todo_write</div>
+            </div>
                 </div>
-                <div class="tool-cat-body">
-                    <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">bash</span><span class="tool-desc">非交互式 Shell 指令执行</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">bash_start</span><span class="tool-desc">启动 Shell 命令会话</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">bash_stdin</span><span class="tool-desc">向运行中会话写入 stdin</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">bash_stop</span><span class="tool-desc">终止运行中的命令会话</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">bash_wait</span><span class="tool-desc">等待命令会话新增输出</span><span class="badge read">只读</span></div>
-                    </div>
+                <div class="detail-text">
+                    <h3><span class="icon-inline">🛠️</span> 工具系统 <span class="accent">Tool System</span></h3>
+                    <p>Agent4j 内置丰富的工具集，并支持无限扩展。继承 <code>AgentTool</code> 基类，定义名称、参数、执行逻辑即可注册新工具。
+                    </p>
+                    <ul>
+                        <li><strong>声明式工具</strong> — 继承 AgentTool 基类，Solon @Component 自动发现</li>
+                        <li><strong>MCP 支持</strong> — 接入 Model Context Protocol 服务器</li>
+                        <li><strong>OpenAPI 集成</strong> — 任意 OpenAPI 规范自动转成工具</li>
+                        <li><strong>技能市场</strong> — 在线装/卸社区技能</li>
+                        <li><strong>Plan Mode</strong> — 只读模式，安全规划后再执行</li>
+                    </ul>
                 </div>
             </div>
 
-            <!-- 后台作业 -->
-            <div class="tool-cat reveal">
-                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
-                    <div class="left">
-                        <span class="emoji">🖥️</span>
-                        <h4>后台作业</h4>
-                        <span class="count">5 tools</span>
-                    </div>
-                    <span class="chevron">▾</span>
+            <!-- 3. 子代理 -->
+            <div class="detail-feature reveal">
+                <div class="detail-text">
+                    <h3><span class="icon-inline">🔀</span> 子代理 <span class="accent">Sub-Agent</span></h3>
+                    <p>将复杂任务拆解给多个子代理并行执行。每个子代理拥有独立的推理循环和上下文，互不干扰。</p>
+                    <ul>
+                        <li><strong>隔离执行</strong> — 独立上下文和推理循环，不串扰</li>
+                        <li><strong>继承工具</strong> — 复制父代理工具集，排除递归 spawn</li>
+                        <li><strong>独立通道</strong> — 子代理输出通过独立事件流推送</li>
+                        <li><strong>用量统计</strong> — 按模型统计 token 消耗，透明可见</li>
+                    </ul>
                 </div>
-                <div class="tool-cat-body">
-                    <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">run_background</span><span class="tool-desc">启动后台 Shell 进程</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">job_output</span><span class="tool-desc">读取后台作业最新输出</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">wait_for_job</span><span class="tool-desc">等待后台作业完成</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">stop_job</span><span class="tool-desc">停止后台作业</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">list_jobs</span><span class="tool-desc">列出所有后台作业</span><span class="badge read">只读</span></div>
-                    </div>
+                <div class="detail-visual">
+                    <div class="flow-diagram" style="flex-direction: column; gap: 8px; padding: 24px;">
+                        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;">
+                            <div class="flow-step active"><span class="step-icon">👤</span><span
+                                    class="step-label">主代理</span></div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-step"><span class="step-icon">1️⃣</span><span
+                                    class="step-label">子代理A</span></div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-step"><span class="step-icon">🔧</span><span
+                                    class="step-label">文件分析</span></div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;">
+                            <div class="flow-step"><span class="step-icon">2️⃣</span><span
+                                    class="step-label">子代理B</span></div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-step"><span class="step-icon">🛠️</span><span
+                                    class="step-label">代码编写</span></div>
+                        </div>
+                        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;">
+                            <div class="flow-step"><span class="step-icon">3️⃣</span><span
+                                    class="step-label">子代理C</span></div>
+                            <span class="flow-arrow">→</span>
+                            <div class="flow-step"><span class="step-icon">🧪</span><span
+                                    class="step-label">运行测试</span></div>
+                        </div>
+            </div>
                 </div>
             </div>
 
-            <!-- Web/API -->
-            <div class="tool-cat reveal">
-                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
-                    <div class="left">
-                        <span class="emoji">🌐</span>
-                        <h4>Web / API</h4>
-                        <span class="count">7 tools</span>
-                    </div>
-                    <span class="chevron">▾</span>
+            <!-- 4. 人工审批 HITL -->
+            <div class="detail-feature reveal">
+                <div class="detail-visual">
+                    <div class="flow-diagram" style="padding: 32px 24px;">
+                        <div style="display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;">
+                            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;">
+                                <div class="flow-step"><span class="step-icon">✍️</span><span
+                                        class="step-label">写操作请求</span></div>
+                                <span class="flow-arrow">→</span>
+                                <div class="flow-step active"><span class="step-icon">👤</span><span class="step-label">等待审批</span>
+                                </div>
+                                <span class="flow-arrow">→</span>
+                                <div class="flow-step"><span class="step-icon">✅</span><span
+                                        class="step-label">批准执行</span></div>
+                            </div>
+                            <div style="display:flex;gap:16px;margin-top:8px;">
+                                <span style="padding:6px 16px;border:1px solid var(--neon);border-radius:100px;color:var(--neon);font-family:'JetBrains Mono',monospace;font-size:0.75rem;">/agree ✓</span>
+                                <span style="padding:6px 16px;border:1px solid var(--text-muted);border-radius:100px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;font-size:0.75rem;">/deny ✗</span>
                 </div>
-                <div class="tool-cat-body">
-                    <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">webfetch</span><span class="tool-desc">网页内容抓取</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">codesearch</span><span class="tool-desc">Exa Code 语义搜索</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">resolve-library-id</span><span class="tool-desc">解析库/包名到 Context7 ID</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">query-docs</span><span class="tool-desc">Context7 文档/代码示例查询</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">search_apis</span><span class="tool-desc">关键词搜索 API 接口</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">get_api_detail</span><span class="tool-desc">获取 API 参数定义与结构</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">call_api</span><span class="tool-desc">执行 REST API 调用</span><span class="badge write">写入</span></div>
+                        </div>
                     </div>
                 </div>
-            </div>
-
-            <!-- 记忆 -->
-            <div class="tool-cat reveal">
-                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
-                    <div class="left">
-                        <span class="emoji">🧠</span>
-                        <h4>记忆</h4>
-                        <span class="count">3 tools</span>
-                    </div>
-                    <span class="chevron">▾</span>
-                </div>
-                <div class="tool-cat-body">
-                    <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">remember</span><span class="tool-desc">持久化保存记忆</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">recall_memory</span><span class="tool-desc">读取完整记忆内容</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">forget</span><span class="tool-desc">删除指定记忆</span><span class="badge write">写入</span></div>
-                    </div>
+                <div class="detail-text">
+                    <h3><span class="icon-inline">👤</span> 人工审批 <span class="accent">HITL</span></h3>
+                    <p>Agent4j 在执行写操作前会等待你批准或拒绝，确保每次修改都在你的控制之下。支持快速命令决策。</p>
+                    <ul>
+                        <li><strong>自动模式</strong> — 写操作前需要确认，安全可靠</li>
+                        <li><strong>YOLO 模式</strong> — 直接执行，无需确认，适合信任场景</li>
+                        <li><strong>快速决策</strong> — <code>/agree</code> 批准 / <code>/deny</code> 拒绝，即时响应</li>
+                        <li><strong>todo_write</strong> — 维护任务清单，跟踪执行进度</li>
+                    </ul>
                 </div>
             </div>
 
-            <!-- 计划 -->
-            <div class="tool-cat reveal">
-                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
-                    <div class="left">
-                        <span class="emoji">📋</span>
-                        <h4>计划</h4>
-                        <span class="count">3 tools</span>
-                    </div>
-                    <span class="chevron">▾</span>
+            <!-- 5. 会话管理 -->
+            <div class="detail-feature reveal">
+                <div class="detail-text">
+                    <h3><span class="icon-inline">💬</span> 会话管理 <span class="accent">Session Management</span></h3>
+                    <p>多会话并行管理，每个会话有独立上下文。JSONL 格式持久化，历史数据可追溯、可审计。</p>
+                    <ul>
+                        <li><strong>多会话</strong> — 创建、切换、搜索、删除，灵活管理</li>
+                        <li><strong>JSONL 持久化</strong> — 结构化日志格式，方便检索和分析</li>
+                        <li><strong>自动标题</strong> — 根据对话内容自动生成会话名称</li>
+                        <li><strong>用量统计</strong> — 每次操作记录 token 消耗，成本透明</li>
+                        <li><strong>工作区隔离</strong> — 不同项目的工作区互相独立</li>
+                    </ul>
                 </div>
-                <div class="tool-cat-body">
-                    <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">submit_plan</span><span class="tool-desc">提交执行计划</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">revise_plan</span><span class="tool-desc">修订剩余步骤</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">mark_step_complete</span><span class="tool-desc">标记步骤完成</span><span class="badge write">写入</span></div>
-                    </div>
+                <div class="detail-visual">
+                    <div class="flow-diagram" style="padding: 24px;">
+                        <div style="display:flex;flex-direction:column;gap:8px;width:100%;">
+                            <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--bg-overlay);border:1px solid var(--border);border-radius:var(--radius);">
+                                <span style="color:var(--neon);font-family:'JetBrains Mono',monospace;font-size:0.8rem;">📁 project-a</span>
+                                <span style="color:var(--text-muted);font-size:0.7rem;margin-left:auto;">3 个会话</span>
+                            </div>
+                            <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--bg-overlay);border:1px solid var(--neon);border-radius:var(--radius);">
+                                <span style="color:var(--neon);font-family:'JetBrains Mono',monospace;font-size:0.8rem;">💬 重构用户模块</span>
+                                <span style="color:var(--text-muted);font-size:0.7rem;margin-left:auto;">active</span>
                 </div>
+                            <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--bg-overlay);border:1px solid var(--border);border-radius:var(--radius);">
+                                <span style="font-family:'JetBrains Mono',monospace;font-size:0.8rem;color:var(--text-secondary);">📁 project-b</span>
+                                <span style="color:var(--text-muted);font-size:0.7rem;margin-left:auto;">1 个会话</span>
+                            </div>
+                        </div>
             </div>
-
-            <!-- 交互 -->
-            <div class="tool-cat reveal">
-                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
-                    <div class="left">
-                        <span class="emoji">💬</span>
-                        <h4>交互</h4>
-                        <span class="count">2 tools</span>
-                    </div>
-                    <span class="chevron">▾</span>
-                </div>
-                <div class="tool-cat-body">
-                    <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">ask_choice</span><span class="tool-desc">用户选择菜单</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">todo_write</span><span class="tool-desc">任务跟踪列表</span><span class="badge write">写入</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 工作区 -->
-            <div class="tool-cat reveal">
-                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
-                    <div class="left">
-                        <span class="emoji">📂</span>
-                        <h4>工作区</h4>
-                        <span class="count">4 tools</span>
-                    </div>
-                    <span class="chevron">▾</span>
-                </div>
-                <div class="tool-cat-body">
-                    <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">workspace_list</span><span class="tool-desc">列出工作区条目键</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">workspace_read</span><span class="tool-desc">读取工作区 KV/文档条目</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">workspace_watch</span><span class="tool-desc">监听工作区文件变化</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">workspace_write</span><span class="tool-desc">写入工作区 KV/文档条目</span><span class="badge write">写入</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 子代理 -->
-            <div class="tool-cat reveal">
-                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
-                    <div class="left">
-                        <span class="emoji">🧬</span>
-                        <h4>子代理</h4>
-                        <span class="count">2 tools</span>
-                    </div>
-                    <span class="chevron">▾</span>
-                </div>
-                <div class="tool-cat-body">
-                    <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">task</span><span class="tool-desc">子代理任务委派</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">multi_task</span><span class="tool-desc">并行多子代理任务</span><span class="badge write">写入</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 工具管理 -->
-            <div class="tool-cat reveal">
-                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
-                    <div class="left">
-                        <span class="emoji">📦</span>
-                        <h4>工具管理</h4>
-                        <span class="count">4 tools</span>
-                    </div>
-                    <span class="chevron">▾</span>
-                </div>
-                <div class="tool-cat-body">
-                    <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">skilllist</span><span class="tool-desc">列出可用技能清单</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">skillread</span><span class="tool-desc">读取技能详细说明书</span><span class="badge read">只读</span></div>
-                        <div class="tool-item"><span class="tool-name">skillrefresh</span><span class="tool-desc">重新扫描挂载池更新技能</span><span class="badge write">写入</span></div>
-                        <div class="tool-item"><span class="tool-name">using-superpowers</span><span class="tool-desc">编排多个技能完成复杂任务</span><span class="badge read">只读</span></div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- 其他 -->
-            <div class="tool-cat reveal">
-                <div class="tool-cat-header" onclick="this.parentElement.classList.toggle('open')">
-                    <div class="left">
-                        <span class="emoji">🕐</span>
-                        <h4>其他</h4>
-                        <span class="count">1 tool</span>
-                    </div>
-                    <span class="chevron">▾</span>
-                </div>
-                <div class="tool-cat-body">
-                    <div class="tool-list">
-                        <div class="tool-item"><span class="tool-name">get_current_time</span><span class="tool-desc">获取系统当前日期时间</span><span class="badge read">只读</span></div>
-                    </div>
                 </div>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ============ TECH STACK ============ -->
-<section class="section">
+<!-- ==================== PREFIX CACHE ==================== -->
+<section class="section" id="cache">
     <div class="container">
-        <div class="section-label reveal">// 技术栈</div>
-        <h2 class="reveal">精选依赖，<span style="color:var(--amber);">追求轻量</span></h2>
-        <p class="section-desc reveal">
-            基于 Java 17，Solon 轻量级 IoC，前后端分离 + Tauri 桌面端，无 Spring Boot 重依赖。
-        </p>
-
-        <div class="tech-grid">
-            <div class="tech-card reveal">
-                <div class="tech-name">Java</div>
-                <div class="tech-ver">17</div>
-                <div class="tech-role">开发语言</div>
+        <div class="section-header reveal">
+            <h2>⚡ 前缀缓存 <span class="accent">优势</span></h2>
+            <p class="subtitle">每次会话开头的重复内容直接命中 KV cache，输入 token 费用降至 2%~3%</p>
+        </div>
+        <div class="cache-showcase reveal">
+            <div class="cache-stats">
+                <div class="stat-card">
+                    <div class="stat-value" data-target="97">97%</div>
+                    <div class="stat-label">DeepSeek 前缀缓存命中率</div>
+                    <div class="stat-detail">deepseek-v4-flash / deepseek-v4-pro</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-value" data-target="98">98%</div>
+                    <div class="stat-label">小米 Mimo 前缀缓存命中率</div>
+                    <div class="stat-detail">mimo-v2.5 / mimo-v2.5-pro</div>
+                </div>
             </div>
-            <div class="tech-card reveal">
-                <div class="tech-name">Maven</div>
-                <div class="tech-ver">3.x</div>
-                <div class="tech-role">构建 & 多模块管理</div>
-            </div>
-            <div class="tech-card reveal">
-                <div class="tech-name">Solon</div>
-                <div class="tech-ver">3.9.6</div>
-                <div class="tech-role">IoC / AOP / Web</div>
-            </div>
-            <div class="tech-card reveal">
-                <div class="tech-name">Snack4</div>
-                <div class="tech-ver">4.0.49</div>
-                <div class="tech-role">JSON 解析 & 序列化</div>
-            </div>
-            <div class="tech-card reveal">
-                <div class="tech-name">Lombok</div>
-                <div class="tech-ver">1.18.34</div>
-                <div class="tech-role">样板代码简化</div>
-            </div>
-            <div class="tech-card reveal">
-                <div class="tech-name">SLF4J</div>
-                <div class="tech-ver">1.7.36</div>
-                <div class="tech-role">日志门面</div>
-            </div>
-            <div class="tech-card reveal">
-                <div class="tech-name">JUnit</div>
-                <div class="tech-ver">5.10.3</div>
-                <div class="tech-role">单元测试框架</div>
-            </div>
-            <div class="tech-card reveal">
-                <div class="tech-name">Logback</div>
-                <div class="tech-ver">via Solon</div>
-                <div class="tech-role">高性能日志实现</div>
-            </div>
-            <div class="tech-card reveal">
-                <div class="tech-name">Vue 3</div>
-                <div class="tech-ver">latest</div>
-                <div class="tech-role">前端框架</div>
-            </div>
-            <div class="tech-card reveal">
-                <div class="tech-name">Vite</div>
-                <div class="tech-ver">latest</div>
-                <div class="tech-role">前端构建工具</div>
-            </div>
-            <div class="tech-card reveal">
-                <div class="tech-name">Tauri</div>
-                <div class="tech-ver">v2</div>
-                <div class="tech-role">桌面端框架</div>
-            </div>
-            <div class="tech-card reveal">
-                <div class="tech-name">Rust</div>
-                <div class="tech-ver">stable</div>
-                <div class="tech-role">Tauri 后端</div>
+            <div class="cache-table-wrap">
+                <table class="cache-table">
+                    <thead>
+                    <tr>
+                        <th>模型</th>
+                        <th>缓存命中率</th>
+                        <th>效果</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr>
+                        <td class="model-name">DeepSeek (deepseek-v4-flash)</td>
+                        <td class="rate">≥ 97%</td>
+                        <td class="effect">输入成本降至 3%</td>
+                    </tr>
+                    <tr>
+                        <td class="model-name">DeepSeek (deepseek-v4-pro)</td>
+                        <td class="rate">≥ 97%</td>
+                        <td class="effect">输入成本降至 3%</td>
+                    </tr>
+                    <tr>
+                        <td class="model-name">小米 Mimo (mimo-v2.5)</td>
+                        <td class="rate">≥ 98%</td>
+                        <td class="effect">输入成本降至 2%</td>
+                    </tr>
+                    <tr>
+                        <td class="model-name">小米 Mimo (mimo-v2.5-pro)</td>
+                        <td class="rate">≥ 98%</td>
+                        <td class="effect">输入成本降至 2%</td>
+                    </tr>
+                    </tbody>
+                </table>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ============ HIGHLIGHT BAR ============ -->
-<div class="highlight-bar">
-    <div class="container">
-        <div class="highlight-item"><span class="check">✓</span> 纯 Java 17，多模块 Maven 构建</div>
-        <div class="highlight-item"><span class="check">✓</span> 双断路器防护，杜绝死循环</div>
-        <div class="highlight-item"><span class="check">✓</span> Skill 系统 V2，可复用 playbook</div>
-        <div class="highlight-item"><span class="check">✓</span> HITL 双模式，安全人机协同</div>
-        <div class="highlight-item"><span class="check">✓</span> 三端交付：CLI 控制台 / Vue3 Web UI / Tauri 桌面端</div>
-    </div>
-</div>
-
-<!-- ============ QUICK START ============ -->
+<!-- ==================== QUICK START ==================== -->
 <section class="section" id="quickstart">
     <div class="container">
-        <div class="section-label reveal">// 快速开始</div>
-        <h2 class="reveal">5 分钟<span style="color:var(--neon);">上手运行</span></h2>
-        <p class="section-desc reveal">
-            只需 JDK 17+、Maven 和一个 OpenAI 兼容的 LLM 端点。
-        </p>
-
-        <div class="code-block-wrapper reveal" style="margin-bottom: 28px;">
-            <div class="code-block-header">
-                <span class="code-block-lang">~/.agent4j/config.json</span>
-                <button class="btn-copy" onclick="copyCode(this, 'config-code')">复制</button>
-            </div>
-            <div class="code-block-body">
-        <pre id="config-code"><span class="p">{</span>
-  <span class="s">"baseUrl"</span><span class="p">:</span> <span class="s">"https://api.deepseek.com/v1"</span><span class="p">,</span>
-  <span class="s">"apiKey"</span><span class="p">:</span> <span class="s">"sk-your-api-key"</span><span class="p">,</span>
-  <span class="s">"model"</span><span class="p">:</span> <span class="s">"deepseek-v4-flash"</span><span class="p">,</span>
-  <span class="s">"workspaceDir"</span><span class="p">:</span> <span class="s">"."</span><span class="p">,</span>
-  <span class="s">"editMode"</span><span class="p">:</span> <span class="s">"auto"</span><span class="p">,</span>
-  <span class="s">"reasoningEffort"</span><span class="p">:</span> <span class="s">"max"</span><span class="p">,</span>
-  <span class="s">"lang"</span><span class="p">:</span> <span class="s">"ZH"</span><span class="p">,</span>
-  <span class="s">"hitl"</span><span class="p">:</span> <span class="k">false</span><span class="p">,</span>
-  <span class="s">"disabledTools"</span><span class="p">:</span> <span class="p">[],</span>
-  <span class="s">"blockedPaths"</span><span class="p">:</span> <span class="p">[],</span>
-  <span class="s">"availableModels"</span><span class="p">:</span> <span class="p">[</span><span class="s">"deepseek-v4-flash"</span><span class="p">,</span> <span class="s">"gpt-4o"</span><span class="p">,</span> <span class="s">"claude-3.5-sonnet"</span><span class="p">],</span>
-  <span class="s">"maxContextChars"</span><span class="p">:</span> <span class="n">128000</span><span class="p">,</span>
-  <span class="s">"keepTailChars"</span><span class="p">:</span> <span class="n">32000</span><span class="p">,</span>
-  <span class="s">"toolTimeoutSec"</span><span class="p">:</span> <span class="n">120</span><span class="p">,</span>
-  <span class="s">"maxSelfCorrectionAttempts"</span><span class="p">:</span> <span class="n">3</span><span class="p">,</span>
-  <span class="s">"maxStreamErrorRetries"</span><span class="p">:</span> <span class="n">3</span><span class="p">,</span>
-  <span class="s">"flushIntervalSec"</span><span class="p">:</span> <span class="n">30</span><span class="p">,</span>
-  <span class="s">"stormWindowSize"</span><span class="p">:</span> <span class="n">12</span><span class="p">,</span>
-  <span class="s">"stormThreshold"</span><span class="p">:</span> <span class="n">8</span>
-<span class="p">}</span></pre>
-            </div>
+        <div class="section-header reveal">
+            <h2>🚀 快速开始</h2>
+            <p class="subtitle">一行命令安装，两行配置运行</p>
         </div>
-
-        <div class="code-block-wrapper reveal">
-            <div class="code-block-header">
-                <span class="code-block-lang">终端 · Terminal</span>
-                <button class="btn-copy" onclick="copyCode(this, 'terminal-code')">复制</button>
+        <div class="quickstart-grid reveal">
+            <div class="install-card">
+                <h3>
+                    <span>🪟 Windows</span>
+                    <span class="os-tag">PowerShell</span>
+                </h3>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this, 'win-install')">复制</button>
+                    <code id="win-install">
+                        <span class="comment-line"># 一行命令安装 Agent4j</span><br/>
+                        <span class="cmd-line">irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex</span>
+                    </code>
+                </div>
+                <h3 style="margin-top: 24px;">
+                    <span>🍎 macOS / 🐧 Linux</span>
+                    <span class="os-tag">bash</span>
+                </h3>
+                <div class="code-block">
+                    <button class="copy-btn" onclick="copyCode(this, 'unix-install')">复制</button>
+                    <code id="unix-install">
+                        <span class="comment-line"># 一行命令安装</span><br/>
+                        <span class="cmd-line">curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash</span>
+                    </code>
+                </div>
             </div>
-            <div class="code-block-body">
-        <pre id="terminal-code"><span class="c"># 1. 克隆项目</span>
-git clone https://gitee.com/ezdemo/agent4j.git
-<span class="k">cd</span> agent4j
-
-<span class="c"># 2. 编译</span>
-mvn compile <span class="p">-pl</span> agent4j-bin
-
-<span class="c"># 3. 运行</span>
-mvn <span class="k">exec</span><span class="p">:</span>java <span class="p">-pl</span> agent4j-bin \
-  <span class="p">-D</span>exec.mainClass=<span class="s">"site.sorghum.agent4j.bin.Agent4jApp"</span>
-
-<span class="c"># 首次启动自动创建 ~/.agent4j/config.json</span>
-<span class="c"># 编辑 API 配置后重新运行即可</span></pre>
+            <div class="install-card">
+                <h3>
+                    <span>⚙️ 配置</span>
+                    <span class="os-tag">config.json</span>
+                </h3>
+                <p style="color:var(--text-secondary);margin-bottom:16px;font-size:0.9rem;">
+                    首次启动自动生成 <code style="color:var(--neon);">~/.agent4j/config.json</code>，填入 API Key 即可：
+                </p>
+                <div class="code-block" style="max-height: 220px; overflow-y: auto;">
+                    <button class="copy-btn" onclick="copyCode(this, 'config-json')">复制</button>
+                    <pre class="config-json" id="config-json" style="margin:0;">{
+  <span class="comment">// API 地址</span>
+  "<span class="key">baseUrl</span>": "<span class="string">https://api.deepseek.com/v1</span>",
+  <span class="comment">// API 密钥</span>
+  "<span class="key">apiKey</span>": "<span class="string">sk-your-api-key</span>",
+  <span class="comment">// 模型名称</span>
+  "<span class="key">model</span>": "<span class="string">deepseek-v4-flash</span>",
+  <span class="comment">// 工作区目录（你的项目路径）</span>
+  "<span class="key">workspaceDir</span>": "<span class="string">/path/to/your/project</span>",
+  <span class="comment">// 推理强度: low | medium | high | max</span>
+  "<span class="key">reasoningEffort</span>": "<span class="string">high</span>"
+}</pre>
+                </div>
+                <div class="code-block" style="margin-top: 12px;">
+                    <button class="copy-btn" onclick="copyCode(this, 'run-cmd')">复制</button>
+                    <code id="run-cmd">
+                        <span class="comment-line"># 启动 Web 服务</span><br/>
+                        <span class="cmd-line">agent4j web 0</span>
+                    </code>
+                </div>
             </div>
         </div>
     </div>
 </section>
 
-<!-- ============ CTA ============ -->
-<section class="cta-section">
+<!-- ==================== COMMANDS ==================== -->
+<section class="section" id="commands" style="padding-top: 20px;">
     <div class="container">
-        <h2 class="reveal">准备好开始了吗？</h2>
-        <p class="reveal" style="color: var(--text-secondary); max-width: 560px; margin: 12px auto 32px;">
-            将 AI 编码代理引入你的 Java 工作流。开源、轻量、可扩展。
-        </p>
-        <div class="cta-buttons reveal">
-            <a href="https://gitee.com/ezdemo/agent4j" class="btn-primary" target="_blank">前往 Gitee →</a>
-            <a href="#quickstart" class="btn-secondary">查看文档</a>
+        <div class="section-header reveal">
+            <h2>🎯 聊天命令</h2>
+            <p class="subtitle">高效控制 AI 代理的快捷命令</p>
+        </div>
+        <div class="cache-table-wrap reveal" style="max-width: 700px; margin: 0 auto;">
+            <table class="cache-table">
+                <thead>
+                <tr>
+                    <th>命令</th>
+                    <th>功能</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td class="model-name"><code>/help</code></td>
+                    <td>帮助信息</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>/new</code></td>
+                    <td>新会话</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>/plan</code></td>
+                    <td>进入计划模式（只读）</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>/execute</code></td>
+                    <td>退出计划模式</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>/compact</code></td>
+                    <td>折叠历史，释放上下文空间</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>/retry</code></td>
+                    <td>撤回重试</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>/rewind N</code></td>
+                    <td>回退到第 N 轮对话</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>/sessions</code></td>
+                    <td>列出所有会话</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>/load N</code></td>
+                    <td>加载第 N 个会话</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>/init</code></td>
+                    <td>分析项目，自动生成文档</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>/hitl</code></td>
+                    <td>切换人工审批模式</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>/agree</code></td>
+                    <td>批准当前写操作</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>/deny</code></td>
+                    <td>拒绝当前写操作</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>/continue</code></td>
+                    <td>继续生成</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>/exit</code></td>
+                    <td>退出</td>
+                </tr>
+                </tbody>
+            </table>
         </div>
     </div>
 </section>
 
-<!-- ============ FOOTER ============ -->
+<!-- ==================== TECH STACK ==================== -->
+<section class="section" id="techstack">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>🛠️ 技术栈</h2>
+            <p class="subtitle">纯 Java 17 + Solon 后端 · Vue 3 前端 · Tauri 2.0 桌面端</p>
+        </div>
+        <div class="tech-stack-visual reveal">
+            <!-- Presentation Layer -->
+            <div class="tech-layer">
+                <span class="layer-label">前端</span>
+                <span class="tech-badge blue">Vue 3.4</span>
+                <span class="tech-badge blue">Vite 5</span>
+                <span class="tech-badge blue">Ant Design Vue 4</span>
+                <span class="tech-badge purple">TypeScript</span>
+            </div>
+            <div class="tech-layer-connector">⬇️ ⬇️ ⬇️</div>
+
+            <!-- Desktop Layer -->
+            <div class="tech-layer">
+                <span class="layer-label">桌面</span>
+                <span class="tech-badge amber">Tauri 2.0</span>
+                <span class="tech-badge amber">Rust</span>
+            </div>
+            <div class="tech-layer-connector">⬇️ ⬇️</div>
+
+            <!-- API Layer -->
+            <div class="tech-layer">
+                <span class="layer-label">API</span>
+                <span class="tech-badge neon">Solon Web</span>
+                <span class="tech-badge neon">REST API</span>
+                <span class="tech-badge neon">SSE Stream</span>
+                <span class="tech-badge neon">Knife4j</span>
+            </div>
+            <div class="tech-layer-connector">⬇️ ⬇️ ⬇️</div>
+
+            <!-- Engine Layer -->
+            <div class="tech-layer">
+                <span class="layer-label">引擎</span>
+                <span class="tech-badge neon">推理循环</span>
+                <span class="tech-badge neon">工具系统</span>
+                <span class="tech-badge neon">子代理</span>
+                <span class="tech-badge neon">会话管理</span>
+            </div>
+            <div class="tech-layer-connector">⬇️ ⬇️</div>
+
+            <!-- Runtime Layer -->
+            <div class="tech-layer">
+                <span class="layer-label">运行时</span>
+                <span class="tech-badge amber">Java 17</span>
+                <span class="tech-badge neon">Solon 4.0</span>
+                <span class="tech-badge blue">Snack4 JSON</span>
+                <span class="tech-badge">OkHttp</span>
+                <span class="tech-badge">JSON Lines</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== INTERFACES ==================== -->
+<section class="section" id="interfaces">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>🌐 三种界面</h2>
+            <p class="subtitle">终端、浏览器、桌面应用 — 同一引擎，三种体验</p>
+        </div>
+        <div class="interfaces-grid reveal">
+            <div class="interface-card">
+                <div class="icon-large">💻</div>
+                <h3>CLI 终端</h3>
+                <p>在终端里直接运行。无需图形界面，SSH 远程也能用，适合资深开发者。</p>
+                <span class="tag">agent4j web 0</span>
+            </div>
+            <div class="interface-card">
+                <div class="icon-large">🌍</div>
+                <h3>Web 界面</h3>
+                <p>浏览器打开可视化界面。流式打字机效果、工具调用可视化、Git 面板。</p>
+                <span class="tag">http://localhost:4567</span>
+            </div>
+            <div class="interface-card">
+                <div class="icon-large">🖥️</div>
+                <h3>Desktop 桌面</h3>
+                <p>Tauri 2.0 原生桌面应用。系统原生窗口、托盘图标、全局快捷键。</p>
+                <span class="tag">Tauri 2.0 + Rust</span>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== PERFORMANCE ==================== -->
+<section class="section" id="performance">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>📊 性能指标</h2>
+            <p class="subtitle">企业级性能，从缓存优化到上下文管理</p>
+        </div>
+        <div class="performance-grid reveal">
+            <div class="perf-card">
+                <div class="perf-value">≥97%</div>
+                <div class="perf-label">DeepSeek 前缀缓存命中率</div>
+            </div>
+            <div class="perf-card">
+                <div class="perf-value">≥98%</div>
+                <div class="perf-label">Mimo 前缀缓存命中率</div>
+            </div>
+            <div class="perf-card">
+                <div class="perf-value">2~3%</div>
+                <div class="perf-label">输入成本压缩比例</div>
+            </div>
+            <div class="perf-card">
+                <div class="perf-value">200K</div>
+                <div class="perf-label">最大上下文字符数</div>
+            </div>
+            <div class="perf-card">
+                <div class="perf-value">50</div>
+                <div class="perf-label">会话并发数 (LRU)</div>
+            </div>
+            <div class="perf-card">
+                <div class="perf-value">360s</div>
+                <div class="perf-label">工具超时可配</div>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== CONFIG DOCS ==================== -->
+<section class="section" id="config-docs" style="padding-top: 20px;">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>⚙️ 配置参考</h2>
+            <p class="subtitle"><code style="color:var(--neon);">~/.agent4j/config.json</code> 完整配置项说明</p>
+        </div>
+        <div class="cache-table-wrap reveal" style="max-width: 900px; margin: 0 auto;">
+            <table class="cache-table">
+                <thead>
+                <tr>
+                    <th>字段</th>
+                    <th>类型</th>
+                    <th>默认值</th>
+                    <th>说明</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr>
+                    <td class="model-name"><code>baseUrl</code></td>
+                    <td>string</td>
+                    <td><code style="color:var(--text-muted);">http://localhost:11434/v1</code></td>
+                    <td>API 地址</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>apiKey</code></td>
+                    <td>string</td>
+                    <td>—</td>
+                    <td>API 密钥</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>model</code></td>
+                    <td>string</td>
+                    <td><code style="color:var(--text-muted);">deepseek-v4-flash</code></td>
+                    <td>模型名称</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>workspaceDir</code></td>
+                    <td>string</td>
+                    <td><code style="color:var(--text-muted);">""</code></td>
+                    <td>工作区目录</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>reasoningEffort</code></td>
+                    <td>string</td>
+                    <td><code style="color:var(--text-muted);">high</code></td>
+                    <td>推理强度：low/medium/high/max</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>lang</code></td>
+                    <td>string</td>
+                    <td><code style="color:var(--text-muted);">ZH</code></td>
+                    <td>语言</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>hitl</code></td>
+                    <td>bool</td>
+                    <td><code style="color:var(--text-muted);">false</code></td>
+                    <td>人工审批默认开关</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>editMode</code></td>
+                    <td>string</td>
+                    <td><code style="color:var(--text-muted);">auto</code></td>
+                    <td>auto（需确认）/ yolo（直接干）</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>maxContextChars</code></td>
+                    <td>int</td>
+                    <td><code style="color:var(--text-muted);">200000</code></td>
+                    <td>上下文上限（字符数）</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>keepTailChars</code></td>
+                    <td>int</td>
+                    <td><code style="color:var(--text-muted);">80000</code></td>
+                    <td>保留尾部预算</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>toolTimeoutSec</code></td>
+                    <td>int</td>
+                    <td><code style="color:var(--text-muted);">360</code></td>
+                    <td>工具超时（秒）</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>disabledTools</code></td>
+                    <td>string[]</td>
+                    <td><code style="color:var(--text-muted);">[]</code></td>
+                    <td>禁用工具列表</td>
+                </tr>
+                <tr>
+                    <td class="model-name"><code>blockedPaths</code></td>
+                    <td>string[]</td>
+                    <td><code style="color:var(--text-muted);">[]</code></td>
+                    <td>路径拦截列表</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== ROADMAP ==================== -->
+<section class="section" id="docs">
+    <div class="container">
+        <div class="section-header reveal">
+            <h2>🗺️ 路线图 & 文档</h2>
+            <p class="subtitle">Agent4j 持续进化中 — 已完成 12 项核心能力，3 项开发中</p>
+        </div>
+
+        <!-- Download / Install Links -->
+        <div class="quickstart-grid reveal" style="margin-bottom: 40px;">
+            <div class="install-card" style="text-align: center;">
+                <div style="font-size: 2.5rem; margin-bottom: 12px;">📦</div>
+                <h3 style="margin-bottom: 8px;">直接安装</h3>
+                <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:20px;">一条命令安装，支持 Windows /
+                    macOS / Linux</p>
+                <a class="btn btn-primary" href="#quickstart">
+                    <svg class="icon-svg" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                        <polyline points="17 6 23 6 23 12"/>
+                    </svg>
+                    查看安装命令
+                </a>
+            </div>
+            <div class="install-card" style="text-align: center;">
+                <div style="font-size: 2.5rem; margin-bottom: 12px;">📖</div>
+                <h3 style="margin-bottom: 8px;">文档与源码</h3>
+                <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:20px;">GitHub
+                    README、更新日志、许可证</p>
+                <a class="btn btn-outline" href="https://github.com/ezdemo/agent4j" rel="noopener" target="_blank">
+                    <svg class="icon-svg" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+                    </svg>
+                    访问 GitHub
+                </a>
+            </div>
+        </div>
+
+        <div class="roadmap-grid reveal">
+            <div class="roadmap-col">
+                <h3>✅ 已完成</h3>
+                <ul class="roadmap-list">
+                    <li><span class="check">✓</span> 推理循环</li>
+                    <li><span class="check">✓</span> 工具调用</li>
+                    <li><span class="check">✓</span> 流式输出</li>
+                    <li><span class="check">✓</span> 会话管理</li>
+                    <li><span class="check">✓</span> 子代理</li>
+                    <li><span class="check">✓</span> 人工审批 (HITL)</li>
+                    <li><span class="check">✓</span> 前缀缓存 (DeepSeek 97%+ / Mimo 98%+)</li>
+                    <li><span class="check">✓</span> MCP 协议</li>
+                    <li><span class="check">✓</span> 技能市场</li>
+                    <li><span class="check">✓</span> Tauri 桌面端</li>
+                    <li><span class="check">✓</span> OpenAPI 集成</li>
+                    <li><span class="check">✓</span> Git 面板</li>
+                </ul>
+        </div>
+            <div class="roadmap-col">
+                <h3>🔜 开发中</h3>
+                <ul class="roadmap-list">
+                    <li><span class="pending">⬜</span> 多模态支持</li>
+                    <li><span class="pending">⬜</span> 本地知识库</li>
+                    <li><span class="pending">⬜</span> 团队协作</li>
+                </ul>
+                <h3 style="margin-top:32px;">📚 文档资源</h3>
+                <ul class="roadmap-list">
+                    <li><span class="check">📖</span> <a href="https://github.com/ezdemo/agent4j/blob/main/README.md"
+                                                        rel="noopener" target="_blank">项目 README</a> — 完整使用指南
+                    </li>
+                    <li><span class="check">📋</span> <a href="https://github.com/ezdemo/agent4j/blob/main/CHANGELOG.md"
+                                                        rel="noopener" target="_blank">更新日志</a> — 版本变更记录
+                    </li>
+                    <li><span class="check">📄</span> <a href="https://github.com/ezdemo/agent4j/blob/main/LICENSE"
+                                                        rel="noopener" target="_blank">MIT 许可证</a> — 开源协议
+                    </li>
+                    <li><span class="check">🐛</span> <a href="https://github.com/ezdemo/agent4j/issues" rel="noopener"
+                                                        target="_blank">问题反馈</a> — 提交 Issue
+                    </li>
+                    <li><span class="check">💡</span> <a href="https://github.com/ezdemo/agent4j/discussions"
+                                                        rel="noopener" target="_blank">讨论区</a> — 社区交流
+                    </li>
+                </ul>
+            </div>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== CTA ==================== -->
+<section class="cta-section" id="cta">
+    <div class="container reveal">
+        <h2>准备好开始了吗？</h2>
+        <p>一行命令安装，让 AI 帮你写代码、改代码、跑构建、查日志</p>
+        <div class="cta-actions">
+            <a class="btn btn-primary btn-lg" href="#quickstart">
+                <svg class="icon-svg" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
+                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
+                    <polyline points="17 6 23 6 23 12"/>
+                </svg>
+                立即安装
+            </a>
+            <a class="btn btn-ghost btn-lg" href="https://github.com/ezdemo/agent4j" rel="noopener" target="_blank">
+                <svg class="icon-svg" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
+                </svg>
+                GitHub
+            </a>
+        </div>
+    </div>
+</section>
+
+<!-- ==================== FOOTER ==================== -->
 <footer class="footer">
     <div class="container">
         <div class="footer-grid">
-            <div>
-                <div class="footer-brand"><span class="bracket">[</span>Agent4j<span class="bracket">]</span></div>
-                <p class="footer-desc">
-                    纯 Java AI 代理框架 — 推理循环 · 工具调度 · Skill 系统 · 三端交付。<br />
-                    CLI 控制台 + Vue3 Web UI + Tauri 桌面端，将 LLM 与可扩展工具系统结合，形成自主工作的编码代理。
-                </p>
+            <div class="footer-brand">
+                <a class="nav-logo" href="#">
+                    <img alt="Agent4j Logo" height="24" src="assets/logo.png" width="24"/>
+                    <span class="bracket">[</span>Agent4j<span class="bracket">]</span>
+                </a>
+                <p>纯 Java 17 的 AI 编码代理框架。推理循环 · 工具调用 · 流式输出 · 会话管理 · 子代理隔离 · 三端覆盖。</p>
             </div>
             <div class="footer-col">
-                <h5>项目</h5>
+                <h5>导航</h5>
                 <ul>
-                    <li><a href="https://gitee.com/ezdemo/agent4j" target="_blank">Gitee 仓库</a></li>
+                    <li><a href="#features">功能特性</a></li>
                     <li><a href="#capabilities">核心能力</a></li>
-                    <li><a href="#architecture">架构设计</a></li>
-                    <li><a href="#tools">工具列表</a></li>
+                    <li><a href="#quickstart">快速开始</a></li>
+                    <li><a href="#interfaces">界面展示</a></li>
                 </ul>
             </div>
             <div class="footer-col">
                 <h5>资源</h5>
                 <ul>
-                    <li><a href="#quickstart">快速开始</a></li>
-                    <li><a href="#">API 文档</a></li>
-                    <li><a href="#">更新日志</a></li>
-                    <li><a href="#">贡献指南</a></li>
+                    <li><a href="#quickstart">快速安装</a></li>
+                    <li><a href="#config-docs">配置参考</a></li>
+                    <li><a href="#docs">路线图</a></li>
+                    <li><a href="https://github.com/ezdemo/agent4j" rel="noopener" target="_blank">GitHub</a></li>
+                    <li><a href="https://github.com/ezdemo/agent4j/blob/main/README.md" rel="noopener" target="_blank">README
+                        文档</a></li>
+                    <li><a href="https://github.com/ezdemo/agent4j/blob/main/CHANGELOG.md" rel="noopener"
+                           target="_blank">更新日志</a></li>
+                    <li><a href="https://github.com/ezdemo/agent4j/issues" rel="noopener" target="_blank">问题反馈</a>
+                    </li>
                 </ul>
             </div>
             <div class="footer-col">
                 <h5>技术栈</h5>
                 <ul>
-                    <li><a href="https://solon.noear.org/" target="_blank">Solon 框架</a></li>
-                    <li><a href="https://snack4.noear.org/" target="_blank">Snack4 JSON</a></li>
-                    <li><a href="https://vuejs.org/" target="_blank">Vue 3</a></li>
-                    <li><a href="https://v2.tauri.app/" target="_blank">Tauri v2</a></li>
+                    <li><a href="https://solon.noear.org/" rel="noopener" target="_blank">Solon 框架</a></li>
+                    <li><a href="https://vuejs.org/" rel="noopener" target="_blank">Vue 3</a></li>
+                    <li><a href="https://v2.tauri.app/" rel="noopener" target="_blank">Tauri v2</a></li>
+                    <li><a href="https://openjdk.org/" rel="noopener" target="_blank">Java 17</a></li>
                 </ul>
             </div>
         </div>
         <div class="footer-bottom">
-            <span>© 2025 Agent4j · 作者 Sorghum · MIT 许可证</span>
+            <span>© <span data-year="2026">2026</span> Agent4j · 作者 <a href="https://github.com/ezdemo"
+                                                                         rel="noopener" target="_blank">Sorghum</a> · MIT 许可证</span>
             <span>Made with <span class="love">♥</span> in Java</span>
         </div>
     </div>
 </footer>
 
-<script>
-    /* ---------- Scroll: nav background ---------- */
-    const nav = document.getElementById('nav');
-    window.addEventListener('scroll', () => {
-        nav.classList.toggle('scrolled', window.scrollY > 40);
-    });
-
-    /* ---------- Scroll: reveal animation ---------- */
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.classList.add('visible');
-            }
-        });
-    }, { threshold: 0.1, rootMargin: '0px 0px -40px 0px' });
-
-    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
-
-    /* ---------- Tool category accordion ---------- */
-    document.querySelectorAll('.tool-cat').forEach(cat => {
-        // First one open by default
-    });
-
-    /* ---------- Copy code ---------- */
-    function copyCode(btn, codeId) {
-        const code = document.getElementById(codeId).innerText;
-        navigator.clipboard.writeText(code).then(() => {
-            btn.textContent = '已复制 ✓';
-            btn.classList.add('copied');
-            setTimeout(() => {
-                btn.textContent = '复制';
-                btn.classList.remove('copied');
-            }, 2000);
-        });
-    }
-
-    /* ---------- Smooth scroll for anchor links ---------- */
-    document.querySelectorAll('a[href^="#"]').forEach(link => {
-        link.addEventListener('click', (e) => {
-            e.preventDefault();
-            const target = document.querySelector(link.getAttribute('href'));
-            if (target) {
-                target.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            }
-        });
-    });
-</script>
-
+<script src="js/main.js"></script>
 </body>
 </html>

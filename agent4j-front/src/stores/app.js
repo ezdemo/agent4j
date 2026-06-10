@@ -68,7 +68,6 @@ export const useAppStore = defineStore('app', () => {
   })
   
   // UI 状态
-  const sidebarOpen = ref(true)
   const activeModal = ref(null)
   const notifications = ref([])
   const isLoading = ref(false)
@@ -250,16 +249,6 @@ export const useAppStore = defineStore('app', () => {
   }
   
   // UI 管理
-  const toggleSidebar = () => {
-    sidebarOpen.value = !sidebarOpen.value
-    localStorage.setItem('agent4j-sidebar', sidebarOpen.value.toString())
-  }
-  
-  const setSidebarOpen = (open) => {
-    sidebarOpen.value = open
-    localStorage.setItem('agent4j-sidebar', open.toString())
-  }
-  
   const openModal = (modalName) => {
     activeModal.value = modalName
   }
@@ -389,11 +378,6 @@ export const useAppStore = defineStore('app', () => {
       settings.value.theme = savedTheme
     }
     
-    const savedSidebar = localStorage.getItem('agent4j-sidebar')
-    if (savedSidebar !== null) {
-      sidebarOpen.value = savedSidebar === 'true'
-    }
-    
     document.documentElement.setAttribute('data-theme', settings.value.theme)
     document.documentElement.style.fontSize = `${settings.value.fontSize}px`
   }
@@ -418,7 +402,6 @@ export const useAppStore = defineStore('app', () => {
     tools,
     isLoadingTools,
     usageStats,
-    sidebarOpen,
     activeModal,
     notifications,
     isLoading,
@@ -446,8 +429,6 @@ export const useAppStore = defineStore('app', () => {
     getToolByName,
     updateUsageStats,
     incrementTokens,
-    toggleSidebar,
-    setSidebarOpen,
     openModal,
     closeModal,
     addNotification,

@@ -8,6 +8,7 @@ import site.sorghum.agent4j.tool.solon.common.Agent4JSkillProvider;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
 
@@ -57,7 +58,7 @@ public class ToolScanUtil {
 
         // 4. 按类名排序，保证顺序稳定
         agentTools.sort(Comparator.comparing(it -> it.getClass().getName()));
-        return agentTools;
+        return Collections.unmodifiableList(agentTools);
     }
 
     public static String getSkillToolDescription(Path workspace){

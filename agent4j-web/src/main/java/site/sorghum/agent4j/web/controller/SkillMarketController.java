@@ -3,9 +3,9 @@ package site.sorghum.agent4j.web.controller;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import lombok.SneakyThrows;
 import org.noear.solon.annotation.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.market.Market;
 import site.sorghum.agent4j.web.market.MarketDetail;
@@ -29,9 +29,8 @@ import java.util.List;
 @Api(tags = "技能市场")
 @Controller
 @Mapping("/api/skill-market")
+@Slf4j
 public class SkillMarketController {
-
-    private static final Logger LOG = LoggerFactory.getLogger(SkillMarketController.class);
 
     private final MarketManager marketManager;
 
@@ -58,19 +57,14 @@ public class SkillMarketController {
             @Param(value = "limit", defaultValue = "50") int limit,
             @ApiParam(value = "市场名称（可选，默认使用 skillhub.cn）")
             @Param(value = "marketName", defaultValue = "") String marketName) {
-        try {
-            Market market = marketManager.getMarketByName(marketName);
-            List<MarketItem> items;
-            if ("search".equals(action) && query != null && !query.isEmpty()) {
-                items = market.search(query, limit);
-            } else {
-                items = market.trending(limit);
-            }
-            return ApiResponse.ok(items);
-        } catch (Exception e) {
-            LOG.warn("SkillMarketProxy error: {}", e.getMessage());
-            return ApiResponse.fail("操作失败: " + e.getMessage());
+        Market market = marketManager.getMarketByName(marketName);
+        List<MarketItem> items;
+        if ("search".equals(action) && query != null && !query.isEmpty()) {
+            items = market.search(query, limit);
+        } else {
+            items = market.trending(limit);
         }
+        return ApiResponse.ok(items);
     }
 
     @ApiOperation(value = "获取技能详情", notes = "根据 slug 获取技能的详细信息")
@@ -82,14 +76,9 @@ public class SkillMarketController {
         if (slug == null || slug.isEmpty()) {
             return ApiResponse.fail("slug is required");
         }
-        try {
-            Market market = marketManager.getMarketByName(marketName);
-            MarketDetail detail = market.detail(slug);
-            return ApiResponse.ok(detail);
-        } catch (Exception e) {
-            LOG.warn("SkillMarketDetail error: {}", e.getMessage());
-            return ApiResponse.fail("获取详情失败: " + e.getMessage());
-        }
+        Market market = marketManager.getMarketByName(marketName);
+        MarketDetail detail = market.detail(slug);
+        return ApiResponse.ok(detail);
     }
 
     @ApiOperation(value = "安装技能", notes = "从市场下载并安装技能到本地技能池")
@@ -102,20 +91,15 @@ public class SkillMarketController {
             return ApiResponse.fail("slug is required");
         }
 
-        try {
-            Market market = marketManager.getMarketByName(marketName);
+        Market market = marketManager.getMarketByName(marketName);
 
-            // 确定安装目标目录：使用 ~/.claude/skills（与 PoolManager 注册的 @skill 路径一致）
-            Path skillsDir = getSkillsInstallDir();
+        // 确定安装目标目录：使用 ~/.claude/skills（与 PoolManager 注册的 @skill 路径一致）
+        Path skillsDir = getSkillsInstallDir();
 
-            String displayName = market.install(slug, skillsDir);
+        String displayName = market.install(slug, skillsDir);
 
-            LOG.info("技能安装成功: {} ({})", displayName, slug);
-            return ApiResponse.ok(displayName);
-        } catch (Exception e) {
-            LOG.warn("SkillMarketInstall error: {}", e.getMessage(), e);
-            return ApiResponse.fail("安装失败: " + e.getMessage());
-        }
+        log.info("技能安装成功: {} ({})", displayName, slug);
+        return ApiResponse.ok(displayName);
     }
 
     @ApiOperation(value = "卸载技能", notes = "从本地技能池删除已安装的技能")
@@ -132,32 +116,28 @@ public class SkillMarketController {
             return ApiResponse.fail("Invalid slug");
         }
 
-        try {
-            Path skillsDir = getSkillsInstallDir();
-            Path targetDir = skillsDir.resolve(slug);
+        Path skillsDir = getSkillsInstallDir();
+        Path targetDir = skillsDir.resolve(slug);
 
-            if (!Files.exists(targetDir)) {
-                // 也尝试其它可能的技能目录
-                Path altDir = Paths.get(
-                        System.getProperty("user.home"),
-                        ".agent4j", "skills", slug);
-                if (Files.exists(altDir)) {
-                    targetDir = altDir;
-                } else {
-                    return ApiResponse.fail("技能未找到: " + slug);
-                }
+        if (!Files.exists(targetDir)) {
+            // 也尝试其它可能的技能目录
+            Path altDir = Paths.get(
+                    System.getProperty("user.home"),
+                    ".agent4j", "skills", slug);
+            if (Files.exists(altDir)) {
+                targetDir = altDir;
+            } else {
+                return ApiResponse.fail("技能未找到: " + slug);
             }
-
-            deleteDirectory(targetDir);
-            LOG.info("技能卸载成功: {}", slug);
-            return ApiResponse.ok(null);
-        } catch (Exception e) {
-            LOG.warn("SkillMarketUninstall error: {}", e.getMessage(), e);
-            return ApiResponse.fail("卸载失败: " + e.getMessage());
         }
+
+        deleteDirectory(targetDir);
+        log.info("技能卸载成功: {}", slug);
+        return ApiResponse.ok(null);
     }
 
-    private void deleteDirectory(Path dir) throws Exception {
+    @SneakyThrows
+    private void deleteDirectory(Path dir){
         if (!Files.exists(dir)) return;
         Files.walk(dir)
                 .sorted(Comparator.reverseOrder())
@@ -165,6 +145,7 @@ public class SkillMarketController {
                     try {
                         Files.delete(p);
                     } catch (Exception ignored) {
+                        log.debug("删除技能文件失败: {}", p);
                     }
                 });
     }

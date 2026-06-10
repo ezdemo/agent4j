@@ -1,563 +1,571 @@
 <template>
-  <aside class="sidebar">
-    <div class="side-head">
-      <button class="new-btn" @click="$emit('newChat')">
-        <span>+</span>
-        <span>新建对话</span>
+  <aside class="sidebar" :class="{ collapsed: !sideOpen }">
+    <div class="sidebar-head">
+      <div class="logo">
+        <span>Agent4j</span>
+      </div>
+      <button class="btn-icon-sm" @click="$emit('update:sideOpen', !sideOpen)">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg>
       </button>
     </div>
 
-    <!-- Workspace -->
-    <div class="side-workspace">
-      <button class="workspace-btn" @click="showWorkspacePicker = true" :title="workspace || '选择工作区'">
-        <span class="ico">📁</span>
-        <span class="body">
-          <span class="label">工作区</span>
-          <span class="name">{{ workspaceName }}</span>
-        </span>
-        <span class="chev">›</span>
-      </button>
+    <button class="btn btn-secondary btn-sm new-btn" @click="$emit('show-workspace-picker')">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+      新建对话
+    </button>
+
+    <div class="sidebar-search">
+      <input v-model="searchQuery" placeholder="搜索会话..." />
     </div>
 
-    <!-- Workspace Picker Modal -->
-    <div v-if="showWorkspacePicker" class="modal-overlay" @click.self="showWorkspacePicker = false">
-      <div class="modal">
-        <div class="modal-head">
-          <h3>选择工作区</h3>
-          <button class="close-btn" @click="showWorkspacePicker = false">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="workspace-list">
-            <div v-if="workspaces.length === 0" class="empty-hint">暂无工作区记录</div>
-            <div
-              v-for="w in workspaces"
-              :key="w.hash"
-              class="workspace-item"
-              :data-active="w.isActive"
-              @click="handleSwitchWorkspace(w.path)"
-            >
-              <span class="ico">📁</span>
-              <div class="body">
-                <span class="name">{{ w.name }}</span>
-                <span class="path">{{ w.path }}</span>
-                <span class="meta">{{ w.sessionCount }} 个会话</span>
-              </div>
-              <button class="delete-btn" title="删除工作区" @click.stop="handleDeleteWorkspace(w.hash)">×</button>
+    <!-- 工作区选择器 -->
+    <div class="sidebar-section-title">
+      <span>项目</span>
+      <div class="sidebar-section-actions">
+        <button
+          class="btn-icon-sm"
+          :title="allProjectsExpanded ? '折叠所有项目会话' : '展开所有项目会话'"
+          @click="toggleAllProjects"
+        >
+          <svg
+            width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+            :style="{ transform: allProjectsExpanded ? 'rotate(0deg)' : 'rotate(-90deg)', transition: 'transform 0.2s' }"
+          >
+            <polyline points="18 15 12 9 6 15"/>
+          </svg>
+        </button>
+        <button class="btn-icon-sm" title="刷新项目列表" @click="$emit('refresh-sessions')">
+          <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+            <path d="M23 4v6h-6"/>
+            <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+          </svg>
+        </button>
+        <button class="btn-icon-sm" title="添加项目" @click="$emit('show-workspace-picker')">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        </button>
+      </div>
+    </div>
+
+    <div class="project-list">
+      <div v-for="p in projectsData" :key="p.workspace.hash" class="project-item">
+        <div class="project-header" :class="{ active: p.workspace.hash === currentSessionWorkspace }" @click="toggleProject(p.workspace.hash)">
+          <svg class="project-chevron" :class="{ open: expandedWorkspaces.has(p.workspace.hash) }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polyline points="9 18 15 12 9 6"/>
+          </svg>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="project-icon">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+          <div class="project-info">
+            <div class="project-name">{{ p.workspace.name }}</div>
+            <div class="project-meta-row">
+              <span class="project-path">{{ truncatePath(p.workspace.path) }}</span>
+              <span class="project-sep">·</span>
+              <span class="project-time">{{ relativeTime(p.workspace.lastAccessedAt) }}</span>
             </div>
           </div>
-          <div class="workspace-add">
-            <input v-model="newWorkspacePath" placeholder="输入新的工作区路径…" @keyup.enter="handleAddWorkspace" />
-            <button @click="handleAddWorkspace">添加</button>
+          <button class="btn-icon-sm project-new" title="新建会话" @click.stop="$emit('new-project-chat', p.workspace.hash)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          </button>
+          <button class="btn-icon-sm project-refresh" title="刷新该项目会话" @click.stop="$emit('refresh-project', p.workspace.hash)">
+            <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+              <path d="M23 4v6h-6"/>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+          </button>
+          <button class="btn-icon-sm project-clear" title="清空该项目所有会话" @click.stop="$emit('clear-project', p.workspace.hash)" :disabled="p.sessions.length === 0">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="3 6 5 6 21 6"/>
+              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+            </svg>
+          </button>
+        </div>
+        <div v-if="expandedWorkspaces.has(p.workspace.hash)" class="project-sessions">
+          <div v-if="p.sessions.length === 0" class="project-empty">暂无会话</div>
+          <div
+            v-for="s in p.sessions"
+            :key="s.name"
+            class="session-item"
+            :class="{ active: s.name === currentSession && currentSessionWorkspace === p.workspace.hash }"
+            @click="$emit('select-session', { workspaceHash: p.workspace.hash, sessionName: s.name })"
+          >
+            <span class="session-dot" :class="{ on: s.name === currentSession && currentSessionWorkspace === p.workspace.hash }"></span>
+            <div class="session-info">
+              <div class="session-name">{{ s.title || formatName(s.name) }}</div>
+              <div class="session-meta">{{ s.messageCount || 0 }}条 · {{ relativeTime(s.mtime) }}</div>
+            </div>
+            <div class="session-item-actions">
+              <button class="btn-icon-sm session-refresh" title="刷新" @click.stop="$emit('refresh-session-chat', s.name)">
+                <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+                  <path d="M23 4v6h-6"/>
+                  <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                </svg>
+              </button>
+              <button class="btn-icon-sm session-del" @click.stop="$emit('delete-session', { workspaceHash: p.workspace.hash, sessionName: s.name })">
+                <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+                  <line x1="18" x2="6" y1="6" y2="18"/>
+                  <line x1="6" x2="18" y1="6" y2="18"/>
+                </svg>
+              </button>
+            </div>
           </div>
         </div>
       </div>
-    </div>
-
-    <div class="search-row">
-      <div class="input">
-        <span>🔍</span>
-        <input v-model="query" placeholder="搜索会话…" />
+      <div v-if="workspaces.length === 0 && initialDataLoaded" class="sidebar-empty">
+        暂无项目
+      </div>
+      <div v-if="!initialDataLoaded" class="sidebar-empty">
+        加载中...
       </div>
     </div>
 
-    <div class="session-list">
-      <div class="side-section">
-        <div class="label">
-          <span>最近会话</span>
-          <span class="count">{{ filtered.length }}</span>
-        </div>
-
-        <div v-if="sessions.length === 0" class="empty-hint">暂无会话</div>
-        <div v-else-if="filtered.length === 0" class="empty-hint">无匹配结果</div>
-
-        <div
-          v-for="s in filtered"
-          :key="s.name"
-          class="session-item"
-          :data-active="s.name === activeName"
-          @click="s.name !== activeName && $emit('loadSession', s.name)"
-          role="button"
-          tabindex="0"
-          :title="s.name"
-        >
-          <span class="state" :style="{ background: s.name === activeName ? 'var(--accent)' : 'var(--border-strong)' }" />
-          <div class="body">
-            <span class="title">{{ prettyName(s) }}</span>
-            <span class="meta">
-              <span>{{ s.messageCount || 0 }} 条消息</span>
-              <span class="sep">·</span>
-              <span>{{ relativeTime(s.mtime) }}</span>
-            </span>
-          </div>
-          <button class="rename-btn" title="重命名" @click.stop="$emit('rename', s.name)">✎</button>
-          <button class="delete-btn" title="删除" @click.stop="$emit('deleteSession', s.name)">×</button>
-        </div>
-      </div>
-    </div>
-
-    <div class="side-foot">
-      <div class="row" @click="$emit('openSettings')">
-        <span class="ico">🛡</span>
-        <span>审批规则</span>
-      </div>
-      <div class="row" @click="$emit('openAbout')">
-        <span class="ico">?</span>
-        <span>关于</span>
-      </div>
-      <div class="row" @click="$emit('openSettings')">
-        <span class="ico">⚙</span>
-        <span>设置</span>
-        <span class="right">⌘,</span>
-      </div>
+    <div class="sidebar-foot">
+      <button class="foot-btn" @click="$emit('show-tools')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        工具
+      </button>
+      <button class="foot-btn" @click="$emit('toggle-theme')">
+        <!-- 浅色：月亮图标 -->
+        <svg v-if="theme === 'light'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <!-- 深色：太阳图标 -->
+        <svg v-else-if="theme === 'dark'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <!-- 复古绿：CRT 显示器图标 -->
+        <svg v-else-if="theme === 'retro'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+        <!-- 复古黄：书本图标 -->
+        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        {{ { light: '浅色', dark: '深色', retro: '复古绿', 'retro-yellow': '复古黄' }[theme] }}
+      </button>
+      <button class="foot-btn" @click="$emit('show-settings')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+        设置
+      </button>
     </div>
   </aside>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
-import { message } from 'ant-design-vue'
-import { configAPI } from '../services/api.js'
+import { computed, ref } from 'vue'
 
 const props = defineProps({
-  sessions: { type: Array, default: () => [] },
-  activeName: { type: String, default: '' },
-  workspace: { type: String, default: '' }
+  sideOpen: { type: Boolean, default: true },
+  theme: { type: String, default: 'light' },
+  currentSession: { type: String, default: '' },
+  currentSessionWorkspace: { type: String, default: null },
+  workspaces: { type: Array, default: () => [] },
+  workspaceSessions: { type: Object, default: () => ({}) },
+  initialDataLoaded: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['newChat', 'loadSession', 'deleteSession', 'rename', 'openSettings', 'openAbout', 'workspaceChanged'])
+defineEmits([
+  'update:sideOpen',
+  'show-workspace-picker',
+  'refresh-sessions',
+  'new-project-chat',
+  'refresh-project',
+  'clear-project',
+  'select-session',
+  'refresh-session-chat',
+  'delete-session',
+  'toggle-theme',
+  'show-tools',
+  'show-settings'
+])
 
-const query = ref('')
-const showWorkspacePicker = ref(false)
-const workspaces = ref([])
-const newWorkspacePath = ref('')
+// 本地搜索状态
+const searchQuery = ref('')
 
-const workspaceName = computed(() => {
-  if (!props.workspace) return '未设置'
-  const parts = props.workspace.split(/[\\/]/)
-  return parts[parts.length - 1] || props.workspace
+// 本地展开/折叠状态
+const expandedWorkspaces = ref(new Set())
+const allProjectsExpanded = ref(true)
+
+// 根据 props + searchQuery 计算项目列表
+const projectsData = computed(() => {
+  if (!props.workspaces.length) return []
+  if (!searchQuery.value) {
+    return props.workspaces.map(w => ({
+      workspace: w,
+      sessions: props.workspaceSessions[w.hash] || []
+    }))
+  }
+  const q = searchQuery.value.toLowerCase()
+  return props.workspaces
+    .map(w => ({
+      workspace: w,
+      sessions: (props.workspaceSessions[w.hash] || [])
+        .filter(s => (s.title || s.name || '').toLowerCase().includes(q))
+    }))
+    .filter(p => p.workspace.name.toLowerCase().includes(q) || p.sessions.length > 0)
 })
 
-const filtered = computed(() => {
-  if (!query.value) return props.sessions
-  const q = query.value.toLowerCase()
-  return props.sessions.filter(s =>
-    prettyName(s).toLowerCase().includes(q) || s.name.toLowerCase().includes(q)
-  )
-})
-
-// 加载工作区列表
-async function loadWorkspaces() {
-  try {
-    const res = await configAPI.listWorkspaces()
-    console.log('工作区列表响应:', res) // 调试日志
-    if (res && res.success) {
-      workspaces.value = res.data || []
-    } else if (res && res.data) {
-      // 兼容不同的响应格式
-      workspaces.value = res.data || []
-    }
-  } catch (e) {
-    console.error('加载工作区列表失败:', e)
-  }
-}
-
-// 切换工作区
-async function handleSwitchWorkspace(path) {
-  try {
-    const res = await configAPI.switchToWorkspace(path)
-    if (res && res.success) {
-      showWorkspacePicker.value = false
-      emit('workspaceChanged', path)
-      await loadWorkspaces()
-      message.success('已切换工作区')
-    } else {
-      message.error((res && res.message) || '切换工作区失败')
-    }
-  } catch (e) {
-    message.error('切换工作区失败: ' + e.message)
-  }
-}
-
-// 添加新工作区
-async function handleAddWorkspace() {
-  const path = newWorkspacePath.value.trim()
-  if (!path) return
-  
-  try {
-    const res = await configAPI.switchWorkspace(path)
-    if (res && res.success) {
-      newWorkspacePath.value = ''
-      showWorkspacePicker.value = false
-      emit('workspaceChanged', path)
-      await loadWorkspaces()
-      message.success('已添加工作区')
-    } else {
-      message.error((res && res.message) || '添加工作区失败')
-    }
-  } catch (e) {
-    message.error('添加工作区失败: ' + e.message)
-  }
-}
-
-// 删除工作区
-async function handleDeleteWorkspace(hash) {
-  if (!confirm('确定要删除此工作区吗？（不会删除实际文件）')) return
-  
-  try {
-    const res = await configAPI.deleteWorkspace(hash)
-    if (res && res.success) {
-      await loadWorkspaces()
-      message.success('工作区已删除')
-    } else {
-      message.error((res && res.message) || '删除工作区失败')
-    }
-  } catch (e) {
-    message.error('删除工作区失败: ' + e.message)
-  }
-}
-
-// 打开工作区选择器时加载列表
-function openWorkspacePicker() {
-  showWorkspacePicker.value = true
-  loadWorkspaces()
-}
-
-onMounted(() => {
-  loadWorkspaces()
-})
-
-function prettyName(s) {
-  // 优先使用自动生成的会话标题
-  if (s.title && s.title.trim()) return s.title.trim()
-  // 然后使用会话名称
-  const m = s.name.match(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/)
-  if (m) return `${m[2]}/${m[3]} ${m[4]}:${m[5]}`
-  return s.name.replace(/[-_]+/g, ' ').slice(0, 40)
-}
-
-function relativeTime(mtime) {
-  if (!mtime) return ''
-  
-  // 处理毫秒时间戳（数字）
-  let timestamp
-  if (typeof mtime === 'number') {
-    timestamp = mtime
-  } else if (typeof mtime === 'string') {
-    timestamp = Date.parse(mtime)
+// 展开/折叠单个项目
+const toggleProject = (hash) => {
+  const s = new Set(expandedWorkspaces.value)
+  if (s.has(hash)) {
+    s.delete(hash)
   } else {
-    return ''
+    s.add(hash)
   }
-  
-  if (!Number.isFinite(timestamp)) return typeof mtime === 'string' ? mtime : ''
-  
-  const ms = Date.now() - timestamp
-  if (ms < 0) return '刚刚'
-  
-  const min = ms / 60000
+  expandedWorkspaces.value = s
+}
+
+// 一键展开/折叠所有项目会话
+const toggleAllProjects = () => {
+  allProjectsExpanded.value = !allProjectsExpanded.value
+  const s = new Set()
+  if (allProjectsExpanded.value) {
+    props.workspaces.forEach(w => s.add(w.hash))
+  }
+  expandedWorkspaces.value = s
+}
+
+// 工具函数
+const truncatePath = (p) => {
+  if (!p) return ''
+  if (p.length <= 40) return p
+  return p.slice(0, 36) + '...'
+}
+
+const relativeTime = (t) => {
+  if (!t) return ''
+  const d = Date.now() - (typeof t === 'number' ? t : Date.parse(t))
+  if (!Number.isFinite(d)) return ''
+  const min = d / 6e4
   if (min < 1) return '刚刚'
-  if (min < 60) return `${Math.floor(min)}分钟前`
-  const hr = min / 60
-  if (hr < 24) return `${Math.floor(hr)}小时前`
-  const d = hr / 24
-  if (d < 7) return `${Math.floor(d)}天前`
-  return `${Math.floor(d / 7)}周前`
+  if (min < 60) return Math.floor(min) + 'm'
+  const hour = min / 60
+  if (hour < 24) return Math.floor(hour) + 'h'
+  const day = hour / 24
+  if (day < 7) return Math.floor(day) + 'd'
+  if (day < 30) return Math.floor(day / 7) + 'w'
+  if (day < 365) return Math.floor(day / 30) + 'mo'
+  return Math.floor(day / 365) + 'y'
+}
+
+const formatName = (n) => {
+  const m = n.match(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/)
+  return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}` : n.replace(/[-_]+/g, ' ').slice(0, 24)
 }
 </script>
 
 <style scoped>
 .sidebar {
-  background: var(--panel);
-  border-right: 1px solid var(--border);
+  width: 260px;
+  flex-shrink: 0;
   display: flex;
   flex-direction: column;
+  background: var(--bg-2);
+  border-right: 1px solid var(--border);
+  transition: width 0.2s, opacity 0.2s;
   overflow: hidden;
-  min-width: 0;
 }
-.side-head {
+.sidebar.collapsed {
+  width: 0;
+  opacity: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.sidebar-head {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 10px 12px;
+  justify-content: space-between;
+  padding: 12px;
   border-bottom: 1px solid var(--border);
 }
-.new-btn {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 7px 12px;
-  border-radius: var(--radius);
-  font-size: 13px;
-  font-weight: 500;
-  background: var(--accent-soft);
-  color: var(--accent);
-}
-.new-btn:hover { background: var(--accent); color: oklch(99% 0 0); }
 
-/* Workspace */
-.side-workspace { padding: 8px 12px; }
-.workspace-btn {
+.logo {
   display: flex;
   align-items: center;
   gap: 8px;
-  width: 100%;
-  padding: 8px 10px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  background: var(--bg);
-  font-size: 12px;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
 }
-.workspace-btn:hover { background: var(--panel-2); }
-.workspace-btn .ico { font-size: 14px; }
-.workspace-btn .body { flex: 1; min-width: 0; text-align: left; }
-.workspace-btn .label { display: block; font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
-.workspace-btn .name {
-  display: block;
+
+.new-btn {
+  width: calc(100% - 24px);
+  margin: 10px 12px 0;
+  justify-content: center;
+}
+
+.sidebar-search {
+  padding: 8px 12px;
+}
+.sidebar-search input {
+  width: 100%;
+  padding: 5px 8px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
   font-size: 12px;
+  color: var(--fg);
+}
+.sidebar-search input:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+.sidebar-search input::placeholder { color: var(--fg-4); }
+
+.sidebar-section-title {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px 4px;
+  font-size: 12px;
+  font-weight: 700;
+  color: var(--fg-4);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  border-bottom: 1px solid var(--border);
+}
+
+.sidebar-section-title button {
+  opacity: 0.5;
+  transition: opacity 0.15s;
+}
+.sidebar-section-title button:hover {
+  opacity: 1;
+  color: var(--accent);
+}
+.sidebar-section-title button:disabled {
+  opacity: 0.2;
+  cursor: not-allowed;
+}
+
+.sidebar-section-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.project-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px 0;
+}
+
+.project-item + .project-item {
+  border-top: 1px solid var(--border);
+}
+
+.project-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  cursor: pointer;
+  transition: background var(--t);
+  user-select: none;
+}
+.project-header:hover {
+  background: var(--bg-3);
+}
+.project-header.active {
+  border-left: 2px solid var(--accent);
+  background: transparent;
+}
+.project-header.active .project-name {
+  color: var(--accent);
+}
+
+.project-chevron {
+  flex-shrink: 0;
+  color: var(--fg-4);
+  transition: transform 0.2s;
+}
+.project-chevron.open {
+  transform: rotate(90deg);
+}
+
+.project-icon {
+  flex-shrink: 0;
+  color: var(--fg-3);
+}
+
+.project-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.project-name {
+  font-size: 13px;
+  font-weight: 600;
   color: var(--fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.workspace-btn .chev { color: var(--muted); }
 
-/* Search */
-.search-row { padding: 8px 12px; }
-.search-row .input {
+.project-meta-row {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
-  color: var(--muted);
-  font-size: 13px;
-}
-.search-row input {
-  flex: 1;
-  background: none;
-  border: none;
-  outline: none;
-  font-size: 13px;
-}
-.search-row input::placeholder { color: var(--muted-2); }
-
-/* Sessions */
-.session-list { flex: 1; overflow-y: auto; padding: 4px 8px; }
-.side-section .label {
-  display: flex;
-  justify-content: space-between;
-  padding: 8px 6px 4px;
+  gap: 4px;
   font-size: 11px;
-  font-weight: 600;
-  color: var(--muted-2);
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
+  color: var(--fg-4);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
-.side-section .label .count { color: var(--muted); }
-.empty-hint { padding: 12px 8px; font-size: 11px; color: var(--muted-2); }
+
+.project-path {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex-shrink: 1;
+  min-width: 0;
+}
+
+.project-sep {
+  flex-shrink: 0;
+}
+
+.project-time {
+  flex-shrink: 0;
+}
+
+.project-count {
+  font-size: 11px;
+  color: var(--fg-3);
+  background: var(--bg-3);
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  flex-shrink: 0;
+}
+
+.project-clear,
+.project-refresh,
+.project-new {
+  opacity: 0;
+  flex-shrink: 0;
+  transition: opacity var(--t);
+}
+.project-clear:hover {
+  color: var(--red);
+}
+.project-refresh:hover {
+  color: var(--accent);
+}
+.project-new:hover {
+  color: var(--green);
+}
+.project-header:hover .project-clear,
+.project-header:hover .project-refresh,
+.project-header:hover .project-new {
+  opacity: 0.6;
+}
+.project-header:hover .project-clear:hover,
+.project-header:hover .project-refresh:hover,
+.project-header:hover .project-new:hover {
+  opacity: 1;
+}
+
+.project-sessions {
+  padding: 0 0 4px;
+}
+
+.project-empty {
+  padding: 8px 16px 8px 32px;
+  font-size: 12px;
+  color: var(--fg-4);
+}
+
+.project-sessions .session-item {
+  padding: 5px 12px 5px 38px;
+}
+
+.sidebar-empty {
+  padding: 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--fg-4);
+}
 
 .session-item {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 8px 10px;
-  border-radius: var(--radius);
+  gap: 8px;
+  padding: 7px 8px;
+  border-radius: var(--r);
   cursor: pointer;
-  transition: background 0.12s;
+  transition: background var(--t);
 }
-.session-item:hover { background: var(--bg-2); }
-.session-item[data-active="true"] { background: var(--accent-soft); }
-.session-item .state { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
-.session-item .body { flex: 1; min-width: 0; }
-.session-item .title {
-  display: block;
+.session-item:hover { background: var(--bg-3); }
+.session-item.active { background: var(--accent-bg); }
+
+.session-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fg-4);
+  flex-shrink: 0;
+}
+.session-dot.on { background: var(--accent); }
+
+.session-info { flex: 1; min-width: 0; }
+.session-name {
   font-size: 13px;
+  font-weight: 500;
   color: var(--fg);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.session-item .meta { display: block; font-size: 11px; color: var(--muted); }
-.session-item .meta .sep { margin: 0 4px; }
-.rename-btn, .delete-btn {
-  width: 20px; height: 20px; border-radius: 4px;
-  display: inline-flex; align-items: center; justify-content: center;
-  color: var(--muted-2); opacity: 0; font-size: 12px;
+.session-meta {
+  font-size: 11px;
+  color: var(--fg-4);
+  margin-top: 1px;
 }
-.session-item:hover .rename-btn, .session-item:hover .delete-btn { opacity: 1; }
-.rename-btn:hover { background: var(--panel-2); color: var(--fg); }
-.delete-btn:hover { background: var(--danger-soft); color: var(--danger); }
 
-/* Footer */
-.side-foot {
-  padding: 8px 12px;
+.session-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  flex-shrink: 0;
+}
+
+.session-refresh,
+.session-del {
+  opacity: 0.3;
+  transition: opacity var(--t);
+}
+
+.session-item:hover .session-refresh,
+.session-item:hover .session-del { opacity: 1; }
+
+.session-refresh:hover {
+  color: var(--accent);
+}
+.session-del:hover { color: var(--red); }
+
+.sidebar-foot {
+  padding: 8px;
   border-top: 1px solid var(--border);
   display: flex;
-  flex-direction: column;
   gap: 2px;
 }
-.side-foot .row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  padding: 6px 8px;
-  border-radius: var(--radius);
-  font-size: 13px;
-  color: var(--muted);
-  cursor: pointer;
-}
-.side-foot .row:hover { background: var(--bg-2); color: var(--fg); }
-.side-foot .row .ico { display: inline-flex; width: 16px; justify-content: center; font-size: 12px; }
-.side-foot .row .right { margin-left: auto; font-size: 11px; color: var(--muted-2); }
-
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 100;
-}
-.modal {
-  background: var(--panel);
-  border-radius: var(--radius-lg, 12px);
-  width: 90%;
-  max-width: 500px;
-  max-height: 80vh;
-  display: flex;
-  flex-direction: column;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
-}
-.modal-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 16px 20px;
-  border-bottom: 1px solid var(--border);
-}
-.modal-head h3 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: var(--fg);
-}
-.close-btn {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 18px;
-  color: var(--muted);
-  background: none;
-  border: none;
-  cursor: pointer;
-}
-.close-btn:hover { background: var(--bg-2); color: var(--fg); }
-.modal-body {
+.foot-btn {
   flex: 1;
-  overflow-y: auto;
-  padding: 16px 20px;
-}
-
-/* Workspace List */
-.workspace-list {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 16px;
-}
-.workspace-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  padding: 12px 14px;
-  border-radius: var(--radius);
-  border: 1px solid var(--border);
-  cursor: pointer;
-  transition: all 0.15s;
-}
-.workspace-item:hover { background: var(--bg-2); }
-.workspace-item[data-active="true"] {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-}
-.workspace-item .ico { font-size: 18px; }
-.workspace-item .body { flex: 1; min-width: 0; }
-.workspace-item .name {
-  display: block;
-  font-size: 14px;
-  font-weight: 500;
-  color: var(--fg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.workspace-item .path {
-  display: block;
-  font-size: 11px;
-  color: var(--muted);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.workspace-item .meta {
-  display: block;
-  font-size: 11px;
-  color: var(--muted-2);
-  margin-top: 2px;
-}
-.workspace-item .delete-btn {
-  width: 24px;
-  height: 24px;
-  border-radius: 4px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 14px;
-  color: var(--muted-2);
-  opacity: 0;
-  transition: opacity 0.15s;
+  gap: 5px;
+  padding: 6px;
+  border-radius: var(--r);
+  font-size: 12px;
+  color: var(--fg-3);
+  transition: all var(--t);
 }
-.workspace-item:hover .delete-btn { opacity: 1; }
-.workspace-item .delete-btn:hover {
-  background: var(--danger-soft);
-  color: var(--danger);
-}
+.foot-btn:hover { background: var(--bg-3); color: var(--fg); }
+.foot-btn.active { background: var(--accent-bg); color: var(--accent); }
 
-/* Workspace Add */
-.workspace-add {
-  display: flex;
-  gap: 8px;
-}
-.workspace-add input {
-  flex: 1;
-  padding: 8px 12px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg);
-  font-size: 13px;
-  outline: none;
-}
-.workspace-add input:focus {
-  border-color: var(--accent);
-}
-.workspace-add button {
-  padding: 8px 16px;
-  border-radius: var(--radius);
-  background: var(--accent);
-  color: white;
-  font-size: 13px;
-  font-weight: 500;
-  border: none;
-  cursor: pointer;
-}
-.workspace-add button:hover {
-  opacity: 0.9;
+/* 响应式 */
+@media (max-width: 768px) {
+  .sidebar {
+    position: fixed;
+    left: -260px;
+    top: 36px;
+    bottom: 0;
+    z-index: 200;
+    transition: left 0.2s;
+  }
+  .sidebar:not(.collapsed) { left: 0; }
 }
 </style>

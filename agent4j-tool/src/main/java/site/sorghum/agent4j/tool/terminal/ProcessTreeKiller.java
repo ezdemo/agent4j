@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.tool.terminal;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.lang.reflect.Field;
 import java.util.concurrent.TimeUnit;
 
@@ -9,6 +11,7 @@ import java.util.concurrent.TimeUnit;
  * Windows: taskkill /T /F，POSIX: kill(-pid, SIGKILL)。
  * </p>
  */
+@Slf4j
 public class ProcessTreeKiller {
 
     /**
@@ -29,14 +32,18 @@ public class ProcessTreeKiller {
                         .start()
                         .waitFor();
                 return;
-            } catch (Exception ignored) { /* fall through */ }
+            } catch (Exception e) {
+                log.debug("Windows taskkill 失败，尝试 POSIX kill: {}", e.getMessage());
+            }
         }
 
         // POSIX: kill process group
         try {
             Runtime.getRuntime().exec(new String[]{"kill", "-9", "-" + pid}).waitFor();
             return;
-        } catch (Exception ignored) { /* fall through */ }
+        } catch (Exception e) {
+            log.debug("POSIX kill 失败，回退到 destroyForcibly: {}", e.getMessage());
+        }
 
         // Final fallback
         process.destroyForcibly();
@@ -54,7 +61,8 @@ public class ProcessTreeKiller {
                 Object val = f.get(process);
                 if (val instanceof Integer) return ((Integer) val).longValue();
                 if (val instanceof Long) return (Long) val;
-            } catch (Exception ignored) {
+            } catch (Exception ex) {
+                log.debug("反射获取 PID 失败(Java 8 fallback): {}", ex.getMessage());
             }
             return -1;
         }

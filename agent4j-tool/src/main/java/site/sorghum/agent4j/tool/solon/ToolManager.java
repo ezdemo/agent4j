@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.tool.solon;
 
 import lombok.AllArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.talent.Talent;
 import org.noear.solon.ai.chat.tool.FunctionTool;
@@ -18,11 +19,11 @@ import java.util.stream.Collectors;
  *
  * @author Sorghum
  */
+@Slf4j
 @AllArgsConstructor
 public class ToolManager {
 
     /**
-     * 【你要完善的方法】
      * 将所有 Skill 中的 FunctionTool 统一适配为 AgentTool。
      */
     public static List<AgentTool> getToolsFromSKill(Collection<Talent> skills) {
@@ -35,8 +36,7 @@ public class ToolManager {
     }
 
     /**
-     * 【你要完善的方法】
-     * 将所有 Skill 中的 FunctionTool 统一适配为 AgentTool。
+     * 将多个 FunctionTool 集合统一适配为 AgentTool 列表。
      */
     @SafeVarargs
     public static List<AgentTool> getToolsFromTools(Collection<FunctionTool> ...tools) {
@@ -108,9 +108,14 @@ public class ToolManager {
                 }
 
                 return ToolResult.ok(text);                       // ← 你的 ToolResult
-            } catch (Throwable e) {
-                return ToolResult.fail(ErrorCodes.TOOL_EXEC_ERROR,         // ← 你的 ToolResult
+            } catch (Exception e) {
+                log.warn("工具执行失败 [{}]: {}", getName(), e.getMessage(), e);
+                return ToolResult.fail(ErrorCodes.TOOL_EXEC_ERROR,
                         "工具执行失败 [" + getName() + "]: " + e.getMessage());
+            } catch (Throwable t) {
+                log.error("工具执行致命错误 [{}]: {}", getName(), t.getMessage(), t);
+                return ToolResult.fail(ErrorCodes.TOOL_EXEC_ERROR,
+                        "工具执行致命错误 [" + getName() + "]: " + t.getMessage());
             }
         }
 
@@ -171,7 +176,7 @@ public class ToolManager {
                 return parseProperties(properties, requiredSet);
             }
         } catch (Exception e) {
-            System.err.println("[WARN] 解析 Tool 参数 Schema 失败: " + toolName + " - " + e.getMessage());
+            log.warn("解析 Tool 参数 Schema 失败: {} - {}", toolName, e.getMessage(), e);
         }
 
         return Collections.emptyList();

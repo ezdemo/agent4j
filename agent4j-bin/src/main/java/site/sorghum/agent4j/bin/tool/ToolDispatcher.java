@@ -22,6 +22,29 @@ import java.util.function.Function;
  */
 public class ToolDispatcher {
 
+    /** Plan Mode 拒绝原因标识 */
+    public static final String REJECTED_REASON_PLAN_MODE = "plan-mode";
+    /** Storm 断路器拒绝原因标识 */
+    public static final String REJECTED_REASON_STORM = "storm";
+
+    /**
+     * 工具调用前拦截器：接收工具名称，返回拦截结果（null 表示放行）。
+     */
+    @FunctionalInterface
+    public interface PreDispatchHook {
+        /** @return 拦截结果字符串，或 null 表示放行继续执行 */
+        String apply(String toolName);
+    }
+
+    /**
+     * 工具调用后拦截器：接收工具名称和结果，返回修改后的结果。
+     */
+    @FunctionalInterface
+    public interface PostDispatchHook {
+        /** @return 修改后的结果字符串 */
+        String apply(String toolName, String result);
+    }
+
     private final ToolRegistry registry;
     /**
      * Storm 断路器（每回合重置）
@@ -38,20 +61,25 @@ public class ToolDispatcher {
      * 工具调用前拦截器
      */
     @Setter
-    private Function<String, String> preDispatchHook = null;
+    private PreDispatchHook preDispatchHook = null;
+
+    /** 向后兼容：接受 {@link java.util.function.Function} 并包装为 {@link PreDispatchHook} */
+    public void setPreDispatchHook(Function<String, String> hook) {
+        this.preDispatchHook = hook != null ? hook::apply : null;
+    }
+
     /**
      * 工具调用后拦截器
      */
     @Setter
-    private BiFunction<String, String, String> postDispatchHook = null;
+    private PostDispatchHook postDispatchHook = null;
+
+    /** 向后兼容：接受 {@link java.util.function.BiFunction} 并包装为 {@link PostDispatchHook} */
+    public void setPostDispatchHook(BiFunction<String, String, String> hook) {
+        this.postDispatchHook = hook != null ? hook::apply : null;
+    }
     /**
-     * 当前会话ID（注入到工具 args 中）
-     * -- GETTER --
-     *  获取当前会话ID
-     * -- SETTER --
-     *  设置当前会话ID
-
-
+     * 当前会话 ID —— 自动注入到工具调用上下文中。
      */
     @Setter
     @Getter
@@ -61,18 +89,22 @@ public class ToolDispatcher {
         this.registry = registry;
     }
 
+    /** 构建 JSON 错误字符串。 */
     private static String error(String msg) {
         ONode node = ONode.ofJson("{}").asObject();
         node.set("error", msg);
         return node.toJson();
     }
 
-    // ---- Plan Mode ----
+    /** 构建含 rejectedReason 的 JSON 拒绝响应。 */
+    private static String rejected(String msg, String reason) {
+        ONode node = ONode.ofJson("{}").asObject();
+        node.set("error", msg);
+        node.set("rejectedReason", reason);
+        return node.toJson();
+    }
 
-    // ---- Hooks ----
-
-    // ---- Storm ----
-
+    /** 重置 Storm 断路器（每回合开始时调用）。 */
     public void resetStorm() {
         stormBreaker.reset();
     }
@@ -80,19 +112,24 @@ public class ToolDispatcher {
     // ---- Dispatch ----
 
     /**
-     * 执行工具调用（无 AgentLoopController），返回结果字符串
+     * 执行工具调用（无 AgentLoopController），返回结果字符串。
+     *
+     * @param name          工具名称
+     * @param argumentsJson 参数 JSON 字符串
+     * @return 工具执行结果字符串
      */
     public String dispatch(String name, String argumentsJson) {
         return dispatch(name, argumentsJson, null);
     }
 
     /**
-     * 执行工具调用，返回结果字符串
+     * 执行工具调用，依次经过 预拦截 → Plan Mode 门控 → Storm 检测 →
+     * 参数解析 → 实际调用 → 后拦截，最终返回结果字符串。
      *
-     * @param name           工具名称
-     * @param argumentsJson  参数 JSON
-     * @param controller     AgentLoop 控制器（可选），通过 ThreadLocal 注入到当前线程
-     * @return 工具执行结果
+     * @param name          工具名称
+     * @param argumentsJson 参数 JSON 字符串
+     * @param controller    AgentLoop 控制器（可选，通过 ThreadLocal 注入当前线程）
+     * @return 工具执行结果字符串
      */
     public String dispatch(String name, String argumentsJson, AgentLoopController controller) {
         if (name == null || name.equals("null")) {
@@ -111,18 +148,18 @@ public class ToolDispatcher {
 
         // Plan Mode 门控
         if (planMode && !tool.readOnly()) {
-            return "{\"error\":\"" + name
+            return rejected(name
                     + ": 计划模式下不可用——当前为只读探索阶段。"
                     + "请使用 read_file / glob / grep / tree / get_file_info 调查代码。"
-                    + "准备好后调用 submit_plan 提交计划供审批。"
-                    + "\",\"rejectedReason\":\"plan-mode\"}";
+                    + "准备好后调用 submit_plan 提交计划供审批。",
+                    REJECTED_REASON_PLAN_MODE);
         }
 
         // Storm Breaker 检查
         if (!tool.stormExempt()) {
             StormBreaker.SuppressResult sr = stormBreaker.inspect(name, argumentsJson, tool.readOnly());
             if (sr.suppressed) {
-                return "{\"error\":\"" + sr.reason + "\",\"rejectedReason\":\"storm\"}";
+                return rejected(sr.reason, REJECTED_REASON_STORM);
             }
         }
 
@@ -164,6 +201,4 @@ public class ToolDispatcher {
             }
         }
     }
-
-
 }
