@@ -47,13 +47,9 @@ public class WorkspaceManager {
     private static final Map<String, WorkspaceManager> WORKSPACE_MANAGERS = new ConcurrentHashMap<>();
 
     /**
-     * 当前活跃的工作区路径（工作目录的实际路径）
+     * 当前工作区路径（工作目录的实际路径）
      */
     private String currentWorkspacePath;
-    /**
-     * 当前工作区的 hash
-     */
-    private String currentWorkspaceHash;
 
 
     public WorkspaceManager() {
@@ -135,7 +131,6 @@ public class WorkspaceManager {
     @SneakyThrows
     public void initWorkspace(String workspacePath){
         this.currentWorkspacePath = workspacePath;
-        this.currentWorkspaceHash = computeHash(workspacePath);
 
         Path workspaceDir = getWorkspaceDir(workspacePath);
         Path sessionsDir = getSessionsDir(workspacePath);
@@ -217,10 +212,9 @@ public class WorkspaceManager {
                     }
 
                     String hash = dir.getFileName().toString();
-                    boolean isActive = hash.equals(currentWorkspaceHash);
 
                     workspaces.add(new WorkspaceInfo(hash, name, path,
-                            createdAt, lastAccessedAt, sessionCount, isActive));
+                            createdAt, lastAccessedAt, sessionCount));
                 } catch (Exception e) {
                     System.err.println("[workspace] 读取工作区配置失败: " + dir + " - " + e.getMessage());
                 }
@@ -246,7 +240,6 @@ public class WorkspaceManager {
         }
 
         this.currentWorkspacePath = workspacePath;
-        this.currentWorkspaceHash = hash;
 
         // 更新最后访问时间
         updateLastAccessed(workspacePath);
@@ -292,10 +285,14 @@ public class WorkspaceManager {
         Files.delete(dir);
     }
 
+    public String getCurrentWorkspaceHash() {
+        return computeHash(currentWorkspacePath);
+    }
+
     /**
      * 工作区信息
      */
     public record WorkspaceInfo(String hash, String name, String path, long createdAt, long lastAccessedAt,
-                                int sessionCount, boolean isActive) {
+                                int sessionCount) {
     }
 }

@@ -440,11 +440,6 @@ export const configAPI = {
     return api.get('/workspaces')
   },
   
-  // 切换到指定工作区 - POST /api/workspaces/switch
-  switchToWorkspace: (hash) => {
-    return api.post('/workspaces/switch', { hash })
-  },
-  
   // 删除工作区 - DELETE /api/workspaces/{hash}
   deleteWorkspace: (hash) => {
     return api.delete(`/workspaces/${hash}`)

@@ -284,11 +284,10 @@ const loadSessions = async () => {
     try {
       const workspacesResponse = await configAPI.listWorkspaces()
       console.log('工作区响应:', workspacesResponse) // 调试日志
-      if (workspacesResponse && workspacesResponse.data) {
-        const activeWorkspace = workspacesResponse.data.find(w => w.isActive)
-        if (activeWorkspace) {
-          workspaceHash = activeWorkspace.hash
-          console.log('活跃工作区 hash:', workspaceHash) // 调试日志
+      if (workspacesResponse && workspacesResponse.data && workspacesResponse.data.length > 0) {
+        // 使用第一个工作区（isActive 已废弃）
+        workspaceHash = workspacesResponse.data[0].hash
+        console.log('使用工作区 hash:', workspaceHash) // 调试日志
         }
       }
     } catch (err) {

@@ -9,7 +9,6 @@ public record WorkspaceInfoDTO(
         String path,
         long createdAt,
         long lastAccessedAt,
-        int sessionCount,
-        boolean isActive
+        int sessionCount
 ) {
 }

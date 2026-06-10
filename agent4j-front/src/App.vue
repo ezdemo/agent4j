@@ -80,7 +80,7 @@
 
       <div class="project-list">
         <div v-for="p in projectsData" :key="p.workspace.hash" class="project-item">
-          <div class="project-header" :class="{ active: p.workspace.isActive }" @click="toggleProject(p.workspace.hash)">
+          <div class="project-header" :class="{ active: p.workspace.hash === currentSessionWorkspace }" @click="toggleProject(p.workspace.hash)">
             <svg class="project-chevron" :class="{ open: expandedWorkspaces.has(p.workspace.hash) }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="9 18 15 12 9 6"/>
             </svg>
@@ -117,10 +117,10 @@
               v-for="s in p.sessions"
               :key="s.name"
               class="session-item"
-              :class="{ active: s.name === currentSession && activeWorkspaceHash === p.workspace.hash }"
+              :class="{ active: s.name === currentSession && currentSessionWorkspace === p.workspace.hash }"
               @click="loadProjectSession(p.workspace.hash, s.name)"
             >
-              <span class="session-dot" :class="{ on: s.name === currentSession && activeWorkspaceHash === p.workspace.hash }"></span>
+              <span class="session-dot" :class="{ on: s.name === currentSession && currentSessionWorkspace === p.workspace.hash }"></span>
               <div class="session-info">
                 <div class="session-name">{{ s.title || formatName(s.name) }}</div>
                 <div class="session-meta">{{ s.messageCount || 0 }}条 · {{ relativeTime(s.mtime) }}</div>
@@ -178,7 +178,7 @@
       <ChatView 
         ref="chatRef" 
         hide-header 
-        :workspace-hash="activeWorkspaceHash"
+        :workspace-hash="currentSessionWorkspace"
         :session-name="currentSession"
         style="flex:1;min-height:0"
         @session-updated="loadSessions"
@@ -187,7 +187,7 @@
 
     <!-- 右侧 Git 面板 -->
     <Transition name="git-panel">
-      <GitPanel v-if="gitOpen" :workspace-hash="activeWorkspaceHash" @close="gitOpen = false" />
+      <GitPanel v-if="gitOpen" :workspace-hash="currentSessionWorkspace" @close="gitOpen = false" />
     </Transition>
 
       <!-- 系统提示词 Modal -->
@@ -231,7 +231,7 @@
                 v-for="w in workspaces"
                 :key="w.hash"
                 class="workspace-item"
-                :class="{ active: w.isActive }"
+                :class="{ active: w.hash === currentSessionWorkspace }"
                 @click="handleSwitchWorkspace(w.hash)"
               >
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -420,7 +420,7 @@ const viewSystemPrompt = async () => {
   loadingPrompt.value = true
   try {
     const params = {}
-    if (activeWorkspaceHash.value) params.workspaceHash = activeWorkspaceHash.value
+    if (currentSessionWorkspace.value) params.workspaceHash = currentSessionWorkspace.value
     if (currentSession.value) params.sessionName = currentSession.value
     const {agentAPI} = await import('./services/api')
     const res = await agentAPI.getSystemPrompt(params)
@@ -519,11 +519,8 @@ const workspaceName = computed(() => {
   return parts[parts.length - 1] || workspace.value
 })
 
-// 获取当前活跃工作区的 hash
-const activeWorkspaceHash = computed(() => {
-  const active = workspaces.value.find(w => w.isActive)
-  return active ? active.hash : null
-})
+// 当前会话所属的工作区 hash
+const currentSessionWorkspace = ref(null)
 
 const fmtTokens = n => !n ? '0' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n)
 
@@ -664,9 +661,9 @@ const loadSessions = async () => {
     workspaceSessions.value = grouped
     
     // 也更新 flat sessions（兼容旧代码）
-    const activeWs = wsList.find(w => w.isActive)
-    if (activeWs) {
-      sessions.value = grouped[activeWs.hash] || []
+    const wsHash = currentSessionWorkspace.value
+    if (wsHash && grouped[wsHash]) {
+      sessions.value = grouped[wsHash] || []
     }
   } catch {}
 }
@@ -681,10 +678,20 @@ const loadWorkspaces = async () => {
   }
 }
 
-// 切换工作区
+// 切换工作区（仅持久化上下文，不新建会话）
+const switchWorkspaceContext = async (hash) => {
+  const ws = workspaces.value.find(w => w.hash === hash)
+  if (!ws) return
+  await configAPI.switchWorkspace(ws.path)
+  workspace.value = ws.path
+}
+
+// 切换工作区（用户主动操作，切换后新建会话）
 const handleSwitchWorkspace = async (hash) => {
   try {
-    const r = await configAPI.switchToWorkspace(hash)
+    const ws = workspaces.value.find(w => w.hash === hash)
+    if (!ws) { message.error('工作区不存在'); return }
+    const r = await configAPI.switchWorkspace(ws.path)
     if (r.success) {
       workspace.value = r.data.workspace
       showWorkspacePicker.value = false
@@ -766,12 +773,9 @@ const toggleAllProjects = () => {
 
 // 加载指定项目下的会话
 const loadProjectSession = async (wsHash, sessionName) => {
-  // 切换到对应的工作区
-  const targetWs = workspaces.value.find(w => w.hash === wsHash)
-  if (targetWs && !targetWs.isActive) {
-    await handleSwitchWorkspace(wsHash)
-  }
+  await switchWorkspaceContext(wsHash)
   currentSession.value = sessionName
+  currentSessionWorkspace.value = wsHash
   chatRef.value?.loadSession(sessionName, wsHash)
 }
 
@@ -794,9 +798,9 @@ const newProjectChat = async (wsHash) => {
   try {
     const r = await sessionsAPI.createNew({ workspaceHash: wsHash })
     if (r.success && r.data?.sessionName) {
-      // 切换到这个工作区
-      await handleSwitchWorkspace(wsHash)
+      await switchWorkspaceContext(wsHash)
       currentSession.value = r.data.sessionName
+      currentSessionWorkspace.value = wsHash
       chatRef.value?.resetLocalMessages()
       await loadSessions()
       message.success('已新建对话')
@@ -819,8 +823,7 @@ const refreshProjectSessions = async (wsHash) => {
       grouped[wsHash] = r.data || []
       workspaceSessions.value = grouped
       // 更新 flat sessions
-      const activeWs = workspaces.value.find(w => w.isActive)
-      if (activeWs && activeWs.hash === wsHash) {
+      if (currentSessionWorkspace.value === wsHash) {
         sessions.value = grouped[wsHash] || []
       }
     }
@@ -832,7 +835,7 @@ const refreshProjectSessions = async (wsHash) => {
 
 // 清空指定项目（或当前活跃项目）的所有会话
 const clearProjectSessions = async (wsHash) => {
-  const hash = wsHash || activeWorkspaceHash.value
+  const hash = wsHash || currentSessionWorkspace.value
   if (!hash) return
   const ws = workspaces.value.find(w => w.hash === hash)
   const name = ws ? ws.name : hash
@@ -841,7 +844,7 @@ const clearProjectSessions = async (wsHash) => {
   try {
     await sessionsAPI.clearAll(hash)
     await loadSessions()
-    if (activeWorkspaceHash.value === hash) {
+    if (currentSessionWorkspace.value === hash) {
       currentSession.value = ''
       chatRef.value?.resetLocalMessages()
     }
@@ -860,9 +863,12 @@ const truncatePath = (p) => {
 
 const newChat = async (skipReload = false) => {
   try {
-    const r = await sessionsAPI.createNew({})
+    const params = {}
+    if (currentSessionWorkspace.value) params.workspaceHash = currentSessionWorkspace.value
+    const r = await sessionsAPI.createNew(params)
     if (r.success && r.data?.sessionName) {
       currentSession.value = r.data.sessionName
+      if (r.data.workspaceHash) currentSessionWorkspace.value = r.data.workspaceHash
       chatRef.value?.resetLocalMessages()
       if (!skipReload) {
         await loadSessions()
@@ -922,11 +928,7 @@ const clearAllSessions = async () => {
   const ok = await confirm({ message: '确定要清空所有会话吗？此操作不可恢复。' })
   if (!ok) return
   try {
-    let workspaceHash = null
-    const activeWorkspace = workspaces.value.find(w => w.isActive)
-    if (activeWorkspace) {
-      workspaceHash = activeWorkspace.hash
-    }
+    let workspaceHash = currentSessionWorkspace.value
     await sessionsAPI.clearAll(workspaceHash)
     sessions.value = []
     currentSession.value = ''

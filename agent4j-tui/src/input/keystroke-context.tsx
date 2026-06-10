@@ -1,7 +1,7 @@
 /**
  * KeystrokeContext — React surface in front of the raw stdin reader.
  *
- * Replaces Ink's `useInput` chain. Components call `useKeystroke(handler, isActive)`
+ * Replaces Ink's `useInput` chain. Components call `useKeystroke(handler, enabled)`
  * from this module instead of importing `useInput` from "ink". The provider
  * mounted at App level owns a `StdinReader`, subscribes a single fan-out function
  * to it, and dispatches each parsed `KeyEvent` to every active consumer.
@@ -67,15 +67,15 @@ export function KeystrokeProvider({children, reader: providedReader}: KeystrokeP
     return <KeystrokeContext.Provider value={busRef.current}>{children}</KeystrokeContext.Provider>;
 }
 
-export function useKeystroke(handler: KeystrokeHandler, isActive = true): void {
+export function useKeystroke(handler: KeystrokeHandler, enabled = true): void {
     const bus = useContext(KeystrokeContext);
     const handlerRef = useRef(handler);
     handlerRef.current = handler;
 
     useEffect(() => {
-        if (!bus || !isActive) return undefined;
+        if (!bus || !enabled) return undefined;
         return bus.subscribe((ev) => handlerRef.current(ev));
-    }, [bus, isActive]);
+    }, [bus, enabled]);
 
     useInput(
         (input, key) => {
@@ -98,7 +98,7 @@ export function useKeystroke(handler: KeystrokeHandler, isActive = true): void {
                 pageDown: key.pageDown,
             });
         },
-        {isActive: !bus && isActive},
+        {isActive: !bus && enabled},
     );
 }
 

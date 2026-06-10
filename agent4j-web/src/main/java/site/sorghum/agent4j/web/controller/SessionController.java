@@ -59,15 +59,13 @@ public class SessionController {
     @Post
     @Mapping("/new")
     public ApiResponse<SessionCreateDTO> createNew(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
             @ApiParam(value = "会话名称（可选，自动生成）")
             @Param(value = "sessionName", required = false) String sessionName) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
-        if (workspacePath == null) workspacePath = agentService.getWorkspace();
+        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
         String actualName = agentService.newSession(workspacePath, sessionName);
-        String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
-        return ApiResponse.ok(new SessionCreateDTO("已创建新会话", resolvedHash, actualName));
+        return ApiResponse.ok(new SessionCreateDTO("已创建新会话", workspaceHash, actualName));
     }
 
     @ApiOperation(value = "切换会话", notes = "切换到指定工作区下的指定会话")
@@ -76,17 +74,14 @@ public class SessionController {
     @Mapping("/{name}")
     public ApiResponse<SessionSwitchDTO> switchSession(
             @ApiParam(value = "会话名称") @Path("name") String name,
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
+            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
-        if (workspacePath == null) workspacePath = agentService.getWorkspace();
+        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
         boolean ok = agentService.switchSession(workspacePath, name);
         if (ok) {
             String confirmedName = agentService.getCurrentSessionName(workspacePath);
-            String resolvedHash = workspaceHash != null
-                    ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
             return ApiResponse.ok(
-                    new SessionSwitchDTO(resolvedHash, confirmedName != null ? confirmedName : name, true));
+                    new SessionSwitchDTO(workspaceHash, confirmedName != null ? confirmedName : name, true));
         }
         throw new ServiceException("会话不存在: " + name);
     }
