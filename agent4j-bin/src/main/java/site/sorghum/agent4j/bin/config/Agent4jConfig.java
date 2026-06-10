@@ -56,10 +56,9 @@ public class Agent4jConfig {
     private static String defaultConfigJson() {
         return """
                 {
-                  "baseUrl": "http://localhost:11434/v1",
+                  "baseUrl": "https://api.deepseek.com/v1",
                   "apiKey": "sk-your-api-key",
-                  "model": "mimo-v2.5",
-                  "workspaceDir": "",
+                  "model": "deepseek-v4-flash",
                   "editMode": "auto",
                   "reasoningEffort": "high",
                   "lang": "ZH",
@@ -78,10 +77,10 @@ public class Agent4jConfig {
                   "price": {
                     "mimo-v2.5": { "input": "1", "cache": "0.02", "output": "2" },
                     "mimo-v2.5-pro": { "input": "3", "cache": "0.025", "output": "6" },
-                    "deepseek-v4-flash": { "input": "1", "cache": "0.025", "output": "2" },
-                    "deepseek-v4-pro": { "input": "3", "cache": "0.02", "output": "6" }
+                    "deepseek-v4-flash": { "input": "1", "cache": "0.02", "output": "2" },
+                    "deepseek-v4-pro": { "input": "3", "cache": "0.025", "output": "6" }
                   },
-                  "disabledTools": [],
+                  "disabledTools": ["lsp"],
                   "blockedPaths": [],
                   "availableModels": ["deepseek-v4-flash", "deepseek-v4-pro", "mimo-v2.5", "mimo-v2.5-pro"]
                 }""";
