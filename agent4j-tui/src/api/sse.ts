@@ -43,7 +43,7 @@ export interface SseClientOptions {
  */
 export class SseClient {
     /** 默认 sessionId（当未指定 sessionName 时使用） */
-    private static readonly DEFAULT_SESSION = "__default__";
+    static readonly DEFAULT_SESSION = "__default__";
     private baseUrl: string;
     private config: ApiConfig;
     private options: SseClientOptions;
