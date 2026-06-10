@@ -79,6 +79,16 @@ public class GitController {
         return ApiResponse.ok(gitService.getFileContent(workspaceHash, path, ref));
     }
 
+    @ApiOperation(value = "获取 Git 提交历史记录",
+            notes = "返回 Git 仓库最近 N 条提交记录，默认 50 条")
+    @Get
+    @Mapping("/log")
+    public ApiResponse<GitCommitDTO.ListWrapper> log(
+            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @ApiParam(value = "返回条数，默认 50") @Param(value = "limit", required = false) Integer limit) {
+        return ApiResponse.ok(gitService.getCommitHistory(workspaceHash, limit));
+    }
+
     // ==================== 操作端点 ====================
 
     @ApiOperation(value = "初始化 Git 仓库",

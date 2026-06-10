@@ -270,6 +270,41 @@ public class GitService {
     }
 
     /**
+     * 获取 Git 提交历史记录，默认返回最近 50 条。
+     * <p>
+     * 使用 git log 自定义格式输出，按提交时间倒序排列。
+     * </p>
+     */
+    public GitCommitDTO.ListWrapper getCommitHistory(String workspaceHash, Integer limit) {
+        String workspacePath = resolveWorkspace(workspaceHash);
+        if (limit == null || limit <= 0) limit = 50;
+
+        // 自定义格式: hash|shortHash|author|email|date|message
+        // 使用 %x1F (Unit Separator) 作为字段分隔，避免消息中的特殊字符干扰
+        String format = "%H%x1F%h%x1F%an%x1F%ae%x1F%ai%x1F%s";
+        String raw = runGitSimple(workspacePath,
+                "log", "-" + limit, "--format=" + format);
+
+        List<GitCommitDTO> commits = new ArrayList<>();
+        if (raw != null && !raw.trim().isEmpty()) {
+            for (String line : raw.split("\n")) {
+                if (line.trim().isEmpty()) continue;
+                String[] parts = line.split("\u001F", 6);
+                if (parts.length < 6) continue;
+                commits.add(new GitCommitDTO(
+                        parts[0],   // hash (full)
+                        parts[1],   // shortHash
+                        parts[2],   // author
+                        parts[3],   // email
+                        parts[4],   // date (ISO 8601)
+                        parts[5]    // message
+                ));
+            }
+        }
+        return new GitCommitDTO.ListWrapper(commits, commits.size());
+    }
+
+    /**
      * 初始化 Git 仓库 —— git init + 自动生成 .gitignore + 可选初始提交。
      */
     public Map<String, Object> initRepo(String workspaceHash, Boolean initialCommit) throws Exception {
