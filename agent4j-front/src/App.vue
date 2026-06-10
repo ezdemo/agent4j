@@ -697,6 +697,7 @@ const handleSwitchWorkspace = async (hash) => {
       showWorkspacePicker.value = false
       await loadWorkspaces()
       await loadSessions()
+      currentSessionWorkspace.value = hash
       await newChat(true)
       message.success('已切换工作区')
     } else {
