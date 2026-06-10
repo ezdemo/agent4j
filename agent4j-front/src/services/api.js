@@ -654,7 +654,7 @@ export const gitAPI = {
     const params = workspaceHash ? { workspaceHash } : {}
     const body = {}
     if (files && files.length) body.files = files
-    return api.post('/git/generate-commit-message', body, { params })
+    return api.post('/git/generate-commit-message', body, { params, timeout: 120000 })
   },
 
   // 获取提交历史记录 - GET /api/git/log?workspaceHash=xxx&limit=50
