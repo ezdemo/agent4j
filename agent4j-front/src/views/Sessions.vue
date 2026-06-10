@@ -388,7 +388,7 @@ const refreshSessions = async () => {
 
 const loadSession = async (sessionId) => {
   try {
-    const response = await sessionsAPI.switchSession(sessionId)
+    const response = await sessionsAPI.switchSession(sessionId, currentWorkspaceHash.value)
     if (response.success) {
       window.dispatchEvent(new CustomEvent('terminal-output', { 
         detail: { 

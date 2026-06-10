@@ -310,9 +310,10 @@ export const sessionsAPI = {
     return api.post('/sessions/new', null, { params: params || {} })
   },
   
-  // 切换会话 - POST /api/sessions/{name}
-  switchSession: (name) => {
-    return api.post(`/sessions/${name}`)
+  // 切换会话 - POST /api/sessions/{name}?workspaceHash=xxx
+  switchSession: (name, workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.post(`/sessions/${name}`, null, { params })
   },
   
   // 删除会话 - DELETE /api/sessions/{name}?workspaceHash=xxx
