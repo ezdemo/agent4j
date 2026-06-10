@@ -1083,8 +1083,7 @@ const loadSession = async (name, workspaceHash) => {
   try {
     resetSubAgentState()
     const {sessionsAPI} = await import('../services/api')
-    await sessionsAPI.switchSession(name)
-    // 如果 store 中已经有该会话的数据，直接使用缓存（流式中的消息比后端更新）
+    await sessionsAPI.switchSession(name, workspaceHash)
     const existing = store.getSessionMessages(name)
     if (existing.length === 0) {
       await loadHistory(name)
