@@ -7,7 +7,7 @@ import {FG} from "../theme/tokens.js";
 export type MetaItem = string | { text: string; color: string };
 
 export interface CardHeaderProps {
-    glyph: string;
+    glyph: string | React.ReactElement;
     tone: string;
     title: string;
     subtitle?: string;
@@ -25,7 +25,11 @@ export function CardHeader({
                            }: CardHeaderProps): React.ReactElement {
     return (
         <Box flexDirection="row" gap={1}>
-            <Text color={tone}>{glyph}</Text>
+            {typeof glyph === "string" ? (
+                <Text color={tone}>{glyph}</Text>
+            ) : (
+                glyph
+            )}
             <Text bold color={tone}>
                 {title}
             </Text>

@@ -5,12 +5,25 @@
  */
 
 import {Box, Text} from "ink";
-import React from "react";
+import React, {useEffect, useState} from "react";
 import {Card, CardHeader} from "../primitives/index.js";
 import {Markdown} from "../markdown/index.js";
 import type {Card as CardType} from "../store/cards.js";
 import {FG, ROLE, TONE} from "../theme/tokens.js";
 import {TRACE_RE} from "./trace.js";
+
+/* ── 动画图标 ─────────────────────────────────────────────── */
+
+const SPINNER_FRAMES = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"];
+
+function Spinner({color}: { color?: string }): React.ReactElement {
+    const [frame, setFrame] = useState(0);
+    useEffect(() => {
+        const id = setInterval(() => setFrame((f) => (f + 1) % SPINNER_FRAMES.length), 80);
+        return () => clearInterval(id);
+    }, []);
+    return <Text color={color ?? FG.meta}>{SPINNER_FRAMES[frame]!} </Text>;
+}
 
 /* ── 工具函数 ─────────────────────────────────────────────── */
 
@@ -49,7 +62,7 @@ function UserCard({card}: { card: CardType & { kind: "user" } }): React.ReactEle
     );
 }
 
-/* ── 思考中卡片 ───────────────────────────────────────────── */
+/* ── 思考卡片 ─────────────────────────────────────────────── */
 
 function ReasoningCard({
                            card,
@@ -68,15 +81,14 @@ function ReasoningCard({
     if (!expanded && lineCount > 2) meta.push(`─ ${lineCount} 行 ─`);
     if (card.done) meta.push("✓ 完成");
 
-    // 折叠时只显示前 2 行
     const displayText = expanded ? cleanText : firstLines(cleanText, 2);
 
     return (
         <Card>
             <CardHeader
-                glyph={expanded ? "▼" : "◆"}
+                glyph={!card.done ? <Spinner color={tone}/> : "✓"}
                 tone={tone}
-                title="思考中"
+                title="思考"
                 subtitle={!card.done ? "..." : undefined}
                 meta={meta}
             />
@@ -88,7 +100,7 @@ function ReasoningCard({
                         <Text color={FG.sub}>{displayText}</Text>
                     )
                 ) : (
-                    <Text color={FG.faint} italic>思考中...</Text>
+                    <Text color={FG.faint} italic>等待中...</Text>
                 )}
             </Box>
         </Card>
@@ -139,15 +151,12 @@ function ToolCard({
     expanded?: boolean;
     onToggle?: () => void;
 }): React.ReactElement {
-    const elapsed = card.done ? `${card.elapsedMs}ms` : "…";
-
     return (
         <Card>
             <CardHeader
-                glyph={expanded ? "▼" : "▣"}
+                glyph={!card.done ? <Spinner color={ROLE.tool.color}/> : "✓"}
                 tone={ROLE.tool.color}
                 title={`工具: ${card.name}`}
-                meta={[elapsed]}
             />
             {expanded && card.output ? (
                 <Box paddingLeft={2} flexDirection="column">
