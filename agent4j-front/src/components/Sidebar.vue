@@ -33,7 +33,6 @@
               v-for="w in workspaces"
               :key="w.hash"
               class="workspace-item"
-              :data-active="w.isActive"
               @click="handleSwitchWorkspace(w.path)"
             >
               <span class="ico">📁</span>
@@ -164,7 +163,7 @@ async function loadWorkspaces() {
 // 切换工作区
 async function handleSwitchWorkspace(path) {
   try {
-    const res = await configAPI.switchToWorkspace(path)
+    const res = await configAPI.switchWorkspace(path)
     if (res && res.success) {
       showWorkspacePicker.value = false
       emit('workspaceChanged', path)

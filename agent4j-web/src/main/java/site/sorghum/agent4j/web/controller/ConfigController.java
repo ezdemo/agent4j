@@ -234,25 +234,6 @@ public class ConfigController {
         return ApiResponse.ok(agentService.listWorkspaces());
     }
 
-    @ApiOperation(value = "切换到指定工作区", notes = "根据 hash 切换到对应工作区")
-    @Post
-    @Mapping("/workspaces/switch")
-    public ApiResponse<WorkspaceSwitchDTO> switchToWorkspace(
-            @ApiParam(value = "{\"hash\":\"...\"}") @Body Map<String, String> body) {
-        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        String hash = body.get("hash");
-        if (hash == null || hash.isEmpty()) {
-            throw new ServiceException(WebErrorMessages.WORKSPACE_HASH_REQUIRED);
-        }
-        boolean ok = agentService.switchToWorkspaceByHash(hash);
-        if (ok) {
-            WorkspaceSwitchDTO data = new WorkspaceSwitchDTO(
-                    "工作区已切换", agentService.getWorkspace(), agentService.getCurrentSession());
-            return ApiResponse.ok(data);
-        }
-        throw new ServiceException("切换工作区失败: " + hash);
-    }
-
     @ApiOperation(value = "删除工作区", notes = "根据 hash 删除指定工作区记录")
     @Delete
     @Mapping("/workspaces/{hash}")

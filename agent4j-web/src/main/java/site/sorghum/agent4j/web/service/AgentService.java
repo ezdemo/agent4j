@@ -185,10 +185,6 @@ public class AgentService {
      * 当前 HITL 模式（true=手动需审批，false=自由直接执行）
      */
     private volatile boolean hitlMode = false;
-    /**
-     * 当前活跃的工作区路径（动态切换）
-     */
-    private volatile String currentActiveWorkspace;
 
     /**
      * 加载用户级默认系统提示词。
@@ -1136,10 +1132,6 @@ public class AgentService {
      * @return 工作区路径
      */
     public String getWorkspace() {
-        // 优先返回动态切换的工作区
-        if (currentActiveWorkspace != null) {
-            return currentActiveWorkspace;
-        }
         if (sharedConfig != null && sharedConfig.workspaceDir() != null) {
             return sharedConfig.workspaceDir().toAbsolutePath().toString();
         }
@@ -1184,19 +1176,18 @@ public class AgentService {
         if (path == null || path.isEmpty()) {
             return false;
         }
-        // 更新当前活跃工作区路径
-        this.currentActiveWorkspace = Paths.get(path).toAbsolutePath().normalize().toString();
         // 持久化到 config.json，下次启动默认加载此工作区
+        String normalized = Paths.get(path).toAbsolutePath().normalize().toString();
         try {
             Agent4jConfig config = Agent4jConfig.load();
-            config.updateAndSave(Collections.singletonMap("workspaceDir", currentActiveWorkspace));
-            log.info("[web] 工作区已持久化到 config.json: {}", currentActiveWorkspace);
+            config.updateAndSave(Collections.singletonMap("workspaceDir", normalized));
+            log.info("[web] 工作区已持久化到 config.json: {}", normalized);
         } catch (Exception e) {
             log.warn("[web] 持久化工作区到 config.json 失败: {}", e.getMessage());
         }
         // 清除默认会话的缓存，让下次访问时使用新路径
         evictAgent(null, null);
-        log.info("[web] 工作区已切换: {}", currentActiveWorkspace);
+        log.info("[web] 工作区已切换: {}", normalized);
         return true;
     }
 
@@ -1220,7 +1211,7 @@ public class AgentService {
                 result.add(new WorkspaceInfoDTO(
                         info.hash(), info.name(), info.path(),
                         info.createdAt(), info.lastAccessedAt(),
-                        info.sessionCount(), info.isActive()
+                        info.sessionCount()
                 ));
             }
         } catch (IOException e) {
@@ -1241,44 +1232,12 @@ public class AgentService {
             for (String path : workspacePaths) {
                 result.add(new WorkspaceInfoDTO(
                         WorkspaceManager.computeHash(path), null, path,
-                        0, 0, 0, false
+                        0, 0, 0
                 ));
             }
         }
 
         return result;
-    }
-
-    /**
-     * 通过 hash 切换到指定工作区。
-     *
-     * @param hash 工作区 hash
-     * @return 切换成功返回 true
-     */
-    public boolean switchToWorkspaceByHash(String hash) {
-        if (hash == null || hash.isEmpty()) {
-            return false;
-        }
-        // 从已注册的工作区中查找匹配的路径
-        try {
-            WorkspaceManager wm = new WorkspaceManager();
-            List<WorkspaceManager.WorkspaceInfo> list = wm.listWorkspaces();
-            for (WorkspaceManager.WorkspaceInfo info : list) {
-                if (hash.equals(info.hash())) {
-                    return switchWorkspace(info.path());
-                }
-            }
-        } catch (IOException e) {
-            log.warn("[web] 查询工作区失败: {}", e.getMessage());
-        }
-        // 兼容：从缓存中查找
-        for (String key : sessionCache.keySet()) {
-            String workspacePath = key.split("::", 2)[0];
-            if (hash.equals(WorkspaceManager.computeHash(workspacePath))) {
-                return switchWorkspace(workspacePath);
-            }
-        }
-        return false;
     }
 
     /**
