@@ -4,6 +4,59 @@
 
 ---
 
+## [26.6.10] - 2026-06-10
+
+### Added
+#### 🎯 目标系统 (Goal System)
+- ✨ 添加 Goal 数据模型层 (Goal, GoalStep, 枚举)
+- ✨ 添加 GoalStore 持久化层，支持工作区哈希过滤
+- ✨ 添加 GoalEngine 引擎与 GoalPatrolPrompt 巡逻提示
+- ✨ 添加 `/goal` 命令处理器 (GoalCommand)
+- ✨ 添加会话加载时目标恢复功能
+- ✨ 添加 GoalMarkDoneTool — LLM 可主动标记步骤完成
+- ✨ 添加 AgentLoop 定时巡逻守护线程 (30s 间隔，并发安全)
+- ✨ 添加消息后巡逻触发器与自动重试循环 (失败步骤自动注入上下文重新执行)
+
+#### 🔧 LSP 管理
+- ✨ 添加 LSP 服务器管理功能
+- ✨ 添加 LSP 完全禁用开关并更新默认配置
+
+#### 📝 Git 集成
+- ✨ 添加 AI 自动生成 Git 提交消息功能
+- ✨ 添加 Git 提交历史查看功能
+
+#### 🖥️ 界面 & 官网
+- ✨ 提取 Sidebar.vue 到独立组件
+- ✨ 添加 Agent4j 官网终端未来主义风格样式
+
+#### 🔗 工作区与会话
+- ✨ 新建会话关联工作区并修复内部类修饰符
+- ✨ 切换会话接口支持 workspaceHash 参数
+
+### Changed
+- 🔄 统一 LSP 作用域为全局并迁移至 Solon 内置配置
+- 🔄 移除 isActive 工作区概念，改用客户端追踪当前会话工作区
+- 🔄 移除侧边栏组件及相关状态（重构至独立组件）
+- 🔄 重构 Agent4jAgent 与 AgentLoop 并增强健壮性
+- 🔄 提取硬编码常量并消除重复错误消息
+- 🔄 将 Git 业务逻辑抽取至 GitService
+- 🔄 使用 Lombok @Getter 替换手写 getter
+- 🔄 后端代码优化
+
+### Fixed
+- 🐛 修复输入框大小不会自动归位的问题
+- 🐛 修复删除会话缺少 workspaceHash 及异常处理优化
+- 🐛 移除清除 Agent 时多余的会话追踪清理
+- 🐛 严格校验工作区 hash 并优化解析逻辑
+- 🐛 Goal 系统：手动序列化 GoalStore、添加清理、修复 TOCTOU
+- 🐛 Goal 系统：工作区未初始化时的空安全保护
+- 🐛 Goal 系统：代码审查修复 — 添加空守卫、@author 标签、@Builder.Default
+
+### Performance
+- ⚡ 优化 Git 提交消息生成延迟及 Token 消耗
+
+---
+
 ## [26.6.9.2]
 
 ### Added
