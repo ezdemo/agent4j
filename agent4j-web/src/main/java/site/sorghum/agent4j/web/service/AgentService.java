@@ -991,11 +991,6 @@ public class AgentService {
             } catch (Exception e) {
                 log.warn("[web] 清除 Agent 失败: {}", e.getMessage());
             }
-            // 如果清除的是当前活跃会话，清理追踪记录
-            String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
-            if (resolvedPath != null && sessionName != null) {
-                sessionCache.setCurrentName(resolvedPath, null);
-            }
             log.info("[web] 已清除 Agent: " + sessionKey);
         }
     }
