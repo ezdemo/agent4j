@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.web.market.impl;
 
+import lombok.SneakyThrows;
 import org.noear.snack4.ONode;
 import site.sorghum.agent4j.web.market.AbstractZipMarket;
 import site.sorghum.agent4j.web.market.MarketDetail;
@@ -29,15 +30,16 @@ public class SkillhubMarket extends AbstractZipMarket {
         return "专为中国用户优化的技能社区";
     }
 
+    @SneakyThrows
     @Override
-    protected String buildDownloadUrl(String slug) throws Exception {
+    protected String buildDownloadUrl(String slug){
         return BASE_URL + "/api/v1/download?slug=" + URLEncoder.encode(slug, "UTF-8");
     }
 
     // ==================== 列表与搜索 ====================
 
     @Override
-    public List<MarketItem> trending(int limit) throws Exception {
+    public List<MarketItem> trending(int limit){
         String url = BASE_URL + "/api/v1/search?q=&limit=" + limit;
         String body = httpGet(url);
         ONode root = ONode.ofJson(body);
@@ -48,8 +50,9 @@ public class SkillhubMarket extends AbstractZipMarket {
         return parseResults(root);
     }
 
+    @SneakyThrows
     @Override
-    public List<MarketItem> search(String query, int limit) throws Exception {
+    public List<MarketItem> search(String query, int limit){
         if (query == null || query.isEmpty()) {
             return trending(limit);
         }
@@ -66,8 +69,9 @@ public class SkillhubMarket extends AbstractZipMarket {
 
     // ==================== 详情 ====================
 
+    @SneakyThrows
     @Override
-    public MarketDetail detail(String slug) throws Exception {
+    public MarketDetail detail(String slug){
         if (slug == null || slug.isEmpty()) {
             throw new IllegalArgumentException("slug is required");
         }
@@ -107,15 +111,15 @@ public class SkillhubMarket extends AbstractZipMarket {
             ownerHandle = getStringValue(ownerNode, "handle");
         }
 
-        MarketDetail detail = new MarketDetail()
-                .slug(resolvedSlug)
-                .displayName(displayName)
-                .summary(summary)
-                .description(summary)
-                .ownerHandle(ownerHandle)
-                .installs(installs)
-                .stars(stars)
-                .installSlug(resolvedSlug);
+        MarketDetail detail = new MarketDetail();
+        detail.setSlug(resolvedSlug)
+                .setDisplayName(displayName)
+                .setSummary(summary)
+                .setDescription(summary)
+                .setOwnerHandle(ownerHandle)
+                .setInstalls(installs)
+                .setStars(stars)
+                .setInstallSlug(resolvedSlug);
 
         return detail;
     }
@@ -131,19 +135,19 @@ public class SkillhubMarket extends AbstractZipMarket {
         List<MarketItem> result = new ArrayList<>();
         for (ONode node : resultsNode.getArray()) {
             MarketItem item = new MarketItem()
-                    .slug(getStringValue(node, "slug"))
-                    .name(getStringValue(node, "slug"))
-                    .displayName(getStringValue(node, "displayName"))
-                    .summary(getStringValue(node, "summary"))
-                    .description(firstNonEmpty(
+                    .setSlug(getStringValue(node, "slug"))
+                    .setName(getStringValue(node, "slug"))
+                    .setDisplayName(getStringValue(node, "displayName"))
+                    .setSummary(getStringValue(node, "summary"))
+                    .setDescription(firstNonEmpty(
                             getStringValue(node, "description_zh"),
                             getStringValue(node, "description")))
-                    .ownerHandle(getStringValue(node, "owner_name"))
-                    .url(firstNonEmpty(
+                    .setOwnerHandle(getStringValue(node, "owner_name"))
+                    .setUrl(firstNonEmpty(
                             getStringValue(node, "url"),
                             "https://skillhub.cn/skills/" + getStringValue(node, "slug")))
-                    .installs(getLongValue(node, "installs"))
-                    .stars(getLongValue(node, "stars"));
+                    .setInstalls(getLongValue(node, "installs"))
+                    .setStars(getLongValue(node, "stars"));
 
             result.add(item);
         }

@@ -310,14 +310,16 @@ export const sessionsAPI = {
     return api.post('/sessions/new', null, { params: params || {} })
   },
   
-  // 切换会话 - POST /api/sessions/{name}
-  switchSession: (name) => {
-    return api.post(`/sessions/${name}`)
+  // 切换会话 - POST /api/sessions/{name}?workspaceHash=xxx
+  switchSession: (name, workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.post(`/sessions/${name}`, null, { params })
   },
   
-  // 删除会话 - DELETE /api/sessions/{name}
-  deleteSession: (name) => {
-    return api.delete(`/sessions/${name}`)
+  // 删除会话 - DELETE /api/sessions/{name}?workspaceHash=xxx
+  deleteSession: (name, workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.delete(`/sessions/${name}`, { params })
   },
 
   // 清空所有会话 - DELETE /api/sessions?workspaceHash=xxx
@@ -437,11 +439,6 @@ export const configAPI = {
   // 获取所有工作区列表 - GET /api/workspaces
   listWorkspaces: () => {
     return api.get('/workspaces')
-  },
-  
-  // 切换到指定工作区 - POST /api/workspaces/switch
-  switchToWorkspace: (hash) => {
-    return api.post('/workspaces/switch', { hash })
   },
   
   // 删除工作区 - DELETE /api/workspaces/{hash}
@@ -657,7 +654,14 @@ export const gitAPI = {
     const params = workspaceHash ? { workspaceHash } : {}
     const body = {}
     if (files && files.length) body.files = files
-    return api.post('/git/generate-commit-message', body, { params })
+    return api.post('/git/generate-commit-message', body, { params, timeout: 120000 })
+  },
+
+  // 获取提交历史记录 - GET /api/git/log?workspaceHash=xxx&limit=50
+  commitHistory: (workspaceHash, limit) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    if (limit) params.limit = limit
+    return api.get('/git/log', { params })
   }
 }
 
@@ -739,6 +743,15 @@ export const skillMarketAPI = {
       headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
     })
   }
+}
+
+// LSP 服务器管理 API
+export const lspAPI = {
+    listServers: () => api.get('/lsp/servers'),
+    addServer: (server) => api.post('/lsp/servers/add', server),
+    updateServer: (originalName, server) => api.post('/lsp/servers/update', { originalName, server }),
+    removeServer: (name) => api.post('/lsp/servers/remove', { name }),
+    toggleServer: (name, enabled) => api.post('/lsp/servers/toggle', { name, enabled }),
 }
 
 export default api

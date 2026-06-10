@@ -6,6 +6,7 @@ import io.swagger.annotations.ApiParam;
 import org.noear.solon.annotation.*;
 import site.sorghum.agent4j.bin.tool.ToolDef;
 import site.sorghum.agent4j.web.common.ServiceException;
+import site.sorghum.agent4j.web.common.WebErrorMessages;
 import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.model.ToolInfoDTO;
 import site.sorghum.agent4j.web.model.ToolParamInfoDTO;
@@ -13,6 +14,7 @@ import site.sorghum.agent4j.web.service.AgentService;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * 工具管理 API 控制器 —— 列出工具、查看详情。
@@ -39,11 +41,14 @@ public class ToolController {
     @Get
     @Mapping("")
     public ApiResponse<List<ToolInfoDTO>> list() {
-        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         List<ToolInfoDTO> tools = new ArrayList<>();
         agentService.getSharedToolRegistry().refresh();
-        for (ToolDef def : agentService.getSharedToolRegistry().all().values()) {
-            tools.add(toToolInfoDTO(def));
+        Map<String, ToolDef> allTools = agentService.getSharedToolRegistry().all();
+        if (allTools != null) {
+            for (ToolDef def : allTools.values()) {
+                tools.add(toToolInfoDTO(def));
+            }
         }
         return ApiResponse.ok(tools);
     }
@@ -52,7 +57,7 @@ public class ToolController {
     @Get
     @Mapping("/{name}")
     public ApiResponse<ToolInfoDTO> get(@ApiParam(value = "工具名称") @Path("name") String name) {
-        if (!agentService.isReady()) throw new ServiceException("Agent 未初始化");
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         ToolDef tool = agentService.getSharedToolRegistry().get(name);
         if (tool == null) throw new ServiceException("工具不存在: " + name);
         return ApiResponse.ok(toToolInfoDTO(tool));

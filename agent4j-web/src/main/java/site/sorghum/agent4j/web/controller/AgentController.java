@@ -5,16 +5,13 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.noear.solon.ai.talents.mount.SkillDir;
 import org.noear.solon.annotation.*;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.tool.solon.common.Agent4JSkillProvider;
 import site.sorghum.agent4j.web.common.ServiceException;
+import site.sorghum.agent4j.web.common.WebErrorMessages;
 import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
 
-import java.io.IOException;
-import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -28,9 +25,8 @@ import java.util.stream.Collectors;
 @Api(tags = "Agent 控制")
 @Controller
 @Mapping("/api/agent")
+@Slf4j
 public class AgentController {
-
-    private static final Logger log = LoggerFactory.getLogger(AgentController.class);
 
     @Inject
     private AgentService agentService;
@@ -56,7 +52,7 @@ public class AgentController {
             @Param(value = "sessionName", required = true)
             String sessionName) {
         if (!agentService.isReady()) {
-            throw new ServiceException("Agent 未初始化");
+            throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         }
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
         return ApiResponse.ok(agentService.getHistory(workspacePath, sessionName));
@@ -67,7 +63,7 @@ public class AgentController {
     @Mapping("/commands")
     public ApiResponse<List<CommandMetaDTO>> commands() {
         if (!agentService.isReady()) {
-            throw new ServiceException("Agent 未初始化");
+            throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         }
         return ApiResponse.ok(agentService.getCommandMetaList());
     }
@@ -77,7 +73,7 @@ public class AgentController {
     @Mapping("/skills")
     public ApiResponse<List<SkillMetaDTO>> skills() {
         if (!agentService.isReady()) {
-            throw new ServiceException("Agent 未初始化");
+            throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         }
         try {
             Agent4JSkillProvider skillProvider = Agent4JSkillProvider.getOrCreate("~");
@@ -94,33 +90,9 @@ public class AgentController {
 
             return ApiResponse.ok(result);
         } catch (Exception e) {
-            log.warn("获取 skill 列表失败: {}", e.getMessage());
+            log.warn("获取 skill 列表失败: {}", e.getMessage(), e);
             return ApiResponse.ok(Collections.emptyList());
         }
-    }
-
-    /**
-     * 从 SKILL.md 文件中读取描述（YAML frontmatter 中的 description 字段）
-     */
-    private String readSkillDescription(Path skillFile) {
-        try {
-            List<String> lines = Files.readAllLines(skillFile);
-            boolean inFrontmatter = false;
-            for (String line : lines) {
-                if (line.trim().equals("---")) {
-                    if (!inFrontmatter) {
-                        inFrontmatter = true;
-                    } else {
-                        break;
-                    }
-                } else if (inFrontmatter && line.startsWith("description:")) {
-                    return line.substring("description:".length()).trim();
-                }
-            }
-        } catch (IOException e) {
-            // ignore
-        }
-        return "";
     }
 
     @ApiOperation(value = "获取当前会话的系统提示词",
@@ -131,7 +103,7 @@ public class AgentController {
             @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
             @ApiParam(value = "会话名称") @Param(value = "sessionName", required = false) String sessionName) {
         if (!agentService.isReady()) {
-            throw new ServiceException("Agent 未初始化");
+            throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         }
         String workspacePath = workspaceHash != null ? agentService.resolveWorkspacePath(workspaceHash) : null;
         return ApiResponse.ok(agentService.getSystemPrompt(workspacePath, sessionName));

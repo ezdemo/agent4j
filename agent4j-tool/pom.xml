@@ -15,6 +15,10 @@
     <dependencies>
         <dependency>
             <groupId>org.noear</groupId>
+            <artifactId>solon-ai-talent-lsp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.noear</groupId>
             <artifactId>solon-ai-talent-sys</artifactId>
         </dependency>
         <dependency>

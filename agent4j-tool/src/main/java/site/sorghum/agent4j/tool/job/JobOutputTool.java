@@ -7,7 +7,6 @@ import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.ToolParameter;
 import site.sorghum.agent4j.tool.ToolResult;
 
-import java.util.Arrays;
 import java.util.List;
 
 /**
@@ -43,7 +42,7 @@ public class JobOutputTool extends AgentTool {
 
     @Override
     public List<ToolParameter> getParameters() {
-        return Arrays.asList(
+        return List.of(
                 new ToolParameter("jobId", "int", true, "Job id from run_background"),
                 new ToolParameter("since", "int", false, "Byte offset for incremental read"),
                 new ToolParameter("tailLines", "int", false, "Last N lines (default 80)")

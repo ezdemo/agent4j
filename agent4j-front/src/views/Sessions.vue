@@ -233,6 +233,7 @@ const pageSize = 10
 const loading = ref(false)
 const error = ref('')
 const sessions = ref([])
+const currentWorkspaceHash = ref(null)
 const currentSession = ref(null)
 const usageStats = ref({
   totalTokens: 0,
@@ -283,17 +284,16 @@ const loadSessions = async () => {
     try {
       const workspacesResponse = await configAPI.listWorkspaces()
       console.log('工作区响应:', workspacesResponse) // 调试日志
-      if (workspacesResponse && workspacesResponse.data) {
-        const activeWorkspace = workspacesResponse.data.find(w => w.isActive)
-        if (activeWorkspace) {
-          workspaceHash = activeWorkspace.hash
-          console.log('活跃工作区 hash:', workspaceHash) // 调试日志
-        }
+      if (workspacesResponse && workspacesResponse.data && workspacesResponse.data.length > 0) {
+        // 使用第一个工作区（isActive 已废弃）
+        workspaceHash = workspacesResponse.data[0].hash
+        console.log('使用工作区 hash:', workspaceHash) // 调试日志
       }
     } catch (err) {
       console.warn('获取工作区信息失败:', err)
     }
     
+    currentWorkspaceHash.value = workspaceHash
     console.log('加载会话列表, workspaceHash:', workspaceHash) // 调试日志
     const response = await sessionsAPI.list(workspaceHash)
     console.log('会话列表响应:', response) // 调试日志
@@ -354,7 +354,8 @@ const loadUsageStats = async () => {
 
 const createNewSession = async () => {
   try {
-    const response = await sessionsAPI.createNew()
+    const params = currentWorkspaceHash.value ? { workspaceHash: currentWorkspaceHash.value } : {}
+    const response = await sessionsAPI.createNew(params)
     if (response.success) {
       await loadSessions()
       window.dispatchEvent(new CustomEvent('terminal-output', { 
@@ -387,7 +388,7 @@ const refreshSessions = async () => {
 
 const loadSession = async (sessionId) => {
   try {
-    const response = await sessionsAPI.switchSession(sessionId)
+    const response = await sessionsAPI.switchSession(sessionId, currentWorkspaceHash.value)
     if (response.success) {
       window.dispatchEvent(new CustomEvent('terminal-output', { 
         detail: { 
@@ -434,7 +435,7 @@ const exportSession = (sessionId) => {
 const deleteSession = async (sessionId) => {
   if (confirm(`确定要删除会话 ${sessionId} 吗？此操作不可恢复。`)) {
     try {
-      const response = await sessionsAPI.deleteSession(sessionId)
+      const response = await sessionsAPI.deleteSession(sessionId, currentWorkspaceHash.value)
       if (response.success) {
         await loadSessions()
         
@@ -457,23 +458,9 @@ const deleteSession = async (sessionId) => {
 const clearAllSessions = async () => {
   if (!confirm('确定要清空所有会话吗？此操作不可恢复。')) return
   
-  let workspaceHash = null
-  try {
-    const workspacesResponse = await configAPI.listWorkspaces()
-    if (workspacesResponse && workspacesResponse.data) {
-      const activeWorkspace = workspacesResponse.data.find(w => w.isActive)
-      if (activeWorkspace) {
-        workspaceHash = activeWorkspace.hash
-      }
-    }
-  } catch (err) {
-    console.warn('获取工作区信息失败:', err)
-  }
-  
   try {
     loading.value = true
-    // 直接调用 clearAll API
-    await sessionsAPI.clearAll(workspaceHash)
+    await sessionsAPI.clearAll(currentWorkspaceHash.value)
     sessions.value = []
     loading.value = false
     

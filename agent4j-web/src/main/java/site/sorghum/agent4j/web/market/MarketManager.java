@@ -1,7 +1,6 @@
 package site.sorghum.agent4j.web.market;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.web.market.impl.ClawhubMarket;
 import site.sorghum.agent4j.web.market.impl.SkillhubMarket;
 
@@ -14,8 +13,8 @@ import java.util.*;
  *
  * @author Sorghum
  */
+@Slf4j
 public class MarketManager {
-    private static final Logger LOG = LoggerFactory.getLogger(MarketManager.class);
 
     private final Map<String, Market> markets = new LinkedHashMap<>();
     private Market defaultMarket;
@@ -35,7 +34,7 @@ public class MarketManager {
      */
     public void register(Market market) {
         markets.put(market.name(), market);
-        LOG.info("MarketManager: registered market -> {}", market.name());
+        log.info("MarketManager: registered market -> {}", market.name());
     }
 
     /**

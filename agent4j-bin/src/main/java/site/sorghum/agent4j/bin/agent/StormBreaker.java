@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.bin.agent;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.util.LinkedList;
 
 /**
@@ -11,6 +13,7 @@ import java.util.LinkedList;
  *
  * @author Sorghum
  */
+@Slf4j
 public class StormBreaker {
 
     private final int windowSize;
@@ -60,7 +63,8 @@ public class StormBreaker {
                 try {
                     org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson(repaired);
                     return name + "|" + node.toJson();
-                } catch (Exception ignored) {
+                } catch (Exception ex) {
+                    log.debug("JSON 修复后仍无法解析为指纹: {}", ex.getMessage());
                 }
             }
             // 修不了 → 返回 null，inspect() 会放行

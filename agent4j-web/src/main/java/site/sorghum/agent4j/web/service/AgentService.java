@@ -61,28 +61,97 @@ public class AgentService {
     /**
      * 当前线程正在处理的会话名称（用于工具执行时获取 sessionId）
      */
-    private static final ThreadLocal<String> currentSessionName = new ThreadLocal<>();
+    private static final ThreadLocal<String> CURRENT_SESSION_NAME = new ThreadLocal<>();
     /**
-     * 会话级 Agent 缓存：key = workspacePath::sessionName
+     * 会话级 Agent 缓存（LRU 淘汰策略）。
+     * <p>
+     * 封装 agents、order、locks、currentNames 四个内部结构，
+     * 对外提供统一的 get/put/evict/clear/lock 操作。
+     * </p>
      */
-    private final ConcurrentHashMap<String, Agent4jAgent> agentCache = new ConcurrentHashMap<>();
-    /**
-     * 会话级锁：key = workspacePath::sessionName
-     */
-    private final ConcurrentHashMap<String, ReentrantLock> sessionLocks = new ConcurrentHashMap<>();
-    /**
-     * 每个工作区当前活跃的会话名：key = workspacePath
-     */
-    private final ConcurrentHashMap<String, String> currentSessionNames = new ConcurrentHashMap<>();
-    /**
-     * Agent 访问顺序（用于 LRU 淘汰）
-     */
-    private final java.util.concurrent.ConcurrentLinkedDeque<String> accessOrder = new java.util.concurrent.ConcurrentLinkedDeque<>();
+    private static class SessionAgentCache {
+        private final ConcurrentHashMap<String, Agent4jAgent> agents = new ConcurrentHashMap<>();
+        private final ConcurrentHashMap<String, ReentrantLock> locks = new ConcurrentHashMap<>();
+        private final ConcurrentHashMap<String, String> currentNames = new ConcurrentHashMap<>();
+        private final java.util.concurrent.ConcurrentLinkedDeque<String> order = new java.util.concurrent.ConcurrentLinkedDeque<>();
+
+        Agent4jAgent get(String key) {
+            order.remove(key);
+            order.addFirst(key);
+            return agents.get(key);
+        }
+
+        void put(String key, Agent4jAgent agent) {
+            agents.put(key, agent);
+        }
+
+        void evictIfNeeded() {
+            while (agents.size() >= MAX_CACHE_SIZE) {
+                String oldest = order.pollLast();
+                if (oldest != null) {
+                    Agent4jAgent removed = agents.remove(oldest);
+                    if (removed != null) {
+                        try {
+                            removed.flushSession();
+                            removed.saveUsage();
+                        } catch (Exception e) {
+                            log.info("[web] 淘汰 Agent 失败: {}", e.getMessage());
+                        }
+                        log.info("[web] LRU 淘汰 Agent: {}", oldest);
+                    }
+                }
+            }
+        }
+
+        void clear() {
+            agents.clear();
+            order.clear();
+            locks.clear();
+            currentNames.clear();
+        }
+
+        Agent4jAgent remove(String key) {
+            order.remove(key);
+            locks.remove(key);
+            return agents.remove(key);
+        }
+
+        Set<String> keySet() {
+            return agents.keySet();
+        }
+
+        Set<Map.Entry<String, Agent4jAgent>> entrySet() {
+            return agents.entrySet();
+        }
+
+        ReentrantLock getLock(String key) {
+            return locks.computeIfAbsent(key, k -> new ReentrantLock());
+        }
+
+        String getCurrentName(String workspacePath) {
+            return currentNames.get(workspacePath);
+        }
+
+        void setCurrentName(String workspacePath, String sessionName) {
+            currentNames.put(workspacePath, sessionName);
+        }
+
+        Collection<Agent4jAgent> values() {
+            return agents.values();
+        }
+
+        int size() {
+            return agents.size();
+        }
+    }
     @Inject
     ChatCommandRegistry commandRegistry;
 
     @Inject
     private site.sorghum.agent4j.bin.config.ConfigService configService;
+
+    /** 会话级 Agent 缓存 */
+    private final SessionAgentCache sessionCache = new SessionAgentCache();
     /**
      * 共享的 ModelClient（所有会话复用）
      * -- GETTER --
@@ -93,6 +162,22 @@ public class AgentService {
      */
     @Getter
     private volatile ModelClient sharedModelClient;
+
+    /**
+     * 创建一个不启用推理（thinking）的轻量 ModelClient，用于 Git 提交消息生成等简单任务。
+     * <p>
+     * 与共享 ModelClient 使用相同的 API 端点和模型，但 reasoningEffort 强制设为 "none"，
+     * 从而跳过推理链，大幅降低延迟（从 30s+ 降至 3-5s）。
+     * </p>
+     *
+     * @return 无推理的 ModelClient，若 API Key 未配置则返回 null
+     */
+    public ModelClient createLightModelClient() {
+        if (sharedApiUrl == null || sharedApiKey == null || sharedModel == null) {
+            return null;
+        }
+        return new HttpModelClient(sharedApiUrl, sharedApiKey, sharedModel, "none");
+    }
     /**
      * 共享的 ToolRegistry（所有会话复用）
      */
@@ -116,10 +201,6 @@ public class AgentService {
      * 当前 HITL 模式（true=手动需审批，false=自由直接执行）
      */
     private volatile boolean hitlMode = false;
-    /**
-     * 当前活跃的工作区路径（动态切换）
-     */
-    private volatile String currentActiveWorkspace;
 
     /**
      * 加载用户级默认系统提示词。
@@ -166,60 +247,13 @@ public class AgentService {
     public void init() {
         try {
             Agent4jConfig config = Agent4jConfig.load();
-            String apiUrl = envOr("OPENAI_BASE_URL", config.chatApiUrl());
-            String apiKey = envOr("OPENAI_API_KEY", config.apiKey());
-            String model = envOr("MODEL", config.model());
-
-            if (apiKey == null || apiKey.isEmpty()) {
+            if (!buildSharedComponents(config)) {
                 log.error("[web] 未配置 apiKey，Agent 未初始化");
-                return;
+            } else {
+                log.info("[web] Agent 共享组件初始化完成 — 模型: {}", sharedModel);
             }
-
-            // 保存共享配置
-            this.sharedConfig = config;
-            this.sharedApiUrl = apiUrl;
-            this.sharedApiKey = apiKey;
-            this.sharedModel = model;
-            this.hitlMode = config.hitl();
-
-            // 创建共享的 ModelClient
-            this.sharedModelClient = new HttpModelClient(apiUrl, apiKey, model);
-
-            // 创建共享的 ToolRegistry
-            this.sharedToolRegistry = new ToolRegistry();
-
-            // 设置禁用工具
-            Set<String> disabledTools = config.disabledTools();
-            if (disabledTools != null && !disabledTools.isEmpty()) {
-                sharedToolRegistry.setDisabledTools(disabledTools);
-                log.info("[config] 已禁用工具: " + String.join(", ", disabledTools));
-            }
-
-            // 屏蔽目录列表
-            final List<String> blockedPaths = config.blockedPaths();
-            if (blockedPaths != null && !blockedPaths.isEmpty()) {
-                log.info("[config] 已屏蔽目录: " + String.join(", ", blockedPaths));
-            }
-
-            // 使用 ToolSystemInitializer 统一初始化（消除重复代码）
-            ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
-                    config.workspaceDir(), apiUrl, apiKey,
-                    disabledTools, blockedPaths,
-                    loadDefaultSystemPrompt());
-            this.sharedToolRegistry = initResult.toolRegistry;
-            // 设置 ConfigService 引用 —— ToolRegistry 实时读取禁用列表
-            this.sharedToolRegistry.setConfigService(configService);
-            // 保存按工作区缓存的 PromptPrefix
-            String initWs = config.workspaceDir() != null
-                    ? config.workspaceDir().toAbsolutePath().toString()
-                    : Paths.get(System.getProperty("user.home"), ".agent4j").toString();
-            workspacePrefixes.put(initWs, initResult.promptPrefix);
-
-            log.info("[web] Agent 共享组件初始化完成 — 模型: {}" , model);
         } catch (Exception e) {
-            log.error(
-                    "Agent 共享组件初始化失败: ", e
-            );
+            log.error("Agent 共享组件初始化失败: ", e);
         }
     }
 
@@ -234,7 +268,7 @@ public class AgentService {
         log.info("[config] 开始重新初始化 AgentService...");
 
         // 1. 先 flush 所有缓存的 Agent，避免数据丢失
-        for (Agent4jAgent agent : agentCache.values()) {
+        for (Agent4jAgent agent : sessionCache.values()) {
             try {
                 agent.flushSession();
                 agent.saveUsage();
@@ -244,48 +278,79 @@ public class AgentService {
         }
 
         // 2. 清空所有缓存
-        agentCache.clear();
-        accessOrder.clear();
-        sessionLocks.clear();
+        sessionCache.clear();
         workspacePrefixes.clear();
 
-        // 3. 重新从 config.json 加载配置
+        // 3. 重新加载配置并构建共享组件
         try {
             Agent4jConfig config = Agent4jConfig.load();
-            String apiUrl = envOr("OPENAI_BASE_URL", config.chatApiUrl());
-            String apiKey = envOr("OPENAI_API_KEY", config.apiKey());
-            String model = envOr("MODEL", config.model());
-
-            // 4. 更新共享配置变量
-            this.sharedConfig = config;
-            this.sharedApiUrl = apiUrl;
-            this.sharedApiKey = apiKey;
-            this.sharedModel = model;
-            this.hitlMode = config.hitl();
-
-            // 5. 创建全新的 HttpModelClient（旧实例的 apiUrl/apiKey 是 final 不可复用）
-            this.sharedModelClient = new HttpModelClient(apiUrl, apiKey, model);
-
-            // 6. 重新初始化 ToolRegistry
-            Set<String> disabledTools = config.disabledTools();
-            List<String> blockedPaths = config.blockedPaths();
-            ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
-                    config.workspaceDir(), apiUrl, apiKey,
-                    disabledTools, blockedPaths,
-                    loadDefaultSystemPrompt());
-            this.sharedToolRegistry = initResult.toolRegistry;
-            this.sharedToolRegistry.setConfigService(configService);
-
-            // 7. 缓存当前工作区的 PromptPrefix
-            String initWs = config.workspaceDir() != null
-                    ? config.workspaceDir().toAbsolutePath().toString()
-                    : Paths.get(System.getProperty("user.home"), ".agent4j").toString();
-            workspacePrefixes.put(initWs, initResult.promptPrefix);
-
-            log.info("[config] AgentService 重新初始化完成 — 模型: {}, API: {}", model, apiUrl);
+            if (!buildSharedComponents(config)) {
+                log.error("[config] 未配置 apiKey，重新初始化失败");
+            } else {
+                log.info("[config] AgentService 重新初始化完成 — 模型: {}, API: {}", sharedModel, sharedApiUrl);
+            }
         } catch (Exception e) {
             log.error("[config] 重新初始化 AgentService 失败", e);
         }
+    }
+
+    /**
+     * 根据配置构建所有共享组件（ModelClient、ToolRegistry、PromptPrefix 等）。
+     * <p>
+     * 抽取自 {@link #init()} 和 {@link #reinitialize()} 中的重复逻辑，
+     * 单一职责：加载配置并初始化共享字段，不含缓存清理等上下文操作。
+     * </p>
+     *
+     * @param config 已加载的 Agent4j 配置
+     * @return true 表示初始化成功，false 表示缺少必要的 API Key
+     */
+    private boolean buildSharedComponents(Agent4jConfig config) {
+        String apiUrl = envOr("OPENAI_BASE_URL", config.chatApiUrl());
+        String apiKey = envOr("OPENAI_API_KEY", config.apiKey());
+        String model = envOr("MODEL", config.model());
+
+        if (apiKey == null || apiKey.isEmpty()) {
+            return false;
+        }
+
+        // 保存共享配置
+        this.sharedConfig = config;
+        this.sharedApiUrl = apiUrl;
+        this.sharedApiKey = apiKey;
+        this.sharedModel = model;
+        this.hitlMode = config.hitl();
+
+        // 创建共享的 ModelClient（使用配置的 reasoningEffort）
+        String reasoningEffort = config.reasoningEffort();
+        this.sharedModelClient = new HttpModelClient(apiUrl, apiKey, model, reasoningEffort);
+
+        // 设置禁用工具
+        Set<String> disabledTools = config.disabledTools();
+        if (disabledTools != null && !disabledTools.isEmpty()) {
+            log.info("[config] 已禁用工具: {}", String.join(", ", disabledTools));
+        }
+
+        // 屏蔽目录列表
+        final List<String> blockedPaths = config.blockedPaths();
+        if (blockedPaths != null && !blockedPaths.isEmpty()) {
+            log.info("[config] 已屏蔽目录: {}", String.join(", ", blockedPaths));
+        }
+
+        // 使用 ToolSystemInitializer 统一初始化
+        ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
+                config.workspaceDir(), apiUrl, apiKey,
+                disabledTools, blockedPaths,
+                loadDefaultSystemPrompt());
+        this.sharedToolRegistry = initResult.toolRegistry;
+        this.sharedToolRegistry.setConfigService(configService);
+
+        // 缓存当前工作区的 PromptPrefix
+        String initWs = config.workspaceDir() != null
+                ? config.workspaceDir().toAbsolutePath().toString()
+                : Paths.get(System.getProperty("user.home"), ".agent4j").toString();
+        workspacePrefixes.put(initWs, initResult.promptPrefix);
+
+        return true;
     }
 
     /**
@@ -320,12 +385,8 @@ public class AgentService {
      * @return Agent 实例
      */
     private Agent4jAgent getOrCreateAgent(String sessionKey) {
-        // 更新访问顺序
-        accessOrder.remove(sessionKey);
-        accessOrder.addFirst(sessionKey);
-
-        // 检查缓存
-        Agent4jAgent agent = agentCache.get(sessionKey);
+        // 更新访问顺序并检查缓存
+        Agent4jAgent agent = sessionCache.get(sessionKey);
         if (agent != null) {
             return agent;
         }
@@ -333,7 +394,7 @@ public class AgentService {
         // 创建新 Agent
         synchronized (this) {
             // 双重检查
-            agent = agentCache.get(sessionKey);
+            agent = sessionCache.get(sessionKey);
             if (agent != null) {
                 return agent;
             }
@@ -343,23 +404,8 @@ public class AgentService {
             String workspacePath = parts[0];
             String sessionName = parts.length > 1 ? parts[1] : "default";
 
-            // 检查缓存大小，淘汰最久未使用的
-            while (agentCache.size() >= MAX_CACHE_SIZE) {
-                String oldestKey = accessOrder.pollLast();
-                if (oldestKey != null) {
-                    Agent4jAgent removed = agentCache.remove(oldestKey);
-                    if (removed != null) {
-                        // 保存并关闭被淘汰的 Agent
-                        try {
-                            removed.flushSession();
-                            removed.saveUsage();
-                        } catch (Exception e) {
-                            log.info("[web] 淘汰 Agent 失败: " + e.getMessage());
-                        }
-                        log.info("[web] LRU 淘汰 Agent: " + oldestKey);
-                    }
-                }
-            }
+            // LRU 淘汰
+            sessionCache.evictIfNeeded();
 
             // 构建轻量级 Agent
             try {
@@ -387,7 +433,7 @@ public class AgentService {
                 agent.setOutput(AgentOutput.NOOP);
 
                 // 缓存 Agent
-                agentCache.put(sessionKey, agent);
+                sessionCache.put(sessionKey, agent);
 
                 log.info("[web] 创建新 Agent: " + sessionKey);
                 return agent;
@@ -407,7 +453,7 @@ public class AgentService {
      * @return 锁
      */
     private ReentrantLock getSessionLock(String sessionKey) {
-        return sessionLocks.computeIfAbsent(sessionKey, k -> new ReentrantLock());
+        return sessionCache.getLock(sessionKey);
     }
 
     /**
@@ -499,7 +545,7 @@ public class AgentService {
         boolean ready = isReady();
         String model = sharedModel;
         String workspace = getWorkspace();
-        int cacheSize = agentCache.size();
+        int cacheSize = sessionCache.size();
 
         int historySize = 0;
         boolean planMode = false;
@@ -510,7 +556,7 @@ public class AgentService {
 
         // 追加默认会话的详细信息
         String defaultKey = generateSessionKey(null, null);
-        Agent4jAgent agent = agentCache.get(defaultKey);
+        Agent4jAgent agent = sessionCache.get(defaultKey);
         if (agent != null) {
             historySize = agent.historySize();
             planMode = agent.isPlanMode();
@@ -555,7 +601,7 @@ public class AgentService {
                 try {
                     return store.load();
                 } catch (IOException e) {
-                    System.err.println("[web] 加载会话历史失败: " + e.getMessage());
+                    log.warn("[web] 加载会话历史失败: {}", e.getMessage());
                 }
             }
         }
@@ -567,7 +613,7 @@ public class AgentService {
      */
     public void abortCurrentChat() {
         // 中断所有缓存的 Agent
-        for (Agent4jAgent agent : agentCache.values()) {
+        for (Agent4jAgent agent : sessionCache.values()) {
             if (agent != null) {
                 agent.abort();
             }
@@ -601,7 +647,7 @@ public class AgentService {
 
         // 设置当前会话名称到 ThreadLocal，供工具执行时获取
         String effectiveSessionName = sessionName != null ? sessionName : "default";
-        currentSessionName.set(effectiveSessionName);
+        CURRENT_SESSION_NAME.set(effectiveSessionName);
 
         try {
             Agent4jAgent agent = getOrCreateAgent(sessionKey);
@@ -616,9 +662,9 @@ public class AgentService {
             return agent.chat(userMessage);
         } finally {
             // 清理 ThreadLocal
-            currentSessionName.remove();
+            CURRENT_SESSION_NAME.remove();
             // 刷入会话数据
-            Agent4jAgent agent = agentCache.get(sessionKey);
+            Agent4jAgent agent = sessionCache.get(sessionKey);
             if (agent != null) {
                 agent.flushSession();
                 agent.saveUsage();
@@ -652,7 +698,7 @@ public class AgentService {
 
         // 设置当前会话名称到 ThreadLocal，供工具执行时获取
         String effectiveSessionName = sessionName != null ? sessionName : "default";
-        currentSessionName.set(effectiveSessionName);
+        CURRENT_SESSION_NAME.set(effectiveSessionName);
 
         try {
             Agent4jAgent agent = getOrCreateAgent(sessionKey);
@@ -680,13 +726,13 @@ public class AgentService {
                 emitter.sendError(e.getMessage());
             } catch (Exception ex) {
                 // SSE连接可能已断开，忽略异常
-                System.err.println("[web] 发送错误信息失败（可能SSE连接已断开）: " + ex.getMessage());
+                log.warn("[web] 发送错误信息失败（可能SSE连接已断开）: {}", ex.getMessage());
             }
         } finally {
             // 清理 ThreadLocal
-            currentSessionName.remove();
+            CURRENT_SESSION_NAME.remove();
             // 恢复 Agent 输出
-            Agent4jAgent agent = agentCache.get(sessionKey);
+            Agent4jAgent agent = sessionCache.get(sessionKey);
             if (agent != null) {
                 agent.setOutput(AgentOutput.NOOP);
                 agent.flushSession();
@@ -752,7 +798,7 @@ public class AgentService {
         if (resolvedPath == null) {
             return Collections.emptyList();
         }
-        String activeSession = currentSessionNames.get(resolvedPath);
+        String activeSession = sessionCache.getCurrentName(resolvedPath);
         if (activeSession == null) {
             activeSession = store.currentName();
         }
@@ -787,7 +833,7 @@ public class AgentService {
         if (agent != null) {
             // 记录当前活跃会话
             String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
-            currentSessionNames.put(resolvedPath, sessionName);
+            sessionCache.setCurrentName(resolvedPath, sessionName);
             return true;
         }
         return false;
@@ -802,13 +848,13 @@ public class AgentService {
     public String getCurrentSessionName(String workspacePath) {
         // 优先从追踪记录中获取
         String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
-        String tracked = currentSessionNames.get(resolvedPath);
+        String tracked = sessionCache.getCurrentName(resolvedPath);
         if (tracked != null) {
             return tracked;
         }
         // 回退到 store 查询
         String sessionKey = generateSessionKey(workspacePath, null);
-        Agent4jAgent agent = agentCache.get(sessionKey);
+        Agent4jAgent agent = sessionCache.get(sessionKey);
         if (agent != null) {
             SessionStore store = agent.getSessionStore();
             return store != null ? store.currentName() : null;
@@ -825,7 +871,7 @@ public class AgentService {
      */
     public UsageDTO getSessionUsageMap(String workspacePath, String sessionName) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
-        Agent4jAgent agent = agentCache.get(sessionKey);
+        Agent4jAgent agent = sessionCache.get(sessionKey);
 
         long promptTokens = 0;
         long completionTokens = 0;
@@ -858,8 +904,10 @@ public class AgentService {
             currentModel = config.model();
             Map<String, Map<String, Double>> prices = config.price();
 
-            // 获取按模型分别累计的用量
-            assert agent != null;
+            if (agent == null) {
+                log.warn("[usage] Agent 为 null，无法获取模型用量");
+                return new UsageDTO(0, 0, 0, 0, 0, maxContextTokens, 0, null, false, 0, 0, 0, 0, null);
+            }
             Map<String, long[]> mu = agent.getModelUsage();
 
             if (mu != null && !mu.isEmpty()) {
@@ -937,7 +985,7 @@ public class AgentService {
      * @return 缓存数量
      */
     public int getCacheSize() {
-        return agentCache.size();
+        return sessionCache.size();
     }
 
     /**
@@ -948,19 +996,14 @@ public class AgentService {
      */
     public void evictAgent(String workspacePath, String sessionName) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
-        Agent4jAgent removed = agentCache.remove(sessionKey);
+        Agent4jAgent removed = sessionCache.remove(sessionKey);
         if (removed != null) {
             try {
                 removed.flushSession();
                 removed.saveUsage();
             } catch (Exception e) {
-                System.err.println("[web] 清除 Agent 失败: " + e.getMessage());
+                log.warn("[web] 清除 Agent 失败: {}", e.getMessage());
             }
-            accessOrder.remove(sessionKey);
-            sessionLocks.remove(sessionKey);
-            // 如果清除的是当前活跃会话，清理追踪记录
-            String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
-            currentSessionNames.remove(resolvedPath, sessionName);
             log.info("[web] 已清除 Agent: " + sessionKey);
         }
     }
@@ -1016,7 +1059,7 @@ public class AgentService {
      * 清除所有 Agent 缓存。
      */
     public void evictAllAgents() {
-        for (Map.Entry<String, Agent4jAgent> entry : agentCache.entrySet()) {
+        for (Map.Entry<String, Agent4jAgent> entry : sessionCache.entrySet()) {
             Agent4jAgent agent = entry.getValue();
             if (agent != null) {
                 try {
@@ -1027,10 +1070,7 @@ public class AgentService {
                 }
             }
         }
-        agentCache.clear();
-        accessOrder.clear();
-        sessionLocks.clear();
-        currentSessionNames.clear();
+        sessionCache.clear();
         log.info("[web] 已清除所有 Agent 缓存");
     }
 
@@ -1038,8 +1078,8 @@ public class AgentService {
      * 通过 workspaceHash 反查工作区路径。
      * <p>
      * 优先使用 {@link WorkspaceManager#listWorkspaces()} 从磁盘读取 hash→path 映射，
-     * 不依赖 agentCache，在缓存为空时也能正确解析。
-     * 兜底检查默认工作区和 agentCache（兼容旧版）。
+     * 不依赖 sessionCache，在缓存为空时也能正确解析。
+     * 兜底检查默认工作区和 sessionCache（兼容旧版）。
      * </p>
      *
      * @param hash 工作区 hash（或路径本身）
@@ -1049,7 +1089,7 @@ public class AgentService {
         if (hash == null || hash.isEmpty()) {
             return null;
         }
-        // 1. 优先使用 WorkspaceManager 的磁盘索引（可靠，不依赖 agentCache）
+        // 1. 优先使用 WorkspaceManager 的磁盘索引（可靠，不依赖 sessionCache）
         try {
             WorkspaceManager wm = new WorkspaceManager();
             List<WorkspaceManager.WorkspaceInfo> workspaces = wm.listWorkspaces();
@@ -1069,7 +1109,7 @@ public class AgentService {
         }
 
         // 3. 遍历缓存的 Agent key（兼容旧版）
-        for (String key : agentCache.keySet()) {
+        for (String key : sessionCache.keySet()) {
             String workspacePath = key.split("::", 2)[0];
             if (hash.equals(WorkspaceManager.computeHash(workspacePath))) {
                 return workspacePath;
@@ -1109,10 +1149,6 @@ public class AgentService {
      * @return 工作区路径
      */
     public String getWorkspace() {
-        // 优先返回动态切换的工作区
-        if (currentActiveWorkspace != null) {
-            return currentActiveWorkspace;
-        }
         if (sharedConfig != null && sharedConfig.workspaceDir() != null) {
             return sharedConfig.workspaceDir().toAbsolutePath().toString();
         }
@@ -1138,7 +1174,7 @@ public class AgentService {
      * @param hitl true=手动(需审批)，false=自由(直接执行)
      */
     public void updateHitlMode(boolean hitl) {
-        for (Agent4jAgent agent : agentCache.values()) {
+        for (Agent4jAgent agent : sessionCache.values()) {
             agent.setHitlMode(hitl);
         }
         // 更新共享配置引用，确保后续新建的 Agent 也使用新值
@@ -1157,19 +1193,18 @@ public class AgentService {
         if (path == null || path.isEmpty()) {
             return false;
         }
-        // 更新当前活跃工作区路径
-        this.currentActiveWorkspace = Paths.get(path).toAbsolutePath().normalize().toString();
         // 持久化到 config.json，下次启动默认加载此工作区
+        String normalized = Paths.get(path).toAbsolutePath().normalize().toString();
         try {
             Agent4jConfig config = Agent4jConfig.load();
-            config.updateAndSave(Collections.singletonMap("workspaceDir", currentActiveWorkspace));
-            log.info("[web] 工作区已持久化到 config.json: {}", currentActiveWorkspace);
+            config.updateAndSave(Collections.singletonMap("workspaceDir", normalized));
+            log.info("[web] 工作区已持久化到 config.json: {}", normalized);
         } catch (Exception e) {
             log.warn("[web] 持久化工作区到 config.json 失败: {}", e.getMessage());
         }
         // 清除默认会话的缓存，让下次访问时使用新路径
         evictAgent(null, null);
-        log.info("[web] 工作区已切换: {}", currentActiveWorkspace);
+        log.info("[web] 工作区已切换: {}", normalized);
         return true;
     }
 
@@ -1193,14 +1228,14 @@ public class AgentService {
                 result.add(new WorkspaceInfoDTO(
                         info.hash(), info.name(), info.path(),
                         info.createdAt(), info.lastAccessedAt(),
-                        info.sessionCount(), info.isActive()
+                        info.sessionCount()
                 ));
             }
         } catch (IOException e) {
             log.warn("[web] 获取工作区列表失败: {}", e.getMessage());
             // 回退到旧逻辑：从缓存中收集
             Set<String> workspacePaths = new HashSet<>();
-            for (String key : agentCache.keySet()) {
+            for (String key : sessionCache.keySet()) {
                 String[] parts = key.split("::", 2);
                 if (parts.length > 0) {
                     workspacePaths.add(parts[0]);
@@ -1214,44 +1249,12 @@ public class AgentService {
             for (String path : workspacePaths) {
                 result.add(new WorkspaceInfoDTO(
                         WorkspaceManager.computeHash(path), null, path,
-                        0, 0, 0, false
+                        0, 0, 0
                 ));
             }
         }
 
         return result;
-    }
-
-    /**
-     * 通过 hash 切换到指定工作区。
-     *
-     * @param hash 工作区 hash
-     * @return 切换成功返回 true
-     */
-    public boolean switchToWorkspaceByHash(String hash) {
-        if (hash == null || hash.isEmpty()) {
-            return false;
-        }
-        // 从已注册的工作区中查找匹配的路径
-        try {
-            WorkspaceManager wm = new WorkspaceManager();
-            List<WorkspaceManager.WorkspaceInfo> list = wm.listWorkspaces();
-            for (WorkspaceManager.WorkspaceInfo info : list) {
-                if (hash.equals(info.hash())) {
-                    return switchWorkspace(info.path());
-                }
-            }
-        } catch (IOException e) {
-            log.warn("[web] 查询工作区失败: {}", e.getMessage());
-        }
-        // 兼容：从缓存中查找
-        for (String key : agentCache.keySet()) {
-            String workspacePath = key.split("::", 2)[0];
-            if (hash.equals(WorkspaceManager.computeHash(workspacePath))) {
-                return switchWorkspace(workspacePath);
-            }
-        }
-        return false;
     }
 
     /**
@@ -1277,7 +1280,7 @@ public class AgentService {
 
         // 1. 查找并清除该工作区的所有 Agent 缓存
         List<String> keysToRemove = new ArrayList<>();
-        for (String key : agentCache.keySet()) {
+        for (String key : sessionCache.keySet()) {
             String workspacePath = key.split("::", 2)[0];
             String keyHash = WorkspaceManager.computeHash(workspacePath);
             if (hash.equals(keyHash)) {

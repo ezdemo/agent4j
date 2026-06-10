@@ -1,15 +1,18 @@
 package site.sorghum.agent4j.tool.solon.common;
 
 import lombok.Getter;
+import org.noear.solon.Solon;
 import org.noear.solon.ai.talents.cli.SkillTalent;
 import org.noear.solon.ai.talents.cli.TerminalTalent;
-import org.noear.solon.ai.talents.cli.TerminalTalentProxy;
+import org.noear.solon.ai.talents.lsp.LspManager;
+import org.noear.solon.ai.talents.lsp.LspTalent;
 import org.noear.solon.ai.talents.mount.MountDir;
 import org.noear.solon.ai.talents.mount.MountManager;
 import org.noear.solon.ai.talents.mount.MountType;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.solon.SolonToTools;
 import site.sorghum.agent4j.tool.solon.ToolManager;
+import site.sorghum.agent4j.tool.solon.lsp.SharedAgent4JLspSkill;
 
 import java.util.List;
 import java.util.Map;
@@ -18,6 +21,8 @@ import java.util.concurrent.ConcurrentHashMap;
 public class Agent4JSkillProvider implements SolonToTools {
     SkillTalent skillTalent;
     TerminalTalent terminalTalent;
+    @Getter
+    LspTalent lspTalent;
     public static Map<String, Agent4JSkillProvider> cliSkillProviderMap = new ConcurrentHashMap<>();
     @Getter
     public MountManager poolManager;
@@ -42,8 +47,13 @@ public class Agent4JSkillProvider implements SolonToTools {
         }};
         skillTalent = new SkillTalent(poolManager);
         terminalTalent = new TerminalTalent(poolManager);
-        terminalTalent.setSandboxMode(false);
+        terminalTalent.setSandboxEnabled(false);
         terminalTalent.setBashAsyncEnabled(true);
+        lspTalent = new LspTalent(
+                new LspManager(workDir), workDir
+        );
+        SharedAgent4JLspSkill share = Solon.context().getBean(SharedAgent4JLspSkill.class);
+        share.copyToAgent4J(lspTalent);
     }
 
     public static Agent4JSkillProvider getOrCreate(String rootDir) {
@@ -54,7 +64,8 @@ public class Agent4JSkillProvider implements SolonToTools {
     public List<AgentTool> getTools() {
         return ToolManager.getToolsFromSKill(List.of(
                 skillTalent,
-                terminalTalent
+                terminalTalent,
+                lspTalent
         ));
     }
 

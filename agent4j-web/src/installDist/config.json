@@ -7,7 +7,7 @@
   "reasoningEffort": "max",
   "lang": "ZH",
   "hitl": false,
-  "disabledTools": [],
+  "disabledTools": ["lsp"],
   "blockedPaths": [],
   "availableModels": [
     "deepseek-v4-flash",

@@ -62,7 +62,7 @@
         <div class="commit-area" v-if="hasChanges">
           <div class="commit-select-all">
             <input type="checkbox" class="git-checkbox" :checked="isAllSelected" @change="toggleSelectAll">
-            <span class="select-all-label">全选 ({{ selectedCount }}/{{ totalCount }})</span>
+            <span class="select-all-label">全选变更 ({{ selectedCount }}/{{ changedCount }})</span>
           </div>
           <textarea
             class="commit-input"
@@ -141,6 +141,33 @@
           <span>工作区干净，没有待提交的更改</span>
         </div>
 
+        <!-- 提交历史 -->
+        <div class="git-history">
+          <div class="git-section-header history" @click="showCommitHistory = !showCommitHistory">
+            <div class="section-left">
+              <svg class="chevron" :class="{ open: showCommitHistory }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+              <span>历史提交</span>
+            </div>
+            <span class="section-count" v-if="commits.length">{{ commits.length }}</span>
+          </div>
+          <template v-if="showCommitHistory">
+            <div v-if="historyLoading" class="git-history-loading">
+              <div class="loading-spinner"></div>
+            </div>
+            <div v-else-if="commits.length === 0" class="git-history-empty">暂无提交记录</div>
+            <div v-else class="git-commit-list">
+              <div v-for="c in commits" :key="c.hash" class="git-commit-item">
+                <div class="commit-top">
+                  <code class="commit-hash" :title="c.hash">{{ c.shortHash }}</code>
+                  <span class="commit-date" :title="c.date">{{ fmtRelative(c.date) }}</span>
+                </div>
+                <div class="commit-message">{{ c.message }}</div>
+                <div class="commit-author">{{ c.author }}</div>
+              </div>
+            </div>
+          </template>
+        </div>
+
         <!-- Diff 预览弹层 -->
         <div v-if="diffViewer.open" class="diff-overlay" @click.self="closeDiffViewer">
           <div class="diff-viewer">
@@ -182,6 +209,11 @@ const untrackedFiles = ref([])
 // 折叠控制
 const showChanged = ref(true)
 const showUntracked = ref(false)
+const showCommitHistory = ref(true)
+
+// 提交历史
+const commits = ref([])
+const historyLoading = ref(false)
 
 // 文件选择
 const selectedFiles = ref(new Set())
@@ -210,7 +242,7 @@ const changedCount = computed(() => (changedFiles.value || []).length)
 const untrackedCount = computed(() => (untrackedFiles.value || []).length)
 const totalCount = computed(() => changedCount.value + untrackedCount.value)
 const selectedCount = computed(() => selectedFiles.value.size)
-const isAllSelected = computed(() => selectedCount.value === totalCount.value && totalCount.value > 0)
+const isAllSelected = computed(() => selectedCount.value === changedCount.value && changedCount.value > 0)
 
 const toggleSelect = (path) => {
   const newSet = new Set(selectedFiles.value)
@@ -224,11 +256,13 @@ const toggleSelect = (path) => {
 
 const toggleSelectAll = () => {
   if (isAllSelected.value) {
-    selectedFiles.value = new Set()
+    // 只取消变更列表的选中，保留未跟踪文件的手动选择
+    const newSet = new Set(selectedFiles.value)
+    ;(changedFiles.value || []).forEach(f => newSet.delete(f.path))
+    selectedFiles.value = newSet
   } else {
-    const newSet = new Set()
+    const newSet = new Set(selectedFiles.value)
     ;(changedFiles.value || []).forEach(f => newSet.add(f.path))
-    ;(untrackedFiles.value || []).forEach(f => newSet.add(f.path))
     selectedFiles.value = newSet
   }
 }
@@ -246,6 +280,8 @@ const loadStatus = async () => {
       branchName.value = d.branch || ''
       changedFiles.value = d.changed || []
       untrackedFiles.value = d.untracked || []
+      // 仓库初始化后加载提交历史
+      if (initialized.value) await loadCommitHistory()
     } else {
       // 回退到 diff 接口
       await loadDiffFallback()
@@ -272,6 +308,41 @@ const loadDiffFallback = async () => {
   } catch (e) {
     error.value = e.message || '加载失败'
   }
+}
+
+// ---- 提交历史 ----
+const loadCommitHistory = async () => {
+  if (!initialized.value) return
+  historyLoading.value = true
+  try {
+    const r = await gitAPI.commitHistory(props.workspaceHash, 50)
+    if (r.success && r.data) {
+      commits.value = r.data.commits || []
+    }
+  } catch (e) {
+    // 静默失败，不影响主功能
+    console.debug('加载提交历史失败:', e)
+  } finally {
+    historyLoading.value = false
+  }
+}
+
+const fmtRelative = (dateStr) => {
+  if (!dateStr) return ''
+  const d = new Date(dateStr)
+  const now = new Date()
+  const diffMs = now - d
+  const diffSec = Math.floor(diffMs / 1000)
+  if (diffSec < 60) return '刚刚'
+  const diffMin = Math.floor(diffSec / 60)
+  if (diffMin < 60) return diffMin + ' 分钟前'
+  const diffHr = Math.floor(diffMin / 60)
+  if (diffHr < 24) return diffHr + ' 小时前'
+  const diffDay = Math.floor(diffHr / 24)
+  if (diffDay < 30) return diffDay + ' 天前'
+  const diffMon = Math.floor(diffDay / 30)
+  if (diffMon < 12) return diffMon + ' 个月前'
+  return Math.floor(diffMon / 12) + ' 年前'
 }
 
 // ---- 操作 ----
@@ -693,6 +764,48 @@ watch(() => props.workspaceHash, () => {
 .toggle-btn.add { background: #d1fae5; color: #065f46; }
 [data-theme="dark"] .toggle-btn { background: #450a0a; color: #f87171; }
 [data-theme="dark"] .toggle-btn.add { background: #052e16; color: #4ade80; }
+
+/* 提交历史 */
+.git-history { border-top: 1px solid var(--border); }
+.git-section-header.history { padding: 7px 12px; }
+.git-history-loading { display: flex; justify-content: center; padding: 12px; }
+.git-history-empty { padding: 12px; font-size: 11px; color: var(--fg-4); text-align: center; }
+.git-commit-list { max-height: 240px; overflow-y: auto; }
+.git-commit-item {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  cursor: default;
+  transition: background var(--t);
+}
+.git-commit-item:hover { background: var(--bg-3); }
+.commit-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 2px;
+}
+.commit-hash {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  padding: 1px 5px;
+  border-radius: 3px;
+}
+.commit-date { font-size: 10px; color: var(--fg-4); margin-left: auto; }
+.commit-message {
+  font-size: 12px;
+  color: var(--fg-2);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.commit-author {
+  font-size: 10px;
+  color: var(--fg-4);
+  margin-top: 1px;
+}
 
 /* 空状态 */
 .git-empty {

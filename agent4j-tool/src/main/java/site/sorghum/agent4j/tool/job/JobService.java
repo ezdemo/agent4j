@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.tool.job;
 
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 
 import java.io.IOException;
@@ -10,6 +11,7 @@ import java.nio.file.Path;
  *
  * @author Sorghum
  */
+@Slf4j
 @Component
 public class JobService {
 
@@ -24,8 +26,9 @@ public class JobService {
         if (waitSec != null && waitSec > 0) {
             try {
                 Thread.sleep(waitSec * JobConstants.MILLIS_PER_SECOND);
-            } catch (InterruptedException ignored) {
-                // 等待启动时被中断，忽略
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.debug("等待后台作业启动时被中断");
             }
             JobRegistry.ReadResult r = JOB_REGISTRY.read(entry.id, 0, JobConstants.MIN_TAIL_LINES);
             preview = r != null ? r.output : null;

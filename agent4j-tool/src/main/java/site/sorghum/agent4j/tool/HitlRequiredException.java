@@ -2,6 +2,7 @@ package site.sorghum.agent4j.tool;
 
 import lombok.Getter;
 
+import java.util.Collections;
 import java.util.Map;
 
 /**
@@ -26,16 +27,18 @@ public class HitlRequiredException extends RuntimeException {
     private final Map<String, Object> toolArgs;
 
     /**
-     * @param toolName 触发审批的工具名
-     * @param reason   简短原因码（如 "SANDBOX_ESCAPE"）
-     * @param details  详细描述（给用户看的审批提示）
-     * @param toolArgs 工具调用时的原始参数（审批通过后用于重放执行）
+     * @param toolName 触发审批的工具名，为 null 时使用 "unknown"
+     * @param reason   简短原因码（如 "SANDBOX_ESCAPE"），为 null 时使用 "UNKNOWN"
+     * @param details  详细描述（给用户看的审批提示），为 null 时使用空字符串
+     * @param toolArgs 工具调用时的原始参数（审批通过后用于重放执行），为 null 时使用空 Map
      */
     public HitlRequiredException(String toolName, String reason, String details, Map<String, Object> toolArgs) {
-        super("[" + reason + "] " + toolName + ": " + details);
+        super("[" + (reason != null ? reason : "UNKNOWN") + "] "
+                + (toolName != null ? toolName : "unknown") + ": "
+                + (details != null ? details : ""));
         this.toolName = toolName;
         this.reason = reason;
         this.details = details;
-        this.toolArgs = toolArgs;
+        this.toolArgs = toolArgs != null ? toolArgs : Collections.emptyMap();
     }
 }

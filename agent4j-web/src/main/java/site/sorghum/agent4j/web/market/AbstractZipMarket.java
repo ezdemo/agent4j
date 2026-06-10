@@ -1,10 +1,10 @@
 package site.sorghum.agent4j.web.market;
 
+import lombok.SneakyThrows;
 import org.noear.snack4.ONode;
 import org.noear.solon.net.http.HttpResponse;
 import org.noear.solon.net.http.HttpUtils;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.BufferedInputStream;
 import java.net.URLEncoder;
@@ -23,12 +23,12 @@ import java.util.zip.ZipInputStream;
  *
  * @author Sorghum
  */
+@Slf4j
 public abstract class AbstractZipMarket implements Market {
 
-    protected final Logger log = LoggerFactory.getLogger(getClass());
-
+    @SneakyThrows
     @Override
-    public String install(String slug, Path skillsDir) throws Exception {
+    public String install(String slug, Path skillsDir){
         if (slug == null || slug.isEmpty()) {
             throw new IllegalArgumentException("slug is required");
         }
@@ -129,7 +129,8 @@ public abstract class AbstractZipMarket implements Market {
     /**
      * 递归删除目录。
      */
-    protected void deleteDirectory(Path dir) throws Exception {
+    @SneakyThrows
+    protected void deleteDirectory(Path dir){
         if (!Files.exists(dir)) return;
         Files.walk(dir)
                 .sorted(Comparator.reverseOrder())
@@ -144,7 +145,8 @@ public abstract class AbstractZipMarket implements Market {
     /**
      * 安全解压 ZIP 文件到目标目录（含 Zip Slip 防护）。
      */
-    protected void unzipToDirectory(Path zipFile, Path targetDir) throws Exception {
+    @SneakyThrows
+    protected void unzipToDirectory(Path zipFile, Path targetDir){
         ZipInputStream zis = new ZipInputStream(new BufferedInputStream(Files.newInputStream(zipFile)));
         try {
             ZipEntry entry;
