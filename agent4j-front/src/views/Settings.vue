@@ -1103,7 +1103,6 @@ X-Custom-Header=value"
                     <div class="mcp-item-info">
                       <div class="mcp-item-name">
                         {{ svr.name }}
-                        <span v-if="svr.scope === 'workspace'" class="mcp-type-tag" style="background:var(--accent-bg);color:var(--accent);margin-left:6px">工作区</span>
                         <span v-if="svr.installed" class="mcp-type-tag" style="background:#e6f7e6;color:#389e0d;margin-left:4px">已安装</span>
                       </div>
                       <div class="mcp-item-detail">{{ typeof svr.command === 'string' ? svr.command : (svr.command || []).join(' ') }}</div>
@@ -1144,13 +1143,6 @@ X-Custom-Header=value"
                   <label>名称 <span class="req">*</span></label>
                   <input v-model="lspForm.name" class="form-input" placeholder="my-lsp-server" type="text" :readonly="!!lspEditName"/>
                   <p class="mcp-hint">仅允许字母、数字、下划线和连字符{{ lspEditName ? '（编辑时不可修改）' : '' }}</p>
-                </div>
-                <div class="mcp-field">
-                  <label>作用域</label>
-                  <div class="mcp-type-toggle">
-                    <button :class="{ active: lspForm.scope === 'user' }" class="type-btn" @click="lspForm.scope = 'user'">用户（全局）</button>
-                    <button :class="{ active: lspForm.scope === 'workspace' }" class="type-btn" @click="lspForm.scope = 'workspace'">工作区（本地）</button>
-                  </div>
                 </div>
                 <div class="mcp-field">
                   <label>启动命令 <span class="req">*</span></label>

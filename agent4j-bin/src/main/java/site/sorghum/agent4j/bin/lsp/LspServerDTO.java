@@ -39,7 +39,8 @@ public class LspServerDTO {
     /** 是否启用 */
     private boolean enabled = true;
 
-    /** 作用域：project / global */
+    /** @deprecated 作用域已简化为全局，该字段保留仅用于向后兼容 */
+    @Deprecated
     private String scope;
 
     /** 环境变量键值对 */
@@ -64,7 +65,7 @@ public class LspServerDTO {
         config.setCommand(parseCommand(this.command));
         config.setExtensions(this.extensions);
         config.setEnabled(this.enabled);
-        config.setScope(this.scope);
+        config.setScope("user");  // 强制全局作用域，忽略前端传入值
         config.setEnv(this.env);
         config.setInitializationOptions(this.initializationOptions);
         return config;
