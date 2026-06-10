@@ -780,7 +780,7 @@ const deleteProjectSession = async (wsHash, sessionName) => {
   const ok = await confirm({ message: `确定要删除此会话吗？` })
   if (!ok) return
   try {
-    await sessionsAPI.deleteSession(sessionName)
+    await sessionsAPI.deleteSession(sessionName, wsHash)
     await loadSessions()
     message.success('会话已删除')
   } catch (e) {
@@ -902,7 +902,15 @@ const deleteSession = async name => {
   const ok = await confirm({ message: `确定要删除此会话吗？` })
   if (!ok) return
   try {
-    await sessionsAPI.deleteSession(name)
+    // 从 workspaceSessions 中找到该会话所属的工作区
+    let workspaceHash = null
+    for (const [hash, sessions] of Object.entries(workspaceSessions.value)) {
+      if (sessions.some(s => s.name === name)) {
+        workspaceHash = hash
+        break
+      }
+    }
+    await sessionsAPI.deleteSession(name, workspaceHash)
     await loadSessions()
     message.success('会话已删除')
   } catch (e) {

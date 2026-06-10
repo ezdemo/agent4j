@@ -42,7 +42,7 @@ public class Agent4JSkillProvider implements SolonToTools {
         }};
         skillTalent = new SkillTalent(poolManager);
         terminalTalent = new TerminalTalent(poolManager);
-        terminalTalent.setSandboxMode(false);
+        terminalTalent.setSandboxEnabled(false);
         terminalTalent.setBashAsyncEnabled(true);
     }
 

@@ -109,10 +109,9 @@ public class SessionController {
     @Mapping("/{name}")
     public ApiResponse<SessionDeleteDTO> deleteSession(
             @ApiParam(value = "会话名称") @Path("name") String name,
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
+            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash") String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
-        if (workspacePath == null) workspacePath = agentService.getWorkspace();
         agentService.deleteSession(workspacePath, name);
         String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
         return ApiResponse.ok(new SessionDeleteDTO("会话已删除", resolvedHash, name));

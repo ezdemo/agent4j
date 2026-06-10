@@ -315,9 +315,10 @@ export const sessionsAPI = {
     return api.post(`/sessions/${name}`)
   },
   
-  // 删除会话 - DELETE /api/sessions/{name}
-  deleteSession: (name) => {
-    return api.delete(`/sessions/${name}`)
+  // 删除会话 - DELETE /api/sessions/{name}?workspaceHash=xxx
+  deleteSession: (name, workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.delete(`/sessions/${name}`, { params })
   },
 
   // 清空所有会话 - DELETE /api/sessions?workspaceHash=xxx
