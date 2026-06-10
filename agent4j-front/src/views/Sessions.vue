@@ -355,7 +355,8 @@ const loadUsageStats = async () => {
 
 const createNewSession = async () => {
   try {
-    const response = await sessionsAPI.createNew()
+    const params = currentWorkspaceHash.value ? { workspaceHash: currentWorkspaceHash.value } : {}
+    const response = await sessionsAPI.createNew(params)
     if (response.success) {
       await loadSessions()
       window.dispatchEvent(new CustomEvent('terminal-output', { 

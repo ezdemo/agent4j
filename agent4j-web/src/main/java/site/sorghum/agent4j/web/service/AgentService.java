@@ -69,7 +69,7 @@ public class AgentService {
      * 对外提供统一的 get/put/evict/clear/lock 操作。
      * </p>
      */
-    private class SessionAgentCache {
+    private static class SessionAgentCache {
         private final ConcurrentHashMap<String, Agent4jAgent> agents = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<String, ReentrantLock> locks = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<String, String> currentNames = new ConcurrentHashMap<>();
