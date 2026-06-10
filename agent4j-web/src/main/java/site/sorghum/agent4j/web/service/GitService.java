@@ -42,8 +42,8 @@ public class GitService {
     private static final int MIN_STATUS_LINE_LENGTH = 4;
     /** 单文件 diff 最大行数（超出截断） */
     private static final int MAX_DIFF_LINES = 2000;
-    /** AI 生成提交消息时 diff 最大字符数 */
-    private static final int MAX_DIFF_CHARS = 8000;
+    /** AI 生成提交消息时 diff 最大字符数（缩减以减少 token 消耗和延迟） */
+    private static final int MAX_DIFF_CHARS = 4000;
     /** 生成提交消息时参考的近期提交条数 */
     private static final int RECENT_COMMIT_LOG_COUNT = 10;
     /** Git 命令超时秒数 */
@@ -474,8 +474,8 @@ public class GitService {
             throw new ServiceException("Not a git repository");
         }
 
-        // 获取 AI 模型客户端
-        ModelClient modelClient = agentService.getSharedModelClient();
+        // 获取轻量 AI 模型客户端（关闭推理/思考，降低延迟）
+        ModelClient modelClient = agentService.createLightModelClient();
         if (modelClient == null) {
             throw new ServiceException("AI 模型未配置，请先设置 OPENAI_API_KEY 环境变量");
         }

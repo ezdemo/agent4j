@@ -162,6 +162,22 @@ public class AgentService {
      */
     @Getter
     private volatile ModelClient sharedModelClient;
+
+    /**
+     * 创建一个不启用推理（thinking）的轻量 ModelClient，用于 Git 提交消息生成等简单任务。
+     * <p>
+     * 与共享 ModelClient 使用相同的 API 端点和模型，但 reasoningEffort 强制设为 "none"，
+     * 从而跳过推理链，大幅降低延迟（从 30s+ 降至 3-5s）。
+     * </p>
+     *
+     * @return 无推理的 ModelClient，若 API Key 未配置则返回 null
+     */
+    public ModelClient createLightModelClient() {
+        if (sharedApiUrl == null || sharedApiKey == null || sharedModel == null) {
+            return null;
+        }
+        return new HttpModelClient(sharedApiUrl, sharedApiKey, sharedModel, "none");
+    }
     /**
      * 共享的 ToolRegistry（所有会话复用）
      */
@@ -304,8 +320,9 @@ public class AgentService {
         this.sharedModel = model;
         this.hitlMode = config.hitl();
 
-        // 创建共享的 ModelClient
-        this.sharedModelClient = new HttpModelClient(apiUrl, apiKey, model);
+        // 创建共享的 ModelClient（使用配置的 reasoningEffort）
+        String reasoningEffort = config.reasoningEffort();
+        this.sharedModelClient = new HttpModelClient(apiUrl, apiKey, model, reasoningEffort);
 
         // 设置禁用工具
         Set<String> disabledTools = config.disabledTools();
