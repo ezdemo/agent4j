@@ -1073,16 +1073,32 @@ X-Custom-Header=value"
                     <h3>LSP 服务器</h3>
                     <p>配置语言服务器 (Language Server Protocol) 用于代码智能分析</p>
                   </div>
-                  <button class="btn btn-primary btn-sm" @click="openLspAdd">
-                    <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
-                      <line x1="12" x2="12" y1="5" y2="19"/>
-                      <line x1="5" x2="19" y1="12" y2="12"/>
-                    </svg>
-                    添加服务器
-                  </button>
+                  <div style="display:flex;align-items:center;gap:12px;">
+                    <label class="toggle-switch" :class="{disabled: lspFullDisableSaving}" title="完全禁用 LSP 功能，将 lsp 加入已禁用工具列表">
+                      <input type="checkbox" :checked="lspFullyDisabled" @change="toggleLspFullDisable" :disabled="lspFullDisableSaving"/>
+                      <span class="toggle-slider"></span>
+                    </label>
+                    <span v-if="lspFullDisableSaving" style="font-size:12px;color:var(--fg-3);white-space:nowrap;">保存中...</span>
+                    <span v-else style="font-size:12px;color:var(--fg-3);white-space:nowrap;">完全禁用</span>
+                    <button class="btn btn-primary btn-sm" @click="openLspAdd" :disabled="lspFullyDisabled">
+                      <svg fill="none" height="12" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="12">
+                        <line x1="12" x2="12" y1="5" y2="19"/>
+                        <line x1="5" x2="19" y1="12" y2="12"/>
+                      </svg>
+                      添加服务器
+                    </button>
+                  </div>
                 </div>
               </div>
               <div class="card-body">
+                <div v-if="lspFullyDisabled" class="mcp-state-box" style="background:var(--yellow-1, #fefce8);border:1px solid var(--yellow-5, #eab308);border-radius:8px;padding:12px 16px;margin-bottom:12px;">
+                  <svg fill="none" height="20" stroke="var(--yellow-5, #eab308)" stroke-width="2" viewBox="0 0 24 24" width="20">
+                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/>
+                    <line x1="12" x2="12" y1="9" y2="13"/>
+                    <line x1="12" x2="12.01" y1="17" y2="17"/>
+                  </svg>
+                  <p style="margin:0;font-size:13px;color:var(--yellow-8, #854d0e);">LSP 已被完全禁用，所有语言服务器将不会启动。在「安全 → 禁用工具」中移除 "lsp" 即可恢复。</p>
+                </div>
                 <div v-if="lspLoading" class="mcp-state-box">
                   <svg class="animate-spin" fill="none" height="24" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="24">
                     <path d="M21 12a9 9 0 11-6.219-8.56"/>
@@ -1109,14 +1125,14 @@ X-Custom-Header=value"
                       <div class="mcp-item-detail" style="font-size:11px;color:var(--fg-3);margin-top:2px">{{ (svr.extensions || []).join(', ') }}</div>
                     </div>
                     <div class="mcp-item-actions" @click.stop>
-                      <button class="btn-icon-xs" title="编辑" @click="openLspEdit(svr)">
+                      <button class="btn-icon-xs" title="编辑" @click="openLspEdit(svr)" :disabled="lspFullyDisabled">
                         <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
                           <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/>
                           <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/>
                         </svg>
                       </button>
-                      <label class="toggle-switch">
-                        <input type="checkbox" :checked="svr.enabled" @change="toggleLspServer(svr)"/>
+                      <label class="toggle-switch" :class="{disabled: lspFullyDisabled}" :title="lspFullyDisabled ? 'LSP 已被完全禁用' : ''">
+                        <input type="checkbox" :checked="svr.enabled" @change="toggleLspServer(svr)" :disabled="lspFullyDisabled"/>
                         <span class="toggle-slider"></span>
                       </label>
                     </div>
@@ -2829,6 +2845,36 @@ const lspFormValid = computed(() => {
   if (!lspForm.command) return false
   return true
 })
+
+// LSP 完全禁用状态（是否在 disabledTools 中）
+const lspFullyDisabled = computed(() => {
+  const tools = settings.security.disabledToolsText.split('\n').map(s => s.trim()).filter(s => s)
+  return tools.includes('lsp')
+})
+
+const lspFullDisableSaving = ref(false)
+
+async function toggleLspFullDisable() {
+  const tools = settings.security.disabledToolsText.split('\n').map(s => s.trim()).filter(s => s)
+  const newDisabledTools = tools.includes('lsp')
+    ? tools.filter(t => t !== 'lsp')
+    : [...tools, 'lsp']
+
+  lspFullDisableSaving.value = true
+  try {
+    const res = await configAPI.updateConfig({ disabledTools: newDisabledTools })
+    if (res.success !== false) {
+      settings.security.disabledToolsText = newDisabledTools.join('\n')
+      message.success(newDisabledTools.includes('lsp') ? 'LSP 已完全禁用' : 'LSP 已启用')
+    } else {
+      message.error(res.error || '操作失败')
+    }
+  } catch (e) {
+    message.error('操作失败: ' + (e.message || ''))
+  } finally {
+    lspFullDisableSaving.value = false
+  }
+}
 
 function resetLspForm() {
   lspForm.name = ''
