@@ -288,7 +288,6 @@ const loadSessions = async () => {
         // 使用第一个工作区（isActive 已废弃）
         workspaceHash = workspacesResponse.data[0].hash
         console.log('使用工作区 hash:', workspaceHash) // 调试日志
-        }
       }
     } catch (err) {
       console.warn('获取工作区信息失败:', err)
