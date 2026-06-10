@@ -38,7 +38,7 @@ public class SharedWorkspace {
     private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
 
     /** 最大条目数（单个存储类型），默认 1000 */
-    private int maxEntries;
+    private final int maxEntries;
 
     public SharedWorkspace() {
         this(1000);

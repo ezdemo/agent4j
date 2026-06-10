@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.tool.job;
 
+import lombok.extern.slf4j.Slf4j;
+
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
@@ -18,6 +20,7 @@ import java.util.stream.Collectors;
  *
  * @author Sorghum
  */
+@Slf4j
 public class JobRegistry {
 
     private final Map<Integer, JobEntry> jobs = new ConcurrentHashMap<>();
@@ -88,8 +91,9 @@ public class JobRegistry {
         e.process.destroyForcibly();
         try {
             e.process.waitFor(3, TimeUnit.SECONDS);
-        } catch (InterruptedException ignored) {
-            // 等待超时，忽略中断异常
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            log.debug("停止作业 {} 时等待被中断", id);
         }
         return new ReadResult(e, 0, 0);
     }
@@ -118,13 +122,14 @@ public class JobRegistry {
                             output.append(line).append("\n");
                         }
                     }
-                } catch (IOException ignored) {
-                    // 读取进程输出时发生IO异常，忽略
+                } catch (IOException e) {
+                    log.debug("作业 {} 输出流读取结束: {}", id, e.getMessage());
                 }
                 try {
                     exitCode = process.waitFor();
-                } catch (InterruptedException ignored) {
-                    // 等待进程结束时被中断，忽略
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    log.debug("作业 {} 等待进程结束时被中断", id);
                 }
                 running = false;
             }, "job-" + id);

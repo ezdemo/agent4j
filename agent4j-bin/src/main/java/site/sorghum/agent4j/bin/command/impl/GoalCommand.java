@@ -33,6 +33,10 @@ import java.time.Instant;
 @Slf4j
 public class GoalCommand implements ChatCommand {
 
+    private static final String NO_GOAL_MSG = "当前会话没有活跃目标。使用 /goal set <描述> 创建目标。";
+    private static final int CMD_PREFIX_LEN = "/goal".length();
+    private static final int VERIFY_FLAG_LEN = "--verify".length();
+
     @Inject
     private GoalEngine goalEngine;
 
@@ -59,7 +63,7 @@ public class GoalCommand implements ChatCommand {
     @Override
     public CommandResult execute(MessageWrapper input, ChatCommandContext ctx) throws Exception {
         String text = input.getMessage();
-        String remaining = text.trim().substring(5).trim();
+        String remaining = text.trim().substring(CMD_PREFIX_LEN).trim();
         String[] parts = remaining.split("\\s+", 2);
         String subCmd = parts.length > 0 ? parts[0].toLowerCase() : "help";
         String args = parts.length > 1 ? parts[1] : "";
@@ -97,7 +101,7 @@ public class GoalCommand implements ChatCommand {
         int verifyIdx = args.indexOf("--verify");
         if (verifyIdx >= 0) {
             description = args.substring(0, verifyIdx).trim();
-            String afterFlag = args.substring(verifyIdx + 8).trim();
+            String afterFlag = args.substring(verifyIdx + VERIFY_FLAG_LEN).trim();
             if (afterFlag.startsWith("\"")) {
                 int endQuote = afterFlag.indexOf("\"", 1);
                 if (endQuote > 0) {
@@ -149,8 +153,7 @@ public class GoalCommand implements ChatCommand {
     private CommandResult handleStatus(ChatCommandContext ctx) {
         Goal goal = goalEngine.getCurrentGoal(ctx);
         if (goal == null) {
-            ctx.getAgent().getOutput().onLog(LogLevel.INFO,
-                    "当前会话没有活跃目标。使用 /goal set <描述> 创建目标。");
+            ctx.getAgent().getOutput().onLog(LogLevel.INFO, NO_GOAL_MSG);
             return CommandResult.CONTINUE;
         }
 
@@ -197,61 +200,56 @@ public class GoalCommand implements ChatCommand {
         return CommandResult.CONTINUE;
     }
 
-    private CommandResult handleRetry(String args, ChatCommandContext ctx) throws Exception {
+    /**
+     * 从参数中解析步骤索引（1-based），并校验范围。返回解析后的 GoalStep，
+     * 若解析失败或超出范围则通过 output 报告错误并返回 null。
+     */
+    private GoalStep resolveStepIndex(String args, ChatCommandContext ctx) throws Exception {
         if (args.isEmpty()) {
-            ctx.getAgent().getOutput().onLog(LogLevel.INFO, "用法: /goal retry <步骤号>");
-            return CommandResult.CONTINUE;
+            ctx.getAgent().getOutput().onLog(LogLevel.INFO, "用法: /goal retry/skip <步骤号>");
+            return null;
         }
         int stepIndex;
         try {
             stepIndex = Integer.parseInt(args.trim()) - 1;
         } catch (NumberFormatException e) {
             ctx.getAgent().getOutput().onLog(LogLevel.INFO, "步骤号必须是数字");
-            return CommandResult.CONTINUE;
+            return null;
         }
-
         Goal goal = goalEngine.getCurrentGoal(ctx);
-        if (goal == null) return noGoalResponse(ctx);
+        if (goal == null) {
+            noGoalResponse(ctx);
+            return null;
+        }
         if (stepIndex < 0 || stepIndex >= goal.getSteps().size()) {
             ctx.getAgent().getOutput().onLog(LogLevel.INFO, "步骤号超出范围（1-" + goal.getSteps().size() + "）");
-            return CommandResult.CONTINUE;
+            return null;
         }
+        return goal.getSteps().get(stepIndex);
+    }
 
-        GoalStep step = goal.getSteps().get(stepIndex);
+    private CommandResult handleRetry(String args, ChatCommandContext ctx) throws Exception {
+        GoalStep step = resolveStepIndex(args, ctx);
+        if (step == null) return CommandResult.CONTINUE;
+
+        Goal goal = goalEngine.getCurrentGoal(ctx);
         step.setStatus(StepStatus.PENDING);
         step.setRetryCount(0);
         step.setLastError(null);
         step.setCompletedAt(null);
         goal.setUpdatedAt(Instant.now());
-        goal.getSteps().set(stepIndex, step);
         ctx.getAgent().getWorkspaceManager().getGoalStore().save(goal);
 
         ctx.getAgent().getOutput().onReasoning(
-                "🔄 步骤 " + (stepIndex + 1) + " 已重置为待执行状态，请继续工作。");
+                "🔄 步骤 " + (step.getIndex() + 1) + " 已重置为待执行状态，请继续工作。");
         return CommandResult.CONTINUE;
     }
 
     private CommandResult handleSkip(String args, ChatCommandContext ctx) throws Exception {
-        if (args.isEmpty()) {
-            ctx.getAgent().getOutput().onLog(LogLevel.INFO, "用法: /goal skip <步骤号>");
-            return CommandResult.CONTINUE;
-        }
-        int stepIndex;
-        try {
-            stepIndex = Integer.parseInt(args.trim()) - 1;
-        } catch (NumberFormatException e) {
-            ctx.getAgent().getOutput().onLog(LogLevel.INFO, "步骤号必须是数字");
-            return CommandResult.CONTINUE;
-        }
+        GoalStep step = resolveStepIndex(args, ctx);
+        if (step == null) return CommandResult.CONTINUE;
 
         Goal goal = goalEngine.getCurrentGoal(ctx);
-        if (goal == null) return noGoalResponse(ctx);
-        if (stepIndex < 0 || stepIndex >= goal.getSteps().size()) {
-            ctx.getAgent().getOutput().onLog(LogLevel.INFO, "步骤号超出范围（1-" + goal.getSteps().size() + "）");
-            return CommandResult.CONTINUE;
-        }
-
-        GoalStep step = goal.getSteps().get(stepIndex);
         step.setStatus(StepStatus.SKIPPED);
         step.setCompletedAt(Instant.now());
         goal.setUpdatedAt(Instant.now());
@@ -263,7 +261,7 @@ public class GoalCommand implements ChatCommand {
 
         ctx.getAgent().getWorkspaceManager().getGoalStore().save(goal);
         ctx.getAgent().getOutput().onLog(LogLevel.INFO,
-                "⏭️ 已跳过步骤 " + (stepIndex + 1) + "：" + step.getDescription());
+                "⏭️ 已跳过步骤 " + (step.getIndex() + 1) + "：" + step.getDescription());
         return CommandResult.CONTINUE;
     }
 
@@ -292,8 +290,7 @@ public class GoalCommand implements ChatCommand {
     }
 
     private CommandResult noGoalResponse(ChatCommandContext ctx) {
-        ctx.getAgent().getOutput().onLog(LogLevel.INFO,
-                "当前会话没有活跃目标。使用 /goal set <描述> 创建目标。");
+        ctx.getAgent().getOutput().onLog(LogLevel.INFO, NO_GOAL_MSG);
         return CommandResult.CONTINUE;
     }
 

@@ -40,11 +40,19 @@ public class AgentLoop implements AgentLoopController {
 
     // ==================== 配置读取（带 null-safe 默认值） ====================
 
+    /** 默认最大上下文字符数（200k 约 256k tokens 的保守估计，覆盖主流模型上下文窗口） */
     private static final int DEFAULT_MAX_CONTEXT_CHARS = 200_000;
+    /** 折叠后保留尾部字符数（80k 确保折叠后仍有足够上下文供后续推理） */
     private static final int DEFAULT_KEEP_TAIL_CHARS = 80_000;
+    /** 工具执行超时秒数（1080s=18min，覆盖长时间工具调用如大型构建/测试） */
     private static final int DEFAULT_TOOL_TIMEOUT_SEC = 1080;
+    /** Storm 断路器自愈最大尝试次数 */
     private static final int DEFAULT_MAX_SELF_CORRECTION = 5;
+    /** 流式错误最大重试次数 */
     private static final int DEFAULT_MAX_STREAM_RETRIES = 10;
+    /** 流式响应等待超时秒数（防止 HTTP 流永不结束导致线程挂起） */
+    private static final int DEFAULT_STREAM_LATCH_TIMEOUT_SEC = 300;
+    /** 指数退避重试延迟序列（秒），第 1-3 次=1s, 4-6 次=3s, 7-8 次=5s, 9 次=7s, 10 次=10s */
     private static final int[] DEFAULT_RETRY_DELAYS_SEC = {1, 1, 1, 3, 3, 3, 5, 7, 10, 10};
 
     private int maxTotalChars() {
@@ -239,6 +247,33 @@ public class AgentLoop implements AgentLoopController {
 
     // ==================== 内部辅助方法 ====================
 
+    /** 安全调用 output 方法，异常记录 warn 日志（用于 onLog/onError/onToolCall/onToolResult 等） */
+    private void safeOutput(String tag, Runnable action) {
+        try {
+            action.run();
+        } catch (Exception e) {
+            log.warn("[{}] output异常: {}", tag, e.getMessage());
+        }
+    }
+
+    /** 安全调用 output 方法，异常记录 debug 日志（用于 SSE delta 回调，断开是预期行为） */
+    private void safeOutputDebug(String tag, Runnable action) {
+        try {
+            action.run();
+        } catch (Exception e) {
+            log.debug("[{}] output异常(SSE可能已断开): {}", tag, e.getMessage());
+        }
+    }
+
+    /** 安全调用 listener 方法，异常记录 warn 日志 */
+    private void safeListener(String tag, Runnable action) {
+        try {
+            action.run();
+        } catch (Exception e) {
+            log.warn("[{}] listener异常: {}", tag, e.getMessage());
+        }
+    }
+
     private static ChatMessage toolResult(String id, String result) {
         return ChatMessage.tool(id, result);
     }
@@ -424,11 +459,7 @@ public class AgentLoop implements AgentLoopController {
 
             // ---- 2.1 用户中断 ----
             if (userAbortRequested) {
-                try {
-                    output.onLog(LogLevel.INFO, "[abort] 用户请求中断（streamLLM 后检测），停止推理循环");
-                } catch (Exception e) {
-                    log.warn("[abort] output.onLog异常: {}", e.getMessage());
-                }
+                safeOutput("abort", () -> output.onLog(LogLevel.INFO, "[abort] 用户请求中断（streamLLM 后检测），停止推理循环"));
                 return handleAbortAfterStream(sr);
             }
 
@@ -438,11 +469,7 @@ public class AgentLoop implements AgentLoopController {
                 throw new IOException("[stream] API error during streaming");
             }
 
-            try {
-                output.onContentComplete();
-            } catch (Exception e) {
-                log.debug("[output] onContentComplete异常(SSE可能已断开): {}", e.getMessage());
-            }
+            safeOutputDebug("contentComplete", output::onContentComplete);
 
             // ---- 推理断路器 ----
             if (sr.loopAborted()) {
@@ -653,11 +680,7 @@ public class AgentLoop implements AgentLoopController {
             public void onReasoningDelta(String token) {
                 if (loopAborted.get() || userAbortRequested) return;
                 reasoningBuf.append(token);
-                try {
-                    output.onReasoningDelta(token);
-                } catch (Exception e) {
-                    log.debug("[stream] onReasoningDelta异常(SSE可能已断开): {}", e.getMessage());
-                }
+                safeOutputDebug("reasoningDelta", () -> output.onReasoningDelta(token));
                 // 流式增量检测：每 500 字符检查一次思考循环
                 int newLen = reasoningBuf.length();
                 if (newLen - lastCheckLen[0] >= 500) {
@@ -666,11 +689,7 @@ public class AgentLoop implements AgentLoopController {
                     if (lr.looping) {
                         loopSnapshot[0] = reasoningBuf.toString();
                         loopAborted.set(true);
-                        try {
-                            output.onLog(LogLevel.WARN, "[ReasonBreaker] " + lr.toWarning());
-                        } catch (Exception ex) {
-                            log.warn("[ReasonBreaker] output.onLog异常: {}", ex.getMessage());
-                        }
+                        safeOutput("ReasonBreaker", () -> output.onLog(LogLevel.WARN, "[ReasonBreaker] " + lr.toWarning()));
                         client.abortStream();
                         streamLatch.countDown();
                     }
@@ -680,11 +699,7 @@ public class AgentLoop implements AgentLoopController {
             @Override
             public void onContentDelta(String token) {
                 contentBuf.append(token);
-                try {
-                    output.onContentDelta(token);
-                } catch (Exception e) {
-                    log.debug("[stream] onContentDelta异常(SSE可能已断开): {}", e.getMessage());
-                }
+                safeOutputDebug("contentDelta", () -> output.onContentDelta(token));
             }
 
             @Override
@@ -700,16 +715,8 @@ public class AgentLoop implements AgentLoopController {
                     sessionService.updateLastPromptTokens(promptTokens);
                 }
                 String currentModel = client.getModel();
-                try {
-                    listener.onUsage(currentModel, promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
-                } catch (Exception e) {
-                    log.warn("[usage] listener.onUsage异常: {}", e.getMessage());
-                }
-                try {
-                    output.onUsage(currentModel, promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
-                } catch (Exception e) {
-                    log.debug("[usage] output.onUsage异常(SSE可能已断开): {}", e.getMessage());
-                }
+                safeListener("usage", () -> listener.onUsage(currentModel, promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss));
+                safeOutputDebug("usage", () -> output.onUsage(currentModel, promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss));
             }
 
             @Override
@@ -720,20 +727,22 @@ public class AgentLoop implements AgentLoopController {
             @Override
             public void onError(String err) {
                 streamError.set(true);
-                try {
-                    output.onError("[stream error] " + err);
-                } catch (Exception e) {
-                    log.debug("[stream] onError异常(SSE可能已断开): {}", e.getMessage());
-                }
+                safeOutput("streamError", () -> output.onError("[stream error] " + err));
                 streamLatch.countDown();
             }
         });
 
-        // 等待流结束
+        // 等待流结束（带超时保护，防止 HTTP 流永不结束导致线程永久挂起）
         try {
-            streamLatch.await();
+            boolean finished = streamLatch.await(DEFAULT_STREAM_LATCH_TIMEOUT_SEC, TimeUnit.SECONDS);
+            if (!finished) {
+                log.error("[stream] LLM 流式响应超时（{}s），主动终止", DEFAULT_STREAM_LATCH_TIMEOUT_SEC);
+                client.abortStream();
+                return new StreamResult(null, null, null, true);
+            }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            return new StreamResult(null, null, null, true);
         }
 
         if (userAbortRequested) {
@@ -760,12 +769,8 @@ public class AgentLoop implements AgentLoopController {
         streamErrorRetryCount++;
         if (streamErrorRetryCount <= maxStreamErrorRetries()) {
             int delay = retryDelaysSec()[streamErrorRetryCount - 1];
-            try {
-                output.onLog(LogLevel.WARN, "[recover] API 流式错误，第 " + streamErrorRetryCount
-                        + "/" + maxStreamErrorRetries() + " 次重试，等待 " + delay + " 秒...");
-            } catch (Exception e) {
-                log.warn("[recover] output.onLog异常: {}", e.getMessage());
-            }
+            safeOutput("recover", () -> output.onLog(LogLevel.WARN, "[recover] API 流式错误，第 " + streamErrorRetryCount
+                    + "/" + maxStreamErrorRetries() + " 次重试，等待 " + delay + " 秒..."));
             try {
                 Thread.sleep(delay * 1000L);
             } catch (InterruptedException e) {
@@ -774,11 +779,7 @@ public class AgentLoop implements AgentLoopController {
             }
             return true;
         }
-        try {
-            output.onLog(LogLevel.ERROR, "[recover] 流式错误已达重试上限（" + maxStreamErrorRetries() + "次），放弃");
-        } catch (Exception e) {
-            log.warn("[recover] output.onLog异常: {}", e.getMessage());
-        }
+        safeOutput("recoverMax", () -> output.onLog(LogLevel.ERROR, "[recover] 流式错误已达重试上限（" + maxStreamErrorRetries() + "次），放弃"));
         return false;
     }
 
@@ -812,16 +813,8 @@ public class AgentLoop implements AgentLoopController {
     private String handleTextResponse(String content, String reasoningContent) {
         if (content == null || content.isEmpty()) {
             if (reasoningContent != null && !reasoningContent.isEmpty()) {
-                try {
-                    listener.onReasoning(reasoningContent);
-                } catch (Exception e) {
-                    log.warn("[text] listener.onReasoning异常: {}", e.getMessage());
-                }
-                try {
-                    output.onReasoning(reasoningContent);
-                } catch (Exception e) {
-                    log.debug("[text] output.onReasoning异常(SSE可能已断开): {}", e.getMessage());
-                }
+                safeListener("reasoning", () -> listener.onReasoning(reasoningContent));
+                safeOutputDebug("reasoning", () -> output.onReasoning(reasoningContent));
                 ctx.addAssistant(null, null, reasoningContent);
                 return reasoningContent;
             }
@@ -836,13 +829,14 @@ public class AgentLoop implements AgentLoopController {
         return executeToolCalls(toolCalls, false);
     }
 
-    @SuppressWarnings("unchecked")
-    private ToolExecutionResult executeToolCalls(ONode toolCalls, boolean skipSandboxCheck) {
-        dispatcher.setSessionId(this.sessionId);
+    /**
+     * 解析并过滤工具调用列表，同时触发 onToolCall 回调。
+     *
+     * @return 包含过滤后的 ToolCallEntry 列表和对应 ONode 列表的记录
+     */
+    private record ParsedToolCalls(List<ToolCallEntry> tcList, List<ONode> nodeList) {}
 
-        ONode[] tcArray = toolCalls.getArray().toArray(new ONode[0]);
-
-        // 1. 解析 tcList，过滤无效调用
+    private ParsedToolCalls parseAndFilterToolCalls(ONode[] tcArray) {
         List<ToolCallEntry> tcList = new ArrayList<>();
         List<ONode> filteredTcList = new ArrayList<>();
         for (ONode tc : tcArray) {
@@ -850,11 +844,8 @@ public class AgentLoop implements AgentLoopController {
             ONode func = tc.get("function");
             String tcName = func.get("name").getString();
             if (tcName == null || tcName.isEmpty()) {
-                try {
-                    output.onLog(LogLevel.WARN, "跳过无效 tool call: name=" + tcName + " id=" + tcId);
-                } catch (Exception e) {
-                    log.warn("[tool] output.onLog异常: {}", e.getMessage());
-                }
+                safeOutput("tool", () -> output.onLog(LogLevel.WARN,
+                        "跳过无效 tool call: name=" + tcName + " id=" + tcId));
                 continue;
             }
             String tcArgs = func.get("arguments").getString();
@@ -863,24 +854,24 @@ public class AgentLoop implements AgentLoopController {
             tcList.add(new ToolCallEntry(tcId, tcName, tcArgs));
             filteredTcList.add(tc);
 
-            try {
-                listener.onToolCall(tcName, tcArgs);
-            } catch (Exception e) {
-                log.warn("[tool] listener.onToolCall异常: {}", e.getMessage());
-            }
-            try {
-                output.onToolCall(tcName, tcArgs);
-            } catch (Exception e) {
-                log.debug("[tool] output.onToolCall异常(SSE可能已断开): {}", e.getMessage());
-            }
+            final String finalTcName = tcName;
+            final String finalTcArgs = tcArgs;
+            safeListener("toolCall", () -> listener.onToolCall(finalTcName, finalTcArgs));
+            safeOutputDebug("toolCall", () -> output.onToolCall(finalTcName, finalTcArgs));
         }
+        return new ParsedToolCalls(tcList, filteredTcList);
+    }
 
-        final ONode[] finalTcArray = filteredTcList.toArray(new ONode[0]);
-        int tcCount = finalTcArray.length;
+    /**
+     * 异步并行分发所有工具调用，返回 Future 数组和共享状态引用。
+     */
+    private record DispatchResult(CompletableFuture<ChatMessage>[] futures,
+                                  AtomicBoolean anySuppressed,
+                                  AtomicReference<HitlRequiredException> hitlRef) {}
 
-        TaskTool.clearUsageCollector();
-
-        // 2. 并行分发
+    private DispatchResult dispatchToolCallsAsync(ONode[] tcArray, boolean skipSandboxCheck) {
+        int tcCount = tcArray.length;
+        @SuppressWarnings("unchecked")
         CompletableFuture<ChatMessage>[] futures = new CompletableFuture[tcCount];
         final AtomicBoolean anySuppressed = new AtomicBoolean(false);
         final AtomicReference<HitlRequiredException> hitlRef = new AtomicReference<>(null);
@@ -895,7 +886,7 @@ public class AgentLoop implements AgentLoopController {
                     TaskTool.setCurrentOutput(capturedOutput);
                 }
                 try {
-                    ONode tc = finalTcArray[idx];
+                    ONode tc = tcArray[idx];
                     String tcId = tc.get("id").getString();
                     ONode func = tc.get("function");
                     String tcName = func.get("name").getString();
@@ -906,20 +897,13 @@ public class AgentLoop implements AgentLoopController {
                         if (result != null && result.contains("\"rejectedReason\":\"storm\"")) {
                             anySuppressed.set(true);
                         }
-                        try {
-                            listener.onToolResult(tcName, result);
-                        } catch (Exception e) {
-                            log.warn("[tool] listener.onToolResult异常: {}", e.getMessage());
-                        }
-                        try {
-                            output.onToolResult(tcName, result);
-                        } catch (Exception e) {
-                            log.debug("[tool] output.onToolResult异常(SSE可能已断开): {}", e.getMessage());
-                        }
+                        safeListener("toolResult", () -> listener.onToolResult(tcName, result));
+                        safeOutputDebug("toolResult", () -> output.onToolResult(tcName, result));
                         return toolResult(tcId, result);
                     } catch (HitlRequiredException e) {
                         hitlRef.set(e);
-                        return ChatMessage.tool(tcId, "[HITL_PENDING:" + e.getReason() + "] " + e.getDetails());
+                        return ChatMessage.tool(tcId,
+                                "[HITL_PENDING:" + e.getReason() + "] " + e.getDetails());
                     }
                 } finally {
                     if (skipSandboxCheck) {
@@ -929,23 +913,26 @@ public class AgentLoop implements AgentLoopController {
                 }
             });
         }
+        return new DispatchResult(futures, anySuppressed, hitlRef);
+    }
 
-        // 3. 等待全部完成（带超时保护）
+    /**
+     * 等待所有工具 Future 完成（带超时保护），收集结果。
+     */
+    private List<ChatMessage> collectToolResults(CompletableFuture<ChatMessage>[] futures,
+                                                  ONode[] tcArray) {
         try {
             CompletableFuture.allOf(futures).get(toolTimeoutSec(), TimeUnit.SECONDS);
         } catch (TimeoutException e) {
-            try {
-                output.onLog(LogLevel.WARN, "[tool] 工具执行超时（" + toolTimeoutSec() + "s），取消未完成的调用");
-            } catch (Exception ex) {
-                log.warn("[tool] output.onLog异常: {}", ex.getMessage());
-            }
+            safeOutput("toolTimeout", () -> output.onLog(LogLevel.WARN,
+                    "[tool] 工具执行超时（" + toolTimeoutSec() + "s），取消未完成的调用"));
             for (CompletableFuture<ChatMessage> f : futures) {
                 if (!f.isDone()) f.cancel(true);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
         } catch (ExecutionException e) {
-            // 继续逐个收集结果
+            log.debug("[tool] 工具执行异常: {}", e.getMessage());
         }
 
         List<ChatMessage> toolResults = new ArrayList<>();
@@ -954,7 +941,7 @@ public class AgentLoop implements AgentLoopController {
             try {
                 toolResults.add(f.get());
             } catch (CancellationException e) {
-                ONode tc = finalTcArray[i];
+                ONode tc = tcArray[i];
                 String tcId = tc.get("id").getString();
                 toolResults.add(toolResult(tcId,
                         "{\"error\":\"工具执行超时（" + toolTimeoutSec()
@@ -966,19 +953,36 @@ public class AgentLoop implements AgentLoopController {
                 toolResults.add(toolResult("?", "[ERROR] " + e.getMessage()));
             }
         }
+        return toolResults;
+    }
 
-        // 3.1 沙箱越界 HITL
-        HitlRequiredException hitlEx = hitlRef.get();
+    @SuppressWarnings("unchecked")
+    private ToolExecutionResult executeToolCalls(ONode toolCalls, boolean skipSandboxCheck) {
+        dispatcher.setSessionId(this.sessionId);
+
+        ONode[] tcArray = toolCalls.getArray().toArray(new ONode[0]);
+
+        // 1. 解析并过滤工具调用
+        ParsedToolCalls parsed = parseAndFilterToolCalls(tcArray);
+        final ONode[] finalTcArray = parsed.nodeList().toArray(new ONode[0]);
+
+        TaskTool.clearUsageCollector();
+
+        // 2. 异步并行分发
+        DispatchResult dispatch = dispatchToolCallsAsync(finalTcArray, skipSandboxCheck);
+
+        // 3. 等待并收集结果
+        List<ChatMessage> toolResults = collectToolResults(dispatch.futures(), finalTcArray);
+
+        // 4. 沙箱越界 HITL
+        HitlRequiredException hitlEx = dispatch.hitlRef().get();
         if (hitlEx != null) {
             hitlManager.setSandboxPending(toolCalls, hitlEx.getDetails());
-            try {
-                output.onLog(LogLevel.WARN, "[hitl] 沙箱越界触发强制审批: " + hitlEx.getDetails());
-            } catch (Exception e) {
-                log.warn("[hitl] output.onLog异常: {}", e.getMessage());
-            }
+            safeOutput("hitl", () -> output.onLog(LogLevel.WARN,
+                    "[hitl] 沙箱越界触发强制审批: " + hitlEx.getDetails()));
         }
 
-        // 收集子代理 token 用量
+        // 5. 收集子代理 token 用量
         if (sessionService != null) {
             var subUsage = TaskTool.drainUsageCollector();
             for (var ur : subUsage) {
@@ -988,7 +992,7 @@ public class AgentLoop implements AgentLoopController {
             }
         }
 
-        return new ToolExecutionResult(tcList, toolResults, anySuppressed.get());
+        return new ToolExecutionResult(parsed.tcList(), toolResults, dispatch.anySuppressed().get());
     }
 
     // ==================== Self-Correction ====================
@@ -1009,21 +1013,14 @@ public class AgentLoop implements AgentLoopController {
 
         selfCorrectionAttempts++;
         if (selfCorrectionAttempts > maxSelfCorrectionAttempts()) {
-            try {
-                output.onLog(LogLevel.WARN,
-                        "[self-correct] 已达自愈尝试上限（" + maxSelfCorrectionAttempts() + "次），停止循环");
-            } catch (Exception e) {
-                log.warn("[self-correct] output.onLog异常: {}", e.getMessage());
-            }
+            safeOutput("selfCorrect", () -> output.onLog(LogLevel.WARN,
+                    "[self-correct] 已达自愈尝试上限（" + maxSelfCorrectionAttempts() + "次），停止循环"));
             return -1;
         }
 
-        try {
-            output.onLog(LogLevel.INFO,
-                    "[self-correct] 所有工具调用被 storm 抑制，第" + selfCorrectionAttempts + "次自愈尝试");
-        } catch (Exception e) {
-            log.warn("[self-correct] output.onLog异常: {}", e.getMessage());
-        }
+        final int currentAttempts = selfCorrectionAttempts;
+        safeOutput("selfCorrect", () -> output.onLog(LogLevel.INFO,
+                "[self-correct] 所有工具调用被 storm 抑制，第" + currentAttempts + "次自愈尝试"));
         ctx.addUser("[系统提示：你刚刚重复调用了相同的工具。请换一种方式完成任务，"
                 + "或直接用文本回答。]");
         return selfCorrectionAttempts;
@@ -1048,10 +1045,6 @@ public class AgentLoop implements AgentLoopController {
     }
 
     private void logAbort() {
-        try {
-            output.onLog(LogLevel.INFO, "[abort] 用户请求中断，停止推理循环");
-        } catch (Exception e) {
-            log.warn("[abort] output.onLog异常: {}", e.getMessage());
-        }
+        safeOutput("abort", () -> output.onLog(LogLevel.INFO, "[abort] 用户请求中断，停止推理循环"));
     }
 }

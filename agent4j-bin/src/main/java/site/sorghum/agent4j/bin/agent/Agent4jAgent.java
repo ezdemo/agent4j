@@ -54,7 +54,7 @@ public class Agent4jAgent {
      * 获取当前工作目录
      */
     @Getter
-    private volatile Path workspace;
+    private final Path workspace;
     /**
      * -- GETTER --
      * 获取工作区管理器
@@ -135,7 +135,8 @@ public class Agent4jAgent {
             this.sessionService = new SessionService(ctx, sessionsDir);
             sessionService.loadOrCreate(System.getenv("AGENT4J_SESSION"));
         } catch (IOException e) {
-            log.error("[session] 初始化失败: {}", e.getMessage());
+            log.error("[session] 初始化失败: {}", e.getMessage(), e);
+            throw new RuntimeException("[session] Agent4j 会话初始化失败，无法继续运行", e);
         }
 
         final AgentLoop agentLoop = new AgentLoop(client, registry, ctx, hitl);
@@ -182,84 +183,111 @@ public class Agent4jAgent {
      */
     @SneakyThrows
     public String chat(UserMessage userMessage) {
-
         // HITL 恢复（approve/deny 后传入 null 触发恢复）
         if (userMessage == null) {
             return loop.run(null);
         }
+
+        // 尝试命令路由
+        CommandHandleResult cmdResult = tryHandleCommand(userMessage);
+        if (cmdResult != null) {
+            if (cmdResult.result() != null) {
+                return cmdResult.result();
+            }
+            // 命令修改了消息内容，继续用修改后的消息走聊天流程
+            if (cmdResult.modifiedMessage() != null) {
+                userMessage = cmdResult.modifiedMessage();
+            }
+        }
+
+        // 目标恢复检测
+        detectAndNotifyPendingGoal();
+
+        // 普通聊天逻辑
         String text = userMessage.getText();
-        MessageWrapper messageWrapper = MessageWrapper.builder().message(text).build();
-        // === 命令处理（通过 IoC 注册的命令接口自动分发）===
-        if (text != null && text.startsWith("/") && commandRegistry != null) {
-            ChatCommand cmd = commandRegistry.match(text);
-            if (cmd != null) {
-                // 构造命令上下文：命令通过此上下文访问 agent 与退出机制
-                ChatCommandContext cmdContext = new ChatCommandContext(
-                        this, null, () -> this.terminated = true);
-                ChatCommand.CommandResult result = cmd.execute(messageWrapper, cmdContext);
-                // 重新赋值
-                String newText = messageWrapper.getMessage();
-                // 命令可能修改了文本内容，重建 UserMessage（保留图片）
-                userMessage = UserMessage.of(newText, userMessage.getImages());
-                text = newText;
-                // 命令执行后自动刷入会话与保存用量
-                flushSession();
-                saveUsage();
-                if (result == ChatCommand.CommandResult.EXIT) {
-                    this.terminated = true;
-                    return "/exit";
-                }
-                // 静默命令（如 /agree、/deny）不返回确认消息，
-                // 它们的实际输出已在命令内部通过 AgentOutput/SSE 发送
-                if (cmd.isSilent()) {
-                    return null;
-                }
-                if (result != ChatCommand.CommandResult.LOOP) {
-                    // 返回执行确认（Web 模式下前端需要看到回复，CLI 模式也便于追踪）
-                    return "✅ 已执行 " + text + " 命令";
-                }
-            }
-            // 未匹配到命令："/" 开头但不是命令，降级为普通聊天消息
-        }
-
-        // === 目标恢复检测 ===
-        // 会话加载后，检查是否有未完成的活跃目标
-        if (sessionService != null && workspaceManager != null) {
-            try {
-                String currentSessionId = sessionService.getStore().currentName();
-                if (currentSessionId != null) {
-                    GoalStore goalStore = workspaceManager.getGoalStore();
-                    Goal pendingGoal = goalStore.findBySession(currentSessionId);
-                    if (pendingGoal != null
-                            && (pendingGoal.getStatus() == GoalStatus.ACTIVE
-                            || pendingGoal.getStatus() == GoalStatus.PAUSED)) {
-                        // 注入系统消息提醒
-                        ctx.addSystemMessage(
-                                "📋 检测到未完成的目标：「" + pendingGoal.getTitle() + "」\n"
-                                        + "进度：" + pendingGoal.progressText() + "\n"
-                                        + "使用 /goal status 查看详情，或直接继续执行。");
-                        log.info("[goal] 会话恢复，发现未完成目标: {} - {}",
-                                pendingGoal.getId(), pendingGoal.getTitle());
-                    }
-                }
-            } catch (Exception e) {
-                log.warn("[goal] 目标恢复检测失败", e);
-            }
-        }
-
-        // === 普通聊天逻辑 ===
-        // 如果是第一条用户消息，自动生成会话标题
         generateSessionTitleIfNeeded(text);
-        // 设置当前会话ID到 AgentLoop（用于工具执行上下文）
         String currentSessionId = sessionService != null ? sessionService.getStore().currentName() : null;
         loop.setSessionId(currentSessionId);
         return loop.run(userMessage);
     }
 
+    /** 命令处理结果：result 为返回给用户的字符串（null=继续聊天），modifiedMessage 为命令修改后的消息 */
+    private record CommandHandleResult(String result, UserMessage modifiedMessage) {}
+
+    /**
+     * 尝试将输入路由到斜杠命令。
+     *
+     * @return 命令处理结果；若未匹配到命令返回 {@code null}
+     */
+    @SneakyThrows
+    private CommandHandleResult tryHandleCommand(UserMessage userMessage) {
+        String text = userMessage.getText();
+        if (text == null || !text.startsWith("/") || commandRegistry == null) {
+            return null;
+        }
+
+        ChatCommand cmd = commandRegistry.match(text);
+        if (cmd == null) {
+            return null; // "/" 开头但不是已知命令，降级为普通聊天消息
+        }
+
+        MessageWrapper wrapper = MessageWrapper.builder().message(text).build();
+        ChatCommandContext cmdContext = new ChatCommandContext(
+                this, null, () -> this.terminated = true);
+        ChatCommand.CommandResult result = cmd.execute(wrapper, cmdContext);
+
+        // 命令可能修改了文本内容
+        String newText = wrapper.getMessage();
+        UserMessage updated = UserMessage.of(newText, userMessage.getImages());
+
+        flushSession();
+        saveUsage();
+
+        if (result == ChatCommand.CommandResult.EXIT) {
+            this.terminated = true;
+            return new CommandHandleResult("/exit", null);
+        }
+        if (cmd.isSilent()) {
+            return new CommandHandleResult(null, null); // 静默命令不返回确认消息
+        }
+        if (result != ChatCommand.CommandResult.LOOP) {
+            return new CommandHandleResult("✅ 已执行 " + newText + " 命令", null);
+        }
+        // LOOP: 命令已修改消息，继续走正常聊天流程
+        return new CommandHandleResult(null, updated);
+    }
+
+    /**
+     * 检查当前会话是否有未完成的活跃目标，若有则注入系统消息提醒用户。
+     */
+    private void detectAndNotifyPendingGoal() {
+        if (sessionService == null || workspaceManager == null) return;
+        try {
+            String currentSessionId = sessionService.getStore().currentName();
+            if (currentSessionId == null) return;
+
+            GoalStore goalStore = workspaceManager.getGoalStore();
+            Goal pendingGoal = goalStore.findBySession(currentSessionId);
+            if (pendingGoal != null
+                    && (pendingGoal.getStatus() == GoalStatus.ACTIVE
+                    || pendingGoal.getStatus() == GoalStatus.PAUSED)) {
+                ctx.addSystemMessage(
+                        "📋 检测到未完成的目标：「" + pendingGoal.getTitle() + "」\n"
+                                + "进度：" + pendingGoal.progressText() + "\n"
+                                + "使用 /goal status 查看详情，或直接继续执行。");
+                log.info("[goal] 会话恢复，发现未完成目标: {} - {}",
+                        pendingGoal.getId(), pendingGoal.getTitle());
+            }
+        } catch (Exception e) {
+            log.warn("[goal] 目标恢复检测失败", e);
+        }
+    }
+
     public void newSession() {
         try {
             sessionService.newSession();
-        } catch (IOException ignored) {
+        } catch (IOException e) {
+            log.warn("[session] 创建新会话失败: {}", e.getMessage());
         }
     }
 
@@ -315,11 +343,14 @@ public class Agent4jAgent {
         return sessionService.getModelUsage();
     }
 
+    /** getMaxContextTokens 回退默认值（模型客户端不可用时的保守值） */
+    private static final int DEFAULT_FALLBACK_MAX_TOKENS = 128000;
+
     /**
      * 获取模型最大上下文窗口 token 数
      */
     public int getMaxContextTokens() {
-        return loop != null ? loop.getMaxContextTokens() : 128000;
+        return loop != null ? loop.getMaxContextTokens() : DEFAULT_FALLBACK_MAX_TOKENS;
     }
 
     /**

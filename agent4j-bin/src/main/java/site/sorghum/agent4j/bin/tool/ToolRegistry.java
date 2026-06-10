@@ -213,6 +213,6 @@ public class ToolRegistry {
             entry.put("function", func);
             list.add(entry);
         }
-        return list;
+        return Collections.unmodifiableList(list);
     }
 }

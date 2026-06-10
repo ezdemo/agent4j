@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.bin.agent;
 
 import lombok.Data;
+import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import org.noear.snack4.annotation.ONodeAttr;
 
@@ -25,6 +26,7 @@ import java.util.Map;
  *
  * @author Sorghum
  */
+@Slf4j
 @Data
 public class ChatMessage {
 
@@ -141,7 +143,8 @@ public class ChatMessage {
                     if (tcArgsObj instanceof String tcArgsStr) {
                         try {
                             tcArgsObj = ONode.ofJson(tcArgsStr).toBean();
-                        } catch (Exception ignored) {
+                        } catch (Exception e) {
+                            log.debug("工具调用参数 JSON 解析失败，保留原始字符串: {}", e.getMessage());
                         }
                     }
                     msg.toolCalls.add(new ToolCallEntry(tcId, tcName, tcArgsObj));
