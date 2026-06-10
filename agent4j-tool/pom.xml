@@ -15,6 +15,10 @@
     <dependencies>
         <dependency>
             <groupId>org.noear</groupId>
+            <artifactId>solon-ai-talent-lsp</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.noear</groupId>
             <artifactId>solon-ai-talent-sys</artifactId>
         </dependency>
         <dependency>
@@ -43,6 +47,11 @@
             <groupId>org.noear</groupId>
             <artifactId>solon-test-junit5</artifactId>
             <version>${solon.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.eclipse.lsp4j</groupId>
+            <artifactId>org.eclipse.lsp4j</artifactId>
+            <version>0.20.1</version>
         </dependency>
     </dependencies>
 
