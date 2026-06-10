@@ -561,7 +561,7 @@ const formatName = (n) => {
   .sidebar {
     position: fixed;
     left: -260px;
-    top: 36px;
+    top: 33px;
     bottom: 0;
     z-index: 200;
     transition: left 0.2s;
