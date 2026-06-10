@@ -8,8 +8,9 @@ import org.noear.snack4.json.JsonWriter;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
 import org.noear.solon.annotation.Inject;
-import site.sorghum.agent4j.tool.solon.lsp.LspServerParameters;
-import site.sorghum.agent4j.tool.solon.lsp.LspTalent;
+import org.noear.solon.ai.talents.lsp.LspManager;
+import org.noear.solon.ai.talents.lsp.LspServerParameters;
+import site.sorghum.agent4j.tool.solon.lsp.SharedAgent4JLspSkill;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -37,7 +38,7 @@ public class LspManageService {
     private static final String CONFIG_FILE = "lsp-servers.json";
 
     @Inject(required = false)
-    private LspTalent lspTalent;
+    private SharedAgent4JLspSkill sharedAgent4JLspSkill;
 
     /** 内存存储：服务器名称 → 配置 */
     private final Map<String, LspServerConfig> serverStore = new ConcurrentHashMap<>();
@@ -103,6 +104,7 @@ public class LspManageService {
      * @return 新增的服务器配置
      */
     public LspServerConfig addServer(LspServerConfig server) {
+        server.setScope("user");  // 强制全局作用域
         serverStore.put(server.getName(), server);
         saveToFile();
         // 桥接到 LSP 执行层
@@ -121,6 +123,7 @@ public class LspManageService {
      * @return 更新后的服务器配置
      */
     public LspServerConfig updateServer(String originalName, LspServerConfig server) {
+        server.setScope("user");  // 强制全局作用域
         // 如果改名了，先解除旧桥接
         if (originalName != null && !originalName.equals(server.getName())) {
             unbridgeFromTalent(originalName);
@@ -260,13 +263,14 @@ public class LspManageService {
      * <p>此方法是配置管理层与工具执行层之间的关键桥接点。</p>
      */
     private void bridgeToTalent(LspServerConfig config) {
-        if (lspTalent == null) {
-            log.debug("LspTalent 未注入，跳过桥接: {}", config.getName());
+        if (sharedAgent4JLspSkill == null) {
+            log.debug("Agent4JLspSkill 未注入，跳过桥接: {}", config.getName());
             return;
         }
         try {
+            LspManager lspManager = sharedAgent4JLspSkill.getLspManager();
             LspServerParameters params = toLspServerParameters(config);
-            lspTalent.registerServer(params);
+            lspManager.registerServer(config.getName(), params);
             log.debug("LSP 服务器已桥接到执行层: {}", config.getName());
         } catch (Exception e) {
             log.warn("桥接 LSP 服务器失败: {} - {}", config.getName(), e.getMessage());
@@ -277,12 +281,12 @@ public class LspManageService {
      * 从 LspTalent 中移除 LSP 服务器配置。
      */
     private void unbridgeFromTalent(String serverName) {
-        if (lspTalent == null) {
-            log.debug("LspTalent 未注入，跳过解除桥接: {}", serverName);
+        if (sharedAgent4JLspSkill == null) {
+            log.debug("Agent4JLspSkill 未注入，跳过解除桥接: {}", serverName);
             return;
         }
         try {
-            lspTalent.getClientManager().unregisterServer(serverName);
+            sharedAgent4JLspSkill.getLspManager().unregisterServer(serverName);
             log.debug("LSP 服务器已从执行层解除: {}", serverName);
         } catch (Exception e) {
             log.warn("解除 LSP 服务器桥接失败: {} - {}", serverName, e.getMessage());
@@ -290,18 +294,19 @@ public class LspManageService {
     }
 
     /**
-     * 将 LspServerConfig 转换为 LspServerParameters（tool 层使用的配置类型）。
+     * 将 LspServerConfig 转换为 Solon 的 LspServerParameters（执行层使用的配置类型）。
+     * <p>注意：Solon 版 LspServerParameters 无 name 字段，name 作为 registerServer 的 key 传入。</p>
      */
     private LspServerParameters toLspServerParameters(LspServerConfig config) {
-        return LspServerParameters.builder()
-                .name(config.getName())
-                .command(config.getCommand())
-                .extensions(config.getExtensions())
-                .enabled(config.isEnabled())
-                .env(config.getEnv() != null ? new HashMap<>(config.getEnv()) : new HashMap<>())
-                .initializationOptions(config.getInitializationOptions() != null
-                        ? new HashMap<>(config.getInitializationOptions()) : new HashMap<>())
-                .build();
+        LspServerParameters params = new LspServerParameters();
+        params.setCommand(config.getCommand() != null ? config.getCommand() : new ArrayList<>());
+        params.setExtensions(config.getExtensions() != null ? config.getExtensions() : new ArrayList<>());
+        params.setEnabled(config.isEnabled());
+        params.setEnv(config.getEnv() != null ? new HashMap<>(config.getEnv()) : new HashMap<>());
+        // Solon 版字段名为 initialization（非 initializationOptions）
+        params.setInitialization(config.getInitializationOptions() != null
+                ? new HashMap<>(config.getInitializationOptions()) : new HashMap<>());
+        return params;
     }
 
     // ==================== 文件持久化 ====================

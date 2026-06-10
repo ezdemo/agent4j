@@ -1,15 +1,21 @@
 package site.sorghum.agent4j.bin.lsp;
 
+import org.noear.solon.ai.talents.lsp.LspManager;
+import org.noear.solon.ai.talents.lsp.LspServerParameters;
+
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
 /**
- * 内置 13 种编程语言的 LSP 服务器配置。
+ * 内置多语言 LSP 服务器配置 —— 数据源自 Solon 的 {@link LspManager#buildLspServers()}。
  * <p>
  * 所有内置服务器默认 {@code enabled = false}，用户需手动启用。
  * 系统内置服务器不会被持久化覆盖——仅在持久化文件无同名配置时才注册。
+ * </p>
+ * <p>
+ * Solon 内置支持 15 种语言：java, typescript, go, python, rust, c-cpp, csharp,
+ * ruby, php, bash, lua, dart, swift, kotlin, yaml
  * </p>
  *
  * @author Sorghum
@@ -21,113 +27,33 @@ public final class BuiltinLspServers {
 
     /**
      * 创建所有内置 LSP 服务器配置（默认禁用）。
+     * <p>数据直接从 Solon 的 {@link LspManager#buildLspServers()} 获取，保持与上游同步。</p>
      *
      * @return 内置服务器配置列表
      */
     public static List<LspServerConfig> createBuiltinServers() {
         List<LspServerConfig> servers = new ArrayList<>();
+        Map<String, LspServerParameters> solonServers = LspManager.buildLspServers();
 
-        // ---- Java ----
-        servers.add(build("java",
-                Arrays.asList("jdtls"),
-                Arrays.asList(".java", ".jav"),
-                "Java (Eclipse JDT.LS)"));
+        for (Map.Entry<String, LspServerParameters> entry : solonServers.entrySet()) {
+            String name = entry.getKey();
+            LspServerParameters sp = entry.getValue();
 
-        // ---- TypeScript / JavaScript ----
-        servers.add(build("typescript",
-                Arrays.asList("typescript-language-server", "--stdio"),
-                Arrays.asList(".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".mts", ".cts"),
-                "TypeScript / JavaScript"));
-
-        // ---- Go ----
-        servers.add(build("go",
-                Arrays.asList("gopls"),
-                Arrays.asList(".go"),
-                "Go (gopls)"));
-
-        // ---- Python ----
-        servers.add(build("python",
-                Arrays.asList("pyright-langserver", "--stdio"),
-                Arrays.asList(".py", ".pyi", ".pyx", ".pxd"),
-                "Python (Pyright)"));
-
-        // ---- Rust ----
-        servers.add(build("rust",
-                Arrays.asList("rust-analyzer"),
-                Arrays.asList(".rs"),
-                "Rust (rust-analyzer)"));
-
-        // ---- C / C++ ----
-        servers.add(build("c-cpp",
-                Arrays.asList("clangd"),
-                Arrays.asList(".c", ".h", ".cpp", ".hpp", ".cc", ".cxx", ".hxx", ".c++", ".h++"),
-                "C / C++ (clangd)"));
-
-        // ---- C# ----
-        servers.add(build("csharp",
-                Arrays.asList("OmniSharp", "--stdio"),
-                Arrays.asList(".cs", ".csx"),
-                "C# (OmniSharp)"));
-
-        // ---- Ruby ----
-        servers.add(build("ruby",
-                Arrays.asList("solargraph", "stdio"),
-                Arrays.asList(".rb", ".rake", ".gemspec"),
-                "Ruby (Solargraph)"));
-
-        // ---- PHP ----
-        servers.add(build("php",
-                Arrays.asList("intelephense", "--stdio"),
-                Arrays.asList(".php", ".phtml"),
-                "PHP (Intelephense)"));
-
-        // ---- Bash ----
-        servers.add(build("bash",
-                Arrays.asList("bash-language-server", "start"),
-                Arrays.asList(".sh", ".bash", ".bashrc", ".bash_profile", ".zsh", ".zshrc"),
-                "Bash / Shell"));
-
-        // ---- Lua ----
-        servers.add(build("lua",
-                Arrays.asList("lua-language-server"),
-                Arrays.asList(".lua"),
-                "Lua"));
-
-        // ---- Dart ----
-        servers.add(build("dart",
-                Arrays.asList("dart", "language-server", "--stdio"),
-                Arrays.asList(".dart"),
-                "Dart"));
-
-        // ---- Swift ----
-        servers.add(build("swift",
-                Arrays.asList("sourcekit-lsp"),
-                Arrays.asList(".swift"),
-                "Swift (SourceKit-LSP)"));
+            LspServerConfig config = new LspServerConfig();
+            config.setName(name);
+            config.setCommand(sp.getCommand());
+            config.setExtensions(sp.getExtensions());
+            config.setEnabled(false);                                 // 默认禁用
+            config.setScope("user");                                  // 统一使用 "user" 表示全局
+            if (!sp.getInitialization().isEmpty()) {
+                config.setInitializationOptions(sp.getInitialization());
+            }
+            if (!sp.getEnv().isEmpty()) {
+                config.setEnv(sp.getEnv());
+            }
+            servers.add(config);
+        }
 
         return servers;
-    }
-
-    /**
-     * 便捷构造方法。
-     *
-     * @param name       服务器名称
-     * @param command    启动命令（列表格式）
-     * @param extensions 关联文件扩展名
-     * @param description 描述（存入初始化选项的 description 字段）
-     * @return 配置对象（默认禁用）
-     */
-    private static LspServerConfig build(String name,
-                                         List<String> command,
-                                         List<String> extensions,
-                                         String description) {
-        LspServerConfig config = new LspServerConfig();
-        config.setName(name);
-        config.setCommand(command);
-        config.setExtensions(extensions);
-        config.setEnabled(false);
-        config.setScope("global");
-        config.setInitializationOptions(Map.of("description", description));
-        return config;
     }
 }

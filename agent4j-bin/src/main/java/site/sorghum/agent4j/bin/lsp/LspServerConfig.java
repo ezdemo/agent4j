@@ -33,7 +33,7 @@ public class LspServerConfig {
     /** 是否启用 */
     private boolean enabled;
 
-    /** 作用域：project（项目级）/ global（全局） */
+    /** 作用域（固定为 "user"，即全局作用域） */
     private String scope;
 
     /** 环境变量键值对 */
