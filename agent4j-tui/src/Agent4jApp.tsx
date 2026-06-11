@@ -9,7 +9,7 @@
  * - 斜杠命令
  */
 
-import {Box, Text} from "ink";
+import {Box, Text, useStdout} from "ink";
 import React, {useCallback, useEffect, useMemo, useRef, useState} from "react";
 import {ApiClient, ApiError} from "./api/client.js";
 import type {CommandItem, ModelItem, SessionItem, SseEvent} from "./api/types.js";
@@ -60,7 +60,8 @@ function handleSseEvent(
         }
 
         case "text":
-        case "message": {
+        case "message":
+        case "content": {
             if (!streamingRef.current.assistant) {
                 streamingRef.current.assistant = true;
                 dispatch({type: "assistant.start"});
@@ -70,15 +71,18 @@ function handleSseEvent(
         }
 
         case "action":
-        case "tool_start": {
+        case "tool_start":
+        case "tool_call": {
             const toolName = event.toolName ?? event.name ?? "unknown";
             const args = event.args ?? {};
             dispatch({type: "tool.start", name: toolName, args});
             break;
         }
 
-        case "tool_end": {
-            const output = event.output ?? event.content ?? "";
+        case "tool_end":
+        case "tool_result": {
+            const raw = event.output ?? event.result ?? event.content ?? "";
+            const output = typeof raw === "string" ? raw : String(raw);
             const elapsedMs = typeof event.elapsedMs === "number" ? event.elapsedMs : 0;
             dispatch({type: "tool.end", output, elapsedMs});
             break;
@@ -222,8 +226,8 @@ export function Agent4jApp({apiUrl, workspaceHash: defaultWorkspace, token}: Age
         const sse = sseRef.current;
         const api = apiRef.current;
 
-        // 注册当前会话的 SSE handler
-        const unsub = sse.subscribe(sessionNameRef.current, (event: SseEvent) => {
+        // 注册全局 SSE handler（使用默认会话，确保事件始终可达）
+        const unsub = sse.subscribe(SseClient.DEFAULT_SESSION, (event: SseEvent) => {
             handleSseEvent(event, dispatch, streamingRef);
         });
 
@@ -244,7 +248,30 @@ export function Agent4jApp({apiUrl, workspaceHash: defaultWorkspace, token}: Age
             }).catch(() => {
             }),
             api.listModels().then((r) => {
-                if (r.success && r.data) setModels(r.data);
+                if (r.success && r.data) {
+                    // 后端返回 { current, models: [{name, active}] }
+                    const raw = r.data as unknown as {
+                        current?: string;
+                        models?: Array<{ name: string; active?: boolean }>
+                    };
+                    const list = raw.models ?? (Array.isArray(r.data) ? r.data as unknown as ModelItem[] : []);
+                    const mapped: ModelItem[] = list.map((m: {
+                        name?: string;
+                        id?: string;
+                        description?: string;
+                        provider?: string;
+                        capabilities?: string[];
+                        maxTokens?: number
+                    }) => ({
+                        id: m.name ?? m.id ?? '?',
+                        name: m.name ?? m.id ?? '?',
+                        provider: m.provider ?? '',
+                        description: m.description ?? '',
+                        capabilities: m.capabilities ?? [],
+                        maxTokens: m.maxTokens ?? 0,
+                    }));
+                    setModels(mapped);
+                }
             }).catch(() => {
             }),
             api.getCommands().then((r) => {
@@ -275,7 +302,7 @@ export function Agent4jApp({apiUrl, workspaceHash: defaultWorkspace, token}: Age
 
     const stableRenderCard = useCallback(
         (card: Card) => {
-            const expanded = expandedRef.current[card.id] ?? false;
+            const expanded = expandedRef.current[card.id] ?? (card.kind === "reasoning");
             const toggleable = card.kind === "reasoning" || card.kind === "tool";
             return (
                 <CardRenderer
@@ -324,6 +351,7 @@ export function Agent4jApp({apiUrl, workspaceHash: defaultWorkspace, token}: Age
     const dynamicSlashCommands = useMemo<SlashCommandSpec[]>(() => {
         const list: SlashCommandSpec[] = [...SLASH_COMMANDS];
         for (const cmd of backendCommands) {
+            if (!cmd.name) continue;
             const exists = SLASH_COMMANDS.some((s) => s.cmd === cmd.name || s.aliases?.includes(cmd.name));
             if (!exists) {
                 list.push({
@@ -343,7 +371,7 @@ export function Agent4jApp({apiUrl, workspaceHash: defaultWorkspace, token}: Age
         if (parts.length > 1) return null;
         const lower = prefix.toLowerCase();
         return dynamicSlashCommands.filter(
-            (s) => s.cmd.startsWith(lower) || s.aliases?.some((a) => a.startsWith(lower)),
+            (s) => s.cmd?.startsWith(lower) || s.aliases?.some((a) => a.startsWith(lower)),
         ).slice(0, 24);
     }, [input, dynamicSlashCommands]);
 
@@ -663,7 +691,10 @@ export function Agent4jApp({apiUrl, workspaceHash: defaultWorkspace, token}: Age
         const slash = parseSlash(text);
         if (slash) {
             const handled = handleAgent4jSlash(slash.cmd, slash.args);
-            if (handled) return;
+            if (handled) {
+                setInput("");
+                return;
+            }
 
             const result = handleSlash(slash.cmd, slash.args, slashCtx);
             if (result.exit) {
@@ -675,12 +706,17 @@ export function Agent4jApp({apiUrl, workspaceHash: defaultWorkspace, token}: Age
             }
             if (result.resubmit) {
                 setInput(result.resubmit);
+            } else {
+                setInput("");
             }
             return;
         }
 
         // 正常消息 → 通过 SSE 发送到后端
         dispatch({type: "user.submit", text});
+        setInput("");
+        setHistory((prev) => [...prev, text]);
+        setHistoryIdx(-1);
         const sse = sseRef.current;
         const params: StreamParams = {
             message: text,
@@ -719,8 +755,11 @@ export function Agent4jApp({apiUrl, workspaceHash: defaultWorkspace, token}: Age
         return parts;
     }, [workspace, connected]);
 
+    const {stdout} = useStdout();
+    const terminalRows = stdout?.rows ?? 40;
+
     return (
-        <Box flexDirection="column" height="100%">
+        <Box flexDirection="column" height={terminalRows}>
             {/* 标题栏 */}
             <Box height={1} flexShrink={0}>
                 <Text bold color={TONE.brand}>

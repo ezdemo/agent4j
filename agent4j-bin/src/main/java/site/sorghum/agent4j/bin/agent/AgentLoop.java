@@ -16,6 +16,7 @@ import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.tool.ToolDispatcher;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.tool.*;
+import site.sorghum.agent4j.tool.interact.FinishTool;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -105,6 +106,9 @@ public class AgentLoop implements AgentLoopController {
 
     /** 用户主动中断标志（前端点击停止按钮时设置） */
     private volatile boolean userAbortRequested = false;
+
+    /** 任务完成标志 —— finish 工具设置，非空时主循环将退出并返回该内容 */
+    private volatile String finishContent = null;
 
     /** 流式错误重试次数（每回合重置） */
     private int streamErrorRetryCount = 0;
@@ -236,6 +240,12 @@ public class AgentLoop implements AgentLoopController {
         log.info("[loop] 工具请求停止推理循环");
     }
 
+    @Override
+    public void finish(String content) {
+        this.finishContent = content;
+        client.abortStream();
+        log.info("[loop] 工具请求完成任务，即将退出循环");
+    }
 
     @Override
     public void injectUserMessage(String message) {
@@ -439,6 +449,7 @@ public class AgentLoop implements AgentLoopController {
      */
     private String mainLoop(boolean isThinkingMode, int selfCorrectionAttempts) throws IOException {
         streamErrorRetryCount = 0;
+        int noToolCallStreak = 0;
         for (int step = 0; ; step++) {
             // ---- 0. 检查用户中断 ----
             if (userAbortRequested) {
@@ -481,10 +492,30 @@ public class AgentLoop implements AgentLoopController {
             ONode toolCalls = scavengeToolCalls(sr.toolCalls(), sr.reasoningContent(), sr.content());
             boolean hasToolCalls = toolCalls != null && toolCalls.isArray() && !toolCalls.getArray().isEmpty();
 
-            // ---- 5. 无 tool_calls → 返回文本回复 ----
+            // ---- 5. 无 tool calls → 不是终止信号，是需纠正的状态 ----
             if (!hasToolCalls) {
-                return handleTextResponse(sr.content(), sr.reasoningContent());
+                ctx.addAssistant(sr.content(), null, sr.reasoningContent());
+                noToolCallStreak++;
+                log.warn("[loop] 第 {} 次无工具调用，累积无工具轮数: {}", step, noToolCallStreak);
+
+                if (noToolCallStreak >= 3) {
+                    log.warn("[loop] 连续 {} 轮无工具调用，降级终止", noToolCallStreak);
+                    int streak = noToolCallStreak;
+                    safeOutput("noToolMax", () -> output.onLog(LogLevel.WARN,
+                            "[loop] 连续 " + streak + " 轮无工具调用，降级终止"));
+                    String degraded = ctx.getLastAssistantContent();
+                    return degraded != null && !degraded.isEmpty() ? degraded : "任务中断，未完成（已收集部分结果）";
+                }
+
+                // 渐进式轻推
+                if (noToolCallStreak >= 2) {
+                    ctx.addUser(FinishTool.TIPS);
+                }
+                continue;
             }
+
+            // ---- 调用了工具 → 重置无工具计数 ----
+            noToolCallStreak = 0;
 
             // ---- HITL 拦截 ----
             if (hitlManager.isHitlMode()) {
@@ -506,6 +537,14 @@ public class AgentLoop implements AgentLoopController {
                 ctx.addToolResult(tr.getToolCallId(), tr.getContent());
             }
 
+            // ---- 7.5. 唯一正常退出：finish 工具被调用 ----
+            if (finishContent != null) {
+                String result = finishContent;
+                finishContent = null;
+                safeOutput("finish", () -> output.onContentDelta(result));
+                return result;
+            }
+
             // ---- 8. Self-Correction ----
             int updated = handleSelfCorrection(ter.toolResults(), ter.anySuppressed(), selfCorrectionAttempts);
             if (updated < 0) {
@@ -515,6 +554,7 @@ public class AgentLoop implements AgentLoopController {
             }
             selfCorrectionAttempts = updated;
         }
+
     }
 
     // ==================== HITL 恢复 ====================
@@ -806,21 +846,6 @@ public class AgentLoop implements AgentLoopController {
             fn.set("arguments", tc.arguments());
         }
         return fakeTcArray;
-    }
-
-    // ==================== 步骤 5: 纯文本响应 ====================
-
-    private String handleTextResponse(String content, String reasoningContent) {
-        if (content == null || content.isEmpty()) {
-            if (reasoningContent != null && !reasoningContent.isEmpty()) {
-                safeListener("reasoning", () -> listener.onReasoning(reasoningContent));
-                safeOutputDebug("reasoning", () -> output.onReasoning(reasoningContent));
-                ctx.addAssistant(null, null, reasoningContent);
-                return reasoningContent;
-            }
-        }
-        ctx.addAssistant(content, null, reasoningContent);
-        return content != null ? content : "(empty response)";
     }
 
     // ==================== 步骤 6: 工具执行 ====================
