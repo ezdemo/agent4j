@@ -660,6 +660,7 @@ public class HttpModelClient implements ModelClient {
         if (reasoningEffort != null && !reasoningEffort.isEmpty() && !Objects.equals(reasoningEffort, "none")) {
             body.set("reasoning_effort", reasoningEffort);
             body.set("chat_template_kwargs",ONode.ofJson("{}").set("enable_thinking",true));
+            body.set("enable_thinking",true);
         }
 
         ONode msgs = body.getOrNew("messages").asArray();
