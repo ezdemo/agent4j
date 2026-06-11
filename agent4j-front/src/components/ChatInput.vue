@@ -397,7 +397,7 @@ defineExpose({ focus: () => inputField.value?.focus(), autoResize })
 </script>
 
 <style scoped>
-.input-area { position: relative; padding: 12px 16px; border-top: 1px solid var(--glass-border); background: var(--glass-bg); backdrop-filter: blur(var(--blur-sm)); -webkit-backdrop-filter: blur(var(--blur-sm)); box-shadow: 0 -2px 12px rgba(0,0,0,0.04); }
+.input-area { position: absolute; bottom: 0; left: 0; right: 0; padding: 12px 10px; }
 .input-box { display: flex; flex-direction: column; gap: 0; background: var(--glass-bg-2); border: 1px solid var(--glass-border); border-radius: var(--r); padding: 6px 8px 0; transition: border-color var(--t); box-shadow: var(--glass-shadow); }
 .input-box.focused { border-color: var(--accent); }
 .input-row { display: flex; align-items: flex-end; gap: 8px; }
