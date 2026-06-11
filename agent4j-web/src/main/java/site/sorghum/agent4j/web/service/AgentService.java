@@ -1202,6 +1202,14 @@ public class AgentService {
         } catch (Exception e) {
             log.warn("[web] 持久化工作区到 config.json 失败: {}", e.getMessage());
         }
+        // 确保工作区目录结构存在（~/.agent4j/workspace/{hash}/）
+        // 否则新工作区不会出现在 listWorkspaces 中，resolveWorkspacePath 也无法反查
+        try {
+            WorkspaceManager.getOrCreate(normalized);
+            log.info("[web] 工作区目录结构已创建: {}", normalized);
+        } catch (Exception e) {
+            log.warn("[web] 创建工作区目录结构失败: {}", e.getMessage());
+        }
         // 清除默认会话的缓存，让下次访问时使用新路径
         evictAgent(null, null);
         log.info("[web] 工作区已切换: {}", normalized);
