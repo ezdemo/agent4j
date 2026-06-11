@@ -723,7 +723,7 @@ const sendMessage = async (images = []) => {
               status: '执行中',
               args,
               result: '',
-              expanded: true
+              expanded: false
             })
           } else if (data.type === 'sub_tool_result') {
             let result = data.result || data.content || ''
@@ -788,7 +788,7 @@ const sendMessage = async (images = []) => {
               status: '执行中',
               args,
               result: '',
-              expanded: true
+              expanded: false
             })
           } else if (data.type === 'tool_result') {
             let result = data.result || data.content || ''
@@ -1051,7 +1051,7 @@ const loadHistory = async (sessionName, force = false) => {
               status: tr[tc.id] ? '成功' : '执行中',
               args,
               result: tr[tc.id] || '',
-              expanded: true
+              expanded: !tr[tc.id]
             })
           }
           if (m.content) item.blocks.push({type: 'content', content: m.content})
