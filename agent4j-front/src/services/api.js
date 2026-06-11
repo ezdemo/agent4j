@@ -635,12 +635,20 @@ export const gitAPI = {
     return api.get('/git/file-content', { params })
   },
 
-  // Git 提交 - POST /api/git/commit?workspaceHash=xxx  body: { message, files }
-  commit: (workspaceHash, message, files) => {
+  // Git 提交 - POST /api/git/commit?workspaceHash=xxx  body: { message, files, authorName, authorEmail }
+  commit: (workspaceHash, message, files, authorName, authorEmail) => {
     const params = workspaceHash ? { workspaceHash } : {}
     const body = { message }
     if (files && files.length) body.files = files
+    if (authorName) body.authorName = authorName
+    if (authorEmail) body.authorEmail = authorEmail
     return api.post('/git/commit', body, { params })
+  },
+
+  // 获取 Git 本地配置 (user.name / user.email) - GET /api/git/config?workspaceHash=xxx
+  getConfig: (workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.get('/git/config', { params })
   },
 
   // 切换文件状态 - POST /api/git/toggle?workspaceHash=xxx  body: { path }

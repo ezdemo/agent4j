@@ -71,6 +71,17 @@
             rows="2"
             @keydown.enter.exact.prevent="handleCommit"
           ></textarea>
+          <!-- 作者配置按钮 -->
+          <div class="commit-author-bar">
+            <button class="author-btn" @click="showAuthorModal = true" title="配置提交作者名和邮箱">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <span>{{ authorName || 'Agent4j' }}</span>
+              <svg class="author-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
           <div class="commit-actions">
             <button
               class="generate-btn"
@@ -202,6 +213,35 @@
             </div>
           </div>
         </Teleport>
+
+        <!-- 作者配置 Modal -->
+        <Teleport to="body">
+          <div v-if="showAuthorModal" class="diff-overlay" @click.self="showAuthorModal = false">
+            <div class="modal author-modal">
+              <div class="modal-head">
+                <span>提交作者配置</span>
+                <button class="btn-icon-sm" @click="showAuthorModal = false">×</button>
+              </div>
+              <div class="modal-body">
+                <div class="author-field">
+                  <label>作者名</label>
+                  <input v-model="authorName" placeholder="输入作者名" />
+                </div>
+                <div class="author-field">
+                  <label>邮箱</label>
+                  <input v-model="authorEmail" placeholder="输入邮箱" />
+                </div>
+              </div>
+              <div class="modal-foot">
+                <button class="btn btn-ghost" @click="handleFetchGitConfig" :disabled="fetchingConfig">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                  {{ fetchingConfig ? '获取中...' : '从现有环境获取' }}
+                </button>
+                <button class="btn btn-primary" @click="showAuthorModal = false">保存</button>
+              </div>
+            </div>
+          </div>
+        </Teleport>
       </template>
     </template>
   </div>
@@ -242,6 +282,35 @@ const selectedFiles = ref(new Set())
 const commitMessage = ref('')
 const committing = ref(false)
 const generating = ref(false)
+
+// 提交作者（持久化到 localStorage）
+const STORAGE_KEY_NAME = 'agent4j-git-author-name'
+const STORAGE_KEY_EMAIL = 'agent4j-git-author-email'
+const authorName = ref(localStorage.getItem(STORAGE_KEY_NAME) || 'Agent4j')
+const authorEmail = ref(localStorage.getItem(STORAGE_KEY_EMAIL) || 'agent4j@sorghum.site')
+watch(authorName, v => localStorage.setItem(STORAGE_KEY_NAME, v))
+watch(authorEmail, v => localStorage.setItem(STORAGE_KEY_EMAIL, v))
+
+// 作者配置弹窗
+const showAuthorModal = ref(false)
+const fetchingConfig = ref(false)
+const handleFetchGitConfig = async () => {
+  fetchingConfig.value = true
+  try {
+    const r = await gitAPI.getConfig(props.workspaceHash)
+    if (r.success && r.data) {
+      if (r.data.authorName) authorName.value = r.data.authorName
+      if (r.data.authorEmail) authorEmail.value = r.data.authorEmail
+      showFeedback('success', '已从 Git 本地配置获取作者信息')
+    } else {
+      showFeedback('error', r.error || '获取 Git 配置失败')
+    }
+  } catch (e) {
+    showFeedback('error', e.message || '获取 Git 配置失败')
+  } finally {
+    fetchingConfig.value = false
+  }
+}
 
 // 初始化
 const initLoading = ref(false)
@@ -408,7 +477,7 @@ const handleCommit = async () => {
   committing.value = true
   try {
     const files = Array.from(selectedFiles.value)
-    const r = await gitAPI.commit(props.workspaceHash, commitMessage.value.trim(), files)
+    const r = await gitAPI.commit(props.workspaceHash, commitMessage.value.trim(), files, authorName.value.trim(), authorEmail.value.trim())
     if (r.success) {
       showFeedback('success', `提交成功 (${files.length} 个文件)`)
       commitMessage.value = ''
@@ -704,6 +773,138 @@ watch(() => props.workspaceHash, () => {
 }
 .commit-input::placeholder { color: var(--fg-4); }
 .commit-input:focus { outline: none; border-color: var(--accent); }
+
+/* 提交作者配置按钮 */
+.commit-author-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.author-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-2);
+  color: var(--fg-3);
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color var(--t), color var(--t);
+  white-space: nowrap;
+}
+.author-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.author-btn svg { flex-shrink: 0; }
+.author-chevron {
+  transition: transform 0.15s ease;
+}
+.author-btn:hover .author-chevron {
+  transform: rotate(90deg);
+}
+
+/* 作者配置 Modal — 基础 modal 样式（Teleport 到 body，需在 scoped 中覆盖） */
+.author-modal {
+  width: min(90vw, 420px);
+  max-height: 70vh;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--glass-shadow);
+}
+.author-modal .modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+}
+.author-modal .modal-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px;
+}
+.author-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.author-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+}
+.author-field input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  font-family: var(--mono);
+  outline: none;
+  transition: border-color var(--t);
+}
+.author-field input:focus {
+  border-color: var(--accent);
+}
+.author-modal .modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--border);
+}
+.author-modal .modal-foot .btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-2);
+  color: var(--fg-2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color var(--t), background var(--t);
+}
+.author-modal .modal-foot .btn-ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--bg-3);
+}
+.author-modal .modal-foot .btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.author-modal .modal-foot .btn-primary {
+  padding: 6px 20px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--t);
+}
+.author-modal .modal-foot .btn-primary:hover {
+  opacity: 0.85;
+}
+
 .commit-actions {
   display: flex;
   gap: 6px;

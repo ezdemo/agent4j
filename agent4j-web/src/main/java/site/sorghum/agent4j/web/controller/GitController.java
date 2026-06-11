@@ -121,6 +121,15 @@ public class GitController {
         return ApiResponse.ok(gitService.toggleFile(workspaceHash, body));
     }
 
+    @ApiOperation(value = "获取 Git 本地配置",
+            notes = "返回 git config 中的 user.name 和 user.email")
+    @Get
+    @Mapping("/config")
+    public ApiResponse<Map<String, String>> config(
+            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
+        return ApiResponse.ok(gitService.getGitConfig(workspaceHash));
+    }
+
     // ==================== AI 辅助 ====================
 
     @ApiOperation(value = "AI 自动生成 Git 提交消息",
