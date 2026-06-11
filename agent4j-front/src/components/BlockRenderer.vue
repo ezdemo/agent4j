@@ -7,7 +7,7 @@
         <span>思考</span>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: block.showContent ? 'rotate(180deg)' : '' }"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
-      <div v-if="block.showContent" class="reasoning-text">{{ block.content }}</div>
+      <div v-if="block.showContent" class="reasoning-text" v-html="fmt(block.content)"></div>
     </div>
 
     <!-- 内容 -->

@@ -4,6 +4,7 @@ import Antd from 'ant-design-vue'
 import 'ant-design-vue/dist/reset.css'
 import App from './App.vue'
 import router from './router'
+import './utils/hljsTheme' // 高亮主题（在 main.css 前加载，避免闪烁）
 import './assets/styles/main.css'
 import { initConfig } from './services/api'
 
