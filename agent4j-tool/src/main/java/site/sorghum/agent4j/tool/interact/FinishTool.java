@@ -19,6 +19,7 @@ import java.util.List;
  * @author Sorghum
  */
 public class FinishTool extends AgentTool {
+    public static final String TIPS = "[系统提示] 你已连续两次未调用工具。如果有足够信息，请调用 `finish` 提交结果；否则请继续调用工具。";
 
     @Override
     public String getName() {
@@ -42,6 +43,7 @@ public class FinishTool extends AgentTool {
                 
                 描述：AI 认为对话可以结束并准备给出最终回答时调用此工具退出推理循环。
                 注意：推理循环不会因纯文本回复而退出，必须通过此工具显式宣告完成。
+                参数: content(可选, AI的最终回答内容。不传则使用已有上下文)。可写。
                 即使没有任务列表，只要回答已完整，也应调用此工具结束对话。
                 调用后本轮对话即结束。
                 """;
@@ -49,17 +51,25 @@ public class FinishTool extends AgentTool {
 
     @Override
     public List<ToolParameter> getParameters() {
-        return List.of();
+        return List.of(
+                new ToolParameter("content", "string", false,
+                        "AI 的最终回答内容。如果不传则使用已有上下文内容。")
+        );
     }
 
     @Override
     public ToolResult execute(ToolContext ctx) {
-        AgentLoopController ctrl = ctx.getLoopController();
-        if (ctrl != null) {
-            ctrl.finish("loop_finfish");
+        String content = ctx.getString("content");
+        if (content == null || content.isBlank()) {
+            content = "__FINISH_NO_CONTENT__";
         }
 
-        return ToolResult.ok("loop_finfish");
+        AgentLoopController ctrl = ctx.getLoopController();
+        if (ctrl != null) {
+            ctrl.finish(content);
+        }
+
+        return ToolResult.ok(content);
     }
 
     @Override
