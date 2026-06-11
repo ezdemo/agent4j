@@ -361,6 +361,8 @@ public class GitService {
         // 解析 JSON body
         String message = null;
         List<String> files = null;
+        String authorName = null;
+        String authorEmail = null;
         if (body != null && !body.trim().isEmpty()) {
             try {
                 ONode json = ONode.ofJson(body);
@@ -375,6 +377,14 @@ public class GitService {
                         for (ONode f : filesNode.getArray()) {
                             files.add(f.getString());
                         }
+                    }
+                    ONode nameNode = json.get("authorName");
+                    if (nameNode != null && nameNode.isString()) {
+                        authorName = nameNode.getString();
+                    }
+                    ONode emailNode = json.get("authorEmail");
+                    if (emailNode != null && emailNode.isString()) {
+                        authorEmail = emailNode.getString();
                     }
                 }
             } catch (Exception ignored) {
@@ -402,17 +412,36 @@ public class GitService {
             }
         }
 
-        // git commit
-        ProcessResult commitResult = runGit(workspaceDir, "git",
-                "-c", "user.name=Agent4j",
-                "-c", "user.email=agent4j@sorghum.site",
-                "commit", "-m", message);
+        // 构建 git commit 命令（动态 author）
+        List<String> commitCmd = new ArrayList<>();
+        commitCmd.add("git");
+        commitCmd.add("-c");
+        commitCmd.add("user.name=" + (authorName != null && !authorName.trim().isEmpty() ? authorName.trim() : "Agent4j"));
+        commitCmd.add("-c");
+        commitCmd.add("user.email=" + (authorEmail != null && !authorEmail.trim().isEmpty() ? authorEmail.trim() : "agent4j@sorghum.site"));
+        commitCmd.add("commit");
+        commitCmd.add("-m");
+        commitCmd.add(message);
+        ProcessResult commitResult = runGit(workspaceDir, commitCmd.toArray(new String[0]));
 
         if (commitResult.exitCode != 0) {
             throw new ServiceException("git commit failed: " + commitResult.stderr);
         }
 
         return new GitCommitResultDTO(commitResult.stdout);
+    }
+
+    /**
+     * 获取 Git 本地配置中的 user.name 和 user.email。
+     */
+    public Map<String, String> getGitConfig(String workspaceHash) {
+        String workspacePath = resolveWorkspace(workspaceHash);
+        String name = runGitSimple(workspacePath, "config", "user.name");
+        String email = runGitSimple(workspacePath, "config", "user.email");
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("authorName", name != null ? name.trim() : "");
+        result.put("authorEmail", email != null ? email.trim() : "");
+        return result;
     }
 
     /**
