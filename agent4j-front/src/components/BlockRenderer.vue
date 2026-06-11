@@ -34,7 +34,7 @@
 </template>
 
 <script setup>
-import { marked } from 'marked'
+import { md } from '../utils/highlight'
 
 const props = defineProps({
   blocks: { type: Array, required: true }
@@ -42,7 +42,7 @@ const props = defineProps({
 
 const fmt = c => {
   if (!c) return ''
-  return marked(c)
+  return md.parse(c)
 }
 
 const fmtArgs = a => {

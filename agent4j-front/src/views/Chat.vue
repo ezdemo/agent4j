@@ -296,10 +296,13 @@
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {agentAPI, chatAPI, configAPI} from '../services/api'
-import {marked} from 'marked'
+import { agentAPI, chatAPI, configAPI } from '../services/api'
+import { md } from '../utils/highlight'
 import ChatInput from '../components/ChatInput.vue'
-import {useAppStore} from '../stores/app'
+import { useAppStore } from '../stores/app'
+
+// SVG 图标（模板使用）
+const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
 
 // ============= 模型切换 =============
 const handleSwitchModel = async (modelName) => {
@@ -489,47 +492,25 @@ const hasAssistant = computed(() => messages.value.some(m => m.role === 'assista
 
 const now = () => new Date().toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit'})
 
-// 配置marked选项 —— 代码块右上角悬浮复制按钮
-const markedRenderer = new marked.Renderer()
-markedRenderer.code = (code, language) => {
-  const lang = language ? ` class="language-${language}"` : ''
-  return `<div class="code-block-wrap">
-    <pre><code${lang}>${code}</code><button class="code-copy-btn" onclick="copyCode(this)" title="复制代码">${COPY_ICON}</button></pre>
-  </div>`
-}
-
-marked.setOptions({
-  breaks: true,
-  gfm: true,
-  headerIds: false,
-  mangle: false,
-  renderer: markedRenderer
-})
-
 // 全局函数：代码复制（被 onclick 引用）
-// SVG 复制图标
-const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
-const CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
-
 window.copyCode = (btn) => {
   const wrap = btn.closest('.code-block-wrap')
   const code = wrap?.querySelector('code')?.textContent || ''
   navigator.clipboard.writeText(code).then(() => {
-    // 通过自定义事件通知 Vue 更新日志条
     window.dispatchEvent(new CustomEvent('copy-success', {detail: '代码已复制'}))
   }).catch(() => {
   })
 }
 
+// 使用共享 marked 实例（语法高亮 + 复制按钮已内置）
 const fmt = c => {
   if (!c) return ''
-  return marked(c)
+  return md.parse(c)
 }
 
-// 提示词用 markdown 渲染
 const fmtPrompt = c => {
   if (!c) return ''
-  return marked(c)
+  return md.parse(c)
 }
 
 // 复制整条消息内容
