@@ -395,8 +395,8 @@ defineExpose({ focus: () => inputField.value?.focus(), autoResize })
 </script>
 
 <style scoped>
-.input-area { position: relative; padding: 12px 16px; border-top: 1px solid var(--border); background: var(--bg); }
-.input-box { display: flex; align-items: flex-end; gap: 8px; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--r); padding: 6px 8px; transition: border-color var(--t); }
+.input-area { position: relative; padding: 12px 16px; border-top: 1px solid var(--glass-border); background: var(--glass-bg); backdrop-filter: blur(var(--blur-sm)); -webkit-backdrop-filter: blur(var(--blur-sm)); }
+.input-box { display: flex; align-items: flex-end; gap: 8px; background: var(--glass-bg-2); border: 1px solid var(--glass-border); border-radius: var(--r); padding: 6px 8px; transition: border-color var(--t); box-shadow: var(--glass-shadow); }
 .input-box.focused { border-color: var(--accent); }
 .input-box textarea { flex: 1; min-height: 22px; max-height: 160px; padding: 0; background: none; border: none; outline: none; font-size: 14px; line-height: 1.5; color: var(--fg); resize: none; }
 .input-box textarea::placeholder { color: var(--fg-4); }
