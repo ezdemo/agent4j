@@ -723,7 +723,7 @@ const sendMessage = async (images = []) => {
               status: '执行中',
               args,
               result: '',
-              expanded: false
+              expanded: true
             })
           } else if (data.type === 'sub_tool_result') {
             let result = data.result || data.content || ''
@@ -736,6 +736,7 @@ const sendMessage = async (images = []) => {
                 if (subAgentBlocks.value[i].type === 'tool_call' && subAgentBlocks.value[i].name === targetName && !subAgentBlocks.value[i].result) {
                   subAgentBlocks.value[i].result = rn;
                   subAgentBlocks.value[i].status = '成功';
+                  subAgentBlocks.value[i].expanded = false;
                   matched = true
                   break
                 }
@@ -746,6 +747,7 @@ const sendMessage = async (images = []) => {
                 if (subAgentBlocks.value[i].type === 'tool_call' && !subAgentBlocks.value[i].result) {
                   subAgentBlocks.value[i].result = rn;
                   subAgentBlocks.value[i].status = '成功';
+                  subAgentBlocks.value[i].expanded = false;
                   break
                 }
               }
@@ -788,7 +790,7 @@ const sendMessage = async (images = []) => {
               status: '执行中',
               args,
               result: '',
-              expanded: false
+              expanded: true
             })
           } else if (data.type === 'tool_result') {
             let result = data.result || data.content || ''
@@ -801,6 +803,7 @@ const sendMessage = async (images = []) => {
                 if (msg.blocks[i].type === 'tool_call' && msg.blocks[i].name === targetName && !msg.blocks[i].result) {
                   msg.blocks[i].result = rn;
                   msg.blocks[i].status = '成功';
+                  msg.blocks[i].expanded = false;
                   matched = true
                   break
                 }
@@ -812,6 +815,7 @@ const sendMessage = async (images = []) => {
                 if (msg.blocks[i].type === 'tool_call' && !msg.blocks[i].result) {
                   msg.blocks[i].result = rn;
                   msg.blocks[i].status = '成功';
+                  msg.blocks[i].expanded = false;
                   break
                 }
               }

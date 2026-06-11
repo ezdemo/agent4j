@@ -508,9 +508,7 @@ public class AgentLoop implements AgentLoopController {
                 }
 
                 // 渐进式轻推
-                if (noToolCallStreak >= 2) {
-                    ctx.addUser(FinishTool.TIPS);
-                }
+                ctx.addUser(FinishTool.TIPS);
                 continue;
             }
 
@@ -541,7 +539,7 @@ public class AgentLoop implements AgentLoopController {
             if (finishContent != null) {
                 String result = finishContent;
                 finishContent = null;
-                safeOutput("finish", () -> output.onContentDelta(result));
+                safeOutput("finish", () -> output.onLog(LogLevel.DEBUG, result));
                 return result;
             }
 
