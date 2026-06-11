@@ -107,8 +107,10 @@ onUnmounted(() => {
   justify-content: space-between;
   height: var(--footer-height, 48px);
   padding: 0 var(--space-4);
-  background: var(--surface);
-  border-top: 1px solid var(--border);
+  background: var(--glass-bg-2);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border-top: 1px solid var(--glass-border);
   font-size: var(--text-xs);
   color: var(--fg-muted);
   user-select: none;
@@ -294,8 +296,8 @@ onUnmounted(() => {
 
 /* 深色模式调整 */
 [data-theme="dark"] .statusbar {
-  background: var(--bg-secondary);
-  border-color: var(--border);
+  background: var(--glass-bg-2);
+  border-color: var(--glass-border);
 }
 
 [data-theme="dark"] .status-item:hover {

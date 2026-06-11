@@ -1,0 +1,84 @@
+package site.sorghum.agent4j.tool.interact;
+
+import site.sorghum.agent4j.tool.AgentLoopController;
+import site.sorghum.agent4j.tool.AgentTool;
+import site.sorghum.agent4j.tool.ToolContext;
+import site.sorghum.agent4j.tool.ToolParameter;
+import site.sorghum.agent4j.tool.ToolResult;
+
+import java.util.List;
+
+/**
+ * 对话结束工具 —— AI 认为可以结束当前对话并给出最终回答时调用，退出推理循环。
+ * <p>
+ * 调用此工具后，推理循环将在本轮工具执行完成后退出，
+ * content 将作为最终回答返回给用户。
+ * 无论是否存在显式的任务列表，只要 AI 认为对话可以结束，都应调用此工具。
+ * </p>
+ *
+ * @author Sorghum
+ */
+public class FinishTool extends AgentTool {
+    public static final String TIPS = "[系统提示] 你已连续两次未调用工具。如果有足够信息，请调用 `finish` 提交结果；否则请继续调用工具。";
+
+    @Override
+    public String getName() {
+        return "finish";
+    }
+
+    @Override
+    public String getDescription() {
+        return """
+                对话结束信号 —— 当你认为对话可以结束，准备给出最终回答时调用此工具。
+                调用后推理循环将退出，content 将作为你的最终回答返回给用户。
+                注意：纯文本回复不会退出循环，必须通过此工具显式宣告对话结束。
+                即使没有显式的任务，只要你觉得回答已经完整，也应当调用此工具来结束对话。
+                """;
+    }
+
+    @Override
+    public String toToolSpec() {
+        return """
+                ### finish
+                
+                描述：AI 认为对话可以结束并准备给出最终回答时调用此工具退出推理循环。
+                注意：推理循环不会因纯文本回复而退出，必须通过此工具显式宣告完成。
+                参数: content(可选, AI的最终回答内容。不传则使用已有上下文)。可写。
+                即使没有任务列表，只要回答已完整，也应调用此工具结束对话。
+                调用后本轮对话即结束。
+                """;
+    }
+
+    @Override
+    public List<ToolParameter> getParameters() {
+        return List.of(
+                new ToolParameter("content", "string", false,
+                        "AI 的最终回答内容。如果不传则使用已有上下文内容。")
+        );
+    }
+
+    @Override
+    public ToolResult execute(ToolContext ctx) {
+        String content = ctx.getString("content");
+        if (content == null || content.isBlank()) {
+            content = "__FINISH_NO_CONTENT__";
+        }
+
+        AgentLoopController ctrl = ctx.getLoopController();
+        if (ctrl != null) {
+            ctrl.finish(content);
+        }
+
+        return ToolResult.ok(content);
+    }
+
+    @Override
+    public boolean isReadOnly() {
+        return false;
+    }
+
+    @Override
+    public boolean isStormExempt() {
+        return true;
+    }
+}

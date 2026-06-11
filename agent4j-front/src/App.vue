@@ -925,6 +925,7 @@ watch(showSettings, (newVal) => {
   flex-direction: column;
   min-width: 0;
   background: var(--bg);
+  position: relative;
 }
 
 /* Git 面板滑动动画 */
@@ -943,7 +944,9 @@ watch(showSettings, (newVal) => {
 .modal-mask {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.3);
+  background: rgba(0,0,0,0.25);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
   z-index: 300;
   display: flex;
   align-items: center;
@@ -953,12 +956,15 @@ watch(showSettings, (newVal) => {
 .modal {
   width: min(520px, 90vw);
   max-height: 70vh;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  box-shadow: var(--glass-shadow);
 }
 
 .modal-settings {

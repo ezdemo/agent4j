@@ -71,6 +71,17 @@
             rows="2"
             @keydown.enter.exact.prevent="handleCommit"
           ></textarea>
+          <!-- 作者配置按钮 -->
+          <div class="commit-author-bar">
+            <button class="author-btn" @click="showAuthorModal = true" title="配置提交作者名和邮箱">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                <circle cx="12" cy="7" r="4"/>
+              </svg>
+              <span>{{ authorName || 'Agent4j' }}</span>
+              <svg class="author-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+            </button>
+          </div>
           <div class="commit-actions">
             <button
               class="generate-btn"
@@ -168,20 +179,77 @@
           </template>
         </div>
 
-        <!-- Diff 预览弹层 -->
-        <div v-if="diffViewer.open" class="diff-overlay" @click.self="closeDiffViewer">
-          <div class="diff-viewer">
-            <div class="diff-viewer-head">
-              <span class="diff-viewer-file">{{ diffViewer.file }}</span>
-              <span class="diff-viewer-stat" v-if="diffViewer.stat">{{ diffViewer.stat }}</span>
-              <button class="btn-icon-sm" @click="closeDiffViewer" title="关闭">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
+        <!-- Diff 预览弹层（Teleport 到 body，左右对比） -->
+        <Teleport to="body">
+          <div v-if="diffViewer.open" class="diff-overlay" @click.self="closeDiffViewer">
+            <div class="diff-viewer diff-viewer-sbs">
+              <div class="diff-viewer-head">
+                <span class="diff-viewer-file">{{ diffViewer.file }}</span>
+                <span class="diff-viewer-stat" v-if="diffViewer.stat">{{ diffViewer.stat }}</span>
+                <button class="btn-icon-sm" @click="closeDiffViewer" title="关闭">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+              <div class="diff-sbs" v-if="diffPairs.length > 0">
+                <!-- 表头 -->
+                <div class="diff-sbs-header">
+                  <span class="diff-sbs-label diff-sbs-label-old">旧版本</span>
+                  <span class="diff-sbs-label diff-sbs-label-new">新版本</span>
+                </div>
+                <!-- 行 -->
+                <div v-for="(pair, i) in diffPairs" :key="i" class="diff-sbs-row" :class="'diff-sbs-' + pair.type">
+                  <div class="diff-sbs-cell diff-sbs-cell-left">
+                    <span class="diff-sbs-ln">{{ pair.leftLineNum ?? '' }}</span>
+                    <span class="diff-sbs-code">{{ pair.left }}</span>
+                  </div>
+                  <div class="diff-sbs-gutter"></div>
+                  <div class="diff-sbs-cell diff-sbs-cell-right">
+                    <span class="diff-sbs-ln">{{ pair.rightLineNum ?? '' }}</span>
+                    <span class="diff-sbs-code">{{ pair.right }}</span>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="diff-viewer-empty">{{ diffViewer.diff ? '无变更' : '加载中...' }}</div>
             </div>
-            <pre class="diff-viewer-content" v-if="diffViewer.diff"><code v-html="renderDiff(diffViewer.diff)"></code></pre>
-            <div v-else class="diff-viewer-empty">无变更</div>
           </div>
-        </div>
+        </Teleport>
+
+        <!-- 作者配置 Modal -->
+        <Teleport to="body">
+          <div v-if="showAuthorModal" class="diff-overlay" @click.self="showAuthorModal = false">
+            <div class="modal author-modal">
+              <div class="modal-head">
+                <span>提交作者配置</span>
+                <button class="btn-icon-sm" @click="showAuthorModal = false">×</button>
+              </div>
+              <div class="modal-body">
+                <div class="author-field">
+                  <label>作者名</label>
+                  <input v-model="authorName" placeholder="输入作者名" />
+                </div>
+                <div class="author-field">
+                  <label>邮箱</label>
+                  <input v-model="authorEmail" placeholder="输入邮箱" />
+                </div>
+              </div>
+              <div class="modal-foot">
+                <div class="modal-foot-left">
+                  <button class="btn btn-ghost btn-reset" @click="handleResetAuthor" title="恢复为 Agent4j 默认值">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    恢复默认
+                  </button>
+                </div>
+                <div class="modal-foot-right">
+                  <button class="btn btn-ghost" @click="handleFetchGitConfig" :disabled="fetchingConfig">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    {{ fetchingConfig ? '获取中...' : '从现有环境获取' }}
+                  </button>
+                  <button class="btn btn-primary" @click="handleSaveAuthorConfig">保存</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </Teleport>
       </template>
     </template>
   </div>
@@ -222,6 +290,67 @@ const selectedFiles = ref(new Set())
 const commitMessage = ref('')
 const committing = ref(false)
 const generating = ref(false)
+
+// 提交作者（从 API 加载/保存到 .agent4j/git-author.json）
+const authorName = ref('Agent4j')
+const authorEmail = ref('agent4j@sorghum.site')
+
+const loadAuthorConfig = async () => {
+  try {
+    const r = await gitAPI.getConfig(props.workspaceHash)
+    if (r.success && r.data) {
+      if (r.data.authorName) authorName.value = r.data.authorName
+      if (r.data.authorEmail) authorEmail.value = r.data.authorEmail
+    }
+  } catch (e) {
+    // 静默，默认值兜底
+  }
+}
+
+const handleSaveAuthorConfig = async () => {
+  try {
+    const r = await gitAPI.saveConfig(props.workspaceHash, authorName.value.trim(), authorEmail.value.trim())
+    if (r.success) {
+      showFeedback('success', '作者配置已保存')
+      showAuthorModal.value = false
+    } else {
+      showFeedback('error', r.error || '保存失败')
+    }
+  } catch (e) {
+    showFeedback('error', e.message || '保存失败')
+  }
+}
+
+// 作者配置弹窗
+const showAuthorModal = ref(false)
+const fetchingConfig = ref(false)
+const handleFetchGitConfig = async () => {
+  fetchingConfig.value = true
+  try {
+    const r = await gitAPI.getConfig(props.workspaceHash)
+    if (r.success && r.data) {
+      if (r.data.authorName) authorName.value = r.data.authorName
+      if (r.data.authorEmail) authorEmail.value = r.data.authorEmail
+      showFeedback('success', '已从 Git 本地配置获取作者信息')
+    } else {
+      showFeedback('error', r.error || '获取 Git 配置失败')
+    }
+  } catch (e) {
+    showFeedback('error', e.message || '获取 Git 配置失败')
+  } finally {
+    fetchingConfig.value = false
+  }
+}
+const handleResetAuthor = async () => {
+  authorName.value = 'Agent4j'
+  authorEmail.value = 'agent4j@sorghum.site'
+  try {
+    await gitAPI.saveConfig(props.workspaceHash, 'Agent4j', 'agent4j@sorghum.site')
+    showFeedback('success', '已恢复为默认作者信息')
+  } catch (e) {
+    showFeedback('error', e.message || '恢复失败')
+  }
+}
 
 // 初始化
 const initLoading = ref(false)
@@ -388,7 +517,7 @@ const handleCommit = async () => {
   committing.value = true
   try {
     const files = Array.from(selectedFiles.value)
-    const r = await gitAPI.commit(props.workspaceHash, commitMessage.value.trim(), files)
+    const r = await gitAPI.commit(props.workspaceHash, commitMessage.value.trim(), files, authorName.value.trim(), authorEmail.value.trim())
     if (r.success) {
       showFeedback('success', `提交成功 (${files.length} 个文件)`)
       commitMessage.value = ''
@@ -440,30 +569,114 @@ const closeDiffViewer = () => {
   diffViewer.value = { open: false, file: '', diff: '', stat: '' }
 }
 
-// ---- Diff 渲染 ----
-const renderDiff = (text) => {
-  if (!text) return ''
-  const lines = text.split('\n')
-  return lines.map(line => {
-    let cls = ''
-    if (line.startsWith('+') && !line.startsWith('+++')) cls = 'diff-add'
-    else if (line.startsWith('-') && !line.startsWith('---')) cls = 'diff-del'
-    else if (line.startsWith('@@')) cls = 'diff-hunk'
-    else if (line.startsWith('diff ') || line.startsWith('index ') ||
-             line.startsWith('---') || line.startsWith('+++')) cls = 'diff-meta'
-    return `<span class="${cls}">${escapeHtml(line)}</span>`
-  }).join('\n')
-}
+// ---- Diff 左右对比 (Side-by-Side) ----
+const diffPairs = computed(() => {
+  if (!diffViewer.value.diff) return []
+  return parseSideBySide(diffViewer.value.diff)
+})
 
-const escapeHtml = (s) => {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+function parseSideBySide(diffText) {
+  if (!diffText) return []
+  const lines = diffText.split('\n')
+  const result = []
+
+  let i = 0
+  // 跳过元信息行，直到第一个 hunk 头
+  while (i < lines.length && !lines[i].startsWith('@@')) {
+    i++
+  }
+
+  for (; i < lines.length; i++) {
+    const line = lines[i]
+    if (line.startsWith('@@')) {
+      // @@ -oldStart[,oldCount] +newStart[,newCount] @@
+      const m = line.match(/@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@/)
+      if (!m) continue
+      let oldNum = parseInt(m[1])
+      let newNum = parseInt(m[2])
+
+      const removedQueue = []
+      const addedQueue = []
+
+      const flushQueues = () => {
+        // 配对删/改为替换
+        while (removedQueue.length > 0 && addedQueue.length > 0) {
+          const r = removedQueue.shift()
+          const a = addedQueue.shift()
+          result.push({
+            left: r.content,
+            right: a.content,
+            leftLineNum: r.lineNum,
+            rightLineNum: a.lineNum,
+            type: 'replace'
+          })
+        }
+        // 纯删除（左栏）
+        while (removedQueue.length > 0) {
+          const r = removedQueue.shift()
+          result.push({
+            left: r.content,
+            right: '',
+            leftLineNum: r.lineNum,
+            rightLineNum: null,
+            type: 'remove'
+          })
+        }
+        // 纯新增（右栏）
+        while (addedQueue.length > 0) {
+          const a = addedQueue.shift()
+          result.push({
+            left: '',
+            right: a.content,
+            leftLineNum: null,
+            rightLineNum: a.lineNum,
+            type: 'add'
+          })
+        }
+      }
+
+      let j = i + 1
+      while (j < lines.length && !lines[j].startsWith('@@')) {
+        const l = lines[j]
+        if (l.startsWith('+') && !l.startsWith('+++')) {
+          addedQueue.push({ content: l.substring(1), lineNum: newNum++ })
+        } else if (l.startsWith('-') && !l.startsWith('---')) {
+          removedQueue.push({ content: l.substring(1), lineNum: oldNum++ })
+        } else if (l.startsWith(' ')) {
+          flushQueues()
+          const content = l.substring(1)
+          result.push({
+            left: content,
+            right: content,
+            leftLineNum: oldNum++,
+            rightLineNum: newNum++,
+            type: 'context'
+          })
+        }
+        // 其他元信息行忽略
+        j++
+      }
+
+      // 刷新队列中剩余条目
+      flushQueues()
+      i = j - 1
+    }
+  }
+
+  return result
 }
 
 // ---- 生命周期 ----
-onMounted(loadStatus)
+onMounted(async () => {
+  await loadStatus()
+  await loadAuthorConfig()
+})
 
-watch(() => props.workspaceHash, () => {
-  if (props.workspaceHash) loadStatus()
+watch(() => props.workspaceHash, async () => {
+  if (props.workspaceHash) {
+    await loadStatus()
+    await loadAuthorConfig()
+  }
 })
 </script>
 
@@ -473,8 +686,10 @@ watch(() => props.workspaceHash, () => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg-2);
-  border-left: 1px solid var(--border);
+  background: var(--glass-bg-2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border-left: 1px solid var(--glass-border);
   overflow: hidden;
 }
 
@@ -484,7 +699,7 @@ watch(() => props.workspaceHash, () => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-border);
 }
 .git-head-actions { display: flex; align-items: center; gap: 2px; }
 .git-title {
@@ -604,6 +819,160 @@ watch(() => props.workspaceHash, () => {
 }
 .commit-input::placeholder { color: var(--fg-4); }
 .commit-input:focus { outline: none; border-color: var(--accent); }
+
+/* 提交作者配置按钮 */
+.commit-author-bar {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 4px;
+}
+.author-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg-2);
+  color: var(--fg-3);
+  font-size: 11px;
+  cursor: pointer;
+  transition: border-color var(--t), color var(--t);
+  white-space: nowrap;
+}
+.author-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.author-btn svg { flex-shrink: 0; }
+.author-chevron {
+  transition: transform 0.15s ease;
+}
+.author-btn:hover .author-chevron {
+  transform: rotate(90deg);
+}
+
+/* 作者配置 Modal — 基础 modal 样式（Teleport 到 body，需在 scoped 中覆盖） */
+.author-modal {
+  width: min(90vw, 420px);
+  max-height: 70vh;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  box-shadow: var(--glass-shadow);
+}
+.author-modal .modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  font-size: 14px;
+  font-weight: 600;
+}
+.author-modal .modal-body {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 20px 24px;
+}
+.author-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.author-field label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+}
+.author-field input {
+  padding: 8px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+  font-family: var(--mono);
+  outline: none;
+  transition: border-color var(--t);
+}
+.author-field input:focus {
+  border-color: var(--accent);
+}
+.author-modal .modal-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 24px;
+  border-top: 1px solid var(--border);
+}
+.author-modal .modal-foot-left {
+  display: flex;
+  align-items: center;
+}
+.author-modal .modal-foot-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.author-modal .modal-foot .btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-2);
+  color: var(--fg-2);
+  font-size: 12px;
+  cursor: pointer;
+  transition: border-color var(--t), background var(--t);
+  white-space: nowrap;
+}
+.author-modal .modal-foot .btn-ghost:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--bg-3);
+}
+.author-modal .modal-foot .btn-ghost:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.author-modal .modal-foot .btn-reset {
+  color: var(--fg-4);
+  border-color: transparent;
+  background: transparent;
+  font-size: 11px;
+}
+.author-modal .modal-foot .btn-reset:hover {
+  color: var(--accent);
+  border-color: var(--border);
+  background: var(--bg-2);
+}
+.author-modal .modal-foot .btn-primary {
+  padding: 6px 20px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity var(--t);
+}
+.author-modal .modal-foot .btn-primary:hover {
+  opacity: 0.85;
+}
+
 .commit-actions {
   display: flex;
   gap: 6px;
@@ -819,7 +1188,7 @@ watch(() => props.workspaceHash, () => {
 }
 .git-empty svg { color: var(--green); }
 
-/* Diff 预览弹层 */
+/* Diff 预览弹层 - 左右对比 */
 .diff-overlay {
   position: fixed;
   inset: 0;
@@ -840,6 +1209,9 @@ watch(() => props.workspaceHash, () => {
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(0,0,0,0.2);
 }
+.diff-viewer-sbs {
+  width: min(95vw, 1200px);
+}
 .diff-viewer-head {
   display: flex;
   align-items: center;
@@ -850,40 +1222,126 @@ watch(() => props.workspaceHash, () => {
 }
 .diff-viewer-file { font-size: 12px; font-family: var(--mono); color: var(--fg); font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .diff-viewer-stat { font-size: 11px; color: var(--fg-4); white-space: nowrap; }
-.diff-viewer-content {
+
+/* Side-by-Side 表格 */
+.diff-sbs {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 12px;
-  margin: 0;
   font-size: 12px;
   font-family: var(--mono);
   line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-all;
-  color: var(--fg-2);
   background: var(--bg);
 }
-.diff-viewer-content code { font-family: var(--mono); }
-.diff-viewer-content :deep(.diff-add) {
-  background: rgba(16, 185, 129, 0.12);
-  color: #065f46;
-  display: block;
+.diff-sbs-header {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
 }
-.diff-viewer-content :deep(.diff-del) {
-  background: rgba(239, 68, 68, 0.12);
-  color: #991b1b;
-  display: block;
-}
-.diff-viewer-content :deep(.diff-hunk) {
-  color: var(--accent);
+.diff-sbs-label {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 10px;
   font-weight: 600;
-  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: center;
 }
-.diff-viewer-content :deep(.diff-meta) {
+.diff-sbs-label-old { color: var(--fg-4); border-right: 1px solid var(--border); }
+.diff-sbs-label-new { color: var(--fg-4); }
+
+.diff-sbs-row {
+  display: flex;
+  min-height: 20px;
+  border-bottom: 1px solid var(--border-muted);
+}
+.diff-sbs-row:last-child { border-bottom: none; }
+
+.diff-sbs-cell {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+.diff-sbs-gutter {
+  width: 1px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.diff-sbs-ln {
+  flex-shrink: 0;
+  width: 40px;
+  padding: 0 6px;
+  text-align: right;
+  font-size: 10px;
   color: var(--fg-4);
-  display: block;
+  background: var(--bg-2);
+  user-select: none;
+  border-right: 1px solid var(--border-muted);
+  line-height: 1.6;
 }
-[data-theme="dark"] .diff-viewer-content :deep(.diff-add) { color: #4ade80; }
-[data-theme="dark"] .diff-viewer-content :deep(.diff-del) { color: #f87171; }
+.diff-sbs-code {
+  flex: 1;
+  padding: 0 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  min-width: 0;
+}
+
+/* 变更行高亮 */
+.diff-sbs-context .diff-sbs-cell { background: transparent; }
+.diff-sbs-context .diff-sbs-ln { background: var(--bg-2); }
+
+.diff-sbs-add .diff-sbs-cell-right {
+  background: rgba(16, 185, 129, 0.10);
+}
+.diff-sbs-add .diff-sbs-cell-right .diff-sbs-code { color: #065f46; }
+.diff-sbs-add .diff-sbs-cell-left .diff-sbs-code { color: var(--fg-4); }
+
+.diff-sbs-remove .diff-sbs-cell-left {
+  background: rgba(239, 68, 68, 0.10);
+}
+.diff-sbs-remove .diff-sbs-cell-left .diff-sbs-code { color: #991b1b; }
+.diff-sbs-remove .diff-sbs-cell-right .diff-sbs-code { color: var(--fg-4); }
+
+.diff-sbs-replace .diff-sbs-cell-left {
+  background: rgba(239, 68, 68, 0.10);
+}
+.diff-sbs-replace .diff-sbs-cell-left .diff-sbs-code { color: #991b1b; }
+.diff-sbs-replace .diff-sbs-cell-right {
+  background: rgba(16, 185, 129, 0.10);
+}
+.diff-sbs-replace .diff-sbs-cell-right .diff-sbs-code { color: #065f46; }
+
+[data-theme="dark"] .diff-sbs-add .diff-sbs-cell-right { background: rgba(16, 185, 129, 0.08); }
+[data-theme="dark"] .diff-sbs-add .diff-sbs-cell-right .diff-sbs-code { color: #4ade80; }
+[data-theme="dark"] .diff-sbs-remove .diff-sbs-cell-left { background: rgba(239, 68, 68, 0.08); }
+[data-theme="dark"] .diff-sbs-remove .diff-sbs-cell-left .diff-sbs-code { color: #f87171; }
+[data-theme="dark"] .diff-sbs-replace .diff-sbs-cell-left { background: rgba(239, 68, 68, 0.08); }
+[data-theme="dark"] .diff-sbs-replace .diff-sbs-cell-left .diff-sbs-code { color: #f87171; }
+[data-theme="dark"] .diff-sbs-replace .diff-sbs-cell-right { background: rgba(16, 185, 129, 0.08); }
+[data-theme="dark"] .diff-sbs-replace .diff-sbs-cell-right .diff-sbs-code { color: #4ade80; }
+
+[data-theme="retro"] .diff-sbs-add .diff-sbs-cell-right { background: rgba(51, 255, 51, 0.08); }
+[data-theme="retro"] .diff-sbs-add .diff-sbs-cell-right .diff-sbs-code { color: #33ff33; }
+[data-theme="retro"] .diff-sbs-remove .diff-sbs-cell-left { background: rgba(255, 102, 102, 0.08); }
+[data-theme="retro"] .diff-sbs-remove .diff-sbs-cell-left .diff-sbs-code { color: #ff6666; }
+[data-theme="retro"] .diff-sbs-replace .diff-sbs-cell-left { background: rgba(255, 102, 102, 0.08); }
+[data-theme="retro"] .diff-sbs-replace .diff-sbs-cell-left .diff-sbs-code { color: #ff6666; }
+[data-theme="retro"] .diff-sbs-replace .diff-sbs-cell-right { background: rgba(51, 255, 51, 0.08); }
+[data-theme="retro"] .diff-sbs-replace .diff-sbs-cell-right .diff-sbs-code { color: #33ff33; }
+
+[data-theme="retro-yellow"] .diff-sbs-add .diff-sbs-cell-right { background: rgba(74, 103, 65, 0.10); }
+[data-theme="retro-yellow"] .diff-sbs-add .diff-sbs-cell-right .diff-sbs-code { color: #4a6741; }
+[data-theme="retro-yellow"] .diff-sbs-remove .diff-sbs-cell-left { background: rgba(139, 37, 0, 0.08); }
+[data-theme="retro-yellow"] .diff-sbs-remove .diff-sbs-cell-left .diff-sbs-code { color: #8b2500; }
+[data-theme="retro-yellow"] .diff-sbs-replace .diff-sbs-cell-left { background: rgba(139, 37, 0, 0.08); }
+[data-theme="retro-yellow"] .diff-sbs-replace .diff-sbs-cell-left .diff-sbs-code { color: #8b2500; }
+[data-theme="retro-yellow"] .diff-sbs-replace .diff-sbs-cell-right { background: rgba(74, 103, 65, 0.10); }
+[data-theme="retro-yellow"] .diff-sbs-replace .diff-sbs-cell-right .diff-sbs-code { color: #4a6741; }
+
 .diff-viewer-empty { padding: 32px; text-align: center; font-size: 12px; color: var(--fg-4); }
 </style>

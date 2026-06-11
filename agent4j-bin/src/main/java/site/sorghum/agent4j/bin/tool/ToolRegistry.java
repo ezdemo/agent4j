@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.bin.tool;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.bin.config.ConfigService;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
@@ -17,6 +18,7 @@ import java.util.*;
  *
  * @author Sorghum
  */
+@Slf4j
 public class ToolRegistry {
 
     private final Map<String, ToolDef> tools = new LinkedHashMap<>();
@@ -136,11 +138,11 @@ public class ToolRegistry {
 
     public void register(ToolDef def) {
         if (getCurrentDisabledTools().contains(def.name())) {
-            System.err.println("[registry] 工具已禁用，跳过注册: " + def.name());
+            log.info("[registry] 工具已禁用，跳过注册: {}", def.name());
             return;
         }
         if (forceDenyTools.contains(def.name())) {
-            System.err.println("[registry] 工具被强制禁止，跳过注册: " + def.name());
+            log.info("[registry] 工具被强制禁止，跳过注册: {}", def.name());
             return;
         }
         tools.put(def.name(), def);

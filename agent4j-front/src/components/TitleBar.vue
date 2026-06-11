@@ -130,8 +130,10 @@ const closeWindow = async () => {
   height: 36px;
   min-height: 36px;
   padding: 0 6px 0 10px;
-  background: var(--bg-2);
-  border-bottom: 1px solid var(--border);
+  background: var(--glass-bg-2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border-bottom: 1px solid var(--glass-border);
   border-radius: 10px 10px 0 0;
   user-select: none;
   -webkit-app-region: drag;
@@ -276,8 +278,8 @@ const closeWindow = async () => {
 
 /* 深色模式微调 */
 [data-theme="dark"] .titlebar {
-  background: var(--bg-2);
-  border-color: var(--border);
+  background: var(--glass-bg-2);
+  border-color: var(--glass-border);
 }
 
 [data-theme="dark"] .tb-win-btn.close:hover {

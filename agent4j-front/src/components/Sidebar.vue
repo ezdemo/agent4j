@@ -252,8 +252,10 @@ const formatName = (n) => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg-2);
-  border-right: 1px solid var(--border);
+  background: var(--glass-bg-2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border-right: 1px solid var(--glass-border);
   transition: width 0.2s, opacity 0.2s;
   overflow: hidden;
 }
@@ -269,7 +271,7 @@ const formatName = (n) => {
   align-items: center;
   justify-content: space-between;
   padding: 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-border);
 }
 
 .logo {
@@ -537,7 +539,7 @@ const formatName = (n) => {
 
 .sidebar-foot {
   padding: 8px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--glass-border);
   display: flex;
   gap: 2px;
 }

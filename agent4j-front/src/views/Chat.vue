@@ -1141,7 +1141,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px;
+  padding: 16px 16px 120px;
   position: relative;
 }
 
@@ -1237,10 +1237,13 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 }
 
 .assistant-body {
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
+  background: var(--glass-bg-2);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
   padding: 8px 12px;
+  box-shadow: var(--glass-shadow);
 }
 
 .assistant-body ::selection {
@@ -1404,8 +1407,10 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 
 /* 思考块 */
 .block-reasoning {
-  background: var(--bg-3);
-  border: 1px solid var(--border);
+  background: var(--glass-bg-2);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--glass-border);
   border-radius: var(--r);
   overflow: hidden;
 }
@@ -1594,8 +1599,10 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 
 /* 工具块 */
 .block-tool {
-  background: var(--bg);
-  border: 1px solid var(--border);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--glass-border);
   border-radius: var(--r);
   overflow: hidden;
 }
@@ -1813,7 +1820,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   padding: 8px 18px;
   margin: 0 auto;
 
-  background: rgba(30, 30, 40, 0.85);
+  background: rgba(30, 30, 40, 0.78);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid rgba(255, 255, 255, 0.12);
@@ -1902,9 +1909,12 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 .sub-modal {
   width: min(90vw, 860px);
   height: min(85vh, 700px);
-  background: var(--bg);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
   border-radius: 12px;
-  box-shadow: 0 8px 40px rgba(0, 0, 0, 0.3);
+  box-shadow: var(--glass-shadow);
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -2047,15 +2057,17 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 }
 
 .prompt-modal {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
   width: 80vw;
   max-width: 900px;
   height: 80vh;
   display: flex;
   flex-direction: column;
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.25);
+  box-shadow: var(--glass-shadow);
 }
 
 .prompt-modal-head {

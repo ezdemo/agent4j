@@ -53,4 +53,14 @@ public interface AgentLoopController {
             out.sendEvent(type, data);
         }
     }
+
+    /**
+     * 任务完成 —— 工具调用此方法声明所有任务已完成，推理循环将在当前工具执行结束后退出。
+     * <p>content 将作为最终回复返回给用户。</p>
+     *
+     * @param content AI 的最终回答内容
+     */
+    default void finish(String content) {
+        // 默认空实现，AgentLoop 中会覆盖此方法
+    }
 }
