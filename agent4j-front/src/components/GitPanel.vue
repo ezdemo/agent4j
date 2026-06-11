@@ -168,20 +168,40 @@
           </template>
         </div>
 
-        <!-- Diff 预览弹层 -->
-        <div v-if="diffViewer.open" class="diff-overlay" @click.self="closeDiffViewer">
-          <div class="diff-viewer">
-            <div class="diff-viewer-head">
-              <span class="diff-viewer-file">{{ diffViewer.file }}</span>
-              <span class="diff-viewer-stat" v-if="diffViewer.stat">{{ diffViewer.stat }}</span>
-              <button class="btn-icon-sm" @click="closeDiffViewer" title="关闭">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
+        <!-- Diff 预览弹层（Teleport 到 body，左右对比） -->
+        <Teleport to="body">
+          <div v-if="diffViewer.open" class="diff-overlay" @click.self="closeDiffViewer">
+            <div class="diff-viewer diff-viewer-sbs">
+              <div class="diff-viewer-head">
+                <span class="diff-viewer-file">{{ diffViewer.file }}</span>
+                <span class="diff-viewer-stat" v-if="diffViewer.stat">{{ diffViewer.stat }}</span>
+                <button class="btn-icon-sm" @click="closeDiffViewer" title="关闭">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </div>
+              <div class="diff-sbs" v-if="diffPairs.length > 0">
+                <!-- 表头 -->
+                <div class="diff-sbs-header">
+                  <span class="diff-sbs-label diff-sbs-label-old">旧版本</span>
+                  <span class="diff-sbs-label diff-sbs-label-new">新版本</span>
+                </div>
+                <!-- 行 -->
+                <div v-for="(pair, i) in diffPairs" :key="i" class="diff-sbs-row" :class="'diff-sbs-' + pair.type">
+                  <div class="diff-sbs-cell diff-sbs-cell-left">
+                    <span class="diff-sbs-ln">{{ pair.leftLineNum ?? '' }}</span>
+                    <span class="diff-sbs-code">{{ pair.left }}</span>
+                  </div>
+                  <div class="diff-sbs-gutter"></div>
+                  <div class="diff-sbs-cell diff-sbs-cell-right">
+                    <span class="diff-sbs-ln">{{ pair.rightLineNum ?? '' }}</span>
+                    <span class="diff-sbs-code">{{ pair.right }}</span>
+                  </div>
+                </div>
+              </div>
+              <div v-else class="diff-viewer-empty">{{ diffViewer.diff ? '无变更' : '加载中...' }}</div>
             </div>
-            <pre class="diff-viewer-content" v-if="diffViewer.diff"><code v-html="renderDiff(diffViewer.diff)"></code></pre>
-            <div v-else class="diff-viewer-empty">无变更</div>
           </div>
-        </div>
+        </Teleport>
       </template>
     </template>
   </div>
@@ -440,23 +460,101 @@ const closeDiffViewer = () => {
   diffViewer.value = { open: false, file: '', diff: '', stat: '' }
 }
 
-// ---- Diff 渲染 ----
-const renderDiff = (text) => {
-  if (!text) return ''
-  const lines = text.split('\n')
-  return lines.map(line => {
-    let cls = ''
-    if (line.startsWith('+') && !line.startsWith('+++')) cls = 'diff-add'
-    else if (line.startsWith('-') && !line.startsWith('---')) cls = 'diff-del'
-    else if (line.startsWith('@@')) cls = 'diff-hunk'
-    else if (line.startsWith('diff ') || line.startsWith('index ') ||
-             line.startsWith('---') || line.startsWith('+++')) cls = 'diff-meta'
-    return `<span class="${cls}">${escapeHtml(line)}</span>`
-  }).join('\n')
-}
+// ---- Diff 左右对比 (Side-by-Side) ----
+const diffPairs = computed(() => {
+  if (!diffViewer.value.diff) return []
+  return parseSideBySide(diffViewer.value.diff)
+})
 
-const escapeHtml = (s) => {
-  return s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+function parseSideBySide(diffText) {
+  if (!diffText) return []
+  const lines = diffText.split('\n')
+  const result = []
+
+  let i = 0
+  // 跳过元信息行，直到第一个 hunk 头
+  while (i < lines.length && !lines[i].startsWith('@@')) {
+    i++
+  }
+
+  for (; i < lines.length; i++) {
+    const line = lines[i]
+    if (line.startsWith('@@')) {
+      // @@ -oldStart[,oldCount] +newStart[,newCount] @@
+      const m = line.match(/@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@/)
+      if (!m) continue
+      let oldNum = parseInt(m[1])
+      let newNum = parseInt(m[2])
+
+      const removedQueue = []
+      const addedQueue = []
+
+      const flushQueues = () => {
+        // 配对删/改为替换
+        while (removedQueue.length > 0 && addedQueue.length > 0) {
+          const r = removedQueue.shift()
+          const a = addedQueue.shift()
+          result.push({
+            left: r.content,
+            right: a.content,
+            leftLineNum: r.lineNum,
+            rightLineNum: a.lineNum,
+            type: 'replace'
+          })
+        }
+        // 纯删除（左栏）
+        while (removedQueue.length > 0) {
+          const r = removedQueue.shift()
+          result.push({
+            left: r.content,
+            right: '',
+            leftLineNum: r.lineNum,
+            rightLineNum: null,
+            type: 'remove'
+          })
+        }
+        // 纯新增（右栏）
+        while (addedQueue.length > 0) {
+          const a = addedQueue.shift()
+          result.push({
+            left: '',
+            right: a.content,
+            leftLineNum: null,
+            rightLineNum: a.lineNum,
+            type: 'add'
+          })
+        }
+      }
+
+      let j = i + 1
+      while (j < lines.length && !lines[j].startsWith('@@')) {
+        const l = lines[j]
+        if (l.startsWith('+') && !l.startsWith('+++')) {
+          addedQueue.push({ content: l.substring(1), lineNum: newNum++ })
+        } else if (l.startsWith('-') && !l.startsWith('---')) {
+          removedQueue.push({ content: l.substring(1), lineNum: oldNum++ })
+        } else if (l.startsWith(' ')) {
+          flushQueues()
+          const content = l.substring(1)
+          result.push({
+            left: content,
+            right: content,
+            leftLineNum: oldNum++,
+            rightLineNum: newNum++,
+            type: 'context'
+          })
+        }
+        // 其他元信息行忽略
+        j++
+      }
+
+      // 刷新队列中剩余条目
+      flushQueues()
+      i = j - 1
+    }
+  }
+
+  return result
 }
 
 // ---- 生命周期 ----
@@ -821,7 +919,7 @@ watch(() => props.workspaceHash, () => {
 }
 .git-empty svg { color: var(--green); }
 
-/* Diff 预览弹层 */
+/* Diff 预览弹层 - 左右对比 */
 .diff-overlay {
   position: fixed;
   inset: 0;
@@ -842,6 +940,9 @@ watch(() => props.workspaceHash, () => {
   overflow: hidden;
   box-shadow: 0 8px 32px rgba(0,0,0,0.2);
 }
+.diff-viewer-sbs {
+  width: min(95vw, 1200px);
+}
 .diff-viewer-head {
   display: flex;
   align-items: center;
@@ -852,40 +953,126 @@ watch(() => props.workspaceHash, () => {
 }
 .diff-viewer-file { font-size: 12px; font-family: var(--mono); color: var(--fg); font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .diff-viewer-stat { font-size: 11px; color: var(--fg-4); white-space: nowrap; }
-.diff-viewer-content {
+
+/* Side-by-Side 表格 */
+.diff-sbs {
   flex: 1;
   overflow-y: auto;
-  padding: 8px 12px;
-  margin: 0;
   font-size: 12px;
   font-family: var(--mono);
   line-height: 1.6;
-  white-space: pre-wrap;
-  word-break: break-all;
-  color: var(--fg-2);
   background: var(--bg);
 }
-.diff-viewer-content code { font-family: var(--mono); }
-.diff-viewer-content :deep(.diff-add) {
-  background: rgba(16, 185, 129, 0.12);
-  color: #065f46;
-  display: block;
+.diff-sbs-header {
+  display: flex;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
 }
-.diff-viewer-content :deep(.diff-del) {
-  background: rgba(239, 68, 68, 0.12);
-  color: #991b1b;
-  display: block;
-}
-.diff-viewer-content :deep(.diff-hunk) {
-  color: var(--accent);
+.diff-sbs-label {
+  flex: 1;
+  padding: 4px 8px;
+  font-size: 10px;
   font-weight: 600;
-  display: block;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-align: center;
 }
-.diff-viewer-content :deep(.diff-meta) {
+.diff-sbs-label-old { color: var(--fg-4); border-right: 1px solid var(--border); }
+.diff-sbs-label-new { color: var(--fg-4); }
+
+.diff-sbs-row {
+  display: flex;
+  min-height: 20px;
+  border-bottom: 1px solid var(--border-muted);
+}
+.diff-sbs-row:last-child { border-bottom: none; }
+
+.diff-sbs-cell {
+  flex: 1;
+  display: flex;
+  align-items: stretch;
+  min-width: 0;
+}
+.diff-sbs-gutter {
+  width: 1px;
+  background: var(--border);
+  flex-shrink: 0;
+}
+
+.diff-sbs-ln {
+  flex-shrink: 0;
+  width: 40px;
+  padding: 0 6px;
+  text-align: right;
+  font-size: 10px;
   color: var(--fg-4);
-  display: block;
+  background: var(--bg-2);
+  user-select: none;
+  border-right: 1px solid var(--border-muted);
+  line-height: 1.6;
 }
-[data-theme="dark"] .diff-viewer-content :deep(.diff-add) { color: #4ade80; }
-[data-theme="dark"] .diff-viewer-content :deep(.diff-del) { color: #f87171; }
+.diff-sbs-code {
+  flex: 1;
+  padding: 0 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  min-width: 0;
+}
+
+/* 变更行高亮 */
+.diff-sbs-context .diff-sbs-cell { background: transparent; }
+.diff-sbs-context .diff-sbs-ln { background: var(--bg-2); }
+
+.diff-sbs-add .diff-sbs-cell-right {
+  background: rgba(16, 185, 129, 0.10);
+}
+.diff-sbs-add .diff-sbs-cell-right .diff-sbs-code { color: #065f46; }
+.diff-sbs-add .diff-sbs-cell-left .diff-sbs-code { color: var(--fg-4); }
+
+.diff-sbs-remove .diff-sbs-cell-left {
+  background: rgba(239, 68, 68, 0.10);
+}
+.diff-sbs-remove .diff-sbs-cell-left .diff-sbs-code { color: #991b1b; }
+.diff-sbs-remove .diff-sbs-cell-right .diff-sbs-code { color: var(--fg-4); }
+
+.diff-sbs-replace .diff-sbs-cell-left {
+  background: rgba(239, 68, 68, 0.10);
+}
+.diff-sbs-replace .diff-sbs-cell-left .diff-sbs-code { color: #991b1b; }
+.diff-sbs-replace .diff-sbs-cell-right {
+  background: rgba(16, 185, 129, 0.10);
+}
+.diff-sbs-replace .diff-sbs-cell-right .diff-sbs-code { color: #065f46; }
+
+[data-theme="dark"] .diff-sbs-add .diff-sbs-cell-right { background: rgba(16, 185, 129, 0.08); }
+[data-theme="dark"] .diff-sbs-add .diff-sbs-cell-right .diff-sbs-code { color: #4ade80; }
+[data-theme="dark"] .diff-sbs-remove .diff-sbs-cell-left { background: rgba(239, 68, 68, 0.08); }
+[data-theme="dark"] .diff-sbs-remove .diff-sbs-cell-left .diff-sbs-code { color: #f87171; }
+[data-theme="dark"] .diff-sbs-replace .diff-sbs-cell-left { background: rgba(239, 68, 68, 0.08); }
+[data-theme="dark"] .diff-sbs-replace .diff-sbs-cell-left .diff-sbs-code { color: #f87171; }
+[data-theme="dark"] .diff-sbs-replace .diff-sbs-cell-right { background: rgba(16, 185, 129, 0.08); }
+[data-theme="dark"] .diff-sbs-replace .diff-sbs-cell-right .diff-sbs-code { color: #4ade80; }
+
+[data-theme="retro"] .diff-sbs-add .diff-sbs-cell-right { background: rgba(51, 255, 51, 0.08); }
+[data-theme="retro"] .diff-sbs-add .diff-sbs-cell-right .diff-sbs-code { color: #33ff33; }
+[data-theme="retro"] .diff-sbs-remove .diff-sbs-cell-left { background: rgba(255, 102, 102, 0.08); }
+[data-theme="retro"] .diff-sbs-remove .diff-sbs-cell-left .diff-sbs-code { color: #ff6666; }
+[data-theme="retro"] .diff-sbs-replace .diff-sbs-cell-left { background: rgba(255, 102, 102, 0.08); }
+[data-theme="retro"] .diff-sbs-replace .diff-sbs-cell-left .diff-sbs-code { color: #ff6666; }
+[data-theme="retro"] .diff-sbs-replace .diff-sbs-cell-right { background: rgba(51, 255, 51, 0.08); }
+[data-theme="retro"] .diff-sbs-replace .diff-sbs-cell-right .diff-sbs-code { color: #33ff33; }
+
+[data-theme="retro-yellow"] .diff-sbs-add .diff-sbs-cell-right { background: rgba(74, 103, 65, 0.10); }
+[data-theme="retro-yellow"] .diff-sbs-add .diff-sbs-cell-right .diff-sbs-code { color: #4a6741; }
+[data-theme="retro-yellow"] .diff-sbs-remove .diff-sbs-cell-left { background: rgba(139, 37, 0, 0.08); }
+[data-theme="retro-yellow"] .diff-sbs-remove .diff-sbs-cell-left .diff-sbs-code { color: #8b2500; }
+[data-theme="retro-yellow"] .diff-sbs-replace .diff-sbs-cell-left { background: rgba(139, 37, 0, 0.08); }
+[data-theme="retro-yellow"] .diff-sbs-replace .diff-sbs-cell-left .diff-sbs-code { color: #8b2500; }
+[data-theme="retro-yellow"] .diff-sbs-replace .diff-sbs-cell-right { background: rgba(74, 103, 65, 0.10); }
+[data-theme="retro-yellow"] .diff-sbs-replace .diff-sbs-cell-right .diff-sbs-code { color: #4a6741; }
+
 .diff-viewer-empty { padding: 32px; text-align: center; font-size: 12px; color: var(--fg-4); }
 </style>
