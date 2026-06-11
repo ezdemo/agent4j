@@ -233,11 +233,19 @@
                 </div>
               </div>
               <div class="modal-foot">
-                <button class="btn btn-ghost" @click="handleFetchGitConfig" :disabled="fetchingConfig">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-                  {{ fetchingConfig ? '获取中...' : '从现有环境获取' }}
-                </button>
-                <button class="btn btn-primary" @click="showAuthorModal = false">保存</button>
+                <div class="modal-foot-left">
+                  <button class="btn btn-ghost btn-reset" @click="handleResetAuthor" title="恢复为 Agent4j 默认值">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    恢复默认
+                  </button>
+                </div>
+                <div class="modal-foot-right">
+                  <button class="btn btn-ghost" @click="handleFetchGitConfig" :disabled="fetchingConfig">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+                    {{ fetchingConfig ? '获取中...' : '从现有环境获取' }}
+                  </button>
+                  <button class="btn btn-primary" @click="handleSaveAuthorConfig">保存</button>
+                </div>
               </div>
             </div>
           </div>
@@ -283,13 +291,35 @@ const commitMessage = ref('')
 const committing = ref(false)
 const generating = ref(false)
 
-// 提交作者（持久化到 localStorage）
-const STORAGE_KEY_NAME = 'agent4j-git-author-name'
-const STORAGE_KEY_EMAIL = 'agent4j-git-author-email'
-const authorName = ref(localStorage.getItem(STORAGE_KEY_NAME) || 'Agent4j')
-const authorEmail = ref(localStorage.getItem(STORAGE_KEY_EMAIL) || 'agent4j@sorghum.site')
-watch(authorName, v => localStorage.setItem(STORAGE_KEY_NAME, v))
-watch(authorEmail, v => localStorage.setItem(STORAGE_KEY_EMAIL, v))
+// 提交作者（从 API 加载/保存到 .agent4j/git-author.json）
+const authorName = ref('Agent4j')
+const authorEmail = ref('agent4j@sorghum.site')
+
+const loadAuthorConfig = async () => {
+  try {
+    const r = await gitAPI.getConfig(props.workspaceHash)
+    if (r.success && r.data) {
+      if (r.data.authorName) authorName.value = r.data.authorName
+      if (r.data.authorEmail) authorEmail.value = r.data.authorEmail
+    }
+  } catch (e) {
+    // 静默，默认值兜底
+  }
+}
+
+const handleSaveAuthorConfig = async () => {
+  try {
+    const r = await gitAPI.saveConfig(props.workspaceHash, authorName.value.trim(), authorEmail.value.trim())
+    if (r.success) {
+      showFeedback('success', '作者配置已保存')
+      showAuthorModal.value = false
+    } else {
+      showFeedback('error', r.error || '保存失败')
+    }
+  } catch (e) {
+    showFeedback('error', e.message || '保存失败')
+  }
+}
 
 // 作者配置弹窗
 const showAuthorModal = ref(false)
@@ -309,6 +339,16 @@ const handleFetchGitConfig = async () => {
     showFeedback('error', e.message || '获取 Git 配置失败')
   } finally {
     fetchingConfig.value = false
+  }
+}
+const handleResetAuthor = async () => {
+  authorName.value = 'Agent4j'
+  authorEmail.value = 'agent4j@sorghum.site'
+  try {
+    await gitAPI.saveConfig(props.workspaceHash, 'Agent4j', 'agent4j@sorghum.site')
+    showFeedback('success', '已恢复为默认作者信息')
+  } catch (e) {
+    showFeedback('error', e.message || '恢复失败')
   }
 }
 
@@ -627,10 +667,16 @@ function parseSideBySide(diffText) {
 }
 
 // ---- 生命周期 ----
-onMounted(loadStatus)
+onMounted(async () => {
+  await loadStatus()
+  await loadAuthorConfig()
+})
 
-watch(() => props.workspaceHash, () => {
-  if (props.workspaceHash) loadStatus()
+watch(() => props.workspaceHash, async () => {
+  if (props.workspaceHash) {
+    await loadStatus()
+    await loadAuthorConfig()
+  }
 })
 </script>
 
@@ -863,10 +909,20 @@ watch(() => props.workspaceHash, () => {
 }
 .author-modal .modal-foot {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
   gap: 8px;
   padding: 12px 24px;
   border-top: 1px solid var(--border);
+}
+.author-modal .modal-foot-left {
+  display: flex;
+  align-items: center;
+}
+.author-modal .modal-foot-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .author-modal .modal-foot .btn-ghost {
   display: inline-flex;
@@ -880,6 +936,7 @@ watch(() => props.workspaceHash, () => {
   font-size: 12px;
   cursor: pointer;
   transition: border-color var(--t), background var(--t);
+  white-space: nowrap;
 }
 .author-modal .modal-foot .btn-ghost:hover {
   border-color: var(--accent);
@@ -889,6 +946,17 @@ watch(() => props.workspaceHash, () => {
 .author-modal .modal-foot .btn-ghost:disabled {
   opacity: 0.5;
   cursor: not-allowed;
+}
+.author-modal .modal-foot .btn-reset {
+  color: var(--fg-4);
+  border-color: transparent;
+  background: transparent;
+  font-size: 11px;
+}
+.author-modal .modal-foot .btn-reset:hover {
+  color: var(--accent);
+  border-color: var(--border);
+  background: var(--bg-2);
 }
 .author-modal .modal-foot .btn-primary {
   padding: 6px 20px;

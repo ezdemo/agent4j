@@ -645,10 +645,16 @@ export const gitAPI = {
     return api.post('/git/commit', body, { params })
   },
 
-  // 获取 Git 本地配置 (user.name / user.email) - GET /api/git/config?workspaceHash=xxx
+  // 获取提交作者配置 (已保存 > git config > Agent4j 默认) - GET /api/git/config?workspaceHash=xxx
   getConfig: (workspaceHash) => {
     const params = workspaceHash ? { workspaceHash } : {}
     return api.get('/git/config', { params })
+  },
+
+  // 保存提交作者配置到工作区 - POST /api/git/config?workspaceHash=xxx  body: { authorName, authorEmail }
+  saveConfig: (workspaceHash, authorName, authorEmail) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.post('/git/config', { authorName, authorEmail }, { params })
   },
 
   // 切换文件状态 - POST /api/git/toggle?workspaceHash=xxx  body: { path }
