@@ -1325,6 +1325,46 @@ public class AgentService {
      *
      * @return 命令元数据列表
      */
+    public String executeScheduledTask(String workspacePath, String sessionName, String message) {
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        ReentrantLock lock = getSessionLock(sessionKey);
+        lock.lock();
+
+        String effectiveSessionName = sessionName != null ? sessionName : "default";
+        CURRENT_SESSION_NAME.set(effectiveSessionName);
+
+        try {
+            Agent4jAgent agent = getOrCreateAgent(sessionKey);
+            if (agent == null) {
+                return "错误：无法创建 Agent 实例";
+            }
+
+            agent.setOutput(AgentOutput.NOOP);
+            String sessionId = sessionName != null ? sessionName : "default";
+            agent.setSessionId(sessionId);
+            return agent.chat(UserMessage.of(message));
+        } catch (Exception e) {
+            log.warn("[schedule] 定时任务执行异常: {}", e.getMessage());
+            return "错误：" + e.getMessage();
+        } finally {
+            CURRENT_SESSION_NAME.remove();
+            Agent4jAgent agent = sessionCache.get(sessionKey);
+            if (agent != null) {
+                agent.setOutput(AgentOutput.NOOP);
+                agent.flushSession();
+                agent.saveUsage();
+            }
+            lock.unlock();
+        }
+    }
+
+    // ==================== 命令与 Skill 查询 ====================
+
+    /**
+     * 获取所有命令的元数据列表（供前端命令选择弹窗使用）。
+     *
+     * @return 命令元数据列表
+     */
     public List<CommandMetaDTO> getCommandMetaList() {
         if (commandRegistry == null) {
             return Collections.emptyList();
