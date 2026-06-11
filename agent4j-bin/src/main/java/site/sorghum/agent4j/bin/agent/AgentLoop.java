@@ -450,9 +450,7 @@ public class AgentLoop implements AgentLoopController {
     private String mainLoop(boolean isThinkingMode, int selfCorrectionAttempts) throws IOException {
         streamErrorRetryCount = 0;
         int noToolCallStreak = 0;
-        final int maxIterations = 80;
-
-        for (int step = 0; step < maxIterations; step++) {
+        for (int step = 0; ; step++) {
             // ---- 0. 检查用户中断 ----
             if (userAbortRequested) {
                 logAbort();
@@ -557,11 +555,6 @@ public class AgentLoop implements AgentLoopController {
             selfCorrectionAttempts = updated;
         }
 
-        // ---- 迭代上限兜底 ----
-        safeOutput("maxIter", () -> output.onLog(LogLevel.WARN,
-                "[loop] 达到最大迭代次数（" + maxIterations + "），超时终止"));
-        String timeoutResult = ctx.getLastAssistantContent();
-        return timeoutResult != null && !timeoutResult.isEmpty() ? timeoutResult : "任务执行超时（已收集部分结果）";
     }
 
     // ==================== HITL 恢复 ====================
