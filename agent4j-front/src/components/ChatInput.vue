@@ -31,8 +31,9 @@
     </Transition>
 
     <div class="input-box" :class="{ focused: inputFocused }">
-      <!-- TODO 图标 -->
-      <div class="todo-trigger" @mouseenter="handleTodoEnter" @mouseleave="handleTodoLeave">
+      <div class="input-row">
+        <!-- TODO 图标 -->
+        <div class="todo-trigger" @mouseenter="handleTodoEnter" @mouseleave="handleTodoLeave">
         <button class="todo-btn" :class="{ 'has-todos': todoStats.pending + todoStats.inProgress > 0 }">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
@@ -114,11 +115,11 @@
           </button>
         </template>
       </div>
-    </div>
+      </div>
 
-    <!-- Token 用量 & 模型选择 -->
-    <div class="usage-bar">
-      <div class="usage-stats">
+      <!-- Token 用量 & 模型选择 -->
+      <div class="usage-bar">
+        <div class="usage-stats">
         <span class="usage-item" :title="'输入: '+fmt(usage.promptTokens)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
@@ -171,6 +172,7 @@
             <svg v-if="m.active" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
           </div>
         </div>
+      </div>
       </div>
     </div>
   </div>
@@ -395,9 +397,10 @@ defineExpose({ focus: () => inputField.value?.focus(), autoResize })
 </script>
 
 <style scoped>
-.input-area { position: relative; padding: 12px 16px; border-top: 1px solid var(--glass-border); background: var(--glass-bg); backdrop-filter: blur(var(--blur-sm)); -webkit-backdrop-filter: blur(var(--blur-sm)); }
-.input-box { display: flex; align-items: flex-end; gap: 8px; background: var(--glass-bg-2); border: 1px solid var(--glass-border); border-radius: var(--r); padding: 6px 8px; transition: border-color var(--t); box-shadow: var(--glass-shadow); }
+.input-area { position: relative; padding: 12px 16px; border-top: 1px solid var(--glass-border); background: var(--glass-bg); backdrop-filter: blur(var(--blur-sm)); -webkit-backdrop-filter: blur(var(--blur-sm)); box-shadow: 0 -2px 12px rgba(0,0,0,0.04); }
+.input-box { display: flex; flex-direction: column; gap: 0; background: var(--glass-bg-2); border: 1px solid var(--glass-border); border-radius: var(--r); padding: 6px 8px 0; transition: border-color var(--t); box-shadow: var(--glass-shadow); }
 .input-box.focused { border-color: var(--accent); }
+.input-row { display: flex; align-items: flex-end; gap: 8px; }
 .input-box textarea { flex: 1; min-height: 22px; max-height: 160px; padding: 0; background: none; border: none; outline: none; font-size: 14px; line-height: 1.5; color: var(--fg); resize: none; }
 .input-box textarea::placeholder { color: var(--fg-4); }
 
@@ -542,8 +545,8 @@ defineExpose({ focus: () => inputField.value?.focus(), autoResize })
 .slash-popup-enter-active, .slash-popup-leave-active { transition: all 0.15s ease; }
 .slash-popup-enter-from, .slash-popup-leave-to { opacity: 0; transform: translateY(8px) scale(0.98); }
 
-/* Usage bar */
-.usage-bar { display: flex; align-items: center; justify-content: space-between; padding: 6px 12px; font-size: 12px; color: var(--fg-3); border-top: 1px solid var(--border); background: var(--bg-2); }
+/* Usage bar — 融入 input-box 底部 */
+.usage-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 4px 12px; font-size: 12px; color: var(--fg-3); border-top: 1px solid var(--glass-border); margin-top: 4px; }
 .usage-stats { display: flex; align-items: center; gap: 12px; }
 .usage-item { display: inline-flex; align-items: center; gap: 3px; cursor: default; color: var(--fg-3); }
 .usage-item svg { color: var(--fg-4); flex-shrink: 0; }
