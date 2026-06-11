@@ -266,7 +266,22 @@ public class WorkspaceManager {
         Path workspaceDir = WORKSPACES_DIR.resolve(hash);
         if (!Files.exists(workspaceDir)) return false;
 
-        // 递归删除目录
+        // 1. 从 WORKSPACE_MANAGERS 静态缓存中移除
+        Path configPath = workspaceDir.resolve("workspace.json");
+        if (Files.exists(configPath)) {
+            try {
+                String json = Files.readString(configPath);
+                org.noear.snack4.ONode config = org.noear.snack4.ONode.ofJson(json);
+                String path = config.get("path").getString();
+                if (path != null && WORKSPACE_MANAGERS.remove(path) != null) {
+                    System.out.println("[workspace] 已从缓存中移除: " + path);
+                }
+            } catch (Exception e) {
+                System.err.println("[workspace] 清理缓存失败: " + e.getMessage());
+            }
+        }
+
+        // 2. 递归删除目录
         deleteDirectory(workspaceDir);
         return true;
     }

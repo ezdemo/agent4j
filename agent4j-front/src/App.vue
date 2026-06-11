@@ -574,7 +574,7 @@ const handleAddWorkspace = async () => {
 
 // 删除工作区
 const handleDeleteWorkspace = async (hash) => {
-  const ok = await confirm({ message: '确定要删除此工作区吗？（不会删除实际文件）' })
+  const ok = await confirm({ message: '确定要删除此工作区吗？' })
   if (!ok) return
   
   try {
