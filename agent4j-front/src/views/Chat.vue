@@ -288,6 +288,7 @@
         @fetchTodos="fetchTodos"
         @refreshUsage="loadUsage"
         @switchModel="handleSwitchModel"
+        @refreshModels="loadUsage"
         @continue="continueChat"
     />
   </div>

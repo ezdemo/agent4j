@@ -160,16 +160,18 @@
         </button>
       </div>
       <div class="model-selector" v-if="currentModel">
-        <button class="model-btn" @click="showModelPicker=!showModelPicker" :title="'当前模型: '+currentModel">
+        <button class="model-btn" @click="toggleModelPicker" :title="'当前模型: '+currentModel">
           {{ currentModel }}
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
         <div class="model-dropdown" v-if="showModelPicker">
           <div class="model-dropdown-title">切换模型</div>
-          <div v-for="m in availableModels" :key="m.name" class="model-option"
-               :class="{ active: m.active }" @click="pickModel(m.name)">
-            <span class="model-option-name">{{ m.name }}</span>
-            <svg v-if="m.active" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          <div class="model-dropdown-list">
+            <div v-for="m in availableModels" :key="m.name" class="model-option"
+                 :class="{ active: m.active }" @click="pickModel(m.name)">
+              <span class="model-option-name">{{ m.name }}</span>
+              <svg v-if="m.active" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            </div>
           </div>
         </div>
       </div>
@@ -194,7 +196,7 @@ const props = defineProps({
   hasHistory: {type: Boolean, default: false}
 })
 
-const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'fetchTodos', 'refreshUsage', 'switchModel', 'continue'])
+const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'fetchTodos', 'refreshUsage', 'switchModel', 'continue', 'refreshModels'])
 
 const inputField = ref(null)
 const inputFocused = ref(false)
@@ -368,6 +370,12 @@ const autoResize = () => { const el = inputField.value; if (el) { el.style.heigh
 
 // ============= 模型切换 =============
 const showModelPicker = ref(false)
+const toggleModelPicker = () => {
+  showModelPicker.value = !showModelPicker.value
+  if (showModelPicker.value) {
+    emit('refreshModels')
+  }
+}
 const pickModel = async (name) => {
   if (name === props.currentModel) { showModelPicker.value = false; return }
   emit('switchModel', name)
@@ -592,7 +600,8 @@ defineExpose({ focus: () => inputField.value?.focus(), autoResize })
 .model-btn { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--fg-2); font-family: var(--mono); padding: 2px 6px; border-radius: var(--r-sm); transition: all var(--t); cursor: pointer; }
 .model-btn:hover { background: var(--bg-3); }
 .model-dropdown { position: absolute; bottom: 100%; right: 0; margin-bottom: 4px; min-width: 200px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow); z-index: 100; overflow: hidden; }
-.model-dropdown-title { padding: 8px 12px; font-size: 11px; font-weight: 600; color: var(--fg-4); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); }
+.model-dropdown-title { padding: 8px 12px; font-size: 11px; font-weight: 600; color: var(--fg-4); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.model-dropdown-list { max-height: 200px; overflow-y: auto; }
 .model-option { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; font-size: 13px; font-family: var(--mono); color: var(--fg-2); cursor: pointer; transition: all var(--t); }
 .model-option:hover { background: var(--bg-2); }
 .model-option.active { color: var(--accent); font-weight: 500; }
