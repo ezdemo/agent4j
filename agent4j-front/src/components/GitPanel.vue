@@ -203,12 +203,12 @@
                 <div v-for="(pair, i) in diffPairs" :key="i" class="diff-sbs-row" :class="'diff-sbs-' + pair.type">
                   <div class="diff-sbs-cell diff-sbs-cell-left">
                     <span class="diff-sbs-ln">{{ pair.leftLineNum ?? '' }}</span>
-                    <span class="diff-sbs-code">{{ pair.left }}</span>
+                    <span class="diff-sbs-code" v-html="pair.leftHtml"></span>
                   </div>
                   <div class="diff-sbs-gutter"></div>
                   <div class="diff-sbs-cell diff-sbs-cell-right">
                     <span class="diff-sbs-ln">{{ pair.rightLineNum ?? '' }}</span>
-                    <span class="diff-sbs-code">{{ pair.right }}</span>
+                    <span class="diff-sbs-code" v-html="pair.rightHtml"></span>
                   </div>
                 </div>
               </div>
@@ -261,6 +261,7 @@
 <script setup>
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { gitAPI } from '../services/api'
+import { highlightCode, detectLanguage } from '../utils/highlight'
 
 const props = defineProps({
   workspaceHash: { type: String, default: null }
@@ -575,7 +576,14 @@ const closeDiffViewer = () => {
 // ---- Diff 左右对比 (Side-by-Side) ----
 const diffPairs = computed(() => {
   if (!diffViewer.value.diff) return []
-  return parseSideBySide(diffViewer.value.diff)
+  const pairs = parseSideBySide(diffViewer.value.diff)
+  // 语法高亮：根据文件扩展名检测语言，逐行高亮
+  const lang = detectLanguage(diffViewer.value.file)
+  for (const p of pairs) {
+    p.leftHtml = p.left ? highlightCode(p.left, lang) : ''
+    p.rightHtml = p.right ? highlightCode(p.right, lang) : ''
+  }
+  return pairs
 })
 
 function parseSideBySide(diffText) {
@@ -1296,57 +1304,41 @@ watch(() => props.workspaceHash, async () => {
   min-width: 0;
 }
 
-/* 变更行高亮 */
+/* 变更行高亮 — 背景区分，文字颜色由 highlight.js 控制 */
 .diff-sbs-context .diff-sbs-cell { background: transparent; }
 .diff-sbs-context .diff-sbs-ln { background: var(--bg-2); }
 
 .diff-sbs-add .diff-sbs-cell-right {
   background: rgba(16, 185, 129, 0.10);
 }
-.diff-sbs-add .diff-sbs-cell-right .diff-sbs-code { color: #065f46; }
 .diff-sbs-add .diff-sbs-cell-left .diff-sbs-code { color: var(--fg-4); }
 
 .diff-sbs-remove .diff-sbs-cell-left {
   background: rgba(239, 68, 68, 0.10);
 }
-.diff-sbs-remove .diff-sbs-cell-left .diff-sbs-code { color: #991b1b; }
 .diff-sbs-remove .diff-sbs-cell-right .diff-sbs-code { color: var(--fg-4); }
 
 .diff-sbs-replace .diff-sbs-cell-left {
   background: rgba(239, 68, 68, 0.10);
 }
-.diff-sbs-replace .diff-sbs-cell-left .diff-sbs-code { color: #991b1b; }
 .diff-sbs-replace .diff-sbs-cell-right {
   background: rgba(16, 185, 129, 0.10);
 }
-.diff-sbs-replace .diff-sbs-cell-right .diff-sbs-code { color: #065f46; }
 
 [data-theme="dark"] .diff-sbs-add .diff-sbs-cell-right { background: rgba(16, 185, 129, 0.08); }
-[data-theme="dark"] .diff-sbs-add .diff-sbs-cell-right .diff-sbs-code { color: #4ade80; }
 [data-theme="dark"] .diff-sbs-remove .diff-sbs-cell-left { background: rgba(239, 68, 68, 0.08); }
-[data-theme="dark"] .diff-sbs-remove .diff-sbs-cell-left .diff-sbs-code { color: #f87171; }
 [data-theme="dark"] .diff-sbs-replace .diff-sbs-cell-left { background: rgba(239, 68, 68, 0.08); }
-[data-theme="dark"] .diff-sbs-replace .diff-sbs-cell-left .diff-sbs-code { color: #f87171; }
 [data-theme="dark"] .diff-sbs-replace .diff-sbs-cell-right { background: rgba(16, 185, 129, 0.08); }
-[data-theme="dark"] .diff-sbs-replace .diff-sbs-cell-right .diff-sbs-code { color: #4ade80; }
 
 [data-theme="retro"] .diff-sbs-add .diff-sbs-cell-right { background: rgba(51, 255, 51, 0.08); }
-[data-theme="retro"] .diff-sbs-add .diff-sbs-cell-right .diff-sbs-code { color: #33ff33; }
 [data-theme="retro"] .diff-sbs-remove .diff-sbs-cell-left { background: rgba(255, 102, 102, 0.08); }
-[data-theme="retro"] .diff-sbs-remove .diff-sbs-cell-left .diff-sbs-code { color: #ff6666; }
 [data-theme="retro"] .diff-sbs-replace .diff-sbs-cell-left { background: rgba(255, 102, 102, 0.08); }
-[data-theme="retro"] .diff-sbs-replace .diff-sbs-cell-left .diff-sbs-code { color: #ff6666; }
 [data-theme="retro"] .diff-sbs-replace .diff-sbs-cell-right { background: rgba(51, 255, 51, 0.08); }
-[data-theme="retro"] .diff-sbs-replace .diff-sbs-cell-right .diff-sbs-code { color: #33ff33; }
 
 [data-theme="retro-yellow"] .diff-sbs-add .diff-sbs-cell-right { background: rgba(74, 103, 65, 0.10); }
-[data-theme="retro-yellow"] .diff-sbs-add .diff-sbs-cell-right .diff-sbs-code { color: #4a6741; }
 [data-theme="retro-yellow"] .diff-sbs-remove .diff-sbs-cell-left { background: rgba(139, 37, 0, 0.08); }
-[data-theme="retro-yellow"] .diff-sbs-remove .diff-sbs-cell-left .diff-sbs-code { color: #8b2500; }
 [data-theme="retro-yellow"] .diff-sbs-replace .diff-sbs-cell-left { background: rgba(139, 37, 0, 0.08); }
-[data-theme="retro-yellow"] .diff-sbs-replace .diff-sbs-cell-left .diff-sbs-code { color: #8b2500; }
 [data-theme="retro-yellow"] .diff-sbs-replace .diff-sbs-cell-right { background: rgba(74, 103, 65, 0.10); }
-[data-theme="retro-yellow"] .diff-sbs-replace .diff-sbs-cell-right .diff-sbs-code { color: #4a6741; }
 
 .diff-viewer-empty { padding: 32px; text-align: center; font-size: 12px; color: var(--fg-4); }
 </style>

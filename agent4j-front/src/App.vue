@@ -238,7 +238,7 @@ import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import {message} from 'ant-design-vue'
 import {useConfirm} from './composables/useConfirm'
-import {marked} from 'marked'
+import { md } from './utils/highlight'
 import {useAppStore} from './stores/app'
 import {agentAPI, configAPI, sessionsAPI, toolsAPI} from './services/api'
 import SetupScreen from './components/SetupScreen.vue'
@@ -317,7 +317,7 @@ const viewSystemPrompt = async () => {
 
 const fmtPrompt = c => {
   if (!c) return ''
-  return marked(c)
+  return md.parse(c)
 }
 
 const copyPrompt = () => {
