@@ -85,7 +85,7 @@
                       <polyline points="6 9 12 15 18 9"/>
                     </svg>
                   </div>
-                  <div v-if="block.showContent" class="reasoning-text">{{ block.content }}</div>
+                  <div v-if="block.showContent" class="reasoning-text" v-html="fmt(block.content)"></div>
                 </div>
 
                 <!-- 内容 -->
@@ -195,7 +195,7 @@
                           <polyline points="6 9 12 15 18 9"/>
                         </svg>
                       </div>
-                      <div v-if="block.showContent" class="reasoning-text">{{ block.content }}</div>
+                      <div v-if="block.showContent" class="reasoning-text" v-html="fmt(block.content)"></div>
                     </div>
                     <div v-else-if="block.type === 'content'" class="block-content" v-html="fmt(block.content)"></div>
                     <div v-else-if="block.type === 'tool_call'" class="block-tool">
@@ -1422,8 +1422,43 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   font-family: var(--mono);
   color: var(--fg-3);
   line-height: 1.6;
-  white-space: pre-wrap;
 }
+.reasoning-text :deep(p) { margin: 0.4em 0; }
+.reasoning-text :deep(pre) {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 6px 10px;
+  margin: 4px 0;
+  overflow-x: auto;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.reasoning-text :deep(pre code) { background: none; padding: 0; }
+.reasoning-text :deep(code) {
+  font-size: 11px;
+  background: var(--bg-3);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.reasoning-text :deep(.code-block-wrap) { margin: 4px 0; }
+.reasoning-text :deep(.code-block-wrap pre) { position: relative; margin: 0 !important; }
+.reasoning-text :deep(.code-copy-btn) {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  opacity: 0;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 1px 5px;
+  border-radius: var(--r-sm);
+  transition: opacity 0.15s;
+  line-height: 1;
+  z-index: 2;
+}
+.reasoning-text :deep(.code-block-wrap pre:hover .code-copy-btn) { opacity: 0.7; }
 
 /* 内容块 */
 .block-content {
