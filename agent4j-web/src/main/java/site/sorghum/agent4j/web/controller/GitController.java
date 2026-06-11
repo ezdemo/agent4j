@@ -121,13 +121,23 @@ public class GitController {
         return ApiResponse.ok(gitService.toggleFile(workspaceHash, body));
     }
 
-    @ApiOperation(value = "获取 Git 本地配置",
-            notes = "返回 git config 中的 user.name 和 user.email")
+    @ApiOperation(value = "获取提交作者配置",
+            notes = "返回已保存配置 > git config > Agent4j 默认 三级的合并结果")
     @Get
     @Mapping("/config")
     public ApiResponse<Map<String, String>> config(
             @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
         return ApiResponse.ok(gitService.getGitConfig(workspaceHash));
+    }
+
+    @ApiOperation(value = "保存提交作者配置",
+            notes = "将 authorName/authorEmail 保存到工作区 .agent4j/git-author.json")
+    @Post
+    @Mapping("/config")
+    public ApiResponse<Map<String, String>> saveConfig(
+            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @Body String body) throws Exception {
+        return ApiResponse.ok(gitService.saveGitConfig(workspaceHash, body));
     }
 
     // ==================== AI 辅助 ====================

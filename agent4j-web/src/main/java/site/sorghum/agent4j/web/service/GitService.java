@@ -432,16 +432,122 @@ public class GitService {
     }
 
     /**
-     * 获取 Git 本地配置中的 user.name 和 user.email。
+     * 获取提交作者配置（优先级：已保存配置 > git config > Agent4j 默认）。
      */
     public Map<String, String> getGitConfig(String workspaceHash) {
         String workspacePath = resolveWorkspace(workspaceHash);
-        String name = runGitSimple(workspacePath, "config", "user.name");
-        String email = runGitSimple(workspacePath, "config", "user.email");
+        File workspaceDir = new File(workspacePath);
+
         Map<String, String> result = new LinkedHashMap<>();
-        result.put("authorName", name != null ? name.trim() : "");
-        result.put("authorEmail", email != null ? email.trim() : "");
+
+        // 1) 读取已保存的 .agent4j/git-author.json
+        File configFile = new File(workspaceDir, ".agent4j/git-author.json");
+        if (configFile.exists()) {
+            try {
+                String json = Files.readString(configFile.toPath(), StandardCharsets.UTF_8);
+                ONode node = ONode.ofJson(json);
+                if (node != null && node.isObject()) {
+                    ONode nameNode = node.get("authorName");
+                    if (nameNode != null && nameNode.isString() && !nameNode.getString().trim().isEmpty()) {
+                        result.put("authorName", nameNode.getString().trim());
+                    }
+                    ONode emailNode = node.get("authorEmail");
+                    if (emailNode != null && emailNode.isString() && !emailNode.getString().trim().isEmpty()) {
+                        result.put("authorEmail", emailNode.getString().trim());
+                    }
+                }
+            } catch (Exception ignored) {
+                // 文件损坏则忽略
+            }
+        }
+
+        // 2) 已保存配置缺少的字段，从 git config 补充
+        if (!result.containsKey("authorName") || result.get("authorName") == null || result.get("authorName").isEmpty()) {
+            String name = runGitSimple(workspacePath, "config", "user.name");
+            if (name != null && !name.trim().isEmpty()) {
+                result.put("authorName", name.trim());
+            }
+        }
+        if (!result.containsKey("authorEmail") || result.get("authorEmail") == null || result.get("authorEmail").isEmpty()) {
+            String email = runGitSimple(workspacePath, "config", "user.email");
+            if (email != null && !email.trim().isEmpty()) {
+                result.put("authorEmail", email.trim());
+            }
+        }
+
+        // 3) 仍缺失的字段，回退到 Agent4j 默认值
+        if (!result.containsKey("authorName") || result.get("authorName") == null || result.get("authorName").isEmpty()) {
+            result.put("authorName", "Agent4j");
+        }
+        if (!result.containsKey("authorEmail") || result.get("authorEmail") == null || result.get("authorEmail").isEmpty()) {
+            result.put("authorEmail", "agent4j@sorghum.site");
+        }
+
         return result;
+    }
+
+    /**
+     * 保存提交作者配置到 .agent4j/git-author.json。
+     */
+    public Map<String, String> saveGitConfig(String workspaceHash, String body) throws Exception {
+        File workspaceDir = new File(resolveWorkspace(workspaceHash));
+
+        // 解析 body
+        String authorName = null;
+        String authorEmail = null;
+        if (body != null && !body.trim().isEmpty()) {
+            try {
+                ONode json = ONode.ofJson(body);
+                if (json != null && json.isObject()) {
+                    ONode nameNode = json.get("authorName");
+                    if (nameNode != null && nameNode.isString()) {
+                        authorName = nameNode.getString().trim();
+                    }
+                    ONode emailNode = json.get("authorEmail");
+                    if (emailNode != null && emailNode.isString()) {
+                        authorEmail = emailNode.getString().trim();
+                    }
+                }
+            } catch (Exception ignored) {
+                throw new ServiceException("请求体 JSON 解析失败");
+            }
+        }
+
+        if (authorName == null || authorName.isEmpty()) {
+            throw new ServiceException("作者名不能为空");
+        }
+        if (authorEmail == null || authorEmail.isEmpty()) {
+            throw new ServiceException("邮箱不能为空");
+        }
+
+        // 确保 .agent4j 目录存在
+        File agent4jDir = new File(workspaceDir, ".agent4j");
+        if (!agent4jDir.exists()) {
+            agent4jDir.mkdirs();
+        }
+
+        // 写入 git-author.json
+        File configFile = new File(agent4jDir, "git-author.json");
+        String json = String.format(
+                "{\"authorName\":\"%s\",\"authorEmail\":\"%s\"}",
+                escapeJson(authorName), escapeJson(authorEmail));
+        Files.writeString(configFile.toPath(), json, StandardCharsets.UTF_8);
+
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("authorName", authorName);
+        result.put("authorEmail", authorEmail);
+        return result;
+    }
+
+    /**
+     * 简易 JSON 字符串转义。
+     */
+    private String escapeJson(String s) {
+        return s.replace("\\", "\\\\")
+                .replace("\"", "\\\"")
+                .replace("\n", "\\n")
+                .replace("\r", "\\r")
+                .replace("\t", "\\t");
     }
 
     /**
