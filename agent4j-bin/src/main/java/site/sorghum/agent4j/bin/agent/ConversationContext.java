@@ -4,6 +4,8 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.bin.session.SessionStore;
+import site.sorghum.agent4j.tool.AgentTool;
+import site.sorghum.agent4j.tool.interact.FinishTool;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -25,6 +27,9 @@ import java.util.Objects;
  */
 @Slf4j
 public class ConversationContext {
+    private static final List<String> NO_TO_JSONL = List.of(
+            FinishTool.TIPS
+    );
 
     private final List<ChatMessage> history = new ArrayList<>();
     private final PromptPrefix prefix;
@@ -125,6 +130,9 @@ public class ConversationContext {
      * 如果 sessionStore 未设置或写入失败，静默忽略。
      */
     private void persist(ChatMessage msg) {
+        if (msg.hasContent() && NO_TO_JSONL.contains(msg.getContent())){
+            return;
+        }
         if (sessionStore != null) {
             try {
                 sessionStore.append(msg);

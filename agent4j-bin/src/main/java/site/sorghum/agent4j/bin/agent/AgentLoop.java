@@ -16,6 +16,7 @@ import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.tool.ToolDispatcher;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.tool.*;
+import site.sorghum.agent4j.tool.interact.FinishTool;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -448,7 +449,10 @@ public class AgentLoop implements AgentLoopController {
      */
     private String mainLoop(boolean isThinkingMode, int selfCorrectionAttempts) throws IOException {
         streamErrorRetryCount = 0;
-        for (int step = 0; ; step++) {
+        int noToolCallStreak = 0;
+        final int maxIterations = 80;
+
+        for (int step = 0; step < maxIterations; step++) {
             // ---- 0. 检查用户中断 ----
             if (userAbortRequested) {
                 logAbort();
@@ -490,12 +494,30 @@ public class AgentLoop implements AgentLoopController {
             ONode toolCalls = scavengeToolCalls(sr.toolCalls(), sr.reasoningContent(), sr.content());
             boolean hasToolCalls = toolCalls != null && toolCalls.isArray() && !toolCalls.getArray().isEmpty();
 
-            // ---- 5. 无 tool_calls → 写入文本到上下文，继续循环（仅 finish 可退出） ----
+            // ---- 5. 无 tool calls → 不是终止信号，是需纠正的状态 ----
             if (!hasToolCalls) {
                 ctx.addAssistant(sr.content(), null, sr.reasoningContent());
-                ctx.addUser("[no_tool_calls] No tool calls. If you want to stop reasoning, please call the finish tool.");
+                noToolCallStreak++;
+                log.warn("[loop] 第 {} 次无工具调用，累积无工具轮数: {}", step, noToolCallStreak);
+
+                if (noToolCallStreak >= 3) {
+                    log.warn("[loop] 连续 {} 轮无工具调用，降级终止", noToolCallStreak);
+                    int streak = noToolCallStreak;
+                    safeOutput("noToolMax", () -> output.onLog(LogLevel.WARN,
+                            "[loop] 连续 " + streak + " 轮无工具调用，降级终止"));
+                    String degraded = ctx.getLastAssistantContent();
+                    return degraded != null && !degraded.isEmpty() ? degraded : "任务中断，未完成（已收集部分结果）";
+                }
+
+                // 渐进式轻推
+                if (noToolCallStreak >= 2) {
+                    ctx.addUser(FinishTool.TIPS);
+                }
                 continue;
             }
+
+            // ---- 调用了工具 → 重置无工具计数 ----
+            noToolCallStreak = 0;
 
             // ---- HITL 拦截 ----
             if (hitlManager.isHitlMode()) {
@@ -517,11 +539,11 @@ public class AgentLoop implements AgentLoopController {
                 ctx.addToolResult(tr.getToolCallId(), tr.getContent());
             }
 
-            // ---- 7.5. 检查 finish_task 请求 ----
+            // ---- 7.5. 唯一正常退出：finish 工具被调用 ----
             if (finishContent != null) {
                 String result = finishContent;
                 finishContent = null;
-                safeOutput("finish", () -> output.onContentDelta(finishContent));
+                safeOutput("finish", () -> output.onContentDelta(result));
                 return result;
             }
 
@@ -534,6 +556,12 @@ public class AgentLoop implements AgentLoopController {
             }
             selfCorrectionAttempts = updated;
         }
+
+        // ---- 迭代上限兜底 ----
+        safeOutput("maxIter", () -> output.onLog(LogLevel.WARN,
+                "[loop] 达到最大迭代次数（" + maxIterations + "），超时终止"));
+        String timeoutResult = ctx.getLastAssistantContent();
+        return timeoutResult != null && !timeoutResult.isEmpty() ? timeoutResult : "任务执行超时（已收集部分结果）";
     }
 
     // ==================== HITL 恢复 ====================
