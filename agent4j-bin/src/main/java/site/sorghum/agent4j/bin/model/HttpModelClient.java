@@ -337,8 +337,7 @@ public class HttpModelClient implements ModelClient {
                             log.debug("收到SSE流结束标记");
                             break;
                         }
-                        boolean hasError = data.contains("\"error\"");
-                        if (hasError) {
+                        if (data.trim().startsWith("{\"error\":")) {
                             log.error("收到SSE流错误: {}", data);
                             callback.onError(data);
                             return;
