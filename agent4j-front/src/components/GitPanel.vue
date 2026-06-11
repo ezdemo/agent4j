@@ -58,98 +58,101 @@
           <span class="change-count" v-if="hasChanges">{{ changedCount + untrackedCount }}</span>
         </div>
 
-        <!-- 提交区域 -->
-        <div class="commit-area" v-if="hasChanges">
-          <div class="commit-select-all">
-            <input type="checkbox" class="git-checkbox" :checked="isAllSelected" @change="toggleSelectAll">
-            <span class="select-all-label">全选变更 ({{ selectedCount }}/{{ changedCount }})</span>
-          </div>
-          <textarea
-            class="commit-input"
-            placeholder="提交信息（按 Enter 提交）..."
-            v-model="commitMessage"
-            rows="2"
-            @keydown.enter.exact.prevent="handleCommit"
-          ></textarea>
-          <!-- 作者配置按钮 -->
-          <div class="commit-author-bar">
-            <button class="author-btn" @click="showAuthorModal = true" title="配置提交作者名和邮箱">
-              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
-                <circle cx="12" cy="7" r="4"/>
-              </svg>
-              <span>{{ authorName || 'Agent4j' }}</span>
-              <svg class="author-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-          </div>
-          <div class="commit-actions">
-            <button
-              class="generate-btn"
-              @click="handleGenerateMessage"
-              :disabled="generating || selectedCount === 0"
-              title="AI 自动生成提交消息"
-            >
-              <svg v-if="!generating" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-              </svg>
-              <span v-else class="generate-spinner"></span>
-              {{ generating ? '生成中...' : 'AI 生成' }}
-            </button>
-            <button
-              class="commit-button"
-              @click="handleCommit"
-              :disabled="committing || !commitMessage.trim() || selectedCount === 0"
-            >
-              {{ committing ? '提交中...' : `提交 (${selectedCount})` }}
-            </button>
-          </div>
-        </div>
-
-        <!-- 文件列表 -->
-        <div class="git-files" v-if="hasChanges">
-          <!-- 变更文件 -->
-          <template v-if="changedCount > 0">
-            <div class="git-section-header changed" @click="showChanged = !showChanged">
-              <div class="section-left">
-                <svg class="chevron" :class="{ open: showChanged }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                <span>变更</span>
-              </div>
-              <span class="section-count">{{ changedCount }}</span>
+        <!-- 可滚动主体区 -->
+        <div class="git-body">
+          <!-- 提交区域 -->
+          <div class="commit-area" v-if="hasChanges">
+            <div class="commit-select-all">
+              <input type="checkbox" class="git-checkbox" :checked="isAllSelected" @change="toggleSelectAll">
+              <span class="select-all-label">全选变更 ({{ selectedCount }}/{{ changedCount }})</span>
             </div>
-            <template v-if="showChanged">
-              <div v-for="f in changedFiles" :key="'c-'+f.path" class="git-file" @click="openDiff(f.path)">
-                <input type="checkbox" class="git-checkbox" :checked="selectedFiles.has(f.path)" @click.stop @change="toggleSelect(f.path)">
-                <span class="file-status" :class="(f.status || f.index || f.workTree || 'M')">{{ (f.status || f.index || f.workTree || 'M') }}</span>
-                <span class="file-path" :title="f.path">{{ f.path }}</span>
-                <button class="file-action-btn toggle-btn" @click.stop="handleToggle(f.path)" title="取消暂存">×</button>
-              </div>
-            </template>
-          </template>
-
-          <!-- 未跟踪文件 -->
-          <template v-if="untrackedCount > 0">
-            <div class="git-section-header untracked" @click="showUntracked = !showUntracked">
-              <div class="section-left">
-                <svg class="chevron" :class="{ open: showUntracked }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-                <span>未跟踪文件</span>
-              </div>
-              <span class="section-count">{{ untrackedCount }}</span>
+            <textarea
+              class="commit-input"
+              placeholder="提交信息（按 Enter 提交）..."
+              v-model="commitMessage"
+              rows="2"
+              @keydown.enter.exact.prevent="handleCommit"
+            ></textarea>
+            <!-- 作者配置按钮 -->
+            <div class="commit-author-bar">
+              <button class="author-btn" @click="showAuthorModal = true" title="配置提交作者名和邮箱">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
+                  <circle cx="12" cy="7" r="4"/>
+                </svg>
+                <span>{{ authorName || 'Agent4j' }}</span>
+                <svg class="author-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+              </button>
             </div>
-            <template v-if="showUntracked">
-              <div v-for="f in untrackedFiles" :key="'n-'+f.path" class="git-file" @click="openDiff(f.path)">
-                <input type="checkbox" class="git-checkbox" :checked="selectedFiles.has(f.path)" @click.stop @change="toggleSelect(f.path)">
-                <span class="file-status U">?</span>
-                <span class="file-path" :title="f.path">{{ f.path }}</span>
-                <button class="file-action-btn toggle-btn add" @click.stop="handleToggle(f.path)" title="添加到变更">+</button>
-              </div>
-            </template>
-          </template>
-        </div>
+            <div class="commit-actions">
+              <button
+                class="generate-btn"
+                @click="handleGenerateMessage"
+                :disabled="generating || selectedCount === 0"
+                title="AI 自动生成提交消息"
+              >
+                <svg v-if="!generating" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+                </svg>
+                <span v-else class="generate-spinner"></span>
+                {{ generating ? '生成中...' : 'AI 生成' }}
+              </button>
+              <button
+                class="commit-button"
+                @click="handleCommit"
+                :disabled="committing || !commitMessage.trim() || selectedCount === 0"
+              >
+                {{ committing ? '提交中...' : `提交 (${selectedCount})` }}
+              </button>
+            </div>
+          </div>
 
-        <!-- 空状态 -->
-        <div v-else class="git-empty">
-          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-          <span>工作区干净，没有待提交的更改</span>
+          <!-- 文件列表 -->
+          <div class="git-files" v-if="hasChanges">
+            <!-- 变更文件 -->
+            <template v-if="changedCount > 0">
+              <div class="git-section-header changed" @click="showChanged = !showChanged">
+                <div class="section-left">
+                  <svg class="chevron" :class="{ open: showChanged }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                  <span>变更</span>
+                </div>
+                <span class="section-count">{{ changedCount }}</span>
+              </div>
+              <template v-if="showChanged">
+                <div v-for="f in changedFiles" :key="'c-'+f.path" class="git-file" @click="openDiff(f.path)">
+                  <input type="checkbox" class="git-checkbox" :checked="selectedFiles.has(f.path)" @click.stop @change="toggleSelect(f.path)">
+                  <span class="file-status" :class="(f.status || f.index || f.workTree || 'M')">{{ (f.status || f.index || f.workTree || 'M') }}</span>
+                  <span class="file-path" :title="f.path">{{ f.path }}</span>
+                  <button class="file-action-btn toggle-btn" @click.stop="handleToggle(f.path)" title="取消暂存">×</button>
+                </div>
+              </template>
+            </template>
+
+            <!-- 未跟踪文件 -->
+            <template v-if="untrackedCount > 0">
+              <div class="git-section-header untracked" @click="showUntracked = !showUntracked">
+                <div class="section-left">
+                  <svg class="chevron" :class="{ open: showUntracked }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+                  <span>未跟踪文件</span>
+                </div>
+                <span class="section-count">{{ untrackedCount }}</span>
+              </div>
+              <template v-if="showUntracked">
+                <div v-for="f in untrackedFiles" :key="'n-'+f.path" class="git-file" @click="openDiff(f.path)">
+                  <input type="checkbox" class="git-checkbox" :checked="selectedFiles.has(f.path)" @click.stop @change="toggleSelect(f.path)">
+                  <span class="file-status U">?</span>
+                  <span class="file-path" :title="f.path">{{ f.path }}</span>
+                  <button class="file-action-btn toggle-btn add" @click.stop="handleToggle(f.path)" title="添加到变更">+</button>
+                </div>
+              </template>
+            </template>
+          </div>
+
+          <!-- 空状态 -->
+          <div v-else class="git-empty">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            <span>工作区干净，没有待提交的更改</span>
+          </div>
         </div>
 
         <!-- 提交历史 -->
@@ -1026,7 +1029,9 @@ watch(() => props.workspaceHash, async () => {
 .commit-button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* 文件列表 */
-.git-files { flex: 1; overflow-y: auto; padding: 4px 0; }
+/* 主体可滚动区 */
+.git-body { flex: 1; overflow-y: auto; }
+.git-files { padding: 4px 0; }
 .git-section-header {
   display: flex;
   align-items: center;
