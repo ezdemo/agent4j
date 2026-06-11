@@ -106,6 +106,9 @@ public class AgentLoop implements AgentLoopController {
     /** 用户主动中断标志（前端点击停止按钮时设置） */
     private volatile boolean userAbortRequested = false;
 
+    /** 任务完成标志 —— finish 工具设置，非空时主循环将退出并返回该内容 */
+    private volatile String finishContent = null;
+
     /** 流式错误重试次数（每回合重置） */
     private int streamErrorRetryCount = 0;
 
@@ -236,6 +239,12 @@ public class AgentLoop implements AgentLoopController {
         log.info("[loop] 工具请求停止推理循环");
     }
 
+    @Override
+    public void finish(String content) {
+        this.finishContent = content;
+        client.abortStream();
+        log.info("[loop] 工具请求完成任务，即将退出循环");
+    }
 
     @Override
     public void injectUserMessage(String message) {
@@ -481,9 +490,11 @@ public class AgentLoop implements AgentLoopController {
             ONode toolCalls = scavengeToolCalls(sr.toolCalls(), sr.reasoningContent(), sr.content());
             boolean hasToolCalls = toolCalls != null && toolCalls.isArray() && !toolCalls.getArray().isEmpty();
 
-            // ---- 5. 无 tool_calls → 返回文本回复 ----
+            // ---- 5. 无 tool_calls → 写入文本到上下文，继续循环（仅 finish 可退出） ----
             if (!hasToolCalls) {
-                return handleTextResponse(sr.content(), sr.reasoningContent());
+                ctx.addAssistant(sr.content(), null, sr.reasoningContent());
+                ctx.addUser("[no_tool_calls] 无工具调用，如停止推理请调用 finish 工具.");
+                continue;
             }
 
             // ---- HITL 拦截 ----
@@ -504,6 +515,14 @@ public class AgentLoop implements AgentLoopController {
             ctx.addAssistant(sr.content(), ter.tcList(), sr.reasoningContent());
             for (ChatMessage tr : ter.toolResults()) {
                 ctx.addToolResult(tr.getToolCallId(), tr.getContent());
+            }
+
+            // ---- 7.5. 检查 finish_task 请求 ----
+            if (finishContent != null) {
+                String result = finishContent;
+                finishContent = null;
+                safeOutput("finish", () -> output.onContentDelta(finishContent));
+                return result;
             }
 
             // ---- 8. Self-Correction ----
@@ -806,21 +825,6 @@ public class AgentLoop implements AgentLoopController {
             fn.set("arguments", tc.arguments());
         }
         return fakeTcArray;
-    }
-
-    // ==================== 步骤 5: 纯文本响应 ====================
-
-    private String handleTextResponse(String content, String reasoningContent) {
-        if (content == null || content.isEmpty()) {
-            if (reasoningContent != null && !reasoningContent.isEmpty()) {
-                safeListener("reasoning", () -> listener.onReasoning(reasoningContent));
-                safeOutputDebug("reasoning", () -> output.onReasoning(reasoningContent));
-                ctx.addAssistant(null, null, reasoningContent);
-                return reasoningContent;
-            }
-        }
-        ctx.addAssistant(content, null, reasoningContent);
-        return content != null ? content : "(empty response)";
     }
 
     // ==================== 步骤 6: 工具执行 ====================
