@@ -493,7 +493,7 @@ public class AgentLoop implements AgentLoopController {
             // ---- 5. 无 tool_calls → 写入文本到上下文，继续循环（仅 finish 可退出） ----
             if (!hasToolCalls) {
                 ctx.addAssistant(sr.content(), null, sr.reasoningContent());
-                ctx.addUser("[no_tool_calls] 无工具调用，如停止推理请调用 finish 工具.");
+                ctx.addUser("[no_tool_calls] No tool calls. If you want to stop reasoning, please call the finish tool.");
                 continue;
             }
 

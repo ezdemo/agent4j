@@ -473,8 +473,10 @@ watch(() => props.workspaceHash, () => {
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: var(--bg-2);
-  border-left: 1px solid var(--border);
+  background: var(--glass-bg-2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border-left: 1px solid var(--glass-border);
   overflow: hidden;
 }
 
@@ -484,7 +486,7 @@ watch(() => props.workspaceHash, () => {
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--glass-border);
 }
 .git-head-actions { display: flex; align-items: center; gap: 2px; }
 .git-title {

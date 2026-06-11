@@ -39,14 +39,26 @@
   --accent: var(--blue);
   --accent-bg: var(--blue-bg);
 
-  /* 阴影 - 极简 */
-  --shadow-sm: 0 1px 2px rgba(0,0,0,0.05);
-  --shadow: 0 1px 3px rgba(0,0,0,0.1);
+  /* 毛玻璃 — 浅色模式：半透明但清晰可辨 */
+  --glass-bg: rgba(255,255,255,0.92);
+  --glass-bg-2: rgba(249,250,251,0.94);
+  --glass-border: rgba(0,0,0,0.08);
+  --glass-shadow: 0 1px 3px rgba(0,0,0,0.06), 0 4px 16px rgba(0,0,0,0.06);
+  --blur-sm: 4px;
+  --blur: 12px;
+  --blur-lg: 24px;
 
-  /* 圆角 - 方正 */
-  --r: 4px;
-  --r-sm: 2px;
-  --r-lg: 6px;
+  /* 阴影 - 层次感 */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.04);
+  --shadow: 0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.1), 0 4px 16px rgba(0,0,0,0.06);
+
+  /* 圆角 - 略微柔和 */
+  --r: 6px;
+  --r-sm: 4px;
+  --r-lg: 10px;
 
   /* 字体 */
   --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
@@ -72,9 +84,9 @@
   --warning-bg: var(--yellow-bg);
   --danger: var(--red);
   --danger-bg: var(--red-bg);
-  --shadow-md: var(--shadow);
-  --shadow-lg: var(--shadow);
-  --shadow-xl: var(--shadow);
+  --shadow-md: 0 4px 12px rgba(0,0,0,0.06), 0 1px 3px rgba(0,0,0,0.04);
+  --shadow-lg: 0 8px 32px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.04);
+  --shadow-xl: 0 16px 48px rgba(0,0,0,0.1), 0 4px 16px rgba(0,0,0,0.06);
   --radius: var(--r);
   --radius-sm: var(--r-sm);
   --radius-lg: var(--r-lg);
@@ -112,7 +124,6 @@
   --z-modal: 300;
   --z-tooltip: 400;
   --z-toast: 500;
-  --blur: 8px;
   --header-height: 48px;
   --sidebar-width: 260px;
   --sidebar-collapsed: 48px;
@@ -148,6 +159,10 @@
   --success-bg: var(--green-bg);
   --warning-bg: var(--yellow-bg);
   --danger-bg: var(--red-bg);
+  --glass-bg: rgba(23,23,23,0.88);
+  --glass-bg-2: rgba(31,31,31,0.92);
+  --glass-border: rgba(255,255,255,0.08);
+  --glass-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 8px 32px rgba(0,0,0,0.35);
 }
 
 /* 全局 */
@@ -202,6 +217,10 @@ body {
   --success-bg: var(--green-bg);
   --warning-bg: var(--yellow-bg);
   --danger-bg: var(--red-bg);
+  --glass-bg: rgba(15,21,15,0.90);
+  --glass-bg-2: rgba(21,29,21,0.94);
+  --glass-border: rgba(51,255,51,0.12);
+  --glass-shadow: 0 1px 3px rgba(0,0,0,0.35), 0 8px 32px rgba(0,0,0,0.45);
 }
 [data-theme="retro"] ::-webkit-scrollbar-thumb { background: #1a3a1a; }
 [data-theme="retro"] ::-webkit-scrollbar-thumb:hover { background: #224422; }
@@ -259,6 +278,10 @@ body {
   --success-bg: var(--green-bg);
   --warning-bg: var(--yellow-bg);
   --danger-bg: var(--red-bg);
+  --glass-bg: rgba(245,230,200,0.92);
+  --glass-bg-2: rgba(236,219,194,0.94);
+  --glass-border: rgba(60,36,21,0.15);
+  --glass-shadow: 0 1px 3px rgba(0,0,0,0.1), 0 8px 32px rgba(0,0,0,0.12);
 }
 [data-theme="retro-yellow"] ::-webkit-scrollbar-thumb { background: #c9b494; }
 [data-theme="retro-yellow"] ::-webkit-scrollbar-thumb:hover { background: #b8a07a; }
@@ -392,10 +415,13 @@ textarea { resize: none; }
 
 /* 卡片 */
 .card {
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
   padding: 16px;
+  box-shadow: var(--glass-shadow);
 }
 
 /* 开关 */
