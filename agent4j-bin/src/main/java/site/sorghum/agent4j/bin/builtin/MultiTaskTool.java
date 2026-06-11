@@ -109,6 +109,11 @@ public class MultiTaskTool extends AgentTool {
             return ToolResult.fail("PARAM_EMPTY", "'tasks' array is empty, at least one task is required");
         }
 
+        // 检查父级是否已请求中断
+        if (ctx.getLoopController() != null && ctx.getLoopController().isAbortRequested()) {
+            return ToolResult.ok("⏹️ 用户已中断，跳过并行任务执行");
+        }
+
         ToolRegistry registry = ctx.getToolRegistry();
         // 捕获父 AgentOutput（通过 TaskTool 的 ThreadLocal 传播机制）
         AgentOutput parentOutput = TaskTool.getCurrentOutput();
@@ -117,6 +122,14 @@ public class MultiTaskTool extends AgentTool {
         List<CompletableFuture<SubAgentResult>> futures = new ArrayList<>(taskList.size());
 
         for (Map<String, Object> taskDef : taskList) {
+            // 每次创建子代理前检查中断（用户可能在遍历过程中取消了）
+            if (Thread.currentThread().isInterrupted()) {
+                for (CompletableFuture<SubAgentResult> f : futures) {
+                    if (!f.isDone()) f.cancel(true);
+                }
+                return ToolResult.ok("⏹️ 用户已中断，部分任务未执行");
+            }
+
             String name = safeString(taskDef.get("name"), "unnamed_task");
             String arguments = safeString(taskDef.get("arguments"), name);
             String customSystemPrompt = safeString(taskDef.get("systemPrompt"), null);
@@ -126,10 +139,16 @@ public class MultiTaskTool extends AgentTool {
             ));
         }
 
-        // 3. 等待全部完成（超时保护 10 分钟）
+        // 3. 等待全部完成（超时保护 10 分钟，且可被中断）
         try {
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
                     .get(600, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            // 用户中断：取消所有未完成的子代理
+            for (CompletableFuture<SubAgentResult> f : futures) {
+                if (!f.isDone()) f.cancel(true);
+            }
         } catch (Exception e) {
             // 部分子代理可能超时或失败，收集已完成的
         }

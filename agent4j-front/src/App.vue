@@ -238,7 +238,7 @@ import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import {message} from 'ant-design-vue'
 import {useConfirm} from './composables/useConfirm'
-import {marked} from 'marked'
+import { md } from './utils/highlight'
 import {useAppStore} from './stores/app'
 import {agentAPI, configAPI, sessionsAPI, toolsAPI} from './services/api'
 import SetupScreen from './components/SetupScreen.vue'
@@ -317,7 +317,7 @@ const viewSystemPrompt = async () => {
 
 const fmtPrompt = c => {
   if (!c) return ''
-  return marked(c)
+  return md.parse(c)
 }
 
 const copyPrompt = () => {
@@ -574,7 +574,7 @@ const handleAddWorkspace = async () => {
 
 // 删除工作区
 const handleDeleteWorkspace = async (hash) => {
-  const ok = await confirm({ message: '确定要删除此工作区吗？（不会删除实际文件）' })
+  const ok = await confirm({ message: '确定要删除此工作区吗？' })
   if (!ok) return
   
   try {

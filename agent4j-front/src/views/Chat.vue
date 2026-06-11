@@ -85,7 +85,7 @@
                       <polyline points="6 9 12 15 18 9"/>
                     </svg>
                   </div>
-                  <div v-if="block.showContent" class="reasoning-text">{{ block.content }}</div>
+                  <div v-if="block.showContent" class="reasoning-text" v-html="fmt(block.content)"></div>
                 </div>
 
                 <!-- 内容 -->
@@ -195,7 +195,7 @@
                           <polyline points="6 9 12 15 18 9"/>
                         </svg>
                       </div>
-                      <div v-if="block.showContent" class="reasoning-text">{{ block.content }}</div>
+                      <div v-if="block.showContent" class="reasoning-text" v-html="fmt(block.content)"></div>
                     </div>
                     <div v-else-if="block.type === 'content'" class="block-content" v-html="fmt(block.content)"></div>
                     <div v-else-if="block.type === 'tool_call'" class="block-tool">
@@ -288,6 +288,7 @@
         @fetchTodos="fetchTodos"
         @refreshUsage="loadUsage"
         @switchModel="handleSwitchModel"
+        @refreshModels="loadUsage"
         @continue="continueChat"
     />
   </div>
@@ -295,10 +296,13 @@
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {agentAPI, chatAPI, configAPI} from '../services/api'
-import {marked} from 'marked'
+import { agentAPI, chatAPI, configAPI } from '../services/api'
+import { md } from '../utils/highlight'
 import ChatInput from '../components/ChatInput.vue'
-import {useAppStore} from '../stores/app'
+import { useAppStore } from '../stores/app'
+
+// SVG 图标（模板使用）
+const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
 
 // ============= 模型切换 =============
 const handleSwitchModel = async (modelName) => {
@@ -488,47 +492,25 @@ const hasAssistant = computed(() => messages.value.some(m => m.role === 'assista
 
 const now = () => new Date().toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit'})
 
-// 配置marked选项 —— 代码块右上角悬浮复制按钮
-const markedRenderer = new marked.Renderer()
-markedRenderer.code = (code, language) => {
-  const lang = language ? ` class="language-${language}"` : ''
-  return `<div class="code-block-wrap">
-    <pre><code${lang}>${code}</code><button class="code-copy-btn" onclick="copyCode(this)" title="复制代码">${COPY_ICON}</button></pre>
-  </div>`
-}
-
-marked.setOptions({
-  breaks: true,
-  gfm: true,
-  headerIds: false,
-  mangle: false,
-  renderer: markedRenderer
-})
-
 // 全局函数：代码复制（被 onclick 引用）
-// SVG 复制图标
-const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
-const CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>'
-
 window.copyCode = (btn) => {
   const wrap = btn.closest('.code-block-wrap')
   const code = wrap?.querySelector('code')?.textContent || ''
   navigator.clipboard.writeText(code).then(() => {
-    // 通过自定义事件通知 Vue 更新日志条
     window.dispatchEvent(new CustomEvent('copy-success', {detail: '代码已复制'}))
   }).catch(() => {
   })
 }
 
+// 使用共享 marked 实例（语法高亮 + 复制按钮已内置）
 const fmt = c => {
   if (!c) return ''
-  return marked(c)
+  return md.parse(c)
 }
 
-// 提示词用 markdown 渲染
 const fmtPrompt = c => {
   if (!c) return ''
-  return marked(c)
+  return md.parse(c)
 }
 
 // 复制整条消息内容
@@ -736,6 +718,7 @@ const sendMessage = async (images = []) => {
                 if (subAgentBlocks.value[i].type === 'tool_call' && subAgentBlocks.value[i].name === targetName && !subAgentBlocks.value[i].result) {
                   subAgentBlocks.value[i].result = rn;
                   subAgentBlocks.value[i].status = '成功';
+                  subAgentBlocks.value[i].expanded = false;
                   matched = true
                   break
                 }
@@ -746,6 +729,7 @@ const sendMessage = async (images = []) => {
                 if (subAgentBlocks.value[i].type === 'tool_call' && !subAgentBlocks.value[i].result) {
                   subAgentBlocks.value[i].result = rn;
                   subAgentBlocks.value[i].status = '成功';
+                  subAgentBlocks.value[i].expanded = false;
                   break
                 }
               }
@@ -801,6 +785,7 @@ const sendMessage = async (images = []) => {
                 if (msg.blocks[i].type === 'tool_call' && msg.blocks[i].name === targetName && !msg.blocks[i].result) {
                   msg.blocks[i].result = rn;
                   msg.blocks[i].status = '成功';
+                  msg.blocks[i].expanded = false;
                   matched = true
                   break
                 }
@@ -812,6 +797,7 @@ const sendMessage = async (images = []) => {
                 if (msg.blocks[i].type === 'tool_call' && !msg.blocks[i].result) {
                   msg.blocks[i].result = rn;
                   msg.blocks[i].status = '成功';
+                  msg.blocks[i].expanded = false;
                   break
                 }
               }
@@ -1051,7 +1037,7 @@ const loadHistory = async (sessionName, force = false) => {
               status: tr[tc.id] ? '成功' : '执行中',
               args,
               result: tr[tc.id] || '',
-              expanded: true
+              expanded: !tr[tc.id]
             })
           }
           if (m.content) item.blocks.push({type: 'content', content: m.content})
@@ -1436,8 +1422,43 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   font-family: var(--mono);
   color: var(--fg-3);
   line-height: 1.6;
-  white-space: pre-wrap;
 }
+.reasoning-text :deep(p) { margin: 0.4em 0; }
+.reasoning-text :deep(pre) {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 6px 10px;
+  margin: 4px 0;
+  overflow-x: auto;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.reasoning-text :deep(pre code) { background: none; padding: 0; }
+.reasoning-text :deep(code) {
+  font-size: 11px;
+  background: var(--bg-3);
+  padding: 1px 4px;
+  border-radius: 3px;
+}
+.reasoning-text :deep(.code-block-wrap) { margin: 4px 0; }
+.reasoning-text :deep(.code-block-wrap pre) { position: relative; margin: 0 !important; }
+.reasoning-text :deep(.code-copy-btn) {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  opacity: 0;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 1px 5px;
+  border-radius: var(--r-sm);
+  transition: opacity 0.15s;
+  line-height: 1;
+  z-index: 2;
+}
+.reasoning-text :deep(.code-block-wrap pre:hover .code-copy-btn) { opacity: 0.7; }
 
 /* 内容块 */
 .block-content {

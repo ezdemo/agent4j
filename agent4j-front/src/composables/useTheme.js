@@ -1,4 +1,5 @@
-import { ref, watch } from 'vue'
+import { ref } from 'vue'
+import { applyHljsTheme } from '../utils/hljsTheme'
 
 const theme = ref('light')
 
@@ -12,6 +13,8 @@ function applyTheme(val) {
   document.documentElement.setAttribute('data-theme', val)
   localStorage.setItem('agent4j-theme', val)
   theme.value = val
+  // 同步切换 highlight.js 语法高亮主题
+  applyHljsTheme(val)
 }
 
 // 初始化

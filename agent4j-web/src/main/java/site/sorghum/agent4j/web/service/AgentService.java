@@ -1202,6 +1202,14 @@ public class AgentService {
         } catch (Exception e) {
             log.warn("[web] 持久化工作区到 config.json 失败: {}", e.getMessage());
         }
+        // 确保工作区目录结构存在（~/.agent4j/workspace/{hash}/）
+        // 否则新工作区不会出现在 listWorkspaces 中，resolveWorkspacePath 也无法反查
+        try {
+            WorkspaceManager.getOrCreate(normalized);
+            log.info("[web] 工作区目录结构已创建: {}", normalized);
+        } catch (Exception e) {
+            log.warn("[web] 创建工作区目录结构失败: {}", e.getMessage());
+        }
         // 清除默认会话的缓存，让下次访问时使用新路径
         evictAgent(null, null);
         log.info("[web] 工作区已切换: {}", normalized);
@@ -1308,6 +1316,46 @@ public class AgentService {
 
         log.info("[web] 已删除工作区: {}，清除了 {} 个 Agent", hash, keysToRemove.size());
         return !keysToRemove.isEmpty();
+    }
+
+    // ==================== 命令与 Skill 查询 ====================
+
+    /**
+     * 获取所有命令的元数据列表（供前端命令选择弹窗使用）。
+     *
+     * @return 命令元数据列表
+     */
+    public String executeScheduledTask(String workspacePath, String sessionName, String message) {
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        ReentrantLock lock = getSessionLock(sessionKey);
+        lock.lock();
+
+        String effectiveSessionName = sessionName != null ? sessionName : "default";
+        CURRENT_SESSION_NAME.set(effectiveSessionName);
+
+        try {
+            Agent4jAgent agent = getOrCreateAgent(sessionKey);
+            if (agent == null) {
+                return "错误：无法创建 Agent 实例";
+            }
+
+            agent.setOutput(AgentOutput.NOOP);
+            String sessionId = sessionName != null ? sessionName : "default";
+            agent.setSessionId(sessionId);
+            return agent.chat(UserMessage.of(message));
+        } catch (Exception e) {
+            log.warn("[schedule] 定时任务执行异常: {}", e.getMessage());
+            return "错误：" + e.getMessage();
+        } finally {
+            CURRENT_SESSION_NAME.remove();
+            Agent4jAgent agent = sessionCache.get(sessionKey);
+            if (agent != null) {
+                agent.setOutput(AgentOutput.NOOP);
+                agent.flushSession();
+                agent.saveUsage();
+            }
+            lock.unlock();
+        }
     }
 
     // ==================== 命令与 Skill 查询 ====================

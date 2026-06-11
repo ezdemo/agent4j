@@ -133,6 +133,10 @@ public class ConversationContext {
         if (msg.hasContent() && NO_TO_JSONL.contains(msg.getContent())){
             return;
         }
+        // 空消息不持久化
+        if (msg.isAssistant() && !msg.hasContent() && !msg.hasToolCalls() && !msg.hasReasoningContent() && !msg.hasToolCallId()){
+            return;
+        }
         if (sessionStore != null) {
             try {
                 sessionStore.append(msg);

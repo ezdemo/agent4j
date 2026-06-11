@@ -337,7 +337,11 @@ public class HttpModelClient implements ModelClient {
                             log.debug("收到SSE流结束标记");
                             break;
                         }
-
+                        if (data.trim().startsWith("{\"error\":")) {
+                            log.error("收到SSE流错误: {}", data);
+                            callback.onError(data);
+                            return;
+                        }
                         // ★ 优化：快路径 — 无 tool_calls 且无 usage 的 chunk 走轻量字符串提取
                         boolean hasComplexFields = data.contains("\"tool_calls\"")
                                 || data.contains("\"usage\"");
@@ -659,7 +663,8 @@ public class HttpModelClient implements ModelClient {
         body.set("model", model);
         if (reasoningEffort != null && !reasoningEffort.isEmpty() && !Objects.equals(reasoningEffort, "none")) {
             body.set("reasoning_effort", reasoningEffort);
-            body.set("chat_template_kwargs",ONode.ofJson("{}").set("enable_thinking",true));
+            body.set("chat_template_kwargs", ONode.ofJson("{}").set("enable_thinking", true));
+            body.set("enable_thinking",true);
         }
 
         ONode msgs = body.getOrNew("messages").asArray();
