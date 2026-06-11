@@ -107,6 +107,9 @@ public class AgentLoop implements AgentLoopController {
     /** 用户主动中断标志（前端点击停止按钮时设置） */
     private volatile boolean userAbortRequested = false;
 
+    /** 当前正在执行的工具 Future 数组（用于 abort 时取消） */
+    private volatile CompletableFuture<ChatMessage>[] activeToolFutures = null;
+
     /** 任务完成标志 —— finish 工具设置，非空时主循环将退出并返回该内容 */
     private volatile String finishContent = null;
 
@@ -208,10 +211,29 @@ public class AgentLoop implements AgentLoopController {
         dispatcher.setPlanMode(on);
     }
 
-    /** 用户主动中断：设置中断标志并中止当前 HTTP 流式请求 */
+    /**
+     * 用户主动中断：设置中断标志、中止当前 HTTP 流式请求、取消正在执行的工具。
+     */
     public void requestUserAbort() {
         userAbortRequested = true;
         client.abortStream();
+        // 取消正在执行的工具 Future
+        CompletableFuture<ChatMessage>[] futures = activeToolFutures;
+        if (futures != null) {
+            for (CompletableFuture<ChatMessage> f : futures) {
+                if (f != null && !f.isDone()) {
+                    f.cancel(true);
+                }
+            }
+        }
+    }
+
+    /**
+     * 检查用户是否已请求中断（供 AgentLoopController 接口实现）。
+     */
+    @Override
+    public boolean isAbortRequested() {
+        return userAbortRequested;
     }
 
     /** 重置用户中断标志（每回合开始时调用） */
@@ -236,7 +258,17 @@ public class AgentLoop implements AgentLoopController {
 
     @Override
     public void requestStop() {
+        userAbortRequested = true;
         client.abortStream();
+        // 取消正在执行的工具 Future
+        CompletableFuture<ChatMessage>[] futures = activeToolFutures;
+        if (futures != null) {
+            for (CompletableFuture<ChatMessage> f : futures) {
+                if (f != null && !f.isDone()) {
+                    f.cancel(true);
+                }
+            }
+        }
         log.info("[loop] 工具请求停止推理循环");
     }
 
@@ -451,8 +483,11 @@ public class AgentLoop implements AgentLoopController {
         streamErrorRetryCount = 0;
         int noToolCallStreak = 0;
         for (int step = 0; ; step++) {
-            // ---- 0. 检查用户中断 ----
-            if (userAbortRequested) {
+            // ---- 0. 检查用户中断（标志位 + 线程中断，覆盖直接 cancel future 的场景）----
+            if (userAbortRequested || Thread.currentThread().isInterrupted()) {
+                if (!userAbortRequested) {
+                    userAbortRequested = true;
+                }
                 logAbort();
                 String lastContent = ctx.getLastAssistantContent();
                 return lastContent != null && !lastContent.isEmpty() ? lastContent : "⏹️ 已停止生成";
@@ -468,8 +503,8 @@ public class AgentLoop implements AgentLoopController {
             // ---- 2. 流式调用 LLM ----
             StreamResult sr = streamLLM(messages, tools);
 
-            // ---- 2.1 用户中断 ----
-            if (userAbortRequested) {
+            // ---- 2.1 用户中断（标志位 + 线程中断）----
+            if (userAbortRequested || Thread.currentThread().isInterrupted()) {
                 safeOutput("abort", () -> output.onLog(LogLevel.INFO, "[abort] 用户请求中断（streamLLM 后检测），停止推理循环"));
                 return handleAbortAfterStream(sr);
             }
@@ -508,9 +543,7 @@ public class AgentLoop implements AgentLoopController {
                 }
 
                 // 渐进式轻推
-                if (noToolCallStreak >= 2) {
-                    ctx.addUser(FinishTool.TIPS);
-                }
+                ctx.addUser(FinishTool.TIPS);
                 continue;
             }
 
@@ -541,7 +574,7 @@ public class AgentLoop implements AgentLoopController {
             if (finishContent != null) {
                 String result = finishContent;
                 finishContent = null;
-                safeOutput("finish", () -> output.onContentDelta(result));
+                safeOutput("finish", () -> output.onLog(LogLevel.DEBUG, result));
                 return result;
             }
 
@@ -718,7 +751,7 @@ public class AgentLoop implements AgentLoopController {
         client.chatStream(messages, tools, new ModelClient.StreamCallback() {
             @Override
             public void onReasoningDelta(String token) {
-                if (loopAborted.get() || userAbortRequested) return;
+                if (loopAborted.get() || userAbortRequested || Thread.currentThread().isInterrupted()) return;
                 reasoningBuf.append(token);
                 safeOutputDebug("reasoningDelta", () -> output.onReasoningDelta(token));
                 // 流式增量检测：每 500 字符检查一次思考循环
@@ -904,6 +937,14 @@ public class AgentLoop implements AgentLoopController {
         for (int i = 0; i < tcCount; i++) {
             final int idx = i;
             futures[i] = CompletableFuture.supplyAsync(() -> {
+                // 用户已中断 → 立即返回，不执行工具
+                if (userAbortRequested) {
+                    ONode tc = tcArray[idx];
+                    String tcId = tc.get("id").getString();
+                    return toolResult(tcId,
+                            "{\"error\":\"用户已中断\",\"aborted\":true}");
+                }
+
                 if (skipSandboxCheck) {
                     ToolContext.enableSandboxBypass();
                 }
@@ -943,21 +984,43 @@ public class AgentLoop implements AgentLoopController {
 
     /**
      * 等待所有工具 Future 完成（带超时保护），收集结果。
+     * 如果用户请求中断，立即取消未完成的 Future 并返回。
      */
     private List<ChatMessage> collectToolResults(CompletableFuture<ChatMessage>[] futures,
                                                   ONode[] tcArray) {
+        // 保存活跃 futures 引用，供 requestUserAbort() 取消
+        this.activeToolFutures = futures;
         try {
+            // 在等待之前检查用户是否已请求中断
+            if (userAbortRequested) {
+                cancelAllFutures(futures);
+                return buildAbortedResults(futures, tcArray);
+            }
+
             CompletableFuture.allOf(futures).get(toolTimeoutSec(), TimeUnit.SECONDS);
+
+            // allOf 完成后，再次检查是否被用户中断
+            if (userAbortRequested) {
+                cancelAllFutures(futures);
+                return buildAbortedResults(futures, tcArray);
+            }
         } catch (TimeoutException e) {
             safeOutput("toolTimeout", () -> output.onLog(LogLevel.WARN,
                     "[tool] 工具执行超时（" + toolTimeoutSec() + "s），取消未完成的调用"));
-            for (CompletableFuture<ChatMessage> f : futures) {
-                if (!f.isDone()) f.cancel(true);
-            }
+            cancelAllFutures(futures);
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
+            cancelAllFutures(futures);
+            return buildAbortedResults(futures, tcArray);
+        } catch (CancellationException e) {
+            // allOf 被取消（可能是用户中断导致所有 future 被取消）
+            safeOutput("toolAborted", () -> output.onLog(LogLevel.INFO,
+                    "[tool] 工具执行被用户中断"));
+            return buildAbortedResults(futures, tcArray);
         } catch (ExecutionException e) {
             log.debug("[tool] 工具执行异常: {}", e.getMessage());
+        } finally {
+            this.activeToolFutures = null;
         }
 
         List<ChatMessage> toolResults = new ArrayList<>();
@@ -979,6 +1042,32 @@ public class AgentLoop implements AgentLoopController {
             }
         }
         return toolResults;
+    }
+
+    /**
+     * 取消所有未完成的 Future。
+     */
+    private void cancelAllFutures(CompletableFuture<ChatMessage>[] futures) {
+        for (CompletableFuture<ChatMessage> f : futures) {
+            if (f != null && !f.isDone()) {
+                f.cancel(true);
+            }
+        }
+    }
+
+    /**
+     * 构建用户中断时的工具结果（全部标记为 aborted）。
+     */
+    private List<ChatMessage> buildAbortedResults(CompletableFuture<ChatMessage>[] futures,
+                                                   ONode[] tcArray) {
+        List<ChatMessage> results = new ArrayList<>();
+        for (int i = 0; i < futures.length; i++) {
+            ONode tc = tcArray[i];
+            String tcId = tc.get("id").getString();
+            results.add(toolResult(tcId,
+                    "{\"error\":\"用户已中断\",\"aborted\":true}"));
+        }
+        return results;
     }
 
     @SuppressWarnings("unchecked")

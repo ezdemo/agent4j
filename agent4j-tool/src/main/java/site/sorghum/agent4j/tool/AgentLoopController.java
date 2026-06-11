@@ -63,4 +63,15 @@ public interface AgentLoopController {
     default void finish(String content) {
         // 默认空实现，AgentLoop 中会覆盖此方法
     }
+
+    /**
+     * 检查用户是否已请求中断/停止。
+     * <p>工具（尤其是长时间运行的工具如 task/multi_task/bash）应该定期检查此标志，
+     * 如果返回 true 应尽快停止执行并返回。</p>
+     *
+     * @return true 表示用户已请求停止
+     */
+    default boolean isAbortRequested() {
+        return false;
+    }
 }

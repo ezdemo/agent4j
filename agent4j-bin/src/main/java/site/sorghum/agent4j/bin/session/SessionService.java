@@ -2,6 +2,7 @@ package site.sorghum.agent4j.bin.session;
 
 import lombok.Getter;
 import lombok.Setter;
+import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.bin.agent.ChatMessage;
 import site.sorghum.agent4j.bin.agent.ConversationContext;
 import site.sorghum.agent4j.bin.agent.MessageHealer;
@@ -21,6 +22,7 @@ import java.util.Map;
  *
  * @author Sorghum
  */
+@Slf4j
 public class SessionService {
 
     private final ConversationContext ctx;
@@ -278,7 +280,7 @@ public class SessionService {
         try {
             store.updateTitle(name, title);
         } catch (IOException e) {
-            System.err.println("[session] 更新会话标题失败: " + e.getMessage());
+            log.error("[session] 更新会话标题失败: {}", e.getMessage());
         }
     }
 }

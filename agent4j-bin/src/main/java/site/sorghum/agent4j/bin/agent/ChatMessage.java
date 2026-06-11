@@ -228,6 +228,14 @@ public class ChatMessage {
         return content != null && !content.isEmpty();
     }
 
+    public boolean hasReasoningContent() {
+        return reasoningContent != null && !reasoningContent.isEmpty();
+    }
+
+    public boolean hasToolCallId() {
+        return toolCallId != null && !toolCallId.isEmpty();
+    }
+
     public boolean hasToolCalls() {
         return toolCalls != null && !toolCalls.isEmpty();
     }

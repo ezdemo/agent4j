@@ -325,6 +325,7 @@ pre {
   overflow-x: auto;
 }
 pre code { background: none; padding: 0; }
+pre code.hljs { background: transparent; } /* 让 pre 背景透出，避免 hljs 自带背景色干扰 */
 
 button { font: inherit; cursor: pointer; border: none; background: none; color: inherit; }
 input, textarea { font: inherit; color: inherit; }

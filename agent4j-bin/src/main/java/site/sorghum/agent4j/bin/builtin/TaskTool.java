@@ -136,6 +136,11 @@ public class TaskTool extends AgentTool {
         String customSystemPrompt = ctx.getString("systemPrompt");
         if (arguments == null) arguments = name;
         try {
+            // 检查父级是否已请求中断（通过 AgentLoopController 传播的 ThreadLocal）
+            if (ctx.getLoopController() != null && ctx.getLoopController().isAbortRequested()) {
+                return ToolResult.ok("⏹️ 用户已中断，跳过子代理执行");
+            }
+
             ToolRegistry registry = ctx.getToolRegistry();
 
             // 构建子代理的 system prompt
