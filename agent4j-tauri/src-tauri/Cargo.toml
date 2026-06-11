@@ -1,6 +1,6 @@
 [package]
 name = "agent4j-tauri"
-version = "26.6.10"
+version = "26.6.11"
 description = "Agent4j - 桌面端 AI 代码助手"
 authors = ["Agent4j Team"]
 license = "MIT"
