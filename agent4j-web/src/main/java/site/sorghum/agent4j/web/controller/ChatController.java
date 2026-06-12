@@ -11,8 +11,10 @@ import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.model.ChatRequest;
 import site.sorghum.agent4j.web.model.ChatResultDTO;
 import site.sorghum.agent4j.web.service.AgentService;
+import site.sorghum.agent4j.web.service.SnapshotService;
 import site.sorghum.agent4j.web.service.SseEmitter;
 
+import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ThreadFactory;
@@ -40,6 +42,9 @@ public class ChatController {
 
     @Inject
     private AgentService agentService;
+
+    @Inject
+    private SnapshotService snapshotService;
 
     @ApiOperation(value = "同步聊天", notes = "发送消息并等待完整回复，返回回复内容、耗时和 Token 用量")
     @Post
@@ -101,6 +106,16 @@ public class ChatController {
 
         chatExecutor.submit(() -> {
             try {
+                // ★ 创建快照检查点：在 AI 执行修改前保存当前工作区状态
+                String msgId = UUID.randomUUID().toString().substring(0, 8);
+                boolean snapshotCreated = createCheckpointIfNeeded(request.getWorkspaceHash(), msgId, emitter);
+                // 只有快照实际创建成功时，才通过 SSE 通知前端
+                if (snapshotCreated) {
+                    emitter.sendSnapshot(msgId);
+                    // 将快照 ID 传递给 UserMessage，以便 JSONL 持久化
+                    userMsg.setSnapshotId(msgId);
+                }
+
                 agentService.chatStream(userMsg, resolvedPath, sessionName, emitter);
             } catch (Exception e) {
                 try {
@@ -113,6 +128,27 @@ public class ChatController {
 
         // ★ 关键：阻塞 handler 线程直到 SSE 流结束，防止 Solon 提前关闭 OutputStream
         emitter.awaitCompletion();
+    }
+
+    /**
+     * 按需创建快照检查点：仅当工作区是 Git 仓库时才创建，非 Git 仓库静默跳过。
+     *
+     * @return true 表示快照创建成功，false 表示跳过或失败
+     */
+    private boolean createCheckpointIfNeeded(String workspaceHash, String msgId, SseEmitter emitter) {
+        try {
+            if (snapshotService.isGitRepo(workspaceHash)) {
+                SnapshotService.SnapshotInfo info = snapshotService.createCheckpoint(workspaceHash, msgId);
+                log.info("[chat] 快照已创建: msgId={}, commitHash={}", msgId, info.getCommitHash());
+                return true;
+            } else {
+                log.debug("[chat] 工作区非 Git 仓库，跳过快照创建");
+            }
+        } catch (Exception e) {
+            // 快照失败不应阻塞聊天流程，仅记录日志
+            log.warn("[chat] 创建快照检查点失败（不影响聊天）: {}", e.getMessage());
+        }
+        return false;
     }
 
     /** 构建 JSON 错误响应字符串。 */
