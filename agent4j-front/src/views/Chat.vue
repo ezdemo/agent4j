@@ -739,7 +739,7 @@ const sendMessage = async (images = []) => {
           } else if (data.type === 'sub_reasoning') {
             const lb = subAgentBlocks.value[subAgentBlocks.value.length - 1]
             if (lb?.type === 'reasoning') lb.content += (data.content || '')
-            else subAgentBlocks.value.push({type: 'reasoning', content: data.content || '', showContent: true})
+            else subAgentBlocks.value.push({type: 'reasoning', content: data.content || '', showContent: false})
           } else if (data.type === 'sub_tool_call') {
             let name = data.name || '', args = data.args || data.arguments || ''
             if (typeof args === 'string') try {
@@ -802,7 +802,7 @@ const sendMessage = async (images = []) => {
           } else if (data.type === 'reasoning') {
             const lb = msg.blocks[msg.blocks.length - 1]
             if (lb?.type === 'reasoning') lb.content += (data.content || '')
-            else msg.blocks.push({type: 'reasoning', content: data.content || '', showContent: true})
+            else msg.blocks.push({type: 'reasoning', content: data.content || '', showContent: false})
           } else if (data.type === 'content') {
             const lb = msg.blocks[msg.blocks.length - 1]
             if (lb?.type === 'content') lb.content += (data.content || '')
@@ -1139,7 +1139,7 @@ const loadHistory = async (sessionName, force = false) => {
           if (m.reasoning_content) item.blocks.push({
             type: 'reasoning',
             content: m.reasoning_content,
-            showContent: true
+            showContent: false
           })
           if (m.tool_calls) for (const tc of m.tool_calls) {
             let name = tc.function?.name || tc.name || '', args = tc.function?.arguments || tc.arguments || ''
@@ -1435,9 +1435,16 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 .msg-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-top: 4px;
   gap: 8px;
+  margin-top: 4px;
+}
+
+.user-body .msg-footer {
+  justify-content: flex-end;
+}
+
+.assistant-body .msg-footer {
+  justify-content: space-between;
 }
 
 .copy-msg-btn {
@@ -1446,23 +1453,28 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   border: none;
   font-size: 12px;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 3px 5px;
   border-radius: var(--r-sm);
-  transition: opacity 0.15s;
+  transition: opacity 0.2s, background 0.2s;
   line-height: 1;
   color: var(--fg-3);
 }
 
 .user-body .copy-msg-btn {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .msg-body:hover .copy-msg-btn {
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
 .copy-msg-btn:hover {
-  opacity: 1 !important;
+  opacity: 1;
+  background: var(--glass-bg-2);
+}
+
+.user-body .copy-msg-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
 }
 
 /* 撤回按钮（恢复到 AI 修改前的状态） */
@@ -1472,9 +1484,9 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   border: none;
   font-size: 12px;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 3px 5px;
   border-radius: var(--r-sm);
-  transition: opacity 0.15s;
+  transition: opacity 0.2s, background 0.2s;
   line-height: 1;
   color: var(--fg-3);
 }
@@ -1485,16 +1497,22 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 }
 
 .user-body .rollback-btn {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .msg-body:hover .rollback-btn {
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
 .rollback-btn:hover {
-  opacity: 1 !important;
+  opacity: 1;
+  background: rgba(231, 76, 60, 0.12);
   color: var(--accent-5, #e74c3c);
+}
+
+.user-body .rollback-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
 }
 
 /* 代码块内嵌复制按钮（通过 :deep 穿透 v-html） */
