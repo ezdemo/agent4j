@@ -19,20 +19,34 @@ import site.sorghum.agent4j.web.model.SystemVersionDTO;
 @Mapping("/api/system")
 public class SystemController {
 
-    private static final String VERSION = "1.0-SNAPSHOT";
-    private static final String BUILD_TIME = "2025-01-01";
-
+    /**
+     * 健康检查 — 不需要版本注入，直接返回固定状态。
+     */
     @ApiOperation(value = "健康检查", notes = "返回服务是否正常运行，无需 Agent 初始化即可访问")
     @Get
     @Mapping("/health")
     public ApiResponse<SystemHealthDTO> health() {
-        return ApiResponse.ok(new SystemHealthDTO("ok", VERSION, BUILD_TIME));
+        String version = readVersion();
+        return ApiResponse.ok(new SystemHealthDTO("ok", version, ""));
     }
 
-    @ApiOperation(value = "获取版本信息", notes = "返回当前 Agent4j 的版本号和构建时间")
+    /**
+     * 获取版本信息 — 从 Solon 配置读取 Maven 注入的版本号。
+     */
+    @ApiOperation(value = "获取版本信息", notes = "返回当前 Agent4j 的运行版本和名称")
     @Get
     @Mapping("/version")
     public ApiResponse<SystemVersionDTO> version() {
-        return ApiResponse.ok(new SystemVersionDTO(VERSION, BUILD_TIME, "Agent4j"));
+        String version = readVersion();
+        String name = org.noear.solon.Solon.cfg().get("solon.app.name");
+        return ApiResponse.ok(new SystemVersionDTO(version, "", name));
+    }
+
+    /**
+     * 从 Solon 配置读取版本号（由 Maven 资源过滤从 pom.xml 注入）。
+     */
+    private String readVersion() {
+        String v = org.noear.solon.Solon.cfg().get("solon.app.version");
+        return (v != null && !v.isEmpty()) ? v : "unknown";
     }
 }

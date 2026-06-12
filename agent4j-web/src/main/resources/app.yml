@@ -1,6 +1,8 @@
 solon.app:
   name: "agent4j-web"
   group: "agent4j"
+  version: "@project.version@"
+version.check.url: "https://gitee.com/api/v5/repos/ezdemo/agent4j/releases/latest"
 server:
   port: 4567
 

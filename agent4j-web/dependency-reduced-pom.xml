@@ -3,13 +3,29 @@
   <parent>
     <artifactId>agent4j</artifactId>
     <groupId>site.sorghum.agent</groupId>
-      <version>26.6.12</version>
+      <version>26.6.12.1</version>
   </parent>
   <modelVersion>4.0.0</modelVersion>
   <artifactId>agent4j-web</artifactId>
   <build>
+    <resources>
+      <resource>
+        <filtering>true</filtering>
+        <directory>src/main/resources</directory>
+      </resource>
+    </resources>
     <finalName>${project.artifactId}</finalName>
     <plugins>
+      <plugin>
+        <artifactId>maven-resources-plugin</artifactId>
+        <version>3.3.1</version>
+        <configuration>
+          <useDefaultDelimiters>false</useDefaultDelimiters>
+          <delimiters>
+            <delimiter>@</delimiter>
+          </delimiters>
+        </configuration>
+      </plugin>
       <plugin>
         <artifactId>maven-shade-plugin</artifactId>
         <version>3.5.1</version>
