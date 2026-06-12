@@ -279,9 +279,9 @@ import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import {message} from 'ant-design-vue'
 import {useConfirm} from './composables/useConfirm'
-import { md } from './utils/highlight'
+import {md} from './utils/highlight'
 import {useAppStore} from './stores/app'
-import {agentAPI, configAPI, sessionsAPI, toolsAPI, systemAPI} from './services/api'
+import {agentAPI, configAPI, sessionsAPI, systemAPI, toolsAPI} from './services/api'
 import SetupScreen from './components/SetupScreen.vue'
 import TitleBar from './components/TitleBar.vue'
 import SplashScreen from './components/SplashScreen.vue'
@@ -332,7 +332,6 @@ const workspace = ref('')
 const appVersion = ref('')
 const hasNewVersion = ref(false)
 const showUpdateModal = ref(false)
-let versionCheckTimer = null
 
 // 系统提示词弹窗
 const promptModalOpen = ref(false)
@@ -842,16 +841,10 @@ onMounted(async () => {
   // 异步获取版本信息（不阻塞启动）
   fetchVersionInfo()
 
-  // 每 10 分钟轮询检查新版本
-  versionCheckTimer = setInterval(fetchVersionInfo, 10 * 60 * 1000)
 })
 
 onBeforeUnmount(() => {
   stopHeartbeat()
-  if (versionCheckTimer) {
-    clearInterval(versionCheckTimer)
-    versionCheckTimer = null
-  }
 })
 
 // 获取版本信息
