@@ -22,10 +22,13 @@
       :hasMessages="true"
       :hasSession="!!currentSession"
       :gitOn="gitOpen"
+      :version="appVersion"
+      :hasNewVersion="hasNewVersion"
       @toggleSide="sideOpen = !sideOpen"
       @openSettings="showSettings = true"
       @toggleGit="gitOpen = !gitOpen"
       @viewPrompt="viewSystemPrompt"
+      @showUpdate="showUpdateModal = true"
     />
 
     <!-- 主体区域 -->
@@ -230,6 +233,44 @@
     <!-- OpenAPI 管理弹窗 -->
     <!-- 确认对话框 -->
     <ConfirmDialog />
+
+    <!-- 版本更新弹窗 -->
+    <Teleport to="body">
+      <div v-if="showUpdateModal" class="update-modal-mask" @click.self="showUpdateModal = false">
+        <div class="update-modal">
+          <div class="update-modal-head">
+            <span>一键{{ hasNewVersion ? '更新' : '重装' }}</span>
+            <button class="btn-icon-xs" @click="showUpdateModal = false">×</button>
+          </div>
+          <div class="update-modal-body">
+            <p class="update-modal-desc">在终端中执行以下命令即可完成{{ hasNewVersion ? '更新' : '重装' }}：</p>
+
+            <div class="update-platform">
+              <div class="update-platform-label">Windows（PowerShell）：</div>
+              <div class="update-code-block">
+                <code>irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex</code>
+                <button class="update-copy-btn" @click="copyText('irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex')" title="复制">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+              </div>
+            </div>
+
+            <div class="update-platform">
+              <div class="update-platform-label">macOS / Linux：</div>
+              <div class="update-code-block">
+                <code>curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash</code>
+                <button class="update-copy-btn" @click="copyText('curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash')" title="复制">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                </button>
+              </div>
+            </div>
+          </div>
+          <div class="update-modal-foot">
+            <button class="btn" @click="showUpdateModal = false">关闭</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -240,7 +281,7 @@ import {message} from 'ant-design-vue'
 import {useConfirm} from './composables/useConfirm'
 import { md } from './utils/highlight'
 import {useAppStore} from './stores/app'
-import {agentAPI, configAPI, sessionsAPI, toolsAPI} from './services/api'
+import {agentAPI, configAPI, sessionsAPI, toolsAPI, systemAPI} from './services/api'
 import SetupScreen from './components/SetupScreen.vue'
 import TitleBar from './components/TitleBar.vue'
 import SplashScreen from './components/SplashScreen.vue'
@@ -286,6 +327,11 @@ const gitOpen = ref(false)
 const initialDataLoaded = ref(false)
 const chatRef = ref(null)
 const workspace = ref('')
+
+// 版本信息
+const appVersion = ref('')
+const hasNewVersion = ref(false)
+const showUpdateModal = ref(false)
 
 // 系统提示词弹窗
 const promptModalOpen = ref(false)
@@ -791,7 +837,45 @@ onMounted(async () => {
     localStorage.removeItem('agent4j-api-base')
   }
   console.log('[App] Cleared stale port from localStorage')
+
+  // 异步获取版本信息（不阻塞启动）
+  fetchVersionInfo()
 })
+
+// 获取版本信息
+async function fetchVersionInfo() {
+  try {
+    const res = await systemAPI.getCurrentVersion()
+    if (res.success && res.data) {
+      appVersion.value = res.data.version || ''
+    }
+  } catch { /* 版本获取失败静默处理 */ }
+  try {
+    const checkRes = await systemAPI.checkLatestVersion()
+    if (checkRes.success && checkRes.data) {
+      hasNewVersion.value = checkRes.data.hasNewVersion
+      if (!appVersion.value) {
+        appVersion.value = checkRes.data.currentVersion || ''
+      }
+    }
+  } catch { /* 版本检查失败静默处理 */ }
+}
+
+// 复制文本到剪贴板
+function copyText(text) {
+  try {
+    navigator.clipboard.writeText(text)
+    message.success('已复制到剪贴板')
+  } catch {
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+    message.success('已复制到剪贴板')
+  }
+}
 
 onBeforeUnmount(() => {
   stopHeartbeat()
@@ -1164,5 +1248,116 @@ watch(showSettings, (newVal) => {
   margin: 1em 0;
   border: none;
   border-top: 1px solid var(--border);
+}
+
+/* ==================== 版本更新弹窗 ==================== */
+:global(.update-modal-mask) {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+:global(.update-modal) {
+  width: 600px;
+  max-width: 90vw;
+  background: var(--bg);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+:global(.update-modal-head) {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+:global(.update-modal-body) {
+  padding: 20px;
+}
+
+:global(.update-modal-desc) {
+  font-size: 13px;
+  color: var(--fg-3);
+  margin: 0 0 16px;
+}
+
+:global(.update-platform) {
+  margin-bottom: 16px;
+}
+
+:global(.update-platform:last-child) {
+  margin-bottom: 0;
+}
+
+:global(.update-platform-label) {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+  margin-bottom: 6px;
+}
+
+:global(.update-code-block) {
+  display: flex;
+  align-items: center;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  gap: 8px;
+}
+
+:global(.update-code-block code) {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg);
+  word-break: break-all;
+  line-height: 1.5;
+  user-select: all;
+}
+
+:global(.update-copy-btn) {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r);
+  color: var(--fg-3);
+  transition: all var(--t);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+
+:global(.update-copy-btn:hover) {
+  background: var(--bg-3);
+  color: var(--accent);
+}
+
+:global(.update-modal-foot) {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+
+[data-theme="dark"] :global(.update-modal-mask) {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+[data-theme="dark"] :global(.update-modal) {
+  border: 1px solid var(--border);
 }
 </style>
