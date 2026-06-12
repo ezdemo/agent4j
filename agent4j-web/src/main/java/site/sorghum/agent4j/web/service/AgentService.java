@@ -191,8 +191,11 @@ public class AgentService {
     /**
      * 共享的 API 配置
      */
+    @Getter
     private volatile String sharedApiUrl;
+    @Getter
     private volatile String sharedApiKey;
+    @Getter
     private volatile String sharedModel;
     /**
      * 当前 HITL 模式（true=手动需审批，false=自由直接执行）
