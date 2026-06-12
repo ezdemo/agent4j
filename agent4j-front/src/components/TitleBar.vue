@@ -12,6 +12,10 @@
       <div class="tb-brand">
         <img src="../assets/logo.png" alt="Agent4j Logo" class="titlebar-logo-img" />
         <span class="tb-brand-name">Agent4j</span>
+        <span class="tb-version" :class="{ 'has-update': hasNewVersion }" @click.stop="$emit('showUpdate')" :title="hasNewVersion ? '有新版本可用，点击查看' : ''">
+          v{{ version }}
+          <span v-if="hasNewVersion" class="tb-version-dot"></span>
+        </span>
       </div>
 
       <div v-if="session" class="tb-breadcrumb">
@@ -79,10 +83,12 @@ defineProps({
   sideOn: { type: Boolean, default: true },
   hasMessages: { type: Boolean, default: false },
   hasSession: { type: Boolean, default: false },
-  gitOn: { type: Boolean, default: false }
+  gitOn: { type: Boolean, default: false },
+  version: { type: String, default: '' },
+  hasNewVersion: { type: Boolean, default: false }
 })
 
-defineEmits(['toggleSide', 'openSettings', 'clear', 'export', 'toggleGit'])
+defineEmits(['toggleSide', 'openSettings', 'clear', 'export', 'toggleGit', 'showUpdate'])
 
 const isMaximized = ref(false)
 const isTauri = ref(false)
@@ -284,5 +290,62 @@ const closeWindow = async () => {
 
 [data-theme="dark"] .tb-win-btn.close:hover {
   background: #c42b1c;
+}
+
+/* 版本号 */
+.tb-version {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--fg-4);
+  margin-left: 4px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: all var(--t);
+  position: relative;
+  -webkit-app-region: no-drag;
+  user-select: none;
+}
+
+.tb-version:hover {
+  color: var(--accent);
+  background: var(--bg-3);
+}
+
+.tb-version.has-update {
+  color: #ef4444;
+  background: rgba(239, 68, 68, 0.1);
+}
+
+.tb-version.has-update:hover {
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.tb-version-dot {
+  position: absolute;
+  top: -2px;
+  right: -2px;
+  width: 8px;
+  height: 8px;
+  background: #ef4444;
+  border-radius: 50%;
+  animation: tb-version-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes tb-version-pulse {
+  0%, 100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.4;
+    transform: scale(1.3);
+  }
+}
+
+@media (max-width: 768px) {
+  .tb-version {
+    display: none;
+  }
 }
 </style>

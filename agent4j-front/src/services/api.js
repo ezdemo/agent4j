@@ -519,6 +519,16 @@ export const systemAPI = {
   getVersion: () => {
     return api.get('/system/version')
   },
+
+  // 获取当前版本（新版） - GET /api/version/
+  getCurrentVersion: () => {
+    return api.get('/version/')
+  },
+
+  // 检查最新版本 - GET /api/version/check
+  checkLatestVersion: () => {
+    return api.get('/version/check')
+  },
   
   // 获取系统日志
   getLogs: (params) => {
