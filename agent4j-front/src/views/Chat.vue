@@ -51,7 +51,7 @@
       </div>
 
       <!-- 消息列表 -->
-      <div v-for="(msg, idx) in messages" :key="msg.id" class="msg" :class="msg.role">
+      <div v-for="(msg, idx) in messages" :key="msg.id" class="msg" :class="msg.role" :data-msg-idx="idx">
         <!-- 用户消息 -->
         <template v-if="msg.role === 'user'">
           <div class="msg-body user-body">
@@ -152,6 +152,21 @@
           <div class="typing">
             <span></span><span></span><span></span>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 消息缩略图 dock（右侧 dock 栏，仅用户消息） -->
+    <div v-if="userMessages.length > 0" class="msg-thumb-dock">
+      <div class="thumb-dock-inner">
+        <div
+          v-for="(um, ui) in userMessages"
+          :key="um.id"
+          class="thumb-item"
+          @click="jumpToMessage(um.globalIdx)"
+        >
+          <span class="thumb-indicator"></span>
+          <span class="thumb-preview">{{ truncateText(um.content, 40) }}</span>
         </div>
       </div>
     </div>
@@ -499,6 +514,28 @@ const suggestions = ['解释这段代码', '优化这个函数', '写个单元�
 const SILENT_CMDS = new Set(['/agree', '/deny', '/exit', '/continue'])
 
 const hasAssistant = computed(() => messages.value.some(m => m.role === 'assistant' && m.blocks?.length > 0))
+
+// ===== 消息缩略图 dock =====
+/** 只取 role === 'user' 的消息，并记录全局索引用于跳转 */
+const userMessages = computed(() => {
+  return messages.value
+    .map((m, idx) => ({...m, globalIdx: idx}))
+    .filter(m => m.role === 'user')
+})
+
+/** 截取文本前 N 个字符 */
+const truncateText = (text, max) => {
+  if (!text) return ''
+  return text.length > max ? text.slice(0, max) + '…' : text
+}
+
+/** 点击缩略图跳转到对应消息 */
+const jumpToMessage = (globalIdx) => {
+  const el = messagesContainer.value?.querySelector(`[data-msg-idx="${globalIdx}"]`)
+  if (el) {
+    el.scrollIntoView({behavior: 'smooth', block: 'start'})
+  }
+}
 
 const now = () => new Date().toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit'})
 
@@ -2343,5 +2380,95 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   font-size: 13px;
   cursor: default;
   user-select: none;
+}
+
+/* ===== 消息缩略图 dock（右侧 dock 栏） ===== */
+.msg-thumb-dock {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 50;
+  pointer-events: none;
+}
+
+.thumb-dock-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 4px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--glass-shadow);
+  pointer-events: auto;
+  opacity: 0.35;
+  transition: opacity 0.25s ease, box-shadow 0.25s ease;
+  max-height: 70vh;
+  overflow-y: auto;
+  min-width: 10px;
+}
+
+.thumb-dock-inner:hover {
+  opacity: 0.95;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+}
+
+.thumb-dock-inner::-webkit-scrollbar {
+  width: 2px;
+}
+
+.thumb-dock-inner::-webkit-scrollbar-thumb {
+  background: var(--fg-4);
+  border-radius: 1px;
+}
+
+.thumb-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.thumb-item:hover {
+  background: var(--accent-bg);
+}
+
+.thumb-item:hover .thumb-indicator {
+  background: var(--accent);
+  transform: scale(1.2);
+}
+
+.thumb-indicator {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fg-4);
+  transition: all 0.2s ease;
+}
+
+.thumb-preview {
+  font-size: 11px;
+  color: var(--fg-3);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 0;
+  opacity: 0;
+  transition: max-width 0.25s ease, opacity 0.25s ease, margin-left 0.25s ease;
+}
+
+.thumb-dock-inner:hover .thumb-preview {
+  max-width: 180px;
+  opacity: 1;
+  margin-left: 2px;
 }
 </style>
