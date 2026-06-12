@@ -62,6 +62,12 @@
             <version>${solon.version}</version>
         </dependency>
 
+        <!-- Solon AI（LLM 聊天模型） -->
+        <dependency>
+            <groupId>org.noear</groupId>
+            <artifactId>solon-ai</artifactId>
+        </dependency>
+
         <!-- JSON 解析 -->
         <dependency>
             <groupId>org.noear</groupId>
