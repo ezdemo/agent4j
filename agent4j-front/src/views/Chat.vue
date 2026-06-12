@@ -90,9 +90,7 @@
                       <polyline points="6 9 12 15 18 9"/>
                     </svg>
                   </div>
-                  <div v-if="block.showContent" class="reasoning-text">
-                    {{ block.content }}
-                  </div>
+                  <div v-if="block.showContent" class="reasoning-text" v-html="getReasoningHtml(block)"></div>
                 </div>
 
                 <!-- 内容 -->
@@ -217,9 +215,7 @@
                           <polyline points="6 9 12 15 18 9"/>
                         </svg>
                       </div>
-                      <div v-if="block.showContent" class="reasoning-text">
-                        {{ block.content }}
-                      </div>
+                      <div v-if="block.showContent" class="reasoning-text" v-html="getReasoningHtml(block)"></div>
                     </div>
                     <div v-else-if="block.type === 'content'" class="block-content" v-html="fmt(block.content)"></div>
                     <div v-else-if="block.type === 'tool_call'" class="block-tool">
@@ -557,6 +553,19 @@ window.copyCode = (btn) => {
 const fmt = c => {
   if (!c) return ''
   return md.parse(c)
+}
+
+// 带缓存的 reasoning Markdown 渲染：只在展开时计算，折叠时返回空；
+// 展开后内容变化自动重算，内容不变直接命中缓存，避免反复解析长文本。
+const getReasoningHtml = (block) => {
+  if (!block.showContent) return ''
+  if (!block.content) return ''
+  if (block._cachedContent === block.content && block._cachedHtml) {
+    return block._cachedHtml
+  }
+  block._cachedContent = block.content
+  block._cachedHtml = fmt(block.content)
+  return block._cachedHtml
 }
 
 const fmtPrompt = c => {
