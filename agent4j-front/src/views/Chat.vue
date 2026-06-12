@@ -61,12 +61,11 @@
             </div>
             <div class="msg-footer">
               <span class="msg-time">{{ msg.time }}</span>
-              <button v-if="msg.snapshotId && !msg.rolledBack" class="rollback-btn"
+              <button v-if="msg.snapshotId" class="rollback-btn"
                       :class="{ loading: snapshotRollbackLoading.get(msg.snapshotId) }"
                       @click="rollbackSnapshot(msg.snapshotId)"
                       title="撤回 AI 修改，恢复到发送前状态"
                       v-html="ROLLBACK_ICON"></button>
-              <span v-if="msg.rolledBack" class="rolled-back-tag">已撤回</span>
               <button class="copy-msg-btn" @click="copyMessage(msg)" title="复制消息" v-html="COPY_ICON"></button>
             </div>
           </div>
@@ -302,10 +301,10 @@
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import { agentAPI, chatAPI, configAPI, snapshotAPI } from '../services/api'
-import { md } from '../utils/highlight'
+import {agentAPI, chatAPI, configAPI, snapshotAPI} from '../services/api'
+import {md} from '../utils/highlight'
 import ChatInput from '../components/ChatInput.vue'
-import { useAppStore } from '../stores/app'
+import {useAppStore} from '../stores/app'
 
 // SVG 图标（模板使用）
 const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
@@ -475,8 +474,6 @@ watch([() => props.workspaceHash, () => props.sessionName], ([ws, sess]) => {
 
 onMounted(() => {
   if (props.sessionName) loadUsage()
-  // 检查 Git 仓库状态，用于快照撤回功能
-  checkGitRepoStatus()
   // 监听复制成功事件
   window.addEventListener('copy-success', (e) => {
     addLog({level: 'INFO', text: '✅ ' + (e.detail || '已复制'), time: Date.now()})
@@ -900,23 +897,7 @@ const abortChat = async () => {
   store.setSessionStreaming(props.sessionName, false)
 }
 
-/** 检查 Git 仓库状态 */
-const checkGitRepoStatus = async () => {
-  if (!props.workspaceHash) return
-  try {
-    const res = await snapshotAPI.getStatus(props.workspaceHash)
-    if (res.success) {
-      store.setGitRepoStatus(props.workspaceHash, res.data?.gitRepo || false)
-    }
-  } catch {
-    store.setGitRepoStatus(props.workspaceHash, false)
-  }
-}
-
-/** 查询 Git 仓库是否可用（用于模板条件判断） */
-const isGitAvailable = computed(() => store.isGitRepoAvailable(props.workspaceHash))
-
-/** 撤回快照：回滚到 AI 修改前的状态 */
+/** 撤回快照：回滚到 AI 修改前的状态，并截断会话消息 + 回填输入框 */
 const rollbackSnapshot = async (msgId) => {
   if (!msgId) return
   const loadingKey = msgId
@@ -924,21 +905,37 @@ const rollbackSnapshot = async (msgId) => {
   snapshotRollbackLoading.value.set(loadingKey, true)
 
   try {
-    const res = await snapshotAPI.rollback(props.workspaceHash, msgId)
+    const res = await snapshotAPI.rollback(props.workspaceHash, msgId, props.sessionName)
     if (res.success) {
       addLog({level: 'INFO', text: `✅ ${res.data?.message || '工作区已恢复'}`, time: Date.now()})
       // 截断该消息之后的所有快照记录
       store.truncateSnapshotsAfter(props.sessionName, msgId)
       // 从 snapshotMap 中移除
       snapshotMap.value.delete(msgId)
-      // 清除对应用户消息上的 snapshotId
+
+      // 找到对应用户消息及其位置，截断会话消息，回填输入框
       const msgs = store.getSessionMessages(props.sessionName)
+      let targetIdx = -1
+      // 优先使用后端返回的 rollbackUserText（从 JSONL 持久化数据中取得）
+      let rollbackContent = res.data?.rollbackUserText || ''
       for (let i = 0; i < msgs.length; i++) {
         if (msgs[i].snapshotId === msgId) {
-          msgs[i].snapshotId = null
-          msgs[i].rolledBack = true
+          targetIdx = i
+          // 如果后端没返回文本，从前端消息中取
+          if (!rollbackContent) rollbackContent = msgs[i].content || ''
+          break
         }
       }
+      if (targetIdx >= 0) {
+        // 截断：保留目标消息之前的所有消息，删除目标消息及之后的所有消息
+        const kept = msgs.slice(0, targetIdx)
+        store.setSessionMessages(props.sessionName, kept)
+        // 回填输入框
+        if (rollbackContent) {
+          inputText.value = rollbackContent
+        }
+      }
+
       // 通知父组件刷新会话列表和 Git 状态
       emit('sessionUpdated')
     } else {
@@ -1461,20 +1458,6 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 .rollback-btn:hover {
   opacity: 1 !important;
   color: var(--accent-5, #e74c3c);
-}
-
-.rolled-back-tag {
-  font-size: 11px;
-  padding: 1px 6px;
-  border-radius: 3px;
-  background: var(--success-2, #d4edda);
-  color: var(--success-7, #155724);
-  white-space: nowrap;
-}
-
-[data-theme="dark"] .rolled-back-tag {
-  background: var(--success-8, #1a3a2a);
-  color: var(--success-3, #81c784);
 }
 
 /* 代码块内嵌复制按钮（通过 :deep 穿透 v-html） */

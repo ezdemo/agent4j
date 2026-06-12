@@ -25,6 +25,11 @@ public class SnapshotRollbackDTO {
     /** 结果消息 */
     private String message;
 
+    /**
+     * 被删除的用户消息文本（用于前端回填输入框）
+     */
+    private String rollbackUserText;
+
     public SnapshotRollbackDTO() {}
 
     public SnapshotRollbackDTO(String msgId, String commitHash, String treeHash, boolean success, String message) {

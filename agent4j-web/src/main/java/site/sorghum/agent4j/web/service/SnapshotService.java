@@ -1,7 +1,6 @@
 package site.sorghum.agent4j.web.service;
 
 import lombok.extern.slf4j.Slf4j;
-import org.noear.snack4.ONode;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import site.sorghum.agent4j.web.common.ServiceException;
@@ -10,9 +9,6 @@ import java.io.BufferedReader;
 import java.io.File;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
@@ -472,7 +468,11 @@ public class SnapshotService {
         private final String commitHash;
         private final String treeHash;
         private final boolean success;
-        private final String message;
+        private String message;
+        /**
+         * 被删除的用户消息文本（用于前端回填输入框）
+         */
+        private String rollbackUserText;
 
         public SnapshotRollbackResult(String msgId, String commitHash, String treeHash, boolean success, String message) {
             this.msgId = msgId;
@@ -486,7 +486,20 @@ public class SnapshotService {
         public String getCommitHash() { return commitHash; }
         public String getTreeHash() { return treeHash; }
         public boolean isSuccess() { return success; }
-        public String getMessage() { return message; }
+        public String getMessage() {
+            return message;
+        }
+
+        public void setMessage(String message) {
+            this.message = message;
+        }
+
+        public String getRollbackUserText() {
+            return rollbackUserText;
+        }
+
+        public void setRollbackUserText(String rollbackUserText) {
+            this.rollbackUserText = rollbackUserText; }
     }
 
     /**

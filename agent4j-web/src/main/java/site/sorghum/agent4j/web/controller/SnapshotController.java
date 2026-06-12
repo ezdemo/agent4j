@@ -4,7 +4,11 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import org.noear.solon.annotation.*;
-import site.sorghum.agent4j.web.model.*;
+import site.sorghum.agent4j.web.model.ApiResponse;
+import site.sorghum.agent4j.web.model.SnapshotDTO;
+import site.sorghum.agent4j.web.model.SnapshotRollbackDTO;
+import site.sorghum.agent4j.web.model.SnapshotStatusDTO;
+import site.sorghum.agent4j.web.service.AgentService;
 import site.sorghum.agent4j.web.service.SnapshotService;
 
 import java.util.ArrayList;
@@ -31,6 +35,9 @@ public class SnapshotController {
     @Inject
     private SnapshotService snapshotService;
 
+    @Inject
+    private AgentService agentService;
+
     @ApiOperation(value = "创建快照检查点",
             notes = "在 AI 执行代码修改前保存当前工作区状态，基于 Git 底层命令实现，不影响提交历史")
     @Post
@@ -46,19 +53,32 @@ public class SnapshotController {
     }
 
     @ApiOperation(value = "撤回到快照",
-            notes = "恢复工作区到指定消息的快照状态，撤回该消息及之后所有 AI 修改")
+            notes = "恢复工作区到指定消息的快照状态，撤回该消息及之后所有 AI 修改，同时截断会话历史")
     @Post
     @Mapping("/rollback")
     public ApiResponse<SnapshotRollbackDTO> rollback(
             @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
-            @ApiParam(value = "要撤回的消息 ID") @Param("msgId") String msgId) {
+            @ApiParam(value = "要撤回的消息 ID") @Param("msgId") String msgId,
+            @ApiParam(value = "会话名称") @Param(value = "sessionName", required = false) String sessionName) {
         if (msgId == null || msgId.trim().isEmpty()) {
             return ApiResponse.fail("msgId 不能为空");
         }
         SnapshotService.SnapshotRollbackResult result = snapshotService.rollbackToSnapshot(workspaceHash, msgId.trim());
-        return ApiResponse.ok(new SnapshotRollbackDTO(
+        // 撤回成功后，截断会话历史（删除该消息及之后的所有消息）
+        if (result.isSuccess()) {
+            String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
+            String rollbackText = agentService.truncateHistoryBySnapshotId(workspacePath, sessionName, msgId.trim());
+            result.setMessage(result.getMessage());
+            if (rollbackText != null) {
+                // 将被删除的用户消息文本返回给前端，用于回填输入框
+                result.setRollbackUserText(rollbackText);
+            }
+        }
+        SnapshotRollbackDTO dto = new SnapshotRollbackDTO(
                 result.getMsgId(), result.getCommitHash(), result.getTreeHash(),
-                result.isSuccess(), result.getMessage()));
+                result.isSuccess(), result.getMessage());
+        dto.setRollbackUserText(result.getRollbackUserText());
+        return ApiResponse.ok(dto);
     }
 
     @ApiOperation(value = "列出快照", notes = "列出当前工作区的所有快照检查点")
