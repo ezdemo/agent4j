@@ -50,6 +50,13 @@ public class ChatMessage {
     @ONodeAttr(name = "reasoning_content")
     private String reasoningContent;
 
+    /**
+     * 快照检查点 ID（仅 user 消息有效）。
+     * 非空时表示该消息发送前工作区已保存快照，可用于撤回 AI 修改。
+     */
+    @ONodeAttr(name = "snapshot_id")
+    private String snapshotId;
+
     // ==================== 内容段模型 ====================
 
     public static ChatMessage user(String content) {
@@ -121,6 +128,8 @@ public class ChatMessage {
         msg.reasoningContent = reasoning != null ? reasoning.toString() : null;
         Object toolCallId = m.get("tool_call_id");
         msg.toolCallId = toolCallId != null ? toolCallId.toString() : null;
+        Object snapshotId = m.get("snapshot_id");
+        msg.snapshotId = snapshotId != null ? snapshotId.toString() : null;
         if (m.containsKey("tool_calls")) {
             List<Map<String, Object>> tcMaps = (List<Map<String, Object>>) m.get("tool_calls");
             if (tcMaps != null) {
@@ -198,6 +207,7 @@ public class ChatMessage {
         }
         if (toolCallId != null) m.put("tool_call_id", toolCallId);
         if (reasoningContent != null) m.put("reasoning_content", reasoningContent);
+        if (snapshotId != null) m.put("snapshot_id", snapshotId);
         if (toolCalls != null && !toolCalls.isEmpty()) {
             List<Map<String, Object>> tcMaps = new ArrayList<>();
             for (ToolCallEntry tc : toolCalls) {

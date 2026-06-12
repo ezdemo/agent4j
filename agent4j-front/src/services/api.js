@@ -679,6 +679,45 @@ export const gitAPI = {
   }
 }
 
+// 快照检查点 API
+export const snapshotAPI = {
+  // 创建快照检查点 - POST /api/snapshots/checkpoint?workspaceHash=xxx&msgId=xxx
+  createCheckpoint: (workspaceHash, msgId) => {
+    const params = {}
+    if (workspaceHash) params.workspaceHash = workspaceHash
+    params.msgId = msgId
+    return api.post('/snapshots/checkpoint', null, { params })
+  },
+
+  // 撤回到快照 - POST /api/snapshots/rollback?workspaceHash=xxx&msgId=xxx
+  rollback: (workspaceHash, msgId) => {
+    const params = {}
+    if (workspaceHash) params.workspaceHash = workspaceHash
+    params.msgId = msgId
+    return api.post('/snapshots/rollback', null, { params })
+  },
+
+  // 列出快照 - GET /api/snapshots?workspaceHash=xxx&sessionName=xxx
+  list: (workspaceHash, sessionName) => {
+    const params = {}
+    if (workspaceHash) params.workspaceHash = workspaceHash
+    if (sessionName) params.sessionName = sessionName
+    return api.get('/snapshots', { params })
+  },
+
+  // 检查 Git 仓库状态 - GET /api/snapshots/status?workspaceHash=xxx
+  getStatus: (workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.get('/snapshots/status', { params })
+  },
+
+  // 删除快照 - DELETE /api/snapshots/{msgId}?workspaceHash=xxx
+  deleteSnapshot: (msgId, workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.delete(`/snapshots/${msgId}`, { params })
+  }
+}
+
 // 工具函数
 export const utils = {
   // 格式化错误消息

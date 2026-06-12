@@ -155,6 +155,15 @@ public class SseEmitter {
         send("usage", node.toJson());
     }
 
+    /**
+     * 发送快照事件 —— 通知前端当前消息的快照 ID（可用于撤回）。
+     */
+    public void sendSnapshot(String msgId) {
+        ONode node = ONode.ofJson("{}").asObject();
+        node.set("msgId", msgId);
+        send("snapshot", node.toJson());
+    }
+
     public void complete() {
         if (completed.compareAndSet(false, true)) {
             // send 方法内部已处理所有异常，无需额外捕获

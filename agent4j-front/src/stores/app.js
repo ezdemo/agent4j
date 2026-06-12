@@ -300,6 +300,12 @@ export const useAppStore = defineStore('app', () => {
     const sessionStreaming = ref({})
     const sessionControllers = ref({})
 
+    // ========== 快照检查点状态 ==========
+    // 每条用户消息的快照ID映射: sessionId -> [{ msgId, snapshotId }]
+    const sessionSnapshots = ref({})
+    // Git仓库状态缓存: workspaceHash -> { gitRepo: boolean }
+    const snapshotStatus = ref({})
+
     function ensureSession(name) {
         if (!name) return
         if (!sessionMessages.value[name]) {
@@ -366,6 +372,42 @@ export const useAppStore = defineStore('app', () => {
     /** 获取指定会话的 AbortController */
     function getSessionController(name) {
         return name ? sessionControllers.value[name] : null
+    }
+
+    // ========== 快照检查点管理 ==========
+
+    /** 记录快照ID：将快照与消息关联 */
+    function addSnapshot(name, msgId, snapshotId) {
+        if (!name) return
+        if (!sessionSnapshots.value[name]) sessionSnapshots.value[name] = []
+        sessionSnapshots.value[name].push({ msgId, snapshotId })
+    }
+
+    /** 获取指定会话的快照列表 */
+    function getSessionSnapshots(name) {
+        if (!name) return []
+        return sessionSnapshots.value[name] || []
+    }
+
+    /** 检查 Git 仓库状态是否可用 */
+    function isGitRepoAvailable(workspaceHash) {
+        if (!workspaceHash) return false
+        return snapshotStatus.value[workspaceHash]?.gitRepo === true
+    }
+
+    /** 设置 Git 仓库状态缓存 */
+    function setGitRepoStatus(workspaceHash, isGitRepo) {
+        if (!workspaceHash) return
+        snapshotStatus.value[workspaceHash] = { gitRepo: isGitRepo }
+    }
+
+    /** 撤回后清除该消息及之后的所有快照记录 */
+    function truncateSnapshotsAfter(name, msgId) {
+        if (!name || !sessionSnapshots.value[name]) return
+        const idx = sessionSnapshots.value[name].findIndex(s => s.msgId === msgId)
+        if (idx >= 0) {
+            sessionSnapshots.value[name] = sessionSnapshots.value[name].slice(0, idx)
+        }
     }
 
   // 初始化
@@ -441,6 +483,8 @@ export const useAppStore = defineStore('app', () => {
       sessionMessages,
       sessionStreaming,
       sessionControllers,
+      sessionSnapshots,
+      snapshotStatus,
       ensureSession,
       getSessionMessages,
       setSessionMessages,
@@ -450,6 +494,12 @@ export const useAppStore = defineStore('app', () => {
       setSessionStreaming,
       getSessionStreaming,
       setSessionController,
-      getSessionController
+      getSessionController,
+      // 快照检查点
+      addSnapshot,
+      getSessionSnapshots,
+      isGitRepoAvailable,
+      setGitRepoStatus,
+      truncateSnapshotsAfter
   }
 })

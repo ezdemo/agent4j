@@ -61,6 +61,12 @@
             </div>
             <div class="msg-footer">
               <span class="msg-time">{{ msg.time }}</span>
+              <button v-if="msg.snapshotId && !msg.rolledBack" class="rollback-btn"
+                      :class="{ loading: snapshotRollbackLoading.get(msg.snapshotId) }"
+                      @click="rollbackSnapshot(msg.snapshotId)"
+                      title="撤回 AI 修改，恢复到发送前状态"
+                      v-html="ROLLBACK_ICON"></button>
+              <span v-if="msg.rolledBack" class="rolled-back-tag">已撤回</span>
               <button class="copy-msg-btn" @click="copyMessage(msg)" title="复制消息" v-html="COPY_ICON"></button>
             </div>
           </div>
@@ -296,13 +302,14 @@
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import { agentAPI, chatAPI, configAPI } from '../services/api'
+import { agentAPI, chatAPI, configAPI, snapshotAPI } from '../services/api'
 import { md } from '../utils/highlight'
 import ChatInput from '../components/ChatInput.vue'
 import { useAppStore } from '../stores/app'
 
 // SVG 图标（模板使用）
 const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+const ROLLBACK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>'
 
 // ============= 模型切换 =============
 const handleSwitchModel = async (modelName) => {
@@ -331,6 +338,10 @@ const store = useAppStore()
 
 const messagesContainer = ref(null)
 const inputText = ref('')
+
+// 快照检查点：msgId -> snapshotId 映射（用于消息关联和撤回按钮显示）
+const snapshotMap = ref(new Map())
+const snapshotRollbackLoading = ref(new Map()) // msgId -> 是否正在撤回
 
 // 图片预览
 const imagePreviewUrl = ref('')
@@ -464,6 +475,8 @@ watch([() => props.workspaceHash, () => props.sessionName], ([ws, sess]) => {
 
 onMounted(() => {
   if (props.sessionName) loadUsage()
+  // 检查 Git 仓库状态，用于快照撤回功能
+  checkGitRepoStatus()
   // 监听复制成功事件
   window.addEventListener('copy-success', (e) => {
     addLog({level: 'INFO', text: '✅ ' + (e.detail || '已复制'), time: Date.now()})
@@ -639,7 +652,7 @@ const sendMessage = async (images = []) => {
 
   // 静默命令不显示用户气泡
   if (!isSilent) {
-    const userMsg = {id: Date.now(), role: 'user', content: text, time: now()}
+    const userMsg = {id: Date.now(), role: 'user', content: text, time: now(), snapshotId: null}
     if (images.length > 0) userMsg.images = images
     store.addSessionMessage(sessionName, userMsg)
   }
@@ -827,6 +840,20 @@ const sendMessage = async (images = []) => {
             if (level === 'DEBUG') return
             const text = data.message || data.content || ''
             addLog({level, text, time: Date.now()})
+          } else if (data.type === 'snapshot') {
+            // 快照检查点事件：记录快照 ID，关联到当前用户消息，用于后续撤回
+            if (data.msgId) {
+              store.addSnapshot(sessionName, data.msgId, data.msgId)
+              snapshotMap.value.set(data.msgId, data.msgId)
+              // 将快照 ID 关联到最后一条用户消息
+              const msgs = store.getSessionMessages(sessionName)
+              for (let i = msgs.length - 1; i >= 0; i--) {
+                if (msgs[i].role === 'user' && !msgs[i].snapshotId) {
+                  msgs[i].snapshotId = data.msgId
+                  break
+                }
+              }
+            }
           }
           scroll()
         },
@@ -871,6 +898,57 @@ const abortChat = async () => {
   } catch {
   }
   store.setSessionStreaming(props.sessionName, false)
+}
+
+/** 检查 Git 仓库状态 */
+const checkGitRepoStatus = async () => {
+  if (!props.workspaceHash) return
+  try {
+    const res = await snapshotAPI.getStatus(props.workspaceHash)
+    if (res.success) {
+      store.setGitRepoStatus(props.workspaceHash, res.data?.gitRepo || false)
+    }
+  } catch {
+    store.setGitRepoStatus(props.workspaceHash, false)
+  }
+}
+
+/** 查询 Git 仓库是否可用（用于模板条件判断） */
+const isGitAvailable = computed(() => store.isGitRepoAvailable(props.workspaceHash))
+
+/** 撤回快照：回滚到 AI 修改前的状态 */
+const rollbackSnapshot = async (msgId) => {
+  if (!msgId) return
+  const loadingKey = msgId
+  if (snapshotRollbackLoading.value.get(loadingKey)) return // 防止重复点击
+  snapshotRollbackLoading.value.set(loadingKey, true)
+
+  try {
+    const res = await snapshotAPI.rollback(props.workspaceHash, msgId)
+    if (res.success) {
+      addLog({level: 'INFO', text: `✅ ${res.data?.message || '工作区已恢复'}`, time: Date.now()})
+      // 截断该消息之后的所有快照记录
+      store.truncateSnapshotsAfter(props.sessionName, msgId)
+      // 从 snapshotMap 中移除
+      snapshotMap.value.delete(msgId)
+      // 清除对应用户消息上的 snapshotId
+      const msgs = store.getSessionMessages(props.sessionName)
+      for (let i = 0; i < msgs.length; i++) {
+        if (msgs[i].snapshotId === msgId) {
+          msgs[i].snapshotId = null
+          msgs[i].rolledBack = true
+        }
+      }
+      // 通知父组件刷新会话列表和 Git 状态
+      emit('sessionUpdated')
+    } else {
+      addLog({level: 'ERROR', text: `❌ 撤回失败: ${res.error || '未知错误'}`, time: Date.now()})
+    }
+  } catch (e) {
+    addLog({level: 'ERROR', text: `❌ 撤回失败: ${e.message || e}`, time: Date.now()})
+  } finally {
+    snapshotRollbackLoading.value.delete(loadingKey)
+  }
 }
 
 const clearChat = async () => {
@@ -1018,6 +1096,10 @@ const loadHistory = async (sessionName, force = false) => {
             if (imgs.length > 0) item.images = imgs
           } else {
             item.content = m.content || ''
+          }
+          // 恢复快照检查点 ID（JSONL 持久化的 snapshot_id 字段）
+          if (m.snapshot_id) {
+            item.snapshotId = m.snapshot_id
           }
         } else {
           if (m.reasoning_content) item.blocks.push({
@@ -1347,6 +1429,52 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 
 .copy-msg-btn:hover {
   opacity: 1 !important;
+}
+
+/* 撤回按钮（恢复到 AI 修改前的状态） */
+.rollback-btn {
+  opacity: 0;
+  background: none;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 4px;
+  border-radius: var(--r-sm);
+  transition: opacity 0.15s;
+  line-height: 1;
+  color: var(--fg-3);
+}
+
+.rollback-btn.loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.user-body .rollback-btn {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.msg-body:hover .rollback-btn {
+  opacity: 0.7;
+}
+
+.rollback-btn:hover {
+  opacity: 1 !important;
+  color: var(--accent-5, #e74c3c);
+}
+
+.rolled-back-tag {
+  font-size: 11px;
+  padding: 1px 6px;
+  border-radius: 3px;
+  background: var(--success-2, #d4edda);
+  color: var(--success-7, #155724);
+  white-space: nowrap;
+}
+
+[data-theme="dark"] .rolled-back-tag {
+  background: var(--success-8, #1a3a2a);
+  color: var(--success-3, #81c784);
 }
 
 /* 代码块内嵌复制按钮（通过 :deep 穿透 v-html） */
