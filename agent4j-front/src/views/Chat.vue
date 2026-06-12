@@ -90,7 +90,9 @@
                       <polyline points="6 9 12 15 18 9"/>
                     </svg>
                   </div>
-                  <div v-if="block.showContent" class="reasoning-text" v-html="fmt(block.content)"></div>
+                  <div v-if="block.showContent" class="reasoning-text">
+                    {{ block.content }}
+                  </div>
                 </div>
 
                 <!-- 内容 -->
@@ -215,7 +217,9 @@
                           <polyline points="6 9 12 15 18 9"/>
                         </svg>
                       </div>
-                      <div v-if="block.showContent" class="reasoning-text" v-html="fmt(block.content)"></div>
+                      <div v-if="block.showContent" class="reasoning-text">
+                        {{ block.content }}
+                      </div>
                     </div>
                     <div v-else-if="block.type === 'content'" class="block-content" v-html="fmt(block.content)"></div>
                     <div v-else-if="block.type === 'tool_call'" class="block-tool">
