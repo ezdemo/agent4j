@@ -34,7 +34,7 @@
           <h2>{{ currentTab?.label || '设置' }}</h2>
           <p class="header-desc">{{ currentTab?.description }}</p>
         </div>
-        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market'" class="header-actions">
+        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'about'" class="header-actions">
           <button v-if="activeTab === 'ai'" class="btn btn-secondary" style="padding:6px 12px;" @click="showAutoFillDialog = true" title="自动填入配置">
             <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
               <polyline points="1 4 1 10 7 10"/>
@@ -1309,6 +1309,65 @@ X-Custom-Header=value"
           </div>
         </section>
 
+        <!-- ==================== 关于 ==================== -->
+        <section v-if="activeTab === 'about'" class="settings-section">
+          <div class="section-card">
+            <div class="card-body">
+              <!-- 版本信息 -->
+              <div class="about-info">
+                <div class="about-row">
+                  <span class="about-label">应用名称</span>
+                  <span class="about-value">{{ aboutInfo.name }}</span>
+                </div>
+                <div class="about-row">
+                  <span class="about-label">当前版本</span>
+                  <span class="about-value version-number">v{{ aboutInfo.version }}</span>
+                </div>
+                <div class="about-row" v-if="aboutInfo.latestVersion">
+                  <span class="about-label">最新版本</span>
+                  <span class="about-value" :class="{ 'has-update': aboutInfo.hasNewVersion }">
+                    v{{ aboutInfo.latestVersion }}
+                    <span v-if="aboutInfo.hasNewVersion" class="update-badge">有新版本</span>
+                  </span>
+                </div>
+                <div class="about-row" v-if="aboutInfo.releaseUrl">
+                  <span class="about-label">发布地址</span>
+                  <a :href="aboutInfo.releaseUrl" target="_blank" class="about-link">{{ aboutInfo.releaseUrl }}</a>
+                </div>
+                <div class="about-row" v-if="aboutInfo.releaseNotes">
+                  <span class="about-label">发布说明</span>
+                  <div class="about-value about-notes" v-html="renderMarkdown(aboutInfo.releaseNotes)"></div>
+                </div>
+                <div class="about-row" v-if="aboutInfo.checkTime">
+                  <span class="about-label">检查时间</span>
+                  <span class="about-value">{{ aboutInfo.checkTime }}</span>
+                </div>
+              </div>
+
+              <!-- 操作按钮 -->
+              <div class="about-actions">
+                <button class="btn btn-primary" :disabled="aboutChecking" @click="handleCheckVersion">
+                  <svg :class="{ 'animate-spin': aboutChecking }" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                  </svg>
+                  {{ aboutChecking ? '检查中...' : '检查更新' }}
+                </button>
+                <button class="btn" :class="aboutInfo.hasNewVersion ? 'btn-primary' : 'btn-secondary'" @click="showUpdateModal = true" :disabled="!aboutInfo.latestVersion">
+                  <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                  </svg>
+                  {{ aboutInfo.hasNewVersion ? '更新' : '重新安装' }}
+                </button>
+              </div>
+
+              <!-- 错误信息 -->
+              <div v-if="aboutError" class="about-error">{{ aboutError }}</div>
+            </div>
+          </div>
+        </section>
+
       </div>
     </main>
   </div>
@@ -1534,13 +1593,52 @@ X-Custom-Header=value"
       </div>
     </div>
   </Teleport>
+
+  <!-- 一键更新/重装 弹窗 -->
+  <Teleport to="body">
+    <div v-if="showUpdateModal" class="update-modal-mask" @click.self="showUpdateModal = false">
+      <div class="update-modal">
+        <div class="update-modal-head">
+          <span>一键{{ aboutInfo.hasNewVersion ? '更新' : '重装' }}</span>
+          <button class="btn-icon-xs" @click="showUpdateModal = false">×</button>
+        </div>
+        <div class="update-modal-body">
+          <p class="update-modal-desc">在终端中执行以下命令即可完成{{ aboutInfo.hasNewVersion ? '更新' : '重装' }}：</p>
+
+          <div class="update-platform">
+            <div class="update-platform-label">Windows（PowerShell）：</div>
+            <div class="update-code-block">
+              <code>irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex</code>
+              <button class="update-copy-btn" @click="copyText('irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex')" title="复制">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+
+          <div class="update-platform">
+            <div class="update-platform-label">macOS / Linux：</div>
+            <div class="update-code-block">
+              <code>curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash</code>
+              <button class="update-copy-btn" @click="copyText('curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash')" title="复制">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+        </div>
+        <div class="update-modal-foot">
+          <button class="btn" @click="showUpdateModal = false">关闭</button>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
 import {computed, onMounted, reactive, ref, watch} from 'vue'
 import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
-import {configAPI, openApiAPI, mcpAPI, lspAPI, skillMarketAPI, agentAPI, toolsAPI, DEFAULT_API_BASE} from '../services/api'
+import {configAPI, openApiAPI, mcpAPI, lspAPI, skillMarketAPI, agentAPI, toolsAPI, systemAPI, DEFAULT_API_BASE} from '../services/api'
+import { md } from '../utils/highlight'
 
 const store = useAppStore()
 
@@ -1620,6 +1718,94 @@ async function loadSkillMarkets() {
     }
   } catch (err) {
     console.warn('加载技能市场失败:', err)
+  }
+}
+
+// ==================== 关于 / 版本信息 ====================
+const aboutInfo = ref({
+  name: '-',
+  version: '-',
+  latestVersion: null,
+  hasNewVersion: false,
+  releaseUrl: null,
+  releaseNotes: null,
+  checkTime: null
+})
+const aboutChecking = ref(false)
+const aboutError = ref('')
+const showUpdateModal = ref(false)
+
+// 检查更新（同时刷新当前版本）
+async function handleCheckVersion() {
+  aboutChecking.value = true
+  aboutError.value = ''
+  // 先刷新当前版本
+  await handleRefreshVersion()
+  try {
+    const res = await systemAPI.checkLatestVersion()
+    if (res.success && res.data) {
+      // 注意：后端 VersionCheckDTO 返回 currentVersion（不是 version），且无 name
+      // 此处合并数据，保留 name 和 version 不被覆盖
+      aboutInfo.value = {
+        ...aboutInfo.value,
+        latestVersion: res.data.latestVersion,
+        hasNewVersion: res.data.hasNewVersion,
+        releaseUrl: res.data.releaseUrl,
+        releaseNotes: res.data.releaseNotes,
+        checkTime: res.data.checkTime,
+        version: res.data.currentVersion || aboutInfo.value.version
+      }
+    } else {
+      aboutError.value = res.message || '检查版本失败'
+    }
+  } catch (e) {
+    aboutError.value = e.message || '无法连接到服务器'
+  } finally {
+    aboutChecking.value = false
+  }
+}
+
+// 刷新当前版本
+async function handleRefreshVersion() {
+  aboutError.value = ''
+  try {
+    const res = await systemAPI.getCurrentVersion()
+    if (res.success && res.data) {
+      aboutInfo.value = {
+        ...aboutInfo.value,
+        name: res.data.name || '-',
+        version: res.data.version || '-'
+      }
+    }
+  } catch (e) {
+    aboutError.value = e.message || '无法获取版本信息'
+  }
+}
+
+// 将 Markdown 文本渲染为 HTML（用于发布说明）
+function renderMarkdown(text) {
+  if (!text) return ''
+  try {
+    return md.parse(text)
+  } catch {
+    return text
+  }
+}
+
+// 复制文本到剪贴板
+function copyText(text) {
+  try {
+    navigator.clipboard.writeText(text)
+    message.success('已复制到剪贴板')
+  } catch {
+    // 降级方案
+    const textarea = document.createElement('textarea')
+    textarea.value = text
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+    message.success('已复制到剪贴板')
   }
 }
 
@@ -1794,6 +1980,14 @@ const tabs = [
     icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
     </svg>`
+  },
+  {
+    id: 'about',
+    label: '关于',
+    description: '版本信息与更新检查',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
+    </svg>`
   }
 ]
 
@@ -1825,6 +2019,10 @@ watch(activeTab, async (tab) => {
     // 先加载已安装技能列表，确保渲染市场列表时就有安装状态
     await loadInstalledSkills()
     loadSkillMarkets()
+  }
+  if (tab === 'about') {
+    // 进入关于页面时自动检查更新（含版本刷新+远程检查）
+    handleCheckVersion()
   }
 })
 
@@ -4896,5 +5094,289 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   margin-top: 12px;
+}
+
+/* ==================== 关于页面 ==================== */
+.about-info {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+.about-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.about-label {
+  min-width: 80px;
+  font-size: 13px;
+  color: var(--fg-3);
+  flex-shrink: 0;
+  padding-top: 2px;
+}
+
+.about-value {
+  font-size: 13px;
+  color: var(--fg);
+  word-break: break-all;
+}
+
+.about-value.version-number {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  font-size: 15px;
+  color: var(--accent);
+}
+
+.about-value.has-update {
+  color: #ef4444;
+}
+
+.about-link {
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.about-link:hover {
+  text-decoration: underline;
+}
+
+.about-notes {
+  font-size: 12px;
+  color: var(--fg-3);
+  line-height: 1.6;
+  max-height: 200px;
+  overflow-y: auto;
+  background: var(--bg-2);
+  padding: 12px 16px;
+  border-radius: var(--r);
+  flex: 1;
+  word-break: break-word;
+}
+
+.about-notes h1,
+.about-notes h2,
+.about-notes h3,
+.about-notes h4 {
+  font-size: 14px;
+  font-weight: 600;
+  margin: 12px 0 6px;
+  color: var(--fg);
+}
+.about-notes h1:first-child,
+.about-notes h2:first-child,
+.about-notes h3:first-child,
+.about-notes h4:first-child {
+  margin-top: 0;
+}
+
+.about-notes p {
+  margin: 6px 0;
+}
+
+.about-notes ul,
+.about-notes ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.about-notes li {
+  margin: 2px 0;
+}
+
+.about-notes code {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  background: var(--bg-3);
+  padding: 1px 5px;
+  border-radius: 3px;
+  color: var(--accent);
+}
+
+.about-notes pre {
+  background: var(--bg-3);
+  border-radius: var(--r);
+  padding: 10px 14px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.about-notes pre code {
+  background: none;
+  padding: 0;
+  color: var(--fg);
+}
+
+.about-notes a {
+  color: var(--accent);
+  text-decoration: none;
+}
+.about-notes a:hover {
+  text-decoration: underline;
+}
+
+.about-notes strong {
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.about-notes blockquote {
+  border-left: 3px solid var(--accent);
+  padding: 4px 12px;
+  margin: 8px 0;
+  background: var(--bg-3);
+  border-radius: 0 var(--r) var(--r) 0;
+  color: var(--fg-3);
+}
+
+.update-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 1px 8px;
+  border-radius: 10px;
+  font-size: 11px;
+  font-weight: 600;
+  background: rgba(239, 68, 68, 0.15);
+  color: #ef4444;
+}
+
+.about-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.about-error {
+  margin-top: 12px;
+  padding: 8px 12px;
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  border-radius: var(--r);
+  font-size: 12px;
+  color: #ef4444;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.animate-spin {
+  animation: spin 1s linear infinite;
+}
+
+/* ==================== 更新/重装 弹窗 ==================== */
+.update-modal-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.update-modal {
+  width: 600px;
+  max-width: 90vw;
+  background: var(--bg);
+  border-radius: 12px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  overflow: hidden;
+}
+
+.update-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 20px;
+  border-bottom: 1px solid var(--border);
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.update-modal-body {
+  padding: 20px;
+}
+
+.update-modal-desc {
+  font-size: 13px;
+  color: var(--fg-3);
+  margin: 0 0 16px;
+}
+
+.update-platform {
+  margin-bottom: 16px;
+}
+
+.update-platform:last-child {
+  margin-bottom: 0;
+}
+
+.update-platform-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+  margin-bottom: 6px;
+}
+
+.update-code-block {
+  display: flex;
+  align-items: center;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 10px 12px;
+  gap: 8px;
+}
+
+.update-code-block code {
+  flex: 1;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--fg);
+  word-break: break-all;
+  line-height: 1.5;
+  user-select: all;
+}
+
+.update-copy-btn {
+  flex-shrink: 0;
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r);
+  color: var(--fg-3);
+  transition: all var(--t);
+  cursor: pointer;
+  border: none;
+  background: transparent;
+}
+
+.update-copy-btn:hover {
+  background: var(--bg-3);
+  color: var(--accent);
+}
+
+.update-modal-foot {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 20px;
+  border-top: 1px solid var(--border);
+}
+
+[data-theme="dark"] .update-modal-mask {
+  background: rgba(0, 0, 0, 0.6);
+}
+
+[data-theme="dark"] .update-modal {
+  border: 1px solid var(--border);
 }
 </style>
