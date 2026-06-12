@@ -4,7 +4,6 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.bin.session.SessionStore;
-import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.interact.FinishTool;
 
 import java.io.IOException;
@@ -62,6 +61,10 @@ public class ConversationContext {
         } else {
             String text = msg != null ? msg.getText() : null;
             chatMsg = ChatMessage.user(text);
+        }
+        // 传递快照检查点 ID 到 ChatMessage，以便 JSONL 持久化
+        if (msg != null && msg.getSnapshotId() != null) {
+            chatMsg.setSnapshotId(msg.getSnapshotId());
         }
         history.add(chatMsg);
         persist(chatMsg);
@@ -256,6 +259,18 @@ public class ConversationContext {
         history.clear();
         history.addAll(foldedMessages);
         // 持久化回写
+        rewriteStore();
+    }
+
+    /**
+     * 截断历史：保留前 keepBefore 条消息，删除之后的所有消息，并持久化回写。
+     *
+     * @param keepBefore 保留的消息条数（0 表示清空所有）
+     */
+    public void truncate(int keepBefore) {
+        if (keepBefore < 0) keepBefore = 0;
+        if (keepBefore >= history.size()) return; // 无需截断
+        history.subList(keepBefore, history.size()).clear();
         rewriteStore();
     }
 

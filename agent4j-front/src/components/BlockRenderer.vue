@@ -7,7 +7,7 @@
         <span>思考</span>
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: block.showContent ? 'rotate(180deg)' : '' }"><polyline points="6 9 12 15 18 9"/></svg>
       </div>
-      <div v-if="block.showContent" class="reasoning-text" v-html="fmt(block.content)"></div>
+      <div v-if="block.showContent" class="reasoning-text" v-html="getReasoningHtml(block)"></div>
     </div>
 
     <!-- 内容 -->
@@ -34,7 +34,7 @@
 </template>
 
 <script setup>
-import { md } from '../utils/highlight'
+import {md} from '../utils/highlight'
 
 const props = defineProps({
   blocks: { type: Array, required: true }
@@ -43,6 +43,18 @@ const props = defineProps({
 const fmt = c => {
   if (!c) return ''
   return md.parse(c)
+}
+
+// 带缓存的 reasoning Markdown 渲染
+const getReasoningHtml = (block) => {
+  if (!block.showContent) return ''
+  if (!block.content) return ''
+  if (block._cachedContent === block.content && block._cachedHtml) {
+    return block._cachedHtml
+  }
+  block._cachedContent = block.content
+  block._cachedHtml = fmt(block.content)
+  return block._cachedHtml
 }
 
 const fmtArgs = a => {

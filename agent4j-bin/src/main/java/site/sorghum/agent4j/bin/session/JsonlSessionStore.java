@@ -143,6 +143,9 @@ public class JsonlSessionStore implements SessionStore {
         if (msg.getReasoningContent() != null) {
             node.set("reasoning_content", msg.getReasoningContent());
         }
+        if (msg.getSnapshotId() != null) {
+            node.set("snapshot_id", msg.getSnapshotId());
+        }
         if (msg.getToolCallId() != null) {
             node.set("tool_call_id", msg.getToolCallId());
         }

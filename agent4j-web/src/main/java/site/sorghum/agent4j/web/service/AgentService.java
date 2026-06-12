@@ -5,10 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
 import org.noear.solon.annotation.Inject;
-import site.sorghum.agent4j.bin.agent.Agent4jAgent;
-import site.sorghum.agent4j.bin.agent.ChatMessage;
-import site.sorghum.agent4j.bin.agent.PromptPrefix;
-import site.sorghum.agent4j.bin.agent.UserMessage;
+import site.sorghum.agent4j.bin.agent.*;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
@@ -194,8 +191,11 @@ public class AgentService {
     /**
      * 共享的 API 配置
      */
+    @Getter
     private volatile String sharedApiUrl;
+    @Getter
     private volatile String sharedApiKey;
+    @Getter
     private volatile String sharedModel;
     /**
      * 当前 HITL 模式（true=手动需审批，false=自由直接执行）
@@ -618,6 +618,42 @@ public class AgentService {
                 agent.abort();
             }
         }
+    }
+
+    /**
+     * 截断会话历史：删除包含指定 snapshotId 的用户消息及之后的所有消息，
+     * 同时重写 JSONL 文件使持久化数据同步。
+     *
+     * @param workspacePath 工作区路径
+     * @param sessionName   会话名称
+     * @param snapshotId    要截断的快照 ID
+     * @return 截断后被删除的用户消息文本（用于回填输入框），null 表示未找到
+     */
+    public String truncateHistoryBySnapshotId(String workspacePath, String sessionName, String snapshotId) {
+        if (sessionName == null || sessionName.isEmpty()) {
+            sessionName = getCurrentSessionName(workspacePath);
+        }
+        if (sessionName == null || snapshotId == null) return null;
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        Agent4jAgent agent = getOrCreateAgent(sessionKey);
+        if (agent == null) return null;
+        ConversationContext ctx = agent.getContext();
+        if (ctx == null) return null;
+        List<ChatMessage> history = ctx.getHistory();
+        int targetIdx = -1;
+        String rollbackText = null;
+        for (int i = 0; i < history.size(); i++) {
+            ChatMessage msg = history.get(i);
+            if ("user".equals(msg.getRole()) && snapshotId.equals(msg.getSnapshotId())) {
+                targetIdx = i;
+                rollbackText = msg.getContent();
+                break;
+            }
+        }
+        if (targetIdx < 0) return null;
+        // 截断历史并持久化
+        ctx.truncate(targetIdx);
+        return rollbackText;
     }
 
     // ==================== 会话管理 ====================

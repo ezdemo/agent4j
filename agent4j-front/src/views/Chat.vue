@@ -51,95 +51,17 @@
       </div>
 
       <!-- 消息列表 -->
-      <div v-for="(msg, idx) in messages" :key="msg.id" class="msg" :class="msg.role">
-        <!-- 用户消息 -->
-        <template v-if="msg.role === 'user'">
-          <div class="msg-body user-body">
-            <div class="msg-text">{{ msg.content }}</div>
-            <div v-if="msg.images && msg.images.length > 0" class="user-images">
-              <img v-for="(img, i) in msg.images" :key="i" :src="img" class="user-image" @click="previewImage(img)"/>
-            </div>
-            <div class="msg-footer">
-              <span class="msg-time">{{ msg.time }}</span>
-              <button class="copy-msg-btn" @click="copyMessage(msg)" title="复制消息" v-html="COPY_ICON"></button>
-            </div>
-          </div>
-        </template>
-
-        <!-- 助手消息 -->
-        <template v-else-if="msg.role === 'assistant'">
-          <div class="msg-body assistant-body">
-            <div class="msg-blocks">
-              <template v-for="(block, bi) in (msg.blocks || [])" :key="bi">
-                <!-- 思考 -->
-                <div v-if="block.type === 'reasoning'" class="block-reasoning">
-                  <div class="reasoning-head" @click="block.showContent = !block.showContent">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <circle cx="12" cy="12" r="10"/>
-                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                      <line x1="12" y1="17" x2="12.01" y2="17"/>
-                    </svg>
-                    <span>思考</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         :style="{ transform: block.showContent ? 'rotate(180deg)' : '' }">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
-                  </div>
-                  <div v-if="block.showContent" class="reasoning-text" v-html="fmt(block.content)"></div>
-                </div>
-
-                <!-- 内容 -->
-                <div v-else-if="block.type === 'content'" class="block-content" v-html="fmt(block.content)"></div>
-
-                <!-- 工具调用 -->
-                <div v-else-if="block.type === 'tool_call'" class="block-tool">
-                  <div class="tool-head" @click="block.expanded = !block.expanded">
-                    <span class="tool-icon" :class="block.status">
-                      <svg v-if="block.status === '执行中'" width="12" height="12" viewBox="0 0 24 24" fill="none"
-                           stroke="currentColor" stroke-width="2" class="animate-spin"><path
-                          d="M21 12a9 9 0 11-6.219-8.56"/></svg>
-                      <svg v-else-if="block.status === '成功'" width="12" height="12" viewBox="0 0 24 24" fill="none"
-                           stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                      <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                           stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-                    </span>
-                    <code class="tool-name">{{ block.name }}</code>
-                    <span class="tool-status" :class="block.status">{{ block.status }}</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         :style="{ transform: block.expanded ? 'rotate(180deg)' : '' }">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
-                  </div>
-                  <div v-if="block.expanded" class="tool-detail">
-                    <pre v-if="block.args"><code>{{ fmtArgs(block.args) }}</code></pre>
-                    <pre v-if="block.result"><code>{{ block.result }}</code></pre>
-                  </div>
-                </div>
-
-                <!-- 选项按钮（choice） -->
-                <div v-else-if="block.type === 'choice'" class="block-choice">
-                  <div v-if="!block.resolved" class="choice-buttons">
-                    <button v-for="opt in (block.options || [])" :key="opt.value"
-                            class="choice-btn"
-                            @click="sendChoice(opt.value, block)">
-                      {{ opt.title }}
-                    </button>
-                  </div>
-                  <div v-else class="choice-resolved">
-                    <span class="choice-label">已选择：</span>
-                    <span class="choice-value">{{ block.selectedTitle || block.options?.[0]?.title || '—' }}</span>
-                  </div>
-                </div>
-
-              </template>
-            </div>
-            <div class="msg-footer">
-              <span class="msg-time">{{ msg.time }}</span>
-              <button class="copy-msg-btn" @click="copyMessage(msg)" title="复制消息" v-html="COPY_ICON"></button>
-            </div>
-          </div>
-        </template>
-      </div>
+      <ChatMessage
+          v-for="(msg, idx) in messages"
+          :key="msg.id"
+          :idx="idx"
+          :msg="msg"
+          :snapshot-rollback-loading="snapshotRollbackLoading"
+          @preview-image="previewImage"
+          @rollback-snapshot="rollbackSnapshot"
+          @copy-message="copyMessage"
+          @send-choice="sendChoice"
+      />
 
       <!-- 加载中 -->
       <div v-if="streaming && !hasAssistant" class="msg assistant">
@@ -147,6 +69,21 @@
           <div class="typing">
             <span></span><span></span><span></span>
           </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 消息缩略图 dock（右侧 dock 栏，仅用户消息） -->
+    <div v-if="userMessages.length > 0" class="msg-thumb-dock">
+      <div class="thumb-dock-inner">
+        <div
+          v-for="(um, ui) in userMessages"
+          :key="um.id"
+          class="thumb-item"
+          @click="jumpToMessage(um.globalIdx)"
+        >
+          <span class="thumb-indicator"></span>
+          <span class="thumb-preview">{{ truncateText(um.content, 40) }}</span>
         </div>
       </div>
     </div>
@@ -195,7 +132,7 @@
                           <polyline points="6 9 12 15 18 9"/>
                         </svg>
                       </div>
-                      <div v-if="block.showContent" class="reasoning-text" v-html="fmt(block.content)"></div>
+                      <div v-if="block.showContent" class="reasoning-text" v-html="getReasoningHtml(block)"></div>
                     </div>
                     <div v-else-if="block.type === 'content'" class="block-content" v-html="fmt(block.content)"></div>
                     <div v-else-if="block.type === 'tool_call'" class="block-tool">
@@ -296,13 +233,11 @@
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import { agentAPI, chatAPI, configAPI } from '../services/api'
-import { md } from '../utils/highlight'
+import {agentAPI, chatAPI, configAPI, snapshotAPI} from '../services/api'
+import {md} from '../utils/highlight'
 import ChatInput from '../components/ChatInput.vue'
-import { useAppStore } from '../stores/app'
-
-// SVG 图标（模板使用）
-const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
+import ChatMessage from '../components/ChatMessage.vue'
+import {useAppStore} from '../stores/app'
 
 // ============= 模型切换 =============
 const handleSwitchModel = async (modelName) => {
@@ -331,6 +266,10 @@ const store = useAppStore()
 
 const messagesContainer = ref(null)
 const inputText = ref('')
+
+// 快照检查点：msgId -> snapshotId 映射（用于消息关联和撤回按钮显示）
+const snapshotMap = ref(new Map())
+const snapshotRollbackLoading = ref(new Map()) // msgId -> 是否正在撤回
 
 // 图片预览
 const imagePreviewUrl = ref('')
@@ -404,7 +343,7 @@ watch([subAgentSessions, subAgentBlocks], async () => {
   if (subAgentModalOpen.value) {
     await scrollSubModalToBottom()
   }
-}, {deep: true})
+})
 
 // 打开 Modal 时滚动到底部（显示最新内容）
 watch(subAgentModalOpen, async (open) => {
@@ -490,6 +429,28 @@ const SILENT_CMDS = new Set(['/agree', '/deny', '/exit', '/continue'])
 
 const hasAssistant = computed(() => messages.value.some(m => m.role === 'assistant' && m.blocks?.length > 0))
 
+// ===== 消息缩略图 dock =====
+/** 只取 role === 'user' 的消息，并记录全局索引用于跳转 */
+const userMessages = computed(() => {
+  return messages.value
+    .map((m, idx) => ({...m, globalIdx: idx}))
+    .filter(m => m.role === 'user')
+})
+
+/** 截取文本前 N 个字符 */
+const truncateText = (text, max) => {
+  if (!text) return ''
+  return text.length > max ? text.slice(0, max) + '…' : text
+}
+
+/** 点击缩略图跳转到对应消息 */
+const jumpToMessage = (globalIdx) => {
+  const el = messagesContainer.value?.querySelector(`[data-msg-idx="${globalIdx}"]`)
+  if (el) {
+    el.scrollIntoView({behavior: 'smooth', block: 'start'})
+  }
+}
+
 const now = () => new Date().toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit'})
 
 // 全局函数：代码复制（被 onclick 引用）
@@ -506,6 +467,19 @@ window.copyCode = (btn) => {
 const fmt = c => {
   if (!c) return ''
   return md.parse(c)
+}
+
+// 带缓存的 reasoning Markdown 渲染：只在展开时计算，折叠时返回空；
+// 展开后内容变化自动重算，内容不变直接命中缓存，避免反复解析长文本。
+const getReasoningHtml = (block) => {
+  if (!block.showContent) return ''
+  if (!block.content) return ''
+  if (block._cachedContent === block.content && block._cachedHtml) {
+    return block._cachedHtml
+  }
+  block._cachedContent = block.content
+  block._cachedHtml = fmt(block.content)
+  return block._cachedHtml
 }
 
 const fmtPrompt = c => {
@@ -639,7 +613,7 @@ const sendMessage = async (images = []) => {
 
   // 静默命令不显示用户气泡
   if (!isSilent) {
-    const userMsg = {id: Date.now(), role: 'user', content: text, time: now()}
+    const userMsg = {id: Date.now(), role: 'user', content: text, time: now(), snapshotId: null}
     if (images.length > 0) userMsg.images = images
     store.addSessionMessage(sessionName, userMsg)
   }
@@ -692,7 +666,7 @@ const sendMessage = async (images = []) => {
           } else if (data.type === 'sub_reasoning') {
             const lb = subAgentBlocks.value[subAgentBlocks.value.length - 1]
             if (lb?.type === 'reasoning') lb.content += (data.content || '')
-            else subAgentBlocks.value.push({type: 'reasoning', content: data.content || '', showContent: true})
+            else subAgentBlocks.value.push({type: 'reasoning', content: data.content || '', showContent: false})
           } else if (data.type === 'sub_tool_call') {
             let name = data.name || '', args = data.args || data.arguments || ''
             if (typeof args === 'string') try {
@@ -755,7 +729,7 @@ const sendMessage = async (images = []) => {
           } else if (data.type === 'reasoning') {
             const lb = msg.blocks[msg.blocks.length - 1]
             if (lb?.type === 'reasoning') lb.content += (data.content || '')
-            else msg.blocks.push({type: 'reasoning', content: data.content || '', showContent: true})
+            else msg.blocks.push({type: 'reasoning', content: data.content || '', showContent: false})
           } else if (data.type === 'content') {
             const lb = msg.blocks[msg.blocks.length - 1]
             if (lb?.type === 'content') lb.content += (data.content || '')
@@ -827,6 +801,20 @@ const sendMessage = async (images = []) => {
             if (level === 'DEBUG') return
             const text = data.message || data.content || ''
             addLog({level, text, time: Date.now()})
+          } else if (data.type === 'snapshot') {
+            // 快照检查点事件：记录快照 ID，关联到当前用户消息，用于后续撤回
+            if (data.msgId) {
+              store.addSnapshot(sessionName, data.msgId, data.msgId)
+              snapshotMap.value.set(data.msgId, data.msgId)
+              // 将快照 ID 关联到最后一条用户消息
+              const msgs = store.getSessionMessages(sessionName)
+              for (let i = msgs.length - 1; i >= 0; i--) {
+                if (msgs[i].role === 'user' && !msgs[i].snapshotId) {
+                  msgs[i].snapshotId = data.msgId
+                  break
+                }
+              }
+            }
           }
           scroll()
         },
@@ -871,6 +859,57 @@ const abortChat = async () => {
   } catch {
   }
   store.setSessionStreaming(props.sessionName, false)
+}
+
+/** 撤回快照：回滚到 AI 修改前的状态，并截断会话消息 + 回填输入框 */
+const rollbackSnapshot = async (msgId) => {
+  if (!msgId) return
+  const loadingKey = msgId
+  if (snapshotRollbackLoading.value.get(loadingKey)) return // 防止重复点击
+  snapshotRollbackLoading.value.set(loadingKey, true)
+
+  try {
+    const res = await snapshotAPI.rollback(props.workspaceHash, msgId, props.sessionName)
+    if (res.success) {
+      addLog({level: 'INFO', text: `✅ ${res.data?.message || '工作区已恢复'}`, time: Date.now()})
+      // 截断该消息之后的所有快照记录
+      store.truncateSnapshotsAfter(props.sessionName, msgId)
+      // 从 snapshotMap 中移除
+      snapshotMap.value.delete(msgId)
+
+      // 找到对应用户消息及其位置，截断会话消息，回填输入框
+      const msgs = store.getSessionMessages(props.sessionName)
+      let targetIdx = -1
+      // 优先使用后端返回的 rollbackUserText（从 JSONL 持久化数据中取得）
+      let rollbackContent = res.data?.rollbackUserText || ''
+      for (let i = 0; i < msgs.length; i++) {
+        if (msgs[i].snapshotId === msgId) {
+          targetIdx = i
+          // 如果后端没返回文本，从前端消息中取
+          if (!rollbackContent) rollbackContent = msgs[i].content || ''
+          break
+        }
+      }
+      if (targetIdx >= 0) {
+        // 截断：保留目标消息之前的所有消息，删除目标消息及之后的所有消息
+        const kept = msgs.slice(0, targetIdx)
+        store.setSessionMessages(props.sessionName, kept)
+        // 回填输入框
+        if (rollbackContent) {
+          inputText.value = rollbackContent
+        }
+      }
+
+      // 通知父组件刷新会话列表和 Git 状态
+      emit('sessionUpdated')
+    } else {
+      addLog({level: 'ERROR', text: `❌ 撤回失败: ${res.error || '未知错误'}`, time: Date.now()})
+    }
+  } catch (e) {
+    addLog({level: 'ERROR', text: `❌ 撤回失败: ${e.message || e}`, time: Date.now()})
+  } finally {
+    snapshotRollbackLoading.value.delete(loadingKey)
+  }
 }
 
 const clearChat = async () => {
@@ -1019,11 +1058,15 @@ const loadHistory = async (sessionName, force = false) => {
           } else {
             item.content = m.content || ''
           }
+          // 恢复快照检查点 ID（JSONL 持久化的 snapshot_id 字段）
+          if (m.snapshot_id) {
+            item.snapshotId = m.snapshot_id
+          }
         } else {
           if (m.reasoning_content) item.blocks.push({
             type: 'reasoning',
             content: m.reasoning_content,
-            showContent: true
+            showContent: false
           })
           if (m.tool_calls) for (const tc of m.tool_calls) {
             let name = tc.function?.name || tc.name || '', args = tc.function?.arguments || tc.arguments || ''
@@ -1319,9 +1362,16 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 .msg-footer {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  margin-top: 4px;
   gap: 8px;
+  margin-top: 4px;
+}
+
+.user-body .msg-footer {
+  justify-content: flex-end;
+}
+
+.assistant-body .msg-footer {
+  justify-content: space-between;
 }
 
 .copy-msg-btn {
@@ -1330,23 +1380,66 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   border: none;
   font-size: 12px;
   cursor: pointer;
-  padding: 2px 4px;
+  padding: 3px 5px;
   border-radius: var(--r-sm);
-  transition: opacity 0.15s;
+  transition: opacity 0.2s, background 0.2s;
   line-height: 1;
   color: var(--fg-3);
 }
 
 .user-body .copy-msg-btn {
-  color: rgba(255, 255, 255, 0.7);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .msg-body:hover .copy-msg-btn {
-  opacity: 0.7;
+  opacity: 0.6;
 }
 
 .copy-msg-btn:hover {
-  opacity: 1 !important;
+  opacity: 1;
+  background: var(--glass-bg-2);
+}
+
+.user-body .copy-msg-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+}
+
+/* 撤回按钮（恢复到 AI 修改前的状态） */
+.rollback-btn {
+  opacity: 0;
+  background: none;
+  border: none;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 3px 5px;
+  border-radius: var(--r-sm);
+  transition: opacity 0.2s, background 0.2s;
+  line-height: 1;
+  color: var(--fg-3);
+}
+
+.rollback-btn.loading {
+  opacity: 0.5;
+  pointer-events: none;
+}
+
+.user-body .rollback-btn {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.msg-body:hover .rollback-btn {
+  opacity: 0.6;
+}
+
+.rollback-btn:hover {
+  opacity: 1;
+  background: rgba(231, 76, 60, 0.12);
+  color: var(--accent-5, #e74c3c);
+}
+
+.user-body .rollback-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
 }
 
 /* 代码块内嵌复制按钮（通过 :deep 穿透 v-html） */
@@ -2232,5 +2325,95 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   font-size: 13px;
   cursor: default;
   user-select: none;
+}
+
+/* ===== 消息缩略图 dock（右侧 dock 栏） ===== */
+.msg-thumb-dock {
+  position: absolute;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 50;
+  pointer-events: none;
+}
+
+.thumb-dock-inner {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  padding: 8px 4px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--glass-shadow);
+  pointer-events: auto;
+  opacity: 0.35;
+  transition: opacity 0.25s ease, box-shadow 0.25s ease;
+  max-height: 70vh;
+  overflow-y: auto;
+  min-width: 10px;
+}
+
+.thumb-dock-inner:hover {
+  opacity: 0.95;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+}
+
+.thumb-dock-inner::-webkit-scrollbar {
+  width: 2px;
+}
+
+.thumb-dock-inner::-webkit-scrollbar-thumb {
+  background: var(--fg-4);
+  border-radius: 1px;
+}
+
+.thumb-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 6px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: all 0.2s ease;
+  white-space: nowrap;
+  overflow: hidden;
+}
+
+.thumb-item:hover {
+  background: var(--accent-bg);
+}
+
+.thumb-item:hover .thumb-indicator {
+  background: var(--accent);
+  transform: scale(1.2);
+}
+
+.thumb-indicator {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fg-4);
+  transition: all 0.2s ease;
+}
+
+.thumb-preview {
+  font-size: 11px;
+  color: var(--fg-3);
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 0;
+  opacity: 0;
+  transition: max-width 0.25s ease, opacity 0.25s ease, margin-left 0.25s ease;
+}
+
+.thumb-dock-inner:hover .thumb-preview {
+  max-width: 180px;
+  opacity: 1;
+  margin-left: 2px;
 }
 </style>

@@ -4,8 +4,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
-import site.sorghum.agent4j.bin.agent.ChatMessage;
-import site.sorghum.agent4j.bin.model.ModelClient;
+import org.noear.solon.ai.chat.ChatModel;
+import org.noear.solon.ai.chat.ChatResponse;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.common.entity.ProcessResult;
 import site.sorghum.agent4j.web.model.*;
@@ -40,10 +40,10 @@ public class GitService {
     private static final int MIN_STATUS_LINE_LENGTH = 4;
     /** 单文件 diff 最大行数（超出截断） */
     private static final int MAX_DIFF_LINES = 2000;
-    /** AI 生成提交消息时 diff 最大字符数（缩减以减少 token 消耗和延迟） */
-    private static final int MAX_DIFF_CHARS = 4000;
+    /** 生成提交消息时，每个文件 diff 最大行数 */
+    private static final int MAX_DIFF_LINES_PER_FILE = 100;
     /** 生成提交消息时参考的近期提交条数 */
-    private static final int RECENT_COMMIT_LOG_COUNT = 10;
+    private static final int RECENT_COMMIT_LOG_COUNT = 3;
     /** Git 命令超时秒数 */
     private static final int GIT_COMMAND_TIMEOUT_SEC = 10;
     /** 默认 Git 提交作者名 */
@@ -540,11 +540,25 @@ public class GitService {
             throw new ServiceException("Not a git repository");
         }
 
-        // 获取轻量 AI 模型客户端（关闭推理/思考，降低延迟）
-        ModelClient modelClient = agentService.createLightModelClient();
-        if (modelClient == null) {
+        // 检查 AI 模型配置
+        String apiUrl = agentService.getSharedApiUrl();
+        String apiKey = agentService.getSharedApiKey();
+        String model = agentService.getSharedModel();
+        if (apiUrl == null || apiKey == null || model == null) {
             throw new ServiceException("AI 模型未配置，请先设置 OPENAI_API_KEY 环境变量");
         }
+
+        // 构建 Solon ChatModel（轻量、无推理）
+        ChatModel chatModel = ChatModel.of(apiUrl)
+                .apiKey(apiKey)
+                .model(model)
+                .modelOptions(o -> {
+                    o.temperature(0.1);
+                    o.optionSet("chat_template_kwargs", ONode.ofJson("{}").set("enable_thinking", false));
+                    o.optionSet("enable_thinking",false);
+                    o.optionSet("thinking",ONode.ofJson("{}").set("type","disabled"));
+                })
+                .build();
 
         // 解析可选的 files 参数
         List<String> files = readStringListField(parseJsonBody(body, "generateCommitMessage"), "files");
@@ -554,76 +568,60 @@ public class GitService {
                 "log", "--oneline", "-" + RECENT_COMMIT_LOG_COUNT);
         if (recentLog == null) recentLog = "";
 
-        // 2. 获取变更（支持按文件过滤）
-        String fullDiff;
-        if (files != null && !files.isEmpty()) {
-            // 仅获取选中文件的 diff
-            StringBuilder sb = new StringBuilder();
-            for (String f : files) {
-                try {
-                    ProcessResult sr = runGit(workspaceDir, "git", "diff", "--cached", "--", f);
-                    if (sr.stdout != null && !sr.stdout.isEmpty()) sb.append(sr.stdout).append("\n");
-                } catch (Exception e) {
-                    log.debug("[git] 获取文件 {} 的 staged diff 失败: {}", f, e.getMessage());
-                }
-                try {
-                    ProcessResult ur = runGit(workspaceDir, "git", "diff", "--", f);
-                    if (ur.stdout != null && !ur.stdout.isEmpty()) sb.append(ur.stdout).append("\n");
-                } catch (Exception e) {
-                    log.debug("[git] 获取文件 {} 的 unstaged diff 失败: {}", f, e.getMessage());
-                }
-            }
-            fullDiff = sb.toString().trim();
-        } else {
-            String stagedDiff = "";
-            String unstagedDiff = "";
-            try {
-                ProcessResult sr = runGit(workspaceDir, "git", "diff", "--cached");
-                stagedDiff = sr.stdout != null ? sr.stdout : "";
-            } catch (Exception e) {
-                log.debug("[git] 获取全局 staged diff 失败: {}", e.getMessage());
-            }
-            try {
-                ProcessResult ur = runGit(workspaceDir, "git", "diff");
-                unstagedDiff = ur.stdout != null ? ur.stdout : "";
-            } catch (Exception e) {
-                log.debug("[git] 获取全局 unstaged diff 失败: {}", e.getMessage());
-            }
-            fullDiff = (stagedDiff + "\n" + unstagedDiff).trim();
+        // 2. 如果没有指定文件，则从 git status 获取所有变更文件
+        if (files == null || files.isEmpty()) {
+            files = getChangedFiles(workspaceDir);
         }
+
+        // 逐文件获取 diff，每个文件最多保留 MAX_DIFF_LINES_PER_FILE 行
+        StringBuilder sb = new StringBuilder();
+        for (String f : files) {
+            String staged = "", unstaged = "";
+            try {
+                ProcessResult sr = runGit(workspaceDir, "git", "diff", "--cached", "--", f);
+                if (sr.stdout != null && !sr.stdout.isEmpty()) staged = sr.stdout;
+            } catch (Exception e) {
+                log.debug("[git] 获取文件 {} 的 staged diff 失败: {}", f, e.getMessage());
+            }
+            try {
+                ProcessResult ur = runGit(workspaceDir, "git", "diff", "--", f);
+                if (ur.stdout != null && !ur.stdout.isEmpty()) unstaged = ur.stdout;
+            } catch (Exception e) {
+                log.debug("[git] 获取文件 {} 的 unstaged diff 失败: {}", f, e.getMessage());
+            }
+            String fileDiff = (staged + "\n" + unstaged).trim();
+            if (!fileDiff.isEmpty()) {
+                sb.append("# ").append(f).append("\n");
+                sb.append(truncateLines(fileDiff, MAX_DIFF_LINES_PER_FILE)).append("\n\n");
+            }
+        }
+        String fullDiff = sb.toString().trim();
 
         if (fullDiff.isEmpty()) {
             throw new ServiceException("没有待提交的变更");
         }
 
-        // 截断 diff 防止超出模型上下文窗口
-        if (fullDiff.length() > MAX_DIFF_CHARS) {
-            fullDiff = fullDiff.substring(0, MAX_DIFF_CHARS)
-                    + "\n\n... (diff 过长，已截断至前 " + MAX_DIFF_CHARS + " 字符)";
-        }
-
         // 3. 构建 AI 提示词
-        String systemPrompt = "你是一个 Git 提交消息生成助手。"
-                + "根据 git diff 内容生成一条简洁、描述性的提交消息。"
-                + "严格遵循以下规约：\n"
-                + "- 参考「近 10 条提交」的风格（如前缀、格式、语言等）\n"
-                + "- 消息长度不超过 72 字符（中文不超过 50 字）\n"
-                + "- 使用中文或英文取决于近期提交的语言\n"
-                + "- 仅输出提交消息本身，不要任何解释、引号或 markdown 格式";
+        String systemPrompt = """
+                你是一个 Git 提交消息生成助手。\
+                根据 git diff 内容生成一条简洁、描述性的提交消息。\
+                严格遵循以下规约：
+                - 参考「近 3 条提交」的风格（如前缀、格式、语言等）
+                - 消息长度不超过 72 字符（中文不超过 50 字）
+                - 使用中文或英文取决于近期提交的语言
+                - 仅输出提交消息本身，不要任何解释、引号或 markdown 格式""";
 
-        String userPrompt = "近 10 条提交（风格参考）：\n"
+        String userPrompt = "近 3 条提交（风格参考）：\n"
                 + (recentLog.isEmpty() ? "（无历史提交）" : recentLog) + "\n\n"
                 + "当前变更（git diff）：\n" + fullDiff + "\n\n"
                 + "请生成提交消息：";
 
-        // 4. 调用 AI 模型
-        List<ChatMessage> messages = new ArrayList<>();
-        messages.add(ChatMessage.system(systemPrompt));
-        messages.add(ChatMessage.user(userPrompt));
-
+        // 4. 调用 AI 模型（使用 Solon ChatModel，简单直接）
         try {
-            ONode response = modelClient.chat(messages, null);
-            String content = response.get("content").getString();
+            ChatResponse response = chatModel.prompt(userPrompt)
+                    .options(o -> o.systemPrompt(systemPrompt))
+                    .call();
+            String content = response.getMessage().getResultContent();
             if (content == null || content.trim().isEmpty()) {
                 throw new ServiceException("AI 未能生成提交消息");
             }
@@ -662,6 +660,49 @@ public class GitService {
             throw new ServiceException("Invalid path");
         }
         return trimmed;
+    }
+
+    // ==================== AI 辅助工具方法 ====================
+
+    /**
+     * 获取工作区中所有变更文件列表（含暂存、未暂存、未跟踪）。
+     */
+    private List<String> getChangedFiles(File workspaceDir) throws Exception {
+        ProcessResult result = runGit(workspaceDir, "git", "status", "--porcelain");
+        if (result.exitCode != 0 || result.stdout == null || result.stdout.trim().isEmpty()) {
+            return List.of();
+        }
+        List<String> fileList = new ArrayList<>();
+        for (String line : result.stdout.split("\n")) {
+            if (line.trim().isEmpty() || line.length() < MIN_STATUS_LINE_LENGTH) continue;
+            String filename = line.substring(3).trim();
+            // 处理重命名
+            if (filename.contains(" -> ")) {
+                filename = filename.split(" -> ", 2)[1];
+            }
+            if (filename.startsWith("\"") && filename.endsWith("\"")) {
+                filename = filename.substring(1, filename.length() - 1);
+            }
+            if (!fileList.contains(filename)) {
+                fileList.add(filename);
+            }
+        }
+        return fileList;
+    }
+
+    /**
+     * 截断文本到指定行数，超出时末尾添加截断提示。
+     */
+    private static String truncateLines(String text, int maxLines) {
+        if (text == null || text.isEmpty()) return text;
+        String[] lines = text.split("\n", -1);
+        if (lines.length <= maxLines) return text;
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < maxLines; i++) {
+            sb.append(lines[i]).append("\n");
+        }
+        sb.append("... (diff 过长，截断至 ").append(maxLines).append(" 行)");
+        return sb.toString();
     }
 
     // ==================== JSON 解析工具方法 ====================
