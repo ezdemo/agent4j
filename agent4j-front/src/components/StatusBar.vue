@@ -48,6 +48,16 @@
         <span class="cache-count">{{ formatTokens(usage.cacheHit) }}</span>
       </div>
       
+      <div class="status-item version-item" v-if="version" @click="$emit('checkVersion')" :class="{ 'has-update': hasNewVersion }" :title="hasNewVersion ? '有新版本可用，点击查看' : ''">
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"/>
+          <line x1="12" y1="8" x2="12" y2="12"/>
+          <line x1="12" y1="16" x2="12.01" y2="16"/>
+        </svg>
+        <span class="version-text">v{{ version }}</span>
+        <span v-if="hasNewVersion" class="version-badge">●</span>
+      </div>
+      
       <div class="status-item time-item">
         <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <circle cx="12" cy="12" r="10"/>
@@ -66,8 +76,12 @@ const props = defineProps({
   usage: { type: Object, default: () => ({ totalTokens: 0, cacheHit: 0 }) },
   model: { type: String, default: '' },
   busy: { type: Boolean, default: false },
-  connected: { type: Boolean, default: true }
+  connected: { type: Boolean, default: true },
+  version: { type: String, default: '' },
+  hasNewVersion: { type: Boolean, default: false }
 })
+
+const emit = defineEmits(['checkVersion'])
 
 const currentTime = ref('')
 let timeInterval = null
@@ -306,5 +320,36 @@ onUnmounted(() => {
 
 [data-theme="dark"] .status-dot.online {
   box-shadow: 0 0 0 3px rgba(52, 211, 153, 0.3);
+}
+
+/* 版本信息 */
+.version-item {
+  cursor: pointer;
+  position: relative;
+}
+
+.version-item:hover .version-text {
+  color: var(--accent);
+}
+
+.version-text {
+  font-family: var(--font-mono);
+  font-weight: var(--font-medium);
+}
+
+.version-badge {
+  color: #ef4444;
+  font-size: 8px;
+  animation: pulse 2s ease-in-out infinite;
+}
+
+.has-update .version-text {
+  color: #ef4444;
+}
+
+@media (max-width: 768px) {
+  .version-item {
+    display: none;
+  }
 }
 </style>
