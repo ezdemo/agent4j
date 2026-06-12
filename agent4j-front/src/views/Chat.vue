@@ -51,100 +51,17 @@
       </div>
 
       <!-- 消息列表 -->
-      <div v-for="(msg, idx) in messages" :key="msg.id" class="msg" :class="msg.role" :data-msg-idx="idx">
-        <!-- 用户消息 -->
-        <template v-if="msg.role === 'user'">
-          <div class="msg-body user-body">
-            <div class="msg-text">{{ msg.content }}</div>
-            <div v-if="msg.images && msg.images.length > 0" class="user-images">
-              <img v-for="(img, i) in msg.images" :key="i" :src="img" class="user-image" @click="previewImage(img)"/>
-            </div>
-            <div class="msg-footer">
-              <span class="msg-time">{{ msg.time }}</span>
-              <button v-if="msg.snapshotId" class="rollback-btn"
-                      :class="{ loading: snapshotRollbackLoading.get(msg.snapshotId) }"
-                      @click="rollbackSnapshot(msg.snapshotId)"
-                      title="撤回 AI 修改，恢复到发送前状态"
-                      v-html="ROLLBACK_ICON"></button>
-              <button class="copy-msg-btn" @click="copyMessage(msg)" title="复制消息" v-html="COPY_ICON"></button>
-            </div>
-          </div>
-        </template>
-
-        <!-- 助手消息 -->
-        <template v-else-if="msg.role === 'assistant'">
-          <div class="msg-body assistant-body">
-            <div class="msg-blocks">
-              <template v-for="(block, bi) in (msg.blocks || [])" :key="bi">
-                <!-- 思考 -->
-                <div v-if="block.type === 'reasoning'" class="block-reasoning">
-                  <div class="reasoning-head" @click="block.showContent = !block.showContent">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                      <circle cx="12" cy="12" r="10"/>
-                      <path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/>
-                      <line x1="12" y1="17" x2="12.01" y2="17"/>
-                    </svg>
-                    <span>思考</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         :style="{ transform: block.showContent ? 'rotate(180deg)' : '' }">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
-                  </div>
-                  <div v-if="block.showContent" class="reasoning-text" v-html="getReasoningHtml(block)"></div>
-                </div>
-
-                <!-- 内容 -->
-                <div v-else-if="block.type === 'content'" class="block-content" v-html="fmt(block.content)"></div>
-
-                <!-- 工具调用 -->
-                <div v-else-if="block.type === 'tool_call'" class="block-tool">
-                  <div class="tool-head" @click="block.expanded = !block.expanded">
-                    <span class="tool-icon" :class="block.status">
-                      <svg v-if="block.status === '执行中'" width="12" height="12" viewBox="0 0 24 24" fill="none"
-                           stroke="currentColor" stroke-width="2" class="animate-spin"><path
-                          d="M21 12a9 9 0 11-6.219-8.56"/></svg>
-                      <svg v-else-if="block.status === '成功'" width="12" height="12" viewBox="0 0 24 24" fill="none"
-                           stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                      <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                           stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-                    </span>
-                    <code class="tool-name">{{ block.name }}</code>
-                    <span class="tool-status" :class="block.status">{{ block.status }}</span>
-                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         :style="{ transform: block.expanded ? 'rotate(180deg)' : '' }">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
-                  </div>
-                  <div v-if="block.expanded" class="tool-detail">
-                    <pre v-if="block.args"><code>{{ fmtArgs(block.args) }}</code></pre>
-                    <pre v-if="block.result"><code>{{ block.result }}</code></pre>
-                  </div>
-                </div>
-
-                <!-- 选项按钮（choice） -->
-                <div v-else-if="block.type === 'choice'" class="block-choice">
-                  <div v-if="!block.resolved" class="choice-buttons">
-                    <button v-for="opt in (block.options || [])" :key="opt.value"
-                            class="choice-btn"
-                            @click="sendChoice(opt.value, block)">
-                      {{ opt.title }}
-                    </button>
-                  </div>
-                  <div v-else class="choice-resolved">
-                    <span class="choice-label">已选择：</span>
-                    <span class="choice-value">{{ block.selectedTitle || block.options?.[0]?.title || '—' }}</span>
-                  </div>
-                </div>
-
-              </template>
-            </div>
-            <div class="msg-footer">
-              <span class="msg-time">{{ msg.time }}</span>
-              <button class="copy-msg-btn" @click="copyMessage(msg)" title="复制消息" v-html="COPY_ICON"></button>
-            </div>
-          </div>
-        </template>
-      </div>
+      <ChatMessage
+          v-for="(msg, idx) in messages"
+          :key="msg.id"
+          :idx="idx"
+          :msg="msg"
+          :snapshot-rollback-loading="snapshotRollbackLoading"
+          @preview-image="previewImage"
+          @rollback-snapshot="rollbackSnapshot"
+          @copy-message="copyMessage"
+          @send-choice="sendChoice"
+      />
 
       <!-- 加载中 -->
       <div v-if="streaming && !hasAssistant" class="msg assistant">
@@ -319,11 +236,8 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {agentAPI, chatAPI, configAPI, snapshotAPI} from '../services/api'
 import {md} from '../utils/highlight'
 import ChatInput from '../components/ChatInput.vue'
+import ChatMessage from '../components/ChatMessage.vue'
 import {useAppStore} from '../stores/app'
-
-// SVG 图标（模板使用）
-const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
-const ROLLBACK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>'
 
 // ============= 模型切换 =============
 const handleSwitchModel = async (modelName) => {
@@ -429,7 +343,7 @@ watch([subAgentSessions, subAgentBlocks], async () => {
   if (subAgentModalOpen.value) {
     await scrollSubModalToBottom()
   }
-}, {deep: true})
+})
 
 // 打开 Modal 时滚动到底部（显示最新内容）
 watch(subAgentModalOpen, async (open) => {
