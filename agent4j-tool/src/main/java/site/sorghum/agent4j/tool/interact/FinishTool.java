@@ -45,27 +45,30 @@ public class FinishTool extends AgentTool {
                 注意：推理循环不会因纯文本回复而退出，必须通过此工具显式宣告完成。
                 即使没有任务列表，只要回答已完整，也应调用此工具结束对话。
                 调用后本轮对话即结束。
+                参数: content(可选, string, 最终回答内容)。
                 """;
     }
 
     @Override
     public List<ToolParameter> getParameters() {
-        return List.of();
+        return List.of(
+                new ToolParameter("content", "string", false,
+                        "AI 的最终回答内容。如果不传，将自动使用最后一条回复内容。")
+        );
     }
 
     @Override
     public ToolResult execute(ToolContext ctx) {
         String content = ctx.getString("content");
-        if (content == null || content.isBlank()) {
-            content = "__FINISH_NO_CONTENT__";
-        }
 
         AgentLoopController ctrl = ctx.getLoopController();
         if (ctrl != null) {
             ctrl.finish(content);
         }
 
-        return ToolResult.ok(content);
+        // 如果 finish 方法处理了空 content（从上下文回填），则使用处理后的值
+        // 否则使用原始 content（可能为 null，由上游兜底）
+        return ToolResult.ok(content != null ? content : "__FINISH_NO_CONTENT__");
     }
 
     @Override

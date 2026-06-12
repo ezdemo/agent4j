@@ -274,6 +274,17 @@ public class AgentLoop implements AgentLoopController {
 
     @Override
     public void finish(String content) {
+        if (content == null || content.isBlank()) {
+            // 尝试从上下文获取最后一条 assistant 回复作为回退
+            String lastAssistant = ctx.getLastAssistantContent();
+            if (lastAssistant != null && !lastAssistant.isBlank()) {
+                content = lastAssistant;
+                log.info("[loop] finish content 为空，使用最后一条 assistant 回复作为回退");
+            } else {
+                content = "(completed)";
+                log.info("[loop] finish content 为空且无 assistant 回复可回退，使用默认值");
+            }
+        }
         this.finishContent = content;
         client.abortStream();
         log.info("[loop] 工具请求完成任务，即将退出循环");
