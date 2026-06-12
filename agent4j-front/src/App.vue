@@ -332,6 +332,7 @@ const workspace = ref('')
 const appVersion = ref('')
 const hasNewVersion = ref(false)
 const showUpdateModal = ref(false)
+let versionCheckTimer = null
 
 // 系统提示词弹窗
 const promptModalOpen = ref(false)
@@ -840,6 +841,17 @@ onMounted(async () => {
 
   // 异步获取版本信息（不阻塞启动）
   fetchVersionInfo()
+
+  // 每 10 分钟轮询检查新版本
+  versionCheckTimer = setInterval(fetchVersionInfo, 10 * 60 * 1000)
+})
+
+onBeforeUnmount(() => {
+  stopHeartbeat()
+  if (versionCheckTimer) {
+    clearInterval(versionCheckTimer)
+    versionCheckTimer = null
+  }
 })
 
 // 获取版本信息
@@ -876,10 +888,6 @@ function copyText(text) {
     message.success('已复制到剪贴板')
   }
 }
-
-onBeforeUnmount(() => {
-  stopHeartbeat()
-})
 
 // 设置弹窗关闭时刷新工作区和会话（用户可能在设置中切换了工作目录）
 watch(showSettings, (newVal) => {
