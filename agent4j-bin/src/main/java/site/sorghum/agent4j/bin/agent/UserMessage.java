@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.bin.agent;
 
 import lombok.Getter;
+import lombok.Setter;
 
 import java.util.Collections;
 import java.util.List;
@@ -31,6 +32,14 @@ public class UserMessage {
      */
     @Getter
     private final List<String> images;
+
+    /**
+     * 快照检查点 ID，由 ChatController 在创建快照后设置。
+     * 在 Agent 写入 JSONL 时会传递到 ChatMessage 上，以便前端恢复撤回按钮。
+     */
+    @Getter
+    @Setter
+    private String snapshotId;
 
     private UserMessage(String text, List<String> images) {
         this.text = text;

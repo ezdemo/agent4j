@@ -63,6 +63,10 @@ public class ConversationContext {
             String text = msg != null ? msg.getText() : null;
             chatMsg = ChatMessage.user(text);
         }
+        // 传递快照检查点 ID 到 ChatMessage，以便 JSONL 持久化
+        if (msg != null && msg.getSnapshotId() != null) {
+            chatMsg.setSnapshotId(msg.getSnapshotId());
+        }
         history.add(chatMsg);
         persist(chatMsg);
     }
