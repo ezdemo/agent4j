@@ -39,6 +39,13 @@ public class Agent4jAgent {
 
     private final AgentLoop loop;
     private final ConversationContext ctx;
+
+    /**
+     * 获取会话上下文（用于外部截断历史等操作）。
+     */
+    public ConversationContext getContext() {
+        return ctx;
+    }
     /**
      * 命令注册表（用于 chat() 中自动路由 "/" 开头的命令）
      */

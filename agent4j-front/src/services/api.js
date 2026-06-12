@@ -689,11 +689,12 @@ export const snapshotAPI = {
     return api.post('/snapshots/checkpoint', null, { params })
   },
 
-  // 撤回到快照 - POST /api/snapshots/rollback?workspaceHash=xxx&msgId=xxx
-  rollback: (workspaceHash, msgId) => {
+    // 撤回到快照 - POST /api/snapshots/rollback?workspaceHash=xxx&msgId=xxx&sessionName=xxx
+    rollback: (workspaceHash, msgId, sessionName) => {
     const params = {}
     if (workspaceHash) params.workspaceHash = workspaceHash
     params.msgId = msgId
+        if (sessionName) params.sessionName = sessionName
     return api.post('/snapshots/rollback', null, { params })
   },
 
