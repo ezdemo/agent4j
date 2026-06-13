@@ -39,7 +39,7 @@
         <GitPanel ref="gitRef" :workspace-hash="workspaceHash" />
       </div>
       <div v-show="modelValue === 'schedule'" class="rp-page">
-        <SchedulePanel ref="scheduleRef" :workspace-hash="workspaceHash" :session-name="sessionName" />
+        <SchedulePanel ref="scheduleRef" :workspace-hash="workspaceHash" :session-name="sessionName" :sessions="sessions" />
       </div>
     </div>
   </div>
@@ -54,7 +54,8 @@ defineProps({
   modelValue: { type: String, default: 'git' },
   open: { type: Boolean, default: true },
   workspaceHash: { type: String, default: null },
-  sessionName: { type: String, default: '' }
+  sessionName: { type: String, default: '' },
+  sessions: { type: Array, default: () => [] }
 })
 
 defineEmits(['update:modelValue', 'close'])
