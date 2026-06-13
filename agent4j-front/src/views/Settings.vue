@@ -1362,6 +1362,17 @@ X-Custom-Header=value"
                 </button>
               </div>
 
+              <!-- 自动更新按钮 -->
+              <div class="about-actions" style="margin-top:8px">
+                <button class="btn btn-auto-update" :disabled="autoUpdating" @click="handleAutoUpdate">
+                  <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                    <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/>
+                  </svg>
+                  {{ autoUpdating ? '正在创建会话...' : '自动更新' }}
+                </button>
+                <span v-if="autoUpdateTip" class="auto-update-tip">{{ autoUpdateTip }}</span>
+              </div>
+
               <!-- 错误信息 -->
               <div v-if="aboutError" class="about-error">{{ aboutError }}</div>
             </div>
@@ -1734,7 +1745,22 @@ const aboutInfo = ref({
 const aboutChecking = ref(false)
 const aboutError = ref('')
 const showUpdateModal = ref(false)
+const autoUpdating = ref(false)
+const autoUpdateTip = ref('')
 
+const emit = defineEmits(['auto-update'])
+
+async function handleAutoUpdate() {
+  autoUpdating.value = true
+  autoUpdateTip.value = ''
+  try {
+    emit('auto-update')
+  } catch (e) {
+    autoUpdateTip.value = '操作失败: ' + (e.message || '未知错误')
+  } finally {
+    autoUpdating.value = false
+  }
+}
 // 检查更新（同时刷新当前版本）
 async function handleCheckVersion() {
   aboutChecking.value = true
@@ -5248,6 +5274,28 @@ onMounted(() => {
   display: flex;
   gap: 8px;
   margin-top: 16px;
+  align-items: center;
+}
+
+.btn-auto-update {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  border-color: transparent;
+}
+
+.btn-auto-update:hover:not(:disabled) {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+}
+
+.btn-auto-update:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.auto-update-tip {
+  font-size: 12px;
+  color: var(--fg-3);
+  margin-left: 4px;
 }
 
 .about-error {

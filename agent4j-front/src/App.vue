@@ -224,7 +224,7 @@
             <button class="btn-icon-sm" @click="showSettings = false">×</button>
           </div>
           <div class="modal-body">
-            <SettingsView />
+            <SettingsView @auto-update="handleAutoUpdate" />
           </div>
         </div>
       </div>
@@ -266,6 +266,12 @@
             </div>
           </div>
           <div class="update-modal-foot">
+            <button class="btn btn-auto-update" :disabled="autoUpdating" @click="handleAutoUpdate">
+              <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/>
+              </svg>
+              {{ autoUpdating ? '正在创建会话...' : '自动更新' }}
+            </button>
             <button class="btn" @click="showUpdateModal = false">关闭</button>
           </div>
         </div>
@@ -332,6 +338,7 @@ const workspace = ref('')
 const appVersion = ref('')
 const hasNewVersion = ref(false)
 const showUpdateModal = ref(false)
+const autoUpdating = ref(false)
 
 // 系统提示词弹窗
 const promptModalOpen = ref(false)
@@ -882,6 +889,65 @@ function copyText(text) {
   }
 }
 
+// 自动更新：选择工作区 → 创建新会话 → 发送更新命令
+const handleAutoUpdate = async () => {
+  autoUpdating.value = true
+  try {
+    // 1. 获取工作区列表
+    const wsRes = await configAPI.listWorkspaces()
+    let wsHash = null
+    if (wsRes.success && wsRes.data && wsRes.data.length > 0) {
+      // 优先使用当前工作区，否则选择第一个
+      const currentWs = wsRes.data.find(w => w.hash === currentSessionWorkspace.value)
+      if (currentWs) {
+        wsHash = currentWs.hash
+      } else {
+        wsHash = wsRes.data[0].hash
+      }
+    } else {
+      message.error('没有可用的工作区，请先打开一个项目')
+      return
+    }
+
+    // 2. 切换工作区上下文
+    const ws = wsRes.data.find(w => w.hash === wsHash)
+    if (ws) {
+      await configAPI.switchWorkspace(ws.path)
+      workspaces.value = wsRes.data
+    }
+
+    // 3. 创建新会话
+    const params = { workspaceHash: wsHash }
+    const r = await sessionsAPI.createNew(params)
+    if (r.success && r.data?.sessionName) {
+      currentSession.value = r.data.sessionName
+      if (r.data.workspaceHash) currentSessionWorkspace.value = r.data.workspaceHash
+      chatRef.value?.resetLocalMessages()
+      await loadSessions()
+      await loadWorkspaces()
+      message.success('已新建更新会话')
+    } else {
+      message.error('新建会话失败')
+      return
+    }
+
+    // 4. 关闭设置和更新弹窗
+    showSettings.value = false
+    showUpdateModal.value = false
+
+    // 5. 稍等一帧让 UI 刷新，然后发送更新命令
+    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 300)))
+
+    const updateCommand = "请帮我执行 Agent4j 自动更新。根据当前操作系统平台，选择并运行对应的更新脚本：\n\n- Windows 系统：在 PowerShell 中运行 `irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex`\n- macOS / Linux 系统：在终端中运行 `curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash`\n\n请先判断当前系统平台，然后执行对应的脚本。执行完成后请报告结果。"
+    await chatRef.value?.sendCommand(updateCommand)
+  } catch (e) {
+    console.error('自动更新失败:', e)
+    message.error('自动更新失败: ' + (e.message || '未知错误'))
+  } finally {
+    autoUpdating.value = false
+  }
+}
+
 // 设置弹窗关闭时刷新工作区和会话（用户可能在设置中切换了工作目录）
 watch(showSettings, (newVal) => {
   if (!newVal) {
@@ -1350,8 +1416,24 @@ watch(showSettings, (newVal) => {
 :global(.update-modal-foot) {
   display: flex;
   justify-content: flex-end;
+  gap: 8px;
   padding: 12px 20px;
   border-top: 1px solid var(--border);
+}
+
+:global(.btn-auto-update) {
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+  color: #fff;
+  border-color: transparent;
+}
+
+:global(.btn-auto-update:hover:not(:disabled)) {
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
+}
+
+:global(.btn-auto-update:disabled) {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 [data-theme="dark"] :global(.update-modal-mask) {
