@@ -1446,13 +1446,6 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   background: var(--bg);
 }
 
-/* 消息块 */
-.msg-blocks {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
 /* 思考块 */
 .block-reasoning {
   background: var(--glass-bg-2);
