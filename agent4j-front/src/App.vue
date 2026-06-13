@@ -271,7 +271,7 @@
             </div>
           </div>
           <div class="update-modal-foot">
-            <button class="btn btn-auto-update" :disabled="autoUpdating" @click="handleAutoUpdate">
+            <button class="btn btn-secondary" :disabled="autoUpdating" @click="handleAutoUpdate">
               <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
                 <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/>
               </svg>
@@ -1436,21 +1436,6 @@ watch(showSettings, (newVal) => {
   gap: 8px;
   padding: 12px 20px;
   border-top: 1px solid var(--border);
-}
-
-:global(.btn-auto-update) {
-  background: linear-gradient(135deg, #6366f1, #8b5cf6);
-  color: #fff;
-  border-color: transparent;
-}
-
-:global(.btn-auto-update:hover:not(:disabled)) {
-  background: linear-gradient(135deg, #4f46e5, #7c3aed);
-}
-
-:global(.btn-auto-update:disabled) {
-  opacity: 0.6;
-  cursor: not-allowed;
 }
 
 [data-theme="dark"] :global(.update-modal-mask) {
