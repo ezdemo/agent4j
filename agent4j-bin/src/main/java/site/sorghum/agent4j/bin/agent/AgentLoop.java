@@ -7,7 +7,6 @@ import org.noear.snack4.ONode;
 import site.sorghum.agent4j.bin.builtin.TaskTool;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.bin.goal.Goal;
-import site.sorghum.agent4j.bin.goal.GoalStatus;
 import site.sorghum.agent4j.bin.goal.GoalStep;
 import site.sorghum.agent4j.bin.goal.GoalStore;
 import site.sorghum.agent4j.bin.goal.StepStatus;
@@ -19,7 +18,6 @@ import site.sorghum.agent4j.tool.*;
 import site.sorghum.agent4j.tool.interact.FinishTool;
 
 import java.io.IOException;
-import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -215,17 +213,7 @@ public class AgentLoop implements AgentLoopController {
      * 用户主动中断：设置中断标志、中止当前 HTTP 流式请求、取消正在执行的工具。
      */
     public void requestUserAbort() {
-        userAbortRequested = true;
-        client.abortStream();
-        // 取消正在执行的工具 Future
-        CompletableFuture<ChatMessage>[] futures = activeToolFutures;
-        if (futures != null) {
-            for (CompletableFuture<ChatMessage> f : futures) {
-                if (f != null && !f.isDone()) {
-                    f.cancel(true);
-                }
-            }
-        }
+        doAbort("用户主动中断");
     }
 
     /**
@@ -258,6 +246,16 @@ public class AgentLoop implements AgentLoopController {
 
     @Override
     public void requestStop() {
+        doAbort("工具请求停止推理循环");
+        log.info("[loop] 工具请求停止推理循环");
+    }
+
+    /**
+     * 统一的中断实现：设置标志、中止流式请求、取消工具 Future。
+     *
+     * @param reason 中断原因（用于日志）
+     */
+    private void doAbort(String reason) {
         userAbortRequested = true;
         client.abortStream();
         // 取消正在执行的工具 Future
@@ -269,7 +267,6 @@ public class AgentLoop implements AgentLoopController {
                 }
             }
         }
-        log.info("[loop] 工具请求停止推理循环");
     }
 
     @Override

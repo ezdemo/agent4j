@@ -253,6 +253,7 @@ public class ChatMessage {
     /**
      * 创建当前消息的浅拷贝（用于 MessageHealer 的复制后修改）。
      * toolCalls 列表是独立副本，但 ToolCallEntry 本身不可变。
+     * snapshotId 也一并复制，避免回滚场景下快照 ID 丢失。
      */
     public ChatMessage copy() {
         ChatMessage copy = new ChatMessage(this.role);
@@ -265,6 +266,7 @@ public class ChatMessage {
         }
         copy.toolCallId = this.toolCallId;
         copy.reasoningContent = this.reasoningContent;
+        copy.snapshotId = this.snapshotId;
         return copy;
     }
 

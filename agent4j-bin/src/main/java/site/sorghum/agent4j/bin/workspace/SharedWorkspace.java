@@ -3,12 +3,7 @@ package site.sorghum.agent4j.bin.workspace;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 
-import java.util.Comparator;
-import java.util.LinkedHashSet;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
@@ -71,7 +66,7 @@ public class SharedWorkspace {
         Objects.requireNonNull(value, "value must not be null");
         Objects.requireNonNull(creator, "creator must not be null");
 
-        rwLock.readLock().lock();
+        rwLock.writeLock().lock();
         try {
             // 容量检查：超限则淘汰最旧条目
             if (kvStore.size() >= maxEntries) {
@@ -101,7 +96,7 @@ public class SharedWorkspace {
                 log.debug("Created KV entry: key={}, version=1", key);
             }
         } finally {
-            rwLock.readLock().unlock();
+            rwLock.writeLock().unlock();
         }
     }
 
@@ -173,7 +168,7 @@ public class SharedWorkspace {
         Objects.requireNonNull(mimeType, "mimeType must not be null");
         Objects.requireNonNull(creator, "creator must not be null");
 
-        rwLock.readLock().lock();
+        rwLock.writeLock().lock();
         try {
             // 容量检查：超限则淘汰最旧文档
             if (docStore.size() >= maxEntries) {
@@ -205,7 +200,7 @@ public class SharedWorkspace {
                 log.debug("Created document entry: key={}, version=1", key);
             }
         } finally {
-            rwLock.readLock().unlock();
+            rwLock.writeLock().unlock();
         }
     }
 
@@ -317,28 +312,42 @@ public class SharedWorkspace {
     // ==================== 淘汰策略 ====================
 
     /**
-     * 淘汰 KV 存储中最旧的条目（按 createdAt 升序）。
+     * 淘汰 KV 存储中最旧的条目（按 createdAt 升序，相同时间戳时按 key 字典序）。
+     * 使用迭代器遍历替代 stream，确保 ConcurrentHashMap 下的确定性淘汰。
      */
     private void evictOne() {
-        kvStore.entrySet().stream()
-                .min(Map.Entry.comparingByValue(Comparator.comparingLong(KVBucket::getCreatedAt)))
-                .ifPresent(entry -> {
-                    kvStore.remove(entry.getKey());
-                    log.info("Evicted oldest KV entry: key={}, createdAt={}",
-                            entry.getKey(), entry.getValue().getCreatedAt());
-                });
+        String oldestKey = null;
+        long oldestTime = Long.MAX_VALUE;
+        for (Map.Entry<String, KVBucket> entry : kvStore.entrySet()) {
+            long createdAt = entry.getValue().getCreatedAt();
+            if (createdAt < oldestTime || (createdAt == oldestTime && oldestKey != null && entry.getKey().compareTo(oldestKey) < 0)) {
+                oldestTime = createdAt;
+                oldestKey = entry.getKey();
+            }
+        }
+        if (oldestKey != null) {
+            kvStore.remove(oldestKey);
+            log.info("Evicted oldest KV entry: key={}, createdAt={}", oldestKey, oldestTime);
+        }
     }
 
     /**
-     * 淘汰文档存储中最旧的条目（按 createdAt 升序）。
+     * 淘汰文档存储中最旧的条目（按 createdAt 升序，相同时间戳时按 key 字典序）。
+     * 使用迭代器遍历替代 stream，确保 ConcurrentHashMap 下的确定性淘汰。
      */
     private void evictOneDoc() {
-        docStore.entrySet().stream()
-                .min(Map.Entry.comparingByValue(Comparator.comparingLong(DocumentBucket::getCreatedAt)))
-                .ifPresent(entry -> {
-                    docStore.remove(entry.getKey());
-                    log.info("Evicted oldest document entry: key={}, createdAt={}",
-                            entry.getKey(), entry.getValue().getCreatedAt());
-                });
+        String oldestKey = null;
+        long oldestTime = Long.MAX_VALUE;
+        for (Map.Entry<String, DocumentBucket> entry : docStore.entrySet()) {
+            long createdAt = entry.getValue().getCreatedAt();
+            if (createdAt < oldestTime || (createdAt == oldestTime && oldestKey != null && entry.getKey().compareTo(oldestKey) < 0)) {
+                oldestTime = createdAt;
+                oldestKey = entry.getKey();
+            }
+        }
+        if (oldestKey != null) {
+            docStore.remove(oldestKey);
+            log.info("Evicted oldest document entry: key={}, createdAt={}", oldestKey, oldestTime);
+        }
     }
 }
