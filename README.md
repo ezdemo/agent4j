@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js"/>
   <img src="https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri"/>
   <img src="https://img.shields.io/badge/license-MIT-green"/>
-  <img src="https://img.shields.io/badge/version-26.6.9.2-lightgrey"/>
+  <img src="https://img.shields.io/badge/version-26.6.13-lightgrey"/>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-📋-brightgreen"/></a>
 </p>
 
@@ -83,6 +83,41 @@ API，一步步把事情干完。
 
 ---
 
+## 🆕 最新更新（v26.6.13）
+
+### 📅 定时任务管理
+- 可视化定时任务管理面板，支持会话筛选
+- 增强 Cron 表达式解析器
+
+### 🎨 前端增强
+- ChatMessage 添加时间戳显示
+- 流式加载动画横线，提升视觉体验
+- finish 工具渲染优化，区分执行中与完成状态
+- TitleBar 添加 Gitee/GitHub Star 按钮
+
+### 🔄 自动更新系统
+- 应用启动时自动检查更新
+- 更新按钮移至模态框底部，优化交互流程
+
+### 🤖 子代理增强
+- 传播父级中断信号到子代理
+- 重构子代理会话渲染，复用 ChatMessage 组件
+
+### 📁 Git 增强
+- 支持未跟踪文件的 diff 显示与空文件处理
+
+### 🛠️ 其他亮点
+- 消息快照系统（基于 Git 的检查点与撤回）
+- 版本检查与更新系统
+- Java 源码查找工具（java_source）
+- Cron 表达式解析器
+- 代码语法高亮（Shiki/Shikiji）
+- 毛玻璃视觉效果
+
+> 📋 完整变更记录请查看 [CHANGELOG.md](CHANGELOG.md)
+
+---
+
 ## ⚡ 前缀缓存命中率
 
 Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）** 能力——系统提示词、工具定义、项目文档等每次都在 prompt
@@ -138,6 +173,7 @@ Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）** �
 - JSONL 格式持久化，工作区隔离
 - 自动生成会话标题
 - 记录每次的 token 用量
+- 消息快照系统（基于 Git 的检查点与撤回）
 
 ### 🌐 三种界面
 
@@ -154,6 +190,9 @@ Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）** �
 - 工具调用可视化
 - Git 面板
 - 工作区管理
+- 毛玻璃视觉效果
+- 代码语法高亮（Shiki/Shikiji）
+- 消息时间戳与流式加载动画
 
 ---
 
@@ -275,6 +314,7 @@ agent4j/
 | `workspace_read` / `workspace_write` / `workspace_list` / `workspace_watch` | 工作区操作      |
 | `webfetch`                                                                  | 抓网页        |
 | `codesearch`                                                                | 搜索代码       |
+| `java_source`                                                               | Java源码查找   |
 | `call_api`                                                                  | 调 REST API |
 | `remember` / `recall_memory` / `forget`                                     | 持久记忆       |
 | `submit_plan` / `revise_plan` / `mark_step_complete`                        | 计划管理       |
@@ -323,7 +363,7 @@ agent4j/
 - [x] Tauri 桌面端
 - [x] OpenAPI 集成
 - [x] Git 面板
-- [ ] 多模态
+- [x] 多模态
 - [ ] 本地知识库
 - [ ] 团队协作
 
