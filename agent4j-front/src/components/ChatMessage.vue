@@ -45,29 +45,52 @@
             <div v-else-if="block.type === 'content'" class="block-content" v-html="fmt(block.content)"></div>
 
             <!-- 工具调用 -->
-            <div v-else-if="block.type === 'tool_call'" class="block-tool">
-              <div class="tool-head" @click="block.expanded = !block.expanded">
-                <span class="tool-icon" :class="block.status">
-                  <svg v-if="block.status === '执行中'" width="12" height="12" viewBox="0 0 24 24" fill="none"
-                       stroke="currentColor" stroke-width="2" class="animate-spin"><path
-                      d="M21 12a9 9 0 11-6.219-8.56"/></svg>
-                  <svg v-else-if="block.status === '成功'" width="12" height="12" viewBox="0 0 24 24" fill="none"
-                       stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                  <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-                </span>
-                <code class="tool-name">{{ block.name }}</code>
-                <span class="tool-status" :class="block.status">{{ block.status }}</span>
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                     :style="{ transform: block.expanded ? 'rotate(180deg)' : '' }">
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
+            <template v-else-if="block.type === 'tool_call'">
+              <!-- finish 工具：完成时将 content 渲染为模型输出样式 -->
+              <div v-if="block.name === 'finish' && block.result" class="block-finish">
+                <div class="finish-head">
+                  <span class="finish-icon">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                  </span>
+                  <span class="finish-label">最终回答</span>
+                </div>
+                <div class="finish-content" v-html="fmt(block.result)"></div>
               </div>
-              <div v-if="block.expanded" class="tool-detail">
-                <pre v-if="block.args"><code>{{ fmtArgs(block.args) }}</code></pre>
-                <pre v-if="block.result"><code>{{ block.result }}</code></pre>
+              <!-- finish 执行中 -->
+              <div v-else-if="block.name === 'finish'" class="block-tool">
+                <div class="tool-head">
+                  <span class="tool-icon" :class="block.status">
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+                  </span>
+                  <code class="tool-name">finish</code>
+                  <span class="tool-status" :class="block.status">{{ block.status }}</span>
+                </div>
               </div>
-            </div>
+              <!-- 其他工具 -->
+              <div v-else class="block-tool">
+                <div class="tool-head" @click="block.expanded = !block.expanded">
+                  <span class="tool-icon" :class="block.status">
+                    <svg v-if="block.status === '执行中'" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2" class="animate-spin"><path
+                        d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+                    <svg v-else-if="block.status === '成功'" width="12" height="12" viewBox="0 0 24 24" fill="none"
+                         stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                    <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                         stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+                  </span>
+                  <code class="tool-name">{{ block.name }}</code>
+                  <span class="tool-status" :class="block.status">{{ block.status }}</span>
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+                       :style="{ transform: block.expanded ? 'rotate(180deg)' : '' }">
+                    <polyline points="6 9 12 15 18 9"/>
+                  </svg>
+                </div>
+                <div v-if="block.expanded" class="tool-detail">
+                  <pre v-if="block.args"><code>{{ fmtArgs(block.args) }}</code></pre>
+                  <pre v-if="block.result"><code>{{ block.result }}</code></pre>
+                </div>
+              </div>
+            </template>
 
             <!-- 选项按钮（choice） -->
             <div v-else-if="block.type === 'choice'" class="block-choice">
@@ -448,6 +471,115 @@ const fmtArgs = a => {
 }
 .block-content :deep(p:first-child) { margin-top: 0; }
 .block-content :deep(p:last-child) { margin-bottom: 0; }
+
+/* 完成块（finish 工具输出） */
+.block-finish {
+  margin-top: 2px;
+}
+
+.finish-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.finish-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  color: var(--green);
+}
+
+.finish-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green);
+}
+
+.finish-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--fg);
+}
+
+.finish-content :deep(pre) {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 10px;
+  margin: 6px 0;
+  overflow-x: auto;
+}
+
+.finish-content :deep(code) {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.finish-content :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+
+.finish-content :deep(strong) {
+  font-weight: 600;
+}
+
+.finish-content :deep(a) {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.finish-content :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.finish-content :deep(h1) { font-size: 1.5em; margin: 0.5em 0; font-weight: 600; }
+.finish-content :deep(h2) { font-size: 1.3em; margin: 0.5em 0; font-weight: 600; }
+.finish-content :deep(h3) { font-size: 1.1em; margin: 0.5em 0; font-weight: 600; }
+.finish-content :deep(h4) { font-size: 1em; margin: 0.5em 0; font-weight: 600; }
+.finish-content :deep(h5) { font-size: 0.9em; margin: 0.5em 0; font-weight: 600; }
+.finish-content :deep(h6) { font-size: 0.8em; margin: 0.5em 0; font-weight: 600; }
+
+.finish-content :deep(ul) { margin: 0.5em 0; padding-left: 1.5em; }
+.finish-content :deep(ol) { margin: 0.5em 0; padding-left: 1.5em; }
+.finish-content :deep(li) { margin: 0.25em 0; }
+.finish-content :deep(blockquote) {
+  margin: 0.5em 0;
+  padding: 0.5em 1em;
+  border-left: 3px solid var(--green);
+  background: var(--bg-3);
+  border-radius: 0 var(--r) var(--r) 0;
+}
+.finish-content :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+}
+.finish-content :deep(th),
+.finish-content :deep(td) {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+.finish-content :deep(th) {
+  background: var(--bg-3);
+  font-weight: 600;
+}
+.finish-content :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1em 0;
+}
+.finish-content :deep(p) {
+  margin: 0.5em 0;
+}
+.finish-content :deep(p:first-child) { margin-top: 0; }
+.finish-content :deep(p:last-child) { margin-bottom: 0; }
 
 /* 代码块内嵌复制按钮 */
 .block-content :deep(.code-block-wrap) {
