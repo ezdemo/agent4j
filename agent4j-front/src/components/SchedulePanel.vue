@@ -67,17 +67,16 @@
         </div>
       </div>
 
-      <!-- 会话筛选 -->
+      <!-- 会话筛选：固定两个选项，默认当前会话 -->
       <div class="sch-filter">
         <button
-          :class="['sch-filter-chip', { active: !filterSession }]"
-          @click="filterSession = ''"
-        >全部</button>
+          :class="['sch-filter-chip', { active: filterSession === 'current' }]"
+          @click="filterSession = 'current'"
+        >当前会话</button>
         <button
-          v-for="s in sessionOptions" :key="s"
-          :class="['sch-filter-chip', { active: filterSession === s, 'is-current': s === props.sessionName }]"
-          @click="filterSession = filterSession === s ? '' : s"
-        >{{ getSessionTitle(s) }}</button>
+          :class="['sch-filter-chip', { active: filterSession === 'all' }]"
+          @click="filterSession = 'all'"
+        >全部</button>
       </div>
 
       <!-- 任务列表 -->
@@ -164,25 +163,23 @@ const error = ref('')
 const tasks = ref([])
 const submitting = ref(false)
 const editingId = ref(null)
-const filterSession = ref('')
-
-// 提取所有会话名选项
-const sessionOptions = computed(() => {
-  const names = [...new Set(tasks.value.map(t => t.sessionName).filter(Boolean))]
-  // 当前会话排第一
-  names.sort((a, b) => a === props.sessionName ? -1 : b === props.sessionName ? 1 : 0)
-  return names
-})
+const filterSession = ref('current')  // 默认筛选当前会话
 
 // 按筛选条件过滤任务，当前会话置顶
 const filteredTasks = computed(() => {
-  const list = filterSession.value
-    ? tasks.value.filter(t => t.sessionName === filterSession.value)
-    : [...tasks.value]
+  const isCurrent = filterSession.value === 'current'
+  const isAll = filterSession.value === 'all'
+  let list
+  if (isCurrent && props.sessionName) {
+    list = tasks.value.filter(t => t.sessionName === props.sessionName)
+  } else {
+    list = [...tasks.value]
+  }
+  // 当前会话始终置顶
   list.sort((a, b) => {
-    const aCurrent = a.sessionName === props.sessionName ? 0 : 1
-    const bCurrent = b.sessionName === props.sessionName ? 0 : 1
-    return aCurrent - bCurrent
+    const aCur = a.sessionName === props.sessionName ? 0 : 1
+    const bCur = b.sessionName === props.sessionName ? 0 : 1
+    return aCur - bCur
   })
   return list
 })
@@ -351,7 +348,7 @@ watch(() => props.workspaceHash, () => {
 })
 watch(() => props.sessionName, () => {
   resetForm()
-  filterSession.value = ''
+  filterSession.value = 'current'  // 切换会话时重置为当前会话筛选
 })
 
 onMounted(() => {
