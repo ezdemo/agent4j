@@ -117,6 +117,8 @@ public class MultiTaskTool extends AgentTool {
         ToolRegistry registry = ctx.getToolRegistry();
         // 捕获父 AgentOutput（通过 TaskTool 的 ThreadLocal 传播机制）
         AgentOutput parentOutput = TaskTool.getCurrentOutput();
+        // 捕获父级 AgentLoopController，传播中断信号到子代理
+        AgentLoopController parentController = ctx.getLoopController();
 
         // 2. 为每个 task 创建异步子代理任务
         List<CompletableFuture<SubAgentResult>> futures = new ArrayList<>(taskList.size());
@@ -135,7 +137,7 @@ public class MultiTaskTool extends AgentTool {
             String customSystemPrompt = safeString(taskDef.get("systemPrompt"), null);
 
             futures.add(CompletableFuture.supplyAsync(() ->
-                    executeSingleSubAgent(name, arguments, customSystemPrompt, registry, parentOutput)
+                    executeSingleSubAgent(name, arguments, customSystemPrompt, registry, parentOutput, parentController)
             ));
         }
 
@@ -185,11 +187,12 @@ public class MultiTaskTool extends AgentTool {
     private SubAgentResult executeSingleSubAgent(String name, String arguments,
                                                   String customSystemPrompt,
                                                   ToolRegistry registry,
-                                                  AgentOutput parentOutput) {
+                                                  AgentOutput parentOutput,
+                                                  AgentLoopController parentController) {
         try {
             String systemPrompt = buildSystemPrompt(name, arguments, customSystemPrompt, registry);
 
-            SubAgent sub = new SubAgent(modelClient, registry, systemPrompt);
+            SubAgent sub = new SubAgent(modelClient, registry, systemPrompt, parentController);
 
             // 传播父 AgentOutput 实现实时流式输出
             if (parentOutput != null) {

@@ -3,6 +3,7 @@ package site.sorghum.agent4j.bin.agent;
 import lombok.Getter;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
+import site.sorghum.agent4j.tool.AgentLoopController;
 import site.sorghum.agent4j.tool.AgentOutput;
 
 import java.io.IOException;
@@ -47,6 +48,11 @@ public class SubAgent {
     private final ToolRegistry registry;
     private final String systemPrompt;
     /**
+     * 父级 AgentLoopController —— 用于传播父级的中断信号到子代理。
+     * 子代理的主循环会同时检查自身中断标志和父级的 isAbortRequested()。
+     */
+    private final AgentLoopController parentController;
+    /**
      * 父代理的 AgentOutput 引用 —— 用于将子代理的流式输出实时推送给用户。
      * 通过 {@link #setOutput(AgentOutput)} 由 TaskTool 注入。
      */
@@ -80,13 +86,27 @@ public class SubAgent {
 
     /**
      * 构造函数（接受 ModelClient 接口，便于 DI）
+     *
+     * @param client            模型客户端（与父级共享同一实例）
+     * @param parentRegistry    父级工具注册表（复制并过滤后用于子代理）
+     * @param systemPrompt      子代理的系统提示词
+     * @param parentController  父级 AgentLoopController（可 null，用于传播中断信号）
      */
-    public SubAgent(ModelClient client, ToolRegistry parentRegistry, String systemPrompt) {
+    public SubAgent(ModelClient client, ToolRegistry parentRegistry, String systemPrompt,
+                    AgentLoopController parentController) {
         this.client = Objects.requireNonNull(client, "client must not be null");
         // 创建独立注册表，通过 forceDenyTools 硬性过滤（禁止递归 spawn 等）
         this.registry = Objects.requireNonNull(parentRegistry, "parentRegistry must not be null").copy();
         this.registry.setForceDenyTools(SUB_AGENT_DENY);
         this.systemPrompt = systemPrompt;
+        this.parentController = parentController;
+    }
+
+    /**
+     * 构造函数（无父级 controller，用于测试或独立场景）
+     */
+    public SubAgent(ModelClient client, ToolRegistry parentRegistry, String systemPrompt) {
+        this(client, parentRegistry, systemPrompt, null);
     }
 
     /**
@@ -118,6 +138,11 @@ public class SubAgent {
         ConversationContext ctx = new ConversationContext(
                 new PromptPrefix(systemPrompt, registry.toOpenAiTools()));
         AgentLoop subLoop = new AgentLoop(client, registry, ctx);
+
+        // 传播父级中断源：子代理主循环会同时检查自身中断标志和父级的 isAbortRequested()
+        if (parentController != null) {
+            subLoop.setExternalAbortSource(parentController);
+        }
 
         // 将父代理的 AgentOutput 传递给子代理的推理循环，
         // 使用 SubAgentAgentOutput 包装器将所有事件以 sub_xxx 前缀独立通道发送，
