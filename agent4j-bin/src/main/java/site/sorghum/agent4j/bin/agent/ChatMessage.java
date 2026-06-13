@@ -57,11 +57,18 @@ public class ChatMessage {
     @ONodeAttr(name = "snapshot_id")
     private String snapshotId;
 
+    /**
+     * 消息时间戳（Unix 毫秒），用于前端渲染消息时间。
+     */
+    @ONodeAttr(name = "timestamp")
+    private Long timestamp;
+
     // ==================== 内容段模型 ====================
 
     public static ChatMessage user(String content) {
         ChatMessage msg = new ChatMessage("user");
         msg.content = content;
+        msg.timestamp = System.currentTimeMillis();
         return msg;
     }
 
@@ -89,6 +96,7 @@ public class ChatMessage {
         if (text != null && !text.isEmpty()) {
             msg.contentParts.add(ContentPart.text(text));
         }
+        msg.timestamp = System.currentTimeMillis();
         return msg;
     }
 
@@ -130,6 +138,16 @@ public class ChatMessage {
         msg.toolCallId = toolCallId != null ? toolCallId.toString() : null;
         Object snapshotId = m.get("snapshot_id");
         msg.snapshotId = snapshotId != null ? snapshotId.toString() : null;
+        Object timestamp = m.get("timestamp");
+        if (timestamp instanceof Number) {
+            msg.timestamp = ((Number) timestamp).longValue();
+        } else if (timestamp != null) {
+            try {
+                msg.timestamp = Long.parseLong(timestamp.toString());
+            } catch (NumberFormatException e) {
+                // 忽略无效的时间戳
+            }
+        }
         if (m.containsKey("tool_calls")) {
             List<Map<String, Object>> tcMaps = (List<Map<String, Object>>) m.get("tool_calls");
             if (tcMaps != null) {
@@ -168,6 +186,7 @@ public class ChatMessage {
         msg.content = content;
         msg.toolCalls = toolCalls;
         msg.reasoningContent = reasoningContent;
+        msg.timestamp = System.currentTimeMillis();
         return msg;
     }
 
@@ -175,6 +194,7 @@ public class ChatMessage {
         ChatMessage msg = new ChatMessage("tool");
         msg.toolCallId = toolCallId;
         msg.content = content != null ? content : "(empty)";
+        msg.timestamp = System.currentTimeMillis();
         return msg;
     }
 
@@ -208,6 +228,7 @@ public class ChatMessage {
         if (toolCallId != null) m.put("tool_call_id", toolCallId);
         if (reasoningContent != null) m.put("reasoning_content", reasoningContent);
         if (snapshotId != null) m.put("snapshot_id", snapshotId);
+        if (timestamp != null) m.put("timestamp", timestamp);
         if (toolCalls != null && !toolCalls.isEmpty()) {
             List<Map<String, Object>> tcMaps = new ArrayList<>();
             for (ToolCallEntry tc : toolCalls) {
@@ -267,6 +288,7 @@ public class ChatMessage {
         copy.toolCallId = this.toolCallId;
         copy.reasoningContent = this.reasoningContent;
         copy.snapshotId = this.snapshotId;
+        copy.timestamp = this.timestamp;
         return copy;
     }
 
