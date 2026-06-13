@@ -1112,11 +1112,11 @@ defineExpose({ loadStatus })
 [data-theme="dark"] .file-status.R { background: #172554; color: #60a5fa; }
 [data-theme="dark"] .file-status.U { background: #3b0764; color: #c084fc; }
 
-[data-theme="retro"] .file-status.M { background: #1a1500; color: #ccaa33; }
-[data-theme="retro"] .file-status.A { background: #0a1f0a; color: #33ff33; }
-[data-theme="retro"] .file-status.D { background: #1a0505; color: #ff6666; }
-[data-theme="retro"] .file-status.R { background: #0a0e1a; color: #66aaff; }
-[data-theme="retro"] .file-status.U { background: #150a1a; color: #cc66ff; }
+[data-theme="retro"] .file-status.M { background: #FFF3E0; color: #E65100; }
+[data-theme="retro"] .file-status.A { background: #E8F5E9; color: #2E7D32; }
+[data-theme="retro"] .file-status.D { background: #FFEBEE; color: #C62828; }
+[data-theme="retro"] .file-status.R { background: #E3F2FD; color: #1565C0; }
+[data-theme="retro"] .file-status.U { background: #F3E5F5; color: #6A1B9A; }
 
 [data-theme="retro-yellow"] .file-status.M { background: #f5ecd0; color: #8b6914; }
 [data-theme="retro-yellow"] .file-status.A { background: #e8eddf; color: #4a6741; }

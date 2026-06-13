@@ -337,6 +337,7 @@ const fmtArgs = a => {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  padding: 0 8px 0 8px
 }
 
 /* 思考块 */
