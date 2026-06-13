@@ -10,6 +10,11 @@
       <button :disabled="loadingPrompt" class="btn btn-ghost btn-sm" @click="viewSystemPrompt">提示词</button>
     </div>
 
+    <!-- 流式加载动画横线 -->
+    <div v-if="streaming" class="streaming-bar">
+      <div class="streaming-bar-inner"></div>
+    </div>
+
     <!-- 悬浮日志通知（全局，不受消息滚动影响） -->
     <div class="log-stack">
       <TransitionGroup name="log-bar">
@@ -1104,6 +1109,30 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 .chat-head-count {
   font-size: 12px;
   color: var(--fg-4);
+}
+
+/* 流式加载动画横线 */
+.streaming-bar {
+  height: 2px;
+  background: var(--bg-3, rgba(0,0,0,0.06));
+  overflow: hidden;
+  position: relative;
+}
+
+.streaming-bar-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  border-radius: 1px;
+  animation: streaming-slide 1.4s ease-in-out infinite;
+}
+
+@keyframes streaming-slide {
+  0% { left: -40%; }
+  100% { left: 100%; }
 }
 
 /* 消息区 */
