@@ -818,5 +818,50 @@ export const lspAPI = {
     toggleServer: (name, enabled) => api.post('/lsp/servers/toggle', { name, enabled }),
 }
 
+// 定时任务 API
+export const scheduleAPI = {
+  // 列出指定工作区的所有定时任务 - GET /api/schedules?workspaceHash=xxx
+  list: (workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.get('/schedules', { params })
+  },
+
+  // 获取单个定时任务 - GET /api/schedules/{id}?workspaceHash=xxx
+  get: (workspaceHash, id) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.get(`/schedules/${id}`, { params })
+  },
+
+  // 创建定时任务 - POST /api/schedules?workspaceHash=xxx
+  create: (workspaceHash, task) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.post('/schedules', task, { params })
+  },
+
+  // 更新定时任务 - PUT /api/schedules/{id}?workspaceHash=xxx
+  update: (workspaceHash, id, task) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.put(`/schedules/${id}`, task, { params })
+  },
+
+  // 启用/禁用定时任务 - POST /api/schedules/{id}/toggle?workspaceHash=xxx
+  toggle: (workspaceHash, id) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.post(`/schedules/${id}/toggle`, null, { params })
+  },
+
+  // 手动触发执行 - POST /api/schedules/{id}/run?workspaceHash=xxx
+  runNow: (workspaceHash, id) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.post(`/schedules/${id}/run`, null, { params })
+  },
+
+  // 删除定时任务 - DELETE /api/schedules/{id}?workspaceHash=xxx
+  delete: (workspaceHash, id) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.delete(`/schedules/${id}`, { params })
+  }
+}
+
 export default api
 

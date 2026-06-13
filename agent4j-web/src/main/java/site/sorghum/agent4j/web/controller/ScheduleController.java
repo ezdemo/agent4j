@@ -126,6 +126,9 @@ public class ScheduleController {
         if (result == null) {
             return ApiResponse.fail("定时任务不存在: " + id);
         }
+        if (result.isEmpty()) {
+            return ApiResponse.fail("工作区不存在: " + workspaceHash);
+        }
         log.info("[schedule] 手动触发执行定时任务: {} (工作区={})", id, workspaceHash);
         return ApiResponse.ok(result);
     }
