@@ -6,7 +6,7 @@
 
 set -e
 
-VERSION="v26.6.12.1"
+VERSION="v26.6.13"
 PACKAGE_URL="https://gitee.com/ezdemo/agent4j/releases/download/${VERSION}/agent4j-web-dist.tar.gz"
 TEMP_DIR="/tmp/agent4j-install"
 
