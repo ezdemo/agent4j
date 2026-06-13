@@ -422,6 +422,13 @@ const jumpToMessage = (globalIdx) => {
 
 const now = () => new Date().toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit'})
 
+// 格式化时间戳（Unix 毫秒）为本地时间字符串
+const formatTimestamp = (timestamp) => {
+  if (!timestamp) return now()
+  const d = new Date(timestamp)
+  return d.toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit'})
+}
+
 // 全局函数：代码复制（被 onclick 引用）
 window.copyCode = (btn) => {
   const wrap = btn.closest('.code-block-wrap')
@@ -984,7 +991,7 @@ const loadHistory = async (sessionName, force = false) => {
       const merged = []
       for (const m of raw) {
         if (m.role === 'tool') continue
-        const item = {id: Date.now() + merged.length, role: m.role, time: now(), blocks: []}
+        const item = {id: Date.now() + merged.length, role: m.role, time: formatTimestamp(m.timestamp), blocks: []}
         if (m.role === 'user') {
           // 多模态消息：contentParts 为 [{type:'text',...},{type:'image_url',...}] 数组
           const parts = m.contentParts || (Array.isArray(m.content) ? m.content : null)

@@ -194,7 +194,7 @@ const fmtArgs = a => {
   font-size: 10px;
   opacity: 0.7;
   margin-top: 4px;
-  text-align: right;
+  text-align: left;
 }
 
 .assistant-body {
@@ -257,7 +257,8 @@ const fmtArgs = a => {
 }
 
 .user-body .msg-footer {
-  justify-content: flex-end;
+  justify-content: space-between;
+  align-items: center;
 }
 
 .assistant-body .msg-footer {
@@ -306,6 +307,7 @@ const fmtArgs = a => {
   transition: opacity 0.2s, background 0.2s;
   line-height: 1;
   color: var(--fg-3);
+  margin-left: auto;
 }
 
 .rollback-btn.loading {
