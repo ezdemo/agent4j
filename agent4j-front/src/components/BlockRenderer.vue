@@ -14,22 +14,45 @@
     <div v-else-if="block.type === 'content'" class="block-content" v-html="fmt(block.content)"></div>
 
     <!-- 工具调用 -->
-    <div v-else-if="block.type === 'tool_call'" class="block-tool">
-      <div class="tool-head" @click="block.expanded = !block.expanded">
-        <span class="tool-icon" :class="block.status">
-          <svg v-if="block.status === '执行中'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
-          <svg v-else-if="block.status === '成功'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-          <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
-        </span>
-        <code class="tool-name">{{ block.name }}</code>
-        <span class="tool-status" :class="block.status">{{ block.status }}</span>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: block.expanded ? 'rotate(180deg)' : '' }"><polyline points="6 9 12 15 18 9"/></svg>
+    <template v-else-if="block.type === 'tool_call'">
+      <!-- finish 工具：完成时将 content 渲染为模型输出样式 -->
+      <div v-if="block.name === 'finish' && block.result" class="block-finish">
+        <div class="finish-head">
+          <span class="finish-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+          </span>
+          <span class="finish-label">最终回答</span>
+        </div>
+        <div class="finish-content" v-html="fmt(block.result)"></div>
       </div>
-      <div v-if="block.expanded" class="tool-detail">
-        <pre v-if="block.args"><code>{{ fmtArgs(block.args) }}</code></pre>
-        <pre v-if="block.result"><code>{{ block.result }}</code></pre>
+      <!-- finish 执行中 -->
+      <div v-else-if="block.name === 'finish'" class="block-tool">
+        <div class="tool-head">
+          <span class="tool-icon" :class="block.status">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+          </span>
+          <code class="tool-name">finish</code>
+          <span class="tool-status" :class="block.status">{{ block.status }}</span>
+        </div>
       </div>
-    </div>
+      <!-- 其他工具 -->
+      <div v-else class="block-tool">
+        <div class="tool-head" @click="block.expanded = !block.expanded">
+          <span class="tool-icon" :class="block.status">
+            <svg v-if="block.status === '执行中'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+            <svg v-else-if="block.status === '成功'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+            <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+          </span>
+          <code class="tool-name">{{ block.name }}</code>
+          <span class="tool-status" :class="block.status">{{ block.status }}</span>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: block.expanded ? 'rotate(180deg)' : '' }"><polyline points="6 9 12 15 18 9"/></svg>
+        </div>
+        <div v-if="block.expanded" class="tool-detail">
+          <pre v-if="block.args"><code>{{ fmtArgs(block.args) }}</code></pre>
+          <pre v-if="block.result"><code>{{ block.result }}</code></pre>
+        </div>
+      </div>
+    </template>
   </template>
 </template>
 
