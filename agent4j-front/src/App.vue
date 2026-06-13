@@ -73,6 +73,7 @@
       v-model="rightPanelTab"
       :workspace-hash="currentSessionWorkspace"
       :session-name="currentSession"
+      :sessions="sessions"
       @close="rightPanelOpen = false"
     />
 

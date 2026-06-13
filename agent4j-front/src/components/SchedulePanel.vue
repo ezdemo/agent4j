@@ -7,7 +7,7 @@
           <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
         </svg>
         <span>定时任务</span>
-        <span v-if="tasks.length > 0" class="sch-count">{{ tasks.length }}</span>
+        <span v-if="filteredTasks.length > 0" class="sch-count">{{ filteredTasks.length }}{{ filterSession ? '/' + tasks.length : '' }}</span>
       </div>
       <div class="sch-head-actions">
         <button class="btn-icon-sm" @click="loadTasks" title="刷新">
@@ -67,16 +67,29 @@
         </div>
       </div>
 
+      <!-- 会话筛选 -->
+      <div class="sch-filter">
+        <button
+          :class="['sch-filter-chip', { active: !filterSession }]"
+          @click="filterSession = ''"
+        >全部</button>
+        <button
+          v-for="s in sessionOptions" :key="s"
+          :class="['sch-filter-chip', { active: filterSession === s, 'is-current': s === props.sessionName }]"
+          @click="filterSession = filterSession === s ? '' : s"
+        >{{ getSessionTitle(s) }}</button>
+      </div>
+
       <!-- 任务列表 -->
       <div class="sch-list">
-        <div v-if="tasks.length === 0" class="sch-empty">
+        <div v-if="filteredTasks.length === 0" class="sch-empty">
           <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
             <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
           </svg>
-          <p>暂无定时任务</p>
+          <p>{{ filterSession ? '该会话暂无定时任务' : '暂无定时任务' }}</p>
           <span class="hint">在上方表单中创建</span>
         </div>
-        <div v-for="t in tasks" :key="t.id" class="sch-task" :class="{ disabled: !t.enabled }">
+        <div v-for="t in filteredTasks" :key="t.id" class="sch-task" :class="{ disabled: !t.enabled, 'current-session': t.sessionName === props.sessionName }">
           <div class="sch-task-head">
             <span class="sch-task-name">{{ t.name || '未命名任务' }}</span>
             <div class="sch-task-actions">
@@ -106,6 +119,7 @@
             </div>
           </div>
           <div class="sch-task-meta">
+            <span v-if="t.sessionName" class="sch-task-session" :class="{ 'is-current': t.sessionName === props.sessionName }">{{ getSessionTitle(t.sessionName) }}</span>
             <span class="sch-task-schedule">{{ formatSchedule(t) }}</span>
           </div>
           <div v-if="t.message" class="sch-task-msg">{{ t.message }}</div>
@@ -126,8 +140,22 @@ import { scheduleAPI } from '../services/api.js'
 
 const props = defineProps({
   workspaceHash: { type: String, default: null },
-  sessionName: { type: String, default: '' }
+  sessionName: { type: String, default: '' },
+  sessions: { type: Array, default: () => [] }
 })
+
+// 会话名 → 显示标题映射
+const sessionTitleMap = computed(() => {
+  const map = {}
+  props.sessions.forEach(s => {
+    map[s.name] = s.title || s.name
+  })
+  return map
+})
+
+function getSessionTitle(name) {
+  return sessionTitleMap.value[name] || name
+}
 
 const emit = defineEmits(['close'])
 
@@ -136,13 +164,36 @@ const error = ref('')
 const tasks = ref([])
 const submitting = ref(false)
 const editingId = ref(null)
+const filterSession = ref('')
+
+// 提取所有会话名选项
+const sessionOptions = computed(() => {
+  const names = [...new Set(tasks.value.map(t => t.sessionName).filter(Boolean))]
+  // 当前会话排第一
+  names.sort((a, b) => a === props.sessionName ? -1 : b === props.sessionName ? 1 : 0)
+  return names
+})
+
+// 按筛选条件过滤任务，当前会话置顶
+const filteredTasks = computed(() => {
+  const list = filterSession.value
+    ? tasks.value.filter(t => t.sessionName === filterSession.value)
+    : [...tasks.value]
+  list.sort((a, b) => {
+    const aCurrent = a.sessionName === props.sessionName ? 0 : 1
+    const bCurrent = b.sessionName === props.sessionName ? 0 : 1
+    return aCurrent - bCurrent
+  })
+  return list
+})
 
 const form = reactive({
   message: '',
   scheduleType: 'cron',
   cronExpr: '',
   intervalSec: 3600,
-  name: ''
+  name: '',
+  sessionName: ''  // 编辑时记录原任务的 sessionName
 })
 
 const canSubmit = computed(() => {
@@ -181,7 +232,7 @@ async function submitForm() {
   try {
     const payload = {
       name: form.name,
-      sessionName: props.sessionName,
+      sessionName: editingId.value ? form.sessionName : props.sessionName,
       message: form.message,
       cronExpr: form.scheduleType === 'cron' ? form.cronExpr.trim() : null,
       intervalSec: form.scheduleType === 'interval' ? form.intervalSec : null,
@@ -211,6 +262,7 @@ function editTask(t) {
   editingId.value = t.id
   form.name = t.name || ''
   form.message = t.message || ''
+  form.sessionName = t.sessionName || ''  // 记录原任务的 sessionName
   if (t.cronExpr) {
     form.scheduleType = 'cron'
     form.cronExpr = t.cronExpr
@@ -228,6 +280,7 @@ function resetForm() {
   form.scheduleType = 'cron'
   form.cronExpr = ''
   form.intervalSec = 3600
+  form.sessionName = ''
 }
 
 // 切换启用/禁用
@@ -298,6 +351,7 @@ watch(() => props.workspaceHash, () => {
 })
 watch(() => props.sessionName, () => {
   resetForm()
+  filterSession.value = ''
 })
 
 onMounted(() => {
@@ -518,6 +572,63 @@ textarea.sch-input { resize: vertical; min-height: 36px; }
   color: var(--fg-4);
 }
 .sch-task-err { color: var(--red); }
+
+/* 当前会话任务高亮 */
+.sch-task.current-session {
+  border-color: var(--accent);
+  border-left-width: 3px;
+}
+
+/* 会话标签 */
+.sch-task-session {
+  font-size: 10px;
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-3);
+  color: var(--fg-4);
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sch-task-session.is-current {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+/* 会话筛选栏 */
+.sch-filter {
+  display: flex;
+  gap: 4px;
+  padding: 6px 10px;
+  overflow-x: auto;
+  border-bottom: 1px solid var(--glass-border);
+}
+.sch-filter-chip {
+  flex-shrink: 0;
+  padding: 2px 8px;
+  font-size: 11px;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  color: var(--fg-3);
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.sch-filter-chip:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.sch-filter-chip.active {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: #fff;
+}
+.sch-filter-chip.is-current:not(.active) {
+  border-color: var(--accent);
+  color: var(--accent);
+}
 
 /* btn-icon-xs（复用设计） */
 .btn-icon-xs {
