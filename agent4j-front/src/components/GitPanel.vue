@@ -601,10 +601,25 @@ function parseSideBySide(diffText) {
     const line = lines[i]
     if (line.startsWith('@@')) {
       // @@ -oldStart[,oldCount] +newStart[,newCount] @@
-      const m = line.match(/@@\s+-(\d+)(?:,\d+)?\s+\+(\d+)(?:,\d+)?\s+@@/)
+      const m = line.match(/@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/)
       if (!m) continue
       let oldNum = parseInt(m[1])
-      let newNum = parseInt(m[2])
+      let newNum = parseInt(m[3])
+      const oldCount = m[2] !== undefined ? parseInt(m[2]) : 1
+      const newCount = m[4] !== undefined ? parseInt(m[4]) : 1
+
+      // 处理空文件 diff：新增0行，删除0行
+      if (oldCount === 0 && newCount === 0) {
+        // 添加一个表示空文件的行
+        result.push({
+          left: '',
+          right: '（空文件）',
+          leftLineNum: null,
+          rightLineNum: null,
+          type: 'empty'
+        })
+        continue
+      }
 
       const removedQueue = []
       const addedQueue = []
@@ -1309,6 +1324,15 @@ defineExpose({ loadStatus })
 /* 变更行高亮 — 背景区分，文字颜色由 highlight.js 控制 */
 .diff-sbs-context .diff-sbs-cell { background: transparent; }
 .diff-sbs-context .diff-sbs-ln { background: var(--bg-2); }
+
+/* 空文件 diff */
+.diff-sbs-empty .diff-sbs-cell {
+  background: rgba(128, 128, 128, 0.05);
+}
+.diff-sbs-empty .diff-sbs-code {
+  color: var(--fg-4);
+  font-style: italic;
+}
 
 .diff-sbs-add .diff-sbs-cell-right {
   background: rgba(16, 185, 129, 0.10);

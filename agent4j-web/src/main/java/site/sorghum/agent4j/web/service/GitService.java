@@ -186,6 +186,7 @@ public class GitService {
 
     /**
      * 获取 Git Diff 内容 —— 分别执行未暂存变更和已暂存变更的 diff 查询，合并输出。
+     * 对于未跟踪文件，返回文件内容作为新增的 diff。
      */
     public GitDiffContentDTO getDiffContent(String workspaceHash, String path) throws Exception {
         File workspaceDir = new File(resolveWorkspace(workspaceHash));
@@ -211,6 +212,42 @@ public class GitService {
             fullDiff += "\n" + stagedResult.stdout;
         }
 
+        // 对于未跟踪文件，git diff 返回空，需要读取文件内容生成 diff
+        if (hasPath && fullDiff.trim().isEmpty()) {
+            // 检查文件是否未跟踪
+            List<String> statusCmd = new ArrayList<>(Arrays.asList("git", "status", "--porcelain", "--", path));
+            ProcessResult statusResult = runGit(workspaceDir, statusCmd.toArray(new String[0]));
+            if (statusResult.exitCode == 0 && statusResult.stdout.trim().startsWith("??")) {
+                // 文件未跟踪，读取文件内容生成 diff
+                File file = new File(workspaceDir, path);
+                if (file.exists() && file.isFile()) {
+                    try {
+                        List<String> lines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
+                        int lineCount = lines.size();
+                        // 限制最大行数
+                        int maxLines = MAX_DIFF_LINES;
+                        if (lineCount > maxLines) {
+                            lines = lines.subList(0, maxLines);
+                        }
+                        StringBuilder diffBuilder = new StringBuilder();
+                        diffBuilder.append("--- /dev/null\n");
+                        diffBuilder.append("+++ b/").append(path).append("\n");
+                        diffBuilder.append("@@ -0,0 +1,").append(lineCount).append(" @@\n");
+                        for (String line : lines) {
+                            diffBuilder.append("+").append(line).append("\n");
+                        }
+                        if (lineCount > maxLines) {
+                            diffBuilder.append("\n... (文件过大，仅显示前 ").append(maxLines).append(" 行)");
+                        }
+                        fullDiff = diffBuilder.toString();
+                    } catch (Exception e) {
+                        // 读取失败，忽略
+                        log.debug("[git] 读取未跟踪文件失败: {}", e.getMessage());
+                    }
+                }
+            }
+        }
+
         // 截断保护：单文件 diff 限制 2000 行
         if (hasPath) {
             String[] lines = fullDiff.split("\n");
@@ -232,6 +269,25 @@ public class GitService {
         String stat = statResult.stdout;
         if (!statCachedResult.stdout.isEmpty()) {
             stat += (stat.isEmpty() ? "" : "\n") + statCachedResult.stdout;
+        }
+
+        // 对于未跟踪文件，生成 stat 摘要
+        if (hasPath && stat.trim().isEmpty()) {
+            // 再次检查未跟踪状态（可能已被上面的 diff 处理）
+            List<String> statusCmd2 = new ArrayList<>(Arrays.asList("git", "status", "--porcelain", "--", path));
+            ProcessResult statusResult2 = runGit(workspaceDir, statusCmd2.toArray(new String[0]));
+            if (statusResult2.exitCode == 0 && statusResult2.stdout.trim().startsWith("??")) {
+                File file = new File(workspaceDir, path);
+                if (file.exists() && file.isFile()) {
+                    try {
+                        List<String> lines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
+                        int lineCount = lines.size();
+                        stat = path + " | " + lineCount + " ++";
+                    } catch (Exception e) {
+                        // 忽略
+                    }
+                }
+            }
         }
 
         return new GitDiffContentDTO(fullDiff, stat);
