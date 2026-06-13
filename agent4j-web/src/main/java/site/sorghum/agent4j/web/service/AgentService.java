@@ -22,7 +22,7 @@ import site.sorghum.agent4j.web.model.*;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.text.SimpleDateFormat;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
@@ -797,7 +797,7 @@ public class AgentService {
 
         // 未指定会话名时自动生成
         if (sessionName == null || sessionName.isEmpty()) {
-            sessionName = "agent4j-" + new SimpleDateFormat("yyyyMMddHHmmss").format(new java.util.Date());
+            sessionName = "agent4j-" + DateTimeFormatter.ofPattern("yyyyMMddHHmmss").format(java.time.LocalDateTime.now());
         }
 
         // 直接以目标会话名创建/获取 Agent（switchTo 是惰性的，不创建文件）

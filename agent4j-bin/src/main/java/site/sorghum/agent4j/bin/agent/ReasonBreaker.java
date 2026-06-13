@@ -60,6 +60,11 @@ public class ReasonBreaker {
     private int triggerCount = 0;
 
     /**
+     * 复用的窗口计数器（每回合 reset 时清空，避免每次 analyze 重新分配）
+     */
+    private final Map<String, Integer> counts = new HashMap<>();
+
+    /**
      * 检测窗口是否全由同一字符构成（如 "AAAA..."），此类窗口跳过不计数
      */
     private static boolean isUniform(String s) {
@@ -93,8 +98,8 @@ public class ReasonBreaker {
             text = text.substring(text.length() - MAX_ANALYZE_LENGTH);
         }
 
-        // 滑动窗口统计
-        Map<String, Integer> counts = new HashMap<>();
+        // 滑动窗口统计（复用 counts Map，避免每次分配）
+        counts.clear();
         int maxCount = 0;
         String maxWindow = null;
         int end = text.length() - WINDOW_SIZE;
@@ -127,10 +132,11 @@ public class ReasonBreaker {
     }
 
     /**
-     * 每回合开始时重置触发计数
+     * 每回合开始时重置触发计数和计数器
      */
     public void reset() {
         triggerCount = 0;
+        counts.clear();
     }
 
     /**
