@@ -1362,17 +1362,6 @@ X-Custom-Header=value"
                 </button>
               </div>
 
-              <!-- 自动更新按钮 -->
-              <div class="about-actions" style="margin-top:8px">
-                <button class="btn btn-secondary" :disabled="autoUpdating" @click="handleAutoUpdate">
-                  <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                    <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/>
-                  </svg>
-                  {{ autoUpdating ? '正在创建会话...' : '自动更新' }}
-                </button>
-                <span v-if="autoUpdateTip" class="auto-update-tip">{{ autoUpdateTip }}</span>
-              </div>
-
               <!-- 错误信息 -->
               <div v-if="aboutError" class="about-error">{{ aboutError }}</div>
             </div>
@@ -1637,6 +1626,12 @@ X-Custom-Header=value"
           </div>
         </div>
         <div class="update-modal-foot">
+          <button class="btn btn-secondary" :disabled="autoUpdating" @click="handleAutoUpdate">
+            <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/>
+            </svg>
+            {{ autoUpdating ? '正在创建会话...' : '自动更新' }}
+          </button>
           <button class="btn" @click="showUpdateModal = false">关闭</button>
         </div>
       </div>
