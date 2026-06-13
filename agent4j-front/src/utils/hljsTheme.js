@@ -1,6 +1,7 @@
 /**
  * highlight.js 主题动态切换
  * 根据应用主题（light/dark/retro/retro-yellow）自动加载对应的语法高亮 CSS
+ * retro 主题是浅绿风格，使用亮色背景
  */
 import githubDarkCss from 'highlight.js/styles/github-dark.css?inline'
 import githubCss from 'highlight.js/styles/github.css?inline'
@@ -10,7 +11,7 @@ const themeStyles = {
   light: githubCss,
   'retro-yellow': githubCss,
   dark: githubDarkCss,
-  retro: githubDarkCss,
+  retro: githubCss,  // 浅绿 是亮色背景
 }
 
 let styleEl = null

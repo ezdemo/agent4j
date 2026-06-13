@@ -2016,7 +2016,7 @@ const tabs = [
 const themes = [
   {value: 'light', label: '浅色'},
   {value: 'dark', label: '深色'},
-  {value: 'retro', label: '复古绿'},
+  {value: 'retro', label: '浅绿'},
   {value: 'retro-yellow', label: '复古黄'}
 ]
 
@@ -3969,7 +3969,7 @@ onMounted(() => {
 }
 
 .theme-preview.retro {
-  background: linear-gradient(135deg, #0a1f0a 50%, #1a3a1a 50%);
+  background: linear-gradient(135deg, #4CAF50 50%, #E8F5E9 50%);
 }
 
 .theme-preview.retro-yellow {
