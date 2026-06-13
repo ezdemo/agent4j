@@ -105,6 +105,9 @@ public class AgentLoop implements AgentLoopController {
     /** 用户主动中断标志（前端点击停止按钮时设置） */
     private volatile boolean userAbortRequested = false;
 
+    /** 外部中断源（Runnable）—— 由父级 AgentLoopController 设置，子代理主循环会同步检查 */
+    private volatile Runnable externalAbortSource = null;
+
     /** 当前正在执行的工具 Future 数组（用于 abort 时取消） */
     private volatile CompletableFuture<ChatMessage>[] activeToolFutures = null;
 
@@ -235,6 +238,29 @@ public class AgentLoop implements AgentLoopController {
 
     public void setOutput(AgentOutput output) {
         this.output = output != null ? output : AgentOutput.NOOP;
+    }
+
+    /**
+     * 设置外部中断源 —— 子代理通过此方法绑定父级的 AgentLoopController。
+     * <p>
+     * 子代理的主循环和流式调用中会同步检查父级的 isAbortRequested()，
+     * 一旦父级请求中断，子代理会立即设置自身的 userAbortRequested 并中止 HTTP 流。
+     * </p>
+     *
+     * @param parentController 父级的 AgentLoopController（可 null 表示无父级）
+     */
+    public void setExternalAbortSource(AgentLoopController parentController) {
+        if (parentController == null) {
+            this.externalAbortSource = null;
+            return;
+        }
+        // 捕获父级引用，创建轻量 Runnable：检查父级中断状态，若已中断则同步到本循环
+        this.externalAbortSource = () -> {
+            if (parentController.isAbortRequested() && !userAbortRequested) {
+                doAbort("父级代理请求中断");
+                log.info("[loop] 检测到父级中断信号，子代理同步中止");
+            }
+        };
     }
 
     // ==================== AgentLoopController 实现 ====================
@@ -491,7 +517,13 @@ public class AgentLoop implements AgentLoopController {
         streamErrorRetryCount = 0;
         int noToolCallStreak = 0;
         for (int step = 0; ; step++) {
-            // ---- 0. 检查用户中断（标志位 + 线程中断，覆盖直接 cancel future 的场景）----
+            // ---- 0. 同步外部中断源（子代理检查父级 abort 状态）----
+            Runnable extSource = externalAbortSource;
+            if (extSource != null) {
+                extSource.run();
+            }
+
+            // ---- 0.1. 检查用户中断（标志位 + 线程中断，覆盖直接 cancel future 的场景）----
             if (userAbortRequested || Thread.currentThread().isInterrupted()) {
                 if (!userAbortRequested) {
                     userAbortRequested = true;
@@ -510,6 +542,12 @@ public class AgentLoop implements AgentLoopController {
 
             // ---- 2. 流式调用 LLM ----
             StreamResult sr = streamLLM(messages, tools);
+
+            // ---- 2.05. 同步外部中断源（streamLLM 期间父级可能已中断）----
+            Runnable extSource2 = externalAbortSource;
+            if (extSource2 != null) {
+                extSource2.run();
+            }
 
             // ---- 2.1 用户中断（标志位 + 线程中断）----
             if (userAbortRequested || Thread.currentThread().isInterrupted()) {
@@ -755,10 +793,14 @@ public class AgentLoop implements AgentLoopController {
         final AtomicBoolean loopAborted = new AtomicBoolean(false);
         final String[] loopSnapshot = {null};
         final int[] lastCheckLen = {0};
+        // 捕获外部中断源引用，避免回调内重复 volatile 读
+        final Runnable capturedExtAbort = externalAbortSource;
 
         client.chatStream(messages, tools, new ModelClient.StreamCallback() {
             @Override
             public void onReasoningDelta(String token) {
+                // 同步外部中断源（子代理检查父级 abort）
+                if (capturedExtAbort != null) capturedExtAbort.run();
                 if (loopAborted.get() || userAbortRequested || Thread.currentThread().isInterrupted()) return;
                 reasoningBuf.append(token);
                 safeOutputDebug("reasoningDelta", () -> output.onReasoningDelta(token));
@@ -825,6 +867,9 @@ public class AgentLoop implements AgentLoopController {
             Thread.currentThread().interrupt();
             return new StreamResult(null, null, null, true);
         }
+
+        // 同步外部中断源（stream 期间父级可能已中断）
+        if (capturedExtAbort != null) capturedExtAbort.run();
 
         if (userAbortRequested) {
             String content = !contentBuf.isEmpty() ? contentBuf.toString() : null;

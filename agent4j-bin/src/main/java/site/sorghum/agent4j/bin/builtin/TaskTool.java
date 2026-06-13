@@ -170,7 +170,10 @@ public class TaskTool extends AgentTool {
                 systemPrompt = sb.toString();
             }
 
-            SubAgent sub = new SubAgent(modelClient, registry, systemPrompt);
+            // 获取父级 AgentLoopController，传播中断信号到子代理
+            AgentLoopController parentController = ctx.getLoopController();
+
+            SubAgent sub = new SubAgent(modelClient, registry, systemPrompt, parentController);
 
             // 将父 Agent 的 AgentOutput 传递给子代理，使其流式输出能实时推送给用户
             AgentOutput parentOutput = getCurrentOutput();
