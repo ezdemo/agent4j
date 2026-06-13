@@ -39,8 +39,11 @@
         </svg>
       </button>
 
-      <button class="tb-btn" :class="{ active: gitOn }" :disabled="!hasSession" @click.stop="hasSession && $emit('toggleGit')" @dblclick.stop title="源代码管理">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>
+      <button class="tb-btn" :class="{ active: gitOn }" :disabled="!hasSession" @click.stop="hasSession && $emit('toggleGit')" @dblclick.stop title="面板">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+          <line x1="15" y1="3" x2="15" y2="21"/>
+        </svg>
       </button>
 
       <template v-if="isTauri">
@@ -88,7 +91,7 @@ defineProps({
   hasNewVersion: { type: Boolean, default: false }
 })
 
-defineEmits(['toggleSide', 'openSettings', 'clear', 'export', 'toggleGit', 'showUpdate'])
+defineEmits(['toggleSide', 'openSettings', 'clear', 'export', 'toggleGit', 'showUpdate', 'viewPrompt'])
 
 const isMaximized = ref(false)
 const isTauri = ref(false)

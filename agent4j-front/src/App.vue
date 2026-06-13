@@ -21,12 +21,12 @@
       :sideOn="sideOpen"
       :hasMessages="true"
       :hasSession="!!currentSession"
-      :gitOn="gitOpen"
+      :gitOn="rightPanelOpen"
       :version="appVersion"
       :hasNewVersion="hasNewVersion"
       @toggleSide="sideOpen = !sideOpen"
       @openSettings="showSettings = true"
-      @toggleGit="gitOpen = !gitOpen"
+      @toggleGit="toggleRightPanel()"
       @viewPrompt="viewSystemPrompt"
       @showUpdate="showUpdateModal = true"
     />
@@ -67,10 +67,14 @@
       />
     </main>
 
-    <!-- 右侧 Git 面板 -->
-    <Transition name="git-panel">
-      <GitPanel v-if="gitOpen" :workspace-hash="currentSessionWorkspace" @close="gitOpen = false" />
-    </Transition>
+    <!-- 右侧面板 -->
+    <RightPanel
+      :open="rightPanelOpen"
+      v-model="rightPanelTab"
+      :workspace-hash="currentSessionWorkspace"
+      :session-name="currentSession"
+      @close="rightPanelOpen = false"
+    />
 
       <!-- 系统提示词 Modal -->
       <Teleport to="body">
@@ -293,7 +297,7 @@ import TitleBar from './components/TitleBar.vue'
 import SplashScreen from './components/SplashScreen.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import Sidebar from './components/Sidebar.vue'
-import GitPanel from './components/GitPanel.vue'
+import RightPanel from './components/RightPanel.vue'
 import ChatView from './views/Chat.vue'
 import SettingsView from './views/Settings.vue'
 
@@ -329,8 +333,14 @@ async function detectTauri() {
 }
 const showConfig = ref(false)
 const showSettings = ref(false)
-const gitOpen = ref(false)
+const rightPanelOpen = ref(false)
+const rightPanelTab = ref('git')
 const initialDataLoaded = ref(false)
+
+// 切换右侧面板（直接 toggle，不关心当前 tab）
+function toggleRightPanel() {
+  rightPanelOpen.value = !rightPanelOpen.value
+}
 const chatRef = ref(null)
 const workspace = ref('')
 
@@ -432,6 +442,12 @@ const workspaceName = computed(() => {
 
 // 当前会话所属的工作区 hash
 const currentSessionWorkspace = ref(null)
+
+// 当前工作区下的会话列表
+const currentWorkspaceSessions = computed(() => {
+  if (!currentSessionWorkspace.value) return []
+  return workspaceSessions.value[currentSessionWorkspace.value] || []
+})
 
 const fmtTokens = n => !n ? '0' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : String(n)
 

@@ -34,14 +34,43 @@ public class CronParser {
                     java.time.Instant.ofEpochMilli(baseTime),
                     ZoneId.systemDefault());
 
-            LocalDateTime deadline = base.plusYears(2);
-            LocalDateTime candidate = base.withSecond(0).withNano(0).plusMinutes(1);
+            LocalDateTime deadline = base.plusYears(4);
+            // 从 base 时间的下一秒开始搜索
+            LocalDateTime candidate = base.plusSeconds(1).withNano(0);
+
+            // 预计算通配标记
+            boolean domWild = daysOfMonth.size() >= 31;
+            boolean dowWild = daysOfWeek.size() >= 7;
 
             while (candidate.isBefore(deadline)) {
                 if (matches(candidate, seconds, minutes, hours, daysOfMonth, months, daysOfWeek)) {
                     return candidate.atZone(ZoneId.systemDefault()).toInstant().toEpochMilli();
                 }
-                candidate = candidate.plusMinutes(1);
+                // 优化跳步：根据不匹配的最小粒度跳跃
+                if (!months.contains(candidate.getMonthValue())) {
+                    candidate = candidate.plusMonths(1).withDayOfMonth(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
+                } else {
+                    // 日期匹配逻辑（与 matches 方法一致）
+                    boolean dateMatch;
+                    if (!domWild && !dowWild) {
+                        dateMatch = daysOfMonth.contains(candidate.getDayOfMonth()) && daysOfWeek.contains(candidate.getDayOfWeek().getValue());
+                    } else if (!domWild) {
+                        dateMatch = daysOfMonth.contains(candidate.getDayOfMonth());
+                    } else if (!dowWild) {
+                        dateMatch = daysOfWeek.contains(candidate.getDayOfWeek().getValue());
+                    } else {
+                        dateMatch = true;
+                    }
+                    if (!dateMatch) {
+                        candidate = candidate.plusDays(1).withHour(0).withMinute(0).withSecond(0).withNano(0);
+                    } else if (!hours.contains(candidate.getHour())) {
+                        candidate = candidate.plusHours(1).withMinute(0).withSecond(0).withNano(0);
+                    } else if (!minutes.contains(candidate.getMinute())) {
+                        candidate = candidate.plusMinutes(1).withSecond(0).withNano(0);
+                    } else {
+                        candidate = candidate.plusSeconds(1);
+                    }
+                }
             }
 
             return -1;
@@ -118,15 +147,49 @@ public class CronParser {
     }
 
     static Set<Integer> parseDayOfWeekField(String field) {
-        Set<Integer> cronValues = parseField(field, 1, 7);
+        // 支持标准 cron 格式：0-7，0和7都是周日，1=周一
         Set<Integer> result = new HashSet<>();
-        for (int cv : cronValues) {
-            if (cv == 1) {
-                result.add(7);
+        if (field.equals("*") || field.equals("?")) {
+            for (int i = 1; i <= 7; i++) result.add(i); // ISO 全周
+            return result;
+        }
+
+        for (String part : field.split(",")) {
+            part = part.trim();
+            if (part.equals("*") || part.equals("?")) {
+                for (int i = 1; i <= 7; i++) result.add(i);
+                return result;
+            }
+            // 处理范围和步长
+            if (part.contains("/")) {
+                String[] stepParts = part.split("/");
+                int start = stepParts[0].equals("*") ? 0 : Integer.parseInt(stepParts[0]);
+                int step = Integer.parseInt(stepParts[1]);
+                for (int i = start; i <= 7; i += step) {
+                    result.add(cronDowToIso(i));
+                }
+            } else if (part.contains("-")) {
+                String[] rangeParts = part.split("-");
+                int rs = Integer.parseInt(rangeParts[0]);
+                int re = Integer.parseInt(rangeParts[1]);
+                for (int i = rs; i <= re; i++) {
+                    result.add(cronDowToIso(i));
+                }
             } else {
-                result.add(cv - 1);
+                int val = Integer.parseInt(part);
+                result.add(cronDowToIso(val));
             }
         }
         return result;
+    }
+
+    /**
+     * 将 cron 星期值转换为 ISO 星期值（java.time DayOfWeek）。
+     * cron: 0=周日, 1=周一, ..., 6=周六, 7=周日
+     * ISO: 1=周一, ..., 7=周日
+     */
+    private static int cronDowToIso(int cronDow) {
+        if (cronDow == 0 || cronDow == 7) return 7; // 周日
+        return cronDow; // 1=周一, 2=周二, ..., 6=周六
     }
 }

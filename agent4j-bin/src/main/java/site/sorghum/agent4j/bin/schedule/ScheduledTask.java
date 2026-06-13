@@ -23,52 +23,52 @@ import java.io.Serializable;
 public class ScheduledTask implements Serializable {
 
     /** 唯一标识 */
-    private String id;
+    private volatile String id;
 
     /** 任务名称 */
-    private String name;
+    private volatile String name;
 
     /** 目标会话名称 */
-    private String sessionName;
+    private volatile String sessionName;
 
     /**
      * Cron 表达式（如 "0 0 9 * * ?" 表示每天 9:00）。
      * 优先级高于 intervalSec，非空时使用 cron 调度。
      */
-    private String cronExpr;
+    private volatile String cronExpr;
 
     /**
      * 固定间隔（秒），与 cronExpr 二选一。
      * cronExpr 为空时生效。
      */
-    private Long intervalSec;
+    private volatile Long intervalSec;
 
     /** 要发送的消息内容 */
-    private String message;
+    private volatile String message;
 
     /** 是否启用 */
-    private boolean enabled;
+    private volatile boolean enabled;
 
     /** 上次执行时间戳（ms） */
-    private long lastRunAt;
+    private volatile long lastRunAt;
 
     /** 下次执行时间戳（ms） */
-    private long nextRunAt;
+    private volatile long nextRunAt;
 
     /** 执行次数累计 */
-    private int runCount;
+    private volatile int runCount;
 
     /** 上次执行结果摘要 */
-    private String lastResult;
+    private volatile String lastResult;
 
     /** 上次错误信息 */
-    private String lastError;
+    private volatile String lastError;
 
     /** 创建时间 */
-    private long createdAt;
+    private volatile long createdAt;
 
     /** 更新时间 */
-    private long updatedAt;
+    private volatile long updatedAt;
 
     /**
      * 计算下次执行时间（基于 cronExpr 或 intervalSec）。

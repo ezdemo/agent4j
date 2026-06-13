@@ -689,6 +689,8 @@ watch(() => props.workspaceHash, async () => {
     await loadAuthorConfig()
   }
 })
+
+defineExpose({ loadStatus })
 </script>
 
 <style scoped>

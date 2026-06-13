@@ -38,6 +38,9 @@ public class ScheduleService {
     /** 按工作区索引的任务 Map：workspaceHash → (taskId → ScheduledTask) */
     private volatile Map<String, Map<String, ScheduledTask>> tasksIndex = new ConcurrentHashMap<>();
 
+    /** 正在执行中的任务 ID 集合，用于防止重复提交 */
+    private final Set<String> runningTaskIds = ConcurrentHashMap.newKeySet();
+
     /** 调度 ticker */
     private ScheduledExecutorService ticker;
 
@@ -217,7 +220,7 @@ public class ScheduleService {
     /**
      * 手动触发执行指定任务。
      *
-     * @return 执行结果
+     * @return 执行结果，null 表示任务不存在
      */
     public String runNow(String workspaceHash, String taskId) {
         Map<String, ScheduledTask> tasks = tasksIndex.get(workspaceHash);
@@ -226,7 +229,9 @@ public class ScheduleService {
         ScheduledTask task = tasks.get(taskId);
         if (task == null) return null;
 
-        return executeTask(workspaceHash, task);
+        String result = executeTask(workspaceHash, task);
+        // 区分工作区不存在和正常返回：executeTask 内部已处理
+        return result != null ? result : "";
     }
 
     /**
@@ -242,12 +247,9 @@ public class ScheduleService {
      * 重建内存索引（从 ScheduleStore 加载最新数据）。
      */
     private void rebuildIndex() {
-        Map<String, Map<String, ScheduledTask>> newIndex = new ConcurrentHashMap<>();
-        for (String hash : store.getActiveWorkspaces()) {
-            newIndex.put(hash, store.load(hash));
-        }
-        // 扫描所有工作区目录
+        // 先清空缓存从磁盘加载最新数据
         store.reloadAll();
+        Map<String, Map<String, ScheduledTask>> newIndex = new ConcurrentHashMap<>();
         for (String hash : store.getActiveWorkspaces()) {
             newIndex.put(hash, store.load(hash));
         }
@@ -269,12 +271,18 @@ public class ScheduleService {
                     if (task.getNextRunAt() <= 0) continue;
                     if (task.getNextRunAt() > now) continue;
 
+                    // 防止重复提交：如果任务正在执行则跳过
+                    if (!runningTaskIds.add(task.getId())) continue;
+
                     // 到期任务提交到工作线程池
+                    String taskId = task.getId();
                     workerPool.submit(() -> {
                         try {
                             executeTask(workspaceHash, task);
                         } catch (Exception e) {
                             log.warn("[schedule] 任务执行异常: {} - {}", task.getName(), e.getMessage());
+                        } finally {
+                            runningTaskIds.remove(taskId);
                         }
                     });
                 }
@@ -286,13 +294,15 @@ public class ScheduleService {
 
     /**
      * 执行单个定时任务。
+     *
+     * @return 执行结果，空字符串表示工作区不存在
      */
     private String executeTask(String workspaceHash, ScheduledTask task) {
         // 获取工作区实际路径
         String workspacePath = resolveWorkspacePath(workspaceHash);
         if (workspacePath == null) {
             log.warn("[schedule] 找不到工作区: {}", workspaceHash);
-            return null;
+            return "";
         }
 
         log.info("[schedule] 执行定时任务: {} → 工作区={}, 会话={}, 消息={}",
