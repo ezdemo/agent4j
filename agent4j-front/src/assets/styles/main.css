@@ -185,64 +185,72 @@ body {
 [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #333; }
 [data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #444; }
 
-/* 复古模式 — 磷光绿 CRT 风格 */
+/* 浅绿 — 基于 Material Design 3 规范 */
 [data-theme="retro"] {
-  --bg: #0a0e0a;
-  --bg-2: #0f150f;
-  --bg-3: #151d15;
-  --fg: #33ff33;
-  --fg-2: #22cc22;
-  --fg-3: #1a9e1a;
-  --fg-4: #117711;
-  --border: #1a3a1a;
-  --border-2: #224422;
-  --accent: #33ff33;
-  --accent-bg: #0a1f0a;
-  --blue: #33ff33;
-  --blue-bg: #0a1f0a;
-  --green: #33ff33;
-  --green-bg: #0a1f0a;
-  --yellow: #ccaa33;
-  --yellow-bg: #1a1500;
-  --red: #ff4444;
-  --red-bg: #1a0505;
+  --bg: #FAFAFA;
+  --bg-2: #F5F5F5;
+  --bg-3: #EEEEEE;
+  --fg: #1C1B1F;
+  --fg-2: #49454F;
+  --fg-3: #79747E;
+  --fg-4: #938F99;
+  --border: #CAC4D0;
+  --border-2: #79747E;
+  --accent: #4CAF50;
+  --accent-bg: #E8F5E9;
+  --blue: #2196F3;
+  --blue-bg: #E3F2FD;
+  --green: #4CAF50;
+  --green-bg: #E8F5E9;
+  --yellow: #FF9800;
+  --yellow-bg: #FFF3E0;
+  --red: #F44336;
+  --red-bg: #FFEBEE;
   --bg-primary: var(--bg);
   --bg-secondary: var(--bg-2);
   --bg-tertiary: var(--bg-3);
-  --surface: var(--bg-2);
-  --surface-hover: var(--bg-3);
+  --surface: #FFFFFF;
+  --surface-hover: #F5F5F5;
   --fg-muted: var(--fg-4);
   --fg-secondary: var(--fg-2);
   --accent-soft: var(--accent-bg);
   --success-bg: var(--green-bg);
   --warning-bg: var(--yellow-bg);
   --danger-bg: var(--red-bg);
-  --glass-bg: rgba(15,21,15,0.90);
-  --glass-bg-2: rgba(21,29,21,0.94);
-  --glass-border: rgba(51,255,51,0.12);
-  --glass-shadow: 0 1px 3px rgba(0,0,0,0.35), 0 8px 32px rgba(0,0,0,0.45);
+  --glass-bg: rgba(255,255,255,0.90);
+  --glass-bg-2: rgba(250,250,250,0.94);
+  --glass-border: rgba(202,196,208,0.60);
+  --glass-shadow: 0 1px 3px rgba(0,0,0,0.08), 0 8px 32px rgba(0,0,0,0.12);
+  --brand-primary: #4CAF50;
+  --gradient-primary: linear-gradient(135deg, #4CAF50 0%, #66BB6A 50%, #81C784 100%);
+  --gradient-secondary: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 28px;
 }
-[data-theme="retro"] ::-webkit-scrollbar-thumb { background: #1a3a1a; }
-[data-theme="retro"] ::-webkit-scrollbar-thumb:hover { background: #224422; }
+[data-theme="retro"] ::-webkit-scrollbar-thumb { background: #CAC4D0; }
+[data-theme="retro"] ::-webkit-scrollbar-thumb:hover { background: #79747E; }
 [data-theme="retro"] code,
 [data-theme="retro"] pre {
-  background: var(--bg-3);
-  border-color: var(--border);
+  background: #F5F5F5;
+  border-color: #CAC4D0;
 }
-/* 复古绿 — 消息 & 加载适配 */
+/* 浅绿 — 消息 & 加载适配 */
 [data-theme="retro"] .user-body {
-  color: #0a0e0a;
+  color: #FFFFFF;
+  background: #4CAF50;
 }
 [data-theme="retro"] .assistant-body {
-  background: #0f150f;
-  border-color: #1a3a1a;
+  background: #F5F5F5;
+  border-color: #CAC4D0;
 }
 [data-theme="retro"] .assistant-body .msg-time {
-  color: #117711;
+  color: #79747E;
 }
 [data-theme="retro"] .loading-spinner {
-  border-color: #1a3a1a;
-  border-top-color: #33ff33;
+  border-color: #E8F5E9;
+  border-top-color: #4CAF50;
 }
 
 
@@ -475,7 +483,7 @@ textarea { resize: none; }
   animation: spin 0.6s linear infinite;
 }
 
-/* Ant Design message 弹窗 — 深色 & 复古主题适配 */
+/* Ant Design message 弹窗 — 深色 & 浅绿主题适配 */
 [data-theme="dark"] .ant-message-notice-content,
 [data-theme="retro"] .ant-message-notice-content,
 [data-theme="retro-yellow"] .ant-message-notice-content {
@@ -497,7 +505,7 @@ textarea { resize: none; }
   border-color: var(--accent);
 }
 [data-theme="retro"] .ant-btn-primary {
-  color: #0a0e0a;
+  color: #FFFFFF;
 }
 [data-theme="dark"] .ant-btn-primary:hover,
 [data-theme="retro"] .ant-btn-primary:hover,
@@ -506,7 +514,7 @@ textarea { resize: none; }
   border-color: var(--blue-dark, var(--accent));
 }
 [data-theme="retro"] .ant-btn-primary:hover {
-  color: #0a0e0a;
+  color: #FFFFFF;
 }
 
 /* 无障碍 */
