@@ -102,6 +102,21 @@ if ($c -ne $old) {
     Write-Host "  [OK] agent4j-web/pom.xml"
 } else { Write-Host "  [--] agent4j-web/pom.xml (unchanged)" }
 
+# 7.1 agent4j-web/dependency-reduced-pom.xml
+$path = Join-Path $root "agent4j-web/dependency-reduced-pom.xml"
+if (Test-Path $path) {
+    $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+    $old = $c
+    # dependency-reduced-pom.xml has <groupId> between <artifactId> and <version>
+    $re2 = [regex]'(?<=<artifactId>agent4j</artifactId>\s*\r?\n\s*<groupId>site\.sorghum\.agent</groupId>\s*\r?\n\s*<version>)\d[\d.]*-?[A-Z]*(?=</version>)'
+    $c = $re2.Replace($c, $Version)
+    if ($c -ne $old) {
+        $c = $c.TrimStart("`u{FEFF}")
+        [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
+        Write-Host "  [OK] agent4j-web/dependency-reduced-pom.xml"
+    } else { Write-Host "  [--] agent4j-web/dependency-reduced-pom.xml (unchanged)" }
+} else { Write-Host "  [--] agent4j-web/dependency-reduced-pom.xml (not found)" }
+
 # 8. .release/setup.sh
 $path = Join-Path $root ".release/setup.sh"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)

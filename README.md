@@ -83,11 +83,33 @@ API，一步步把事情干完。
 
 ---
 
+## 📸 界面预览
+
+### 主界面
+
+<p align="center">
+  <img src="img/main_app.png" width="90%" alt="Agent4j 主界面"/>
+</p>
+
+### 数据面板
+
+<p align="center">
+  <img src="img/data_dashboard_1.png" width="45%" alt="数据面板 1"/>
+  &nbsp;&nbsp;
+  <img src="img/data_dashboard_2.png" width="45%" alt="数据面板 2"/>
+</p>
+
+---
+
 ## 🆕 最新更新（v26.6.13）
 
 ### 📅 定时任务管理
 - 可视化定时任务管理面板，支持会话筛选
 - 增强 Cron 表达式解析器
+
+<p align="center">
+  <img src="img/right_corn_job_panel.png" width="60%" alt="定时任务面板"/>
+</p>
 
 ### 🎨 前端增强
 - ChatMessage 添加时间戳显示
@@ -99,12 +121,20 @@ API，一步步把事情干完。
 - 应用启动时自动检查更新
 - 更新按钮移至模态框底部，优化交互流程
 
+<p align="center">
+  <img src="img/auto_update_setting.png" width="60%" alt="自动更新设置"/>
+</p>
+
 ### 🤖 子代理增强
 - 传播父级中断信号到子代理
 - 重构子代理会话渲染，复用 ChatMessage 组件
 
 ### 📁 Git 增强
 - 支持未跟踪文件的 diff 显示与空文件处理
+
+<p align="center">
+  <img src="img/right_git_panel.png" width="60%" alt="Git 面板"/>
+</p>
 
 ### 🛠️ 其他亮点
 - 消息快照系统（基于 Git 的检查点与撤回）
@@ -150,8 +180,18 @@ Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）** �
 - **声明式工具**：继承 `AgentTool` 基类，定义名称、参数、执行逻辑即可
 - **自动注册**：Solon `@Component` 自动发现
 - **MCP 支持**：接入 Model Context Protocol 服务器
+
+<p align="center">
+  <img src="img/mcp_setting.png" width="60%" alt="MCP 设置"/>
+</p>
+
 - **OpenAPI 集成**：任意 OpenAPI 规范自动转成工具
 - **技能市场**：在线装/卸社区技能
+
+<p align="center">
+  <img src="img/skill_setting.png" width="60%" alt="技能设置"/>
+</p>
+
 - **Plan Mode**：只读模式，安全规划
 
 ### 🔄 子代理
@@ -261,6 +301,12 @@ agent4j/
 ## ⚙️ 配置
 
 配置文件 `~/.agent4j/config.json`：
+
+<p align="center">
+  <img src="img/base_setting.png" width="60%" alt="基础设置"/>
+  &nbsp;&nbsp;
+  <img src="img/lsp_setting.png" width="60%" alt="LSP 设置"/>
+</p>
 
 | 字段                | 类型       | 默认值                         | 说明                               |
 |-------------------|----------|-----------------------------|----------------------------------|
