@@ -111,6 +111,24 @@ public interface SessionStore {
     String getTitle(String name);
 
     /**
+     * 追加一条每日用量记录到全局日志文件 {@code ~/.agent4j/usage_daily.jsonl}。
+     * <p>
+     * 记录格式为一行 JSON：
+     * {@code {"ts":<epochMs>,"model":"...","prompt":N,"completion":N,"cacheHit":N,"cacheMiss":N}}
+     * </p>
+     *
+     * @param model      模型名称
+     * @param prompt     输入 token 数
+     * @param completion 输出 token 数
+     * @param cacheHit   缓存命中 token 数
+     * @param cacheMiss  缓存未命中 token 数
+     */
+    default void appendDailyUsage(String model, int prompt, int completion,
+                                  int cacheHit, int cacheMiss) {
+        // 默认空实现，向后兼容
+    }
+
+    /**
      * 会话元信息。
      */
     record SessionInfo(String name, long size, long messageCount, long mtime, String title) {
