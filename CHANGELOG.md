@@ -4,6 +4,25 @@
 
 ---
 
+## [26.6.14] - 2026-06-14
+
+### Added
+
+#### 📊 数据面板
+
+- ✨ 新增数据面板（Dashboard）— 可视化展示每日 Token 用量、费用统计、模型分布
+- ✨ 后端新增 `DashboardService` — 读取 `~/.agent4j/usage_daily.jsonl` 并聚合统计数据
+- ✨ 新增 `UsageCostCalculator` — 提取 Token 费用计算为独立工具类，供多处复用
+- ✨ 前端新增 `Dashboard.vue` 组件 — 支持近 7/14/30 天切换，柱状图 + 模型饼图
+- ✨ `SessionStore` 增加每日用量记录接口 — 请求完成后自动追加日志条目
+- ✨ 侧边栏新增数据面板入口
+
+### Changed
+
+- 🔄 提取 Token 费用计算逻辑至 `UsageCostCalculator`，消除 `AgentService` 中的重复代码
+
+---
+
 ## [26.6.13] - 2026-06-13
 
 ### Added
