@@ -407,6 +407,12 @@ export const configAPI = {
   getUsage: (params) => {
     return api.get('/usage', { params })
   },
+
+  // 获取数据面板 - GET /api/usage/dashboard?days=7
+  getDashboard: (days) => {
+    const params = days ? { days } : {}
+    return api.get('/usage/dashboard', { params })
+  },
   
   // 获取会话 TODO 列表 - GET /api/sessions/{name}/todos?workspaceHash=xxx
   getTodos: (params) => {

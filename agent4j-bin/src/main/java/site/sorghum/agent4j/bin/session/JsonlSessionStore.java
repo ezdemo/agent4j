@@ -646,4 +646,36 @@ public class JsonlSessionStore implements SessionStore {
     private Path sessionPath(String name) {
         return sessionsDir.resolve(sanitize(name) + ".jsonl");
     }
+
+    // ---- 每日用量日志（全局共享） ----
+
+    private static final Path DAILY_USAGE_FILE = Paths.get(
+            System.getProperty("user.home"), ".agent4j", "usage_daily.jsonl");
+
+    private static final java.util.concurrent.locks.ReentrantLock DAILY_LOCK =
+            new java.util.concurrent.locks.ReentrantLock();
+
+    @Override
+    public void appendDailyUsage(String model, int prompt, int completion,
+                                 int cacheHit, int cacheMiss) {
+        if (prompt == 0 && completion == 0) return;
+        DAILY_LOCK.lock();
+        try {
+            Files.createDirectories(DAILY_USAGE_FILE.getParent());
+            String modelName = model != null ? model.replace("\\", "\\\\").replace("\"", "\\\"") : "unknown";
+            String line = "{\"ts\":" + System.currentTimeMillis()
+                    + ",\"model\":\"" + modelName + "\""
+                    + ",\"prompt\":" + prompt
+                    + ",\"completion\":" + completion
+                    + ",\"cacheHit\":" + cacheHit
+                    + ",\"cacheMiss\":" + cacheMiss + "}\n";
+            Files.writeString(DAILY_USAGE_FILE, line,
+                    StandardCharsets.UTF_8,
+                    StandardOpenOption.CREATE, StandardOpenOption.APPEND);
+        } catch (IOException e) {
+            log.debug("[usage] 写入每日用量日志失败: {}", e.getMessage());
+        } finally {
+            DAILY_LOCK.unlock();
+        }
+    }
 }

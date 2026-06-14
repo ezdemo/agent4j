@@ -52,6 +52,7 @@
       @delete-session="onSidebarDeleteSession"
       @toggle-theme="toggleTheme"
       @show-tools="showTools = true"
+      @show-dashboard="showDashboard = true"
       @show-settings="showSettings = true"
     />
 
@@ -235,6 +236,21 @@
       </div>
     </Teleport>
 
+    <!-- 数据面板弹窗 -->
+    <Teleport to="body">
+      <div v-if="showDashboard" class="modal-mask" @click.self="showDashboard = false">
+        <div class="modal modal-dashboard">
+          <div class="modal-head">
+            <span>数据面板</span>
+            <button class="btn-icon-sm" @click="showDashboard = false">×</button>
+          </div>
+          <div class="modal-body">
+            <DashboardPanel ref="dashboardRef" />
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
     <!-- OpenAPI 管理弹窗 -->
     <!-- 确认对话框 -->
     <ConfirmDialog />
@@ -301,6 +317,7 @@ import Sidebar from './components/Sidebar.vue'
 import RightPanel from './components/RightPanel.vue'
 import ChatView from './views/Chat.vue'
 import SettingsView from './views/Settings.vue'
+import DashboardPanel from './components/Dashboard.vue'
 
 const store = useAppStore()
 const router = useRouter()
@@ -334,6 +351,7 @@ async function detectTauri() {
 }
 const showConfig = ref(false)
 const showSettings = ref(false)
+const showDashboard = ref(false)
 const rightPanelOpen = ref(false)
 const rightPanelTab = ref('git')
 const initialDataLoaded = ref(false)
@@ -343,6 +361,7 @@ function toggleRightPanel() {
   rightPanelOpen.value = !rightPanelOpen.value
 }
 const chatRef = ref(null)
+const dashboardRef = ref(null)
 const workspace = ref('')
 
 // 版本信息
@@ -1137,6 +1156,11 @@ watch(showSettings, (newVal) => {
 
 .modal-settings {
   width: min(800px, 95vw);
+  max-height: 85vh;
+}
+
+.modal-dashboard {
+  width: min(900px, 95vw);
   max-height: 85vh;
 }
 

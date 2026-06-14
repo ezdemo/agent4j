@@ -167,6 +167,8 @@ public class SessionService {
         mu[1] += completion;
         mu[2] += cacheHit;
         mu[3] += cacheMiss;
+        // 追加到每日用量日志
+        store.appendDailyUsage(model, prompt, completion, cacheHit, cacheMiss);
     }
 
     /**

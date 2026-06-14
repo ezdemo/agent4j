@@ -17,6 +17,7 @@ import site.sorghum.agent4j.bin.tool.ToolSystemInitializer;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
 import site.sorghum.agent4j.tool.AgentOutput;
 import site.sorghum.agent4j.web.common.ServiceException;
+import site.sorghum.agent4j.web.common.UsageCostCalculator;
 import site.sorghum.agent4j.web.model.*;
 
 import java.io.IOException;
@@ -951,10 +952,6 @@ public class AgentService {
                 for (Map.Entry<String, long[]> entry : mu.entrySet()) {
                     String modelName = entry.getKey();
                     long[] usage = entry.getValue();
-                    long mPrompt = usage[0];
-                    long mCompletion = usage[1];
-                    long mCacheHit = usage[2];
-
                     Map<String, Double> modelPrice = prices.get(modelName);
                     if (modelPrice != null && !modelPrice.isEmpty()) {
                         hasPrice = true;
@@ -962,12 +959,11 @@ public class AgentService {
                         double cacheRate = modelPrice.getOrDefault("cache", 0.0);
                         double outputRate = modelPrice.getOrDefault("output", 0.0);
 
-                        long nonCacheInput = Math.max(0, mPrompt - mCacheHit);
+                        long nonCacheInput = Math.max(0, usage[0] - usage[2]);
                         inputCost += nonCacheInput / 1_000_000.0 * inputRate;
-                        cacheCost += mCacheHit / 1_000_000.0 * cacheRate;
-                        outputCost += mCompletion / 1_000_000.0 * outputRate;
+                        cacheCost += usage[2] / 1_000_000.0 * cacheRate;
+                        outputCost += usage[1] / 1_000_000.0 * outputRate;
                     }
-                    // 无价格配置的模型不计入费用
                 }
                 totalCost = inputCost + cacheCost + outputCost;
                 currency = hasPrice ? "CNY" : null;
@@ -978,26 +974,12 @@ public class AgentService {
                 totalCost = Math.round(totalCost * 10000.0) / 10000.0;
             } else {
                 // 无 per-model 数据（旧格式 .usage 文件），回退到当前模型计费
-                Map<String, Double> modelPrice = prices.get(currentModel);
-                hasPrice = modelPrice != null && !modelPrice.isEmpty();
-
-                if (hasPrice) {
-                    double inputRate = modelPrice.getOrDefault("input", 0.0);
-                    double cacheRate = modelPrice.getOrDefault("cache", 0.0);
-                    double outputRate = modelPrice.getOrDefault("output", 0.0);
-
-                    long nonCacheInput = Math.max(0, promptTokens - cacheHit);
-                    inputCost = nonCacheInput / 1_000_000.0 * inputRate;
-                    cacheCost = cacheHit / 1_000_000.0 * cacheRate;
-                    outputCost = completionTokens / 1_000_000.0 * outputRate;
-                    totalCost = inputCost + cacheCost + outputCost;
-                    currency = "CNY";
-
-                    inputCost = Math.round(inputCost * 10000.0) / 10000.0;
-                    cacheCost = Math.round(cacheCost * 10000.0) / 10000.0;
-                    outputCost = Math.round(outputCost * 10000.0) / 10000.0;
-                    totalCost = Math.round(totalCost * 10000.0) / 10000.0;
-                }
+                totalCost = UsageCostCalculator.calc(prices, currentModel, promptTokens, completionTokens, cacheHit);
+                hasPrice = totalCost > 0;
+                currency = hasPrice ? "CNY" : null;
+                inputCost = totalCost;
+                totalCost = Math.round(totalCost * 10000.0) / 10000.0;
+                inputCost = Math.round(inputCost * 10000.0) / 10000.0;
             }
         } catch (Exception e) {
             // 价格计算失败不影响主逻辑

@@ -11,6 +11,7 @@ import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.common.WebErrorMessages;
 import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
+import site.sorghum.agent4j.web.service.DashboardService;
 
 import okhttp3.OkHttpClient;
 import okhttp3.Request;
@@ -247,5 +248,19 @@ public class ConfigController {
             return ApiResponse.ok("工作区已删除");
         }
         throw new ServiceException("删除工作区失败");
+    }
+
+    // ============ 数据面板 ============
+
+    @Inject
+    private DashboardService dashboardService;
+
+    @ApiOperation(value = "获取数据面板", notes = "返回最近 N 天的 Token 用量数据面板，包含按天和按模型的统计")
+    @Get
+    @Mapping("/usage/dashboard")
+    public ApiResponse<DashboardDTO> getDashboard(
+            @ApiParam(value = "统计天数，默认 7") @Param(value = "days", required = false) Integer days) {
+        int n = (days != null && days > 0) ? days : 7;
+        return ApiResponse.ok(dashboardService.getDashboard(n));
     }
 }
