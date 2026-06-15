@@ -201,4 +201,4 @@ __snapshots__/
 *.otf
 
 # electron
-release/win-unpacked
+release

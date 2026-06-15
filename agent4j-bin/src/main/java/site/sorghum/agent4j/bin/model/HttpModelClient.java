@@ -125,16 +125,8 @@ public class HttpModelClient implements ModelClient {
      */
     @Override
     public boolean isThinkingMode() {
-        return model != null && (
-                model.contains("reasoner")
-                        || model.equals("deepseek-v4-flash")
-                        || model.equals("deepseek-v4-pro")
-                        || model.contains("mimo")
-                        || model.contains("minimax")
-                        || model.contains("gpt")
-                        || model.contains("glm")
-                        || model.contains("agnes")
-        );
+        // 所有模型都视为思考模型
+        return true;
     }
 
     /**
@@ -152,7 +144,16 @@ public class HttpModelClient implements ModelClient {
 
     /**
      * 模型最大上下文窗口 token 数。
-     * 优先级：环境变量 AGENT4J_MAX_CONTEXT_TOKENS > 模型名推断 > 默认 128K。
+     * 优先级：环境变量 AGENT4J_MAX_CONTEXT_TOKENS > 模型名后缀 [大小] > 模型名推断 > 默认 256K。
+     * <p>
+     * 支持模型名后缀配置上下文大小，例如：
+     * <ul>
+     *   <li>mimo-v2.5[512k] → 512,000 tokens</li>
+     *   <li>mimo-v2.5[1m] → 1,000,000 tokens</li>
+     *   <li>deepseek-v4-pro[2m] → 2,000,000 tokens</li>
+     * </ul>
+     * 后缀格式：[数字k] 或 [数字m]（不区分大小写）
+     * </p>
      */
     @Override
     public int getMaxContextTokens() {
@@ -165,6 +166,13 @@ public class HttpModelClient implements ModelClient {
             }
         }
         if (model == null) return 200_000;
+        
+        // 检查模型名后缀 [大小] 配置
+        int suffixSize = parseContextSizeSuffix(model);
+        if (suffixSize > 0) {
+            return suffixSize;
+        }
+        
         String m = model.toLowerCase();
         // Gemini 系列支持 1M
         if (m.contains("gemini")) return 1_000_000;
@@ -179,6 +187,113 @@ public class HttpModelClient implements ModelClient {
         if (m.contains("gpt-4") || m.contains("o1") || m.contains("o3")) return 128_000;
         // 默认
         return 256_000;
+    }
+    
+    /**
+     * 解析模型名称中的上下文大小后缀。
+     * 格式：[数字k] 或 [数字m]（不区分大小写）
+     * 
+     * @param modelName 模型名称，例如 "mimo-v2.5[512k]"
+     * @return 解析出的 token 数，如果解析失败返回 -1
+     */
+    private int parseContextSizeSuffix(String modelName) {
+        if (modelName == null || !modelName.contains("[") || !modelName.contains("]")) {
+            return -1;
+        }
+        
+        try {
+            int start = modelName.lastIndexOf('[');
+            int end = modelName.lastIndexOf(']');
+            if (start < 0 || end < 0 || end <= start) {
+                return -1;
+            }
+            
+            String suffix = modelName.substring(start + 1, end).trim().toLowerCase();
+            if (suffix.isEmpty()) {
+                return -1;
+            }
+            
+            // 解析数字部分
+            int numberEnd = suffix.length();
+            for (int i = 0; i < suffix.length(); i++) {
+                char c = suffix.charAt(i);
+                if (c < '0' || c > '9') {
+                    numberEnd = i;
+                    break;
+                }
+            }
+            
+            if (numberEnd == 0) {
+                return -1; // 没有数字部分
+            }
+            
+            long number = Long.parseLong(suffix.substring(0, numberEnd));
+            String unit = suffix.substring(numberEnd).trim();
+            
+            // 根据单位转换
+            switch (unit) {
+                case "k":
+                    return (int) (number * 1_000);
+                case "m":
+                    return (int) (number * 1_000_000);
+                case "g":
+                    return (int) (number * 1_000_000_000);
+                case "":
+                    // 没有单位，默认为 k
+                    return (int) (number * 1_000);
+                default:
+                    return -1; // 未知单位
+            }
+        } catch (NumberFormatException e) {
+            return -1;
+        }
+    }
+    
+    /**
+     * 剥离模型名称中的上下文大小后缀。
+     * 例如："mimo-v2.5[512k]" → "mimo-v2.5"
+     * 
+     * @param modelName 模型名称
+     * @return 剥离后缀后的模型名称，如果没有后缀则返回原名称
+     */
+    public static String stripContextSizeSuffix(String modelName) {
+        if (modelName == null || !modelName.contains("[") || !modelName.contains("]")) {
+            return modelName;
+        }
+        
+        int start = modelName.lastIndexOf('[');
+        int end = modelName.lastIndexOf(']');
+        if (start < 0 || end < 0 || end <= start) {
+            return modelName;
+        }
+        
+        // 检查后缀是否符合格式（数字+可选单位）
+        String suffix = modelName.substring(start + 1, end).trim().toLowerCase();
+        if (suffix.isEmpty()) {
+            return modelName;
+        }
+        
+        // 验证是否是有效的上下文大小后缀
+        int numberEnd = suffix.length();
+        for (int i = 0; i < suffix.length(); i++) {
+            char c = suffix.charAt(i);
+            if (c < '0' || c > '9') {
+                numberEnd = i;
+                break;
+            }
+        }
+        
+        if (numberEnd == 0) {
+            return modelName; // 没有数字部分，不是有效的后缀
+        }
+        
+        String unit = suffix.substring(numberEnd).trim();
+        if (unit.isEmpty() || unit.equals("k") || unit.equals("m") || unit.equals("g")) {
+            // 是有效的上下文大小后缀，剥离它
+            return modelName.substring(0, start).trim();
+        }
+        
+        return modelName; // 不是有效的后缀
     }
 
     /**
@@ -658,7 +773,8 @@ public class HttpModelClient implements ModelClient {
     private String buildBody(List<ChatMessage> messages,
                              List<Map<String, Object>> tools) {
         ONode body = new ONode(ONode.ofJson("{}").options()).asObject();
-        body.set("model", model);
+        // 剥离模型名称中的上下文大小后缀，例如 "mimo-v2.5[512k]" → "mimo-v2.5"
+        body.set("model", stripContextSizeSuffix(model));
         if (reasoningEffort != null && !reasoningEffort.isEmpty() && !Objects.equals(reasoningEffort, "none")) {
             body.set("reasoning_effort", reasoningEffort);
             body.set("chat_template_kwargs", ONode.ofJson("{}").set("enable_thinking", true));
