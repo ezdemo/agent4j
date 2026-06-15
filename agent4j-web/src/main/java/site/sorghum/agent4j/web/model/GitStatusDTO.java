@@ -13,6 +13,7 @@ public record GitStatusDTO(
         String branch,
         String workspacePath,
         List<GitFileChangeDTO> changed,
-        List<GitFileChangeDTO> untracked
+        List<GitFileChangeDTO> untracked,
+        String model
 ) {
 }

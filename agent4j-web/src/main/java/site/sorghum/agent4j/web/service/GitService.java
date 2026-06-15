@@ -114,18 +114,18 @@ public class GitService {
             ProcessResult checkGit = runGit(workspaceDir, "git", "--version");
             if (checkGit.exitCode != 0) {
                 return new GitStatusDTO(false, false, null,
-                        workspaceDir.getAbsolutePath(), List.of(), List.of());
+                        workspaceDir.getAbsolutePath(), List.of(), List.of(), null);
             }
         } catch (Exception e) {
             return new GitStatusDTO(false, false, null,
-                    workspaceDir.getAbsolutePath(), List.of(), List.of());
+                    workspaceDir.getAbsolutePath(), List.of(), List.of(), null);
         }
 
         // 2. 检测是否是 git 仓库
         ProcessResult checkRepo = runGit(workspaceDir, "git", "rev-parse", "--is-inside-work-tree");
         if (checkRepo.exitCode != 0) {
             return new GitStatusDTO(true, false, null,
-                    workspaceDir.getAbsolutePath(), List.of(), List.of());
+                    workspaceDir.getAbsolutePath(), List.of(), List.of(), null);
         }
 
         // 3. 获取分支名
@@ -139,8 +139,12 @@ public class GitService {
         List<GitFileChangeDTO> untracked = new ArrayList<>();
         parsePorcelainStatus(statusResult.stdout, changed, untracked);
 
+        // 5. 获取配置的模型
+        Map<String, String> config = getGitConfig(workspaceHash);
+        String model = config.get("model");
+
         return new GitStatusDTO(true, true, branch,
-                workspaceDir.getAbsolutePath(), changed, untracked);
+                workspaceDir.getAbsolutePath(), changed, untracked, model);
     }
 
     /**
@@ -474,6 +478,10 @@ public class GitService {
                     if (emailNode != null && emailNode.isString() && !emailNode.getString().trim().isEmpty()) {
                         result.put("authorEmail", emailNode.getString().trim());
                     }
+                    ONode modelNode = node.get("model");
+                    if (modelNode != null && modelNode.isString() && !modelNode.getString().trim().isEmpty()) {
+                        result.put("model", modelNode.getString().trim());
+                    }
                 }
             } catch (Exception e) {
                 log.debug("[git] 读取 git-author.json 失败: {}", e.getMessage());
@@ -502,6 +510,11 @@ public class GitService {
             result.put("authorEmail", DEFAULT_AUTHOR_EMAIL);
         }
 
+        // 4) 模型字段：如果未配置，使用当前全局模型
+        if (!result.containsKey("model") || result.get("model") == null || result.get("model").isEmpty()) {
+            result.put("model", agentService.getSharedModel());
+        }
+
         return result;
     }
 
@@ -515,6 +528,7 @@ public class GitService {
         ONode json = parseJsonBody(body, "saveGitConfig");
         String authorName = readStringField(json, "authorName");
         String authorEmail = readStringField(json, "authorEmail");
+        String model = readStringField(json, "model");
         if (authorName == null || authorEmail == null) {
             throw new ServiceException("作者名和邮箱不能为空");
         }
@@ -530,11 +544,17 @@ public class GitService {
         ONode configNode = ONode.ofJson("{}").asObject();
         configNode.set("authorName", authorName);
         configNode.set("authorEmail", authorEmail);
+        if (model != null && !model.trim().isEmpty()) {
+            configNode.set("model", model.trim());
+        }
         Files.writeString(configFile.toPath(), configNode.toJson(), StandardCharsets.UTF_8);
 
         Map<String, String> result = new LinkedHashMap<>();
         result.put("authorName", authorName);
         result.put("authorEmail", authorEmail);
+        if (model != null && !model.trim().isEmpty()) {
+            result.put("model", model.trim());
+        }
         return result;
     }
 
@@ -597,12 +617,35 @@ public class GitService {
             throw new ServiceException("Not a git repository");
         }
 
+        // 解析请求体
+        ONode bodyJson = parseJsonBody(body, "generateCommitMessage");
+        List<String> files = readStringListField(bodyJson, "files");
+        String requestModel = readStringField(bodyJson, "model");
+
         // 检查 AI 模型配置
         String apiUrl = agentService.getSharedApiUrl();
         String apiKey = agentService.getSharedApiKey();
         String model = agentService.getSharedModel();
         if (apiUrl == null || apiKey == null || model == null) {
             throw new ServiceException("AI 模型未配置，请先设置 OPENAI_API_KEY 环境变量");
+        }
+
+        // 读取工作区配置的模型（优先使用请求参数 > 工作区配置 > 全局配置）
+        if (requestModel != null && !requestModel.trim().isEmpty()) {
+            model = requestModel.trim();
+            // 持久化模型配置
+            Map<String, String> currentConfig = getGitConfig(workspaceHash);
+            saveGitConfig(workspaceHash, ONode.ofJson("{}")
+                    .set("authorName", currentConfig.get("authorName"))
+                    .set("authorEmail", currentConfig.get("authorEmail"))
+                    .set("model", model)
+                    .toJson());
+        } else {
+            Map<String, String> config = getGitConfig(workspaceHash);
+            String configModel = config.get("model");
+            if (configModel != null && !configModel.trim().isEmpty()) {
+                model = configModel.trim();
+            }
         }
 
         // 构建 Solon ChatModel（轻量、无推理）
@@ -617,9 +660,6 @@ public class GitService {
                     o.optionSet("thinking",ONode.ofJson("{}").set("type","disabled"));
                 })
                 .build();
-
-        // 解析可选的 files 参数
-        List<String> files = readStringListField(parseJsonBody(body, "generateCommitMessage"), "files");
 
         // 1. 获取近 N 条提交日志（用于风格参考）
         String recentLog = runGitSimple(workspaceDir.getAbsolutePath(),

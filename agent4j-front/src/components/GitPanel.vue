@@ -73,8 +73,15 @@
               rows="2"
               @keydown.enter.exact.prevent="handleCommit"
             ></textarea>
-            <!-- 作者配置按钮 -->
+            <!-- 作者配置和模型选择 -->
             <div class="commit-author-bar">
+              <!-- 模型选择在左边 -->
+              <select v-model="commitModel" class="author-btn model-select-inline" @change="checkModelWarning">
+                <option v-for="m in availableModels" :key="m.name" :value="m.name">
+                  {{ m.name }}
+                </option>
+              </select>
+              <!-- 提交人按钮在右边 -->
               <button class="author-btn" @click="showAuthorModal = true" title="配置提交作者名和邮箱">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/>
@@ -84,6 +91,8 @@
                 <svg class="author-chevron" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
               </button>
             </div>
+            <!-- 模型警告 -->
+            <div v-if="modelWarning" class="model-warning-bar">{{ modelWarning }}</div>
             <div class="commit-actions">
               <button
                 class="generate-btn"
@@ -298,6 +307,37 @@ const generating = ref(false)
 // 提交作者（从 API 加载/保存到 .agent4j/git-author.json）
 const authorName = ref('Agent4j')
 const authorEmail = ref('agent4j@sorghum.site')
+const commitModel = ref('')
+const availableModels = ref([])
+const modelWarning = ref('')
+
+// 获取可用模型列表
+const loadAvailableModels = async () => {
+  try {
+    const r = await gitAPI.getModels()
+    if (r.success && r.data) {
+      availableModels.value = r.data.models || []
+      // 如果当前配置的模型不在可用列表里，设置警告
+      checkModelWarning()
+    }
+  } catch (e) {
+    // 静默
+  }
+}
+
+// 检查模型警告
+const checkModelWarning = () => {
+  if (!commitModel.value || availableModels.value.length === 0) {
+    modelWarning.value = ''
+    return
+  }
+  const found = availableModels.value.some(m => m.name === commitModel.value)
+  if (!found) {
+    modelWarning.value = `警告: "${commitModel.value}" 不在可用模型列表中，请切换模型`
+  } else {
+    modelWarning.value = ''
+  }
+}
 
 const loadAuthorConfig = async () => {
   try {
@@ -305,6 +345,7 @@ const loadAuthorConfig = async () => {
     if (r.success && r.data) {
       if (r.data.authorName) authorName.value = r.data.authorName
       if (r.data.authorEmail) authorEmail.value = r.data.authorEmail
+      if (r.data.model) commitModel.value = r.data.model
     }
   } catch (e) {
     // 静默，默认值兜底
@@ -313,7 +354,7 @@ const loadAuthorConfig = async () => {
 
 const handleSaveAuthorConfig = async () => {
   try {
-    const r = await gitAPI.saveConfig(props.workspaceHash, authorName.value.trim(), authorEmail.value.trim())
+    const r = await gitAPI.saveConfig(props.workspaceHash, authorName.value.trim(), authorEmail.value.trim(), commitModel.value.trim())
     if (r.success) {
       showFeedback('success', '作者配置已保存')
       showAuthorModal.value = false
@@ -335,6 +376,7 @@ const handleFetchGitConfig = async () => {
     if (r.success && r.data) {
       if (r.data.authorName) authorName.value = r.data.authorName
       if (r.data.authorEmail) authorEmail.value = r.data.authorEmail
+      if (r.data.model) commitModel.value = r.data.model
       showFeedback('success', '已从 Git 本地配置获取作者信息')
     } else {
       showFeedback('error', r.error || '获取 Git 配置失败')
@@ -348,8 +390,9 @@ const handleFetchGitConfig = async () => {
 const handleResetAuthor = async () => {
   authorName.value = 'Agent4j'
   authorEmail.value = 'agent4j@sorghum.site'
+  commitModel.value = '' // 清空，使用默认模型
   try {
-    await gitAPI.saveConfig(props.workspaceHash, 'Agent4j', 'agent4j@sorghum.site')
+    await gitAPI.saveConfig(props.workspaceHash, 'Agent4j', 'agent4j@sorghum.site', '')
     showFeedback('success', '已恢复为默认作者信息')
   } catch (e) {
     showFeedback('error', e.message || '恢复失败')
@@ -413,6 +456,8 @@ const loadStatus = async () => {
       branchName.value = d.branch || ''
       changedFiles.value = d.changed || []
       untrackedFiles.value = d.untracked || []
+      // 从状态中读取配置的模型
+      if (d.model) commitModel.value = d.model
       // 仓库初始化后加载提交历史
       if (initialized.value) await loadCommitHistory()
     } else {
@@ -542,7 +587,7 @@ const handleGenerateMessage = async () => {
   generating.value = true
   try {
     const files = Array.from(selectedFiles.value)
-    const r = await gitAPI.generateCommitMessage(props.workspaceHash, files)
+    const r = await gitAPI.generateCommitMessage(props.workspaceHash, files, commitModel.value)
     if (r.success && r.data && r.data.message) {
       commitMessage.value = r.data.message
       showFeedback('success', `AI 已生成提交消息（基于 ${files.length} 个文件）`)
@@ -696,13 +741,20 @@ function parseSideBySide(diffText) {
 onMounted(async () => {
   await loadStatus()
   await loadAuthorConfig()
+  await loadAvailableModels()
 })
 
 watch(() => props.workspaceHash, async () => {
   if (props.workspaceHash) {
     await loadStatus()
     await loadAuthorConfig()
+    await loadAvailableModels()
   }
+})
+
+// 监听模型变化，更新警告
+watch(commitModel, () => {
+  checkModelWarning()
 })
 
 defineExpose({ loadStatus })
@@ -851,8 +903,27 @@ defineExpose({ loadStatus })
 /* 提交作者配置按钮 */
 .commit-author-bar {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: space-between;
   margin-top: 4px;
+  gap: 8px;
+}
+.model-select-inline {
+  flex: 1;
+  min-width: 0;
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpolyline points='9 18 15 12 9 6'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 6px center;
+  padding-right: 20px;
+}
+.model-warning-bar {
+  font-size: 10px;
+  color: #e74c3c;
+  margin-top: 2px;
+  padding: 0 2px;
 }
 .author-btn {
   display: inline-flex;

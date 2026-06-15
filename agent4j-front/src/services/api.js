@@ -667,10 +667,12 @@ export const gitAPI = {
     return api.get('/git/config', { params })
   },
 
-  // 保存提交作者配置到工作区 - POST /api/git/config?workspaceHash=xxx  body: { authorName, authorEmail }
-  saveConfig: (workspaceHash, authorName, authorEmail) => {
+  // 保存提交作者配置到工作区 - POST /api/git/config?workspaceHash=xxx  body: { authorName, authorEmail, model }
+  saveConfig: (workspaceHash, authorName, authorEmail, model) => {
     const params = workspaceHash ? { workspaceHash } : {}
-    return api.post('/git/config', { authorName, authorEmail }, { params })
+    const body = { authorName, authorEmail }
+    if (model) body.model = model
+    return api.post('/git/config', body, { params })
   },
 
   // 切换文件状态 - POST /api/git/toggle?workspaceHash=xxx  body: { path }
@@ -679,11 +681,12 @@ export const gitAPI = {
     return api.post('/git/toggle', { path }, { params })
   },
 
-  // AI 自动生成提交消息 - POST /api/git/generate-commit-message?workspaceHash=xxx  body: { files }
-  generateCommitMessage: (workspaceHash, files) => {
+  // AI 自动生成提交消息 - POST /api/git/generate-commit-message?workspaceHash=xxx  body: { files, model }
+  generateCommitMessage: (workspaceHash, files, model) => {
     const params = workspaceHash ? { workspaceHash } : {}
     const body = {}
     if (files && files.length) body.files = files
+    if (model) body.model = model
     return api.post('/git/generate-commit-message', body, { params, timeout: 120000 })
   },
 
@@ -692,6 +695,11 @@ export const gitAPI = {
     const params = workspaceHash ? { workspaceHash } : {}
     if (limit) params.limit = limit
     return api.get('/git/log', { params })
+  },
+
+  // 获取可用模型列表 - GET /api/models
+  getModels: () => {
+    return api.get('/models')
   }
 }
 
