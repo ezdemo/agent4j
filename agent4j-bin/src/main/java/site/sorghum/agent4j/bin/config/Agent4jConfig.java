@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.config;
 
+import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.Feature;
 import org.noear.snack4.ONode;
 import org.noear.snack4.Options;
@@ -18,6 +19,7 @@ import java.util.stream.Collectors;
  *
  * @author Sorghum
  */
+@Slf4j
 public class Agent4jConfig {
 
     private static volatile Agent4jConfig INSTANCE;
@@ -128,8 +130,8 @@ public class Agent4jConfig {
             Files.createDirectories(configDir);
             String defaultConfig = defaultConfigJson();
             Files.writeString(configPath, defaultConfig);
-            System.err.println("[config] 已创建默认配置文件: " + configPath);
-            System.err.println("[config] 请编辑 " + configPath + " 填入 apiKey 后重启");
+            log.info("[config] 已创建默认配置文件: {}", configPath);
+            log.info("[config] 请编辑 {} 填入 apiKey 后重启", configPath);
             System.exit(1);
         }
         try {

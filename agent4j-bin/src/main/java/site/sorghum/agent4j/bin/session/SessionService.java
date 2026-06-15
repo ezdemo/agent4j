@@ -85,7 +85,7 @@ public class SessionService {
     public void loadOrCreate(String sessionName) throws IOException {
         if (sessionName != null && !sessionName.isEmpty()) {
             if (!store.switchTo(sessionName)) {
-                System.err.println("[session] 切换到指定会话失败: " + sessionName + "，使用新会话");
+                log.warn("[session] 切换到指定会话失败: {}，使用新会话", sessionName);
             }
             // 仅在明确指定会话时才加载历史和恢复用量
             List<ChatMessage> loaded = store.load();

@@ -17,6 +17,7 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import lombok.SneakyThrows;
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.goal.GoalStore;
 import site.sorghum.agent4j.bin.goal.JsonlGoalStore;
@@ -38,6 +39,7 @@ import site.sorghum.agent4j.bin.goal.JsonlGoalStore;
  * @author Sorghum
  */
 @Getter
+@Slf4j
 public class WorkspaceManager {
 
     private static final Path WORKSPACES_DIR = Paths.get(
@@ -56,7 +58,7 @@ public class WorkspaceManager {
         try {
             Files.createDirectories(WORKSPACES_DIR);
         } catch (IOException e) {
-            System.err.println("[workspace] 创建工作区目录失败: " + e.getMessage());
+            log.error("[workspace] 创建工作区目录失败: {}", e.getMessage());
         }
     }
 
@@ -216,7 +218,7 @@ public class WorkspaceManager {
                     workspaces.add(new WorkspaceInfo(hash, name, path,
                             createdAt, lastAccessedAt, sessionCount));
                 } catch (Exception e) {
-                    System.err.println("[workspace] 读取工作区配置失败: " + dir + " - " + e.getMessage());
+                    log.error("[workspace] 读取工作区配置失败: {} - {}", dir, e.getMessage());
                 }
             }
         }
@@ -274,10 +276,10 @@ public class WorkspaceManager {
                 org.noear.snack4.ONode config = org.noear.snack4.ONode.ofJson(json);
                 String path = config.get("path").getString();
                 if (path != null && WORKSPACE_MANAGERS.remove(path) != null) {
-                    System.out.println("[workspace] 已从缓存中移除: " + path);
+                    log.info("[workspace] 已从缓存中移除: {}", path);
                 }
             } catch (Exception e) {
-                System.err.println("[workspace] 清理缓存失败: " + e.getMessage());
+                log.error("[workspace] 清理缓存失败: {}", e.getMessage());
             }
         }
 

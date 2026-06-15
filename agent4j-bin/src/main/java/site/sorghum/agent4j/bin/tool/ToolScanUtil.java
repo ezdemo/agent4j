@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.tool;
 
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.Solon;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.solon.SolonToTools;
@@ -22,6 +23,7 @@ import java.util.List;
  *
  * @author Sorghum
  */
+@Slf4j
 public class ToolScanUtil {
 
     /**
@@ -48,7 +50,7 @@ public class ToolScanUtil {
                         workspace.toAbsolutePath().normalize().toString());
                 agentTools.addAll(solonToTools.getTools());
             } catch (Exception e) {
-                System.err.println("[tool-scan] Skill 工具扫描失败: " + e.getMessage());
+                log.error("[tool-scan] Skill 工具扫描失败: " + e.getMessage());
             }
         }
 
