@@ -14,9 +14,9 @@
   <img src="https://img.shields.io/badge/Java-17-blue?logo=openjdk"/>
   <img src="https://img.shields.io/badge/Solon-4.0.0--M3-important?logo=java"/>
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js"/>
-  <img src="https://img.shields.io/badge/Tauri-2.0-FFC131?logo=tauri"/>
+  <img src="https://img.shields.io/badge/Electron-32.0-47848F?logo=electron"/>
   <img src="https://img.shields.io/badge/license-MIT-green"/>
-  <img src="https://img.shields.io/badge/version-26.6.13-lightgrey"/>
+  <img src="https://img.shields.io/badge/version-26.6.15-lightgrey"/>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-📋-brightgreen"/></a>
 </p>
 
@@ -101,48 +101,33 @@ API，一步步把事情干完。
 
 ---
 
-## 🆕 最新更新（v26.6.13）
+## 🆕 最新更新（v26.6.15）
 
-### 📅 定时任务管理
-- 可视化定时任务管理面板，支持会话筛选
-- 增强 Cron 表达式解析器
-
-<p align="center">
-  <img src="img/right_corn_job_panel.png" width="60%" alt="定时任务面板"/>
-</p>
-
-### 🎨 前端增强
-- ChatMessage 添加时间戳显示
-- 流式加载动画横线，提升视觉体验
-- finish 工具渲染优化，区分执行中与完成状态
-- TitleBar 添加 Gitee/GitHub Star 按钮
-
-### 🔄 自动更新系统
-- 应用启动时自动检查更新
-- 更新按钮移至模态框底部，优化交互流程
+### 🖥️ Electron 桌面端 (替换 Tauri)
+- 新增 Electron 桌面端支持，替换 Tauri
+- 无缝迁移：所有桌面端功能平滑过渡，无影响
 
 <p align="center">
-  <img src="img/auto_update_setting.png" width="60%" alt="自动更新设置"/>
+  <img src="img/main_app.png" width="60%" alt="主界面"/>
 </p>
 
-### 🤖 子代理增强
-- 传播父级中断信号到子代理
-- 重构子代理会话渲染，复用 ChatMessage 组件
+### 🧩 元素面板（Element Panel）
+- 新增 ElementPanel 组件 — 可视化查看页面 DOM 元素树
+- 右侧面板支持拖拽调整宽度
+- 元素信息弹窗展示，支持发送消息到会话
 
-### 📁 Git 增强
-- 支持未跟踪文件的 diff 显示与空文件处理
+### 🔧 Git 面板增强
+- 添加模型选择下拉框，支持切换提交消息生成模型
+- git-author 配置中添加模型字段持久化偏好
 
-<p align="center">
-  <img src="img/right_git_panel.png" width="60%" alt="Git 面板"/>
-</p>
+### 🤖 模型优化
+- 简化思考模式判断逻辑
+- 支持模型名后缀灵活配置上下文大小
 
 ### 🛠️ 其他亮点
-- 消息快照系统（基于 Git 的检查点与撤回）
-- 版本检查与更新系统
-- Java 源码查找工具（java_source）
-- Cron 表达式解析器
-- 代码语法高亮（Shiki/Shikiji）
-- 毛玻璃视觉效果
+- 统一日志输出：替换 System.err 为 Slf4j
+- 添加 bump-version.ps1 版本更新脚本
+- 添加 12 张界面预览图
 
 > 📋 完整变更记录请查看 [CHANGELOG.md](CHANGELOG.md)
 
@@ -221,7 +206,7 @@ Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）** �
 |-------------|--------------|
 | **CLI**     | 终端里直接干       |
 | **Web**     | 浏览器打开可视化界面   |
-| **Desktop** | Tauri 原生桌面应用 |
+| **Desktop** | Electron 原生桌面应用 |
 
 ### 🎨 前端
 
@@ -277,18 +262,19 @@ agent4j/
 │   ├── service/                # Agent 管理 / SSE 推送
 │   └── market/                 # 技能市场
 │
-├── agent4j-front/             # Vue 3 前端
+├── agent4j-front/             # Vue 3 前端 + Electron 桌面端
 │   ├── src/
 │   │   ├── components/
 │   │   ├── views/
-│   │   ├── services/api.js
+│   │   ├── services/
+│   │   │   ├── api.js
+│   │   │   └── platform.js      # 平台适配层（Electron/Web）
 │   │   └── stores/app.js
+│   ├── electron/
+│   │   ├── main.cjs             # Electron 主进程
+│   │   └── preload.cjs          # 预加载脚本
+│   ├── electron-builder.json    # 打包配置
 │   └── vite.config.js
-│
-├── agent4j-tauri/             # Tauri 桌面端
-│   └── src-tauri/
-│       ├── src/lib.rs          # Rust 后端
-│       └── tauri.conf.json
 │
 ├── intro/                      # 官网
 ├── docs/superpowers/           # 文档
@@ -376,7 +362,7 @@ agent4j/
 | **语言**  | Java 17                             |
 | **后端**  | Solon 4.0.0-M3 + Snack4 + OkHttp    |
 | **前端**  | Vue 3.4 + Vite 5 + Ant Design Vue 4 |
-| **桌面**  | Tauri 2.0 + Rust                    |
+| **桌面**  | Electron + Node.js                    |
 | **持久化** | JSON Lines                          |
 | **文档**  | Knife4j                             |
 
@@ -406,7 +392,7 @@ agent4j/
 - [x] 前缀缓存（DeepSeek 97%+ / Mimo 98%+）
 - [x] MCP 协议
 - [x] 技能市场
-- [x] Tauri 桌面端
+- [x] Electron 桌面端
 - [x] OpenAPI 集成
 - [x] Git 面板
 - [x] 多模态
