@@ -211,9 +211,7 @@ public class HttpModelClient implements ModelClient {
 
                 if (retryable(status) && attempt < RETRY_DELAYS.length) {
                     int delay = RETRY_DELAYS[attempt];
-                    System.err.println("[retry] HTTP " + status
-                            + " (非流式)，第" + (attempt + 1)
-                            + "次重试，等待" + delay + "s...");
+                    log.warn("[retry] HTTP {} (非流式)，第{}次重试，等待{}s...", status, attempt + 1, delay);
                     Thread.sleep(delay * 1000L);
                     continue;
                 }
@@ -233,7 +231,7 @@ public class HttpModelClient implements ModelClient {
                 log.error("非流式API调用IO异常: {}", e.getMessage(), e);
                 if (attempt < RETRY_DELAYS.length) {
                     int delay = RETRY_DELAYS[attempt];
-                    System.err.println("[retry] " + e.getMessage() + "，第" + (attempt + 1) + "次重试，等待" + delay + "s...");
+                    log.warn("[retry] " + e.getMessage() + "，第" + (attempt + 1) + "次重试，等待" + delay + "s...");
                     try {
                         Thread.sleep(delay * 1000L);
                     } catch (InterruptedException ie) {
@@ -291,7 +289,7 @@ public class HttpModelClient implements ModelClient {
                 int status = response.code();
                 if (retryable(status) && attempt < RETRY_DELAYS.length) {
                     int delay = RETRY_DELAYS[attempt];
-                    System.err.println("[retry] HTTP " + status + "，第" + (attempt + 1) + "次重试，等待" + delay + "s...");
+                    log.warn("[retry] HTTP {} (非流式)，第{}次重试，等待{}s...", status, attempt + 1, delay);
                     Thread.sleep(delay * 1000L);
                     activeCall = null;
                     continue;
@@ -552,7 +550,7 @@ public class HttpModelClient implements ModelClient {
                 log.error("流式API调用IO异常: {}", e.getMessage(), e);
                 if (attempt < RETRY_DELAYS.length) {
                     int delay = RETRY_DELAYS[attempt];
-                    System.err.println("[retry] " + e.getMessage() + "，第" + (attempt + 1) + "次重试，等待" + delay + "s...");
+                    log.warn("[retry] {}，第{}次重试，等待{}s...", e.getMessage(), attempt + 1, delay);
                     try {
                         Thread.sleep(delay * 1000L);
                     } catch (InterruptedException ie) {
