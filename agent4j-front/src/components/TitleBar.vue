@@ -1,5 +1,5 @@
 <template>
-  <header class="titlebar" data-tauri-drag-region @dblclick="toggleMaximize">
+  <header class="titlebar" @dblclick="toggleMaximize">
     <!-- 左侧：侧边栏切换 + Logo + 会话名 -->
     <div class="titlebar-left">
       <button class="tb-btn sidebar-toggle" @click="$emit('toggleSide')" @dblclick.stop :class="{ active: sideOn }" title="切换侧边栏">
@@ -56,7 +56,7 @@
         </svg>
       </button>
 
-      <template v-if="isTauri">
+      <template v-if="isDesktop">
         <!-- 分隔线 -->
         <div class="tb-sep"></div>
 
@@ -90,6 +90,7 @@
 
 <script setup>
 import {onMounted, ref} from 'vue'
+import { platform } from '@/services/platform'
 
 defineProps({
   session: { type: String, default: '' },
@@ -104,37 +105,39 @@ defineProps({
 defineEmits(['toggleSide', 'openSettings', 'clear', 'export', 'toggleGit', 'showUpdate', 'viewPrompt'])
 
 const isMaximized = ref(false)
-const isTauri = ref(false)
-let appWindow = null
+const isDesktop = ref(false)
 
 onMounted(async () => {
   try {
-    const { getCurrentWindow } = await import('@tauri-apps/api/window')
-    appWindow = getCurrentWindow()
-    isTauri.value = true
-    isMaximized.value = await appWindow.isMaximized()
-
-    // 监听窗口状态变化
-    await appWindow.onResized(async () => {
-      isMaximized.value = await appWindow.isMaximized()
-    })
+    isMaximized.value = await platform.implementation.window.isMaximized()
+    isDesktop.value = platform.isElectron
   } catch {
-    // 非 Tauri 环境（浏览器开发模式），静默忽略
+    // 非桌面环境（浏览器），静默忽略
   }
 })
 
 const minimize = async () => {
-  if (appWindow) await appWindow.minimize()
+  try {
+    await platform.implementation.window.minimize()
+  } catch (e) {
+    console.warn('[TitleBar] Failed to minimize:', e)
+  }
 }
 
 const toggleMaximize = async () => {
-  if (appWindow) await appWindow.toggleMaximize()
+  try {
+    await platform.implementation.window.maximize()
+    isMaximized.value = !isMaximized.value
+  } catch (e) {
+    console.warn('[TitleBar] Failed to toggle maximize:', e)
+  }
 }
 
 const closeWindow = async () => {
-  if (appWindow) {
-    await appWindow.close()
-  } else {
+  try {
+    await platform.implementation.window.close()
+  } catch (e) {
+    console.warn('[TitleBar] Failed to close window:', e)
     // 浏览器环境：尝试关闭标签页
     window.close()
   }

@@ -56,7 +56,9 @@
 <script setup>
 import { ref, onMounted } from 'vue'
 import { systemAPI, DEFAULT_API_BASE } from '../services/api'
-import { invoke } from '@tauri-apps/api/core'
+import { platform } from '@/services/platform'
+// 动态获取当前平台的 agent4jWebService
+const { agent4jWebService } = platform.implementation
 
 
 const emit = defineEmits(['connected', 'close'])
@@ -105,29 +107,27 @@ function saveServerUrl(url) {
   }
 }
 
-// 尝试从 Rust 同步最新端口（Tauri 模式下端口会变）
-async function syncPortFromRust() {
+// 尝试从服务同步最新端口（桌面模式下端口会变）
+async function syncPortFromService() {
   try {
-    const port = await invoke('get_agent4j_web_port')
+    const port = await agent4jWebService.getCurrentPort()
     if (port > 0) {
       localStorage.setItem('agent4j-port', String(port))
       const baseUrl = `http://127.0.0.1:${port}`
       localStorage.setItem('agent4j-api-base', baseUrl)
       serverUrl.value = baseUrl
     }
-  } catch { /* 非 Tauri 环境，忽略 */ }
+  } catch { /* 非桌面环境，忽略 */ }
 }
 
 // 关闭程序
 async function handleClose() {
-  // 尝试关闭 Tauri 窗口
+  // 使用平台抽象层关闭窗口
   try {
-    const { getCurrentWindow } = await import('@tauri-apps/api/window')
-    const win = getCurrentWindow()
-    await win.close()
+    await platform.implementation.window.close()
     return
-  } catch {
-    // 非 Tauri 环境
+  } catch (e) {
+    console.warn('[Setup] Failed to close window via platform API:', e)
   }
   // 浏览器环境：尝试关闭标签页
   window.close()
@@ -139,8 +139,8 @@ async function handleClose() {
 
 // 检测连接
 async function handleConnect() {
-  // 连接前先刷新端口（Tauri 下确保是最新的）
-  await syncPortFromRust()
+  // 连接前先刷新端口（桌面环境下确保是最新的）
+  await syncPortFromService()
 
   connecting.value = true
   status.value = 'connecting'
@@ -213,24 +213,22 @@ async function autoConnect() {
   } catch {}
   status.value = 'idle'
 }
-const isTauriEnv = ref(false)
+const isDesktopEnv = ref(false)
 
-// 异步检测 Tauri 环境
-async function detectTauri() {
-  try {
-    const { invoke } = await import('@tauri-apps/api/core')
-    await invoke('get_system_info')
-    isTauriEnv.value = true
-    console.log('[App] Tauri environment detected')
-  } catch {
-    isTauriEnv.value = false
-    console.log('[App] Browser environment detected')
+// 异步检测环境
+async function detectEnvironment() {
+  if (platform.isElectron) {
+    isDesktopEnv.value = true
+    console.log('[Setup] Electron environment detected')
+  } else {
+    isDesktopEnv.value = false
+    console.log('[Setup] Browser environment detected')
   }
 }
 onMounted(() => {
-  detectTauri()
-  // Tauri 模式下 SplashScreen 处理，SetupScreen 不自动连接
-  if (!isTauriEnv.value) {
+  detectEnvironment()
+  // 桌面模式下 SplashScreen 处理，SetupScreen 不自动连接
+  if (!isDesktopEnv.value) {
     autoConnect()
   }
 })

@@ -19,8 +19,8 @@
         </div>
       </template>
 
-      <!-- 非 Tauri 环境：跳过安装 -->
-      <template v-else-if="phase === 'non-tauri'">
+      <!-- Web 环境：跳过安装 -->
+      <template v-else-if="phase === 'waiting'">
         <div class="status-bar status-connecting">
           <span class="status-dot"></span>
           <span>正在连接服务...</span>
@@ -153,13 +153,14 @@
 
 <script setup>
 import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { agent4jWebService } from '@/services/tauri'
-import { invoke } from '@tauri-apps/api/core'
+import { platform } from '@/services/platform'
+// 动态获取当前平台的 agent4jWebService
+const { agent4jWebService } = platform.implementation
 
 const emit = defineEmits(['ready', 'error'])
 
 const visible = ref(true)
-const phase = ref('checking') // checking | confirm | installing | starting | ready | non-tauri | error
+const phase = ref('checking') // checking | confirm | installing | starting | ready | waiting | error
 const installReason = ref('')
 const javaInfo = ref('')
 const errorMessage = ref('')
@@ -174,8 +175,8 @@ const installProgress = ref(0)
 const downloadProgress = ref(null)
 let downloadUnlisten = null
 
-// 是否在 Tauri 环境中
-const isTauri = ref(false)
+// 是否在桌面环境（Electron）中
+const isDesktop = ref(false)
 
 onMounted(async () => {
   await checkEnvironment()
@@ -184,20 +185,20 @@ onMounted(async () => {
 async function checkEnvironment() {
   phase.value = 'checking'
 
-  // 检查是否在 Tauri 环境
-  try {
-    const sysInfo = await invoke('get_system_info')
-    isTauri.value = true
-    console.log('[Splash] Tauri environment:', sysInfo)
-  } catch {
-    // 非 Tauri 环境，直接等待服务
-    console.log('[Splash] Non-Tauri environment, waiting for service...')
-    phase.value = 'non-tauri'
+  // 检查运行环境
+  if (platform.isElectron) {
+    console.log('[Splash] Electron environment detected')
+    isDesktop.value = true
+  } else {
+    console.log('[Splash] Web environment detected')
+    isDesktop.value = false
+    // Web 环境直接等待服务
+    phase.value = 'waiting'
     await waitForService()
     return
   }
 
-  // Tauri 环境：获取资源目录
+  // 桌面环境：获取资源目录
   try {
     const dir = await agent4jWebService.getResourceDir()
     if (dir) {
@@ -233,12 +234,9 @@ async function checkInstall() {
       return
     }
 
-    // 需要安装：检查 Java 并显示确认页
+    // 需要安装：显示确认页
     installReason.value = result.reason
-    try {
-      const sysInfo = await invoke('get_system_info')
-      javaInfo.value = `Java 环境已检测`
-    } catch {}
+    javaInfo.value = '准备安装'
 
     phase.value = 'confirm'
   } catch (e) {
@@ -267,22 +265,21 @@ async function startInstall() {
 
     if (!javaStatus.found) {
       // Java 未安装，启动异步下载（带进度事件）
-      const { listen } = await import('@tauri-apps/api/event')
-      downloadUnlisten = await listen('java-download-progress', (event) => {
-        downloadProgress.value = event.payload
+      downloadUnlisten = await platform.implementation.events.listen('java-download-progress', (payload) => {
+        downloadProgress.value = payload
 
         // 实时更新步骤详情
-        const msg = event.payload.message || ''
-        if (event.payload.phase === 'downloading' && event.payload.total > 0) {
-          const pct = event.payload.percent || 0
-          installSteps.value[0].detail = `${pct}% - ${formatFileSize(event.payload.downloaded)} / ${formatFileSize(event.payload.total)}`
+        const msg = payload.message || ''
+        if (payload.phase === 'downloading' && payload.total > 0) {
+          const pct = payload.percent || 0
+          installSteps.value[0].detail = `${pct}% - ${formatFileSize(payload.downloaded)} / ${formatFileSize(payload.total)}`
         } else {
           installSteps.value[0].detail = msg
         }
 
         // 下载出错
-        if (event.payload.phase === 'error') {
-          throw new Error(event.payload.error || 'JDK 下载失败')
+        if (payload.phase === 'error') {
+          throw new Error(payload.error || 'JDK 下载失败')
         }
       })
 
@@ -368,9 +365,8 @@ async function ensureJreBeforeStart() {
     phase.value = 'installing'
     downloadProgress.value = null
 
-    const { listen } = await import('@tauri-apps/api/event')
-    let unlisten = await listen('java-download-progress', (event) => {
-      downloadProgress.value = event.payload
+    const unlisten = await platform.implementation.events.listen('java-download-progress', (payload) => {
+      downloadProgress.value = payload
     })
 
     await agent4jWebService.startJavaDownload()
@@ -403,10 +399,10 @@ async function startService() {
   startupMessage.value = '正在启动 Java 服务...'
 
   try {
-    // 1) 从 Rust 获取端口（start 命令已启动 Java 进程）
+    // 1) 获取当前端口
     let port = 0
     try {
-      port = await invoke('get_agent4j_web_port')
+      port = await agent4jWebService.getCurrentPort()
     } catch {}
 
     if (port > 0) {
@@ -423,7 +419,7 @@ async function startService() {
         localStorage.setItem('agent4j-api-base', `http://127.0.0.1:${port}`)
         startupMessage.value = `Java 服务已启动，端口 ${port}，等待健康检查...`
       } else {
-        // 非 Tauri：Rust 未返回端口，使用 localStorage 缓存的端口
+        // 未返回端口，使用 localStorage 缓存的端口
         port = parseInt(localStorage.getItem('agent4j-port') || '0', 10)
         if (port > 0) {
           localStorage.setItem('agent4j-api-base', `http://127.0.0.1:${port}`)
@@ -490,7 +486,7 @@ async function pollHealthCheck(port, maxAttempts = 20, intervalMs = 1500) {
 }
 
 async function waitForService() {
-  // 非 Tauri 环境：尝试连接已有服务，或提示用户手动启动
+  // 非桌面环境：尝试连接已有服务，或提示用户手动启动
   try {
     const ready = await agent4jWebService.waitForReady(3, 1500)
     if (ready) {
@@ -501,10 +497,10 @@ async function waitForService() {
       return
     }
 
-    // 默认端口不行，尝试从 Rust 获取
+    // 默认端口不行，尝试从服务获取
     let port = 0
     try {
-      port = await invoke('get_agent4j_web_port')
+      port = await agent4jWebService.getCurrentPort()
     } catch {}
 
     if (port > 0) {
@@ -534,14 +530,12 @@ function retry() {
 }
 
 async function closeApp() {
-  // 尝试关闭 Tauri 窗口
+  // 使用平台抽象层关闭窗口
   try {
-    const { getCurrentWindow } = await import('@tauri-apps/api/window')
-    const win = getCurrentWindow()
-    await win.close()
+    await platform.implementation.window.close()
     return
-  } catch {
-    // 非 Tauri 环境
+  } catch (e) {
+    console.warn('[Splash] Failed to close window via platform API:', e)
   }
   // 浏览器环境
   window.close()

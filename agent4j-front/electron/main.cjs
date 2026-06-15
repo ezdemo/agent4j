@@ -1,0 +1,209 @@
+const { app, BrowserWindow, ipcMain, Menu } = require('electron')
+const path = require('path')
+const { spawn } = require('child_process')
+const fs = require('fs')
+
+const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
+const isWin = process.platform === 'win32'
+
+let mainWindow = null
+let agent4jWebProcess = null
+let currentPort = 0
+
+function getDefaultPort() {
+  try {
+    const cfgPath = isDev
+      ? path.join(__dirname, '../dist/config.json')
+      : path.join(process.resourcesPath, 'dist/config.json')
+    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'))
+    if (cfg.apiBase) {
+      const url = new URL(cfg.apiBase)
+      return parseInt(url.port, 10) || 4567
+    }
+  } catch { /* ignore */ }
+  return 4567
+}
+
+async function healthCheck(port) {
+  try {
+    const resp = await fetch(`http://127.0.0.1:${port}/api/system/health`, {
+      signal: AbortSignal.timeout(3000)
+    })
+    return resp.ok
+  } catch { return false }
+}
+
+// 杀掉整个进程树（包括 java 子进程）
+function killProcessTree(child) {
+  if (!child || child.killed) return
+  const pid = child.pid
+  if (isWin) {
+    // Windows: taskkill /T 杀掉进程树
+    try {
+      spawn('taskkill', ['/pid', String(pid), '/t', '/f'], { stdio: 'ignore' })
+    } catch { /* ignore */ }
+  } else {
+    // macOS/Linux: 负号杀掉整个进程组
+    try {
+      process.kill(-pid, 'SIGTERM')
+      setTimeout(() => {
+        try { process.kill(-pid, 'SIGKILL') } catch { /* already dead */ }
+      }, 3000)
+    } catch { /* already dead */ }
+  }
+}
+
+// 启动 agent4j web <port>
+function startAgent4jWeb(port) {
+  const home = app.getPath('home')
+  const binDir = path.join(home, '.agent4j', 'bin')
+  const binName = isWin ? 'agent4j.bat' : 'agent4j'
+  const binPath = path.join(binDir, binName)
+
+  if (!fs.existsSync(binPath)) {
+    throw new Error(`agent4j not found: ${binPath}`)
+  }
+
+  console.log(`Starting: ${binPath} web ${port}`)
+
+  // macOS/Linux: detached=true 创建新进程组，方便整体 kill
+  // Windows: detached 无意义，靠 taskkill /T 杀树
+  const child = spawn(binPath, ['web', String(port)], {
+    cwd: binDir,
+    shell: true,
+    detached: !isWin,
+    stdio: ['ignore', 'pipe', 'pipe'],
+    windowsHide: true
+  })
+
+  child.stdout.on('data', (d) => console.log(`[agent4j-web] ${d}`))
+  child.stderr.on('data', (d) => console.error(`[agent4j-web] ${d}`))
+
+  child.on('exit', (code) => {
+    console.log(`agent4j-web exited with code ${code}`)
+    agent4jWebProcess = null
+    currentPort = 0
+  })
+
+  child.on('error', (err) => {
+    console.error('agent4j-web spawn error:', err)
+    agent4jWebProcess = null
+    currentPort = 0
+  })
+
+  agent4jWebProcess = child
+  return child
+}
+
+// 统一清理
+function cleanupAgent4jWeb() {
+  if (agent4jWebProcess) {
+    killProcessTree(agent4jWebProcess)
+    agent4jWebProcess = null
+    currentPort = 0
+  }
+}
+
+// ==================== 窗口 ====================
+
+function createWindow() {
+  mainWindow = new BrowserWindow({
+    width: 1200, height: 800,
+    minWidth: 800, minHeight: 600,
+    frame: false,
+    titleBarStyle: 'hidden',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false
+    }
+  })
+
+  mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
+
+  if (isDev) mainWindow.webContents.openDevTools()
+
+  mainWindow.webContents.on('context-menu', (event, params) => {
+    const menu = Menu.buildFromTemplate([
+      { label: '检查元素', click: () => mainWindow.webContents.inspectElement(params.x, params.y) },
+      { type: 'separator' },
+      { role: 'reload', label: '刷新' },
+      { role: 'forceReload', label: '强制刷新' },
+      { role: 'toggleDevTools', label: '开发者工具' }
+    ])
+    menu.popup()
+  })
+
+  mainWindow.on('closed', () => { mainWindow = null })
+}
+
+app.whenReady().then(() => {
+  createWindow()
+  app.on('activate', () => {
+    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+  })
+})
+
+app.on('window-all-closed', () => {
+  cleanupAgent4jWeb()
+  if (process.platform !== 'darwin') app.quit()
+})
+
+app.on('before-quit', () => {
+  cleanupAgent4jWeb()
+})
+
+// ==================== IPC ====================
+
+ipcMain.handle('get_agent4j_web_port', async () => currentPort)
+
+ipcMain.handle('get_agent4j_web_status', async () => ({
+  installed: true,
+  running: agent4jWebProcess !== null,
+  install_dir: path.join(app.getPath('home'), '.agent4j')
+}))
+
+ipcMain.handle('get_resource_dir', async () => {
+  if (app.isPackaged) return path.join(process.resourcesPath, 'resources')
+  return path.join(__dirname, '../resources')
+})
+
+ipcMain.handle('check_install_needed', async () => ({ needed: false, reason: 'electron_mock' }))
+ipcMain.handle('install_agent4j_web', async () => ({ success: true, steps: ['electron_mock_install'] }))
+
+ipcMain.handle('start_agent4j_web', async () => {
+  if (agent4jWebProcess) return currentPort
+
+  const port = getDefaultPort()
+
+  // 先检查服务是否已在运行
+  if (await healthCheck(port)) {
+    console.log(`Agent4j Web already running on port ${port}`)
+    currentPort = port
+    return port
+  }
+
+  // 未运行，启动
+  try {
+    startAgent4jWeb(port)
+    currentPort = port
+    return port
+  } catch (error) {
+    throw new Error(`Failed to start agent4j web: ${error.message}`)
+  }
+})
+
+ipcMain.handle('stop_agent4j_web', async () => {
+  cleanupAgent4jWeb()
+})
+
+ipcMain.handle('check_java_quick', async () => ({ found: true, version: '17.0.0', source: 'electron_mock' }))
+ipcMain.handle('start_java_download', async () => 'started')
+
+ipcMain.handle('window-minimize', () => { if (mainWindow) mainWindow.minimize() })
+ipcMain.handle('window-maximize', () => {
+  if (mainWindow) mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize()
+})
+ipcMain.handle('window-close', () => { if (mainWindow) mainWindow.close() })
+ipcMain.handle('window-is-maximized', () => mainWindow ? mainWindow.isMaximized() : false)
