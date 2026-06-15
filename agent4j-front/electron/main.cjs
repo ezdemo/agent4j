@@ -1,6 +1,6 @@
 const { app, BrowserWindow, ipcMain, Menu } = require('electron')
 const path = require('path')
-const { spawn } = require('child_process')
+const { spawn, execSync } = require('child_process')
 const fs = require('fs')
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
@@ -35,21 +35,30 @@ async function healthCheck(port) {
 
 // 杀掉整个进程树（包括 java 子进程）
 function killProcessTree(child) {
-  if (!child || child.killed) return
+  if (!child) return
   const pid = child.pid
+  if (!pid) return
+
   if (isWin) {
-    // Windows: taskkill /T 杀掉进程树
+    // Windows: taskkill /T /F 同步杀掉整个进程树
     try {
-      spawn('taskkill', ['/pid', String(pid), '/t', '/f'], { stdio: 'ignore' })
-    } catch { /* ignore */ }
+      execSync(`taskkill /pid ${pid} /t /f`, { stdio: 'ignore' })
+    } catch { /* 进程可能已退出 */ }
   } else {
-    // macOS/Linux: 负号杀掉整个进程组
-    try {
-      process.kill(-pid, 'SIGTERM')
-      setTimeout(() => {
-        try { process.kill(-pid, 'SIGKILL') } catch { /* already dead */ }
-      }, 3000)
-    } catch { /* already dead */ }
+    // macOS/Linux: 杀掉整个进程组，同步等待
+    try { process.kill(-pid, 'SIGTERM') } catch { return }
+    // 同步等待进程退出，最多 5 秒
+    const deadline = Date.now() + 5000
+    while (Date.now() < deadline) {
+      try {
+        process.kill(-pid, 0) // 检查进程是否还在
+        execSync('sleep 0.2')
+      } catch {
+        return // 已退出
+      }
+    }
+    // 还没死，强杀
+    try { process.kill(-pid, 'SIGKILL') } catch { /* already dead */ }
   }
 }
 
@@ -57,7 +66,7 @@ function killProcessTree(child) {
 function startAgent4jWeb(port) {
   const home = app.getPath('home')
   const binDir = path.join(home, '.agent4j', 'bin')
-  const binName = isWin ? 'agent4j.bat' : 'agent4j'
+  const binName = isWin ? 'agent4j.ps1' : 'agent4j'
   const binPath = path.join(binDir, binName)
 
   if (!fs.existsSync(binPath)) {
@@ -66,15 +75,27 @@ function startAgent4jWeb(port) {
 
   console.log(`Starting: ${binPath} web ${port}`)
 
-  // macOS/Linux: detached=true 创建新进程组，方便整体 kill
-  // Windows: detached 无意义，靠 taskkill /T 杀树
-  const child = spawn(binPath, ['web', String(port)], {
-    cwd: binDir,
-    shell: true,
-    detached: !isWin,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    windowsHide: true
-  })
+  let child
+  if (isWin) {
+    // Windows: 用 PowerShell 执行 .ps1 脚本
+    child = spawn('powershell', [
+      '-ExecutionPolicy', 'Bypass',
+      '-NoProfile',
+      '-File', binPath,
+      'web', String(port)
+    ], {
+      cwd: binDir,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true
+    })
+  } else {
+    // macOS/Linux: 直接执行
+    child = spawn(binPath, ['web', String(port)], {
+      cwd: binDir,
+      detached: true,
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+  }
 
   child.stdout.on('data', (d) => console.log(`[agent4j-web] ${d}`))
   child.stderr.on('data', (d) => console.error(`[agent4j-web] ${d}`))
