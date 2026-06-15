@@ -7,11 +7,16 @@ export default {
     asarUnpack: ['dist/**'],
   },
   makers: [
-    // Windows - Squirrel installer
+    // Windows - NSIS 安装器（替代 Squirrel）
     {
-      name: '@electron-forge/maker-squirrel',
+      name: '@felixrieseberg/electron-forge-maker-nsis',
       config: {
-        name: 'Agent4j',
+        // 可选：创建桌面快捷方式
+        createDesktopShortcut: true,
+        // 可选：一键安装模式
+        oneClick: false,
+        // 允许用户选择安装目录
+        allowToChangeInstallationDirectory: true,
       },
     },
     // macOS - ZIP (可进一步转为 DMG)

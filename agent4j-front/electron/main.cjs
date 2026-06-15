@@ -3,6 +3,46 @@ const path = require('path')
 const { spawn, execSync } = require('child_process')
 const fs = require('fs')
 
+// ==================== Squirrel 安装事件处理 ====================
+// Squirrel 安装/卸载时会以特定参数启动应用，需要处理并立即退出
+const handleSquirrelEvent = () => {
+  if (process.argv.length === 1) return false
+  const appFolder = path.resolve(process.execPath, '..')
+  const rootAtomFolder = path.resolve(appFolder, '..')
+  const updateDotExe = path.resolve(rootAtomFolder, 'Update.exe')
+  const exeName = path.basename(process.execPath)
+
+  const spawnProcess = (command, args) => {
+    try {
+      return spawn(command, args, { detached: true })
+    } catch { return null }
+  }
+
+  const squirrelEvent = process.argv[1]
+  switch (squirrelEvent) {
+    case '--squirrel-install':
+    case '--squirrel-updated':
+      // 创建开始菜单和桌面快捷方式
+      spawnProcess(updateDotExe, ['--createShortcut', exeName])
+      setTimeout(app.quit, 1000)
+      return true
+    case '--squirrel-uninstall':
+      // 移除快捷方式
+      spawnProcess(updateDotExe, ['--removeShortcut', exeName])
+      setTimeout(app.quit, 1000)
+      return true
+    case '--squirrel-obsolete':
+      app.quit()
+      return true
+  }
+  return false
+}
+
+if (handleSquirrelEvent()) {
+  // Squirrel 事件已处理，应用将在短暂延迟后退出
+  // 这里不需要执行任何其他逻辑
+}
+
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 const isWin = process.platform === 'win32'
 
