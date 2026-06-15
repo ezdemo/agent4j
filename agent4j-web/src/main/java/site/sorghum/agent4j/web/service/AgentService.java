@@ -745,7 +745,7 @@ public class AgentService {
             }
 
             // 设置 AgentOutput：将所有事件桥接到 SSE
-            agent.setOutput(new SseAgentOutput(emitter, agent));
+            agent.setOutput(new SseAgentOutput(emitter));
 
             // 设置会话ID到 AgentLoop
             String sessionId = sessionName != null ? sessionName : "default";

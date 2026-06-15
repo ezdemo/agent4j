@@ -38,7 +38,7 @@
     "@vue/eslint-config-prettier": "^9.0.0",
     "@vue/test-utils": "^2.4.4",
     "electron": "^42.4.0",
-    "electron-builder": "^25.1.8",
+    "electron-builder": "^26.15.3",
     "eslint": "^8.57.0",
     "eslint-plugin-vue": "^9.22.0",
     "jsdom": "^24.0.0",
