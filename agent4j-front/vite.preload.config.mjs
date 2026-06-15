@@ -1,9 +1,13 @@
 import {defineConfig} from 'vite'
 
 // Vite 配置 — 预加载脚本
-// 注意：不需要指定 build.lib.entry，插件会根据 forge.config.js 自动注入
 export default defineConfig({
   build: {
+    lib: {
+      entry: 'electron/preload.cjs',
+      fileName: () => '[name].cjs',
+      formats: ['cjs'],
+    },
     rollupOptions: {
       external: ['electron'],
     },
