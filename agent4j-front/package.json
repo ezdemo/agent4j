@@ -2,7 +2,7 @@
   "name": "agent4j-front",
   "version": "1.0.0",
   "private": true,
-  "main": "electron/main.cjs",
+  "main": ".vite/build/main.js",
   "type": "module",
   "description": "Agent4j - 智能AI代码助手前端",
   "author": "Agent4j Team",
@@ -16,11 +16,13 @@
     "test": "vitest",
     "test:ui": "vitest --ui",
     "test:coverage": "vitest --coverage",
-    "electron:dev": "vite build && set NODE_ENV=development && electron .",
-    "electron:build": "vite build && electron-builder",
-    "electron:build:win": "vite build && electron-builder --win",
-    "electron:build:mac": "vite build && electron-builder --mac",
-    "electron:build:linux": "vite build && electron-builder --linux"
+    "electron:dev": "electron-forge start",
+    "electron:start": "electron-forge start",
+    "electron:package": "electron-forge package",
+    "electron:make": "electron-forge make",
+    "electron:make:win": "electron-forge make --platform=win32",
+    "electron:make:mac": "electron-forge make --platform=darwin",
+    "electron:make:linux": "electron-forge make --platform=linux"
   },
   "dependencies": {
     "@ant-design/icons-vue": "^7.0.1",
@@ -37,8 +39,13 @@
     "@vitejs/plugin-vue-jsx": "^3.1.0",
     "@vue/eslint-config-prettier": "^9.0.0",
     "@vue/test-utils": "^2.4.4",
+    "@electron-forge/cli": "^7.6.0",
+    "@electron-forge/maker-deb": "^7.6.0",
+    "@electron-forge/maker-rpm": "^7.6.0",
+    "@electron-forge/maker-squirrel": "^7.6.0",
+    "@electron-forge/maker-zip": "^7.6.0",
+    "@electron-forge/plugin-vite": "^7.6.0",
     "electron": "^42.4.0",
-    "electron-builder": "^26.15.3",
     "eslint": "^8.57.0",
     "eslint-plugin-vue": "^9.22.0",
     "jsdom": "^24.0.0",
@@ -70,7 +77,8 @@
       "electron",
       "esbuild",
       "core-js",
-      "vue-demi"
+      "vue-demi",
+      "electron-winstaller"
     ]
   }
 }
