@@ -6,6 +6,7 @@ import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import org.noear.solon.ai.chat.ChatModel;
 import org.noear.solon.ai.chat.ChatResponse;
+import site.sorghum.agent4j.bin.model.HttpModelClient;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.common.entity.ProcessResult;
 import site.sorghum.agent4j.web.model.*;
@@ -605,9 +606,10 @@ public class GitService {
         }
 
         // 构建 Solon ChatModel（轻量、无推理）
+        // 剥离模型名称中的上下文大小后缀，例如 "mimo-v2.5[512k]" → "mimo-v2.5"
         ChatModel chatModel = ChatModel.of(apiUrl)
                 .apiKey(apiKey)
-                .model(model)
+                .model(HttpModelClient.stripContextSizeSuffix(model))
                 .modelOptions(o -> {
                     o.temperature(0.1);
                     o.optionSet("chat_template_kwargs", ONode.ofJson("{}").set("enable_thinking", false));
