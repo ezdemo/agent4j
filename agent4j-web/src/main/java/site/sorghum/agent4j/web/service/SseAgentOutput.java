@@ -1,7 +1,6 @@
 package site.sorghum.agent4j.web.service;
 
 import org.noear.snack4.ONode;
-import site.sorghum.agent4j.bin.agent.Agent4jAgent;
 import site.sorghum.agent4j.tool.AgentOutput;
 import site.sorghum.agent4j.tool.ChoiceOption;
 import site.sorghum.agent4j.tool.LogLevel;
@@ -19,11 +18,9 @@ import java.util.Map;
 public class SseAgentOutput implements AgentOutput {
 
     private final SseEmitter emitter;
-    private final Agent4jAgent agent;
 
-    public SseAgentOutput(SseEmitter emitter, Agent4jAgent agent) {
+    public SseAgentOutput(SseEmitter emitter) {
         this.emitter = emitter;
-        this.agent = agent;
     }
 
     @Override
@@ -61,14 +58,12 @@ public class SseAgentOutput implements AgentOutput {
     public void onUsage(int promptTokens, int completionTokens, int totalTokens,
                         int cacheHit, int cacheMiss) {
         emitter.sendUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
-        agent.addUsage(promptTokens, completionTokens, cacheHit, cacheMiss);
     }
 
     @Override
     public void onUsage(String model, int promptTokens, int completionTokens, int totalTokens,
                         int cacheHit, int cacheMiss) {
         emitter.sendUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
-        agent.addUsage(model, promptTokens, completionTokens, cacheHit, cacheMiss);
     }
 
     @Override
