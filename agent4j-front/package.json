@@ -2,7 +2,7 @@
   "name": "agent4j-front",
   "version": "1.0.0",
   "private": true,
-  "main": ".vite/build/main.js",
+  "main": ".vite/build/main.cjs",
   "type": "module",
   "description": "Agent4j - 智能AI代码助手前端",
   "author": "Agent4j Team",

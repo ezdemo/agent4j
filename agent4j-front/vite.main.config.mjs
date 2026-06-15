@@ -1,10 +1,14 @@
 import {defineConfig} from 'vite'
 
 // Vite 配置 — 主进程
-// 注意：不需要指定 build.lib.entry，插件会根据 forge.config.js 自动注入
-// 也不需要指定 build.lib.formats，插件默认使用 cjs
+// 需要指定 entry + fileName(.cjs)，避免 "type": "module" 导致 ESM 报错
 export default defineConfig({
   build: {
+    lib: {
+      entry: 'electron/main.cjs',
+      fileName: () => '[name].cjs',
+      formats: ['cjs'],
+    },
     rollupOptions: {
       external: ['electron'],
     },
