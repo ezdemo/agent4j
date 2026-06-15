@@ -152,8 +152,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onUnmounted } from 'vue'
-import { platform } from '@/services/platform'
+import {onMounted, ref} from 'vue'
+import {platform} from '@/services/platform'
 // 动态获取当前平台的 agent4jWebService
 const { agent4jWebService } = platform.implementation
 
@@ -486,8 +486,13 @@ async function pollHealthCheck(port, maxAttempts = 20, intervalMs = 1500) {
 }
 
 async function waitForService() {
-  // 非桌面环境：尝试连接已有服务，或提示用户手动启动
+  // 非桌面环境：尝试连接已有服务
+  // web 环境下始终使用 config.json 中的 apiBase 配置，不自行拼接端口
   try {
+    const baseUrl = await agent4jWebService.getBaseUrl()
+    console.log('[Splash] Web environment, base URL:', baseUrl || '(同域)')
+
+    // 尝试连接服务
     const ready = await agent4jWebService.waitForReady(3, 1500)
     if (ready) {
       phase.value = 'ready'
@@ -497,28 +502,12 @@ async function waitForService() {
       return
     }
 
-    // 默认端口不行，尝试从服务获取
-    let port = 0
-    try {
-      port = await agent4jWebService.getCurrentPort()
-    } catch {}
-
-    if (port > 0) {
-      localStorage.setItem('agent4j-api-base', `http://127.0.0.1:${port}`)
-      localStorage.setItem('agent4j-port', String(port))
-      const ready2 = await agent4jWebService.waitForReady(3, 1000)
-      if (ready2) {
-        phase.value = 'ready'
-        await sleep(500)
-        visible.value = false
-        emit('ready')
-        return
-      }
-    }
-
-    // 都不行：显示错误，让用户手动启动
+    // 服务不可达，显示错误
+    const hint = baseUrl
+      ? `请确认 ${baseUrl}/api/system/health 可访问`
+      : '请确认后端服务已启动并在同域下提供 /api 接口'
     phase.value = 'error'
-    errorMessage.value = '无法连接服务，请确认 agent4j-web 已启动'
+    errorMessage.value = `无法连接服务。${hint}`
   } catch (e) {
     phase.value = 'error'
     errorMessage.value = e.message || '连接服务失败'
