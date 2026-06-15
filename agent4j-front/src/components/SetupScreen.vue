@@ -196,7 +196,7 @@ async function handleCheckVersion() {
 // 自动连接：尝试连接已保存的地址
 async function autoConnect() {
   // 先同步最新端口
-  await syncPortFromRust()
+  await syncPortFromService()
 
   const saved = localStorage.getItem('agent4j-api-base')
   if (saved) {

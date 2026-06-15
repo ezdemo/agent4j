@@ -76,6 +76,7 @@
       :session-name="currentSession"
       :sessions="sessions"
       @close="rightPanelOpen = false"
+      @element-send="onElementSend"
     />
 
       <!-- 系统提示词 Modal -->
@@ -359,6 +360,27 @@ const initialDataLoaded = ref(false)
 function toggleRightPanel() {
   rightPanelOpen.value = !rightPanelOpen.value
 }
+
+// 元素面板发送消息 → 直接发给当前会话的 AI
+function onElementSend(payload) {
+  const comp = payload.component
+  // 组装完整元素信息为 Markdown
+  let md = '---\n'
+  md += '**组件路径:** ' + (comp.path ? comp.path.join(' > ') : comp.name) + '\n'
+  md += '**文件路径:** ' + (comp.file || '-') + '\n'
+  md += '**标签:** `' + (comp.tag || '-') + '`\n'
+  md += '**文本:** ' + (comp.text || '-') + '\n'
+  md += '**CSS 选择器:** `' + (comp.selector || '-') + '`\n'
+  if (comp.attrs && comp.attrs.length) {
+    md += '**属性:** '
+    md += comp.attrs.map(a => '`' + a.key + '="' + a.val + '"`').join(' ')
+    md += '\n'
+  }
+  md += '---\n'
+  md += payload.message
+  chatRef.value?.sendCommand?.(md)
+}
+
 const chatRef = ref(null)
 const dashboardRef = ref(null)
 const workspace = ref('')
