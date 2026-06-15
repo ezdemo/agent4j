@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.bin.agent.ChatMessage;
 import site.sorghum.agent4j.bin.agent.ToolCallEntry;
 import site.sorghum.agent4j.bin.util.ONodeUtil;
+import site.sorghum.agent4j.tool.interact.FinishTool;
 
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -418,6 +419,9 @@ public class JsonlSessionStore implements SessionStore {
                 log.warn("[jsonl] 解析消息行失败: {}", e.getMessage());
             }
         }
+        messages = messages.stream().filter(
+                it -> !(it.isUser() && Objects.equals(FinishTool.TIPS,it.getContent()))
+        ).toList();
         return messages;
     }
 
