@@ -65,7 +65,7 @@
         <SchedulePanel ref="scheduleRef" :workspace-hash="workspaceHash" :session-name="sessionName" :sessions="sessions" />
       </div>
       <div v-show="modelValue === 'element'" class="rp-page">
-        <ElementPanel ref="elementRef" />
+        <ElementPanel ref="elementRef" @send="onElementSend" />
       </div>
     </div>
   </div>
@@ -90,7 +90,7 @@ const props = defineProps({
   sessions: { type: Array, default: () => [] }
 })
 
-defineEmits(['update:modelValue', 'close'])
+const emit = defineEmits(['update:modelValue', 'close', 'element-send'])
 
 const panelRef = ref(null)
 const gitRef = ref(null)
@@ -98,6 +98,11 @@ const scheduleRef = ref(null)
 const elementRef = ref(null)
 const isDragging = ref(false)
 const panelWidth = ref(DEFAULT_WIDTH)
+
+function onElementSend(payload) {
+  // 向父组件传递元素选取结果和用户消息
+  emit('element-send', payload)
+}
 
 // 加载保存的宽度
 onMounted(() => {
