@@ -12,13 +12,23 @@ let currentPort = 0
 
 function getDefaultPort() {
   try {
-    const cfgPath = isDev
-      ? path.join(__dirname, '../dist/config.json')
-      : path.join(process.resourcesPath, 'dist/config.json')
-    const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'))
-    if (cfg.apiBase) {
-      const url = new URL(cfg.apiBase)
-      return parseInt(url.port, 10) || 4567
+    // 尝试多个可能路径查找 config.json
+    const candidates = []
+    if (isDev) {
+      // 开发环境：通过 Vite dev server 获取，或从源码目录读取
+      candidates.push(path.join(__dirname, '..', '..', 'public', 'config.json'))
+    } else {
+      // 生产环境：从 resources 中读取
+      candidates.push(path.join(process.resourcesPath, '.vite', 'renderer', 'main_window', 'config.json'))
+    }
+    for (const cfgPath of candidates) {
+      if (fs.existsSync(cfgPath)) {
+        const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'))
+        if (cfg.apiBase) {
+          const url = new URL(cfg.apiBase)
+          return parseInt(url.port, 10) || 4567
+        }
+      }
     }
   } catch { /* ignore */ }
   return 4567
@@ -134,14 +144,22 @@ function createWindow() {
     frame: false,
     titleBarStyle: 'hidden',
     webPreferences: {
-      preload: path.join(__dirname, 'preload.cjs'),
+      // Vite plugin 将 preload 构建到 .vite/build/preload.js
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false
     }
   })
 
-  mainWindow.loadFile(path.join(__dirname, '../dist/index.html'))
+  // 使用 Electron Forge Vite plugin 提供的全局变量
+  // MAIN_WINDOW_VITE_DEV_SERVER_URL: 开发服务器 URL
+  // MAIN_WINDOW_VITE_NAME: 渲染器构建输出目录名
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL)
+  } else {
+    mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`))
+  }
 
   if (isDev) mainWindow.webContents.openDevTools()
 
