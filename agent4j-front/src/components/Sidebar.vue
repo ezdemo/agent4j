@@ -553,8 +553,9 @@ const formatName = (n) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 6px;
+  gap: 4px;
+  padding: 6px 4px;
+  white-space: nowrap;
   border-radius: var(--r);
   font-size: 12px;
   color: var(--fg-3);
