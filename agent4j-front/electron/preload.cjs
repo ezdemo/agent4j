@@ -35,7 +35,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     }
   },
-  
+
+  // 元素检测（跨域 iframe 穿透）
+  inspector: {
+    inject: () => ipcRenderer.invoke('inspector-inject'),
+    remove: () => ipcRenderer.invoke('inspector-remove')
+  },
+
   // 平台信息
   platform: process.platform,
   

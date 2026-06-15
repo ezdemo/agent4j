@@ -139,7 +139,7 @@
 </template>
 
 <script setup>
-import { ref, onBeforeUnmount, onMounted, watch, nextTick } from 'vue'
+import {nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 
 const props = defineProps({
   workspaceHash: { type: String, default: null },
@@ -205,11 +205,32 @@ function toggleDesignMode() {
   }
 }
 
-// 向 iframe 注入检测脚本（仅同源有效）
-function injectInspector() {
+// 向 iframe 注入检测脚本
+// Electron 模式：通过 IPC 由主进程注入，突破跨域限制
+// 普通模式：直接访问 contentDocument（仅同源有效）
+async function injectInspector() {
   const frame = frameRef.value
-  if (!frame || !frame.contentDocument) {
+  if (!frame) {
     console.warn('[ElementPanel] iframe 未就绪，无法注入')
+    crossOrigin.value = true
+    designMode.value = false
+    return
+  }
+
+  // ---- Electron 模式：通过主进程注入（无视跨域） ----
+  if (window.electronAPI?.inspector) {
+    const result = await window.electronAPI.inspector.inject()
+    if (result.success) {
+      console.log('[ElementPanel] Electron 模式：检测脚本已注入')
+      return  // designMode 保持 true
+    }
+    console.warn('[ElementPanel] Electron 注入失败:', result.reason)
+    // 降级到普通模式
+  }
+
+  // ---- 普通模式：直接 DOM 访问（仅同源） ----
+  if (!frame.contentDocument) {
+    console.warn('[ElementPanel] iframe 跨域，无法注入')
     crossOrigin.value = true
     designMode.value = false
     return
@@ -248,9 +269,17 @@ function injectInspector() {
   }
 }
 
-function removeInspector() {
+async function removeInspector() {
   const frame = frameRef.value
   if (!frame) return
+
+  // ---- Electron 模式：通过主进程移除 ----
+  if (window.electronAPI?.inspector) {
+    await window.electronAPI.inspector.remove()
+    return
+  }
+
+  // ---- 普通模式 ----
   try {
     const doc = frame.contentDocument
     if (doc) {
@@ -531,8 +560,29 @@ function onKeydown(e) {
   }
 }
 
+/**
+ * 接收 Electron 模式下从 iframe 通过 postMessage 传来的元素点击信息
+ */
+function onFrameMessage(e) {
+  if (!e.data || e.data.type !== 'agent4j-element-click') return
+  const data = e.data
+  console.log('[ElementPanel] 收到元素点击数据:', data.tag)
+
+  selectedComponent.value = {
+    name: data.vueComponent?.name || '原生元素（无 Vue 组件包裹）',
+    tag: data.tag || '?',
+    text: data.text || '',
+    selector: data.selector || '',
+    attrs: data.attrs || [],
+    file: data.vueComponent?.file || '',
+    path: data.path || [],
+    children: data.children || []
+  }
+}
+
 onMounted(() => {
   document.addEventListener('keydown', onKeydown)
+  window.addEventListener('message', onFrameMessage)
 })
 
 // 弹窗打开时自动聚焦输入框
@@ -547,6 +597,7 @@ watch(selectedComponent, (val) => {
 onBeforeUnmount(() => {
   removeInspector()
   document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('message', onFrameMessage)
   clearTimeout(loadedTimer)
 })
 </script>

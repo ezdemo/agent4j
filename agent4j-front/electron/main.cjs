@@ -228,3 +228,226 @@ ipcMain.handle('window-maximize', () => {
 })
 ipcMain.handle('window-close', () => { if (mainWindow) mainWindow.close() })
 ipcMain.handle('window-is-maximized', () => mainWindow ? mainWindow.isMaximized() : false)
+
+// ==================== Element Inspector (跨域穿透) ====================
+
+/** 在主窗口的 child frame 中寻找 ElementPanel 的 iframe */
+function findIframeFrame(frame) {
+  if (!frame || !frame.frames) return null
+  // 优先找第一个 loaded 的直接子 frame
+  for (const child of frame.frames) {
+    if (child.url && child.url !== 'about:blank') {
+      return child
+    }
+  }
+  // 没有直接子 frame，递归查找
+  for (const child of frame.frames) {
+    const found = findIframeFrame(child)
+    if (found) return found
+  }
+  return null
+}
+
+/**
+ * 注入元素检测脚本到 iframe
+ * 利用 Electron 主进程权限，跨域 iframe 也能执行 JS
+ */
+ipcMain.handle('inspector-inject', async () => {
+  if (!mainWindow) return { success: false, reason: 'no_window' }
+
+  const iframeFrame = findIframeFrame(mainWindow.webContents.mainFrame)
+  if (!iframeFrame) return { success: false, reason: 'no_iframe' }
+
+  const code = `
+(function(){
+  if(window.__agent4jInspectorInjected) return;
+  window.__agent4jInspectorInjected = true;
+
+  var oldStyle = document.getElementById('__agent4j_elem_style');
+  if(oldStyle) oldStyle.remove();
+
+  // ---- 注入高亮样式 ----
+  var style = document.createElement('style');
+  style.id = '__agent4j_elem_style';
+  style.textContent = '*.__agent4j-highlight{outline:2px dashed #2563eb !important;outline-offset:2px !important;background:rgba(37,99,235,0.08) !important;cursor:crosshair !important}';
+  document.head.appendChild(style);
+
+  // ---- 工具函数：安全序列化值（postMessage 要求可结构化克隆） ----
+  function safeProp(v){
+    if(v===null||v===undefined) return '';
+    var t=typeof v;
+    if(t==='string'||t==='number'||t==='boolean') return v;
+    if(t==='function') return '\u0192()';
+    if(t==='symbol') return v.toString();
+    try{ return JSON.parse(JSON.stringify(v)); }catch(e){ return String(v); }
+  }
+
+  // ---- 工具函数：提取 Vue 组件信息 ----
+  function getVueInfo(el){
+    try{
+      var vn = el.__vueParentComponent;
+      if(vn){
+        var type = vn.type;
+        var name = typeof type === 'object' ? (type.name || type.__name || type.displayName || 'Anonymous') : '' + type;
+        var props = {};
+        if(vn.props) for(var k in vn.props){
+          if(vn.props.hasOwnProperty(k) && k.indexOf('on')!==0 && k.indexOf('$')!==0)
+            props[k] = safeProp(vn.props[k]);
+        }
+        var children = [];
+        try{ if(type.components) children = Object.keys(type.components).filter(function(x){return x!=='Fragment'&&x!=='Teleport'&&x!=='Suspense'}); }catch(e){}
+        return {name:name, props:props, file:type.__file||type.__source||'', children:children};
+      }
+      // 尝试 __vnode
+      var vnd = el.__vnode;
+      if(vnd && vnd.component){
+        var comp = vnd.component, type2 = comp.type;
+        var name2 = typeof type2 === 'object' ? (type2.name||type2.__name||type2.displayName||'Anonymous') : ''+type2;
+        var props2 = {};
+        if(comp.props) for(var k2 in comp.props){ if(k2.indexOf('on')!==0) props2[k2] = safeProp(comp.props[k2]); }
+        var children2 = [];
+        try{ if(type2.components) children2 = Object.keys(type2.components).filter(function(x){return x!=='Fragment'&&x!=='Teleport'&&x!=='Suspense'}); }catch(e){}
+        return {name:name2, props:props2, file:type2.__file||type2.__source||'', children:children2};
+      }
+    }catch(e){}
+    return null;
+  }
+
+  // ---- 工具函数：提取元素属性 ----
+  function getAttrs(el){
+    if(!el||!el.attributes) return [];
+    var keep = ['id','class','type','name','value','placeholder','href','src','alt','title','role','for','data-v-','aria-'];
+    var r = [];
+    for(var i=0;i<el.attributes.length;i++){
+      var a=el.attributes[i], n=a.name, v=a.value;
+      if(!v&&v!=='') continue;
+      if(n==='style'||n==='class') continue;
+      if(v.length>50) continue;
+      for(var j=0;j<keep.length;j++){ if(n===keep[j]||n.indexOf(keep[j])===0){ r.push({key:n, val:v.length>40?v.substring(0,40)+'\u2026':v}); break; } }
+    }
+    return r;
+  }
+
+  // ---- 工具函数：构建 CSS 选择器 ----
+  function getSelector(el){
+    var parts=[], cur=el, max=10;
+    while(cur&&cur!==document.body&&max-->0){
+      var seg=cur.tagName.toLowerCase();
+      if(cur.id){ parts.unshift('#'+cur.id); break; }
+      if(cur.className&&typeof cur.className==='string'){
+        var cls=cur.className.trim().split(/\\s+/).filter(function(c){return c&&c.indexOf('__agent4j')!==0&&c!=='active'&&c!=='selected'&&c!=='hover';}).slice(0,2);
+        if(cls.length) seg+='.'+cls.join('.');
+      }
+      var p=cur.parentElement;
+      if(p){
+        var sib=[].filter.call(p.children,function(s){return s.tagName===cur.tagName;});
+        if(sib.length>1){ var idx=sib.indexOf(cur)+1; seg+=':nth-child('+idx+')'; }
+      }
+      parts.unshift(seg);
+      cur=cur.parentElement;
+    }
+    return parts.join(' > ');
+  }
+
+  // ---- 组件路径（向上查找） ----
+  function buildCompPath(el, vueInfo){
+    var path=[];
+    if(vueInfo&&vueInfo.name&&vueInfo.name!=='Anonymous'){
+      var cur=el.parentElement;
+      while(cur&&cur!==document.body){
+        var pinfo=getVueInfo(cur);
+        if(pinfo&&pinfo.name!=='Anonymous'&&pinfo.name!=='Transition'&&pinfo.name!=='KeepAlive'&&pinfo.name.indexOf('V')!==0){
+          if(path.indexOf(pinfo.name)===-1) path.unshift(pinfo.name);
+        }
+        cur=cur.parentElement;
+      }
+      if(path.indexOf(vueInfo.name)===-1) path.push(vueInfo.name);
+    }
+    return path;
+  }
+
+  // ---- 点击元素 ----
+  document.addEventListener('click', function(e){
+    e.stopPropagation();
+    e.preventDefault();
+    var el=e.target; if(!el) return;
+    try{
+      var vueInfo=getVueInfo(el);
+      var attrs=getAttrs(el);
+      var selector=getSelector(el);
+      var text=(el.textContent||'').trim();
+      if(text.length>60) text=text.substring(0,60)+'\u2026';
+      var path=buildCompPath(el, vueInfo);
+
+      window.parent.postMessage({
+        type:'agent4j-element-click',
+        tag:el.tagName?el.tagName.toLowerCase():'?',
+        text:text,
+        selector:selector,
+        attrs:attrs,
+        id:el.id||'',
+        vueComponent:vueInfo,
+        path:path,
+        children:vueInfo?vueInfo.children:[]
+      }, '*');
+    }catch(pe){
+      // postMessage 结构化克隆失败，发送最小数据
+      try{
+        window.parent.postMessage({
+          type:'agent4j-element-click',
+          tag:el.tagName?el.tagName.toLowerCase():'?',
+          text:(el.textContent||'').trim().substring(0,60),
+          selector:'',
+          attrs:[],
+          id:el.id||'',
+          vueComponent:{name:'\u6dfb\u52a0\u7ec4\u4ef6',props:{},file:'',children:[]},
+          path:[],
+          children:[]
+        }, '*');
+      }catch(e2){}
+    }
+  }, true);
+
+  // ---- 悬停高亮 ----
+  document.addEventListener('mouseover', function(e){
+    try{
+      [].forEach.call(document.querySelectorAll('.__agent4j-highlight'), function(el){el.classList.remove('__agent4j-highlight');});
+      e.target.classList.add('__agent4j-highlight');
+    }catch(ex){}
+  }, true);
+
+  document.addEventListener('mouseout', function(e){
+    try{ e.target.classList.remove('__agent4j-highlight'); }catch(ex){}
+  }, true);
+})();
+`
+
+  try {
+    await iframeFrame.executeJavaScript(code)
+    return { success: true }
+  } catch (e) {
+    return { success: false, reason: e.message }
+  }
+})
+
+/** 移除 iframe 中的检测脚本 */
+ipcMain.handle('inspector-remove', async () => {
+  if (!mainWindow) return { success: false }
+
+  const iframeFrame = findIframeFrame(mainWindow.webContents.mainFrame)
+  if (!iframeFrame) return { success: false }
+
+  try {
+    await iframeFrame.executeJavaScript(`
+      (function(){
+        var s=document.getElementById('__agent4j_elem_style');
+        if(s) s.remove();
+        [].forEach.call(document.querySelectorAll('.__agent4j-highlight'),function(el){el.classList.remove('__agent4j-highlight');});
+        window.__agent4jInspectorInjected = false;
+      })();
+    `)
+    return { success: true }
+  } catch (e) {
+    return { success: false }
+  }
+})
