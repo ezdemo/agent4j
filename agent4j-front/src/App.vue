@@ -1,16 +1,16 @@
 ﻿<template>
   <div class="app" :data-theme="theme">
-    <!-- 启动画面 (仅 Tauri 环境) -->
+    <!-- 启动画面 (仅桌面环境) -->
     <SplashScreen
-      v-if="showSetup && isTauriEnv"
+      v-if="showSetup && isDesktopEnv"
       ref="splashRef"
       @ready="onSplashReady"
       @error="onSplashError"
     />
 
-    <!-- 连接设置（非 Tauri 环境，后端未连上时显示） -->
+    <!-- 连接设置（Web 环境，后端未连上时显示） -->
     <SetupScreen
-      v-if="showSetup && !isTauriEnv"
+      v-if="showSetup && !isDesktopEnv"
       @connected="onConnected"
       @close="onSetupClose"
     />
@@ -149,7 +149,7 @@
                 style="display:none"
                 @change="onFolderPicked"
               />
-              <button v-if="isTauriEnv" class="btn-icon-sm" title="选择文件夹（仅桌面端）" @click="openFolderPicker">
+              <button v-if="isDesktopEnv" class="btn-icon-sm" title="选择文件夹（仅桌面端）" @click="openFolderPicker">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
                 </svg>
@@ -318,6 +318,7 @@ import RightPanel from './components/RightPanel.vue'
 import ChatView from './views/Chat.vue'
 import SettingsView from './views/Settings.vue'
 import DashboardPanel from './components/Dashboard.vue'
+import { platform } from '@/services/platform'
 
 const store = useAppStore()
 const router = useRouter()
@@ -334,18 +335,16 @@ const tools = ref([])
 const config = ref({})
 const showTools = ref(false)
 const refreshingTools = ref(false)
-const isTauriEnv = ref(false)
-const showSetup = ref(true)  // SplashScreen (Tauri) 或 SetupScreen (非Tauri) 成功后设为 false
+const isDesktopEnv = ref(false)
+const showSetup = ref(true)  // SplashScreen (桌面) 或 SetupScreen (Web) 成功后设为 false
 
-// 异步检测 Tauri 环境
-async function detectTauri() {
-  try {
-    const { invoke } = await import('@tauri-apps/api/core')
-    await invoke('get_system_info')
-    isTauriEnv.value = true
-    console.log('[App] Tauri environment detected')
-  } catch {
-    isTauriEnv.value = false
+// 异步检测环境
+async function detectEnvironment() {
+  if (platform.isElectron) {
+    isDesktopEnv.value = true
+    console.log('[App] Electron environment detected')
+  } else {
+    isDesktopEnv.value = false
     console.log('[App] Browser environment detected')
   }
 }
@@ -418,14 +417,14 @@ const newWorkspacePath = ref('')
 const workspacePathInput = ref(null)
 const folderPicker = ref(null)
 
-// 打开文件夹选择器（Tauri桌面端用原生对话框，浏览器用输入框）
+// 打开文件夹选择器（桌面端用原生对话框，浏览器用输入框）
 const openFolderPicker = async () => {
-  if (isTauriEnv.value) {
+  if (platform.isElectron) {
     try {
-      const { invoke } = await import('@tauri-apps/api/core')
-      const path = await invoke('pick_folder')
-      if (path) {
-        newWorkspacePath.value = path
+      // Electron 环境：使用原生对话框（通过 IPC）
+      const result = await window.electronAPI.agent4jWebService.pickFolder()
+      if (result) {
+        newWorkspacePath.value = result
       }
     } catch (e) {
       console.error('选择文件夹失败:', e)
@@ -511,7 +510,7 @@ const onConnected = () => {
   startHeartbeat()
 }
 
-// 用户关闭设置页（仅非 Tauri 浏览器环境走到这里）
+// 用户关闭设置页（仅 Web 环境走到这里）
 const onSetupClose = () => {
   showSetup.value = false
   loadData()
@@ -871,12 +870,12 @@ const clearChat = async () => {
 }
 
 onMounted(async () => {
-  // 先检测 Tauri 环境，再决定显示哪个启动屏
-  await detectTauri()
-  // 清空过期的 localStorage 端口（Tauri 每次启动端口都不同）
+  // 先检测环境，再决定显示哪个启动屏
+  await detectEnvironment()
+  // 清空过期的 localStorage 端口（桌面端每次启动端口都不同）
   localStorage.removeItem('agent4j-port')
-  if (isTauriEnv.value) {
-    // 仅 Tauri 环境清除 api-base（端口每次启动都变，由 SplashScreen 重新检测）
+  if (isDesktopEnv.value) {
+    // 仅桌面环境清除 api-base（端口每次启动都变，由 SplashScreen 重新检测）
     localStorage.removeItem('agent4j-api-base')
   }
   console.log('[App] Cleared stale port from localStorage')

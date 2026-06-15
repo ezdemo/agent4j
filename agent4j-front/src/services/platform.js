@@ -1,0 +1,244 @@
+/**
+ * 平台抽象层 - 根据当前环境提供统一的 API 接口
+ * 支持 Electron 和 Web 环境
+ */
+
+// 环境检测
+const isElectron = typeof window !== 'undefined' && window.electronAPI !== undefined
+const isWeb = !isElectron
+
+// 从 config.json 读取默认端口（缓存）
+let _configApiBase = null
+async function getConfigApiBase() {
+  if (_configApiBase) return _configApiBase
+  try {
+    const resp = await fetch('/config.json')
+    if (resp.ok) {
+      const cfg = await resp.json()
+      if (cfg.apiBase) _configApiBase = cfg.apiBase
+    }
+  } catch { /* ignore */ }
+  return _configApiBase
+}
+
+/** 从 apiBase URL 中提取端口号 */
+function extractPort(apiBase) {
+  if (!apiBase) return 0
+  try {
+    const url = new URL(apiBase)
+    return parseInt(url.port, 10) || (url.protocol === 'https:' ? 443 : 80)
+  } catch { return 0 }
+}
+
+/** 获取当前端口：localStorage > config.json > 4567 */
+async function resolveCurrentPort() {
+  const stored = localStorage.getItem('agent4j-port')
+  if (stored && parseInt(stored, 10) > 0) return parseInt(stored, 10)
+
+  const apiBase = await getConfigApiBase()
+  const port = extractPort(apiBase)
+  if (port > 0) return port
+
+  return 4567
+}
+
+/**
+ * Web 环境下的默认实现
+ * 假设服务已在外部启动，直接通过 HTTP 与后端通信
+ */
+const webImplementation = {
+  agent4jWebService: {
+    async getStatus() {
+      return {
+        installed: true,
+        running: true,
+        install_dir: '~/.agent4j'
+      }
+    },
+
+    async getResourceDir() {
+      return null
+    },
+
+    async checkInstallNeeded() {
+      return { needed: false, reason: 'web_environment' }
+    },
+
+    async install() {
+      return { success: true, steps: ['web_environment_skip'] }
+    },
+
+    async start() {
+      return await resolveCurrentPort()
+    },
+
+    async stop() {
+      console.log('Web environment: stop service not implemented')
+    },
+
+    async getCurrentPort() {
+      return await resolveCurrentPort()
+    },
+
+    async checkJavaQuick() {
+      return { found: true, version: 'web_environment', source: 'web' }
+    },
+
+    async startJavaDownload() {
+      return 'started'
+    },
+
+    async waitForReady(maxAttempts = 30, interval = 1000) {
+      const port = await this.getCurrentPort()
+      const baseUrl = `http://127.0.0.1:${port}`
+
+      for (let i = 0; i < maxAttempts; i++) {
+        try {
+          const response = await fetch(`${baseUrl}/api/system/health`, {
+            method: 'GET',
+            signal: AbortSignal.timeout(2000)
+          })
+          if (response.ok) return true
+        } catch (e) {
+          // 服务还没准备好
+        }
+        await new Promise(resolve => setTimeout(resolve, interval))
+      }
+
+      return false
+    },
+
+    async healthCheck() {
+      const port = await this.getCurrentPort()
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/api/system/health`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(5000)
+        })
+        return response.ok
+      } catch (e) {
+        return false
+      }
+    },
+
+    async getBaseUrl() {
+      const port = await this.getCurrentPort()
+      return `http://127.0.0.1:${port}`
+    }
+  },
+
+  window: {
+    minimize() { console.log('Web: minimize not supported') },
+    maximize() { console.log('Web: maximize not supported') },
+    close() { window.close() },
+    async isMaximized() { return false }
+  },
+
+  events: {
+    async listen(eventName) {
+      console.log(`Web: listen to ${eventName} not supported`)
+      return () => {}
+    }
+  }
+}
+
+/**
+ * Electron 环境下的实现
+ * 通过 preload 脚本暴露的 API 与主进程通信
+ */
+const electronImplementation = {
+  agent4jWebService: {
+    async getStatus() {
+      return await window.electronAPI.agent4jWebService.getStatus()
+    },
+    async getResourceDir() {
+      return await window.electronAPI.agent4jWebService.getResourceDir()
+    },
+    async checkInstallNeeded(resourceDir) {
+      return await window.electronAPI.agent4jWebService.checkInstallNeeded(resourceDir)
+    },
+    async install(resourceDir) {
+      return await window.electronAPI.agent4jWebService.install(resourceDir)
+    },
+    async start() {
+      return await window.electronAPI.agent4jWebService.start()
+    },
+    async stop() {
+      return await window.electronAPI.agent4jWebService.stop()
+    },
+    async getCurrentPort() {
+      return await window.electronAPI.agent4jWebService.getCurrentPort()
+    },
+    async checkJavaQuick() {
+      return await window.electronAPI.agent4jWebService.checkJavaQuick()
+    },
+    async startJavaDownload() {
+      return await window.electronAPI.agent4jWebService.startJavaDownload()
+    },
+    async waitForReady(maxAttempts = 30, interval = 1000) {
+      const port = await this.getCurrentPort()
+      const baseUrl = `http://127.0.0.1:${port}`
+      for (let i = 0; i < maxAttempts; i++) {
+        try {
+          const response = await fetch(`${baseUrl}/api/system/health`, {
+            method: 'GET',
+            signal: AbortSignal.timeout(2000)
+          })
+          if (response.ok) return true
+        } catch (e) {
+          // 服务还没准备好
+        }
+        await new Promise(resolve => setTimeout(resolve, interval))
+      }
+      return false
+    },
+    async healthCheck() {
+      const port = await this.getCurrentPort()
+      try {
+        const response = await fetch(`http://127.0.0.1:${port}/api/system/health`, {
+          method: 'GET',
+          signal: AbortSignal.timeout(5000)
+        })
+        return response.ok
+      } catch (e) {
+        return false
+      }
+    },
+    async getBaseUrl() {
+      const port = await this.getCurrentPort()
+      return `http://127.0.0.1:${port}`
+    }
+  },
+
+  window: {
+    minimize() { window.electronAPI.window.minimize() },
+    maximize() { window.electronAPI.window.maximize() },
+    close() { window.electronAPI.window.close() },
+    async isMaximized() {
+      return await window.electronAPI.window.isMaximized()
+    }
+  },
+
+  events: {
+    async listen(eventName, callback) {
+      return window.electronAPI.events.listen(eventName, callback)
+    }
+  }
+}
+
+// 根据环境选择实现
+function getImplementation() {
+  return isElectron ? electronImplementation : webImplementation
+}
+
+// 导出统一的 API
+export const platform = {
+  isElectron,
+  isWeb,
+
+  get implementation() {
+    return getImplementation()
+  }
+}
+
+export default platform

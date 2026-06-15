@@ -1,7 +1,7 @@
 ﻿import axios from 'axios'
 
-/** 硬编码兜底默认值，运行时优先读 public/config.json */
-export const DEFAULT_API_BASE = 'http://localhost:8097'
+/** 默认兜底值，运行时优先读 public/config.json */
+export const DEFAULT_API_BASE = 'http://localhost:4567'
 
 /** 应用启动时调用一次，从 public/config.json 加载默认地址到 localStorage */
 export async function initConfig() {

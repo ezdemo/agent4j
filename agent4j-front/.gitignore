@@ -199,3 +199,6 @@ __snapshots__/
 *.eot
 *.ttf
 *.otf
+
+# electron
+release/win-unpacked

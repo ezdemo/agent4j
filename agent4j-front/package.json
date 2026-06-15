@@ -2,6 +2,7 @@
   "name": "agent4j-front",
   "version": "1.0.0",
   "private": true,
+  "main": "electron/main.cjs",
   "type": "module",
   "description": "Agent4j - 智能AI代码助手前端",
   "author": "Agent4j Team",
@@ -14,11 +15,15 @@
     "format": "prettier --write src/",
     "test": "vitest",
     "test:ui": "vitest --ui",
-    "test:coverage": "vitest --coverage"
+    "test:coverage": "vitest --coverage",
+    "electron:dev": "vite build && set NODE_ENV=development && electron .",
+    "electron:build": "vite build && electron-builder",
+    "electron:build:win": "vite build && electron-builder --win",
+    "electron:build:mac": "vite build && electron-builder --mac",
+    "electron:build:linux": "vite build && electron-builder --linux"
   },
   "dependencies": {
     "@ant-design/icons-vue": "^7.0.1",
-    "@tauri-apps/api": "^2.0.0",
     "ant-design-vue": "^4.2.6",
     "axios": "^1.6.7",
     "highlight.js": "^11.11.1",
@@ -32,6 +37,8 @@
     "@vitejs/plugin-vue-jsx": "^3.1.0",
     "@vue/eslint-config-prettier": "^9.0.0",
     "@vue/test-utils": "^2.4.4",
+    "electron": "28.3.3",
+    "electron-builder": "^24.9.1",
     "eslint": "^8.57.0",
     "eslint-plugin-vue": "^9.22.0",
     "jsdom": "^24.0.0",
@@ -57,5 +64,13 @@
     "code-assistant",
     "vue3",
     "vite"
-  ]
+  ],
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "electron",
+      "esbuild",
+      "core-js",
+      "vue-demi"
+    ]
+  }
 }
