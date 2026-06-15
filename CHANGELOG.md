@@ -4,6 +4,57 @@
 
 ---
 
+## [26.6.15] - 2026-06-15
+
+### Added
+
+#### 🖥️ Electron 桌面端支持
+
+- ✨ 添加 Electron 桌面端支持，替换 Tauri — 新增 Electron 主进程、预加载脚本、打包配置
+- ✨ 添加 `platform.js` 平台适配层 — 替换 `tauri.js`，统一桌面端 API 调用
+- ✨ 适配 `SetupScreen`、`SplashScreen`、`TitleBar`、`App.vue` 等组件 — 兼容 Electron 运行环境
+- ✨ 添加窗口控制 IPC（最小化/最大化/关闭）与进程树管理（跨平台进程清理）
+- ✨ 添加 `electron-builder.json` 打包配置 — 支持 Windows/macOS/Linux 分发
+- ✨ 升级 `electron-builder` 依赖并优化构建配置
+
+#### 🧩 元素面板（Element Panel）
+
+- ✨ 新增元素面板（ElementPanel）— 可视化查看页面 DOM 元素树
+- ✨ 右侧面板支持拖拽调整宽度 — 灵活的界面布局定制
+- ✨ 组件信息改为弹窗展示 — 点击元素查看详细组件信息
+- ✨ 支持从元素面板发送消息到当前会话 — 快速引用元素上下文
+- ✨ 过滤 FinishTool 提示元素 — 保持面板内容简洁
+- ✨ 优化元素面板按钮样式并防止文字换行
+
+#### 🔧 Git 面板增强
+
+- ✨ Git 面板添加模型选择下拉框 — 选择 AI 生成提交消息的模型
+- ✨ 添加模型切换警告提示 — 确保用户知晓模型变更的影响
+- ✨ `git-author` 配置中添加模型字段 — 持久化用户偏好
+
+#### 🤖 模型与推理优化
+
+- ✨ 简化思考模式判断逻辑 — 减少冗余条件分支
+- ✨ 支持模型名后缀配置上下文大小 — 通过模型名称后缀灵活控制上下文窗口
+
+### Changed
+
+- 🔄 统一日志输出，替换多处 `System.err` 为 Slf4j — 提升日志管理一致性（`Agent4jConfig`、`HttpModelClient`、`SessionService`、`ToolScanUtil`、`WorkspaceManager`）
+- 🔄 简化 `SseAgentOutput` 构造函数 — 减少不必要的参数传递
+- 🔄 升级 `electron-builder` 并更新 `pnpm-lock.yaml` 依赖锁定
+
+### Fixed
+
+- 🐛 优化 Electron 进程管理 — 修复窗口关闭时后端进程未正确清理的问题
+- 🐛 升级依赖版本 — 修复已知兼容性问题
+
+### Chore
+
+- 📸 添加界面预览图（主界面、设置页、数据面板、Git 面板等 12 张截图）
+- 🔧 添加 `bump-version.ps1` 版本更新脚本 — 一键更新版本号
+
+---
+
 ## [26.6.14] - 2026-06-14
 
 ### Added
