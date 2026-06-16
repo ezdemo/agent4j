@@ -22,11 +22,13 @@
       :hasMessages="true"
       :hasSession="!!currentSession"
       :gitOn="rightPanelOpen"
+      :elementOn="elementPanelOpen"
       :version="appVersion"
       :hasNewVersion="hasNewVersion"
       @toggleSide="sideOpen = !sideOpen"
       @openSettings="showSettings = true"
       @toggleGit="toggleRightPanel()"
+      @toggleElement="toggleElementPanel()"
       @viewPrompt="viewSystemPrompt"
       @showUpdate="showUpdateModal = true"
     />
@@ -68,6 +70,26 @@
       />
     </main>
 
+    <!-- 元素面板（保活：用 v-show） -->
+    <div
+      v-show="elementPanelOpen"
+      class="element-panel-wrapper"
+      :class="{ dragging: isElementDragging }"
+      :style="{ width: elementPanelWidth + 'px' }"
+    >
+      <!-- 拖拽手柄 -->
+      <div
+        class="element-resize-handle"
+        @mousedown.prevent="onElementResizeStart"
+        title="拖拽调整宽度"
+      ></div>
+      <div class="element-panel-header">
+        <span>元素检查</span>
+        <button class="btn-icon-sm" @click="elementPanelOpen = false">×</button>
+      </div>
+      <ElementPanel @send="onElementSend" />
+    </div>
+
     <!-- 右侧面板 -->
     <RightPanel
       :open="rightPanelOpen"
@@ -76,7 +98,6 @@
       :session-name="currentSession"
       :sessions="sessions"
       @close="rightPanelOpen = false"
-      @element-send="onElementSend"
     />
 
       <!-- 系统提示词 Modal -->
@@ -316,6 +337,7 @@ import SplashScreen from './components/SplashScreen.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import Sidebar from './components/Sidebar.vue'
 import RightPanel from './components/RightPanel.vue'
+import ElementPanel from './components/ElementPanel.vue'
 import ChatView from './views/Chat.vue'
 import SettingsView from './views/Settings.vue'
 import DashboardPanel from './components/Dashboard.vue'
@@ -354,12 +376,64 @@ const showSettings = ref(false)
 const showDashboard = ref(false)
 const rightPanelOpen = ref(false)
 const rightPanelTab = ref('git')
+const elementPanelOpen = ref(false)
+const elementPanelWidth = ref(360)
+const isElementDragging = ref(false)
 const initialDataLoaded = ref(false)
 
 // 切换右侧面板（直接 toggle，不关心当前 tab）
 function toggleRightPanel() {
   rightPanelOpen.value = !rightPanelOpen.value
 }
+
+// 切换元素面板
+function toggleElementPanel() {
+  elementPanelOpen.value = !elementPanelOpen.value
+}
+
+// 元素面板拖拽调整宽度
+const ELEMENT_MIN_WIDTH = 280
+const ELEMENT_MAX_WIDTH = 800
+
+function onElementResizeStart(e) {
+  isElementDragging.value = true
+  document.body.style.cursor = 'ew-resize'
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onElementResizeMove)
+  document.addEventListener('mouseup', onElementResizeEnd)
+}
+
+function onElementResizeMove(e) {
+  if (!isElementDragging.value) return
+  const viewportWidth = window.innerWidth
+  const newWidth = viewportWidth - e.clientX
+  elementPanelWidth.value = Math.min(ELEMENT_MAX_WIDTH, Math.max(ELEMENT_MIN_WIDTH, newWidth))
+}
+
+function onElementResizeEnd() {
+  isElementDragging.value = false
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  document.removeEventListener('mousemove', onElementResizeMove)
+  document.removeEventListener('mouseup', onElementResizeEnd)
+  // 持久化宽度
+  try {
+    localStorage.setItem('agent4j-element-panel-width', String(elementPanelWidth.value))
+  } catch { /* ignore */ }
+}
+
+// 加载保存的元素面板宽度
+onMounted(() => {
+  try {
+    const saved = localStorage.getItem('agent4j-element-panel-width')
+    if (saved) {
+      const w = parseInt(saved, 10)
+      if (w >= ELEMENT_MIN_WIDTH && w <= ELEMENT_MAX_WIDTH) {
+        elementPanelWidth.value = w
+      }
+    }
+  } catch { /* ignore */ }
+})
 
 // 元素面板发送消息 → 直接发给当前会话的 AI
 function onElementSend(payload) {
@@ -1489,5 +1563,76 @@ watch(showSettings, (newVal) => {
 
 [data-theme="dark"] :global(.update-modal) {
   border: 1px solid var(--border);
+}
+
+/* ==================== 元素面板 ==================== */
+.element-panel-wrapper {
+  position: fixed;
+  top: 36px;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass-bg-2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border-left: 1px solid var(--glass-border);
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
+  transition: width 0.05s;
+}
+
+.element-panel-wrapper.dragging {
+  transition: none !important;
+}
+
+/* 拖拽手柄 */
+.element-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  z-index: 10;
+  cursor: ew-resize;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.element-resize-handle:hover,
+.element-panel-wrapper.dragging .element-resize-handle {
+  background: var(--accent);
+  opacity: 0.5;
+}
+
+.element-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--glass-border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  min-height: 36px;
+}
+
+.element-panel-header .btn-icon-sm {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--fg-4);
+  cursor: pointer;
+  border-radius: var(--r);
+  transition: all 0.12s;
+}
+
+.element-panel-header .btn-icon-sm:hover {
+  background: var(--bg-3);
+  color: var(--fg);
 }
 </style>

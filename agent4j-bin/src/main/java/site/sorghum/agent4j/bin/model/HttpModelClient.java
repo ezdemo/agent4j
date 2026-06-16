@@ -31,10 +31,10 @@ public class HttpModelClient implements ModelClient {
     private static final MediaType MEDIA_TYPE_JSON = MediaType.parse("application/json; charset=utf-8");
 
     /**
-     * 重试间隔（秒），共 10 次：1,1,1,2,2,2,3,3,6,10 — 总计约 31 秒。
+     * 重试间隔（秒），共 10 次：3,3,5,5,8,10,12,16,22,36 — 总计约 120 秒（2 分钟）。
      * 指数退避策略，应对 API 临时故障。
      */
-    private static final int[] RETRY_DELAYS = {1, 1, 1, 2, 2, 2, 3, 3, 6, 10};
+    private static final int[] RETRY_DELAYS = {3, 3, 5, 5, 8, 10, 12, 16, 22, 36};
 
     // ==================== OpenAI API JSON 字段名常量 ====================
 
@@ -434,6 +434,7 @@ public class HttpModelClient implements ModelClient {
                 try (BufferedReader reader = new BufferedReader(
                         new InputStreamReader(body.byteStream(), StandardCharsets.UTF_8))) {
                     String line;
+                    String sseErrorData = null;
                     StringBuilder contentBuf = new StringBuilder();
                     StringBuilder reasoningBuf = new StringBuilder();
                     ONode toolCallsAccum = null;
@@ -451,9 +452,9 @@ public class HttpModelClient implements ModelClient {
                             break;
                         }
                         if (data.trim().startsWith("{\"error\":")) {
-                            log.error("收到SSE流错误: {}", data);
-                            callback.onError(data);
-                            return;
+                            log.warn("收到SSE流错误（可重试）: {}", data);
+                            sseErrorData = data;
+                            break;
                         }
                         // ★ 优化：快路径 — 无 tool_calls 且无 usage 的 chunk 走轻量字符串提取
                         boolean hasComplexFields = data.contains("\"tool_calls\"")
@@ -603,6 +604,24 @@ public class HttpModelClient implements ModelClient {
                                 }
                             }
                         }
+                    }
+
+                    // ★ SSE流错误重试逻辑 — 突破while循环后在此判断
+                    if (sseErrorData != null) {
+                        if (attempt < RETRY_DELAYS.length) {
+                            int delay = RETRY_DELAYS[attempt];
+                            log.warn("[retry] SSE流错误，第{}次重试，等待{}s...", attempt + 1, delay);
+                            Thread.sleep(delay * 1000L);
+                            continue; // 关闭当前response，继续外层for循环重试
+                        }
+                        // 重试耗尽，回调错误
+                        log.error("SSE流错误（重试耗尽）: {}", sseErrorData);
+                        try {
+                            callback.onError(sseErrorData);
+                        } catch (Exception e) {
+                            log.debug("onError回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                        }
+                        return;
                     }
 
                     if (toolCallsAccum != null) {

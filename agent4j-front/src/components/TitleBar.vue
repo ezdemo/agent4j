@@ -38,6 +38,14 @@
 
     <!-- 右侧：操作按钮 + 窗口控制 -->
     <div class="titlebar-right">
+      <button class="tb-btn" title="元素检查" @click.stop="$emit('toggleElement')" @dblclick.stop :class="{ active: elementOn }">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+          <line x1="8" y1="21" x2="16" y2="21"/>
+          <line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+      </button>
+
       <button class="tb-btn" title="系统提示词" @click.stop="$emit('viewPrompt')" @dblclick.stop>
         <svg fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
              viewBox="0 0 24 24" width="13">
@@ -98,11 +106,12 @@ defineProps({
   hasMessages: { type: Boolean, default: false },
   hasSession: { type: Boolean, default: false },
   gitOn: { type: Boolean, default: false },
+  elementOn: { type: Boolean, default: false },
   version: { type: String, default: '' },
   hasNewVersion: { type: Boolean, default: false }
 })
 
-defineEmits(['toggleSide', 'openSettings', 'clear', 'export', 'toggleGit', 'showUpdate', 'viewPrompt'])
+defineEmits(['toggleSide', 'openSettings', 'clear', 'export', 'toggleGit', 'toggleElement', 'showUpdate', 'viewPrompt'])
 
 const isMaximized = ref(false)
 const isDesktop = ref(false)
