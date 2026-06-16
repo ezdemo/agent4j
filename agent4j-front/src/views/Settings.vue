@@ -1322,8 +1322,10 @@ X-Custom-Header=value"
                   :desktop-has-new-version="desktopInfo.hasNewVersion"
                   :checking="aboutChecking"
                   :is-electron="platform.isElectron"
+                  :auto-updating="autoUpdating"
                   @check="handleCheckVersion"
                   @download="openDesktopDownload"
+                  @auto-update="handleAutoUpdateFromPanel"
               />
               <div v-if="aboutError" class="about-error">{{ aboutError }}</div>
             </div>
@@ -1672,6 +1674,9 @@ const aboutChecking = ref(false)
 const aboutError = ref('')
 const showUpdateModal = ref(false)
 const electronVersion = ref('')
+const autoUpdating = ref(false)
+
+const emit = defineEmits(['auto-update'])
 
 // 桌面端版本信息（由 handleCheckVersion 一并更新）
 const desktopInfo = ref({
@@ -1753,6 +1758,18 @@ function compareVersions(a, b) {
     if (na < nb) return -1
   }
   return 0
+}
+
+// 自动更新：转发给父组件（App.vue）处理
+async function handleAutoUpdateFromPanel() {
+  autoUpdating.value = true
+  try {
+    emit('auto-update')
+  } catch (e) {
+    console.warn('自动更新失败:', e)
+  } finally {
+    autoUpdating.value = false
+  }
 }
 
 // 将 Markdown 文本渲染为 HTML（用于发布说明）

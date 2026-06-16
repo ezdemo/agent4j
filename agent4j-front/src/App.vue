@@ -299,8 +299,10 @@
                 :desktop-has-new-version="desktopHasNewVersion"
                 :checking="checkingVersion"
                 :is-electron="platform.isElectron"
+                :auto-updating="autoUpdating"
                 @check="handleCheckVersion"
                 @download="openDesktopDownloadUrl"
+                @auto-update="handleAutoUpdate"
             />
           </div>
 
