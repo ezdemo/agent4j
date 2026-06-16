@@ -40,7 +40,7 @@ export default defineConfig({
   },
   
   build: {
-    outDir: 'dist',
+    outDir: 'dist/renderer',
     assetsDir: 'assets',
     sourcemap: false,
     minify: 'esbuild',

@@ -1,4 +1,5 @@
 import {defineConfig} from 'vite'
+import {builtinModules} from 'node:module'
 
 // Vite 配置 — 预加载脚本
 export default defineConfig({
@@ -9,7 +10,7 @@ export default defineConfig({
       formats: ['cjs'],
     },
     rollupOptions: {
-      external: ['electron'],
+      external: ['electron', ...builtinModules],
     },
     minify: false,
     sourcemap: true,
