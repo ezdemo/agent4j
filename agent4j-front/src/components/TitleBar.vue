@@ -48,17 +48,6 @@
         </svg>
       </button>
 
-      <button class="tb-btn" title="系统提示词" @click.stop="$emit('viewPrompt')" @dblclick.stop>
-        <svg fill="none" height="13" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-             viewBox="0 0 24 24" width="13">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14 2 14 8 20 8"/>
-          <line x1="16" x2="8" y1="13" y2="13"/>
-          <line x1="16" x2="8" y1="17" y2="17"/>
-          <polyline points="10 9 9 9 8 9"/>
-        </svg>
-      </button>
-
       <button class="tb-btn" :class="{ active: gitOn }" :disabled="!hasSession" @click.stop="hasSession && $emit('toggleGit')" @dblclick.stop title="面板">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
@@ -113,7 +102,7 @@ defineProps({
   hasNewVersion: { type: Boolean, default: false }
 })
 
-defineEmits(['toggleSide', 'openSettings', 'clear', 'export', 'toggleGit', 'toggleElement', 'showUpdate', 'viewPrompt'])
+defineEmits(['toggleSide', 'openSettings', 'clear', 'export', 'toggleGit', 'toggleElement', 'showUpdate'])
 
 const isMaximized = ref(false)
 const isDesktop = ref(false)
