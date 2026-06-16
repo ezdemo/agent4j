@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu } = require('electron')
+const { app, BrowserWindow, ipcMain, Menu, shell } = require('electron')
 const path = require('path')
 const { spawn, execSync } = require('child_process')
 const fs = require('fs')
@@ -506,5 +506,16 @@ ipcMain.handle('inspector-remove', async () => {
     return { success: true }
   } catch (e) {
     return { success: false }
+  }
+})
+
+// 打开外部链接
+ipcMain.handle('open-external', async (event, url) => {
+  try {
+    await shell.openExternal(url)
+    return { success: true }
+  } catch (e) {
+    console.error('Failed to open external URL:', e)
+    return { success: false, error: e.message }
   }
 })
