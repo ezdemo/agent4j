@@ -211,6 +211,11 @@ function createWindow() {
     menu.popup()
   })
 
+  // macOS: 隐藏原生窗口控制按钮（红绿灯），应用内使用自定义标题栏按钮
+  if (process.platform === 'darwin') {
+    mainWindow.setWindowButtonVisibility(false)
+  }
+
   mainWindow.on('closed', () => { mainWindow = null })
 }
 
@@ -223,7 +228,7 @@ app.whenReady().then(() => {
 
 app.on('window-all-closed', () => {
   cleanupAgent4jWeb()
-  if (process.platform !== 'darwin') app.quit()
+  app.quit()
 })
 
 app.on('before-quit', () => {
@@ -283,7 +288,6 @@ ipcMain.handle('window-maximize', () => {
 })
 ipcMain.handle('window-close', () => { if (mainWindow) mainWindow.close() })
 ipcMain.handle('window-is-maximized', () => mainWindow ? mainWindow.isMaximized() : false)
-
 // ==================== Element Inspector (跨域穿透) ====================
 
 /** 在主窗口的 child frame 中寻找 ElementPanel 的 iframe */

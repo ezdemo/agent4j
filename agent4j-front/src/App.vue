@@ -1000,23 +1000,37 @@ onBeforeUnmount(() => {
   window.removeEventListener('agent4j:open-in-element', onOpenInElement)
 })
 
-// 获取版本信息
-async function fetchVersionInfo() {
+// 获取版本信息 — 纯后端获取，最多重试 3 次（每次间隔 3 秒）
+async function fetchVersionInfo(retryCount = 0) {
   try {
+    // 先尝试获取当前版本
     const res = await systemAPI.getCurrentVersion()
-    if (res.success && res.data) {
-      appVersion.value = res.data.version || ''
+    if (res.success && res.data && res.data.version) {
+      appVersion.value = res.data.version
     }
-  } catch { /* 版本获取失败静默处理 */ }
-  try {
-    const checkRes = await systemAPI.checkLatestVersion()
-    if (checkRes.success && checkRes.data) {
-      hasNewVersion.value = checkRes.data.hasNewVersion
-      if (!appVersion.value) {
-        appVersion.value = checkRes.data.currentVersion || ''
+    // 再检查最新版本
+    try {
+      const checkRes = await systemAPI.checkLatestVersion()
+      if (checkRes.success && checkRes.data) {
+        hasNewVersion.value = checkRes.data.hasNewVersion
+        if (checkRes.data.currentVersion) {
+          appVersion.value = checkRes.data.currentVersion
+        }
       }
+    } catch { /* 版本检查失败 */ }
+    // 两个接口都失败了且未获取到版本
+    if (!appVersion.value) {
+      throw new Error('version not obtained')
     }
-  } catch { /* 版本检查失败静默处理 */ }
+  } catch {
+    if (retryCount < 2) {
+      // 3 秒后重试
+      await new Promise(r => setTimeout(r, 3000))
+      return fetchVersionInfo(retryCount + 1)
+    }
+    // 3 次都失败，显示未知版本
+    appVersion.value = '未知版本'
+  }
 }
 
 // 复制文本到剪贴板

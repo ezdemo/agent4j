@@ -47,7 +47,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 平台信息
   platform: process.platform,
-  
+
   // 环境检测
   isElectron: true
 })
