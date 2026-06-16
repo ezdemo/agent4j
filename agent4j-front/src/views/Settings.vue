@@ -34,7 +34,7 @@
           <h2>{{ currentTab?.label || '设置' }}</h2>
           <p class="header-desc">{{ currentTab?.description }}</p>
         </div>
-        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'about'" class="header-actions">
+        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'about' && activeTab !== 'desktop'" class="header-actions">
           <button v-if="activeTab === 'ai'" class="btn btn-secondary" style="padding:6px 12px;" @click="showAutoFillDialog = true" title="自动填入配置">
             <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
               <polyline points="1 4 1 10 7 10"/>
@@ -1368,6 +1368,59 @@ X-Custom-Header=value"
           </div>
         </section>
 
+        <!-- ==================== 桌面端 ==================== -->
+        <section v-if="activeTab === 'desktop'" class="settings-section">
+          <div class="section-card">
+            <div class="card-body">
+              <div class="about-info">
+                <div class="about-row">
+                  <span class="about-label">应用框架</span>
+                  <span class="about-value">Electron</span>
+                </div>
+                <div class="about-row">
+                  <span class="about-label">当前版本</span>
+                  <span class="about-value version-number">v{{ electronVersion || '加载中...' }}</span>
+                </div>
+                <div class="about-row" v-if="desktopInfo.latestVersion">
+                  <span class="about-label">最新版本</span>
+                  <span class="about-value" :class="{ 'has-update': desktopInfo.hasNewVersion }">
+                    v{{ desktopInfo.latestVersion }}
+                    <span v-if="desktopInfo.hasNewVersion" class="update-badge">有新版本</span>
+                  </span>
+                </div>
+                <div class="about-row" v-if="desktopInfo.releaseUrl">
+                  <span class="about-label">发布地址</span>
+                  <a :href="desktopInfo.releaseUrl" target="_blank" class="about-link">{{ desktopInfo.releaseUrl }}</a>
+                </div>
+                <div class="about-row" v-if="desktopInfo.checkTime">
+                  <span class="about-label">检查时间</span>
+                  <span class="about-value">{{ desktopInfo.checkTime }}</span>
+                </div>
+              </div>
+
+              <!-- 操作按钮 -->
+              <div class="about-actions">
+                <button class="btn btn-primary" :disabled="desktopChecking" @click="handleDesktopCheckVersion">
+                  <svg :class="{ 'animate-spin': desktopChecking }" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                    <polyline points="23 4 23 10 17 10"/>
+                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                  </svg>
+                  {{ desktopChecking ? '检查中...' : '检查更新' }}
+                </button>
+                <button v-if="desktopInfo.releaseUrl" class="btn btn-primary" @click="openDesktopDownload">
+                  <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+                  </svg>
+                  下载最新版本
+                </button>
+              </div>
+
+              <!-- 错误信息 -->
+              <div v-if="desktopError" class="about-error">{{ desktopError }}</div>
+            </div>
+          </div>
+        </section>
+
       </div>
     </main>
   </div>
@@ -1643,8 +1696,19 @@ X-Custom-Header=value"
 import {computed, onMounted, reactive, ref, watch} from 'vue'
 import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
-import {configAPI, openApiAPI, mcpAPI, lspAPI, skillMarketAPI, agentAPI, toolsAPI, systemAPI, DEFAULT_API_BASE} from '../services/api'
-import { md } from '../utils/highlight'
+import {
+  agentAPI,
+  configAPI,
+  DEFAULT_API_BASE,
+  lspAPI,
+  mcpAPI,
+  openApiAPI,
+  skillMarketAPI,
+  systemAPI,
+  toolsAPI
+} from '../services/api'
+import {md} from '../utils/highlight'
+import platform from '../services/platform'
 
 const store = useAppStore()
 
@@ -1740,6 +1804,18 @@ const aboutInfo = ref({
 const aboutChecking = ref(false)
 const aboutError = ref('')
 const showUpdateModal = ref(false)
+const electronVersion = ref('')
+
+// ==================== 桌面端 / Electron 版本 ====================
+const desktopInfo = ref({
+  latestVersion: null,
+  hasNewVersion: false,
+  releaseUrl: null,
+  checkTime: null
+})
+const desktopChecking = ref(false)
+const desktopError = ref('')
+
 const autoUpdating = ref(false)
 const autoUpdateTip = ref('')
 
@@ -1923,7 +1999,7 @@ function isSkillInstalled(slug) {
 }
 
 // 标签页配置
-const tabs = [
+const tabs = computed(() => [
   {
     id: 'general',
     label: '基本设置',
@@ -2002,6 +2078,15 @@ const tabs = [
       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
     </svg>`
   },
+  // Electron 桌面端专属设置
+  ...(platform.isElectron ? [{
+    id: 'desktop',
+    label: '桌面端',
+    description: 'Electron 桌面应用信息',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+    </svg>`
+  }] : []),
   {
     id: 'about',
     label: '关于',
@@ -2010,7 +2095,57 @@ const tabs = [
       <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
     </svg>`
   }
-]
+])
+
+// 获取 Electron 版本
+async function fetchElectronVersion() {
+  if (!platform.isElectron) return
+  try {
+    electronVersion.value = await window.electronAPI.getElectronVersion()
+  } catch (e) {
+    electronVersion.value = '未知'
+    console.warn('获取 Electron 版本失败:', e)
+  }
+}
+
+// Electron 版本更新检查
+async function handleDesktopCheckVersion() {
+  desktopChecking.value = true
+  desktopError.value = ''
+  // 先刷新当前 Electron 版本
+  await fetchElectronVersion()
+  try {
+    const res = await systemAPI.checkLatestVersion()
+    if (res.success && res.data) {
+      desktopInfo.value = {
+        latestVersion: res.data.latestVersion,
+        hasNewVersion: res.data.hasNewVersion,
+        releaseUrl: res.data.releaseUrl || 'https://gitee.com/ezdemo/agent4j/releases/latest',
+        checkTime: res.data.checkTime
+      }
+      // 如果后端没返回 releaseUrl，兜底使用 Gitee 地址
+      if (!desktopInfo.value.releaseUrl) {
+        desktopInfo.value.releaseUrl = 'https://gitee.com/ezdemo/agent4j/releases/latest'
+      }
+    } else {
+      desktopError.value = res.message || '检查版本失败'
+    }
+  } catch (e) {
+    desktopError.value = e.message || '无法连接到服务器'
+  } finally {
+    desktopChecking.value = false
+  }
+}
+
+// 打开下载页面
+async function openDesktopDownload() {
+  if (!platform.isElectron) return
+  try {
+    await window.electronAPI.openExternal('https://gitee.com/ezdemo/agent4j/releases/latest')
+  } catch {
+    window.open('https://gitee.com/ezdemo/agent4j/releases/latest', '_blank')
+  }
+}
 
 // 主题选项
 const themes = [
@@ -2021,7 +2156,7 @@ const themes = [
 ]
 
 // 计算属性
-const currentTab = computed(() => tabs.find(t => t.id === activeTab.value))
+const currentTab = computed(() => tabs.value.find(t => t.id === activeTab.value))
 
 // 监听设置变化
 watch(settings, () => {
@@ -2044,6 +2179,10 @@ watch(activeTab, async (tab) => {
   if (tab === 'about') {
     // 进入关于页面时自动检查更新（含版本刷新+远程检查）
     handleCheckVersion()
+  }
+  if (tab === 'desktop') {
+    // 进入桌面端页面时获取 Electron 版本并检查更新
+    handleDesktopCheckVersion()
   }
 })
 

@@ -239,6 +239,10 @@ app.on('before-quit', () => {
 
 ipcMain.handle('get_agent4j_web_port', async () => currentPort)
 
+ipcMain.handle('get_electron_version', async () => {
+  return app.getVersion()
+})
+
 ipcMain.handle('get_agent4j_web_status', async () => ({
   installed: true,
   running: agent4jWebProcess !== null,
