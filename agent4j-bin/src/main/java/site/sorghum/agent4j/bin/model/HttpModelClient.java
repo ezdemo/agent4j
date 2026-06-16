@@ -101,10 +101,109 @@ public class HttpModelClient implements ModelClient {
 
     /**
      * 判断 HTTP 状态码是否应重试。
-     * 5xx 服务端错误或 0（连接失败）需要重试，4xx 客户端错误不重试。
+     * 5xx 服务端错误、429 限流或 0（连接失败）需要重试，其他 4xx 客户端错误不重试。
      */
     private static boolean retryable(int status) {
-        return status >= 500 || status == 0;
+        return status >= 500 || status == 429 || status == 0;
+    }
+
+    // ==================== 统一重试机制 ====================
+
+    /**
+     * 重试上下文 — 封装重试状态和控制逻辑。
+     * <p>
+     * 使用方式：
+     * <pre>{@code
+     * RetryContext retry = new RetryContext("流式");
+     * for (int attempt = 0; ; attempt++) {
+     *     try {
+     *         // 执行请求...
+     *         if (retryable(status)) {
+     *             retry.waitOrThrow("HTTP " + status, attempt);
+     *             continue;
+     *         }
+     *         return result;
+     *     } catch (IOException e) {
+     *         retry.waitOrThrow(e, attempt);
+     *         continue;
+     *     }
+     * }
+     * }</pre>
+     * </p>
+     */
+    private class RetryContext {
+        private final String tag;
+
+        RetryContext(String tag) {
+            this.tag = tag;
+        }
+
+        /**
+         * 检查是否应该重试，如果是则等待并返回；否则抛出异常。
+         *
+         * @param reason 重试原因（用于日志）
+         * @param attempt 当前尝试次数（从 0 开始）
+         * @throws IOException 如果不应重试或等待被中断
+         */
+        void waitOrThrow(String reason, int attempt) throws IOException {
+            if (abortRequested) {
+                log.debug("[{}] {} 可重试，但已请求中断，跳过重试", tag, reason);
+                abortRequested = false;
+                throw new IOException("Request aborted by user");
+            }
+            if (attempt >= RETRY_DELAYS.length) {
+                throw new IOException("[" + tag + "] 重试耗尽: " + reason);
+            }
+            int delay = RETRY_DELAYS[attempt];
+            log.warn("[retry][{}] {}，第{}次重试，等待{}s...", tag, reason, attempt + 1, delay);
+            doSleep(delay);
+            checkAbort();
+        }
+
+        /**
+         * 检查是否应该重试（IO 异常版本），如果是则等待并返回；否则抛出异常。
+         *
+         * @param e 捕获的 IO 异常
+         * @param attempt 当前尝试次数（从 0 开始）
+         * @throws IOException 如果不应重试或等待被中断
+         */
+        void waitOrThrow(IOException e, int attempt) throws IOException {
+            if (abortRequested) {
+                log.debug("[{}] IO异常，但已请求中断，跳过重试", tag);
+                abortRequested = false;
+                throw new IOException("Request aborted by user", e);
+            }
+            if (attempt >= RETRY_DELAYS.length) {
+                throw e;
+            }
+            int delay = RETRY_DELAYS[attempt];
+            log.warn("[retry][{}] {}，第{}次重试，等待{}s...", tag, e.getMessage(), attempt + 1, delay);
+            doSleep(delay);
+            checkAbort();
+        }
+
+        /**
+         * 等待指定秒数，响应中断。
+         */
+        private void doSleep(int delaySec) throws IOException {
+            try {
+                Thread.sleep(delaySec * 1000L);
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted during retry", ie);
+            }
+        }
+
+        /**
+         * 等待后检查是否收到中断请求。
+         */
+        private void checkAbort() throws IOException {
+            if (abortRequested) {
+                log.debug("[{}] 重试等待期间收到中断请求，跳过重试", tag);
+                abortRequested = false;
+                throw new IOException("Request aborted by user");
+            }
+        }
     }
 
     @Override
@@ -307,6 +406,7 @@ public class HttpModelClient implements ModelClient {
         bodyWithStream.set("stream", false);
         jsonBody = bodyWithStream.toJson();
 
+        RetryContext retry = new RetryContext("非流式");
         for (int attempt = 0; ; attempt++) {
             Request request = new Request.Builder()
                     .url(apiUrl)
@@ -324,10 +424,8 @@ public class HttpModelClient implements ModelClient {
                         apiUrl, model, messages.size(), tools != null ? tools.size() : 0);
                 log.debug("收到API响应（完整响应）: {}", responseText);
 
-                if (retryable(status) && attempt < RETRY_DELAYS.length) {
-                    int delay = RETRY_DELAYS[attempt];
-                    log.warn("[retry] HTTP {} (非流式)，第{}次重试，等待{}s...", status, attempt + 1, delay);
-                    Thread.sleep(delay * 1000L);
+                if (retryable(status)) {
+                    retry.waitOrThrow("HTTP " + status, attempt);
                     continue;
                 }
 
@@ -344,21 +442,8 @@ public class HttpModelClient implements ModelClient {
 
             } catch (IOException e) {
                 log.error("非流式API调用IO异常: {}", e.getMessage(), e);
-                if (attempt < RETRY_DELAYS.length) {
-                    int delay = RETRY_DELAYS[attempt];
-                    log.warn("[retry] " + e.getMessage() + "，第" + (attempt + 1) + "次重试，等待" + delay + "s...");
-                    try {
-                        Thread.sleep(delay * 1000L);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
-                    }
-                    continue;
-                }
-                throw e;
-            } catch (InterruptedException e) {
-                log.error("非流式API调用被中断", e);
-                Thread.currentThread().interrupt();
-                throw new IOException("Interrupted during retry", e);
+                retry.waitOrThrow(e, attempt);
+                continue;
             }
         }
     }
@@ -386,6 +471,7 @@ public class HttpModelClient implements ModelClient {
             return;
         }
 
+        RetryContext retry = new RetryContext("流式");
         for (int attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
             Request request = new Request.Builder()
                     .url(apiUrl)
@@ -402,10 +488,18 @@ public class HttpModelClient implements ModelClient {
                         apiUrl, model, messages.size(), tools != null ? tools.size() : 0);
 
                 int status = response.code();
-                if (retryable(status) && attempt < RETRY_DELAYS.length) {
-                    int delay = RETRY_DELAYS[attempt];
-                    log.warn("[retry] HTTP {} (非流式)，第{}次重试，等待{}s...", status, attempt + 1, delay);
-                    Thread.sleep(delay * 1000L);
+                if (retryable(status)) {
+                    try {
+                        retry.waitOrThrow("HTTP " + status, attempt);
+                    } catch (IOException e) {
+                        // 用户中断或重试耗尽
+                        try {
+                            callback.onDone();
+                        } catch (Exception ignored) {
+                            log.debug("onDone回调异常: {}", ignored.getMessage());
+                        }
+                        return;
+                    }
                     activeCall = null;
                     continue;
                 }
@@ -608,20 +702,18 @@ public class HttpModelClient implements ModelClient {
 
                     // ★ SSE流错误重试逻辑 — 突破while循环后在此判断
                     if (sseErrorData != null) {
-                        if (attempt < RETRY_DELAYS.length) {
-                            int delay = RETRY_DELAYS[attempt];
-                            log.warn("[retry] SSE流错误，第{}次重试，等待{}s...", attempt + 1, delay);
-                            Thread.sleep(delay * 1000L);
-                            continue; // 关闭当前response，继续外层for循环重试
-                        }
-                        // 重试耗尽，回调错误
-                        log.error("SSE流错误（重试耗尽）: {}", sseErrorData);
                         try {
-                            callback.onError(sseErrorData);
-                        } catch (Exception e) {
-                            log.debug("onError回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                            retry.waitOrThrow("SSE流错误: " + sseErrorData, attempt);
+                        } catch (IOException e) {
+                            // 用户中断或重试耗尽
+                            try {
+                                callback.onDone();
+                            } catch (Exception ex) {
+                                log.debug("onDone回调异常: {}", ex.getMessage());
+                            }
+                            return;
                         }
-                        return;
+                        continue; // 关闭当前response，继续外层for循环重试
                     }
 
                     if (toolCallsAccum != null) {
@@ -682,33 +774,18 @@ public class HttpModelClient implements ModelClient {
                     return;
                 }
                 log.error("流式API调用IO异常: {}", e.getMessage(), e);
-                if (attempt < RETRY_DELAYS.length) {
-                    int delay = RETRY_DELAYS[attempt];
-                    log.warn("[retry] {}，第{}次重试，等待{}s...", e.getMessage(), attempt + 1, delay);
+                try {
+                    retry.waitOrThrow(e, attempt);
+                } catch (IOException retryEx) {
+                    // 重试耗尽或中断
                     try {
-                        Thread.sleep(delay * 1000L);
-                    } catch (InterruptedException ie) {
-                        Thread.currentThread().interrupt();
+                        callback.onError(retryEx.getMessage());
+                    } catch (Exception ex) {
+                        log.debug("onError回调异常（可能SSE连接已断开）: {}", ex.getMessage());
                     }
-                    continue;
+                    return;
                 }
-                try {
-                    callback.onError(e.getMessage());
-                } catch (Exception ex) {
-                    // SSE连接断开时忽略异常
-                    log.debug("onError回调异常（可能SSE连接已断开）: {}", ex.getMessage());
-                }
-                return;
-            } catch (InterruptedException e) {
-                log.error("流式API调用被中断", e);
-                Thread.currentThread().interrupt();
-                try {
-                    callback.onError("Interrupted during retry");
-                } catch (Exception ex) {
-                    // SSE连接断开时忽略异常
-                    log.debug("onError回调异常（可能SSE连接已断开）: {}", ex.getMessage());
-                }
-                return;
+                continue;
             } catch (Exception e) {
                 log.error("流式API调用异常: {}", e.getMessage(), e);
                 // 非 IO 异常（如 JSON 解析错误），不重试
