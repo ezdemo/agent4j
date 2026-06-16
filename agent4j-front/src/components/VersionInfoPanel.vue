@@ -65,6 +65,12 @@
         </svg>
         下载新版
       </button>
+      <button v-if="!isElectron" class="btn btn-secondary" :disabled="autoUpdating" @click="$emit('auto-update')" style="margin-left:auto;">
+        <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/>
+        </svg>
+        {{ autoUpdating ? '正在创建会话...' : '自动更新' }}
+      </button>
     </div>
   </div>
 </template>
@@ -80,10 +86,11 @@ const props = defineProps({
   hasNewVersion: {type: Boolean, default: false},
   desktopHasNewVersion: {type: Boolean, default: false},
   checking: {type: Boolean, default: false},
-  isElectron: {type: Boolean, default: false}
+  isElectron: {type: Boolean, default: false},
+  autoUpdating: {type: Boolean, default: false}
 })
 
-const emit = defineEmits(['check', 'download'])
+const emit = defineEmits(['check', 'download', 'auto-update'])
 
 function copyText(text) {
   try {
@@ -120,7 +127,7 @@ function handleDownload() {
 /* 版本双栏卡片 */
 .update-versions-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
   gap: 12px;
 }
 
