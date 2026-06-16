@@ -105,6 +105,17 @@ if ($c -ne $old) {
     Write-Host "  [OK] agent4j-front/package.json"
 } else { Write-Host "  [--] agent4j-front/package.json (unchanged)" }
 
+# 8. agent4j-web/src/installDist/bin/version.txt
+$path = Join-Path $root "agent4j-web/src/installDist/bin/version.txt"
+$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+$old = $c
+$c = [regex]::Replace($c.Trim(), '^[\d.]+', $Version)
+if ($c -ne $old.Trim()) {
+    $c = $c.TrimStart("`u{FEFF}")
+    [System.IO.File]::WriteAllText($path, $c + [Environment]::NewLine, $utf8NoBom)
+    Write-Host "  [OK] agent4j-web/src/installDist/bin/version.txt"
+} else { Write-Host "  [--] agent4j-web/src/installDist/bin/version.txt (unchanged)" }
+
 Write-Host ""
 Write-Host "Done! Version unified to $Version"
 Write-Host "Run: git diff to review, then commit."
