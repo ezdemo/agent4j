@@ -117,7 +117,7 @@ public class Agent4jAgent {
     private static String resolvePrompt(Builder b) {
         if (b.systemPrompt != null) return b.systemPrompt;
         if (b.sharedSystemPrompt != null) return b.sharedSystemPrompt;
-        return "你是一个智能体助手，名为Agent4J\n";
+        return Builder.DEFAULT_SYSTEM_PROMPT;
     }
 
     /**
@@ -519,7 +519,7 @@ public class Agent4jAgent {
         /**
          * 硬编码的默认系统提示词（在 ~/.agent4j/agent4j.md 不存在时使用）
          */
-        private static final String DEFAULT_SYSTEM_PROMPT = "你是一个智能体助手，名为Agent4J\n";
+        public static final String DEFAULT_SYSTEM_PROMPT = DEFAULT_PROMPT.PROMPT;
         String apiUrl;
         String apiKey;
         String model = "deepseek-v4-flash";

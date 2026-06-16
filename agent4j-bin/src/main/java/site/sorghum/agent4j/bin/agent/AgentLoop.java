@@ -891,31 +891,16 @@ public class AgentLoop implements AgentLoopController {
 
     // ==================== 流式错误恢复 ====================
 
+    /**
+     * 流式错误恢复（已弃用，重试逻辑已统一到 HttpModelClient.RetryContext）。
+     * <p>
+     * 保留此方法以兼容现有代码，但不再进行重试。
+     * </p>
+     */
+    @Deprecated
     private boolean recoverFromStreamError() {
-        streamErrorRetryCount++;
-        if (streamErrorRetryCount <= maxStreamErrorRetries()) {
-            // 检查是否已请求中断，避免在用户停止后继续重试
-            if (userAbortRequested) {
-                log.debug("流式错误恢复，但用户已请求中断，跳过重试");
-                return false;
-            }
-            int delay = retryDelaysSec()[streamErrorRetryCount - 1];
-            safeOutput("recover", () -> output.onLog(LogLevel.WARN, "[recover] API 流式错误，第 " + streamErrorRetryCount
-                    + "/" + maxStreamErrorRetries() + " 次重试，等待 " + delay + " 秒..."));
-            try {
-                Thread.sleep(delay * 1000L);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return false;
-            }
-            // sleep 后再次检查中断
-            if (userAbortRequested) {
-                log.debug("流式错误恢复等待期间收到中断请求，跳过重试");
-                return false;
-            }
-            return true;
-        }
-        safeOutput("recoverMax", () -> output.onLog(LogLevel.ERROR, "[recover] 流式错误已达重试上限（" + maxStreamErrorRetries() + "次），放弃"));
+        // 重试逻辑已统一到 HttpModelClient.RetryContext，这里不再重试
+        safeOutput("recover", () -> output.onLog(LogLevel.WARN, "[recover] API 流式错误，重试逻辑已统一到 HttpModelClient"));
         return false;
     }
 
