@@ -1,4 +1,5 @@
 import {defineConfig} from 'vite'
+import {builtinModules} from 'node:module'
 
 // Vite 配置 — 主进程
 // 需要指定 entry + fileName(.cjs)，避免 "type": "module" 导致 ESM 报错
@@ -10,7 +11,7 @@ export default defineConfig({
       formats: ['cjs'],
     },
     rollupOptions: {
-      external: ['electron'],
+      external: ['electron', ...builtinModules],
     },
     minify: false,
     sourcemap: true,

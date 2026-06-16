@@ -191,13 +191,11 @@ function createWindow() {
     }
   })
 
-  // 使用 Electron Forge Vite plugin 提供的全局变量
-  // MAIN_WINDOW_VITE_DEV_SERVER_URL: 开发服务器 URL
-  // MAIN_WINDOW_VITE_NAME: 渲染器构建输出目录名
-  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
-    mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL)
+  // 开发模式：加载 Vite dev server；生产模式：加载打包后的 renderer
+  if (isDev) {
+    mainWindow.loadURL('http://localhost:5173')
   } else {
-    mainWindow.loadFile(path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`))
+    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
 
   if (isDev) mainWindow.webContents.openDevTools()
