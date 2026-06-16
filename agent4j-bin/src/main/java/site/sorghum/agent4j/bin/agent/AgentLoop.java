@@ -894,6 +894,11 @@ public class AgentLoop implements AgentLoopController {
     private boolean recoverFromStreamError() {
         streamErrorRetryCount++;
         if (streamErrorRetryCount <= maxStreamErrorRetries()) {
+            // 检查是否已请求中断，避免在用户停止后继续重试
+            if (userAbortRequested) {
+                log.debug("流式错误恢复，但用户已请求中断，跳过重试");
+                return false;
+            }
             int delay = retryDelaysSec()[streamErrorRetryCount - 1];
             safeOutput("recover", () -> output.onLog(LogLevel.WARN, "[recover] API 流式错误，第 " + streamErrorRetryCount
                     + "/" + maxStreamErrorRetries() + " 次重试，等待 " + delay + " 秒..."));
@@ -901,6 +906,11 @@ public class AgentLoop implements AgentLoopController {
                 Thread.sleep(delay * 1000L);
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
+                return false;
+            }
+            // sleep 后再次检查中断
+            if (userAbortRequested) {
+                log.debug("流式错误恢复等待期间收到中断请求，跳过重试");
                 return false;
             }
             return true;
