@@ -13,7 +13,9 @@
         <img src="../assets/logo.png" alt="Agent4j Logo" class="titlebar-logo-img" />
         <span class="tb-brand-name">Agent4j</span>
         <span class="tb-version" :class="{ 'has-update': hasNewVersion }" @click.stop="$emit('showUpdate')" :title="hasNewVersion ? '有新版本可用，点击查看' : ''">
-          v{{ version }}
+          <template v-if="version && version !== '未知版本'">v{{ version }}</template>
+          <template v-else-if="!version">loading...</template>
+          <template v-else>未知版本</template>
           <span v-if="hasNewVersion" class="tb-version-dot"></span>
         </span>
       </div>
