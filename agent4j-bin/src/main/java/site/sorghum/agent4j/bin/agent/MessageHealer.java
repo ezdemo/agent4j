@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.bin.agent;
 
+import org.noear.snack4.ONode;
+
 import java.util.*;
 
 /**
@@ -117,6 +119,18 @@ public class MessageHealer {
                             changed = true;
                             tcListModified = true;
                             continue; // 丢弃无效 tool_call
+                        }
+                        Object arguments = tc.arguments();
+                        if (arguments instanceof String argStr){
+                            // 是不是JSON格式 不是则改为空JSON串
+                            try {
+                                ONode.ofJson(argStr).toJson();
+                            }catch (Exception e){
+                                changed = true;
+                                tcListModified = true;
+                                cleaned.add(new ToolCallEntry(tc.id(), tcName, "{}"));
+                                continue;
+                            }
                         }
 
                         // ★ 重复 id 检测：tool_calls 数组中不允许重复 id
