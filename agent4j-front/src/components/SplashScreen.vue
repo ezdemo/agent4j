@@ -71,53 +71,23 @@
         </div>
       </template>
 
-      <!-- 安装进行中 -->
+      <!-- 安装进行中（在线安装） -->
       <template v-else-if="phase === 'installing'">
-        <div class="steps-list">
-          <div
-            v-for="(step, idx) in installSteps"
-            :key="idx"
-            class="step-item"
-            :class="{
-              'step-done': step.status === 'done',
-              'step-active': step.status === 'active',
-              'step-error': step.status === 'error'
-            }"
-          >
-            <span class="step-icon">
-              <svg v-if="step.status === 'done'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <polyline points="20 6 9 17 4 12"/>
-              </svg>
-              <svg v-else-if="step.status === 'error'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
-                <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
-              </svg>
-              <span v-else class="step-spinner"></span>
-            </span>
-            <span class="step-label">{{ step.label }}</span>
-            <span class="step-detail" v-if="step.detail">{{ step.detail }}</span>
+        <div class="status-bar status-connecting">
+          <span class="status-dot"></span>
+          <span>{{ installLogs.length === 0 ? '正在安装...' : '安装中，请稍候...' }}</span>
+        </div>
+
+        <!-- 安装日志控制台 -->
+        <div class="install-log" ref="logContainer">
+          <div v-for="(line, i) in installLogs" :key="i" class="log-line">
+            {{ line }}
           </div>
+          <div v-if="installLogs.length === 0" class="log-line log-placeholder">等待输出...</div>
         </div>
 
         <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: downloadProgress && downloadProgress.percent ? downloadProgress.percent + '%' : installProgress + '%' }"></div>
-        </div>
-
-        <!-- JDK 下载详情 -->
-        <div v-if="downloadProgress && downloadProgress.phase === 'downloading'" class="download-detail">
-          <div class="download-info-row">
-            <span class="download-label">下载进度</span>
-            <span class="download-value">{{ downloadProgress.percent || 0 }}%</span>
-          </div>
-          <div class="download-info-row">
-            <span class="download-label">{{ formatFileSize(downloadProgress.downloaded) }} / {{ formatFileSize(downloadProgress.total) }}</span>
-            <span class="download-value">{{ formatFileSize(downloadProgress.speed) }}/s</span>
-          </div>
-          <div class="download-message" v-if="downloadProgress.message">
-            {{ downloadProgress.message }}
-          </div>
-        </div>
-        <div v-else-if="downloadProgress && (downloadProgress.phase === 'extracting' || downloadProgress.phase === 'installing' || downloadProgress.phase === 'resolving')" class="download-detail">
-          <div class="download-message">{{ downloadProgress.message }}</div>
+          <div class="progress-fill progress-indeterminate"></div>
         </div>
       </template>
 
@@ -139,7 +109,15 @@
           <span>{{ errorMessage }}</span>
         </div>
         <div class="error-actions">
-          <button class="btn btn-primary" @click="retry">
+          <button class="btn btn-primary btn-online" @click="onlineInstall">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="7 10 12 15 17 10"/>
+              <line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            一键安装
+          </button>
+          <button class="btn btn-secondary" @click="retry">
             重试
           </button>
           <button class="btn btn-secondary" @click="closeApp">
@@ -152,7 +130,7 @@
 </template>
 
 <script setup>
-import {onMounted, ref} from 'vue'
+import {onMounted, ref, nextTick} from 'vue'
 import {platform} from '@/services/platform'
 // 动态获取当前平台的 agent4jWebService
 const { agent4jWebService } = platform.implementation
@@ -177,6 +155,11 @@ let downloadUnlisten = null
 
 // 是否在桌面环境（Electron）中
 const isDesktop = ref(false)
+
+// 在线安装日志
+const installLogs = ref([])
+const logContainer = ref(null)
+let unlistenInstallOutput = null
 
 onMounted(async () => {
   await checkEnvironment()
@@ -518,6 +501,44 @@ function retry() {
   checkEnvironment()
 }
 
+// 在线一键安装
+async function onlineInstall() {
+  phase.value = 'installing'
+  installLogs.value = []
+
+  // 监听安装日志事件
+  try {
+    unlistenInstallOutput = await platform.implementation.events.listen('install-output', (payload) => {
+      if (payload && payload.line) {
+        installLogs.value.push(payload.line)
+        // 自动滚动到底部
+        nextTick(() => {
+          const el = logContainer.value
+          if (el) el.scrollTop = el.scrollHeight
+        })
+      }
+    })
+  } catch (e) {
+    console.warn('[Splash] Failed to listen install output:', e)
+  }
+
+  try {
+    await agent4jWebService.installOnline()
+    // 安装成功，启动服务
+    installLogs.value.push('')
+    installLogs.value.push('✅ 安装完成，正在启动服务...')
+    await startService()
+  } catch (e) {
+    phase.value = 'error'
+    errorMessage.value = `安装失败: ${e.message || e}`
+  } finally {
+    if (unlistenInstallOutput) {
+      unlistenInstallOutput()
+      unlistenInstallOutput = null
+    }
+  }
+}
+
 async function closeApp() {
   // 使用平台抽象层关闭窗口
   try {
@@ -551,6 +572,7 @@ function formatFileSize(bytes) {
 
 defineExpose({
   retry,
+  onlineInstall,
   hide: () => { visible.value = false }
 })
 </script>
@@ -867,5 +889,44 @@ defineExpose({
   color: var(--fg-4);
   font-size: 11px;
   margin-top: 4px;
+}
+
+/* 在线安装日志控制台 */
+.install-log {
+  margin-top: 16px;
+  width: 100%;
+  max-height: 240px;
+  overflow-y: auto;
+  background: #1a1a2e;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: left;
+  font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+  font-size: 11px;
+  line-height: 1.6;
+}
+
+.log-line {
+  color: #a0aec0;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-placeholder {
+  color: #4a5568;
+  font-style: italic;
+}
+
+.btn-online {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: #fff;
+  border: none;
+}
+.btn-online:hover {
+  opacity: 0.92;
 }
 </style>

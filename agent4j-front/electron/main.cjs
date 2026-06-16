@@ -193,7 +193,7 @@ function createWindow() {
 
   // 开发模式：加载 Vite dev server；生产模式：加载打包后的 renderer
   if (isDev) {
-    mainWindow.loadURL('http://localhost:5173')
+    mainWindow.loadURL('http://localhost:3000')
   } else {
     mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
   }
@@ -250,7 +250,7 @@ ipcMain.handle('get_resource_dir', async () => {
   return path.join(__dirname, '../resources')
 })
 
-ipcMain.handle('check_install_needed', async () => ({ needed: false, reason: 'electron_mock' }))
+ipcMain.handle('check_install_needed', async () => ({ needed: false }))
 ipcMain.handle('install_agent4j_web', async () => ({ success: true, steps: ['electron_mock_install'] }))
 
 ipcMain.handle('start_agent4j_web', async () => {
@@ -275,11 +275,103 @@ ipcMain.handle('start_agent4j_web', async () => {
   }
 })
 
+// 推送安装日志到前端
+function sendInstallLog(line) {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('install-output', { type: 'log', line })
+  }
+}
+
+// 在线一键安装 agent4j（走远程脚本）
+ipcMain.handle('install_agent4j_web_online', async () => {
+  sendInstallLog('='.repeat(50))
+  sendInstallLog('  Agent4j 在线一键安装')
+  sendInstallLog('='.repeat(50))
+  sendInstallLog('')
+
+  return new Promise((resolve, reject) => {
+    let child
+    if (isWin) {
+      // Windows: irm ... | iex
+      sendInstallLog('>> 检测到 Windows 系统，使用 PowerShell 安装...')
+      const psCmd = [
+        '-ExecutionPolicy', 'Bypass', '-NoProfile', '-Command',
+        'irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex'
+      ]
+      child = spawn('powershell', psCmd, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true
+      })
+      sendInstallLog('>> 执行: irm setup.ps1 | iex')
+    } else {
+      // macOS/Linux: curl ... | bash
+      sendInstallLog('>> 检测到 Unix 系统，使用 curl 安装...')
+      // 下载脚本并管道给 bash 执行，-fsSL = 静默+显示错误+跟随跳转
+      child = spawn('bash', ['-c',
+        'curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash'
+      ], { stdio: ['ignore', 'pipe', 'pipe'] })
+      sendInstallLog('>> 执行: curl setup.sh | bash')
+    }
+
+    sendInstallLog('>> 安装进程已启动，等待输出...')
+    sendInstallLog('')
+
+    let installOutputBuffer = ''
+
+    function onInstallOutput(data) {
+      installOutputBuffer += data.toString()
+      const lines = installOutputBuffer.split('\n')
+      // 保留最后一段（可能不完整），其余发送
+      installOutputBuffer = lines.pop() || ''
+      for (const line of lines) {
+        const trimmed = line.replace(/\r$/, '')
+        if (trimmed.length > 0) {
+          sendInstallLog(trimmed)
+        }
+      }
+    }
+
+    child.stdout.on('data', onInstallOutput)
+    child.stderr.on('data', onInstallOutput)
+    child.on('exit', (code) => {
+      // 刷出 buffer 中剩余的内容
+      if (installOutputBuffer.length > 0) {
+        const trimmed = installOutputBuffer.replace(/\r$/, '')
+        if (trimmed.length > 0) {
+          sendInstallLog(trimmed)
+        }
+      }
+      installOutputBuffer = ''
+      sendInstallLog('')
+      sendInstallLog(`>> 安装进程已退出，退出码: ${code}`)
+      if (code === 0) {
+        sendInstallLog('>> ✅ Agent4j 安装成功！')
+        resolve({ success: true })
+      } else {
+        sendInstallLog('>> ❌ 安装失败，请检查网络连接后重试')
+        reject(new Error(`安装失败，退出码: ${code}`))
+      }
+    })
+    child.on('error', (err) => {
+      sendInstallLog(`>> ❌ 启动安装进程失败: ${err.message}`)
+      reject(new Error(`安装进程启动失败: ${err.message}`))
+    })
+  })
+})
+
 ipcMain.handle('stop_agent4j_web', async () => {
   cleanupAgent4jWeb()
 })
 
-ipcMain.handle('check_java_quick', async () => ({ found: true, version: '17.0.0', source: 'electron_mock' }))
+ipcMain.handle('check_java_quick', async () => {
+  try {
+    const out = execSync('java -version 2>&1').toString()
+    const m = out.match(/(\d+\.\d+\.\d+)/)
+    return { found: true, version: m ? m[1] : 'unknown', source: 'system' }
+  } catch {
+    return { found: false, version: '', source: 'none' }
+  }
+})
 ipcMain.handle('start_java_download', async () => 'started')
 
 ipcMain.handle('window-minimize', () => { if (mainWindow) mainWindow.minimize() })

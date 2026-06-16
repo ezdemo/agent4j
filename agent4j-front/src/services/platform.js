@@ -109,6 +109,12 @@ const webImplementation = {
       return 'started'
     },
 
+    // 在线安装：web 环境下跳转到浏览器下载
+    async installOnline() {
+      window.open('https://gitee.com/ezdemo/agent4j/releases')
+      return { success: true, steps: ['redirected_to_browser'] }
+    },
+
     async waitForReady(maxAttempts = 30, interval = 1000) {
       const baseUrl = await this.getBaseUrl()
 
@@ -195,6 +201,9 @@ const electronImplementation = {
     },
     async startJavaDownload() {
       return await window.electronAPI.agent4jWebService.startJavaDownload()
+    },
+    async installOnline() {
+      return await window.electronAPI.agent4jWebService.installOnline()
     },
     async waitForReady(maxAttempts = 30, interval = 1000) {
       const port = await this.getCurrentPort()
