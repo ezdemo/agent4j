@@ -290,71 +290,21 @@
           </div>
 
           <div class="update-modal-body">
-            <!-- 当前版本双栏卡片 -->
-            <div class="update-versions-grid">
-              <div class="update-version-card">
-                <div class="uvc-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
-                </div>
-                <div class="uvc-info">
-                  <div class="uvc-name">核心服务</div>
-                  <div class="uvc-version">v{{ appVersion || '-' }}</div>
-                </div>
-                <div v-if="hasNewVersion" class="uvc-status warn">有新版本</div>
-                <div v-else class="uvc-status ok">已是最新</div>
-              </div>
-
-              <div v-if="platform.isElectron" class="update-version-card">
-                <div class="uvc-icon">
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-                </div>
-                <div class="uvc-info">
-                  <div class="uvc-name">桌面端</div>
-                  <div class="uvc-version">v{{ electronVersion || '加载中...' }}</div>
-                </div>
-                <div v-if="desktopHasNewVersion" class="uvc-status warn">有新版本</div>
-                <div v-else class="uvc-status ok">已是最新</div>
-              </div>
-            </div>
-
-            <!-- 最新版本 + 发布地址 -->
-            <div class="update-latest-row">
-              <div class="ulr-label">最新发布</div>
-              <div class="ulr-version" :class="{ 'has-update': hasNewVersion || desktopHasNewVersion }">
-                v{{ latestVersion || '...' }}
-              </div>
-              <a v-if="releaseUrl" :href="releaseUrl" target="_blank" class="ulr-link" @click.prevent="openDesktopDownloadUrl">查看发布页 →</a>
-            </div>
-
-            <!-- 更新命令 -->
-            <div class="update-commands">
-              <div class="uc-label">更新命令</div>
-              <div class="uc-list">
-                <div class="uc-item" @click="copyText('irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex')" title="点击复制">
-                  <span class="uc-badge win">PS</span>
-                  <code>irm ...setup.ps1 | iex</code>
-                </div>
-                <div class="uc-item" @click="copyText('curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash')" title="点击复制">
-                  <span class="uc-badge unix">sh</span>
-                  <code>curl ...setup.sh | bash</code>
-                </div>
-              </div>
-            </div>
+            <VersionInfoPanel
+                :app-version="appVersion"
+                :electron-version="electronVersion"
+                :latest-version="latestVersion"
+                :release-url="releaseUrl"
+                :has-new-version="hasNewVersion"
+                :desktop-has-new-version="desktopHasNewVersion"
+                :checking="checkingVersion"
+                :is-electron="platform.isElectron"
+                @check="handleCheckVersion"
+                @download="openDesktopDownloadUrl"
+            />
           </div>
 
           <div class="update-modal-foot">
-            <button class="btn btn-primary" :disabled="checkingVersion" @click="handleCheckVersion">
-              <svg :class="{ 'animate-spin': checkingVersion }" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-              </svg>
-              {{ checkingVersion ? '检查中...' : '检查更新' }}
-            </button>
-            <button v-if="platform.isElectron" class="btn btn-secondary" @click="openDesktopDownloadUrl">
-              <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-              </svg>
-              下载新版
-            </button>
             <button class="btn" @click="showUpdateModal = false">关闭</button>
           </div>
         </div>
@@ -377,6 +327,7 @@ import SplashScreen from './components/SplashScreen.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import Sidebar from './components/Sidebar.vue'
 import RightPanel from './components/RightPanel.vue'
+import VersionInfoPanel from './components/VersionInfoPanel.vue'
 import ElementPanel from './components/ElementPanel.vue'
 import ChatView from './views/Chat.vue'
 import SettingsView from './views/Settings.vue'
@@ -1690,11 +1641,14 @@ watch(showSettings, (newVal) => {
 }
 
 :global(.uvc-version) {
-  font-size: 16px;
+  font-size: 13px;
   font-weight: 700;
   color: var(--fg);
   font-family: var(--font-mono);
   letter-spacing: -0.3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 :global(.uvc-status) {
