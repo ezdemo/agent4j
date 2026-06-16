@@ -202,14 +202,15 @@ function navigate() {
   }
 }
 
-function toggleDesignMode() {
+async function toggleDesignMode() {
   if (!loaded.value) return
   designMode.value = !designMode.value
   selectedComponent.value = null
+  console.log('[ElementPanel] 切换设计模式:', designMode.value)
   if (designMode.value) {
-    injectInspector()
+    await injectInspector()
   } else {
-    removeInspector()
+    await removeInspector()
   }
 }
 
@@ -283,8 +284,18 @@ async function removeInspector() {
 
   // ---- Electron 模式：通过主进程移除 ----
   if (window.electronAPI?.inspector) {
-    await window.electronAPI.inspector.remove()
-    return
+    try {
+      const result = await window.electronAPI.inspector.remove()
+      if (result.success) {
+        console.log('[ElementPanel] Electron 模式：检测脚本已移除')
+        return
+      }
+      console.warn('[ElementPanel] Electron 移除失败:', result.reason)
+      // 降级到普通模式
+    } catch (e) {
+      console.warn('[ElementPanel] Electron 移除异常:', e.message)
+      // 降级到普通模式
+    }
   }
 
   // ---- 普通模式 ----
@@ -300,9 +311,10 @@ async function removeInspector() {
       doc.querySelectorAll('.__agent4j-highlight').forEach(el => {
         el.classList.remove('__agent4j-highlight')
       })
+      console.log('[ElementPanel] 普通模式：检测脚本已移除')
     }
   } catch (e) {
-    // 忽略跨域错误
+    console.warn('[ElementPanel] 移除检测脚本失败（可能跨域）:', e.message)
   }
 }
 
@@ -573,6 +585,7 @@ function onKeydown(e) {
  */
 function onFrameMessage(e) {
   if (!e.data || e.data.type !== 'agent4j-element-click') return
+  if (!designMode.value) return  // 非设计模式下忽略
   const data = e.data
   console.log('[ElementPanel] 收到元素点击数据:', data.tag)
 

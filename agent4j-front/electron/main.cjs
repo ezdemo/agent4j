@@ -317,6 +317,7 @@ ipcMain.handle('inspector-inject', async () => {
 
   const code = `
 (function(){
+  // 已注入则跳过（但允许重新激活）
   if(window.__agent4jInspectorInjected) return;
   window.__agent4jInspectorInjected = true;
 
@@ -423,8 +424,10 @@ ipcMain.handle('inspector-inject', async () => {
     return path;
   }
 
-  // ---- 点击元素 ----
-  document.addEventListener('click', function(e){
+  // ---- 点击元素（具名函数，便于 removeEventListener） ----
+  function __agent4jClickHandler(e){
+    // 仅在设计模式激活时阻止事件
+    if(!window.__agent4jInspectorInjected) return;
     e.stopPropagation();
     e.preventDefault();
     var el=e.target; if(!el) return;
@@ -448,7 +451,6 @@ ipcMain.handle('inspector-inject', async () => {
         children:vueInfo?vueInfo.children:[]
       }, '*');
     }catch(pe){
-      // postMessage 结构化克隆失败，发送最小数据
       try{
         window.parent.postMessage({
           type:'agent4j-element-click',
@@ -463,19 +465,33 @@ ipcMain.handle('inspector-inject', async () => {
         }, '*');
       }catch(e2){}
     }
-  }, true);
+  }
 
-  // ---- 悬停高亮 ----
-  document.addEventListener('mouseover', function(e){
+  function __agent4jMouseoverHandler(e){
+    // 仅在设计模式激活时高亮
+    if(!window.__agent4jInspectorInjected) return;
     try{
       [].forEach.call(document.querySelectorAll('.__agent4j-highlight'), function(el){el.classList.remove('__agent4j-highlight');});
       e.target.classList.add('__agent4j-highlight');
     }catch(ex){}
-  }, true);
+  }
 
-  document.addEventListener('mouseout', function(e){
+  function __agent4jMouseoutHandler(e){
+    // 仅在设计模式激活时移除高亮
+    if(!window.__agent4jInspectorInjected) return;
     try{ e.target.classList.remove('__agent4j-highlight'); }catch(ex){}
-  }, true);
+  }
+
+  // 存储引用，便于 remove 时精确移除
+  window.__agent4jHandlers = {
+    click: __agent4jClickHandler,
+    mouseover: __agent4jMouseoverHandler,
+    mouseout: __agent4jMouseoutHandler
+  };
+
+  document.addEventListener('click', __agent4jClickHandler, true);
+  document.addEventListener('mouseover', __agent4jMouseoverHandler, true);
+  document.addEventListener('mouseout', __agent4jMouseoutHandler, true);
 })();
 `
 
@@ -489,23 +505,33 @@ ipcMain.handle('inspector-inject', async () => {
 
 /** 移除 iframe 中的检测脚本 */
 ipcMain.handle('inspector-remove', async () => {
-  if (!mainWindow) return { success: false }
+  if (!mainWindow) return { success: false, reason: 'no_window' }
 
   const iframeFrame = findIframeFrame(mainWindow.webContents.mainFrame)
-  if (!iframeFrame) return { success: false }
+  if (!iframeFrame) return { success: false, reason: 'no_iframe' }
 
   try {
     await iframeFrame.executeJavaScript(`
       (function(){
+        // 精确移除事件监听器
+        if(window.__agent4jHandlers){
+          try{document.removeEventListener('click', window.__agent4jHandlers.click, true);}catch(e){}
+          try{document.removeEventListener('mouseover', window.__agent4jHandlers.mouseover, true);}catch(e){}
+          try{document.removeEventListener('mouseout', window.__agent4jHandlers.mouseout, true);}catch(e){}
+          window.__agent4jHandlers = null;
+        }
+        // 清理样式和高亮
         var s=document.getElementById('__agent4j_elem_style');
         if(s) s.remove();
         [].forEach.call(document.querySelectorAll('.__agent4j-highlight'),function(el){el.classList.remove('__agent4j-highlight');});
         window.__agent4jInspectorInjected = false;
       })();
     `)
+    console.log('[Main] inspector-remove: 成功移除检测脚本')
     return { success: true }
   } catch (e) {
-    return { success: false }
+    console.error('[Main] inspector-remove: 移除失败:', e.message)
+    return { success: false, reason: e.message }
   }
 })
 
