@@ -87,7 +87,7 @@
         <span>元素检查</span>
         <button class="btn-icon-sm" @click="elementPanelOpen = false">×</button>
       </div>
-      <ElementPanel @send="onElementSend" />
+      <ElementPanel ref="elemPanelRef" @send="onElementSend" />
     </div>
 
     <!-- 右侧面板 -->
@@ -324,7 +324,7 @@
 </template>
 
 <script setup>
-import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import {message} from 'ant-design-vue'
 import {useConfirm} from './composables/useConfirm'
@@ -380,6 +380,18 @@ const elementPanelOpen = ref(false)
 const elementPanelWidth = ref(360)
 const isElementDragging = ref(false)
 const initialDataLoaded = ref(false)
+const elemPanelRef = ref(null)
+
+// 从 AI 消息中的链接点击「在元素界面打开」
+function onOpenInElement(e) {
+  const url = e.detail?.url
+  if (!url) return
+  elementPanelOpen.value = true
+  // 等 DOM 更新后再导航
+  nextTick(() => {
+    elemPanelRef.value?.loadUrl?.(url)
+  })
+}
 
 // 切换右侧面板（直接 toggle，不关心当前 tab）
 function toggleRightPanel() {
@@ -979,10 +991,13 @@ onMounted(async () => {
   // 异步获取版本信息（不阻塞启动）
   fetchVersionInfo()
 
+  // 监听从 ChatMessage 发出的「在元素界面打开」事件
+  window.addEventListener('agent4j:open-in-element', onOpenInElement)
 })
 
 onBeforeUnmount(() => {
   stopHeartbeat()
+  window.removeEventListener('agent4j:open-in-element', onOpenInElement)
 })
 
 // 获取版本信息
