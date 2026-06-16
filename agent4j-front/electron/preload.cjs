@@ -42,6 +42,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     remove: () => ipcRenderer.invoke('inspector-remove')
   },
 
+  // 打开外部链接
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+
   // 平台信息
   platform: process.platform,
   
