@@ -133,9 +133,16 @@ public class HttpModelClient implements ModelClient {
      */
     private class RetryContext {
         private final String tag;
+        /** 是否为流式调用（流式调用需要检查 SSE 连接状态） */
+        private final boolean streamMode;
 
         RetryContext(String tag) {
+            this(tag, false);
+        }
+
+        RetryContext(String tag, boolean streamMode) {
             this.tag = tag;
+            this.streamMode = streamMode;
         }
 
         /**
@@ -150,6 +157,11 @@ public class HttpModelClient implements ModelClient {
                 log.debug("[{}] {} 可重试，但已请求中断，跳过重试", tag, reason);
                 abortRequested = false;
                 throw new IOException("Request aborted by user");
+            }
+            // 流式模式下检查 SSE 连接是否还活着
+            if (streamMode && !isSseAlive()) {
+                log.debug("[{}] {} 可重试，但 SSE 连接已断开，跳过重试", tag, reason);
+                throw new IOException("SSE connection closed");
             }
             if (attempt >= RETRY_DELAYS.length) {
                 throw new IOException("[" + tag + "] 重试耗尽: " + reason);
@@ -172,6 +184,11 @@ public class HttpModelClient implements ModelClient {
                 log.debug("[{}] IO异常，但已请求中断，跳过重试", tag);
                 abortRequested = false;
                 throw new IOException("Request aborted by user", e);
+            }
+            // 流式模式下检查 SSE 连接是否还活着
+            if (streamMode && !isSseAlive()) {
+                log.debug("[{}] IO异常，但 SSE 连接已断开，跳过重试", tag);
+                throw new IOException("SSE connection closed", e);
             }
             if (attempt >= RETRY_DELAYS.length) {
                 throw e;
@@ -204,6 +221,20 @@ public class HttpModelClient implements ModelClient {
                 throw new IOException("Request aborted by user");
             }
         }
+    }
+
+    /**
+     * 检查 SSE 连接是否还活着。
+     * <p>
+     * 通过检查 activeCall 是否被取消来判断 SSE 连接状态。
+     * 如果 activeCall 为 null 或已被取消，说明 SSE 连接已断开。
+     * </p>
+     *
+     * @return true 如果 SSE 连接还活着，false 如果已断开
+     */
+    private boolean isSseAlive() {
+        Call call = activeCall;
+        return call != null && !call.isCanceled();
     }
 
     @Override
@@ -471,7 +502,7 @@ public class HttpModelClient implements ModelClient {
             return;
         }
 
-        RetryContext retry = new RetryContext("流式");
+        RetryContext retry = new RetryContext("流式", true);
         for (int attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
             Request request = new Request.Builder()
                     .url(apiUrl)

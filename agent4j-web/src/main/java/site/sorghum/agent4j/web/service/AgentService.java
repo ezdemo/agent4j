@@ -223,7 +223,7 @@ public class AgentService {
                 log.error("[prompt] 读取 ~/.agent4j/agent4j.md 失败: {}", e.getMessage());
             }
         }
-        return "你是一个智能体助手，名为Agent4J\n";
+        return Agent4jAgent.Builder.DEFAULT_SYSTEM_PROMPT;
     }
 
     /**
