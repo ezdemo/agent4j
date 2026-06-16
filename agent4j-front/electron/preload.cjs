@@ -46,6 +46,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 打开外部链接
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
 
+  // Electron 版本
+  getElectronVersion: () => ipcRenderer.invoke('get_electron_version'),
+
   // 平台信息
   platform: process.platform,
 

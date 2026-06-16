@@ -24,7 +24,7 @@
       :gitOn="rightPanelOpen"
       :elementOn="elementPanelOpen"
       :version="appVersion"
-      :hasNewVersion="hasNewVersion"
+      :hasNewVersion="hasNewVersion || desktopHasNewVersion"
       @toggleSide="sideOpen = !sideOpen"
       @openSettings="showSettings = true"
       @toggleGit="toggleRightPanel()"
@@ -282,38 +282,78 @@
       <div v-if="showUpdateModal" class="update-modal-mask" @click.self="showUpdateModal = false">
         <div class="update-modal">
           <div class="update-modal-head">
-            <span>一键{{ hasNewVersion ? '更新' : '重装' }}</span>
+            <span class="update-modal-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              版本更新
+            </span>
             <button class="btn-icon-xs" @click="showUpdateModal = false">×</button>
           </div>
-          <div class="update-modal-body">
-            <p class="update-modal-desc">在终端中执行以下命令即可完成{{ hasNewVersion ? '更新' : '重装' }}：</p>
 
-            <div class="update-platform">
-              <div class="update-platform-label">Windows（PowerShell）：</div>
-              <div class="update-code-block">
-                <code>irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex</code>
-                <button class="update-copy-btn" @click="copyText('irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex')" title="复制">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                </button>
+          <div class="update-modal-body">
+            <!-- 当前版本双栏卡片 -->
+            <div class="update-versions-grid">
+              <div class="update-version-card">
+                <div class="uvc-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+                </div>
+                <div class="uvc-info">
+                  <div class="uvc-name">核心服务</div>
+                  <div class="uvc-version">v{{ appVersion || '-' }}</div>
+                </div>
+                <div v-if="hasNewVersion" class="uvc-status warn">有新版本</div>
+                <div v-else class="uvc-status ok">已是最新</div>
+              </div>
+
+              <div v-if="platform.isElectron" class="update-version-card">
+                <div class="uvc-icon">
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+                </div>
+                <div class="uvc-info">
+                  <div class="uvc-name">桌面端</div>
+                  <div class="uvc-version">v{{ electronVersion || '加载中...' }}</div>
+                </div>
+                <div v-if="desktopHasNewVersion" class="uvc-status warn">有新版本</div>
+                <div v-else class="uvc-status ok">已是最新</div>
               </div>
             </div>
 
-            <div class="update-platform">
-              <div class="update-platform-label">macOS / Linux：</div>
-              <div class="update-code-block">
-                <code>curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash</code>
-                <button class="update-copy-btn" @click="copyText('curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash')" title="复制">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                </button>
+            <!-- 最新版本 + 发布地址 -->
+            <div class="update-latest-row">
+              <div class="ulr-label">最新发布</div>
+              <div class="ulr-version" :class="{ 'has-update': hasNewVersion || desktopHasNewVersion }">
+                v{{ latestVersion || '...' }}
+              </div>
+              <a v-if="releaseUrl" :href="releaseUrl" target="_blank" class="ulr-link" @click.prevent="openDesktopDownloadUrl">查看发布页 →</a>
+            </div>
+
+            <!-- 更新命令 -->
+            <div class="update-commands">
+              <div class="uc-label">更新命令</div>
+              <div class="uc-list">
+                <div class="uc-item" @click="copyText('irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex')" title="点击复制">
+                  <span class="uc-badge win">PS</span>
+                  <code>irm ...setup.ps1 | iex</code>
+                </div>
+                <div class="uc-item" @click="copyText('curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash')" title="点击复制">
+                  <span class="uc-badge unix">sh</span>
+                  <code>curl ...setup.sh | bash</code>
+                </div>
               </div>
             </div>
           </div>
+
           <div class="update-modal-foot">
-            <button class="btn btn-secondary" :disabled="autoUpdating" @click="handleAutoUpdate">
-              <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/>
+            <button class="btn btn-primary" :disabled="checkingVersion" @click="handleCheckVersion">
+              <svg :class="{ 'animate-spin': checkingVersion }" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
               </svg>
-              {{ autoUpdating ? '正在创建会话...' : '自动更新' }}
+              {{ checkingVersion ? '检查中...' : '检查更新' }}
+            </button>
+            <button v-if="platform.isElectron" class="btn btn-secondary" @click="openDesktopDownloadUrl">
+              <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              下载新版
             </button>
             <button class="btn" @click="showUpdateModal = false">关闭</button>
           </div>
@@ -341,7 +381,7 @@ import ElementPanel from './components/ElementPanel.vue'
 import ChatView from './views/Chat.vue'
 import SettingsView from './views/Settings.vue'
 import DashboardPanel from './components/Dashboard.vue'
-import { platform } from '@/services/platform'
+import {platform} from '@/services/platform'
 
 const store = useAppStore()
 const router = useRouter()
@@ -474,8 +514,15 @@ const workspace = ref('')
 // 版本信息
 const appVersion = ref('')
 const hasNewVersion = ref(false)
+const latestVersion = ref('')
+const releaseUrl = ref('')
 const showUpdateModal = ref(false)
 const autoUpdating = ref(false)
+
+// Electron 桌面端版本
+const electronVersion = ref('')
+const desktopHasNewVersion = ref(false)
+const checkingVersion = ref(false)
 
 // 系统提示词弹窗
 const promptModalOpen = ref(false)
@@ -1013,6 +1060,7 @@ async function fetchVersionInfo(retryCount = 0) {
       const checkRes = await systemAPI.checkLatestVersion()
       if (checkRes.success && checkRes.data) {
         hasNewVersion.value = checkRes.data.hasNewVersion
+        latestVersion.value = checkRes.data.latestVersion || ''
         if (checkRes.data.currentVersion) {
           appVersion.value = checkRes.data.currentVersion
         }
@@ -1030,6 +1078,73 @@ async function fetchVersionInfo(retryCount = 0) {
     }
     // 3 次都失败，显示未知版本
     appVersion.value = '未知版本'
+  }
+  // 桌面端：额外获取 Electron 版本并对比
+  if (platform.isElectron) {
+    fetchElectronVersion()
+  }
+}
+
+// 版本对比工具
+function compareVersions(a, b) {
+  const pa = a.split('.').map(Number)
+  const pb = b.split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0
+    const nb = pb[i] || 0
+    if (na > nb) return 1
+    if (na < nb) return -1
+  }
+  return 0
+}
+
+// 获取 Electron 版本并判断是否落后
+async function fetchElectronVersion() {
+  if (!platform.isElectron) return
+  try {
+    const ver = await window.electronAPI.getElectronVersion()
+    electronVersion.value = ver
+    if (latestVersion.value && ver && ver !== '未知') {
+      desktopHasNewVersion.value = compareVersions(ver, latestVersion.value) < 0
+    }
+  } catch (e) {
+    electronVersion.value = '未知'
+    console.warn('获取 Electron 版本失败:', e)
+  }
+}
+
+// 检查最新版本（后端 + Electron 统一检查）
+async function handleCheckVersion() {
+  checkingVersion.value = true
+  try {
+    const res = await systemAPI.checkLatestVersion()
+    if (res.success && res.data) {
+      hasNewVersion.value = res.data.hasNewVersion
+      latestVersion.value = res.data.latestVersion || ''
+      releaseUrl.value = res.data.releaseUrl || ''
+      if (res.data.currentVersion) {
+        appVersion.value = res.data.currentVersion
+      }
+      // 刷新后重新对比 Electron 版本
+      if (platform.isElectron) {
+        await fetchElectronVersion()
+      }
+    }
+  } catch { /* 忽略 */ }
+  checkingVersion.value = false
+}
+
+// 打开下载页面
+async function openDesktopDownloadUrl() {
+  const url = 'https://gitee.com/ezdemo/agent4j/releases/latest'
+  if (platform.isElectron) {
+    try {
+      await window.electronAPI.openExternal(url)
+    } catch {
+      window.open(url, '_blank')
+    }
+  } else {
+    window.open(url, '_blank')
   }
 }
 
@@ -1494,11 +1609,11 @@ watch(showSettings, (newVal) => {
 }
 
 :global(.update-modal) {
-  width: 600px;
+  width: 520px;
   max-width: 90vw;
   background: var(--bg);
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border-radius: 14px;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
   overflow: hidden;
 }
 
@@ -1506,84 +1621,218 @@ watch(showSettings, (newVal) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 18px 24px;
   border-bottom: 1px solid var(--border);
-  font-size: 15px;
+}
+
+:global(.update-modal-title) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--fg);
+}
+
+:global(.update-modal-title svg) {
+  color: var(--accent);
 }
 
 :global(.update-modal-body) {
-  padding: 20px;
+  padding: 24px;
 }
 
-:global(.update-modal-desc) {
-  font-size: 13px;
+/* 版本双栏卡片 */
+:global(.update-versions-grid) {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+:global(.update-version-card) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 0.2s;
+}
+
+:global(.update-version-card:hover) {
+  border-color: var(--accent);
+}
+
+:global(.uvc-icon) {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-3);
+  border-radius: 8px;
+  color: var(--fg-2);
+  flex-shrink: 0;
+}
+
+:global(.uvc-info) {
+  flex: 1;
+  min-width: 0;
+}
+
+:global(.uvc-name) {
+  font-size: 12px;
+  font-weight: 500;
   color: var(--fg-3);
-  margin: 0 0 16px;
+  margin-bottom: 2px;
 }
 
-:global(.update-platform) {
+:global(.uvc-version) {
+  font-size: 16px;
+  font-weight: 700;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  letter-spacing: -0.3px;
+}
+
+:global(.uvc-status) {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+:global(.uvc-status.ok) {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+}
+
+:global(.uvc-status.warn) {
+  background: rgba(255, 159, 28, 0.12);
+  color: #ff9f1c;
+}
+
+/* 最新版本行 */
+:global(.update-latest-row) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.06), rgba(168, 85, 247, 0.06));
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  border-radius: 10px;
   margin-bottom: 16px;
 }
 
-:global(.update-platform:last-child) {
-  margin-bottom: 0;
-}
-
-:global(.update-platform-label) {
+:global(.ulr-label) {
   font-size: 12px;
-  font-weight: 600;
-  color: var(--fg-2);
-  margin-bottom: 6px;
+  font-weight: 500;
+  color: var(--fg-3);
+  flex-shrink: 0;
 }
 
-:global(.update-code-block) {
+:global(.ulr-version) {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  letter-spacing: -0.5px;
+}
+
+:global(.ulr-version.has-update) {
+  color: var(--accent);
+}
+
+:global(.ulr-link) {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+  flex-shrink: 0;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+:global(.ulr-link:hover) {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+/* 更新命令 */
+:global(.update-commands) {
   display: flex;
-  align-items: center;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  padding: 10px 12px;
+  flex-direction: column;
   gap: 8px;
 }
 
-:global(.update-code-block code) {
-  flex: 1;
+:global(.uc-label) {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-3);
+}
+
+:global(.uc-list) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+:global(.uc-item) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+:global(.uc-item:hover) {
+  border-color: var(--accent);
+  background: var(--bg-3);
+}
+
+:global(.uc-item code) {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--fg);
-  word-break: break-all;
-  line-height: 1.5;
+  color: var(--fg-2);
   user-select: all;
 }
 
-:global(.update-copy-btn) {
+:global(.uc-badge) {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--r);
-  color: var(--fg-3);
-  transition: all var(--t);
-  cursor: pointer;
-  border: none;
-  background: transparent;
+  letter-spacing: 0.3px;
 }
 
-:global(.update-copy-btn:hover) {
-  background: var(--bg-3);
-  color: var(--accent);
+:global(.uc-badge.win) {
+  background: rgba(0, 120, 215, 0.15);
+  color: #0078d7;
+}
+
+:global(.uc-badge.unix) {
+  background: rgba(51, 51, 51, 0.12);
+  color: var(--fg-2);
 }
 
 :global(.update-modal-foot) {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
-  padding: 12px 20px;
+  padding: 14px 24px;
   border-top: 1px solid var(--border);
+  background: var(--bg-1);
 }
 
 [data-theme="dark"] :global(.update-modal-mask) {
