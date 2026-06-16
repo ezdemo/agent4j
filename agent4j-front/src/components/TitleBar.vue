@@ -38,7 +38,7 @@
 
     <!-- 右侧：操作按钮 + 窗口控制 -->
     <div class="titlebar-right">
-      <button class="tb-btn" title="元素检查" @click.stop="$emit('toggleElement')" @dblclick.stop :class="{ active: elementOn }">
+      <button v-if="isDesktop" class="tb-btn" title="元素检查" @click.stop="$emit('toggleElement')" @dblclick.stop :class="{ active: elementOn }">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
           <line x1="8" y1="21" x2="16" y2="21"/>
@@ -124,6 +124,21 @@ onMounted(async () => {
     // 非桌面环境（浏览器），静默忽略
   }
 })
+
+const openExternal = async (url) => {
+  if (platform.isElectron) {
+    // 桌面环境：尝试使用 electronAPI 打开外部链接
+    if (window.electronAPI && window.electronAPI.openExternal) {
+      await window.electronAPI.openExternal(url)
+    } else {
+      // 回退：使用 window.open，希望 Electron 能在默认浏览器中打开
+      window.open(url, '_system')
+    }
+  } else {
+    // 非桌面环境：使用 window.open
+    window.open(url, '_blank')
+  }
+}
 
 const minimize = async () => {
   try {
