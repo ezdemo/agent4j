@@ -1,5 +1,5 @@
 <template>
-  <div class="msg" :class="msg.role" :data-msg-idx="idx">
+  <div ref="msgRef" class="msg" :class="msg.role" :data-msg-idx="idx">
     <!-- 用户消息 -->
     <template v-if="msg.role === 'user'">
       <div class="msg-body user-body">
@@ -116,10 +116,30 @@
       </div>
     </template>
   </div>
+
+  <!-- 链接悬停浮层 -->
+  <Teleport to="body">
+    <div v-if="linkPopover.visible"
+         class="link-popover"
+         :style="{ left: linkPopover.x + 'px', top: linkPopover.y + 'px' }"
+         @mouseenter="onPopoverMouseEnter"
+         @mouseleave="onPopoverMouseLeave">
+      <button v-if="isElectron" class="link-popover-btn" @click="openInElement">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+        元素界面打开
+      </button>
+      <button class="link-popover-btn" @click="openInBrowser">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="2" y1="12" x2="22" y2="12"/><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/></svg>
+        浏览器打开
+      </button>
+    </div>
+  </Teleport>
 </template>
 
 <script setup>
 import {md} from '../utils/highlight'
+import {onMounted, onBeforeUnmount, reactive, ref} from 'vue'
+import platform from '../services/platform'
 
 const props = defineProps({
   msg: {type: Object, required: true},
@@ -128,6 +148,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['previewImage', 'rollbackSnapshot', 'copyMessage', 'sendChoice'])
+
+const isElectron = platform.isElectron
 
 // SVG 图标
 const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
@@ -138,6 +160,101 @@ const fmt = c => {
   if (!c) return ''
   return md.parse(c)
 }
+
+// ═══════════════════════════════════════════
+// 链接悬停浮层
+// ═══════════════════════════════════════════
+const msgRef = ref(null)
+const linkPopover = reactive({ visible: false, x: 0, y: 0, url: '' })
+let hideTimer = null
+
+function showLinkPopover(el) {
+  clearTimeout(hideTimer)
+  const href = el.getAttribute('href')
+  if (!href) return
+  const rect = el.getBoundingClientRect()
+  linkPopover.url = href
+  // 居中对齐，超出视口时修正
+  const centerX = rect.left + rect.width / 2
+  linkPopover.x = Math.max(80, Math.min(centerX, window.innerWidth - 80))
+  linkPopover.y = rect.bottom + 4
+  linkPopover.visible = true
+}
+
+function scheduleHide() {
+  hideTimer = setTimeout(() => {
+    linkPopover.visible = false
+  }, 150)
+}
+
+function onPopoverMouseEnter() {
+  clearTimeout(hideTimer)
+}
+
+function onPopoverMouseLeave() {
+  scheduleHide()
+}
+
+function onMsgMouseOver(e) {
+  const link = e.target.closest('.ai-link')
+  if (!link) return
+  showLinkPopover(link)
+}
+
+function onMsgMouseOut(e) {
+  const link = e.target.closest('.ai-link')
+  if (!link) return
+  const related = e.relatedTarget
+  if (related && (link.contains(related) || related.closest?.('.link-popover'))) return
+  scheduleHide()
+}
+
+function onMsgClick(e) {
+  const link = e.target.closest('.ai-link')
+  if (!link) return
+  e.preventDefault()
+  e.stopPropagation()
+  // 浏览器环境直接打开
+  if (!isElectron) {
+    window.open(link.getAttribute('href'), '_blank')
+  }
+  // 桌面环境由浮层按钮处理
+}
+
+async function openInBrowser() {
+  const url = linkPopover.url
+  linkPopover.visible = false
+  if (!url) return
+  if (window.electronAPI?.openExternal) {
+    await window.electronAPI.openExternal(url)
+  } else {
+    window.open(url, '_blank')
+  }
+}
+
+function openInElement() {
+  const url = linkPopover.url
+  linkPopover.visible = false
+  if (!url) return
+  window.dispatchEvent(new CustomEvent('agent4j:open-in-element', { detail: { url } }))
+}
+
+onMounted(() => {
+  const el = msgRef.value
+  if (!el) return
+  el.addEventListener('mouseover', onMsgMouseOver)
+  el.addEventListener('mouseout', onMsgMouseOut)
+  el.addEventListener('click', onMsgClick)
+})
+onBeforeUnmount(() => {
+  const el = msgRef.value
+  if (el) {
+    el.removeEventListener('mouseover', onMsgMouseOver)
+    el.removeEventListener('mouseout', onMsgMouseOut)
+    el.removeEventListener('click', onMsgClick)
+  }
+  clearTimeout(hideTimer)
+})
 
 // 带缓存的 reasoning Markdown 渲染
 const getReasoningHtml = (block) => {
@@ -743,5 +860,50 @@ const fmtArgs = a => {
 .choice-value {
   color: var(--accent);
   font-weight: 600;
+}
+
+/* 链接悬停浮层 */
+.link-popover {
+  position: fixed;
+  transform: translateX(-50%);
+  z-index: 9999;
+  display: flex;
+  gap: 2px;
+  background: var(--bg, #fff);
+  border: 1px solid var(--border, #e0e0e0);
+  border-radius: 8px;
+  padding: 4px;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.12), 0 1px 4px rgba(0, 0, 0, 0.08);
+  animation: link-popover-in 0.15s ease-out;
+}
+
+@keyframes link-popover-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(-4px); }
+  to { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+
+.link-popover-btn {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 6px 12px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg, #333);
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.link-popover-btn:hover {
+  background: var(--accent, #3b82f6);
+  color: #fff;
+}
+
+.link-popover-btn svg {
+  flex-shrink: 0;
 }
 </style>

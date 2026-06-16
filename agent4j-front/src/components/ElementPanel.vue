@@ -176,6 +176,14 @@ function normalizeUrl(input) {
 
 let loadedTimer = null
 
+// 暴露给父组件的方法：外部导航到指定 URL
+function loadUrl(newUrl) {
+  url.value = newUrl
+  navigate()
+}
+
+defineExpose({ loadUrl })
+
 function navigate() {
   const normalized = normalizeUrl(url.value)
   if (!normalized) return
