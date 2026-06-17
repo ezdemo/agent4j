@@ -57,10 +57,10 @@ public class ConversationContext {
     public void addUser(UserMessage msg) {
         ChatMessage chatMsg;
         if (msg != null && msg.hasImages()) {
-            chatMsg = ChatMessage.userWithImages(msg.getText(), msg.getImages());
+            chatMsg = ChatMessage.ofUser(msg.getText(), msg.getImages());
         } else {
             String text = msg != null ? msg.getText() : null;
-            chatMsg = ChatMessage.user(text);
+            chatMsg = ChatMessage.ofUser(text);
         }
         // 传递快照检查点 ID 到 ChatMessage，以便 JSONL 持久化
         if (msg != null && msg.getSnapshotId() != null) {
@@ -84,7 +84,7 @@ public class ConversationContext {
      * @param content 系统消息内容
      */
     public void addSystemMessage(String content) {
-        ChatMessage msg = ChatMessage.system(content);
+        ChatMessage msg = ChatMessage.ofSystem(content);
         history.add(msg);
         persist(msg);
     }

@@ -110,7 +110,7 @@ class ConversationContextTest {
         ctx.addUser("msg2");
 
         List<ChatMessage> folded = new ArrayList<>();
-        folded.add(ChatMessage.user("summary"));
+        folded.add(ChatMessage.ofUser("summary"));
 
         ctx.compact(folded);
         assertEquals(1, ctx.size());
@@ -120,7 +120,7 @@ class ConversationContextTest {
     @Test
     void injectHistoryDoesNotAffectSize() {
         ConversationContext ctx = createContext();
-        ChatMessage msg = ChatMessage.user("loaded");
+        ChatMessage msg = ChatMessage.ofUser("loaded");
         ctx.injectHistory(msg);
         assertEquals(1, ctx.size());
     }
