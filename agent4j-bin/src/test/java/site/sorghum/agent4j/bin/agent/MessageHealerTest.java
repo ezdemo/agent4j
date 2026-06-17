@@ -1,9 +1,6 @@
 package site.sorghum.agent4j.bin.agent;
 
 import org.junit.jupiter.api.Test;
-import site.sorghum.agent4j.bin.agent.context.MessageHealer;
-import site.sorghum.agent4j.bin.agent.model.ChatMessage;
-import site.sorghum.agent4j.bin.agent.model.ToolCallEntry;
 
 import java.util.ArrayList;
 import java.util.List;

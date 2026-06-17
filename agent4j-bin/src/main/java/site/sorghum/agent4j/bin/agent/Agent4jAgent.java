@@ -4,12 +4,6 @@ import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.dami2.Dami;
-import site.sorghum.agent4j.bin.agent.context.ConversationContext;
-import site.sorghum.agent4j.bin.agent.loop.AgentLoop;
-import site.sorghum.agent4j.bin.agent.loop.AgentLoopListener;
-import site.sorghum.agent4j.bin.agent.model.ChatMessage;
-import site.sorghum.agent4j.bin.agent.model.UserMessage;
-import site.sorghum.agent4j.bin.agent.prompt.DEFAULT_PROMPT;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
@@ -52,7 +46,7 @@ public class Agent4jAgent {
      * 对话上下文
      * -- GETTER --
      *  获取会话上下文（用于外部截断历史等操作）。
-     *
+
      */
     @Getter
     private final ConversationContext ctx;
@@ -130,7 +124,16 @@ public class Agent4jAgent {
     }
 
     /**
-     * 初始化会话持久化和 Agent 推理循环。
+     * 初始化会话持久化和 Agent 推理循环（两个构造函数共享的逻辑）。
+     * <p>
+     * 完成 WorkspaceManager 初始化、SessionService 创建、
+     * 历史会话加载以及 AgentLoop 的构造与 SessionService 绑定。
+     * </p>
+     *
+     * @param client   模型客户端（HttpModelClient 或共享实例）
+     * @param registry 工具注册表
+     * @param hitl     是否启用人工审批
+     * @return 构造完成的 AgentLoop 实例
      */
     private AgentLoop initSessionAndLoop(ModelClient client, ToolRegistry registry, boolean hitl) {
         try {
@@ -151,6 +154,9 @@ public class Agent4jAgent {
         return agentLoop;
     }
 
+    // 使用 ToolDefHelper 提供的公共方法
+
+
     // ========== 公共 API ==========
 
     public static Builder builder() {
@@ -159,9 +165,12 @@ public class Agent4jAgent {
 
     /**
      * 如果当前会话尚未生成标题，则根据用户消息生成标题。
+     *
+     * @param userMessage 用户消息内容
      */
     private void generateSessionTitleIfNeeded(String userMessage) {
         if (sessionService != null && !sessionService.isTitleGenerated()) {
+            // 确保会话名已分配（新会话的 currentName 初始为 null，延迟到首次 append 才分配）
             sessionService.ensureSessionName();
             String title = sessionService.generateSessionTitle(userMessage);
             sessionService.updateCurrentSessionTitle(title);
@@ -172,6 +181,15 @@ public class Agent4jAgent {
 
     /**
      * 处理用户输入，自动路由 "/" 命令或转发到 LLM 推理循环。
+     * <p>
+     * 命令处理通过 {@link ChatCommandRegistry} 自动分发 ——
+     * 新增命令只需实现 {@link ChatCommand} 接口并标注 {@code @Component}，
+     * 即可被 IoC 容器收集并在此处自动匹配执行。
+     * </p>
+     * <p>
+     * {@link UserMessage} 支持纯文本和多模态（文本+图片）输入。
+     * 传递 {@code null} 用于 HITL 恢复。
+     * </p>
      */
     @SneakyThrows
     public String chat(UserMessage userMessage) {
@@ -186,6 +204,7 @@ public class Agent4jAgent {
             if (cmdResult.result() != null) {
                 return cmdResult.result();
             }
+            // 命令修改了消息内容，继续用修改后的消息走聊天流程
             if (cmdResult.modifiedMessage() != null) {
                 userMessage = cmdResult.modifiedMessage();
             }
@@ -202,11 +221,13 @@ public class Agent4jAgent {
         return loop.run(userMessage);
     }
 
-    /** 命令处理结果 */
+    /** 命令处理结果：result 为返回给用户的字符串（null=继续聊天），modifiedMessage 为命令修改后的消息 */
     private record CommandHandleResult(String result, UserMessage modifiedMessage) {}
 
     /**
      * 尝试将输入路由到斜杠命令。
+     *
+     * @return 命令处理结果；若未匹配到命令返回 {@code null}
      */
     @SneakyThrows
     private CommandHandleResult tryHandleCommand(UserMessage userMessage) {
@@ -217,7 +238,7 @@ public class Agent4jAgent {
 
         ChatCommand cmd = commandRegistry.match(text);
         if (cmd == null) {
-            return null;
+            return null; // "/" 开头但不是已知命令，降级为普通聊天消息
         }
 
         MessageWrapper wrapper = MessageWrapper.builder().message(text).build();
@@ -225,6 +246,7 @@ public class Agent4jAgent {
                 this, null, () -> this.terminated = true);
         ChatCommand.CommandResult result = cmd.execute(wrapper, cmdContext);
 
+        // 命令可能修改了文本内容
         String newText = wrapper.getMessage();
         UserMessage updated = UserMessage.of(newText, userMessage.getImages());
 
@@ -236,16 +258,17 @@ public class Agent4jAgent {
             return new CommandHandleResult("/exit", null);
         }
         if (cmd.isSilent()) {
-            return new CommandHandleResult(null, null);
+            return new CommandHandleResult(null, null); // 静默命令不返回确认消息
         }
         if (result != ChatCommand.CommandResult.LOOP) {
             return new CommandHandleResult("✅ 已执行 " + newText + " 命令", null);
         }
+        // LOOP: 命令已修改消息，继续走正常聊天流程
         return new CommandHandleResult(null, updated);
     }
 
     /**
-     * 检查当前会话是否有未完成的活跃目标。
+     * 检查当前会话是否有未完成的活跃目标，若有则注入系统消息提醒用户。
      */
     private void detectAndNotifyPendingGoal() {
         if (sessionService == null || workspaceManager == null) return;
@@ -272,10 +295,13 @@ public class Agent4jAgent {
 
     /**
      * 切换到指定会话。
+     * 切换后加载历史消息到上下文并恢复 token 用量。
      */
     public void bindSession(String name) {
         boolean ok = getSessionStore().bindTo(name);
         if (ok) {
+            // 加载会话历史消息到上下文，将 JSONL 中的 OpenAI 格式 tool_calls
+            // 转回内存格式 {id, name, arguments}，与新创建的消息保持一致
             try {
                 List<ChatMessage> loaded = getSessionStore().load();
                 for (ChatMessage m : loaded) {
@@ -284,6 +310,7 @@ public class Agent4jAgent {
             } catch (IOException e) {
                 log.error("[session] 加载会话历史失败: {}", e.getMessage());
             }
+            // 恢复该会话的 token 用量
             sessionService.restoreUsage(name);
             String existingTitle = getSessionStore().getTitle(name);
             sessionService.setTitleGenerated(existingTitle != null && !existingTitle.isEmpty());
@@ -318,7 +345,7 @@ public class Agent4jAgent {
         return sessionService.getModelUsage();
     }
 
-    /** getMaxContextTokens 回退默认值 */
+    /** getMaxContextTokens 回退默认值（模型客户端不可用时的保守值） */
     private static final int DEFAULT_FALLBACK_MAX_TOKENS = 128000;
 
     /**
@@ -357,13 +384,20 @@ public class Agent4jAgent {
 
     /**
      * 设置输出接口。
+     * <p>
+     * 所有 Agent 的输出（流式内容、思考、工具调用、日志等）都会通过此接口发送。
+     * 默认使用 {@link ConsoleAgentOutput} 打印到控制台。
+     * 可传入自定义实现（如 WebSocket SSE、日志文件等）。
+     * </p>
+     *
+     * @param output 输出接口实现，传入 null 则使用 NOOP（关闭输出）
      */
     public void setOutput(AgentOutput output) {
         loop.setOutput(output);
     }
 
     /**
-     * 设置当前会话ID
+     * 设置当前会话ID（用于工具执行上下文）
      */
     public void setSessionId(String sessionId) {
         if (loop != null) {
@@ -391,38 +425,67 @@ public class Agent4jAgent {
         return loop.isPlanMode();
     }
 
+    /**
+     * 进入/退出 Plan Mode（提示词始终包含规则，仅切换 dispatch 门控）
+     */
     public void setPlanMode(boolean on) {
         loop.setPlanMode(on);
     }
 
+    /**
+     * 获取 HITL 模式状态
+     */
     public boolean isHitlMode() {
         return loop.isHitlMode();
     }
 
+    /**
+     * 直接设置 HITL 模式（用于配置热更新）
+     */
     public void setHitlMode(boolean on) {
         loop.setHitlMode(on);
     }
 
+    /**
+     * 运行时切换模型（热更新）。
+     * 每个 Agent 持有自己的 ModelClient，互不影响。
+     */
     public void setModel(String model) {
         loop.setModel(model);
     }
 
+    /**
+     * 运行时切换推理强度（热更新）。
+     * 取值: low / medium / high / max
+     */
     public void setReasoningEffort(String reasoningEffort) {
         loop.setReasoningEffort(reasoningEffort);
     }
 
+    /**
+     * 切换 HITL 模式
+     */
     public void toggleHitl() {
         loop.toggleHitl();
     }
 
+    /**
+     * 批准待执行的工具调用
+     */
     public void approveHITL() {
         loop.approveHITL();
     }
 
+    /**
+     * 拒绝待执行的工具调用
+     */
     public void denyHITL() {
         loop.denyHITL();
     }
 
+    /**
+     * 是否有待审批的工具调用
+     */
     public boolean noPendingHITL() {
         return !loop.hasPendingHITL();
     }
@@ -435,7 +498,8 @@ public class Agent4jAgent {
     }
 
     /**
-     * 中断当前聊天
+     * 中断当前聊天 —— 调用底层 ModelClient 的中断方法。
+     * 用于前端主动停止生成。
      */
     public void abort() {
         if (loop != null) {
@@ -445,6 +509,7 @@ public class Agent4jAgent {
 
     /**
      * 刷入会话数据到磁盘。
+     * 每轮对话结束后调用，确保消息已持久化。
      */
     public void flushSession() {
         sessionService.flush();
@@ -470,7 +535,7 @@ public class Agent4jAgent {
         String apiKey;
         String model = "deepseek-v4-flash";
         /**
-         * 默认系统提示词
+         * 默认系统提示词。如果 ~/.agent4j/agent4j.md 存在则从中读取，否则用此硬编码默认值。
          */
         String systemPrompt = DEFAULT_SYSTEM_PROMPT;
         Path workspace = null;
@@ -478,23 +543,32 @@ public class Agent4jAgent {
         List<String> blockedPaths;
         boolean hitl;
         /**
-         * 命令注册表
+         * 命令注册表（Solon 自动收集的 ChatCommand Bean）
          */
         ChatCommandRegistry commandRegistry;
         /**
-         * 共享的 ModelClient
+         * 共享的 ModelClient（用于轻量级构建，避免重复创建 HTTP 客户端）
          */
         ModelClient sharedModelClient;
+        /**
+         * 共享的 system prompt（用于轻量级构建）
+         */
+
 
         /**
          * 首次运行时自动安装默认系统提示词到 ~/.agent4j/agent4j.md。
+         * <p>
+         * 从 classpath 读取打包的 default-agent4j.md，写入用户目录。
+         * 如果目标文件已存在则跳过，不覆盖用户自定义内容。
+         * </p>
          */
         public static void installDefaultPromptIfNeeded() {
             Path homeDir = Paths.get(System.getProperty("user.home"), ".agent4j");
             Path target = homeDir.resolve("agent4j.md");
             if (Files.exists(target)) {
-                return;
+                return; // 用户已有自定义提示词，不覆盖
             }
+            // 从 classpath 读取打包的默认提示词
             try (var is = Agent4jAgent.class.getClassLoader().getResourceAsStream("default-agent4j.md")) {
                 if (is == null) {
                     log.warn("[prompt] classpath 中未找到 default-agent4j.md，跳过自动安装");
@@ -514,9 +588,12 @@ public class Agent4jAgent {
 
         /**
          * 加载用户级默认系统提示词。
+         * 优先级：~/.agent4j/agent4j.md > 硬编码默认值
          */
         private static String loadDefaultSystemPrompt() {
+            // 先确保默认提示词文件已安装
             installDefaultPromptIfNeeded();
+            // 如果 ~/.agent4j/agent4j.md 存在，以其内容作为默认系统提示词
             Path homePrompt = Paths.get(System.getProperty("user.home"), ".agent4j", "agent4j.md");
             if (Files.exists(homePrompt)) {
                 try {
@@ -581,8 +658,14 @@ public class Agent4jAgent {
             return this;
         }
 
+
+
         /**
          * 构建轻量级 Agent 实例。
+         * 共享 ModelClient，仅创建独立的会话上下文。
+         * 适用于"一个会话一个 Agent"场景，减少资源消耗。
+         *
+         * @return 轻量级 Agent 实例
          */
         public Agent4jAgent buildLightweight() {
             Objects.requireNonNull(sharedModelClient, "sharedModelClient is required");

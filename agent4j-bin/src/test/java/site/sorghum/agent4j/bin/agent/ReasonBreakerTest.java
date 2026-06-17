@@ -2,7 +2,6 @@ package site.sorghum.agent4j.bin.agent;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import site.sorghum.agent4j.bin.agent.breaker.ReasonBreaker;
 
 import static org.junit.jupiter.api.Assertions.*;
 

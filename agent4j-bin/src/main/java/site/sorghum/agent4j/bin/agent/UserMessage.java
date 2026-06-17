@@ -1,4 +1,4 @@
-package site.sorghum.agent4j.bin.agent.model;
+package site.sorghum.agent4j.bin.agent;
 
 import lombok.Getter;
 import lombok.Setter;
