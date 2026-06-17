@@ -40,7 +40,7 @@ export default defineConfig({
   },
   
   build: {
-    outDir: 'dist',
+    outDir: 'dist/renderer',
     assetsDir: 'assets',
     sourcemap: false,
     minify: 'esbuild',
@@ -49,9 +49,13 @@ export default defineConfig({
         chunkFileNames: 'assets/js/[name]-[hash].js',
         entryFileNames: 'assets/js/[name]-[hash].js',
         assetFileNames: 'assets/[ext]/[name]-[hash].[ext]',
-        manualChunks: {
-          vue: ['vue', 'vue-router', 'pinia'],
-          vendor: ['axios']
+        manualChunks(id) {
+          if (id.includes('node_modules/vue') || id.includes('node_modules/vue-router') || id.includes('node_modules/pinia')) {
+            return 'vue';
+          }
+          if (id.includes('node_modules/axios')) {
+            return 'vendor';
+          }
         }
       }
     },

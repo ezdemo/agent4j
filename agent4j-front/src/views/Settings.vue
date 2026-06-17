@@ -1313,56 +1313,20 @@ X-Custom-Header=value"
         <section v-if="activeTab === 'about'" class="settings-section">
           <div class="section-card">
             <div class="card-body">
-              <!-- 版本信息 -->
-              <div class="about-info">
-                <div class="about-row">
-                  <span class="about-label">应用名称</span>
-                  <span class="about-value">{{ aboutInfo.name }}</span>
-                </div>
-                <div class="about-row">
-                  <span class="about-label">当前版本</span>
-                  <span class="about-value version-number">v{{ aboutInfo.version }}</span>
-                </div>
-                <div class="about-row" v-if="aboutInfo.latestVersion">
-                  <span class="about-label">最新版本</span>
-                  <span class="about-value" :class="{ 'has-update': aboutInfo.hasNewVersion }">
-                    v{{ aboutInfo.latestVersion }}
-                    <span v-if="aboutInfo.hasNewVersion" class="update-badge">有新版本</span>
-                  </span>
-                </div>
-                <div class="about-row" v-if="aboutInfo.releaseUrl">
-                  <span class="about-label">发布地址</span>
-                  <a :href="aboutInfo.releaseUrl" target="_blank" class="about-link">{{ aboutInfo.releaseUrl }}</a>
-                </div>
-                <div class="about-row" v-if="aboutInfo.releaseNotes">
-                  <span class="about-label">发布说明</span>
-                  <div class="about-value about-notes" v-html="renderMarkdown(aboutInfo.releaseNotes)"></div>
-                </div>
-                <div class="about-row" v-if="aboutInfo.checkTime">
-                  <span class="about-label">检查时间</span>
-                  <span class="about-value">{{ aboutInfo.checkTime }}</span>
-                </div>
-              </div>
-
-              <!-- 操作按钮 -->
-              <div class="about-actions">
-                <button class="btn btn-primary" :disabled="aboutChecking" @click="handleCheckVersion">
-                  <svg :class="{ 'animate-spin': aboutChecking }" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                    <polyline points="23 4 23 10 17 10"/>
-                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                  </svg>
-                  {{ aboutChecking ? '检查中...' : '检查更新' }}
-                </button>
-                <button class="btn" :class="aboutInfo.hasNewVersion ? 'btn-primary' : 'btn-secondary'" @click="showUpdateModal = true" :disabled="!aboutInfo.latestVersion">
-                  <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                    <polyline points="23 4 23 10 17 10"/>
-                    <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                  </svg>
-                  {{ aboutInfo.hasNewVersion ? '更新' : '重新安装' }}
-                </button>
-              </div>
-
-              <!-- 错误信息 -->
+              <VersionInfoPanel
+                  :app-version="aboutInfo.version"
+                  :electron-version="electronVersion"
+                  :latest-version="aboutInfo.latestVersion"
+                  :release-url="aboutInfo.releaseUrl"
+                  :has-new-version="aboutInfo.hasNewVersion"
+                  :desktop-has-new-version="desktopInfo.hasNewVersion"
+                  :checking="aboutChecking"
+                  :is-electron="platform.isElectron"
+                  :auto-updating="autoUpdating"
+                  @check="handleCheckVersion"
+                  @download="openDesktopDownload"
+                  @auto-update="handleAutoUpdateFromPanel"
+              />
               <div v-if="aboutError" class="about-error">{{ aboutError }}</div>
             </div>
           </div>
@@ -1594,57 +1558,26 @@ X-Custom-Header=value"
     </div>
   </Teleport>
 
-  <!-- 一键更新/重装 弹窗 -->
-  <Teleport to="body">
-    <div v-if="showUpdateModal" class="update-modal-mask" @click.self="showUpdateModal = false">
-      <div class="update-modal">
-        <div class="update-modal-head">
-          <span>一键{{ aboutInfo.hasNewVersion ? '更新' : '重装' }}</span>
-          <button class="btn-icon-xs" @click="showUpdateModal = false">×</button>
-        </div>
-        <div class="update-modal-body">
-          <p class="update-modal-desc">在终端中执行以下命令即可完成{{ aboutInfo.hasNewVersion ? '更新' : '重装' }}：</p>
-
-          <div class="update-platform">
-            <div class="update-platform-label">Windows（PowerShell）：</div>
-            <div class="update-code-block">
-              <code>irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex</code>
-              <button class="update-copy-btn" @click="copyText('irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex')" title="复制">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              </button>
-            </div>
-          </div>
-
-          <div class="update-platform">
-            <div class="update-platform-label">macOS / Linux：</div>
-            <div class="update-code-block">
-              <code>curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash</code>
-              <button class="update-copy-btn" @click="copyText('curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash')" title="复制">
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              </button>
-            </div>
-          </div>
-        </div>
-        <div class="update-modal-foot">
-          <button class="btn btn-secondary" :disabled="autoUpdating" @click="handleAutoUpdate">
-            <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-              <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/>
-            </svg>
-            {{ autoUpdating ? '正在创建会话...' : '自动更新' }}
-          </button>
-          <button class="btn" @click="showUpdateModal = false">关闭</button>
-        </div>
-      </div>
-    </div>
-  </Teleport>
 </template>
 
 <script setup>
 import {computed, onMounted, reactive, ref, watch} from 'vue'
 import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
-import {configAPI, openApiAPI, mcpAPI, lspAPI, skillMarketAPI, agentAPI, toolsAPI, systemAPI, DEFAULT_API_BASE} from '../services/api'
-import { md } from '../utils/highlight'
+import {
+  agentAPI,
+  configAPI,
+  DEFAULT_API_BASE,
+  lspAPI,
+  mcpAPI,
+  openApiAPI,
+  skillMarketAPI,
+  systemAPI,
+  toolsAPI
+} from '../services/api'
+import {md} from '../utils/highlight'
+import platform from '../services/platform'
+import VersionInfoPanel from '../components/VersionInfoPanel.vue'
 
 const store = useAppStore()
 
@@ -1740,23 +1673,20 @@ const aboutInfo = ref({
 const aboutChecking = ref(false)
 const aboutError = ref('')
 const showUpdateModal = ref(false)
+const electronVersion = ref('')
 const autoUpdating = ref(false)
-const autoUpdateTip = ref('')
 
 const emit = defineEmits(['auto-update'])
 
-async function handleAutoUpdate() {
-  autoUpdating.value = true
-  autoUpdateTip.value = ''
-  try {
-    emit('auto-update')
-  } catch (e) {
-    autoUpdateTip.value = '操作失败: ' + (e.message || '未知错误')
-  } finally {
-    autoUpdating.value = false
-  }
-}
-// 检查更新（同时刷新当前版本）
+// 桌面端版本信息（由 handleCheckVersion 一并更新）
+const desktopInfo = ref({
+  latestVersion: null,
+  hasNewVersion: false,
+  releaseUrl: null,
+  checkTime: null
+})
+
+// 检查更新（同时刷新当前版本和桌面端版本信息）
 async function handleCheckVersion() {
   aboutChecking.value = true
   aboutError.value = ''
@@ -1775,6 +1705,20 @@ async function handleCheckVersion() {
         releaseNotes: res.data.releaseNotes,
         checkTime: res.data.checkTime,
         version: res.data.currentVersion || aboutInfo.value.version
+      }
+      // 同步更新桌面端版本信息
+      if (platform.isElectron) {
+        await fetchElectronVersion()
+        const ver = electronVersion.value
+        if (ver && ver !== '未知' && res.data.latestVersion) {
+          desktopInfo.value = {
+            ...desktopInfo.value,
+            latestVersion: res.data.latestVersion,
+            hasNewVersion: compareVersions(ver, res.data.latestVersion) < 0,
+            releaseUrl: res.data.releaseUrl || 'https://gitee.com/ezdemo/agent4j/releases/latest',
+            checkTime: res.data.checkTime
+          }
+        }
       }
     } else {
       aboutError.value = res.message || '检查版本失败'
@@ -1800,6 +1744,31 @@ async function handleRefreshVersion() {
     }
   } catch (e) {
     aboutError.value = e.message || '无法获取版本信息'
+  }
+}
+
+// 版本对比工具
+function compareVersions(a, b) {
+  const pa = a.split('.').map(Number)
+  const pb = b.split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0
+    const nb = pb[i] || 0
+    if (na > nb) return 1
+    if (na < nb) return -1
+  }
+  return 0
+}
+
+// 自动更新：转发给父组件（App.vue）处理
+async function handleAutoUpdateFromPanel() {
+  autoUpdating.value = true
+  try {
+    emit('auto-update')
+  } catch (e) {
+    console.warn('自动更新失败:', e)
+  } finally {
+    autoUpdating.value = false
   }
 }
 
@@ -1923,7 +1892,7 @@ function isSkillInstalled(slug) {
 }
 
 // 标签页配置
-const tabs = [
+const tabs = computed(() => [
   {
     id: 'general',
     label: '基本设置',
@@ -2002,6 +1971,7 @@ const tabs = [
       <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
     </svg>`
   },
+  // Electron 桌面端专属设置（已合并到关于页面的 VersionInfoPanel 中）
   {
     id: 'about',
     label: '关于',
@@ -2010,7 +1980,32 @@ const tabs = [
       <circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/>
     </svg>`
   }
-]
+])
+
+// 获取 Electron 版本
+async function fetchElectronVersion() {
+  if (!platform.isElectron) return
+  try {
+    electronVersion.value = await window.electronAPI.getElectronVersion()
+  } catch (e) {
+    electronVersion.value = '未知'
+    console.warn('获取 Electron 版本失败:', e)
+  }
+}
+
+// 打开下载页面
+async function openDesktopDownload(url) {
+  const target = url || 'https://gitee.com/ezdemo/agent4j/releases/latest'
+  if (platform.isElectron) {
+    try {
+      await window.electronAPI.openExternal(target)
+    } catch {
+      window.open(target, '_blank')
+    }
+  } else {
+    window.open(target, '_blank')
+  }
+}
 
 // 主题选项
 const themes = [
@@ -2021,7 +2016,7 @@ const themes = [
 ]
 
 // 计算属性
-const currentTab = computed(() => tabs.find(t => t.id === activeTab.value))
+const currentTab = computed(() => tabs.value.find(t => t.id === activeTab.value))
 
 // 监听设置变化
 watch(settings, () => {

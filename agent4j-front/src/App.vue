@@ -22,11 +22,13 @@
       :hasMessages="true"
       :hasSession="!!currentSession"
       :gitOn="rightPanelOpen"
+      :elementOn="elementPanelOpen"
       :version="appVersion"
-      :hasNewVersion="hasNewVersion"
+      :hasNewVersion="hasNewVersion || desktopHasNewVersion"
       @toggleSide="sideOpen = !sideOpen"
       @openSettings="showSettings = true"
       @toggleGit="toggleRightPanel()"
+      @toggleElement="toggleElementPanel()"
       @viewPrompt="viewSystemPrompt"
       @showUpdate="showUpdateModal = true"
     />
@@ -68,6 +70,26 @@
       />
     </main>
 
+    <!-- 元素面板（保活：用 v-show） -->
+    <div
+      v-show="elementPanelOpen"
+      class="element-panel-wrapper"
+      :class="{ dragging: isElementDragging }"
+      :style="{ width: elementPanelWidth + 'px' }"
+    >
+      <!-- 拖拽手柄 -->
+      <div
+        class="element-resize-handle"
+        @mousedown.prevent="onElementResizeStart"
+        title="拖拽调整宽度"
+      ></div>
+      <div class="element-panel-header">
+        <span>元素检查</span>
+        <button class="btn-icon-sm" @click="elementPanelOpen = false">×</button>
+      </div>
+      <ElementPanel ref="elemPanelRef" @send="onElementSend" />
+    </div>
+
     <!-- 右侧面板 -->
     <RightPanel
       :open="rightPanelOpen"
@@ -76,7 +98,6 @@
       :session-name="currentSession"
       :sessions="sessions"
       @close="rightPanelOpen = false"
-      @element-send="onElementSend"
     />
 
       <!-- 系统提示词 Modal -->
@@ -261,40 +282,93 @@
       <div v-if="showUpdateModal" class="update-modal-mask" @click.self="showUpdateModal = false">
         <div class="update-modal">
           <div class="update-modal-head">
-            <span>一键{{ hasNewVersion ? '更新' : '重装' }}</span>
+            <span class="update-modal-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+              版本更新
+            </span>
             <button class="btn-icon-xs" @click="showUpdateModal = false">×</button>
           </div>
-          <div class="update-modal-body">
-            <p class="update-modal-desc">在终端中执行以下命令即可完成{{ hasNewVersion ? '更新' : '重装' }}：</p>
 
-            <div class="update-platform">
-              <div class="update-platform-label">Windows（PowerShell）：</div>
-              <div class="update-code-block">
-                <code>irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex</code>
-                <button class="update-copy-btn" @click="copyText('irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex')" title="复制">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                </button>
+          <div class="update-modal-body">
+            <VersionInfoPanel
+                :app-version="appVersion"
+                :electron-version="electronVersion"
+                :latest-version="latestVersion"
+                :release-url="releaseUrl"
+                :has-new-version="hasNewVersion"
+                :desktop-has-new-version="desktopHasNewVersion"
+                :checking="checkingVersion"
+                :is-electron="platform.isElectron"
+                :auto-updating="autoUpdating"
+                @check="handleCheckVersion"
+                @download="openDesktopDownloadUrl"
+                @auto-update="handleAutoUpdate"
+            />
+          </div>
+
+          <div class="update-modal-foot">
+            <button class="btn" @click="showUpdateModal = false">关闭</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
+
+    <!-- 核心服务版本落后提示弹窗（仅桌面端） -->
+    <Teleport to="body">
+      <div v-if="showCoreServiceUpdateModal" class="update-modal-mask" @click.self="!coreServiceUpdating && !coreServiceUpdateDone && (showCoreServiceUpdateModal = false)">
+        <div class="update-modal" style="max-width: 520px;">
+          <div class="update-modal-head">
+            <span class="update-modal-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              核心服务更新
+            </span>
+            <button class="btn-icon-xs" @click="showCoreServiceUpdateModal = false" :disabled="coreServiceUpdating || coreServiceUpdateDone" v-show="!coreServiceUpdateDone">×</button>
+          </div>
+
+          <div class="update-modal-body">
+            <!-- 版本对比 -->
+            <div class="core-service-update-versions">
+              <div class="version-row">
+                <span class="version-label">桌面端</span>
+                <span class="version-badge version-new">v{{ desktopAppVersion }}</span>
+              </div>
+              <div class="version-row">
+                <span class="version-label">核心服务</span>
+                <span class="version-badge version-old">v{{ appVersion }}</span>
               </div>
             </div>
 
-            <div class="update-platform">
-              <div class="update-platform-label">macOS / Linux：</div>
-              <div class="update-code-block">
-                <code>curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash</code>
-                <button class="update-copy-btn" @click="copyText('curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash')" title="复制">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-                </button>
+            <!-- 安装日志 -->
+            <div v-if="coreServiceUpdating || installLogs.length > 0" class="install-log-container">
+              <div class="install-log" ref="logContainer">
+                <div v-for="(line, i) in installLogs" :key="i" class="log-line">{{ line }}</div>
+                <div v-if="installLogs.length === 0" class="log-line log-placeholder">等待输出...</div>
               </div>
+            </div>
+
+            <!-- 更新成功提示 -->
+            <div v-if="coreServiceUpdateDone" class="update-success-tip">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              <span>更新完成，请关闭程序后重新启动</span>
             </div>
           </div>
+
           <div class="update-modal-foot">
-            <button class="btn btn-secondary" :disabled="autoUpdating" @click="handleAutoUpdate">
-              <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/>
-              </svg>
-              {{ autoUpdating ? '正在创建会话...' : '自动更新' }}
+            <button v-if="coreServiceUpdateDone" class="btn btn-primary" @click="closeAppAfterUpdate">
+              关闭程序
             </button>
-            <button class="btn" @click="showUpdateModal = false">关闭</button>
+            <template v-else>
+              <button class="btn btn-secondary" @click="showCoreServiceUpdateModal = false" :disabled="coreServiceUpdating">
+                稍后
+              </button>
+              <button class="btn btn-primary" @click="handleCoreServiceUpdate" :disabled="coreServiceUpdating">
+                <span v-if="coreServiceUpdating" class="btn-spinner"></span>
+                {{ coreServiceUpdating ? '更新中...' : '立即更新' }}
+              </button>
+            </template>
           </div>
         </div>
       </div>
@@ -303,7 +377,7 @@
 </template>
 
 <script setup>
-import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useRouter} from 'vue-router'
 import {message} from 'ant-design-vue'
 import {useConfirm} from './composables/useConfirm'
@@ -316,10 +390,12 @@ import SplashScreen from './components/SplashScreen.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import Sidebar from './components/Sidebar.vue'
 import RightPanel from './components/RightPanel.vue'
+import VersionInfoPanel from './components/VersionInfoPanel.vue'
+import ElementPanel from './components/ElementPanel.vue'
 import ChatView from './views/Chat.vue'
 import SettingsView from './views/Settings.vue'
 import DashboardPanel from './components/Dashboard.vue'
-import { platform } from '@/services/platform'
+import {platform} from '@/services/platform'
 
 const store = useAppStore()
 const router = useRouter()
@@ -354,12 +430,76 @@ const showSettings = ref(false)
 const showDashboard = ref(false)
 const rightPanelOpen = ref(false)
 const rightPanelTab = ref('git')
+const elementPanelOpen = ref(false)
+const elementPanelWidth = ref(360)
+const isElementDragging = ref(false)
 const initialDataLoaded = ref(false)
+const elemPanelRef = ref(null)
+
+// 从 AI 消息中的链接点击「在元素界面打开」
+function onOpenInElement(e) {
+  const url = e.detail?.url
+  if (!url) return
+  elementPanelOpen.value = true
+  // 等 DOM 更新后再导航
+  nextTick(() => {
+    elemPanelRef.value?.loadUrl?.(url)
+  })
+}
 
 // 切换右侧面板（直接 toggle，不关心当前 tab）
 function toggleRightPanel() {
   rightPanelOpen.value = !rightPanelOpen.value
 }
+
+// 切换元素面板
+function toggleElementPanel() {
+  elementPanelOpen.value = !elementPanelOpen.value
+}
+
+// 元素面板拖拽调整宽度
+const ELEMENT_MIN_WIDTH = 280
+const ELEMENT_MAX_WIDTH = 800
+
+function onElementResizeStart(e) {
+  isElementDragging.value = true
+  document.body.style.cursor = 'ew-resize'
+  document.body.style.userSelect = 'none'
+  document.addEventListener('mousemove', onElementResizeMove)
+  document.addEventListener('mouseup', onElementResizeEnd)
+}
+
+function onElementResizeMove(e) {
+  if (!isElementDragging.value) return
+  const viewportWidth = window.innerWidth
+  const newWidth = viewportWidth - e.clientX
+  elementPanelWidth.value = Math.min(ELEMENT_MAX_WIDTH, Math.max(ELEMENT_MIN_WIDTH, newWidth))
+}
+
+function onElementResizeEnd() {
+  isElementDragging.value = false
+  document.body.style.cursor = ''
+  document.body.style.userSelect = ''
+  document.removeEventListener('mousemove', onElementResizeMove)
+  document.removeEventListener('mouseup', onElementResizeEnd)
+  // 持久化宽度
+  try {
+    localStorage.setItem('agent4j-element-panel-width', String(elementPanelWidth.value))
+  } catch { /* ignore */ }
+}
+
+// 加载保存的元素面板宽度
+onMounted(() => {
+  try {
+    const saved = localStorage.getItem('agent4j-element-panel-width')
+    if (saved) {
+      const w = parseInt(saved, 10)
+      if (w >= ELEMENT_MIN_WIDTH && w <= ELEMENT_MAX_WIDTH) {
+        elementPanelWidth.value = w
+      }
+    }
+  } catch { /* ignore */ }
+})
 
 // 元素面板发送消息 → 直接发给当前会话的 AI
 function onElementSend(payload) {
@@ -388,8 +528,24 @@ const workspace = ref('')
 // 版本信息
 const appVersion = ref('')
 const hasNewVersion = ref(false)
+const latestVersion = ref('')
+const releaseUrl = ref('')
 const showUpdateModal = ref(false)
 const autoUpdating = ref(false)
+
+// Electron 桌面端版本
+const electronVersion = ref('')
+const desktopHasNewVersion = ref(false)
+const checkingVersion = ref(false)
+
+// 核心服务版本落后提示（仅桌面端）
+const showCoreServiceUpdateModal = ref(false)
+const coreServiceUpdating = ref(false)
+const coreServiceUpdateDone = ref(false)
+const desktopAppVersion = ref('')
+const installLogs = ref([])
+const logContainer = ref(null)
+let unlistenInstallOutput = null
 
 // 系统提示词弹窗
 const promptModalOpen = ref(false)
@@ -905,29 +1061,189 @@ onMounted(async () => {
   // 异步获取版本信息（不阻塞启动）
   fetchVersionInfo()
 
+  // 监听从 ChatMessage 发出的「在元素界面打开」事件
+  window.addEventListener('agent4j:open-in-element', onOpenInElement)
 })
 
 onBeforeUnmount(() => {
   stopHeartbeat()
+  window.removeEventListener('agent4j:open-in-element', onOpenInElement)
 })
 
-// 获取版本信息
-async function fetchVersionInfo() {
+// 获取版本信息 — 纯后端获取，最多重试 3 次（每次间隔 3 秒）
+async function fetchVersionInfo(retryCount = 0) {
   try {
+    // 先尝试获取当前版本
     const res = await systemAPI.getCurrentVersion()
-    if (res.success && res.data) {
-      appVersion.value = res.data.version || ''
+    if (res.success && res.data && res.data.version) {
+      appVersion.value = res.data.version
     }
-  } catch { /* 版本获取失败静默处理 */ }
+    // 再检查最新版本
+    try {
+      const checkRes = await systemAPI.checkLatestVersion()
+      if (checkRes.success && checkRes.data) {
+        hasNewVersion.value = checkRes.data.hasNewVersion
+        latestVersion.value = checkRes.data.latestVersion || ''
+        if (checkRes.data.currentVersion) {
+          appVersion.value = checkRes.data.currentVersion
+        }
+      }
+    } catch { /* 版本检查失败 */ }
+    // 两个接口都失败了且未获取到版本
+    if (!appVersion.value) {
+      throw new Error('version not obtained')
+    }
+  } catch {
+    if (retryCount < 2) {
+      // 3 秒后重试
+      await new Promise(r => setTimeout(r, 3000))
+      return fetchVersionInfo(retryCount + 1)
+    }
+    // 3 次都失败，显示未知版本
+    appVersion.value = '未知版本'
+  }
+  // 桌面端：额外获取 Electron 版本并对比
+  if (platform.isElectron) {
+    await fetchElectronVersion()
+    // 检查核心服务版本是否落后于桌面端版本
+    checkCoreServiceVersion()
+  }
+}
+
+// 版本对比工具
+function compareVersions(a, b) {
+  const pa = a.split('.').map(Number)
+  const pb = b.split('.').map(Number)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0
+    const nb = pb[i] || 0
+    if (na > nb) return 1
+    if (na < nb) return -1
+  }
+  return 0
+}
+
+// 获取 Electron 版本并判断是否落后
+async function fetchElectronVersion() {
+  if (!platform.isElectron) return
   try {
-    const checkRes = await systemAPI.checkLatestVersion()
-    if (checkRes.success && checkRes.data) {
-      hasNewVersion.value = checkRes.data.hasNewVersion
-      if (!appVersion.value) {
-        appVersion.value = checkRes.data.currentVersion || ''
+    const ver = await window.electronAPI.getElectronVersion()
+    electronVersion.value = ver
+    desktopAppVersion.value = ver
+    if (latestVersion.value && ver && ver !== '未知') {
+      desktopHasNewVersion.value = compareVersions(ver, latestVersion.value) < 0
+    }
+  } catch (e) {
+    electronVersion.value = '未知'
+    console.warn('获取 Electron 版本失败:', e)
+  }
+}
+
+// 检查核心服务版本是否落后于桌面端版本
+function checkCoreServiceVersion() {
+  if (!platform.isElectron) return
+  if (!appVersion.value || !desktopAppVersion.value) return
+  if (appVersion.value === '未知版本' || desktopAppVersion.value === '未知') return
+  
+  try {
+    // 比较核心服务版本和桌面端版本
+    const compareResult = compareVersions(appVersion.value, desktopAppVersion.value)
+    if (compareResult < 0) {
+      // 核心服务版本落后于桌面端版本
+      console.log(`[App] 核心服务版本落后: 服务版本=${appVersion.value}, 桌面端版本=${desktopAppVersion.value}`)
+      showCoreServiceUpdateModal.value = true
+    }
+  } catch (e) {
+    console.warn('[App] 版本比较失败:', e)
+  }
+}
+
+// 处理核心服务更新
+async function handleCoreServiceUpdate() {
+  coreServiceUpdating.value = true
+  coreServiceUpdateDone.value = false
+  installLogs.value = []
+
+  // 监听安装日志事件
+  try {
+    unlistenInstallOutput = await platform.implementation.events.listen('install-output', (payload) => {
+      if (payload && payload.line) {
+        installLogs.value.push(payload.line)
+        // 自动滚动到底部
+        nextTick(() => {
+          const el = logContainer.value
+          if (el) el.scrollTop = el.scrollHeight
+        })
+      }
+    })
+  } catch (e) {
+    console.warn('[App] Failed to listen install output:', e)
+  }
+
+  try {
+    // 调用在线安装接口
+    const result = await window.electronAPI.agent4jWebService.installOnline()
+    if (result && result.success) {
+      installLogs.value.push('')
+      installLogs.value.push('✅ 更新完成！')
+      coreServiceUpdateDone.value = true
+      message.success('核心服务更新成功！')
+    } else {
+      installLogs.value.push('')
+      installLogs.value.push('❌ 更新失败，请稍后重试')
+      message.error('更新失败，请稍后重试')
+    }
+  } catch (e) {
+    installLogs.value.push('')
+    installLogs.value.push('❌ 更新失败: ' + (e.message || '未知错误'))
+    message.error('更新失败: ' + (e.message || '未知错误'))
+  } finally {
+    coreServiceUpdating.value = false
+    if (unlistenInstallOutput) {
+      unlistenInstallOutput()
+      unlistenInstallOutput = null
+    }
+  }
+}
+
+// 更新完成后关闭程序
+function closeAppAfterUpdate() {
+  window.electronAPI.window.close()
+}
+
+// 检查最新版本（后端 + Electron 统一检查）
+async function handleCheckVersion() {
+  checkingVersion.value = true
+  try {
+    const res = await systemAPI.checkLatestVersion()
+    if (res.success && res.data) {
+      hasNewVersion.value = res.data.hasNewVersion
+      latestVersion.value = res.data.latestVersion || ''
+      releaseUrl.value = res.data.releaseUrl || ''
+      if (res.data.currentVersion) {
+        appVersion.value = res.data.currentVersion
+      }
+      // 刷新后重新对比 Electron 版本
+      if (platform.isElectron) {
+        await fetchElectronVersion()
       }
     }
-  } catch { /* 版本检查失败静默处理 */ }
+  } catch { /* 忽略 */ }
+  checkingVersion.value = false
+}
+
+// 打开下载页面
+async function openDesktopDownloadUrl() {
+  const url = 'https://gitee.com/ezdemo/agent4j/releases/latest'
+  if (platform.isElectron) {
+    try {
+      await window.electronAPI.openExternal(url)
+    } catch {
+      window.open(url, '_blank')
+    }
+  } else {
+    window.open(url, '_blank')
+  }
 }
 
 // 复制文本到剪贴板
@@ -1391,11 +1707,11 @@ watch(showSettings, (newVal) => {
 }
 
 :global(.update-modal) {
-  width: 600px;
+  width: 520px;
   max-width: 90vw;
   background: var(--bg);
-  border-radius: 12px;
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+  border-radius: 14px;
+  box-shadow: 0 25px 80px rgba(0, 0, 0, 0.35);
   overflow: hidden;
 }
 
@@ -1403,84 +1719,221 @@ watch(showSettings, (newVal) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 16px 20px;
+  padding: 18px 24px;
   border-bottom: 1px solid var(--border);
-  font-size: 15px;
+}
+
+:global(.update-modal-title) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 16px;
   font-weight: 600;
   color: var(--fg);
+}
+
+:global(.update-modal-title svg) {
+  color: var(--accent);
 }
 
 :global(.update-modal-body) {
-  padding: 20px;
+  padding: 24px;
 }
 
-:global(.update-modal-desc) {
-  font-size: 13px;
+/* 版本双栏卡片 */
+:global(.update-versions-grid) {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+
+:global(.update-version-card) {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 16px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  transition: border-color 0.2s;
+}
+
+:global(.update-version-card:hover) {
+  border-color: var(--accent);
+}
+
+:global(.uvc-icon) {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-3);
+  border-radius: 8px;
+  color: var(--fg-2);
+  flex-shrink: 0;
+}
+
+:global(.uvc-info) {
+  flex: 1;
+  min-width: 0;
+}
+
+:global(.uvc-name) {
+  font-size: 12px;
+  font-weight: 500;
   color: var(--fg-3);
-  margin: 0 0 16px;
+  margin-bottom: 2px;
 }
 
-:global(.update-platform) {
+:global(.uvc-version) {
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  letter-spacing: -0.3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:global(.uvc-status) {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 4px;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+:global(.uvc-status.ok) {
+  background: rgba(34, 197, 94, 0.12);
+  color: #22c55e;
+}
+
+:global(.uvc-status.warn) {
+  background: rgba(255, 159, 28, 0.12);
+  color: #ff9f1c;
+}
+
+/* 最新版本行 */
+:global(.update-latest-row) {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: linear-gradient(135deg, rgba(99, 102, 241, 0.06), rgba(168, 85, 247, 0.06));
+  border: 1px solid rgba(99, 102, 241, 0.15);
+  border-radius: 10px;
   margin-bottom: 16px;
 }
 
-:global(.update-platform:last-child) {
-  margin-bottom: 0;
-}
-
-:global(.update-platform-label) {
+:global(.ulr-label) {
   font-size: 12px;
-  font-weight: 600;
-  color: var(--fg-2);
-  margin-bottom: 6px;
+  font-weight: 500;
+  color: var(--fg-3);
+  flex-shrink: 0;
 }
 
-:global(.update-code-block) {
+:global(.ulr-version) {
+  font-size: 18px;
+  font-weight: 700;
+  color: var(--fg);
+  font-family: var(--font-mono);
+  letter-spacing: -0.5px;
+}
+
+:global(.ulr-version.has-update) {
+  color: var(--accent);
+}
+
+:global(.ulr-link) {
+  margin-left: auto;
+  font-size: 12px;
+  color: var(--accent);
+  text-decoration: none;
+  font-weight: 500;
+  flex-shrink: 0;
+  opacity: 0.8;
+  transition: opacity 0.2s;
+}
+
+:global(.ulr-link:hover) {
+  opacity: 1;
+  text-decoration: underline;
+}
+
+/* 更新命令 */
+:global(.update-commands) {
   display: flex;
-  align-items: center;
-  background: var(--bg-2);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  padding: 10px 12px;
+  flex-direction: column;
   gap: 8px;
 }
 
-:global(.update-code-block code) {
-  flex: 1;
+:global(.uc-label) {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-3);
+}
+
+:global(.uc-list) {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+:global(.uc-item) {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+:global(.uc-item:hover) {
+  border-color: var(--accent);
+  background: var(--bg-3);
+}
+
+:global(.uc-item code) {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--fg);
-  word-break: break-all;
-  line-height: 1.5;
+  color: var(--fg-2);
   user-select: all;
 }
 
-:global(.update-copy-btn) {
+:global(.uc-badge) {
+  font-size: 10px;
+  font-weight: 700;
+  padding: 1px 5px;
+  border-radius: 4px;
   flex-shrink: 0;
-  width: 28px;
-  height: 28px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--r);
-  color: var(--fg-3);
-  transition: all var(--t);
-  cursor: pointer;
-  border: none;
-  background: transparent;
+  letter-spacing: 0.3px;
 }
 
-:global(.update-copy-btn:hover) {
-  background: var(--bg-3);
-  color: var(--accent);
+:global(.uc-badge.win) {
+  background: rgba(0, 120, 215, 0.15);
+  color: #0078d7;
+}
+
+:global(.uc-badge.unix) {
+  background: rgba(51, 51, 51, 0.12);
+  color: var(--fg-2);
 }
 
 :global(.update-modal-foot) {
   display: flex;
   justify-content: flex-end;
+  align-items: center;
   gap: 8px;
-  padding: 12px 20px;
+  padding: 14px 24px;
   border-top: 1px solid var(--border);
+  background: var(--bg-1);
 }
 
 [data-theme="dark"] :global(.update-modal-mask) {
@@ -1489,5 +1942,218 @@ watch(showSettings, (newVal) => {
 
 [data-theme="dark"] :global(.update-modal) {
   border: 1px solid var(--border);
+}
+
+/* ==================== 元素面板 ==================== */
+.element-panel-wrapper {
+  position: fixed;
+  top: 36px;
+  right: 0;
+  bottom: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: var(--glass-bg-2);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border-left: 1px solid var(--glass-border);
+  box-shadow: -4px 0 20px rgba(0, 0, 0, 0.1);
+  transition: width 0.05s;
+}
+
+.element-panel-wrapper.dragging {
+  transition: none !important;
+}
+
+/* 拖拽手柄 */
+.element-resize-handle {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 4px;
+  z-index: 10;
+  cursor: ew-resize;
+  background: transparent;
+  transition: background 0.15s;
+}
+
+.element-resize-handle:hover,
+.element-panel-wrapper.dragging .element-resize-handle {
+  background: var(--accent);
+  opacity: 0.5;
+}
+
+.element-panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--glass-border);
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  min-height: 36px;
+}
+
+.element-panel-header .btn-icon-sm {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  background: none;
+  color: var(--fg-4);
+  cursor: pointer;
+  border-radius: var(--r);
+  transition: all 0.12s;
+}
+
+.element-panel-header .btn-icon-sm:hover {
+  background: var(--bg-3);
+  color: var(--fg);
+}
+
+/* ==================== 核心服务更新弹窗 ==================== */
+.core-service-update-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: var(--bg-2);
+  border-radius: var(--r);
+  margin-bottom: 16px;
+}
+
+.core-service-update-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r);
+  background: var(--accent-bg);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.core-service-update-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.core-service-update-desc {
+  font-size: 13px;
+  color: var(--fg-2);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.core-service-update-desc strong {
+  color: var(--fg);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.core-service-update-versions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg-2);
+  border-radius: var(--r);
+}
+
+.version-label {
+  font-size: 13px;
+  color: var(--fg-3);
+}
+
+.version-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  font-family: var(--font-mono);
+}
+
+.version-badge.version-new {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.version-badge.version-old {
+  background: var(--yellow-bg);
+  color: var(--yellow);
+}
+
+.btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==================== 安装日志 ==================== */
+.install-log-container {
+  margin-top: 16px;
+}
+
+.install-log {
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.log-line {
+  color: var(--fg-3);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-placeholder {
+  color: var(--fg-4);
+  font-style: italic;
+}
+
+/* ==================== 更新成功提示 ==================== */
+.update-success-tip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--green-bg);
+  border-radius: var(--r);
+  margin-top: 16px;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.update-success-tip svg {
+  flex-shrink: 0;
 }
 </style>

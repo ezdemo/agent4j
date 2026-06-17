@@ -1,17 +1,8 @@
 <template>
   <div
     class="rp-panel"
-    :class="{ collapsed: !open, dragging: isDragging }"
-    :style="panelStyle"
-    ref="panelRef"
+    :class="{ collapsed: !open }"
   >
-    <!-- 拖拽手柄 -->
-    <div
-      class="rp-resize-handle"
-      @mousedown.prevent="onResizeStart"
-      title="拖拽调整宽度"
-    ></div>
-
     <!-- 统一头部：标签页切换 + 刷新 + 关闭 -->
     <div class="rp-head">
       <div class="rp-tabs">
@@ -31,23 +22,12 @@
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           定时
         </button>
-        <button
-          class="rp-tab"
-          :class="{ active: modelValue === 'element' }"
-          @click="$emit('update:modelValue', 'element')"
-        >
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
-          元素
-        </button>
       </div>
       <div class="rp-head-actions">
         <button v-if="modelValue === 'git'" class="btn-icon-sm" @click="gitRef?.loadStatus?.()" title="刷新 Git 状态">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
         <button v-if="modelValue === 'schedule'" class="btn-icon-sm" @click="scheduleRef?.loadTasks?.()" title="刷新定时任务">
-          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
-        </button>
-        <button v-if="modelValue === 'element'" class="btn-icon-sm" @click="resetElementPanel()" title="重置">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
         <button class="btn-icon-sm" @click="$emit('close')" title="关闭">
@@ -64,23 +44,14 @@
       <div v-show="modelValue === 'schedule'" class="rp-page">
         <SchedulePanel ref="scheduleRef" :workspace-hash="workspaceHash" :session-name="sessionName" :sessions="sessions" />
       </div>
-      <div v-show="modelValue === 'element'" class="rp-page">
-        <ElementPanel ref="elementRef" @send="onElementSend" />
-      </div>
     </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount } from 'vue'
+import { ref } from 'vue'
 import GitPanel from './GitPanel.vue'
 import SchedulePanel from './SchedulePanel.vue'
-import ElementPanel from './ElementPanel.vue'
-
-const STORAGE_KEY = 'agent4j-right-panel-width'
-const MIN_WIDTH = 220
-const MAX_WIDTH = 600
-const DEFAULT_WIDTH = 320
 
 const props = defineProps({
   modelValue: { type: String, default: 'git' },
@@ -90,79 +61,15 @@ const props = defineProps({
   sessions: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['update:modelValue', 'close', 'element-send'])
+const emit = defineEmits(['update:modelValue', 'close'])
 
-const panelRef = ref(null)
 const gitRef = ref(null)
 const scheduleRef = ref(null)
-const elementRef = ref(null)
-const isDragging = ref(false)
-const panelWidth = ref(DEFAULT_WIDTH)
-
-function onElementSend(payload) {
-  // 向父组件传递元素选取结果和用户消息
-  emit('element-send', payload)
-}
-
-// 加载保存的宽度
-onMounted(() => {
-  try {
-    const saved = localStorage.getItem(STORAGE_KEY)
-    if (saved) {
-      const w = parseInt(saved, 10)
-      if (w >= MIN_WIDTH && w <= MAX_WIDTH) {
-        panelWidth.value = w
-      }
-    }
-  } catch { /* ignore */ }
-})
-
-const panelStyle = computed(() => ({
-  width: props.open ? panelWidth.value + 'px' : '0px'
-}))
-
-function resetElementPanel() {
-  elementRef.value?.navigate?.()
-}
-
-// --- 拖拽调整宽度 ---
-function onResizeStart(e) {
-  isDragging.value = true
-  document.body.style.cursor = 'ew-resize'
-  document.body.style.userSelect = 'none'
-  // 防止选中 iframe 内容
-  document.addEventListener('mousemove', onResizeMove)
-  document.addEventListener('mouseup', onResizeEnd)
-}
-
-function onResizeMove(e) {
-  if (!isDragging.value) return
-  // 计算新宽度：从窗口右边缘往左算
-  const viewportWidth = window.innerWidth
-  const newWidth = viewportWidth - e.clientX
-  panelWidth.value = Math.min(MAX_WIDTH, Math.max(MIN_WIDTH, newWidth))
-}
-
-function onResizeEnd() {
-  isDragging.value = false
-  document.body.style.cursor = ''
-  document.body.style.userSelect = ''
-  document.removeEventListener('mousemove', onResizeMove)
-  document.removeEventListener('mouseup', onResizeEnd)
-  // 持久化宽度
-  try {
-    localStorage.setItem(STORAGE_KEY, String(panelWidth.value))
-  } catch { /* ignore */ }
-}
-
-onBeforeUnmount(() => {
-  document.removeEventListener('mousemove', onResizeMove)
-  document.removeEventListener('mouseup', onResizeEnd)
-})
 </script>
 
 <style scoped>
 .rp-panel {
+  width: 320px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -171,34 +78,13 @@ onBeforeUnmount(() => {
   -webkit-backdrop-filter: blur(var(--blur));
   border-left: 1px solid var(--glass-border);
   overflow: hidden;
-  position: relative;
-  transition: opacity 0.2s ease;
-}
-.rp-panel.dragging {
-  transition: none !important;
+  transition: width 0.2s, opacity 0.2s;
 }
 .rp-panel.collapsed {
+  width: 0;
   opacity: 0;
   border-left: none;
   pointer-events: none;
-}
-
-/* ── 拖拽手柄 ── */
-.rp-resize-handle {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 4px;
-  z-index: 10;
-  cursor: ew-resize;
-  background: transparent;
-  transition: background 0.15s;
-}
-.rp-resize-handle:hover,
-.rp-panel.dragging .rp-resize-handle {
-  background: var(--accent);
-  opacity: 0.5;
 }
 
 /* 头部标签栏 */
