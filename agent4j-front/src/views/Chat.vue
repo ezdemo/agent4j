@@ -204,6 +204,7 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {agentAPI, chatAPI, configAPI, snapshotAPI} from '../services/api'
 import {md} from '../utils/highlight'
+import {sanitize} from '../utils/sanitize'
 import ChatInput from '../components/ChatInput.vue'
 import ChatMessage from '../components/ChatMessage.vue'
 import {useAppStore} from '../stores/app'
@@ -447,7 +448,7 @@ const fmt = c => {
 
 const fmtPrompt = c => {
   if (!c) return ''
-  return md.parse(c)
+  return sanitize(md.parse(c))
 }
 
 // 复制整条消息内容

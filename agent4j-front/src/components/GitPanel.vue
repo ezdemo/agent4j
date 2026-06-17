@@ -271,6 +271,7 @@
 import { ref, computed, onMounted, watch, nextTick } from 'vue'
 import { gitAPI } from '../services/api'
 import { highlightCode, detectLanguage } from '../utils/highlight'
+import { sanitize } from '../utils/sanitize'
 
 const props = defineProps({
   workspaceHash: { type: String, default: null }
@@ -625,8 +626,8 @@ const diffPairs = computed(() => {
   // 语法高亮：根据文件扩展名检测语言，逐行高亮
   const lang = detectLanguage(diffViewer.value.file)
   for (const p of pairs) {
-    p.leftHtml = p.left ? highlightCode(p.left, lang) : ''
-    p.rightHtml = p.right ? highlightCode(p.right, lang) : ''
+    p.leftHtml = p.left ? sanitize(highlightCode(p.left, lang)) : ''
+    p.rightHtml = p.right ? sanitize(highlightCode(p.right, lang)) : ''
   }
   return pairs
 })
