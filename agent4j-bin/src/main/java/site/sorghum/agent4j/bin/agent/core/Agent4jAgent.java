@@ -1,9 +1,14 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.core;
 
 import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.dami2.Dami;
+import site.sorghum.agent4j.bin.agent.context.ConversationContext;
+import site.sorghum.agent4j.bin.agent.listener.AgentLoopListener;
+import site.sorghum.agent4j.bin.agent.model.ChatMessage;
+import site.sorghum.agent4j.bin.agent.model.UserMessage;
+import site.sorghum.agent4j.bin.agent.prompt.DEFAULT_PROMPT;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;

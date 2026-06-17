@@ -1,7 +1,7 @@
 package site.sorghum.agent4j.bin.command.impl;
 
 import org.noear.solon.annotation.Component;
-import site.sorghum.agent4j.bin.agent.Agent4jAgent;
+import site.sorghum.agent4j.bin.agent.core.Agent4jAgent;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.bin.command.MessageWrapper;

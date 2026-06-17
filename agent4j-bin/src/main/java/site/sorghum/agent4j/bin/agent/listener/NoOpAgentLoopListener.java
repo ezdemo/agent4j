@@ -1,4 +1,4 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.listener;
 
 /**
  * AgentLoopListener 的无操作空实现 —— 替代匿名类 {@code new AgentLoopListener() {}}。

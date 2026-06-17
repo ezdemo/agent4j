@@ -1,7 +1,8 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.context;
 
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
+import site.sorghum.agent4j.bin.agent.model.ChatMessage;
 import site.sorghum.agent4j.bin.model.ModelClient;
 
 import java.io.IOException;

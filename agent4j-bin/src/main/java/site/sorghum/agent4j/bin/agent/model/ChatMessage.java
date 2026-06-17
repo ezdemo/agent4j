@@ -1,12 +1,10 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.model;
 
 import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import org.noear.snack4.annotation.ONodeAttr;
-import org.noear.snack4.codec.TypeRef;
 
-import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;

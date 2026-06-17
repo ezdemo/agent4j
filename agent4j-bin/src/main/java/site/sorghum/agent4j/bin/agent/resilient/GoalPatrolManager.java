@@ -1,10 +1,10 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.resilient;
 
 import lombok.extern.slf4j.Slf4j;
+import site.sorghum.agent4j.bin.agent.context.ConversationContext;
 import site.sorghum.agent4j.bin.goal.*;
 import site.sorghum.agent4j.bin.session.SessionService;
 
-import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;

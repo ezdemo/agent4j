@@ -1,4 +1,4 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.resilient;
 
 import java.util.HashMap;
 import java.util.Map;
