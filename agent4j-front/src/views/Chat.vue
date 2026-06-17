@@ -1244,7 +1244,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 }
 
 .msg.assistant .msg-body {
-  max-width: min(680px, 85%);
+  max-width: 85%;
 }
 
 .assistant-body {
