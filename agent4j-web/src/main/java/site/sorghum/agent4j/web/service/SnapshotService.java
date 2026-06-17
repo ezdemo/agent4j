@@ -96,7 +96,19 @@ public class SnapshotService {
      * 执行快照创建的核心逻辑。
      */
     private SnapshotInfo doCreateCheckpoint(File workspaceDir, String workspaceHash, String msgId) throws Exception {
-        // 2. git add -A：将所有变更加入暂存区
+        // 2a. 保存用户当前的暂存状态：记录哪些文件已被用户 git add
+        String userStagedRaw = runGitSimple(workspaceDir, "diff", "--cached", "--name-only");
+        List<String> userStagedFiles = new ArrayList<>();
+        if (userStagedRaw != null && !userStagedRaw.trim().isEmpty()) {
+            for (String file : userStagedRaw.split("\n")) {
+                String trimmed = file.trim();
+                if (!trimmed.isEmpty()) {
+                    userStagedFiles.add(trimmed);
+                }
+            }
+        }
+
+        // 2b. git add -A：将所有变更加入暂存区（包括用户的修改）
         ProcessResult addResult = runGit(workspaceDir, "git", "add", "-A");
         if (addResult.exitCode != 0) {
             throw new ServiceException("快照失败: git add 失败 - " + addResult.stderr);
@@ -151,11 +163,19 @@ public class SnapshotService {
             }
         }
 
-        // 7. 恢复暂存区：git reset HEAD，避免 git add -A 影响用户的 git 状态
-        // 只重置暂存区，不修改工作目录
+        // 7. 重置暂存区为 HEAD，避免 git add -A 影响用户的 git 状态
+        //    使用 --mixed 模式，只清暂存区，不修改工作目录
         runGit(workspaceDir, "git", "reset", "HEAD", "--");
 
-        // 8. 记录快照信息
+        // 8. 恢复用户原先暂存的文件：将用户之前 git add 的文件重新暂存
+        if (!userStagedFiles.isEmpty()) {
+            for (String file : userStagedFiles) {
+                runGitSimple(workspaceDir, "add", "--", file);
+            }
+            log.debug("[snapshot] 已恢复 {} 个文件的暂存状态", userStagedFiles.size());
+        }
+
+        // 9. 记录快照信息
         SnapshotInfo info = new SnapshotInfo(msgId, commitHash, treeHash, System.currentTimeMillis());
         registerSnapshot(workspaceHash, msgId, info);
 
