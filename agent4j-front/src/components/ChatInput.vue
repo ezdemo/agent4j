@@ -492,8 +492,8 @@ defineExpose({ focus: () => inputField.value?.focus(), autoResize })
   cursor: not-allowed;
   opacity: 0.35;
 }
-.stop-btn { display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: var(--red); color: #fff; border-radius: var(--r); font-size: 12px; font-weight: 500; cursor: pointer; transition: all var(--t); animation: pulse-red 1.5s infinite; }
-.stop-btn:hover { background: var(--red-dark); transform: scale(1.05); }
+.stop-btn { display: flex; align-items: center; gap: 4px; padding: 4px 8px; background: var(--red); color: #fff; border: none; border-radius: var(--r); font-size: 12px; font-weight: 500; cursor: pointer; transition: all var(--t); animation: pulse-red 1.5s infinite; }
+.stop-btn:hover { background: #b91c1c; }
 .stop-btn svg { animation: spin 1s linear infinite; }
 .stop-text { margin-left: 2px; }
 @keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
