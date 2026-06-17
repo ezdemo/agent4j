@@ -43,6 +43,14 @@ public interface ModelClient {
     void setModel(String model);
 
     /**
+     * 设置推理强度（运行时切换）。
+     * 取值: low / medium / high / max
+     * 默认空实现——不支持运行时切换的客户端可忽略。
+     */
+    default void setReasoningEffort(String reasoningEffort) {
+    }
+
+    /**
      * 中断当前正在进行的流式调用（如果存在）。
      * 默认空实现——不支持中断的客户端可忽略。
      */

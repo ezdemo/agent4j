@@ -47,8 +47,6 @@ public class ConversationContext {
         this.prefix = Objects.requireNonNull(prefix, "prefix must not be null");
     }
 
-    // ---- 写入 ----
-
     /**
      * 添加用户消息（支持纯文本和多模态）。
      *

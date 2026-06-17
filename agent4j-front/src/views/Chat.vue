@@ -187,6 +187,7 @@
         :usage="usage"
         :currentModel="currentModel"
         :availableModels="availableModels"
+        :currentReasoningEffort="currentReasoningEffort"
         :workspaceHash="props.workspaceHash"
         :sessionName="props.sessionName"
         :hasHistory="hasHistory"
@@ -197,6 +198,7 @@
         @fetchTodos="fetchTodos"
         @refreshUsage="loadUsage"
         @switchModel="handleSwitchModel"
+        @switchReasoningEffort="handleSwitchReasoningEffort"
         @refreshModels="loadUsage"
         @continue="continueChat"
     />
@@ -225,6 +227,21 @@ const handleSwitchModel = async (modelName) => {
     }
   } catch (e) {
     console.error('切换模型失败:', e)
+  }
+}
+
+// ============= 推理强度切换 =============
+const currentReasoningEffort = ref('max')
+
+const handleSwitchReasoningEffort = async (value) => {
+  if (value === currentReasoningEffort.value) return
+  try {
+    const r = await configAPI.updateConfig({reasoningEffort: value})
+    if (r.success) {
+      currentReasoningEffort.value = value
+    }
+  } catch (e) {
+    console.error('切换推理强度失败:', e)
   }
 }
 
@@ -279,9 +296,10 @@ const loadUsage = async (override) => {
     if (wsHash) params.workspaceHash = wsHash
     if (sessName) params.sessionName = sessName
 
-    const [usageRes, modelsRes] = await Promise.allSettled([
+    const [usageRes, modelsRes, configRes] = await Promise.allSettled([
       configAPI.getUsage(params),
-      configAPI.getModels()
+      configAPI.getModels(),
+      configAPI.getConfig()
     ])
     if (usageRes.status === 'fulfilled' && usageRes.value.success) {
       usage.value = {...usage.value, ...usageRes.value.data}
@@ -289,6 +307,9 @@ const loadUsage = async (override) => {
     if (modelsRes.status === 'fulfilled' && modelsRes.value.success) {
       currentModel.value = modelsRes.value.data?.current || ''
       availableModels.value = modelsRes.value.data?.models || []
+    }
+    if (configRes.status === 'fulfilled' && configRes.value.success) {
+      currentReasoningEffort.value = configRes.value.data?.reasoningEffort || 'max'
     }
   } catch {
   }

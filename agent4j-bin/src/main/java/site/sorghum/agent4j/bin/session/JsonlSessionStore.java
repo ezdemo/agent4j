@@ -343,7 +343,7 @@ public class JsonlSessionStore implements SessionStore {
     }
 
     @Override
-    public boolean switchTo(String name) {
+    public boolean bindTo(String name) {
         if (name == null || name.isEmpty()) return false;
         // 切换前先排空缓冲区
         drainBuffer();

@@ -3,15 +3,16 @@ package site.sorghum.agent4j.bin.agent;
 import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import org.noear.dami2.Dami;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.command.MessageWrapper;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
+import site.sorghum.agent4j.bin.config.ConfigChangedEvent;
 import site.sorghum.agent4j.bin.goal.Goal;
 import site.sorghum.agent4j.bin.goal.GoalStatus;
 import site.sorghum.agent4j.bin.goal.GoalStore;
-import site.sorghum.agent4j.bin.model.HttpModelClient;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.session.SessionStore;
@@ -37,19 +38,24 @@ import java.util.Set;
 @Slf4j
 public class Agent4jAgent {
 
+    /**
+     * 主循环
+     */
     private final AgentLoop loop;
+    /**
+     * 对话上下文
+     * -- GETTER --
+     *  获取会话上下文（用于外部截断历史等操作）。
+
+     */
+    @Getter
     private final ConversationContext ctx;
 
-    /**
-     * 获取会话上下文（用于外部截断历史等操作）。
-     */
-    public ConversationContext getContext() {
-        return ctx;
-    }
     /**
      * 命令注册表（用于 chat() 中自动路由 "/" 开头的命令）
      */
     private final ChatCommandRegistry commandRegistry;
+
     /**
      * 获取当前 SessionService（用于保存/恢复状态）
      */
@@ -79,7 +85,6 @@ public class Agent4jAgent {
      * </br>仅创建独立的会话上下文。适用于"一个会话一个 Agent"场景，减少资源消耗。
      *
      * @param b                  Builder
-     * @param ignoredLightweight 标记为轻量级构建（仅用于区分构造函数重载）
      */
     private Agent4jAgent(Builder b) {
         this.commandRegistry = b.commandRegistry;
@@ -92,6 +97,22 @@ public class Agent4jAgent {
                 b.disabledTools, b.blockedPaths, prompt);
         this.ctx = new ConversationContext(initResult.promptPrefix);
         this.loop = initSessionAndLoop(client, initResult.toolRegistry, b.hitl);
+
+        // 注册 DamiBus 配置变更监听 —— 每个 Agent 自监听自更新
+        Dami.bus().<ConfigChangedEvent>listen("config.changed", event -> {
+            ConfigChangedEvent e = event.getPayload();
+            if (e == null) return;
+            try {
+                switch (e.key()) {
+                    case "model" -> setModel((String) e.value());
+                    case "reasoningEffort" -> setReasoningEffort((String) e.value());
+                    case "hitl" -> setHitlMode((Boolean) e.value());
+                    default -> log.warn("[bus] 未知配置键: {}", e.key());
+                }
+            } catch (Exception ex) {
+                log.error("[bus] 处理配置变更事件失败: key={}, value={}", e.key(), e.value(), ex);
+            }
+        });
     }
 
     /**
@@ -272,20 +293,12 @@ public class Agent4jAgent {
         }
     }
 
-    public void newSession() {
-        try {
-            sessionService.newSession();
-        } catch (IOException e) {
-            log.warn("[session] 创建新会话失败: {}", e.getMessage());
-        }
-    }
-
     /**
      * 切换到指定会话。
      * 切换后加载历史消息到上下文并恢复 token 用量。
      */
-    public void switchSession(String name) {
-        boolean ok = getSessionStore().switchTo(name);
+    public void bindSession(String name) {
+        boolean ok = getSessionStore().bindTo(name);
         if (ok) {
             // 加载会话历史消息到上下文，将 JSONL 中的 OpenAI 格式 tool_calls
             // 转回内存格式 {id, name, arguments}，与新创建的消息保持一致
@@ -431,6 +444,22 @@ public class Agent4jAgent {
      */
     public void setHitlMode(boolean on) {
         loop.setHitlMode(on);
+    }
+
+    /**
+     * 运行时切换模型（热更新）。
+     * 每个 Agent 持有自己的 ModelClient，互不影响。
+     */
+    public void setModel(String model) {
+        loop.setModel(model);
+    }
+
+    /**
+     * 运行时切换推理强度（热更新）。
+     * 取值: low / medium / high / max
+     */
+    public void setReasoningEffort(String reasoningEffort) {
+        loop.setReasoningEffort(reasoningEffort);
     }
 
     /**

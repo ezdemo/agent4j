@@ -35,7 +35,6 @@ public class SessionService {
      */
     private final Map<String, long[]> modelUsage = new LinkedHashMap<>();
     /**
-     * -- GETTER --
      *  获取底层 SessionStore
      */
     @Getter
@@ -50,12 +49,6 @@ public class SessionService {
     private long sessionLastPromptTokens;
     /**
      * 是否已生成会话标题
-     * -- GETTER --
-     *  检查是否已生成会话标题
-     * -- SETTER --
-     *  设置标题已生成标志
-
-
      */
     @Setter
     @Getter
@@ -84,7 +77,7 @@ public class SessionService {
      */
     public void loadOrCreate(String sessionName) throws IOException {
         if (sessionName != null && !sessionName.isEmpty()) {
-            if (!store.switchTo(sessionName)) {
+            if (!store.bindTo(sessionName)) {
                 log.warn("[session] 切换到指定会话失败: {}，使用新会话", sessionName);
             }
             // 仅在明确指定会话时才加载历史和恢复用量
@@ -105,27 +98,6 @@ public class SessionService {
             }
         }
         // sessionName 为空时：保持 store 当前状态（新建的空白会话），不加载历史
-    }
-
-    /**
-     * 新建会话：保存当前、关闭旧 store、创建新会话
-     */
-    public void newSession() throws IOException {
-        saveUsage();
-        // 关闭旧的 store，释放定时器 + writer 资源
-        if (store instanceof JsonlSessionStore) {
-            ((JsonlSessionStore) store).shutdown();
-        }
-        // 使用工作区隔离的会话目录（如果有的话）
-        if (sessionsDir != null) {
-            store = new JsonlSessionStore(sessionsDir);
-        } else {
-            store = new JsonlSessionStore();
-        }
-        ctx.setSessionStore(store);
-        ctx.clearHistory();  // 仅清空内存历史，不重写旧会话文件
-        resetUsage();
-        titleGenerated = false; // 新会话，标题未生成
     }
 
     /**
@@ -267,7 +239,7 @@ public class SessionService {
     public void ensureSessionName() {
         if (store.currentName() == null) {
             String newName = store.newSessionName();
-            store.switchTo(newName);
+            store.bindTo(newName);
         }
     }
 

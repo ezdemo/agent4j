@@ -22,7 +22,7 @@ class JsonlSessionStoreTest {
         store = new JsonlSessionStore();
         // 使用唯一会话名避免测试间干扰
         counter++;
-        store.switchTo("test-" + System.nanoTime() + "-" + counter);
+        store.bindTo("test-" + System.nanoTime() + "-" + counter);
     }
 
     @AfterEach
@@ -89,14 +89,14 @@ class JsonlSessionStoreTest {
     }
 
     @Test
-    void switchToAndLoad() throws IOException {
+    void bindToAndLoad() throws IOException {
         String uniqueName = "sw-" + System.nanoTime();
         ChatMessage msg = ChatMessage.ofUser("in session 1");
         store.append(msg);
         store.flush();
 
         String name1 = store.currentName();
-        assertTrue(store.switchTo(uniqueName));
+        assertTrue(store.bindTo(uniqueName));
         assertNotEquals(name1, store.currentName());
 
         ChatMessage msg2 = ChatMessage.ofUser("in session 2");
@@ -107,7 +107,7 @@ class JsonlSessionStoreTest {
         assertEquals(1, loaded.size());
         assertEquals("in session 2", loaded.get(0).getContent());
 
-        store.switchTo(name1);
+        store.bindTo(name1);
         List<ChatMessage> loaded1 = store.load();
         assertEquals(1, loaded1.size());
         assertEquals("in session 1", loaded1.get(0).getContent());
