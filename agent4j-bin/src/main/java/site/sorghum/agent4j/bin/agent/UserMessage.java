@@ -21,13 +21,11 @@ import java.util.List;
 public class UserMessage {
 
     /**
-     * -- GETTER --
      * 文本内容（可能为 null）
      */
     @Getter
     private final String text;
     /**
-     * -- GETTER --
      * 图片 URL 列表（不可变，不会为 null）
      */
     @Getter

@@ -159,25 +159,46 @@
           </svg>
         </button>
       </div>
-      <div class="model-selector" v-if="currentModel">
-        <button class="model-btn" @click="toggleModelPicker" :title="'当前模型: '+currentModel">
-          {{ currentModel }}
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
-        </button>
-        <div class="model-dropdown" v-if="showModelPicker">
-          <div class="model-dropdown-title">切换模型</div>
-          <div class="model-dropdown-list">
-            <div v-for="m in availableModels" :key="m.name" class="model-option"
-                 :class="{ active: m.active }" @click="pickModel(m.name)">
-              <span class="model-option-name">{{ m.name }}</span>
-              <svg v-if="m.active" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+      <div class="model-toolbar">
+        <div class="reasoning-effort-selector">
+          <button class="effort-btn" @click="toggleEffortPicker" :title="'当前推理强度: '+currentReasoningEffort">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+            </svg>
+            {{ effortLabel }}
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="effort-dropdown" v-if="showEffortPicker">
+            <div class="effort-dropdown-title">推理强度</div>
+            <div class="effort-dropdown-list">
+              <div v-for="opt in effortOptions" :key="opt.value" class="effort-option"
+                   :class="{ active: opt.value === currentReasoningEffort }" @click="pickEffort(opt.value)">
+                <span class="effort-option-name">{{ opt.label }}</span>
+                <svg v-if="opt.value === currentReasoningEffort" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="model-selector" v-if="currentModel">
+          <button class="model-btn" @click="toggleModelPicker" :title="'当前模型: '+currentModel">
+            {{ currentModel }}
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+          <div class="model-dropdown" v-if="showModelPicker">
+            <div class="model-dropdown-title">切换模型</div>
+            <div class="model-dropdown-list">
+              <div v-for="m in availableModels" :key="m.name" class="model-option"
+                   :class="{ active: m.active }" @click="pickModel(m.name)">
+                <span class="model-option-name">{{ m.name }}</span>
+                <svg v-if="m.active" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+              </div>
             </div>
           </div>
         </div>
       </div>
       </div>
+      </div>
     </div>
-  </div>
 </template>
 
 <script setup>
@@ -193,10 +214,11 @@ const props = defineProps({
   availableModels: { type: Array, default: () => [] },
   workspaceHash: { type: String, default: null },
   sessionName: {type: String, default: null},
-  hasHistory: {type: Boolean, default: false}
+  hasHistory: {type: Boolean, default: false},
+  currentReasoningEffort: { type: String, default: 'max' }
 })
 
-const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'fetchTodos', 'refreshUsage', 'switchModel', 'continue', 'refreshModels'])
+const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'fetchTodos', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort'])
 
 const inputField = ref(null)
 const inputFocused = ref(false)
@@ -383,7 +405,29 @@ const pickModel = async (name) => {
 }
 
 // 点击外部关闭模型选择器
-const handleOutside = (e) => { if (!e.target.closest('.model-selector')) showModelPicker.value = false }
+const handleOutside = (e) => { if (!e.target.closest('.model-selector')) showModelPicker.value = false; if (!e.target.closest('.reasoning-effort-selector')) showEffortPicker.value = false }
+
+// ============= 推理强度切换 =============
+const showEffortPicker = ref(false)
+const effortOptions = [
+  { value: 'none', label: '无' },
+  { value: 'low', label: '低' },
+  { value: 'medium', label: '中' },
+  { value: 'high', label: '高' },
+  { value: 'max', label: '最大' }
+]
+const effortLabel = computed(() => {
+  const found = effortOptions.find(o => o.value === props.currentReasoningEffort)
+  return found ? found.label : props.currentReasoningEffort
+})
+const toggleEffortPicker = () => {
+  showEffortPicker.value = !showEffortPicker.value
+}
+const pickEffort = async (value) => {
+  if (value === props.currentReasoningEffort) { showEffortPicker.value = false; return }
+  emit('switchReasoningEffort', value)
+  showEffortPicker.value = false
+}
 
 // ============= Usage =============
 const fmt = (n) => { if (!n||n===0) return '0'; if (n>=1e6) return (n/1e6).toFixed(1)+'M'; if (n>=1e3) return (n/1e3).toFixed(1)+'K'; return String(n) }
@@ -596,8 +640,24 @@ defineExpose({ focus: () => inputField.value?.focus(), autoResize })
 .usage-refresh:hover { background: var(--bg-3); color: var(--fg-2); }
 .usage-cost-item { color: var(--yellow); font-weight: 500; font-family: var(--mono); }
 .usage-cost-item svg { color: var(--yellow); }
-.model-selector { position: relative; }
-.model-btn { display: flex; align-items: center; gap: 4px; font-size: 12px; font-weight: 600; color: var(--fg-2); font-family: var(--mono); padding: 2px 6px; border-radius: var(--r-sm); transition: all var(--t); cursor: pointer; }
+.model-toolbar { display: flex; align-items: center; gap: 0; border: 1px solid var(--border); border-radius: var(--r-sm); overflow: hidden; }
+.model-toolbar .reasoning-effort-selector,
+.model-toolbar .model-selector { position: relative; display: flex; }
+.model-toolbar .reasoning-effort-selector + .model-selector { border-left: 1px solid var(--border); }
+
+.effort-btn { display: flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: var(--fg-2); padding: 2px 6px; border-radius: 0; transition: all var(--t); cursor: pointer; background: none; border: none; white-space: nowrap; }
+.effort-btn:hover { background: var(--bg-3); }
+.effort-btn svg:first-child { color: var(--accent); width: 11px; height: 11px; flex-shrink: 0; }
+.effort-btn svg:last-child { color: var(--fg-4); width: 8px; height: 8px; flex-shrink: 0; }
+.effort-dropdown { position: absolute; bottom: 100%; right: 0; margin-bottom: 4px; min-width: 140px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow); z-index: 100; overflow: hidden; }
+.effort-dropdown-title { padding: 8px 12px; font-size: 11px; font-weight: 600; color: var(--fg-4); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.effort-dropdown-list { max-height: 200px; overflow-y: auto; }
+.effort-option { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px; font-size: 12px; color: var(--fg-2); cursor: pointer; transition: all var(--t); }
+.effort-option:hover { background: var(--bg-2); }
+.effort-option.active { color: var(--accent); font-weight: 500; }
+.effort-option svg { color: var(--accent); }
+.model-selector { position: relative; display: flex; }
+.model-btn { display: flex; align-items: center; gap: 3px; font-size: 11px; font-weight: 600; color: var(--fg-2); font-family: var(--mono); padding: 2px 6px; border-radius: 0; transition: all var(--t); cursor: pointer; background: none; border: none; white-space: nowrap; }
 .model-btn:hover { background: var(--bg-3); }
 .model-dropdown { position: absolute; bottom: 100%; right: 0; margin-bottom: 4px; min-width: 200px; background: var(--bg); border: 1px solid var(--border); border-radius: var(--r); box-shadow: var(--shadow); z-index: 100; overflow: hidden; }
 .model-dropdown-title { padding: 8px 12px; font-size: 11px; font-weight: 600; color: var(--fg-4); text-transform: uppercase; letter-spacing: 0.05em; border-bottom: 1px solid var(--border); flex-shrink: 0; }
@@ -617,8 +677,11 @@ defineExpose({ focus: () => inputField.value?.focus(), autoResize })
   .input-row { gap: 4px; }
   .btn-icon-sm, .send-btn, .continue-btn, .todo-btn { width: 32px; height: 32px; }
   .hide-mobile { display: none !important; }
-  .model-btn { font-size: 11px; padding: 2px 4px; }
+  .model-toolbar { font-size: 10px; }
+  .effort-btn { font-size: 10px; padding: 1px 4px; }
+  .model-btn { font-size: 10px; padding: 1px 4px; }
   .model-dropdown { min-width: 160px; }
+  .effort-dropdown { min-width: 120px; }
   .todo-tooltip { width: 240px; }
   .slash-popup { left: 8px; right: 8px; }
 }

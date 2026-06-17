@@ -170,6 +170,16 @@ public class AgentLoop implements AgentLoopController {
         return client.getMaxContextTokens();
     }
 
+    /** 运行时切换模型（热更新） */
+    public void setModel(String model) {
+        client.setModel(model);
+    }
+
+    /** 运行时切换推理强度（热更新） */
+    public void setReasoningEffort(String reasoningEffort) {
+        client.setReasoningEffort(reasoningEffort);
+    }
+
     /** 手动触发上下文折叠（/compact 命令） */
     public void compactNow() throws IOException {
         List<ChatMessage> messages = ctx.buildMessages();

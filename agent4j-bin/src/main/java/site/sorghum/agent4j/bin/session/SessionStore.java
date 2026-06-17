@@ -30,7 +30,7 @@ public interface SessionStore {
     /**
      * 切换到指定会话
      */
-    boolean switchTo(String name);
+    boolean bindTo(String name);
 
     /**
      * 追加一条消息

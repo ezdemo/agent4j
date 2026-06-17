@@ -4,19 +4,20 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import lombok.SneakyThrows;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import org.noear.dami2.Dami;
+import org.noear.snack4.ONode;
 import org.noear.solon.annotation.*;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
+import site.sorghum.agent4j.bin.config.ConfigChangedEvent;
 import site.sorghum.agent4j.bin.config.ConfigService;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.common.WebErrorMessages;
 import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
 import site.sorghum.agent4j.web.service.DashboardService;
-
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
-import org.noear.snack4.ONode;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -92,15 +93,15 @@ public class ConfigController {
             return ApiResponse.ok("API 地址/密钥已更新，Agent 已重新初始化");
         }
 
-        if (body.containsKey("model") && agentService.isReady()) {
-            String newModel = body.get("model").toString();
-            agentService.updateModel(newModel);
-        }
-
-        if (body.containsKey("hitl") && agentService.isReady()) {
-            Object hitlVal = body.get("hitl");
-            boolean newHitl = hitlVal instanceof Boolean ? (Boolean) hitlVal : Boolean.parseBoolean(hitlVal.toString());
-            agentService.updateHitlMode(newHitl);
+        // model、reasoningEffort、hitl 等运行时配置 → 通过 DamiBus 广播，由监听者处理
+        for (Map.Entry<String, Object> entry : body.entrySet()) {
+            String key = entry.getKey();
+            // baseUrl/apiKey 已在上方处理，跳过
+            if ("baseUrl".equals(key) || "apiKey".equals(key)) continue;
+            // 只发布已知的运行时配置键
+            if ("model".equals(key) || "reasoningEffort".equals(key) || "hitl".equals(key)) {
+                Dami.bus().send("config.changed", new ConfigChangedEvent(key, entry.getValue()));
+            }
         }
 
         return ApiResponse.ok("配置已更新");

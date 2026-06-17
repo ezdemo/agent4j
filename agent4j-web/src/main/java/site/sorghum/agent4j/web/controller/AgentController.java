@@ -3,13 +3,16 @@ package site.sorghum.agent4j.web.controller;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.ai.talents.mount.SkillDir;
 import org.noear.solon.annotation.*;
-import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.tool.solon.common.Agent4JSkillProvider;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.common.WebErrorMessages;
-import site.sorghum.agent4j.web.model.*;
+import site.sorghum.agent4j.web.model.AgentStatusDTO;
+import site.sorghum.agent4j.web.model.ApiResponse;
+import site.sorghum.agent4j.web.model.CommandMetaDTO;
+import site.sorghum.agent4j.web.model.SkillMetaDTO;
 import site.sorghum.agent4j.web.service.AgentService;
 
 import java.util.Collection;
@@ -93,19 +96,5 @@ public class AgentController {
             log.warn("获取 skill 列表失败: {}", e.getMessage(), e);
             return ApiResponse.ok(Collections.emptyList());
         }
-    }
-
-    @ApiOperation(value = "获取当前会话的系统提示词",
-            notes = "返回完整的 PromptPrefix 内容（含基础提示词 + 工具定义 + Skill 索引 + Plan Mode 说明）")
-    @Get
-    @Mapping("/prompt")
-    public ApiResponse<PromptDTO> prompt(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
-            @ApiParam(value = "会话名称") @Param(value = "sessionName", required = false) String sessionName) {
-        if (!agentService.isReady()) {
-            throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        }
-        String workspacePath = workspaceHash != null ? agentService.resolveWorkspacePath(workspaceHash) : null;
-        return ApiResponse.ok(agentService.getSystemPrompt(workspacePath, sessionName));
     }
 }

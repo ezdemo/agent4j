@@ -46,6 +46,13 @@
             <artifactId>okhttp</artifactId>
             <version>${okhttp.version}</version>
         </dependency>
+
+        <!-- DamiBus 本地事件总线 -->
+        <dependency>
+            <groupId>org.noear</groupId>
+            <artifactId>dami2</artifactId>
+            <version>2.0.5</version>
+        </dependency>
         <dependency>
             <groupId>org.noear</groupId>
             <artifactId>solon-test-junit5</artifactId>
