@@ -47,12 +47,8 @@ public class AgentLoop implements AgentLoopController {
     private static final int DEFAULT_TOOL_TIMEOUT_SEC = 1080;
     /** Storm 断路器自愈最大尝试次数 */
     private static final int DEFAULT_MAX_SELF_CORRECTION = 5;
-    /** 流式错误最大重试次数 */
-    private static final int DEFAULT_MAX_STREAM_RETRIES = 10;
     /** 流式响应等待超时秒数（防止 HTTP 流永不结束导致线程挂起） */
     private static final int DEFAULT_STREAM_LATCH_TIMEOUT_SEC = 300;
-    /** 指数退避重试延迟序列（秒），第 1-3 次=1s, 4-6 次=3s, 7-8 次=5s, 9 次=7s, 10 次=10s */
-    private static final int[] DEFAULT_RETRY_DELAYS_SEC = {1, 1, 1, 3, 3, 3, 5, 7, 10, 10};
 
     private int maxTotalChars() {
         return config != null ? config.maxContextChars() : DEFAULT_MAX_CONTEXT_CHARS;
@@ -68,14 +64,6 @@ public class AgentLoop implements AgentLoopController {
 
     private int maxSelfCorrectionAttempts() {
         return config != null ? config.maxSelfCorrectionAttempts() : DEFAULT_MAX_SELF_CORRECTION;
-    }
-
-    private int maxStreamErrorRetries() {
-        return config != null ? config.maxStreamErrorRetries() : DEFAULT_MAX_STREAM_RETRIES;
-    }
-
-    private int[] retryDelaysSec() {
-        return DEFAULT_RETRY_DELAYS_SEC;
     }
 
     // ==================== 核心字段 ====================
@@ -114,14 +102,9 @@ public class AgentLoop implements AgentLoopController {
     /** 任务完成标志 —— finish 工具设置，非空时主循环将退出并返回该内容 */
     private volatile String finishContent = null;
 
-    /** 流式错误重试次数（每回合重置） */
-    private int streamErrorRetryCount = 0;
-
     @Setter
     @Getter
     private volatile String sessionId;
-
-    /** ==================== 定时巡检 ==================== */
 
     /** 巡检管理器（goals / retry / patrol） */
     private final GoalPatrolManager patrolManager;
@@ -182,11 +165,6 @@ public class AgentLoop implements AgentLoopController {
         return hitlManager.hasPendingHITL();
     }
 
-    /** 获取待审批的工具调用列表（用于 /agree 命令显示） */
-    public List<ToolCallEntry> getPendingHITTcList() {
-        return hitlManager.getPendingHITTcList();
-    }
-
     /** 获取模型最大上下文窗口 token 数 */
     public int getMaxContextTokens() {
         return client.getMaxContextTokens();
@@ -216,7 +194,7 @@ public class AgentLoop implements AgentLoopController {
      * 用户主动中断：设置中断标志、中止当前 HTTP 流式请求、取消正在执行的工具。
      */
     public void requestUserAbort() {
-        doAbort("用户主动中断");
+        doAbort();
     }
 
     /**
@@ -257,7 +235,7 @@ public class AgentLoop implements AgentLoopController {
         // 捕获父级引用，创建轻量 Runnable：检查父级中断状态，若已中断则同步到本循环
         this.externalAbortSource = () -> {
             if (parentController.isAbortRequested() && !userAbortRequested) {
-                doAbort("父级代理请求中断");
+                doAbort();
                 log.info("[loop] 检测到父级中断信号，子代理同步中止");
             }
         };
@@ -266,22 +244,15 @@ public class AgentLoop implements AgentLoopController {
     // ==================== AgentLoopController 实现 ====================
 
     @Override
-    public AgentOutput getOutput() {
-        return this.output;
-    }
-
-    @Override
     public void requestStop() {
-        doAbort("工具请求停止推理循环");
+        doAbort();
         log.info("[loop] 工具请求停止推理循环");
     }
 
     /**
      * 统一的中断实现：设置标志、中止流式请求、取消工具 Future。
-     *
-     * @param reason 中断原因（用于日志）
      */
-    private void doAbort(String reason) {
+    private void doAbort() {
         userAbortRequested = true;
         client.abortStream();
         // 取消正在执行的工具 Future
@@ -412,7 +383,6 @@ public class AgentLoop implements AgentLoopController {
         dispatcher.resetStorm();
         reasonBreaker.reset();
         resetUserAbort();
-        streamErrorRetryCount = 0;
 
         // ---- 进入统一的主推理循环（含自动重试闭环） ----
         return runWithAutoRetry();
@@ -423,7 +393,7 @@ public class AgentLoop implements AgentLoopController {
      * 如果发现 FAILED 且未超重试次数的步骤，自动注入重试消息并继续循环。
      */
     private String runWithAutoRetry() throws IOException {
-        String result = mainLoop(client.isThinkingMode(), 0);
+        String result = mainLoop();
 
         // === 自动重试闭环 ===
         // 每次 mainLoop 结束后，检查是否有需要重试的目标步骤
@@ -470,7 +440,7 @@ public class AgentLoop implements AgentLoopController {
                     + "\n请重新执行此步骤。注意分析上次失败的原因，避免同样的错误。");
 
             // 继续 LLM 循环
-            result = mainLoop(client.isThinkingMode(), 0);
+            result = mainLoop();
         }
 
         // === 巡检生命周期管理 ===
@@ -488,20 +458,6 @@ public class AgentLoop implements AgentLoopController {
         return result;
     }
 
-    /**
-     * 委托给 {@link GoalPatrolManager#startPatrol()}。
-     */
-    public synchronized void startGoalPatrol() {
-        patrolManager.startPatrol();
-    }
-
-    /**
-     * 委托给 {@link GoalPatrolManager#stopPatrol()}。
-     */
-    public synchronized void stopGoalPatrol() {
-        patrolManager.stopPatrol();
-    }
-
     // ==================== 统一主推理循环 ====================
 
     /**
@@ -509,13 +465,11 @@ public class AgentLoop implements AgentLoopController {
      * 被 run() / resumeAfterHITL / resumeAfterSandboxHITL 复用。
      * 消除了原 continueConversationLoop() 与 run() 主循环体的重复代码。
      *
-     * @param isThinkingMode        是否为推理模型
-     * @param selfCorrectionAttempts 当前自愈尝试次数
      * @return 最终的 assistant content
      */
-    private String mainLoop(boolean isThinkingMode, int selfCorrectionAttempts) throws IOException {
-        streamErrorRetryCount = 0;
+    private String mainLoop() throws IOException {
         int noToolCallStreak = 0;
+        int selfCorrectionAttempts = 0;
         for (int step = 0; ; step++) {
             // ---- 0. 同步外部中断源（子代理检查父级 abort 状态）----
             Runnable extSource = externalAbortSource;
@@ -537,7 +491,7 @@ public class AgentLoop implements AgentLoopController {
             List<Map<String, Object>> tools = refreshTools();
 
             // ---- 1. 消息准备：构建 + Healing + 折叠 ----
-            PreparedMessages prepared = prepareMessages(step, isThinkingMode);
+            PreparedMessages prepared = prepareMessages(step);
             List<ChatMessage> messages = prepared.messages();
 
             // ---- 2. 流式调用 LLM ----
@@ -557,7 +511,6 @@ public class AgentLoop implements AgentLoopController {
 
             // ---- 3. 流式错误恢复 ----
             if (sr.error()) {
-                if (recoverFromStreamError()) continue;
                 throw new IOException("[stream] API error during streaming");
             }
 
@@ -669,7 +622,7 @@ public class AgentLoop implements AgentLoopController {
         }
 
         // 进入统一推理循环
-        return mainLoop(client.isThinkingMode(), 0);
+        return mainLoop();
     }
 
     /**
@@ -711,7 +664,7 @@ public class AgentLoop implements AgentLoopController {
             return fallback;
         }
 
-        return mainLoop(client.isThinkingMode(), 0);
+        return mainLoop();
     }
 
     /**
@@ -734,9 +687,9 @@ public class AgentLoop implements AgentLoopController {
 
     // ==================== 步骤 1: 消息准备 ====================
 
-    private PreparedMessages prepareMessages(int step, boolean isThinkingMode) throws IOException {
+    private PreparedMessages prepareMessages(int step) throws IOException {
         List<ChatMessage> messages = ctx.buildMessages();
-        MessageHealer.HealResult healResult = MessageHealer.heal(messages, isThinkingMode);
+        MessageHealer.HealResult healResult = MessageHealer.heal(messages);
         messages = healResult.messages();
 
         // 预检：token 数接近上下文窗口 80% 时折叠
@@ -889,21 +842,6 @@ public class AgentLoop implements AgentLoopController {
         return new StreamResult(content, reasoningContent, streamedTcs[0], false);
     }
 
-    // ==================== 流式错误恢复 ====================
-
-    /**
-     * 流式错误恢复（已弃用，重试逻辑已统一到 HttpModelClient.RetryContext）。
-     * <p>
-     * 保留此方法以兼容现有代码，但不再进行重试。
-     * </p>
-     */
-    @Deprecated
-    private boolean recoverFromStreamError() {
-        // 重试逻辑已统一到 HttpModelClient.RetryContext，这里不再重试
-        safeOutput("recover", () -> output.onLog(LogLevel.WARN, "[recover] API 流式错误，重试逻辑已统一到 HttpModelClient"));
-        return false;
-    }
-
     // ==================== 步骤 4: Scavenger 回收 ====================
 
     private ONode scavengeToolCalls(ONode toolCalls, String reasoningContent, String content) {
@@ -935,13 +873,13 @@ public class AgentLoop implements AgentLoopController {
         return executeToolCalls(toolCalls, false);
     }
 
+    private record ParsedToolCalls(List<ToolCallEntry> tcList, List<ONode> nodeList) {}
+
     /**
      * 解析并过滤工具调用列表，同时触发 onToolCall 回调。
      *
      * @return 包含过滤后的 ToolCallEntry 列表和对应 ONode 列表的记录
      */
-    private record ParsedToolCalls(List<ToolCallEntry> tcList, List<ONode> nodeList) {}
-
     private ParsedToolCalls parseAndFilterToolCalls(ONode[] tcArray) {
         List<ToolCallEntry> tcList = new ArrayList<>();
         List<ONode> filteredTcList = new ArrayList<>();
@@ -1118,7 +1056,6 @@ public class AgentLoop implements AgentLoopController {
         return results;
     }
 
-    @SuppressWarnings("unchecked")
     private ToolExecutionResult executeToolCalls(ONode toolCalls, boolean skipSandboxCheck) {
         dispatcher.setSessionId(this.sessionId);
 

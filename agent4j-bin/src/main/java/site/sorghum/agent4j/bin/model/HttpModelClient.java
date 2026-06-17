@@ -251,15 +251,6 @@ public class HttpModelClient implements ModelClient {
     }
 
     /**
-     * DeepSeek V4 系列推理模型 — reasoning_content 必须回传
-     */
-    @Override
-    public boolean isThinkingMode() {
-        // 所有模型都视为思考模型
-        return true;
-    }
-
-    /**
      * 中断当前流式请求（ReasonBreaker 触发时调用）
      */
     @Override

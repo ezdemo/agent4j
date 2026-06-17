@@ -51,19 +51,16 @@ public class Agent4jAgent {
      */
     private final ChatCommandRegistry commandRegistry;
     /**
-     * -- GETTER --
      * 获取当前 SessionService（用于保存/恢复状态）
      */
     @Getter
     private SessionService sessionService;
     /**
-     * -- GETTER --
      * 获取当前工作目录
      */
     @Getter
     private final Path workspace;
     /**
-     * -- GETTER --
      * 获取工作区管理器
      */
     @Getter
@@ -77,26 +74,14 @@ public class Agent4jAgent {
     @Getter
     private volatile boolean terminated = false;
 
-    private Agent4jAgent(Builder b) {
-        this.commandRegistry = b.commandRegistry;
-        this.workspace = b.workspace;
-
-        final ModelClient client = new HttpModelClient(b.apiUrl, b.apiKey, b.model);
-        final ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
-                b.workspace, b.apiUrl, b.apiKey,
-                b.disabledTools, b.blockedPaths, b.systemPrompt);
-        this.ctx = new ConversationContext(initResult.promptPrefix);
-        this.loop = initSessionAndLoop(client, initResult.toolRegistry, b.hitl);
-    }
-
     /**
-     * 轻量级构造函数 —— 共享 ModelClient 和 PromptPrefix，
-     * 仅创建独立的会话上下文。适用于"一个会话一个 Agent"场景，减少资源消耗。
+     * 共享 ModelClient 和 PromptPrefix，
+     * </br>仅创建独立的会话上下文。适用于"一个会话一个 Agent"场景，减少资源消耗。
      *
      * @param b                  Builder
      * @param ignoredLightweight 标记为轻量级构建（仅用于区分构造函数重载）
      */
-    private Agent4jAgent(Builder b, boolean ignoredLightweight) {
+    private Agent4jAgent(Builder b) {
         this.commandRegistry = b.commandRegistry;
         this.workspace = b.workspace;
 
@@ -676,7 +661,7 @@ public class Agent4jAgent {
          */
         public Agent4jAgent buildLightweight() {
             Objects.requireNonNull(sharedModelClient, "sharedModelClient is required");
-            return new Agent4jAgent(this, true);
+            return new Agent4jAgent(this);
         }
     }
 }

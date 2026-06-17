@@ -35,12 +35,10 @@ public class MessageHealer {
      * 3. 检测并修复重复的 tool_call_id（兜底，避免 API 400）
      * 4. 检测并修复 tool_calls 数组内的重复 id
      *
-     * @param messages       原始消息列表
-     * @param isThinkingMode 是否为推理模型（需要 reasoning_content）
+     * @param messages 原始消息列表
      * @return 整流结果（修复后的消息列表 + 是否发生修改）
      */
-    public static HealResult heal(List<ChatMessage> messages,
-                                         boolean isThinkingMode) {
+    public static HealResult heal(List<ChatMessage> messages) {
         List<ChatMessage> out = new ArrayList<>();
         int pendingToolCount = 0;
         int lastAssistantWithTcIdx = -1;
@@ -167,7 +165,7 @@ public class MessageHealer {
             }
 
             // ======== 3. stamp missing reasoning_content ========
-            if (isThinkingMode && "assistant".equals(role) && current.getReasoningContent() == null) {
+            if ( "assistant".equals(role) && current.getReasoningContent() == null) {
                 ChatMessage stamped = current.copy();
                 stamped.setReasoningContent("");
                 out.add(stamped);
