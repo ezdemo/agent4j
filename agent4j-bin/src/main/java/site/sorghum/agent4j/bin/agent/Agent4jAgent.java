@@ -75,7 +75,7 @@ public class Agent4jAgent {
     private volatile boolean terminated = false;
 
     /**
-     * 共享 ModelClient 和 PromptPrefix，
+     * 共享 ModelClient，每次构建独立初始化工具系统。
      * </br>仅创建独立的会话上下文。适用于"一个会话一个 Agent"场景，减少资源消耗。
      *
      * @param b                  Builder
@@ -90,18 +90,15 @@ public class Agent4jAgent {
         final ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
                 b.workspace, b.apiUrl, b.apiKey,
                 b.disabledTools, b.blockedPaths, prompt);
-        final PromptPrefix prefix = b.sharedPrefix != null ? b.sharedPrefix : initResult.promptPrefix;
-        this.ctx = new ConversationContext(prefix);
+        this.ctx = new ConversationContext(initResult.promptPrefix);
         this.loop = initSessionAndLoop(client, initResult.toolRegistry, b.hitl);
     }
 
     /**
-     * 解析系统提示词：优先使用显式设置的 systemPrompt，
-     * 其次使用共享的 sharedSystemPrompt，最后回退到硬编码默认值。
+     * 解析系统提示词：优先使用显式设置的 systemPrompt，否则回退到硬编码默认值。
      */
     private static String resolvePrompt(Builder b) {
         if (b.systemPrompt != null) return b.systemPrompt;
-        if (b.sharedSystemPrompt != null) return b.sharedSystemPrompt;
         return Builder.DEFAULT_SYSTEM_PROMPT;
     }
 
@@ -527,11 +524,7 @@ public class Agent4jAgent {
         /**
          * 共享的 system prompt（用于轻量级构建）
          */
-        String sharedSystemPrompt;
-        /**
-         * 共享的 PromptPrefix（用于轻量级构建）
-         */
-        PromptPrefix sharedPrefix;
+
 
         /**
          * 首次运行时自动安装默认系统提示词到 ~/.agent4j/agent4j.md。
@@ -636,25 +629,11 @@ public class Agent4jAgent {
             return this;
         }
 
-        /**
-         * 单独设置共享的 PromptPrefix
-         */
-        public Builder sharedPrefix(PromptPrefix v) {
-            this.sharedPrefix = v;
-            return this;
-        }
 
-        /**
-         * 单独设置共享的 system prompt
-         */
-        public Builder sharedSystemPrompt(String v) {
-            this.sharedSystemPrompt = v;
-            return this;
-        }
 
         /**
          * 构建轻量级 Agent 实例。
-         * 共享 ModelClient、ToolRegistry 和 PromptPrefix，仅创建独立的会话上下文。
+         * 共享 ModelClient，仅创建独立的会话上下文。
          * 适用于"一个会话一个 Agent"场景，减少资源消耗。
          *
          * @return 轻量级 Agent 实例
