@@ -76,47 +76,6 @@ public abstract class AgentTool {
         return "";
     }
 
-    // ==================== AgentLoop 控制便捷方法 ====================
-
-    /**
-     * 请求停止推理循环（空安全）。
-     * <p>调用方无需关心是否存在 AgentLoop 控制器。</p>
-     *
-     * @param ctx 工具执行上下文（不可为 null）
-     * @throws NullPointerException 如果 ctx 为 null
-     */
-    protected void stopLoop(ToolContext ctx) {
-        Objects.requireNonNull(ctx, "ToolContext must not be null");
-        ctx.requestStopLoop();
-    }
-
-    /**
-     * 在下一轮循环前注入一条用户消息（空安全）。
-     * <p>调用方无需关心是否存在 AgentLoop 控制器。</p>
-     *
-     * @param ctx     工具执行上下文（不可为 null）
-     * @param message 要注入的用户消息
-     * @throws NullPointerException 如果 ctx 为 null
-     */
-    protected void injectMessage(ToolContext ctx, String message) {
-        Objects.requireNonNull(ctx, "ToolContext must not be null");
-        ctx.injectUserMessage(message);
-    }
-
-    /**
-     * 向下游推送自定义事件（空安全）。
-     * <p>调用方无需关心是否存在 AgentLoop 控制器。</p>
-     *
-     * @param ctx  工具执行上下文（不可为 null）
-     * @param type 事件类型标识符
-     * @param data JSON 格式的事件数据
-     * @throws NullPointerException 如果 ctx 为 null
-     */
-    protected void emitEvent(ToolContext ctx, String type, String data) {
-        Objects.requireNonNull(ctx, "ToolContext must not be null");
-        ctx.emitEvent(type, data);
-    }
-
     @Override
     public String toString() {
         return getName();

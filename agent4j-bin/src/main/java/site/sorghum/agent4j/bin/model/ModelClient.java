@@ -43,11 +43,6 @@ public interface ModelClient {
     void setModel(String model);
 
     /**
-     * 是否为推理模型（DeepSeek V4 / Reasoner 系列）。
-     */
-    boolean isThinkingMode();
-
-    /**
      * 中断当前正在进行的流式调用（如果存在）。
      * 默认空实现——不支持中断的客户端可忽略。
      */
