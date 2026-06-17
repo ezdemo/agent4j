@@ -68,11 +68,14 @@
           @send-choice="sendChoice"
       />
 
-      <!-- 加载中 -->
-      <div v-if="streaming && !hasAssistant" class="msg assistant">
+      <!-- 加载中：AI 准备中 -->
+      <div v-if="waitingForAI" class="msg assistant">
         <div class="msg-body assistant-body">
-          <div class="typing">
-            <span></span><span></span><span></span>
+          <div class="ai-preparing">
+            <span class="ai-dot"></span>
+            <span class="ai-dot"></span>
+            <span class="ai-dot"></span>
+            <span class="ai-label">AI 正在思考...</span>
           </div>
         </div>
       </div>
@@ -397,7 +400,22 @@ const suggestions = ['解释这段代码', '优化这个函数', '写个单元�
 // 不在聊天区显示的静默命令（只发给后端，不加用户消息气泡）
 const SILENT_CMDS = new Set(['/agree', '/deny', '/exit', '/continue'])
 
-const hasAssistant = computed(() => messages.value.some(m => m.role === 'assistant' && m.blocks?.length > 0))
+const hasAssistant = computed(() => {
+  if (!streaming.value) return false
+  // 检查最后一条助手消息是否有内容
+  const msgs = messages.value
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === 'assistant') {
+      return msgs[i].blocks?.length > 0
+    }
+  }
+  return false
+})
+
+// 是否正在等待 AI 回复（用于显示加载动画）
+const waitingForAI = computed(() => {
+  return streaming.value && !hasAssistant.value
+})
 
 // ===== 消息缩略图 dock =====
 /** 只取 role === 'user' 的消息，并记录全局索引用于跳转 */
@@ -1211,27 +1229,60 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   color: var(--accent);
 }
 
-/* 打字动画 */
-.typing {
+/* AI 准备中动画 */
+.ai-preparing {
   display: flex;
-  gap: 4px;
-  padding: 4px 0;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
 }
 
-.typing span {
-  width: 6px;
-  height: 6px;
-  background: var(--fg-4);
+/* 助手消息气泡样式（Chat.vue 中的加载状态需要） */
+.msg.assistant {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.msg.assistant .msg-body {
+  max-width: min(680px, 85%);
+}
+
+.assistant-body {
+  background: var(--glass-bg-2);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: 8px 12px;
+  box-shadow: var(--glass-shadow);
+}
+
+.ai-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
   border-radius: 50%;
-  animation: pulse 1.4s infinite;
+  opacity: 0.4;
+  animation: ai-pulse 1.4s ease-in-out infinite;
 }
 
-.typing span:nth-child(2) {
+.ai-dot:nth-child(2) {
   animation-delay: 0.2s;
 }
 
-.typing span:nth-child(3) {
+.ai-dot:nth-child(3) {
   animation-delay: 0.4s;
+}
+
+.ai-label {
+  font-size: 13px;
+  color: var(--fg-3);
+  margin-left: 4px;
+}
+
+@keyframes ai-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
 }
 
 /* 全部输入区样式已迁移到 ChatInput.vue 组件中（.input-area, .input-box, .usage-bar, .todo-*, .slash-popup, .model-selector 等） */
