@@ -1,5 +1,5 @@
 <template>
-  <template v-for="(block, bi) in blocks" :key="bi">
+  <template v-if="blocks && blocks.length > 0" v-for="(block, bi) in blocks" :key="bi">
     <!-- 思考 -->
     <div v-if="block.type === 'reasoning'" class="block-reasoning">
       <div class="reasoning-head" @click="block.showContent = !block.showContent">
@@ -11,7 +11,7 @@
     </div>
 
     <!-- 内容 -->
-    <div v-else-if="block.type === 'content'" class="block-content" v-html="fmt(block.content)"></div>
+    <div v-else-if="block.type === 'content' && block.content" class="block-content" v-html="fmt(block.content)"></div>
 
     <!-- 工具调用 -->
     <template v-else-if="block.type === 'tool_call'">
@@ -24,7 +24,7 @@
         <div class="finish-content" v-html="fmt(block.result)"></div>
       </div>
       <!-- finish 执行中 -->
-      <div v-else-if="block.name === 'finish'" class="block-tool">
+      <div v-else-if="block.name === 'finish' && block.status" class="block-tool">
         <div class="tool-head">
           <span class="tool-icon" :class="block.status" v-html="SPINNER_ICON"></span>
           <code class="tool-name">finish</code>
