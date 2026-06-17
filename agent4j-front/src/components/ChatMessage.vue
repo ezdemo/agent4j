@@ -20,7 +20,7 @@
     </template>
 
     <!-- 助手消息 -->
-    <template v-else-if="msg.role === 'assistant'">
+    <template v-else-if="msg.role === 'assistant' && msg.blocks && msg.blocks.length > 0">
       <div class="msg-body assistant-body">
         <div class="msg-blocks">
           <BlockRenderer :blocks="msg.blocks || []" @send-choice="(val, block) => $emit('sendChoice', val, block)" />
@@ -171,7 +171,14 @@ onBeforeUnmount(() => {
 <style scoped>
 /* 消息 */
 .msg {
-  margin-bottom: 12px;
+  margin-bottom: 8px;
+}
+
+/* 角色切换时增大间距 */
+.msg.user + .msg.assistant,
+.msg.assistant + .msg.user {
+  margin-top: 8px;
+  margin-bottom: 8px;
 }
 
 .msg.user {
@@ -180,14 +187,14 @@ onBeforeUnmount(() => {
 }
 
 .msg-body {
-  max-width: 80%;
+  max-width: min(680px, 85%);
 }
 
 .user-body {
   background: var(--accent);
   color: #fff;
   padding: 8px 12px;
-  border-radius: var(--r);
+  border-radius: var(--r-lg);
 }
 
 .user-body ::selection {

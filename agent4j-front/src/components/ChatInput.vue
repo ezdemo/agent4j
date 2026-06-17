@@ -406,7 +406,7 @@ defineExpose({ focus: () => inputField.value?.focus(), autoResize })
 
 <style scoped>
 .input-area { position: absolute; bottom: 0; left: 0; right: 0; padding: 12px 10px; background: transparent; z-index: 10; }
-.input-box { display: flex; flex-direction: column; gap: 0; background: var(--glass-bg-2); border: 1px solid var(--glass-border); border-radius: var(--r); padding: 6px 8px 0; transition: border-color var(--t); box-shadow: var(--glass-shadow); }
+.input-box { display: flex; flex-direction: column; gap: 0; background: var(--glass-bg-2); border: 1px solid var(--glass-border); border-radius: var(--r-lg); padding: 6px 8px 0; transition: border-color var(--t); box-shadow: var(--glass-shadow); }
 .input-box.focused { border-color: var(--accent); }
 .input-row { display: flex; align-items: flex-end; gap: 8px; }
 .input-box textarea { flex: 1; min-height: 22px; max-height: 160px; padding: 0; background: none; border: none; outline: none; font-size: 14px; line-height: 1.5; color: var(--fg); resize: none; }
@@ -554,7 +554,7 @@ defineExpose({ focus: () => inputField.value?.focus(), autoResize })
 .slash-popup-enter-from, .slash-popup-leave-to { opacity: 0; transform: translateY(8px) scale(0.98); }
 
 /* Usage bar — 融入 input-box 底部 */
-.usage-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 4px 12px; font-size: 12px; color: var(--fg-3); border-top: 1px solid var(--glass-border); margin-top: 4px; }
+.usage-bar { display: flex; align-items: center; justify-content: space-between; padding: 4px 4px 4px 12px; font-size: 11px; color: var(--fg-3); border-top: 1px solid var(--glass-border); margin-top: 4px; }
 .usage-stats { display: flex; align-items: center; gap: 12px; }
 .usage-item { display: inline-flex; align-items: center; gap: 3px; cursor: default; color: var(--fg-3); }
 .usage-item svg { color: var(--fg-4); flex-shrink: 0; }

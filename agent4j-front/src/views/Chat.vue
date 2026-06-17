@@ -1169,8 +1169,9 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-3);
-  border-radius: var(--r);
+  background: transparent;
+  border: 2px dashed var(--border);
+  border-radius: 50%;
   margin-bottom: 12px;
   color: var(--fg-4);
 }
