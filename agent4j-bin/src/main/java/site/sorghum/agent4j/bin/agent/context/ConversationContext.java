@@ -1,8 +1,12 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.context;
 
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import site.sorghum.agent4j.bin.agent.model.ChatMessage;
+import site.sorghum.agent4j.bin.agent.model.ToolCallEntry;
+import site.sorghum.agent4j.bin.agent.model.UserMessage;
+import site.sorghum.agent4j.bin.agent.prompt.PromptPrefix;
 import site.sorghum.agent4j.bin.session.SessionStore;
 import site.sorghum.agent4j.tool.interact.FinishTool;
 

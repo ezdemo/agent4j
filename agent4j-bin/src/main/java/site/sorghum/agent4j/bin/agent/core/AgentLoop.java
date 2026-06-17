@@ -1,9 +1,20 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.core;
 
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
+import site.sorghum.agent4j.bin.agent.context.ContextFolding;
+import site.sorghum.agent4j.bin.agent.context.ConversationContext;
+import site.sorghum.agent4j.bin.agent.context.MessageHealer;
+import site.sorghum.agent4j.bin.agent.hitl.HitlManager;
+import site.sorghum.agent4j.bin.agent.listener.AgentLoopListener;
+import site.sorghum.agent4j.bin.agent.listener.NoOpAgentLoopListener;
+import site.sorghum.agent4j.bin.agent.model.*;
+import site.sorghum.agent4j.bin.agent.output.ConsoleAgentOutput;
+import site.sorghum.agent4j.bin.agent.resilient.GoalPatrolManager;
+import site.sorghum.agent4j.bin.agent.resilient.ReasonBreaker;
+import site.sorghum.agent4j.bin.agent.resilient.Scavenger;
 import site.sorghum.agent4j.bin.builtin.TaskTool;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.bin.goal.Goal;

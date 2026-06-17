@@ -1,4 +1,4 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.model;
 
 /**
  * HITL（Human-In-The-Loop）审批状态枚举。

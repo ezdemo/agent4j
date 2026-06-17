@@ -2,7 +2,7 @@ package site.sorghum.agent4j.bin.builtin;
 
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
-import site.sorghum.agent4j.bin.agent.SubAgent;
+import site.sorghum.agent4j.bin.agent.core.SubAgent;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.tool.ToolDef;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
