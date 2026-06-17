@@ -1147,9 +1147,10 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 16px 120px;
+  padding: 16px 16px 100px;
   position: relative;
 }
+
 
 /* 空状态 */
 .empty {
