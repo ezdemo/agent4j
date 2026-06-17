@@ -1,4 +1,4 @@
-package site.sorghum.agent4j.bin.agent.loop;
+package site.sorghum.agent4j.bin.agent;
 
 /**
  * Agent 循环事件监听器 —— 用于观察推理、工具调用、工具结果和 token 用量。

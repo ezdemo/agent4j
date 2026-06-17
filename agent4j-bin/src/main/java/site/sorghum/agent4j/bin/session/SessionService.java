@@ -3,9 +3,9 @@ package site.sorghum.agent4j.bin.session;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import site.sorghum.agent4j.bin.agent.context.ConversationContext;
-import site.sorghum.agent4j.bin.agent.context.MessageHealer;
-import site.sorghum.agent4j.bin.agent.model.ChatMessage;
+import site.sorghum.agent4j.bin.agent.ChatMessage;
+import site.sorghum.agent4j.bin.agent.ConversationContext;
+import site.sorghum.agent4j.bin.agent.MessageHealer;
 
 import java.io.IOException;
 import java.nio.file.Path;

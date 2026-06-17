@@ -1,6 +1,6 @@
 package site.sorghum.agent4j.bin.session;
 
-import site.sorghum.agent4j.bin.agent.model.ChatMessage;
+import site.sorghum.agent4j.bin.agent.ChatMessage;
 
 import java.io.IOException;
 import java.util.List;

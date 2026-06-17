@@ -1,4 +1,4 @@
-package site.sorghum.agent4j.bin.agent.breaker;
+package site.sorghum.agent4j.bin.agent;
 
 import lombok.extern.slf4j.Slf4j;
 

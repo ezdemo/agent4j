@@ -1,4 +1,4 @@
-package site.sorghum.agent4j.bin.agent.prompt;
+package site.sorghum.agent4j.bin.agent;
 
 public class DEFAULT_PROMPT {
     public final static String PROMPT = """

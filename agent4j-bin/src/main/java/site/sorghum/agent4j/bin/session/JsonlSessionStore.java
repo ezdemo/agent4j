@@ -3,8 +3,8 @@ package site.sorghum.agent4j.bin.session;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
-import site.sorghum.agent4j.bin.agent.model.ChatMessage;
-import site.sorghum.agent4j.bin.agent.model.ToolCallEntry;
+import site.sorghum.agent4j.bin.agent.ChatMessage;
+import site.sorghum.agent4j.bin.agent.ToolCallEntry;
 import site.sorghum.agent4j.bin.util.ONodeUtil;
 import site.sorghum.agent4j.tool.interact.FinishTool;
 

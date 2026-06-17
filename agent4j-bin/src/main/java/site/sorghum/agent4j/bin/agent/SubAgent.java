@@ -1,12 +1,6 @@
-package site.sorghum.agent4j.bin.agent.sub;
+package site.sorghum.agent4j.bin.agent;
 
 import lombok.Getter;
-import site.sorghum.agent4j.bin.agent.context.ConversationContext;
-import site.sorghum.agent4j.bin.agent.loop.AgentLoop;
-import site.sorghum.agent4j.bin.agent.loop.AgentLoopListener;
-import site.sorghum.agent4j.bin.agent.model.UserMessage;
-import site.sorghum.agent4j.bin.agent.output.SubAgentAgentOutput;
-import site.sorghum.agent4j.bin.agent.prompt.PromptPrefix;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.tool.AgentLoopController;
