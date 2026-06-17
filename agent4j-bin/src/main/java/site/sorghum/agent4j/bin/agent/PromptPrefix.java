@@ -41,7 +41,7 @@ public class PromptPrefix {
      */
     public List<ChatMessage> toMessages() {
         List<ChatMessage> msgs = new ArrayList<>();
-        msgs.add(ChatMessage.system(system));
+        msgs.add(ChatMessage.ofSystem(system));
         return msgs;
     }
 

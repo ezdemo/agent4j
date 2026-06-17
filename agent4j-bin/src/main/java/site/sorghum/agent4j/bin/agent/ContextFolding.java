@@ -192,9 +192,11 @@ public class ContextFolding {
         trimmed = sanitizeMessagesForSummary(trimmed);
 
         List<ChatMessage> msgs = new ArrayList<>();
-        msgs.add(ChatMessage.system(sp));
-        for (Map<String, Object> m : trimmed) msgs.add(ChatMessage.fromMap(m));
-        msgs.add(ChatMessage.user("请用一段中文总结上面的对话。这段摘要将替代原始对话以释放上下文。"));
+        msgs.add(ChatMessage.ofSystem(sp));
+        for (Map<String, Object> m : trimmed) {
+            msgs.add(ChatMessage.fromMap(m));
+        }
+        msgs.add(ChatMessage.ofUser("请用一段中文总结上面的对话。这段摘要将替代原始对话以释放上下文。"));
 
         ONode resp = client.chat(msgs, null);
         String content = resp.get("content").getString();

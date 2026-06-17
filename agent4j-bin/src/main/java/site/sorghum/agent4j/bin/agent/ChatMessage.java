@@ -4,7 +4,9 @@ import lombok.Data;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import org.noear.snack4.annotation.ONodeAttr;
+import org.noear.snack4.codec.TypeRef;
 
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -65,7 +67,7 @@ public class ChatMessage {
 
     // ==================== 内容段模型 ====================
 
-    public static ChatMessage user(String content) {
+    public static ChatMessage ofUser(String content) {
         ChatMessage msg = new ChatMessage("user");
         msg.content = content;
         msg.timestamp = System.currentTimeMillis();
@@ -74,7 +76,7 @@ public class ChatMessage {
 
     // ==================== 工厂方法 ====================
 
-    public static ChatMessage system(String content) {
+    public static ChatMessage ofSystem(String content) {
         ChatMessage msg = new ChatMessage("system");
         msg.content = content;
         return msg;
@@ -87,7 +89,7 @@ public class ChatMessage {
      * @param images 图片 URL 列表（公开 URL 或 Base64 Data URI）
      * @return 用户消息
      */
-    public static ChatMessage userWithImages(String text, List<String> images) {
+    public static ChatMessage ofUser(String text, List<String> images) {
         ChatMessage msg = new ChatMessage("user");
         msg.contentParts = new ArrayList<>();
         for (String img : images) {
@@ -100,13 +102,13 @@ public class ChatMessage {
         return msg;
     }
 
-    @SuppressWarnings("unchecked")
     public static ChatMessage fromMap(Map<String, Object> m) {
         String role = String.valueOf(m.getOrDefault("role", "user"));
         ChatMessage msg = new ChatMessage(role);
         Object content = m.get("content");
         if (content instanceof List) {
             // 多模态内容段：[{"type":"text",...},{"type":"image_url",...}]
+            //noinspection unchecked
             List<Map<String, Object>> parts = (List<Map<String, Object>>) content;
             msg.contentParts = new ArrayList<>();
             for (Map<String, Object> part : parts) {
@@ -117,6 +119,7 @@ public class ChatMessage {
                     Object textVal = part.get("text");
                     cp.setText(textVal != null ? textVal.toString() : null);
                 } else if ("image_url".equals(type)) {
+                    //noinspection unchecked
                     Map<String, Object> iuMap = (Map<String, Object>) part.get("image_url");
                     if (iuMap != null) {
                         ContentPart.ImageUrl iu = new ContentPart.ImageUrl();
@@ -313,6 +316,7 @@ public class ChatMessage {
         /**
          * image_url 类型时的图片信息
          */
+        @ONodeAttr(name = "image_url")
         private ImageUrl imageUrl;
 
         public static ContentPart text(String text) {

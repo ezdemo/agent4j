@@ -774,7 +774,7 @@ public class AgentLoop implements AgentLoopController {
         if (!instr.isEmpty()) {
             List<ChatMessage> withInstr = new ArrayList<>(messages.size() + 1);
             withInstr.add(messages.get(0)); // system prompt
-            withInstr.add(ChatMessage.user(instr));
+            withInstr.add(ChatMessage.ofUser(instr));
             withInstr.addAll(messages.subList(1, messages.size()));
             messages = withInstr;
         }
