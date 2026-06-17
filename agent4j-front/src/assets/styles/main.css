@@ -314,6 +314,23 @@ body {
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
+/* 消息内链接 — 代码风格包裹 */
+.ai-link {
+  color: var(--fg-2);
+  text-decoration: none;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  font-family: var(--mono);
+  font-size: 12px;
+  transition: color var(--t), background var(--t), border-color var(--t);
+}
+.ai-link:hover {
+  color: var(--fg);
+  background: var(--border);
+}
+
 code {
   font-family: var(--mono);
   font-size: 12px;
