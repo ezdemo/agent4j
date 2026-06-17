@@ -1,6 +1,8 @@
 package site.sorghum.agent4j.bin.agent;
 
 import org.junit.jupiter.api.Test;
+import site.sorghum.agent4j.bin.agent.context.ContextFolding;
+import site.sorghum.agent4j.bin.agent.model.ChatMessage;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -12,8 +14,8 @@ class ContextFoldingTest {
     @Test
     void estimateCharsSingleMessage() {
         ChatMessage msg = ChatMessage.ofUser("hello world");
-        int n = ContextFolding.estimateChars(msg);
-        assertEquals(4 + 11, n, "role=4 chars + content=11 chars");
+        int n = ContextFolding.estimateChars(List.of(msg));
+        assertEquals(11, n, "content=11 chars (role not counted in estimateChars)");
     }
 
     @Test
@@ -28,7 +30,7 @@ class ContextFoldingTest {
     @Test
     void estimateCharsWithReasoning() {
         ChatMessage msg = ChatMessage.assistant("ok", null, "thinking...");
-        int n = ContextFolding.estimateChars(msg);
+        int n = ContextFolding.estimateChars(List.of(msg));
         assertTrue(n > 4 + 2, "reasoning_content 也应计入字符数");
     }
 

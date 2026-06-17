@@ -3,7 +3,7 @@ package site.sorghum.agent4j.bin.tool;
 import lombok.Getter;
 import lombok.Setter;
 import org.noear.snack4.ONode;
-import site.sorghum.agent4j.bin.agent.StormBreaker;
+import site.sorghum.agent4j.bin.agent.breaker.StormBreaker;
 import site.sorghum.agent4j.bin.util.ONodeUtil;
 import site.sorghum.agent4j.tool.AgentLoopController;
 import site.sorghum.agent4j.tool.ToolContext;

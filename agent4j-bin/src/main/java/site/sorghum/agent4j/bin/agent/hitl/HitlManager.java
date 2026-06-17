@@ -1,9 +1,10 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.hitl;
 
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
+import site.sorghum.agent4j.bin.agent.model.ToolCallEntry;
 import site.sorghum.agent4j.tool.AgentOutput;
 import site.sorghum.agent4j.tool.ChoiceOption;
 

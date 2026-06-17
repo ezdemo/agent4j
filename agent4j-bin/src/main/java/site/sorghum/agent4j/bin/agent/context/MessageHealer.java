@@ -1,8 +1,13 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.context;
 
 import org.noear.snack4.ONode;
+import site.sorghum.agent4j.bin.agent.model.ChatMessage;
+import site.sorghum.agent4j.bin.agent.model.ToolCallEntry;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Set;
 
 /**
  * 消息修复器（整流器）—— 发送前修复消息列表。

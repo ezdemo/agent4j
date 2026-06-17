@@ -1,8 +1,12 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.context;
 
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import site.sorghum.agent4j.bin.agent.model.ChatMessage;
+import site.sorghum.agent4j.bin.agent.model.ToolCallEntry;
+import site.sorghum.agent4j.bin.agent.model.UserMessage;
+import site.sorghum.agent4j.bin.agent.prompt.PromptPrefix;
 import site.sorghum.agent4j.bin.session.SessionStore;
 import site.sorghum.agent4j.tool.interact.FinishTool;
 
@@ -34,10 +38,6 @@ public class ConversationContext {
     private final PromptPrefix prefix;
     /**
      * 持久化存储（可选）
-     * -- SETTER --
-     *  绑定会话存储，所有后续消息将通过此存储持久化。
-     *  传入 null 可解除绑定（停止持久化）。
-     *
      */
     @Setter
     @Getter

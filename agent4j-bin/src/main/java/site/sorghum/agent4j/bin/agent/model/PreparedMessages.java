@@ -1,4 +1,4 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.model;
 
 import java.util.List;
 
