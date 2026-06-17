@@ -120,19 +120,19 @@
       <!-- Token 用量 & 模型选择 -->
       <div class="usage-bar">
         <div class="usage-stats">
-        <span class="usage-item" :title="'输入: '+fmt(usage.promptTokens)">
+        <span class="usage-item hide-mobile" :title="'输入: '+fmt(usage.promptTokens)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
           </svg>
           输入 {{ fmt(usage.promptTokens) }}
         </span>
-        <span class="usage-item" :title="'输出: '+fmt(usage.completionTokens)">
+        <span class="usage-item hide-mobile" :title="'输出: '+fmt(usage.completionTokens)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
           </svg>
           输出 {{ fmt(usage.completionTokens) }}
         </span>
-        <span class="usage-item" :title="'缓存命中: '+fmt(usage.cacheHit)+' / 未命中: '+fmt(usage.cacheMiss)">
+        <span class="usage-item hide-mobile" :title="'缓存命中: '+fmt(usage.cacheHit)+' / 未命中: '+fmt(usage.cacheMiss)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
           </svg>
@@ -608,4 +608,18 @@ defineExpose({ focus: () => inputField.value?.focus(), autoResize })
 .model-option svg { color: var(--accent); }
 .loading-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent); animation: loadBounce 0.6s infinite alternate; }
 @keyframes loadBounce { from { opacity: 0.3; transform: scale(0.8); } to { opacity: 1; transform: scale(1.2); } }
+
+/* ===== 移动端适配 ===== */
+@media (max-width: 640px) {
+  .input-area { padding: 8px 6px; }
+  .input-box { padding: 4px 6px 0; border-radius: var(--r); }
+  .input-box textarea { font-size: 16px; min-height: 20px; }
+  .input-row { gap: 4px; }
+  .btn-icon-sm, .send-btn, .continue-btn, .todo-btn { width: 32px; height: 32px; }
+  .hide-mobile { display: none !important; }
+  .model-btn { font-size: 11px; padding: 2px 4px; }
+  .model-dropdown { min-width: 160px; }
+  .todo-tooltip { width: 240px; }
+  .slash-popup { left: 8px; right: 8px; }
+}
 </style>

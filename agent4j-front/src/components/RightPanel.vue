@@ -176,4 +176,21 @@ const scheduleRef = ref(null)
 .rp-page :deep(.sch-head) {
   display: none;
 }
+
+/* 响应式 */
+@media (max-width: 768px) {
+  .rp-panel {
+    position: fixed;
+    right: -320px;
+    top: 33px;
+    bottom: 0;
+    z-index: 200;
+    width: 300px;
+    max-width: 85vw;
+    transition: right 0.2s;
+    border-left: 1px solid var(--glass-border);
+    box-shadow: -4px 0 20px rgba(0,0,0,0.15);
+  }
+  .rp-panel:not(.collapsed) { right: 0; }
+}
 </style>

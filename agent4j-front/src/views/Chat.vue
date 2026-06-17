@@ -1818,4 +1818,20 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   opacity: 1;
   margin-left: 2px;
 }
+
+/* ===== 移动端适配 ===== */
+@media (max-width: 640px) {
+  .messages { padding: 12px 8px 100px; }
+  .msg-body { max-width: 95%; }
+  .empty-title { font-size: 14px; }
+  .empty-desc { font-size: 12px; }
+  .suggestion { font-size: 11px; padding: 3px 8px; }
+  .scroll-bottom-btn { right: 12px; bottom: 100px; width: 32px; height: 32px; }
+  .ai-preparing { padding: 6px 10px; }
+  .ai-dot { width: 6px; height: 6px; }
+  .ai-label { font-size: 12px; }
+  .msg-thumb-dock { display: none; } /* 手机端隐藏缩略图dock */
+  .chat-head { padding: 6px 10px; }
+  .chat-head-title { font-size: 13px; }
+}
 </style>
