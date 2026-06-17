@@ -1,10 +1,10 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.patrol;
 
 import lombok.extern.slf4j.Slf4j;
+import site.sorghum.agent4j.bin.agent.context.ConversationContext;
 import site.sorghum.agent4j.bin.goal.*;
 import site.sorghum.agent4j.bin.session.SessionService;
 
-import java.io.IOException;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -15,7 +15,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * 目标巡检管理器 —— 从 {@link AgentLoop} 中抽取的 patrol / goal-retry 逻辑。
+ * 目标巡检管理器 —— 从 {@link site.sorghum.agent4j.bin.agent.loop.AgentLoop AgentLoop} 中抽取的 patrol / goal-retry 逻辑。
  * <p>
  * 职责：
  * <ul>

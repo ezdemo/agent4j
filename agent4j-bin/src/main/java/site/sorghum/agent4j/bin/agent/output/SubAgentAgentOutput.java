@@ -1,4 +1,4 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.output;
 
 import site.sorghum.agent4j.tool.AgentOutput;
 import site.sorghum.agent4j.tool.ChoiceOption;

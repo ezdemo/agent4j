@@ -1,4 +1,4 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.output;
 
 import site.sorghum.agent4j.tool.AgentOutput;
 import site.sorghum.agent4j.tool.ChoiceOption;
@@ -8,7 +8,8 @@ import site.sorghum.agent4j.tool.LogLevel;
  * 控制台输出实现 —— {@link AgentOutput} 的默认实现。
  * <p>
  * 所有输出内容通过 {@link System#out} / {@link System#err} 打印到控制台，
- * 保持与重构前一致的行为。将原 {@link AgentLoop} 和 {@link site.sorghum.agent4j.bin.Agent4jApp Agent4jApp}
+ * 保持与重构前一致的行为。将原 {@link site.sorghum.agent4j.bin.agent.loop.AgentLoop AgentLoop}
+ * 和 {@link site.sorghum.agent4j.bin.Agent4jApp Agent4jApp}
  * 中散落的 System.out/err 调用集中于此。
  * </p>
  *

@@ -1,7 +1,7 @@
 package site.sorghum.agent4j.bin.builtin;
 
 import lombok.extern.slf4j.Slf4j;
-import site.sorghum.agent4j.bin.agent.AgentLoopListener;
+import site.sorghum.agent4j.bin.agent.loop.AgentLoopListener;
 
 /**
  * 子代理事件监听器 —— 将子代理的推理和工具调用输出到 stderr。

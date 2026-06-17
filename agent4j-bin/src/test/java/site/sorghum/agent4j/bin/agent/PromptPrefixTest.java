@@ -1,6 +1,8 @@
 package site.sorghum.agent4j.bin.agent;
 
 import org.junit.jupiter.api.Test;
+import site.sorghum.agent4j.bin.agent.model.ChatMessage;
+import site.sorghum.agent4j.bin.agent.prompt.PromptPrefix;
 
 import java.util.List;
 

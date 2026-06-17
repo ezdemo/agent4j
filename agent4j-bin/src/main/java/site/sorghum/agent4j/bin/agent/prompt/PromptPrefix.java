@@ -1,4 +1,6 @@
-package site.sorghum.agent4j.bin.agent;
+package site.sorghum.agent4j.bin.agent.prompt;
+
+import site.sorghum.agent4j.bin.agent.model.ChatMessage;
 
 import java.util.ArrayList;
 import java.util.List;

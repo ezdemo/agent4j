@@ -5,7 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import org.noear.solon.annotation.*;
 import org.noear.solon.core.handle.Context;
-import site.sorghum.agent4j.bin.agent.UserMessage;
+import site.sorghum.agent4j.bin.agent.model.UserMessage;
 import site.sorghum.agent4j.web.common.WebErrorMessages;
 import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.model.ChatRequest;

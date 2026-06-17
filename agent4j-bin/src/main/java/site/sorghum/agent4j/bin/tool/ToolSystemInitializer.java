@@ -1,7 +1,7 @@
 package site.sorghum.agent4j.bin.tool;
 
 import lombok.extern.slf4j.Slf4j;
-import site.sorghum.agent4j.bin.agent.PromptPrefix;
+import site.sorghum.agent4j.bin.agent.prompt.PromptPrefix;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
 

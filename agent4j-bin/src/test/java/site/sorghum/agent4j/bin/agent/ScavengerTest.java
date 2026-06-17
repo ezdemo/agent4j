@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.bin.agent;
 
 import org.junit.jupiter.api.Test;
+import site.sorghum.agent4j.bin.agent.context.Scavenger;
 
 import java.util.ArrayList;
 import java.util.List;
