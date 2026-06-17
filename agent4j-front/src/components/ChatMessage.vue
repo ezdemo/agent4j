@@ -187,7 +187,7 @@ onBeforeUnmount(() => {
 }
 
 .msg-body {
-  max-width: min(680px, 85%);
+  max-width: 85%;
 }
 
 .user-body {
