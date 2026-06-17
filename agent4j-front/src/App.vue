@@ -312,6 +312,67 @@
         </div>
       </div>
     </Teleport>
+
+    <!-- 核心服务版本落后提示弹窗（仅桌面端） -->
+    <Teleport to="body">
+      <div v-if="showCoreServiceUpdateModal" class="update-modal-mask" @click.self="!coreServiceUpdating && !coreServiceUpdateDone && (showCoreServiceUpdateModal = false)">
+        <div class="update-modal" style="max-width: 520px;">
+          <div class="update-modal-head">
+            <span class="update-modal-title">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+              核心服务更新
+            </span>
+            <button class="btn-icon-xs" @click="showCoreServiceUpdateModal = false" :disabled="coreServiceUpdating || coreServiceUpdateDone" v-show="!coreServiceUpdateDone">×</button>
+          </div>
+
+          <div class="update-modal-body">
+            <!-- 版本对比 -->
+            <div class="core-service-update-versions">
+              <div class="version-row">
+                <span class="version-label">桌面端</span>
+                <span class="version-badge version-new">v{{ desktopAppVersion }}</span>
+              </div>
+              <div class="version-row">
+                <span class="version-label">核心服务</span>
+                <span class="version-badge version-old">v{{ appVersion }}</span>
+              </div>
+            </div>
+
+            <!-- 安装日志 -->
+            <div v-if="coreServiceUpdating || installLogs.length > 0" class="install-log-container">
+              <div class="install-log" ref="logContainer">
+                <div v-for="(line, i) in installLogs" :key="i" class="log-line">{{ line }}</div>
+                <div v-if="installLogs.length === 0" class="log-line log-placeholder">等待输出...</div>
+              </div>
+            </div>
+
+            <!-- 更新成功提示 -->
+            <div v-if="coreServiceUpdateDone" class="update-success-tip">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/>
+                <polyline points="22 4 12 14.01 9 11.01"/>
+              </svg>
+              <span>更新完成，请关闭程序后重新启动</span>
+            </div>
+          </div>
+
+          <div class="update-modal-foot">
+            <button v-if="coreServiceUpdateDone" class="btn btn-primary" @click="closeAppAfterUpdate">
+              关闭程序
+            </button>
+            <template v-else>
+              <button class="btn btn-secondary" @click="showCoreServiceUpdateModal = false" :disabled="coreServiceUpdating">
+                稍后
+              </button>
+              <button class="btn btn-primary" @click="handleCoreServiceUpdate" :disabled="coreServiceUpdating">
+                <span v-if="coreServiceUpdating" class="btn-spinner"></span>
+                {{ coreServiceUpdating ? '更新中...' : '立即更新' }}
+              </button>
+            </template>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -476,6 +537,15 @@ const autoUpdating = ref(false)
 const electronVersion = ref('')
 const desktopHasNewVersion = ref(false)
 const checkingVersion = ref(false)
+
+// 核心服务版本落后提示（仅桌面端）
+const showCoreServiceUpdateModal = ref(false)
+const coreServiceUpdating = ref(false)
+const coreServiceUpdateDone = ref(false)
+const desktopAppVersion = ref('')
+const installLogs = ref([])
+const logContainer = ref(null)
+let unlistenInstallOutput = null
 
 // 系统提示词弹窗
 const promptModalOpen = ref(false)
@@ -1034,7 +1104,9 @@ async function fetchVersionInfo(retryCount = 0) {
   }
   // 桌面端：额外获取 Electron 版本并对比
   if (platform.isElectron) {
-    fetchElectronVersion()
+    await fetchElectronVersion()
+    // 检查核心服务版本是否落后于桌面端版本
+    checkCoreServiceVersion()
   }
 }
 
@@ -1057,6 +1129,7 @@ async function fetchElectronVersion() {
   try {
     const ver = await window.electronAPI.getElectronVersion()
     electronVersion.value = ver
+    desktopAppVersion.value = ver
     if (latestVersion.value && ver && ver !== '未知') {
       desktopHasNewVersion.value = compareVersions(ver, latestVersion.value) < 0
     }
@@ -1064,6 +1137,78 @@ async function fetchElectronVersion() {
     electronVersion.value = '未知'
     console.warn('获取 Electron 版本失败:', e)
   }
+}
+
+// 检查核心服务版本是否落后于桌面端版本
+function checkCoreServiceVersion() {
+  if (!platform.isElectron) return
+  if (!appVersion.value || !desktopAppVersion.value) return
+  if (appVersion.value === '未知版本' || desktopAppVersion.value === '未知') return
+  
+  try {
+    // 比较核心服务版本和桌面端版本
+    const compareResult = compareVersions(appVersion.value, desktopAppVersion.value)
+    if (compareResult < 0) {
+      // 核心服务版本落后于桌面端版本
+      console.log(`[App] 核心服务版本落后: 服务版本=${appVersion.value}, 桌面端版本=${desktopAppVersion.value}`)
+      showCoreServiceUpdateModal.value = true
+    }
+  } catch (e) {
+    console.warn('[App] 版本比较失败:', e)
+  }
+}
+
+// 处理核心服务更新
+async function handleCoreServiceUpdate() {
+  coreServiceUpdating.value = true
+  coreServiceUpdateDone.value = false
+  installLogs.value = []
+
+  // 监听安装日志事件
+  try {
+    unlistenInstallOutput = await platform.implementation.events.listen('install-output', (payload) => {
+      if (payload && payload.line) {
+        installLogs.value.push(payload.line)
+        // 自动滚动到底部
+        nextTick(() => {
+          const el = logContainer.value
+          if (el) el.scrollTop = el.scrollHeight
+        })
+      }
+    })
+  } catch (e) {
+    console.warn('[App] Failed to listen install output:', e)
+  }
+
+  try {
+    // 调用在线安装接口
+    const result = await window.electronAPI.agent4jWebService.installOnline()
+    if (result && result.success) {
+      installLogs.value.push('')
+      installLogs.value.push('✅ 更新完成！')
+      coreServiceUpdateDone.value = true
+      message.success('核心服务更新成功！')
+    } else {
+      installLogs.value.push('')
+      installLogs.value.push('❌ 更新失败，请稍后重试')
+      message.error('更新失败，请稍后重试')
+    }
+  } catch (e) {
+    installLogs.value.push('')
+    installLogs.value.push('❌ 更新失败: ' + (e.message || '未知错误'))
+    message.error('更新失败: ' + (e.message || '未知错误'))
+  } finally {
+    coreServiceUpdating.value = false
+    if (unlistenInstallOutput) {
+      unlistenInstallOutput()
+      unlistenInstallOutput = null
+    }
+  }
+}
+
+// 更新完成后关闭程序
+function closeAppAfterUpdate() {
+  window.electronAPI.window.close()
 }
 
 // 检查最新版本（后端 + Electron 统一检查）
@@ -1868,5 +2013,147 @@ watch(showSettings, (newVal) => {
 .element-panel-header .btn-icon-sm:hover {
   background: var(--bg-3);
   color: var(--fg);
+}
+
+/* ==================== 核心服务更新弹窗 ==================== */
+.core-service-update-info {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px;
+  background: var(--bg-2);
+  border-radius: var(--r);
+  margin-bottom: 16px;
+}
+
+.core-service-update-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--r);
+  background: var(--accent-bg);
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+.core-service-update-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.core-service-update-desc {
+  font-size: 13px;
+  color: var(--fg-2);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.core-service-update-desc strong {
+  color: var(--fg);
+  font-weight: 600;
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+.core-service-update-versions {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.version-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px;
+  background: var(--bg-2);
+  border-radius: var(--r);
+}
+
+.version-label {
+  font-size: 13px;
+  color: var(--fg-3);
+}
+
+.version-badge {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+  font-family: var(--font-mono);
+}
+
+.version-badge.version-new {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.version-badge.version-old {
+  background: var(--yellow-bg);
+  color: var(--yellow);
+}
+
+.btn-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==================== 安装日志 ==================== */
+.install-log-container {
+  margin-top: 16px;
+}
+
+.install-log {
+  max-height: 240px;
+  overflow-y: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.6;
+}
+
+.log-line {
+  color: var(--fg-3);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.log-placeholder {
+  color: var(--fg-4);
+  font-style: italic;
+}
+
+/* ==================== 更新成功提示 ==================== */
+.update-success-tip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--green-bg);
+  border-radius: var(--r);
+  margin-top: 16px;
+  color: var(--green);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.update-success-tip svg {
+  flex-shrink: 0;
 }
 </style>
