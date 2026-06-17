@@ -102,6 +102,18 @@ export function detectLanguage(filePath) {
 const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>'
 
 const renderer = new Renderer()
+
+// 为所有链接添加 ai-link 类，便于前端拦截处理
+renderer.link = (href, title, text) => {
+  if (!href) return text
+  let out = '<a class="ai-link" href="' + href + '" target="_blank" rel="noopener"'
+  if (title) {
+    out += ' title="' + title + '"'
+  }
+  out += '>' + text + '</a>'
+  return out
+}
+
 renderer.code = (code, language) => {
   const highlighted = highlightCode(code, language || null)
   const lang = language ? ` class="language-${language}"` : ''

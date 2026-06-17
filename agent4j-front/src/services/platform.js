@@ -7,7 +7,7 @@
 const isElectron = typeof window !== 'undefined' && window.electronAPI !== undefined
 const isWeb = !isElectron
 
-// 从 config.json 读取默认端口（缓存）
+// 从 config.json 读取 apiBase（缓存）
 let _configApiBase = null
 async function getConfigApiBase() {
   if (_configApiBase) return _configApiBase
@@ -30,6 +30,23 @@ function extractPort(apiBase) {
   } catch { return 0 }
 }
 
+/**
+ * 获取当前 base URL：localStorage > config.json > 空字符串（同域）
+ * web 环境下使用此值，不自行拼接 127.0.0.1
+ */
+async function resolveBaseUrl() {
+  // 优先使用 localStorage 中用户设置的值
+  const stored = localStorage.getItem('agent4j-api-base')
+  if (stored) return stored.replace(/\/+$/, '')
+
+  // 其次从 config.json 读取
+  const apiBase = await getConfigApiBase()
+  if (apiBase) return apiBase.replace(/\/+$/, '')
+
+  // 兜底：空字符串表示同域（相对路径）
+  return ''
+}
+
 /** 获取当前端口：localStorage > config.json > 4567 */
 async function resolveCurrentPort() {
   const stored = localStorage.getItem('agent4j-port')
@@ -45,6 +62,7 @@ async function resolveCurrentPort() {
 /**
  * Web 环境下的默认实现
  * 假设服务已在外部启动，直接通过 HTTP 与后端通信
+ * 始终使用 config.json 中的 apiBase 配置，不自行拼接端口
  */
 const webImplementation = {
   agent4jWebService: {
@@ -69,7 +87,8 @@ const webImplementation = {
     },
 
     async start() {
-      return await resolveCurrentPort()
+      // web 环境下不需要启动服务，直接返回 0
+      return 0
     },
 
     async stop() {
@@ -77,7 +96,9 @@ const webImplementation = {
     },
 
     async getCurrentPort() {
-      return await resolveCurrentPort()
+      // web 环境下端口概念不适用，返回 0
+      // 前端通过 getBaseUrl() 获取完整地址
+      return 0
     },
 
     async checkJavaQuick() {
@@ -88,9 +109,14 @@ const webImplementation = {
       return 'started'
     },
 
+    // 在线安装：web 环境下跳转到浏览器下载
+    async installOnline() {
+      window.open('https://gitee.com/ezdemo/agent4j/releases')
+      return { success: true, steps: ['redirected_to_browser'] }
+    },
+
     async waitForReady(maxAttempts = 30, interval = 1000) {
-      const port = await this.getCurrentPort()
-      const baseUrl = `http://127.0.0.1:${port}`
+      const baseUrl = await this.getBaseUrl()
 
       for (let i = 0; i < maxAttempts; i++) {
         try {
@@ -109,9 +135,9 @@ const webImplementation = {
     },
 
     async healthCheck() {
-      const port = await this.getCurrentPort()
+      const baseUrl = await this.getBaseUrl()
       try {
-        const response = await fetch(`http://127.0.0.1:${port}/api/system/health`, {
+        const response = await fetch(`${baseUrl}/api/system/health`, {
           method: 'GET',
           signal: AbortSignal.timeout(5000)
         })
@@ -122,8 +148,9 @@ const webImplementation = {
     },
 
     async getBaseUrl() {
-      const port = await this.getCurrentPort()
-      return `http://127.0.0.1:${port}`
+      // web 环境下：直接使用 config.json 中的 apiBase
+      // 如果是 '/' 或空字符串，使用相对路径（同域）
+      return await resolveBaseUrl()
     }
   },
 
@@ -174,6 +201,9 @@ const electronImplementation = {
     },
     async startJavaDownload() {
       return await window.electronAPI.agent4jWebService.startJavaDownload()
+    },
+    async installOnline() {
+      return await window.electronAPI.agent4jWebService.installOnline()
     },
     async waitForReady(maxAttempts = 30, interval = 1000) {
       const port = await this.getCurrentPort()

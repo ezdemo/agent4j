@@ -891,21 +891,16 @@ public class AgentLoop implements AgentLoopController {
 
     // ==================== 流式错误恢复 ====================
 
+    /**
+     * 流式错误恢复（已弃用，重试逻辑已统一到 HttpModelClient.RetryContext）。
+     * <p>
+     * 保留此方法以兼容现有代码，但不再进行重试。
+     * </p>
+     */
+    @Deprecated
     private boolean recoverFromStreamError() {
-        streamErrorRetryCount++;
-        if (streamErrorRetryCount <= maxStreamErrorRetries()) {
-            int delay = retryDelaysSec()[streamErrorRetryCount - 1];
-            safeOutput("recover", () -> output.onLog(LogLevel.WARN, "[recover] API 流式错误，第 " + streamErrorRetryCount
-                    + "/" + maxStreamErrorRetries() + " 次重试，等待 " + delay + " 秒..."));
-            try {
-                Thread.sleep(delay * 1000L);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                return false;
-            }
-            return true;
-        }
-        safeOutput("recoverMax", () -> output.onLog(LogLevel.ERROR, "[recover] 流式错误已达重试上限（" + maxStreamErrorRetries() + "次），放弃"));
+        // 重试逻辑已统一到 HttpModelClient.RetryContext，这里不再重试
+        safeOutput("recover", () -> output.onLog(LogLevel.WARN, "[recover] API 流式错误，重试逻辑已统一到 HttpModelClient"));
         return false;
     }
 

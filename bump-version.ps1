@@ -10,13 +10,6 @@ if (-not $root) { $root = Get-Location }
 # UTF8 without BOM to avoid breaking JSON parsers
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 
-# For Tauri-related files, only keep first 3 version parts (e.g. 26.6.9.1 -> 26.6.9)
-$versionParts = $Version.Split('.')
-$tauriVersion = $versionParts[0..2] -join '.'
-if ($versionParts.Length -gt 3) {
-    Write-Host "[bump] Full version: $Version, Tauri version (first 3 parts): $tauriVersion"
-}
-
 Write-Host "[bump] Updating version to $Version"
 Write-Host ""
 
@@ -32,43 +25,7 @@ if ($c -ne $old) {
     Write-Host "  [OK] pom.xml"
 } else { Write-Host "  [--] pom.xml (unchanged)" }
 
-# 2. tauri.conf.json
-$path = Join-Path $root "agent4j-tauri/src-tauri/tauri.conf.json"
-$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
-$old = $c
-$c = [regex]::Replace($c, '(?<="version"\s*:\s*")[\d.]+(?=")', $tauriVersion)
-if ($c -ne $old) {
-    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
-    Write-Host "  [OK] tauri.conf.json"
-} else { Write-Host "  [--] tauri.conf.json (unchanged)" }
-
-# 3. Cargo.toml
-$path = Join-Path $root "agent4j-tauri/src-tauri/Cargo.toml"
-$lines = [System.IO.File]::ReadAllLines($path, [System.Text.Encoding]::UTF8)
-$changed = $false
-for ($i = 0; $i -lt $lines.Length; $i++) {
-    if ($lines[$i] -match '^version\s*=\s*"[\d.]+"') {
-        $lines[$i] = 'version = "' + $tauriVersion + '"'
-        $changed = $true
-        break
-    }
-}
-if ($changed) {
-    [System.IO.File]::WriteAllText($path, ($lines -join "`r`n"), $utf8NoBom)
-    Write-Host "  [OK] Cargo.toml"
-} else { Write-Host "  [--] Cargo.toml (unchanged)" }
-
-# 4. package.json
-$path = Join-Path $root "agent4j-tauri/package.json"
-$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
-$old = $c
-$c = [regex]::Replace($c, '(?<="version"\s*:\s*")[\d.]+(?=")', $tauriVersion)
-if ($c -ne $old) {
-    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
-    Write-Host "  [OK] package.json"
-} else { Write-Host "  [--] package.json (unchanged)" }
-
-# 5. agent4j-bin/pom.xml
+# 2. agent4j-bin/pom.xml
 $path = Join-Path $root "agent4j-bin/pom.xml"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
@@ -80,7 +37,7 @@ if ($c -ne $old) {
     Write-Host "  [OK] agent4j-bin/pom.xml"
 } else { Write-Host "  [--] agent4j-bin/pom.xml (unchanged)" }
 
-# 6. agent4j-tool/pom.xml
+# 3. agent4j-tool/pom.xml
 $path = Join-Path $root "agent4j-tool/pom.xml"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
@@ -91,7 +48,7 @@ if ($c -ne $old) {
     Write-Host "  [OK] agent4j-tool/pom.xml"
 } else { Write-Host "  [--] agent4j-tool/pom.xml (unchanged)" }
 
-# 7. agent4j-web/pom.xml
+# 4. agent4j-web/pom.xml
 $path = Join-Path $root "agent4j-web/pom.xml"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
@@ -102,7 +59,7 @@ if ($c -ne $old) {
     Write-Host "  [OK] agent4j-web/pom.xml"
 } else { Write-Host "  [--] agent4j-web/pom.xml (unchanged)" }
 
-# 7.1 agent4j-web/dependency-reduced-pom.xml
+# 4.1 agent4j-web/dependency-reduced-pom.xml
 $path = Join-Path $root "agent4j-web/dependency-reduced-pom.xml"
 if (Test-Path $path) {
     $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
@@ -117,7 +74,7 @@ if (Test-Path $path) {
     } else { Write-Host "  [--] agent4j-web/dependency-reduced-pom.xml (unchanged)" }
 } else { Write-Host "  [--] agent4j-web/dependency-reduced-pom.xml (not found)" }
 
-# 8. .release/setup.sh
+# 5. .release/setup.sh
 $path = Join-Path $root ".release/setup.sh"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
@@ -127,7 +84,7 @@ if ($c -ne $old) {
     Write-Host "  [OK] .release/setup.sh"
 } else { Write-Host "  [--] .release/setup.sh (unchanged)" }
 
-# 9. .release/setup.ps1
+# 6. .release/setup.ps1
 $path = Join-Path $root ".release/setup.ps1"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
@@ -136,6 +93,28 @@ if ($c -ne $old) {
     [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
     Write-Host "  [OK] .release/setup.ps1"
 } else { Write-Host "  [--] .release/setup.ps1 (unchanged)" }
+
+# 7. agent4j-front/package.json (Electron)
+$path = Join-Path $root "agent4j-front/package.json"
+$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+$old = $c
+$c = [regex]::Replace($c, '(?<="version"\s*:\s*")[\d.]+(?=")', $Version)
+if ($c -ne $old) {
+    $c = $c.TrimStart("`u{FEFF}")
+    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
+    Write-Host "  [OK] agent4j-front/package.json"
+} else { Write-Host "  [--] agent4j-front/package.json (unchanged)" }
+
+# 8. agent4j-web/src/installDist/bin/version.txt
+$path = Join-Path $root "agent4j-web/src/installDist/bin/version.txt"
+$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+$old = $c
+$c = [regex]::Replace($c.Trim(), '^[\d.]+', $Version)
+if ($c -ne $old.Trim()) {
+    $c = $c.TrimStart("`u{FEFF}")
+    [System.IO.File]::WriteAllText($path, $c + [Environment]::NewLine, $utf8NoBom)
+    Write-Host "  [OK] agent4j-web/src/installDist/bin/version.txt"
+} else { Write-Host "  [--] agent4j-web/src/installDist/bin/version.txt (unchanged)" }
 
 Write-Host ""
 Write-Host "Done! Version unified to $Version"

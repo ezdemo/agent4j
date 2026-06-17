@@ -3,16 +3,15 @@ package site.sorghum.agent4j.web.controller;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import lombok.extern.slf4j.Slf4j;
-import org.noear.snack4.ONode;
 import org.noear.solon.annotation.Controller;
 import org.noear.solon.annotation.Get;
-import org.noear.solon.annotation.Inject;
 import org.noear.solon.annotation.Mapping;
-import org.noear.solon.net.http.HttpUtils;
 import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.model.SystemVersionDTO;
 import site.sorghum.agent4j.web.model.VersionCheckDTO;
 
+import java.net.HttpURLConnection;
+import java.net.URL;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 
@@ -30,12 +29,6 @@ import java.time.format.DateTimeFormatter;
 @Controller
 @Mapping("/api/version")
 public class VersionController {
-
-    /**
-     * 远程版本检查地址（Gitee 最新 Release API），可通过配置覆盖。
-     */
-    @Inject("${version.check.url}")
-    private String versionCheckUrl;
 
     /**
      * 获取当前系统版本信息。
@@ -57,12 +50,14 @@ public class VersionController {
     /**
      * 检查远程最新版本，与当前版本比较后返回结果。
      * <p>
-     * 默认查询 Gitee 仓库的最新 Release，可通过配置 {@code version.check.url} 自定义检查地址。
+     * 通过访问 {@code https://gitee.com/ezdemo/agent4j/releases/latest} 的 302 重定向目标地址
+     * 来提取最新版本标签（例如重定向到 {@code /releases/tag/v26.6.15} 得到版本 {@code 26.6.15}），
+     * 比直接调用 Gitee API 更稳定（不受 API 频率限制和格式变更影响）。
      * </p>
      *
      * @return 版本检查结果（当前版本、最新版本、是否有更新、发布说明等）
      */
-    @ApiOperation(value = "检查最新版本", notes = "查询远程仓库的最新 Release，与当前版本比较，返回是否有新版本及发布说明")
+    @ApiOperation(value = "检查最新版本", notes = "通过访问 releases/latest 的 302 重定向目标地址提取最新版本号")
     @Get
     @Mapping("/check")
     public ApiResponse<VersionCheckDTO> checkLatestVersion() {
@@ -74,41 +69,54 @@ public class VersionController {
         String checkTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
 
         try {
-            String url = (versionCheckUrl != null && !versionCheckUrl.isEmpty())
-                    ? versionCheckUrl
-                    : "https://gitee.com/api/v5/repos/ezdemo/agent4j/releases/latest";
+            String checkUrl = "https://gitee.com/ezdemo/agent4j/releases/latest";
 
-            String responseBody = HttpUtils.http(url)
-                    .header("User-Agent", "Agent4j/" + currentVersion)
-                    .timeout(10000)
-                    .get();
+            // 发送请求，不跟随重定向，获取 Location 头中的最新版本标签
+            URL url = new URL(checkUrl);
+            HttpURLConnection conn = (HttpURLConnection) url.openConnection();
+            conn.setInstanceFollowRedirects(false);
+            conn.setConnectTimeout(10000);
+            conn.setReadTimeout(10000);
+            conn.setRequestProperty("User-Agent", "Agent4j/" + currentVersion);
+            conn.setRequestMethod("GET");
+            conn.connect();
 
-            ONode json = ONode.ofJson(responseBody);
+            int statusCode = conn.getResponseCode();
+            String latestVersion = null;
+            String releaseUrl = null;
 
-            String latestTag = json.get("tag_name").getString();
-            if (latestTag == null) {
-                latestTag = json.get("name").getString();
+            // 读取重定向响应中的 Location 头
+            if (statusCode >= 300 && statusCode < 400) {
+                String location = conn.getHeaderField("Location");
+                if (location != null && !location.isEmpty()) {
+                    // 从 Location 中提取版本标签
+                    // 格式如: https://gitee.com/ezdemo/agent4j/releases/tag/v26.6.15
+                    int tagIndex = location.lastIndexOf("/tag/");
+                    if (tagIndex >= 0) {
+                        String tagName = location.substring(tagIndex + 5); // "/tag/" 长度为 5
+                        latestVersion = tagName.replaceFirst("^[vV]", "");
+                        releaseUrl = location;
+                    }
+                }
             }
-            // 去除 tag 中的 "v" 前缀以便比较
-            String latestVersion = latestTag != null ? latestTag.replaceFirst("^[vV]", "") : null;
+            conn.disconnect();
 
-            String releaseUrl = json.get("html_url").getString();
-            String releaseNotes = json.get("body").getString();
-            if (releaseNotes != null && releaseNotes.length() > 500) {
-                releaseNotes = releaseNotes.substring(0, 500) + "...";
+            if (latestVersion == null) {
+                // 如果通过重定向方式获取失败，记录详细日志
+                throw new RuntimeException("无法从重定向中获取最新版本号 (HTTP " + statusCode + ")");
             }
 
             boolean hasNewVersion = false;
-            if (latestVersion != null && !currentVersion.equals("unknown")) {
+            if (!currentVersion.equals("unknown")) {
                 hasNewVersion = compareVersions(latestVersion, currentVersion) > 0;
             }
 
             return ApiResponse.ok(new VersionCheckDTO(
                     currentVersion,
-                    latestVersion != null ? latestVersion : "unknown",
+                    latestVersion,
                     hasNewVersion,
                     releaseUrl,
-                    releaseNotes,
+                    null, // 通过重定向方式无法获取发布说明
                     checkTime
             ));
         } catch (Exception e) {

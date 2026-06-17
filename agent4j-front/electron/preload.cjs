@@ -12,7 +12,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     stop: () => ipcRenderer.invoke('stop_agent4j_web'),
     getCurrentPort: () => ipcRenderer.invoke('get_agent4j_web_port'),
     checkJavaQuick: () => ipcRenderer.invoke('check_java_quick'),
-    startJavaDownload: () => ipcRenderer.invoke('start_java_download')
+    startJavaDownload: () => ipcRenderer.invoke('start_java_download'),
+    installOnline: () => ipcRenderer.invoke('install_agent4j_web_online')
   },
   
   // 窗口控制
@@ -35,10 +36,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
       }
     }
   },
-  
+
+  // 元素检测（跨域 iframe 穿透）
+  inspector: {
+    inject: () => ipcRenderer.invoke('inspector-inject'),
+    remove: () => ipcRenderer.invoke('inspector-remove')
+  },
+
+  // 打开外部链接
+  openExternal: (url) => ipcRenderer.invoke('open-external', url),
+
+  // Electron 版本
+  getElectronVersion: () => ipcRenderer.invoke('get_electron_version'),
+
   // 平台信息
   platform: process.platform,
-  
+
   // 环境检测
   isElectron: true
 })

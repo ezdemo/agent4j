@@ -139,7 +139,7 @@
 </template>
 
 <script setup>
-import { ref, onBeforeUnmount, onMounted, watch, nextTick } from 'vue'
+import {nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 
 const props = defineProps({
   workspaceHash: { type: String, default: null },
@@ -176,6 +176,14 @@ function normalizeUrl(input) {
 
 let loadedTimer = null
 
+// 暴露给父组件的方法：外部导航到指定 URL
+function loadUrl(newUrl) {
+  url.value = newUrl
+  navigate()
+}
+
+defineExpose({ loadUrl })
+
 function navigate() {
   const normalized = normalizeUrl(url.value)
   if (!normalized) return
@@ -194,22 +202,44 @@ function navigate() {
   }
 }
 
-function toggleDesignMode() {
+async function toggleDesignMode() {
   if (!loaded.value) return
   designMode.value = !designMode.value
   selectedComponent.value = null
+  console.log('[ElementPanel] 切换设计模式:', designMode.value)
   if (designMode.value) {
-    injectInspector()
+    await injectInspector()
   } else {
-    removeInspector()
+    await removeInspector()
   }
 }
 
-// 向 iframe 注入检测脚本（仅同源有效）
-function injectInspector() {
+// 向 iframe 注入检测脚本
+// Electron 模式：通过 IPC 由主进程注入，突破跨域限制
+// 普通模式：直接访问 contentDocument（仅同源有效）
+async function injectInspector() {
   const frame = frameRef.value
-  if (!frame || !frame.contentDocument) {
+  if (!frame) {
     console.warn('[ElementPanel] iframe 未就绪，无法注入')
+    crossOrigin.value = true
+    designMode.value = false
+    return
+  }
+
+  // ---- Electron 模式：通过主进程注入（无视跨域） ----
+  if (window.electronAPI?.inspector) {
+    const result = await window.electronAPI.inspector.inject()
+    if (result.success) {
+      console.log('[ElementPanel] Electron 模式：检测脚本已注入')
+      return  // designMode 保持 true
+    }
+    console.warn('[ElementPanel] Electron 注入失败:', result.reason)
+    // 降级到普通模式
+  }
+
+  // ---- 普通模式：直接 DOM 访问（仅同源） ----
+  if (!frame.contentDocument) {
+    console.warn('[ElementPanel] iframe 跨域，无法注入')
     crossOrigin.value = true
     designMode.value = false
     return
@@ -248,9 +278,27 @@ function injectInspector() {
   }
 }
 
-function removeInspector() {
+async function removeInspector() {
   const frame = frameRef.value
   if (!frame) return
+
+  // ---- Electron 模式：通过主进程移除 ----
+  if (window.electronAPI?.inspector) {
+    try {
+      const result = await window.electronAPI.inspector.remove()
+      if (result.success) {
+        console.log('[ElementPanel] Electron 模式：检测脚本已移除')
+        return
+      }
+      console.warn('[ElementPanel] Electron 移除失败:', result.reason)
+      // 降级到普通模式
+    } catch (e) {
+      console.warn('[ElementPanel] Electron 移除异常:', e.message)
+      // 降级到普通模式
+    }
+  }
+
+  // ---- 普通模式 ----
   try {
     const doc = frame.contentDocument
     if (doc) {
@@ -263,9 +311,10 @@ function removeInspector() {
       doc.querySelectorAll('.__agent4j-highlight').forEach(el => {
         el.classList.remove('__agent4j-highlight')
       })
+      console.log('[ElementPanel] 普通模式：检测脚本已移除')
     }
   } catch (e) {
-    // 忽略跨域错误
+    console.warn('[ElementPanel] 移除检测脚本失败（可能跨域）:', e.message)
   }
 }
 
@@ -531,8 +580,30 @@ function onKeydown(e) {
   }
 }
 
+/**
+ * 接收 Electron 模式下从 iframe 通过 postMessage 传来的元素点击信息
+ */
+function onFrameMessage(e) {
+  if (!e.data || e.data.type !== 'agent4j-element-click') return
+  if (!designMode.value) return  // 非设计模式下忽略
+  const data = e.data
+  console.log('[ElementPanel] 收到元素点击数据:', data.tag)
+
+  selectedComponent.value = {
+    name: data.vueComponent?.name || '原生元素（无 Vue 组件包裹）',
+    tag: data.tag || '?',
+    text: data.text || '',
+    selector: data.selector || '',
+    attrs: data.attrs || [],
+    file: data.vueComponent?.file || '',
+    path: data.path || [],
+    children: data.children || []
+  }
+}
+
 onMounted(() => {
   document.addEventListener('keydown', onKeydown)
+  window.addEventListener('message', onFrameMessage)
 })
 
 // 弹窗打开时自动聚焦输入框
@@ -547,6 +618,7 @@ watch(selectedComponent, (val) => {
 onBeforeUnmount(() => {
   removeInspector()
   document.removeEventListener('keydown', onKeydown)
+  window.removeEventListener('message', onFrameMessage)
   clearTimeout(loadedTimer)
 })
 </script>

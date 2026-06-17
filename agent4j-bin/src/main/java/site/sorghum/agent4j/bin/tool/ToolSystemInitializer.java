@@ -98,10 +98,7 @@ public class ToolSystemInitializer {
         // 4.1 加载solon skill 基准提示词
         systemPrompt  = systemPrompt + "\n\n" + ToolScanUtil.getSkillToolDescription(workspace);
         // 5. 追加工具规范到 system prompt
-        systemPrompt = systemPrompt + "\n\n" + toolSpecsBuilder.toString().trim();
-
-        // 6. 追加 Plan Mode 说明（永久存在于 system prompt 中）
-        systemPrompt = systemPrompt + "\n\n" + PLAN_MODE_DESCRIPTION;
+        systemPrompt = systemPrompt + "\n\n";
 
         // 7. 项目文档后置到最底部 —— 最大化前缀缓存命中。
         //    稳定的 system prompt（身份/规则/工具定义/Plan Mode/Skill 索引）保持在头部，
