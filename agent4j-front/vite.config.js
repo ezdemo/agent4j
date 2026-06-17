@@ -1,5 +1,7 @@
 import {defineConfig} from 'vite'
 import vue from '@vitejs/plugin-vue'
+import Components from 'unplugin-vue-components/vite'
+import {AntDesignVueResolver} from 'unplugin-vue-components/resolvers'
 import {resolve} from 'path'
 
 export default defineConfig({
@@ -10,6 +12,14 @@ export default defineConfig({
         defineModel: true,
         propsDestructure: true
       }
+    }),
+    Components({
+      resolvers: [
+        AntDesignVueResolver({
+          importStyle: false // 不导入样式，使用主题
+        })
+      ],
+      dts: false // 不生成类型声明文件
     })
   ],
   
