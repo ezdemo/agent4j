@@ -63,6 +63,27 @@ public class ConfigController {
             maskedKey = "****";
         }
 
+        // 获取视觉模型配置
+        String visionBaseUrl = cfg.visionBaseUrl();
+        String visionApiKey = cfg.visionApiKey();
+        String visionModel = cfg.visionModel();
+        
+        // 对视觉模型 API 密钥进行脱敏
+        String maskedVisionKey;
+        if (visionApiKey != null && visionApiKey.length() > MASK_MIN_LENGTH) {
+            maskedVisionKey = visionApiKey.substring(0, MASK_KEEP_LENGTH) + "****" + visionApiKey.substring(visionApiKey.length() - MASK_KEEP_LENGTH);
+        } else if (visionApiKey != null && !visionApiKey.isEmpty()) {
+            maskedVisionKey = "****";
+        } else {
+            maskedVisionKey = "";
+        }
+        
+        ConfigDTO.VisionConfig visionConfig = new ConfigDTO.VisionConfig(
+                visionBaseUrl != null ? visionBaseUrl : "",
+                maskedVisionKey,
+                visionModel != null ? visionModel : ""
+        );
+
         ConfigDTO data = new ConfigDTO(
                 cfg.baseUrl(),
                 cfg.model(),
@@ -75,7 +96,8 @@ public class ConfigController {
                 configService.getDisabledTools(),
                 cfg.blockedPaths(),
                 maskedKey,
-                cfg.price()
+                cfg.price(),
+                visionConfig
         );
         return ApiResponse.ok(data);
     }

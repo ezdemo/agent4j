@@ -375,6 +375,104 @@
           </div>
         </section>
 
+        <!-- 图片识别设置 -->
+        <section v-if="activeTab === 'vision'" class="settings-section">
+          <div class="section-card">
+            <div class="card-header">
+              <div>
+                <h3>视觉模型配置</h3>
+                <p>配置图片识别服务的 API 连接与模型参数</p>
+              </div>
+              <button class="btn btn-secondary" style="padding:6px 12px;" @click="fillVisionDefaults" title="填入 SiliconFlow 默认配置">
+                <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                  <polyline points="1 4 1 10 7 10"/>
+                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                </svg>
+                一键填入
+              </button>
+            </div>
+            <div class="card-body">
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">API 地址</label>
+                  <p class="setting-hint">视觉模型 API 的完整 URL（OpenAI 兼容）</p>
+                </div>
+                <div class="setting-control">
+                  <input
+                      v-model="settings.vision.baseUrl"
+                      class="form-input"
+                      placeholder="https://api.siliconflow.cn/v1/chat/completions"
+                      type="text"
+                  />
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">API 密钥</label>
+                  <p class="setting-hint">用于身份验证的密钥</p>
+                </div>
+                <div class="setting-control">
+                  <div class="input-with-toggle">
+                    <input
+                        v-model="settings.vision.apiKey"
+                        :type="showVisionApiKey ? 'text' : 'password'"
+                        class="form-input"
+                        placeholder="sk-..."
+                    />
+                    <button
+                        :title="showVisionApiKey ? '隐藏' : '显示'"
+                        class="toggle-visibility"
+                        @click="showVisionApiKey = !showVisionApiKey"
+                    >
+                      <svg v-if="showVisionApiKey" fill="none" height="14" stroke="currentColor" stroke-width="2"
+                           viewBox="0 0 24 24" width="14">
+                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                        <circle cx="12" cy="12" r="3"/>
+                      </svg>
+                      <svg v-else fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
+                           width="14">
+                        <path
+                            d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
+                        <line x1="1" x2="23" y1="1" y2="23"/>
+                      </svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">模型</label>
+                  <p class="setting-hint">视觉模型名称（需支持图片输入）</p>
+                </div>
+                <div class="setting-control">
+                  <input
+                      v-model="settings.vision.model"
+                      class="form-input"
+                      placeholder="Qwen/Qwen3.5-4B"
+                      type="text"
+                  />
+                </div>
+              </div>
+
+              <div class="setting-row">
+                <div class="setting-info">
+                  <label class="setting-label">说明</label>
+                </div>
+                <div class="setting-control">
+                  <div class="setting-hint-block">
+                    <p>• 视觉模型用于图片内容识别，需支持多模态输入</p>
+                    <p>• API 地址和密钥可与主模型不同，支持独立配置</p>
+                    <p>• 配置后可通过 <code>vision_recognize</code> 工具调用</p>
+                    <p>• SiliconFlow 不定时提供免费模型，<a href="https://siliconflow.cn/models" target="_blank" style="color:var(--accent);text-decoration:underline;">前往查看</a></p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- 工作区设置 -->
         <section v-if="activeTab === 'workspace'" class="settings-section">
           <div class="section-card">
@@ -1591,6 +1689,7 @@ const settings = reactive({
   },
   server: {apiBaseUrl: '', autoConnect: true},
   ai: {baseUrl: '', apiKey: '', model: '', reasoningEffort: 'max', availableModelsText: '', prices: {}},
+  vision: {baseUrl: '', apiKey: '', model: ''},
   workspace: {dir: '', mode: false},
   security: {
     stormBreaker: true,
@@ -1603,6 +1702,7 @@ const settings = reactive({
 
 const activeTab = ref('general')
 const showApiKey = ref(false)
+const showVisionApiKey = ref(false)
 const loading = ref(false)
 const availableModels = ref([])
 const checkingConnection = ref(false)
@@ -1919,6 +2019,15 @@ const tabs = computed(() => [
     </svg>`
   },
   {
+    id: 'vision',
+    label: '图片识别',
+    description: '视觉模型配置，用于图片内容识别',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+      <circle cx="12" cy="12" r="3"/>
+    </svg>`
+  },
+  {
     id: 'workspace',
     label: '工作区',
     description: '工作目录和编辑行为配置',
@@ -2042,6 +2151,13 @@ watch(activeTab, async (tab) => {
   }
 })
 
+// 一键填入 SiliconFlow 默认配置
+const fillVisionDefaults = () => {
+  settings.vision.baseUrl = 'https://api.siliconflow.cn/v1/chat/completions'
+  settings.vision.model = 'Qwen/Qwen3.5-4B'
+  hasChanges.value = true
+}
+
 // 加载设置
 const loadSettings = async () => {
   loading.value = true
@@ -2085,6 +2201,13 @@ const loadSettings = async () => {
       // 加载禁用工具列表
       if (config.disabledTools && Array.isArray(config.disabledTools)) {
         settings.security.disabledToolsText = config.disabledTools.join('\n')
+      }
+
+      // 加载视觉模型配置
+      if (config.vision) {
+        settings.vision.baseUrl = config.vision.baseUrl || ''
+        settings.vision.apiKey = config.vision.apiKey || ''
+        settings.vision.model = config.vision.model || ''
       }
     } else {
       message.error(configResponse.error || '加载配置失败')
@@ -2156,7 +2279,16 @@ const saveSettings = async () => {
       hitl: settings.workspace.mode === true,
       security: {...settings.security},
       price: settings.ai.prices,
-      disabledTools: settings.security.disabledToolsText.split('\n').map(s => s.trim()).filter(s => s)
+      disabledTools: settings.security.disabledToolsText.split('\n').map(s => s.trim()).filter(s => s),
+      vision: {
+        baseUrl: settings.vision.baseUrl,
+        model: settings.vision.model
+      }
+    }
+    
+    // 只有当 vision.apiKey 不为空且不包含脱敏标记时才保存
+    if (settings.vision.apiKey && !settings.vision.apiKey.includes('****')) {
+      configToUpdate.vision.apiKey = settings.vision.apiKey
     }
 
     const response = await configAPI.updateConfig(configToUpdate)
@@ -5406,5 +5538,33 @@ onMounted(() => {
 
 [data-theme="dark"] .update-modal {
   border: 1px solid var(--border);
+}
+
+/* 提示块样式 */
+.setting-hint-block {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 12px 16px;
+  width: 100%;
+}
+
+.setting-hint-block p {
+  margin: 0 0 6px 0;
+  font-size: 12px;
+  color: var(--fg-3);
+  line-height: 1.5;
+}
+
+.setting-hint-block p:last-child {
+  margin-bottom: 0;
+}
+
+.setting-hint-block code {
+  background: var(--bg-3);
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  font-size: 11px;
+  font-family: var(--mono);
 }
 </style>
