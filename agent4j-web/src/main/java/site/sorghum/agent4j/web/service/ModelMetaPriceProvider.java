@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.web.service;
 
+import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
@@ -28,7 +29,7 @@ public class ModelMetaPriceProvider implements ModelPriceProvider {
     /**
      * 美元兑人民币汇率
      */
-    private static final double USD_TO_CNY_RATE = 7.3;
+    private static final double USD_TO_CNY_RATE = 7.0;
 
     @Inject
     private ModelMetaService modelMetaService;
@@ -36,6 +37,7 @@ public class ModelMetaPriceProvider implements ModelPriceProvider {
     /**
      * 全局价格提供者实例（供 UsageCostCalculator 等使用）
      */
+    @Getter
     private static volatile ModelPriceProvider instance;
 
     /**
@@ -45,15 +47,6 @@ public class ModelMetaPriceProvider implements ModelPriceProvider {
     public void init() {
         instance = this;
         log.info("[model-meta] 已注册 ModelMetaPriceProvider 为全局价格提供者");
-    }
-
-    /**
-     * 获取全局价格提供者实例。
-     *
-     * @return 价格提供者实例，可能为 null
-     */
-    public static ModelPriceProvider getInstance() {
-        return instance;
     }
 
     @Override
@@ -81,10 +74,13 @@ public class ModelMetaPriceProvider implements ModelPriceProvider {
         Map<String, Double> priceMap = new HashMap<>();
 
         // 将美元价格转换为人民币（乘以汇率）
-        double inputPrice = cost.input() * USD_TO_CNY_RATE;
-        double outputPrice = cost.output() * USD_TO_CNY_RATE;
-        double cacheReadPrice = cost.cache_read() * USD_TO_CNY_RATE;
-
+        double inputPrice = cost.input() * USD_TO_CNY_RATE + 0.00005;
+        double outputPrice = cost.output() * USD_TO_CNY_RATE + 0.00005;
+        double cacheReadPrice = cost.cache_read() * USD_TO_CNY_RATE + 0.00005;
+        // 保留4位小数
+        inputPrice = Math.round(inputPrice * 1000) / 1000.0;
+        outputPrice = Math.round(outputPrice * 1000) / 1000.0;
+        cacheReadPrice = Math.round(cacheReadPrice * 1000) / 1000.0;
         priceMap.put("input", inputPrice);
         priceMap.put("output", outputPrice);
         priceMap.put("cache", cacheReadPrice);

@@ -165,6 +165,9 @@ public class ModelMetaService {
             // 遍历所有提供商
             for (Map.Entry<String, ONode> entry : root.getObject().entrySet()) {
                 String providerId = entry.getKey();
+                if (!Objects.equals(providerId,"openrouter")){
+                    continue;
+                }
                 ONode providerNode = entry.getValue();
 
                 try {
@@ -214,6 +217,11 @@ public class ModelMetaService {
                     Model model = parseModel(modelId, modelNode);
                     if (model != null) {
                         models.put(modelId, model);
+                        // 如果模型存在/ 存单纯模型名称也存一份
+                        if (modelId.contains("/")){
+                            modelId = modelId.substring(modelId.lastIndexOf("/") + 1);
+                            models.put(modelId, model);
+                        }
                     }
                 } catch (Exception e) {
                     log.warn("[model-meta] 解析模型 '{}' 失败: {}", modelId, e.getMessage());

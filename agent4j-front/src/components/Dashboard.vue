@@ -148,7 +148,7 @@
             <span class="col-num">请求</span>
           </div>
           <div v-for="m in data.modelStats" :key="m.model" class="model-row">
-            <span class="col-model" :title="m.model">{{ shortModel(m.model) }}</span>
+            <span class="col-model" :title="priceTooltip(m.model)">{{ shortModel(m.model) }}</span>
             <span class="col-num">{{ fmtNum(m.promptTokens) }}</span>
             <span class="col-num cache-col-token">{{ fmtNum(m.cacheHit) }}</span>
             <span class="col-num">{{ fmtNum(m.completionTokens) }}</span>
@@ -276,6 +276,17 @@ function shortModel(model) {
 function cacheRate(m) {
   if (m.promptTokens === 0) return '0.0'
   return ((m.cacheHit / m.promptTokens) * 100).toFixed(1)
+}
+
+function priceTooltip(model) {
+  const p = data.value?.modelPrices?.[model]
+  if (!p) return model
+  const parts = []
+  if (p.input != null) parts.push('输入: ¥' + p.input + '/M tokens')
+  if (p.cache != null) parts.push('缓存: ¥' + p.cache + '/M tokens')
+  if (p.output != null) parts.push('输出: ¥' + p.output + '/M tokens')
+  if (parts.length === 0) return model
+  return model + '\n\n' + parts.join('\n')
 }
 
 async function fetchData() {

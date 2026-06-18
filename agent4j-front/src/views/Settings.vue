@@ -2059,10 +2059,9 @@ const loadSettings = async () => {
       // 记录原始值，用于检测 baseUrl/apiKey 是否变更
       originalBaseUrl.value = settings.ai.baseUrl
       // 从 localStorage 读取上次保存的 apiKey，用于后续对比
-      const savedKey = getLastSavedApiKey()
-      if (savedKey) {
-        settings.ai.apiKey = savedKey
-      }
+      // 注意：出于安全考虑，保存成功后会清空 localStorage 中的明文密钥
+      // 因此此处不再回填到输入框，用户需重新输入才能再次保存
+      // getLastSavedApiKey() 保留用于保存时的变更检测
       settings.ai.model = config.model || ''
       settings.ai.reasoningEffort = config.reasoningEffort || 'max'
 
@@ -2119,9 +2118,11 @@ const loadSettings = async () => {
 // 保存设置
 const saveSettings = async () => {
   // 检测 baseUrl 或 apiKey 是否变更（变更会触发 Agent 重建，当前会话将丢失）
+  // 注意：出于安全考虑，保存成功后会清空 localStorage 中的明文密钥
+  // 因此当 localStorage 为空且用户输入了非空 apiKey 时，视为「已变更」
   const lastSavedApiKey = getLastSavedApiKey()
   const baseUrlChanged = settings.ai.baseUrl !== originalBaseUrl.value
-  const apiKeyChanged = settings.ai.apiKey !== lastSavedApiKey
+  const apiKeyChanged = settings.ai.apiKey !== lastSavedApiKey && (lastSavedApiKey !== '' || settings.ai.apiKey.trim() !== '')
 
   if (baseUrlChanged || apiKeyChanged) {
     // 弹出确认对话框
@@ -2163,7 +2164,11 @@ const saveSettings = async () => {
     if (response.success) {
       // 记录本次保存的值，用于下次对比
       originalBaseUrl.value = settings.ai.baseUrl
-      setLastSavedApiKey(settings.ai.apiKey)
+      // 安全起见：保存成功后清空本地存储的明文 apiKey，避免 localStorage 泄露
+      // 对比逻辑改为与空值比对，下次进入设置页时若输入框非空则视为「已变更」
+      setLastSavedApiKey('')
+      // 同时清空输入框中的密钥，防止页面残留
+      settings.ai.apiKey = ''
 
       // 切换工作目录
       if (settings.workspace.dir && settings.workspace.dir.trim()) {
