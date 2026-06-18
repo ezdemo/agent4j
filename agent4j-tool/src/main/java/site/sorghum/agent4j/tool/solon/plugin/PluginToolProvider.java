@@ -2,19 +2,20 @@ package site.sorghum.agent4j.tool.solon.plugin;
 
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
+import org.noear.solon.ai.chat.tool.FunctionTool;
+import org.noear.solon.ai.chat.tool.FunctionToolDesc;
 import org.noear.solon.annotation.Component;
-import site.sorghum.agent4j.tool.AgentTool;
+import site.sorghum.agent4j.tool.ErrorCodes;
+import site.sorghum.agent4j.tool.ToolResult;
 import site.sorghum.agent4j.tool.solon.SolonToTools;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
@@ -39,11 +40,11 @@ public class PluginToolProvider implements SolonToTools {
     }
 
     @Override
-    public List<AgentTool> getTools() {
+    public Collection<FunctionTool> getSolonTools() {
         Path root = pluginRoot();
         if (!Files.exists(root) || !Files.isDirectory(root)) return Collections.emptyList();
 
-        List<AgentTool> tools = new ArrayList<>();
+        List<FunctionTool> tools = new ArrayList<>();
         try (DirectoryStream<Path> plugins = Files.newDirectoryStream(root)) {
             for (Path pluginDir : plugins) {
                 if (!Files.isDirectory(pluginDir)) continue;
@@ -57,7 +58,22 @@ public class PluginToolProvider implements SolonToTools {
                         String dirName = skillDir.getFileName().toString();
                         NameDesc nd = resolveNameDesc(config, dirName);
                         if (nd == null) continue;
-                        tools.add(new PluginAgentTool(nd.name, nd.desc, skillDir));
+                        tools.add(new FunctionToolDesc(nd.name())
+                                .description(nd.desc())
+                                .doHandle(map -> {
+                                    try {
+                                        Path skillMd = skillDir.resolve("skill.md");
+                                        if (!Files.exists(skillMd)) {
+                                            return ToolResult.fail(ErrorCodes.SKILL_NOT_FOUND,
+                                                    "未在 " + skillDir.toAbsolutePath() + " 下找到 skill.md");
+                                        }
+                                        String content = Files.readString(skillMd, StandardCharsets.UTF_8);
+                                        String dirPath = skillDir.toAbsolutePath().normalize().toString();
+                                        return  "=== 技能目录: " + dirPath + " ===\n\n" + content + "\n\n=== 文件目录 ===\n" + dirPath;
+                                    } catch (Exception e) {
+                                        return "执行插件工具 [" + nd.name() + "] 失败: " + e.getMessage();
+                                    }
+                                }));
                         count++;
                         log.debug("注册插件工具: {} ({} -> {})", nd.name, pluginDir.getFileName(), dirName);
                     }

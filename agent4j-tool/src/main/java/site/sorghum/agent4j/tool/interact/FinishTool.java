@@ -2,15 +2,14 @@ package site.sorghum.agent4j.tool.interact;
 
 import org.noear.solon.ai.annotation.ToolMapping;
 import org.noear.solon.ai.chat.tool.AbsToolProvider;
+import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Param;
 import site.sorghum.agent4j.tool.AgentLoopController;
-import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
-import site.sorghum.agent4j.tool.ToolParameter;
-import site.sorghum.agent4j.tool.ToolResult;
+import site.sorghum.agent4j.tool.solon.SolonToTools;
 
-import java.util.List;
+import java.util.Collection;
 
 /**
  * 对话结束工具 —— AI 认为可以结束当前对话并给出最终回答时调用，退出推理循环。
@@ -23,7 +22,7 @@ import java.util.List;
  * @author Sorghum
  */
 @Component
-public class FinishTool extends AbsToolProvider {
+public class FinishTool extends AbsToolProvider implements SolonToTools {
     public static final String TIPS = "[系统提示] 你已连续两次未调用工具。如果有足够信息，请调用 `finish` 提交结果；否则请继续调用工具。";
 
     @ToolMapping(description = """
@@ -42,5 +41,17 @@ public class FinishTool extends AbsToolProvider {
         // 如果 finish 方法处理了空 content（从上下文回填），则使用处理后的值
         // 否则使用原始 content（可能为 null，由上游兜底）
         return content != null ? content : "__FINISH_NO_CONTENT__";
+    }
+
+    @Override
+    public Collection<FunctionTool> getSolonTools() {
+        return this.getTools();
+    }
+
+    @Override
+    public String getSystemPrompt() {
+        return """
+                AI 认为对话可以结束并准备给出最终回答时调用finish工具退出推理循环
+                """;
     }
 }
