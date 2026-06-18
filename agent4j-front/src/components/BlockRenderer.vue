@@ -144,6 +144,16 @@ const fmtArgs = a => {
   line-height: 1.6;
 }
 .reasoning-text :deep(p) { margin: 0.4em 0; }
+.reasoning-text :deep(ul) { margin: 0.4em 0; padding-left: 1.5em; }
+.reasoning-text :deep(ol) { margin: 0.4em 0; padding-left: 1.5em; }
+.reasoning-text :deep(li) { margin: 0.2em 0; }
+.reasoning-text :deep(blockquote) {
+  margin: 0.4em 0;
+  padding: 0.3em 0.8em;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-3);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
 .reasoning-text :deep(pre) {
   background: var(--bg-3);
   border: 1px solid var(--border);
