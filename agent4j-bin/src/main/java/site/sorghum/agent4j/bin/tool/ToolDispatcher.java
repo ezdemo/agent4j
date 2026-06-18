@@ -3,12 +3,14 @@ package site.sorghum.agent4j.bin.tool;
 import lombok.Getter;
 import lombok.Setter;
 import org.noear.snack4.ONode;
+import org.noear.solon.ai.chat.tool.FunctionTool;
 import site.sorghum.agent4j.bin.agent.resilient.StormBreaker;
 import site.sorghum.agent4j.bin.util.ONodeUtil;
 import site.sorghum.agent4j.tool.AgentLoopController;
 import site.sorghum.agent4j.tool.ToolContext;
 
 import java.util.Map;
+import java.util.Objects;
 import java.util.function.BiFunction;
 import java.util.function.Function;
 
@@ -135,7 +137,7 @@ public class ToolDispatcher {
         if (name == null || name.equals("null")) {
             return error("请重新思考,调用方式错误，工具名不能为null。");
         }
-        ToolDef tool = registry.get(name);
+        FunctionTool tool = registry.get(name);
         if (tool == null) {
             return error("unknown tool: " + name);
         }
@@ -145,9 +147,10 @@ public class ToolDispatcher {
             String intercepted = preDispatchHook.apply(name);
             if (intercepted != null) return intercepted;
         }
+        boolean readOnly = Objects.equals(tool.meta().getOrDefault("readOnly", false),false);
 
         // Plan Mode 门控
-        if (planMode && !tool.readOnly()) {
+        if (planMode && readOnly) {
             return rejected(name
                     + ": 计划模式下不可用——当前为只读探索阶段。"
                     + "请使用 read_file / glob / grep / tree / get_file_info 调查代码。"
@@ -156,11 +159,9 @@ public class ToolDispatcher {
         }
 
         // Storm Breaker 检查
-        if (!tool.stormExempt()) {
-            StormBreaker.SuppressResult sr = stormBreaker.inspect(name, argumentsJson, tool.readOnly());
-            if (sr.suppressed) {
-                return rejected(sr.reason, REJECTED_REASON_STORM);
-            }
+        StormBreaker.SuppressResult sr = stormBreaker.inspect(name, argumentsJson, readOnly);
+        if (sr.suppressed) {
+            return rejected(sr.reason, REJECTED_REASON_STORM);
         }
 
         Map<String, Object> args;
@@ -182,7 +183,7 @@ public class ToolDispatcher {
         }
 
         try {
-            String result = tool.fn().call(args);
+            String result = tool.call(args).getContent();
             result = result != null ? result : "(ok)";
 
             // Post-dispatch Hook
@@ -193,9 +194,9 @@ public class ToolDispatcher {
             return result;
         } catch (site.sorghum.agent4j.tool.HitlRequiredException e) {
             throw e; // 向上传播到 AgentLoop 触发 HITL 审批
-        } catch (Exception e) {
+        } catch (Throwable e) {
             return error(name + ": " + e.getMessage());
-        } finally {
+        }  finally {
             if (controller != null) {
                 ToolContext.clearCurrentController();
             }

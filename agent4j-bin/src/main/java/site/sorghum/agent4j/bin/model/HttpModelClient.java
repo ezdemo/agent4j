@@ -12,14 +12,13 @@ import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.TimeUnit;
 
 /**
  * OpenAI 兼容 API 的 HTTP 客户端 —— {@link ModelClient} 的 OkHttp 实现。
  * <p>
- * 支持非流式 ({@link #chat}) 和流式 ({@link #chatStream}) 两种调用。
+ * 支持非流式 ({@link ModelClient#chat}) 和流式 ({@link ModelClient#chatStream}) 两种调用。
  * 底层基于 OkHttp，支持连接池、超时控制和请求中断。
  * </p>
  *
@@ -453,7 +452,7 @@ public class HttpModelClient implements ModelClient {
      */
     @Override
     public ONode chat(List<ChatMessage> messages,
-                      List<Map<String, Object>> tools) throws IOException {
+                      ONode tools) throws IOException {
         String jsonBody = buildBody(messages, tools);
         ONode bodyWithStream = ONode.ofJson(jsonBody);
         bodyWithStream.set("stream", false);
@@ -511,7 +510,7 @@ public class HttpModelClient implements ModelClient {
      */
     @Override
     public void chatStream(List<ChatMessage> messages,
-                           List<Map<String, Object>> tools,
+                           ONode tools,
                            StreamCallback callback) {
         String jsonBody;
         try {
@@ -920,7 +919,7 @@ public class HttpModelClient implements ModelClient {
      * 对 tool 消息做防御性检查（缺少 tool_call_id 时跳过）。
      */
     private String buildBody(List<ChatMessage> messages,
-                             List<Map<String, Object>> tools) {
+                             ONode tools) {
         ONode body = new ONode(ONode.ofJson("{}").options()).asObject();
         // 剥离模型名称中的上下文大小后缀，例如 "mimo-v2.5[512k]" → "mimo-v2.5"
         body.set("model", stripContextSizeSuffix(model));
@@ -1010,13 +1009,7 @@ public class HttpModelClient implements ModelClient {
         }
 
         if (tools != null && !tools.isEmpty()) {
-            ONode toolArray = body.getOrNew("tools").asArray();
-            for (Map<String, Object> t : tools) {
-                ONode toolNode = toolArray.addNew();
-                for (Map.Entry<String, Object> e : t.entrySet()) {
-                    toolNode.set(e.getKey(), e.getValue());
-                }
-            }
+            body.set("tools", tools);
         }
 
         String jsonBody = body.toJson();

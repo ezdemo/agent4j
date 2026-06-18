@@ -21,7 +21,7 @@ public class ToolSchemaFlattener {
     /**
      * 展平阈值：深度
      */
-    static final int MAX_DEPTH = 2;
+    static final int MAX_DEPTH = 3;
 
     /**
      * 分析 schema 是否需要展平。叶子数 &gt; 10 或深度 &gt; 2 时展平。

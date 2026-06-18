@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.builtin;
 
+import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import site.sorghum.agent4j.bin.agent.core.SubAgent;
@@ -230,9 +231,9 @@ public class MultiTaskTool extends AgentTool {
         sb.append("## 可用工具规范\n\n");
 
         // 附加工具规范（与 SubAgent 过滤逻辑一致）
-        for (ToolDef def : registry.all().values()) {
+        for (FunctionTool def : registry.all().values()) {
             if (!SubAgent.SUB_AGENT_DENY.contains(def.name())) {
-                String spec = def.toolSpec();
+                String spec = def.descriptionAndMeta();
                 if (spec != null && !spec.isEmpty()) {
                     sb.append(spec).append("\n\n---\n\n");
                 }

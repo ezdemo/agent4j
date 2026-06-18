@@ -2,6 +2,7 @@ package site.sorghum.agent4j.tool.solon.common;
 
 import lombok.Getter;
 import org.noear.solon.Solon;
+import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.ai.talents.cli.SkillTalent;
 import org.noear.solon.ai.talents.cli.TerminalTalent;
 import org.noear.solon.ai.talents.lsp.LspManager;
@@ -14,9 +15,11 @@ import site.sorghum.agent4j.tool.solon.SolonToTools;
 import site.sorghum.agent4j.tool.solon.ToolManager;
 import site.sorghum.agent4j.tool.solon.lsp.SharedAgent4JLspSkill;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.stream.Stream;
 
 public class Agent4JSkillProvider implements SolonToTools {
     SkillTalent skillTalent;
@@ -67,6 +70,17 @@ public class Agent4JSkillProvider implements SolonToTools {
                 terminalTalent,
                 lspTalent
         ));
+    }
+
+    @Override
+    public Collection<FunctionTool> getSolonTools() {
+        return Stream.of(
+                skillTalent,
+                terminalTalent,
+                lspTalent
+        ).map(
+                talent -> talent.getTools(null)
+        ).flatMap(Collection::stream).toList();
     }
 
     @Override
