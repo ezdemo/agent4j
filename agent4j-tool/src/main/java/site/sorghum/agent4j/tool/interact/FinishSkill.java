@@ -1,16 +1,23 @@
 package site.sorghum.agent4j.tool.interact;
 
+import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.solon.SolonToTools;
 
+import java.util.Collection;
 import java.util.List;
 
 @Component
 public class FinishSkill implements SolonToTools {
     @Override
     public List<AgentTool> getTools() {
-        return List.of(new FinishTool());
+        return List.of();
+    }
+
+    @Override
+    public Collection<FunctionTool> getSolonTools() {
+        return new FinishTool().getTools();
     }
 
     @Override

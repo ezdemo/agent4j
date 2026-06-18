@@ -1,5 +1,9 @@
 package site.sorghum.agent4j.tool.interact;
 
+import org.noear.solon.ai.annotation.ToolMapping;
+import org.noear.solon.ai.chat.tool.AbsToolProvider;
+import org.noear.solon.annotation.Component;
+import org.noear.solon.annotation.Param;
 import site.sorghum.agent4j.tool.AgentLoopController;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
@@ -18,66 +22,24 @@ import java.util.List;
  *
  * @author Sorghum
  */
-public class FinishTool extends AgentTool {
+@Component
+public class FinishTool extends AbsToolProvider {
     public static final String TIPS = "[系统提示] 你已连续两次未调用工具。如果有足够信息，请调用 `finish` 提交结果；否则请继续调用工具。";
 
-    @Override
-    public String getName() {
-        return "finish";
-    }
-
-    @Override
-    public String getDescription() {
-        return """
+    @ToolMapping(description = """
                 对话结束信号 —— 当你认为对话可以结束，准备给出最终回答时调用此工具。
                 调用后推理循环将退出，content 将作为你的最终回答返回给用户。
                 注意：纯文本回复不会退出循环，必须通过此工具显式宣告对话结束。
                 即使没有显式的任务，只要你觉得回答已经完整，也应当调用此工具来结束对话。
-                """;
-    }
-
-    @Override
-    public String toToolSpec() {
-        return """
-                ### finish
-                
-                描述：AI 认为对话可以结束并准备给出最终回答时调用此工具退出推理循环。
-                注意：推理循环不会因纯文本回复而退出，必须通过此工具显式宣告完成。
-                即使没有任务列表，只要回答已完整，也应调用此工具结束对话。
-                调用后本轮对话即结束。
-                参数: content(可选, string, 最终回答内容)。
-                """;
-    }
-
-    @Override
-    public List<ToolParameter> getParameters() {
-        return List.of(
-                new ToolParameter("content", "string", false,
-                        "AI 的最终回答内容。如果不传，将自动使用最后一条回复内容。")
-        );
-    }
-
-    @Override
-    public ToolResult execute(ToolContext ctx) {
-        String content = ctx.getString("content");
-
-        AgentLoopController ctrl = ctx.getLoopController();
+                """)
+    public String finish(@Param(name = "content", description = "AI 的最终回答内容",required = false) String content) {
+        AgentLoopController ctrl = ToolContext.getCurrentController();
         if (ctrl != null) {
             ctrl.finish(content);
         }
 
         // 如果 finish 方法处理了空 content（从上下文回填），则使用处理后的值
         // 否则使用原始 content（可能为 null，由上游兜底）
-        return ToolResult.ok(content != null ? content : "__FINISH_NO_CONTENT__");
-    }
-
-    @Override
-    public boolean isReadOnly() {
-        return false;
-    }
-
-    @Override
-    public boolean isStormExempt() {
-        return true;
+        return content != null ? content : "__FINISH_NO_CONTENT__";
     }
 }

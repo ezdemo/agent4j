@@ -1,10 +1,10 @@
 package site.sorghum.agent4j.bin.builtin;
 
+import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import site.sorghum.agent4j.bin.agent.core.SubAgent;
 import site.sorghum.agent4j.bin.model.ModelClient;
-import site.sorghum.agent4j.bin.tool.ToolDef;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.tool.*;
 
@@ -153,9 +153,9 @@ public class TaskTool extends AgentTool {
                 sb.append("你是一个子代理，专注于完成以下任务：").append(arguments).append("\n\n");
                 sb.append("## 可用工具规范\n\n");
                 // 收集并附加工具规范（与 SubAgent 构造函数保持一致的过滤逻辑）
-                for (ToolDef def : registry.all().values()) {
+                for (FunctionTool def : registry.all().values()) {
                     if (!SubAgent.SUB_AGENT_DENY.contains(def.name())) {
-                        String spec = def.toolSpec();
+                        String spec = def.descriptionAndMeta();
                         if (spec != null && !spec.isEmpty()) {
                             sb.append(spec).append("\n\n---\n\n");
                         }

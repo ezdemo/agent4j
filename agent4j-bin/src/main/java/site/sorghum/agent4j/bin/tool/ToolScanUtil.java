@@ -2,6 +2,7 @@ package site.sorghum.agent4j.bin.tool;
 
 import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.Solon;
+import org.noear.solon.ai.chat.tool.FunctionTool;
 import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.solon.SolonToTools;
 import site.sorghum.agent4j.tool.solon.common.Agent4JSkillProvider;
@@ -39,16 +40,16 @@ public class ToolScanUtil {
      * @param workspace 工作区根目录，用于加载 Skill 工具。传 null 则跳过 Skill 扫描。
      * @return 已排序的 AgentTool 列表
      */
-    public static List<AgentTool> scanTools(Path workspace) {
+    public static List<FunctionTool> scanTools(Path workspace) {
         // 1. 通过 Solon IoC 获取所有 AgentTool Bean
-        List<AgentTool> agentTools = new ArrayList<>(Solon.context().getBeansOfType(AgentTool.class));
+        List<FunctionTool> agentTools = new ArrayList<>(Solon.context().getBeansOfType(FunctionTool.class));
 
         // 2. 加载 Skill 工具（从文件系统读取）
         if (workspace != null) {
             try {
                 SolonToTools solonToTools = Agent4JSkillProvider.getOrCreate(
                         workspace.toAbsolutePath().normalize().toString());
-                agentTools.addAll(solonToTools.getTools());
+                agentTools.addAll(solonToTools.getSolonTools());
             } catch (Exception e) {
                 log.error("[tool-scan] Skill 工具扫描失败: " + e.getMessage());
             }
@@ -56,7 +57,7 @@ public class ToolScanUtil {
 
         // 3. 加载SolonToSKill
         List<SolonToTools> solonToTools = Solon.context().getBeansOfType(SolonToTools.class);
-        agentTools.addAll(solonToTools.stream().map(SolonToTools::getTools).flatMap(Collection::stream).toList());
+        agentTools.addAll(solonToTools.stream().map(SolonToTools::getSolonTools).flatMap(Collection::stream).toList());
 
         // 4. 按类名排序，保证顺序稳定
         agentTools.sort(Comparator.comparing(it -> it.getClass().getName()));

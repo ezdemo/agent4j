@@ -3,7 +3,15 @@ package site.sorghum.agent4j.bin.agent.core;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.noear.snack4.Feature;
 import org.noear.snack4.ONode;
+import org.noear.snack4.Options;
+import org.noear.snack4.json.JsonReader;
+import org.noear.snack4.json.util.FormatUtil;
+import org.noear.solon.ai.chat.interceptor.ToolRequest;
+import org.noear.solon.ai.chat.tool.FunctionTool;
+import org.noear.solon.ai.chat.tool.ToolCall;
+import org.noear.solon.ai.chat.tool.ToolResult;
 import site.sorghum.agent4j.bin.agent.context.ContextFolding;
 import site.sorghum.agent4j.bin.agent.context.ConversationContext;
 import site.sorghum.agent4j.bin.agent.context.MessageHealer;
@@ -30,9 +38,7 @@ import site.sorghum.agent4j.tool.*;
 import site.sorghum.agent4j.tool.interact.FinishTool;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
@@ -347,7 +353,7 @@ public class AgentLoop implements AgentLoopController {
         return ChatMessage.tool(id, result);
     }
 
-    private List<Map<String, Object>> refreshTools() {
+    private ONode refreshTools() {
         registry.refresh();
         return registry.toOpenAiTools();
     }
@@ -513,7 +519,7 @@ public class AgentLoop implements AgentLoopController {
             }
 
             // ---- 0.5. 动态刷新工具列表 ----
-            List<Map<String, Object>> tools = refreshTools();
+            ONode tools = refreshTools();
 
             // ---- 1. 消息准备：构建 + Healing + 折叠 ----
             PreparedMessages prepared = prepareMessages(step);
@@ -762,10 +768,10 @@ public class AgentLoop implements AgentLoopController {
 
     // ==================== 步骤 2: 流式调用 LLM ====================
 
-    private StreamResult streamLLM(List<ChatMessage> messages, List<Map<String, Object>> tools) {
+    private StreamResult streamLLM(List<ChatMessage> messages, ONode tools) {
         final StringBuilder contentBuf = new StringBuilder();
         final StringBuilder reasoningBuf = new StringBuilder();
-        final ONode[] streamedTcs = {null};
+        final AtomicReference<ONode> streamedTcs = new AtomicReference<>();
         final CountDownLatch streamLatch = new CountDownLatch(1);
         final AtomicBoolean streamError = new AtomicBoolean(false);
         final AtomicBoolean loopAborted = new AtomicBoolean(false);
@@ -805,7 +811,7 @@ public class AgentLoop implements AgentLoopController {
 
             @Override
             public void onToolCalls(ONode tcs) {
-                streamedTcs[0] = tcs;
+                streamedTcs.set(tcs);
             }
 
             @Override
@@ -852,7 +858,7 @@ public class AgentLoop implements AgentLoopController {
         if (userAbortRequested) {
             String content = !contentBuf.isEmpty() ? contentBuf.toString() : null;
             String reasoningContent = !reasoningBuf.isEmpty() ? reasoningBuf.toString() : null;
-            return new StreamResult(content, reasoningContent, streamedTcs[0], false);
+            return new StreamResult(content, reasoningContent, streamedTcs.get(), false);
         }
         if (streamError.get()) {
             return new StreamResult(null, null, null, true);
@@ -860,11 +866,11 @@ public class AgentLoop implements AgentLoopController {
         if (loopAborted.get()) {
             String reasoning = loopSnapshot[0] != null ? loopSnapshot[0]
                     : (!reasoningBuf.isEmpty() ? reasoningBuf.toString() : null);
-            return new StreamResult(null, reasoning, streamedTcs[0], false, true);
+            return new StreamResult(null, reasoning, streamedTcs.get(), false, true);
         }
         String content = !contentBuf.isEmpty() ? contentBuf.toString() : null;
         String reasoningContent = !reasoningBuf.isEmpty() ? reasoningBuf.toString() : null;
-        return new StreamResult(content, reasoningContent, streamedTcs[0], false);
+        return new StreamResult(content, reasoningContent, streamedTcs.get(), false);
     }
 
     // ==================== 步骤 4: Scavenger 回收 ====================
@@ -905,7 +911,7 @@ public class AgentLoop implements AgentLoopController {
      *
      * @return 包含过滤后的 ToolCallEntry 列表和对应 ONode 列表的记录
      */
-    private ParsedToolCalls parseAndFilterToolCalls(ONode[] tcArray) {
+    private ParsedToolCalls parseAndFilterToolCalls(List<ONode> tcArray) {
         List<ToolCallEntry> tcList = new ArrayList<>();
         List<ONode> filteredTcList = new ArrayList<>();
         for (ONode tc : tcArray) {
@@ -938,8 +944,8 @@ public class AgentLoop implements AgentLoopController {
                                   AtomicBoolean anySuppressed,
                                   AtomicReference<HitlRequiredException> hitlRef) {}
 
-    private DispatchResult dispatchToolCallsAsync(ONode[] tcArray, boolean skipSandboxCheck) {
-        int tcCount = tcArray.length;
+    private DispatchResult dispatchToolCallsAsync(List<ONode> tcArray, boolean skipSandboxCheck) {
+        int tcCount = tcArray.size();
         @SuppressWarnings("unchecked")
         CompletableFuture<ChatMessage>[] futures = new CompletableFuture[tcCount];
         final AtomicBoolean anySuppressed = new AtomicBoolean(false);
@@ -950,7 +956,7 @@ public class AgentLoop implements AgentLoopController {
             futures[i] = CompletableFuture.supplyAsync(() -> {
                 // 用户已中断 → 立即返回，不执行工具
                 if (userAbortRequested) {
-                    ONode tc = tcArray[idx];
+                    ONode tc = tcArray.get(idx);
                     String tcId = tc.get("id").getString();
                     return toolResult(tcId,
                             "{\"error\":\"用户已中断\",\"aborted\":true}");
@@ -963,24 +969,29 @@ public class AgentLoop implements AgentLoopController {
                     TaskTool.setCurrentOutput(capturedOutput);
                 }
                 try {
-                    ONode tc = tcArray[idx];
-                    String tcId = tc.get("id").getString();
-                    ONode func = tc.get("function");
-                    String tcName = func.get("name").getString();
-                    String tcArgs = func.get("arguments").getString();
-                    if (tcArgs == null) tcArgs = "{}";
+                    ONode tc = tcArray.get(idx);
+                    ToolCall toolCall = getToolCall(tc);
+                    FunctionTool fc = registry.get(toolCall.getName());
+                    if (fc == null) {
+                        String result = "工具不存在";
+                        safeListener("toolResult", () -> listener.onToolResult(toolCall.getName(), result));
+                        safeOutputDebug("toolResult", () -> output.onToolResult(toolCall.getName(), result));
+                        return toolResult(toolCall.getId(), "工具不存在");
+                    }
+                    //收集拦截器
+                    ToolContext.setCurrentController(AgentLoop.this);
+                    ToolRequest req = new ToolRequest(null,new HashMap<>(), toolCall.getArguments());
                     try {
-                        String result = dispatcher.dispatch(tcName, tcArgs, AgentLoop.this);
-                        if (result != null && result.contains("\"rejectedReason\":\"storm\"")) {
-                            anySuppressed.set(true);
-                        }
-                        safeListener("toolResult", () -> listener.onToolResult(tcName, result));
-                        safeOutputDebug("toolResult", () -> output.onToolResult(tcName, result));
-                        return toolResult(tcId, result);
-                    } catch (HitlRequiredException e) {
-                        hitlRef.set(e);
-                        return ChatMessage.tool(tcId,
-                                "[HITL_PENDING:" + e.getReason() + "] " + e.getDetails());
+                        ToolResult call = fc.call(req.getArgs());
+                        String result = call.getContent();
+                        safeListener("toolResult", () -> listener.onToolResult(toolCall.getName(), result));
+                        safeOutputDebug("toolResult", () -> output.onToolResult(toolCall.getName(), result));
+                        return toolResult(toolCall.getId(), result);
+                    } catch (Throwable e) {
+                        String result = e.getMessage();
+                        safeListener("toolResult", () -> listener.onToolResult(toolCall.getName(), result));
+                        safeOutputDebug("toolResult", () -> output.onToolResult(toolCall.getName(), result));
+                        return toolResult(toolCall.getId(), result);
                     }
                 } finally {
                     if (skipSandboxCheck) {
@@ -998,7 +1009,7 @@ public class AgentLoop implements AgentLoopController {
      * 如果用户请求中断，立即取消未完成的 Future 并返回。
      */
     private List<ChatMessage> collectToolResults(CompletableFuture<ChatMessage>[] futures,
-                                                  ONode[] tcArray) {
+                                                 List<ONode> tcArray) {
         // 保存活跃 futures 引用，供 requestUserAbort() 取消
         this.activeToolFutures = futures;
         try {
@@ -1040,7 +1051,7 @@ public class AgentLoop implements AgentLoopController {
             try {
                 toolResults.add(f.get());
             } catch (CancellationException e) {
-                ONode tc = tcArray[i];
+                ONode tc = tcArray.get(i);
                 String tcId = tc.get("id").getString();
                 toolResults.add(toolResult(tcId,
                         "{\"error\":\"工具执行超时（" + toolTimeoutSec()
@@ -1070,10 +1081,10 @@ public class AgentLoop implements AgentLoopController {
      * 构建用户中断时的工具结果（全部标记为 aborted）。
      */
     private List<ChatMessage> buildAbortedResults(CompletableFuture<ChatMessage>[] futures,
-                                                   ONode[] tcArray) {
+                                                  List<ONode> tcArray) {
         List<ChatMessage> results = new ArrayList<>();
         for (int i = 0; i < futures.length; i++) {
-            ONode tc = tcArray[i];
+            ONode tc = tcArray.get(i);
             String tcId = tc.get("id").getString();
             results.add(toolResult(tcId,
                     "{\"error\":\"用户已中断\",\"aborted\":true}"));
@@ -1084,11 +1095,11 @@ public class AgentLoop implements AgentLoopController {
     private ToolExecutionResult executeToolCalls(ONode toolCalls, boolean skipSandboxCheck) {
         dispatcher.setSessionId(this.sessionId);
 
-        ONode[] tcArray = toolCalls.getArray().toArray(new ONode[0]);
+        List<ONode> tcArray = toolCalls.getArray();
 
         // 1. 解析并过滤工具调用
         ParsedToolCalls parsed = parseAndFilterToolCalls(tcArray);
-        final ONode[] finalTcArray = parsed.nodeList().toArray(new ONode[0]);
+        List<ONode> finalTcArray = parsed.nodeList();
 
         TaskTool.clearUsageCollector();
 
@@ -1170,5 +1181,38 @@ public class AgentLoop implements AgentLoopController {
 
     private void logAbort() {
         safeOutput("abort", () -> output.onLog(LogLevel.INFO, "[abort] 用户请求中断，停止推理循环"));
+    }
+
+
+    public ToolCall getToolCall(ONode n1) {
+        String callId = n1.get("id").getString();
+
+        String index = n1.get("index").getString();
+
+        ONode n1f = n1.get("function");
+        String name = n1f.get("name").getString(); //可能是空的
+        ONode n1fArgs = n1f.get("arguments");
+        String argStr = n1fArgs.getString();
+
+        if (n1fArgs.isString()) {
+            //有可能是 json string（还可能只是流的中间消息）
+            if (FormatUtil.hasNestedJsonBlock(argStr)) {
+                JsonReader reader = new JsonReader(argStr, Options.of(Feature.Read_AutoRepair));
+                n1fArgs = reader.readLast();
+
+                if (n1fArgs == null) {
+                    log.warn("Parse tool arguments failed: {}", argStr);
+                }
+            }
+        }
+
+        Map<String, Object> argMap = new HashMap<>();
+        if (n1fArgs != null) {
+            if (n1fArgs.isObject()) {
+                argMap = n1fArgs.toBean(Map.class);
+            }
+        }
+
+        return new ToolCall(index, callId, name, argStr, argMap);
     }
 }

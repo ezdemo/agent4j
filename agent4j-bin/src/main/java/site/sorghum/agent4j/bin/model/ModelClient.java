@@ -5,7 +5,6 @@ import site.sorghum.agent4j.bin.agent.model.ChatMessage;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 模型客户端接口 —— 封装 LLM API 调用的抽象契约。
@@ -23,13 +22,13 @@ public interface ModelClient {
      * 用于后台操作（上下文折叠摘要等）。
      */
     ONode chat(List<ChatMessage> messages,
-               List<Map<String, Object>> tools) throws IOException;
+               ONode tools) throws IOException;
 
     /**
      * 流式调用 —— 通过回调逐 token 推送推理和内容。
      */
     void chatStream(List<ChatMessage> messages,
-                    List<Map<String, Object>> tools,
+                    ONode tools,
                     StreamCallback callback);
 
     /**
