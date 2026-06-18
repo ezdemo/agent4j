@@ -95,6 +95,27 @@ public class ConfigService {
     // ==================== 通用配置更新 ====================
 
     /**
+     * 获取图片识别服务的 API 基础地址。
+     */
+    public String getVisionBaseUrl() {
+        return config.visionBaseUrl();
+    }
+
+    /**
+     * 获取图片识别服务的 API Key。
+     */
+    public String getVisionApiKey() {
+        return config.visionApiKey();
+    }
+
+    /**
+     * 获取图片识别服务的模型名称。
+     */
+    public String getVisionModel() {
+        return config.visionModel();
+    }
+
+    /**
      * 合并更新配置项（只更新非空字段）并持久化到 config.json。
      */
     public synchronized void updateConfig(Map<String, Object> updates) {
