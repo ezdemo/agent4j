@@ -22,6 +22,7 @@ import site.sorghum.agent4j.bin.goal.GoalStep;
 import site.sorghum.agent4j.bin.goal.GoalStore;
 import site.sorghum.agent4j.bin.goal.StepStatus;
 import site.sorghum.agent4j.bin.model.ModelClient;
+import site.sorghum.agent4j.bin.model.UserMessageSanitizer;
 import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.tool.ToolDispatcher;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
@@ -379,6 +380,9 @@ public class AgentLoop implements AgentLoopController {
     }
 
     private String doRun(UserMessage userMessage) throws IOException {
+        // ---- 根据模型多模态支持清洗用户消息 ----
+        userMessage = UserMessageSanitizer.sanitize(userMessage, client.getModel());
+        
         // ---- HITL 恢复：用户已审批 / 拒绝 ----
         if (hitlManager.getState() == HitlState.APPROVED) {
             hitlManager.resetState();
