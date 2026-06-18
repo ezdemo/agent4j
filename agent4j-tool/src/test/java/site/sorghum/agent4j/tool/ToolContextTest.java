@@ -22,14 +22,14 @@ class ToolContextTest {
      * 全参数构造器的简化工厂 —— 只传 params，其余全 null/默认
      */
     private static ToolContext ctx(Map<String, Object> params) {
-        return new ToolContext(params, null, null, null, null, Collections.emptyList(), null, false);
+        return new ToolContext(params, null, null, null, null, Collections.emptyList(), null);
     }
 
     /**
      * 全参数构造器的简化工厂 —— 传 params + rootDir
      */
     private static ToolContext ctx(Map<String, Object> params, Path rootDir) {
-        return new ToolContext(params, rootDir, null, null, null, Collections.emptyList(), null, false);
+        return new ToolContext(params, rootDir, null, null, null, Collections.emptyList(), null);
     }
 
     /**
@@ -37,7 +37,7 @@ class ToolContextTest {
      */
     private static ToolContext ctx(Map<String, Object> params, Path rootDir,
                                    List<String> blockedPaths) {
-        return new ToolContext(params, rootDir, null, null, null, blockedPaths, null, false);
+        return new ToolContext(params, rootDir, null, null, null, blockedPaths, null);
     }
 
     /**
@@ -46,7 +46,7 @@ class ToolContextTest {
     private static ToolContext ctx(Map<String, Object> params, Path rootDir,
                                    String apiUrl, String apiKey,
                                    Object toolRegistry, List<String> blockedPaths) {
-        return new ToolContext(params, rootDir, apiUrl, apiKey, toolRegistry, blockedPaths, null, false);
+        return new ToolContext(params, rootDir, apiUrl, apiKey, toolRegistry, blockedPaths, null);
     }
 
     @Nested

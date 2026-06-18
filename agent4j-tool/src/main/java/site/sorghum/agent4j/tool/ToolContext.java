@@ -12,6 +12,7 @@ import java.util.Map;
  * 工具执行上下文——封装一次工具调用的全部入参。
  * <p>
  * 包含调用参数 Map 和一个可选的根目录路径，
+ * 以及线程局部的 {@link AgentLoopController} 引用。
  * </p>
  *
  * @author Sorghum
@@ -19,11 +20,6 @@ import java.util.Map;
 @Getter
 public class ToolContext {
 
-    /**
-     * 线程局部沙箱旁路标志，供 resolveSafe 等深层方法在不持有 ToolContext 时检查。
-     * HITL 审批通过路径越界后，AgentLoop 在重放执行前设置此标志。
-     */
-    private static final ThreadLocal<Boolean> SANDBOX_BYPASS_TL = new ThreadLocal<>();
     /**
      * AgentLoop 控制器线程局部引用。
      * 由 {@code ToolDispatcher.dispatch()} 在执行工具前注入，
@@ -60,18 +56,11 @@ public class ToolContext {
     private final String sessionId;
 
     /**
-     * 沙箱旁路标志 — HITL 审批通过路径越界后置为 true，
-     * resolveSafe 检测到此标志时跳过边界校验。
-     */
-    private final boolean skipSandboxCheck;
-
-    /**
      * 全参数构造器。
      * <p>不使用的参数传 {@code null} 或合适的默认值。</p>
      */
     public ToolContext(Map<String, Object> params, Path rootDir, String apiUrl, String apiKey,
-                       Object toolRegistry, List<String> blockedPaths, String sessionId,
-                       boolean skipSandboxCheck) {
+                       Object toolRegistry, List<String> blockedPaths, String sessionId) {
         this.params = params != null ? new HashMap<>(params) : Collections.emptyMap();
         this.rootDir = rootDir;
         this.apiUrl = apiUrl;
@@ -79,37 +68,6 @@ public class ToolContext {
         this.toolRegistry = toolRegistry;
         this.blockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
         this.sessionId = sessionId;
-        this.skipSandboxCheck = skipSandboxCheck;
-    }
-
-    // ==================== 线程级沙箱旁路 ====================
-
-    /**
-     * 开启当前线程的沙箱旁路（resolveSafe 跳过边界检查）
-     */
-    public static void enableSandboxBypass() {
-        SANDBOX_BYPASS_TL.set(true);
-    }
-
-    /**
-     * 关闭当前线程的沙箱旁路
-     */
-    public static void disableSandboxBypass() {
-        SANDBOX_BYPASS_TL.remove();
-    }
-
-    /**
-     * 当前线程是否开启了沙箱旁路
-     */
-    public static boolean isSandboxBypass() {
-        return Boolean.TRUE.equals(SANDBOX_BYPASS_TL.get());
-    }
-
-    /**
-     * 沙箱旁路标志 — HITL 审批通过后为 true
-     */
-    public boolean isSkipSandboxCheck() {
-        return skipSandboxCheck;
     }
 
     // ==================== 参数访问 ====================
