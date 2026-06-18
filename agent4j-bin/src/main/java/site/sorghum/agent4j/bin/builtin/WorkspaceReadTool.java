@@ -1,17 +1,18 @@
 package site.sorghum.agent4j.bin.builtin;
 
+import org.noear.solon.ai.annotation.ToolMapping;
+import org.noear.solon.ai.chat.tool.AbsToolProvider;
+import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
+import org.noear.solon.annotation.Param;
 import site.sorghum.agent4j.bin.workspace.DocumentBucket;
 import site.sorghum.agent4j.bin.workspace.KVBucket;
 import site.sorghum.agent4j.bin.workspace.SharedWorkspace;
-import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
-import site.sorghum.agent4j.tool.ToolParameter;
-import site.sorghum.agent4j.tool.ToolResult;
+import site.sorghum.agent4j.tool.solon.SolonToTools;
 
 import java.util.*;
-import java.util.stream.Collectors;
 
 /**
  * Workspace Read 工具 —— 从共享工作区读取 KV 或文档条目。
@@ -27,7 +28,7 @@ import java.util.stream.Collectors;
  * @author Sorghum
  */
 @Component
-public class WorkspaceReadTool extends AgentTool {
+public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
 
     @Inject
     private SharedWorkspace workspace;
@@ -47,56 +48,19 @@ public class WorkspaceReadTool extends AgentTool {
         this.workspace = workspace;
     }
 
-    @Override
-    public String getName() {
-        return "workspace_read";
-    }
-
-    @Override
-    public String getDescription() {
-        return """
-                Read entries from the shared workspace. Supports two modes:
-                - KV mode: read a value stored under a key (key)
-                - Document mode: read document content and metadata under a key (key)
-                Key is always required. KV mode is tried first; if no KV entry is found,
-                document mode is attempted. If neither exists, returns NOT_FOUND with suggestions
-                for similar keys.""";
-    }
-
-    @Override
-    public String toToolSpec() {
-        return """
-                ### workspace_read
-
-                描述：从共享工作区读取 KV 或文档条目。优先尝试 KV 读取，其次尝试文档读取，
+    @ToolMapping(name = "workspace_read", description = """
+                从共享工作区读取 KV 或文档条目。优先尝试 KV 读取，其次尝试文档读取，
                 均未命中时返回 NOT_FOUND 错误并附带相似 key 提示。
                 参数: key(必填, 条目路径), scope(可选, 作用域过滤)。
                 key 为空时返回错误。
                 只读。
-                """;
-    }
-
-    @Override
-    public List<ToolParameter> getParameters() {
-        return List.of(
-                new ToolParameter("key", "string", true,
-                        "Entry path / key for the workspace entry to read"),
-                new ToolParameter("scope", "string", false,
-                        "Scope / namespace filter (reserved for future use)")
-        );
-    }
-
-    @Override
-    public boolean isReadOnly() {
-        return true;
-    }
-
-    @Override
-    public ToolResult execute(ToolContext ctx) {
+                """)
+    public String workspaceRead(@Param(name = "key", description = "Entry path / key for the workspace entry to read") String key,
+                                @Param(name = "scope", description = "Scope / namespace filter (reserved for future use)", required = false) String scope,
+                                ToolContext ctx) {
         // 1. 获取 key，必填
-        String key = ctx.getString("key");
         if (key == null || key.isBlank()) {
-            return ToolResult.fail("PARAM_MISSING", "Missing required parameter 'key'");
+            return "PARAM_MISSING: Missing required parameter 'key'";
         }
 
         // 2. 优先尝试 KV 读取
@@ -117,7 +81,7 @@ public class WorkspaceReadTool extends AgentTool {
             if (bucket.getMetadata() != null && !bucket.getMetadata().isEmpty()) {
                 data.put("metadata", bucket.getMetadata());
             }
-            return ToolResult.ok("KV entry found for key: " + key + "\nValue: " + bucket.getValue(), data);
+            return "KV entry found for key: " + key + "\nValue: " + bucket.getValue();
         }
 
         // 3. 再尝试文档读取
@@ -139,15 +103,14 @@ public class WorkspaceReadTool extends AgentTool {
             if (bucket.getMetadata() != null && !bucket.getMetadata().isEmpty()) {
                 data.put("metadata", bucket.getMetadata());
             }
-            return ToolResult.ok("Document entry found for key: " + key
+            return "Document entry found for key: " + key
                     + "\nType: " + bucket.getMimeType()
-                    + "\nContent: " + bucket.getContent(), data);
+                    + "\nContent: " + bucket.getContent();
         }
 
         // 4. 都找不到，返回 NOT_FOUND 并附带相似 key 提示
         String suggestion = buildNotFoundSuggestion(key);
-        return ToolResult.fail("NOT_FOUND",
-                "No entry found for key: '" + key + "'.\n" + suggestion);
+        return "NOT_FOUND: No entry found for key: '" + key + "'.\n" + suggestion;
     }
 
     /**
@@ -267,5 +230,21 @@ public class WorkspaceReadTool extends AgentTool {
         }
 
         return dp[m][n];
+    }
+
+    @Override
+    public Collection<FunctionTool> getSolonTools() {
+        return this.getTools();
+    }
+
+    @Override
+    public String getSystemPrompt() {
+        return """
+                从共享工作区读取 KV 或文档条目。优先尝试 KV 读取，其次尝试文档读取，
+                均未命中时返回 NOT_FOUND 错误并附带相似 key 提示。
+                参数: key(必填, 条目路径), scope(可选, 作用域过滤)。
+                key 为空时返回错误。
+                只读。
+                """;
     }
 }

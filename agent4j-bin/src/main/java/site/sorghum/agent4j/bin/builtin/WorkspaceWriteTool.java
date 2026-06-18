@@ -1,14 +1,16 @@
 package site.sorghum.agent4j.bin.builtin;
 
+import org.noear.solon.ai.annotation.ToolMapping;
+import org.noear.solon.ai.chat.tool.AbsToolProvider;
+import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
+import org.noear.solon.annotation.Param;
 import site.sorghum.agent4j.bin.workspace.SharedWorkspace;
-import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
-import site.sorghum.agent4j.tool.ToolParameter;
-import site.sorghum.agent4j.tool.ToolResult;
+import site.sorghum.agent4j.tool.solon.SolonToTools;
 
-import java.util.List;
+import java.util.Collection;
 
 /**
  * Workspace Write 工具 —— 向共享工作区写入 KV 或文档条目。
@@ -24,7 +26,7 @@ import java.util.List;
  * @author Sorghum
  */
 @Component
-public class WorkspaceWriteTool extends AgentTool {
+public class WorkspaceWriteTool extends AbsToolProvider implements SolonToTools {
 
     @Inject
     private SharedWorkspace workspace;
@@ -44,57 +46,22 @@ public class WorkspaceWriteTool extends AgentTool {
         this.workspace = workspace;
     }
 
-    @Override
-    public String getName() {
-        return "workspace_write";
-    }
-
-    @Override
-    public String getDescription() {
-        return """
-                Write entries to the shared workspace. Supports two modes:
-                - KV mode: store a value under a key (key + value)
-                - Document mode: store document content under a key (key + content + optional type)
-                Key is always required. If 'value' is provided, KV mode is used.
-                If 'content' is provided, document mode is used.
-                If both 'value' and 'content' are provided, KV mode takes precedence.""";
-    }
-
-    @Override
-    public String toToolSpec() {
-        return """
-                ### workspace_write
-
-                描述：向共享工作区写入 KV 或文档条目。KV 模式存储键值对，文档模式存储富文本内容。
+    @ToolMapping(name = "workspace_write", description = """
+                向共享工作区写入 KV 或文档条目。KV 模式存储键值对，文档模式存储富文本内容。
                 参数: key(必填, 条目路径), value(可选, KV 模式值), content(可选, 文档模式内容),
                       type(可选, 文档 MIME 类型, 默认 text/plain), scope(可选, 作用域预留)。
                 key 为空时返回错误；value 和 content 都为空时返回错误。
                 可写。
-                """;
-    }
-
-    @Override
-    public List<ToolParameter> getParameters() {
-        return List.of(
-                new ToolParameter("key", "string", true,
-                        "Entry path / key for the workspace entry"),
-                new ToolParameter("value", "string", false,
-                        "Value for KV mode. If provided, writes as a key-value pair."),
-                new ToolParameter("content", "string", false,
-                        "Content for document mode. If provided (and value is null), writes as a document."),
-                new ToolParameter("type", "string", false,
-                        "Document MIME type (e.g. text/plain, text/markdown, application/json). Default: text/plain"),
-                new ToolParameter("scope", "string", false,
-                        "Scope / namespace for the entry (reserved for future use)")
-        );
-    }
-
-    @Override
-    public ToolResult execute(ToolContext ctx) {
+                """)
+    public String workspaceWrite(@Param(name = "key", description = "Entry path / key for the workspace entry") String key,
+                                 @Param(name = "value", description = "Value for KV mode. If provided, writes as a key-value pair.", required = false) String value,
+                                 @Param(name = "content", description = "Content for document mode. If provided (and value is null), writes as a document.", required = false) String content,
+                                 @Param(name = "type", description = "Document MIME type (e.g. text/plain, text/markdown, application/json). Default: text/plain", required = false) String type,
+                                 @Param(name = "scope", description = "Scope / namespace for the entry (reserved for future use)", required = false) String scope,
+                                 ToolContext ctx) {
         // 1. 获取 key，必填
-        String key = ctx.getString("key");
         if (key == null || key.isBlank()) {
-            return ToolResult.fail("PARAM_MISSING", "Missing required parameter 'key'");
+            return "PARAM_MISSING: Missing required parameter 'key'";
         }
 
         // 2. 获取 creator（优先使用 sessionId，兜底用 "agent"）
@@ -103,33 +70,44 @@ public class WorkspaceWriteTool extends AgentTool {
             creator = "agent";
         }
 
-        String value = ctx.getString("value");
-        String content = ctx.getString("content");
-
         // 3. 确定模式并写入
         if (value != null) {
             // KV 模式
             try {
                 workspace.writeKV(key, value, creator);
-                return ToolResult.ok("Successfully wrote KV entry: " + key);
+                return "Successfully wrote KV entry: " + key;
             } catch (Exception e) {
-                return ToolResult.fail("WRITE_FAILED", "Failed to write KV entry '" + key + "': " + e.getMessage());
+                return "WRITE_FAILED: Failed to write KV entry '" + key + "': " + e.getMessage();
             }
         } else if (content != null) {
             // 文档模式
-            String mimeType = ctx.getString("type", "text/plain");
+            String mimeType = (type != null) ? type : "text/plain";
             try {
                 workspace.writeDoc(key, content, mimeType, creator);
-                return ToolResult.ok("Successfully wrote document entry: " + key + " (type: " + mimeType + ")");
+                return "Successfully wrote document entry: " + key + " (type: " + mimeType + ")";
             } catch (Exception e) {
-                return ToolResult.fail("WRITE_FAILED",
-                        "Failed to write document entry '" + key
-                                + "': " + e.getMessage());
+                return "WRITE_FAILED: Failed to write document entry '" + key
+                        + "': " + e.getMessage();
             }
         } else {
             // value 和 content 都为空
-            return ToolResult.fail("PARAM_MISSING",
-                    "Either 'value' (KV mode) or 'content' (document mode) must be provided");
+            return "PARAM_MISSING: Either 'value' (KV mode) or 'content' (document mode) must be provided";
         }
+    }
+
+    @Override
+    public Collection<FunctionTool> getSolonTools() {
+        return this.getTools();
+    }
+
+    @Override
+    public String getSystemPrompt() {
+        return """
+                向共享工作区写入 KV 或文档条目。KV 模式存储键值对，文档模式存储富文本内容。
+                参数: key(必填, 条目路径), value(可选, KV 模式值), content(可选, 文档模式内容),
+                      type(可选, 文档 MIME 类型, 默认 text/plain), scope(可选, 作用域预留)。
+                key 为空时返回错误；value 和 content 都为空时返回错误。
+                可写。
+                """;
     }
 }
