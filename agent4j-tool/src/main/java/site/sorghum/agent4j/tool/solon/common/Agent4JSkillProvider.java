@@ -10,13 +10,10 @@ import org.noear.solon.ai.talents.lsp.LspTalent;
 import org.noear.solon.ai.talents.mount.MountDir;
 import org.noear.solon.ai.talents.mount.MountManager;
 import org.noear.solon.ai.talents.mount.MountType;
-import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.solon.SolonToTools;
-import site.sorghum.agent4j.tool.solon.ToolManager;
 import site.sorghum.agent4j.tool.solon.lsp.SharedAgent4JLspSkill;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
@@ -63,14 +60,6 @@ public class Agent4JSkillProvider implements SolonToTools {
         return cliSkillProviderMap.computeIfAbsent(rootDir, k -> new Agent4JSkillProvider(rootDir));
     }
 
-    @Override
-    public List<AgentTool> getTools() {
-        return ToolManager.getToolsFromSKill(List.of(
-                skillTalent,
-                terminalTalent,
-                lspTalent
-        ));
-    }
 
     @Override
     public Collection<FunctionTool> getSolonTools() {
