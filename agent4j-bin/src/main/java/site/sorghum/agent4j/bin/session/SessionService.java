@@ -27,10 +27,6 @@ public class SessionService {
 
     private final ConversationContext ctx;
     /**
-     * 当前工作区的会话目录（支持工作区隔离）
-     */
-    private final Path sessionsDir;
-    /**
      * 按模型分别累计的 token 用量：model -> [prompt, completion, cacheHit, cacheMiss]
      */
     private final Map<String, long[]> modelUsage = new LinkedHashMap<>();
@@ -62,7 +58,6 @@ public class SessionService {
      */
     public SessionService(ConversationContext ctx, Path sessionsDir) throws IOException {
         this.ctx = ctx;
-        this.sessionsDir = sessionsDir;
         this.store = new JsonlSessionStore(sessionsDir);
         ctx.setSessionStore(store);
     }

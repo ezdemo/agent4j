@@ -32,7 +32,8 @@ public class FinishTool extends AbsToolProvider {
                 注意：纯文本回复不会退出循环，必须通过此工具显式宣告对话结束。
                 即使没有显式的任务，只要你觉得回答已经完整，也应当调用此工具来结束对话。
                 """)
-    public String finish(@Param(name = "content", description = "AI 的最终回答内容",required = false) String content) {
+    public String finish(@Param(name = "content", description = "AI 的最终回答内容",required = false) String content,
+                         ToolContext ctx) {
         AgentLoopController ctrl = ToolContext.getCurrentController();
         if (ctrl != null) {
             ctrl.finish(content);

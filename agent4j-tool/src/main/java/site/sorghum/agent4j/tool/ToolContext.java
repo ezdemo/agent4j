@@ -35,21 +35,9 @@ public class ToolContext {
      */
     private final Path rootDir;
     /**
-     * LLM API 地址（可选，供需要 API 调用的工具使用）
-     */
-    private final String apiUrl;
-    /**
-     * LLM API Key（可选）
-     */
-    private final String apiKey;
-    /**
      * 工具注册表引用（可选，供需要创建子代理的工具使用）
      */
     private final Object toolRegistry;
-    /**
-     * 屏蔽目录列表（相对路径，相对于工作区根目录）
-     */
-    private final List<String> blockedPaths;
     /**
      * 当前会话ID（可选，用于按会话隔离数据）
      */
@@ -59,14 +47,11 @@ public class ToolContext {
      * 全参数构造器。
      * <p>不使用的参数传 {@code null} 或合适的默认值。</p>
      */
-    public ToolContext(Map<String, Object> params, Path rootDir, String apiUrl, String apiKey,
-                       Object toolRegistry, List<String> blockedPaths, String sessionId) {
+    public ToolContext(Map<String, Object> params, Path rootDir,
+                       Object toolRegistry, String sessionId) {
         this.params = params != null ? new HashMap<>(params) : Collections.emptyMap();
         this.rootDir = rootDir;
-        this.apiUrl = apiUrl;
-        this.apiKey = apiKey;
         this.toolRegistry = toolRegistry;
-        this.blockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
         this.sessionId = sessionId;
     }
 
@@ -160,77 +145,10 @@ public class ToolContext {
     }
 
     /**
-     * 请求停止推理循环（空安全）。
-     */
-    public void requestStopLoop() {
-        AgentLoopController ctrl = CONTROLLER_TL.get();
-        if (ctrl != null) {
-            ctrl.requestStop();
-        }
-    }
-
-    /**
-     * 在下一轮循环前注入一条用户消息（空安全）。
-     *
-     * @param message 要注入的用户消息
-     */
-    public void injectUserMessage(String message) {
-        AgentLoopController ctrl = CONTROLLER_TL.get();
-        if (ctrl != null) {
-            ctrl.injectUserMessage(message);
-        }
-    }
-
-    /**
-     * 向下游推送自定义事件（空安全）。
-     *
-     * @param type 事件类型标识符
-     * @param data JSON 格式的事件数据
-     */
-    public void emitEvent(String type, String data) {
-        AgentLoopController ctrl = CONTROLLER_TL.get();
-        if (ctrl != null) {
-            ctrl.emitEvent(type, data);
-        }
-    }
-
-    /**
      * 检查参数是否存在。
      */
     public boolean has(String key) {
         return params.containsKey(key);
-    }
-
-    /**
-     * 参数数量。
-     */
-    public int paramCount() {
-        return params.size();
-    }
-
-    /**
-     * 检查目标路径是否在屏蔽目录列表中。
-     * 目标路径必须是已解析的绝对路径。
-     *
-     * @param target 已解析的绝对路径
-     * @return 如果路径被屏蔽返回 true
-     */
-    public boolean isPathBlocked(Path target) {
-        if (blockedPaths.isEmpty() || rootDir == null || target == null) {
-            return false;
-        }
-        final Path rootAbs = rootDir.toAbsolutePath().normalize();
-        final Path targetAbs = target.toAbsolutePath().normalize();
-        if (!targetAbs.startsWith(rootAbs)) {
-            return false; // 路径越界由 resolveSafe 处理
-        }
-        for (String blocked : blockedPaths) {
-            final Path blockedPath = rootAbs.resolve(blocked).normalize();
-            if (targetAbs.equals(blockedPath) || targetAbs.startsWith(blockedPath)) {
-                return true;
-            }
-        }
-        return false;
     }
 
     @Override
