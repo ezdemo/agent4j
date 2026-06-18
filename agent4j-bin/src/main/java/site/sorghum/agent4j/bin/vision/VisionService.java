@@ -11,7 +11,8 @@ import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import site.sorghum.agent4j.bin.config.ConfigService;
 
-import java.io.IOException;
+import java.time.Duration;
+import java.time.temporal.ChronoUnit;
 
 /**
  * 图片识别服务 —— 使用视觉模型识别图片内容。
@@ -44,13 +45,12 @@ public class VisionService {
     /**
      * 识别图片内容。
      *
-     * @param imageUrl 图片 URL（支持 HTTP/HTTPS 或 Base64 Data URI）
+     * @param imageBase64 图片 URL（支持 HTTP/HTTPS 或 Base64 Data URI）
      * @param prompt   可选的提示词，用于指导图片识别
      * @return 图片识别结果，包含思考块和内容块
-     * @throws IOException 如果 API 调用失败
      */
-    public VisionResult recognize(String imageUrl, String prompt){
-        if (imageUrl == null || imageUrl.isBlank()) {
+    public VisionResult recognize(String imageBase64, String prompt){
+        if (imageBase64 == null || imageBase64.isBlank()) {
             throw new IllegalArgumentException("图片 URL 不能为空");
         }
 
@@ -63,7 +63,7 @@ public class VisionService {
         String userText = prompt != null && !prompt.isBlank() ? prompt : "描述图片所有内容 提供给别的模型使用。";
         
         // 使用 Solon AI 的多模态支持
-        ChatMessage userMessage = ChatMessage.ofUser(userText, ImageBlock.ofUrl(imageUrl));
+        ChatMessage userMessage = ChatMessage.ofUser(userText, ImageBlock.ofUrl(imageBase64));
         
         // 调用 API
         try {
@@ -71,6 +71,11 @@ public class VisionService {
             
             // 获取响应内容
             AssistantMessage message = response.getMessage();
+            if (message == null) {
+                log.error("[vision] API 返回空响应，请检查视觉模型配置和图片格式，图片: {}",
+                        imageBase64.length() > 100 ? imageBase64.substring(0, 100) + "..." : imageBase64);
+                throw new IllegalStateException("图片识别失败: API 返回空响应，请检查视觉模型配置和图片格式");
+            }
             String content = message.getContent();
             
             // 获取思考内容
@@ -82,10 +87,10 @@ public class VisionService {
             VisionResult result = new VisionResult();
             result.setReasoningContent(reasoningContent);
             result.setContent(content);
-            result.setImageUrl(imageUrl);
+            result.setImageUrl(imageBase64);
             
             log.info("[vision] 图片识别完成，图片: {}, 内容长度: {}", 
-                    imageUrl.length() > 50 ? imageUrl.substring(0, 50) + "..." : imageUrl,
+                    imageBase64.length() > 50 ? imageBase64.substring(0, 50) + "..." : imageBase64,
                     content != null ? content.length() : 0);
             
             return result;
@@ -127,6 +132,10 @@ public class VisionService {
                     visionModel = ChatModel.of(apiUrl)
                             .apiKey(apiKey)
                             .model(model)
+                            .timeout(Duration.of(10 * 60, ChronoUnit.SECONDS))
+                            .modelOptions(
+                                    modelOptions -> modelOptions.optionSet("enable_thinking",false)
+                            )
                             .build();
                     
                     log.info("[vision] 已创建图片识别模型，模型: {}, API: {}", model, apiUrl);
