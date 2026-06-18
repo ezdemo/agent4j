@@ -16,22 +16,28 @@ import java.util.Map;
  */
 public interface ModelPriceProvider {
     CacheService cacheService = new LocalCacheService();
+
     /**
-     * 获取指定模型的价格信息。
+     * 获取指定模型的价格信息（带缓存）。
      *
      * @param modelName 模型名称（如 "openai/gpt-5"、"google/gemini-2.5-pro"）
      * @return 价格信息 Map，包含 "input"、"cache"、"output" 等键，单位：元/百万 token
      *         如果无法确定则返回 null 或空 Map
      */
-    default Map<String, Double> getModelPrice(String modelName){
+    default Map<String, Double> getModelPrice(String modelName) {
         return cacheService.getOrStore(
-                "ModelPriceProvider:getModelPrice" + modelName,
+                "ModelPriceProvider:getModelPrice:" + modelName,
                 Map.class,
                 5 * 60,
                 () -> _getModelPrice(modelName)
         );
     }
 
-
+    /**
+     * 获取指定模型的价格信息（内部实现，不带缓存）。
+     *
+     * @param modelName 模型名称
+     * @return 价格信息 Map
+     */
     Map<String, Double> _getModelPrice(String modelName);
 }
