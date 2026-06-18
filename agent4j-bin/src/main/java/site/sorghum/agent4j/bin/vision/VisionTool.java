@@ -13,7 +13,6 @@ import site.sorghum.agent4j.bin.config.ConfigService;
 import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.solon.SolonToTools;
 
-import java.io.IOException;
 import java.util.Collection;
 
 /**
@@ -72,12 +71,12 @@ public class VisionTool extends AbsToolProvider implements SolonToTools {
 
     @ToolMapping(name = "vision_recognize", description = """
                 识别图片内容。支持传入图片 URL（HTTP/HTTPS 或 Base64 Data URI），返回图片识别结果。
-                参数: imageUrl(必填, 图片URL), prompt(可选, 指导识别的提示词)。
+                参数: imageBase64(必填, 图片URL), prompt(可选, 指导识别的提示词)。
                 返回: 包含思考块和内容块的识别结果。
                 需要在 config.json 中配置 vision 部分（baseUrl, apiKey, model）。
                 """)
     public String visionRecognize(
-            @Param(name = "imageUrl", description = "图片 URL（HTTP/HTTPS 或 Base64 Data URI）") String imageUrl,
+            @Param(name = "imageBase64", description = "图片 URL（HTTP/HTTPS 或 Base64 Data URI）") String imageBase64,
             @Param(name = "prompt", description = "可选的提示词，用于指导图片识别", required = false) String prompt,
             ToolContext ctx) {
         
@@ -100,13 +99,13 @@ public class VisionTool extends AbsToolProvider implements SolonToTools {
         }
 
         // 2. 检查参数
-        if (imageUrl == null || imageUrl.isBlank()) {
-            return "PARAM_MISSING: 缺少必填参数 'imageUrl'";
+        if (imageBase64 == null || imageBase64.isBlank()) {
+            return "PARAM_MISSING: 缺少必填参数 'imageBase64'";
         }
 
         // 3. 调用识别服务
         try {
-            VisionService.VisionResult result = visionService.recognize(imageUrl, prompt);
+            VisionService.VisionResult result = visionService.recognize(imageBase64, prompt);
             
             StringBuilder sb = new StringBuilder();
             sb.append("图片识别完成。\n\n");
