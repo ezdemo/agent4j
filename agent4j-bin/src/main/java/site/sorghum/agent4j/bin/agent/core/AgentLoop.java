@@ -1010,7 +1010,15 @@ public class AgentLoop implements AgentLoopController {
                     }
                     //收集拦截器
                     ToolContext.setCurrentController(AgentLoop.this);
-                    ToolRequest req = new ToolRequest(null,new HashMap<>(), toolCall.getArguments());
+                    HashMap<String, Object> extraMap = new HashMap<>();
+                    extraMap.put("ctx", new ToolContext(
+                            new HashMap<>(),
+                            null,
+                            null,
+                            this.getSessionId()
+                    ));
+
+                    ToolRequest req = new ToolRequest(null,extraMap, toolCall.getArguments());
                     try {
                         ToolResult call = fc.call(req.getArgs());
                         String result = call.getContent();
