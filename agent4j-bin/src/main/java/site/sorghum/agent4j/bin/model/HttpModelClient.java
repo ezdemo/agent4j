@@ -82,6 +82,11 @@ public class HttpModelClient implements ModelClient {
      */
     private final OkHttpClient client;
 
+    /**
+     * 上下文大小提供者（可选，用于从外部源获取模型的上下文大小）
+     */
+    private static volatile ContextSizeProvider contextSizeProvider;
+
     public HttpModelClient(String apiUrl, String apiKey, String model) {
         this(apiUrl, apiKey, model, "high");
     }
@@ -97,6 +102,28 @@ public class HttpModelClient implements ModelClient {
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .retryOnConnectionFailure(false) // 由我们自己的重试逻辑控制
                 .build();
+    }
+
+    /**
+     * 设置全局上下文大小提供者。
+     * <p>
+     * 此方法允许外部模块（如 ModelMetaService）注册一个上下文大小提供者，
+     * 用于覆盖默认的上下文大小推断逻辑。
+     * </p>
+     *
+     * @param provider 上下文大小提供者，传 null 可清除
+     */
+    public static void setContextSizeProvider(ContextSizeProvider provider) {
+        contextSizeProvider = provider;
+    }
+
+    /**
+     * 获取当前注册的上下文大小提供者。
+     *
+     * @return 上下文大小提供者，可能为 null
+     */
+    public static ContextSizeProvider getContextSizeProvider() {
+        return contextSizeProvider;
     }
 
     /**
@@ -297,24 +324,19 @@ public class HttpModelClient implements ModelClient {
         }
         if (model == null) return 200_000;
         
-        // 检查模型名后缀 [大小] 配置
+        // 检查模型名后缀 [大小] 配置（最高优先级）
         int suffixSize = parseContextSizeSuffix(model);
         if (suffixSize > 0) {
             return suffixSize;
         }
         
-        String m = model.toLowerCase();
-        // Gemini 系列支持 1M
-        if (m.contains("gemini")) return 1_000_000;
-        // Claude 系列 200K
-        if (m.contains("claude")) return 200_000;
-        // DeepSeek Reasoner 64K，V3/V4 系列 1000K（1M 上下文窗口）
-        if (m.contains("reasoner")) return 64_000;
-        if (m.contains("deepseek")) return 1_000_000;
-        if (m.contains("mimo")) return 1_000_000;
-        if (m.contains("m3")) return 512_000;
-        // GPT-4 / o1 系列 128K
-        if (m.contains("gpt-4") || m.contains("o1") || m.contains("o3")) return 128_000;
+        // 从上下文大小提供者获取（次优先级，如 ModelMetaService）
+        if (contextSizeProvider != null) {
+            int providerSize = contextSizeProvider.getContextSize(model);
+            if (providerSize > 0) {
+                return providerSize;
+            }
+        }
         // 默认
         return 256_000;
     }
