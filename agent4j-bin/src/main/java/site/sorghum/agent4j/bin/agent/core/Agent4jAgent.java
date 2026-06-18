@@ -95,7 +95,7 @@ public class Agent4jAgent {
         this.commandRegistry = b.commandRegistry;
         this.workspace = b.workspace;
 
-        final ModelClient client = b.sharedModelClient;
+        final ModelClient client = b.modelClient;
         final String prompt = resolvePrompt(b);
         final ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
                 b.workspace, b.apiUrl, b.apiKey,
@@ -103,10 +103,11 @@ public class Agent4jAgent {
         this.ctx = new ConversationContext(initResult.promptPrefix);
         this.loop = initSessionAndLoop(client, initResult.toolRegistry, b.hitl);
 
-        // 注册 DamiBus 配置变更监听 —— 每个 Agent 自监听自更新
+        //  —— 每个 Agent 自监听自更新
         Dami.bus().<ConfigChangedEvent>listen("config.changed", event -> {
             ConfigChangedEvent e = event.getPayload();
             if (e == null) return;
+            log.info("[bus] 收到配置变更事件: key={}, value={}", e.key(), e.value());
             try {
                 switch (e.key()) {
                     case "model" -> setModel((String) e.value());
@@ -552,14 +553,9 @@ public class Agent4jAgent {
          */
         ChatCommandRegistry commandRegistry;
         /**
-         * 共享的 ModelClient（用于轻量级构建，避免重复创建 HTTP 客户端）
+         * ModelClient（用于轻量级构建，避免重复创建 HTTP 客户端）
          */
-        ModelClient sharedModelClient;
-        /**
-         * 共享的 system prompt（用于轻量级构建）
-         */
-
-
+        ModelClient modelClient;
         /**
          * 首次运行时自动安装默认系统提示词到 ~/.agent4j/agent4j.md。
          * <p>
@@ -658,8 +654,8 @@ public class Agent4jAgent {
         /**
          * 单独设置共享的 ModelClient
          */
-        public Builder sharedModelClient(ModelClient v) {
-            this.sharedModelClient = v;
+        public Builder modelClient(ModelClient v) {
+            this.modelClient = v;
             return this;
         }
 
@@ -673,7 +669,7 @@ public class Agent4jAgent {
          * @return 轻量级 Agent 实例
          */
         public Agent4jAgent buildLightweight() {
-            Objects.requireNonNull(sharedModelClient, "sharedModelClient is required");
+            Objects.requireNonNull(modelClient, "sharedModelClient is required");
             return new Agent4jAgent(this);
         }
     }

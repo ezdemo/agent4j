@@ -370,8 +370,6 @@ public class AgentService {
             String reasoningEffort = sharedConfig.reasoningEffort();
             boolean hitl = sharedConfig.hitl();
 
-            ModelClient modelClient = new HttpModelClient(apiUrl, apiKey, model, reasoningEffort);
-
             Agent4jAgent.Builder builder = Agent4jAgent.builder()
                     .config(sharedConfig)               // 加载 config 默认值
                     .apiUrl(apiUrl)                     // 覆盖为 env 感知的值
@@ -380,7 +378,7 @@ public class AgentService {
                     .workspace(Paths.get(workspacePath))
                     .commandRegistry(commandRegistry)
                     .hitl(hitl)
-                    .sharedModelClient(modelClient);
+                    .modelClient(new HttpModelClient(apiUrl, apiKey, model, reasoningEffort));
 
             agent = builder.buildLightweight();
 
