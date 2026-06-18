@@ -679,8 +679,7 @@ public class AgentLoop implements AgentLoopController {
         reasonBreaker.reset();
         resetUserAbort();
 
-        // 沙箱旁路执行
-        ToolExecutionResult initialTer = executeToolCalls(state.toolCalls(), true);
+        ToolExecutionResult initialTer = executeToolCalls(state.toolCalls());
 
         // 写入工具结果
         for (ChatMessage tr : initialTer.toolResults()) {
@@ -901,7 +900,41 @@ public class AgentLoop implements AgentLoopController {
     // ==================== 步骤 6: 工具执行 ====================
 
     private ToolExecutionResult executeToolCalls(ONode toolCalls) {
-        return executeToolCalls(toolCalls, false);
+        dispatcher.setSessionId(this.sessionId);
+
+        List<ONode> tcArray = toolCalls.getArray();
+
+        // 1. 解析并过滤工具调用
+        ParsedToolCalls parsed = parseAndFilterToolCalls(tcArray);
+        List<ONode> finalTcArray = parsed.nodeList();
+
+        TaskTool.clearUsageCollector();
+
+        // 2. 异步并行分发
+        DispatchResult dispatch = dispatchToolCallsAsync(finalTcArray);
+
+        // 3. 等待并收集结果
+        List<ChatMessage> toolResults = collectToolResults(dispatch.futures(), finalTcArray);
+
+        // 4. 沙箱越界 HITL
+        HitlRequiredException hitlEx = dispatch.hitlRef().get();
+        if (hitlEx != null) {
+            hitlManager.setSandboxPending(toolCalls, hitlEx.getDetails());
+            safeOutput("hitl", () -> output.onLog(LogLevel.WARN,
+                    "[hitl] 沙箱越界触发强制审批: " + hitlEx.getDetails()));
+        }
+
+        // 5. 收集子代理 token 用量
+        if (sessionService != null) {
+            var subUsage = TaskTool.drainUsageCollector();
+            for (var ur : subUsage) {
+                sessionService.addUsage(ur.model(),
+                        (int) ur.prompt(), (int) ur.completion(),
+                        (int) ur.cacheHit(), (int) ur.cacheMiss());
+            }
+        }
+
+        return new ToolExecutionResult(parsed.tcList(), toolResults, dispatch.anySuppressed().get());
     }
 
     private record ParsedToolCalls(List<ToolCallEntry> tcList, List<ONode> nodeList) {}
@@ -944,7 +977,7 @@ public class AgentLoop implements AgentLoopController {
                                   AtomicBoolean anySuppressed,
                                   AtomicReference<HitlRequiredException> hitlRef) {}
 
-    private DispatchResult dispatchToolCallsAsync(List<ONode> tcArray, boolean skipSandboxCheck) {
+    private DispatchResult dispatchToolCallsAsync(List<ONode> tcArray) {
         int tcCount = tcArray.size();
         @SuppressWarnings("unchecked")
         CompletableFuture<ChatMessage>[] futures = new CompletableFuture[tcCount];
@@ -962,9 +995,6 @@ public class AgentLoop implements AgentLoopController {
                             "{\"error\":\"用户已中断\",\"aborted\":true}");
                 }
 
-                if (skipSandboxCheck) {
-                    ToolContext.enableSandboxBypass();
-                }
                 if (capturedOutput != null) {
                     TaskTool.setCurrentOutput(capturedOutput);
                 }
@@ -994,9 +1024,6 @@ public class AgentLoop implements AgentLoopController {
                         return toolResult(toolCall.getId(), result);
                     }
                 } finally {
-                    if (skipSandboxCheck) {
-                        ToolContext.disableSandboxBypass();
-                    }
                     TaskTool.clearCurrentOutput();
                 }
             });
@@ -1090,44 +1117,6 @@ public class AgentLoop implements AgentLoopController {
                     "{\"error\":\"用户已中断\",\"aborted\":true}"));
         }
         return results;
-    }
-
-    private ToolExecutionResult executeToolCalls(ONode toolCalls, boolean skipSandboxCheck) {
-        dispatcher.setSessionId(this.sessionId);
-
-        List<ONode> tcArray = toolCalls.getArray();
-
-        // 1. 解析并过滤工具调用
-        ParsedToolCalls parsed = parseAndFilterToolCalls(tcArray);
-        List<ONode> finalTcArray = parsed.nodeList();
-
-        TaskTool.clearUsageCollector();
-
-        // 2. 异步并行分发
-        DispatchResult dispatch = dispatchToolCallsAsync(finalTcArray, skipSandboxCheck);
-
-        // 3. 等待并收集结果
-        List<ChatMessage> toolResults = collectToolResults(dispatch.futures(), finalTcArray);
-
-        // 4. 沙箱越界 HITL
-        HitlRequiredException hitlEx = dispatch.hitlRef().get();
-        if (hitlEx != null) {
-            hitlManager.setSandboxPending(toolCalls, hitlEx.getDetails());
-            safeOutput("hitl", () -> output.onLog(LogLevel.WARN,
-                    "[hitl] 沙箱越界触发强制审批: " + hitlEx.getDetails()));
-        }
-
-        // 5. 收集子代理 token 用量
-        if (sessionService != null) {
-            var subUsage = TaskTool.drainUsageCollector();
-            for (var ur : subUsage) {
-                sessionService.addUsage(ur.model(),
-                        (int) ur.prompt(), (int) ur.completion(),
-                        (int) ur.cacheHit(), (int) ur.cacheMiss());
-            }
-        }
-
-        return new ToolExecutionResult(parsed.tcList(), toolResults, dispatch.anySuppressed().get());
     }
 
     // ==================== Self-Correction ====================
