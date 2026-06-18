@@ -55,6 +55,13 @@ public record ModelMeta(
         // 模型 ID 通常格式为 "provider/modelName"
         String[] parts = modelId.split("/", 2);
         if (parts.length != 2) {
+            // 遍历所有的
+            for (Provider provider : providers.values()) {
+                Model model = provider.models().get(modelId);
+                if (model != null) {
+                    return model;
+                }
+            }
             return null;
         }
         String providerId = parts[0];
