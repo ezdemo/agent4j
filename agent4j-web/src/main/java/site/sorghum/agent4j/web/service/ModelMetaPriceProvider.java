@@ -4,6 +4,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import org.noear.solon.annotation.Init;
+import site.sorghum.agent4j.bin.model.HttpModelClient;
 import site.sorghum.agent4j.bin.model.ModelPriceProvider;
 import site.sorghum.agent4j.web.model.meta.Cost;
 import site.sorghum.agent4j.web.model.meta.Model;
@@ -102,6 +103,6 @@ public class ModelMetaPriceProvider implements ModelPriceProvider {
      * @return 剥离后缀后的模型名称
      */
     private String stripContextSizeSuffix(String modelName) {
-        return site.sorghum.agent4j.bin.model.HttpModelClient.stripContextSizeSuffix(modelName);
+        return HttpModelClient.stripContextSizeSuffix(modelName);
     }
 }
