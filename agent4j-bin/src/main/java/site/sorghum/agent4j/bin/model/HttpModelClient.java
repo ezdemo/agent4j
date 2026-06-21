@@ -737,6 +737,10 @@ public class HttpModelClient implements ModelClient {
                 log.warn("buildBody: 跳过没有tool_call_id的tool消息");
                 continue;
             }
+            // 防御：tool 消息必须有 content，缺少时补齐错误
+            if (m.isTool() && (m.getContent() == null || m.getContent().isEmpty())) {
+                m.setContent("ERROR 工具执行失败或者工具执行结果为空");
+            }
 
             ONode msg = new ONode();
             msg.set(FIELD_ROLE, m.getRole());
