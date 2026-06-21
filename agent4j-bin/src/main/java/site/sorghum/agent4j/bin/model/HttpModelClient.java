@@ -41,6 +41,7 @@ public class HttpModelClient implements ModelClient {
 
     private static final String FIELD_CONTENT = "content";
     private static final String FIELD_REASONING_CONTENT = "reasoning_content";
+    private static final String FIELD_REASONING_CONTENT_V2 = "reasoning";
     private static final String FIELD_TOOL_CALLS = "tool_calls";
     private static final String FIELD_CHOICES = "choices";
     private static final String FIELD_ROLE = "role";
@@ -581,7 +582,9 @@ public class HttpModelClient implements ModelClient {
         if (delta == null || delta.isNull()) return;
 
         // reasoning content
-        ONode rd = delta.get(FIELD_REASONING_CONTENT);
+        ONode rd = delta.get(FIELD_REASONING_CONTENT) == null ? delta.get(FIELD_REASONING_CONTENT_V2) : delta.get(FIELD_REASONING_CONTENT);
+        // 回设
+        delta.set(FIELD_REASONING_CONTENT, rd);
         if (rd != null && rd.isString()) {
             String tok = rd.getString();
             if (tok != null && !tok.isEmpty()) {
