@@ -5,7 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import org.noear.solon.annotation.Init;
-import site.sorghum.agent4j.bin.model.HttpModelClient;
+import site.sorghum.agent4j.bin.model.ModelContextUtils;
 import site.sorghum.agent4j.bin.model.ModelModalityProvider;
 import site.sorghum.agent4j.bin.model.ModalitySupport;
 import site.sorghum.agent4j.web.model.meta.Modalities;
@@ -106,6 +106,6 @@ public class ModelMetaModalityProvider implements ModelModalityProvider {
      * @return 剥离后缀后的模型名称
      */
     private String stripContextSizeSuffix(String modelName) {
-        return HttpModelClient.stripContextSizeSuffix(modelName);
+        return ModelContextUtils.stripContextSizeSuffix(modelName);
     }
 }
