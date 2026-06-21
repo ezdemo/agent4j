@@ -43,7 +43,6 @@ public class HttpModelClient implements ModelClient {
     private static final String FIELD_REASONING_CONTENT = "reasoning_content";
     private static final String FIELD_TOOL_CALLS = "tool_calls";
     private static final String FIELD_CHOICES = "choices";
-    private static final String FIELD_DELTA = "delta";
     private static final String FIELD_ROLE = "role";
     private static final String FIELD_FUNCTION = "function";
     private static final String FIELD_NAME = "name";
@@ -439,7 +438,7 @@ public class HttpModelClient implements ModelClient {
                       ONode tools) throws IOException {
         String jsonBody = buildBody(messages, tools);
         ONode bodyWithStream = ONode.ofJson(jsonBody);
-        bodyWithStream.set("stream", false);
+        bodyWithStream.set(FIELD_STREAM, false);
         jsonBody = bodyWithStream.toJson();
 
         RetryContext retry = new RetryContext("非流式");
@@ -470,11 +469,11 @@ public class HttpModelClient implements ModelClient {
                 }
 
                 ONode resp = ONode.ofJson(responseText);
-                ONode choices = resp.get("choices");
+                ONode choices = resp.get(FIELD_CHOICES);
                 if (choices == null || !choices.isArray() || choices.getArray().isEmpty()) {
                     throw new IOException("No choices in response: " + responseText);
                 }
-                return choices.get(0).get("message");
+                return choices.get(0).get(FIELD_MESSAGE);
 
             } catch (IOException e) {
                 log.error("非流式API调用IO异常: {}", e.getMessage(), e);
@@ -500,7 +499,7 @@ public class HttpModelClient implements ModelClient {
         try {
             jsonBody = buildBody(messages, tools);
             ONode bodyWithStream = ONode.ofJson(jsonBody);
-            bodyWithStream.set("stream", true);
+            bodyWithStream.set(FIELD_STREAM, true);
             jsonBody = bodyWithStream.toJson();
         } catch (Exception e) {
             callback.onError(e.getMessage());
@@ -588,7 +587,7 @@ public class HttpModelClient implements ModelClient {
                         log.debug("收到SSE数据块，大小: {} 字符", data.length());
 
                         // 捕获 usage
-                        ONode usage = chunk.get("usage");
+                        ONode usage = chunk.get(FIELD_USAGE);
                         if (usage != null && !usage.isNull()) {
                             int pt = usage.get("prompt_tokens").isNull()
                                     ? 0
@@ -612,10 +611,10 @@ public class HttpModelClient implements ModelClient {
                             if (ch == 0 && cm == 0) {
                                 ONode ptDetails = usage.get("prompt_tokens_details");
                                 if (ptDetails != null && !ptDetails.isNull()) {
-                                    ch = ptDetails.get("cached_tokens")
+                                    ch = ptDetails.get(FIELD_CACHED_TOKENS)
                                             .isNull()
                                             ? 0
-                                            : ptDetails.get("cached_tokens")
+                                            : ptDetails.get(FIELD_CACHED_TOKENS)
                                             .getInt();
                                     cm = Math.max(0, pt - ch);
                                 }
@@ -623,10 +622,10 @@ public class HttpModelClient implements ModelClient {
                             ONode ctDetails = usage.get("completion_tokens_details");
                             if (ctDetails != null && !ctDetails.isNull()) {
                                 int reasoningTokens = ctDetails
-                                        .get("reasoning_tokens").isNull()
+                                        .get(FIELD_REASONING_TOKENS).isNull()
                                         ? 0
                                         : ctDetails
-                                        .get("reasoning_tokens")
+                                        .get(FIELD_REASONING_TOKENS)
                                         .getInt();
                                 if (reasoningTokens > 0) {
                                     log.debug("推理 token 消耗: {}", reasoningTokens);
@@ -644,7 +643,7 @@ public class HttpModelClient implements ModelClient {
                         ONode delta = chunk.select("$.choices[0].delta");
                         if (delta == null || delta.isNull()) continue;
 
-                        ONode rd = delta.get("reasoning_content");
+                        ONode rd = delta.get(FIELD_REASONING_CONTENT);
                         if (rd != null && rd.isString()) {
                             String tok = rd.getString();
                             if (tok != null && !tok.isEmpty()) {
@@ -670,37 +669,37 @@ public class HttpModelClient implements ModelClient {
                             }
                         }
 
-                        ONode tcDelta = delta.get("tool_calls");
+                        ONode tcDelta = delta.get(FIELD_TOOL_CALLS);
                         if (tcDelta != null && tcDelta.isArray()) {
                             log.debug("收到tool_calls数据，数量: {}", tcDelta.getArray().size());
                             for (ONode tcd : tcDelta.getArray()) {
                                 if (toolCallsAccum == null) {
                                     toolCallsAccum = org.noear.snack4.ONode.ofJson("[]").asArray();
                                 }
-                                int idx = tcd.get("index").isNull() ? 0 : tcd.get("index").getInt();
-                                ONode func = tcd.get("function");
+                                int idx = tcd.get(FIELD_INDEX).isNull() ? 0 : tcd.get(FIELD_INDEX).getInt();
+                                ONode func = tcd.get(FIELD_FUNCTION);
                                 while (toolCallsAccum.getArray().size() <= idx) {
-                                    toolCallsAccum.addNew().set("type", "function");
+                                    toolCallsAccum.addNew().set(FIELD_TYPE, FIELD_FUNCTION);
                                 }
                                 ONode existing = toolCallsAccum.get(idx);
                                 if (func == null || func.isNull()) {
                                     continue;
                                 }
 
-                                if (existing.get("id").isNull()) {
-                                    existing.set("id", tcd.get("id").getString());
+                                if (existing.get(FIELD_ID).isNull()) {
+                                    existing.set(FIELD_ID, tcd.get(FIELD_ID).getString());
                                 }
                                 if (existing.select("$.function.name").isNull()) {
-                                    existing.getOrNew("function").set("name", func.get("name").getString());
+                                    existing.getOrNew(FIELD_FUNCTION).set(FIELD_NAME, func.get(FIELD_NAME).getString());
                                 }
-                                if (!func.get("arguments").isNull()) {
-                                    String prev = existing.getOrNew("function").get("arguments").getString();
-                                    String add = func.get("arguments").getString();
-                                    existing.getOrNew("function").set("arguments",
+                                if (!func.get(FIELD_ARGUMENTS).isNull()) {
+                                    String prev = existing.getOrNew(FIELD_FUNCTION).get(FIELD_ARGUMENTS).getString();
+                                    String add = func.get(FIELD_ARGUMENTS).getString();
+                                    existing.getOrNew(FIELD_FUNCTION).set(FIELD_ARGUMENTS,
                                             (prev != null ? prev : "") + (add != null ? add : ""));
                                 }
                                 log.debug("tool_calls索引: {}, 函数名: {}", idx,
-                                        func.get("name").isNull() ? "null" : func.get("name").getString());
+                                        func.get(FIELD_NAME).isNull() ? "null" : func.get(FIELD_NAME).getString());
                             }
                         }
                     }
@@ -725,9 +724,9 @@ public class HttpModelClient implements ModelClient {
                         // 过滤掉 name 为 null/empty 的 tool call（SSE 分块缺失导致）
                         List<ONode> valid = new ArrayList<>();
                         for (ONode tc : toolCallsAccum.getArray()) {
-                            ONode fn = tc.get("function");
+                            ONode fn = tc.get(FIELD_FUNCTION);
                             if (fn != null && !fn.isNull()) {
-                                ONode nm = fn.get("name");
+                                ONode nm = fn.get(FIELD_NAME);
                                 if (nm != null && nm.isString()
                                         && nm.getString() != null
                                         && !nm.getString().isEmpty()) {
@@ -739,11 +738,11 @@ public class HttpModelClient implements ModelClient {
                             ONode filtered = org.noear.snack4.ONode.ofJson("[]").asArray();
                             for (ONode v : valid) {
                                 ONode copy = filtered.addNew();
-                                copy.set("id", v.get("id").isNull() ? "" : v.get("id").getString());
-                                copy.set("type", "function");
-                                ONode copyFn = copy.getOrNew("function");
-                                copyFn.set("name", v.get("function").get("name").getString());
-                                copyFn.set("arguments", v.get("function").get("arguments").getString());
+                                copy.set(FIELD_ID, v.get(FIELD_ID).isNull() ? "" : v.get(FIELD_ID).getString());
+                                copy.set(FIELD_TYPE, FIELD_FUNCTION);
+                                ONode copyFn = copy.getOrNew(FIELD_FUNCTION);
+                                copyFn.set(FIELD_NAME, v.get(FIELD_FUNCTION).get(FIELD_NAME).getString());
+                                copyFn.set(FIELD_ARGUMENTS, v.get(FIELD_FUNCTION).get(FIELD_ARGUMENTS).getString());
                             }
                             log.debug("完成tool_calls累积，共 {} 个有效调用", valid.size());
                             try {
@@ -817,14 +816,14 @@ public class HttpModelClient implements ModelClient {
                              ONode tools) {
         ONode body = new ONode(ONode.ofJson("{}").options()).asObject();
         // 剥离模型名称中的上下文大小后缀，例如 "mimo-v2.5[512k]" → "mimo-v2.5"
-        body.set("model", stripContextSizeSuffix(model));
+        body.set(FIELD_MODEL, stripContextSizeSuffix(model));
         if (reasoningEffort != null && !reasoningEffort.isEmpty() && !Objects.equals(reasoningEffort, "none")) {
             body.set("reasoning_effort", reasoningEffort);
             body.set("chat_template_kwargs", ONode.ofJson("{}").set("enable_thinking", true));
             body.set("enable_thinking", true);
         }
 
-        ONode msgs = body.getOrNew("messages").asArray();
+        ONode msgs = body.getOrNew(FIELD_MESSAGES).asArray();
         for (ChatMessage m : messages) {
             // 防御：tool 消息必须有 tool_call_id，缺少时跳过该消息
             if (m.isTool() && (m.getToolCallId() == null || m.getToolCallId().isEmpty())) {
@@ -833,7 +832,7 @@ public class HttpModelClient implements ModelClient {
             }
 
             ONode msg = new ONode();
-            msg.set("role", m.getRole());
+            msg.set(FIELD_ROLE, m.getRole());
             boolean skip = false;
 
             // 防御：assistant 消息必须有 content 或 tool_calls（OpenAI/DeepSeek API 要求）
@@ -852,7 +851,7 @@ public class HttpModelClient implements ModelClient {
                 ONode contentArray = msg.getOrNew(FIELD_CONTENT).asArray();
                 for (ChatMessage.ContentPart part : m.getContentParts()) {
                     ONode partNode = contentArray.addNew();
-                    partNode.set("type", part.getType());
+                    partNode.set(FIELD_TYPE, part.getType());
                     if ("text".equals(part.getType())) {
                         partNode.set("text", part.getText() != null ? part.getText() : "");
                     } else if ("image_url".equals(part.getType())) {
@@ -875,13 +874,13 @@ public class HttpModelClient implements ModelClient {
             }
 
             if (hasTc) {
-                ONode tcArray = msg.getOrNew("tool_calls").asArray();
+                ONode tcArray = msg.getOrNew(FIELD_TOOL_CALLS).asArray();
                 for (ToolCallEntry tc : m.getToolCalls()) {
                     ONode tcNode = tcArray.addNew();
-                    tcNode.set("id", tc.id());
-                    tcNode.set("type", "function");
-                    ONode funcNode = tcNode.getOrNew("function");
-                    funcNode.set("name", tc.name());
+                    tcNode.set(FIELD_ID, tc.id());
+                    tcNode.set(FIELD_TYPE, FIELD_FUNCTION);
+                    ONode funcNode = tcNode.getOrNew(FIELD_FUNCTION);
+                    funcNode.set(FIELD_NAME, tc.name());
                     // arguments 可能为 String（API 返回/AgentLoop 构造）或 Map（JSONL 加载后解析），统一转字符串
                     Object argsObj = tc.arguments();
                     String argsStr = "{}";
@@ -893,10 +892,10 @@ public class HttpModelClient implements ModelClient {
                             argsStr = org.noear.snack4.ONode.serialize(argsObj);
                         }
                     }
-                    funcNode.set("arguments", argsStr);
+                    funcNode.set(FIELD_ARGUMENTS, argsStr);
                 }
             }
-            if (m.getReasoningContent() != null) msg.set("reasoning_content", m.getReasoningContent());
+            if (m.getReasoningContent() != null) msg.set(FIELD_REASONING_CONTENT, m.getReasoningContent());
             if (m.getToolCallId() != null) msg.set("tool_call_id", m.getToolCallId());
             if (!skip) {
                 msgs.add(msg);
@@ -904,7 +903,7 @@ public class HttpModelClient implements ModelClient {
         }
 
         if (tools != null && !tools.isEmpty()) {
-            body.set("tools", tools);
+            body.set(FIELD_TOOLS, tools);
         }
 
         String jsonBody = body.toJson();
