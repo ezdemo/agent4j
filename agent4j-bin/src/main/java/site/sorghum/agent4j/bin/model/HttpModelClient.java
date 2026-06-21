@@ -159,7 +159,9 @@ public class HttpModelClient implements ModelClient {
      */
     private class RetryContext {
         private final String tag;
-        /** 是否为流式调用（流式调用需要检查 SSE 连接状态） */
+        /**
+         * 是否为流式调用（流式调用需要检查 SSE 连接状态）
+         */
         private final boolean streamMode;
 
         RetryContext(String tag) {
@@ -174,7 +176,7 @@ public class HttpModelClient implements ModelClient {
         /**
          * 检查是否应该重试，如果是则等待并返回；否则抛出异常。
          *
-         * @param reason 重试原因（用于日志）
+         * @param reason  重试原因（用于日志）
          * @param attempt 当前尝试次数（从 0 开始）
          * @throws IOException 如果不应重试或等待被中断
          */
@@ -201,7 +203,7 @@ public class HttpModelClient implements ModelClient {
         /**
          * 检查是否应该重试（IO 异常版本），如果是则等待并返回；否则抛出异常。
          *
-         * @param e 捕获的 IO 异常
+         * @param e       捕获的 IO 异常
          * @param attempt 当前尝试次数（从 0 开始）
          * @throws IOException 如果不应重试或等待被中断
          */
@@ -322,13 +324,13 @@ public class HttpModelClient implements ModelClient {
             }
         }
         if (model == null) return 200_000;
-        
+
         // 检查模型名后缀 [大小] 配置（最高优先级）
         int suffixSize = parseContextSizeSuffix(model);
         if (suffixSize > 0) {
             return suffixSize;
         }
-        
+
         // 从上下文大小提供者获取（次优先级，如 ModelMetaService）
         if (contextSizeProvider != null) {
             int providerSize = contextSizeProvider.getContextSize(model);
@@ -339,11 +341,11 @@ public class HttpModelClient implements ModelClient {
         // 默认
         return 256_000;
     }
-    
+
     /**
      * 解析模型名称中的上下文大小后缀。
      * 格式：[数字k] 或 [数字m]（不区分大小写）
-     * 
+     *
      * @param modelName 模型名称，例如 "mimo-v2.5[512k]"
      * @return 解析出的 token 数，如果解析失败返回 -1
      */
@@ -351,19 +353,19 @@ public class HttpModelClient implements ModelClient {
         if (modelName == null || !modelName.contains("[") || !modelName.contains("]")) {
             return -1;
         }
-        
+
         try {
             int start = modelName.lastIndexOf('[');
             int end = modelName.lastIndexOf(']');
             if (start < 0 || end < 0 || end <= start) {
                 return -1;
             }
-            
+
             String suffix = modelName.substring(start + 1, end).trim().toLowerCase();
             if (suffix.isEmpty()) {
                 return -1;
             }
-            
+
             // 解析数字部分
             int numberEnd = suffix.length();
             for (int i = 0; i < suffix.length(); i++) {
@@ -373,14 +375,14 @@ public class HttpModelClient implements ModelClient {
                     break;
                 }
             }
-            
+
             if (numberEnd == 0) {
                 return -1; // 没有数字部分
             }
-            
+
             long number = Long.parseLong(suffix.substring(0, numberEnd));
             String unit = suffix.substring(numberEnd).trim();
-            
+
             // 根据单位转换
             switch (unit) {
                 case "k":
@@ -399,11 +401,11 @@ public class HttpModelClient implements ModelClient {
             return -1;
         }
     }
-    
+
     /**
      * 剥离模型名称中的上下文大小后缀。
      * 例如："mimo-v2.5[512k]" → "mimo-v2.5"
-     * 
+     *
      * @param modelName 模型名称
      * @return 剥离后缀后的模型名称，如果没有后缀则返回原名称
      */
@@ -411,19 +413,19 @@ public class HttpModelClient implements ModelClient {
         if (modelName == null || !modelName.contains("[") || !modelName.contains("]")) {
             return modelName;
         }
-        
+
         int start = modelName.lastIndexOf('[');
         int end = modelName.lastIndexOf(']');
         if (start < 0 || end < 0 || end <= start) {
             return modelName;
         }
-        
+
         // 检查后缀是否符合格式（数字+可选单位）
         String suffix = modelName.substring(start + 1, end).trim().toLowerCase();
         if (suffix.isEmpty()) {
             return modelName;
         }
-        
+
         // 验证是否是有效的上下文大小后缀
         int numberEnd = suffix.length();
         for (int i = 0; i < suffix.length(); i++) {
@@ -433,17 +435,17 @@ public class HttpModelClient implements ModelClient {
                 break;
             }
         }
-        
+
         if (numberEnd == 0) {
             return modelName; // 没有数字部分，不是有效的后缀
         }
-        
+
         String unit = suffix.substring(numberEnd).trim();
         if (unit.isEmpty() || unit.equals("k") || unit.equals("m") || unit.equals("g")) {
             // 是有效的上下文大小后缀，剥离它
             return modelName.substring(0, start).trim();
         }
-        
+
         return modelName; // 不是有效的后缀
     }
 
@@ -602,158 +604,125 @@ public class HttpModelClient implements ModelClient {
                             sseErrorData = data;
                             break;
                         }
-                        // ★ 优化：快路径 — 无 tool_calls 且无 usage 的 chunk 走轻量字符串提取
-                        boolean hasComplexFields = data.contains("\"tool_calls\"")
-                                || data.contains("\"usage\"");
-                        boolean isShortEnough = data.length() < FAST_PATH_MAX_LEN;
+                        ONode chunk = ONode.ofJson(data);
+                        log.debug("收到SSE数据块，大小: {} 字符", data.length());
 
-                        if (!hasComplexFields && isShortEnough) {
-                            // content 提取（高频路径）
-                            String content = extractJsonStringField(data, FIELD_CONTENT);
-                            if (content != null && !content.isEmpty()) {
-                                contentBuf.append(content);
-                                log.debug("收到content: {}", content);
-                                try {
-                                    callback.onContentDelta(content);
-                                } catch (Exception e) {
-                                    log.debug("onContentDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                        // 捕获 usage
+                        ONode usage = chunk.get("usage");
+                        if (usage != null && !usage.isNull()) {
+                            int pt = usage.get("prompt_tokens").isNull()
+                                    ? 0
+                                    : usage.get("prompt_tokens").getInt();
+                            int ct = usage.get("completion_tokens").isNull()
+                                    ? 0
+                                    : usage.get("completion_tokens").getInt();
+                            int tt = usage.get("total_tokens").isNull()
+                                    ? 0
+                                    : usage.get("total_tokens").getInt();
+                            int ch = usage.get("prompt_cache_hit_tokens")
+                                    .isNull()
+                                    ? 0
+                                    : usage.get("prompt_cache_hit_tokens")
+                                    .getInt();
+                            int cm = usage.get("prompt_cache_miss_tokens")
+                                    .isNull()
+                                    ? 0
+                                    : usage.get("prompt_cache_miss_tokens")
+                                    .getInt();
+                            if (ch == 0 && cm == 0) {
+                                ONode ptDetails = usage.get("prompt_tokens_details");
+                                if (ptDetails != null && !ptDetails.isNull()) {
+                                    ch = ptDetails.get("cached_tokens")
+                                            .isNull()
+                                            ? 0
+                                            : ptDetails.get("cached_tokens")
+                                            .getInt();
+                                    cm = Math.max(0, pt - ch);
                                 }
                             }
-                            // reasoning_content 与 content 可能共存
-                            String reasoning = extractJsonStringField(data, "reasoning_content");
-                            if (reasoning != null && !reasoning.isEmpty()) {
-                                reasoningBuf.append(reasoning);
-                                log.debug("收到reasoning_content: {}", reasoning);
+                            ONode ctDetails = usage.get("completion_tokens_details");
+                            if (ctDetails != null && !ctDetails.isNull()) {
+                                int reasoningTokens = ctDetails
+                                        .get("reasoning_tokens").isNull()
+                                        ? 0
+                                        : ctDetails
+                                        .get("reasoning_tokens")
+                                        .getInt();
+                                if (reasoningTokens > 0) {
+                                    log.debug("推理 token 消耗: {}", reasoningTokens);
+                                }
+                            }
+                            log.debug("收到usage数据（完整API响应）: {}", chunk.toJson());
+                            try {
+                                callback.onUsage(pt, ct, tt, ch, cm);
+                            } catch (Exception e) {
+                                log.debug("onUsage回调异常（可能SSE连接已断开）: {}", e.getMessage());
+                            }
+                        }
+
+                        // tool_calls 累积
+                        ONode delta = chunk.select("$.choices[0].delta");
+                        if (delta == null || delta.isNull()) continue;
+
+                        ONode rd = delta.get("reasoning_content");
+                        if (rd != null && rd.isString()) {
+                            String tok = rd.getString();
+                            if (tok != null && !tok.isEmpty()) {
+                                reasoningBuf.append(tok);
+                                log.debug("收到reasoning_content: {}", tok);
                                 try {
-                                    callback.onReasoningDelta(reasoning);
+                                    callback.onReasoningDelta(tok);
                                 } catch (Exception e) {
                                     log.debug("onReasoningDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
                                 }
                             }
-                        } else {
-                            // ---- 慢路径：完整 ONode 解析（usage / tool_calls / 超大 chunk） ----
-                            ONode chunk = ONode.ofJson(data);
-                            log.debug("收到SSE数据块，大小: {} 字符", data.length());
+                        }
 
-                            // 捕获 usage
-                            if (data.contains("\"usage\"")) {
-                                ONode usage = chunk.get("usage");
-                                if (usage != null && !usage.isNull()) {
-                                    int pt = usage.get("prompt_tokens").isNull()
-                                            ? 0
-                                            : usage.get("prompt_tokens").getInt();
-                                    int ct = usage.get("completion_tokens").isNull()
-                                            ? 0
-                                            : usage.get("completion_tokens").getInt();
-                                    int tt = usage.get("total_tokens").isNull()
-                                            ? 0
-                                            : usage.get("total_tokens").getInt();
-                                    int ch = usage.get("prompt_cache_hit_tokens")
-                                            .isNull()
-                                            ? 0
-                                            : usage.get("prompt_cache_hit_tokens")
-                                            .getInt();
-                                    int cm = usage.get("prompt_cache_miss_tokens")
-                                            .isNull()
-                                            ? 0
-                                            : usage.get("prompt_cache_miss_tokens")
-                                            .getInt();
-                                    if (ch == 0 && cm == 0) {
-                                        ONode ptDetails = usage.get("prompt_tokens_details");
-                                        if (ptDetails != null && !ptDetails.isNull()) {
-                                            ch = ptDetails.get("cached_tokens")
-                                                    .isNull()
-                                                    ? 0
-                                                    : ptDetails.get("cached_tokens")
-                                                    .getInt();
-                                            cm = Math.max(0, pt - ch);
-                                        }
-                                    }
-                                    ONode ctDetails = usage.get("completion_tokens_details");
-                                    if (ctDetails != null && !ctDetails.isNull()) {
-                                        int reasoningTokens = ctDetails
-                                                .get("reasoning_tokens").isNull()
-                                                ? 0
-                                                : ctDetails
-                                                .get("reasoning_tokens")
-                                                .getInt();
-                                        if (reasoningTokens > 0) {
-                                            log.debug("推理 token 消耗: {}", reasoningTokens);
-                                        }
-                                    }
-                                    log.debug("收到usage数据（完整API响应）: {}", chunk.toJson());
-                                    try {
-                                        callback.onUsage(pt, ct, tt, ch, cm);
-                                    } catch (Exception e) {
-                                        log.debug("onUsage回调异常（可能SSE连接已断开）: {}", e.getMessage());
-                                    }
+                        ONode cd = delta.get(FIELD_CONTENT);
+                        if (cd != null && cd.isString()) {
+                            String tok = cd.getString();
+                            if (tok != null && !tok.isEmpty()) {
+                                contentBuf.append(tok);
+                                log.debug("收到content: {}", tok);
+                                try {
+                                    callback.onContentDelta(tok);
+                                } catch (Exception e) {
+                                    log.debug("onContentDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
                                 }
                             }
+                        }
 
-                            // tool_calls 累积
-                            ONode delta = chunk.select("$.choices[0].delta");
-                            if (delta == null || delta.isNull()) continue;
-
-                            ONode rd = delta.get("reasoning_content");
-                            if (rd != null && rd.isString()) {
-                                String tok = rd.getString();
-                                if (tok != null && !tok.isEmpty()) {
-                                    reasoningBuf.append(tok);
-                                    log.debug("收到reasoning_content: {}", tok);
-                                    try {
-                                        callback.onReasoningDelta(tok);
-                                    } catch (Exception e) {
-                                        log.debug("onReasoningDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
-                                    }
+                        ONode tcDelta = delta.get("tool_calls");
+                        if (tcDelta != null && tcDelta.isArray()) {
+                            log.debug("收到tool_calls数据，数量: {}", tcDelta.getArray().size());
+                            for (ONode tcd : tcDelta.getArray()) {
+                                if (toolCallsAccum == null) {
+                                    toolCallsAccum = org.noear.snack4.ONode.ofJson("[]").asArray();
                                 }
-                            }
-
-                            ONode cd = delta.get(FIELD_CONTENT);
-                            if (cd != null && cd.isString()) {
-                                String tok = cd.getString();
-                                if (tok != null && !tok.isEmpty()) {
-                                    contentBuf.append(tok);
-                                    log.debug("收到content: {}", tok);
-                                    try {
-                                        callback.onContentDelta(tok);
-                                    } catch (Exception e) {
-                                        log.debug("onContentDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
-                                    }
+                                int idx = tcd.get("index").isNull() ? 0 : tcd.get("index").getInt();
+                                ONode func = tcd.get("function");
+                                while (toolCallsAccum.getArray().size() <= idx) {
+                                    toolCallsAccum.addNew().set("type", "function");
                                 }
-                            }
-
-                            ONode tcDelta = delta.get("tool_calls");
-                            if (tcDelta != null && tcDelta.isArray()) {
-                                log.debug("收到tool_calls数据，数量: {}", tcDelta.getArray().size());
-                                for (ONode tcd : tcDelta.getArray()) {
-                                    if (toolCallsAccum == null) {
-                                        toolCallsAccum = org.noear.snack4.ONode.ofJson("[]").asArray();
-                                    }
-                                    int idx = tcd.get("index").isNull() ? 0 : tcd.get("index").getInt();
-                                    ONode func = tcd.get("function");
-                                    while (toolCallsAccum.getArray().size() <= idx) {
-                                        toolCallsAccum.addNew().set("type", "function");
-                                    }
-                                    ONode existing = toolCallsAccum.get(idx);
-                                    if (func == null || func.isNull()) {
-                                        continue;
-                                    }
-
-                                    if (existing.get("id").isNull()) {
-                                        existing.set("id", tcd.get("id").getString());
-                                    }
-                                    if (existing.select("$.function.name").isNull()) {
-                                        existing.getOrNew("function").set("name", func.get("name").getString());
-                                    }
-                                    if (!func.get("arguments").isNull()) {
-                                        String prev = existing.getOrNew("function").get("arguments").getString();
-                                        String add = func.get("arguments").getString();
-                                        existing.getOrNew("function").set("arguments",
-                                                (prev != null ? prev : "") + (add != null ? add : ""));
-                                    }
-                                    log.debug("tool_calls索引: {}, 函数名: {}", idx,
-                                            func.get("name").isNull() ? "null" : func.get("name").getString());
+                                ONode existing = toolCallsAccum.get(idx);
+                                if (func == null || func.isNull()) {
+                                    continue;
                                 }
+
+                                if (existing.get("id").isNull()) {
+                                    existing.set("id", tcd.get("id").getString());
+                                }
+                                if (existing.select("$.function.name").isNull()) {
+                                    existing.getOrNew("function").set("name", func.get("name").getString());
+                                }
+                                if (!func.get("arguments").isNull()) {
+                                    String prev = existing.getOrNew("function").get("arguments").getString();
+                                    String add = func.get("arguments").getString();
+                                    existing.getOrNew("function").set("arguments",
+                                            (prev != null ? prev : "") + (add != null ? add : ""));
+                                }
+                                log.debug("tool_calls索引: {}, 函数名: {}", idx,
+                                        func.get("name").isNull() ? "null" : func.get("name").getString());
                             }
                         }
                     }
@@ -860,64 +829,6 @@ public class HttpModelClient implements ModelClient {
         }
     }
 
-    // ==================== 快速 JSON 字符串字段提取 ====================
-
-    /**
-     * 快路径 chunk 最大长度 — 超过此长度也走 ONode 解析（防御极端情况）
-     */
-    private static final int FAST_PATH_MAX_LEN = 1024;
-
-    /**
-     * 从 JSON 字符串中提取指定字段的字符串值（快路径，无 ONode 开销）。
-     * 仅适用于字符串类型的字段，不处理嵌套对象/数组。
-     * 支持转义字符（\\, \", \n, \t, \r, \/）。
-     *
-     * @param json      JSON 字符串
-     * @param fieldName 字段名（不包含引号）
-     * @return 字段值，不存在时返回 null
-     */
-    private static String extractJsonStringField(String json, String fieldName) {
-        String key = "\"" + fieldName + "\":\"";
-        int keyIdx = json.indexOf(key);
-        if (keyIdx < 0) return null;
-
-        int valStart = keyIdx + key.length();
-        StringBuilder val = new StringBuilder();
-        for (int i = valStart; i < json.length(); i++) {
-            char c = json.charAt(i);
-            if (c == '\\') {
-                if (i + 1 < json.length()) {
-                    char next = json.charAt(i + 1);
-                    switch (next) {
-                        case '"': val.append('"'); break;
-                        case '\\': val.append('\\'); break;
-                        case 'n': val.append('\n'); break;
-                        case 't': val.append('\t'); break;
-                        case 'r': val.append('\r'); break;
-                        case '/': val.append('/'); break;
-                        case 'u':
-                            if (i + 5 < json.length()) {
-                                try {
-                                    int hex = Integer.parseInt(json.substring(i + 2, i + 6), 16);
-                                    val.append((char) hex);
-                                } catch (NumberFormatException ignored) {
-                                    val.append('?');
-                                }
-                                i += 5;
-                            }
-                            break;
-                        default: val.append(next); break;
-                    }
-                    i++;
-                }
-            } else if (c == '"') {
-                break;
-            } else {
-                val.append(c);
-            }
-        }
-        return !val.isEmpty() ? val.toString() : "";
-    }
 
     /**
      * 构建 API 请求体 JSON。
@@ -932,7 +843,7 @@ public class HttpModelClient implements ModelClient {
         if (reasoningEffort != null && !reasoningEffort.isEmpty() && !Objects.equals(reasoningEffort, "none")) {
             body.set("reasoning_effort", reasoningEffort);
             body.set("chat_template_kwargs", ONode.ofJson("{}").set("enable_thinking", true));
-            body.set("enable_thinking",true);
+            body.set("enable_thinking", true);
         }
 
         ONode msgs = body.getOrNew("messages").asArray();
@@ -955,7 +866,7 @@ public class HttpModelClient implements ModelClient {
             boolean hasContentParts = m.getContentParts() != null && !m.getContentParts().isEmpty();
             boolean hasReasoning = m.getReasoningContent() != null && !m.getReasoningContent().isEmpty();
 
-            if (isUser && !hasContent && !hasReasoning && !hasTc && !hasContentParts){
+            if (isUser && !hasContent && !hasReasoning && !hasTc && !hasContentParts) {
                 continue;
             }
             // 多模态 contentParts 序列化为 JSON array

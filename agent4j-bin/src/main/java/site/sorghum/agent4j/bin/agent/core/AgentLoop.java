@@ -35,6 +35,7 @@ import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.tool.ToolDispatcher;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.tool.*;
+import site.sorghum.agent4j.tool.interact.FinishTool;
 
 import java.io.IOException;
 import java.util.*;
@@ -558,22 +559,22 @@ public class AgentLoop implements AgentLoopController {
 
             // ---- 5. 无 tool calls → 不是终止信号，是需纠正的状态 ----
             if (!hasToolCalls) {
-//                ctx.addAssistant(sr.content(), null, sr.reasoningContent());
-//                noToolCallStreak++;
-//                log.warn("[loop] 第 {} 次无工具调用，累积无工具轮数: {}", step, noToolCallStreak);
-//
-//                if (noToolCallStreak >= 3) {
-//                    log.warn("[loop] 连续 {} 轮无工具调用，降级终止", noToolCallStreak);
-//                    int streak = noToolCallStreak;
-//                    safeOutput("noToolMax", () -> output.onLog(LogLevel.WARN,
-//                            "[loop] 连续 " + streak + " 轮无工具调用，降级终止"));
-//                    String degraded = ctx.getLastAssistantContent();
-//                    return degraded != null && !degraded.isEmpty() ? degraded : "任务中断，未完成（已收集部分结果）";
-//                }
-//
-//                // 渐进式轻推
-//                ctx.addUser(FinishTool.TIPS);
-//                continue;
+                ctx.addAssistant(sr.content(), null, sr.reasoningContent());
+                noToolCallStreak++;
+                log.warn("[loop] 第 {} 次无工具调用，累积无工具轮数: {}", step, noToolCallStreak);
+
+                if (noToolCallStreak >= 3) {
+                    log.warn("[loop] 连续 {} 轮无工具调用，降级终止", noToolCallStreak);
+                    int streak = noToolCallStreak;
+                    safeOutput("noToolMax", () -> output.onLog(LogLevel.WARN,
+                            "[loop] 连续 " + streak + " 轮无工具调用，降级终止"));
+                    String degraded = ctx.getLastAssistantContent();
+                    return degraded != null && !degraded.isEmpty() ? degraded : "任务中断，未完成（已收集部分结果）";
+                }
+
+                // 渐进式轻推
+                ctx.addUser(FinishTool.TIPS);
+                continue;
             }
 
             // ---- 调用了工具 → 重置无工具计数 ----
