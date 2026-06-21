@@ -8,6 +8,7 @@ import org.noear.solon.data.cache.CacheService;
 import org.noear.solon.data.cache.LocalCacheService;
 import site.sorghum.agent4j.bin.model.ContextSizeProvider;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
+import site.sorghum.agent4j.bin.model.ModelContextUtils;
 import site.sorghum.agent4j.web.model.meta.Model;
 
 import java.util.concurrent.TimeUnit;
@@ -83,6 +84,6 @@ public class ModelMetaContextSizeProvider implements ContextSizeProvider {
      * @return 剥离后缀后的模型名称
      */
     private String stripContextSizeSuffix(String modelName) {
-        return HttpModelClient.stripContextSizeSuffix(modelName);
+        return ModelContextUtils.stripContextSizeSuffix(modelName);
     }
 }

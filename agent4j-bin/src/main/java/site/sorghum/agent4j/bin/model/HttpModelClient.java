@@ -59,6 +59,16 @@ public class HttpModelClient implements ModelClient {
     private static final String FIELD_MESSAGE = "message";
     private static final String FIELD_INDEX = "index";
 
+    // ==================== Usage 相关字段常量 ====================
+
+    private static final String FIELD_PROMPT_TOKENS = "prompt_tokens";
+    private static final String FIELD_COMPLETION_TOKENS = "completion_tokens";
+    private static final String FIELD_TOTAL_TOKENS = "total_tokens";
+    private static final String FIELD_PROMPT_TOKENS_DETAILS = "prompt_tokens_details";
+    private static final String FIELD_COMPLETION_TOKENS_DETAILS = "completion_tokens_details";
+    private static final String FIELD_PROMPT_CACHE_HIT_TOKENS = "prompt_cache_hit_tokens";
+    private static final String FIELD_PROMPT_CACHE_MISS_TOKENS = "prompt_cache_miss_tokens";
+
     // ==================== 核心字段 ====================
 
     private final String apiUrl;
@@ -246,6 +256,20 @@ public class HttpModelClient implements ModelClient {
         return call != null && !call.isCanceled();
     }
 
+    /**
+     * 安全执行回调，捕获异常防止 SSE 连接断开时影响主流程。
+     *
+     * @param name   回调名称（用于日志）
+     * @param action 回调动作
+     */
+    private void safeCallback(String name, Runnable action) {
+        try {
+            action.run();
+        } catch (Exception e) {
+            log.debug("{}回调异常（可能SSE连接已断开）: {}", name, e.getMessage());
+        }
+    }
+
     @Override
     public String getModel() {
         return model;
@@ -307,7 +331,7 @@ public class HttpModelClient implements ModelClient {
         if (model == null) return 200_000;
 
         // 检查模型名后缀 [大小] 配置（最高优先级）
-        int suffixSize = parseContextSizeSuffix(model);
+        int suffixSize = ModelContextUtils.parseContextSizeSuffix(model);
         if (suffixSize > 0) {
             return suffixSize;
         }
@@ -321,113 +345,6 @@ public class HttpModelClient implements ModelClient {
         }
         // 默认
         return 256_000;
-    }
-
-    /**
-     * 解析模型名称中的上下文大小后缀。
-     * 格式：[数字k] 或 [数字m]（不区分大小写）
-     *
-     * @param modelName 模型名称，例如 "mimo-v2.5[512k]"
-     * @return 解析出的 token 数，如果解析失败返回 -1
-     */
-    private int parseContextSizeSuffix(String modelName) {
-        if (modelName == null || !modelName.contains("[") || !modelName.contains("]")) {
-            return -1;
-        }
-
-        try {
-            int start = modelName.lastIndexOf('[');
-            int end = modelName.lastIndexOf(']');
-            if (start < 0 || end < 0 || end <= start) {
-                return -1;
-            }
-
-            String suffix = modelName.substring(start + 1, end).trim().toLowerCase();
-            if (suffix.isEmpty()) {
-                return -1;
-            }
-
-            // 解析数字部分
-            int numberEnd = suffix.length();
-            for (int i = 0; i < suffix.length(); i++) {
-                char c = suffix.charAt(i);
-                if (c < '0' || c > '9') {
-                    numberEnd = i;
-                    break;
-                }
-            }
-
-            if (numberEnd == 0) {
-                return -1; // 没有数字部分
-            }
-
-            long number = Long.parseLong(suffix.substring(0, numberEnd));
-            String unit = suffix.substring(numberEnd).trim();
-
-            // 根据单位转换
-            switch (unit) {
-                case "k":
-                    return (int) (number * 1_000);
-                case "m":
-                    return (int) (number * 1_000_000);
-                case "g":
-                    return (int) (number * 1_000_000_000);
-                case "":
-                    // 没有单位，默认为 k
-                    return (int) (number * 1_000);
-                default:
-                    return -1; // 未知单位
-            }
-        } catch (NumberFormatException e) {
-            return -1;
-        }
-    }
-
-    /**
-     * 剥离模型名称中的上下文大小后缀。
-     * 例如："mimo-v2.5[512k]" → "mimo-v2.5"
-     *
-     * @param modelName 模型名称
-     * @return 剥离后缀后的模型名称，如果没有后缀则返回原名称
-     */
-    public static String stripContextSizeSuffix(String modelName) {
-        if (modelName == null || !modelName.contains("[") || !modelName.contains("]")) {
-            return modelName;
-        }
-
-        int start = modelName.lastIndexOf('[');
-        int end = modelName.lastIndexOf(']');
-        if (start < 0 || end < 0 || end <= start) {
-            return modelName;
-        }
-
-        // 检查后缀是否符合格式（数字+可选单位）
-        String suffix = modelName.substring(start + 1, end).trim().toLowerCase();
-        if (suffix.isEmpty()) {
-            return modelName;
-        }
-
-        // 验证是否是有效的上下文大小后缀
-        int numberEnd = suffix.length();
-        for (int i = 0; i < suffix.length(); i++) {
-            char c = suffix.charAt(i);
-            if (c < '0' || c > '9') {
-                numberEnd = i;
-                break;
-            }
-        }
-
-        if (numberEnd == 0) {
-            return modelName; // 没有数字部分，不是有效的后缀
-        }
-
-        String unit = suffix.substring(numberEnd).trim();
-        if (unit.isEmpty() || unit.equals("k") || unit.equals("m") || unit.equals("g")) {
-            // 是有效的上下文大小后缀，剥离它
-            return modelName.substring(0, start).trim();
-        }
-
-        return modelName; // 不是有效的后缀
     }
 
     /**
@@ -528,11 +445,7 @@ public class HttpModelClient implements ModelClient {
                         retry.waitOrThrow("HTTP " + status, attempt);
                     } catch (IOException e) {
                         // 用户中断或重试耗尽
-                        try {
-                            callback.onDone();
-                        } catch (Exception ignored) {
-                            log.debug("onDone回调异常: {}", ignored.getMessage());
-                        }
+                        safeCallback("onDone", callback::onDone);
                         return;
                     }
                     activeCall = null;
@@ -541,224 +454,36 @@ public class HttpModelClient implements ModelClient {
                 if (status >= 400) {
                     ResponseBody errorBody = response.body();
                     String err = errorBody != null ? errorBody.string() : "unknown error";
-                    try {
-                        callback.onError("API error " + status + ": " + err);
-                    } catch (Exception e) {
-                        // SSE连接断开时忽略异常
-                        log.debug("onError回调异常（可能SSE连接已断开）: {}", e.getMessage());
-                    }
+                    safeCallback("onError", () -> callback.onError("API error " + status + ": " + err));
                     return;
                 }
 
                 ResponseBody body = response.body();
                 if (body == null) {
-                    try {
-                        callback.onError("Empty response body");
-                    } catch (Exception e) {
-                        log.debug("onError回调异常: {}", e.getMessage());
-                    }
+                    safeCallback("onError", () -> callback.onError("Empty response body"));
                     return;
                 }
 
                 try (BufferedReader reader = new BufferedReader(
                         new InputStreamReader(body.byteStream(), StandardCharsets.UTF_8))) {
-                    String line;
-                    String sseErrorData = null;
-                    ONode toolCallsAccum = null;
+                    SseParseResult parseResult = processSseStream(reader, callback);
 
-                    while ((line = reader.readLine()) != null) {
-                        if (abortRequested) {
-                            abortRequested = false;
-                            log.debug("流式请求被 ReasonBreaker 中断");
-                            break;
-                        }
-                        if (!line.startsWith("data: ")) continue;
-                        String data = line.substring(6).trim();
-                        if ("[DONE]".equals(data)) {
-                            log.debug("收到SSE流结束标记");
-                            break;
-                        }
-                        if (data.trim().startsWith("{\"error\":")) {
-                            log.warn("收到SSE流错误（可重试）: {}", data);
-                            sseErrorData = data;
-                            break;
-                        }
-                        ONode chunk = ONode.ofJson(data);
-                        log.debug("收到SSE数据块，大小: {} 字符", data.length());
-
-                        // 捕获 usage
-                        ONode usage = chunk.get(FIELD_USAGE);
-                        if (usage != null && !usage.isNull()) {
-                            int pt = usage.get("prompt_tokens").isNull()
-                                    ? 0
-                                    : usage.get("prompt_tokens").getInt();
-                            int ct = usage.get("completion_tokens").isNull()
-                                    ? 0
-                                    : usage.get("completion_tokens").getInt();
-                            int tt = usage.get("total_tokens").isNull()
-                                    ? 0
-                                    : usage.get("total_tokens").getInt();
-                            int ch = usage.get("prompt_cache_hit_tokens")
-                                    .isNull()
-                                    ? 0
-                                    : usage.get("prompt_cache_hit_tokens")
-                                    .getInt();
-                            int cm = usage.get("prompt_cache_miss_tokens")
-                                    .isNull()
-                                    ? 0
-                                    : usage.get("prompt_cache_miss_tokens")
-                                    .getInt();
-                            if (ch == 0 && cm == 0) {
-                                ONode ptDetails = usage.get("prompt_tokens_details");
-                                if (ptDetails != null && !ptDetails.isNull()) {
-                                    ch = ptDetails.get(FIELD_CACHED_TOKENS)
-                                            .isNull()
-                                            ? 0
-                                            : ptDetails.get(FIELD_CACHED_TOKENS)
-                                            .getInt();
-                                    cm = Math.max(0, pt - ch);
-                                }
-                            }
-                            ONode ctDetails = usage.get("completion_tokens_details");
-                            if (ctDetails != null && !ctDetails.isNull()) {
-                                int reasoningTokens = ctDetails
-                                        .get(FIELD_REASONING_TOKENS).isNull()
-                                        ? 0
-                                        : ctDetails
-                                        .get(FIELD_REASONING_TOKENS)
-                                        .getInt();
-                                if (reasoningTokens > 0) {
-                                    log.debug("推理 token 消耗: {}", reasoningTokens);
-                                }
-                            }
-                            log.debug("收到usage数据（完整API响应）: {}", chunk.toJson());
-                            try {
-                                callback.onUsage(pt, ct, tt, ch, cm);
-                            } catch (Exception e) {
-                                log.debug("onUsage回调异常（可能SSE连接已断开）: {}", e.getMessage());
-                            }
-                        }
-
-                        // tool_calls 累积
-                        ONode delta = chunk.select("$.choices[0].delta");
-                        if (delta == null || delta.isNull()) continue;
-
-                        ONode rd = delta.get(FIELD_REASONING_CONTENT);
-                        if (rd != null && rd.isString()) {
-                            String tok = rd.getString();
-                            if (tok != null && !tok.isEmpty()) {
-                                log.debug("收到reasoning_content: {}", tok);
-                                try {
-                                    callback.onReasoningDelta(tok);
-                                } catch (Exception e) {
-                                    log.debug("onReasoningDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
-                                }
-                            }
-                        }
-
-                        ONode cd = delta.get(FIELD_CONTENT);
-                        if (cd != null && cd.isString()) {
-                            String tok = cd.getString();
-                            if (tok != null && !tok.isEmpty()) {
-                                log.debug("收到content: {}", tok);
-                                try {
-                                    callback.onContentDelta(tok);
-                                } catch (Exception e) {
-                                    log.debug("onContentDelta回调异常（可能SSE连接已断开）: {}", e.getMessage());
-                                }
-                            }
-                        }
-
-                        ONode tcDelta = delta.get(FIELD_TOOL_CALLS);
-                        if (tcDelta != null && tcDelta.isArray()) {
-                            log.debug("收到tool_calls数据，数量: {}", tcDelta.getArray().size());
-                            for (ONode tcd : tcDelta.getArray()) {
-                                if (toolCallsAccum == null) {
-                                    toolCallsAccum = org.noear.snack4.ONode.ofJson("[]").asArray();
-                                }
-                                int idx = tcd.get(FIELD_INDEX).isNull() ? 0 : tcd.get(FIELD_INDEX).getInt();
-                                ONode func = tcd.get(FIELD_FUNCTION);
-                                while (toolCallsAccum.getArray().size() <= idx) {
-                                    toolCallsAccum.addNew().set(FIELD_TYPE, FIELD_FUNCTION);
-                                }
-                                ONode existing = toolCallsAccum.get(idx);
-                                if (func == null || func.isNull()) {
-                                    continue;
-                                }
-
-                                if (existing.get(FIELD_ID).isNull()) {
-                                    existing.set(FIELD_ID, tcd.get(FIELD_ID).getString());
-                                }
-                                if (existing.select("$.function.name").isNull()) {
-                                    existing.getOrNew(FIELD_FUNCTION).set(FIELD_NAME, func.get(FIELD_NAME).getString());
-                                }
-                                if (!func.get(FIELD_ARGUMENTS).isNull()) {
-                                    String prev = existing.getOrNew(FIELD_FUNCTION).get(FIELD_ARGUMENTS).getString();
-                                    String add = func.get(FIELD_ARGUMENTS).getString();
-                                    existing.getOrNew(FIELD_FUNCTION).set(FIELD_ARGUMENTS,
-                                            (prev != null ? prev : "") + (add != null ? add : ""));
-                                }
-                                log.debug("tool_calls索引: {}, 函数名: {}", idx,
-                                        func.get(FIELD_NAME).isNull() ? "null" : func.get(FIELD_NAME).getString());
-                            }
-                        }
-                    }
-
-                    // ★ SSE流错误重试逻辑 — 突破while循环后在此判断
-                    if (sseErrorData != null) {
+                    // ★ SSE流错误重试逻辑
+                    if (parseResult.sseErrorData != null) {
                         try {
-                            retry.waitOrThrow("SSE流错误: " + sseErrorData, attempt);
+                            retry.waitOrThrow("SSE流错误: " + parseResult.sseErrorData, attempt);
                         } catch (IOException e) {
                             // 用户中断或重试耗尽
-                            try {
-                                callback.onDone();
-                            } catch (Exception ex) {
-                                log.debug("onDone回调异常: {}", ex.getMessage());
-                            }
+                            safeCallback("onDone", callback::onDone);
                             return;
                         }
                         continue; // 关闭当前response，继续外层for循环重试
                     }
 
-                    if (toolCallsAccum != null) {
-                        // 过滤掉 name 为 null/empty 的 tool call（SSE 分块缺失导致）
-                        List<ONode> valid = new ArrayList<>();
-                        for (ONode tc : toolCallsAccum.getArray()) {
-                            ONode fn = tc.get(FIELD_FUNCTION);
-                            if (fn != null && !fn.isNull()) {
-                                ONode nm = fn.get(FIELD_NAME);
-                                if (nm != null && nm.isString()
-                                        && nm.getString() != null
-                                        && !nm.getString().isEmpty()) {
-                                    valid.add(tc);
-                                }
-                            }
-                        }
-                        if (!valid.isEmpty()) {
-                            ONode filtered = org.noear.snack4.ONode.ofJson("[]").asArray();
-                            for (ONode v : valid) {
-                                ONode copy = filtered.addNew();
-                                copy.set(FIELD_ID, v.get(FIELD_ID).isNull() ? "" : v.get(FIELD_ID).getString());
-                                copy.set(FIELD_TYPE, FIELD_FUNCTION);
-                                ONode copyFn = copy.getOrNew(FIELD_FUNCTION);
-                                copyFn.set(FIELD_NAME, v.get(FIELD_FUNCTION).get(FIELD_NAME).getString());
-                                copyFn.set(FIELD_ARGUMENTS, v.get(FIELD_FUNCTION).get(FIELD_ARGUMENTS).getString());
-                            }
-                            log.debug("完成tool_calls累积，共 {} 个有效调用", valid.size());
-                            try {
-                                callback.onToolCalls(filtered);
-                            } catch (Exception e) {
-                                // SSE连接断开时忽略异常，继续执行
-                                log.debug("onToolCalls回调异常（可能SSE连接已断开）: {}", e.getMessage());
-                            }
-                        }
+                    if (parseResult.toolCallsAccum != null) {
+                        emitToolCalls(parseResult.toolCallsAccum, callback);
                     }
-                    try {
-                        callback.onDone();
-                    } catch (Exception e) {
-                        // SSE连接断开时忽略异常，继续执行
-                        log.debug("onDone回调异常（可能SSE连接已断开）: {}", e.getMessage());
-                    }
+                    safeCallback("onDone", callback::onDone);
                 }
                 return; // success
 
@@ -770,11 +495,7 @@ public class HttpModelClient implements ModelClient {
                     //    导致 AgentService 的会话锁（ReentrantLock）永远无法释放。
                     log.debug("流式请求已被中断，跳过重试");
                     abortRequested = false;
-                    try {
-                        callback.onDone();
-                    } catch (Exception ignored) {
-                        log.debug("onDone回调异常（可能SSE连接已断开）: {}", ignored.getMessage());
-                    }
+                    safeCallback("onDone", callback::onDone);
                     return;
                 }
                 log.error("流式API调用IO异常: {}", e.getMessage(), e);
@@ -782,23 +503,14 @@ public class HttpModelClient implements ModelClient {
                     retry.waitOrThrow(e, attempt);
                 } catch (IOException retryEx) {
                     // 重试耗尽或中断
-                    try {
-                        callback.onError(retryEx.getMessage());
-                    } catch (Exception ex) {
-                        log.debug("onError回调异常（可能SSE连接已断开）: {}", ex.getMessage());
-                    }
+                    safeCallback("onError", () -> callback.onError(retryEx.getMessage()));
                     return;
                 }
                 continue;
             } catch (Exception e) {
                 log.error("流式API调用异常: {}", e.getMessage(), e);
                 // 非 IO 异常（如 JSON 解析错误），不重试
-                try {
-                    callback.onError(e.getMessage());
-                } catch (Exception ex) {
-                    // SSE连接断开时忽略异常
-                    log.debug("onError回调异常（可能SSE连接已断开）: {}", ex.getMessage());
-                }
+                safeCallback("onError", () -> callback.onError(e.getMessage()));
                 return;
             } finally {
                 activeCall = null;
@@ -806,6 +518,198 @@ public class HttpModelClient implements ModelClient {
         }
     }
 
+
+    /**
+     * SSE 流解析结果。
+     */
+    private static class SseParseResult {
+        String sseErrorData;
+        ONode toolCallsAccum;
+    }
+
+    /**
+     * 处理 SSE 流，解析所有数据行。
+     *
+     * @param reader   SSE 流的 BufferedReader
+     * @param callback 流式回调
+     * @return 解析结果（包含错误数据和累积的 tool_calls）
+     */
+    private SseParseResult processSseStream(BufferedReader reader, StreamCallback callback) throws IOException {
+        SseParseResult result = new SseParseResult();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            if (abortRequested) {
+                abortRequested = false;
+                log.debug("流式请求被 ReasonBreaker 中断");
+                break;
+            }
+            if (!line.startsWith("data: ")) continue;
+            String data = line.substring(6).trim();
+            if ("[DONE]".equals(data)) {
+                log.debug("收到SSE流结束标记");
+                break;
+            }
+            if (data.trim().startsWith("{\"error\":")) {
+                log.warn("收到SSE流错误（可重试）: {}", data);
+                result.sseErrorData = data;
+                break;
+            }
+            ONode chunk = ONode.ofJson(data);
+            log.debug("收到SSE数据块，大小: {} 字符", data.length());
+
+            processChunk(chunk, callback, result);
+        }
+        return result;
+    }
+
+    /**
+     * 处理单个 SSE 数据块。
+     *
+     * @param chunk    解析后的 JSON 数据块
+     * @param callback 流式回调
+     * @param result   累积结果（用于 tool_calls）
+     */
+    private void processChunk(ONode chunk, StreamCallback callback, SseParseResult result) {
+        // 捕获 usage
+        ONode usage = chunk.get(FIELD_USAGE);
+        if (usage != null && !usage.isNull()) {
+            handleUsage(usage, chunk, callback);
+        }
+
+        // delta 处理
+        ONode delta = chunk.select("$.choices[0].delta");
+        if (delta == null || delta.isNull()) return;
+
+        // reasoning content
+        ONode rd = delta.get(FIELD_REASONING_CONTENT);
+        if (rd != null && rd.isString()) {
+            String tok = rd.getString();
+            if (tok != null && !tok.isEmpty()) {
+                log.debug("收到reasoning_content: {}", tok);
+                safeCallback("onReasoningDelta", () -> callback.onReasoningDelta(tok));
+            }
+        }
+
+        // content
+        ONode cd = delta.get(FIELD_CONTENT);
+        if (cd != null && cd.isString()) {
+            String tok = cd.getString();
+            if (tok != null && !tok.isEmpty()) {
+                log.debug("收到content: {}", tok);
+                safeCallback("onContentDelta", () -> callback.onContentDelta(tok));
+            }
+        }
+
+        // tool_calls 累积
+        ONode tcDelta = delta.get(FIELD_TOOL_CALLS);
+        if (tcDelta != null && tcDelta.isArray()) {
+            log.debug("收到tool_calls数据，数量: {}", tcDelta.getArray().size());
+            accumulateToolCalls(tcDelta, result);
+        }
+    }
+
+    /**
+     * 处理 usage 统计数据。
+     */
+    private void handleUsage(ONode usage, ONode chunk, StreamCallback callback) {
+        int pt = usage.get(FIELD_PROMPT_TOKENS).isNull() ? 0 : usage.get(FIELD_PROMPT_TOKENS).getInt();
+        int ct = usage.get(FIELD_COMPLETION_TOKENS).isNull() ? 0 : usage.get(FIELD_COMPLETION_TOKENS).getInt();
+        int tt = usage.get(FIELD_TOTAL_TOKENS).isNull() ? 0 : usage.get(FIELD_TOTAL_TOKENS).getInt();
+        int cacheHit = usage.get(FIELD_PROMPT_CACHE_HIT_TOKENS).isNull() ? 0 : usage.get(FIELD_PROMPT_CACHE_HIT_TOKENS).getInt();
+        int cacheMiss = usage.get(FIELD_PROMPT_CACHE_MISS_TOKENS).isNull() ? 0 : usage.get(FIELD_PROMPT_CACHE_MISS_TOKENS).getInt();
+
+        if (cacheHit == 0 && cacheMiss == 0) {
+            ONode ptDetails = usage.get(FIELD_PROMPT_TOKENS_DETAILS);
+            if (ptDetails != null && !ptDetails.isNull()) {
+                cacheHit = ptDetails.get(FIELD_CACHED_TOKENS).isNull() ? 0 : ptDetails.get(FIELD_CACHED_TOKENS).getInt();
+                cacheMiss = Math.max(0, pt - cacheHit);
+            }
+        }
+
+        final int finalCacheHit = cacheHit;
+        final int finalCacheMiss = cacheMiss;
+
+        ONode ctDetails = usage.get(FIELD_COMPLETION_TOKENS_DETAILS);
+        if (ctDetails != null && !ctDetails.isNull()) {
+            int reasoningTokens = ctDetails.get(FIELD_REASONING_TOKENS).isNull() ? 0 : ctDetails.get(FIELD_REASONING_TOKENS).getInt();
+            if (reasoningTokens > 0) {
+                log.debug("推理 token 消耗: {}", reasoningTokens);
+            }
+        }
+
+        log.debug("收到usage数据（完整API响应）: {}", chunk.toJson());
+        safeCallback("onUsage", () -> callback.onUsage(pt, ct, tt, finalCacheHit, finalCacheMiss));
+    }
+
+    /**
+     * 累积 tool_calls delta 数据。
+     */
+    private void accumulateToolCalls(ONode tcDelta, SseParseResult result) {
+        for (ONode tcd : tcDelta.getArray()) {
+            if (result.toolCallsAccum == null) {
+                result.toolCallsAccum = org.noear.snack4.ONode.ofJson("[]").asArray();
+            }
+            int idx = tcd.get(FIELD_INDEX).isNull() ? 0 : tcd.get(FIELD_INDEX).getInt();
+            ONode func = tcd.get(FIELD_FUNCTION);
+            while (result.toolCallsAccum.getArray().size() <= idx) {
+                result.toolCallsAccum.addNew().set(FIELD_TYPE, FIELD_FUNCTION);
+            }
+            ONode existing = result.toolCallsAccum.get(idx);
+            if (func == null || func.isNull()) {
+                continue;
+            }
+
+            if (existing.get(FIELD_ID).isNull()) {
+                existing.set(FIELD_ID, tcd.get(FIELD_ID).getString());
+            }
+            if (existing.select("$.function.name").isNull()) {
+                existing.getOrNew(FIELD_FUNCTION).set(FIELD_NAME, func.get(FIELD_NAME).getString());
+            }
+            if (!func.get(FIELD_ARGUMENTS).isNull()) {
+                String prev = existing.getOrNew(FIELD_FUNCTION).get(FIELD_ARGUMENTS).getString();
+                String add = func.get(FIELD_ARGUMENTS).getString();
+                existing.getOrNew(FIELD_FUNCTION).set(FIELD_ARGUMENTS,
+                        (prev != null ? prev : "") + (add != null ? add : ""));
+            }
+            log.debug("tool_calls索引: {}, 函数名: {}", idx,
+                    func.get(FIELD_NAME).isNull() ? "null" : func.get(FIELD_NAME).getString());
+        }
+    }
+
+    /**
+     * 过滤并发送累积的 tool_calls。
+     *
+     * @param toolCallsAccum 累积的 tool_calls
+     * @param callback       流式回调
+     */
+    private void emitToolCalls(ONode toolCallsAccum, StreamCallback callback) {
+        // 过滤掉 name 为 null/empty 的 tool call（SSE 分块缺失导致）
+        List<ONode> valid = new ArrayList<>();
+        for (ONode tc : toolCallsAccum.getArray()) {
+            ONode fn = tc.get(FIELD_FUNCTION);
+            if (fn != null && !fn.isNull()) {
+                ONode nm = fn.get(FIELD_NAME);
+                if (nm != null && nm.isString()
+                        && nm.getString() != null
+                        && !nm.getString().isEmpty()) {
+                    valid.add(tc);
+                }
+            }
+        }
+        if (!valid.isEmpty()) {
+            ONode filtered = org.noear.snack4.ONode.ofJson("[]").asArray();
+            for (ONode v : valid) {
+                ONode copy = filtered.addNew();
+                copy.set(FIELD_ID, v.get(FIELD_ID).isNull() ? "" : v.get(FIELD_ID).getString());
+                copy.set(FIELD_TYPE, FIELD_FUNCTION);
+                ONode copyFn = copy.getOrNew(FIELD_FUNCTION);
+                copyFn.set(FIELD_NAME, v.get(FIELD_FUNCTION).get(FIELD_NAME).getString());
+                copyFn.set(FIELD_ARGUMENTS, v.get(FIELD_FUNCTION).get(FIELD_ARGUMENTS).getString());
+            }
+            log.debug("完成tool_calls累积，共 {} 个有效调用", valid.size());
+            safeCallback("onToolCalls", () -> callback.onToolCalls(filtered));
+        }
+    }
 
     /**
      * 构建 API 请求体 JSON。
@@ -816,7 +720,7 @@ public class HttpModelClient implements ModelClient {
                              ONode tools) {
         ONode body = new ONode(ONode.ofJson("{}").options()).asObject();
         // 剥离模型名称中的上下文大小后缀，例如 "mimo-v2.5[512k]" → "mimo-v2.5"
-        body.set(FIELD_MODEL, stripContextSizeSuffix(model));
+        body.set(FIELD_MODEL, ModelContextUtils.stripContextSizeSuffix(model));
         if (reasoningEffort != null && !reasoningEffort.isEmpty() && !Objects.equals(reasoningEffort, "none")) {
             body.set("reasoning_effort", reasoningEffort);
             body.set("chat_template_kwargs", ONode.ofJson("{}").set("enable_thinking", true));
