@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.bin.model;
 
+import lombok.Getter;
+import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import org.noear.snack4.ONode;
@@ -84,6 +86,8 @@ public class HttpModelClient implements ModelClient {
     /**
      * 上下文大小提供者（可选，用于从外部源获取模型的上下文大小）
      */
+    @Getter
+    @Setter
     private static volatile ContextSizeProvider contextSizeProvider;
 
     public HttpModelClient(String apiUrl, String apiKey, String model) {
@@ -101,28 +105,6 @@ public class HttpModelClient implements ModelClient {
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .retryOnConnectionFailure(false) // 由我们自己的重试逻辑控制
                 .build();
-    }
-
-    /**
-     * 设置全局上下文大小提供者。
-     * <p>
-     * 此方法允许外部模块（如 ModelMetaService）注册一个上下文大小提供者，
-     * 用于覆盖默认的上下文大小推断逻辑。
-     * </p>
-     *
-     * @param provider 上下文大小提供者，传 null 可清除
-     */
-    public static void setContextSizeProvider(ContextSizeProvider provider) {
-        contextSizeProvider = provider;
-    }
-
-    /**
-     * 获取当前注册的上下文大小提供者。
-     *
-     * @return 上下文大小提供者，可能为 null
-     */
-    public static ContextSizeProvider getContextSizeProvider() {
-        return contextSizeProvider;
     }
 
     /**
@@ -583,8 +565,6 @@ public class HttpModelClient implements ModelClient {
                         new InputStreamReader(body.byteStream(), StandardCharsets.UTF_8))) {
                     String line;
                     String sseErrorData = null;
-                    StringBuilder contentBuf = new StringBuilder();
-                    StringBuilder reasoningBuf = new StringBuilder();
                     ONode toolCallsAccum = null;
 
                     while ((line = reader.readLine()) != null) {
@@ -668,7 +648,6 @@ public class HttpModelClient implements ModelClient {
                         if (rd != null && rd.isString()) {
                             String tok = rd.getString();
                             if (tok != null && !tok.isEmpty()) {
-                                reasoningBuf.append(tok);
                                 log.debug("收到reasoning_content: {}", tok);
                                 try {
                                     callback.onReasoningDelta(tok);
@@ -682,7 +661,6 @@ public class HttpModelClient implements ModelClient {
                         if (cd != null && cd.isString()) {
                             String tok = cd.getString();
                             if (tok != null && !tok.isEmpty()) {
-                                contentBuf.append(tok);
                                 log.debug("收到content: {}", tok);
                                 try {
                                     callback.onContentDelta(tok);
