@@ -726,19 +726,25 @@ public class HttpModelClient implements ModelClient {
                             if (tcDelta != null && tcDelta.isArray()) {
                                 log.debug("收到tool_calls数据，数量: {}", tcDelta.getArray().size());
                                 for (ONode tcd : tcDelta.getArray()) {
-                                    int idx = tcd.get("index").isNull() ? 0 : tcd.get("index").getInt();
-                                    ONode func = tcd.get("function");
-                                    if (func == null || func.isNull()) continue;
                                     if (toolCallsAccum == null) {
                                         toolCallsAccum = org.noear.snack4.ONode.ofJson("[]").asArray();
                                     }
+                                    int idx = tcd.get("index").isNull() ? 0 : tcd.get("index").getInt();
+                                    ONode func = tcd.get("function");
                                     while (toolCallsAccum.getArray().size() <= idx) {
                                         toolCallsAccum.addNew().set("type", "function");
                                     }
                                     ONode existing = toolCallsAccum.get(idx);
-                                    if (!tcd.get("id").isNull()) existing.set("id", tcd.get("id").getString());
-                                    if (!func.get("name").isNull())
+                                    if (func == null || func.isNull()) {
+                                        continue;
+                                    }
+
+                                    if (existing.get("id").isNull()) {
+                                        existing.set("id", tcd.get("id").getString());
+                                    }
+                                    if (existing.select("$.function.name").isNull()) {
                                         existing.getOrNew("function").set("name", func.get("name").getString());
+                                    }
                                     if (!func.get("arguments").isNull()) {
                                         String prev = existing.getOrNew("function").get("arguments").getString();
                                         String add = func.get("arguments").getString();
