@@ -35,7 +35,7 @@
           <p class="header-desc">{{ currentTab?.description }}</p>
         </div>
         <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'about'" class="header-actions">
-          <button v-if="activeTab === 'ai'" class="btn btn-secondary" style="padding:6px 12px;" @click="showAutoFillDialog = true" title="自动填入配置">
+          <button v-if="activeTab === 'ai' || activeTab === 'vision'" class="btn btn-secondary" style="padding:6px 12px;" @click="openAutoFillDialog" title="自动填入配置">
             <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
               <polyline points="1 4 1 10 7 10"/>
               <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
@@ -383,13 +383,6 @@
                 <h3>视觉模型配置</h3>
                 <p>配置图片识别服务的 API 连接与模型参数</p>
               </div>
-              <button class="btn btn-secondary" style="padding:6px 12px;" @click="fillVisionDefaults" title="填入 SiliconFlow 默认配置">
-                <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                  <polyline points="1 4 1 10 7 10"/>
-                  <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-                </svg>
-                一键填入
-              </button>
             </div>
             <div class="card-body">
               <div class="setting-row">
@@ -447,12 +440,25 @@
                   <p class="setting-hint">视觉模型名称（需支持图片输入）</p>
                 </div>
                 <div class="setting-control">
-                  <input
-                      v-model="settings.vision.model"
-                      class="form-input"
-                      placeholder="Qwen/Qwen3.5-4B"
-                      type="text"
-                  />
+                  <div class="input-group">
+                    <input
+                        v-model="settings.vision.model"
+                        class="form-input"
+                        placeholder="如 Qwen/Qwen3.5-4B"
+                        type="text"
+                    />
+                    <button
+                        class="btn btn-secondary"
+                        @click="fetchAndPickVisionModel"
+                        title="从远端获取可用视觉模型列表"
+                    >
+                      <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                        <polyline points="23 4 23 10 17 10"/>
+                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+                      </svg>
+                      填入
+                    </button>
+                  </div>
                 </div>
               </div>
 
@@ -1574,12 +1580,12 @@ X-Custom-Header=value"
     </div>
   </Teleport>
 
-  <!-- 自动填入配置弹窗 -->
+  <!-- 自动填入配置弹窗（AI模型/视觉模型共用） -->
   <Teleport to="body">
     <div v-if="showAutoFillDialog" class="auto-fill-mask" @click.self="showAutoFillDialog = false">
       <div class="auto-fill-dialog">
         <div class="auto-fill-head">
-          <span>自动填入配置</span>
+          <span>{{ activeTab === 'vision' ? '视觉模型' : 'AI模型' }}自动填入</span>
           <button class="btn-icon-xs" @click="showAutoFillDialog = false">×</button>
         </div>
         <div class="auto-fill-body">
@@ -1588,6 +1594,7 @@ X-Custom-Header=value"
             <div class="select-wrapper">
               <select v-model="autoFillPreset" class="form-select" @change="onPresetChange">
                 <option value="">自定义地址</option>
+                <option value="https://api.siliconflow.cn/v1">SiliconFlow</option>
                 <option value="https://api.deepseek.com">DeepSeek</option>
                 <option value="https://api.xiaomimimo.com/v1">小米</option>
                 <option value="https://token-plan-cn.xiaomimimo.com/v1">小米TokenPlan</option>
@@ -1659,7 +1666,7 @@ X-Custom-Header=value"
 </template>
 
 <script setup>
-import {computed, onMounted, reactive, ref, watch} from 'vue'
+import {computed, h, onMounted, reactive, ref, watch} from 'vue'
 import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
 import {
@@ -1705,6 +1712,8 @@ const showApiKey = ref(false)
 const showVisionApiKey = ref(false)
 const loading = ref(false)
 const availableModels = ref([])
+const visionModels = ref([])
+const visionModelsLoading = ref(false)
 const checkingConnection = ref(false)
 const connectionOk = ref(false)
 const connectionChecked = ref(false)
@@ -2151,13 +2160,6 @@ watch(activeTab, async (tab) => {
   }
 })
 
-// 一键填入 SiliconFlow 默认配置
-const fillVisionDefaults = () => {
-  settings.vision.baseUrl = 'https://api.siliconflow.cn/v1/chat/completions'
-  settings.vision.model = 'Qwen/Qwen3.5-4B'
-  hasChanges.value = true
-}
-
 // 加载设置
 const loadSettings = async () => {
   loading.value = true
@@ -2208,6 +2210,17 @@ const loadSettings = async () => {
         settings.vision.baseUrl = config.vision.baseUrl || ''
         settings.vision.apiKey = config.vision.apiKey || ''
         settings.vision.model = config.vision.model || ''
+      }
+
+      // 自动获取远端视觉模型列表（静默，不弹错误）
+      // apiKey 已存储在后端，前端只检查 baseUrl 是否已配置
+      if (settings.vision.baseUrl) {
+        try {
+          const visionRes = await configAPI.getRemoteVisionModels()
+          if (visionRes.success && visionRes.data && visionRes.data.length > 0) {
+            visionModels.value = visionRes.data
+          }
+        } catch { /* 忽略 */ }
       }
     } else {
       message.error(configResponse.error || '加载配置失败')
@@ -2286,8 +2299,8 @@ const saveSettings = async () => {
       }
     }
     
-    // 只有当 vision.apiKey 不为空且不包含脱敏标记时才保存
-    if (settings.vision.apiKey && !settings.vision.apiKey.includes('****')) {
+    // 只有当 vision.apiKey 不为空时才保存（后端返回空字符串，不会误存）
+    if (settings.vision.apiKey) {
       configToUpdate.vision.apiKey = settings.vision.apiKey
     }
 
@@ -2442,6 +2455,45 @@ const onPresetChange = () => {
   }
 }
 
+// 通用自动填入逻辑
+const doAutoFill = async ({ url, key, configPayload, fetchModels, onModelsSuccess, onModelsFail }) => {
+  // 填入配置
+  hasChanges.value = true
+
+  // 保存到后端
+  try {
+    await configAPI.updateConfig(configPayload)
+  } catch { /* 不阻断 */ }
+
+  // 获取远端模型列表
+  try {
+    const res = await fetchModels()
+    if (res.success && res.data && res.data.length > 0) {
+      onModelsSuccess(res.data)
+      message.success(`已自动填入 ${url}，发现 ${res.data.length} 个模型`)
+    } else {
+      onModelsFail()
+      message.success(`已填入 API 地址和密钥`)
+    }
+  } catch {
+    onModelsFail()
+    message.success(`已填入 API 地址和密钥`)
+  }
+}
+
+// 打开自动填入弹窗时，根据当前 tab 填入对应的配置
+const openAutoFillDialog = () => {
+  if (activeTab.value === 'vision') {
+    autoFillUrl.value = settings.vision.baseUrl || ''
+    autoFillApiKey.value = settings.vision.apiKey || ''
+  } else {
+    autoFillUrl.value = settings.ai.baseUrl || ''
+    autoFillApiKey.value = settings.ai.apiKey || ''
+  }
+  autoFillPreset.value = ''
+  showAutoFillDialog.value = true
+}
+
 // 确认自动填入
 const confirmAutoFill = async () => {
   const url = autoFillUrl.value.trim().replace(/\/+$/, '')
@@ -2451,50 +2503,132 @@ const confirmAutoFill = async () => {
     return
   }
 
-  // 弹出确认警告（与保存设置行为一致）
-  const confirm = await new Promise((resolve) => {
-    Modal.confirm({
-      title: '更改 API 地址或密钥将重置 Agent',
-      content: '修改 API 地址或密钥后，系统将重新初始化 Agent，当前活跃的会话将被保存并关闭。\n\n要继续自动填入吗？',
-      okText: '确认填入',
-      cancelText: '取消',
-      onOk: () => resolve(true),
-      onCancel: () => resolve(false)
+  // AI 模型配置变更会重置 Agent，需要确认
+  if (activeTab.value === 'ai') {
+    const confirm = await new Promise((resolve) => {
+      Modal.confirm({
+        title: '更改 API 地址或密钥将重置 Agent',
+        content: '修改 API 地址或密钥后，系统将重新初始化 Agent，当前活跃的会话将被保存并关闭。\n\n要继续自动填入吗？',
+        okText: '确认填入',
+        cancelText: '取消',
+        onOk: () => resolve(true),
+        onCancel: () => resolve(false)
+      })
     })
-  })
-  if (!confirm) return
+    if (!confirm) return
 
-  // 填入并保存基础配置（保存后才可正确获取远端模型）
-  settings.ai.baseUrl = url
-  settings.ai.apiKey = key
-  hasChanges.value = true
+    settings.ai.baseUrl = url
+    settings.ai.apiKey = key
 
-  try {
-    await configAPI.updateConfig({
-      baseUrl: url,
-      apiKey: key
+    await doAutoFill({
+      url,
+      key,
+      configPayload: { baseUrl: url, apiKey: key },
+      fetchModels: () => configAPI.getRemoteModels(),
+      onModelsSuccess: (data) => {
+        settings.ai.availableModelsText = data.join('\n')
+        settings.ai.model = data[0]
+      },
+      onModelsFail: () => {}
     })
-  } catch {
-    // 保存失败不阻断流程
-  }
+  } else {
+    // 视觉模型配置
+    settings.vision.baseUrl = url
+    settings.vision.apiKey = key
 
-  // 尝试获取远端模型列表
-  try {
-    const res = await configAPI.getRemoteModels()
-    if (res.success && res.data && res.data.length > 0) {
-      settings.ai.availableModelsText = res.data.join('\n')
-      if (res.data.length > 0) {
-        settings.ai.model = res.data[0]
-      }
-      message.success(`已自动填入 ${url}，发现 ${res.data.length} 个模型`)
-    } else {
-      message.success(`已填入 API 地址和密钥，可手动添加模型列表`)
-    }
-  } catch {
-    message.success(`已填入 API 地址和密钥，可手动添加模型列表`)
+    await doAutoFill({
+      url,
+      key,
+      configPayload: { vision: { baseUrl: url, apiKey: key } },
+      fetchModels: () => configAPI.getRemoteVisionModels(),
+      onModelsSuccess: (data) => {
+        visionModels.value = data
+        settings.vision.model = data[0]
+      },
+      onModelsFail: () => { visionModels.value = [] }
+    })
   }
 
   showAutoFillDialog.value = false
+}
+
+// ==================== 视觉模型相关 ====================
+
+// 获取可用视觉模型列表
+const fetchVisionModels = async () => {
+  visionModelsLoading.value = true
+  try {
+    const res = await configAPI.getRemoteVisionModels()
+    if (res.success && res.data && res.data.length > 0) {
+      visionModels.value = res.data
+      // 如果当前没有选中模型，则默认选中第一个
+      if (!settings.vision.model && res.data.length > 0) {
+        settings.vision.model = res.data[0]
+      }
+      message.success(`获取到 ${res.data.length} 个视觉模型`)
+    } else {
+      visionModels.value = []
+      message.warning(res.error || '未获取到可用的视觉模型，请检查 API 地址和密钥')
+    }
+  } catch (err) {
+    visionModels.value = []
+    message.error('获取视觉模型列表失败: ' + (err.message || err))
+  } finally {
+    visionModelsLoading.value = false
+  }
+}
+
+// 获取并选择视觉模型（点击"填入"按钮）
+const fetchAndPickVisionModel = async () => {
+  visionModelsLoading.value = true
+  try {
+    const res = await configAPI.getRemoteVisionModels()
+    if (res.success && res.data && res.data.length > 0) {
+      visionModels.value = res.data
+      if (res.data.length === 1) {
+        // 只有一个模型，直接填入
+        settings.vision.model = res.data[0]
+        message.success(`已填入模型: ${res.data[0]}`)
+      } else {
+        // 多个模型，弹出选择对话框
+        let selectedModel = res.data[0]
+        const confirmed = await new Promise((resolve) => {
+          const modal = Modal.confirm({
+            title: '选择视觉模型',
+            content: () => h('div', [
+              h('p', { style: 'margin-bottom:8px' }, `发现 ${res.data.length} 个可用模型：`),
+              h('select', {
+                style: 'width:100%;padding:6px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:14px',
+                onChange: (e) => { selectedModel = e.target.value },
+                innerHTML: res.data.map(m => `<option value="${m}">${m}</option>`).join('')
+              })
+            ]),
+            okText: '确认填入',
+            cancelText: '取消',
+            onOk: () => resolve(true),
+            onCancel: () => resolve(false)
+          })
+        })
+        if (confirmed && selectedModel) {
+          settings.vision.model = selectedModel
+          message.success(`已填入模型: ${selectedModel}`)
+        }
+      }
+    } else {
+      message.warning(res.error || '未获取到可用的视觉模型，请检查 API 地址和密钥')
+    }
+  } catch (err) {
+    message.error('获取视觉模型列表失败: ' + (err.message || err))
+  } finally {
+    visionModelsLoading.value = false
+  }
+}
+
+// 保留一键填入 SiliconFlow 默认配置的能力（作为预设之一）
+const fillVisionDefaults = () => {
+  settings.vision.baseUrl = 'https://api.siliconflow.cn/v1/chat/completions'
+  settings.vision.model = 'Qwen/Qwen3.5-4B'
+  hasChanges.value = true
 }
 
 // ==================== 模型价格操作 ====================

@@ -65,22 +65,11 @@ public class ConfigController {
 
         // 获取视觉模型配置
         String visionBaseUrl = cfg.visionBaseUrl();
-        String visionApiKey = cfg.visionApiKey();
         String visionModel = cfg.visionModel();
-        
-        // 对视觉模型 API 密钥进行脱敏
-        String maskedVisionKey;
-        if (visionApiKey != null && visionApiKey.length() > MASK_MIN_LENGTH) {
-            maskedVisionKey = visionApiKey.substring(0, MASK_KEEP_LENGTH) + "****" + visionApiKey.substring(visionApiKey.length() - MASK_KEEP_LENGTH);
-        } else if (visionApiKey != null && !visionApiKey.isEmpty()) {
-            maskedVisionKey = "****";
-        } else {
-            maskedVisionKey = "";
-        }
         
         ConfigDTO.VisionConfig visionConfig = new ConfigDTO.VisionConfig(
                 visionBaseUrl != null ? visionBaseUrl : "",
-                maskedVisionKey,
+                "",
                 visionModel != null ? visionModel : ""
         );
 
@@ -205,6 +194,67 @@ public class ConfigController {
             return ApiResponse.ok(modelNames);
         } catch (Exception e) {
             return ApiResponse.fail("获取远程模型列表失败: " + e.getMessage());
+        }
+    }
+
+    @ApiOperation(value = "从远程 API 获取视觉模型列表", notes = "调用视觉模型配置的 API 地址 + /models，携带 API Key 获取远程视觉模型列表")
+    @SneakyThrows
+    @Get
+    @Mapping("/remote-vision-models")
+    public ApiResponse<List<String>> getRemoteVisionModels() {
+        Agent4jConfig cfg = configService.getConfig();
+        String visionUrl = cfg.visionBaseUrl();
+        String visionApiKey = cfg.visionApiKey();
+
+        if (visionUrl == null || visionUrl.isEmpty()) {
+            return ApiResponse.fail("视觉模型 API 地址未配置");
+        }
+        if (visionApiKey == null || visionApiKey.isEmpty()) {
+            return ApiResponse.fail("视觉模型 API 密钥未配置");
+        }
+
+        // vision baseUrl 可能已包含 /chat/completions，需要去掉后缀再拼 /models
+        String base = visionUrl
+                .replaceAll("/chat/completions$", "")
+                .replaceAll("/+$", "");
+        String modelsUrl = base + "/models";
+
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(REMOTE_CONNECT_TIMEOUT_SEC, TimeUnit.SECONDS)
+                .readTimeout(REMOTE_READ_TIMEOUT_SEC, TimeUnit.SECONDS)
+                .build();
+
+        Request request = new Request.Builder()
+                .url(modelsUrl)
+                .header("Authorization", "Bearer " + visionApiKey)
+                .header("Content-Type", "application/json")
+                .get()
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                String body = response.body() != null ? response.body().string() : "";
+                return ApiResponse.fail("远程 API 返回错误 (" + response.code() + "): " + body);
+            }
+
+            String json = response.body() != null ? response.body().string() : "[]";
+            ONode root = ONode.ofJson(json);
+            ONode dataArr = root.select("$.data");
+
+            List<String> modelNames = new ArrayList<>();
+            if (dataArr != null && dataArr.isArray()) {
+                for (ONode item : dataArr.getArray()) {
+                    String id = item.get("id").getString();
+                    if (id != null && !id.isEmpty()) {
+                        modelNames.add(id);
+                    }
+                }
+            }
+
+            Collections.sort(modelNames);
+            return ApiResponse.ok(modelNames);
+        } catch (Exception e) {
+            return ApiResponse.fail("获取远程视觉模型列表失败: " + e.getMessage());
         }
     }
 
