@@ -9,33 +9,48 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
-        <div class="diff-sbs" v-if="diffPairs.length > 0">
-          <!-- 表头 -->
-          <div class="diff-sbs-header">
-            <span class="diff-sbs-label diff-sbs-label-old">旧版本</span>
-            <span class="diff-sbs-label diff-sbs-label-new">新版本</span>
-          </div>
-          <!-- 行 -->
-          <div v-for="(pair, i) in diffPairs" :key="i" class="diff-sbs-row" :class="'diff-sbs-' + pair.type">
-            <div class="diff-sbs-cell diff-sbs-cell-left">
-              <span class="diff-sbs-ln">{{ pair.leftLineNum ?? '' }}</span>
-              <span class="diff-sbs-code" v-html="pair.leftHtml"></span>
+        <div class="diff-sbs-body">
+          <!-- diff 视图 -->
+          <template v-if="diffPairs.length > 0">
+            <!-- 表头 -->
+            <div class="diff-sbs-header">
+              <span class="diff-sbs-label diff-sbs-label-old">旧版本</span>
+              <span class="diff-sbs-label diff-sbs-label-new">新版本</span>
             </div>
-            <div class="diff-sbs-gutter"></div>
-            <div class="diff-sbs-cell diff-sbs-cell-right">
-              <span class="diff-sbs-ln">{{ pair.rightLineNum ?? '' }}</span>
-              <span class="diff-sbs-code" v-html="pair.rightHtml"></span>
+            <!-- 行 -->
+            <div v-for="(pair, i) in diffPairs" :key="i" class="diff-sbs-row" :class="'diff-sbs-' + pair.type">
+              <div class="diff-sbs-cell diff-sbs-cell-left">
+                <span class="diff-sbs-ln">{{ pair.leftLineNum ?? '' }}</span>
+                <span class="diff-sbs-code" v-html="pair.leftHtml"></span>
+              </div>
+              <div class="diff-sbs-gutter"></div>
+              <div class="diff-sbs-cell diff-sbs-cell-right">
+                <span class="diff-sbs-ln">{{ pair.rightLineNum ?? '' }}</span>
+                <span class="diff-sbs-code" v-html="pair.rightHtml"></span>
+              </div>
             </div>
+          </template>
+          <!-- 无变更：展示文件内容 -->
+          <template v-else-if="fileContentLines.length > 0">
+            <div v-for="(line, i) in fileContentLines" :key="i" class="file-content-row">
+              <span class="file-content-ln">{{ i + 1 }}</span>
+              <span class="file-content-code" v-html="line"></span>
+            </div>
+          </template>
+          <!-- loading -->
+          <div v-else class="diff-loading">
+            <div class="diff-loading-spinner"></div>
+            <span>加载中...</span>
           </div>
         </div>
-        <div v-else class="diff-viewer-empty">{{ diff ? '无变更' : '加载中...' }}</div>
       </div>
     </div>
   </Teleport>
 </template>
 
 <script setup>
-import { computed } from 'vue'
+import { ref, computed, watch } from 'vue'
+import { gitAPI } from '../services/api'
 import { highlightCode, detectLanguage } from '../utils/highlight'
 import { sanitize } from '../utils/sanitize'
 
@@ -43,10 +58,64 @@ const props = defineProps({
   open: { type: Boolean, default: false },
   file: { type: String, default: '' },
   diff: { type: String, default: '' },
-  stat: { type: String, default: '' }
+  stat: { type: String, default: '' },
+  workspaceHash: { type: String, default: null }
 })
 
 defineEmits(['close'])
+
+// ---- 无 diff 时加载文件内容（带 debounce 避免闪烁） ----
+const fileContentHtml = ref('')
+const fileContentLoading = ref(false)
+const fileContentLines = computed(() => {
+  if (!fileContentHtml.value) return []
+  return fileContentHtml.value.split('\n')
+})
+
+let fileContentTimer = null
+const FILE_CONTENT_DELAY = 300
+
+const loadFileContent = async () => {
+  if (!props.open || !props.workspaceHash || !props.file) return
+  fileContentLoading.value = true
+  fileContentHtml.value = ''
+  try {
+    const r = await gitAPI.fileContent(props.workspaceHash, props.file)
+    // 打开期间如果 diff 到了，不再展示文件内容
+    if (props.diff) { fileContentHtml.value = ''; return }
+    if (r.success && r.data && r.data.content) {
+      const lang = detectLanguage(props.file)
+      const lines = r.data.content.split('\n')
+      fileContentHtml.value = lines.map(l => sanitize(highlightCode(l, lang))).join('\n')
+    }
+  } catch (e) {
+    fileContentHtml.value = ''
+  } finally {
+    fileContentLoading.value = false
+  }
+}
+
+const scheduleFileContent = () => {
+  clearTimeout(fileContentTimer)
+  fileContentTimer = setTimeout(() => {
+    if (props.open && !props.diff) loadFileContent()
+  }, FILE_CONTENT_DELAY)
+}
+
+watch(() => [props.open, props.file, props.diff], ([open, , diff]) => {
+  clearTimeout(fileContentTimer)
+  if (!open) {
+    fileContentHtml.value = ''
+    return
+  }
+  if (diff) {
+    // 有 diff 内容，清除文件内容视图
+    fileContentHtml.value = ''
+    return
+  }
+  // diff 还没到（空字符串），延迟等待
+  scheduleFileContent()
+})
 
 // ---- Diff 左右对比 (Side-by-Side) ----
 const diffPairs = computed(() => {
@@ -215,14 +284,17 @@ function parseSideBySide(diffText) {
 }
 .btn-icon-sm:hover { color: var(--fg); border-color: var(--border-focus); }
 
-/* Side-by-Side 表格 */
-.diff-sbs {
+/* 内容区域（始终占位，避免高度跳动） */
+.diff-sbs-body {
   flex: 1;
   overflow-y: auto;
   font-size: 12px;
   font-family: var(--mono);
   line-height: 1.6;
   background: var(--bg);
+  min-height: 120px;
+  display: flex;
+  flex-direction: column;
 }
 .diff-sbs-header {
   display: flex;
@@ -244,12 +316,13 @@ function parseSideBySide(diffText) {
 .diff-sbs-label-old { color: var(--fg-4); border-right: 1px solid var(--border); }
 .diff-sbs-label-new { color: var(--fg-4); }
 
-.diff-sbs-row {
+/* 行：diff 和文件内容共用 */
+.diff-sbs-row, .file-content-row {
   display: flex;
   min-height: 20px;
   border-bottom: 1px solid var(--border-muted);
 }
-.diff-sbs-row:last-child { border-bottom: none; }
+.diff-sbs-row:last-child, .file-content-row:last-child { border-bottom: none; }
 
 .diff-sbs-cell {
   flex: 1;
@@ -263,7 +336,7 @@ function parseSideBySide(diffText) {
   flex-shrink: 0;
 }
 
-.diff-sbs-ln {
+.diff-sbs-ln, .file-content-ln {
   flex-shrink: 0;
   width: 40px;
   padding: 0 6px;
@@ -275,7 +348,7 @@ function parseSideBySide(diffText) {
   border-right: 1px solid var(--border-muted);
   line-height: 1.6;
 }
-.diff-sbs-code {
+.diff-sbs-code, .file-content-code {
   flex: 1;
   padding: 0 8px;
   white-space: pre-wrap;
@@ -310,5 +383,24 @@ function parseSideBySide(diffText) {
 [data-theme="retro-yellow"] .diff-sbs-replace .diff-sbs-cell-left { background: rgba(139, 37, 0, 0.08); }
 [data-theme="retro-yellow"] .diff-sbs-replace .diff-sbs-cell-right { background: rgba(74, 103, 65, 0.10); }
 
-.diff-viewer-empty { padding: 32px; text-align: center; font-size: 12px; color: var(--fg-4); }
+/* 加载中 */
+.diff-loading {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--fg-4);
+}
+.diff-loading-spinner {
+  width: 24px;
+  height: 24px;
+  border: 2.5px solid var(--border);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: diff-spin 0.7s linear infinite;
+}
+@keyframes diff-spin { to { transform: rotate(360deg); } }
 </style>
