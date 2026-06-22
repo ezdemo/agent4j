@@ -1,16 +1,17 @@
 package site.sorghum.agent4j.bin.builtin;
 
+import org.noear.solon.ai.annotation.ToolMapping;
+import org.noear.solon.ai.chat.tool.AbsToolProvider;
+import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
-import org.noear.solon.annotation.Inject;
+import org.noear.solon.annotation.Param;
 import site.sorghum.agent4j.bin.goal.*;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
-import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
-import site.sorghum.agent4j.tool.ToolParameter;
-import site.sorghum.agent4j.tool.ToolResult;
+import site.sorghum.agent4j.tool.solon.SolonToTools;
 
 import java.time.Instant;
-import java.util.List;
+import java.util.Collection;
 
 /**
  * Goal Mark Step 工具 —— 标记目标中的某一步为已完成。
@@ -22,86 +23,55 @@ import java.util.List;
  * @author Sorghum
  */
 @Component
-public class GoalMarkDoneTool extends AgentTool {
+public class GoalMarkDoneTool extends AbsToolProvider implements SolonToTools {
 
-
-    @Override
-    public String getName() {
-        return "goal_mark_step";
-    }
-
-    @Override
-    public String getDescription() {
-        return """
+    @ToolMapping(name = "goal_mark_step", description = """
                 标记当前会话目标中的某一步为"已完成"。
                 每完成一个步骤后调用此工具，参数传入步骤序号（从 1 开始计数）。
                 如果所有步骤都已完成，目标会自动标记为已完成。
-                """;
-    }
-
-    @Override
-    public List<ToolParameter> getParameters() {
-        return List.of(
-                new ToolParameter("stepIndex", "integer", true,
-                        "已完成的步骤序号，从 1 开始计数（第一步为 1，第二步为 2，依此类推）"),
-                new ToolParameter("output", "string", false,
-                        "该步骤的执行结果摘要，记录在目标中供后续查阅"),
-                new ToolParameter("sessionId", "string", false,
-                        "会话 ID。留空自动从上下文获取当前会话")
-        );
-    }
-
-    @Override
-    public ToolResult execute(ToolContext ctx) {
-        Integer stepIndex = null;
-        Object v = ctx.getParams().get("stepIndex");
-        if (v instanceof Number num) {
-            stepIndex = num.intValue();
-        } else if (v instanceof String str) {
-            try {
-                stepIndex = Integer.parseInt(str);
-            } catch (NumberFormatException ignored) {
-            }
-        }
+                """)
+    public String goalMarkStep(@Param(name = "stepIndex", description = "已完成的步骤序号，从 1 开始计数（第一步为 1，第二步为 2，依此类推)") Integer stepIndex,
+                               @Param(name = "output", description = "该步骤的执行结果摘要，记录在目标中供后续查阅", required = false) String output,
+                               @Param(name = "sessionId", description = "会话 ID。留空自动从上下文获取当前会话", required = false) String sessionId,
+                               ToolContext ctx) {
+        // 校验 stepIndex
         if (stepIndex == null) {
-            return ToolResult.fail("PARAM_MISSING", "缺少必填参数 'stepIndex'，请传入已完成的步骤序号（从 1 开始）");
+            return "PARAM_MISSING: 缺少必填参数 'stepIndex'，请传入已完成的步骤序号（从 1 开始）";
         }
 
-        String sessionId = ctx.getString("sessionId");
+        // 获取 sessionId
         if (sessionId == null || sessionId.isBlank()) {
             sessionId = ctx.getSessionId();
         }
         if (sessionId == null || sessionId.isBlank()) {
-            return ToolResult.fail("SESSION_MISSING", "无法获取会话 ID，请确保已在会话中");
+            return "SESSION_MISSING: 无法获取会话 ID，请确保已在会话中";
         }
 
         try {
             GoalStore goalStore = WorkspaceManager.getOrCreate(ctx.getRootDir().toAbsolutePath().toString()).getGoalStore();
             Goal goal = goalStore.findBySession(sessionId);
             if (goal == null) {
-                return ToolResult.fail("GOAL_NOT_FOUND",
-                        "当前会话没有活跃目标。请先使用 /goal set 创建目标。");
+                return "GOAL_NOT_FOUND: 当前会话没有活跃目标。请先使用 /goal set 创建目标。";
             }
 
             // stepIndex 从 1 开始计数，转为 0-based
             int idx = stepIndex - 1;
             if (idx < 0 || idx >= goal.getSteps().size()) {
-                return ToolResult.fail("INVALID_STEP_INDEX",
-                        "步骤序号无效。当前目标共有 " + goal.getSteps().size()
-                                + " 步，传入的 stepIndex=" + stepIndex + " 超出范围（1-"
-                                + goal.getSteps().size() + "）。");
+                return "INVALID_STEP_INDEX: 步骤序号无效。当前目标共有 " + goal.getSteps().size()
+                        + " 步，传入的 stepIndex=" + stepIndex + " 超出范围（1-"
+                        + goal.getSteps().size() + ")。";
             }
 
             GoalStep step = goal.getSteps().get(idx);
             if (step.getStatus() == StepStatus.DONE) {
-                return ToolResult.ok("步骤 " + stepIndex + " 之前已标记为完成，无需重复操作。");
+                return "步骤 " + stepIndex + " 之前已标记为完成，无需重复操作。";
             }
 
             // 标记为完成
             step.setStatus(StepStatus.DONE);
             step.setCompletedAt(Instant.now());
-            if (ctx.getString("output") != null) {
-                step.setLastError(ctx.getString("output"));
+            if (output != null) {
+                step.setLastError(output);
             }
             goal.setUpdatedAt(Instant.now());
 
@@ -131,14 +101,26 @@ public class GoalMarkDoneTool extends AgentTool {
                         + nextStepHint;
             }
 
-            return ToolResult.ok(statusMsg);
+            return statusMsg;
 
         } catch (IllegalStateException e) {
-            return ToolResult.fail("WORKSPACE_NOT_INITIALIZED",
-                    "工作区未初始化，无法更新目标状态：" + e.getMessage());
+            return "WORKSPACE_NOT_INITIALIZED: 工作区未初始化，无法更新目标状态：" + e.getMessage();
         } catch (Exception e) {
-            return ToolResult.fail("UPDATE_FAILED",
-                    "标记步骤完成失败：" + e.getMessage());
+            return "UPDATE_FAILED: 标记步骤完成失败：" + e.getMessage();
         }
+    }
+
+    @Override
+    public Collection<FunctionTool> getSolonTools() {
+        return this.getTools();
+    }
+
+    @Override
+    public String getSystemPrompt() {
+        return """
+                标记当前会话目标中的某一步为"已完成"。
+                每完成一个步骤后调用此工具，参数传入步骤序号（从 1 开始计数）。
+                如果所有步骤都已完成，目标会自动标记为已完成。
+                """;
     }
 }

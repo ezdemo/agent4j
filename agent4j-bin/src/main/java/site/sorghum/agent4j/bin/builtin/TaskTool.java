@@ -1,15 +1,21 @@
 package site.sorghum.agent4j.bin.builtin;
 
+import org.noear.solon.ai.annotation.ToolMapping;
+import org.noear.solon.ai.chat.tool.AbsToolProvider;
+import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
-import site.sorghum.agent4j.bin.agent.SubAgent;
+import org.noear.solon.annotation.Param;
+import site.sorghum.agent4j.bin.agent.core.SubAgent;
 import site.sorghum.agent4j.bin.model.ModelClient;
-import site.sorghum.agent4j.bin.tool.ToolDef;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
-import site.sorghum.agent4j.tool.*;
+import site.sorghum.agent4j.tool.AgentLoopController;
+import site.sorghum.agent4j.tool.AgentOutput;
+import site.sorghum.agent4j.tool.ToolContext;
+import site.sorghum.agent4j.tool.solon.SolonToTools;
 
 import java.io.IOException;
-import java.util.List;
+import java.util.Collection;
 import java.util.Map;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
@@ -22,7 +28,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * @author Sorghum
  */
 @Component
-public class TaskTool extends AgentTool {
+public class TaskTool extends AbsToolProvider implements SolonToTools {
 
     // ==================== 父 AgentOutput 传播 ====================
 
@@ -60,12 +66,12 @@ public class TaskTool extends AgentTool {
 
     /**
      * 全局用量收集队列，AgentLoop 在 dispatch 前清空、dispatch 后读取
-     * package-private 可见性，供 {@link MultiTaskTool} 汇总多子代理用量时写入。
+     * package-private 可见性
      */
     static final ConcurrentLinkedQueue<UsageRecord> subAgentUsageCollector = new ConcurrentLinkedQueue<>();
 
     /**
-     * 添加用量记录（供 {@link MultiTaskTool} 等工具使用）
+     * 添加用量记录
      *
      * @param record 用量记录
      */
@@ -74,6 +80,7 @@ public class TaskTool extends AgentTool {
             subAgentUsageCollector.add(record);
         }
     }
+
     @Inject
     private ModelClient modelClient;
 
@@ -96,52 +103,24 @@ public class TaskTool extends AgentTool {
         return drained;
     }
 
-    @Override
-    public String getName() {
-        return "task";
-    }
-
-    @Override
-    public String getDescription() {
-        return "Spawn an isolated sub-agent to handle a complex, multi-step task autonomously. "
-                + "The sub-agent inherits most tools and returns a single result. "
-                + "Use when a task requires deep investigation across many files.";
-    }
-
-    @Override
-    public String toToolSpec() {
-        return """
-                ### task
-                
-                描述：创建隔离子代理处理复杂多步任务。子代理有独立上下文，完成后返回结果给主代理。
+    @ToolMapping(name = "task", description = """
+                创建隔离子代理处理复杂多步任务。子代理有独立上下文，完成后返回结果给主代理。
                 适用于深入调查多个文件或独立功能实现。
                 参数: name(必填), arguments(可选), systemPrompt(可选)。可写。
                 注意：子代理不可再创建子代理（task 工具对子代理不可用）。
-                """;
-    }
-
-    @Override
-    public List<ToolParameter> getParameters() {
-        return List.of(
-                new ToolParameter("name", "string", true, "技能/任务名称，用于标识子代理的任务类型"),
-                new ToolParameter("arguments", "string", false, "技能参数描述/任务详情，作为子代理的初始指令"),
-                new ToolParameter("systemPrompt", "string", false, "可选的子代理系统提示词覆盖，为空时自动生成")
-        );
-    }
-
-    @Override
-    public ToolResult execute(ToolContext ctx) {
-        String name = ctx.getString("name");
-        String arguments = ctx.getString("arguments");
-        String customSystemPrompt = ctx.getString("systemPrompt");
+                """)
+    public String task(@Param(name = "name", description = "技能/任务名称，用于标识子代理的任务类型") String name,
+                       @Param(name = "arguments", description = "技能参数描述/任务详情，作为子代理的初始指令", required = false) String arguments,
+                       @Param(name = "systemPrompt", description = "可选的子代理系统提示词覆盖，为空时自动生成", required = false) String customSystemPrompt,
+                       ToolContext ctx) {
         if (arguments == null) arguments = name;
         try {
             // 检查父级是否已请求中断（通过 AgentLoopController 传播的 ThreadLocal）
             if (ctx.getLoopController() != null && ctx.getLoopController().isAbortRequested()) {
-                return ToolResult.ok("⏹️ 用户已中断，跳过子代理执行");
+                return "⏹️ 用户已中断，跳过子代理执行";
             }
 
-            ToolRegistry registry = ctx.getToolRegistry();
+            ToolRegistry registry = ctx.getLoopController().getToolRegistry();
 
             // 构建子代理的 system prompt
             // 优先使用调用方传入的 systemPrompt，否则自动组合：任务描述 + 工具规范 + 使用指引
@@ -153,9 +132,9 @@ public class TaskTool extends AgentTool {
                 sb.append("你是一个子代理，专注于完成以下任务：").append(arguments).append("\n\n");
                 sb.append("## 可用工具规范\n\n");
                 // 收集并附加工具规范（与 SubAgent 构造函数保持一致的过滤逻辑）
-                for (ToolDef def : registry.all().values()) {
+                for (FunctionTool def : registry.all().values()) {
                     if (!SubAgent.SUB_AGENT_DENY.contains(def.name())) {
-                        String spec = def.toolSpec();
+                        String spec = def.descriptionAndMeta();
                         if (spec != null && !spec.isEmpty()) {
                             sb.append(spec).append("\n\n---\n\n");
                         }
@@ -193,10 +172,25 @@ public class TaskTool extends AgentTool {
                 }
             }
 
-            return ToolResult.ok(result);
+            return result;
         } catch (IOException e) {
-            return ToolResult.fail("IO_ERROR", e.getMessage());
+            return "IO_ERROR: " + e.getMessage();
         }
+    }
+
+    @Override
+    public Collection<FunctionTool> getSolonTools() {
+        return this.getTools();
+    }
+
+    @Override
+    public String getSystemPrompt() {
+        return """
+                创建隔离子代理处理复杂多步任务。子代理有独立上下文，完成后返回结果给主代理。
+                适用于深入调查多个文件或独立功能实现。
+                参数: name(必填), arguments(可选), systemPrompt(可选)。可写。
+                注意：子代理不可再创建子代理（task 工具对子代理不可用）。
+                """;
     }
 
     /**

@@ -442,18 +442,15 @@ const commands = [
 
 // 工具列表
 const tools = [
-  { name: 'read_file', desc: '读取文件内容', params: 'path, head?, tail?, range?', readonly: true },
-  { name: 'edit_file', desc: 'SEARCH/REPLACE 编辑文件', params: 'path, search, replace', readonly: false },
-  { name: 'write_file', desc: '创建或覆盖文件', params: 'path, content', readonly: false },
-  { name: 'multi_edit', desc: '批量原子编辑', params: 'edits[{path,search,replace}]', readonly: false },
-  { name: 'glob', desc: '按模式匹配文件名', params: 'pattern, maxResults?', readonly: true },
-  { name: 'grep', desc: '正则表达式搜索内容', params: 'pattern, glob?, caseSensitive?', readonly: true },
-  { name: 'tree', desc: '生成目录树结构', params: 'maxDepth?', readonly: true },
-  { name: 'run_command', desc: '执行 shell 命令', params: 'command, timeoutSec?', readonly: false },
-  { name: 'web_search', desc: '搜索互联网', params: 'query', readonly: true },
-  { name: 'web_fetch', desc: '下载 URL 内容', params: 'url', readonly: true },
-  { name: 'remember', desc: '保存记忆', params: 'name, type, scope, description, content', readonly: false },
-  { name: 'task', desc: '创建子代理', params: 'name, arguments?', readonly: false }
+  { name: 'read', desc: '读取文件内容', params: 'file_path, offset?, limit?', readonly: true },
+  { name: 'edit', desc: '精准文本替换编辑', params: 'file_path, edits[{old_str,old_StrStartLine,new_str,replace_all}]', readonly: false },
+  { name: 'write', desc: '创建或覆盖文件', params: 'file_path, content', readonly: false },
+  { name: 'bash', desc: '执行 shell 命令', params: 'command, timeout?', readonly: false },
+  { name: 'glob', desc: '按通配符模式搜索文件', params: 'pattern, path', readonly: true },
+  { name: 'grep', desc: '递归搜索内容', params: 'pattern, path, include?', readonly: true },
+  { name: 'ls', desc: '列出目录内容', params: 'path, recursive?, show_hidden?', readonly: true },
+  { name: 'todo_write', desc: '任务跟踪列表', params: 'todos[{status,content,activeForm}]', readonly: false },
+  { name: 'task', desc: '创建子代理', params: 'name, arguments?, systemPrompt?', readonly: false }
 ]
 
 // 故障排除

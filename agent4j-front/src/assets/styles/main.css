@@ -314,6 +314,23 @@ body {
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
+/* 消息内链接 — 代码风格包裹 */
+.ai-link {
+  color: var(--fg-2);
+  text-decoration: none;
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  font-family: var(--mono);
+  font-size: 12px;
+  transition: color var(--t), background var(--t), border-color var(--t);
+}
+.ai-link:hover {
+  color: var(--fg);
+  background: var(--border);
+}
+
 code {
   font-family: var(--mono);
   font-size: 12px;
@@ -646,4 +663,23 @@ textarea { resize: none; }
 [data-theme="retro"] .ant-modal-mask,
 [data-theme="retro-yellow"] .ant-modal-mask {
   background-color: rgba(0, 0, 0, 0.6);
+}
+
+/* diff / modal 遮罩层（全局，供 Teleport 到 body 的弹层使用） */
+.diff-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.default-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: var(--r-sm);
 }

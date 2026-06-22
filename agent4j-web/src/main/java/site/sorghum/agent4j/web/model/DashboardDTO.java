@@ -15,6 +15,7 @@ import java.util.Map;
  * @param totalRequests      总请求数（LLM 调用次数）
  * @param dailyStats         按天统计列表（最近 N 天）
  * @param modelStats         按模型汇总统计
+ * @param modelPrices        模型价格（元/百万 token）model → {input, cache, output}
  */
 public record DashboardDTO(
         long totalPromptTokens,
@@ -25,7 +26,8 @@ public record DashboardDTO(
         int activeDays,
         long totalRequests,
         List<DailyStat> dailyStats,
-        List<ModelStat> modelStats
+        List<ModelStat> modelStats,
+        Map<String, Map<String, Double>> modelPrices
 ) {
     /**
      * 单日统计。

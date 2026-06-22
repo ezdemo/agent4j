@@ -19,6 +19,16 @@ public record ConfigDTO(
         Set<String> disabledTools,
         List<String> blockedPaths,
         String apiKey,
-        Map<String, Map<String, Double>> price
+        Map<String, Map<String, Double>> price,
+        VisionConfig vision
 ) {
+    /**
+     * 视觉模型配置。
+     */
+    public record VisionConfig(
+            String baseUrl,
+            String apiKey,
+            String model
+    ) {
+    }
 }

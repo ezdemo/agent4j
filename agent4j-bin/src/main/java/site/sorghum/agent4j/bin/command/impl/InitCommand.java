@@ -2,7 +2,7 @@ package site.sorghum.agent4j.bin.command.impl;
 
 import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
-import site.sorghum.agent4j.bin.agent.UserMessage;
+import site.sorghum.agent4j.bin.agent.model.UserMessage;
 import site.sorghum.agent4j.bin.command.ChatCommand;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.bin.command.MessageWrapper;

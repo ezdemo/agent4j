@@ -1,6 +1,6 @@
 {
   "name": "agent4j-front",
-  "version": "26.6.17.1",
+  "version": "26.6.22",
   "private": true,
   "main": "dist/main/main.cjs",
   "type": "module",
@@ -32,6 +32,7 @@
     "@ant-design/icons-vue": "^7.0.1",
     "ant-design-vue": "^4.2.6",
     "axios": "^1.6.7",
+    "dompurify": "^3.4.10",
     "highlight.js": "^11.11.1",
     "marked": "^12.0.0",
     "pinia": "^2.1.7",
@@ -39,14 +40,13 @@
     "vue-router": "^4.3.0"
   },
   "devDependencies": {
-    "electron-builder": "^26.15.3",
-    "concurrently": "^9.1.2",
-    "wait-on": "^8.0.3",
     "@vitejs/plugin-vue": "^5.0.4",
     "@vitejs/plugin-vue-jsx": "^3.1.0",
     "@vue/eslint-config-prettier": "^9.0.0",
     "@vue/test-utils": "^2.4.4",
+    "concurrently": "^9.1.2",
     "electron": "^42.4.1",
+    "electron-builder": "^26.15.3",
     "eslint": "^8.57.0",
     "eslint-plugin-vue": "^9.22.0",
     "jsdom": "^24.0.0",
@@ -54,7 +54,8 @@
     "unplugin-auto-import": "^0.17.5",
     "unplugin-vue-components": "^0.26.0",
     "vite": "8.0.5",
-    "vitest": "^1.3.1"
+    "vitest": "^1.3.1",
+    "wait-on": "^8.0.3"
   },
   "engines": {
     "node": ">=18.0.0",

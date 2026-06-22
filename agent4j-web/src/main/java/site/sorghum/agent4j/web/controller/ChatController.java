@@ -5,7 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import org.noear.solon.annotation.*;
 import org.noear.solon.core.handle.Context;
-import site.sorghum.agent4j.bin.agent.UserMessage;
+import site.sorghum.agent4j.bin.agent.model.UserMessage;
 import site.sorghum.agent4j.web.common.WebErrorMessages;
 import site.sorghum.agent4j.web.model.ApiResponse;
 import site.sorghum.agent4j.web.model.ChatRequest;
@@ -46,31 +46,6 @@ public class ChatController {
     @Inject
     private SnapshotService snapshotService;
 
-    @ApiOperation(value = "同步聊天", notes = "发送消息并等待完整回复，返回回复内容、耗时和 Token 用量")
-    @Post
-    @Mapping("")
-    public ApiResponse<ChatResultDTO> chat(
-            @ApiParam(value = "聊天请求（含消息、工作区、会话）") @Body ChatRequest request) throws Exception {
-        if (!agentService.isReady()) {
-            return ApiResponse.fail("Agent 未初始化，请检查 ~/.agent4j/config.json");
-        }
-        if (request == null || request.getMessage() == null || request.getMessage().trim().isEmpty()) {
-            return ApiResponse.fail("message 不能为空");
-        }
-        long t0 = System.currentTimeMillis();
-        String workspacePath = agentService.resolveWorkspacePath(request.getWorkspaceHash());
-        if (workspacePath == null) workspacePath = agentService.getWorkspace();
-        UserMessage userMsg = UserMessage.of(request.getMessage().trim(), request.getImages());
-        String reply = agentService.chat(userMsg, workspacePath, request.getSessionName());
-        long elapsed = System.currentTimeMillis() - t0;
-
-        ChatResultDTO data = new ChatResultDTO(
-                reply, elapsed,
-                agentService.getSessionUsageMap(workspacePath, request.getSessionName())
-        );
-        return ApiResponse.ok(data);
-    }
-
     @ApiOperation(value = "中断当前聊天", notes = "发送中断信号给正在进行的聊天会话")
     @Post
     @Mapping("/abort")
@@ -99,9 +74,7 @@ public class ChatController {
 
         SseEmitter emitter = new SseEmitter(ctx);
         final UserMessage userMsg = UserMessage.of(request.getMessage().trim(), request.getImages());
-        String workspacePath = agentService.resolveWorkspacePath(request.getWorkspaceHash());
-        if (workspacePath == null) workspacePath = agentService.getWorkspace();
-        final String resolvedPath = workspacePath;
+        final String resolvedPath = agentService.resolveWorkspacePath(request.getWorkspaceHash());
         final String sessionName = request.getSessionName();
 
         chatExecutor.submit(() -> {

@@ -2,8 +2,9 @@ package site.sorghum.agent4j.bin.session;
 
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import site.sorghum.agent4j.bin.agent.ChatMessage;
-import site.sorghum.agent4j.bin.agent.ToolCallEntry;
+import org.noear.snack4.ONode;
+import site.sorghum.agent4j.bin.agent.model.ChatMessage;
+import site.sorghum.agent4j.bin.agent.model.ToolCallEntry;
 import site.sorghum.agent4j.bin.util.ONodeUtil;
 import site.sorghum.agent4j.tool.interact.FinishTool;
 
@@ -342,7 +343,7 @@ public class JsonlSessionStore implements SessionStore {
     }
 
     @Override
-    public boolean switchTo(String name) {
+    public boolean bindTo(String name) {
         if (name == null || name.isEmpty()) return false;
         // 切换前先排空缓冲区
         drainBuffer();
@@ -413,7 +414,7 @@ public class JsonlSessionStore implements SessionStore {
             line = line.trim();
             if (line.isEmpty() || line.startsWith("//")) continue;
             try {
-                org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson(line);
+                ONode node = ONode.ofJson(line);
                 messages.add(ChatMessage.fromMap(ONodeUtil.toMap(node)));
             } catch (Exception e) {
                 log.warn("[jsonl] 解析消息行失败: {}", e.getMessage());

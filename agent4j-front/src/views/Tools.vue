@@ -340,59 +340,57 @@ const loadTools = async () => {
 
 const getDefaultTools = () => [
   {
-    name: 'read_file',
-    description: '读取工作区内的文件内容。返回完整的文本内容（无行号标注）。',
+    name: 'read',
+    description: '读取文件内容。支持大文件分页。支持逻辑路径（如 @pool）。优先尝试不限制读取（即尝试完整读取）',
     readonly: true,
     write: false,
     stormExempt: true,
     params: [
-      { name: 'path', type: 'string', required: true, description: '文件路径（相对于工作区根目录）' },
-      { name: 'head', type: 'int', required: false, description: '返回前 N 行' },
-      { name: 'tail', type: 'int', required: false, description: '返回后 N 行' },
-      { name: 'range', type: 'string', required: false, description: '行范围 "start-end"' }
+      { name: 'file_path', type: 'string', required: true, description: '文件相对路径（如 \"src/demo.md\"）或逻辑路径（如 \"@pool\"）。\".\" 表示当前根目录。' },
+      { name: 'offset', type: 'int', required: false, description: '开始读取的行号（默认从1开始索引）' },
+      { name: 'limit', type: 'int', required: false, description: '需要读取的最大行数（默认不限制）。注意：单次读取受 128KB 物理长度保护' }
     ],
-    example: 'read_file({ path: "src/main.java" })',
-    notes: ['一次性读取：请直接读取完整文件，不要使用 head/tail/range 分段读取', '大文件处理：超过 100 MiB 的文件会被拒绝读取']
+    example: 'read({ file_path: "src/main.java" })',
+    notes: ['支持逻辑路径：如 @pool 表示挂载点', '大文件保护：单次读取受 128KB 物理长度保护，若触发截断，请根据输出提示调整 offset 分页读取']
   },
   {
-    name: 'edit_file',
-    description: '对已有文件执行 SEARCH/REPLACE 编辑。这是修改代码的主要工具。',
+    name: 'edit',
+    description: '对文件进行精准文本替换。支持单次调用执行一处或多处编辑。具有原子性：所有编辑成功才会写入，否则全部回滚。',
     readonly: false,
     write: true,
     stormExempt: false,
     params: [
-      { name: 'path', type: 'string', required: true, description: '文件路径' },
-      { name: 'search', type: 'string', required: true, description: '要搜索替换的精确文本（必须唯一）' },
-      { name: 'replace', type: 'string', required: true, description: '替换后的文本' }
+      { name: 'file_path', type: 'string', required: true, description: '文件相对路径（如 \"src/demo.md\"）。\".\" 表示当前根目录。' },
+      { name: 'edits', type: 'array', required: true, description: '编辑操作列表，每个元素包含 old_str、old_StrStartLine、new_str、replace_all' }
     ],
-    example: 'edit_file({ path: "src/Hello.java", search: "Hello!", replace: "Hello, World!" })',
-    notes: ['search 必须唯一：要搜索的文本在文件中只能出现一次', '精确匹配：search 文本必须与文件中完全一致', '缩进敏感：search/replace 中的缩进必须与源文件完全一致']
+    example: 'edit({ file_path: "src/Hello.java", edits: [{ old_str: "Hello!", old_StrStartLine: 10, new_str: "Hello, World!" }] })',
+    notes: ['old_str 必须唯一：要搜索的文本在文件中只能出现一次（除非指定 old_StrStartLine）', '精确匹配：old_str 文本必须与文件中完全一致', '原子性：所有编辑成功才会写入，否则全部回滚']
   },
   {
-    name: 'write_file',
-    description: '创建新文件或覆盖已有文件的内容。父目录会自动创建。',
+    name: 'write',
+    description: '创建新文件或覆盖现有文件。',
     readonly: false,
     write: true,
     stormExempt: false,
     params: [
-      { name: 'path', type: 'string', required: true, description: '文件路径' },
-      { name: 'content', type: 'string', required: true, description: '文件内容' }
+      { name: 'file_path', type: 'string', required: true, description: '文件相对路径（如 \"src/demo.md\"）。\".\" 表示当前根目录。' },
+      { name: 'content', type: 'string', required: true, description: '完整文本内容。' }
     ],
-    example: 'write_file({ path: "src/NewFile.java", content: "public class NewFile {}" })',
-    notes: ['创建新文件：指定 path 和 content，父目录不存在时会自动创建', '覆盖已有文件：会直接覆盖，不可恢复', '编辑已有文件：推荐使用 edit_file 而非 write_file']
+    example: 'write({ file_path: "src/NewFile.java", content: "public class NewFile {}" })',
+    notes: ['创建新文件：指定 file_path 和 content，父目录不存在时会自动创建', '覆盖已有文件：会直接覆盖，不可恢复', '编辑已有文件：推荐使用 edit 而非 write']
   },
   {
-    name: 'run_command',
-    description: '在工作区执行 shell 命令。返回 stdout+stderr 合并输出。',
+    name: 'bash',
+    description: '在终端执行非交互式 Shell 指令。支持多行脚本，支持逻辑路径（如 @pool）自动转环境变量。',
     readonly: false,
     write: true,
     stormExempt: false,
     params: [
-      { name: 'command', type: 'string', required: true, description: 'shell 命令' },
-      { name: 'timeoutSec', type: 'int', required: false, description: '超时秒数（默认 60）' }
+      { name: 'command', type: 'string', required: true, description: '要执行的指令。' },
+      { name: 'timeout', type: 'int', required: false, description: '可选超时时间，单位为毫秒（默认 120000）' }
     ],
-    example: 'run_command({ command: "mvn compile" })',
-    notes: ['只读命令立即执行', '写入命令需要用户确认', '支持管道、重定向等 shell 特性']
+    example: 'bash({ command: "mvn compile" })',
+    notes: ['支持逻辑路径：如 @pool 会自动转为环境变量', '支持多行脚本', '支持管道、重定向等 shell 特性']
   }
 ]
 

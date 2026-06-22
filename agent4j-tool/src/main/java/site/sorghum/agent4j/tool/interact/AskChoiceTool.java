@@ -1,15 +1,18 @@
 package site.sorghum.agent4j.tool.interact;
 
+import org.noear.solon.ai.annotation.ToolMapping;
+import org.noear.solon.ai.chat.tool.AbsToolProvider;
+import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
+import org.noear.solon.annotation.Param;
 import site.sorghum.agent4j.tool.AgentLoopController;
 import site.sorghum.agent4j.tool.AgentOutput;
-import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ErrorCodes;
 import site.sorghum.agent4j.tool.ToolContext;
-import site.sorghum.agent4j.tool.ToolParameter;
-import site.sorghum.agent4j.tool.ToolResult;
+import site.sorghum.agent4j.tool.solon.SolonToTools;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -19,58 +22,33 @@ import java.util.Map;
  * @author Sorghum
  */
 @Component
-public class AskChoiceTool extends AgentTool {
+public class AskChoiceTool extends AbsToolProvider implements SolonToTools {
 
-    @Override
-    public String getName() {
-        return "ask_choice";
-    }
-
-    @Override
-    public String getDescription() {
-        return "Render an arrow-key picker with 2–6 alternatives.";
-    }
-
-    @Override
-    public String toToolSpec() {
-        return """
-                ### ask_choice
-                
-                描述：向用户展示选择菜单（2-6 个选项），等待用户选择。allowCustom=true 允许自定义输入。
-                参数: question(必填), options(必填，支持字符串数组或对象数组), allowCustom(可选)。可写。
-                """;
-    }
-
-    @Override
-    public List<ToolParameter> getParameters() {
-        return List.of(
-                new ToolParameter("question", "string", true, "问题"),
-                new ToolParameter("options", "array", true, "选项列表"),
-                new ToolParameter("allowCustom", "boolean", false, "是否允许自定义输入")
-        );
-    }
-
-    @Override
-    public ToolResult execute(ToolContext ctx) {
+    @ToolMapping(name = "ask_choice", description = """
+                向用户展示选择菜单（2-6 个选项），等待用户选择。allowCustom=true 允许自定义输入。
+                """)
+    public String askChoice(@Param(name = "question", description = "问题") String question,
+                            @Param(name = "options", description = "选项列表") List<Object> options,
+                            @Param(name = "allowCustom", description = "是否允许自定义输入", required = false) Boolean allowCustom,
+                            ToolContext ctx) {
         // 通过 AgentLoopController 获取输出通道
         AgentLoopController ctrl = ctx.getLoopController();
         if (ctrl == null) {
-            return ToolResult.fail(ErrorCodes.NO_CONTROLLER, "没有可用的 AgentLoop 控制器，无法展示选择菜单");
+            return ErrorCodes.NO_CONTROLLER + ": 没有可用的 AgentLoop 控制器，无法展示选择菜单";
         }
         AgentOutput output = ctrl.getOutput();
         if (output == null) {
-            return ToolResult.fail(ErrorCodes.NO_OUTPUT, "没有可用的输出通道，无法展示选择菜单");
+            return ErrorCodes.NO_OUTPUT + ": 没有可用的输出通道，无法展示选择菜单";
         }
 
-        List<?> rawOptions = (List<?>) ctx.getParams().get("options");
-        List<Map<String, Object>> options = normalizeOptions(rawOptions);
+        List<Map<String, Object>> normalizedOptions = normalizeOptions(options);
         String result = output.ask(
-                ctx.getString("question"),
-                options,
-                ctx.getBool("allowCustom", false)
+                question,
+                normalizedOptions,
+                allowCustom != null ? allowCustom : false
         );
         ctrl.requestStop();
-        return ToolResult.ok(result);
+        return result;
     }
 
     /**
@@ -95,4 +73,18 @@ public class AskChoiceTool extends AgentTool {
         }
         return result;
     }
+
+    @Override
+    public Collection<FunctionTool> getSolonTools() {
+        return this.getTools();
+    }
+
+    @Override
+    public String getSystemPrompt() {
+        return """
+                向用户展示选择菜单（2-6 个选项），等待用户选择。allowCustom=true 允许自定义输入。
+                """;
+    }
 }
+
+

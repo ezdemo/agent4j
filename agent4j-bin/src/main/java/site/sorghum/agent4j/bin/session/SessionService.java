@@ -3,9 +3,9 @@ package site.sorghum.agent4j.bin.session;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import site.sorghum.agent4j.bin.agent.ChatMessage;
-import site.sorghum.agent4j.bin.agent.ConversationContext;
-import site.sorghum.agent4j.bin.agent.MessageHealer;
+import site.sorghum.agent4j.bin.agent.context.ConversationContext;
+import site.sorghum.agent4j.bin.agent.context.MessageHealer;
+import site.sorghum.agent4j.bin.agent.model.ChatMessage;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -27,15 +27,10 @@ public class SessionService {
 
     private final ConversationContext ctx;
     /**
-     * 当前工作区的会话目录（支持工作区隔离）
-     */
-    private final Path sessionsDir;
-    /**
      * 按模型分别累计的 token 用量：model -> [prompt, completion, cacheHit, cacheMiss]
      */
     private final Map<String, long[]> modelUsage = new LinkedHashMap<>();
     /**
-     * -- GETTER --
      *  获取底层 SessionStore
      */
     @Getter
@@ -50,12 +45,6 @@ public class SessionService {
     private long sessionLastPromptTokens;
     /**
      * 是否已生成会话标题
-     * -- GETTER --
-     *  检查是否已生成会话标题
-     * -- SETTER --
-     *  设置标题已生成标志
-
-
      */
     @Setter
     @Getter
@@ -69,7 +58,6 @@ public class SessionService {
      */
     public SessionService(ConversationContext ctx, Path sessionsDir) throws IOException {
         this.ctx = ctx;
-        this.sessionsDir = sessionsDir;
         this.store = new JsonlSessionStore(sessionsDir);
         ctx.setSessionStore(store);
     }
@@ -84,12 +72,12 @@ public class SessionService {
      */
     public void loadOrCreate(String sessionName) throws IOException {
         if (sessionName != null && !sessionName.isEmpty()) {
-            if (!store.switchTo(sessionName)) {
+            if (!store.bindTo(sessionName)) {
                 log.warn("[session] 切换到指定会话失败: {}，使用新会话", sessionName);
             }
             // 仅在明确指定会话时才加载历史和恢复用量
             List<ChatMessage> loaded = store.load();
-            var healResult = MessageHealer.heal(loaded, false);
+            var healResult = MessageHealer.heal(loaded);
             loaded = healResult.messages();
             for (ChatMessage m : loaded) {
                 ctx.injectHistory(m);
@@ -105,27 +93,6 @@ public class SessionService {
             }
         }
         // sessionName 为空时：保持 store 当前状态（新建的空白会话），不加载历史
-    }
-
-    /**
-     * 新建会话：保存当前、关闭旧 store、创建新会话
-     */
-    public void newSession() throws IOException {
-        saveUsage();
-        // 关闭旧的 store，释放定时器 + writer 资源
-        if (store instanceof JsonlSessionStore) {
-            ((JsonlSessionStore) store).shutdown();
-        }
-        // 使用工作区隔离的会话目录（如果有的话）
-        if (sessionsDir != null) {
-            store = new JsonlSessionStore(sessionsDir);
-        } else {
-            store = new JsonlSessionStore();
-        }
-        ctx.setSessionStore(store);
-        ctx.clearHistory();  // 仅清空内存历史，不重写旧会话文件
-        resetUsage();
-        titleGenerated = false; // 新会话，标题未生成
     }
 
     /**
@@ -267,7 +234,7 @@ public class SessionService {
     public void ensureSessionName() {
         if (store.currentName() == null) {
             String newName = store.newSessionName();
-            store.switchTo(newName);
+            store.bindTo(newName);
         }
     }
 
