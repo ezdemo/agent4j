@@ -224,6 +224,7 @@ const handleSwitchModel = async (modelName) => {
       availableModels.value.forEach(m => {
         m.active = m.name === modelName
       })
+      loadUsage()
     }
   } catch (e) {
     console.error('切换模型失败:', e)
