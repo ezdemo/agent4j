@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.tool;
 
 import lombok.Getter;
+import org.noear.snack4.annotation.ONodeAttr;
 
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -42,9 +43,9 @@ public class ToolContext {
      * 全参数构造器。
      * <p>不使用的参数传 {@code null} 或合适的默认值。</p>
      */
-    public ToolContext(Map<String, Object> params, Path rootDir, String sessionId) {
+    public ToolContext(Map<String, Object> params, String rootDir, String sessionId) {
         this.params = params != null ? new HashMap<>(params) : Collections.emptyMap();
-        this.rootDir = rootDir.toAbsolutePath().toString();
+        this.rootDir = rootDir;
         this.sessionId = sessionId;
     }
 
@@ -142,6 +143,7 @@ public class ToolContext {
         return "ToolContext" + params;
     }
 
+    @ONodeAttr(ignore = true)
     public Path getRootDir() {
         return Paths.get(rootDir);
     }
