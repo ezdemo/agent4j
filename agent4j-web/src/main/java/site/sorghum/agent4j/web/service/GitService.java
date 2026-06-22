@@ -192,6 +192,7 @@ public class GitService {
     /**
      * 获取 Git Diff 内容 —— 分别执行未暂存变更和已暂存变更的 diff 查询，合并输出。
      * 对于未跟踪文件，返回文件内容作为新增的 diff。
+     * 如果非 Git 管理或没有 diff，返回文件原文内容。
      */
     public GitDiffContentDTO getDiffContent(String workspaceHash, String path) throws Exception {
         File workspaceDir = new File(resolveWorkspace(workspaceHash));
@@ -200,6 +201,15 @@ public class GitService {
         path = validatePath(path);
 
         boolean hasPath = path != null && !path.isEmpty();
+
+        // 检查是否是 Git 仓库
+        ProcessResult checkRepo = runGit(workspaceDir, "git", "rev-parse", "--is-inside-work-tree");
+        boolean isGitRepo = checkRepo.exitCode == 0;
+
+        if (!isGitRepo) {
+            // 非 Git 管理，返回原文内容
+            return getOriginalContent(workspaceDir, path, hasPath);
+        }
 
         // 未暂存的变更
         List<String> unstagedCmd = new ArrayList<>(Arrays.asList("git", "diff"));
@@ -253,6 +263,11 @@ public class GitService {
             }
         }
 
+        // 如果没有 diff 且指定了路径，返回原文内容
+        if (hasPath && fullDiff.trim().isEmpty()) {
+            return getOriginalContent(workspaceDir, path, true);
+        }
+
         // 截断保护：单文件 diff 限制 2000 行
         if (hasPath) {
             String[] lines = fullDiff.split("\n");
@@ -296,6 +311,33 @@ public class GitService {
         }
 
         return new GitDiffContentDTO(fullDiff, stat);
+    }
+
+    /**
+     * 获取文件原文内容 —— 用于非 Git 管理或没有 diff 的情况。
+     */
+    private GitDiffContentDTO getOriginalContent(File workspaceDir, String path, boolean hasPath) {
+        if (!hasPath) {
+            // 没有指定路径，返回空内容
+            return new GitDiffContentDTO("", "");
+        }
+
+        File file = new File(workspaceDir, path);
+        if (!file.exists() || !file.isFile()) {
+            // 文件不存在，返回空内容
+            return new GitDiffContentDTO("", "");
+        }
+
+        try {
+            List<String> lines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
+            int lineCount = lines.size();
+            String content = String.join("\n", lines);
+            String stat = path + " | " + lineCount + " lines";
+            return new GitDiffContentDTO(content, stat);
+        } catch (Exception e) {
+            log.debug("[git] 读取文件失败: {}", e.getMessage());
+            return new GitDiffContentDTO("", "");
+        }
     }
 
     /**
