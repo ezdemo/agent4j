@@ -1,5 +1,5 @@
 <template>
-  <template v-if="blocks && blocks.length > 0" v-for="(block, bi) in blocks" :key="bi">
+  <template v-if="processedBlocks.length > 0" v-for="(block, bi) in processedBlocks" :key="bi">
     <!-- 思考 -->
     <div v-if="block.type === 'reasoning'" class="block-reasoning">
       <div class="reasoning-head" @click="block.showContent = !block.showContent">
@@ -21,7 +21,70 @@
     <!-- 内容 -->
     <div v-else-if="block.type === 'content' && block.content" class="block-content" v-html="fmt(block.content)"></div>
 
-    <!-- 工具调用 -->
+    <!-- 工具调用分组（连续多个工具合并，样式与普通工具栏一致） -->
+    <div v-else-if="block.type === 'tool_group'" class="block-tool">
+      <div class="tool-head" @click="toggleToolGroup(block._groupId)">
+        <span class="tool-icon default-icon" :class="block._groupRunning ? '执行中' : '成功'">
+          <span v-if="block._groupRunning" v-html="SPINNER_ICON"></span>
+          <span v-else-if="block._groupAllDone" v-html="CHECK_ICON_SM"></span>
+          <span v-else v-html="CIRCLE_ICON"></span>
+        </span>
+        <code class="tool-name">{{ block._tools.length }} 个工具</code>
+        <span class="tool-status" :class="block._groupRunning ? '执行中' : '成功'">{{ block._groupRunning ? '执行中' : '成功' }}</span>
+        <span class="tool-param" :title="getToolGroupOrder(block)">{{ getToolGroupOrderTruncated(block) }}</span>
+        <span class="default-icon"
+              v-html="CHEVRON_DOWN_ICON"
+              :style="{
+                transform: toolGroupsExpanded[block._groupId] ? 'rotate(180deg)' : 'rotate(0deg)',
+                display: 'inline-block',
+                transition: 'transform 0.25s ease',
+                lineHeight: 0
+              }">
+        </span>
+      </div>
+      <div v-if="toolGroupsExpanded[block._groupId]" class="tool-group-detail">
+        <div v-for="(t, ti) in block._tools" :key="ti" class="tool-group-item-block">
+          <div class="block-tool">
+            <div class="tool-head" @click="t.expanded = !t.expanded">
+              <span class="tool-icon default-icon" :class="t.status">
+                <span v-if="t.status === '执行中'" v-html="SPINNER_ICON"></span>
+                <span v-else-if="t.status === '成功'" v-html="CHECK_ICON_SM"></span>
+                <span v-else v-html="CIRCLE_ICON"></span>
+              </span>
+              <code class="tool-name">{{ t.name }}</code>
+              <span class="tool-status" :class="t.status">{{ t.status }}</span>
+              <span v-if="t.name === 'bash' && getBashCommand(t)" class="tool-param"
+                    :title="getBashCommandFull(t)">{{ getBashCommand(t) }}</span>
+              <span v-else-if="t.name === 'grep' && getGrepPath(t)" class="tool-param"
+                    :title="getGrepPathFull(t)">{{ getGrepPath(t) }}</span>
+              <span v-else-if="t.name === 'glob' && getGlobPath(t)" class="tool-param"
+                    :title="getGlobPathFull(t)">{{ getGlobPath(t) }}</span>
+              <span v-else-if="t.name === 'ls' && getLsPath(t)" class="tool-param"
+                    :title="getLsPath(t)">{{ getLsPath(t) }}</span>
+              <button v-else-if="shouldShowOpenFile(t)" class="tool-file" @click.stop="openFile(t)"
+                      :title="getFilePath(t)">{{ getFileName(t) }}
+              </button>
+              <span v-else-if="t.name === 'ask_choice' && getChoiceQuestion(t)" class="tool-param tool-param-wide"
+                    :title="getChoiceQuestion(t)">{{ getChoiceQuestion(t) }}</span>
+              <span class="default-icon" v-html="CHEVRON_DOWN_ICON"
+                    :style="{
+                      transform: t.expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                      display: 'inline-block',
+                      transition: 'transform 0.25s ease',
+                      lineHeight: 0
+                    }">
+              </span>
+            </div>
+            <div v-if="t.expanded" class="tool-detail">
+              <pre v-if="t.args"><code>{{ fmtArgs(t.args) }}</code></pre>
+              <pre v-if="t.result"><code>{{ t.result }}</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 单个工具调用（非连续时不合并） -->
     <template v-else-if="block.type === 'tool_call'">
       <!-- finish 工具：完成时将 content 渲染为模型输出样式 -->
       <div v-if="block.name === 'finish' && block.result" class="block-finish">
@@ -120,12 +183,75 @@ import {md} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
 import {CHECK_ICON, CHECK_ICON_SM, CHEVRON_DOWN_ICON, CIRCLE_ICON, SPINNER_ICON, THINKING_ICON} from '../utils/icons'
 import {LRUCache} from '../utils/cache'
+import {ref, computed} from 'vue'
 
 const props = defineProps({
   blocks: {type: Array, required: true}
 })
 
 const emit = defineEmits(['sendChoice', 'openFile'])
+
+// ── 工具分组折叠状态 ──
+let _groupSeq = 0
+const toolGroupsExpanded = ref({})
+
+const toggleToolGroup = (groupId) => {
+  toolGroupsExpanded.value = {...toolGroupsExpanded.value, [groupId]: !toolGroupsExpanded.value[groupId]}
+}
+
+/** 将连续 tool_call 合并为 tool_group */
+const processedBlocks = computed(() => {
+  const src = props.blocks
+  if (!src || src.length === 0) return []
+  const out = []
+  let i = 0
+  while (i < src.length) {
+    const b = src[i]
+    if (b.type === 'tool_call' && b.name !== 'finish') {
+      // 收集连续的 tool_call
+      const group = [b]
+      let j = i + 1
+      while (j < src.length && src[j].type === 'tool_call' && src[j].name !== 'finish') {
+        group.push(src[j])
+        j++
+      }
+      if (group.length >= 2) {
+        // 多个连续工具 → 合并为 tool_group
+        _groupSeq++
+        const gid = `tg-${_groupSeq}`
+        const allDone = group.every(t => t.status === '成功')
+        const running = group.some(t => t.status === '执行中')
+        out.push({
+          type: 'tool_group',
+          _groupId: gid,
+          _tools: group,
+          _groupAllDone: allDone,
+          _groupRunning: running
+        })
+      } else {
+        // 单个工具不合并
+        out.push(b)
+      }
+      i = j
+    } else {
+      out.push(b)
+      i++
+    }
+  }
+  return out
+})
+
+// ── 工具分组顺序辅助 ──
+const getToolGroupOrder = (block) => {
+  if (!block || !block._tools) return ''
+  return block._tools.map(t => t.name).join(' → ')
+}
+
+const getToolGroupOrderTruncated = (block) => {
+  const order = getToolGroupOrder(block)
+  if (!order) return ''
+  return order.length > 60 ? order.slice(0, 57) + '...' : order
+}
 
 // Markdown 渲染缓存
 const renderCache = new LRUCache(200)
@@ -348,7 +474,7 @@ const getChoiceQuestion = (block) => {
 .reasoning-text :deep(code) {
   font-size: 11px;
   background: var(--bg-3);
-  padding: 1px 4px;
+  padding: 0 4px;
   border-radius: 3px;
 }
 
@@ -682,6 +808,16 @@ const getChoiceQuestion = (block) => {
   background: var(--bg);
 }
 
+/* 工具分组展开内容 */
+.tool-group-detail {
+  border-top: 1px solid var(--glass-border);
+  padding: 4px 6px;
+}
+
+.tool-group-item-block + .tool-group-item-block {
+  margin-top: 2px;
+}
+
 /* 工具块 */
 .block-tool {
   background: var(--glass-bg);
@@ -732,7 +868,8 @@ const getChoiceQuestion = (block) => {
 
 .tool-status {
   font-size: 10px;
-  padding: 1px 4px;
+  padding: 0 4px;
+  font-weight: 500;
   border-radius: var(--r-sm);
   font-family: var(--mono);
 }
@@ -774,7 +911,7 @@ const getChoiceQuestion = (block) => {
   color: var(--fg-3);
   background: var(--bg-3);
   border-radius: 3px;
-  padding: 1px 6px;
+  padding: 0 6px;
   max-width: 220px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -795,7 +932,7 @@ const getChoiceQuestion = (block) => {
   color: var(--fg-3);
   background: var(--bg-3);
   border-radius: 3px;
-  padding: 1px 6px;
+  padding: 0 6px;
   max-width: 180px;
   font-family: var(--mono);
   overflow: hidden;

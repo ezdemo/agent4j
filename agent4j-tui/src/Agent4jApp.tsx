@@ -15,7 +15,8 @@ import {ApiClient, ApiError} from "./api/client.js";
 import type {CommandItem, ModelItem, SessionItem, SseEvent} from "./api/types.js";
 import type {StreamParams} from "./api/sse.js";
 import {SseClient} from "./api/sse.js";
-import {CardRenderer} from "./cards/CardRenderer.js";
+import {CardRenderer, ToolGroupCard} from "./cards/CardRenderer.js";
+import type {ToolGroupData} from "./cards/CardRenderer.js";
 import type {StatusPart} from "./ComposerArea.js";
 import {ComposerArea} from "./ComposerArea.js";
 import {useKeystroke} from "./input/keystroke-context.js";
@@ -183,6 +184,43 @@ function buildCardsFromMessages(messages: Array<{
     return cards;
 }
 
+/** 将连续 tool 卡片分组为虚拟 tool_group 卡片 */
+let _tgSeq = 0;
+type RenderableItem = Card | ToolGroupData;
+
+function groupConsecutiveTools(cards: readonly Card[]): RenderableItem[] {
+    const out: RenderableItem[] = [];
+    let i = 0;
+    while (i < cards.length) {
+        const c = cards[i]!;
+        if (c.kind === "tool") {
+            const group: Array<Card & { kind: "tool" }> = [c as Card & { kind: "tool" }];
+            let j = i + 1;
+            while (j < cards.length && cards[j]!.kind === "tool") {
+                group.push(cards[j]! as Card & { kind: "tool" });
+                j++;
+            }
+            if (group.length >= 2) {
+                _tgSeq++;
+                out.push({
+                    kind: "tool_group",
+                    id: `tg-${_tgSeq}`,
+                    tools: group,
+                    allDone: group.every((t) => t.done),
+                    running: group.some((t) => !t.done),
+                });
+            } else {
+                out.push(c);
+            }
+            i = j;
+        } else {
+            out.push(c);
+            i++;
+        }
+    }
+    return out;
+}
+
 // ── 主组件 ────────────────────────────────────────────────────
 
 export function Agent4jApp({apiUrl, workspaceHash: defaultWorkspace, token}: Agent4jAppProps): React.ReactElement {
@@ -300,8 +338,28 @@ export function Agent4jApp({apiUrl, workspaceHash: defaultWorkspace, token}: Age
     const expandedRef = useRef(expandedCards);
     expandedRef.current = expandedCards;
 
+    // ── 连续工具分组 ─────────────────────────────────────────
+    const groupedCards = useMemo(() => groupConsecutiveTools(cards), [cards]);
+
     const stableRenderCard = useCallback(
-        (card: Card) => {
+        (item: RenderableItem) => {
+            if (item.kind === "tool_group") {
+                const groupExpanded = expandedRef.current[item.id] ?? false;
+                return (
+                    <ToolGroupCard
+                        group={item}
+                        expanded={groupExpanded}
+                        expandedTools={expandedRef.current}
+                        onToggleGroup={() => {
+                            setExpandedCards((prev) => ({...prev, [item.id]: !prev[item.id]}));
+                        }}
+                        onToggleTool={(toolId: string) => {
+                            setExpandedCards((prev) => ({...prev, [toolId]: !prev[toolId]}));
+                        }}
+                    />
+                );
+            }
+            const card = item as Card;
             const expanded = expandedRef.current[card.id] ?? (card.kind === "reasoning");
             const toggleable = card.kind === "reasoning" || card.kind === "tool";
             return (
@@ -319,12 +377,12 @@ export function Agent4jApp({apiUrl, workspaceHash: defaultWorkspace, token}: Age
 
     // ── 键盘 e 展开最后一个可折叠卡片 ─────────────────────────
     const lastCollapsible = useMemo(() => {
-        for (let i = cards.length - 1; i >= 0; i--) {
-            const c = cards[i];
-            if (c && (c.kind === "reasoning" || c.kind === "tool")) return c.id;
+        for (let i = groupedCards.length - 1; i >= 0; i--) {
+            const c = groupedCards[i];
+            if (c && (c.kind === "reasoning" || c.kind === "tool" || c.kind === "tool_group")) return c.id;
         }
         return null;
-    }, [cards]);
+    }, [groupedCards]);
 
     useKeystroke((ev) => {
         if (ev.input === "e" && !ev.ctrl && !ev.meta && lastCollapsible) {
@@ -336,9 +394,9 @@ export function Agent4jApp({apiUrl, workspaceHash: defaultWorkspace, token}: Age
     useKeystroke((ev) => {
         if (!ev.mouseClick || !ev.mouseRow) return;
         let cursor = 1;
-        for (const c of cards) {
+        for (const c of groupedCards) {
             if (ev.mouseRow >= cursor - 1 && ev.mouseRow <= cursor + 3) {
-                if (c.kind === "reasoning" || c.kind === "tool") {
+                if (c.kind === "reasoning" || c.kind === "tool" || c.kind === "tool_group") {
                     setExpandedCards((prev) => ({...prev, [c.id]: !prev[c.id]}));
                 }
                 break;
@@ -772,7 +830,7 @@ export function Agent4jApp({apiUrl, workspaceHash: defaultWorkspace, token}: Age
 
             {/* 卡片流 */}
             <CardStream
-                cards={cards}
+                cards={groupedCards}
                 renderCard={stableRenderCard}
             />
 
