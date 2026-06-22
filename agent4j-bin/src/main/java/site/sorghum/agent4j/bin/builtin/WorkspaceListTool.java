@@ -1,13 +1,16 @@
 package site.sorghum.agent4j.bin.builtin;
 
+import org.noear.solon.ai.annotation.ToolMapping;
+import org.noear.solon.ai.chat.tool.AbsToolProvider;
+import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
+import org.noear.solon.annotation.Param;
 import site.sorghum.agent4j.bin.workspace.SharedWorkspace;
-import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.ToolContext;
-import site.sorghum.agent4j.tool.ToolParameter;
-import site.sorghum.agent4j.tool.ToolResult;
+import site.sorghum.agent4j.tool.solon.SolonToTools;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -22,7 +25,7 @@ import java.util.stream.Collectors;
  * @author Sorghum
  */
 @Component
-public class WorkspaceListTool extends AgentTool {
+public class WorkspaceListTool extends AbsToolProvider implements SolonToTools {
 
     @Inject
     private SharedWorkspace workspace;
@@ -42,66 +45,35 @@ public class WorkspaceListTool extends AgentTool {
         this.workspace = workspace;
     }
 
-    @Override
-    public String getName() {
-        return "workspace_list";
-    }
-
-    @Override
-    public String getDescription() {
-        return "List keys in the shared workspace. Supports optional prefix filtering.\n"
-                + "Returns all matching KV and document entry keys, sorted alphabetically,\n"
-                + "with index numbers and total count. Use without prefix to list all entries.";
-    }
-
-    @Override
-    public String toToolSpec() {
-        return """
-                ### workspace_list
-
-                描述：列出共享工作区中的条目键。支持按前缀过滤，返回所有匹配的 KV 和文档条目的 key 列表。
+    @ToolMapping(name = "workspace_list", description = """
+                列出共享工作区中的条目键。支持按前缀过滤，返回所有匹配的 KV 和文档条目的 key 列表。
                 参数: prefix(可选, key 前缀过滤), scope(可选, 作用域预留)。
                 prefix 为空时列出所有条目。
                 只读。
-                """;
-    }
-
-    @Override
-    public List<ToolParameter> getParameters() {
-        return List.of(
-                new ToolParameter("prefix", "string", false,
-                        "Optional prefix to filter keys. Only keys starting with this prefix will be returned."),
-                new ToolParameter("scope", "string", false,
-                        "Scope / namespace filter (reserved for future use)")
-        );
-    }
-
-    @Override
-    public boolean isReadOnly() {
-        return true;
-    }
-
-    @Override
-    public ToolResult execute(ToolContext ctx) {
+                """)
+    public String workspaceList(@Param(name = "prefix", description = "Optional prefix to filter keys. Only keys starting with this prefix will be returned.", required = false) String prefix,
+                                @Param(name = "scope", description = "Scope / namespace filter (reserved for future use)", required = false) String scope,
+                                ToolContext ctx) {
         // 1. 获取 prefix，可选，默认为空字符串（列出所有）
-        String prefix = ctx.getString("prefix", "");
+        if (prefix == null) {
+            prefix = "";
+        }
 
         // 2. 调用 workspace.listKeys(prefix)
         Set<String> keys;
         try {
             keys = workspace.listKeys(prefix);
         } catch (Exception e) {
-            return ToolResult.fail("LIST_FAILED",
-                    "Failed to list workspace keys with prefix '" + prefix + "': " + e.getMessage());
+            return "LIST_FAILED: Failed to list workspace keys with prefix '" + prefix + "': " + e.getMessage();
         }
 
         // 3. 格式化输出
         if (keys == null || keys.isEmpty()) {
             if (prefix.isEmpty()) {
-                return ToolResult.ok("Workspace is empty. No entries found.");
+                return "Workspace is empty. No entries found.";
             } else {
-                return ToolResult.ok("No entries found with prefix: '" + prefix + "'.\n"
-                        + "Tip: Use workspace_list without prefix to see all available keys.");
+                return "No entries found with prefix: '" + prefix + "'.\n"
+                        + "Tip: Use workspace_list without prefix to see all available keys.";
             }
         }
 
@@ -126,6 +98,21 @@ public class WorkspaceListTool extends AgentTool {
                 .append(sortedKeys.size() == 1 ? "y" : "ies")
                 .append(".");
 
-        return ToolResult.ok(sb.toString());
+        return sb.toString();
+    }
+
+    @Override
+    public Collection<FunctionTool> getSolonTools() {
+        return this.getTools();
+    }
+
+    @Override
+    public String getSystemPrompt() {
+        return """
+                列出共享工作区中的条目键。支持按前缀过滤，返回所有匹配的 KV 和文档条目的 key 列表。
+                参数: prefix(可选, key 前缀过滤), scope(可选, 作用域预留)。
+                prefix 为空时列出所有条目。
+                只读。
+                """;
     }
 }

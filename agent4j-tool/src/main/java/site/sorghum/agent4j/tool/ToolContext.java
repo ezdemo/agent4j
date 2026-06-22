@@ -1,8 +1,10 @@
 package site.sorghum.agent4j.tool;
 
 import lombok.Getter;
+import org.noear.snack4.annotation.ONodeAttr;
 
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -12,6 +14,7 @@ import java.util.Map;
  * 工具执行上下文——封装一次工具调用的全部入参。
  * <p>
  * 包含调用参数 Map 和一个可选的根目录路径，
+ * 以及线程局部的 {@link AgentLoopController} 引用。
  * </p>
  *
  * @author Sorghum
@@ -20,14 +23,7 @@ import java.util.Map;
 public class ToolContext {
 
     /**
-     * 线程局部沙箱旁路标志，供 resolveSafe 等深层方法在不持有 ToolContext 时检查。
-     * HITL 审批通过路径越界后，AgentLoop 在重放执行前设置此标志。
-     */
-    private static final ThreadLocal<Boolean> SANDBOX_BYPASS_TL = new ThreadLocal<>();
-    /**
      * AgentLoop 控制器线程局部引用。
-     * 由 {@code ToolDispatcher.dispatch()} 在执行工具前注入，
-     * 替代通过 args map 传递 {@code __controller__} 的硬编码方式。
      */
     private static final ThreadLocal<AgentLoopController> CONTROLLER_TL = new ThreadLocal<>();
     /**
@@ -37,79 +33,20 @@ public class ToolContext {
     /**
      * 工作区根目录（可选）
      */
-    private final Path rootDir;
-    /**
-     * LLM API 地址（可选，供需要 API 调用的工具使用）
-     */
-    private final String apiUrl;
-    /**
-     * LLM API Key（可选）
-     */
-    private final String apiKey;
-    /**
-     * 工具注册表引用（可选，供需要创建子代理的工具使用）
-     */
-    private final Object toolRegistry;
-    /**
-     * 屏蔽目录列表（相对路径，相对于工作区根目录）
-     */
-    private final List<String> blockedPaths;
+    private final String rootDir;
     /**
      * 当前会话ID（可选，用于按会话隔离数据）
      */
     private final String sessionId;
 
     /**
-     * 沙箱旁路标志 — HITL 审批通过路径越界后置为 true，
-     * resolveSafe 检测到此标志时跳过边界校验。
-     */
-    private final boolean skipSandboxCheck;
-
-    /**
      * 全参数构造器。
      * <p>不使用的参数传 {@code null} 或合适的默认值。</p>
      */
-    public ToolContext(Map<String, Object> params, Path rootDir, String apiUrl, String apiKey,
-                       Object toolRegistry, List<String> blockedPaths, String sessionId,
-                       boolean skipSandboxCheck) {
+    public ToolContext(Map<String, Object> params, String rootDir, String sessionId) {
         this.params = params != null ? new HashMap<>(params) : Collections.emptyMap();
         this.rootDir = rootDir;
-        this.apiUrl = apiUrl;
-        this.apiKey = apiKey;
-        this.toolRegistry = toolRegistry;
-        this.blockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
         this.sessionId = sessionId;
-        this.skipSandboxCheck = skipSandboxCheck;
-    }
-
-    // ==================== 线程级沙箱旁路 ====================
-
-    /**
-     * 开启当前线程的沙箱旁路（resolveSafe 跳过边界检查）
-     */
-    public static void enableSandboxBypass() {
-        SANDBOX_BYPASS_TL.set(true);
-    }
-
-    /**
-     * 关闭当前线程的沙箱旁路
-     */
-    public static void disableSandboxBypass() {
-        SANDBOX_BYPASS_TL.remove();
-    }
-
-    /**
-     * 当前线程是否开启了沙箱旁路
-     */
-    public static boolean isSandboxBypass() {
-        return Boolean.TRUE.equals(SANDBOX_BYPASS_TL.get());
-    }
-
-    /**
-     * 沙箱旁路标志 — HITL 审批通过后为 true
-     */
-    public boolean isSkipSandboxCheck() {
-        return skipSandboxCheck;
     }
 
     // ==================== 参数访问 ====================
@@ -185,13 +122,6 @@ public class ToolContext {
         return defaultValue;
     }
 
-    /**
-     * 获取工具注册表（类型安全的调用方应自行转型）。
-     */
-    @SuppressWarnings("unchecked")
-    public <T> T getToolRegistry() {
-        return (T) toolRegistry;
-    }
 
     /**
      * 获取 AgentLoop 控制器引用，用于控制推理循环。
@@ -202,81 +132,19 @@ public class ToolContext {
     }
 
     /**
-     * 请求停止推理循环（空安全）。
-     */
-    public void requestStopLoop() {
-        AgentLoopController ctrl = CONTROLLER_TL.get();
-        if (ctrl != null) {
-            ctrl.requestStop();
-        }
-    }
-
-    /**
-     * 在下一轮循环前注入一条用户消息（空安全）。
-     *
-     * @param message 要注入的用户消息
-     */
-    public void injectUserMessage(String message) {
-        AgentLoopController ctrl = CONTROLLER_TL.get();
-        if (ctrl != null) {
-            ctrl.injectUserMessage(message);
-        }
-    }
-
-    /**
-     * 向下游推送自定义事件（空安全）。
-     *
-     * @param type 事件类型标识符
-     * @param data JSON 格式的事件数据
-     */
-    public void emitEvent(String type, String data) {
-        AgentLoopController ctrl = CONTROLLER_TL.get();
-        if (ctrl != null) {
-            ctrl.emitEvent(type, data);
-        }
-    }
-
-    /**
      * 检查参数是否存在。
      */
     public boolean has(String key) {
         return params.containsKey(key);
     }
 
-    /**
-     * 参数数量。
-     */
-    public int paramCount() {
-        return params.size();
-    }
-
-    /**
-     * 检查目标路径是否在屏蔽目录列表中。
-     * 目标路径必须是已解析的绝对路径。
-     *
-     * @param target 已解析的绝对路径
-     * @return 如果路径被屏蔽返回 true
-     */
-    public boolean isPathBlocked(Path target) {
-        if (blockedPaths.isEmpty() || rootDir == null || target == null) {
-            return false;
-        }
-        final Path rootAbs = rootDir.toAbsolutePath().normalize();
-        final Path targetAbs = target.toAbsolutePath().normalize();
-        if (!targetAbs.startsWith(rootAbs)) {
-            return false; // 路径越界由 resolveSafe 处理
-        }
-        for (String blocked : blockedPaths) {
-            final Path blockedPath = rootAbs.resolve(blocked).normalize();
-            if (targetAbs.equals(blockedPath) || targetAbs.startsWith(blockedPath)) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     @Override
     public String toString() {
         return "ToolContext" + params;
+    }
+
+    @ONodeAttr(ignore = true)
+    public Path getRootDir() {
+        return Paths.get(rootDir);
     }
 }

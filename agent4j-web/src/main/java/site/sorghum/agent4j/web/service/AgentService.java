@@ -5,11 +5,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
 import org.noear.solon.annotation.Inject;
-import site.sorghum.agent4j.bin.agent.*;
+import site.sorghum.agent4j.bin.agent.context.ConversationContext;
+import site.sorghum.agent4j.bin.agent.core.Agent4jAgent;
+import site.sorghum.agent4j.bin.agent.model.ChatMessage;
+import site.sorghum.agent4j.bin.agent.model.UserMessage;
 import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
+import site.sorghum.agent4j.bin.config.ConfigService;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
-import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.session.JsonlSessionStore;
 import site.sorghum.agent4j.bin.session.SessionStore;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
@@ -34,18 +37,9 @@ import java.util.stream.Collectors;
  * <p>
  * 实现"一个会话一个 Agent"架构：
  * - 每个会话（workspacePath::sessionName）拥有独立的 Agent4jAgent 实例
- * - 共享 ModelClient、ToolRegistry 和 PromptPrefix 减少资源消耗
+ * - 共享 ModelClient、ToolRegistry 减少资源消耗
  * - 每个 Agent 有自己的 ReentrantLock，支持并发聊天
  * - 使用 LRU 缓存策略管理 Agent 实例数量
- * </p>
- *
- * <p>
- * <strong>关于命令操作：</strong>retry/rewind/compact/plan/hitl/agree/deny 等命令
- * 已由 {@link site.sorghum.agent4j.bin.command.ChatCommandRegistry} 在
- * {@link Agent4jAgent#chat(String)} 中统一处理。前端直接发送命令字符串
- * （如 {@code "/retry"}、{@code "/compact"}）到聊天接口即可，
- * 无需额外 REST API。</p>
- *
  * @author Sorghum
  */
 @Slf4j
@@ -60,6 +54,7 @@ public class AgentService {
      * 当前线程正在处理的会话名称（用于工具执行时获取 sessionId）
      */
     private static final ThreadLocal<String> CURRENT_SESSION_NAME = new ThreadLocal<>();
+
     /**
      * 会话级 Agent 缓存（LRU 淘汰策略）。
      * <p>
@@ -142,66 +137,23 @@ public class AgentService {
             return agents.size();
         }
     }
+
     @Inject
     ChatCommandRegistry commandRegistry;
 
     @Inject
-    private site.sorghum.agent4j.bin.config.ConfigService configService;
+    private ConfigService configService;
 
-    /** 会话级 Agent 缓存 */
+    /**
+     * 会话级 Agent 缓存
+     */
     private final SessionAgentCache sessionCache = new SessionAgentCache();
-    /**
-     * 共享的 ModelClient（所有会话复用）
-     * -- GETTER --
-     *  获取共享的 ModelClient（用于 Git 提交消息生成等后台 AI 调用）。
-     *
-     * @return 共享的 ModelClient 实例，可能为 null（未配置 API Key 时）
 
-     */
-    @Getter
-    private volatile ModelClient sharedModelClient;
-
-    /**
-     * 创建一个不启用推理（thinking）的轻量 ModelClient，用于 Git 提交消息生成等简单任务。
-     * <p>
-     * 与共享 ModelClient 使用相同的 API 端点和模型，但 reasoningEffort 强制设为 "none"，
-     * 从而跳过推理链，大幅降低延迟（从 30s+ 降至 3-5s）。
-     * </p>
-     *
-     * @return 无推理的 ModelClient，若 API Key 未配置则返回 null
-     */
-    public ModelClient createLightModelClient() {
-        if (sharedApiUrl == null || sharedApiKey == null || sharedModel == null) {
-            return null;
-        }
-        return new HttpModelClient(sharedApiUrl, sharedApiKey, sharedModel, "none");
-    }
     /**
      * 共享的 ToolRegistry（所有会话复用）
      */
     @Getter
     private volatile ToolRegistry sharedToolRegistry;
-    /**
-     * 按工作区缓存的 PromptPrefix：key = 工作区绝对路径
-     */
-    private final ConcurrentHashMap<String, PromptPrefix> workspacePrefixes = new ConcurrentHashMap<>();
-    /**
-     * 共享的 Agent4jConfig
-     */
-    private volatile Agent4jConfig sharedConfig;
-    /**
-     * 共享的 API 配置
-     */
-    @Getter
-    private volatile String sharedApiUrl;
-    @Getter
-    private volatile String sharedApiKey;
-    @Getter
-    private volatile String sharedModel;
-    /**
-     * 当前 HITL 模式（true=手动需审批，false=自由直接执行）
-     */
-    private volatile boolean hitlMode = false;
 
     /**
      * 加载用户级默认系统提示词。
@@ -226,12 +178,21 @@ public class AgentService {
         return Agent4jAgent.Builder.DEFAULT_SYSTEM_PROMPT;
     }
 
-    /**
-     * 从环境变量读取配置，如果环境变量不存在则使用默认值。
-     */
-    private static String envOr(String envName, String defaultValue) {
-        String value = System.getenv(envName);
-        return (value != null && !value.isEmpty()) ? value : defaultValue;
+    // ==================== 配置 getter（统一从 ConfigService 读取） ====================
+
+    public String getSharedApiUrl() {
+        Agent4jConfig cfg = ConfigService.getConfig();
+        return cfg != null ? cfg.chatApiUrl() : null;
+    }
+
+    public String getSharedApiKey() {
+        Agent4jConfig cfg = ConfigService.getConfig();
+        return cfg != null ? cfg.apiKey() : null;
+    }
+
+    public String getSharedModel() {
+        Agent4jConfig cfg = ConfigService.getConfig();
+        return cfg != null ? cfg.model() : null;
     }
 
     /**
@@ -247,11 +208,11 @@ public class AgentService {
     @Init
     public void init() {
         try {
-            Agent4jConfig config = Agent4jConfig.load();
-            if (!buildSharedComponents(config)) {
+            ConfigService.reload();
+            if (!buildSharedComponents(ConfigService.getConfig())) {
                 log.error("[web] 未配置 apiKey，Agent 未初始化");
             } else {
-                log.info("[web] Agent 共享组件初始化完成 — 模型: {}", sharedModel);
+                log.info("[web] Agent 共享组件初始化完成 — 模型: {}", getSharedModel());
             }
         } catch (Exception e) {
             log.error("Agent 共享组件初始化失败: ", e);
@@ -280,15 +241,14 @@ public class AgentService {
 
         // 2. 清空所有缓存
         sessionCache.clear();
-        workspacePrefixes.clear();
 
         // 3. 重新加载配置并构建共享组件
         try {
-            Agent4jConfig config = Agent4jConfig.load();
-            if (!buildSharedComponents(config)) {
+            ConfigService.reload();
+            if (!buildSharedComponents(ConfigService.getConfig())) {
                 log.error("[config] 未配置 apiKey，重新初始化失败");
             } else {
-                log.info("[config] AgentService 重新初始化完成 — 模型: {}, API: {}", sharedModel, sharedApiUrl);
+                log.info("[config] AgentService 重新初始化完成 — 模型: {}, API: {}", getSharedModel(), getSharedApiUrl());
             }
         } catch (Exception e) {
             log.error("[config] 重新初始化 AgentService 失败", e);
@@ -296,7 +256,7 @@ public class AgentService {
     }
 
     /**
-     * 根据配置构建所有共享组件（ModelClient、ToolRegistry、PromptPrefix 等）。
+     * 根据配置构建所有共享组件（ModelClient、ToolRegistry 等）。
      * <p>
      * 抽取自 {@link #init()} 和 {@link #reinitialize()} 中的重复逻辑，
      * 单一职责：加载配置并初始化共享字段，不含缓存清理等上下文操作。
@@ -306,24 +266,12 @@ public class AgentService {
      * @return true 表示初始化成功，false 表示缺少必要的 API Key
      */
     private boolean buildSharedComponents(Agent4jConfig config) {
-        String apiUrl = envOr("OPENAI_BASE_URL", config.chatApiUrl());
-        String apiKey = envOr("OPENAI_API_KEY", config.apiKey());
-        String model = envOr("MODEL", config.model());
+        String apiUrl = config.chatApiUrl();
+        String apiKey = config.apiKey();
 
         if (apiKey == null || apiKey.isEmpty()) {
             return false;
         }
-
-        // 保存共享配置
-        this.sharedConfig = config;
-        this.sharedApiUrl = apiUrl;
-        this.sharedApiKey = apiKey;
-        this.sharedModel = model;
-        this.hitlMode = config.hitl();
-
-        // 创建共享的 ModelClient（使用配置的 reasoningEffort）
-        String reasoningEffort = config.reasoningEffort();
-        this.sharedModelClient = new HttpModelClient(apiUrl, apiKey, model, reasoningEffort);
 
         // 设置禁用工具
         Set<String> disabledTools = config.disabledTools();
@@ -343,13 +291,6 @@ public class AgentService {
                 disabledTools, blockedPaths,
                 loadDefaultSystemPrompt());
         this.sharedToolRegistry = initResult.toolRegistry;
-        this.sharedToolRegistry.setConfigService(configService);
-
-        // 缓存当前工作区的 PromptPrefix
-        String initWs = config.workspaceDir() != null
-                ? config.workspaceDir().toAbsolutePath().toString()
-                : Paths.get(System.getProperty("user.home"), ".agent4j").toString();
-        workspacePrefixes.put(initWs, initResult.promptPrefix);
 
         return true;
     }
@@ -364,8 +305,9 @@ public class AgentService {
     private String generateSessionKey(String workspacePath, String sessionName) {
         // 使用默认工作区路径（如果未指定）
         if (workspacePath == null || workspacePath.isEmpty()) {
-            if (sharedConfig != null && sharedConfig.workspaceDir() != null) {
-                workspacePath = sharedConfig.workspaceDir().toAbsolutePath().toString();
+            Agent4jConfig cfg = ConfigService.getConfig();
+            if (cfg != null && cfg.workspaceDir() != null) {
+                workspacePath = cfg.workspaceDir().toAbsolutePath().toString();
             } else {
                 workspacePath = Paths.get(System.getProperty("user.home"), ".agent4j").toString();
             }
@@ -408,42 +350,41 @@ public class AgentService {
             // LRU 淘汰
             sessionCache.evictIfNeeded();
 
-            // 构建轻量级 Agent
-            try {
-                Agent4jAgent.Builder builder = Agent4jAgent.builder()
-                        .config(sharedConfig)               // 先加载 config 默认值（含 disabledTools/blockedPaths/hitl）
-                        .apiUrl(sharedApiUrl)               // 覆盖为 env 感知的值
-                        .apiKey(sharedApiKey)
-                        .model(sharedModel)
-                        .workspace(Paths.get(workspacePath)) // 覆盖为当前工作区路径
-                        .commandRegistry(commandRegistry)
-                        .hitl(hitlMode)  // 使用热更新后的 HITL 模式
-                        .sharedModelClient(sharedModelClient)
-                        .sharedPrefix(getOrCreateWorkspacePrefix(workspacePath, sessionName))
-                        .sharedSystemPrompt(loadDefaultSystemPrompt());
+            // 构建轻量级 Agent（每个 Agent 拥有独立的 ModelClient）
+            Agent4jConfig cfg = ConfigService.getConfig();
+            String apiUrl = cfg.chatApiUrl();
+            String apiKey = cfg.apiKey();
+            String model = cfg.model();
+            String reasoningEffort = cfg.reasoningEffort();
+            boolean hitl = cfg.hitl();
 
-                agent = builder.buildLightweight();
+            Agent4jAgent.Builder builder = Agent4jAgent.builder()
+                    .config(cfg)
+                    .apiUrl(apiUrl)
+                    .apiKey(apiKey)
+                    .model(model)
+                    .workspace(Paths.get(workspacePath))
+                    .commandRegistry(commandRegistry)
+                    .hitl(hitl)
+                    .agent4jConfig(cfg)
+                    .modelClient(new HttpModelClient(apiUrl, apiKey, model, reasoningEffort));
 
-                // 切换到指定会话（含 default，以恢复 usage / title）
-                agent.switchSession(sessionName);
+            agent = builder.buildLightweight();
 
-                // 注册 token 用量追踪
-                agent.setListener(new WebUsageListener(agent));
+            // 切换到指定会话（含 default，以恢复 usage / title）
+            agent.bindSession(sessionName);
 
-                // 默认使用 NOOP 输出（API 调用时由 SseEmitter 接管）
-                agent.setOutput(AgentOutput.NOOP);
+            // 注册 token 用量追踪
+            agent.setListener(new WebUsageListener(agent));
 
-                // 缓存 Agent
-                sessionCache.put(sessionKey, agent);
+            // 默认使用 NOOP 输出（API 调用时由 SseEmitter 接管）
+            agent.setOutput(AgentOutput.NOOP);
 
-                log.info("[web] 创建新 Agent: " + sessionKey);
-                return agent;
-            } catch (Exception e) {
-                log.error(
-                        "Agent 共享组件初始化失败: ", e
-                );
-                return null;
-            }
+            // 缓存 Agent
+            sessionCache.put(sessionKey, agent);
+
+            log.info("[web] 创建新 Agent: {}", sessionKey);
+            return agent;
         }
     }
 
@@ -461,80 +402,8 @@ public class AgentService {
      * 共享组件是否已初始化
      */
     public boolean isReady() {
-        return sharedModelClient != null && sharedToolRegistry != null && !workspacePrefixes.isEmpty();
-    }
-
-    /**
-     * 获取或创建指定会话的 PromptPrefix。
-     * <p>
-     * 以 "workspacePath::sessionName" 为缓存 key，每个会话有独立的 PromptPrefix
-     * （因会话可能在不同工作区，项目文档 agent4j.md/CLAUDE.md 不同）。
-     * 同一工作区+同一会话名的请求复用缓存，避免重复初始化。
-     * </p>
-     *
-     * @param workspacePath 工作区路径
-     * @param sessionName   会话名称
-     * @return PromptPrefix，缓存未命中时自动初始化
-     */
-    private PromptPrefix getOrCreateWorkspacePrefix(String workspacePath, String sessionName) {
-        // 标准化工作区路径
-        String ws = workspacePath != null ? workspacePath : getWorkspace();
-        if (ws == null && sharedConfig != null && sharedConfig.workspaceDir() != null) {
-            ws = sharedConfig.workspaceDir().toAbsolutePath().toString();
-        }
-        if (ws == null) {
-            ws = Paths.get(System.getProperty("user.home"), ".agent4j").toString();
-        }
-        String session = sessionName != null ? sessionName : "default";
-        String cacheKey = ws + "::" + session;
-
-        // 缓存命中直接返回
-        PromptPrefix existing = workspacePrefixes.get(cacheKey);
-        if (existing != null) {
-            return existing;
-        }
-        // 缓存未命中，为该工作区初始化
-        synchronized (this) {
-            existing = workspacePrefixes.get(cacheKey);
-            if (existing != null) return existing;
-            try {
-                Path workspaceDir = Paths.get(ws);
-                Set<String> disabledTools = sharedConfig != null ? sharedConfig.disabledTools() : Collections.emptySet();
-                List<String> blockedPaths = sharedConfig != null ? sharedConfig.blockedPaths() : Collections.emptyList();
-                ToolSystemInitializer.Result result = ToolSystemInitializer.initialize(
-                        workspaceDir, sharedApiUrl, sharedApiKey,
-                        disabledTools, blockedPaths,
-                        loadDefaultSystemPrompt());
-                workspacePrefixes.put(cacheKey, result.promptPrefix);
-                log.info("[prompt] 已初始化会话提示词: {} ({} 字符)", cacheKey, result.promptPrefix.system.length());
-                return result.promptPrefix;
-            } catch (Exception e) {
-                log.error("[prompt] 初始化会话提示词失败: {}", e.getMessage());
-                return null;
-            }
-        }
-    }
-
-    // ==================== 聊天 ====================
-
-    /**
-     * 获取当前会话的系统提示词。
-     * <p>
-     * 直接返回 {@link PromptPrefix#system}，即 Agent 运行时实际使用的完整提示词
-     *（含项目文档 + 基础提示词 + 工具定义 + Plan Mode 说明 + Skill 索引）。
-     * </p>
-     *
-     * @param workspacePath 工作区路径（预留，目前所有会话共享同一份 PromptPrefix）
-     * @param sessionName   会话名称（预留）
-     * @return PromptDTO，包含提示词内容和字符数
-     */
-    public PromptDTO getSystemPrompt(String workspacePath, String sessionName) {
-        // 获取该会话的 PromptPrefix（优先用缓存，未命中则自动初始化）
-        PromptPrefix prefix = getOrCreateWorkspacePrefix(workspacePath, sessionName);
-        if (prefix == null || prefix.system == null) {
-            return new PromptDTO("", 0);
-        }
-        return new PromptDTO(prefix.system, prefix.system.length());
+        return ConfigService.getConfig() != null
+                && sharedToolRegistry != null;
     }
 
     /**
@@ -544,12 +413,11 @@ public class AgentService {
      */
     public AgentStatusDTO getStatus() {
         boolean ready = isReady();
-        String model = sharedModel;
+        String model = getSharedModel();
         String workspace = getWorkspace();
         int cacheSize = sessionCache.size();
 
         int historySize = 0;
-        boolean planMode = false;
         boolean hitlMode = false;
         String sessionName = null;
         long promptTokens = 0;
@@ -560,7 +428,6 @@ public class AgentService {
         Agent4jAgent agent = sessionCache.get(defaultKey);
         if (agent != null) {
             historySize = agent.historySize();
-            planMode = agent.isPlanMode();
             hitlMode = agent.isHitlMode();
             SessionStore store = agent.getSessionStore();
             if (store != null) {
@@ -571,7 +438,7 @@ public class AgentService {
             completionTokens = usage[1];
         }
         return new AgentStatusDTO(ready, model, workspace, cacheSize,
-                historySize, planMode, hitlMode, sessionName,
+                historySize, hitlMode, sessionName,
                 promptTokens, completionTokens);
     }
 
@@ -596,14 +463,12 @@ public class AgentService {
         }
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         Agent4jAgent agent = getOrCreateAgent(sessionKey);
-        if (agent != null) {
-            SessionStore store = agent.getSessionStore();
-            if (store != null) {
-                try {
-                    return store.load();
-                } catch (IOException e) {
-                    log.warn("[web] 加载会话历史失败: {}", e.getMessage());
-                }
+        SessionStore store = agent.getSessionStore();
+        if (store != null) {
+            try {
+                return store.load();
+            } catch (IOException e) {
+                log.warn("[web] 加载会话历史失败: {}", e.getMessage());
             }
         }
         return new ArrayList<>();
@@ -637,8 +502,7 @@ public class AgentService {
         if (sessionName == null || snapshotId == null) return null;
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         Agent4jAgent agent = getOrCreateAgent(sessionKey);
-        if (agent == null) return null;
-        ConversationContext ctx = agent.getContext();
+        ConversationContext ctx = agent.getCtx();
         if (ctx == null) return null;
         List<ChatMessage> history = ctx.getHistory();
         int targetIdx = -1;
@@ -660,21 +524,6 @@ public class AgentService {
     // ==================== 会话管理 ====================
 
     /**
-     * 同步聊天 —— 支持工作区和会话隔离。
-     * <p>
-     * 每个会话拥有独立的 Agent4jAgent 实例，无需切换和恢复状态。
-     * </p>
-     *
-     * @param message       用户消息
-     * @param workspacePath 工作区路径（可选）
-     * @param sessionName   会话名称（可选）
-     * @return 聊天回复
-     */
-    public String chat(String message, String workspacePath, String sessionName) {
-        return chat(UserMessage.of(message), workspacePath, sessionName);
-    }
-
-    /**
      * 同步聊天（多模态）—— 使用 {@link UserMessage} 统一表示文本+图片。
      */
     public String chat(UserMessage userMessage, String workspacePath, String sessionName) {
@@ -688,9 +537,6 @@ public class AgentService {
 
         try {
             Agent4jAgent agent = getOrCreateAgent(sessionKey);
-            if (agent == null) {
-                return "错误：无法创建 Agent 实例";
-            }
 
             agent.setOutput(AgentOutput.NOOP);
             // 设置会话ID到 AgentLoop
@@ -711,21 +557,6 @@ public class AgentService {
     }
 
     /**
-     * 流式聊天 —— 支持工作区和会话隔离。
-     * <p>
-     * 每个会话拥有独立的 Agent4jAgent 实例，无需切换和恢复状态。
-     * </p>
-     *
-     * @param message       用户消息
-     * @param workspacePath 工作区路径（可选）
-     * @param sessionName   会话名称（可选）
-     * @param emitter       SSE 发射器
-     */
-    public void chatStream(String message, String workspacePath, String sessionName, SseEmitter emitter) {
-        chatStream(UserMessage.of(message), workspacePath, sessionName, emitter);
-    }
-
-    /**
      * 流式聊天（多模态）—— 使用 {@link UserMessage} 统一表示文本+图片。
      */
     public void chatStream(UserMessage userMessage, String workspacePath, String sessionName, SseEmitter emitter) {
@@ -739,17 +570,10 @@ public class AgentService {
 
         try {
             Agent4jAgent agent = getOrCreateAgent(sessionKey);
-            if (agent == null) {
-                emitter.sendError("无法创建 Agent 实例");
-                return;
-            }
 
             // 设置 AgentOutput：将所有事件桥接到 SSE
             agent.setOutput(new SseAgentOutput(emitter));
 
-            // 设置会话ID到 AgentLoop
-            String sessionId = sessionName != null ? sessionName : "default";
-            agent.setSessionId(sessionId);
             String reply = agent.chat(userMessage);
 
             // 发送最终完整回复（使用 complete 事件，与增量 content 事件区分）
@@ -821,9 +645,6 @@ public class AgentService {
         // 获取一个 Agent 实例来访问 SessionStore
         String sessionKey = generateSessionKey(workspacePath, null);
         Agent4jAgent agent = getOrCreateAgent(sessionKey);
-        if (agent == null) {
-            return Collections.emptyList();
-        }
 
         SessionStore store = agent.getSessionStore();
         if (store == null) {
@@ -864,16 +685,10 @@ public class AgentService {
             return false;
         }
 
-        // 获取或创建目标会话的 Agent
-        String sessionKey = generateSessionKey(workspacePath, sessionName);
-        Agent4jAgent agent = getOrCreateAgent(sessionKey);
-        if (agent != null) {
-            // 记录当前活跃会话
-            String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
-            sessionCache.setCurrentName(resolvedPath, sessionName);
-            return true;
-        }
-        return false;
+        // 记录当前活跃会话
+        String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+        sessionCache.setCurrentName(resolvedPath, sessionName);
+        return true;
     }
 
     /**
@@ -937,7 +752,7 @@ public class AgentService {
 
         // 价格计算：优先按模型分别计费，解决模型中途切换导致计价错乱
         try {
-            Agent4jConfig config = Agent4jConfig.load();
+            Agent4jConfig config = ConfigService.getConfig();
             currentModel = config.model();
             Map<String, Map<String, Double>> prices = config.price();
 
@@ -1167,39 +982,12 @@ public class AgentService {
      * @return 工作区路径
      */
     public String getWorkspace() {
-        if (sharedConfig != null && sharedConfig.workspaceDir() != null) {
-            return sharedConfig.workspaceDir().toAbsolutePath().toString();
+        Agent4jConfig cfg = ConfigService.getConfig();
+        if (cfg != null && cfg.workspaceDir() != null) {
+            return cfg.workspaceDir().toAbsolutePath().toString();
         }
         return null;
     }
-
-    /**
-     * 更新模型（更新共享 ModelClient）。
-     *
-     * @param model 新模型名称
-     */
-    public void updateModel(String model) {
-        if (sharedModelClient != null) {
-            sharedModelClient.setModel(model);
-            this.sharedModel = model;
-            log.info("[web] 模型已更新: {}", model);
-        }
-    }
-
-    /**
-     * 热更新 HITL 模式 — 同步到所有已缓存的 Agent 实例。
-     *
-     * @param hitl true=手动(需审批)，false=自由(直接执行)
-     */
-    public void updateHitlMode(boolean hitl) {
-        for (Agent4jAgent agent : sessionCache.values()) {
-            agent.setHitlMode(hitl);
-        }
-        // 更新共享配置引用，确保后续新建的 Agent 也使用新值
-        this.hitlMode = hitl;
-        log.info("[web] HITL 模式已更新: {}", hitl ? "手动(需审批)" : "自由(直接执行)");
-    }
-
     /**
      * 切换工作区（兼容旧接口）。
      * 更新当前工作区并持久化到 config.json，下次启动默认打开此工作区。
@@ -1214,8 +1002,7 @@ public class AgentService {
         // 持久化到 config.json，下次启动默认加载此工作区
         String normalized = Paths.get(path).toAbsolutePath().normalize().toString();
         try {
-            Agent4jConfig config = Agent4jConfig.load();
-            config.updateAndSave(Collections.singletonMap("workspaceDir", normalized));
+            ConfigService.updateConfig(Collections.singletonMap("workspaceDir", normalized));
             log.info("[web] 工作区已持久化到 config.json: {}", normalized);
         } catch (Exception e) {
             log.warn("[web] 持久化工作区到 config.json 失败: {}", e.getMessage());
@@ -1268,8 +1055,9 @@ public class AgentService {
                 }
             }
 
-            if (sharedConfig != null && sharedConfig.workspaceDir() != null) {
-                workspacePaths.add(sharedConfig.workspaceDir().toAbsolutePath().toString());
+            Agent4jConfig cfg = ConfigService.getConfig();
+            if (cfg != null && cfg.workspaceDir() != null) {
+                workspacePaths.add(cfg.workspaceDir().toAbsolutePath().toString());
             }
 
             for (String path : workspacePaths) {
@@ -1281,15 +1069,6 @@ public class AgentService {
         }
 
         return result;
-    }
-
-    /**
-     * 获取当前会话信息（兼容旧接口）。
-     *
-     * @return 当前会话信息
-     */
-    public SessionCurrentDTO getCurrentSession() {
-        return new SessionCurrentDTO(getWorkspace(), getCurrentSessionName(null));
     }
 
     /**
@@ -1353,9 +1132,6 @@ public class AgentService {
 
         try {
             Agent4jAgent agent = getOrCreateAgent(sessionKey);
-            if (agent == null) {
-                return "错误：无法创建 Agent 实例";
-            }
 
             agent.setOutput(AgentOutput.NOOP);
             String sessionId = sessionName != null ? sessionName : "default";
@@ -1395,4 +1171,5 @@ public class AgentService {
                 ))
                 .collect(Collectors.toList());
     }
+
 }

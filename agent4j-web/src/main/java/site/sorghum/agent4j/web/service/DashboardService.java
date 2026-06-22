@@ -3,6 +3,7 @@ package site.sorghum.agent4j.web.service;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import org.noear.snack4.ONode;
+import site.sorghum.agent4j.bin.model.ModelPriceProvider;
 import site.sorghum.agent4j.web.common.UsageCostCalculator;
 import site.sorghum.agent4j.web.model.DashboardDTO;
 
@@ -92,8 +93,17 @@ public class DashboardService {
             }
         }
 
-        // 3. 价格配置
-        Map<String, Map<String, Double>> prices = UsageCostCalculator.loadPrices();
+        // 3. 价格配置：优先用户配置，其次 ModelMetaPriceProvider
+        Map<String, Map<String, Double>> configPrices = UsageCostCalculator.loadPrices();
+        ModelPriceProvider provider = ModelMetaPriceProvider.getInstance();
+
+        // 合并价格：config 优先，provider 补充
+        Map<String, Map<String, Double>> allPrices = new LinkedHashMap<>(configPrices);
+        if (provider != null) {
+            for (String mName : modelTotal.keySet()) {
+                allPrices.computeIfAbsent(mName, provider::getModelPrice);
+            }
+        }
 
         // 4. 构建每日统计
         List<DashboardDTO.DailyStat> dailyStats = new ArrayList<>();
@@ -119,7 +129,7 @@ public class DashboardService {
                 dayCacheMiss += v[3];
                 dayRequests += v[4];
 
-                dayCost += UsageCostCalculator.calc(prices, mName, v[0], v[1], v[2]);
+                dayCost += UsageCostCalculator.calc(allPrices, mName, v[0], v[1], v[2]);
 
                 breakdown.put(mName, new DashboardDTO.ModelUsage(
                         v[0], v[1], v[2], v[3], v[0] + v[1]));
@@ -144,7 +154,7 @@ public class DashboardService {
         for (Map.Entry<String, long[]> entry : modelTotal.entrySet()) {
             String mName = entry.getKey();
             long[] v = entry.getValue();
-            double mCost = round4(UsageCostCalculator.calc(prices, mName, v[0], v[1], v[2]));
+            double mCost = round4(UsageCostCalculator.calc(allPrices, mName, v[0], v[1], v[2]));
             modelStats.add(new DashboardDTO.ModelStat(
                     mName, v[0], v[1], v[2], v[0] + v[1], mCost, v[3]));
         }
@@ -152,7 +162,7 @@ public class DashboardService {
 
         return new DashboardDTO(
                 globalPrompt, globalCompletion, globalCacheHit, globalCacheMiss,
-                round4(globalCost), activeDates.size(), totalRequests, dailyStats, modelStats);
+                round4(globalCost), activeDates.size(), totalRequests, dailyStats, modelStats, allPrices);
     }
 
     // ---- 内部方法 ----
@@ -174,7 +184,7 @@ public class DashboardService {
                     today.minusDays(n - 1 - i).format(DATE_FMT),
                     0, 0, 0, 0, 0, 0, 0, Collections.emptyMap()));
         }
-        return new DashboardDTO(0, 0, 0, 0, 0, 0, 0, dailyStats, Collections.emptyList());
+        return new DashboardDTO(0, 0, 0, 0, 0, 0, 0, dailyStats, Collections.emptyList(), Collections.emptyMap());
     }
 
     private static double round4(double v) {

@@ -1,11 +1,10 @@
 package site.sorghum.agent4j.bin.model;
 
 import org.noear.snack4.ONode;
-import site.sorghum.agent4j.bin.agent.ChatMessage;
+import site.sorghum.agent4j.bin.agent.model.ChatMessage;
 
 import java.io.IOException;
 import java.util.List;
-import java.util.Map;
 
 /**
  * 模型客户端接口 —— 封装 LLM API 调用的抽象契约。
@@ -23,13 +22,13 @@ public interface ModelClient {
      * 用于后台操作（上下文折叠摘要等）。
      */
     ONode chat(List<ChatMessage> messages,
-               List<Map<String, Object>> tools) throws IOException;
+               ONode tools) throws IOException;
 
     /**
      * 流式调用 —— 通过回调逐 token 推送推理和内容。
      */
     void chatStream(List<ChatMessage> messages,
-                    List<Map<String, Object>> tools,
+                    ONode tools,
                     StreamCallback callback);
 
     /**
@@ -43,9 +42,12 @@ public interface ModelClient {
     void setModel(String model);
 
     /**
-     * 是否为推理模型（DeepSeek V4 / Reasoner 系列）。
+     * 设置推理强度（运行时切换）。
+     * 取值: low / medium / high / max
+     * 默认空实现——不支持运行时切换的客户端可忽略。
      */
-    boolean isThinkingMode();
+    default void setReasoningEffort(String reasoningEffort) {
+    }
 
     /**
      * 中断当前正在进行的流式调用（如果存在）。

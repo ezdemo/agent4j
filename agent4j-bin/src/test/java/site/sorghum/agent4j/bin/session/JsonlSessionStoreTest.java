@@ -3,8 +3,8 @@ package site.sorghum.agent4j.bin.session;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import site.sorghum.agent4j.bin.agent.ChatMessage;
-import site.sorghum.agent4j.bin.agent.ToolCallEntry;
+import site.sorghum.agent4j.bin.agent.model.ChatMessage;
+import site.sorghum.agent4j.bin.agent.model.ToolCallEntry;
 
 import java.io.IOException;
 import java.util.ArrayList;
@@ -22,7 +22,7 @@ class JsonlSessionStoreTest {
         store = new JsonlSessionStore();
         // 使用唯一会话名避免测试间干扰
         counter++;
-        store.switchTo("test-" + System.nanoTime() + "-" + counter);
+        store.bindTo("test-" + System.nanoTime() + "-" + counter);
     }
 
     @AfterEach
@@ -52,7 +52,7 @@ class JsonlSessionStoreTest {
 
     @Test
     void appendAndLoad() throws IOException {
-        ChatMessage msg = ChatMessage.user("hello");
+        ChatMessage msg = ChatMessage.ofUser("hello");
         store.append(msg);
 
         store.flush();
@@ -65,7 +65,7 @@ class JsonlSessionStoreTest {
     @Test
     void appendMultipleMessages() throws IOException {
         for (int i = 0; i < 5; i++) {
-            ChatMessage msg = ChatMessage.user("msg" + i);
+            ChatMessage msg = ChatMessage.ofUser("msg" + i);
             store.append(msg);
         }
         store.flush();
@@ -75,7 +75,7 @@ class JsonlSessionStoreTest {
 
     @Test
     void rewriteReplacesAllMessages() throws IOException {
-        ChatMessage msg1 = ChatMessage.user("original");
+        ChatMessage msg1 = ChatMessage.ofUser("original");
         store.append(msg1);
         store.flush();
 
@@ -89,17 +89,17 @@ class JsonlSessionStoreTest {
     }
 
     @Test
-    void switchToAndLoad() throws IOException {
+    void bindToAndLoad() throws IOException {
         String uniqueName = "sw-" + System.nanoTime();
-        ChatMessage msg = ChatMessage.user("in session 1");
+        ChatMessage msg = ChatMessage.ofUser("in session 1");
         store.append(msg);
         store.flush();
 
         String name1 = store.currentName();
-        assertTrue(store.switchTo(uniqueName));
+        assertTrue(store.bindTo(uniqueName));
         assertNotEquals(name1, store.currentName());
 
-        ChatMessage msg2 = ChatMessage.user("in session 2");
+        ChatMessage msg2 = ChatMessage.ofUser("in session 2");
         store.append(msg2);
         store.flush();
 
@@ -107,7 +107,7 @@ class JsonlSessionStoreTest {
         assertEquals(1, loaded.size());
         assertEquals("in session 2", loaded.get(0).getContent());
 
-        store.switchTo(name1);
+        store.bindTo(name1);
         List<ChatMessage> loaded1 = store.load();
         assertEquals(1, loaded1.size());
         assertEquals("in session 1", loaded1.get(0).getContent());
@@ -115,7 +115,7 @@ class JsonlSessionStoreTest {
 
     @Test
     void listReturnsSessions() throws IOException {
-        ChatMessage msg = ChatMessage.user("hi");
+        ChatMessage msg = ChatMessage.ofUser("hi");
         store.append(msg);
         store.flush();
 
@@ -154,7 +154,7 @@ class JsonlSessionStoreTest {
 
     @Test
     void deleteSession() throws IOException {
-        ChatMessage msg = ChatMessage.user("to be deleted");
+        ChatMessage msg = ChatMessage.ofUser("to be deleted");
         store.append(msg);
         store.flush();
 

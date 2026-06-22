@@ -1,7 +1,7 @@
 package site.sorghum.agent4j.web.service;
 
-import site.sorghum.agent4j.bin.agent.Agent4jAgent;
-import site.sorghum.agent4j.bin.agent.AgentLoopListener;
+import site.sorghum.agent4j.bin.agent.core.Agent4jAgent;
+import site.sorghum.agent4j.bin.agent.listener.AgentLoopListener;
 
 /**
  * Web 端 token 用量追踪监听器 —— 替代 AgentService 中的匿名 AgentLoopListener。

@@ -1,7 +1,7 @@
 package site.sorghum.agent4j.bin.command;
 
 import lombok.Getter;
-import site.sorghum.agent4j.bin.agent.Agent4jAgent;
+import site.sorghum.agent4j.bin.agent.core.Agent4jAgent;
 
 import java.util.Scanner;
 

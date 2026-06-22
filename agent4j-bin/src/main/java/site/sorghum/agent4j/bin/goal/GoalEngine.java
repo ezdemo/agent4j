@@ -3,11 +3,9 @@ package site.sorghum.agent4j.bin.goal;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
-import org.noear.solon.annotation.Inject;
-import site.sorghum.agent4j.bin.agent.Agent4jAgent;
-import site.sorghum.agent4j.bin.agent.UserMessage;
+import site.sorghum.agent4j.bin.agent.core.Agent4jAgent;
+import site.sorghum.agent4j.bin.agent.model.UserMessage;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
-import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
 import site.sorghum.agent4j.tool.LogLevel;
 
 import java.time.Instant;

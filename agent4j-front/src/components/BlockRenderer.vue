@@ -1,36 +1,103 @@
 <template>
-  <template v-for="(block, bi) in blocks" :key="bi">
+  <template v-if="processedBlocks.length > 0" v-for="(block, bi) in processedBlocks" :key="bi">
     <!-- 思考 -->
     <div v-if="block.type === 'reasoning'" class="block-reasoning">
       <div class="reasoning-head" @click="block.showContent = !block.showContent">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span class="default-icon" v-html="THINKING_ICON"></span>
         <span>思考</span>
-        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: block.showContent ? 'rotate(180deg)' : '' }"><polyline points="6 9 12 15 18 9"/></svg>
+        <span class="default-icon"
+              v-html="CHEVRON_DOWN_ICON"
+              :style="{
+                  transform: block.showContent ? 'rotate(180deg)' : 'rotate(0deg)',
+                  display: 'inline-block',
+                  transition: 'transform 0.25s ease',
+                  lineHeight: 0
+                }">
+        </span>
       </div>
       <div v-if="block.showContent" class="reasoning-text" v-html="getReasoningHtml(block)"></div>
     </div>
 
     <!-- 内容 -->
-    <div v-else-if="block.type === 'content'" class="block-content" v-html="fmt(block.content)"></div>
+    <div v-else-if="block.type === 'content' && block.content" class="block-content" v-html="fmt(block.content)"></div>
 
-    <!-- 工具调用 -->
+    <!-- 工具调用分组（连续多个工具合并，样式与普通工具栏一致） -->
+    <div v-else-if="block.type === 'tool_group'" class="block-tool">
+      <div class="tool-head" @click="toggleToolGroup(block._groupId)">
+        <span class="tool-icon default-icon" :class="block._groupRunning ? '执行中' : '成功'">
+          <span v-if="block._groupRunning" v-html="SPINNER_ICON"></span>
+          <span v-else-if="block._groupAllDone" v-html="CHECK_ICON_SM"></span>
+          <span v-else v-html="CIRCLE_ICON"></span>
+        </span>
+        <code class="tool-name">{{ block._tools.length }} 个工具</code>
+        <span class="tool-status" :class="block._groupRunning ? '执行中' : '成功'">{{ block._groupRunning ? '执行中' : '成功' }}</span>
+        <span class="tool-param" :title="getToolGroupOrder(block)">{{ getToolGroupOrderTruncated(block) }}</span>
+        <span class="default-icon"
+              v-html="CHEVRON_DOWN_ICON"
+              :style="{
+                transform: toolGroupsExpanded[block._groupId] ? 'rotate(180deg)' : 'rotate(0deg)',
+                display: 'inline-block',
+                transition: 'transform 0.25s ease',
+                lineHeight: 0
+              }">
+        </span>
+      </div>
+      <div v-if="toolGroupsExpanded[block._groupId]" class="tool-group-detail">
+        <div v-for="(t, ti) in block._tools" :key="ti" class="tool-group-item-block">
+          <div class="block-tool">
+            <div class="tool-head" @click="t.expanded = !t.expanded">
+              <span class="tool-icon default-icon" :class="t.status">
+                <span v-if="t.status === '执行中'" v-html="SPINNER_ICON"></span>
+                <span v-else-if="t.status === '成功'" v-html="CHECK_ICON_SM"></span>
+                <span v-else v-html="CIRCLE_ICON"></span>
+              </span>
+              <code class="tool-name">{{ t.name }}</code>
+              <span class="tool-status" :class="t.status">{{ t.status }}</span>
+              <span v-if="t.name === 'bash' && getBashCommand(t)" class="tool-param"
+                    :title="getBashCommandFull(t)">{{ getBashCommand(t) }}</span>
+              <span v-else-if="t.name === 'grep' && getGrepPath(t)" class="tool-param"
+                    :title="getGrepPathFull(t)">{{ getGrepPath(t) }}</span>
+              <span v-else-if="t.name === 'glob' && getGlobPath(t)" class="tool-param"
+                    :title="getGlobPathFull(t)">{{ getGlobPath(t) }}</span>
+              <span v-else-if="t.name === 'ls' && getLsPath(t)" class="tool-param"
+                    :title="getLsPath(t)">{{ getLsPath(t) }}</span>
+              <button v-else-if="shouldShowOpenFile(t)" class="tool-file" @click.stop="openFile(t)"
+                      :title="getFilePath(t)">{{ getFileName(t) }}
+              </button>
+              <span v-else-if="t.name === 'ask_choice' && getChoiceQuestion(t)" class="tool-param tool-param-wide"
+                    :title="getChoiceQuestion(t)">{{ getChoiceQuestion(t) }}</span>
+              <span class="default-icon" v-html="CHEVRON_DOWN_ICON"
+                    :style="{
+                      transform: t.expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                      display: 'inline-block',
+                      transition: 'transform 0.25s ease',
+                      lineHeight: 0
+                    }">
+              </span>
+            </div>
+            <div v-if="t.expanded" class="tool-detail">
+              <pre v-if="t.args"><code>{{ fmtArgs(t.args) }}</code></pre>
+              <pre v-if="t.result"><code>{{ t.result }}</code></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 单个工具调用（非连续时不合并） -->
     <template v-else-if="block.type === 'tool_call'">
       <!-- finish 工具：完成时将 content 渲染为模型输出样式 -->
       <div v-if="block.name === 'finish' && block.result" class="block-finish">
         <div class="finish-head">
-          <span class="finish-icon">
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-          </span>
+          <span class="finish-icon default-icon" v-html="CHECK_ICON"></span>
           <span class="finish-label">最终回答</span>
         </div>
         <div class="finish-content" v-html="fmt(block.result)"></div>
       </div>
       <!-- finish 执行中 -->
-      <div v-else-if="block.name === 'finish'" class="block-tool">
+      <div v-else-if="block.name === 'finish' && block.status" class="block-tool">
         <div class="tool-head">
-          <span class="tool-icon" :class="block.status">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
-          </span>
+          <span class="tool-icon default-icon" :class="block.status" v-html="SPINNER_ICON"></span>
           <code class="tool-name">finish</code>
           <span class="tool-status" :class="block.status">{{ block.status }}</span>
         </div>
@@ -38,14 +105,35 @@
       <!-- 其他工具 -->
       <div v-else class="block-tool">
         <div class="tool-head" @click="block.expanded = !block.expanded">
-          <span class="tool-icon" :class="block.status">
-            <svg v-if="block.status === '执行中'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="animate-spin"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
-            <svg v-else-if="block.status === '成功'" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-            <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>
+          <span class="tool-icon default-icon" :class="block.status">
+            <span v-if="block.status === '执行中'" v-html="SPINNER_ICON"></span>
+            <span v-else-if="block.status === '成功'" v-html="CHECK_ICON_SM"></span>
+            <span v-else v-html="CIRCLE_ICON"></span>
           </span>
           <code class="tool-name">{{ block.name }}</code>
           <span class="tool-status" :class="block.status">{{ block.status }}</span>
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" :style="{ transform: block.expanded ? 'rotate(180deg)' : '' }"><polyline points="6 9 12 15 18 9"/></svg>
+          <span v-if="block.name === 'bash' && getBashCommand(block)" class="tool-param"
+                :title="getBashCommandFull(block)">{{ getBashCommand(block) }}</span>
+          <span v-else-if="block.name === 'grep' && getGrepPath(block)" class="tool-param"
+                :title="getGrepPathFull(block)">{{ getGrepPath(block) }}</span>
+          <span v-else-if="block.name === 'glob' && getGlobPath(block)" class="tool-param"
+                :title="getGlobPathFull(block)">{{ getGlobPath(block) }}</span>
+          <span v-else-if="block.name === 'ls' && getLsPath(block)" class="tool-param"
+                :title="getLsPath(block)">{{ getLsPath(block) }}</span>
+          <button v-else-if="shouldShowOpenFile(block)" class="tool-file" @click.stop="openFile(block)"
+                  :title="getFilePath(block)">{{ getFileName(block) }}
+          </button>
+          <span v-else-if="block.name === 'ask_choice' && getChoiceQuestion(block)" class="tool-param tool-param-wide"
+                :title="getChoiceQuestion(block)">{{ getChoiceQuestion(block) }}</span>
+          <span class="default-icon"
+                v-html="CHEVRON_DOWN_ICON"
+                :style="{
+                  transform: block.showContent ? 'rotate(180deg)' : 'rotate(0deg)',
+                  display: 'inline-block',
+                  transition: 'transform 0.25s ease',
+                  lineHeight: 0
+                }">
+        </span>
         </div>
         <div v-if="block.expanded" class="tool-detail">
           <pre v-if="block.args"><code>{{ fmtArgs(block.args) }}</code></pre>
@@ -53,19 +141,128 @@
         </div>
       </div>
     </template>
+
+    <!-- 选项按钮（choice） -->
+    <div v-else-if="block.type === 'choice'" class="block-choice">
+      <!-- 未选择：显示问题 + 选项卡片 -->
+      <div v-if="!block.resolved">
+        <div class="choice-question" v-if="block.question">
+          <span class="choice-q-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle
+                cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01"
+                                                                                              y2="17"/></svg>
+          </span>
+          <span class="choice-q-text">{{ block.question }}</span>
+        </div>
+        <div class="choice-buttons">
+          <button
+              v-for="opt in (block.options || [])"
+              :key="opt.value || opt.title"
+              class="choice-btn"
+              :title="opt.summary || opt.title"
+              @click="$emit('sendChoice', opt.value, block)"
+          >
+            <span class="choice-btn-title">{{ opt.title }}</span>
+            <span v-if="opt.summary" class="choice-btn-sep">·</span>
+            <span v-if="opt.summary" class="choice-btn-summary">{{ opt.summary }}</span>
+          </button>
+        </div>
+      </div>
+      <!-- 已选择 -->
+      <div v-else class="choice-resolved">
+        <span class="choice-resolved-icon default-icon" v-html="CHECK_ICON_SM"></span>
+        <span class="choice-resolved-label">已选择</span>
+        <span class="choice-resolved-value">{{ block.selectedTitle || block.options?.[0]?.title || '—' }}</span>
+      </div>
+    </div>
   </template>
 </template>
 
 <script setup>
 import {md} from '../utils/highlight'
+import {sanitize} from '../utils/sanitize'
+import {CHECK_ICON, CHECK_ICON_SM, CHEVRON_DOWN_ICON, CIRCLE_ICON, SPINNER_ICON, THINKING_ICON} from '../utils/icons'
+import {LRUCache} from '../utils/cache'
+import {ref, computed} from 'vue'
 
 const props = defineProps({
-  blocks: { type: Array, required: true }
+  blocks: {type: Array, required: true}
 })
+
+const emit = defineEmits(['sendChoice', 'openFile'])
+
+// ── 工具分组折叠状态 ──
+let _groupSeq = 0
+const toolGroupsExpanded = ref({})
+
+const toggleToolGroup = (groupId) => {
+  toolGroupsExpanded.value = {...toolGroupsExpanded.value, [groupId]: !toolGroupsExpanded.value[groupId]}
+}
+
+/** 将连续 tool_call 合并为 tool_group */
+const processedBlocks = computed(() => {
+  const src = props.blocks
+  if (!src || src.length === 0) return []
+  const out = []
+  let i = 0
+  while (i < src.length) {
+    const b = src[i]
+    if (b.type === 'tool_call' && b.name !== 'finish') {
+      // 收集连续的 tool_call
+      const group = [b]
+      let j = i + 1
+      while (j < src.length && src[j].type === 'tool_call' && src[j].name !== 'finish') {
+        group.push(src[j])
+        j++
+      }
+      if (group.length >= 2) {
+        // 多个连续工具 → 合并为 tool_group
+        _groupSeq++
+        const gid = `tg-${_groupSeq}`
+        const allDone = group.every(t => t.status === '成功')
+        const running = group.some(t => t.status === '执行中')
+        out.push({
+          type: 'tool_group',
+          _groupId: gid,
+          _tools: group,
+          _groupAllDone: allDone,
+          _groupRunning: running
+        })
+      } else {
+        // 单个工具不合并
+        out.push(b)
+      }
+      i = j
+    } else {
+      out.push(b)
+      i++
+    }
+  }
+  return out
+})
+
+// ── 工具分组顺序辅助 ──
+const getToolGroupOrder = (block) => {
+  if (!block || !block._tools) return ''
+  return block._tools.map(t => t.name).join(' → ')
+}
+
+const getToolGroupOrderTruncated = (block) => {
+  const order = getToolGroupOrder(block)
+  if (!order) return ''
+  return order.length > 60 ? order.slice(0, 57) + '...' : order
+}
+
+// Markdown 渲染缓存
+const renderCache = new LRUCache(200)
 
 const fmt = c => {
   if (!c) return ''
-  return md.parse(c)
+  const cached = renderCache.get(c)
+  if (cached) return cached
+  const result = sanitize(md.parse(c))
+  renderCache.set(c, result)
+  return result
 }
 
 // 带缓存的 reasoning Markdown 渲染
@@ -81,7 +278,792 @@ const getReasoningHtml = (block) => {
 }
 
 const fmtArgs = a => {
-  if (typeof a === 'string') { try { return JSON.stringify(JSON.parse(a), null, 2) } catch { return a } }
+  if (typeof a === 'string') {
+    try {
+      return JSON.stringify(JSON.parse(a), null, 2)
+    } catch {
+      return a
+    }
+  }
   return JSON.stringify(a, null, 2)
 }
+
+// 解析 args
+const parseArgs = (block) => {
+  if (!block || block.type !== 'tool_call') return null
+  let args = block.args
+  if (typeof args === 'string') {
+    try {
+      args = JSON.parse(args)
+    } catch {
+      return null
+    }
+  }
+  return args && typeof args === 'object' ? args : null
+}
+
+// 检查是否显示打开文件按钮
+const shouldShowOpenFile = (block) => {
+  const args = parseArgs(block)
+  if (!args) return false
+  const toolName = block.name
+  // 对 write、edit、read 工具显示打开文件按钮
+  if (toolName !== 'write' && toolName !== 'edit' && toolName !== 'read') return false
+  return !!args.file_path
+}
+
+// 获取文件路径（完整路径）
+const getFilePath = (block) => {
+  const args = parseArgs(block)
+  return args?.file_path || null
+}
+
+// 获取文件名（从路径中提取最后一段）
+const getFileName = (block) => {
+  const fp = getFilePath(block)
+  if (!fp) return null
+  const parts = fp.replace(/\\/g, '/').split('/')
+  return parts[parts.length - 1]
+}
+
+// 获取 bash 命令（截断显示版）
+const getBashCommand = (block) => {
+  const args = parseArgs(block)
+  const cmd = args?.command
+  if (!cmd) return null
+  return cmd.length > 60 ? cmd.slice(0, 57) + '...' : cmd
+}
+
+// 获取 bash 命令（完整版，用于 title）
+const getBashCommandFull = (block) => {
+  const args = parseArgs(block)
+  return args?.command || null
+}
+
+// 获取 grep path（截断显示版）
+const getGrepPath = (block) => {
+  const args = parseArgs(block)
+  const p = args?.path
+  if (!p) return null
+  return p.length > 50 ? p.slice(0, 47) + '...' : p
+}
+
+// 获取 grep path（完整版，用于 title）
+const getGrepPathFull = (block) => {
+  const args = parseArgs(block)
+  return args?.path || null
+}
+
+// 获取 ls path
+const getLsPath = (block) => {
+  const args = parseArgs(block)
+  return args?.path || null
+}
+
+// 获取 glob path（截断显示版）
+const getGlobPath = (block) => {
+  const args = parseArgs(block)
+  const p = args?.path
+  if (!p) return null
+  return p.length > 50 ? p.slice(0, 47) + '...' : p
+}
+
+// 获取 glob path（完整版，用于 title）
+const getGlobPathFull = (block) => {
+  const args = parseArgs(block)
+  return args?.path || null
+}
+
+// 触发打开文件事件
+const openFile = (block) => {
+  const filePath = getFilePath(block)
+  if (filePath) {
+    emit('openFile', filePath)
+  }
+}
+
+// 获取 ask_choice 的问题文字
+const getChoiceQuestion = (block) => {
+  const args = parseArgs(block)
+  const q = args?.question
+  if (!q) return null
+  const options = args?.options
+  const count = Array.isArray(options) ? options.length : 0
+  const suffix = count > 0 ? ` (${count} 项)` : ''
+  return q.length > 40 ? q.slice(0, 37) + '...' + suffix : q + suffix
+}
 </script>
+
+<style scoped>
+/* 思考块 */
+.block-reasoning {
+  background: var(--glass-bg-2);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.reasoning-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-3);
+  cursor: pointer;
+}
+
+.reasoning-head :deep(svg:last-child) {
+  transition: transform var(--t);
+}
+
+.reasoning-text {
+  padding: 0 10px 8px;
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--fg-3);
+  line-height: 1.6;
+}
+
+.reasoning-text :deep(p) {
+  margin: 0.4em 0;
+}
+
+.reasoning-text :deep(ul) {
+  margin: 0.4em 0;
+  padding-left: 1.5em;
+}
+
+.reasoning-text :deep(ol) {
+  margin: 0.4em 0;
+  padding-left: 1.5em;
+}
+
+.reasoning-text :deep(li) {
+  margin: 0.2em 0;
+}
+
+.reasoning-text :deep(blockquote) {
+  margin: 0.4em 0;
+  padding: 0.3em 0.8em;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-3);
+  border-radius: 0 var(--r-sm) var(--r-sm) 0;
+}
+
+.reasoning-text :deep(pre) {
+  background: var(--bg-3);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 6px 10px;
+  margin: 4px 0;
+  overflow-x: auto;
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+.reasoning-text :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+
+.reasoning-text :deep(code) {
+  font-size: 11px;
+  background: var(--bg-3);
+  padding: 0 4px;
+  border-radius: 3px;
+}
+
+/* 内容块 */
+.block-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--fg);
+  margin-bottom: 4px;
+}
+
+.block-content :deep(pre) {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 10px;
+  margin: 6px 0;
+  overflow-x: auto;
+}
+
+.block-content :deep(code) {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.block-content :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+
+.block-content :deep(strong) {
+  font-weight: 600;
+}
+
+.block-content :deep(a) {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.block-content :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.block-content :deep(h1) {
+  font-size: 1.5em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.block-content :deep(h2) {
+  font-size: 1.3em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.block-content :deep(h3) {
+  font-size: 1.1em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.block-content :deep(h4) {
+  font-size: 1em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.block-content :deep(h5) {
+  font-size: 0.9em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.block-content :deep(h6) {
+  font-size: 0.8em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.block-content :deep(ul) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.block-content :deep(ol) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.block-content :deep(li) {
+  margin: 0.25em 0;
+}
+
+.block-content :deep(blockquote) {
+  margin: 0.5em 0;
+  padding: 0.5em 1em;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-3);
+  border-radius: 0 var(--r) var(--r) 0;
+}
+
+.block-content :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+}
+
+.block-content :deep(th),
+.block-content :deep(td) {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.block-content :deep(th) {
+  background: var(--bg-3);
+  font-weight: 600;
+}
+
+.block-content :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1em 0;
+}
+
+.block-content :deep(p) {
+  margin: 0.5em 0;
+}
+
+.block-content :deep(p:first-child) {
+  margin-top: 0;
+}
+
+.block-content :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+/* 完成块（finish 工具输出） */
+.block-finish {
+  margin-top: 2px;
+  margin-bottom: 4px;
+}
+
+.finish-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 6px;
+}
+
+.finish-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  color: var(--green);
+}
+
+.finish-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--green);
+}
+
+.finish-content {
+  font-size: 14px;
+  line-height: 1.6;
+  color: var(--fg);
+}
+
+.finish-content :deep(pre) {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 10px;
+  margin: 6px 0;
+  overflow-x: auto;
+}
+
+.finish-content :deep(code) {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.finish-content :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+
+.finish-content :deep(strong) {
+  font-weight: 600;
+}
+
+.finish-content :deep(a) {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.finish-content :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.finish-content :deep(h1) {
+  font-size: 1.5em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.finish-content :deep(h2) {
+  font-size: 1.3em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.finish-content :deep(h3) {
+  font-size: 1.1em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.finish-content :deep(h4) {
+  font-size: 1em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.finish-content :deep(h5) {
+  font-size: 0.9em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.finish-content :deep(h6) {
+  font-size: 0.8em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.finish-content :deep(ul) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.finish-content :deep(ol) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.finish-content :deep(li) {
+  margin: 0.25em 0;
+}
+
+.finish-content :deep(blockquote) {
+  margin: 0.5em 0;
+  padding: 0.5em 1em;
+  border-left: 3px solid var(--green);
+  background: var(--bg-3);
+  border-radius: 0 var(--r) var(--r) 0;
+}
+
+.finish-content :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+}
+
+.finish-content :deep(th),
+.finish-content :deep(td) {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.finish-content :deep(th) {
+  background: var(--bg-3);
+  font-weight: 600;
+}
+
+.finish-content :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1em 0;
+}
+
+.finish-content :deep(p) {
+  margin: 0.5em 0;
+}
+
+.finish-content :deep(p:first-child) {
+  margin-top: 0;
+}
+
+.finish-content :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+/* 代码块内嵌复制按钮 */
+.block-content :deep(.code-block-wrap) {
+  margin: 8px 0;
+}
+
+.block-content :deep(.code-block-wrap pre) {
+  position: relative;
+  margin: 0 !important;
+}
+
+.block-content :deep(.code-copy-btn) {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  opacity: 0;
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  transition: opacity 0.15s;
+  line-height: 1;
+  z-index: 2;
+}
+
+.block-content :deep(.code-block-wrap pre:hover .code-copy-btn) {
+  opacity: 0.7;
+}
+
+.block-content :deep(.code-copy-btn:hover) {
+  opacity: 1 !important;
+  background: var(--bg);
+}
+
+/* 工具分组展开内容 */
+.tool-group-detail {
+  border-top: 1px solid var(--glass-border);
+  padding: 4px 6px;
+}
+
+.tool-group-item-block + .tool-group-item-block {
+  margin-top: 2px;
+}
+
+/* 工具块 */
+.block-tool {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.tool-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+  transition: background var(--t);
+}
+
+.tool-head:hover {
+  background: var(--bg-2);
+}
+
+.tool-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-sm);
+}
+
+.tool-icon.执行中 {
+  color: var(--yellow);
+}
+
+.tool-icon.成功 {
+  color: var(--green);
+}
+
+.tool-name {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--accent);
+}
+
+.tool-status {
+  font-size: 10px;
+  padding: 0 4px;
+  font-weight: 500;
+  border-radius: var(--r-sm);
+  font-family: var(--mono);
+}
+
+.tool-status.执行中 {
+  background: var(--yellow-bg);
+  color: var(--yellow);
+}
+
+.tool-status.成功 {
+  background: var(--green-bg);
+  color: var(--green);
+}
+
+.tool-head :deep(svg:last-child) {
+  margin-left: auto;
+  transition: transform var(--t);
+  color: var(--fg-4);
+}
+
+.tool-detail {
+  padding: 0 10px 8px;
+  border-top: 1px solid var(--border);
+}
+
+.tool-detail pre {
+  background: var(--bg-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 8px;
+  margin-top: 6px;
+  font-size: 11px;
+  max-height: 150px;
+  overflow: auto;
+}
+
+.tool-param {
+  font-size: 10px;
+  color: var(--fg-3);
+  background: var(--bg-3);
+  border-radius: 3px;
+  padding: 0 6px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.5;
+  font-family: var(--mono);
+}
+
+/* 长文本参数（ask_choice 问题等），允许更宽 */
+.tool-param-wide {
+  max-width: 320px;
+}
+
+/* 文件工具（edit/write/read 显示文件名，可点击打开，标签风格） */
+.tool-file {
+  font-size: 10px;
+  color: var(--fg-3);
+  background: var(--bg-3);
+  border-radius: 3px;
+  padding: 0 6px;
+  max-width: 180px;
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.5;
+  border: none;
+  cursor: pointer;
+  transition: color var(--t), background var(--t);
+}
+
+.tool-file:hover {
+  color: var(--accent);
+  background: var(--accent-bg);
+  font-family: var(--mono);
+}
+
+/* 选项按钮（choice / ask_choice） */
+.block-choice {
+  background: var(--glass-bg-2);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  margin-bottom: 4px;
+  overflow: hidden;
+}
+
+/* 问题头部 */
+.choice-question {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg);
+}
+
+.choice-q-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  color: var(--accent);
+}
+
+.choice-q-text {
+  flex: 1;
+  font-weight: 500;
+}
+
+/* 选项列表 — 横向 wrap */
+.choice-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 12px 10px;
+}
+
+.choice-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--t);
+  white-space: nowrap;
+  line-height: 1.4;
+}
+
+.choice-btn:hover {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.choice-btn:active {
+  transform: scale(0.96);
+}
+
+.choice-btn-title {
+  font-weight: 600;
+}
+
+.choice-btn-sep {
+  color: var(--fg-4);
+  margin: 0 1px;
+}
+
+.choice-btn-summary {
+  color: var(--fg-4);
+  font-size: 11px;
+}
+
+/* 已选择状态 */
+.choice-resolved {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--green);
+  background: var(--green-bg);
+}
+
+.choice-resolved-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.choice-resolved-label {
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.choice-resolved-value {
+  font-size: 11px;
+  color: var(--fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+</style>

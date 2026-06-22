@@ -1,9 +1,8 @@
 package site.sorghum.agent4j.bin.tool;
 
 import lombok.extern.slf4j.Slf4j;
-import site.sorghum.agent4j.bin.agent.PromptPrefix;
-import site.sorghum.agent4j.tool.AgentTool;
-import site.sorghum.agent4j.tool.ToolContext;
+import org.noear.solon.ai.chat.tool.FunctionTool;
+import site.sorghum.agent4j.bin.agent.prompt.PromptPrefix;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -66,28 +65,14 @@ public class ToolSystemInitializer {
         }
 
         // 2. 使用 ToolScanUtil 统一扫描工具（Solon IoC + Skill 文件系统）
-        List<AgentTool> agentTools = ToolScanUtil.scanTools(workspace);
+        List<FunctionTool> agentTools = ToolScanUtil.scanTools(workspace);
 
         // 3. 收集工具规范文本 & 注册工具
         StringBuilder toolSpecsBuilder = new StringBuilder();
         toolSpecsBuilder.append("\n\n## 可用工具规范\n\n");
 
-        for (AgentTool tool : agentTools) {
-            String toolSpec = tool.toToolSpec();
-            registry.register(new ToolDef(
-                    tool.getName(),
-                    tool.getDescription(),
-                    ToolDefHelper.toParamDefs(tool.getParameters()),
-                    args -> {
-                        String sessionId = args != null ? (String) args.remove("__sessionId__") : null;
-                        return ToolDefHelper.formatResult(tool.execute(
-                                new ToolContext(args, workspace, apiUrl, apiKey,
-                                        registry, effectiveBlockedPaths,
-                                        sessionId, false)));
-                    },
-                    tool.isReadOnly(),
-                    tool.isStormExempt(),
-                    toolSpec));
+        for (FunctionTool tool : agentTools) {
+            String toolSpec = tool.descriptionAndMeta();
             if (toolSpec != null && !toolSpec.isEmpty()) {
                 toolSpecsBuilder.append(toolSpec).append("\n\n---\n\n");
             }

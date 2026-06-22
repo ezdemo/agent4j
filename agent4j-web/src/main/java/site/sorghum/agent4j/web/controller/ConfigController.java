@@ -4,19 +4,20 @@ import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import lombok.SneakyThrows;
+import okhttp3.OkHttpClient;
+import okhttp3.Request;
+import okhttp3.Response;
+import org.noear.dami2.Dami;
+import org.noear.snack4.ONode;
 import org.noear.solon.annotation.*;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
+import site.sorghum.agent4j.bin.config.ConfigChangedEvent;
 import site.sorghum.agent4j.bin.config.ConfigService;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.common.WebErrorMessages;
 import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
 import site.sorghum.agent4j.web.service.DashboardService;
-
-import okhttp3.OkHttpClient;
-import okhttp3.Request;
-import okhttp3.Response;
-import org.noear.snack4.ONode;
 
 import java.util.*;
 import java.util.concurrent.TimeUnit;
@@ -62,6 +63,16 @@ public class ConfigController {
             maskedKey = "****";
         }
 
+        // 获取视觉模型配置
+        String visionBaseUrl = cfg.visionBaseUrl();
+        String visionModel = cfg.visionModel();
+        
+        ConfigDTO.VisionConfig visionConfig = new ConfigDTO.VisionConfig(
+                visionBaseUrl != null ? visionBaseUrl : "",
+                "",
+                visionModel != null ? visionModel : ""
+        );
+
         ConfigDTO data = new ConfigDTO(
                 cfg.baseUrl(),
                 cfg.model(),
@@ -74,7 +85,8 @@ public class ConfigController {
                 configService.getDisabledTools(),
                 cfg.blockedPaths(),
                 maskedKey,
-                cfg.price()
+                cfg.price(),
+                visionConfig
         );
         return ApiResponse.ok(data);
     }
@@ -92,15 +104,15 @@ public class ConfigController {
             return ApiResponse.ok("API 地址/密钥已更新，Agent 已重新初始化");
         }
 
-        if (body.containsKey("model") && agentService.isReady()) {
-            String newModel = body.get("model").toString();
-            agentService.updateModel(newModel);
-        }
-
-        if (body.containsKey("hitl") && agentService.isReady()) {
-            Object hitlVal = body.get("hitl");
-            boolean newHitl = hitlVal instanceof Boolean ? (Boolean) hitlVal : Boolean.parseBoolean(hitlVal.toString());
-            agentService.updateHitlMode(newHitl);
+        // model、reasoningEffort、hitl 等运行时配置 → 通过 DamiBus 广播，由监听者处理
+        for (Map.Entry<String, Object> entry : body.entrySet()) {
+            String key = entry.getKey();
+            // baseUrl/apiKey 已在上方处理，跳过
+            if ("baseUrl".equals(key) || "apiKey".equals(key)) continue;
+            // 只发布已知的运行时配置键
+            if ("model".equals(key) || "reasoningEffort".equals(key) || "hitl".equals(key)) {
+                Dami.bus().send("config.changed", new ConfigChangedEvent(key, entry.getValue()));
+            }
         }
 
         return ApiResponse.ok("配置已更新");
@@ -182,6 +194,67 @@ public class ConfigController {
             return ApiResponse.ok(modelNames);
         } catch (Exception e) {
             return ApiResponse.fail("获取远程模型列表失败: " + e.getMessage());
+        }
+    }
+
+    @ApiOperation(value = "从远程 API 获取视觉模型列表", notes = "调用视觉模型配置的 API 地址 + /models，携带 API Key 获取远程视觉模型列表")
+    @SneakyThrows
+    @Get
+    @Mapping("/remote-vision-models")
+    public ApiResponse<List<String>> getRemoteVisionModels() {
+        Agent4jConfig cfg = configService.getConfig();
+        String visionUrl = cfg.visionBaseUrl();
+        String visionApiKey = cfg.visionApiKey();
+
+        if (visionUrl == null || visionUrl.isEmpty()) {
+            return ApiResponse.fail("视觉模型 API 地址未配置");
+        }
+        if (visionApiKey == null || visionApiKey.isEmpty()) {
+            return ApiResponse.fail("视觉模型 API 密钥未配置");
+        }
+
+        // vision baseUrl 可能已包含 /chat/completions，需要去掉后缀再拼 /models
+        String base = visionUrl
+                .replaceAll("/chat/completions$", "")
+                .replaceAll("/+$", "");
+        String modelsUrl = base + "/models";
+
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(REMOTE_CONNECT_TIMEOUT_SEC, TimeUnit.SECONDS)
+                .readTimeout(REMOTE_READ_TIMEOUT_SEC, TimeUnit.SECONDS)
+                .build();
+
+        Request request = new Request.Builder()
+                .url(modelsUrl)
+                .header("Authorization", "Bearer " + visionApiKey)
+                .header("Content-Type", "application/json")
+                .get()
+                .build();
+
+        try (Response response = client.newCall(request).execute()) {
+            if (!response.isSuccessful()) {
+                String body = response.body() != null ? response.body().string() : "";
+                return ApiResponse.fail("远程 API 返回错误 (" + response.code() + "): " + body);
+            }
+
+            String json = response.body() != null ? response.body().string() : "[]";
+            ONode root = ONode.ofJson(json);
+            ONode dataArr = root.select("$.data");
+
+            List<String> modelNames = new ArrayList<>();
+            if (dataArr != null && dataArr.isArray()) {
+                for (ONode item : dataArr.getArray()) {
+                    String id = item.get("id").getString();
+                    if (id != null && !id.isEmpty()) {
+                        modelNames.add(id);
+                    }
+                }
+            }
+
+            Collections.sort(modelNames);
+            return ApiResponse.ok(modelNames);
+        } catch (Exception e) {
+            return ApiResponse.fail("获取远程视觉模型列表失败: " + e.getMessage());
         }
     }
 

@@ -643,3 +643,33 @@ ipcMain.handle('open-external', async (event, url) => {
     return { success: false, error: e.message }
   }
 })
+
+// 打开本地文件
+ipcMain.handle('open-file', async (event, filePath) => {
+  try {
+    // 路径验证
+    if (!filePath || typeof filePath !== 'string') {
+      return { success: false, error: '无效的文件路径' }
+    }
+    // 防止路径遍历攻击
+    if (filePath.includes('..') || filePath.includes('~')) {
+      return { success: false, error: '文件路径包含非法字符' }
+    }
+    // 确保路径是绝对路径
+    const absolutePath = path.resolve(filePath)
+    // 检查文件是否存在
+    if (!fs.existsSync(absolutePath)) {
+      return { success: false, error: '文件不存在' }
+    }
+    // 检查是否是文件（不是目录）
+    const stat = fs.statSync(absolutePath)
+    if (!stat.isFile()) {
+      return { success: false, error: '路径不是文件' }
+    }
+    await shell.openPath(absolutePath)
+    return { success: true }
+  } catch (e) {
+    console.error('Failed to open file:', e)
+    return { success: false, error: e.message }
+  }
+})

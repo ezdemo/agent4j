@@ -66,13 +66,17 @@
           @rollback-snapshot="rollbackSnapshot"
           @copy-message="copyMessage"
           @send-choice="sendChoice"
+          @open-file="openFile"
       />
 
-      <!-- 加载中 -->
-      <div v-if="streaming && !hasAssistant" class="msg assistant">
+      <!-- 加载中：AI 准备中 -->
+      <div v-if="waitingForAI" class="msg assistant">
         <div class="msg-body assistant-body">
-          <div class="typing">
-            <span></span><span></span><span></span>
+          <div class="ai-preparing">
+            <span class="ai-dot"></span>
+            <span class="ai-dot"></span>
+            <span class="ai-dot"></span>
+            <span class="ai-label">AI 正在思考...</span>
           </div>
         </div>
       </div>
@@ -166,6 +170,15 @@
       </div>
     </Teleport>
 
+    <!-- Diff 查看器弹窗（复用 DiffViewer 组件） -->
+    <DiffViewer
+      :open="diffViewer.open"
+      :file="diffViewer.file"
+      :diff="diffViewer.diff"
+      :stat="diffViewer.stat"
+      @close="closeDiffViewer"
+    />
+
     <!-- 无会话时：禁用输入框占位 -->
     <div v-if="!props.sessionName" class="no-session-input-bar">
       <div class="no-session-input-placeholder">
@@ -184,6 +197,7 @@
         :usage="usage"
         :currentModel="currentModel"
         :availableModels="availableModels"
+        :currentReasoningEffort="currentReasoningEffort"
         :workspaceHash="props.workspaceHash"
         :sessionName="props.sessionName"
         :hasHistory="hasHistory"
@@ -194,6 +208,7 @@
         @fetchTodos="fetchTodos"
         @refreshUsage="loadUsage"
         @switchModel="handleSwitchModel"
+        @switchReasoningEffort="handleSwitchReasoningEffort"
         @refreshModels="loadUsage"
         @continue="continueChat"
     />
@@ -202,11 +217,14 @@
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {agentAPI, chatAPI, configAPI, snapshotAPI} from '../services/api'
+import {agentAPI, chatAPI, configAPI, gitAPI, snapshotAPI} from '../services/api'
 import {md} from '../utils/highlight'
+import {sanitize} from '../utils/sanitize'
 import ChatInput from '../components/ChatInput.vue'
 import ChatMessage from '../components/ChatMessage.vue'
+import DiffViewer from '../components/DiffViewer.vue'
 import {useAppStore} from '../stores/app'
+import platform from '../services/platform'
 
 // ============= 模型切换 =============
 const handleSwitchModel = async (modelName) => {
@@ -218,9 +236,25 @@ const handleSwitchModel = async (modelName) => {
       availableModels.value.forEach(m => {
         m.active = m.name === modelName
       })
+      loadUsage()
     }
   } catch (e) {
     console.error('切换模型失败:', e)
+  }
+}
+
+// ============= 推理强度切换 =============
+const currentReasoningEffort = ref('max')
+
+const handleSwitchReasoningEffort = async (value) => {
+  if (value === currentReasoningEffort.value) return
+  try {
+    const r = await configAPI.updateConfig({reasoningEffort: value})
+    if (r.success) {
+      currentReasoningEffort.value = value
+    }
+  } catch (e) {
+    console.error('切换推理强度失败:', e)
   }
 }
 
@@ -247,6 +281,25 @@ const previewImage = (url) => {
   imagePreviewUrl.value = url
   imagePreviewOpen.value = true
 }
+
+// Diff 查看器
+const diffViewer = ref({ open: false, file: '', diff: '', stat: '' })
+const openDiff = async (filePath) => {
+  diffViewer.value = { open: true, file: filePath, diff: '', stat: '' }
+  try {
+    const r = await gitAPI.diffContent(props.workspaceHash, filePath)
+    if (r.success && r.data) {
+      diffViewer.value.diff = r.data.diff || ''
+      diffViewer.value.stat = r.data.stat || ''
+    }
+  } catch (e) {
+    diffViewer.value.diff = '加载 diff 失败: ' + (e.message || '')
+  }
+}
+const closeDiffViewer = () => {
+  diffViewer.value = { open: false, file: '', diff: '', stat: '' }
+}
+
 const messages = computed(() => store.getSessionMessages(props.sessionName))
 const streaming = computed(() => store.getSessionStreaming(props.sessionName))
 const hasHistory = computed(() => messages.value.length > 0)
@@ -275,9 +328,10 @@ const loadUsage = async (override) => {
     if (wsHash) params.workspaceHash = wsHash
     if (sessName) params.sessionName = sessName
 
-    const [usageRes, modelsRes] = await Promise.allSettled([
+    const [usageRes, modelsRes, configRes] = await Promise.allSettled([
       configAPI.getUsage(params),
-      configAPI.getModels()
+      configAPI.getModels(),
+      configAPI.getConfig()
     ])
     if (usageRes.status === 'fulfilled' && usageRes.value.success) {
       usage.value = {...usage.value, ...usageRes.value.data}
@@ -285,6 +339,9 @@ const loadUsage = async (override) => {
     if (modelsRes.status === 'fulfilled' && modelsRes.value.success) {
       currentModel.value = modelsRes.value.data?.current || ''
       availableModels.value = modelsRes.value.data?.models || []
+    }
+    if (configRes.status === 'fulfilled' && configRes.value.success) {
+      currentReasoningEffort.value = configRes.value.data?.reasoningEffort || 'max'
     }
   } catch {
   }
@@ -396,7 +453,22 @@ const suggestions = ['解释这段代码', '优化这个函数', '写个单元�
 // 不在聊天区显示的静默命令（只发给后端，不加用户消息气泡）
 const SILENT_CMDS = new Set(['/agree', '/deny', '/exit', '/continue'])
 
-const hasAssistant = computed(() => messages.value.some(m => m.role === 'assistant' && m.blocks?.length > 0))
+const hasAssistant = computed(() => {
+  if (!streaming.value) return false
+  // 检查最后一条助手消息是否有内容
+  const msgs = messages.value
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === 'assistant') {
+      return msgs[i].blocks?.length > 0
+    }
+  }
+  return false
+})
+
+// 是否正在等待 AI 回复（用于显示加载动画）
+const waitingForAI = computed(() => {
+  return streaming.value && !hasAssistant.value
+})
 
 // ===== 消息缩略图 dock =====
 /** 只取 role === 'user' 的消息，并记录全局索引用于跳转 */
@@ -447,7 +519,7 @@ const fmt = c => {
 
 const fmtPrompt = c => {
   if (!c) return ''
-  return md.parse(c)
+  return sanitize(md.parse(c))
 }
 
 // 复制整条消息内容
@@ -539,6 +611,11 @@ const sendChoice = (value, block) => {
   }
   inputText.value = value
   sendMessage()
+}
+
+// 打开文件（显示 Git diff）
+const openFile = async (filePath) => {
+  openDiff(filePath)
 }
 
 // 键盘事件已迁移到 ChatInput 组件
@@ -745,7 +822,32 @@ const sendMessage = async (images = []) => {
               }
             }
             if (Array.isArray(options) && options.length > 0) {
-              msg.blocks.push({type: 'choice', options})
+              // 尝试从同消息的 ask_choice tool_call 中获取 question 和 summary
+              let question = data.question || ''
+              let toolOptions = null
+              if (msg.blocks) {
+                for (let i = msg.blocks.length - 1; i >= 0; i--) {
+                  const b = msg.blocks[i]
+                  if (b.type === 'tool_call' && b.name === 'ask_choice') {
+                    try {
+                      const args = typeof b.args === 'string' ? JSON.parse(b.args) : b.args
+                      if (args?.question && !question) question = args.question
+                      if (args?.options) toolOptions = args.options
+                    } catch {}
+                  }
+                }
+              }
+              // 如果后端 choice 事件没带 summary，从 tool_call args 补上
+              if (toolOptions && Array.isArray(toolOptions)) {
+                options = options.map((opt, idx) => {
+                  const toolOpt = toolOptions[idx]
+                  if (toolOpt && !opt.summary && toolOpt.summary) {
+                    return { ...opt, summary: toolOpt.summary }
+                  }
+                  return opt
+                })
+              }
+              msg.blocks.push({type: 'choice', options, question})
             }
           } else if (data.type === 'log') {
             // 系统日志（如 [compact] 折叠结果）→ 仅展示 INFO 及以上级别
@@ -1146,9 +1248,10 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 16px 120px;
+  padding: 16px 16px 100px;
   position: relative;
 }
+
 
 /* 空状态 */
 .empty {
@@ -1167,8 +1270,9 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--bg-3);
-  border-radius: var(--r);
+  background: transparent;
+  border: 2px dashed var(--border);
+  border-radius: 50%;
   margin-bottom: 12px;
   color: var(--fg-4);
 }
@@ -1208,27 +1312,60 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   color: var(--accent);
 }
 
-/* 打字动画 */
-.typing {
+/* AI 准备中动画 */
+.ai-preparing {
   display: flex;
-  gap: 4px;
-  padding: 4px 0;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
 }
 
-.typing span {
-  width: 6px;
-  height: 6px;
-  background: var(--fg-4);
+/* 助手消息气泡样式（Chat.vue 中的加载状态需要） */
+.msg.assistant {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.msg.assistant .msg-body {
+  max-width: 85%;
+}
+
+.assistant-body {
+  background: var(--glass-bg-2);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  padding: 8px 12px;
+  box-shadow: var(--glass-shadow);
+}
+
+.ai-dot {
+  width: 8px;
+  height: 8px;
+  background: var(--accent);
   border-radius: 50%;
-  animation: pulse 1.4s infinite;
+  opacity: 0.4;
+  animation: ai-pulse 1.4s ease-in-out infinite;
 }
 
-.typing span:nth-child(2) {
+.ai-dot:nth-child(2) {
   animation-delay: 0.2s;
 }
 
-.typing span:nth-child(3) {
+.ai-dot:nth-child(3) {
   animation-delay: 0.4s;
+}
+
+.ai-label {
+  font-size: 13px;
+  color: var(--fg-3);
+  margin-left: 4px;
+}
+
+@keyframes ai-pulse {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50% { opacity: 1; transform: scale(1); }
 }
 
 /* 全部输入区样式已迁移到 ChatInput.vue 组件中（.input-area, .input-box, .usage-bar, .todo-*, .slash-popup, .model-selector 等） */
@@ -1764,4 +1901,21 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   opacity: 1;
   margin-left: 2px;
 }
+
+/* ===== 移动端适配 ===== */
+@media (max-width: 640px) {
+  .messages { padding: 12px 8px 100px; }
+  .msg-body { max-width: 95%; }
+  .empty-title { font-size: 14px; }
+  .empty-desc { font-size: 12px; }
+  .suggestion { font-size: 11px; padding: 3px 8px; }
+  .scroll-bottom-btn { right: 12px; bottom: 100px; width: 32px; height: 32px; }
+  .ai-preparing { padding: 6px 10px; }
+  .ai-dot { width: 6px; height: 6px; }
+  .ai-label { font-size: 12px; }
+  .msg-thumb-dock { display: none; } /* 手机端隐藏缩略图dock */
+  .chat-head { padding: 6px 10px; }
+    .chat-head-title { font-size: 13px; }
+}
+
 </style>

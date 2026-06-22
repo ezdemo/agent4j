@@ -1,13 +1,16 @@
 package site.sorghum.agent4j.tool.solon;
 
-import site.sorghum.agent4j.tool.AgentTool;
+import org.noear.solon.ai.chat.tool.FunctionTool;
 
-import java.util.List;
+import java.util.Collection;
+import java.util.Collections;
 
 
 public interface SolonToTools {
 
-    List<AgentTool> getTools();
+    default Collection<FunctionTool> getSolonTools() {
+        return Collections.emptyList();
+    }
 
     default String getSystemPrompt() {
         return null;

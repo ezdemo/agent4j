@@ -1,0 +1,30 @@
+package site.sorghum.agent4j.bin.agent.model;
+
+import java.util.LinkedHashMap;
+import java.util.Map;
+
+/**
+ * 工具调用条目 —— 替代 Map&lt;String, Object&gt; 表示单个工具调用的强类型封装。
+ * <p>
+ * 包含工具调用的 ID、名称和参数。
+ * {@code arguments} 内部为 JSON 字符串，反序列化为 JSON 对象输出。
+ * </p>
+ *
+ * @param id        工具调用 ID（由 API 返回或自动生成）
+ * @param name      工具名称
+ * @param arguments 工具参数（内部 String，序列化时由 Snack4 自动输出为 JSON 对象）
+ * @author Sorghum
+ */
+public record ToolCallEntry(String id, String name, Object arguments) {
+
+    /**
+     * 转换为 Map（兼容旧的 JSON 序列化路径）。
+     */
+    public Map<String, Object> toMap() {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("id", id);
+        m.put("name", name);
+        m.put("arguments", arguments);
+        return m;
+    }
+}
