@@ -3,9 +3,17 @@
     <!-- 思考 -->
     <div v-if="block.type === 'reasoning'" class="block-reasoning">
       <div class="reasoning-head" @click="block.showContent = !block.showContent">
-        <span v-html="THINKING_ICON"></span>
+        <span class="default-icon" v-html="THINKING_ICON"></span>
         <span>思考</span>
-        <span v-html="CHEVRON_DOWN_ICON" :style="{ transform: block.showContent ? 'rotate(180deg)' : '', display: 'inline-block' }"></span>
+        <span class="default-icon"
+              v-html="CHEVRON_DOWN_ICON"
+              :style="{
+                  transform: block.showContent ? 'rotate(180deg)' : 'rotate(0deg)',
+                  display: 'inline-block',
+                  transition: 'transform 0.25s ease',
+                  lineHeight: 0
+                }">
+        </span>
       </div>
       <div v-if="block.showContent" class="reasoning-text" v-html="getReasoningHtml(block)"></div>
     </div>
@@ -18,7 +26,7 @@
       <!-- finish 工具：完成时将 content 渲染为模型输出样式 -->
       <div v-if="block.name === 'finish' && block.result" class="block-finish">
         <div class="finish-head">
-          <span class="finish-icon" v-html="CHECK_ICON"></span>
+          <span class="finish-icon default-icon" v-html="CHECK_ICON"></span>
           <span class="finish-label">最终回答</span>
         </div>
         <div class="finish-content" v-html="fmt(block.result)"></div>
@@ -26,7 +34,7 @@
       <!-- finish 执行中 -->
       <div v-else-if="block.name === 'finish' && block.status" class="block-tool">
         <div class="tool-head">
-          <span class="tool-icon" :class="block.status" v-html="SPINNER_ICON"></span>
+          <span class="tool-icon default-icon" :class="block.status" v-html="SPINNER_ICON"></span>
           <code class="tool-name">finish</code>
           <span class="tool-status" :class="block.status">{{ block.status }}</span>
         </div>
@@ -34,21 +42,35 @@
       <!-- 其他工具 -->
       <div v-else class="block-tool">
         <div class="tool-head" @click="block.expanded = !block.expanded">
-          <span class="tool-icon" :class="block.status">
+          <span class="tool-icon default-icon" :class="block.status">
             <span v-if="block.status === '执行中'" v-html="SPINNER_ICON"></span>
             <span v-else-if="block.status === '成功'" v-html="CHECK_ICON_SM"></span>
             <span v-else v-html="CIRCLE_ICON"></span>
           </span>
           <code class="tool-name">{{ block.name }}</code>
           <span class="tool-status" :class="block.status">{{ block.status }}</span>
-          <button v-if="shouldShowOpenFile(block)" class="open-file-inline" @click.stop="openFile(block)" title="查看文件变更">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-            </svg>
-            <span class="open-file-path">{{ getFilePath(block) }}</span>
+          <span v-if="block.name === 'bash' && getBashCommand(block)" class="tool-param"
+                :title="getBashCommandFull(block)">{{ getBashCommand(block) }}</span>
+          <span v-else-if="block.name === 'grep' && getGrepPath(block)" class="tool-param"
+                :title="getGrepPathFull(block)">{{ getGrepPath(block) }}</span>
+          <span v-else-if="block.name === 'glob' && getGlobPath(block)" class="tool-param"
+                :title="getGlobPathFull(block)">{{ getGlobPath(block) }}</span>
+          <span v-else-if="block.name === 'ls' && getLsPath(block)" class="tool-param"
+                :title="getLsPath(block)">{{ getLsPath(block) }}</span>
+          <button v-else-if="shouldShowOpenFile(block)" class="tool-file" @click.stop="openFile(block)"
+                  :title="getFilePath(block)">{{ getFileName(block) }}
           </button>
-          <span v-if="block.name === 'bash' && getBashCommand(block)" class="tool-bash-cmd">{{ getBashCommand(block) }}</span>
-          <span v-html="CHEVRON_DOWN_ICON" :style="{ transform: block.expanded ? 'rotate(180deg)' : '', display: 'inline-block' }"></span>
+          <span v-else-if="block.name === 'ask_choice' && getChoiceQuestion(block)" class="tool-param tool-param-wide"
+                :title="getChoiceQuestion(block)">{{ getChoiceQuestion(block) }}</span>
+          <span class="default-icon"
+                v-html="CHEVRON_DOWN_ICON"
+                :style="{
+                  transform: block.showContent ? 'rotate(180deg)' : 'rotate(0deg)',
+                  display: 'inline-block',
+                  transition: 'transform 0.25s ease',
+                  lineHeight: 0
+                }">
+        </span>
         </div>
         <div v-if="block.expanded" class="tool-detail">
           <pre v-if="block.args"><code>{{ fmtArgs(block.args) }}</code></pre>
@@ -59,16 +81,35 @@
 
     <!-- 选项按钮（choice） -->
     <div v-else-if="block.type === 'choice'" class="block-choice">
-      <div v-if="!block.resolved" class="choice-buttons">
-        <button v-for="opt in (block.options || [])" :key="opt.value"
-                class="choice-btn"
-                @click="$emit('sendChoice', opt.value, block)">
-          {{ opt.title }}
-        </button>
+      <!-- 未选择：显示问题 + 选项卡片 -->
+      <div v-if="!block.resolved">
+        <div class="choice-question" v-if="block.question">
+          <span class="choice-q-icon">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle
+                cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01"
+                                                                                              y2="17"/></svg>
+          </span>
+          <span class="choice-q-text">{{ block.question }}</span>
+        </div>
+        <div class="choice-buttons">
+          <button
+              v-for="opt in (block.options || [])"
+              :key="opt.value || opt.title"
+              class="choice-btn"
+              :title="opt.summary || opt.title"
+              @click="$emit('sendChoice', opt.value, block)"
+          >
+            <span class="choice-btn-title">{{ opt.title }}</span>
+            <span v-if="opt.summary" class="choice-btn-sep">·</span>
+            <span v-if="opt.summary" class="choice-btn-summary">{{ opt.summary }}</span>
+          </button>
+        </div>
       </div>
+      <!-- 已选择 -->
       <div v-else class="choice-resolved">
-        <span class="choice-label">已选择：</span>
-        <span class="choice-value">{{ block.selectedTitle || block.options?.[0]?.title || '—' }}</span>
+        <span class="choice-resolved-icon default-icon" v-html="CHECK_ICON_SM"></span>
+        <span class="choice-resolved-label">已选择</span>
+        <span class="choice-resolved-value">{{ block.selectedTitle || block.options?.[0]?.title || '—' }}</span>
       </div>
     </div>
   </template>
@@ -77,11 +118,11 @@
 <script setup>
 import {md} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
-import {THINKING_ICON, CHEVRON_DOWN_ICON, CHECK_ICON, CHECK_ICON_SM, CIRCLE_ICON, SPINNER_ICON} from '../utils/icons'
+import {CHECK_ICON, CHECK_ICON_SM, CHEVRON_DOWN_ICON, CIRCLE_ICON, SPINNER_ICON, THINKING_ICON} from '../utils/icons'
 import {LRUCache} from '../utils/cache'
 
 const props = defineProps({
-  blocks: { type: Array, required: true }
+  blocks: {type: Array, required: true}
 })
 
 const emit = defineEmits(['sendChoice', 'openFile'])
@@ -111,43 +152,100 @@ const getReasoningHtml = (block) => {
 }
 
 const fmtArgs = a => {
-  if (typeof a === 'string') { try { return JSON.stringify(JSON.parse(a), null, 2) } catch { return a } }
+  if (typeof a === 'string') {
+    try {
+      return JSON.stringify(JSON.parse(a), null, 2)
+    } catch {
+      return a
+    }
+  }
   return JSON.stringify(a, null, 2)
+}
+
+// 解析 args
+const parseArgs = (block) => {
+  if (!block || block.type !== 'tool_call') return null
+  let args = block.args
+  if (typeof args === 'string') {
+    try {
+      args = JSON.parse(args)
+    } catch {
+      return null
+    }
+  }
+  return args && typeof args === 'object' ? args : null
 }
 
 // 检查是否显示打开文件按钮
 const shouldShowOpenFile = (block) => {
-  if (!block || block.type !== 'tool_call') return false
+  const args = parseArgs(block)
+  if (!args) return false
   const toolName = block.name
-  // 只对 write 和 edit 工具显示打开文件按钮
-  if (toolName !== 'write' && toolName !== 'edit') return false
-  // 检查args是否包含file_path字段
-  let args = block.args
-  if (typeof args === 'string') {
-    try { args = JSON.parse(args) } catch { return false }
-  }
-  return args && typeof args === 'object' && args.file_path
+  // 对 write、edit、read 工具显示打开文件按钮
+  if (toolName !== 'write' && toolName !== 'edit' && toolName !== 'read') return false
+  return !!args.file_path
 }
 
-// 获取文件路径
+// 获取文件路径（完整路径）
 const getFilePath = (block) => {
-  let args = block.args
-  if (typeof args === 'string') {
-    try { args = JSON.parse(args) } catch { return null }
-  }
+  const args = parseArgs(block)
   return args?.file_path || null
 }
 
-// 获取 bash 命令
+// 获取文件名（从路径中提取最后一段）
+const getFileName = (block) => {
+  const fp = getFilePath(block)
+  if (!fp) return null
+  const parts = fp.replace(/\\/g, '/').split('/')
+  return parts[parts.length - 1]
+}
+
+// 获取 bash 命令（截断显示版）
 const getBashCommand = (block) => {
-  let args = block.args
-  if (typeof args === 'string') {
-    try { args = JSON.parse(args) } catch { return null }
-  }
+  const args = parseArgs(block)
   const cmd = args?.command
   if (!cmd) return null
-  // 截断过长命令
   return cmd.length > 60 ? cmd.slice(0, 57) + '...' : cmd
+}
+
+// 获取 bash 命令（完整版，用于 title）
+const getBashCommandFull = (block) => {
+  const args = parseArgs(block)
+  return args?.command || null
+}
+
+// 获取 grep path（截断显示版）
+const getGrepPath = (block) => {
+  const args = parseArgs(block)
+  const p = args?.path
+  if (!p) return null
+  return p.length > 50 ? p.slice(0, 47) + '...' : p
+}
+
+// 获取 grep path（完整版，用于 title）
+const getGrepPathFull = (block) => {
+  const args = parseArgs(block)
+  return args?.path || null
+}
+
+// 获取 ls path
+const getLsPath = (block) => {
+  const args = parseArgs(block)
+  return args?.path || null
+}
+
+// 获取 glob path（截断显示版）
+const getGlobPath = (block) => {
+  const args = parseArgs(block)
+  const p = args?.path
+  if (!p) return null
+  return p.length > 50 ? p.slice(0, 47) + '...' : p
+}
+
+// 获取 glob path（完整版，用于 title）
+const getGlobPathFull = (block) => {
+  const args = parseArgs(block)
+  return args?.path || null
 }
 
 // 触发打开文件事件
@@ -156,6 +254,17 @@ const openFile = (block) => {
   if (filePath) {
     emit('openFile', filePath)
   }
+}
+
+// 获取 ask_choice 的问题文字
+const getChoiceQuestion = (block) => {
+  const args = parseArgs(block)
+  const q = args?.question
+  if (!q) return null
+  const options = args?.options
+  const count = Array.isArray(options) ? options.length : 0
+  const suffix = count > 0 ? ` (${count} 项)` : ''
+  return q.length > 40 ? q.slice(0, 37) + '...' + suffix : q + suffix
 }
 </script>
 
@@ -193,10 +302,25 @@ const openFile = (block) => {
   color: var(--fg-3);
   line-height: 1.6;
 }
-.reasoning-text :deep(p) { margin: 0.4em 0; }
-.reasoning-text :deep(ul) { margin: 0.4em 0; padding-left: 1.5em; }
-.reasoning-text :deep(ol) { margin: 0.4em 0; padding-left: 1.5em; }
-.reasoning-text :deep(li) { margin: 0.2em 0; }
+
+.reasoning-text :deep(p) {
+  margin: 0.4em 0;
+}
+
+.reasoning-text :deep(ul) {
+  margin: 0.4em 0;
+  padding-left: 1.5em;
+}
+
+.reasoning-text :deep(ol) {
+  margin: 0.4em 0;
+  padding-left: 1.5em;
+}
+
+.reasoning-text :deep(li) {
+  margin: 0.2em 0;
+}
+
 .reasoning-text :deep(blockquote) {
   margin: 0.4em 0;
   padding: 0.3em 0.8em;
@@ -204,6 +328,7 @@ const openFile = (block) => {
   background: var(--bg-3);
   border-radius: 0 var(--r-sm) var(--r-sm) 0;
 }
+
 .reasoning-text :deep(pre) {
   background: var(--bg-3);
   border: 1px solid var(--border);
@@ -214,7 +339,12 @@ const openFile = (block) => {
   font-size: 11px;
   line-height: 1.5;
 }
-.reasoning-text :deep(pre code) { background: none; padding: 0; }
+
+.reasoning-text :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+
 .reasoning-text :deep(code) {
   font-size: 11px;
   background: var(--bg-3);
@@ -262,16 +392,56 @@ const openFile = (block) => {
   text-decoration: underline;
 }
 
-.block-content :deep(h1) { font-size: 1.5em; margin: 0.5em 0; font-weight: 600; }
-.block-content :deep(h2) { font-size: 1.3em; margin: 0.5em 0; font-weight: 600; }
-.block-content :deep(h3) { font-size: 1.1em; margin: 0.5em 0; font-weight: 600; }
-.block-content :deep(h4) { font-size: 1em; margin: 0.5em 0; font-weight: 600; }
-.block-content :deep(h5) { font-size: 0.9em; margin: 0.5em 0; font-weight: 600; }
-.block-content :deep(h6) { font-size: 0.8em; margin: 0.5em 0; font-weight: 600; }
+.block-content :deep(h1) {
+  font-size: 1.5em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
 
-.block-content :deep(ul) { margin: 0.5em 0; padding-left: 1.5em; }
-.block-content :deep(ol) { margin: 0.5em 0; padding-left: 1.5em; }
-.block-content :deep(li) { margin: 0.25em 0; }
+.block-content :deep(h2) {
+  font-size: 1.3em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.block-content :deep(h3) {
+  font-size: 1.1em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.block-content :deep(h4) {
+  font-size: 1em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.block-content :deep(h5) {
+  font-size: 0.9em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.block-content :deep(h6) {
+  font-size: 0.8em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.block-content :deep(ul) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.block-content :deep(ol) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.block-content :deep(li) {
+  margin: 0.25em 0;
+}
+
 .block-content :deep(blockquote) {
   margin: 0.5em 0;
   padding: 0.5em 1em;
@@ -279,31 +449,42 @@ const openFile = (block) => {
   background: var(--bg-3);
   border-radius: 0 var(--r) var(--r) 0;
 }
+
 .block-content :deep(table) {
   border-collapse: collapse;
   width: 100%;
   margin: 0.5em 0;
 }
+
 .block-content :deep(th),
 .block-content :deep(td) {
   border: 1px solid var(--border);
   padding: 6px 10px;
   text-align: left;
 }
+
 .block-content :deep(th) {
   background: var(--bg-3);
   font-weight: 600;
 }
+
 .block-content :deep(hr) {
   border: none;
   border-top: 1px solid var(--border);
   margin: 1em 0;
 }
+
 .block-content :deep(p) {
   margin: 0.5em 0;
 }
-.block-content :deep(p:first-child) { margin-top: 0; }
-.block-content :deep(p:last-child) { margin-bottom: 0; }
+
+.block-content :deep(p:first-child) {
+  margin-top: 0;
+}
+
+.block-content :deep(p:last-child) {
+  margin-bottom: 0;
+}
 
 /* 完成块（finish 工具输出） */
 .block-finish {
@@ -372,16 +553,56 @@ const openFile = (block) => {
   text-decoration: underline;
 }
 
-.finish-content :deep(h1) { font-size: 1.5em; margin: 0.5em 0; font-weight: 600; }
-.finish-content :deep(h2) { font-size: 1.3em; margin: 0.5em 0; font-weight: 600; }
-.finish-content :deep(h3) { font-size: 1.1em; margin: 0.5em 0; font-weight: 600; }
-.finish-content :deep(h4) { font-size: 1em; margin: 0.5em 0; font-weight: 600; }
-.finish-content :deep(h5) { font-size: 0.9em; margin: 0.5em 0; font-weight: 600; }
-.finish-content :deep(h6) { font-size: 0.8em; margin: 0.5em 0; font-weight: 600; }
+.finish-content :deep(h1) {
+  font-size: 1.5em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
 
-.finish-content :deep(ul) { margin: 0.5em 0; padding-left: 1.5em; }
-.finish-content :deep(ol) { margin: 0.5em 0; padding-left: 1.5em; }
-.finish-content :deep(li) { margin: 0.25em 0; }
+.finish-content :deep(h2) {
+  font-size: 1.3em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.finish-content :deep(h3) {
+  font-size: 1.1em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.finish-content :deep(h4) {
+  font-size: 1em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.finish-content :deep(h5) {
+  font-size: 0.9em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.finish-content :deep(h6) {
+  font-size: 0.8em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.finish-content :deep(ul) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.finish-content :deep(ol) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.finish-content :deep(li) {
+  margin: 0.25em 0;
+}
+
 .finish-content :deep(blockquote) {
   margin: 0.5em 0;
   padding: 0.5em 1em;
@@ -389,40 +610,53 @@ const openFile = (block) => {
   background: var(--bg-3);
   border-radius: 0 var(--r) var(--r) 0;
 }
+
 .finish-content :deep(table) {
   border-collapse: collapse;
   width: 100%;
   margin: 0.5em 0;
 }
+
 .finish-content :deep(th),
 .finish-content :deep(td) {
   border: 1px solid var(--border);
   padding: 6px 10px;
   text-align: left;
 }
+
 .finish-content :deep(th) {
   background: var(--bg-3);
   font-weight: 600;
 }
+
 .finish-content :deep(hr) {
   border: none;
   border-top: 1px solid var(--border);
   margin: 1em 0;
 }
+
 .finish-content :deep(p) {
   margin: 0.5em 0;
 }
-.finish-content :deep(p:first-child) { margin-top: 0; }
-.finish-content :deep(p:last-child) { margin-bottom: 0; }
+
+.finish-content :deep(p:first-child) {
+  margin-top: 0;
+}
+
+.finish-content :deep(p:last-child) {
+  margin-bottom: 0;
+}
 
 /* 代码块内嵌复制按钮 */
 .block-content :deep(.code-block-wrap) {
   margin: 8px 0;
 }
+
 .block-content :deep(.code-block-wrap pre) {
   position: relative;
   margin: 0 !important;
 }
+
 .block-content :deep(.code-copy-btn) {
   position: absolute;
   top: 6px;
@@ -438,9 +672,11 @@ const openFile = (block) => {
   line-height: 1;
   z-index: 2;
 }
+
 .block-content :deep(.code-block-wrap pre:hover .code-copy-btn) {
   opacity: 0.7;
 }
+
 .block-content :deep(.code-copy-btn:hover) {
   opacity: 1 !important;
   background: var(--bg);
@@ -488,6 +724,7 @@ const openFile = (block) => {
 }
 
 .tool-name {
+  font-family: var(--mono);
   font-size: 12px;
   font-weight: 600;
   color: var(--accent);
@@ -497,6 +734,7 @@ const openFile = (block) => {
   font-size: 10px;
   padding: 1px 4px;
   border-radius: var(--r-sm);
+  font-family: var(--mono);
 }
 
 .tool-status.执行中 {
@@ -531,78 +769,164 @@ const openFile = (block) => {
   overflow: auto;
 }
 
-.open-file-inline {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  border: none;
+.tool-param {
+  font-size: 10px;
+  color: var(--fg-3);
+  background: var(--bg-3);
   border-radius: 3px;
-  background: transparent;
-  color: var(--fg-4);
+  padding: 1px 6px;
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.5;
+  font-family: var(--mono);
+}
+
+/* 长文本参数（ask_choice 问题等），允许更宽 */
+.tool-param-wide {
+  max-width: 320px;
+}
+
+/* 文件工具（edit/write/read 显示文件名，可点击打开，标签风格） */
+.tool-file {
+  font-size: 10px;
+  color: var(--fg-3);
+  background: var(--bg-3);
+  border-radius: 3px;
+  padding: 1px 6px;
+  max-width: 180px;
+  font-family: var(--mono);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  flex-shrink: 0;
+  line-height: 1.5;
+  border: none;
   cursor: pointer;
   transition: color var(--t), background var(--t);
-  flex-shrink: 0;
-  min-width: 0;
 }
 
-.open-file-inline:hover {
+.tool-file:hover {
   color: var(--accent);
-  background: var(--accent-bg, rgba(var(--accent-rgb, 59 130 246), 0.1));
-}
-
-.open-file-path {
-  font-size: 11px;
+  background: var(--accent-bg);
   font-family: var(--mono);
-  color: var(--fg-4);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 180px;
-  direction: rtl;
-  text-align: left;
 }
 
-.open-file-inline:hover .open-file-path {
-  color: var(--accent);
-}
-
-.tool-bash-cmd {
-  font-size: 11px;
-  font-family: var(--mono);
-  color: var(--fg-4);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  max-width: 220px;
-  margin-left: 2px;
-  flex-shrink: 0;
-}
-
-/* 选项按钮 */
+/* 选项按钮（choice / ask_choice） */
 .block-choice {
-  margin: 4px 0;
+  background: var(--glass-bg-2);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  margin-bottom: 4px;
+  overflow: hidden;
 }
 
+/* 问题头部 */
+.choice-question {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 8px 12px 4px;
+  font-size: 13px;
+  line-height: 1.5;
+  color: var(--fg);
+}
+
+.choice-q-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  border-radius: var(--r-sm);
+  color: var(--accent);
+}
+
+.choice-q-text {
+  flex: 1;
+  font-weight: 500;
+}
+
+/* 选项列表 — 横向 wrap */
 .choice-buttons {
   display: flex;
-  gap: 8px;
   flex-wrap: wrap;
+  gap: 6px;
+  padding: 4px 12px 10px;
 }
 
 .choice-btn {
-  padding: 6px 16px;
-  border: 1px solid var(--accent);
-  border-radius: var(--r);
-  background: var(--accent-bg, rgba(var(--accent-rgb, 59 130 246), 0.1));
-  color: var(--accent);
-  font-size: 13px;
-  font-weight: 500;
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 5px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 12px;
   cursor: pointer;
   transition: all var(--t);
+  white-space: nowrap;
+  line-height: 1.4;
 }
 
 .choice-btn:hover {
-  background: var(--accent);
-  color: #fff;
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.choice-btn:active {
+  transform: scale(0.96);
+}
+
+.choice-btn-title {
+  font-weight: 600;
+}
+
+.choice-btn-sep {
+  color: var(--fg-4);
+  margin: 0 1px;
+}
+
+.choice-btn-summary {
+  color: var(--fg-4);
+  font-size: 11px;
+}
+
+/* 已选择状态 */
+.choice-resolved {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--green);
+  background: var(--green-bg);
+}
+
+.choice-resolved-icon {
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.choice-resolved-label {
+  font-weight: 500;
+  flex-shrink: 0;
+}
+
+.choice-resolved-value {
+  font-size: 11px;
+  color: var(--fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

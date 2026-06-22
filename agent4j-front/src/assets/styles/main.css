@@ -675,3 +675,11 @@ textarea { resize: none; }
   align-items: center;
   justify-content: center;
 }
+
+.default-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    border-radius: var(--r-sm);
+}

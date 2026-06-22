@@ -822,7 +822,32 @@ const sendMessage = async (images = []) => {
               }
             }
             if (Array.isArray(options) && options.length > 0) {
-              msg.blocks.push({type: 'choice', options})
+              // 尝试从同消息的 ask_choice tool_call 中获取 question 和 summary
+              let question = data.question || ''
+              let toolOptions = null
+              if (msg.blocks) {
+                for (let i = msg.blocks.length - 1; i >= 0; i--) {
+                  const b = msg.blocks[i]
+                  if (b.type === 'tool_call' && b.name === 'ask_choice') {
+                    try {
+                      const args = typeof b.args === 'string' ? JSON.parse(b.args) : b.args
+                      if (args?.question && !question) question = args.question
+                      if (args?.options) toolOptions = args.options
+                    } catch {}
+                  }
+                }
+              }
+              // 如果后端 choice 事件没带 summary，从 tool_call args 补上
+              if (toolOptions && Array.isArray(toolOptions)) {
+                options = options.map((opt, idx) => {
+                  const toolOpt = toolOptions[idx]
+                  if (toolOpt && !opt.summary && toolOpt.summary) {
+                    return { ...opt, summary: toolOpt.summary }
+                  }
+                  return opt
+                })
+              }
+              msg.blocks.push({type: 'choice', options, question})
             }
           } else if (data.type === 'log') {
             // 系统日志（如 [compact] 折叠结果）→ 仅展示 INFO 及以上级别
