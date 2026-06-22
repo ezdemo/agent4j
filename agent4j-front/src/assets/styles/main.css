@@ -664,3 +664,14 @@ textarea { resize: none; }
 [data-theme="retro-yellow"] .ant-modal-mask {
   background-color: rgba(0, 0, 0, 0.6);
 }
+
+/* diff / modal 遮罩层（全局，供 Teleport 到 body 的弹层使用） */
+.diff-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.35);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
