@@ -10,11 +10,19 @@ export const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="
 export const ROLLBACK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/></svg>'
 
 // 思考/问题图标
-export const THINKING_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>'
-
+export const THINKING_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+  <circle cx="12" cy="12" r="10"/>
+  <path d="M8.8 9a3.2 3.2 0 0 1 6.4 0c0 2.2-3.2 3.2-3.2 3.2"/>
+  <line x1="12" y1="17" x2="12.01" y2="17"/>
+  <circle cx="18" cy="5" r="1.2" fill="currentColor" stroke="none">
+    <animate attributeName="opacity" values="0.2;0.8;0.2" dur="1.8s" repeatCount="indefinite"/>
+  </circle>
+  <circle cx="20.2" cy="2.2" r="0.8" fill="currentColor" stroke="none">
+    <animate attributeName="opacity" values="0.15;0.6;0.15" dur="1.8s" repeatCount="indefinite" begin="0.3s"/>
+  </circle>
+</svg>`;
 // 展开/折叠箭头
-export const CHEVRON_DOWN_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>'
-
+export const CHEVRON_DOWN_ICON = '<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 9l6 6 6-6"/></svg>';
 // 完成/成功图标
 export const CHECK_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>'
 
