@@ -1257,7 +1257,7 @@ public class AgentLoop implements AgentLoopController {
                     HashMap<String, Object> extraMap = new HashMap<>();
                     extraMap.put("ctx", new ToolContext(
                             new HashMap<>(),
-                            registry.getWorkspace(),
+                            registry.getWorkspace().toAbsolutePath().toString(),
                             this.getSessionId()
                     ));
 
