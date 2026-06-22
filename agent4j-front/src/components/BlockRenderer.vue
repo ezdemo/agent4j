@@ -41,18 +41,15 @@
           </span>
           <code class="tool-name">{{ block.name }}</code>
           <span class="tool-status" :class="block.status">{{ block.status }}</span>
+          <button v-if="shouldShowOpenFile(block)" class="open-file-inline" @click.stop="openFile(block)" title="查看文件变更">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+            </svg>
+            <span class="open-file-path">{{ getFilePath(block) }}</span>
+          </button>
           <span v-html="CHEVRON_DOWN_ICON" :style="{ transform: block.expanded ? 'rotate(180deg)' : '', display: 'inline-block' }"></span>
         </div>
         <div v-if="block.expanded" class="tool-detail">
-          <!-- 打开文件按钮 -->
-          <div v-if="shouldShowOpenFile(block)" class="tool-actions">
-            <button class="open-file-btn" @click="openFile(block)">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
-              </svg>
-              打开文件
-            </button>
-          </div>
           <pre v-if="block.args"><code>{{ fmtArgs(block.args) }}</code></pre>
           <pre v-if="block.result"><code>{{ block.result }}</code></pre>
         </div>
@@ -521,30 +518,39 @@ const openFile = (block) => {
   overflow: auto;
 }
 
-.tool-actions {
-  display: flex;
-  gap: 8px;
-  margin-top: 6px;
-  margin-bottom: 6px;
-}
-
-.open-file-btn {
-  display: flex;
+.open-file-inline {
+  display: inline-flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
-  background: var(--accent-bg, rgba(var(--accent-rgb, 59 130 246), 0.1));
-  border: 1px solid var(--accent);
-  border-radius: var(--r-sm);
-  color: var(--accent);
-  font-size: 12px;
+  border: none;
+  border-radius: 3px;
+  background: transparent;
+  color: var(--fg-4);
   cursor: pointer;
-  transition: all var(--t);
+  transition: color var(--t), background var(--t);
+  flex-shrink: 0;
+  min-width: 0;
 }
 
-.open-file-btn:hover {
-  background: var(--accent);
-  color: #fff;
+.open-file-inline:hover {
+  color: var(--accent);
+  background: var(--accent-bg, rgba(var(--accent-rgb, 59 130 246), 0.1));
+}
+
+.open-file-path {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--fg-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 180px;
+  direction: rtl;
+  text-align: left;
+}
+
+.open-file-inline:hover .open-file-path {
+  color: var(--accent);
 }
 
 /* 选项按钮 */
