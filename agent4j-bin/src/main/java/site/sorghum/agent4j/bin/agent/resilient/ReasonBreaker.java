@@ -32,32 +32,32 @@ public class ReasonBreaker {
     /**
      * 滑动窗口大小（字符数）
      */
-    static final int WINDOW_SIZE = 200;
+    public static final int WINDOW_SIZE = 200;
 
     /**
      * 同一窗口出现多少次视为循环
      */
-    static final int MIN_REPEATS = 3;
+    public static final int MIN_REPEATS = 3;
 
     /**
      * 推理内容至少多长才开始检测
      */
-    static final int MIN_REASONING_LENGTH = 1000;
+    public static final int MIN_REASONING_LENGTH = 1000;
 
     /**
      * 最多分析多长的推理内容（性能上限，超出取尾部）
      */
-    static final int MAX_ANALYZE_LENGTH = 20_000;
+    public static final int MAX_ANALYZE_LENGTH = 20_000;
 
     /**
      * 每回合最多触发次数（防止 ReasonBreaker 自身形成无限循环）
      */
-    static final int MAX_TRIGGERS_PER_TURN = 3;
+    public static final int MAX_TRIGGERS_PER_TURN = 3;
 
     /**
      * 本回合已触发次数
      */
-    private int triggerCount = 0;
+    public  int triggerCount = 0;
 
     /**
      * 复用的窗口计数器（每回合 reset 时清空，避免每次 analyze 重新分配）
@@ -161,7 +161,7 @@ public class ReasonBreaker {
          */
         public final int count;
 
-        LoopResult(boolean looping, String snippet, int count) {
+        public LoopResult(boolean looping, String snippet, int count) {
             this.looping = looping;
             this.snippet = snippet;
             this.count = count;
