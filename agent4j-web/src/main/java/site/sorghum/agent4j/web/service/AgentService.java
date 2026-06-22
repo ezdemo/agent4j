@@ -13,7 +13,6 @@ import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.bin.config.ConfigService;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
-import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.session.JsonlSessionStore;
 import site.sorghum.agent4j.bin.session.SessionStore;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
@@ -182,17 +181,17 @@ public class AgentService {
     // ==================== 配置 getter（统一从 ConfigService 读取） ====================
 
     public String getSharedApiUrl() {
-        Agent4jConfig cfg = configService.getConfig();
+        Agent4jConfig cfg = ConfigService.getConfig();
         return cfg != null ? cfg.chatApiUrl() : null;
     }
 
     public String getSharedApiKey() {
-        Agent4jConfig cfg = configService.getConfig();
+        Agent4jConfig cfg = ConfigService.getConfig();
         return cfg != null ? cfg.apiKey() : null;
     }
 
     public String getSharedModel() {
-        Agent4jConfig cfg = configService.getConfig();
+        Agent4jConfig cfg = ConfigService.getConfig();
         return cfg != null ? cfg.model() : null;
     }
 
@@ -209,8 +208,8 @@ public class AgentService {
     @Init
     public void init() {
         try {
-            configService.reload();
-            if (!buildSharedComponents(configService.getConfig())) {
+            ConfigService.reload();
+            if (!buildSharedComponents(ConfigService.getConfig())) {
                 log.error("[web] 未配置 apiKey，Agent 未初始化");
             } else {
                 log.info("[web] Agent 共享组件初始化完成 — 模型: {}", getSharedModel());
@@ -245,8 +244,8 @@ public class AgentService {
 
         // 3. 重新加载配置并构建共享组件
         try {
-            configService.reload();
-            if (!buildSharedComponents(configService.getConfig())) {
+            ConfigService.reload();
+            if (!buildSharedComponents(ConfigService.getConfig())) {
                 log.error("[config] 未配置 apiKey，重新初始化失败");
             } else {
                 log.info("[config] AgentService 重新初始化完成 — 模型: {}, API: {}", getSharedModel(), getSharedApiUrl());
@@ -292,7 +291,6 @@ public class AgentService {
                 disabledTools, blockedPaths,
                 loadDefaultSystemPrompt());
         this.sharedToolRegistry = initResult.toolRegistry;
-        this.sharedToolRegistry.setConfigService(configService);
 
         return true;
     }
@@ -307,7 +305,7 @@ public class AgentService {
     private String generateSessionKey(String workspacePath, String sessionName) {
         // 使用默认工作区路径（如果未指定）
         if (workspacePath == null || workspacePath.isEmpty()) {
-            Agent4jConfig cfg = configService.getConfig();
+            Agent4jConfig cfg = ConfigService.getConfig();
             if (cfg != null && cfg.workspaceDir() != null) {
                 workspacePath = cfg.workspaceDir().toAbsolutePath().toString();
             } else {
@@ -353,7 +351,7 @@ public class AgentService {
             sessionCache.evictIfNeeded();
 
             // 构建轻量级 Agent（每个 Agent 拥有独立的 ModelClient）
-            Agent4jConfig cfg = configService.getConfig();
+            Agent4jConfig cfg = ConfigService.getConfig();
             String apiUrl = cfg.chatApiUrl();
             String apiKey = cfg.apiKey();
             String model = cfg.model();
@@ -368,6 +366,7 @@ public class AgentService {
                     .workspace(Paths.get(workspacePath))
                     .commandRegistry(commandRegistry)
                     .hitl(hitl)
+                    .agent4jConfig(cfg)
                     .modelClient(new HttpModelClient(apiUrl, apiKey, model, reasoningEffort));
 
             agent = builder.buildLightweight();
@@ -403,7 +402,7 @@ public class AgentService {
      * 共享组件是否已初始化
      */
     public boolean isReady() {
-        return configService.getConfig() != null
+        return ConfigService.getConfig() != null
                 && sharedToolRegistry != null;
     }
 
@@ -419,7 +418,6 @@ public class AgentService {
         int cacheSize = sessionCache.size();
 
         int historySize = 0;
-        boolean planMode = false;
         boolean hitlMode = false;
         String sessionName = null;
         long promptTokens = 0;
@@ -430,7 +428,6 @@ public class AgentService {
         Agent4jAgent agent = sessionCache.get(defaultKey);
         if (agent != null) {
             historySize = agent.historySize();
-            planMode = agent.isPlanMode();
             hitlMode = agent.isHitlMode();
             SessionStore store = agent.getSessionStore();
             if (store != null) {
@@ -441,7 +438,7 @@ public class AgentService {
             completionTokens = usage[1];
         }
         return new AgentStatusDTO(ready, model, workspace, cacheSize,
-                historySize, planMode, hitlMode, sessionName,
+                historySize, hitlMode, sessionName,
                 promptTokens, completionTokens);
     }
 
@@ -755,7 +752,7 @@ public class AgentService {
 
         // 价格计算：优先按模型分别计费，解决模型中途切换导致计价错乱
         try {
-            Agent4jConfig config = configService.getConfig();
+            Agent4jConfig config = ConfigService.getConfig();
             currentModel = config.model();
             Map<String, Map<String, Double>> prices = config.price();
 
@@ -985,7 +982,7 @@ public class AgentService {
      * @return 工作区路径
      */
     public String getWorkspace() {
-        Agent4jConfig cfg = configService.getConfig();
+        Agent4jConfig cfg = ConfigService.getConfig();
         if (cfg != null && cfg.workspaceDir() != null) {
             return cfg.workspaceDir().toAbsolutePath().toString();
         }
@@ -1005,7 +1002,7 @@ public class AgentService {
         // 持久化到 config.json，下次启动默认加载此工作区
         String normalized = Paths.get(path).toAbsolutePath().normalize().toString();
         try {
-            configService.updateConfig(Collections.singletonMap("workspaceDir", normalized));
+            ConfigService.updateConfig(Collections.singletonMap("workspaceDir", normalized));
             log.info("[web] 工作区已持久化到 config.json: {}", normalized);
         } catch (Exception e) {
             log.warn("[web] 持久化工作区到 config.json 失败: {}", e.getMessage());
@@ -1058,7 +1055,7 @@ public class AgentService {
                 }
             }
 
-            Agent4jConfig cfg = configService.getConfig();
+            Agent4jConfig cfg = ConfigService.getConfig();
             if (cfg != null && cfg.workspaceDir() != null) {
                 workspacePaths.add(cfg.workspaceDir().toAbsolutePath().toString());
             }

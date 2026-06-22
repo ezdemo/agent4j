@@ -74,4 +74,9 @@ public interface AgentLoopController {
     default boolean isAbortRequested() {
         return false;
     }
+
+    /**
+     * 获取工具注册类
+     */
+    <T>T getToolRegistry();
 }

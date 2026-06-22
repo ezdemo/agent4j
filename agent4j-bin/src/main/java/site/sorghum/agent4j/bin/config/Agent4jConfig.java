@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.bin.config;
 
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.Feature;
 import org.noear.snack4.ONode;
@@ -33,7 +34,7 @@ public class Agent4jConfig {
     /**
      * 获取配置单例，首次加载会从文件读取。
      */
-    public static Agent4jConfig getInstance() throws IOException {
+    public static Agent4jConfig getInstance() {
         if (INSTANCE == null) {
             synchronized (Agent4jConfig.class) {
                 if (INSTANCE == null) {
@@ -47,7 +48,7 @@ public class Agent4jConfig {
     /**
      * 强制重新加载配置（热更新场景使用）
      */
-    public static synchronized Agent4jConfig reload() throws IOException {
+    public static synchronized Agent4jConfig reload() {
         INSTANCE = load();
         return INSTANCE;
     }
@@ -128,7 +129,8 @@ public class Agent4jConfig {
     /**
      * 从默认路径加载：{@code ~/.agent4j/config.json}，首次启动自动创建
      */
-    public static Agent4jConfig load() throws IOException {
+    @SneakyThrows
+    public static Agent4jConfig load(){
         Path configDir = Paths.get(System.getProperty("user.home"), ".agent4j");
         Path configPath = configDir.resolve("config.json");
         if (!Files.exists(configPath)) {

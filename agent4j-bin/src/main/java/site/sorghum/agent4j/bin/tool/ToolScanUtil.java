@@ -3,7 +3,6 @@ package site.sorghum.agent4j.bin.tool;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.Solon;
 import org.noear.solon.ai.chat.tool.FunctionTool;
-import site.sorghum.agent4j.tool.AgentTool;
 import site.sorghum.agent4j.tool.solon.SolonToTools;
 import site.sorghum.agent4j.tool.solon.common.Agent4JSkillProvider;
 

@@ -37,7 +37,6 @@ import site.sorghum.agent4j.bin.agent.resilient.WorkflowPatrolManager;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.model.UserMessageSanitizer;
 import site.sorghum.agent4j.bin.session.SessionService;
-import site.sorghum.agent4j.bin.tool.ToolDispatcher;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.tool.*;
 import site.sorghum.agent4j.tool.interact.FinishTool;
@@ -92,7 +91,6 @@ public class AgentLoop implements AgentLoopController {
     // ==================== 核心字段 ====================
 
     private final ModelClient client;
-    private final ToolDispatcher dispatcher;
     private final ToolRegistry registry;
     private final Agent4jConfig config;
     @Getter
@@ -154,7 +152,6 @@ public class AgentLoop implements AgentLoopController {
         this.registry = registry;
         this.ctx = ctx;
         this.config = config;
-        this.dispatcher = new ToolDispatcher(registry);
         this.hitlManager = new HitlManager(hitlDefault);
         this.patrolManager = new GoalPatrolManager(null, ctx, running);
         this.workflowPatrolManager = new WorkflowPatrolManager(null, ctx, running);
@@ -217,14 +214,6 @@ public class AgentLoop implements AgentLoopController {
         } else {
             output.onLog(LogLevel.INFO, "[compact] 无需折叠（总消息数 ≤ 20）");
         }
-    }
-
-    public boolean isPlanMode() {
-        return dispatcher.isPlanMode();
-    }
-
-    public void setPlanMode(boolean on) {
-        dispatcher.setPlanMode(on);
     }
 
     /**
@@ -327,6 +316,11 @@ public class AgentLoop implements AgentLoopController {
         ctx.addUser("[系统注入] " + message);
         log.info("[loop] 工具注入用户消息: {}...",
                 message.length() > 80 ? message.substring(0, 80) + "..." : message);
+    }
+
+    @Override
+    public <T>T getToolRegistry() {
+        return (T) registry;
     }
 
     // ==================== 内部辅助方法 ====================
@@ -609,7 +603,6 @@ public class AgentLoop implements AgentLoopController {
         }
 
         // ---- 每回合初始化 ----
-        dispatcher.resetStorm();
         reasonBreaker.reset();
         resetUserAbort();
 
@@ -887,7 +880,6 @@ public class AgentLoop implements AgentLoopController {
 
         // 用户批准：先写入 assistant 消息
         ctx.addAssistant(state.content(), state.tcList(), state.reasoningContent());
-        dispatcher.resetStorm();
 
         // 并行执行暂存的工具调用
         ToolExecutionResult ter = executeToolCalls(state.toolCalls());
@@ -926,7 +918,6 @@ public class AgentLoop implements AgentLoopController {
         List<ToolCallEntry> tcList = parseToolCallsFromONode(state.toolCalls());
         ctx.addAssistant(state.content(), tcList, state.reasoningContent());
 
-        dispatcher.resetStorm();
         reasonBreaker.reset();
         resetUserAbort();
 
@@ -1154,7 +1145,6 @@ public class AgentLoop implements AgentLoopController {
         if (toolCalls == null){
             return new ToolExecutionResult(Collections.emptyList(),Collections.emptyList(),false);
         }
-        dispatcher.setSessionId(this.sessionId);
 
         List<ONode> tcArray = toolCalls.getArray();
 
@@ -1267,8 +1257,7 @@ public class AgentLoop implements AgentLoopController {
                     HashMap<String, Object> extraMap = new HashMap<>();
                     extraMap.put("ctx", new ToolContext(
                             new HashMap<>(),
-                            null,
-                            null,
+                            registry.getWorkspace(),
                             this.getSessionId()
                     ));
 

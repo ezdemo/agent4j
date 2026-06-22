@@ -3,6 +3,7 @@ package site.sorghum.agent4j.tool;
 import lombok.Getter;
 
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -22,8 +23,6 @@ public class ToolContext {
 
     /**
      * AgentLoop 控制器线程局部引用。
-     * 由 {@code ToolDispatcher.dispatch()} 在执行工具前注入，
-     * 替代通过 args map 传递 {@code __controller__} 的硬编码方式。
      */
     private static final ThreadLocal<AgentLoopController> CONTROLLER_TL = new ThreadLocal<>();
     /**
@@ -33,11 +32,7 @@ public class ToolContext {
     /**
      * 工作区根目录（可选）
      */
-    private final Path rootDir;
-    /**
-     * 工具注册表引用（可选，供需要创建子代理的工具使用）
-     */
-    private final Object toolRegistry;
+    private final String rootDir;
     /**
      * 当前会话ID（可选，用于按会话隔离数据）
      */
@@ -47,11 +42,9 @@ public class ToolContext {
      * 全参数构造器。
      * <p>不使用的参数传 {@code null} 或合适的默认值。</p>
      */
-    public ToolContext(Map<String, Object> params, Path rootDir,
-                       Object toolRegistry, String sessionId) {
+    public ToolContext(Map<String, Object> params, Path rootDir, String sessionId) {
         this.params = params != null ? new HashMap<>(params) : Collections.emptyMap();
-        this.rootDir = rootDir;
-        this.toolRegistry = toolRegistry;
+        this.rootDir = rootDir.toAbsolutePath().toString();
         this.sessionId = sessionId;
     }
 
@@ -128,13 +121,6 @@ public class ToolContext {
         return defaultValue;
     }
 
-    /**
-     * 获取工具注册表（类型安全的调用方应自行转型）。
-     */
-    @SuppressWarnings("unchecked")
-    public <T> T getToolRegistry() {
-        return (T) toolRegistry;
-    }
 
     /**
      * 获取 AgentLoop 控制器引用，用于控制推理循环。
@@ -154,5 +140,9 @@ public class ToolContext {
     @Override
     public String toString() {
         return "ToolContext" + params;
+    }
+
+    public Path getRootDir() {
+        return Paths.get(rootDir);
     }
 }

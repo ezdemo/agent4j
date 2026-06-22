@@ -13,7 +13,6 @@ import java.util.*;
  * 工具注册表 —— 管理工具定义的注册和查询。
  * <p>
  * 职责：工具注册、查询、生成 OpenAI function-calling 格式的工具列表。
- * 调度逻辑已移至 {@link ToolDispatcher}，schema 展平已移至 {@link ToolSchemaFlattener}。
  * </p>
  *
  * @author Sorghum
@@ -23,8 +22,6 @@ public class ToolRegistry {
 
     private final LinkedHashMap<String, FunctionTool> functionToolMap = new LinkedHashMap<>();
 
-    /** ConfigService 引用（同模块，运行时实时读取禁用列表） */
-    private ConfigService configService;
     /** 静态快照（setDisabledTools 方式设置时使用，兼容 CLI/测试） */
     private Set<String> disabledToolsSnapshot = Collections.emptySet();
     /** true=使用静态快照，false=使用 ConfigService 实时读取 */
@@ -39,18 +36,11 @@ public class ToolRegistry {
     private Set<String> forceDenyTools = Collections.emptySet();
 
     // ==================== 动态刷新上下文 ====================
+    @Getter
     private Path workspace;
     private String apiUrl;
     private String apiKey;
     private List<String> blockedPaths = Collections.emptyList();
-
-    /**
-     * 设置 ConfigService 引用（运行时实时读取禁用列表）。
-     */
-    public void setConfigService(ConfigService configService) {
-        this.configService = configService;
-        this.useSnapshot = false;
-    }
 
     /**
      * 设置被禁用的工具名称集合（静态快照，用于 CLI 模式 / 测试）。
@@ -66,8 +56,8 @@ public class ToolRegistry {
      * 优先使用 ConfigService 实时读取，否则回退到静态快照。
      */
     private Set<String> getCurrentDisabledTools() {
-        if (!useSnapshot && configService != null) {
-            return configService.getDisabledTools();
+        if (!useSnapshot) {
+            return ConfigService.getDisabledTools();
         }
         return disabledToolsSnapshot;
     }
@@ -143,8 +133,6 @@ public class ToolRegistry {
      */
     public ToolRegistry copy() {
         ToolRegistry copy = new ToolRegistry();
-        // 复制 ConfigService 引用（同一实例，线程安全）
-        copy.configService = this.configService;
         // 复制禁用工具快照
         copy.disabledToolsSnapshot = this.disabledToolsSnapshot.isEmpty()
                 ? Collections.emptySet()
@@ -173,7 +161,6 @@ public class ToolRegistry {
 
     /**
      * 生成 OpenAI 格式的 tools 数组（按名称排序，保证 prompt prefix 稳定可缓存）。
-     * Schema 展平委托给 {@link ToolSchemaFlattener}。
      */
     public ONode toOpenAiTools() {
         List<FunctionTool> functionTools = functionToolMap.values().stream().toList();

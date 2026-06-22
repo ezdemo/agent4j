@@ -120,7 +120,7 @@ public class TaskTool extends AbsToolProvider implements SolonToTools {
                 return "⏹️ 用户已中断，跳过子代理执行";
             }
 
-            ToolRegistry registry = ctx.getToolRegistry();
+            ToolRegistry registry = ctx.getLoopController().getToolRegistry();
 
             // 构建子代理的 system prompt
             // 优先使用调用方传入的 systemPrompt，否则自动组合：任务描述 + 工具规范 + 使用指引
