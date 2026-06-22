@@ -29,6 +29,11 @@ import site.sorghum.agent4j.bin.goal.Goal;
 import site.sorghum.agent4j.bin.goal.GoalStep;
 import site.sorghum.agent4j.bin.goal.GoalStore;
 import site.sorghum.agent4j.bin.goal.StepStatus;
+import site.sorghum.agent4j.bin.workflow.Workflow;
+import site.sorghum.agent4j.bin.workflow.WorkflowNode;
+import site.sorghum.agent4j.bin.workflow.WorkflowStore;
+import site.sorghum.agent4j.bin.workflow.NodeStatus;
+import site.sorghum.agent4j.bin.agent.resilient.WorkflowPatrolManager;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.model.UserMessageSanitizer;
 import site.sorghum.agent4j.bin.session.SessionService;
@@ -127,6 +132,9 @@ public class AgentLoop implements AgentLoopController {
     /** 巡检管理器（goals / retry / patrol） */
     private final GoalPatrolManager patrolManager;
 
+    /** 工作流巡检管理器（workflows / retry / patrol） */
+    private final WorkflowPatrolManager workflowPatrolManager;
+
     /** 主循环是否正在执行中（防止巡检线程与主循环冲突） */
     private final AtomicBoolean running = new AtomicBoolean(false);
 
@@ -149,6 +157,7 @@ public class AgentLoop implements AgentLoopController {
         this.dispatcher = new ToolDispatcher(registry);
         this.hitlManager = new HitlManager(hitlDefault);
         this.patrolManager = new GoalPatrolManager(null, ctx, running);
+        this.workflowPatrolManager = new WorkflowPatrolManager(null, ctx, running);
     }
 
     // ==================== 公共控制 API ====================
@@ -663,16 +672,69 @@ public class AgentLoop implements AgentLoopController {
             result = mainLoop();
         }
 
+        // === 工作流自动重试闭环 ===
+        // 检查是否有需要重试的工作流节点
+        boolean hasActiveWorkflow = false;
+        while (true) {
+            WorkflowPatrolManager.WorkflowAndStore ws = workflowPatrolManager.findRetriableWorkflow();
+            if (ws == null) break;
+
+            hasActiveWorkflow = true;
+            Workflow workflow = ws.workflow();
+            WorkflowStore workflowStore = ws.workflowStore();
+
+            // 找到第一个 FAILED 且未超重试次数的节点
+            WorkflowNode failedNode = null;
+            for (WorkflowNode n : workflow.getNodes()) {
+                if (n.getStatus() == NodeStatus.FAILED
+                        && n.getRetryCount() < workflow.getMaxRetries()) {
+                    failedNode = n;
+                    break;
+                }
+            }
+            if (failedNode == null) break;
+
+            // 重置为 PENDING 并递增重试计数
+            failedNode.setStatus(NodeStatus.PENDING);
+            failedNode.setRetryCount(failedNode.getRetryCount() + 1);
+            workflow.setUpdatedAt(java.time.Instant.now());
+            workflowStore.save(workflow);
+
+            log.info("[workflow] 自动重试: node={}, retry={}/{}",
+                    failedNode.getId(),
+                    failedNode.getRetryCount(),
+                    workflow.getMaxRetries());
+
+            // 注入系统消息说明重试原因
+            ctx.addUser(
+                    "⚠️ [系统自动重试] 上一个节点执行失败，正在重试（"
+                    + failedNode.getRetryCount() + "/" + workflow.getMaxRetries() + "）。\n\n"
+                    + "### 需要重试的节点\n"
+                    + "节点 " + failedNode.getId() + "：" + failedNode.getDescription() + "\n"
+                    + (failedNode.getLastError() != null
+                        ? "### 上一次失败原因\n" + failedNode.getLastError() + "\n"
+                        : "")
+                    + "\n请重新执行此节点。注意分析上次失败的原因，避免同样的错误。");
+
+            // 继续 LLM 循环
+            result = mainLoop();
+        }
+
         // === 巡检生命周期管理 ===
         if (!hasActiveGoal) {
-            // 本次没找到活跃目标，检查是否还有 goal 需要巡检（可能定时器已过期但 goal 还在）
             if (patrolManager.isRunning()) {
-                // 快速检查一次，决定是否停止巡检
                 patrolManager.tick();
             }
         } else {
-            // 有活跃目标 → 确保定时巡检已启动
             patrolManager.startPatrol();
+        }
+
+        if (!hasActiveWorkflow) {
+            if (workflowPatrolManager.isRunning()) {
+                workflowPatrolManager.tick();
+            }
+        } else {
+            workflowPatrolManager.startPatrol();
         }
 
         return result;
