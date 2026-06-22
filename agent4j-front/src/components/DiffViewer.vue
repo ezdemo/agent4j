@@ -187,15 +187,6 @@ function parseSideBySide(diffText) {
 </script>
 
 <style scoped>
-.diff-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0,0,0,0.35);
-  z-index: 200;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
 .diff-viewer {
   width: min(90vw, 800px);
   max-height: 80vh;
