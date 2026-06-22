@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js"/>
   <img src="https://img.shields.io/badge/Electron-32.0-47848F?logo=electron"/>
   <img src="https://img.shields.io/badge/license-MIT-green"/>
-  <img src="https://img.shields.io/badge/version-26.6.15-lightgrey"/>
+  <img src="https://img.shields.io/badge/version-26.6.22-lightgrey"/>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-📋-brightgreen"/></a>
 </p>
 
@@ -101,33 +101,37 @@ API，一步步把事情干完。
 
 ---
 
-## 🆕 最新更新（v26.6.15）
+## 🆕 最新更新（v26.6.22）
 
-### 🖥️ Electron 桌面端 (替换 Tauri)
-- 新增 Electron 桌面端支持，替换 Tauri
-- 无缝迁移：所有桌面端功能平滑过渡，无影响
+### 📝 DiffViewer 与文件打开功能
+- 新增文件打开功能，支持在系统编辑器中打开文件
+- 文件打开按钮移至工具标题行内，优化交互布局
+- 无变更时展示文件原文内容，Diff 为空时仍显示文件内容
 
-<p align="center">
-  <img src="img/main_app.png" width="60%" alt="主界面"/>
-</p>
+### 🤖 视觉模型与图片识别
+- 新增 vision_recognize 图片识别工具
+- 无视觉模型时自动识别图片并拼接到文本
+- 视觉模型远端自动获取与填入
 
-### 🧩 元素面板（Element Panel）
-- 新增 ElementPanel 组件 — 可视化查看页面 DOM 元素树
-- 右侧面板支持拖拽调整宽度
-- 元素信息弹窗展示，支持发送消息到会话
+### 🧠 模型元数据管理
+- 新增模型元数据管理功能，统一管理模型能力、价格信息
+- 模型多模态支持提供者及动态价格计算
+- 通过 ContextSizeProvider 动态获取模型上下文大小
+- 仪表盘显示模型价格提示并清除本地 API 密钥
 
-### 🔧 Git 面板增强
-- 添加模型选择下拉框，支持切换提交消息生成模型
-- git-author 配置中添加模型字段持久化偏好
+### 🛠️ 工具系统增强
+- 连续工具调用合并为分组展示
+- BlockRenderer 展示 bash 命令，优化图标样式
+- 将内置工具迁移至 Solon AbsToolProvider 注解驱动模式
 
-### 🤖 模型优化
-- 简化思考模式判断逻辑
-- 支持模型名后缀灵活配置上下文大小
+### 🔄 工作流增强
+- 工作流自动重试与巡检管理功能
+- 推理强度切换及运行时热更新
 
-### 🛠️ 其他亮点
-- 统一日志输出：替换 System.err 为 Slf4j
-- 添加 bump-version.ps1 版本更新脚本
-- 添加 12 张界面预览图
+### 🎨 前端样式优化
+- 优化聊天界面布局和移动端响应式适配
+- 调整消息体最大宽度，优化 AI 加载动画和推理文本样式
+- 新增 Windows 打包脚本
 
 > 📋 完整变更记录请查看 [CHANGELOG.md](CHANGELOG.md)
 
@@ -349,6 +353,7 @@ agent4j/
 | `java_source`                                                               | Java源码查找   |
 | `call_api`                                                                  | 调 REST API |
 | `remember` / `recall_memory` / `forget`                                     | 持久记忆       |
+| `vision_recognize`                                                           | 图片识别       |
 | `submit_plan` / `revise_plan` / `mark_step_complete`                        | 计划管理       |
 | `ask_choice` / `todo_write`                                                 | 用户交互       |
 | `run_background` / `stop_job` / `wait_for_job` / `job_output` / `list_jobs` | 后台作业       |
