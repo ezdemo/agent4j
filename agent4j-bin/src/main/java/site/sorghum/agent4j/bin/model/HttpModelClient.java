@@ -575,34 +575,10 @@ public class HttpModelClient implements ModelClient {
      * @param result   累积结果（用于 tool_calls）
      */
     private void processChunk(ONode chunk, StreamCallback callback, SseParseResult result) {
-        // 捕获 usage（同一请求 ID 多次出现时，仅上报与上次的差量，确保最终值准确）
+        // 捕获 usage
         ONode usage = chunk.get(FIELD_USAGE);
         if (usage != null && !usage.isNull()) {
-            String requestId = chunk.get(FIELD_ID).getString();
-            int[] vals = parseUsage(usage);
-            if (requestId != null) {
-                int[] prev = result.lastUsage.put(requestId, vals);
-                if (prev != null) {
-                    // 已有同 ID 记录，只上报增量（new - old）
-                    int dp = vals[0] - prev[0];
-                    int dc = vals[1] - prev[1];
-                    int dch = vals[2] - prev[2];
-                    int dcm = vals[3] - prev[3];
-                    int dtt = vals[4] - prev[4];
-                    if (dp == 0 && dc == 0 && dch == 0 && dcm == 0) {
-                        log.debug("usage数据无变化，跳过，requestId={}", requestId);
-                    } else {
-                        log.debug("usage增量更新: requestId={}, +prompt={}, +completion={}, +cacheHit={}, +cacheMiss={}",
-                                requestId, dp, dc, dch, dcm);
-                        safeCallback("onUsage", () -> callback.onUsage(dp, dc, dtt, dch, dcm));
-                    }
-                    // 注意：不用 return，后续 delta 处理仍需执行
-                    usage = null; // 标记已处理
-                }
-            }
-            if (usage != null) {
-                handleUsage(usage, callback);
-            }
+            handleUsage(usage, chunk.get(FIELD_ID).getString(), callback, result.lastUsage);
         }
 
         // delta 处理
@@ -660,11 +636,34 @@ public class HttpModelClient implements ModelClient {
     }
 
     /**
-     * 处理首次出现的 usage 统计数据（原样上报）。
+     * 处理 usage 统计数据。
+     * 同一请求 ID 多次出现时，仅上报与上次的差量，确保最终累计值与最后一次（最准确的）数据一致。
      */
-    private void handleUsage(ONode usage, StreamCallback callback) {
+    private void handleUsage(ONode usage, String requestId, StreamCallback callback,
+                             Map<String, int[]> lastUsage) {
         int[] vals = parseUsage(usage);
 
+        // 差量去重：同一 requestId 只上报增量
+        if (requestId != null) {
+            int[] prev = lastUsage.put(requestId, vals);
+            if (prev != null) {
+                int dp = vals[0] - prev[0];
+                int dc = vals[1] - prev[1];
+                int dch = vals[2] - prev[2];
+                int dcm = vals[3] - prev[3];
+                int dtt = vals[4] - prev[4];
+                if (dp == 0 && dc == 0 && dch == 0 && dcm == 0) {
+                    log.debug("usage数据无变化，跳过，requestId={}", requestId);
+                } else {
+                    log.debug("usage增量更新: requestId={}, +prompt={}, +completion={}, +cacheHit={}, +cacheMiss={}",
+                            requestId, dp, dc, dch, dcm);
+                    safeCallback("onUsage", () -> callback.onUsage(dp, dc, dtt, dch, dcm));
+                }
+                return;
+            }
+        }
+
+        // 首次出现，原样上报
         ONode ctDetails = usage.get(FIELD_COMPLETION_TOKENS_DETAILS);
         if (ctDetails != null && !ctDetails.isNull()) {
             int reasoningTokens = ctDetails.get(FIELD_REASONING_TOKENS).isNull() ? 0 : ctDetails.get(FIELD_REASONING_TOKENS).getInt();
