@@ -161,6 +161,27 @@ const webImplementation = {
     async isMaximized() { return false }
   },
 
+  // 打开本地文件（Web环境下尝试使用window.open，可能受浏览器安全限制）
+  async openFile(filePath) {
+    try {
+      // 路径验证
+      if (!filePath || typeof filePath !== 'string') {
+        return { success: false, error: '无效的文件路径' }
+      }
+      // 防止路径遍历攻击
+      if (filePath.includes('..') || filePath.includes('~')) {
+        return { success: false, error: '文件路径包含非法字符' }
+      }
+      // Web环境下无法直接打开本地文件，尝试使用file://协议
+      const fileUrl = filePath.startsWith('file://') ? filePath : `file://${filePath}`
+      window.open(fileUrl, '_blank')
+      return { success: true }
+    } catch (e) {
+      console.error('Web: openFile failed:', e)
+      return { success: false, error: e.message }
+    }
+  },
+
   events: {
     async listen(eventName) {
       console.log(`Web: listen to ${eventName} not supported`)
@@ -247,6 +268,11 @@ const electronImplementation = {
     async isMaximized() {
       return await window.electronAPI.window.isMaximized()
     }
+  },
+
+  // 打开本地文件（Electron环境）
+  async openFile(filePath) {
+    return await window.electronAPI.openFile(filePath)
   },
 
   events: {

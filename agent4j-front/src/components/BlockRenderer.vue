@@ -44,6 +44,15 @@
           <span v-html="CHEVRON_DOWN_ICON" :style="{ transform: block.expanded ? 'rotate(180deg)' : '', display: 'inline-block' }"></span>
         </div>
         <div v-if="block.expanded" class="tool-detail">
+          <!-- 打开文件按钮 -->
+          <div v-if="shouldShowOpenFile(block)" class="tool-actions">
+            <button class="open-file-btn" @click="openFile(block)">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"></path>
+              </svg>
+              打开文件
+            </button>
+          </div>
           <pre v-if="block.args"><code>{{ fmtArgs(block.args) }}</code></pre>
           <pre v-if="block.result"><code>{{ block.result }}</code></pre>
         </div>
@@ -77,7 +86,7 @@ const props = defineProps({
   blocks: { type: Array, required: true }
 })
 
-const emit = defineEmits(['sendChoice'])
+const emit = defineEmits(['sendChoice', 'openFile'])
 
 // Markdown 渲染缓存
 const renderCache = new LRUCache(200)
@@ -106,6 +115,37 @@ const getReasoningHtml = (block) => {
 const fmtArgs = a => {
   if (typeof a === 'string') { try { return JSON.stringify(JSON.parse(a), null, 2) } catch { return a } }
   return JSON.stringify(a, null, 2)
+}
+
+// 检查是否显示打开文件按钮
+const shouldShowOpenFile = (block) => {
+  if (!block || block.type !== 'tool_call') return false
+  const toolName = block.name
+  // 只对 write 和 edit 工具显示打开文件按钮
+  if (toolName !== 'write' && toolName !== 'edit') return false
+  // 检查args是否包含file_path字段
+  let args = block.args
+  if (typeof args === 'string') {
+    try { args = JSON.parse(args) } catch { return false }
+  }
+  return args && typeof args === 'object' && args.file_path
+}
+
+// 获取文件路径
+const getFilePath = (block) => {
+  let args = block.args
+  if (typeof args === 'string') {
+    try { args = JSON.parse(args) } catch { return null }
+  }
+  return args?.file_path || null
+}
+
+// 触发打开文件事件
+const openFile = (block) => {
+  const filePath = getFilePath(block)
+  if (filePath) {
+    emit('openFile', filePath)
+  }
 }
 </script>
 
@@ -479,6 +519,32 @@ const fmtArgs = a => {
   font-size: 11px;
   max-height: 150px;
   overflow: auto;
+}
+
+.tool-actions {
+  display: flex;
+  gap: 8px;
+  margin-top: 6px;
+  margin-bottom: 6px;
+}
+
+.open-file-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  background: var(--accent-bg, rgba(var(--accent-rgb, 59 130 246), 0.1));
+  border: 1px solid var(--accent);
+  border-radius: var(--r-sm);
+  color: var(--accent);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all var(--t);
+}
+
+.open-file-btn:hover {
+  background: var(--accent);
+  color: #fff;
 }
 
 /* 选项按钮 */

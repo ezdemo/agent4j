@@ -46,6 +46,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 打开外部链接
   openExternal: (url) => ipcRenderer.invoke('open-external', url),
 
+  // 打开本地文件
+  openFile: (filePath) => ipcRenderer.invoke('open-file', filePath),
+
   // Electron 版本
   getElectronVersion: () => ipcRenderer.invoke('get_electron_version'),
 

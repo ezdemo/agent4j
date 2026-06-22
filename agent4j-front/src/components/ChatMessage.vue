@@ -23,7 +23,7 @@
     <template v-else-if="msg.role === 'assistant' && msg.blocks && msg.blocks.length > 0">
       <div class="msg-body assistant-body">
         <div class="msg-blocks">
-          <BlockRenderer :blocks="msg.blocks || []" @send-choice="(val, block) => $emit('sendChoice', val, block)" />
+          <BlockRenderer :blocks="msg.blocks || []" @send-choice="(val, block) => $emit('sendChoice', val, block)" @open-file="(filePath) => $emit('openFile', filePath)" />
         </div>
         <div class="msg-footer">
           <span class="msg-time">{{ msg.time }}</span>
@@ -64,7 +64,7 @@ const props = defineProps({
   snapshotRollbackLoading: {type: Object, required: true}
 })
 
-const emit = defineEmits(['previewImage', 'rollbackSnapshot', 'copyMessage', 'sendChoice'])
+const emit = defineEmits(['previewImage', 'rollbackSnapshot', 'copyMessage', 'sendChoice', 'openFile'])
 
 const isElectron = platform.isElectron
 
