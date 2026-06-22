@@ -66,6 +66,7 @@
           @rollback-snapshot="rollbackSnapshot"
           @copy-message="copyMessage"
           @send-choice="sendChoice"
+          @open-file="openFile"
       />
 
       <!-- 加载中：AI 准备中 -->
@@ -169,6 +170,15 @@
       </div>
     </Teleport>
 
+    <!-- Diff 查看器弹窗（复用 DiffViewer 组件） -->
+    <DiffViewer
+      :open="diffViewer.open"
+      :file="diffViewer.file"
+      :diff="diffViewer.diff"
+      :stat="diffViewer.stat"
+      @close="closeDiffViewer"
+    />
+
     <!-- 无会话时：禁用输入框占位 -->
     <div v-if="!props.sessionName" class="no-session-input-bar">
       <div class="no-session-input-placeholder">
@@ -207,12 +217,14 @@
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {agentAPI, chatAPI, configAPI, snapshotAPI} from '../services/api'
+import {agentAPI, chatAPI, configAPI, gitAPI, snapshotAPI} from '../services/api'
 import {md} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
 import ChatInput from '../components/ChatInput.vue'
 import ChatMessage from '../components/ChatMessage.vue'
+import DiffViewer from '../components/DiffViewer.vue'
 import {useAppStore} from '../stores/app'
+import platform from '../services/platform'
 
 // ============= 模型切换 =============
 const handleSwitchModel = async (modelName) => {
@@ -269,6 +281,25 @@ const previewImage = (url) => {
   imagePreviewUrl.value = url
   imagePreviewOpen.value = true
 }
+
+// Diff 查看器
+const diffViewer = ref({ open: false, file: '', diff: '', stat: '' })
+const openDiff = async (filePath) => {
+  diffViewer.value = { open: true, file: filePath, diff: '', stat: '' }
+  try {
+    const r = await gitAPI.diffContent(props.workspaceHash, filePath)
+    if (r.success && r.data) {
+      diffViewer.value.diff = r.data.diff || ''
+      diffViewer.value.stat = r.data.stat || ''
+    }
+  } catch (e) {
+    diffViewer.value.diff = '加载 diff 失败: ' + (e.message || '')
+  }
+}
+const closeDiffViewer = () => {
+  diffViewer.value = { open: false, file: '', diff: '', stat: '' }
+}
+
 const messages = computed(() => store.getSessionMessages(props.sessionName))
 const streaming = computed(() => store.getSessionStreaming(props.sessionName))
 const hasHistory = computed(() => messages.value.length > 0)
@@ -580,6 +611,11 @@ const sendChoice = (value, block) => {
   }
   inputText.value = value
   sendMessage()
+}
+
+// 打开文件（显示 Git diff）
+const openFile = async (filePath) => {
+  openDiff(filePath)
 }
 
 // 键盘事件已迁移到 ChatInput 组件
@@ -1854,6 +1890,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   .ai-label { font-size: 12px; }
   .msg-thumb-dock { display: none; } /* 手机端隐藏缩略图dock */
   .chat-head { padding: 6px 10px; }
-  .chat-head-title { font-size: 13px; }
+    .chat-head-title { font-size: 13px; }
 }
+
 </style>
