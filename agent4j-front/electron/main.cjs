@@ -368,13 +368,9 @@ ipcMain.handle('stop_agent4j_web', async () => {
 })
 
 ipcMain.handle('check_java_quick', async () => {
-  try {
-    const out = execSync('java -version 2>&1').toString()
-    const m = out.match(/(\d+\.\d+\.\d+)/)
-    return { found: true, version: m ? m[1] : 'unknown', source: 'system' }
-  } catch {
-    return { found: false, version: '', source: 'none' }
-  }
+  // 跳过 Java 检查：agent4j 启动脚本自带 JRE 25 探测逻辑
+  // 如果 Java 不可用，startService 会失败，走在线安装流程
+  return { found: true, version: 'skip', source: 'deferred' }
 })
 ipcMain.handle('start_java_download', async () => 'started')
 
