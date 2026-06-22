@@ -239,14 +239,12 @@ function parseSideBySide(diffText) {
 /* 内容区域（始终占位，避免高度跳动） */
 .diff-sbs-body {
   flex: 1;
-  overflow-y: auto;
+  overflow: auto;
   font-size: 12px;
   font-family: var(--mono);
   line-height: 1.6;
   background: var(--bg);
   min-height: 120px;
-  display: flex;
-  flex-direction: column;
 }
 .diff-sbs-header {
   display: flex;
@@ -271,7 +269,6 @@ function parseSideBySide(diffText) {
 /* 行：diff 和文件内容共用 */
 .diff-sbs-row, .file-content-row {
   display: flex;
-  min-height: 20px;
   border-bottom: 1px solid var(--border-muted);
 }
 .diff-sbs-row:last-child, .file-content-row:last-child { border-bottom: none; }
@@ -304,7 +301,8 @@ function parseSideBySide(diffText) {
   flex: 1;
   padding: 0 8px;
   white-space: pre-wrap;
-  word-break: break-all;
+  word-break: break-word;
+  overflow-wrap: anywhere;
   min-width: 0;
 }
 

@@ -47,6 +47,7 @@
             </svg>
             <span class="open-file-path">{{ getFilePath(block) }}</span>
           </button>
+          <span v-if="block.name === 'bash' && getBashCommand(block)" class="tool-bash-cmd">{{ getBashCommand(block) }}</span>
           <span v-html="CHEVRON_DOWN_ICON" :style="{ transform: block.expanded ? 'rotate(180deg)' : '', display: 'inline-block' }"></span>
         </div>
         <div v-if="block.expanded" class="tool-detail">
@@ -135,6 +136,18 @@ const getFilePath = (block) => {
     try { args = JSON.parse(args) } catch { return null }
   }
   return args?.file_path || null
+}
+
+// 获取 bash 命令
+const getBashCommand = (block) => {
+  let args = block.args
+  if (typeof args === 'string') {
+    try { args = JSON.parse(args) } catch { return null }
+  }
+  const cmd = args?.command
+  if (!cmd) return null
+  // 截断过长命令
+  return cmd.length > 60 ? cmd.slice(0, 57) + '...' : cmd
 }
 
 // 触发打开文件事件
@@ -551,6 +564,18 @@ const openFile = (block) => {
 
 .open-file-inline:hover .open-file-path {
   color: var(--accent);
+}
+
+.tool-bash-cmd {
+  font-size: 11px;
+  font-family: var(--mono);
+  color: var(--fg-4);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 220px;
+  margin-left: 2px;
+  flex-shrink: 0;
 }
 
 /* 选项按钮 */
