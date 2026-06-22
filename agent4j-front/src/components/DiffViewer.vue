@@ -30,14 +30,14 @@
               </div>
             </div>
           </template>
-          <!-- 无变更：展示文件内容 -->
-          <template v-else-if="fileContentLines.length > 0">
-            <div v-for="(line, i) in fileContentLines" :key="i" class="file-content-row">
+          <!-- 无变更：展示文件原文 -->
+          <template v-else-if="rawFileLines.length > 0">
+            <div v-for="(line, i) in rawFileLines" :key="i" class="file-content-row">
               <span class="file-content-ln">{{ i + 1 }}</span>
               <span class="file-content-code" v-html="line"></span>
             </div>
           </template>
-          <!-- loading -->
+          <!-- 加载中 -->
           <div v-else class="diff-loading">
             <div class="diff-loading-spinner"></div>
             <span>加载中...</span>
@@ -49,8 +49,7 @@
 </template>
 
 <script setup>
-import { ref, computed, watch } from 'vue'
-import { gitAPI } from '../services/api'
+import { computed } from 'vue'
 import { highlightCode, detectLanguage } from '../utils/highlight'
 import { sanitize } from '../utils/sanitize'
 
@@ -58,64 +57,10 @@ const props = defineProps({
   open: { type: Boolean, default: false },
   file: { type: String, default: '' },
   diff: { type: String, default: '' },
-  stat: { type: String, default: '' },
-  workspaceHash: { type: String, default: null }
+  stat: { type: String, default: '' }
 })
 
 defineEmits(['close'])
-
-// ---- 无 diff 时加载文件内容（带 debounce 避免闪烁） ----
-const fileContentHtml = ref('')
-const fileContentLoading = ref(false)
-const fileContentLines = computed(() => {
-  if (!fileContentHtml.value) return []
-  return fileContentHtml.value.split('\n')
-})
-
-let fileContentTimer = null
-const FILE_CONTENT_DELAY = 300
-
-const loadFileContent = async () => {
-  if (!props.open || !props.workspaceHash || !props.file) return
-  fileContentLoading.value = true
-  fileContentHtml.value = ''
-  try {
-    const r = await gitAPI.fileContent(props.workspaceHash, props.file)
-    // 打开期间如果 diff 到了，不再展示文件内容
-    if (props.diff) { fileContentHtml.value = ''; return }
-    if (r.success && r.data && r.data.content) {
-      const lang = detectLanguage(props.file)
-      const lines = r.data.content.split('\n')
-      fileContentHtml.value = lines.map(l => sanitize(highlightCode(l, lang))).join('\n')
-    }
-  } catch (e) {
-    fileContentHtml.value = ''
-  } finally {
-    fileContentLoading.value = false
-  }
-}
-
-const scheduleFileContent = () => {
-  clearTimeout(fileContentTimer)
-  fileContentTimer = setTimeout(() => {
-    if (props.open && !props.diff) loadFileContent()
-  }, FILE_CONTENT_DELAY)
-}
-
-watch(() => [props.open, props.file, props.diff], ([open, , diff]) => {
-  clearTimeout(fileContentTimer)
-  if (!open) {
-    fileContentHtml.value = ''
-    return
-  }
-  if (diff) {
-    // 有 diff 内容，清除文件内容视图
-    fileContentHtml.value = ''
-    return
-  }
-  // diff 还没到（空字符串），延迟等待
-  scheduleFileContent()
-})
 
 // ---- Diff 左右对比 (Side-by-Side) ----
 const diffPairs = computed(() => {
@@ -128,6 +73,13 @@ const diffPairs = computed(() => {
     p.rightHtml = p.right ? sanitize(highlightCode(p.right, lang)) : ''
   }
   return pairs
+})
+
+// ---- 无 hunk 时，把 diff 当原文展示 ----
+const rawFileLines = computed(() => {
+  if (diffPairs.value.length > 0 || !props.diff) return []
+  const lang = detectLanguage(props.file)
+  return props.diff.split('\n').map(l => sanitize(highlightCode(l, lang)))
 })
 
 function parseSideBySide(diffText) {
