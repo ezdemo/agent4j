@@ -167,6 +167,74 @@ function ToolCard({
     );
 }
 
+/* ── 工具分组卡片（连续多个工具合并） ─────────────────────── */
+
+export interface ToolGroupData {
+    kind: "tool_group";
+    id: string;
+    tools: Array<CardType & { kind: "tool" }>;
+    allDone: boolean;
+    running: boolean;
+}
+
+export function ToolGroupCard({
+                                  group,
+                                  expanded,
+                                  expandedTools,
+                                  onToggleGroup,
+                                  onToggleTool,
+                              }: {
+    group: ToolGroupData;
+    expanded?: boolean;
+    expandedTools?: Record<string, boolean>;
+    onToggleGroup?: () => void;
+    onToggleTool?: (toolId: string) => void;
+}): React.ReactElement {
+    const glyph = group.running
+        ? <Spinner color={ROLE.tool.color}/>
+        : "✓";
+    const names = group.tools.map((t) => t.name).join(" → ");
+    const statusLabel = group.running ? "执行中" : "成功";
+
+    return (
+        <Card>
+            <CardHeader
+                glyph={glyph}
+                tone={ROLE.tool.color}
+                title={`${group.tools.length} 个工具`}
+                subtitle={statusLabel}
+                meta={[expanded ? names : (names.length > 50 ? names.slice(0, 47) + "..." : names)]}
+                right={
+                    <Text color={FG.faint}>{expanded ? "▲" : "▼"}</Text>
+                }
+            />
+            {expanded ? (
+                <Box flexDirection="column" paddingTop={1} paddingLeft={1}>
+                    {group.tools.map((t) => {
+                        const toolExpanded = expandedTools?.[t.id] ?? false;
+                        return (
+                            <Box key={t.id} flexDirection="column">
+                                <Box paddingLeft={1} flexDirection="row" gap={1}>
+                                    <Text color={t.done ? TONE.ok : ROLE.tool.color}>
+                                        {t.done ? "✓" : "…"}
+                                    </Text>
+                                    <Text color={FG.body} bold>{t.name}</Text>
+                                    {toolExpanded ? <Text color={FG.faint}> ▲</Text> : null}
+                                </Box>
+                                {toolExpanded && t.output ? (
+                                    <Box paddingLeft={2} flexDirection="column">
+                                        <Markdown text={t.output} dimmed/>
+                                    </Box>
+                                ) : null}
+                            </Box>
+                        );
+                    })}
+                </Box>
+            ) : null}
+        </Card>
+    );
+}
+
 /* ── 系统卡片 ─────────────────────────────────────────────── */
 
 const TONE_MAP: Record<string, string> = {
