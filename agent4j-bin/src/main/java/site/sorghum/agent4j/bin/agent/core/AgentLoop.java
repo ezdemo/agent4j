@@ -360,9 +360,198 @@ public class AgentLoop implements AgentLoopController {
 
     private String buildToolInstructions() {
         return """
-                编辑文件时使用 edit_file（SEARCH/REPLACE，search 必须唯一）。
-                多文件批量编辑使用 multi_edit。
-                不确定文件位置时用 glob/grep 搜索，需要构建/测试时用 run_command。
+                # Agent4j AI 工具速查
+                ## 调用规约
+                - 编辑文件用 `edit`（SEARCH/REPLACE，search 必须唯一，先 `read` 确认内容）
+                - 批量编辑用 `edit`（单次调用多 edits）
+                - 不确定文件位置时用 `glob`/`grep`
+                - 需要构建/测试时用 `bash`
+                - 结束对话**必须**调用 `finish`，纯文本回复不会退出循环
+                
+                ---
+                
+                ## 工具清单
+                
+                ### finish — 结束对话
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | content | 否 | 最终回答内容（为空则从上下文回填）|
+                
+                ---
+                
+                ### task — 创建子代理
+                子代理有独立上下文，继承父工具集（排除 task/ask_choice/finish），不可递归创建。
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | name | 是 | 任务名称 |
+                | arguments | 否 | 任务详情/初始指令 |
+                | systemPrompt | 否 | 系统提示词覆盖，为空自动生成 |
+                
+                ---
+                
+                ### ask_choice — 用户选择菜单（2-6 选项）
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | question | 是 | 问题 |
+                | options | 是 | 选项列表，支持字符串或 `{title, summary}` |
+                | allowCustom | 否 | 是否允许自定义输入，默认 false |
+                
+                ---
+                
+                ### todo_write — 任务跟踪（适合 3 步以上工作流）
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | todos | 是 | `[{status, content, activeForm}]`，status: pending/in_progress/completed |
+                
+                ---
+                
+                ### workspace_list — 列出工作区条目（只读）
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | prefix | 否 | key 前缀过滤，为空列出全部 |
+                | scope | 否 | 预留 |
+                
+                ---
+                
+                ### workspace_read — 读取工作区条目（只读）
+                优先 KV → 文档 → NOT_FOUND（附相似 key 提示）
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | key | 是 | 条目路径 |
+                | scope | 否 | 预留 |
+                
+                ---
+                
+                ### workspace_write — 写入工作区条目
+                KV 模式：传 value；文档模式：传 content（无 value 时）。
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | key | 是 | 条目路径 |
+                | value | 否 | KV 值（与 content 二选一）|
+                | content | 否 | 文档内容（与 value 二选一）|
+                | type | 否 | MIME 类型，默认 text/plain |
+                | scope | 否 | 预留 |
+                
+                ---
+                
+                ### workspace_watch — 阻塞监听工作区变更
+                通配符：`*` 匹配单级，`**` 匹配多级。
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | keyPattern | 是 | 通配符模式，如 `user/**` |
+                | timeout | 否 | 秒，默认 30，最大 300。超时返回 TIMEOUT |
+                
+                ---
+                
+                ### goal_mark_step — 标记目标步骤完成
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | stepIndex | 是 | 步骤序号（从 1 开始）|
+                | output | 否 | 执行结果摘要 |
+                | sessionId | 否 | 留空自动获取 |
+                
+                ---
+                
+                ### java_source — 查找 Java 源码（I/O 密集，每类只调一次）
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | className | 是 | 全限定类名，如 `com.example.MyClass` |
+                | jarKeyword | 是 | jar 关键字，简短精确，如 `spring-core` |
+                
+                ---
+                
+                ### vision_recognize — 图片识别
+                需在 `~/.agent4j/config.json` 配置 vision（baseUrl, apiKey, model）。
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | imageBase64 | 是 | 图片 URL 或 Base64 Data URI |
+                | prompt | 否 | 识别提示词 |
+                
+                ---
+                
+                ### read — 读取文件（只读）
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | file_path | 是 | 相对路径，`.` 表示根目录 |
+                | offset | 否 | 起始行号（从 1 开始）|
+                | limit | 否 | 最大行数（单次 128KB 保护）|
+                
+                ### write — 写入/覆盖文件
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | file_path | 是 | 相对路径 |
+                | content | 是 | 完整内容 |
+                
+                ### edit — 精准文本替换（原子性：全成功或全回滚）
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | file_path | 是 | 相对路径 |
+                | edits | 是 | `[{old_str, old_StrStartLine, new_str, replace_all?}]` |
+                
+                ### glob — 通配符搜索文件（只读）
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | pattern | 是 | 如 `**/*.java` |
+                | path | 是 | 目录路径 |
+                
+                ### grep — 递归搜索内容（只读，支持正则）
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | pattern | 是 | 正则表达式 |
+                | path | 是 | 目录路径 |
+                | include | 否 | 文件模式，如 `*.java` |
+                
+                ### ls — 列出目录（只读）
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | path | 是 | 目录路径 |
+                | recursive | 否 | 是否递归 |
+                | show_hidden | 否 | 是否显示隐藏文件 |
+                
+                ### bash — 执行 Shell 命令
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | command | 是 | 指令 |
+                | max_output_chars | 否 | 默认 64000 |
+                | timeout | 否 | 毫秒，默认 120000 |
+                
+                ---
+                
+                ### skilllist — 列出可用技能（只读，无参数）
+                ### skillread — 读取技能说明（只读）
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | name | 是 | 技能路径标识 |
+                
+                ### skillrefresh — 刷新技能列表（无参数）
+                
+                ---
+                
+                ### webfetch — 获取网页（只读）
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | url | 是 | 完整 URL |
+                | format | 否 | markdown/text/html，默认 markdown |
+                | timeoutMs | 否 | 最大 120000 |
+                
+                ### codesearch — 代码搜索（只读）
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | query | 是 | 搜索词 |
+                | tokensNum | 否 | 1000-50000，默认 5000 |
+                
+                ---
+                
+                ### lsp_* — LSP 语言服务（需先启用）
+                定义跳转/引用查找/悬停提示/诊断/文档符号/调用层次。
+                
+                ---
+                
+                ## 动态工具
+                - **MCP** — 通过 `/mcp` 命令管理，工具名带服务器前缀
+                - **OpenAPI** — 自动将 REST API 转为工具
+                - **Plugin** — `~/.agent4j/plugin/` 下含 `tool.json` + `skill.md` 的目录自动注册
+
                 """;
     }
 
