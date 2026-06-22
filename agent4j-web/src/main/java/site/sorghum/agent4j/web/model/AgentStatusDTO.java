@@ -9,7 +9,6 @@ public record AgentStatusDTO(
         String workspace,
         int cacheSize,
         int historySize,
-        boolean planMode,
         boolean hitlMode,
         String sessionName,
         long promptTokens,

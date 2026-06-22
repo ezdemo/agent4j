@@ -155,7 +155,7 @@ public class Agent4jAgent {
             throw new RuntimeException("[session] Agent4j 会话初始化失败，无法继续运行", e);
         }
 
-        final AgentLoop agentLoop = new AgentLoop(client, registry, ctx, hitl);
+        final AgentLoop agentLoop = new AgentLoop(client, registry, ctx, hitl,Agent4jConfig.getInstance());
         agentLoop.setSessionService(this.sessionService);
         return agentLoop;
     }
@@ -392,7 +392,6 @@ public class Agent4jAgent {
      * 设置输出接口。
      * <p>
      * 所有 Agent 的输出（流式内容、思考、工具调用、日志等）都会通过此接口发送。
-     * 默认使用 {@link ConsoleAgentOutput} 打印到控制台。
      * 可传入自定义实现（如 WebSocket SSE、日志文件等）。
      * </p>
      *
@@ -426,18 +425,6 @@ public class Agent4jAgent {
     }
 
     // ========== HITL (Human-In-The-Loop) ==========
-
-    public boolean isPlanMode() {
-        return loop.isPlanMode();
-    }
-
-    /**
-     * 进入/退出 Plan Mode（提示词始终包含规则，仅切换 dispatch 门控）
-     */
-    public void setPlanMode(boolean on) {
-        loop.setPlanMode(on);
-    }
-
     /**
      * 获取 HITL 模式状态
      */
@@ -557,6 +544,10 @@ public class Agent4jAgent {
          */
         ModelClient modelClient;
         /**
+         * 共享配置
+         */
+        Agent4jConfig agent4jConfig;
+        /**
          * 首次运行时自动安装默认系统提示词到 ~/.agent4j/agent4j.md。
          * <p>
          * 从 classpath 读取打包的 default-agent4j.md，写入用户目录。
@@ -610,6 +601,10 @@ public class Agent4jAgent {
             return DEFAULT_SYSTEM_PROMPT;
         }
 
+        public Builder agent4jConfig(Agent4jConfig agent4jConfig){
+            this.agent4jConfig = agent4jConfig;
+            return this;
+        }
         public Builder apiUrl(String v) {
             this.apiUrl = v;
             return this;
