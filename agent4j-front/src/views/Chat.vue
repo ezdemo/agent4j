@@ -176,7 +176,6 @@
       :file="diffViewer.file"
       :diff="diffViewer.diff"
       :stat="diffViewer.stat"
-      :workspaceHash="props.workspaceHash"
       @close="closeDiffViewer"
     />
 
