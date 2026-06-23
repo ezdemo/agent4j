@@ -2,6 +2,7 @@ const { app, BrowserWindow, ipcMain, Menu, shell } = require('electron')
 const path = require('path')
 const { spawn, execSync } = require('child_process')
 const fs = require('fs')
+const net = require('net')
 
 // ==================== Squirrel 安装事件处理 ====================
 // Squirrel 安装/卸载时会以特定参数启动应用，需要处理并立即退出
@@ -50,28 +51,22 @@ let mainWindow = null
 let agent4jWebProcess = null
 let currentPort = 0
 
-function getDefaultPort() {
-  try {
-    // 尝试多个可能路径查找 config.json
-    const candidates = []
-    if (isDev) {
-      // 开发环境：通过 Vite dev server 获取，或从源码目录读取
-      candidates.push(path.join(__dirname, '..', '..', 'public', 'config.json'))
-    } else {
-      // 生产环境：从 resources 中读取
-      candidates.push(path.join(process.resourcesPath, '.vite', 'renderer', 'main_window', 'config.json'))
-    }
-    for (const cfgPath of candidates) {
-      if (fs.existsSync(cfgPath)) {
-        const cfg = JSON.parse(fs.readFileSync(cfgPath, 'utf-8'))
-        if (cfg.apiBase) {
-          const url = new URL(cfg.apiBase)
-          return parseInt(url.port, 10) || 4567
-        }
-      }
-    }
-  } catch { /* ignore */ }
-  return 4567
+// 获取随机可用端口
+async function getRandomPort() {
+  return new Promise((resolve, reject) => {
+    const server = net.createServer()
+    server.listen(0, () => {
+      const port = server.address().port
+      server.close(() => resolve(port))
+    })
+    server.on('error', reject)
+  })
+}
+
+async function getDefaultPort() {
+  // 获取随机可用端口，避免占用固定端口
+  const port = await getRandomPort()
+  return port
 }
 
 async function healthCheck(port) {
@@ -260,7 +255,7 @@ ipcMain.handle('install_agent4j_web', async () => ({ success: true, steps: ['ele
 ipcMain.handle('start_agent4j_web', async () => {
   if (agent4jWebProcess) return currentPort
 
-  const port = getDefaultPort()
+  const port = await getDefaultPort()
 
   // 先检查服务是否已在运行
   if (await healthCheck(port)) {
