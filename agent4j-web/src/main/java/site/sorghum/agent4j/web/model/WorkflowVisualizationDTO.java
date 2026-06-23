@@ -46,6 +46,9 @@ public class WorkflowVisualizationDTO {
         private int retryCount;
         private String lastError;
         private String result;
+        private String condition;
+        private String conditionResult;
+        private List<String> parallelBranches;
     }
 
     @Data
@@ -58,6 +61,7 @@ public class WorkflowVisualizationDTO {
         private String to;
         private String type;
         private String condition;
+        private String label;
     }
 
     @Data

@@ -133,6 +133,9 @@ public class JsonlWorkflowStore implements WorkflowStore {
                 if (n.getCondition() != null) {
                     nodeObj.set("condition", n.getCondition());
                 }
+                if (n.getConditionResult() != null) {
+                    nodeObj.set("conditionResult", n.getConditionResult());
+                }
                 if (n.getParallelBranches() != null && !n.getParallelBranches().isEmpty()) {
                     ONode branchesArr = nodeObj.getOrNew("parallelBranches").asArray();
                     for (String branch : n.getParallelBranches()) {
@@ -160,6 +163,9 @@ public class JsonlWorkflowStore implements WorkflowStore {
                 edgeObj.set("to", e.getTo());
                 if (e.getCondition() != null) {
                     edgeObj.set("condition", e.getCondition());
+                }
+                if (e.getLabel() != null) {
+                    edgeObj.set("label", e.getLabel());
                 }
                 edgeObj.set("type", e.getType() != null ? e.getType().name() : null);
             }
@@ -228,6 +234,7 @@ public class JsonlWorkflowStore implements WorkflowStore {
                 .lastError(node.get("lastError").getString())
                 .result(node.get("result").getString())
                 .condition(node.get("condition").getString())
+                .conditionResult(node.get("conditionResult").getString())
                 .approvalPrompt(node.get("approvalPrompt").getString())
                 .approvalResult(node.get("approvalResult").getString())
                 .subWorkflowId(node.get("subWorkflowId").getString());
@@ -258,6 +265,7 @@ public class JsonlWorkflowStore implements WorkflowStore {
                 .from(node.get("from").getString())
                 .to(node.get("to").getString())
                 .condition(node.get("condition").getString())
+                .label(node.get("label").getString())
                 .type(parseEdgeType(node.get("type").getString()))
                 .build();
     }

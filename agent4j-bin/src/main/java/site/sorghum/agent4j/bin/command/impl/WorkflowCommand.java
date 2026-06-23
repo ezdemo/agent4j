@@ -59,7 +59,7 @@ public class WorkflowCommand implements ChatCommand {
 
     @Override
     public String getDescription() {
-        return "/workflow    设定并跟踪工作流（子命令：create/status/show/pause/resume/run/node/link/unbranch/retry/skip/clear）";
+        return "/workflow    设定并跟踪工作流（子命令：create/status/show/pause/resume/run/approve/deny/node/link/unbranch/retry/skip/clear）";
     }
 
     @Override
@@ -88,6 +88,10 @@ public class WorkflowCommand implements ChatCommand {
                 return handleResume(ctx);
             case "run":
                 return handleRun(ctx, input);
+            case "approve":
+                return handleApprove(args, ctx);
+            case "deny":
+                return handleDeny(args, ctx);
             case "node":
                 return handleNode(args, ctx);
             case "link":
@@ -228,8 +232,11 @@ public class WorkflowCommand implements ChatCommand {
         workflow.setUpdatedAt(java.time.Instant.now());
         ctx.getAgent().getWorkspaceManager().getWorkflowStore().save(workflow);
 
-        // 生成工作流结构文本
-        String structureText = generateStructureText(workflow);
+        // 生成工作流结构概览
+        String structureText = workflowEngine.generateStructureText(workflow);
+
+        // 使用引擎生成当前就绪节点的执行提示词
+        String execPrompt = workflowEngine.buildExecutionPrompt(workflow);
 
         // 注入执行 prompt，让 LLM 开始执行
         String prompt = """
@@ -238,36 +245,86 @@ public class WorkflowCommand implements ChatCommand {
                 工作流结构：
                 %s
                 
-                请按照工作流结构执行节点。
-                每完成一个节点，**必须**调用 workflow_mark_node 工具通知系统，参数传入节点ID和执行结果摘要。
-                如果有节点失败，系统会自动重试（最多 %d 次）。
-                全部完成后总结汇报。
+                %s
                 """
-                .formatted(workflow.getTitle(), structureText, workflow.getMaxRetries());
+                .formatted(workflow.getTitle(), structureText,
+                        execPrompt != null ? execPrompt : "工作流已完成。");
 
         input.setMessage(prompt);
         return CommandResult.LOOP;
     }
-    
-    /**
-     * 生成工作流结构文本。
-     */
-    private String generateStructureText(Workflow workflow) {
-        StringBuilder sb = new StringBuilder();
-        sb.append("节点列表:\n");
-        for (WorkflowNode node : workflow.getNodes()) {
-            sb.append("  ").append(node.getId()).append(". ").append(node.getDescription())
-                    .append(" (").append(node.getType()).append(")\n");
+
+    private CommandResult handleApprove(String args, ChatCommandContext ctx) throws Exception {
+        Workflow workflow = workflowEngine.getCurrentWorkflow(ctx);
+        if (workflow == null) return noWorkflowResponse(ctx);
+
+        String nodeId = args.trim();
+        if (nodeId.isEmpty()) {
+            ctx.getAgent().getOutput().onLog(LogLevel.INFO, "用法: /workflow approve <节点ID>");
+            return CommandResult.CONTINUE;
         }
-        sb.append("\n依赖关系:\n");
-        for (WorkflowEdge edge : workflow.getEdges()) {
-            sb.append("  ").append(edge.getFrom()).append(" -> ").append(edge.getTo());
-            if (edge.getCondition() != null) {
-                sb.append(" [条件: ").append(edge.getCondition()).append("]");
-            }
-            sb.append("\n");
+
+        WorkflowNode node = workflow.findNode(nodeId);
+        if (node == null) {
+            ctx.getAgent().getOutput().onLog(LogLevel.INFO, "节点 " + nodeId + " 不存在");
+            return CommandResult.CONTINUE;
         }
-        return sb.toString();
+        if (node.getStatus() != NodeStatus.WAITING) {
+            ctx.getAgent().getOutput().onLog(LogLevel.INFO, "节点 " + nodeId + " 不在等待审批状态");
+            return CommandResult.CONTINUE;
+        }
+
+        // 批准：标记为完成
+        node.setStatus(NodeStatus.DONE);
+        node.setApprovalResult("approved");
+        node.setResult("人工审批通过");
+        node.setCompletedAt(Instant.now());
+        workflow.setUpdatedAt(Instant.now());
+
+        // 恢复工作流
+        workflow.setStatus(WorkflowStatus.ACTIVE);
+
+        ctx.getAgent().getWorkspaceManager().getWorkflowStore().save(workflow);
+        ctx.getAgent().getOutput().onLog(LogLevel.INFO,
+                "✅ 节点 " + nodeId + " 已批准。工作流已恢复执行。");
+
+        // 注入恢复执行的 prompt
+        String prompt = "工作流节点 " + nodeId + " 已获得人工批准，工作流已恢复。请继续执行下一个就绪节点。";
+        ctx.getAgent().getOutput().onLog(LogLevel.INFO, prompt);
+        return CommandResult.LOOP;
+    }
+
+    private CommandResult handleDeny(String args, ChatCommandContext ctx) throws Exception {
+        Workflow workflow = workflowEngine.getCurrentWorkflow(ctx);
+        if (workflow == null) return noWorkflowResponse(ctx);
+
+        String nodeId = args.trim();
+        if (nodeId.isEmpty()) {
+            ctx.getAgent().getOutput().onLog(LogLevel.INFO, "用法: /workflow deny <节点ID>");
+            return CommandResult.CONTINUE;
+        }
+
+        WorkflowNode node = workflow.findNode(nodeId);
+        if (node == null) {
+            ctx.getAgent().getOutput().onLog(LogLevel.INFO, "节点 " + nodeId + " 不存在");
+            return CommandResult.CONTINUE;
+        }
+        if (node.getStatus() != NodeStatus.WAITING) {
+            ctx.getAgent().getOutput().onLog(LogLevel.INFO, "节点 " + nodeId + " 不在等待审批状态");
+            return CommandResult.CONTINUE;
+        }
+
+        // 拒绝：标记为失败
+        node.setStatus(NodeStatus.FAILED);
+        node.setApprovalResult("rejected");
+        node.setLastError("人工审批拒绝");
+        workflow.setUpdatedAt(Instant.now());
+        workflow.setStatus(WorkflowStatus.FAILED);
+
+        ctx.getAgent().getWorkspaceManager().getWorkflowStore().save(workflow);
+        ctx.getAgent().getOutput().onLog(LogLevel.INFO,
+                "❌ 节点 " + nodeId + " 已拒绝。工作流已标记为失败。");
+        return CommandResult.CONTINUE;
     }
 
     private CommandResult handleNode(String args, ChatCommandContext ctx) throws Exception {

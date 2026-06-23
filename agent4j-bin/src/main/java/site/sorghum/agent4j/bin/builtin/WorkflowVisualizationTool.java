@@ -1,11 +1,11 @@
 package site.sorghum.agent4j.bin.builtin;
 
+import org.noear.snack4.ONode;
 import org.noear.solon.ai.annotation.ToolMapping;
 import org.noear.solon.ai.chat.tool.AbsToolProvider;
 import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Param;
-import org.noear.snack4.ONode;
 import site.sorghum.agent4j.bin.workflow.*;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
 import site.sorghum.agent4j.tool.ToolContext;
@@ -83,6 +83,19 @@ public class WorkflowVisualizationTool extends AbsToolProvider implements SolonT
             if (node.getResult() != null && !node.getResult().isEmpty()) {
                 nodeObj.set("result", node.getResult());
             }
+            if (node.getConditionResult() != null) {
+                nodeObj.set("conditionResult", node.getConditionResult());
+            }
+            if (node.getType() == NodeType.PARALLEL && node.getParallelBranches() != null
+                    && !node.getParallelBranches().isEmpty()) {
+                ONode branchesArr = nodeObj.getOrNew("parallelBranches").asArray();
+                for (String branch : node.getParallelBranches()) {
+                    branchesArr.addNew().fill(branch);
+                }
+            }
+            if (node.getCondition() != null) {
+                nodeObj.set("condition", node.getCondition());
+            }
         }
         
         // 边列表
@@ -95,6 +108,9 @@ public class WorkflowVisualizationTool extends AbsToolProvider implements SolonT
             edgeObj.set("type", edge.getType().name());
             if (edge.getCondition() != null) {
                 edgeObj.set("condition", edge.getCondition());
+            }
+            if (edge.getLabel() != null) {
+                edgeObj.set("label", edge.getLabel());
             }
         }
         
