@@ -32,65 +32,7 @@
 
     <div class="input-box" :class="{ focused: inputFocused }">
       <div class="input-row">
-        <!-- TODO 图标 -->
-        <div class="todo-trigger" @mouseenter="handleTodoEnter" @mouseleave="handleTodoLeave">
-          <button class="todo-btn" :class="{ 'has-todos': todoStats.pending + todoStats.inProgress > 0 }">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M9 11l3 3L22 4"/>
-              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
-            </svg>
-            <span v-if="todoStats.pending + todoStats.inProgress > 0"
-                  class="todo-badge">{{ todoStats.pending + todoStats.inProgress }}</span>
-          </button>
-          <Transition name="tooltip">
-            <div v-if="todoTooltipVisible" class="todo-tooltip"
-                 @mouseenter="clearTodoTimer" @mouseleave="handleTodoLeave">
-              <div class="todo-tooltip-header">
-                <span class="todo-tooltip-title">任务列表</span>
-                <span class="todo-tooltip-stats">{{ todoStats.completed }}/{{ todoStats.total }} 完成</span>
-              </div>
-              <div v-if="todos.length === 0" class="todo-tooltip-empty">暂无任务</div>
-              <div v-else class="todo-tooltip-list">
-                <div v-for="(todo, i) in incompleteTodos" :key="'i'+i" class="todo-tooltip-item">
-                <span class="todo-status-icon" :class="todo.status">
-                  <svg v-if="todo.status==='in_progress'" width="12" height="12" viewBox="0 0 24 24" fill="none"
-                       stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline
-                      points="12 6 12 12 16 14"/></svg>
-                  <svg v-else width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                       stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/></svg>
-                </span>
-                  <span class="todo-content" :class="todo.status">{{ todo.content }}</span>
-                </div>
-                <div v-if="completedTodos.length>0" class="todo-completed-section">
-                  <div class="todo-completed-toggle" @click="showCompleted=!showCompleted">
-                    <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
-                         :style="{ transform: showCompleted ? 'rotate(90deg)' : '' }">
-                      <polyline points="9 18 15 12 9 6"/>
-                    </svg>
-                    <span>{{ completedTodos.length }} 项已完成</span>
-                  </div>
-                  <Transition name="collapse">
-                    <div v-if="showCompleted" class="todo-completed-list">
-                      <div v-for="(todo,i) in completedTodos" :key="'c'+i" class="todo-tooltip-item completed">
-                      <span class="todo-status-icon completed">
-                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                             stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-                      </span>
-                        <span class="todo-content completed">{{ todo.content }}</span>
-                      </div>
-                    </div>
-                  </Transition>
-                </div>
-              </div>
-              <div v-if="todoStats.total>0" class="todo-tooltip-footer">
-                <div class="todo-progress-bar">
-                  <div class="todo-progress-fill"
-                       :style="{ width: (todoStats.completed/todoStats.total*100)+'%' }"></div>
-                </div>
-              </div>
-            </div>
-          </Transition>
-        </div>
+        <!-- TODO 图标 - 已废弃，使用工作流替代 -->
 
         <textarea ref="inputField" v-model="localText" @keydown="handleKeydown"
                   placeholder="输入消息... (Enter 发送, Tab 补全, / 命令，粘贴图片)" rows="1" @blur="handleBlur"
@@ -238,7 +180,6 @@ import {agentAPI} from '../services/api'
 const props = defineProps({
   inputText: {type: String, default: ''},
   streaming: {type: Boolean, default: false},
-  todos: {type: Array, default: () => []},
   usage: {type: Object, default: () => ({})},
   currentModel: {type: String, default: ''},
   availableModels: {type: Array, default: () => []},
@@ -248,7 +189,7 @@ const props = defineProps({
   currentReasoningEffort: {type: String, default: 'max'}
 })
 
-const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'fetchTodos', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort'])
+const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort'])
 
 const inputField = ref(null)
 const inputFocused = ref(false)
@@ -334,35 +275,6 @@ const selectSlashCmd = (cmd) => {
   localText.value = cmd.cmd + ' '
   nextTick(() => inputField.value?.focus())
 }
-
-// ============= TODO =============
-const todoTooltipVisible = ref(false)
-const todoTimer = ref(null)
-const showCompleted = ref(false)
-
-const todoStats = computed(() => {
-  const total = props.todos.length, completed = props.todos.filter(t => t.status === 'completed').length
-  const inProgress = props.todos.filter(t => t.status === 'in_progress').length,
-      pending = props.todos.filter(t => t.status === 'pending').length
-  return {total, completed, inProgress, pending}
-})
-const incompleteTodos = computed(() => props.todos.filter(t => t.status !== 'completed'))
-const completedTodos = computed(() => props.todos.filter(t => t.status === 'completed'))
-
-const handleTodoEnter = () => {
-  clearTimeout(todoTimer.value);
-  todoTimer.value = setTimeout(() => {
-    todoTooltipVisible.value = true;
-    emit('fetchTodos')
-  }, 300)
-}
-const handleTodoLeave = () => {
-  clearTimeout(todoTimer.value);
-  todoTimer.value = setTimeout(() => {
-    todoTooltipVisible.value = false
-  }, 50)
-}
-const clearTodoTimer = () => clearTimeout(todoTimer.value)
 
 // ============= 输入处理 =============
 const handleInput = () => {
@@ -786,7 +698,6 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   }
 }
 
-/* TODO */
 .todo-trigger {
   position: relative;
   flex-shrink: 0;
