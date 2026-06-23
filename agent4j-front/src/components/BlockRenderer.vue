@@ -245,17 +245,10 @@ const processedBlocks = computed(() => {
   while (i < src.length) {
     const b = src[i]
     if (b.type === 'tool_call' && b.name !== 'finish') {
-      // 工作流工具不参与分组，单独处理并默认展开
-      if (WORKFLOW_TOOLS.includes(b.name)) {
-        if (b.expanded === undefined) b.expanded = true
-        out.push(b)
-        i++
-        continue
-      }
       // 收集连续的 tool_call
       const group = [b]
       let j = i + 1
-      while (j < src.length && src[j].type === 'tool_call' && src[j].name !== 'finish' && !WORKFLOW_TOOLS.includes(src[j].name)) {
+      while (j < src.length && src[j].type === 'tool_call' && src[j].name !== 'finish') {
         group.push(src[j])
         j++
       }
