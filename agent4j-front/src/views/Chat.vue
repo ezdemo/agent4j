@@ -82,8 +82,8 @@
       </div>
     </div>
 
-    <!-- 工作流状态面板（左侧 dock 栏） -->
-    <div v-if="workflowData" class="workflow-dock">
+    <!-- 工作流状态面板（左侧 dock 栏，仅会话选中时显示） -->
+    <div v-if="props.sessionName" class="workflow-dock">
       <div class="workflow-dock-inner">
         <div class="dock-expand" @mouseenter="loadWorkflow">
           <span class="dock-expand-icon">
@@ -92,8 +92,20 @@
               <polyline points="6,10 9,13 14,7"/>
             </svg>
           </span>
-          <div class="dock-expand-body">
+          <div v-if="workflowData" class="dock-expand-body">
             <WorkflowDagRenderer :data="workflowData" />
+          </div>
+          <div v-else class="dock-expand-body dock-empty">
+            <span class="dock-empty-icon">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <rect x="3" y="3" width="7" height="7" rx="1"/>
+                <rect x="14" y="3" width="7" height="7" rx="1"/>
+                <rect x="3" y="14" width="7" height="7" rx="1"/>
+                <rect x="14" y="14" width="7" height="7" rx="1"/>
+              </svg>
+            </span>
+            <span class="dock-empty-text">暂无工作流</span>
+            <span class="dock-empty-hint">使用 /workflow create 创建</span>
           </div>
         </div>
       </div>
@@ -1870,7 +1882,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   border-radius: var(--r-lg);
   box-shadow: var(--glass-shadow);
   opacity: 0.8;
-  cursor: pointer;
+  cursor: default;
   transition: width 0.3s ease, max-height 0.4s ease, opacity 0.25s ease, box-shadow 0.25s ease, border-radius 0.3s ease;
 }
 
@@ -1932,6 +1944,34 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 .dock-expand-body :deep(.workflow-header) {
   margin-bottom: 6px;
   padding-bottom: 6px;
+}
+
+/* ===== 工作流 dock 空状态 ===== */
+.dock-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 8px !important;
+  text-align: center;
+  white-space: nowrap;
+}
+
+.dock-empty-icon {
+  color: var(--fg-3, #aaa);
+  opacity: 0.6;
+  margin-bottom: 2px;
+}
+
+.dock-empty-text {
+  font-size: 12px;
+  color: var(--fg-2, #888);
+  font-weight: 500;
+}
+
+.dock-empty-hint {
+  font-size: 11px;
+  color: var(--fg-3, #aaa);
 }
 
 /* ===== 消息缩略图 dock（右侧 dock 栏） ===== */
