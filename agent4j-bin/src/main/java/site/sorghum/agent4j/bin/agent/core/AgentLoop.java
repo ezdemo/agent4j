@@ -20,15 +20,12 @@ import site.sorghum.agent4j.bin.agent.listener.AgentLoopListener;
 import site.sorghum.agent4j.bin.agent.listener.NoOpAgentLoopListener;
 import site.sorghum.agent4j.bin.agent.model.*;
 import site.sorghum.agent4j.bin.agent.output.ConsoleAgentOutput;
-import site.sorghum.agent4j.bin.agent.resilient.GoalPatrolManager;
+
 import site.sorghum.agent4j.bin.agent.resilient.ReasonBreaker;
 import site.sorghum.agent4j.bin.agent.resilient.Scavenger;
 import site.sorghum.agent4j.bin.builtin.TaskTool;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
-import site.sorghum.agent4j.bin.goal.Goal;
-import site.sorghum.agent4j.bin.goal.GoalStep;
-import site.sorghum.agent4j.bin.goal.GoalStore;
-import site.sorghum.agent4j.bin.goal.StepStatus;
+
 import site.sorghum.agent4j.bin.workflow.Workflow;
 import site.sorghum.agent4j.bin.workflow.WorkflowNode;
 import site.sorghum.agent4j.bin.workflow.WorkflowStore;
@@ -127,8 +124,7 @@ public class AgentLoop implements AgentLoopController {
     @Getter
     private volatile String sessionId;
 
-    /** 巡检管理器（goals / retry / patrol） */
-    private final GoalPatrolManager patrolManager;
+
 
     /** 工作流巡检管理器（workflows / retry / patrol） */
     private final WorkflowPatrolManager workflowPatrolManager;
@@ -153,7 +149,7 @@ public class AgentLoop implements AgentLoopController {
         this.ctx = ctx;
         this.config = config;
         this.hitlManager = new HitlManager(hitlDefault);
-        this.patrolManager = new GoalPatrolManager(null, ctx, running);
+
         this.workflowPatrolManager = new WorkflowPatrolManager(null, ctx, running);
     }
 
@@ -624,59 +620,12 @@ public class AgentLoop implements AgentLoopController {
     }
 
     /**
-     * 执行主推理循环，并在完成后检查目标步骤是否需要自动重试。
-     * 如果发现 FAILED 且未超重试次数的步骤，自动注入重试消息并继续循环。
+     * 执行主推理循环，并在完成后检查工作流节点是否需要自动重试。
      */
     private String runWithAutoRetry() throws IOException {
         String result = mainLoop();
 
-        // === 自动重试闭环 ===
-        // 每次 mainLoop 结束后，检查是否有需要重试的目标步骤
-        boolean hasActiveGoal = false;
-        while (true) {
-            GoalPatrolManager.GoalAndStore gs = patrolManager.findRetriableGoal();
-            if (gs == null) break;
 
-            hasActiveGoal = true;
-            Goal goal = gs.goal();
-            GoalStore goalStore = gs.goalStore();
-
-            // 找到第一个 FAILED 且未超重试次数的步骤
-            GoalStep failedStep = null;
-            for (GoalStep s : goal.getSteps()) {
-                if (s.getStatus() == StepStatus.FAILED
-                        && s.getRetryCount() < goal.getMaxRetries()) {
-                    failedStep = s;
-                    break;
-                }
-            }
-            if (failedStep == null) break;
-
-            // 重置为 PENDING 并递增重试计数
-            failedStep.setStatus(StepStatus.PENDING);
-            failedStep.setRetryCount(failedStep.getRetryCount() + 1);
-            goal.setUpdatedAt(java.time.Instant.now());
-            goalStore.save(goal);
-
-            log.info("[goal] 自动重试: step={}, retry={}/{}",
-                    failedStep.getIndex() + 1,
-                    failedStep.getRetryCount(),
-                    goal.getMaxRetries());
-
-            // 注入系统消息说明重试原因
-            ctx.addUser(
-                    "⚠️ [系统自动重试] 上一步执行失败，正在重试（"
-                    + failedStep.getRetryCount() + "/" + goal.getMaxRetries() + "）。\n\n"
-                    + "### 需要重试的步骤\n"
-                    + "步骤 " + (failedStep.getIndex() + 1) + "：" + failedStep.getDescription() + "\n"
-                    + (failedStep.getLastError() != null
-                        ? "### 上一次失败原因\n" + failedStep.getLastError() + "\n"
-                        : "")
-                    + "\n请重新执行此步骤。注意分析上次失败的原因，避免同样的错误。");
-
-            // 继续 LLM 循环
-            result = mainLoop();
-        }
 
         // === 工作流自动重试闭环 ===
         // 检查是否有需要重试的工作流节点
@@ -727,20 +676,15 @@ public class AgentLoop implements AgentLoopController {
         }
 
         // === 巡检生命周期管理 ===
-        if (!hasActiveGoal) {
-            if (patrolManager.isRunning()) {
-                patrolManager.tick();
+        // 用户已中断时跳过巡检，避免无意义的后台扫描
+        if (!userAbortRequested) {
+            if (!hasActiveWorkflow) {
+                if (workflowPatrolManager.isRunning()) {
+                    workflowPatrolManager.tick();
+                }
+            } else {
+                workflowPatrolManager.startPatrol();
             }
-        } else {
-            patrolManager.startPatrol();
-        }
-
-        if (!hasActiveWorkflow) {
-            if (workflowPatrolManager.isRunning()) {
-                workflowPatrolManager.tick();
-            }
-        } else {
-            workflowPatrolManager.startPatrol();
         }
 
         return result;
