@@ -748,6 +748,9 @@ const handleAddWorkspace = async (path) => {
       showWorkspacePicker.value = false
       await loadWorkspaces()
       await loadSessions()
+      // 通过路径匹配新工作区的 hash 并切换上下文
+      const newWs = workspaces.value.find(w => w.path === r.data.workspace)
+      if (newWs) currentSessionWorkspace.value = newWs.hash
       await newChat(true)
       message.success('已添加工作区')
     } else {
