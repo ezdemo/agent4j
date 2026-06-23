@@ -1031,10 +1031,8 @@ public class AgentService {
 
         try {
             WorkspaceManager workspaceManager = new WorkspaceManager();
-            String currentPath = getWorkspace();
-            if (currentPath != null) {
-                workspaceManager.switchWorkspace(currentPath);
-            }
+            // 注意：此处不应调用 switchWorkspace，因为它有自动创建（initWorkspace）的副作用，
+            // 会导致刚刚被删除的工作区在 list 时被重建。
             List<WorkspaceManager.WorkspaceInfo> workspaces = workspaceManager.listWorkspaces();
 
             for (WorkspaceManager.WorkspaceInfo info : workspaces) {
@@ -1101,18 +1099,33 @@ public class AgentService {
         }
 
         // 2. 删除工作区数据目录（~/.agent4j/workspace/{hash}/）
+        boolean directoryDeleted = false;
         try {
             WorkspaceManager wm = new WorkspaceManager();
-            boolean deleted = wm.deleteWorkspace(hash);
-            if (deleted) {
+            directoryDeleted = wm.deleteWorkspace(hash);
+            if (directoryDeleted) {
                 log.info("[web] 已删除工作区数据目录: {}", hash);
             }
         } catch (Exception e) {
             log.warn("[web] 删除工作区数据目录失败: {}", e.getMessage());
         }
 
+        // 3. 如果删除的是当前工作区，清除 config.json 中的 workspaceDir，
+        //    防止后续其他代码路径触发 switchWorkspace → initWorkspace 重建已删除的工作区
+        if (directoryDeleted) {
+            try {
+                String currentPath = getWorkspace();
+                if (currentPath != null && hash.equals(WorkspaceManager.computeHash(currentPath))) {
+                    ConfigService.removeConfigKey("workspaceDir");
+                    log.info("[web] 已清除 config.json 中的当前工作区引用: {}", currentPath);
+                }
+            } catch (Exception e) {
+                log.warn("[web] 清除当前工作区引用失败: {}", e.getMessage());
+            }
+        }
+
         log.info("[web] 已删除工作区: {}，清除了 {} 个 Agent", hash, keysToRemove.size());
-        return !keysToRemove.isEmpty();
+        return directoryDeleted;
     }
 
     // ==================== 命令与 Skill 查询 ====================
