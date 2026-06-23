@@ -347,7 +347,7 @@ agent4j/
 | `bash`                                                                      | 跑命令        |
 | `bash_start` / `bash_wait` / `bash_stdin` / `bash_stop`                     | 交互式命令会话    |
 | `task` / `multi_task`                                                       | 派生子代理      |
-| `workspace_read` / `workspace_write` / `workspace_list` / `workspace_watch` | 工作区操作      |
+| `workspace_read` / `workspace_write` / `workspace_list` | 工作区操作      |
 | `webfetch`                                                                  | 抓网页        |
 | `codesearch`                                                                | 搜索代码       |
 | `java_source`                                                               | Java源码查找   |

@@ -45,8 +45,7 @@ public class SubAgent {
             "mark_step_complete",  // 计划管理（主代理专用）
             "revise_plan",         // 计划管理（主代理专用）
             "ask_choice",          // 用户交互（主代理专用）
-            "todo_write",          // 会话任务跟踪（主代理专用）
-            "workspace_watch"      // 子代理不允许阻塞式 watch
+            "todo_write"           // 会话任务跟踪（主代理专用）
     )));
 
     private final ModelClient client;

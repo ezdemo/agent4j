@@ -437,15 +437,6 @@ public class AgentLoop implements AgentLoopController {
                 
                 ---
                 
-                ### workspace_watch — 阻塞监听工作区变更
-                通配符：`*` 匹配单级，`**` 匹配多级。
-                | 参数 | 必填 | 说明 |
-                |------|------|------|
-                | keyPattern | 是 | 通配符模式，如 `user/**` |
-                | timeout | 否 | 秒，默认 30，最大 300。超时返回 TIMEOUT |
-                
-                ---
-                
                 ### goal_mark_step — 标记目标步骤完成
                 | 参数 | 必填 | 说明 |
                 |------|------|------|
