@@ -143,7 +143,6 @@
             <div class="sub-session">
               <div class="sub-session-body">
                 <template v-for="(session, si) in subAgentSessions" :key="session.id">
-                  <div class="sub-session-task">{{ session.taskName }}</div>
                   <ChatMessage
                       :msg="{ role: 'assistant', blocks: session.blocks, id: session.id }"
                       :idx="si"
@@ -210,7 +209,6 @@
     <ChatInput v-else
         v-model:inputText="inputText"
         :streaming="streaming"
-        :todos="todos"
         :usage="usage"
         :currentModel="currentModel"
         :availableModels="availableModels"
@@ -222,7 +220,6 @@
         @abort="abortChat"
         @clear="clearChat"
         @export="exportChat"
-        @fetchTodos="fetchTodos"
         @refreshUsage="loadUsage"
         @switchModel="handleSwitchModel"
         @switchReasoningEffort="handleSwitchReasoningEffort"
@@ -322,9 +319,6 @@ const messages = computed(() => store.getSessionMessages(props.sessionName))
 const streaming = computed(() => store.getSessionStreaming(props.sessionName))
 const hasHistory = computed(() => messages.value.length > 0)
 const planMode = ref(false)
-
-// TODO 相关状态
-const todos = ref([])
 
 // Usage 相关
 const usage = ref({
@@ -450,21 +444,6 @@ const formatTime = (t) => {
   if (!t) return ''
   const d = new Date(t)
   return d.toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'})
-}
-
-// 获取当前会话的 TODO 列表
-const fetchTodos = async () => {
-  try {
-    const params = {}
-    params.sessionName = props.sessionName || 'default'
-    if (props.workspaceHash) params.workspaceHash = props.workspaceHash
-    const res = await configAPI.getTodos(params)
-    if (res.success) {
-      todos.value = res.data || []
-    }
-  } catch (e) {
-    todos.value = []
-  }
 }
 
 // 监听 workspace 和 session 变化，重新加载 usage

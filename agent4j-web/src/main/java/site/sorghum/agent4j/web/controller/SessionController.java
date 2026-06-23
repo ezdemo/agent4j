@@ -132,16 +132,6 @@ public class SessionController {
         return ApiResponse.ok(new SessionStatsDTO(agentService.getCacheSize(), DEFAULT_CACHE_LIMIT));
     }
 
-    @ApiOperation(value = "获取会话 TODO 列表", notes = "返回指定会话的交互式 TODO 任务列表")
-    @Get
-    @Mapping("/{name}/todos")
-    public ApiResponse<List<?>> getTodos(
-            @ApiParam(value = "会话名称") @Path("name") String sessionName,
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
-        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        List<?> todos = interactionService.getTodos(sessionName);
-        return ApiResponse.ok(todos);
-    }
 
     @ApiOperation(value = "获取会话工作流", notes = "返回指定会话的工作流结构（与 workflow_visualize 格式一致）")
     @Get

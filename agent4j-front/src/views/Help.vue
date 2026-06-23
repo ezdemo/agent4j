@@ -449,7 +449,6 @@ const tools = [
   { name: 'glob', desc: '按通配符模式搜索文件', params: 'pattern, path', readonly: true },
   { name: 'grep', desc: '递归搜索内容', params: 'pattern, path, include?', readonly: true },
   { name: 'ls', desc: '列出目录内容', params: 'path, recursive?, show_hidden?', readonly: true },
-  { name: 'todo_write', desc: '任务跟踪列表', params: 'todos[{status,content,activeForm}]', readonly: false },
   { name: 'task', desc: '创建子代理', params: 'name, arguments?, systemPrompt?', readonly: false }
 ]
 

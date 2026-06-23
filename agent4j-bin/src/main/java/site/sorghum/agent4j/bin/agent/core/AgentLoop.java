@@ -399,12 +399,34 @@ public class AgentLoop implements AgentLoopController {
                 | options | 是 | 选项列表，支持字符串或 `{title, summary}` |
                 | allowCustom | 否 | 是否允许自定义输入，默认 false |
                 
-                ---
                 
-                ### todo_write — 任务跟踪（适合 3 步以上工作流）
+                ### workflow_create_dag — 创建工作流 DAG
+                创建复杂工作流（有向无环图），支持条件分支和并行执行。
                 | 参数 | 必填 | 说明 |
                 |------|------|------|
-                | todos | 是 | `[{status, content, activeForm}]`，status: pending/in_progress/completed |
+                | title | 是 | 工作流标题 |
+                | description | 是 | 工作流详细描述 |
+                | nodesJson | 是 | 节点数组 JSON：`[{id, description, type?, condition?}]` |
+                | edgesJson | 是 | 边数组 JSON：`[{from, to, type?}]` |
+                
+                ---
+                
+                ### workflow_visualize — 查看工作流
+                可视化查看当前会话的工作流结构（节点列表、依赖关系和执行状态）。
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | sessionId | 否 | 会话 ID，留空自动获取 |
+                
+                ---
+                
+                ### workflow_mark_node — 标记节点完成
+                标记当前会话工作流中的某个节点为"已完成"。
+                每完成一个节点后调用此工具，如果所有节点都已完成，工作流自动标记为已完成。
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | nodeId | 是 | 已完成的节点ID（如 'n1', 'n2'）|
+                | result | 否 | 该节点的执行结果摘要 |
+                | sessionId | 否 | 会话 ID，留空自动获取 |
                 
                 ---
                 

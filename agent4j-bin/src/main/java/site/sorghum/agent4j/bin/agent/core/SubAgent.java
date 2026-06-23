@@ -34,7 +34,6 @@ public class SubAgent {
      *   <li><b>task</b> — 防止递归子代理 spawn（子代理不应再创建子代理）</li>
      *   <li>submit_plan / mark_step_complete / revise_plan — 计划管理，主代理专用</li>
      *   <li>ask_choice — 用户交互，主代理专用（子代理无用户交互）</li>
-     *   <li>todo_write — 会话任务跟踪，主代理专用</li>
      * </ul>
      * <p>public 可见性供 {@code TaskTool} 构建子代理 system prompt 时保持一致的过滤逻辑。</p>
      */
@@ -44,8 +43,7 @@ public class SubAgent {
             "submit_plan",         // 计划管理（主代理专用）
             "mark_step_complete",  // 计划管理（主代理专用）
             "revise_plan",         // 计划管理（主代理专用）
-            "ask_choice",          // 用户交互（主代理专用）
-            "todo_write"           // 会话任务跟踪（主代理专用）
+            "ask_choice"          // 用户交互（主代理专用）
     )));
 
     private final ModelClient client;
