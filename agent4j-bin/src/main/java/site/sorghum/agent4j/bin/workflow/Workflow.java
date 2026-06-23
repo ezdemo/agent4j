@@ -85,7 +85,23 @@ public class Workflow {
     }
 
     /**
+     * 查找从 from 到 to 的边。
+     */
+    public WorkflowEdge findEdge(String from, String to) {
+        return edges.stream()
+                .filter(e -> e.getFrom().equals(from) && e.getTo().equals(to))
+                .findFirst()
+                .orElse(null);
+    }
+
+    /**
      * 获取所有就绪节点（所有依赖已满足）。
+     * <p>
+     * 当前驱是 CONDITION 节点时，只激活 conditionResult 匹配的那个分支：
+     * 只有目标节点ID等于 conditionResult 的条件边才会使后继就绪，
+     * 其余条件边的目标节点不会被激活（应由调用方主动 skipBranch）。
+     * 非条件边（NORMAL/DEFAULT）不受影响。
+     * 天然支持任意数量分支的单选语义。
      */
     public List<WorkflowNode> getReadyNodes() {
         return nodes.stream()
@@ -104,10 +120,32 @@ public class Workflow {
                         // 没有前驱节点，检查是否为开始节点或就绪状态
                         return node.getType() == NodeType.START || node.getStatus() == NodeStatus.READY;
                     }
-                    // 所有前驱节点必须已完成
+                    // 所有前驱节点必须满足条件
                     return predecessors.stream().allMatch(predId -> {
                         WorkflowNode pred = findNode(predId);
-                        return pred != null && pred.isCompleted();
+                        if (pred == null) {
+                            return false;
+                        }
+                        // 前驱节点必须已完成
+                        if (!pred.isCompleted()) {
+                            return false;
+                        }
+                        // 如果前驱是 CONDITION 节点，检查是否选中了当前节点
+                        if (pred.getType() == NodeType.CONDITION) {
+                            WorkflowEdge edge = findEdge(predId, node.getId());
+                            if (edge == null) {
+                                return false;
+                            }
+                            // 非条件边（NORMAL/DEFAULT）直接通过
+                            if (!edge.isConditional()) {
+                                return true;
+                            }
+                            // 条件边：只有目标节点ID匹配 conditionResult 才就绪
+                            // 支持任意数量分支（2个、3个、5个...）的单选语义
+                            String conditionResult = pred.getConditionResult();
+                            return node.getId().equals(conditionResult);
+                        }
+                        return true;
                     });
                 })
                 .collect(Collectors.toList());
@@ -165,6 +203,37 @@ public class Workflow {
     public boolean isAllDone() {
         return nodes != null && !nodes.isEmpty() && nodes.stream()
                 .allMatch(n -> n.isCompleted() || n.getType() == NodeType.START || n.getType() == NodeType.END);
+    }
+
+    /**
+     * 递归跳过未选分支的整个子树。
+     * <p>
+     * 从 startNodeId 开始，只跳过那些<strong>所有前驱路径都来自已跳过节点或 CONDITION 节点</strong>的后继。
+     * 如果某个后继还有来自其他活跃分支的前驱，则保留不跳过——这确保了分支汇合点不会被误跳过。
+     * </p>
+     *
+     * @param startNodeId     开始跳过的节点ID
+     * @param conditionNodeId 对应的 CONDITION 节点ID（跳过时以此为界）
+     */
+    public void skipBranch(String startNodeId, String conditionNodeId) {
+        WorkflowNode node = findNode(startNodeId);
+        if (node == null || node.isCompleted()) {
+            return;
+        }
+        node.setStatus(NodeStatus.SKIPPED);
+
+        List<String> successors = getSuccessorIds(startNodeId);
+        for (String succId : successors) {
+            // 仅当该后继的 ALL 前驱都来自 CONDITION 节点或已跳过节点时，才继续递归跳过
+            boolean canSkip = getPredecessorIds(succId).stream().allMatch(predId -> {
+                if (predId.equals(conditionNodeId)) return true;        // 从 CONDITION 出发的边
+                WorkflowNode pred = findNode(predId);
+                return pred != null && pred.getStatus() == NodeStatus.SKIPPED;
+            });
+            if (canSkip) {
+                skipBranch(succId, conditionNodeId);
+            }
+        }
     }
 
     /**

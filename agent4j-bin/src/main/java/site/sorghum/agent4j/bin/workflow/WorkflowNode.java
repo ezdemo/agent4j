@@ -43,6 +43,8 @@ public class WorkflowNode {
     // 条件节点专用
     /** 条件表达式（如 "test.passed == true"） */
     private String condition;
+    /** 条件结果（"true"/"false"/null） */
+    private String conditionResult;
 
     // 并行节点专用
     /** 并行分支的节点ID列表 */
