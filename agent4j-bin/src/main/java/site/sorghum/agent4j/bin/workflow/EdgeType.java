@@ -13,5 +13,7 @@ public enum EdgeType {
     /** 条件为假时 */
     CONDITION_FALSE,
     /** 默认路径 */
-    DEFAULT
+    DEFAULT,
+    /** 条件选择边（N路分支，由 conditionResult 指定目标节点ID） */
+    CONDITION_SELECT
 }

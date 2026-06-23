@@ -105,7 +105,7 @@
               </svg>
             </span>
             <span class="dock-empty-text">暂无工作流</span>
-            <span class="dock-empty-hint">使用 /workflow create 创建</span>
+            <button class="dock-empty-btn" @click="inputText = '/workflow create '">去创建</button>
           </div>
         </div>
       </div>
@@ -251,7 +251,6 @@ import ChatMessage from '../components/ChatMessage.vue'
 import DiffViewer from '../components/DiffViewer.vue'
 import WorkflowDagRenderer from '../components/WorkflowDagRenderer.vue'
 import {useAppStore} from '../stores/app'
-import platform from '../services/platform'
 
 // ============= 模型切换 =============
 const handleSwitchModel = async (modelName) => {
@@ -1969,9 +1968,21 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   font-weight: 500;
 }
 
-.dock-empty-hint {
+.dock-empty-btn {
   font-size: 11px;
-  color: var(--fg-3, #aaa);
+  color: var(--primary, #4f8ff7);
+  background: none;
+  border: 1px solid var(--primary, #4f8ff7);
+  border-radius: 4px;
+  padding: 3px 12px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+  margin-top: 2px;
+}
+
+.dock-empty-btn:hover {
+  background: var(--primary, #4f8ff7);
+  color: #fff;
 }
 
 /* ===== 消息缩略图 dock（右侧 dock 栏） ===== */
