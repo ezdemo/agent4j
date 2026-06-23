@@ -66,27 +66,41 @@ public class AgentService {
         private final ConcurrentHashMap<String, Agent4jAgent> agents = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<String, ReentrantLock> locks = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<String, String> currentNames = new ConcurrentHashMap<>();
-        private final java.util.concurrent.ConcurrentLinkedDeque<String> order = new java.util.concurrent.ConcurrentLinkedDeque<>();
+        /** LRU 访问顺序跟踪（synchronized 保证 put/get 与 evict 的原子性） */
+        private final List<String> accessOrder = Collections.synchronizedList(new LinkedList<>());
 
         Agent4jAgent get(String key) {
-            order.remove(key);
-            order.addFirst(key);
-            return agents.get(key);
+            // 先查 agents（ConcurrentHashMap 无锁读），再更新 LRU 顺序
+            Agent4jAgent agent = agents.get(key);
+            if (agent != null) {
+                synchronized (accessOrder) {
+                    accessOrder.remove(key);
+                    accessOrder.add(0, key);
+                }
+            }
+            return agent;
         }
 
         void put(String key, Agent4jAgent agent) {
             agents.put(key, agent);
+            synchronized (accessOrder) {
+                accessOrder.remove(key);
+                accessOrder.add(0, key);
+            }
         }
 
         void evictIfNeeded() {
             while (agents.size() >= MAX_CACHE_SIZE) {
-                String oldest = order.pollLast();
+                String oldest;
+                synchronized (accessOrder) {
+                    if (accessOrder.isEmpty()) break;
+                    oldest = accessOrder.remove(accessOrder.size() - 1);
+                }
                 if (oldest != null) {
                     Agent4jAgent removed = agents.remove(oldest);
                     if (removed != null) {
                         try {
-                            removed.flushSession();
-                            removed.saveUsage();
+                            removed.dispose();
                         } catch (Exception e) {
                             log.info("[web] 淘汰 Agent 失败: {}", e.getMessage());
                         }
@@ -98,13 +112,13 @@ public class AgentService {
 
         void clear() {
             agents.clear();
-            order.clear();
+            accessOrder.clear();
             locks.clear();
             currentNames.clear();
         }
 
         Agent4jAgent remove(String key) {
-            order.remove(key);
+            accessOrder.remove(key);
             locks.remove(key);
             return agents.remove(key);
         }
@@ -229,13 +243,12 @@ public class AgentService {
     public synchronized void reinitialize() {
         log.info("[config] 开始重新初始化 AgentService...");
 
-        // 1. 先 flush 所有缓存的 Agent，避免数据丢失
+        // 1. 先 dispose 所有缓存的 Agent（注销监听 + 刷入数据）
         for (Agent4jAgent agent : sessionCache.values()) {
             try {
-                agent.flushSession();
-                agent.saveUsage();
+                agent.dispose();
             } catch (Exception e) {
-                log.warn("[config] flush 淘汰 Agent 时异常: {}", e.getMessage());
+                log.warn("[config] dispose Agent 时异常: {}", e.getMessage());
             }
         }
 

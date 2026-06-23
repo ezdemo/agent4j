@@ -66,12 +66,12 @@ function Install-JRE25 {
 
     # 1. 从 Adoptium API 获取最新包名
     $apiUrl = "https://api.adoptium.net/v3/assets/feature_releases/25/ga?architecture=$arch&image_type=jre&os=$os&page_size=1"
-    Write-Host "      Querying Adoptium API..." -ForegroundColor Gray
+    Write-Host "      Querying Adoptium API..."  -ForegroundColor Gray
 
     $packageName = $null
     try {
-        $apiResponse = Invoke-WebRequest -Uri $apiUrl -UseBasicParsing -TimeoutSec 10
-        $json = $apiResponse.Content | ConvertFrom-Json
+        $apiResponse = Invoke-WebRequest -Uri $apiUrl -UseBasicParsing -TimeoutSec 30
+        $json = $apiResponse | ConvertFrom-Json
         $packageName = $json[0].binaries[0].package.name
     } catch {
         Write-Host "      API request failed: $_" -ForegroundColor DarkGray

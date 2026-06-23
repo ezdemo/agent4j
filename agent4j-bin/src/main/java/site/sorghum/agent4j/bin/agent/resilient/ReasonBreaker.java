@@ -2,6 +2,7 @@ package site.sorghum.agent4j.bin.agent.resilient;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.atomic.AtomicInteger;
 
 /**
  * 推理断路器 —— 检测模型思考（reasoning_content）中的循环重复。
@@ -55,21 +56,46 @@ public class ReasonBreaker {
     public static final int MAX_TRIGGERS_PER_TURN = 3;
 
     /**
-     * 本回合已触发次数
+     * 本回合已触发次数（volatile 保证跨线程可见性）
      */
-    public  int triggerCount = 0;
+    private final AtomicInteger triggerCount = new AtomicInteger(0);
 
     /**
-     * 复用的窗口计数器（每回合 reset 时清空，避免每次 analyze 重新分配）
+     * Rabin-Karp 滚动哈希基数（素数）
      */
-    private final Map<String, Integer> counts = new HashMap<>();
+    private static final long BASE = 257L;
 
     /**
-     * 检测窗口是否全由同一字符构成（如 "AAAA..."），此类窗口跳过不计数
+     * BASE^(WINDOW_SIZE-1) mod M，用于滚动哈希移除首字符
      */
-    private static boolean isUniform(String s) {
-        char first = s.charAt(0);
-        for (int i = 1; i < s.length(); i++) {
+    private static final long POW_BASE_WINDOW;
+
+    static {
+        long pow = 1;
+        for (int i = 0; i < WINDOW_SIZE - 1; i++) {
+            pow = (pow * BASE);
+        }
+        POW_BASE_WINDOW = pow;
+    }
+
+    /**
+     * 复用的哈希计数器（每回合 reset 时清空，避免每次 analyze 重新分配）
+     */
+    private final Map<Long, Integer> hashCounts = new HashMap<>();
+
+    /**
+     * 记录每个哈希值首次出现的位置（用于 regionMatches 验证）
+     */
+    private final Map<Long, Integer> hashFirstPos = new HashMap<>();
+
+    /**
+     * 检测窗口是否全由同一字符构成（如 "AAAA..."），此类窗口跳过不计数。
+     * 使用下标范围避免 substring 分配。
+     */
+    private static boolean isUniform(String s, int start, int end) {
+        if (start >= end) return true;
+        char first = s.charAt(start);
+        for (int i = start + 1; i < end; i++) {
             if (s.charAt(i) != first) return false;
         }
         return true;
@@ -77,6 +103,7 @@ public class ReasonBreaker {
 
     /**
      * 分析推理内容是否包含循环重复。
+     * 使用 Rabin-Karp 滚动哈希避免大量 substring 分配。
      *
      * @param reasoningContent 模型的推理/思考文本（可为 null）
      * @return 检测结果，{@link LoopResult#looping} 为 true 表示检测到循环
@@ -88,7 +115,7 @@ public class ReasonBreaker {
         }
 
         // 达到每回合触发上限 → 不再介入
-        if (triggerCount >= MAX_TRIGGERS_PER_TURN) {
+        if (triggerCount.get() >= MAX_TRIGGERS_PER_TURN) {
             return LoopResult.NO_LOOP;
         }
 
@@ -98,33 +125,69 @@ public class ReasonBreaker {
             text = text.substring(text.length() - MAX_ANALYZE_LENGTH);
         }
 
-        // 滑动窗口统计（复用 counts Map，避免每次分配）
-        counts.clear();
+        // 滑动窗口统计（Rabin-Karp 滚动哈希，避免 substring 分配）
+        hashCounts.clear();
+        hashFirstPos.clear();
         int maxCount = 0;
-        String maxWindow = null;
+        int maxCountFirstPos = 0;
         int end = text.length() - WINDOW_SIZE;
 
-        for (int i = 0; i <= end; i++) {
-            String window = text.substring(i, i + WINDOW_SIZE);
-            // 跳过全 uniform 窗口（如 "AAAA..."），避免单一块内重叠计数
-            if (isUniform(window)) {
+        // 计算首个窗口的哈希值
+        long hash = 0;
+        for (int i = 0; i < WINDOW_SIZE; i++) {
+            hash = hash * BASE + text.charAt(i);
+        }
+
+        // 检测首个窗口是否全 uniform
+        boolean firstUniform = isUniform(text, 0, WINDOW_SIZE);
+        if (!firstUniform) {
+            hashCounts.put(hash, 1);
+            hashFirstPos.put(hash, 0);
+            maxCount = 1;
+            maxCountFirstPos = 0;
+        }
+
+        // 滚动哈希遍历剩余窗口
+        for (int i = 1; i <= end; i++) {
+            // 滚动更新哈希：移除首字符，添加尾字符
+            char oldChar = text.charAt(i - 1);
+            char newChar = text.charAt(i + WINDOW_SIZE - 1);
+            hash = (hash - oldChar * POW_BASE_WINDOW) * BASE + newChar;
+
+            // 跳过全 uniform 窗口
+            if (isUniform(text, i, i + WINDOW_SIZE)) {
                 continue;
             }
-            int count = counts.merge(window, 1, Integer::sum);
-            if (count > maxCount) {
-                maxCount = count;
-                maxWindow = window;
-                // 提前退出：一旦达到阈值即可判定
-                if (maxCount >= MIN_REPEATS) {
-                    break;
+
+            Integer count = hashCounts.get(hash);
+            if (count == null) {
+                hashCounts.put(hash, 1);
+                hashFirstPos.put(hash, i);
+            } else {
+                // 哈希碰撞验证：用 regionMatches 确认内容确实相同
+                int firstPos = hashFirstPos.get(hash);
+                if (!text.regionMatches(firstPos, text, i, WINDOW_SIZE)) {
+                    // 哈希碰撞，跳过
+                    continue;
+                }
+                int newCount = count + 1;
+                hashCounts.put(hash, newCount);
+                if (newCount > maxCount) {
+                    maxCount = newCount;
+                    maxCountFirstPos = firstPos;
+                    if (maxCount >= MIN_REPEATS) {
+                        break;
+                    }
                 }
             }
         }
 
         if (maxCount >= MIN_REPEATS) {
-            triggerCount++;
+            triggerCount.incrementAndGet();
             // 截取摘要（取重复片段的前 80 字符）
-            String snippet = maxWindow.length() > 80 ? maxWindow.substring(0, 80) + "..." : maxWindow;
+            int snippetEnd = Math.min(maxCountFirstPos + 80, text.length());
+            String snippet = text.substring(maxCountFirstPos, snippetEnd);
+            if (snippetEnd - maxCountFirstPos >= 80) snippet += "...";
             return new LoopResult(true, snippet, maxCount);
         }
 
@@ -135,8 +198,16 @@ public class ReasonBreaker {
      * 每回合开始时重置触发计数和计数器
      */
     public void reset() {
-        triggerCount = 0;
-        counts.clear();
+        triggerCount.set(0);
+        hashCounts.clear();
+        hashFirstPos.clear();
+    }
+
+    /**
+     * 获取本回合已触发次数
+     */
+    public int getTriggerCount() {
+        return triggerCount.get();
     }
 
     /**

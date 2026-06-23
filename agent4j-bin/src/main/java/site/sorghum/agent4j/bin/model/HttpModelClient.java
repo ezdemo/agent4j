@@ -12,12 +12,9 @@ import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * OpenAI 兼容 API 的 HTTP 客户端 —— {@link ModelClient} 的 OkHttp 实现。
@@ -84,7 +81,7 @@ public class HttpModelClient implements ModelClient {
     /**
      * 流式中断标志（ReasonBreaker 触发时设置）
      */
-    private volatile boolean abortRequested = false;
+    private final AtomicBoolean abortRequested = new AtomicBoolean(false);
     /**
      * 当前活跃的 OkHttp Call（用于中断）
      */
@@ -175,9 +172,8 @@ public class HttpModelClient implements ModelClient {
          * @throws IOException 如果不应重试或等待被中断
          */
         void waitOrThrow(String reason, int attempt) throws IOException {
-            if (abortRequested) {
+            if (abortRequested.compareAndSet(true, false)) {
                 log.debug("[{}] {} 可重试，但已请求中断，跳过重试", tag, reason);
-                abortRequested = false;
                 throw new IOException("Request aborted by user");
             }
             // 流式模式下检查 SSE 连接是否还活着
@@ -202,9 +198,8 @@ public class HttpModelClient implements ModelClient {
          * @throws IOException 如果不应重试或等待被中断
          */
         void waitOrThrow(IOException e, int attempt) throws IOException {
-            if (abortRequested) {
+            if (abortRequested.compareAndSet(true, false)) {
                 log.debug("[{}] IO异常，但已请求中断，跳过重试", tag);
-                abortRequested = false;
                 throw new IOException("Request aborted by user", e);
             }
             // 流式模式下检查 SSE 连接是否还活着
@@ -237,9 +232,8 @@ public class HttpModelClient implements ModelClient {
          * 等待后检查是否收到中断请求。
          */
         private void checkAbort() throws IOException {
-            if (abortRequested) {
+            if (abortRequested.compareAndSet(true, false)) {
                 log.debug("[{}] 重试等待期间收到中断请求，跳过重试", tag);
-                abortRequested = false;
                 throw new IOException("Request aborted by user");
             }
         }
@@ -300,7 +294,7 @@ public class HttpModelClient implements ModelClient {
      */
     @Override
     public void abortStream() {
-        abortRequested = true;
+        abortRequested.set(true);
         Call call = activeCall;
         if (call != null && !call.isCanceled()) {
             call.cancel();
@@ -356,10 +350,11 @@ public class HttpModelClient implements ModelClient {
     @Override
     public ONode chat(List<ChatMessage> messages,
                       ONode tools) throws IOException {
-        String jsonBody = buildBody(messages, tools);
-        ONode bodyWithStream = ONode.ofJson(jsonBody);
-        bodyWithStream.set(FIELD_STREAM, false);
-        jsonBody = bodyWithStream.toJson();
+        ONode body = buildBody(messages, tools);
+        body.set(FIELD_STREAM, false);
+        String jsonBody = body.toJson();
+        log.debug("构建请求体: 大小={} 字符, 工具数={}, 消息数={}",
+                jsonBody.length(), tools != null ? tools.size() : 0, messages.size());
 
         RetryContext retry = new RetryContext("非流式");
         for (int attempt = 0; ; attempt++) {
@@ -417,10 +412,11 @@ public class HttpModelClient implements ModelClient {
                            StreamCallback callback) {
         String jsonBody;
         try {
-            jsonBody = buildBody(messages, tools);
-            ONode bodyWithStream = ONode.ofJson(jsonBody);
-            bodyWithStream.set(FIELD_STREAM, true);
-            jsonBody = bodyWithStream.toJson();
+            ONode body = buildBody(messages, tools);
+            body.set(FIELD_STREAM, true);
+            jsonBody = body.toJson();
+            log.debug("构建流式请求体: 大小={} 字符, 工具数={}, 消息数={}",
+                    jsonBody.length(), tools != null ? tools.size() : 0, messages.size());
         } catch (Exception e) {
             callback.onError(e.getMessage());
             return;
@@ -491,13 +487,12 @@ public class HttpModelClient implements ModelClient {
                 return; // success
 
             } catch (IOException e) {
-                if (abortRequested) {
+                if (abortRequested.compareAndSet(true, false)) {
                     // 主动中断，不重试，不报错
                     // ★ 必须回调 onDone() 释放 AgentLoop.streamLLM() 中的 streamLatch，
                     //    否则调用方线程会永久阻塞在 CountDownLatch.await() 上，
                     //    导致 AgentService 的会话锁（ReentrantLock）永远无法释放。
                     log.debug("流式请求已被中断，跳过重试");
-                    abortRequested = false;
                     safeCallback("onDone", callback::onDone);
                     return;
                 }
@@ -543,8 +538,7 @@ public class HttpModelClient implements ModelClient {
         SseParseResult result = new SseParseResult();
         String line;
         while ((line = reader.readLine()) != null) {
-            if (abortRequested) {
-                abortRequested = false;
+            if (abortRequested.compareAndSet(true, false)) {
                 log.debug("流式请求被 ReasonBreaker 中断");
                 break;
             }
@@ -752,7 +746,7 @@ public class HttpModelClient implements ModelClient {
      * 包含 model、messages、tools 等字段，
      * 对 tool 消息做防御性检查（缺少 tool_call_id 时跳过）。
      */
-    private String buildBody(List<ChatMessage> messages,
+    private ONode buildBody(List<ChatMessage> messages,
                              ONode tools) {
         ONode body = new ONode(ONode.ofJson("{}").options()).asObject();
         // 剥离模型名称中的上下文大小后缀，例如 "mimo-v2.5[512k]" → "mimo-v2.5"
@@ -850,9 +844,6 @@ public class HttpModelClient implements ModelClient {
             body.set(FIELD_TOOLS, tools);
         }
 
-        String jsonBody = body.toJson();
-        log.debug("构建请求体: 大小={} 字符, 工具数={}, 消息数={}",
-                jsonBody.length(), tools != null ? tools.size() : 0, messages.size());
-        return jsonBody;
+        return body;
     }
 }

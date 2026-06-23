@@ -362,13 +362,6 @@ ipcMain.handle('stop_agent4j_web', async () => {
   cleanupAgent4jWeb()
 })
 
-ipcMain.handle('check_java_quick', async () => {
-  // 跳过 Java 检查：agent4j 启动脚本自带 JRE 25 探测逻辑
-  // 如果 Java 不可用，startService 会失败，走在线安装流程
-  return { found: true, version: 'skip', source: 'deferred' }
-})
-ipcMain.handle('start_java_download', async () => 'started')
-
 ipcMain.handle('window-minimize', () => { if (mainWindow) mainWindow.minimize() })
 ipcMain.handle('window-maximize', () => {
   if (mainWindow) mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize()
