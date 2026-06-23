@@ -226,7 +226,7 @@ const props = defineProps({
 const emit = defineEmits(['sendChoice', 'openFile'])
 
 // 工作流工具列表（需要在 processedBlocks 之前定义）
-const WORKFLOW_TOOLS = ['workflow_create_dag', 'workflow_visualize', 'workflow_mark_node']
+const WORKFLOW_TOOLS = ['workflow_create_dag', 'workflow_visualize']
 
 // ── 工具分组折叠状态 ──
 let _groupSeq = 0
