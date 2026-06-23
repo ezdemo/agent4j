@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.dami2.Dami;
+import org.noear.dami2.bus.EventListener;
 import site.sorghum.agent4j.bin.agent.context.ConversationContext;
 import site.sorghum.agent4j.bin.agent.listener.AgentLoopListener;
 import site.sorghum.agent4j.bin.agent.model.ChatMessage;
@@ -91,6 +92,8 @@ public class Agent4jAgent {
      *
      * @param b                  Builder
      */
+    private EventListener<ConfigChangedEvent> configListener;
+
     private Agent4jAgent(Builder b) {
         this.commandRegistry = b.commandRegistry;
         this.workspace = b.workspace;
@@ -103,8 +106,8 @@ public class Agent4jAgent {
         this.ctx = new ConversationContext(initResult.promptPrefix);
         this.loop = initSessionAndLoop(client, initResult.toolRegistry, b.hitl);
 
-        //  —— 每个 Agent 自监听自更新
-        Dami.bus().<ConfigChangedEvent>listen("config.changed", event -> {
+        //  —— 每个 Agent 自监听自更新（保存引用以便 dispose 时注销）
+        this.configListener = event -> {
             ConfigChangedEvent e = event.getPayload();
             if (e == null) return;
             log.info("[bus] 收到配置变更事件: key={}, value={}", e.key(), e.value());
@@ -118,7 +121,8 @@ public class Agent4jAgent {
             } catch (Exception ex) {
                 log.error("[bus] 处理配置变更事件失败: key={}, value={}", e.key(), e.value(), ex);
             }
-        });
+        };
+        Dami.bus().listen("config.changed", this.configListener);
     }
 
     /**
@@ -506,6 +510,29 @@ public class Agent4jAgent {
      */
     public void flushSession() {
         sessionService.flush();
+    }
+
+    /**
+     * 释放 Agent 资源：注销事件监听、刷入会话、保存用量。
+     * 当 Agent 被 LRU 淘汰或应用关闭时调用，防止内存泄漏。
+     */
+    public void dispose() {
+        // 注销 Dami 事件监听
+        if (configListener != null) {
+            try {
+                Dami.bus().unlisten("config.changed", configListener);
+                configListener = null;
+            } catch (Exception e) {
+                log.warn("[dispose] 注销配置变更监听失败: {}", e.getMessage());
+            }
+        }
+        // 刷入会话和用量
+        try {
+            flushSession();
+            saveUsage();
+        } catch (Exception e) {
+            log.warn("[dispose] 刷入会话失败: {}", e.getMessage());
+        }
     }
 
     public void compact() throws IOException {
