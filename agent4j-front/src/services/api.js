@@ -350,6 +350,12 @@ export const sessionsAPI = {
     return api.post('/sessions/import', formData, {
       headers: { 'Content-Type': 'multipart/form-data' }
     })
+  },
+  
+  // 获取会话工作流 - GET /api/sessions/{name}/workflow?workspaceHash=xxx
+  getWorkflow: (name, workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.get(`/sessions/${name}/workflow`, { params })
   }
 }
 

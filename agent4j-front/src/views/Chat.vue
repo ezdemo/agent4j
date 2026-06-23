@@ -82,6 +82,26 @@
       </div>
     </div>
 
+    <!-- 工作流状态面板（左侧 dock 栏） -->
+    <div v-if="workflowData" class="workflow-dock">
+      <div class="workflow-dock-inner">
+        <div class="dock-expand">
+          <span class="dock-expand-icon">
+            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
+              <circle cx="10" cy="4" r="2.5"/>
+              <circle cx="4" cy="16" r="2.5"/>
+              <circle cx="16" cy="16" r="2.5"/>
+              <line x1="8.5" y1="6" x2="5.5" y2="13.5"/>
+              <line x1="11.5" y1="6" x2="14.5" y2="13.5"/>
+            </svg>
+          </span>
+          <div class="dock-expand-body">
+            <WorkflowDagRenderer :data="workflowData" />
+          </div>
+        </div>
+      </div>
+    </div>
+
     <!-- 消息缩略图 dock（右侧 dock 栏，仅用户消息） -->
     <div v-if="userMessages.length > 0" class="msg-thumb-dock">
       <div class="thumb-dock-inner">
@@ -223,6 +243,7 @@ import {sanitize} from '../utils/sanitize'
 import ChatInput from '../components/ChatInput.vue'
 import ChatMessage from '../components/ChatMessage.vue'
 import DiffViewer from '../components/DiffViewer.vue'
+import WorkflowDagRenderer from '../components/WorkflowDagRenderer.vue'
 import {useAppStore} from '../stores/app'
 import platform from '../services/platform'
 
@@ -319,6 +340,37 @@ const usage = ref({
 })
 const currentModel = ref('')
 const availableModels = ref([])
+
+// ==================== 工作流状态 ====================
+const workflowData = ref(null)
+const workflowLoading = ref(false)
+const workflowCollapsed = ref(false)
+
+const loadWorkflow = async () => {
+  if (!props.workspaceHash || !props.sessionName) {
+    workflowData.value = null
+    return
+  }
+  workflowLoading.value = true
+  try {
+    const { sessionsAPI } = await import('../services/api')
+    const res = await sessionsAPI.getWorkflow(props.sessionName, props.workspaceHash)
+    if (res.success && res.data) {
+      workflowData.value = res.data
+    } else {
+      workflowData.value = null
+    }
+  } catch (e) {
+    workflowData.value = null
+  } finally {
+    workflowLoading.value = false
+  }
+}
+
+// 监听会话变化，加载工作流
+watch([() => props.workspaceHash, () => props.sessionName], () => {
+  loadWorkflow()
+}, { immediate: true })
 
 const loadUsage = async (override) => {
   try {
@@ -1810,6 +1862,101 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   font-size: 13px;
   cursor: default;
   user-select: none;
+}
+
+/* ===== 工作流状态面板（左侧 dock 栏）- 按钮展开动画 ===== */
+.workflow-dock {
+  position: absolute;
+  left: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 60;
+  pointer-events: none;
+}
+
+.workflow-dock-inner {
+  position: relative;
+  pointer-events: auto;
+}
+
+/* 可展开容器：小图标 → 展开成大面板 */
+.dock-expand {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  width: 24px;
+  max-height: 24px;
+  overflow: hidden;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--glass-shadow);
+  opacity: 0.35;
+  cursor: pointer;
+  transition: width 0.3s ease, max-height 0.4s ease, opacity 0.25s ease, box-shadow 0.25s ease, border-radius 0.3s ease;
+}
+
+.workflow-dock-inner:hover .dock-expand {
+  width: min(80vw, 600px);
+  max-height: 70vh;
+  opacity: 1;
+  background: var(--bg);
+  border-color: var(--border);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  border-radius: 8px;
+}
+
+/* ⚙ 图标：默认可见，hover 后隐藏 */
+.dock-expand-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+  border-radius: var(--r-lg);
+  transition: opacity 0.15s ease, width 0.2s ease, margin 0.2s ease;
+  transition-delay: 0.3s; /* 等容器缩回后再显示 */
+}
+
+.workflow-dock-inner:hover .dock-expand-icon {
+  opacity: 0;
+  width: 0;
+  margin: 0;
+  overflow: hidden;
+  transition-delay: 0s; /* 展开时立即隐藏 */
+}
+
+/* 展开后的内容区：默认隐藏，hover 后淡入 */
+.dock-expand-body {
+  flex: 1;
+  min-width: 0;
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.25s ease 0.1s, visibility 0s ease 0.35s;
+  white-space: nowrap;
+}
+
+.workflow-dock-inner:hover .dock-expand-body {
+  opacity: 1;
+  visibility: visible;
+  white-space: normal;
+  transition: opacity 0.25s ease 0.1s, visibility 0s ease 0s;
+  padding: 8px 8px 8px 0;
+}
+
+.dock-expand-body :deep(.workflow-dag) {
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.dock-expand-body :deep(.workflow-header) {
+  margin-bottom: 6px;
+  padding-bottom: 6px;
 }
 
 /* ===== 消息缩略图 dock（右侧 dock 栏） ===== */
