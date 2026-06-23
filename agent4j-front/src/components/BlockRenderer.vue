@@ -102,6 +102,39 @@
           <span class="tool-status" :class="block.status">{{ block.status }}</span>
         </div>
       </div>
+      <!-- 工作流工具：workflow_create_dag 和 workflow_visualize -->
+      <div v-else-if="isWorkflowTool(block) && block.result" class="block-workflow">
+        <div class="workflow-tool-head" @click="block.expanded = !block.expanded">
+          <span class="tool-icon default-icon" :class="block.status">
+            <span v-if="block.status === '执行中'" v-html="SPINNER_ICON"></span>
+            <span v-else-if="block.status === '成功'" v-html="CHECK_ICON_SM"></span>
+            <span v-else v-html="CIRCLE_ICON"></span>
+          </span>
+          <code class="tool-name">{{ block.name }}</code>
+          <span class="tool-status" :class="block.status">{{ block.status }}</span>
+          <span class="workflow-tool-title">{{ getWorkflowTitle(block) }}</span>
+          <span class="default-icon"
+                v-html="CHEVRON_DOWN_ICON"
+                :style="{
+                  transform: block.expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                  display: 'inline-block',
+                  transition: 'transform 0.25s ease',
+                  lineHeight: 0
+                }">
+          </span>
+        </div>
+        <div v-if="block.expanded" class="workflow-tool-detail">
+          <WorkflowDagRenderer :data="getWorkflowData(block)" />
+        </div>
+      </div>
+      <!-- 工作流工具执行中 -->
+      <div v-else-if="isWorkflowTool(block) && block.status" class="block-tool">
+        <div class="tool-head">
+          <span class="tool-icon default-icon" :class="block.status" v-html="SPINNER_ICON"></span>
+          <code class="tool-name">{{ block.name }}</code>
+          <span class="tool-status" :class="block.status">{{ block.status }}</span>
+        </div>
+      </div>
       <!-- 其他工具 -->
       <div v-else class="block-tool">
         <div class="tool-head" @click="block.expanded = !block.expanded">
@@ -184,12 +217,16 @@ import {sanitize} from '../utils/sanitize'
 import {CHECK_ICON, CHECK_ICON_SM, CHEVRON_DOWN_ICON, CIRCLE_ICON, SPINNER_ICON, THINKING_ICON} from '../utils/icons'
 import {LRUCache} from '../utils/cache'
 import {ref, computed} from 'vue'
+import WorkflowDagRenderer from './WorkflowDagRenderer.vue'
 
 const props = defineProps({
   blocks: {type: Array, required: true}
 })
 
 const emit = defineEmits(['sendChoice', 'openFile'])
+
+// 工作流工具列表（需要在 processedBlocks 之前定义）
+const WORKFLOW_TOOLS = ['workflow_create_dag', 'workflow_visualize', 'workflow_mark_node']
 
 // ── 工具分组折叠状态 ──
 let _groupSeq = 0
@@ -208,10 +245,17 @@ const processedBlocks = computed(() => {
   while (i < src.length) {
     const b = src[i]
     if (b.type === 'tool_call' && b.name !== 'finish') {
+      // 工作流工具不参与分组，单独处理并默认展开
+      if (WORKFLOW_TOOLS.includes(b.name)) {
+        if (b.expanded === undefined) b.expanded = true
+        out.push(b)
+        i++
+        continue
+      }
       // 收集连续的 tool_call
       const group = [b]
       let j = i + 1
-      while (j < src.length && src[j].type === 'tool_call' && src[j].name !== 'finish') {
+      while (j < src.length && src[j].type === 'tool_call' && src[j].name !== 'finish' && !WORKFLOW_TOOLS.includes(src[j].name)) {
         group.push(src[j])
         j++
       }
@@ -391,6 +435,59 @@ const getChoiceQuestion = (block) => {
   const count = Array.isArray(options) ? options.length : 0
   const suffix = count > 0 ? ` (${count} 项)` : ''
   return q.length > 40 ? q.slice(0, 37) + '...' + suffix : q + suffix
+}
+
+// 工作流工具相关方法
+const isWorkflowTool = (block) => {
+  return WORKFLOW_TOOLS.includes(block.name)
+}
+
+// 工作流工具默认展开
+const initWorkflowToolExpanded = (block) => {
+  if (isWorkflowTool(block) && block.expanded === undefined) {
+    block.expanded = true
+  }
+}
+
+const getWorkflowTitle = (block) => {
+  try {
+    if (block.name === 'workflow_create_dag') {
+      const args = parseArgs(block)
+      return args?.title || ''
+    }
+    if (block.name === 'workflow_visualize') {
+      const result = parseResult(block)
+      return result?.title || ''
+    }
+  } catch (e) {
+    // ignore
+  }
+  return ''
+}
+
+const getWorkflowData = (block) => {
+  try {
+    if (block.name === 'workflow_create_dag') {
+      const result = parseResult(block)
+      return result || {}
+    }
+    if (block.name === 'workflow_visualize') {
+      const result = parseResult(block)
+      return result || {}
+    }
+  } catch (e) {
+    // ignore
+  }
+  return {}
+}
+
+const parseResult = (block) => {
+  if (!block.result) return null
+  try {
+    return JSON.parse(block.result)
+  } catch (e) {
+    return null
+  }
 }
 </script>
 
@@ -904,6 +1001,38 @@ const getChoiceQuestion = (block) => {
   font-size: 11px;
   max-height: 150px;
   overflow: auto;
+}
+
+/* 工作流工具 */
+.block-workflow {
+  background: var(--bg-2, #f9fafb);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.workflow-tool-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.workflow-tool-head:hover {
+  background: var(--bg-3, #f3f4f6);
+}
+
+.workflow-tool-title {
+  font-size: 12px;
+  color: var(--fg-2, #6b7280);
+  margin-left: 4px;
+}
+
+.workflow-tool-detail {
+  padding: 8px;
+  border-top: 1px solid var(--border, #e5e7eb);
 }
 
 .tool-param {

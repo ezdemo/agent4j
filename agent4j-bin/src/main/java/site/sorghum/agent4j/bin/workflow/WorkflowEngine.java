@@ -3,23 +3,17 @@ package site.sorghum.agent4j.bin.workflow;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
-import site.sorghum.agent4j.bin.agent.core.Agent4jAgent;
-import site.sorghum.agent4j.bin.agent.model.UserMessage;
 import site.sorghum.agent4j.bin.command.ChatCommandContext;
 import site.sorghum.agent4j.tool.LogLevel;
 
 import java.time.Instant;
-import java.util.ArrayList;
 import java.util.List;
-import java.util.UUID;
-import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * WorkflowEngine — 工作流执行引擎。
  * <p>
- * 负责工作流创建（LLM 拆解节点）、状态查询、暂停/恢复、节点执行。
- * 支持有向无环图（DAG）结构，节点间可有多依赖关系。
+ * 负责工作流状态查询、暂停/恢复、节点执行等操作。
+ * 工作流创建由 {@link site.sorghum.agent4j.bin.builtin.WorkflowCreateDagTool} 工具完成。
  * </p>
  *
  * @author Sorghum
@@ -28,83 +22,6 @@ import java.util.stream.IntStream;
 @Component
 @RequiredArgsConstructor
 public class WorkflowEngine {
-
-    /**
-     * 创建新工作流：调用 LLM 拆解节点。
-     */
-    public Workflow createWorkflow(String description, ChatCommandContext ctx) {
-        Agent4jAgent agent = ctx.getAgent();
-        String sessionId = agent.getSessionStore() != null ? agent.getSessionStore().currentName() : null;
-        if (sessionId == null) {
-            throw new IllegalStateException("会话未初始化，无法创建工作流");
-        }
-        String workspaceHash = agent.getWorkspaceManager().getCurrentWorkspaceHash();
-        if (workspaceHash == null) {
-            throw new IllegalStateException("工作区未初始化，请先初始化工作区");
-        }
-
-        String breakdownPrompt = """
-                请将以下目标拆解为 3-8 个具体的、可执行的步骤，每个步骤应是一个独立可验证的任务。
-                请以 JSON 数组格式返回，每个元素包含 "description" 字段。
-                不要包含任何其他文本，只返回 JSON 数组。
-                
-                目标：%s
-                """.formatted(description);
-
-        String llmResponse;
-        try {
-            llmResponse = agent.chat(UserMessage.of(breakdownPrompt));
-        } catch (Exception e) {
-            log.error("[workflow] LLM 拆解失败", e);
-            llmResponse = """
-                    [{"description": "%s"}]
-                    """.formatted(description);
-        }
-
-        List<WorkflowNode> nodes = parseNodes(llmResponse, description);
-        List<WorkflowEdge> edges = createLinearEdges(nodes);
-
-        Workflow workflow = Workflow.builder()
-                .id(UUID.randomUUID().toString().substring(0, 8))
-                .sessionId(sessionId)
-                .workspaceHash(workspaceHash)
-                .title(description.length() > 50 ? description.substring(0, 50) + "..." : description)
-                .description(description)
-                .status(WorkflowStatus.DRAFT)
-                .maxRetries(3)
-                .nodes(nodes)
-                .edges(edges)
-                .createdAt(Instant.now())
-                .updatedAt(Instant.now())
-                .build();
-
-        return workflow;
-    }
-
-    /**
-     * 持久化工作流并输出通知。
-     */
-    public void activateWorkflow(Workflow workflow, ChatCommandContext ctx) {
-        try {
-            WorkflowStore store = ctx.getAgent().getWorkspaceManager().getWorkflowStore();
-            store.save(workflow);
-            log.info("[workflow] 工作流已保存: {} - {}", workflow.getId(), workflow.getTitle());
-
-            String nodesText = IntStream.range(0, workflow.getNodes().size())
-                    .mapToObj(i -> {
-                        WorkflowNode n = workflow.getNodes().get(i);
-                        return "  [" + n.getId() + "] " + n.getDescription() + " (" + n.getType() + ", " + n.getStatus() + ")";
-                    })
-                    .collect(Collectors.joining("\n"));
-
-            ctx.getAgent().getOutput().onLog(LogLevel.INFO,
-                    "🔄 工作流已创建: " + workflow.getTitle() + "\n节点:\n" + nodesText);
-        } catch (Exception e) {
-            log.error("[workflow] 激活工作流失败: {}", e.getMessage());
-            ctx.getAgent().getOutput().onLog(LogLevel.ERROR,
-                    "❌ 工作流创建失败: " + e.getMessage());
-        }
-    }
 
     /**
      * 获取当前会话的工作流。
@@ -364,93 +281,5 @@ public class WorkflowEngine {
             sb.append("\n");
         }
         return sb.toString();
-    }
-
-    private List<WorkflowNode> parseNodes(String llmResponse, String fallbackDescription) {
-        try {
-            String json = llmResponse;
-            int startIdx = json.indexOf('[');
-            int endIdx = json.lastIndexOf(']');
-            if (startIdx >= 0 && endIdx > startIdx) {
-                json = json.substring(startIdx, endIdx + 1);
-            }
-
-            org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson(json);
-            if (node.isArray()) {
-                List<WorkflowNode> nodes = new ArrayList<>();
-                // 添加开始节点
-                nodes.add(WorkflowNode.builder()
-                        .id("start")
-                        .description("开始")
-                        .type(NodeType.START)
-                        .status(NodeStatus.DONE)
-                        .retryCount(0)
-                        .build());
-
-                for (int i = 0; i < node.size(); i++) {
-                    String desc = node.get(i).get("description").getString();
-                    if (desc != null && !desc.isEmpty()) {
-                        nodes.add(WorkflowNode.builder()
-                                .id("n" + (i + 1))
-                                .description(desc)
-                                .type(NodeType.ACTION)
-                                .status(NodeStatus.PENDING)
-                                .retryCount(0)
-                                .build());
-                    }
-                }
-
-                // 添加结束节点
-                nodes.add(WorkflowNode.builder()
-                        .id("end")
-                        .description("结束")
-                        .type(NodeType.END)
-                        .status(NodeStatus.PENDING)
-                        .retryCount(0)
-                        .build());
-
-                if (nodes.size() > 2) return nodes;
-            }
-        } catch (Exception e) {
-            log.warn("[workflow] 解析 LLM 节点失败，使用 fallback", e);
-        }
-
-        // Fallback: 创建简单的线性工作流
-        List<WorkflowNode> nodes = new ArrayList<>();
-        nodes.add(WorkflowNode.builder()
-                .id("start")
-                .description("开始")
-                .type(NodeType.START)
-                .status(NodeStatus.DONE)
-                .retryCount(0)
-                .build());
-        nodes.add(WorkflowNode.builder()
-                .id("n1")
-                .description(fallbackDescription)
-                .type(NodeType.ACTION)
-                .status(NodeStatus.PENDING)
-                .retryCount(0)
-                .build());
-        nodes.add(WorkflowNode.builder()
-                .id("end")
-                .description("结束")
-                .type(NodeType.END)
-                .status(NodeStatus.PENDING)
-                .retryCount(0)
-                .build());
-        return nodes;
-    }
-
-    private List<WorkflowEdge> createLinearEdges(List<WorkflowNode> nodes) {
-        List<WorkflowEdge> edges = new ArrayList<>();
-        for (int i = 0; i < nodes.size() - 1; i++) {
-            edges.add(WorkflowEdge.builder()
-                    .id("e" + (i + 1))
-                    .from(nodes.get(i).getId())
-                    .to(nodes.get(i + 1).getId())
-                    .type(EdgeType.NORMAL)
-                    .build());
-        }
-        return edges;
     }
 }

@@ -114,37 +114,21 @@ public class WorkflowCommand implements ChatCommand {
             return CommandResult.CONTINUE;
         }
 
-        // 创建工作流（LLM 拆解节点）
-        Workflow workflow;
-        try {
-            workflow = workflowEngine.createWorkflow(args, ctx);
-        } catch (IllegalStateException e) {
-            ctx.getAgent().getOutput().onLog(LogLevel.ERROR,
-                    "❌ " + e.getMessage());
-            return CommandResult.CONTINUE;
-        }
-
-        // 持久化并激活
-        workflowEngine.activateWorkflow(workflow, ctx);
-
-        // 生成节点文本并注入到 LLM 的下一次请求中
-        StringBuilder nodesText = new StringBuilder();
-        for (WorkflowNode node : workflow.getNodes()) {
-            nodesText.append("  ").append(node.getId()).append(". [ ] ").append(node.getDescription()).append("\n");
-        }
-
+        // 注入 prompt，引导 LLM 使用工具创建工作流
         String prompt = """
-                当前会话已设定工作流：「%s」
+                用户想要创建工作流：「%s」
                 
-                节点计划：
-                %s
+                请使用 workflow_create_dag 工具来创建这个工作流。
                 
-                请逐条执行以上节点。
-                每完成一个节点，**必须**调用 workflow_mark_node 工具通知系统，参数传入节点ID。
-                如果有节点失败，系统会自动重试（最多 %d 次）。
-                全部完成后总结汇报。
-                """
-                .formatted(workflow.getTitle(), nodesText.toString(), workflow.getMaxRetries());
+                你需要：
+                1. 分析目标，拆解为多个具体的步骤
+                2. 确定每个步骤的类型（ACTION/CONDITION/PARALLEL）
+                3. 确定步骤之间的依赖关系
+                4. 调用 workflow_create_dag 工具创建工作流
+                
+                如果任务是简单的线性流程，可以直接创建线性结构。
+                如果任务需要条件分支或并行执行，请设计相应的 DAG 结构。
+                """.formatted(args);
 
         input.setMessage(prompt);
         return CommandResult.LOOP;
@@ -239,8 +223,51 @@ public class WorkflowCommand implements ChatCommand {
         Workflow workflow = workflowEngine.getCurrentWorkflow(ctx);
         if (workflow == null) return noWorkflowResponse(ctx);
 
-        workflowEngine.executeWorkflow(workflow, ctx);
-        return CommandResult.CONTINUE;
+        // 设置工作流状态为 ACTIVE
+        workflow.setStatus(WorkflowStatus.ACTIVE);
+        workflow.setUpdatedAt(java.time.Instant.now());
+        ctx.getAgent().getWorkspaceManager().getWorkflowStore().save(workflow);
+
+        // 生成工作流结构文本
+        String structureText = generateStructureText(workflow);
+
+        // 注入执行 prompt，让 LLM 开始执行
+        String prompt = """
+                当前会话已设定工作流：「%s」
+                
+                工作流结构：
+                %s
+                
+                请按照工作流结构执行节点。
+                每完成一个节点，**必须**调用 workflow_mark_node 工具通知系统，参数传入节点ID和执行结果摘要。
+                如果有节点失败，系统会自动重试（最多 %d 次）。
+                全部完成后总结汇报。
+                """
+                .formatted(workflow.getTitle(), structureText, workflow.getMaxRetries());
+
+        input.setMessage(prompt);
+        return CommandResult.LOOP;
+    }
+    
+    /**
+     * 生成工作流结构文本。
+     */
+    private String generateStructureText(Workflow workflow) {
+        StringBuilder sb = new StringBuilder();
+        sb.append("节点列表:\n");
+        for (WorkflowNode node : workflow.getNodes()) {
+            sb.append("  ").append(node.getId()).append(". ").append(node.getDescription())
+                    .append(" (").append(node.getType()).append(")\n");
+        }
+        sb.append("\n依赖关系:\n");
+        for (WorkflowEdge edge : workflow.getEdges()) {
+            sb.append("  ").append(edge.getFrom()).append(" -> ").append(edge.getTo());
+            if (edge.getCondition() != null) {
+                sb.append(" [条件: ").append(edge.getCondition()).append("]");
+            }
+            sb.append("\n");
+        }
+        return sb.toString();
     }
 
     private CommandResult handleNode(String args, ChatCommandContext ctx) throws Exception {

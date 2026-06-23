@@ -26,9 +26,6 @@ public class SharedWorkspace {
     /** 文档存储 */
     private final ConcurrentHashMap<String, DocumentBucket> docStore = new ConcurrentHashMap<>();
 
-    /** 事件总线 */
-    private final WorkspaceEventBus eventBus = new WorkspaceEventBus();
-
     /** 读写锁 —— 批量操作一致性 */
     private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
 
@@ -54,7 +51,6 @@ public class SharedWorkspace {
      *   <li>如果 key 已存在：更新 value、updatedAt、version++</li>
      *   <li>如果 key 不存在：新建 KVBucket，版本从 1 开始</li>
      *   <li>写入前检查容量，超限则淘汰最旧条目</li>
-     *   <li>发布事件到 eventBus（WRITE 或 UPDATE）</li>
      * </ul>
      *
      * @param key     键
@@ -79,7 +75,6 @@ public class SharedWorkspace {
                 existing.setValue(value);
                 existing.setUpdatedAt(System.currentTimeMillis());
                 existing.setVersion(existing.getVersion() + 1);
-                eventBus.publish(key, EventType.UPDATE, existing);
                 log.debug("Updated KV entry: key={}, version={}", key, existing.getVersion());
             } else {
                 // 新建条目
@@ -92,7 +87,6 @@ public class SharedWorkspace {
                         .version(1)
                         .build();
                 kvStore.put(key, bucket);
-                eventBus.publish(key, EventType.WRITE, bucket);
                 log.debug("Created KV entry: key={}, version=1", key);
             }
         } finally {
@@ -116,7 +110,6 @@ public class SharedWorkspace {
         }
         if (bucket.isExpired()) {
             kvStore.remove(key);
-            eventBus.publish(key, EventType.DELETE, null);
             log.debug("Removed expired KV entry: key={}", key);
             return Optional.empty();
         }
@@ -139,7 +132,6 @@ public class SharedWorkspace {
         }
         if (bucket.isExpired()) {
             kvStore.remove(key);
-            eventBus.publish(key, EventType.DELETE, null);
             log.debug("Removed expired KV entry: key={}", key);
             return Optional.empty();
         }
@@ -154,7 +146,6 @@ public class SharedWorkspace {
      *   <li>如果 key 已存在：更新 content、mimeType、updatedAt、version++</li>
      *   <li>如果 key 不存在：新建 DocumentBucket，版本从 1 开始</li>
      *   <li>写入前检查容量，超限则淘汰最旧文档</li>
-     *   <li>发布事件到 eventBus（WRITE 或 UPDATE）</li>
      * </ul>
      *
      * @param key      键
@@ -182,7 +173,6 @@ public class SharedWorkspace {
                 existing.setMimeType(mimeType);
                 existing.setUpdatedAt(System.currentTimeMillis());
                 existing.setVersion(existing.getVersion() + 1);
-                eventBus.publish(key, EventType.UPDATE, existing);
                 log.debug("Updated document entry: key={}, version={}", key, existing.getVersion());
             } else {
                 // 新建文档
@@ -196,7 +186,6 @@ public class SharedWorkspace {
                         .version(1)
                         .build();
                 docStore.put(key, bucket);
-                eventBus.publish(key, EventType.WRITE, bucket);
                 log.debug("Created document entry: key={}, version=1", key);
             }
         } finally {
@@ -220,7 +209,6 @@ public class SharedWorkspace {
         }
         if (bucket.isExpired()) {
             docStore.remove(key);
-            eventBus.publish(key, EventType.DELETE, null);
             log.debug("Removed expired document entry: key={}", key);
             return Optional.empty();
         }
@@ -249,7 +237,7 @@ public class SharedWorkspace {
             log.debug("Deleted document entry: key={}", key);
         }
         if (removed) {
-            eventBus.publish(key, EventType.DELETE, null);
+            log.debug("Deleted entry: key={}", key);
         }
     }
 
@@ -298,15 +286,6 @@ public class SharedWorkspace {
      */
     public int size() {
         return kvStore.size() + docStore.size();
-    }
-
-    /**
-     * 获取事件总线引用（供 WorkspaceWatchTool 使用）。
-     *
-     * @return WorkspaceEventBus 实例
-     */
-    public WorkspaceEventBus getEventBus() {
-        return eventBus;
     }
 
     // ==================== 淘汰策略 ====================

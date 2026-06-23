@@ -15,6 +15,7 @@
       <list>
         <option value="$PROJECT_DIR$/pom.xml" />
         <option value="$PROJECT_DIR$/agent4j-bin/pom.xml" />
+        <option value="$PROJECT_DIR$/workflow-project/05-后端开发代码/pom.xml" />
       </list>
     </option>
   </component>
