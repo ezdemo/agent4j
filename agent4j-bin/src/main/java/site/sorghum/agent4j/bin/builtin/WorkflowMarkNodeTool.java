@@ -12,6 +12,7 @@ import site.sorghum.agent4j.tool.solon.SolonToTools;
 
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * Workflow Mark Node 工具 —— 标记工作流中的某个节点为已完成。
@@ -71,6 +72,20 @@ public class WorkflowMarkNodeTool extends AbsToolProvider implements SolonToTool
                 node.setResult(result);
             }
             workflow.setUpdatedAt(Instant.now());
+
+            // 自动完成 END 节点：如果所有前驱节点都已完成，则 END 节点自动标记为完成
+            for (WorkflowNode wn : workflow.getNodes()) {
+                if (wn.getType() == NodeType.END && wn.getStatus() != NodeStatus.DONE) {
+                    List<String> preds = workflow.getPredecessorIds(wn.getId());
+                    if (!preds.isEmpty() && preds.stream().allMatch(predId -> {
+                        WorkflowNode pred = workflow.findNode(predId);
+                        return pred != null && pred.getStatus() == NodeStatus.DONE;
+                    })) {
+                        wn.setStatus(NodeStatus.DONE);
+                        wn.setCompletedAt(Instant.now());
+                    }
+                }
+            }
 
             // 检查所有节点是否都已完成
             if (workflow.isAllDone()) {

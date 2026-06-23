@@ -85,14 +85,11 @@
     <!-- 工作流状态面板（左侧 dock 栏） -->
     <div v-if="workflowData" class="workflow-dock">
       <div class="workflow-dock-inner">
-        <div class="dock-expand">
+        <div class="dock-expand" @mouseenter="loadWorkflow">
           <span class="dock-expand-icon">
-            <svg width="14" height="14" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.5">
-              <circle cx="10" cy="4" r="2.5"/>
-              <circle cx="4" cy="16" r="2.5"/>
-              <circle cx="16" cy="16" r="2.5"/>
-              <line x1="8.5" y1="6" x2="5.5" y2="13.5"/>
-              <line x1="11.5" y1="6" x2="14.5" y2="13.5"/>
+            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="14" height="14" rx="2"/>
+              <polyline points="6,10 9,13 14,7"/>
             </svg>
           </span>
           <div class="dock-expand-body">
@@ -1884,16 +1881,16 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   display: flex;
   align-items: flex-start;
   gap: 8px;
-  width: 24px;
-  max-height: 24px;
+  width: 32px;
+  max-height: 45px;
   overflow: hidden;
   background: var(--glass-bg);
   backdrop-filter: blur(var(--blur-sm));
   -webkit-backdrop-filter: blur(var(--blur-sm));
-  border: 1px solid var(--glass-border);
+  border: 1.5px solid var(--glass-border);
   border-radius: var(--r-lg);
   box-shadow: var(--glass-shadow);
-  opacity: 0.35;
+  opacity: 0.8;
   cursor: pointer;
   transition: width 0.3s ease, max-height 0.4s ease, opacity 0.25s ease, box-shadow 0.25s ease, border-radius 0.3s ease;
 }
@@ -1908,18 +1905,17 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   border-radius: 8px;
 }
 
-/* ⚙ 图标：默认可见，hover 后隐藏 */
+/* 代办图标：默认显示，hover 后隐藏 */
 .dock-expand-icon {
   flex-shrink: 0;
-  width: 24px;
-  height: 24px;
+  width: 32px;
+  height: 45px;
   display: flex;
   align-items: center;
   justify-content: center;
   color: var(--accent);
-  border-radius: var(--r-lg);
   transition: opacity 0.15s ease, width 0.2s ease, margin 0.2s ease;
-  transition-delay: 0.3s; /* 等容器缩回后再显示 */
+  transition-delay: 0.3s;
 }
 
 .workflow-dock-inner:hover .dock-expand-icon {
@@ -1927,7 +1923,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   width: 0;
   margin: 0;
   overflow: hidden;
-  transition-delay: 0s; /* 展开时立即隐藏 */
+  transition-delay: 0s;
 }
 
 /* 展开后的内容区：默认隐藏，hover 后淡入 */
