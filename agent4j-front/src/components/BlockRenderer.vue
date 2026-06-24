@@ -84,6 +84,92 @@
       </div>
     </div>
 
+    <!-- 路径组（连续 reasoning + tool_call 折叠） -->
+    <div v-else-if="block.type === 'path_group'" class="block-tool">
+      <div class="tool-head" @click="togglePathGroup(block._groupId)">
+        <span class="tool-icon default-icon" :class="block._running ? '执行中' : '成功'">
+          <span v-if="block._running" v-html="SPINNER_ICON"></span>
+          <span v-else-if="block._allDone" v-html="CHECK_ICON_SM"></span>
+          <span v-else v-html="CIRCLE_ICON"></span>
+        </span>
+        <span class="path-label">路径</span>
+        <span class="tool-param" :title="block._pathNames">{{ truncatePath(block._pathNames, 60) }}</span>
+        <span class="path-steps">{{ block._blocks.length }} 步</span>
+        <span class="default-icon"
+              v-html="CHEVRON_DOWN_ICON"
+              :style="{
+                transform: pathGroupsExpanded[block._groupId] ? 'rotate(180deg)' : 'rotate(0deg)',
+                display: 'inline-block',
+                transition: 'transform 0.25s ease',
+                lineHeight: 0
+              }">
+        </span>
+      </div>
+      <div v-if="pathGroupsExpanded[block._groupId]" class="tool-group-detail">
+        <template v-for="(ib, ibi) in block._blocks" :key="ibi">
+          <!-- 内层思考 -->
+          <div v-if="ib.type === 'reasoning'" class="tool-group-item-block">
+            <div class="block-reasoning">
+              <div class="reasoning-head" @click="ib.showContent = !ib.showContent">
+                <span class="default-icon" v-html="THINKING_ICON"></span>
+                <span>思考</span>
+                <span class="default-icon"
+                      v-html="CHEVRON_DOWN_ICON"
+                      :style="{
+                        transform: ib.showContent ? 'rotate(180deg)' : 'rotate(0deg)',
+                        display: 'inline-block',
+                        transition: 'transform 0.25s ease',
+                        lineHeight: 0
+                      }">
+                </span>
+              </div>
+              <div v-if="ib.showContent" class="reasoning-text" v-html="getReasoningHtml(ib)"></div>
+            </div>
+          </div>
+          <!-- 内层工具 -->
+          <div v-else-if="ib.type === 'tool_call'" class="tool-group-item-block">
+            <div class="block-tool">
+              <div class="tool-head" @click="ib.expanded = !ib.expanded">
+                <span class="tool-icon default-icon" :class="ib.status">
+                  <span v-if="ib.status === '执行中'" v-html="SPINNER_ICON"></span>
+                  <span v-else-if="ib.status === '成功'" v-html="CHECK_ICON_SM"></span>
+                  <span v-else v-html="CIRCLE_ICON"></span>
+                </span>
+                <code class="tool-name">{{ ib.name }}</code>
+                <span class="tool-status" :class="ib.status">{{ ib.status }}</span>
+                <span v-if="ib.name === 'bash' && getBashCommand(ib)" class="tool-param"
+                      :title="getBashCommandFull(ib)">{{ getBashCommand(ib) }}</span>
+                <span v-else-if="ib.name === 'grep' && getGrepPath(ib)" class="tool-param"
+                      :title="getGrepPathFull(ib)">{{ getGrepPath(ib) }}</span>
+                <span v-else-if="ib.name === 'glob' && getGlobPath(ib)" class="tool-param"
+                      :title="getGlobPathFull(ib)">{{ getGlobPath(ib) }}</span>
+                <span v-else-if="ib.name === 'ls' && getLsPath(ib)" class="tool-param"
+                      :title="getLsPathFull(ib)">{{ getLsPath(ib) }}</span>
+                <button v-else-if="shouldShowOpenFile(ib)" class="tool-file" @click.stop="openFile(ib)"
+                        :title="getFilePath(ib)">{{ getFileName(ib) }}
+                </button>
+                <span v-else-if="ib.name === 'ask_choice' && getChoiceQuestion(ib)" class="tool-param tool-param-wide"
+                      :title="getChoiceQuestion(ib)">{{ getChoiceQuestion(ib) }}</span>
+                <span class="default-icon"
+                      v-html="CHEVRON_DOWN_ICON"
+                      :style="{
+                        transform: ib.expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                        display: 'inline-block',
+                        transition: 'transform 0.25s ease',
+                        lineHeight: 0
+                      }">
+                </span>
+              </div>
+              <div v-if="ib.expanded" class="tool-detail">
+                <pre v-if="ib.args"><code>{{ fmtArgs(ib.args) }}</code></pre>
+                <pre v-if="ib.result"><code>{{ ib.result }}</code></pre>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
     <!-- 单个工具调用（非连续时不合并） -->
     <template v-else-if="block.type === 'tool_call'">
       <!-- finish 工具：完成时将 content 渲染为模型输出样式 -->
@@ -236,7 +322,14 @@ const toggleToolGroup = (groupId) => {
   toolGroupsExpanded.value = {...toolGroupsExpanded.value, [groupId]: !toolGroupsExpanded.value[groupId]}
 }
 
-/** 将连续 tool_call 合并为 tool_group */
+// ── 路径组折叠状态 ──
+const pathGroupsExpanded = ref({})
+
+const togglePathGroup = (groupId) => {
+  pathGroupsExpanded.value = {...pathGroupsExpanded.value, [groupId]: !pathGroupsExpanded.value[groupId]}
+}
+
+/** 将连续 reasoning + tool_call(非 finish) 合并为 path_group */
 const processedBlocks = computed(() => {
   const src = props.blocks
   if (!src || src.length === 0) return []
@@ -244,31 +337,35 @@ const processedBlocks = computed(() => {
   let i = 0
   while (i < src.length) {
     const b = src[i]
-    if (b.type === 'tool_call' && b.name !== 'finish') {
-      // 收集连续的 tool_call
+    // 收集连续的 reasoning + tool_call(非 finish)
+    if (b.type === 'reasoning' || (b.type === 'tool_call' && b.name !== 'finish')) {
       const group = [b]
       let j = i + 1
-      while (j < src.length && src[j].type === 'tool_call' && src[j].name !== 'finish') {
-        group.push(src[j])
-        j++
+      while (j < src.length) {
+        const nb = src[j]
+        if (nb.type === 'reasoning' || (nb.type === 'tool_call' && nb.name !== 'finish')) {
+          group.push(nb)
+          j++
+        } else {
+          break
+        }
       }
-      if (group.length >= 2) {
-        // 多个连续工具 → 合并为 tool_group
-        _groupSeq++
-        const gid = `tg-${_groupSeq}`
-        const allDone = group.every(t => t.status === '成功')
-        const running = group.some(t => t.status === '执行中')
-        out.push({
-          type: 'tool_group',
-          _groupId: gid,
-          _tools: group,
-          _groupAllDone: allDone,
-          _groupRunning: running
-        })
-      } else {
-        // 单个工具不合并
-        out.push(b)
-      }
+      // 不管几个都合并为 path_group（单个 reasoning 也要折叠）
+      _groupSeq++
+      const gid = `pg-${_groupSeq}`
+      const toolCount = group.filter(x => x.type === 'tool_call').length
+      const pathNames = group.map(x => x.type === 'reasoning' ? 'think' : x.name).join(' → ')
+      const allDone = group.filter(x => x.type === 'tool_call').every(t => t.status === '成功')
+      const running = group.filter(x => x.type === 'tool_call').some(t => t.status === '执行中')
+      out.push({
+        type: 'path_group',
+        _groupId: gid,
+        _blocks: group,
+        _toolCount: toolCount,
+        _pathNames: pathNames,
+        _allDone: toolCount === 0 ? true : allDone,
+        _running: running
+      })
       i = j
     } else {
       out.push(b)
@@ -288,6 +385,11 @@ const getToolGroupOrderTruncated = (block) => {
   const order = getToolGroupOrder(block)
   if (!order) return ''
   return order.length > 60 ? order.slice(0, 57) + '...' : order
+}
+
+const truncatePath = (text, max) => {
+  if (!text) return ''
+  return text.length > max ? text.slice(0, max - 1) + '…' : text
 }
 
 // Markdown 渲染缓存
@@ -906,6 +1008,20 @@ const parseResult = (block) => {
 
 .tool-group-item-block + .tool-group-item-block {
   margin-top: 2px;
+}
+
+/* 路径组标签（不带蓝色） */
+.path-label {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+}
+
+.path-steps {
+  font-size: 10px;
+  color: var(--fg-4);
+  flex-shrink: 0;
 }
 
 /* 工具块 */
