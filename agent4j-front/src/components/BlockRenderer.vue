@@ -93,8 +93,8 @@
           <span v-else v-html="CIRCLE_ICON"></span>
         </span>
         <span class="path-label">路径</span>
-        <span class="tool-param" :title="block._pathNames">{{ truncatePath(block._pathNames, 60) }}</span>
         <span class="path-steps">{{ block._blocks.length }} 步</span>
+        <span class="tool-param" :title="block._pathNames">{{ truncatePath(block._pathNames, 60) }}</span>
         <span class="default-icon"
               v-html="CHEVRON_DOWN_ICON"
               :style="{
