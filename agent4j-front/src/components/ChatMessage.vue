@@ -29,7 +29,13 @@
           <BlockRenderer :blocks="msg.blocks || []" @send-choice="(val, block) => $emit('sendChoice', val, block)" @open-file="(filePath) => $emit('openFile', filePath)" />
         </div>
         <div class="msg-footer">
-          <span class="msg-time">{{ msg.time }}</span>
+          <span class="msg-time-group">
+            <span class="msg-time">{{ msg.time }}</span>
+            <template v-if="fileStats">
+              <span v-if="fileStats.edited > 0" class="msg-file-stat">修改 {{ fileStats.edited }} 文件</span>
+              <span v-if="fileStats.created > 0" class="msg-file-stat">新增 {{ fileStats.created }} 文件</span>
+            </template>
+          </span>
           <button class="copy-msg-btn" @click="$emit('copyMessage', msg)" title="复制消息" v-html="COPY_ICON"></button>
         </div>
       </div>
@@ -79,6 +85,22 @@ const userDisplayText = computed(() => {
   const c = props.msg.content || ''
   if (userExpanded.value || c.length <= USER_MAX_LEN) return c
   return c.slice(0, USER_MAX_LEN) + '...'
+})
+
+// 助手消息文件统计（edit=修改, write=新增，按 file_path 去重）
+const fileStats = computed(() => {
+  const blocks = props.msg.blocks
+  if (!blocks) return null
+  const edited = new Set(), created = new Set()
+  for (const b of blocks) {
+    if (b.type !== 'tool_call' || b.name === 'finish') continue
+    const fp = b.args?.file_path
+    if (!fp) continue
+    if (b.name === 'edit') edited.add(fp)
+    else if (b.name === 'write') created.add(fp)
+  }
+  if (edited.size === 0 && created.size === 0) return null
+  return { edited: edited.size, created: created.size }
 })
 
 // SVG 图标已迁移至 ../utils/icons.js
@@ -246,7 +268,6 @@ onBeforeUnmount(() => {
 .assistant-body .msg-time {
   font-size: 10px;
   color: var(--fg-4);
-  margin-top: 4px;
 }
 
 .msg-text {
@@ -294,6 +315,17 @@ onBeforeUnmount(() => {
 
 .assistant-body .msg-footer {
   justify-content: space-between;
+}
+
+.msg-time-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.msg-file-stat {
+  font-size: 10px;
+  color: var(--fg-4);
 }
 
 .copy-msg-btn {
