@@ -3,7 +3,10 @@
     <!-- 用户消息 -->
     <template v-if="msg.role === 'user'">
       <div class="msg-body user-body">
-        <div class="msg-text">{{ msg.content }}</div>
+        <div class="msg-text">{{ userDisplayText }}</div>
+        <button v-if="isUserLong" class="user-expand-btn" @click="userExpanded = !userExpanded">
+          {{ userExpanded ? '收起' : '展开全部' }}
+        </button>
         <div v-if="msg.images && msg.images.length > 0" class="user-images">
           <img v-for="(img, i) in msg.images" :key="i" :src="img" class="user-image" @click="$emit('previewImage', img)"/>
         </div>
@@ -55,7 +58,7 @@
 <script setup>
 import {COPY_ICON, ROLLBACK_ICON} from '../utils/icons'
 import BlockRenderer from './BlockRenderer.vue'
-import {onMounted, onBeforeUnmount, reactive, ref} from 'vue'
+import {onMounted, onBeforeUnmount, reactive, ref, computed} from 'vue'
 import platform from '../services/platform'
 
 const props = defineProps({
@@ -67,6 +70,16 @@ const props = defineProps({
 const emit = defineEmits(['previewImage', 'rollbackSnapshot', 'copyMessage', 'sendChoice', 'openFile'])
 
 const isElectron = platform.isElectron
+
+// 用户消息截断
+const USER_MAX_LEN = 300
+const userExpanded = ref(false)
+const isUserLong = computed(() => (props.msg.content || '').length > USER_MAX_LEN)
+const userDisplayText = computed(() => {
+  const c = props.msg.content || ''
+  if (userExpanded.value || c.length <= USER_MAX_LEN) return c
+  return c.slice(0, USER_MAX_LEN) + '...'
+})
 
 // SVG 图标已迁移至 ../utils/icons.js
 
@@ -311,6 +324,23 @@ onBeforeUnmount(() => {
 
 .user-body .copy-msg-btn:hover {
   background: rgba(255, 255, 255, 0.15);
+}
+
+/* 用户消息展开/收起按钮 */
+.user-expand-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 0;
+  margin-top: 2px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.user-expand-btn:hover {
+  color: #fff;
 }
 
 /* 撤回按钮 */
