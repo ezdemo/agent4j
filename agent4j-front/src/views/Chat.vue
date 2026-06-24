@@ -1130,10 +1130,13 @@ const loadHistory = async (sessionName, force = false) => {
       const raw = r.data, tr = {}
       for (const m of raw) if (m.role === 'tool' && m.tool_call_id) tr[m.tool_call_id] = m.content || ''
       const merged = []
+      let lastAssistantItem = null
+      let idCounter = 0
       for (const m of raw) {
         if (m.role === 'tool') continue
-        const item = {id: Date.now() + merged.length, role: m.role, time: formatTimestamp(m.timestamp), blocks: []}
         if (m.role === 'user') {
+          // 用户消息：创建新item
+          const item = {id: Date.now() + idCounter++, role: 'user', time: formatTimestamp(m.timestamp), blocks: []}
           // 多模态消息：contentParts 为 [{type:'text',...},{type:'image_url',...}] 数组
           const parts = m.contentParts || (Array.isArray(m.content) ? m.content : null)
           if (parts && parts.length > 0) {
@@ -1155,8 +1158,19 @@ const loadHistory = async (sessionName, force = false) => {
           if (m.snapshot_id) {
             item.snapshotId = m.snapshot_id
           }
+          merged.push(item)
+          lastAssistantItem = null // 重置
         } else {
-          if (m.reasoning_content) item.blocks.push({
+          // assistant消息：合并连续的assistant消息
+          if (!lastAssistantItem) {
+            // 创建新的assistant item
+            lastAssistantItem = {id: Date.now() + idCounter++, role: 'assistant', time: formatTimestamp(m.timestamp), blocks: []}
+            merged.push(lastAssistantItem)
+          } else {
+            // 更新时间戳为最新的
+            lastAssistantItem.time = formatTimestamp(m.timestamp)
+          }
+          if (m.reasoning_content) lastAssistantItem.blocks.push({
             type: 'reasoning',
             content: m.reasoning_content,
             showContent: false
@@ -1167,7 +1181,7 @@ const loadHistory = async (sessionName, force = false) => {
               args = JSON.parse(args)
             } catch {
             }
-            item.blocks.push({
+            lastAssistantItem.blocks.push({
               type: 'tool_call',
               name,
               status: tr[tc.id] ? '成功' : '执行中',
@@ -1176,9 +1190,8 @@ const loadHistory = async (sessionName, force = false) => {
               expanded: !tr[tc.id]
             })
           }
-          if (m.content) item.blocks.push({type: 'content', content: m.content})
+          if (m.content) lastAssistantItem.blocks.push({type: 'content', content: m.content})
         }
-        merged.push(item)
       }
       store.setSessionMessages(targetSession, merged)
       await scroll(true)
