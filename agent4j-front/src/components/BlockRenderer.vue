@@ -110,26 +110,26 @@
           <!-- 内层思考 -->
           <div v-if="ib.type === 'reasoning'" class="tool-group-item-block">
             <div class="block-reasoning">
-              <div class="reasoning-head" @click="ib.showContent = !ib.showContent">
+              <div class="reasoning-head" @click="togglePathItem(ib._itemId)">
                 <span class="default-icon" v-html="THINKING_ICON"></span>
                 <span>思考</span>
                 <span class="default-icon"
                       v-html="CHEVRON_DOWN_ICON"
                       :style="{
-                        transform: ib.showContent ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transform: pathItemExpanded[ib._itemId] ? 'rotate(180deg)' : 'rotate(0deg)',
                         display: 'inline-block',
                         transition: 'transform 0.25s ease',
                         lineHeight: 0
                       }">
                 </span>
               </div>
-              <div v-if="ib.showContent" class="reasoning-text" v-html="getReasoningHtml(ib)"></div>
+              <div v-if="pathItemExpanded[ib._itemId]" class="reasoning-text" v-html="fmt(ib.content)"></div>
             </div>
           </div>
           <!-- 内层工具 -->
           <div v-else-if="ib.type === 'tool_call'" class="tool-group-item-block">
             <div class="block-tool">
-              <div class="tool-head" @click="ib.expanded = !ib.expanded">
+              <div class="tool-head" @click="togglePathItem(ib._itemId)">
                 <span class="tool-icon default-icon" :class="ib.status">
                   <span v-if="ib.status === '执行中'" v-html="SPINNER_ICON"></span>
                   <span v-else-if="ib.status === '成功'" v-html="CHECK_ICON_SM"></span>
@@ -144,7 +144,7 @@
                 <span v-else-if="ib.name === 'glob' && getGlobPath(ib)" class="tool-param"
                       :title="getGlobPathFull(ib)">{{ getGlobPath(ib) }}</span>
                 <span v-else-if="ib.name === 'ls' && getLsPath(ib)" class="tool-param"
-                      :title="getLsPathFull(ib)">{{ getLsPath(ib) }}</span>
+                      :title="getLsPath(ib)">{{ getLsPath(ib) }}</span>
                 <button v-else-if="shouldShowOpenFile(ib)" class="tool-file" @click.stop="openFile(ib)"
                         :title="getFilePath(ib)">{{ getFileName(ib) }}
                 </button>
@@ -153,14 +153,14 @@
                 <span class="default-icon"
                       v-html="CHEVRON_DOWN_ICON"
                       :style="{
-                        transform: ib.expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transform: pathItemExpanded[ib._itemId] ? 'rotate(180deg)' : 'rotate(0deg)',
                         display: 'inline-block',
                         transition: 'transform 0.25s ease',
                         lineHeight: 0
                       }">
                 </span>
               </div>
-              <div v-if="ib.expanded" class="tool-detail">
+              <div v-if="pathItemExpanded[ib._itemId]" class="tool-detail">
                 <pre v-if="ib.args"><code>{{ fmtArgs(ib.args) }}</code></pre>
                 <pre v-if="ib.result"><code>{{ ib.result }}</code></pre>
               </div>
@@ -329,6 +329,13 @@ const togglePathGroup = (groupId) => {
   pathGroupsExpanded.value = {...pathGroupsExpanded.value, [groupId]: !pathGroupsExpanded.value[groupId]}
 }
 
+// ── 路径组内层块折叠状态（key = groupId-index） ──
+const pathItemExpanded = ref({})
+
+const togglePathItem = (key) => {
+  pathItemExpanded.value = {...pathItemExpanded.value, [key]: !pathItemExpanded.value[key]}
+}
+
 /** 将连续 reasoning + tool_call(非 finish) 合并为 path_group */
 const processedBlocks = computed(() => {
   const src = props.blocks
@@ -353,6 +360,8 @@ const processedBlocks = computed(() => {
       // 不管几个都合并为 path_group（单个 reasoning 也要折叠）
       _groupSeq++
       const gid = `pg-${_groupSeq}`
+      // 给每个内层块分配唯一 ID 用于展开状态跟踪
+      group.forEach((item, idx) => { item._itemId = `${gid}-${idx}` })
       const toolCount = group.filter(x => x.type === 'tool_call').length
       const pathNames = group.map(x => x.type === 'reasoning' ? 'think' : x.name).join(' → ')
       const allDone = group.filter(x => x.type === 'tool_call').every(t => t.status === '成功')
