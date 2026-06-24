@@ -530,6 +530,17 @@ public class Agent4jConfig {
     }
 
     /**
+     * 移除指定配置项并保存。
+     *
+     * @param key 要移除的配置键
+     */
+    public void removeAndSave(String key) throws IOException {
+        if (key == null || key.isEmpty()) return;
+        root.remove(key);
+        save();
+    }
+
+    /**
      * 保存配置到文件。
      * 保存前自动补充默认配置中缺失的字段，确保新版本新增的配置项自动出现。
      */

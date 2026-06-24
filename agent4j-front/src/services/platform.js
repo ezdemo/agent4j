@@ -101,14 +101,6 @@ const webImplementation = {
       return 0
     },
 
-    async checkJavaQuick() {
-      return { found: true, version: 'web_environment', source: 'web' }
-    },
-
-    async startJavaDownload() {
-      return 'started'
-    },
-
     // 在线安装：web 环境下跳转到浏览器下载
     async installOnline() {
       window.open('https://gitee.com/ezdemo/agent4j/releases')
@@ -216,12 +208,6 @@ const electronImplementation = {
     },
     async getCurrentPort() {
       return await window.electronAPI.agent4jWebService.getCurrentPort()
-    },
-    async checkJavaQuick() {
-      return await window.electronAPI.agent4jWebService.checkJavaQuick()
-    },
-    async startJavaDownload() {
-      return await window.electronAPI.agent4jWebService.startJavaDownload()
     },
     async installOnline() {
       return await window.electronAPI.agent4jWebService.installOnline()

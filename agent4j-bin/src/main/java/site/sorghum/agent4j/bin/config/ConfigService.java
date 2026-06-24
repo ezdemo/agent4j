@@ -121,4 +121,19 @@ public class ConfigService {
             log.error("[config] 更新配置失败", e);
         }
     }
+
+    /**
+     * 移除指定配置项并持久化到 config.json。
+     *
+     * @param key 要移除的配置键
+     */
+    public static synchronized void removeConfigKey(String key) {
+        try {
+            config.removeAndSave(key);
+            ConfigService.config = Agent4jConfig.load();
+            log.debug("[config] 已移除配置项: {}", key);
+        } catch (IOException e) {
+            log.error("[config] 移除配置项失败: {}", key, e);
+        }
+    }
 }

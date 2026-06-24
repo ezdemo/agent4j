@@ -28,12 +28,15 @@ public class WorkflowEdge {
     private String condition;
     /** 边类型 */
     private EdgeType type;
+    /** 边标签（可选，如 CONDITION_SELECT 的 "通过"/"失败"） */
+    private String label;
 
     /**
      * 判断是否为条件边。
      */
     public boolean isConditional() {
-        return type == EdgeType.CONDITION_TRUE || type == EdgeType.CONDITION_FALSE;
+        return type == EdgeType.CONDITION_TRUE || type == EdgeType.CONDITION_FALSE
+                || type == EdgeType.CONDITION_SELECT;
     }
 
     /**

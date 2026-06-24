@@ -1,6 +1,6 @@
 {
   "name": "agent4j-front",
-  "version": "26.6.22",
+  "version": "26.6.24.1",
   "private": true,
   "main": "dist/main/main.cjs",
   "type": "module",
@@ -73,14 +73,5 @@
     "code-assistant",
     "vue3",
     "vite"
-  ],
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron",
-      "esbuild",
-      "core-js",
-      "vue-demi",
-      "app-builder-lib"
-    ]
-  }
+  ]
 }
