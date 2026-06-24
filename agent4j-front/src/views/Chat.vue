@@ -1890,19 +1890,18 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 
 .dock-body {
   position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  right: 0;
-  padding: 12px 16px 12px 12px;
+  left: 12px;
+  top: 8px;
+  bottom: 8px;
+  right: 8px;
+  padding: 12px 16px;
   overflow-y: auto;
   pointer-events: auto;
   background: var(--bg);
   border: 1px solid var(--border);
-  border-left: none;
-  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
-  border-radius: 0 var(--r) var(--r) 0;
-  transform: translateX(calc(-100% + 7px));
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+  border-radius: var(--r-lg);
+  transform: translateX(calc(-100% - 12px));
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
               opacity 0.25s ease;
   opacity: 0;
