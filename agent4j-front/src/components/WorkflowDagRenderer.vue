@@ -234,11 +234,11 @@ function getMaxNodesInLevel() {
   border-radius: 3px;
 }
 
-.workflow-status.draft { background: #f3f4f6; color: #6b7280; }
-.workflow-status.active { background: #dbeafe; color: #3b82f6; }
-.workflow-status.paused { background: #fef3c7; color: #f59e0b; }
-.workflow-status.completed { background: #d1fae5; color: #10b981; }
-.workflow-status.failed { background: #fee2e2; color: #ef4444; }
+.workflow-status.draft { background: var(--bg-3); color: var(--fg-3); }
+.workflow-status.active { background: var(--accent-bg); color: var(--accent); }
+.workflow-status.paused { background: var(--yellow-bg, #fef3c7); color: var(--yellow, #f59e0b); }
+.workflow-status.completed { background: var(--green-bg); color: var(--green); }
+.workflow-status.failed { background: var(--red-bg, #fee2e2); color: var(--red, #ef4444); }
 
 .workflow-progress {
   font-size: 11px;
@@ -256,29 +256,29 @@ function getMaxNodesInLevel() {
 }
 
 .edge-line {
-  stroke: #d1d5db;
+  stroke: var(--border);
   stroke-width: 1.5;
 }
 
 .edge-conditional {
-  stroke: #9ca3af;
+  stroke: var(--fg-4);
   stroke-dasharray: 4 2;
 }
 
 .node-rect {
-  fill: #fff;
-  stroke: #d1d5db;
+  fill: var(--bg);
+  stroke: var(--border);
   stroke-width: 1.5;
 }
 
-.node-done .node-rect { fill: #ecfdf5; stroke: #10b981; }
-.node-running .node-rect { fill: #eff6ff; stroke: #3b82f6; }
-.node-failed .node-rect { fill: #fef2f2; stroke: #ef4444; }
-.node-pending .node-rect { fill: #f9fafb; stroke: #d1d5db; }
+.node-done .node-rect { fill: var(--green-bg); stroke: var(--green); }
+.node-running .node-rect { fill: var(--accent-bg); stroke: var(--accent); }
+.node-failed .node-rect { fill: var(--red-bg, #fef2f2); stroke: var(--red, #ef4444); }
+.node-pending .node-rect { fill: var(--bg-3); stroke: var(--border); }
 
 .node-label {
   font-size: 11px;
-  fill: #374151;
+  fill: var(--fg);
 }
 
 .node-list {
@@ -295,9 +295,9 @@ function getMaxNodesInLevel() {
   color: var(--fg-2, #6b7280);
 }
 
-.node-item.status-done { color: #10b981; }
-.node-item.status-running { color: #3b82f6; }
-.node-item.status-failed { color: #ef4444; }
+.node-item.status-done { color: var(--green); }
+.node-item.status-running { color: var(--accent); }
+.node-item.status-failed { color: var(--red, #ef4444); }
 
 .node-item-icon {
   width: 14px;
