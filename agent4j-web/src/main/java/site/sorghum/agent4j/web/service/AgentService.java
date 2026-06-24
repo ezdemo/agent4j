@@ -66,27 +66,41 @@ public class AgentService {
         private final ConcurrentHashMap<String, Agent4jAgent> agents = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<String, ReentrantLock> locks = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<String, String> currentNames = new ConcurrentHashMap<>();
-        private final java.util.concurrent.ConcurrentLinkedDeque<String> order = new java.util.concurrent.ConcurrentLinkedDeque<>();
+        /** LRU 访问顺序跟踪（synchronized 保证 put/get 与 evict 的原子性） */
+        private final List<String> accessOrder = Collections.synchronizedList(new LinkedList<>());
 
         Agent4jAgent get(String key) {
-            order.remove(key);
-            order.addFirst(key);
-            return agents.get(key);
+            // 先查 agents（ConcurrentHashMap 无锁读），再更新 LRU 顺序
+            Agent4jAgent agent = agents.get(key);
+            if (agent != null) {
+                synchronized (accessOrder) {
+                    accessOrder.remove(key);
+                    accessOrder.add(0, key);
+                }
+            }
+            return agent;
         }
 
         void put(String key, Agent4jAgent agent) {
             agents.put(key, agent);
+            synchronized (accessOrder) {
+                accessOrder.remove(key);
+                accessOrder.add(0, key);
+            }
         }
 
         void evictIfNeeded() {
             while (agents.size() >= MAX_CACHE_SIZE) {
-                String oldest = order.pollLast();
+                String oldest;
+                synchronized (accessOrder) {
+                    if (accessOrder.isEmpty()) break;
+                    oldest = accessOrder.remove(accessOrder.size() - 1);
+                }
                 if (oldest != null) {
                     Agent4jAgent removed = agents.remove(oldest);
                     if (removed != null) {
                         try {
-                            removed.flushSession();
-                            removed.saveUsage();
+                            removed.dispose();
                         } catch (Exception e) {
                             log.info("[web] 淘汰 Agent 失败: {}", e.getMessage());
                         }
@@ -98,13 +112,13 @@ public class AgentService {
 
         void clear() {
             agents.clear();
-            order.clear();
+            accessOrder.clear();
             locks.clear();
             currentNames.clear();
         }
 
         Agent4jAgent remove(String key) {
-            order.remove(key);
+            accessOrder.remove(key);
             locks.remove(key);
             return agents.remove(key);
         }
@@ -229,13 +243,12 @@ public class AgentService {
     public synchronized void reinitialize() {
         log.info("[config] 开始重新初始化 AgentService...");
 
-        // 1. 先 flush 所有缓存的 Agent，避免数据丢失
+        // 1. 先 dispose 所有缓存的 Agent（注销监听 + 刷入数据）
         for (Agent4jAgent agent : sessionCache.values()) {
             try {
-                agent.flushSession();
-                agent.saveUsage();
+                agent.dispose();
             } catch (Exception e) {
-                log.warn("[config] flush 淘汰 Agent 时异常: {}", e.getMessage());
+                log.warn("[config] dispose Agent 时异常: {}", e.getMessage());
             }
         }
 
@@ -1031,10 +1044,8 @@ public class AgentService {
 
         try {
             WorkspaceManager workspaceManager = new WorkspaceManager();
-            String currentPath = getWorkspace();
-            if (currentPath != null) {
-                workspaceManager.switchWorkspace(currentPath);
-            }
+            // 注意：此处不应调用 switchWorkspace，因为它有自动创建（initWorkspace）的副作用，
+            // 会导致刚刚被删除的工作区在 list 时被重建。
             List<WorkspaceManager.WorkspaceInfo> workspaces = workspaceManager.listWorkspaces();
 
             for (WorkspaceManager.WorkspaceInfo info : workspaces) {
@@ -1101,18 +1112,33 @@ public class AgentService {
         }
 
         // 2. 删除工作区数据目录（~/.agent4j/workspace/{hash}/）
+        boolean directoryDeleted = false;
         try {
             WorkspaceManager wm = new WorkspaceManager();
-            boolean deleted = wm.deleteWorkspace(hash);
-            if (deleted) {
+            directoryDeleted = wm.deleteWorkspace(hash);
+            if (directoryDeleted) {
                 log.info("[web] 已删除工作区数据目录: {}", hash);
             }
         } catch (Exception e) {
             log.warn("[web] 删除工作区数据目录失败: {}", e.getMessage());
         }
 
+        // 3. 如果删除的是当前工作区，清除 config.json 中的 workspaceDir，
+        //    防止后续其他代码路径触发 switchWorkspace → initWorkspace 重建已删除的工作区
+        if (directoryDeleted) {
+            try {
+                String currentPath = getWorkspace();
+                if (currentPath != null && hash.equals(WorkspaceManager.computeHash(currentPath))) {
+                    ConfigService.removeConfigKey("workspaceDir");
+                    log.info("[web] 已清除 config.json 中的当前工作区引用: {}", currentPath);
+                }
+            } catch (Exception e) {
+                log.warn("[web] 清除当前工作区引用失败: {}", e.getMessage());
+            }
+        }
+
         log.info("[web] 已删除工作区: {}，清除了 {} 个 Agent", hash, keysToRemove.size());
-        return !keysToRemove.isEmpty();
+        return directoryDeleted;
     }
 
     // ==================== 命令与 Skill 查询 ====================

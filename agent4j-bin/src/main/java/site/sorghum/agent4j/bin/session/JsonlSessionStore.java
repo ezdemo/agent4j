@@ -210,27 +210,39 @@ public class JsonlSessionStore implements SessionStore {
      */
     private void consumerLoop() {
         List<ChatMessage> batch = new ArrayList<>(BATCH_SIZE);
-        while (consumerRunning) {
-            try {
-                // 阻塞取一条（避免忙等）
-                ChatMessage first = buffer.poll(1, TimeUnit.SECONDS);
-                if (first == null) continue;
-                batch.add(first);
-                // 非阻塞取剩余（最多 BATCH_SIZE 条）
-                buffer.drainTo(batch, BATCH_SIZE - 1);
-                // 批量写入
-                writeBatch(batch);
-                batch.clear();
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                break;
+        try {
+            while (consumerRunning) {
+                try {
+                    // 阻塞取一条（避免忙等）
+                    ChatMessage first = buffer.poll(1, TimeUnit.SECONDS);
+                    if (first == null) continue;
+                    batch.add(first);
+                    // 非阻塞取剩余（最多 BATCH_SIZE 条）
+                    buffer.drainTo(batch, BATCH_SIZE - 1);
+                    // 批量写入
+                    writeBatch(batch);
+                    batch.clear();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    break;
+                }
             }
-        }
-        // 消费者退出前，将剩余消息全部写完
-        List<ChatMessage> remaining = new ArrayList<>();
-        buffer.drainTo(remaining);
-        if (!remaining.isEmpty()) {
-            writeBatch(remaining);
+        } finally {
+            // 消费者退出前，将剩余消息全部写完（finally 保证即使异常也能执行）
+            try {
+                // 先写完当前 batch 中已取出但未写入的消息
+                if (!batch.isEmpty()) {
+                    writeBatch(batch);
+                }
+                // 再排空缓冲区中剩余的消息
+                List<ChatMessage> remaining = new ArrayList<>();
+                buffer.drainTo(remaining);
+                if (!remaining.isEmpty()) {
+                    writeBatch(remaining);
+                }
+            } catch (Exception e) {
+                log.error("[jsonl] 消费者退出前排空缓冲区失败: {}", e.getMessage());
+            }
         }
     }
 
@@ -380,15 +392,23 @@ public class JsonlSessionStore implements SessionStore {
 
     @Override
     public void flush() {
-        // 先将缓冲区中的消息全部排空到文件
-        List<ChatMessage> pending = new ArrayList<>();
-        buffer.drainTo(pending);
-        if (!pending.isEmpty()) {
-            writeBatch(pending);
-        }
-        // 再刷入文件系统
+        // 先获取锁，等待消费者完成当前写入，再排空缓冲区
         lock.lock();
         try {
+            List<ChatMessage> pending = new ArrayList<>();
+            buffer.drainTo(pending);
+            if (!pending.isEmpty()) {
+                // 直接写入（已在锁内，无需再获取锁）
+                if (currentName == null) {
+                    currentName = newSessionName();
+                }
+                ensureWriter();
+                for (ChatMessage msg : pending) {
+                    writer.write(serializeMessage(msg));
+                    writer.newLine();
+                }
+            }
+            // 刷入文件系统
             if (writer != null) {
                 writer.flush();
             }

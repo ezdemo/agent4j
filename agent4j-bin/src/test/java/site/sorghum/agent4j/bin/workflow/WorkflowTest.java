@@ -6,6 +6,7 @@ import org.junit.jupiter.api.io.TempDir;
 import java.io.IOException;
 import java.nio.file.Path;
 import java.time.Instant;
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 
@@ -541,11 +542,11 @@ class WorkflowTest {
         Workflow workflow = createTestWorkflow();
         int initialEdgeCount = workflow.getEdges().size();
         
-        // 添加边
+        // 添加边（使用不重复的 from→to，避免与现有边冲突）
         WorkflowEdge newEdge = WorkflowEdge.builder()
                 .id("e5")
-                .from("n2")
-                .to("n3")
+                .from("n3")
+                .to("n1")
                 .type(EdgeType.NORMAL)
                 .build();
         
@@ -553,13 +554,13 @@ class WorkflowTest {
         assertEquals(initialEdgeCount + 1, workflow.getEdges().size());
         
         // 移除边
-        workflow.removeEdge("n2", "n3");
+        workflow.removeEdge("n3", "n1");
         assertEquals(initialEdgeCount, workflow.getEdges().size());
     }
 
     // 辅助方法：创建测试工作流
     private Workflow createTestWorkflow() {
-        List<WorkflowNode> nodes = Arrays.asList(
+        List<WorkflowNode> nodes = new ArrayList<>(Arrays.asList(
                 WorkflowNode.builder()
                         .id("start")
                         .description("开始")
@@ -595,9 +596,9 @@ class WorkflowTest {
                         .status(NodeStatus.PENDING)
                         .retryCount(0)
                         .build()
-        );
+        ));
 
-        List<WorkflowEdge> edges = Arrays.asList(
+        List<WorkflowEdge> edges = new ArrayList<>(Arrays.asList(
                 WorkflowEdge.builder()
                         .id("e1")
                         .from("start")
@@ -622,7 +623,7 @@ class WorkflowTest {
                         .to("end")
                         .type(EdgeType.NORMAL)
                         .build()
-        );
+        ));
 
         return Workflow.builder()
                 .id("test-workflow-1")
@@ -630,6 +631,197 @@ class WorkflowTest {
                 .workspaceHash("test-hash-1")
                 .title("测试工作流")
                 .description("这是一个测试工作流")
+                .status(WorkflowStatus.DRAFT)
+                .maxRetries(3)
+                .nodes(nodes)
+                .edges(edges)
+                .createdAt(Instant.now())
+                .updatedAt(Instant.now())
+                .build();
+    }
+
+    // ========== 条件分支测试 ==========
+
+    @Test
+    void testConditionalBranchingTrue() {
+        Workflow workflow = createConditionalWorkflow();
+
+        // 初始状态：start 已完成，condition 应该就绪
+        List<WorkflowNode> readyNodes = workflow.getReadyNodes();
+        assertEquals(1, readyNodes.size());
+        assertEquals("condition", readyNodes.get(0).getId());
+
+        // 模拟条件结果选中 n_true 分支，标记 condition 完成
+        WorkflowNode condition = workflow.findNode("condition");
+        condition.setStatus(NodeStatus.DONE);
+        condition.setConditionResult("n_true");
+        condition.setCompletedAt(Instant.now());
+
+        // 模拟引擎自动跳过未选分支（n_false）
+        workflow.skipBranch("n_false", "condition");
+
+        // 此时 n_true 应该就绪，n_false 不应就绪
+        readyNodes = workflow.getReadyNodes();
+        assertEquals(1, readyNodes.size());
+        assertEquals("n_true", readyNodes.get(0).getId());
+
+        // 完成 n_true
+        WorkflowNode nTrue = workflow.findNode("n_true");
+        nTrue.setStatus(NodeStatus.DONE);
+        nTrue.setCompletedAt(Instant.now());
+
+        // 此时 end 应该就绪
+        readyNodes = workflow.getReadyNodes();
+        assertEquals(1, readyNodes.size());
+        assertEquals("end", readyNodes.get(0).getId());
+    }
+
+    @Test
+    void testConditionalBranchingFalse() {
+        Workflow workflow = createConditionalWorkflow();
+
+        // 标记 condition 完成，选中 n_false 分支
+        WorkflowNode condition = workflow.findNode("condition");
+        condition.setStatus(NodeStatus.DONE);
+        condition.setConditionResult("n_false");
+        condition.setCompletedAt(Instant.now());
+
+        // 模拟引擎自动跳过未选分支（n_true）
+        workflow.skipBranch("n_true", "condition");
+
+        // 此时 n_false 应该就绪，n_true 不应就绪
+        List<WorkflowNode> readyNodes = workflow.getReadyNodes();
+        assertEquals(1, readyNodes.size());
+        assertEquals("n_false", readyNodes.get(0).getId());
+    }
+
+    @Test
+    void testSkipBranch() {
+        Workflow workflow = createConditionalWorkflow();
+
+        // 标记 condition 完成，选中 n_true 分支
+        WorkflowNode condition = workflow.findNode("condition");
+        condition.setStatus(NodeStatus.DONE);
+        condition.setConditionResult("n_true");
+        condition.setCompletedAt(Instant.now());
+
+        // 手动跳过未选分支（n_false 分支），传入 condition 节点ID
+        workflow.skipBranch("n_false", "condition");
+
+        // n_true 应就绪
+        List<WorkflowNode> readyNodes = workflow.getReadyNodes();
+        assertEquals(1, readyNodes.size());
+        assertEquals("n_true", readyNodes.get(0).getId());
+        assertEquals(NodeStatus.SKIPPED, workflow.findNode("n_false").getStatus());
+    }
+
+    @Test
+    void testConditionResultField() {
+        WorkflowNode conditionNode = WorkflowNode.builder()
+                .id("cond1")
+                .description("条件判断")
+                .type(NodeType.CONDITION)
+                .status(NodeStatus.PENDING)
+                .condition("x > 10")
+                .build();
+
+        // 默认 conditionResult 为 null
+        assertNull(conditionNode.getConditionResult());
+
+        // 设置为 true
+        conditionNode.setConditionResult("true");
+        assertEquals("true", conditionNode.getConditionResult());
+
+        // 设置为 false
+        conditionNode.setConditionResult("false");
+        assertEquals("false", conditionNode.getConditionResult());
+    }
+
+    /**
+     * 创建带条件分支的测试工作流：
+     * start -> condition -> n_true (CONDITION_TRUE) -> end
+     *                   \n     *                    -> n_false (CONDITION_FALSE) -> end
+     */
+    private Workflow createConditionalWorkflow() {
+        List<WorkflowNode> nodes = new ArrayList<>(Arrays.asList(
+                WorkflowNode.builder()
+                        .id("start")
+                        .description("开始")
+                        .type(NodeType.START)
+                        .status(NodeStatus.DONE)
+                        .retryCount(0)
+                        .build(),
+                WorkflowNode.builder()
+                        .id("condition")
+                        .description("条件判断")
+                        .type(NodeType.CONDITION)
+                        .status(NodeStatus.PENDING)
+                        .retryCount(0)
+                        .condition("test.passed == true")
+                        .build(),
+                WorkflowNode.builder()
+                        .id("n_true")
+                        .description("条件为真时的操作")
+                        .type(NodeType.ACTION)
+                        .status(NodeStatus.PENDING)
+                        .retryCount(0)
+                        .build(),
+                WorkflowNode.builder()
+                        .id("n_false")
+                        .description("条件为假时的操作")
+                        .type(NodeType.ACTION)
+                        .status(NodeStatus.PENDING)
+                        .retryCount(0)
+                        .build(),
+                WorkflowNode.builder()
+                        .id("end")
+                        .description("结束")
+                        .type(NodeType.END)
+                        .status(NodeStatus.PENDING)
+                        .retryCount(0)
+                        .build()
+        ));
+
+        List<WorkflowEdge> edges = new ArrayList<>(Arrays.asList(
+                WorkflowEdge.builder()
+                        .id("e1")
+                        .from("start")
+                        .to("condition")
+                        .type(EdgeType.NORMAL)
+                        .build(),
+                WorkflowEdge.builder()
+                        .id("e2")
+                        .from("condition")
+                        .to("n_true")
+                        .type(EdgeType.CONDITION_TRUE)
+                        .condition("test.passed == true")
+                        .build(),
+                WorkflowEdge.builder()
+                        .id("e3")
+                        .from("condition")
+                        .to("n_false")
+                        .type(EdgeType.CONDITION_FALSE)
+                        .build(),
+                WorkflowEdge.builder()
+                        .id("e4")
+                        .from("n_true")
+                        .to("end")
+                        .type(EdgeType.NORMAL)
+                        .build(),
+                WorkflowEdge.builder()
+                        .id("e5")
+                        .from("n_false")
+                        .to("end")
+                        .type(EdgeType.NORMAL)
+                        .build()
+        ));
+
+        return Workflow.builder()
+                .id("test-conditional-workflow")
+                .sessionId("test-session-2")
+                .workspaceHash("test-hash-2")
+                .title("条件分支测试工作流")
+                .description("这是一个条件分支测试工作流")
                 .status(WorkflowStatus.DRAFT)
                 .maxRetries(3)
                 .nodes(nodes)

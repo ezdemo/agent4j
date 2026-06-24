@@ -130,7 +130,7 @@
 </template>
 
 <script setup>
-import {onMounted, ref, nextTick} from 'vue'
+import {nextTick, onMounted, ref} from 'vue'
 import {platform} from '@/services/platform'
 // 动态获取当前平台的 agent4jWebService
 const { agent4jWebService } = platform.implementation
@@ -148,10 +148,6 @@ const resourceDir = ref('')
 // 安装步骤和进度
 const installSteps = ref([])
 const installProgress = ref(0)
-
-// JDK 下载进度（事件驱动）
-const downloadProgress = ref(null)
-let downloadUnlisten = null
 
 // 是否在桌面环境（Electron）中
 const isDesktop = ref(false)
@@ -201,7 +197,7 @@ async function checkInstall() {
   if (!resourceDir.value) {
     // 无法获取资源目录，尝试直接启动
     console.warn('[Splash] No resource dir, trying to start directly')
-    await ensureJreBeforeStart()
+    await startService()
     return
   }
 
@@ -212,8 +208,7 @@ async function checkInstall() {
 
     if (!result.needed) {
       // 已安装且版本匹配，直接启动
-      // 但先确保 JRE 存在（不存在则自动下载带进度）
-      await ensureJreBeforeStart()
+      await startService()
       return
     }
 
@@ -225,14 +220,13 @@ async function checkInstall() {
   } catch (e) {
     console.error('[Splash] Check install failed:', e)
     // 回退：尝试直接启动
-    await ensureJreBeforeStart()
+    await startService()
   }
 }
 
 async function startInstall() {
   phase.value = 'installing'
   installProgress.value = 0
-  downloadProgress.value = null
 
   // 初始化步骤
   installSteps.value = [
@@ -242,61 +236,9 @@ async function startInstall() {
   ]
 
   try {
-    // ===== 步骤1：快速检查 Java 环境 =====
+    // ===== 步骤1：Java 环境（由 agent4j 启动脚本内部处理） =====
     installSteps.value[0].status = 'active'
-    const javaStatus = await agent4jWebService.checkJavaQuick()
-
-    if (!javaStatus.found) {
-      // Java 未安装，启动异步下载（带进度事件）
-      downloadUnlisten = await platform.implementation.events.listen('java-download-progress', (payload) => {
-        downloadProgress.value = payload
-
-        // 实时更新步骤详情
-        const msg = payload.message || ''
-        if (payload.phase === 'downloading' && payload.total > 0) {
-          const pct = payload.percent || 0
-          installSteps.value[0].detail = `${pct}% - ${formatFileSize(payload.downloaded)} / ${formatFileSize(payload.total)}`
-        } else {
-          installSteps.value[0].detail = msg
-        }
-
-        // 下载出错
-        if (payload.phase === 'error') {
-          throw new Error(payload.error || 'JDK 下载失败')
-        }
-      })
-
-      // 启动异步下载
-      await agent4jWebService.startJavaDownload()
-
-      // 等待下载完成（由 done 事件驱动）
-      await new Promise((resolve, reject) => {
-        const checkDone = setInterval(() => {
-          const dp = downloadProgress.value
-          if (!dp) return
-          if (dp.phase === 'done') {
-            clearInterval(checkDone)
-            resolve()
-          } else if (dp.phase === 'error') {
-            clearInterval(checkDone)
-            reject(new Error(dp.error || 'JDK 下载失败'))
-          }
-        }, 300)
-      })
-
-      // 清理事件监听
-      if (downloadUnlisten) {
-        downloadUnlisten()
-        downloadUnlisten = null
-      }
-
-      const ver = downloadProgress.value?.version || ''
-      installSteps.value[0].detail = ver ? `JDK ${ver}` : '完成'
-    } else {
-      // Java 已存在
-      installSteps.value[0].detail = javaStatus.version || '已安装'
-    }
-
+    installSteps.value[0].detail = '由启动脚本自动管理'
     installSteps.value[0].status = 'done'
     installProgress.value = 33
     await sleep(200)
@@ -326,56 +268,9 @@ async function startInstall() {
     }
     phase.value = 'error'
     errorMessage.value = `安装失败: ${e.message || e}`
-  } finally {
-    if (downloadUnlisten) {
-      downloadUnlisten()
-      downloadUnlisten = null
-    }
   }
 }
 
-// 启动前确保 JRE 存在（不存在则异步下载带进度）
-async function ensureJreBeforeStart() {
-  try {
-    const javaStatus = await agent4jWebService.checkJavaQuick()
-    if (javaStatus.found) {
-      // JRE 已存在，直接启动
-      await startService()
-      return
-    }
-
-    // JRE 不存在 → 显示安装 UI 并下载
-    phase.value = 'installing'
-    downloadProgress.value = null
-
-    const unlisten = await platform.implementation.events.listen('java-download-progress', (payload) => {
-      downloadProgress.value = payload
-    })
-
-    await agent4jWebService.startJavaDownload()
-
-    // 等待下载完成
-    await new Promise((resolve, reject) => {
-      const checkDone = setInterval(() => {
-        const dp = downloadProgress.value
-        if (!dp) return
-        if (dp.phase === 'done') {
-          clearInterval(checkDone)
-          resolve()
-        } else if (dp.phase === 'error') {
-          clearInterval(checkDone)
-          reject(new Error(dp.error || 'JRE 下载失败'))
-        }
-      }, 300)
-    })
-
-    unlisten()
-    await startService()
-  } catch (e) {
-    console.error('[Splash] JRE check failed, trying direct start:', e)
-    await startService()
-  }
-}
 
 async function startService() {
   phase.value = 'starting'
@@ -556,18 +451,6 @@ async function closeApp() {
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
-}
-
-function formatFileSize(bytes) {
-  if (!bytes || bytes === 0) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB']
-  let i = 0
-  let size = bytes
-  while (size >= 1024 && i < units.length - 1) {
-    size /= 1024
-    i++
-  }
-  return i === 0 ? `${size} ${units[i]}` : `${size.toFixed(1)} ${units[i]}`
 }
 
 defineExpose({

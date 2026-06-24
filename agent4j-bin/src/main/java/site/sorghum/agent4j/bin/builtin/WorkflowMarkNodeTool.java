@@ -12,6 +12,7 @@ import site.sorghum.agent4j.tool.solon.SolonToTools;
 
 import java.time.Instant;
 import java.util.Collection;
+import java.util.List;
 
 /**
  * Workflow Mark Node 工具 —— 标记工作流中的某个节点为已完成。
@@ -29,9 +30,12 @@ public class WorkflowMarkNodeTool extends AbsToolProvider implements SolonToTool
                 标记当前会话工作流中的某个节点为"已完成"。
                 每完成一个节点后调用此工具，参数传入节点ID。
                 如果所有节点都已完成，工作流会自动标记为已完成。
+                注意：对于 CONDITION 类型节点，必须传入 conditionResult 参数（值为选中的目标节点ID，如 "n4"），
+                系统会自动跳过其他未选中的分支。
                 """)
     public String workflowMarkNode(@Param(name = "nodeId", description = "已完成的节点ID（如 'n1', 'n2'）") String nodeId,
                                    @Param(name = "result", description = "该节点的执行结果摘要，记录在工作流中供后续查阅", required = false) String result,
+                                   @Param(name = "conditionResult", description = "CONDITION 节点专用：选中的分支节点ID（如 'n4'），引擎会自动跳过其他分支", required = false) String conditionResult,
                                    @Param(name = "sessionId", description = "会话 ID。留空自动从上下文获取当前会话", required = false) String sessionId,
                                    ToolContext ctx) {
         // 校验 nodeId
@@ -71,6 +75,36 @@ public class WorkflowMarkNodeTool extends AbsToolProvider implements SolonToTool
                 node.setResult(result);
             }
             workflow.setUpdatedAt(Instant.now());
+
+            // 如果是 CONDITION 节点且提供了 conditionResult，处理分支跳过逻辑
+            // conditionResult 应为选中的目标节点ID（如 "n4"），引擎会跳过其他所有分支
+            if (node.getType() == NodeType.CONDITION && conditionResult != null && !conditionResult.isBlank()) {
+                // 存储条件结果到节点
+                node.setConditionResult(conditionResult);
+
+                // 查找所有从该条件节点出发的后继节点，跳过不匹配的分支
+                List<String> successors = workflow.getSuccessorIds(nodeId);
+                for (String succId : successors) {
+                    if (!succId.equals(conditionResult)) {
+                        // 未选中的分支：递归跳过整条子树（智能跳过，不影响汇合节点）
+                        workflow.skipBranch(succId, nodeId);
+                    }
+                }
+            }
+
+            // 自动完成 END 节点：如果所有前驱节点都已完成，则 END 节点自动标记为完成
+            for (WorkflowNode wn : workflow.getNodes()) {
+                if (wn.getType() == NodeType.END && wn.getStatus() != NodeStatus.DONE) {
+                    List<String> preds = workflow.getPredecessorIds(wn.getId());
+                    if (!preds.isEmpty() && preds.stream().allMatch(predId -> {
+                        WorkflowNode pred = workflow.findNode(predId);
+                        return pred != null && pred.getStatus() == NodeStatus.DONE;
+                    })) {
+                        wn.setStatus(NodeStatus.DONE);
+                        wn.setCompletedAt(Instant.now());
+                    }
+                }
+            }
 
             // 检查所有节点是否都已完成
             if (workflow.isAllDone()) {

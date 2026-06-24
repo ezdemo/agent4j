@@ -84,21 +84,140 @@
       </div>
     </div>
 
+    <!-- 路径组（连续 reasoning + tool_call 折叠） -->
+    <div v-else-if="block.type === 'path_group'" class="block-tool">
+      <div class="tool-head" @click="togglePathGroup(block._groupId)">
+        <span class="tool-icon default-icon" :class="block._running ? '执行中' : '成功'">
+          <span v-if="block._running" v-html="SPINNER_ICON"></span>
+          <span v-else-if="block._allDone" v-html="CHECK_ICON_SM"></span>
+          <span v-else v-html="CIRCLE_ICON"></span>
+        </span>
+        <span class="path-label">路径</span>
+        <span class="path-steps">{{ block._blocks.length }} 步</span>
+        <span class="tool-param" :title="block._pathNames">{{ truncatePath(block._pathNames, 60) }}</span>
+        <span class="default-icon"
+              v-html="CHEVRON_DOWN_ICON"
+              :style="{
+                transform: pathGroupsExpanded[block._groupId] ? 'rotate(180deg)' : 'rotate(0deg)',
+                display: 'inline-block',
+                transition: 'transform 0.25s ease',
+                lineHeight: 0
+              }">
+        </span>
+      </div>
+      <div v-if="pathGroupsExpanded[block._groupId]" class="tool-group-detail">
+        <template v-for="(ib, ibi) in block._blocks" :key="ibi">
+          <!-- 内层思考 -->
+          <div v-if="ib.type === 'reasoning'" class="tool-group-item-block">
+            <div class="block-reasoning">
+              <div class="reasoning-head" @click="togglePathItem(ib._itemId)">
+                <span class="default-icon" v-html="THINKING_ICON"></span>
+                <span>思考</span>
+                <span class="default-icon"
+                      v-html="CHEVRON_DOWN_ICON"
+                      :style="{
+                        transform: pathItemExpanded[ib._itemId] ? 'rotate(180deg)' : 'rotate(0deg)',
+                        display: 'inline-block',
+                        transition: 'transform 0.25s ease',
+                        lineHeight: 0
+                      }">
+                </span>
+              </div>
+              <div v-if="pathItemExpanded[ib._itemId]" class="reasoning-text" v-html="fmt(ib.content)"></div>
+            </div>
+          </div>
+          <!-- 内层工具 -->
+          <div v-else-if="ib.type === 'tool_call'" class="tool-group-item-block">
+            <div class="block-tool">
+              <div class="tool-head" @click="togglePathItem(ib._itemId)">
+                <span class="tool-icon default-icon" :class="ib.status">
+                  <span v-if="ib.status === '执行中'" v-html="SPINNER_ICON"></span>
+                  <span v-else-if="ib.status === '成功'" v-html="CHECK_ICON_SM"></span>
+                  <span v-else v-html="CIRCLE_ICON"></span>
+                </span>
+                <code class="tool-name">{{ ib.name }}</code>
+                <span class="tool-status" :class="ib.status">{{ ib.status }}</span>
+                <span v-if="ib.name === 'bash' && getBashCommand(ib)" class="tool-param"
+                      :title="getBashCommandFull(ib)">{{ getBashCommand(ib) }}</span>
+                <span v-else-if="ib.name === 'grep' && getGrepPath(ib)" class="tool-param"
+                      :title="getGrepPathFull(ib)">{{ getGrepPath(ib) }}</span>
+                <span v-else-if="ib.name === 'glob' && getGlobPath(ib)" class="tool-param"
+                      :title="getGlobPathFull(ib)">{{ getGlobPath(ib) }}</span>
+                <span v-else-if="ib.name === 'ls' && getLsPath(ib)" class="tool-param"
+                      :title="getLsPath(ib)">{{ getLsPath(ib) }}</span>
+                <button v-else-if="shouldShowOpenFile(ib)" class="tool-file" @click.stop="openFile(ib)"
+                        :title="getFilePath(ib)">{{ getFileName(ib) }}
+                </button>
+                <span v-else-if="ib.name === 'ask_choice' && getChoiceQuestion(ib)" class="tool-param tool-param-wide"
+                      :title="getChoiceQuestion(ib)">{{ getChoiceQuestion(ib) }}</span>
+                <span class="default-icon"
+                      v-html="CHEVRON_DOWN_ICON"
+                      :style="{
+                        transform: pathItemExpanded[ib._itemId] ? 'rotate(180deg)' : 'rotate(0deg)',
+                        display: 'inline-block',
+                        transition: 'transform 0.25s ease',
+                        lineHeight: 0
+                      }">
+                </span>
+              </div>
+              <div v-if="pathItemExpanded[ib._itemId]" class="tool-detail">
+                <pre v-if="ib.args"><code>{{ fmtArgs(ib.args) }}</code></pre>
+                <pre v-if="ib.result"><code>{{ ib.result }}</code></pre>
+              </div>
+            </div>
+          </div>
+        </template>
+      </div>
+    </div>
+
     <!-- 单个工具调用（非连续时不合并） -->
     <template v-else-if="block.type === 'tool_call'">
       <!-- finish 工具：完成时将 content 渲染为模型输出样式 -->
-      <div v-if="block.name === 'finish' && block.result" class="block-finish">
-        <div class="finish-head">
-          <span class="finish-icon default-icon" v-html="CHECK_ICON"></span>
-          <span class="finish-label">最终回答</span>
+      <div v-if="block.name === 'finish' && block.result" class="block-tool block-finish">
+        <div class="tool-head">
+          <span class="tool-icon default-icon 成功" v-html="CHECK_ICON_SM"></span>
+          <code class="tool-name" >最终回答</code>
         </div>
-        <div class="finish-content" v-html="fmt(block.result)"></div>
+        <div class="tool-detail finish-content" v-html="fmt(block.result)"></div>
       </div>
       <!-- finish 执行中 -->
       <div v-else-if="block.name === 'finish' && block.status" class="block-tool">
         <div class="tool-head">
           <span class="tool-icon default-icon" :class="block.status" v-html="SPINNER_ICON"></span>
           <code class="tool-name">finish</code>
+          <span class="tool-status" :class="block.status">{{ block.status }}</span>
+        </div>
+      </div>
+      <!-- 工作流工具：workflow_create_dag 和 workflow_visualize -->
+      <div v-else-if="isWorkflowTool(block) && block.result" class="block-workflow">
+        <div class="workflow-tool-head" @click="block.expanded = !block.expanded">
+          <span class="tool-icon default-icon" :class="block.status">
+            <span v-if="block.status === '执行中'" v-html="SPINNER_ICON"></span>
+            <span v-else-if="block.status === '成功'" v-html="CHECK_ICON_SM"></span>
+            <span v-else v-html="CIRCLE_ICON"></span>
+          </span>
+          <code class="tool-name">{{ block.name }}</code>
+          <span class="tool-status" :class="block.status">{{ block.status }}</span>
+          <span class="workflow-tool-title">{{ getWorkflowTitle(block) }}</span>
+          <span class="default-icon"
+                v-html="CHEVRON_DOWN_ICON"
+                :style="{
+                  transform: block.expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                  display: 'inline-block',
+                  transition: 'transform 0.25s ease',
+                  lineHeight: 0
+                }">
+          </span>
+        </div>
+        <div v-if="block.expanded" class="workflow-tool-detail">
+          <WorkflowDagRenderer :data="getWorkflowData(block)" />
+        </div>
+      </div>
+      <!-- 工作流工具执行中 -->
+      <div v-else-if="isWorkflowTool(block) && block.status" class="block-tool">
+        <div class="tool-head">
+          <span class="tool-icon default-icon" :class="block.status" v-html="SPINNER_ICON"></span>
+          <code class="tool-name">{{ block.name }}</code>
           <span class="tool-status" :class="block.status">{{ block.status }}</span>
         </div>
       </div>
@@ -181,15 +300,19 @@
 <script setup>
 import {md} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
-import {CHECK_ICON, CHECK_ICON_SM, CHEVRON_DOWN_ICON, CIRCLE_ICON, SPINNER_ICON, THINKING_ICON} from '../utils/icons'
+import {CHECK_ICON_SM, CHEVRON_DOWN_ICON, CIRCLE_ICON, SPINNER_ICON, THINKING_ICON} from '../utils/icons'
 import {LRUCache} from '../utils/cache'
 import {ref, computed} from 'vue'
+import WorkflowDagRenderer from './WorkflowDagRenderer.vue'
 
 const props = defineProps({
   blocks: {type: Array, required: true}
 })
 
 const emit = defineEmits(['sendChoice', 'openFile'])
+
+// 工作流工具列表（需要在 processedBlocks 之前定义）
+const WORKFLOW_TOOLS = ['workflow_create_dag', 'workflow_visualize']
 
 // ── 工具分组折叠状态 ──
 let _groupSeq = 0
@@ -199,7 +322,21 @@ const toggleToolGroup = (groupId) => {
   toolGroupsExpanded.value = {...toolGroupsExpanded.value, [groupId]: !toolGroupsExpanded.value[groupId]}
 }
 
-/** 将连续 tool_call 合并为 tool_group */
+// ── 路径组折叠状态 ──
+const pathGroupsExpanded = ref({})
+
+const togglePathGroup = (groupId) => {
+  pathGroupsExpanded.value = {...pathGroupsExpanded.value, [groupId]: !pathGroupsExpanded.value[groupId]}
+}
+
+// ── 路径组内层块折叠状态（key = groupId-index） ──
+const pathItemExpanded = ref({})
+
+const togglePathItem = (key) => {
+  pathItemExpanded.value = {...pathItemExpanded.value, [key]: !pathItemExpanded.value[key]}
+}
+
+/** 将连续 reasoning + tool_call(非 finish) 合并为 path_group */
 const processedBlocks = computed(() => {
   const src = props.blocks
   if (!src || src.length === 0) return []
@@ -207,31 +344,37 @@ const processedBlocks = computed(() => {
   let i = 0
   while (i < src.length) {
     const b = src[i]
-    if (b.type === 'tool_call' && b.name !== 'finish') {
-      // 收集连续的 tool_call
+    // 收集连续的 reasoning + tool_call(非 finish)
+    if (b.type === 'reasoning' || (b.type === 'tool_call' && b.name !== 'finish')) {
       const group = [b]
       let j = i + 1
-      while (j < src.length && src[j].type === 'tool_call' && src[j].name !== 'finish') {
-        group.push(src[j])
-        j++
+      while (j < src.length) {
+        const nb = src[j]
+        if (nb.type === 'reasoning' || (nb.type === 'tool_call' && nb.name !== 'finish')) {
+          group.push(nb)
+          j++
+        } else {
+          break
+        }
       }
-      if (group.length >= 2) {
-        // 多个连续工具 → 合并为 tool_group
-        _groupSeq++
-        const gid = `tg-${_groupSeq}`
-        const allDone = group.every(t => t.status === '成功')
-        const running = group.some(t => t.status === '执行中')
-        out.push({
-          type: 'tool_group',
-          _groupId: gid,
-          _tools: group,
-          _groupAllDone: allDone,
-          _groupRunning: running
-        })
-      } else {
-        // 单个工具不合并
-        out.push(b)
-      }
+      // 不管几个都合并为 path_group（单个 reasoning 也要折叠）
+      _groupSeq++
+      const gid = `pg-${_groupSeq}`
+      // 给每个内层块分配唯一 ID 用于展开状态跟踪
+      group.forEach((item, idx) => { item._itemId = `${gid}-${idx}` })
+      const toolCount = group.filter(x => x.type === 'tool_call').length
+      const pathNames = group.map(x => x.type === 'reasoning' ? 'think' : x.name).join(' → ')
+      const allDone = group.filter(x => x.type === 'tool_call').every(t => t.status === '成功')
+      const running = group.filter(x => x.type === 'tool_call').some(t => t.status === '执行中')
+      out.push({
+        type: 'path_group',
+        _groupId: gid,
+        _blocks: group,
+        _toolCount: toolCount,
+        _pathNames: pathNames,
+        _allDone: toolCount === 0 ? true : allDone,
+        _running: running
+      })
       i = j
     } else {
       out.push(b)
@@ -251,6 +394,11 @@ const getToolGroupOrderTruncated = (block) => {
   const order = getToolGroupOrder(block)
   if (!order) return ''
   return order.length > 60 ? order.slice(0, 57) + '...' : order
+}
+
+const truncatePath = (text, max) => {
+  if (!text) return ''
+  return text.length > max ? text.slice(0, max - 1) + '…' : text
 }
 
 // Markdown 渲染缓存
@@ -391,6 +539,59 @@ const getChoiceQuestion = (block) => {
   const count = Array.isArray(options) ? options.length : 0
   const suffix = count > 0 ? ` (${count} 项)` : ''
   return q.length > 40 ? q.slice(0, 37) + '...' + suffix : q + suffix
+}
+
+// 工作流工具相关方法
+const isWorkflowTool = (block) => {
+  return WORKFLOW_TOOLS.includes(block.name)
+}
+
+// 工作流工具默认展开
+const initWorkflowToolExpanded = (block) => {
+  if (isWorkflowTool(block) && block.expanded === undefined) {
+    block.expanded = true
+  }
+}
+
+const getWorkflowTitle = (block) => {
+  try {
+    if (block.name === 'workflow_create_dag') {
+      const args = parseArgs(block)
+      return args?.title || ''
+    }
+    if (block.name === 'workflow_visualize') {
+      const result = parseResult(block)
+      return result?.title || ''
+    }
+  } catch (e) {
+    // ignore
+  }
+  return ''
+}
+
+const getWorkflowData = (block) => {
+  try {
+    if (block.name === 'workflow_create_dag') {
+      const result = parseResult(block)
+      return result || {}
+    }
+    if (block.name === 'workflow_visualize') {
+      const result = parseResult(block)
+      return result || {}
+    }
+  } catch (e) {
+    // ignore
+  }
+  return {}
+}
+
+const parseResult = (block) => {
+  if (!block.result) return null
+  try {
+    return JSON.parse(block.result)
+  } catch (e) {
+    return null
+  }
 }
 </script>
 
@@ -612,33 +813,9 @@ const getChoiceQuestion = (block) => {
   margin-bottom: 0;
 }
 
-/* 完成块（finish 工具输出） */
+/* 完成块（finish 工具输出）— 复用 block-tool 样式 */
 .block-finish {
-  margin-top: 2px;
-  margin-bottom: 4px;
-}
-
-.finish-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.finish-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: var(--r-sm);
-  color: var(--green);
-}
-
-.finish-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--green);
+  border-color: var(--green-bg);
 }
 
 .finish-content {
@@ -818,6 +995,20 @@ const getChoiceQuestion = (block) => {
   margin-top: 2px;
 }
 
+/* 路径组标签（不带蓝色） */
+.path-label {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+}
+
+.path-steps {
+  font-size: 10px;
+  color: var(--fg-4);
+  flex-shrink: 0;
+}
+
 /* 工具块 */
 .block-tool {
   background: var(--glass-bg);
@@ -904,6 +1095,38 @@ const getChoiceQuestion = (block) => {
   font-size: 11px;
   max-height: 150px;
   overflow: auto;
+}
+
+/* 工作流工具 */
+.block-workflow {
+  background: var(--bg-2, #f9fafb);
+  border: 1px solid var(--border, #e5e7eb);
+  border-radius: 6px;
+  overflow: hidden;
+  margin-bottom: 4px;
+}
+
+.workflow-tool-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  cursor: pointer;
+}
+
+.workflow-tool-head:hover {
+  background: var(--bg-3, #f3f4f6);
+}
+
+.workflow-tool-title {
+  font-size: 12px;
+  color: var(--fg-2, #6b7280);
+  margin-left: 4px;
+}
+
+.workflow-tool-detail {
+  padding: 8px;
+  border-top: 1px solid var(--border, #e5e7eb);
 }
 
 .tool-param {

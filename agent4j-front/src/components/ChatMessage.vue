@@ -3,7 +3,10 @@
     <!-- 用户消息 -->
     <template v-if="msg.role === 'user'">
       <div class="msg-body user-body">
-        <div class="msg-text">{{ msg.content }}</div>
+        <div class="msg-text">{{ userDisplayText }}</div>
+        <button v-if="isUserLong" class="user-expand-btn" @click="userExpanded = !userExpanded">
+          {{ userExpanded ? '收起' : '展开全部' }}
+        </button>
         <div v-if="msg.images && msg.images.length > 0" class="user-images">
           <img v-for="(img, i) in msg.images" :key="i" :src="img" class="user-image" @click="$emit('previewImage', img)"/>
         </div>
@@ -26,7 +29,13 @@
           <BlockRenderer :blocks="msg.blocks || []" @send-choice="(val, block) => $emit('sendChoice', val, block)" @open-file="(filePath) => $emit('openFile', filePath)" />
         </div>
         <div class="msg-footer">
-          <span class="msg-time">{{ msg.time }}</span>
+          <span class="msg-time-group">
+            <span class="msg-time">{{ msg.time }}</span>
+            <template v-if="fileStats">
+              <span v-if="fileStats.edited > 0" class="msg-file-stat">修改 {{ fileStats.edited }} 文件</span>
+              <span v-if="fileStats.created > 0" class="msg-file-stat">新增 {{ fileStats.created }} 文件</span>
+            </template>
+          </span>
           <button class="copy-msg-btn" @click="$emit('copyMessage', msg)" title="复制消息" v-html="COPY_ICON"></button>
         </div>
       </div>
@@ -55,7 +64,7 @@
 <script setup>
 import {COPY_ICON, ROLLBACK_ICON} from '../utils/icons'
 import BlockRenderer from './BlockRenderer.vue'
-import {onMounted, onBeforeUnmount, reactive, ref} from 'vue'
+import {onMounted, onBeforeUnmount, reactive, ref, computed} from 'vue'
 import platform from '../services/platform'
 
 const props = defineProps({
@@ -67,6 +76,32 @@ const props = defineProps({
 const emit = defineEmits(['previewImage', 'rollbackSnapshot', 'copyMessage', 'sendChoice', 'openFile'])
 
 const isElectron = platform.isElectron
+
+// 用户消息截断
+const USER_MAX_LEN = 300
+const userExpanded = ref(false)
+const isUserLong = computed(() => (props.msg.content || '').length > USER_MAX_LEN)
+const userDisplayText = computed(() => {
+  const c = props.msg.content || ''
+  if (userExpanded.value || c.length <= USER_MAX_LEN) return c
+  return c.slice(0, USER_MAX_LEN) + '...'
+})
+
+// 助手消息文件统计（edit=修改, write=新增，按 file_path 去重）
+const fileStats = computed(() => {
+  const blocks = props.msg.blocks
+  if (!blocks) return null
+  const edited = new Set(), created = new Set()
+  for (const b of blocks) {
+    if (b.type !== 'tool_call' || b.name === 'finish') continue
+    const fp = b.args?.file_path
+    if (!fp) continue
+    if (b.name === 'edit') edited.add(fp)
+    else if (b.name === 'write') created.add(fp)
+  }
+  if (edited.size === 0 && created.size === 0) return null
+  return { edited: edited.size, created: created.size }
+})
 
 // SVG 图标已迁移至 ../utils/icons.js
 
@@ -233,7 +268,6 @@ onBeforeUnmount(() => {
 .assistant-body .msg-time {
   font-size: 10px;
   color: var(--fg-4);
-  margin-top: 4px;
 }
 
 .msg-text {
@@ -283,6 +317,17 @@ onBeforeUnmount(() => {
   justify-content: space-between;
 }
 
+.msg-time-group {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.msg-file-stat {
+  font-size: 10px;
+  color: var(--fg-4);
+}
+
 .copy-msg-btn {
   opacity: 0;
   background: none;
@@ -311,6 +356,23 @@ onBeforeUnmount(() => {
 
 .user-body .copy-msg-btn:hover {
   background: rgba(255, 255, 255, 0.15);
+}
+
+/* 用户消息展开/收起按钮 */
+.user-expand-btn {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 2px 0;
+  margin-top: 2px;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.user-expand-btn:hover {
+  color: #fff;
 }
 
 /* 撤回按钮 */

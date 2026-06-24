@@ -158,7 +158,9 @@ public class ConversationContext {
      * prefix 始终保持不变 → DeepSeek 前缀缓存命中。
      */
     public List<ChatMessage> buildMessages() {
-        List<ChatMessage> msgs = prefix.toMessages();
+        List<ChatMessage> prefixMsgs = prefix.toMessages();
+        List<ChatMessage> msgs = new ArrayList<>(prefixMsgs.size() + history.size());
+        msgs.addAll(prefixMsgs);
         msgs.addAll(history);
         return msgs;
     }

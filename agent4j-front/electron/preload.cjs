@@ -11,8 +11,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
     start: () => ipcRenderer.invoke('start_agent4j_web'),
     stop: () => ipcRenderer.invoke('stop_agent4j_web'),
     getCurrentPort: () => ipcRenderer.invoke('get_agent4j_web_port'),
-    checkJavaQuick: () => ipcRenderer.invoke('check_java_quick'),
-    startJavaDownload: () => ipcRenderer.invoke('start_java_download'),
     installOnline: () => ipcRenderer.invoke('install_agent4j_web_online')
   },
   

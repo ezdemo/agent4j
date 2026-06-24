@@ -82,6 +82,18 @@
       </div>
     </div>
 
+    <!-- 工作流状态面板（左侧指示条，仅会话选中时显示） -->
+    <div v-if="props.sessionName" class="workflow-dock">
+      <div class="dock-trigger" @mouseenter="loadWorkflow"></div>
+      <div v-if="workflowData" class="dock-body">
+        <WorkflowDagRenderer :data="workflowData" />
+      </div>
+      <div v-else class="dock-body dock-empty">
+        <span class="dock-empty-text">暂无工作流</span>
+        <button class="dock-empty-btn" @click="inputText = '/workflow create '">去创建</button>
+      </div>
+    </div>
+
     <!-- 消息缩略图 dock（右侧 dock 栏，仅用户消息） -->
     <div v-if="userMessages.length > 0" class="msg-thumb-dock">
       <div class="thumb-dock-inner">
@@ -126,7 +138,6 @@
             <div class="sub-session">
               <div class="sub-session-body">
                 <template v-for="(session, si) in subAgentSessions" :key="session.id">
-                  <div class="sub-session-task">{{ session.taskName }}</div>
                   <ChatMessage
                       :msg="{ role: 'assistant', blocks: session.blocks, id: session.id }"
                       :idx="si"
@@ -193,7 +204,6 @@
     <ChatInput v-else
         v-model:inputText="inputText"
         :streaming="streaming"
-        :todos="todos"
         :usage="usage"
         :currentModel="currentModel"
         :availableModels="availableModels"
@@ -205,7 +215,6 @@
         @abort="abortChat"
         @clear="clearChat"
         @export="exportChat"
-        @fetchTodos="fetchTodos"
         @refreshUsage="loadUsage"
         @switchModel="handleSwitchModel"
         @switchReasoningEffort="handleSwitchReasoningEffort"
@@ -223,8 +232,8 @@ import {sanitize} from '../utils/sanitize'
 import ChatInput from '../components/ChatInput.vue'
 import ChatMessage from '../components/ChatMessage.vue'
 import DiffViewer from '../components/DiffViewer.vue'
+import WorkflowDagRenderer from '../components/WorkflowDagRenderer.vue'
 import {useAppStore} from '../stores/app'
-import platform from '../services/platform'
 
 // ============= 模型切换 =============
 const handleSwitchModel = async (modelName) => {
@@ -305,9 +314,6 @@ const streaming = computed(() => store.getSessionStreaming(props.sessionName))
 const hasHistory = computed(() => messages.value.length > 0)
 const planMode = ref(false)
 
-// TODO 相关状态
-const todos = ref([])
-
 // Usage 相关
 const usage = ref({
   promptTokens: 0,
@@ -319,6 +325,37 @@ const usage = ref({
 })
 const currentModel = ref('')
 const availableModels = ref([])
+
+// ==================== 工作流状态 ====================
+const workflowData = ref(null)
+const workflowLoading = ref(false)
+const workflowCollapsed = ref(false)
+
+const loadWorkflow = async () => {
+  if (!props.workspaceHash || !props.sessionName) {
+    workflowData.value = null
+    return
+  }
+  workflowLoading.value = true
+  try {
+    const { sessionsAPI } = await import('../services/api')
+    const res = await sessionsAPI.getWorkflow(props.sessionName, props.workspaceHash)
+    if (res.success && res.data) {
+      workflowData.value = res.data
+    } else {
+      workflowData.value = null
+    }
+  } catch (e) {
+    workflowData.value = null
+  } finally {
+    workflowLoading.value = false
+  }
+}
+
+// 监听会话变化，加载工作流
+watch([() => props.workspaceHash, () => props.sessionName], () => {
+  loadWorkflow()
+}, { immediate: true })
 
 const loadUsage = async (override) => {
   try {
@@ -401,21 +438,6 @@ const formatTime = (t) => {
   if (!t) return ''
   const d = new Date(t)
   return d.toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'})
-}
-
-// 获取当前会话的 TODO 列表
-const fetchTodos = async () => {
-  try {
-    const params = {}
-    params.sessionName = props.sessionName || 'default'
-    if (props.workspaceHash) params.workspaceHash = props.workspaceHash
-    const res = await configAPI.getTodos(params)
-    if (res.success) {
-      todos.value = res.data || []
-    }
-  } catch (e) {
-    todos.value = []
-  }
 }
 
 // 监听 workspace 和 session 变化，重新加载 usage
@@ -1091,10 +1113,13 @@ const loadHistory = async (sessionName, force = false) => {
       const raw = r.data, tr = {}
       for (const m of raw) if (m.role === 'tool' && m.tool_call_id) tr[m.tool_call_id] = m.content || ''
       const merged = []
+      let lastAssistantItem = null
+      let idCounter = 0
       for (const m of raw) {
         if (m.role === 'tool') continue
-        const item = {id: Date.now() + merged.length, role: m.role, time: formatTimestamp(m.timestamp), blocks: []}
         if (m.role === 'user') {
+          // 用户消息：创建新item
+          const item = {id: Date.now() + idCounter++, role: 'user', time: formatTimestamp(m.timestamp), blocks: []}
           // 多模态消息：contentParts 为 [{type:'text',...},{type:'image_url',...}] 数组
           const parts = m.contentParts || (Array.isArray(m.content) ? m.content : null)
           if (parts && parts.length > 0) {
@@ -1116,8 +1141,19 @@ const loadHistory = async (sessionName, force = false) => {
           if (m.snapshot_id) {
             item.snapshotId = m.snapshot_id
           }
+          merged.push(item)
+          lastAssistantItem = null // 重置
         } else {
-          if (m.reasoning_content) item.blocks.push({
+          // assistant消息：合并连续的assistant消息
+          if (!lastAssistantItem) {
+            // 创建新的assistant item
+            lastAssistantItem = {id: Date.now() + idCounter++, role: 'assistant', time: formatTimestamp(m.timestamp), blocks: []}
+            merged.push(lastAssistantItem)
+          } else {
+            // 更新时间戳为最新的
+            lastAssistantItem.time = formatTimestamp(m.timestamp)
+          }
+          if (m.reasoning_content) lastAssistantItem.blocks.push({
             type: 'reasoning',
             content: m.reasoning_content,
             showContent: false
@@ -1128,7 +1164,7 @@ const loadHistory = async (sessionName, force = false) => {
               args = JSON.parse(args)
             } catch {
             }
-            item.blocks.push({
+            lastAssistantItem.blocks.push({
               type: 'tool_call',
               name,
               status: tr[tc.id] ? '成功' : '执行中',
@@ -1137,9 +1173,8 @@ const loadHistory = async (sessionName, force = false) => {
               expanded: !tr[tc.id]
             })
           }
-          if (m.content) item.blocks.push({type: 'content', content: m.content})
+          if (m.content) lastAssistantItem.blocks.push({type: 'content', content: m.content})
         }
-        merged.push(item)
       }
       store.setSessionMessages(targetSession, merged)
       await scroll(true)
@@ -1810,6 +1845,114 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   font-size: 13px;
   cursor: default;
   user-select: none;
+}
+
+/* ===== 工作流指示条（左侧边缘侧滑） ===== */
+.workflow-dock {
+  position: absolute;
+  left: 0;
+  top: 30%;
+  bottom: 30%;
+  z-index: 60;
+  width: min(85vw, 780px);
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.dock-trigger {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 10px;
+  pointer-events: auto;
+  cursor: default;
+  z-index: 2;
+}
+
+.dock-trigger::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  border-radius: 0 4px 4px 0;
+  background: var(--accent);
+  opacity: 0.5;
+  transition: opacity 0.25s ease;
+}
+
+.workflow-dock:has(.dock-trigger:hover) .dock-trigger::before,
+.workflow-dock:has(.dock-body:hover) .dock-trigger::before {
+  opacity: 0;
+}
+
+.dock-body {
+  position: absolute;
+  left: 12px;
+  top: 8px;
+  bottom: 8px;
+  right: 8px;
+  padding: 12px 16px;
+  overflow-y: auto;
+  pointer-events: auto;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
+  border-radius: var(--r-lg);
+  transform: translateX(calc(-100% - 12px));
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.25s ease;
+  opacity: 0;
+}
+
+.workflow-dock:has(.dock-trigger:hover) .dock-body,
+.workflow-dock:has(.dock-body:hover) .dock-body {
+  transform: translateX(0);
+  opacity: 1;
+}
+
+.dock-body :deep(.workflow-dag) {
+  border: none;
+  padding: 0;
+  background: transparent;
+}
+
+.dock-body :deep(.workflow-header) {
+  margin-bottom: 6px;
+  padding-bottom: 6px;
+}
+
+/* 空状态 */
+.dock-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  text-align: center;
+}
+
+.dock-empty-text {
+  font-size: 12px;
+  color: var(--fg-3);
+}
+
+.dock-empty-btn {
+  font-size: 11px;
+  color: var(--accent);
+  background: none;
+  border: 1px solid var(--accent);
+  border-radius: 4px;
+  padding: 3px 12px;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s;
+}
+
+.dock-empty-btn:hover {
+  background: var(--accent);
+  color: #fff;
 }
 
 /* ===== 消息缩略图 dock（右侧 dock 栏） ===== */

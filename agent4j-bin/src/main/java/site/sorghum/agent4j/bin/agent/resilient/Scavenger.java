@@ -24,10 +24,10 @@ public class Scavenger {
             "<invoke\\s+name=\"([^\"]+)\">([\\s\\S]*?)</invoke>", Pattern.CASE_INSENSITIVE);
 
     /**
-     * 裸 JSON 工具调用模式：匹配 {name, arguments}、{tool_name, tool_args}、{function:{name, arguments}} 等格式。
+     * 裸 JSON 工具调用模式：匹配 {name, arguments} 等格式。要求存在 arguments/tool_args 字段，减少误报。
      */
     private static final Pattern JSON_CALL = Pattern.compile(
-            "\\{\\s*\"(?:name|tool_name|function)\"\\s*:\\s*\"(\\w+)\"\\s*[,}]");
+            "\\{\\s*\"(?:name|tool_name|function)\"\\s*:\\s*\"(\\w+)\"\\s*,\\s*\"(?:arguments|tool_args)\"");
 
     /**
      * 从 reasoning_content 和 content 中回收丢失的工具调用。

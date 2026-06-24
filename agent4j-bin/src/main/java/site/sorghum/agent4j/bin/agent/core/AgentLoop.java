@@ -20,20 +20,11 @@ import site.sorghum.agent4j.bin.agent.listener.AgentLoopListener;
 import site.sorghum.agent4j.bin.agent.listener.NoOpAgentLoopListener;
 import site.sorghum.agent4j.bin.agent.model.*;
 import site.sorghum.agent4j.bin.agent.output.ConsoleAgentOutput;
-import site.sorghum.agent4j.bin.agent.resilient.GoalPatrolManager;
+
 import site.sorghum.agent4j.bin.agent.resilient.ReasonBreaker;
 import site.sorghum.agent4j.bin.agent.resilient.Scavenger;
 import site.sorghum.agent4j.bin.builtin.TaskTool;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
-import site.sorghum.agent4j.bin.goal.Goal;
-import site.sorghum.agent4j.bin.goal.GoalStep;
-import site.sorghum.agent4j.bin.goal.GoalStore;
-import site.sorghum.agent4j.bin.goal.StepStatus;
-import site.sorghum.agent4j.bin.workflow.Workflow;
-import site.sorghum.agent4j.bin.workflow.WorkflowNode;
-import site.sorghum.agent4j.bin.workflow.WorkflowStore;
-import site.sorghum.agent4j.bin.workflow.NodeStatus;
-import site.sorghum.agent4j.bin.agent.resilient.WorkflowPatrolManager;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.model.UserMessageSanitizer;
 import site.sorghum.agent4j.bin.session.SessionService;
@@ -127,12 +118,6 @@ public class AgentLoop implements AgentLoopController {
     @Getter
     private volatile String sessionId;
 
-    /** 巡检管理器（goals / retry / patrol） */
-    private final GoalPatrolManager patrolManager;
-
-    /** 工作流巡检管理器（workflows / retry / patrol） */
-    private final WorkflowPatrolManager workflowPatrolManager;
-
     /** 主循环是否正在执行中（防止巡检线程与主循环冲突） */
     private final AtomicBoolean running = new AtomicBoolean(false);
 
@@ -153,8 +138,6 @@ public class AgentLoop implements AgentLoopController {
         this.ctx = ctx;
         this.config = config;
         this.hitlManager = new HitlManager(hitlDefault);
-        this.patrolManager = new GoalPatrolManager(null, ctx, running);
-        this.workflowPatrolManager = new WorkflowPatrolManager(null, ctx, running);
     }
 
     // ==================== 公共控制 API ====================
@@ -399,12 +382,34 @@ public class AgentLoop implements AgentLoopController {
                 | options | 是 | 选项列表，支持字符串或 `{title, summary}` |
                 | allowCustom | 否 | 是否允许自定义输入，默认 false |
                 
-                ---
                 
-                ### todo_write — 任务跟踪（适合 3 步以上工作流）
+                ### workflow_create_dag — 创建工作流 DAG
+                创建复杂工作流（有向无环图），支持条件分支和并行执行。
                 | 参数 | 必填 | 说明 |
                 |------|------|------|
-                | todos | 是 | `[{status, content, activeForm}]`，status: pending/in_progress/completed |
+                | title | 是 | 工作流标题 |
+                | description | 是 | 工作流详细描述 |
+                | nodesJson | 是 | 节点数组 JSON：`[{id, description, type?, condition?}]` |
+                | edgesJson | 是 | 边数组 JSON：`[{from, to, type?}]` |
+                
+                ---
+                
+                ### workflow_visualize — 查看工作流
+                可视化查看当前会话的工作流结构（节点列表、依赖关系和执行状态）。
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | sessionId | 否 | 会话 ID，留空自动获取 |
+                
+                ---
+                
+                ### workflow_mark_node — 标记节点完成
+                标记当前会话工作流中的某个节点为"已完成"。
+                每完成一个节点后调用此工具，如果所有节点都已完成，工作流自动标记为已完成。
+                | 参数 | 必填 | 说明 |
+                |------|------|------|
+                | nodeId | 是 | 已完成的节点ID（如 'n1', 'n2'）|
+                | result | 否 | 该节点的执行结果摘要 |
+                | sessionId | 否 | 会话 ID，留空自动获取 |
                 
                 ---
                 
@@ -434,15 +439,6 @@ public class AgentLoop implements AgentLoopController {
                 | content | 否 | 文档内容（与 value 二选一）|
                 | type | 否 | MIME 类型，默认 text/plain |
                 | scope | 否 | 预留 |
-                
-                ---
-                
-                ### workspace_watch — 阻塞监听工作区变更
-                通配符：`*` 匹配单级，`**` 匹配多级。
-                | 参数 | 必填 | 说明 |
-                |------|------|------|
-                | keyPattern | 是 | 通配符模式，如 `user/**` |
-                | timeout | 否 | 秒，默认 30，最大 300。超时返回 TIMEOUT |
                 
                 ---
                 
@@ -610,127 +606,8 @@ public class AgentLoop implements AgentLoopController {
         return runWithAutoRetry();
     }
 
-    /**
-     * 执行主推理循环，并在完成后检查目标步骤是否需要自动重试。
-     * 如果发现 FAILED 且未超重试次数的步骤，自动注入重试消息并继续循环。
-     */
     private String runWithAutoRetry() throws IOException {
-        String result = mainLoop();
-
-        // === 自动重试闭环 ===
-        // 每次 mainLoop 结束后，检查是否有需要重试的目标步骤
-        boolean hasActiveGoal = false;
-        while (true) {
-            GoalPatrolManager.GoalAndStore gs = patrolManager.findRetriableGoal();
-            if (gs == null) break;
-
-            hasActiveGoal = true;
-            Goal goal = gs.goal();
-            GoalStore goalStore = gs.goalStore();
-
-            // 找到第一个 FAILED 且未超重试次数的步骤
-            GoalStep failedStep = null;
-            for (GoalStep s : goal.getSteps()) {
-                if (s.getStatus() == StepStatus.FAILED
-                        && s.getRetryCount() < goal.getMaxRetries()) {
-                    failedStep = s;
-                    break;
-                }
-            }
-            if (failedStep == null) break;
-
-            // 重置为 PENDING 并递增重试计数
-            failedStep.setStatus(StepStatus.PENDING);
-            failedStep.setRetryCount(failedStep.getRetryCount() + 1);
-            goal.setUpdatedAt(java.time.Instant.now());
-            goalStore.save(goal);
-
-            log.info("[goal] 自动重试: step={}, retry={}/{}",
-                    failedStep.getIndex() + 1,
-                    failedStep.getRetryCount(),
-                    goal.getMaxRetries());
-
-            // 注入系统消息说明重试原因
-            ctx.addUser(
-                    "⚠️ [系统自动重试] 上一步执行失败，正在重试（"
-                    + failedStep.getRetryCount() + "/" + goal.getMaxRetries() + "）。\n\n"
-                    + "### 需要重试的步骤\n"
-                    + "步骤 " + (failedStep.getIndex() + 1) + "：" + failedStep.getDescription() + "\n"
-                    + (failedStep.getLastError() != null
-                        ? "### 上一次失败原因\n" + failedStep.getLastError() + "\n"
-                        : "")
-                    + "\n请重新执行此步骤。注意分析上次失败的原因，避免同样的错误。");
-
-            // 继续 LLM 循环
-            result = mainLoop();
-        }
-
-        // === 工作流自动重试闭环 ===
-        // 检查是否有需要重试的工作流节点
-        boolean hasActiveWorkflow = false;
-        while (true) {
-            WorkflowPatrolManager.WorkflowAndStore ws = workflowPatrolManager.findRetriableWorkflow();
-            if (ws == null) break;
-
-            hasActiveWorkflow = true;
-            Workflow workflow = ws.workflow();
-            WorkflowStore workflowStore = ws.workflowStore();
-
-            // 找到第一个 FAILED 且未超重试次数的节点
-            WorkflowNode failedNode = null;
-            for (WorkflowNode n : workflow.getNodes()) {
-                if (n.getStatus() == NodeStatus.FAILED
-                        && n.getRetryCount() < workflow.getMaxRetries()) {
-                    failedNode = n;
-                    break;
-                }
-            }
-            if (failedNode == null) break;
-
-            // 重置为 PENDING 并递增重试计数
-            failedNode.setStatus(NodeStatus.PENDING);
-            failedNode.setRetryCount(failedNode.getRetryCount() + 1);
-            workflow.setUpdatedAt(java.time.Instant.now());
-            workflowStore.save(workflow);
-
-            log.info("[workflow] 自动重试: node={}, retry={}/{}",
-                    failedNode.getId(),
-                    failedNode.getRetryCount(),
-                    workflow.getMaxRetries());
-
-            // 注入系统消息说明重试原因
-            ctx.addUser(
-                    "⚠️ [系统自动重试] 上一个节点执行失败，正在重试（"
-                    + failedNode.getRetryCount() + "/" + workflow.getMaxRetries() + "）。\n\n"
-                    + "### 需要重试的节点\n"
-                    + "节点 " + failedNode.getId() + "：" + failedNode.getDescription() + "\n"
-                    + (failedNode.getLastError() != null
-                        ? "### 上一次失败原因\n" + failedNode.getLastError() + "\n"
-                        : "")
-                    + "\n请重新执行此节点。注意分析上次失败的原因，避免同样的错误。");
-
-            // 继续 LLM 循环
-            result = mainLoop();
-        }
-
-        // === 巡检生命周期管理 ===
-        if (!hasActiveGoal) {
-            if (patrolManager.isRunning()) {
-                patrolManager.tick();
-            }
-        } else {
-            patrolManager.startPatrol();
-        }
-
-        if (!hasActiveWorkflow) {
-            if (workflowPatrolManager.isRunning()) {
-                workflowPatrolManager.tick();
-            }
-        } else {
-            workflowPatrolManager.startPatrol();
-        }
-
-        return result;
+        return mainLoop();
     }
 
     // ==================== 统一主推理循环 ====================

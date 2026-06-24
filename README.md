@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js"/>
   <img src="https://img.shields.io/badge/Electron-32.0-47848F?logo=electron"/>
   <img src="https://img.shields.io/badge/license-MIT-green"/>
-  <img src="https://img.shields.io/badge/version-26.6.22-lightgrey"/>
+  <img src="https://img.shields.io/badge/version-26.6.24.1-lightgrey"/>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-📋-brightgreen"/></a>
 </p>
 
@@ -101,37 +101,33 @@ API，一步步把事情干完。
 
 ---
 
-## 🆕 最新更新（v26.6.22）
-
-### 📝 DiffViewer 与文件打开功能
-- 新增文件打开功能，支持在系统编辑器中打开文件
-- 文件打开按钮移至工具标题行内，优化交互布局
-- 无变更时展示文件原文内容，Diff 为空时仍显示文件内容
-
-### 🤖 视觉模型与图片识别
-- 新增 vision_recognize 图片识别工具
-- 无视觉模型时自动识别图片并拼接到文本
-- 视觉模型远端自动获取与填入
-
-### 🧠 模型元数据管理
-- 新增模型元数据管理功能，统一管理模型能力、价格信息
-- 模型多模态支持提供者及动态价格计算
-- 通过 ContextSizeProvider 动态获取模型上下文大小
-- 仪表盘显示模型价格提示并清除本地 API 密钥
-
-### 🛠️ 工具系统增强
-- 连续工具调用合并为分组展示
-- BlockRenderer 展示 bash 命令，优化图标样式
-- 将内置工具迁移至 Solon AbsToolProvider 注解驱动模式
+## 🆕 最新更新（v26.6.24.1）
 
 ### 🔄 工作流增强
-- 工作流自动重试与巡检管理功能
-- 推理强度切换及运行时热更新
+- 新增工作流 DAG 工具及前端可视化渲染，支持复杂工作流设计
+- 增强工作流节点类型和审批机制，支持更多节点类型和人工审批流程
+- 工作流自动完成 END 节点并优化前端面板，自动处理工作流结束状态
+- 添加会话工作流 API 及前端可视化面板，可视化展示执行状态
 
-### 🎨 前端样式优化
-- 优化聊天界面布局和移动端响应式适配
-- 调整消息体最大宽度，优化 AI 加载动画和推理文本样式
-- 新增 Windows 打包脚本
+### 🧩 路径组折叠组件
+- 新增路径组折叠组件，支持连续推理和工具调用的折叠展示
+- 优化长推理链的展示和交互体验
+
+### 🏗️ 代码重构与优化
+- 移除前端 Java 检查并优化后端性能与稳定性
+- 移除工作流巡检及自动重试逻辑，简化工作流执行
+- 移除目标 (Goal) 巡检及相关功能，清理废弃代码
+- 迁移 pnpm 构建配置并更新 gitignore，优化前端构建流程
+
+### 🐛 界面与交互修复
+- 修复助手消息文件修改/新增统计显示
+- 调整 dock-body 定位与圆角样式
+- 用户长消息添加展开/收起按钮
+- 修复路径组内层块展开状态管理
+- 合并连续 assistant 消息并修复消息 ID 生成
+- 工作流面板仅在会话选中时显示并添加空状态提示
+- 添加工作区后自动切换到新工作区
+- 修复删除工作区后因副作用被重建的问题
 
 > 📋 完整变更记录请查看 [CHANGELOG.md](CHANGELOG.md)
 
@@ -347,7 +343,7 @@ agent4j/
 | `bash`                                                                      | 跑命令        |
 | `bash_start` / `bash_wait` / `bash_stdin` / `bash_stop`                     | 交互式命令会话    |
 | `task` / `multi_task`                                                       | 派生子代理      |
-| `workspace_read` / `workspace_write` / `workspace_list` / `workspace_watch` | 工作区操作      |
+| `workspace_read` / `workspace_write` / `workspace_list` | 工作区操作      |
 | `webfetch`                                                                  | 抓网页        |
 | `codesearch`                                                                | 搜索代码       |
 | `java_source`                                                               | Java源码查找   |

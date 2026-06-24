@@ -22,6 +22,9 @@ public class ToolRegistry {
 
     private final LinkedHashMap<String, FunctionTool> functionToolMap = new LinkedHashMap<>();
 
+    /** 缓存的 OpenAI tools 格式（refresh 时失效） */
+    private ONode cachedOpenAiTools = null;
+
     /** 静态快照（setDisabledTools 方式设置时使用，兼容 CLI/测试） */
     private Set<String> disabledToolsSnapshot = Collections.emptySet();
     /** true=使用静态快照，false=使用 ConfigService 实时读取 */
@@ -95,6 +98,7 @@ public class ToolRegistry {
     public void refresh() {
         Set<String> disabled = getCurrentDisabledTools();
         functionToolMap.clear();
+        cachedOpenAiTools = null; // 失效缓存
 
         // 使用 ToolScanUtil 统一扫描（Solon IoC + Skill 文件系统）
         List<FunctionTool> functionToolsList = ToolScanUtil.scanTools(workspace);
@@ -160,9 +164,12 @@ public class ToolRegistry {
     }
 
     /**
-     * 生成 OpenAI 格式的 tools 数组（按名称排序，保证 prompt prefix 稳定可缓存）。
+     * 生成 OpenAI 格式的 tools 数组（带缓存，refresh 时自动失效）。
      */
     public ONode toOpenAiTools() {
+        if (cachedOpenAiTools != null) {
+            return cachedOpenAiTools;
+        }
         List<FunctionTool> functionTools = functionToolMap.values().stream().toList();
         ONode tools = new ONode();
         for (FunctionTool func : functionTools) {
@@ -175,6 +182,7 @@ public class ToolRegistry {
                 });
             });
         }
+        cachedOpenAiTools = tools;
         return tools;
     }
 }

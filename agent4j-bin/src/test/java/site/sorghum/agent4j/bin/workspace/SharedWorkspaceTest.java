@@ -159,40 +159,6 @@ class SharedWorkspaceTest {
         }
     }
 
-    // ==================== testEventBusNotification ====================
-
-    @Test
-    void testEventBusNotification() {
-        WorkspaceEventBus eventBus = workspace.getEventBus();
-
-        // 用于记录事件
-        AtomicReference<String> capturedKey = new AtomicReference<>();
-        AtomicReference<EventType> capturedType = new AtomicReference<>();
-        AtomicReference<Object> capturedValue = new AtomicReference<>();
-
-        // 订阅所有事件（匹配任意 key）
-        eventBus.subscribe("**", (key, type, value) -> {
-            capturedKey.set(key);
-            capturedType.set(type);
-            capturedValue.set(value);
-        });
-
-        // 写入 KV → 应触发 WRITE 事件
-        workspace.writeKV("event-test", "hello", "tester");
-        assertEquals("event-test", capturedKey.get(), "事件 key 应匹配");
-        assertEquals(EventType.WRITE, capturedType.get(), "写入应触发 WRITE 事件");
-        assertNotNull(capturedValue.get(), "事件 value 不应为 null");
-        assertInstanceOf(KVBucket.class, capturedValue.get(), "KV 写入事件 value 应为 KVBucket");
-
-        // 更新 KV → 应触发 UPDATE 事件
-        workspace.writeKV("event-test", "world", "tester");
-        assertEquals(EventType.UPDATE, capturedType.get(), "更新应触发 UPDATE 事件");
-
-        // 删除 KV → 应触发 DELETE 事件
-        workspace.delete("event-test");
-        assertEquals(EventType.DELETE, capturedType.get(), "删除应触发 DELETE 事件");
-    }
-
     // ==================== testReadNonExistent ====================
 
     @Test

@@ -748,6 +748,9 @@ const handleAddWorkspace = async (path) => {
       showWorkspacePicker.value = false
       await loadWorkspaces()
       await loadSessions()
+      // 通过路径匹配新工作区的 hash 并切换上下文
+      const newWs = workspaces.value.find(w => w.path === r.data.workspace)
+      if (newWs) currentSessionWorkspace.value = newWs.hash
       await newChat(true)
       message.success('已添加工作区')
     } else {
@@ -1277,90 +1280,6 @@ watch(showSettings, (newVal) => {
   overflow: visible;
 }
 
-/* 工作区选择弹窗 */
-.workspace-list {
-  margin-bottom: 8px;
-}
-
-.modal .workspace-item {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 12px;
-  cursor: pointer;
-  border-radius: var(--r);
-  transition: background var(--t);
-}
-.modal .workspace-item:hover {
-  background: var(--bg-2);
-}
-.modal .workspace-item.active {
-  background: var(--accent-bg);
-}
-.modal .workspace-item svg {
-  color: var(--fg-3);
-  flex-shrink: 0;
-}
-.modal .workspace-item .workspace-info {
-  flex: 1;
-  min-width: 0;
-}
-.modal .workspace-item .workspace-item-name {
-  font-size: 13px;
-  font-weight: 500;
-  color: var(--fg);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.modal .workspace-item .workspace-item-path {
-  font-size: 11px;
-  color: var(--fg-4);
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.modal .workspace-item .workspace-item-count {
-  font-size: 11px;
-  color: var(--fg-3);
-  background: var(--bg-3);
-  padding: 1px 5px;
-  border-radius: var(--r-sm);
-}
-.modal .workspace-item .workspace-del {
-  opacity: 0;
-  transition: opacity var(--t);
-}
-.modal .workspace-item:hover .workspace-del {
-  opacity: 1;
-}
-.modal .workspace-item .workspace-del:hover {
-  color: var(--red);
-}
-
-.modal .workspace-add {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  padding: 8px 0 0;
-  border-top: 1px solid var(--border);
-}
-.modal .workspace-add input {
-  flex: 1;
-  padding: 5px 8px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
-  font-size: 12px;
-  color: var(--fg);
-}
-.modal .workspace-add input:focus {
-  outline: none;
-  border-color: var(--accent);
-}
-.modal .workspace-add input::placeholder {
-  color: var(--fg-4);
-}
 
 /* 主区域 */
 .main {
