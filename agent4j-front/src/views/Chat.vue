@@ -82,32 +82,15 @@
       </div>
     </div>
 
-    <!-- 工作流状态面板（左侧 dock 栏，仅会话选中时显示） -->
+    <!-- 工作流状态面板（左侧指示条，仅会话选中时显示） -->
     <div v-if="props.sessionName" class="workflow-dock">
-      <div class="workflow-dock-inner">
-        <div class="dock-expand" @mouseenter="loadWorkflow">
-          <span class="dock-expand-icon">
-            <svg width="18" height="18" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="14" height="14" rx="2"/>
-              <polyline points="6,10 9,13 14,7"/>
-            </svg>
-          </span>
-          <div v-if="workflowData" class="dock-expand-body">
-            <WorkflowDagRenderer :data="workflowData" />
-          </div>
-          <div v-else class="dock-expand-body dock-empty">
-            <span class="dock-empty-icon">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-                <rect x="3" y="3" width="7" height="7" rx="1"/>
-                <rect x="14" y="3" width="7" height="7" rx="1"/>
-                <rect x="3" y="14" width="7" height="7" rx="1"/>
-                <rect x="14" y="14" width="7" height="7" rx="1"/>
-              </svg>
-            </span>
-            <span class="dock-empty-text">暂无工作流</span>
-            <button class="dock-empty-btn" @click="inputText = '/workflow create '">去创建</button>
-          </div>
-        </div>
+      <div class="dock-trigger" @mouseenter="loadWorkflow"></div>
+      <div v-if="workflowData" class="dock-body">
+        <WorkflowDagRenderer :data="workflowData" />
+      </div>
+      <div v-else class="dock-body dock-empty">
+        <span class="dock-empty-text">暂无工作流</span>
+        <button class="dock-empty-btn" @click="inputText = '/workflow create '">去创建</button>
       </div>
     </div>
 
@@ -1864,137 +1847,112 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   user-select: none;
 }
 
-/* ===== 工作流状态面板（左侧 dock 栏）- 按钮展开动画 ===== */
+/* ===== 工作流指示条（左侧边缘侧滑） ===== */
 .workflow-dock {
   position: absolute;
-  left: 6px;
-  top: 50%;
-  transform: translateY(-50%);
+  left: 0;
+  top: 30%;
+  bottom: 30%;
   z-index: 60;
+  width: min(85vw, 780px);
+  overflow: hidden;
   pointer-events: none;
 }
 
-.workflow-dock-inner {
-  position: relative;
+.dock-trigger {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 10px;
   pointer-events: auto;
-}
-
-/* 可展开容器：小图标 → 展开成大面板 */
-.dock-expand {
-  display: flex;
-  align-items: flex-start;
-  gap: 8px;
-  width: 32px;
-  max-height: 45px;
-  overflow: hidden;
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--blur-sm));
-  -webkit-backdrop-filter: blur(var(--blur-sm));
-  border: 1.5px solid var(--glass-border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--glass-shadow);
-  opacity: 0.8;
   cursor: default;
-  transition: width 0.3s ease, max-height 0.4s ease, opacity 0.25s ease, box-shadow 0.25s ease, border-radius 0.3s ease;
+  z-index: 2;
 }
 
-.workflow-dock-inner:hover .dock-expand {
-  width: min(80vw, 600px);
-  max-height: 70vh;
-  opacity: 1;
+.dock-trigger::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 7px;
+  border-radius: 0 4px 4px 0;
+  background: var(--accent);
+  opacity: 0.5;
+  transition: opacity 0.25s ease;
+}
+
+.workflow-dock:has(.dock-trigger:hover) .dock-trigger::before,
+.workflow-dock:has(.dock-body:hover) .dock-trigger::before {
+  opacity: 0;
+}
+
+.dock-body {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  right: 0;
+  padding: 12px 16px 12px 12px;
+  overflow-y: auto;
+  pointer-events: auto;
   background: var(--bg);
-  border-color: var(--border);
-  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
-  border-radius: 8px;
-}
-
-/* 代办图标：默认显示，hover 后隐藏 */
-.dock-expand-icon {
-  flex-shrink: 0;
-  width: 32px;
-  height: 45px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--accent);
-  transition: opacity 0.15s ease, width 0.2s ease, margin 0.2s ease;
-  transition-delay: 0.3s;
-}
-
-.workflow-dock-inner:hover .dock-expand-icon {
+  border: 1px solid var(--border);
+  border-left: none;
+  box-shadow: 4px 0 24px rgba(0, 0, 0, 0.08);
+  border-radius: 0 var(--r) var(--r) 0;
+  transform: translateX(calc(-100% + 7px));
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+              opacity 0.25s ease;
   opacity: 0;
-  width: 0;
-  margin: 0;
-  overflow: hidden;
-  transition-delay: 0s;
 }
 
-/* 展开后的内容区：默认隐藏，hover 后淡入 */
-.dock-expand-body {
-  flex: 1;
-  min-width: 0;
-  opacity: 0;
-  visibility: hidden;
-  transition: opacity 0.25s ease 0.1s, visibility 0s ease 0.35s;
-  white-space: nowrap;
-}
-
-.workflow-dock-inner:hover .dock-expand-body {
+.workflow-dock:has(.dock-trigger:hover) .dock-body,
+.workflow-dock:has(.dock-body:hover) .dock-body {
+  transform: translateX(0);
   opacity: 1;
-  visibility: visible;
-  white-space: normal;
-  transition: opacity 0.25s ease 0.1s, visibility 0s ease 0s;
-  padding: 8px 8px 8px 0;
 }
 
-.dock-expand-body :deep(.workflow-dag) {
+.dock-body :deep(.workflow-dag) {
   border: none;
   padding: 0;
   background: transparent;
 }
 
-.dock-expand-body :deep(.workflow-header) {
+.dock-body :deep(.workflow-header) {
   margin-bottom: 6px;
   padding-bottom: 6px;
 }
 
-/* ===== 工作流 dock 空状态 ===== */
+/* 空状态 */
 .dock-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 4px;
-  padding: 12px 8px !important;
+  justify-content: center;
+  gap: 8px;
   text-align: center;
-  white-space: nowrap;
-}
-
-.dock-empty-icon {
-  color: var(--fg-3, #aaa);
-  opacity: 0.6;
-  margin-bottom: 2px;
 }
 
 .dock-empty-text {
   font-size: 12px;
-  color: var(--fg-2, #888);
-  font-weight: 500;
+  color: var(--fg-3);
 }
 
 .dock-empty-btn {
   font-size: 11px;
-  color: var(--primary, #4f8ff7);
+  color: var(--accent);
   background: none;
-  border: 1px solid var(--primary, #4f8ff7);
+  border: 1px solid var(--accent);
   border-radius: 4px;
   padding: 3px 12px;
   cursor: pointer;
   transition: background 0.2s, color 0.2s;
-  margin-top: 2px;
 }
 
 .dock-empty-btn:hover {
-  background: var(--primary, #4f8ff7);
+  background: var(--accent);
   color: #fff;
 }
 

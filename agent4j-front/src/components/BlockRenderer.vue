@@ -173,12 +173,12 @@
     <!-- 单个工具调用（非连续时不合并） -->
     <template v-else-if="block.type === 'tool_call'">
       <!-- finish 工具：完成时将 content 渲染为模型输出样式 -->
-      <div v-if="block.name === 'finish' && block.result" class="block-finish">
-        <div class="finish-head">
-          <span class="finish-icon default-icon" v-html="CHECK_ICON"></span>
-          <span class="finish-label">最终回答</span>
+      <div v-if="block.name === 'finish' && block.result" class="block-tool block-finish">
+        <div class="tool-head">
+          <span class="tool-icon default-icon 成功" v-html="CHECK_ICON_SM"></span>
+          <code class="tool-name" >最终回答</code>
         </div>
-        <div class="finish-content" v-html="fmt(block.result)"></div>
+        <div class="tool-detail finish-content" v-html="fmt(block.result)"></div>
       </div>
       <!-- finish 执行中 -->
       <div v-else-if="block.name === 'finish' && block.status" class="block-tool">
@@ -300,7 +300,7 @@
 <script setup>
 import {md} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
-import {CHECK_ICON, CHECK_ICON_SM, CHEVRON_DOWN_ICON, CIRCLE_ICON, SPINNER_ICON, THINKING_ICON} from '../utils/icons'
+import {CHECK_ICON_SM, CHEVRON_DOWN_ICON, CIRCLE_ICON, SPINNER_ICON, THINKING_ICON} from '../utils/icons'
 import {LRUCache} from '../utils/cache'
 import {ref, computed} from 'vue'
 import WorkflowDagRenderer from './WorkflowDagRenderer.vue'
@@ -813,33 +813,9 @@ const parseResult = (block) => {
   margin-bottom: 0;
 }
 
-/* 完成块（finish 工具输出） */
+/* 完成块（finish 工具输出）— 复用 block-tool 样式 */
 .block-finish {
-  margin-top: 2px;
-  margin-bottom: 4px;
-}
-
-.finish-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 6px;
-}
-
-.finish-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 20px;
-  height: 20px;
-  border-radius: var(--r-sm);
-  color: var(--green);
-}
-
-.finish-label {
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--green);
+  border-color: var(--green-bg);
 }
 
 .finish-content {
