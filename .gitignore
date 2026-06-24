@@ -68,4 +68,6 @@ venv/
 .nuxt/
 .turbo/
 .vercel/"_script_*.bat"  
-"_script_*"  
+"_script_*"
+
+.codegraph

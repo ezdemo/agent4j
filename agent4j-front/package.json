@@ -73,14 +73,5 @@
     "code-assistant",
     "vue3",
     "vite"
-  ],
-  "pnpm": {
-    "onlyBuiltDependencies": [
-      "electron",
-      "esbuild",
-      "core-js",
-      "vue-demi",
-      "app-builder-lib"
-    ]
-  }
+  ]
 }
