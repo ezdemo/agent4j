@@ -1,7 +1,6 @@
 package site.sorghum.agent4j.tool;
 
 import java.util.List;
-import java.util.Objects;
 
 /**
  * Agent 工具抽象基类——所有 Agent 可调用工具的顶层契约。

@@ -15,7 +15,6 @@
     <packaging>pom</packaging>
 
     <modules>
-        <module>agent4j-tool</module>
         <module>agent4j-bin</module>
         <module>agent4j-web</module>
     </modules>

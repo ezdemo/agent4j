@@ -1,8 +1,6 @@
 package site.sorghum.agent4j.tool.solon.plugin;
 
 import lombok.Data;
-import lombok.Getter;
-import lombok.Setter;
 
 import java.util.Collections;
 import java.util.Map;
