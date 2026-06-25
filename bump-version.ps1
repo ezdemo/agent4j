@@ -37,16 +37,6 @@ if ($c -ne $old) {
     Write-Host "  [OK] agent4j-bin/pom.xml"
 } else { Write-Host "  [--] agent4j-bin/pom.xml (unchanged)" }
 
-# 3. agent4j-tool/pom.xml
-$path = Join-Path $root "agent4j-tool/pom.xml"
-$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
-$old = $c
-$c = $re.Replace($c, $Version)
-if ($c -ne $old) {
-    $c = $c.TrimStart("`u{FEFF}")
-    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
-    Write-Host "  [OK] agent4j-tool/pom.xml"
-} else { Write-Host "  [--] agent4j-tool/pom.xml (unchanged)" }
 
 # 4. agent4j-web/pom.xml
 $path = Join-Path $root "agent4j-web/pom.xml"
