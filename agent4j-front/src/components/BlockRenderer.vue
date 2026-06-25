@@ -315,7 +315,7 @@ const emit = defineEmits(['sendChoice', 'openFile'])
 const WORKFLOW_TOOLS = ['workflow_create_dag', 'workflow_visualize']
 
 // ── 工具分组折叠状态 ──
-let _groupSeq = 0
+
 const toolGroupsExpanded = ref({})
 
 const toggleToolGroup = (groupId) => {
@@ -358,8 +358,7 @@ const processedBlocks = computed(() => {
         }
       }
       // 不管几个都合并为 path_group（单个 reasoning 也要折叠）
-      _groupSeq++
-      const gid = `pg-${_groupSeq}`
+      const gid = `pg-${i}`
       // 给每个内层块分配唯一 ID 用于展开状态跟踪
       group.forEach((item, idx) => { item._itemId = `${gid}-${idx}` })
       const toolCount = group.filter(x => x.type === 'tool_call').length
