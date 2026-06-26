@@ -148,7 +148,6 @@
 
 <script setup>
 import { computed, ref } from 'vue'
-import TaskItem from './TaskItem.vue'
 
 const props = defineProps({
   sideOpen: { type: Boolean, default: true },
