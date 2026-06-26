@@ -58,7 +58,7 @@ class ClassSourceFinderTest {
     // ── defaultRepoPaths ─────────────────────────────────────────────────
 
     @Test
-    void 默认仓库路径返回列表() {
+    void defaultRepoPathsReturnsList() {
         List<Path> paths = ClassSourceFinder.defaultRepoPaths();
         assertNotNull(paths);
         for (Path p : paths) {
@@ -69,7 +69,7 @@ class ClassSourceFinderTest {
     // ── 项目树搜索 ───────────────────────────────────────────────────
 
     @Test
-    void 在项目树中找到Java文件() throws IOException {
+    void findsJavaFileInProjectTree() throws IOException {
         Path src = Files.createDirectories(tempDir.resolve("src/main/java/com/example"));
         String source = "package com.example;\npublic class Hello { public void greet() {} }\n";
         Files.writeString(src.resolve("Hello.java"), source);
@@ -83,7 +83,7 @@ class ClassSourceFinderTest {
     }
 
     @Test
-    void 在深层嵌套项目树中找到Java文件() throws IOException {
+    void findsJavaFileInDeepNestedProjectTree() throws IOException {
         Path deep = Files.createDirectories(tempDir.resolve("a/b/c/d"));
         String source = "public class Deep { }\n";
         Files.writeString(deep.resolve("Deep.java"), source);
@@ -96,7 +96,7 @@ class ClassSourceFinderTest {
     }
 
     @Test
-    void 跳过排除目录() throws IOException {
+    void skipsExcludedDirectories() throws IOException {
         // 在 target/ 下创建 .java —— 应被跳过
         Path targetDir = Files.createDirectories(tempDir.resolve("target"));
         Files.writeString(targetDir.resolve("Hidden.java"), "public class Hidden { }\n");
@@ -108,7 +108,7 @@ class ClassSourceFinderTest {
     }
 
     @Test
-    void 项目无匹配时返回未找到() throws IOException {
+    void returnsNotFoundWhenProjectHasNoMatch() throws IOException {
         Files.writeString(tempDir.resolve("Other.java"), "public class Other { }\n");
 
         ClassSourceFinder finder = new ClassSourceFinder(tempDir);
@@ -120,7 +120,7 @@ class ClassSourceFinderTest {
     // ── 源码 jar 搜索 ─────────────────────────────────────────────────
 
     @Test
-    void 在源码jar中找到源码() throws IOException {
+    void findsSourceInSourceJar() throws IOException {
         // 搭建模拟 .m2 仓库
         Path m2Repo = Files.createDirectories(tempDir.resolve("m2/repository/com/example/lib/1.0"));
         String sourceContent = "package com.example;\npublic class Lib { }\n";
@@ -139,7 +139,7 @@ class ClassSourceFinderTest {
     // ── jarKeyword 过滤 ─────────────────────────────────────────────────
 
     @Test
-    void 关键字过滤掉不匹配的jar() throws IOException {
+    void keywordFiltersOutUnmatchedJar() throws IOException {
         Path repo = Files.createDirectories(tempDir.resolve("repo"));
         String matchedContent = "package com.a;\npublic class A { }\n";
         String unmatchedContent = "package com.b;\npublic class B { }\n";
@@ -164,7 +164,7 @@ class ClassSourceFinderTest {
     // ── compressJavapOutput ──────────────────────────────────────────────
 
     @Test
-    void 剥离常量池定义行() {
+    void stripsConstantPoolDefinitionLines() {
         // 常量池定义行（如 "   #7 = Fieldref ..."）应该被剥离。
         // 字节码注释中的内联引用 #1 等应保留。
         String raw = """
@@ -190,7 +190,7 @@ class ClassSourceFinderTest {
     }
 
     @Test
-    void 剥离调试表() {
+    void stripsDebugTables() {
         String raw = """
                 Compiled from "Foo.java"
                 public class Foo {
@@ -215,7 +215,7 @@ class ClassSourceFinderTest {
     }
 
     @Test
-    void 剥离StackMapTable() {
+    void stripsStackMapTable() {
         String raw = """
                 Compiled from "Bar.java"
                 public class Bar {
@@ -243,7 +243,7 @@ class ClassSourceFinderTest {
     }
 
     @Test
-    void 合并多余连续空行() {
+    void mergesMultipleConsecutiveBlankLines() {
         String raw = "public class Foo {\n\n\n\n  void m() {}\n}";
         String compressed = ClassSourceFinder.compressJavapOutput(raw);
         // 不应出现超过 2 个连续换行

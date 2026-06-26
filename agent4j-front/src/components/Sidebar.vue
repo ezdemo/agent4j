@@ -301,8 +301,8 @@ const formatName = (n) => {
 }
 
 .new-task-btn {
-  background: #000;
-  color: #fff;
+  background: var(--fg);
+  color: var(--bg);
   border: none;
   padding: 6px 10px;
   border-radius: 6px;
