@@ -93,8 +93,10 @@
           <span v-else v-html="CIRCLE_ICON"></span>
         </span>
         <span class="path-label">执行</span>
-        <span class="path-steps">{{ block._toolCount }} 个工具</span>
-        <span class="tool-param" :title="block._pathNames">{{ truncatePath(block._uniqueToolNames, 60) }}</span>
+        <span v-if="block._toolCount > 0" class="path-steps">{{ block._toolCount }} 个工具</span>
+        <span v-else class="path-steps">推理</span>
+        <span v-if="block._toolCount > 0" class="tool-param" :title="block._pathNames">{{ truncatePath(block._uniqueToolNames, 60) }}</span>
+        <span v-else class="tool-param">reason</span>
         <span class="default-icon"
               v-html="CHEVRON_DOWN_ICON"
               :style="{
@@ -362,6 +364,7 @@ const processedBlocks = computed(() => {
       // 给每个内层块分配唯一 ID 用于展开状态跟踪
       group.forEach((item, idx) => { item._itemId = `${gid}-${idx}` })
       const toolCount = group.filter(x => x.type === 'tool_call').length
+      const thinkCount = group.filter(x => x.type === 'reasoning').length
       const pathNames = group.map(x => x.type === 'reasoning' ? 'think' : x.name).join(' → ')
       // Unique tool names for inline display (Cowork style)
       const uniqueToolNames = [...new Set(group.filter(x => x.type === 'tool_call').map(x => x.name))].join(' › ')
@@ -372,6 +375,7 @@ const processedBlocks = computed(() => {
         _groupId: gid,
         _blocks: group,
         _toolCount: toolCount,
+        _thinkCount: thinkCount,
         _pathNames: pathNames,
         _uniqueToolNames: uniqueToolNames,
         _allDone: toolCount === 0 ? true : allDone,

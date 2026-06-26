@@ -53,6 +53,20 @@ public class VisionService {
         if (imageBase64 == null || imageBase64.isBlank()) {
             throw new IllegalArgumentException("图片 URL 不能为空");
         }
+        return recognize(ImageBlock.ofUrl(imageBase64), prompt);
+    }
+
+    /**
+     * 识别图片内容（接受 ImageBlock）。
+     *
+     * @param imageBlock 图片内容块
+     * @param prompt     可选的提示词，用于指导图片识别
+     * @return 图片识别结果，包含思考块和内容块
+     */
+    public VisionResult recognize(ImageBlock imageBlock, String prompt){
+        if (imageBlock == null) {
+            throw new IllegalArgumentException("图片内容不能为空");
+        }
 
         ChatModel model = getModel();
         if (model == null) {
@@ -63,7 +77,7 @@ public class VisionService {
         String userText = prompt != null && !prompt.isBlank() ? prompt : "描述图片所有内容 提供给别的模型使用。";
         
         // 使用 Solon AI 的多模态支持
-        ChatMessage userMessage = ChatMessage.ofUser(userText, ImageBlock.ofUrl(imageBase64));
+        ChatMessage userMessage = ChatMessage.ofUser(userText, imageBlock);
         
         // 调用 API
         try {
@@ -72,8 +86,6 @@ public class VisionService {
             // 获取响应内容
             AssistantMessage message = response.getMessage();
             if (message == null) {
-                log.error("[vision] API 返回空响应，请检查视觉模型配置和图片格式，图片: {}",
-                        imageBase64.length() > 100 ? imageBase64.substring(0, 100) + "..." : imageBase64);
                 throw new IllegalStateException("图片识别失败: API 返回空响应，请检查视觉模型配置和图片格式");
             }
             String content = message.getContent();
@@ -87,10 +99,9 @@ public class VisionService {
             VisionResult result = new VisionResult();
             result.setReasoningContent(reasoningContent);
             result.setContent(content);
-            result.setImageUrl(imageBase64);
+            result.setImageUrl(imageBlock.getUrl() != null ? imageBlock.getUrl() : "(本地文件)");
             
-            log.info("[vision] 图片识别完成，图片: {}, 内容长度: {}", 
-                    imageBase64.length() > 50 ? imageBase64.substring(0, 50) + "..." : imageBase64,
+            log.info("[vision] 图片识别完成，内容长度: {}", 
                     content != null ? content.length() : 0);
             
             return result;
