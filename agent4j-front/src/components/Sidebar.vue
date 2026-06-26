@@ -1,13 +1,9 @@
 <template>
   <aside class="sidebar" :class="{ collapsed: !sideOpen }">
     <div class="sidebar-header">
-      <div class="sidebar-logo">
-        <button class="btn-icon-sm" @click="$emit('update:sideOpen', false)" title="收起侧边栏">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg>
-        </button>
-        <span class="sidebar-logo-icon">A</span>
-        <span class="sidebar-logo-text">Agent4j</span>
-      </div>
+      <button class="btn-icon-sm" @click="$emit('update:sideOpen', false)" title="收起侧边栏">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg>
+      </button>
       <button class="new-task-btn" @click="$emit('show-workspace-picker')">+ New Task</button>
     </div>
 
