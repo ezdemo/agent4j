@@ -227,7 +227,9 @@
         :hasHistory="hasHistory"
         :version="props.version"
         :connected="props.connected"
-        @send="(imgs) => sendMessage(imgs)"
+        :currentSkill="currentSkill"
+        :currentPermission="currentPermission"
+        @send="(imgs, text) => sendMessage(imgs, text)"
         @abort="abortChat"
         @clear="clearChat"
         @export="exportChat"
@@ -236,6 +238,8 @@
         @switchReasoningEffort="handleSwitchReasoningEffort"
         @refreshModels="loadUsage"
         @continue="continueChat"
+        @switchSkill="handleSwitchSkill"
+        @switchPermission="handleSwitchPermission"
     />
   </div>
 </template>
@@ -281,6 +285,18 @@ const handleSwitchReasoningEffort = async (value) => {
   } catch (e) {
     console.error('切换推理强度失败:', e)
   }
+}
+
+// ============= 技能切换（多选） =============
+const currentSkill = ref([])
+const handleSwitchSkill = (skills) => {
+  currentSkill.value = skills
+}
+
+// ============= 权限切换 =============
+const currentPermission = ref('默认权限')
+const handleSwitchPermission = (level) => {
+  currentPermission.value = level
 }
 
 const props = defineProps({
@@ -667,8 +683,8 @@ const openFile = async (filePath) => {
  *   收到有内容的 SSE 事件时才创建助手气泡
  * - /skill: 命令：显示用户气泡 + 助手气泡（正常流程）
  */
-const sendMessage = async (images = []) => {
-  const text = inputText.value.trim()
+const sendMessage = async (images = [], overrideText = null) => {
+  const text = overrideText || inputText.value.trim()
   if ((!text || streaming.value) && images.length === 0) return
   const sessionName = props.sessionName
   if (!sessionName) return
