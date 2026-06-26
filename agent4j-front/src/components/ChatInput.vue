@@ -142,12 +142,8 @@
         <div class="model-actions">
         <!-- 技能指定 -->
         <div class="skill-selector">
-          <button class="tool-btn" @click="toggleSkillPicker" :class="{ active: selectedSkills.length > 0 }" title="选择技能">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-            </svg>
+          <button class="effort-btn" @click="toggleSkillPicker" title="选择技能">
             技能
-            <span v-if="selectedSkills.length > 0" class="tool-badge">{{ selectedSkills.length }}</span>
             <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="6 9 12 15 18 9"/>
             </svg>
@@ -166,9 +162,6 @@
               <div v-else-if="filteredSkills.length === 0" class="skill-panel-empty">无匹配技能</div>
               <div v-for="s in filteredSkills" :key="s.name" class="skill-panel-item"
                    :class="{ active: isSkillSelected(s) }" @click="toggleSkill(s)">
-                <div class="skill-item-avatar">
-                  {{ s.name?.charAt(0)?.toUpperCase() || '?' }}
-                </div>
                 <div class="skill-item-info">
                   <div class="skill-item-name">{{ s.name }}</div>
                   <div v-if="s.description" class="skill-item-desc">{{ s.description }}</div>
@@ -181,25 +174,24 @@
           </div>
         </div>
         <!-- 权限切换 -->
-        <div class="permission-selector">
-          <button class="tool-btn" @click="togglePermissionPicker" :title="currentPermission">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-            </svg>
-            {{ currentPermission }}
-            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
-          <div class="tool-dropdown" v-if="showPermissionPicker">
-            <div class="tool-dropdown-title">权限级别</div>
-            <div class="tool-dropdown-list">
-              <div v-for="opt in permissionOptions" :key="opt.value" class="tool-option"
-                   :class="{ active: opt.value === currentPermission }" @click="pickPermission(opt.value)">
-                <span class="tool-option-name">{{ opt.label }}</span>
-                <svg v-if="opt.value === currentPermission" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
+        <div class="permission-hitl-selector">
+          <div class="reasoning-effort-selector">
+            <button class="effort-btn" @click="togglePermissionPicker" :title="currentPermission ? '审批模式' : '自由模式'">
+              {{ currentPermission ? '审批' : '自由' }}
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            <div class="effort-dropdown" v-if="showPermissionPicker">
+              <div class="effort-dropdown-title">权限模式</div>
+              <div class="effort-dropdown-list">
+                <div v-for="opt in permissionOptions" :key="String(opt.value)" class="effort-option"
+                     :class="{ active: opt.value === currentPermission }" @click="pickPermission(opt.value)">
+                  <span class="effort-option-name">{{ opt.label }}</span>
+                  <svg v-if="opt.value === currentPermission" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </div>
               </div>
             </div>
           </div>
@@ -269,7 +261,7 @@ const props = defineProps({
   connected: {type: Boolean, default: true},
   version: {type: String, default: ''},
   currentSkill: {type: Object, default: null},
-  currentPermission: {type: String, default: '默认权限'}
+  currentPermission: {type: Boolean, default: false}
 })
 
 const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchSkill', 'switchPermission'])
@@ -559,10 +551,8 @@ const removeSkill = (skill) => {
 // ============= 权限切换 =============
 const showPermissionPicker = ref(false)
 const permissionOptions = [
-  {value: '默认权限', label: '默认权限'},
-  {value: '自动执行', label: '自动执行'},
-  {value: '需要确认', label: '需要确认'},
-  {value: '严格模式', label: '严格模式'}
+  {value: false, label: '自由模式'},
+  {value: true, label: '审批模式'}
 ]
 const togglePermissionPicker = () => {
   showPermissionPicker.value = !showPermissionPicker.value
@@ -577,7 +567,7 @@ const handleOutside = (e) => {
   if (!e.target.closest('.model-selector')) showModelPicker.value = false;
   if (!e.target.closest('.reasoning-effort-selector')) showEffortPicker.value = false
   if (!e.target.closest('.skill-selector')) showSkillPicker.value = false
-  if (!e.target.closest('.permission-selector')) showPermissionPicker.value = false
+  if (!e.target.closest('.permission-hitl-selector')) showPermissionPicker.value = false
 }
 
 // ============= 推理强度切换 =============
@@ -1348,56 +1338,12 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   gap: 8px;
 }
 
-/* ============= 技能 & 权限选择器 ============= */
+/* ============= 技能选择器 ============= */
 .skill-selector,
-.permission-selector {
+.permission-hitl-selector {
   position: relative;
   display: inline-flex;
   vertical-align: middle;
-}
-
-.tool-btn {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 12px;
-  font-weight: 500;
-  color: var(--fg-2);
-  padding: 2px 6px;
-  border-radius: var(--r-sm);
-  transition: all var(--t);
-  cursor: pointer;
-  background: none;
-  border: none;
-  white-space: nowrap;
-}
-
-.tool-btn:hover {
-  background: var(--bg-3);
-}
-
-.tool-btn.active {
-  color: var(--accent);
-}
-
-.tool-btn svg {
-  color: var(--fg-4);
-  flex-shrink: 0;
-}
-
-.tool-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 16px;
-  height: 14px;
-  padding: 0 4px;
-  background: var(--accent);
-  color: #fff;
-  font-size: 10px;
-  font-weight: 700;
-  border-radius: 7px;
-  line-height: 1;
 }
 
 /* 技能面板 */
@@ -1479,21 +1425,6 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
 
 .skill-panel-item.active {
   background: var(--accent-bg);
-}
-
-.skill-item-avatar {
-  width: 32px;
-  height: 32px;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--bg-3);
-  color: var(--fg-3);
-  font-size: 13px;
-  font-weight: 600;
-  flex-shrink: 0;
-  border: 1px solid var(--border);
 }
 
 .skill-item-info {

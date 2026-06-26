@@ -121,17 +121,39 @@ public class HitlManager {
     // ==================== 普通 HITL 拦截 ====================
 
     /**
+     * 免审批的纯交互/控制流工具名称集合。
+     * 这些工具不修改文件系统，仅用于对话控制和用户交互，
+     * 在 HITL 模式下直接放行，无需用户审批。
+     */
+    private static final java.util.Set<String> HITL_EXEMPT_TOOLS = java.util.Set.of("finish", "ask_choice");
+
+    /**
+     * 判断工具调用列表是否全部为免审批工具。
+     */
+    private static boolean allToolsExempt(List<ToolCallEntry> tcList) {
+        return !tcList.isEmpty() && tcList.stream()
+                .allMatch(tc -> HITL_EXEMPT_TOOLS.contains(tc.name()));
+    }
+
+    /**
      * HITL 拦截：暂存工具调用，通过 {@code output} 向用户发送审批提示。
+     * <p>如果本轮工具调用全部为免审批工具（finish/ask_choice），直接放行返回 {@code null}。</p>
      *
      * @param toolCalls       工具调用 ONode 数组
      * @param content         assistant 消息的 content
      * @param reasoningContent assistant 消息的 reasoning_content
      * @param output          输出接口（用于发送审批提示）
-     * @return 审批提示文本
+     * @return 审批提示文本，全部免审批时返回 {@code null}
      */
     public String interceptForHITL(ONode toolCalls, String content, String reasoningContent,
                                    AgentOutput output) {
         List<ToolCallEntry> tcList = parseToolCalls(toolCalls);
+
+        // 免审批工具直接放行
+        if (allToolsExempt(tcList)) {
+            log.debug("[hitl] 工具全部免审批，直接放行: {}", tcList.stream().map(ToolCallEntry::name).toList());
+            return null;
+        }
 
         // 暂存状态
         this.pendingHITLToolCalls = toolCalls;

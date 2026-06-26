@@ -293,10 +293,18 @@ const handleSwitchSkill = (skills) => {
   currentSkill.value = skills
 }
 
-// ============= 权限切换 =============
-const currentPermission = ref('默认权限')
-const handleSwitchPermission = (level) => {
-  currentPermission.value = level
+// ============= 权限切换（hitl） =============
+const currentPermission = ref(false)
+const handleSwitchPermission = async (hitl) => {
+  if (hitl === currentPermission.value) return
+  try {
+    const r = await configAPI.updateConfig({hitl})
+    if (r.success) {
+      currentPermission.value = hitl
+    }
+  } catch (e) {
+    console.error('切换权限模式失败:', e)
+  }
 }
 
 const props = defineProps({
@@ -413,6 +421,7 @@ const loadUsage = async (override) => {
     }
     if (configRes.status === 'fulfilled' && configRes.value.success) {
       currentReasoningEffort.value = configRes.value.data?.reasoningEffort || 'max'
+      currentPermission.value = !!configRes.value.data?.hitl
     }
   } catch {
   }
