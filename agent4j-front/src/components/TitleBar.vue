@@ -192,7 +192,7 @@ const closeWindow = async () => {
   align-items: center;
   justify-content: center;
   border-radius: var(--r);
-  color: var(--fg-3);
+  color: var(--fg);
   transition: all var(--t);
   flex-shrink: 0;
   -webkit-app-region: no-drag;
