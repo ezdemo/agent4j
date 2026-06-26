@@ -1,7 +1,8 @@
-package site.sorghum.agent4j.tool.javasource;
+package tool.javasource;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import site.sorghum.agent4j.tool.javasource.ZipReader;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;

@@ -1,7 +1,8 @@
-package site.sorghum.agent4j.tool;
+package tool;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import site.sorghum.agent4j.tool.ToolParameter;
 
 import java.util.List;
 

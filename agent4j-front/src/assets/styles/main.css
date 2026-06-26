@@ -36,6 +36,14 @@
   --fg-4: #9ca3af;
   --border: #e5e7eb;
   --border-2: #d1d5db;
+  --text: var(--fg);
+  --text-secondary: var(--fg-2);
+  --text-muted: var(--fg-4);
+  --text-faint: #b4b4bb;
+  --bg-subtle: #fafafa;
+  --bg-muted: #f4f4f5;
+  --bg-hover: #f0f0f1;
+  --bg-active: #e8e8ea;
   --accent: var(--blue);
   --accent-bg: var(--blue-bg);
 
@@ -61,8 +69,8 @@
   --r-lg: 10px;
 
   /* 字体 */
-  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-  --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
 
   /* 过渡 */
   --t: 0.15s ease;
@@ -125,7 +133,7 @@
   --z-tooltip: 400;
   --z-toast: 500;
   --header-height: 48px;
-  --sidebar-width: 260px;
+  --sidebar-width: 272px;
   --sidebar-collapsed: 48px;
   --footer-height: 36px;
   --input-height: 36px;
@@ -140,6 +148,14 @@
   --fg-2: #a3a3a3;
   --fg-3: #737373;
   --fg-4: #525252;
+  --text: var(--fg);
+  --text-secondary: var(--fg-2);
+  --text-muted: var(--fg-4);
+  --text-faint: #7a7a83;
+  --bg-subtle: #121212;
+  --bg-muted: #1a1a1a;
+  --bg-hover: #222222;
+  --bg-active: #2a2a2a;
   --border: #262626;
   --border-2: #333333;
   --accent: #3b82f6;
@@ -163,6 +179,13 @@
   --glass-bg-2: rgba(31,31,31,0.92);
   --glass-border: rgba(255,255,255,0.08);
   --glass-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 8px 32px rgba(0,0,0,0.35);
+}
+[data-theme="dark"] .new-task-btn {
+  background: #333;
+  color: #e5e5e5;
+}
+[data-theme="dark"] .new-task-btn:hover {
+  background: #404040;
 }
 
 /* 全局 */
@@ -238,8 +261,12 @@ body {
 }
 /* 浅绿 — 消息 & 加载适配 */
 [data-theme="retro"] .user-body {
-  color: #FFFFFF;
+  color: #1C1B1F;
+  background: #C8E6C9;
+}
+[data-theme="retro"] .new-task-btn {
   background: #4CAF50;
+  color: #fff;
 }
 [data-theme="retro"] .assistant-body {
   background: #F5F5F5;
@@ -295,6 +322,11 @@ body {
 [data-theme="retro-yellow"] ::-webkit-scrollbar-thumb:hover { background: #b8a07a; }
 /* 复古黄 — 消息 & 加载适配 */
 [data-theme="retro-yellow"] .user-body {
+  color: #3c2415;
+  background: #e8d5b0;
+}
+[data-theme="retro-yellow"] .new-task-btn {
+  background: #8b4513;
   color: #f5e6c8;
 }
 [data-theme="retro-yellow"] .assistant-body {

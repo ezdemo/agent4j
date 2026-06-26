@@ -207,10 +207,12 @@ public class SessionController {
         if (node == null) return List.of();
         
         List<String> successors = workflow.getSuccessorIds(nodeId);
+        java.util.Set<String> visited = new java.util.HashSet<>();
+        visited.add(nodeId);
         List<WorkflowVisualizationDTO.PathNodeDTO> next = successors.isEmpty() 
                 ? List.of() 
                 : successors.stream()
-                    .map(sid -> buildPathNode(workflow, sid))
+                    .map(sid -> buildPathNode(workflow, sid, visited))
                     .collect(Collectors.toList());
         
         return List.of(WorkflowVisualizationDTO.PathNodeDTO.builder()
@@ -222,14 +224,30 @@ public class SessionController {
     }
     
     private WorkflowVisualizationDTO.PathNodeDTO buildPathNode(Workflow workflow, String nodeId) {
+        return buildPathNode(workflow, nodeId, new java.util.HashSet<>());
+    }
+    
+    private WorkflowVisualizationDTO.PathNodeDTO buildPathNode(Workflow workflow, String nodeId, java.util.Set<String> visited) {
         WorkflowNode node = workflow.findNode(nodeId);
         if (node == null) return null;
+
+        // 循环检测：如果已访问过，返回叶子节点（截断环路）
+        if (visited.contains(nodeId)) {
+            return WorkflowVisualizationDTO.PathNodeDTO.builder()
+                    .id(node.getId())
+                    .description(node.getDescription() + " (循环)")
+                    .status(node.getStatus().name())
+                    .next(List.of())
+                    .build();
+        }
+        java.util.Set<String> visitedCopy = new java.util.HashSet<>(visited);
+        visitedCopy.add(nodeId);
         
         List<String> successors = workflow.getSuccessorIds(nodeId);
         List<WorkflowVisualizationDTO.PathNodeDTO> next = successors.isEmpty()
                 ? List.of()
                 : successors.stream()
-                    .map(sid -> buildPathNode(workflow, sid))
+                    .map(sid -> buildPathNode(workflow, sid, new java.util.HashSet<>(visitedCopy)))
                     .filter(p -> p != null)
                     .collect(Collectors.toList());
         

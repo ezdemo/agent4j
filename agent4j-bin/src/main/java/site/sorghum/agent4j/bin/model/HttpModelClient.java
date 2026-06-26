@@ -801,7 +801,7 @@ public class HttpModelClient implements ModelClient {
                         }
                     }
                 }
-            } else if (isAssistant && !hasContent && !hasTc) {
+            } else if (isAssistant && !hasContent && !hasTc && !hasReasoning) {
                 // 既无 content 也无 tool_calls → 强制补空 content 防止 API 400
                 // 这种情况不应出现在正常流程中，但历史消息损坏或 Healer 遗漏时兜底
                 log.warn("buildBody: 检测到空 assistant 消息（无 content 且无 tool_calls），强制删除");

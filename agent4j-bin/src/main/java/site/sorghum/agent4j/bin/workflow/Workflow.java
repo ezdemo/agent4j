@@ -120,8 +120,16 @@ public class Workflow {
                         // 没有前驱节点，检查是否为开始节点或就绪状态
                         return node.getType() == NodeType.START || node.getStatus() == NodeStatus.READY;
                     }
+                    // 过滤掉 LOOP_BACK 边的前驱（循环回边不算在依赖条件内）
+                    // 对于非 LOOP 节点，getPredecessorIds 不会返回 LOOP_BACK 边，过滤无副作用
+                    List<String> forwardPreds = predecessors.stream()
+                            .filter(predId -> {
+                                WorkflowEdge edge = findEdge(predId, node.getId());
+                                return edge == null || edge.getType() != EdgeType.LOOP_BACK;
+                            })
+                            .collect(Collectors.toList());
                     // 所有前驱节点必须满足条件
-                    return predecessors.stream().allMatch(predId -> {
+                    return forwardPreds.stream().allMatch(predId -> {
                         WorkflowNode pred = findNode(predId);
                         if (pred == null) {
                             return false;
@@ -248,6 +256,57 @@ public class Workflow {
      */
     public boolean isRunning() {
         return status == WorkflowStatus.ACTIVE && !isAllDone() && !hasFailed();
+    }
+
+    /**
+     * 重置循环体节点，为下一次迭代做准备。
+     * <p>
+     * 将 loopTarget 到 LOOP 节点之间通过 LOOP_BACK 边连接的所有节点重置为 PENDING，
+     * 清除上次迭代的结果和完成时间。
+     * </p>
+     *
+     * @param loopNodeId LOOP 节点ID
+     */
+    public void resetLoopBody(String loopNodeId) {
+        WorkflowNode loopNode = findNode(loopNodeId);
+        if (loopNode == null || loopNode.getType() != NodeType.LOOP) {
+            return;
+        }
+        String loopTarget = loopNode.getLoopTarget();
+        if (loopTarget == null) {
+            return;
+        }
+
+        // 收集循环体节点：从 loopTarget 出发，沿边遍历到 LOOP 节点
+        java.util.Set<String> bodyNodeIds = new java.util.HashSet<>();
+        collectLoopBodyNodes(loopTarget, loopNodeId, bodyNodeIds);
+
+        // 重置循环体节点
+        for (String bodyNodeId : bodyNodeIds) {
+            WorkflowNode bodyNode = findNode(bodyNodeId);
+            if (bodyNode != null && bodyNodeId.equals(loopNodeId)) continue;
+            if (bodyNode != null && bodyNode.isCompleted()) {
+                bodyNode.setStatus(NodeStatus.PENDING);
+                bodyNode.setResult(null);
+                bodyNode.setCompletedAt(null);
+            }
+        }
+
+        // 重置 LOOP 节点本身，使其回到可被 getReadyNodes 拾取的状态
+        loopNode.setStatus(NodeStatus.PENDING);
+    }
+
+    /**
+     * 递归收集循环体内的节点ID。
+     */
+    private void collectLoopBodyNodes(String currentId, String loopNodeId, java.util.Set<String> visited) {
+        if (visited.contains(currentId) || currentId.equals(loopNodeId)) {
+            return;
+        }
+        visited.add(currentId);
+        for (String succId : getSuccessorIds(currentId)) {
+            collectLoopBodyNodes(succId, loopNodeId, visited);
+        }
     }
 
     /**

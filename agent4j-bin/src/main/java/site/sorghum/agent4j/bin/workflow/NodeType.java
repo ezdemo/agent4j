@@ -16,6 +16,8 @@ public enum NodeType {
     HITL,
     /** 子工作流 */
     SUBFLOW,
+    /** 循环控制 */
+    LOOP,
     /** 开始节点 */
     START,
     /** 结束节点 */

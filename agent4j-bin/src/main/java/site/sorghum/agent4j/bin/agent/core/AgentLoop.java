@@ -463,7 +463,7 @@ public class AgentLoop implements AgentLoopController {
                 需在 `~/.agent4j/config.json` 配置 vision（baseUrl, apiKey, model）。
                 | 参数 | 必填 | 说明 |
                 |------|------|------|
-                | imageBase64 | 是 | 图片 URL 或 Base64 Data URI |
+                | image | 是 | 图片路径、URL 或 Base64 Data URI |
                 | prompt | 否 | 识别提示词 |
                 
                 ---

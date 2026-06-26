@@ -56,6 +56,7 @@ public class WorkflowCreateDagTool extends AbsToolProvider implements SolonToToo
             - CONDITION: 条件判断。系统自动评估条件并选择一个后继分支
             - SUBFLOW:   子代理执行。适合复杂任务（需求分析、架构设计、多步推理），会自动创建子代理
             - HITL:      人工审批。暂停工作流等待用户 approve/deny
+            - LOOP:      循环控制。支持重试直到成功、迭代处理等循环场景，需设置 loopTarget、maxIterations、breakCondition
             （start 和 end 节点由系统自动生成，不需要你创建）
             
             ═══════════════════════════════════════════════
@@ -65,6 +66,7 @@ public class WorkflowCreateDagTool extends AbsToolProvider implements SolonToToo
             - CONDITION_SELECT: 条件选择边（用于 CONDITION 节点的 N 路分支）
             - CONDITION_TRUE:   条件为真（兼容旧版，推荐用 CONDITION_SELECT）
             - CONDITION_FALSE:  条件为假（兼容旧版，推荐用 CONDITION_SELECT）
+            - LOOP_BACK:        循环回边（LOOP 节点到循环体起始节点，必填）
             边额外字段：
             - label: 边标签（可选，用于 CONDITION_SELECT 标注分支含义，如 "通过"/"失败"）
             
@@ -79,6 +81,11 @@ public class WorkflowCreateDagTool extends AbsToolProvider implements SolonToToo
             
             HITL 节点：
             - approvalPrompt: "审批提示文本"
+            
+            LOOP 节点：
+            - loopTarget: "n2"  循环体起始节点ID（必填）
+            - maxIterations: 10  最大迭代次数（可选，默认10，防死循环）
+            - breakCondition: "退出条件描述"  循环退出条件（必填）
             
             ═══════════════════════════════════════════════
             ⭐ DAG 构建规则（重要！）
@@ -171,7 +178,29 @@ public class WorkflowCreateDagTool extends AbsToolProvider implements SolonToToo
                ]
                ```
             
-            7. 【综合示例】（并发 + 多条件 + 子代理）
+            7. 【循环控制】⭐
+                用 LOOP 节点 + LOOP_BACK 边实现循环。LOOP 节点每轮评估是否继续循环。
+                LOOP_BACK 边从循环体末尾指回 LOOP 节点，系统自动重置循环体节点为下一次迭代。
+
+                示例：重试调用 API 直到成功（最多 5 次）
+                ```
+                nodes: [
+                  {"id":"n_loop","description":"重试直到 API 调用成功","type":"LOOP","loopTarget":"n_retry","maxIterations":5,"breakCondition":"API 调用成功"},
+                  {"id":"n_retry","description":"调用外部 API","type":"ACTION"},
+                  {"id":"n_ok","description":"处理成功结果","type":"ACTION"}
+                ]
+                edges: [
+                  {"from":"start","to":"n_loop"},
+                  {"from":"n_loop","to":"n_retry"},
+                  {"from":"n_retry","to":"n_loop","type":"LOOP_BACK"},
+                  {"from":"n_loop","to":"n_ok"},
+                  {"from":"n_ok","to":"end"}
+                ]
+                ```
+                关键：n_loop 有两条出边——到 n_retry（循环体）和到 n_ok（退出循环）。
+                n_retry 通过 LOOP_BACK 边指回 n_loop，每轮迭代完成后系统重置 n_retry 并重新评估 LOOP。
+
+             8. 【综合示例】（并发 + 多条件 + 子代理）
                用户需求："分析需求，并行开发前后端，测试通过后人工确认部署"
                ```
                nodes: [
@@ -207,7 +236,9 @@ public class WorkflowCreateDagTool extends AbsToolProvider implements SolonToToo
             ❌ CONDITION 节点没有 condition 字段
             ❌ 条件分支用 NORMAL 边而不是 CONDITION_SELECT 边
             ❌ 并行分支的汇聚节点缺少某个分支的入边（会导致 join 不完整）
-            ❌ 节点之间存在循环依赖
+            ❌ 节点之间存在循环依赖（必须通过 LOOP + LOOP_BACK 实现循环）
+            ❌ LOOP 节点没有 loopTarget 或 breakCondition 字段
+            ❌ LOOP_BACK 边的目标不是 LOOP 节点
             ❌ 节点描述过于笼统（如"处理数据"，应该具体到"解析 CSV 文件并计算统计值"）
             """)
     public String workflowCreateDag(
@@ -356,7 +387,23 @@ public class WorkflowCreateDagTool extends AbsToolProvider implements SolonToToo
                     if (approvalPrompt != null && !approvalPrompt.isBlank()) {
                         node.setApprovalPrompt(approvalPrompt);
                     }
-                    
+
+                    // 解析 LOOP 循环字段
+                    if (type == NodeType.LOOP) {
+                        String loopTarget = nodeObj.get("loopTarget").getString();
+                        if (loopTarget != null && !loopTarget.isBlank()) {
+                            node.setLoopTarget(loopTarget);
+                        }
+                        Integer maxIter = nodeObj.get("maxIterations").getInt();
+                        if (maxIter != null && maxIter > 0) {
+                            node.setMaxIterations(maxIter);
+                        }
+                        String breakCond = nodeObj.get("breakCondition").getString();
+                        if (breakCond != null && !breakCond.isBlank()) {
+                            node.setBreakCondition(breakCond);
+                        }
+                    }
+
                     nodes.add(node);
                 }
             }
@@ -464,6 +511,17 @@ public class WorkflowCreateDagTool extends AbsToolProvider implements SolonToToo
                     return "CONDITION 节点 '" + node.getId() + "' 缺少 condition 字段";
                 }
             }
+            if (node.getType() == NodeType.LOOP) {
+                if (node.getLoopTarget() == null || node.getLoopTarget().isBlank()) {
+                    return "LOOP 节点 '" + node.getId() + "' 缺少 loopTarget 字段（循环体起始节点ID）";
+                }
+                if (!nodeIds.contains(node.getLoopTarget())) {
+                    return "LOOP 节点 '" + node.getId() + "' 的 loopTarget '" + node.getLoopTarget() + "' 不存在";
+                }
+                if (node.getMaxIterations() <= 0) {
+                    return "LOOP 节点 '" + node.getId() + "' 的 maxIterations 必须大于 0";
+                }
+            }
         }
         
         // 验证 CONDITION 节点的出边类型
@@ -481,6 +539,18 @@ public class WorkflowCreateDagTool extends AbsToolProvider implements SolonToToo
                 }
             }
         }
+
+        // 验证 LOOP_BACK 边的目标必须是 LOOP 节点
+        for (WorkflowEdge edge : edges) {
+            if (edge.getType() == EdgeType.LOOP_BACK) {
+                WorkflowNode targetNode = nodes.stream()
+                        .filter(n -> n.getId().equals(edge.getTo()))
+                        .findFirst().orElse(null);
+                if (targetNode == null || targetNode.getType() != NodeType.LOOP) {
+                    return "LOOP_BACK 边 '" + edge.getFrom() + " -> " + edge.getTo() + "' 的目标必须是 LOOP 节点";
+                }
+            }
+        }
         
         // 检查是否有循环（简单的 DFS 检测）
         if (hasCycle(nodes, edges)) {
@@ -491,16 +561,22 @@ public class WorkflowCreateDagTool extends AbsToolProvider implements SolonToToo
     }
     
     /**
-     * 检测是否有循环。
+     * 检测是否有循环（排除 LOOP_BACK 边）。
+     * <p>
+     * LOOP_BACK 边是 LOOP 节点到循环体起始节点的回边，是合法的循环结构，
+     * 不应被视为非法循环依赖。
+     * </p>
      */
     private boolean hasCycle(List<WorkflowNode> nodes, List<WorkflowEdge> edges) {
-        // 构建邻接表
+        // 构建邻接表（排除 LOOP_BACK 边）
         java.util.Map<String, List<String>> adjacency = new java.util.HashMap<>();
         for (WorkflowNode node : nodes) {
             adjacency.put(node.getId(), new ArrayList<>());
         }
         for (WorkflowEdge edge : edges) {
-            adjacency.get(edge.getFrom()).add(edge.getTo());
+            if (edge.getType() != EdgeType.LOOP_BACK) {
+                adjacency.get(edge.getFrom()).add(edge.getTo());
+            }
         }
         
         // DFS 检测循环
@@ -566,6 +642,11 @@ public class WorkflowCreateDagTool extends AbsToolProvider implements SolonToToo
             }
             if (node.getType() == NodeType.CONDITION && node.getCondition() != null) {
                 nodeObj.set("condition", node.getCondition());
+            }
+            if (node.getType() == NodeType.LOOP) {
+                if (node.getLoopTarget() != null) nodeObj.set("loopTarget", node.getLoopTarget());
+                nodeObj.set("maxIterations", node.getMaxIterations());
+                if (node.getBreakCondition() != null) nodeObj.set("breakCondition", node.getBreakCondition());
             }
         }
         
