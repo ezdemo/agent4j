@@ -225,6 +225,8 @@
         :workspaceHash="props.workspaceHash"
         :sessionName="props.sessionName"
         :hasHistory="hasHistory"
+        :version="props.version"
+        :connected="props.connected"
         @send="(imgs) => sendMessage(imgs)"
         @abort="abortChat"
         @clear="clearChat"
@@ -284,7 +286,9 @@ const handleSwitchReasoningEffort = async (value) => {
 const props = defineProps({
   hideHeader: {type: Boolean, default: false},
   workspaceHash: {type: String, default: null},
-  sessionName: {type: String, default: null}
+  sessionName: {type: String, default: null},
+  version: {type: String, default: ''},
+  connected: {type: Boolean, default: true}
 })
 
 const emit = defineEmits(['sessionUpdated'])
@@ -1297,7 +1301,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 16px 100px;
+  padding: 16px 48px 100px;
   position: relative;
 }
 

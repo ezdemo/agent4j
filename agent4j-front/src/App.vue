@@ -65,6 +65,8 @@
         hide-header 
         :workspace-hash="currentSessionWorkspace"
         :session-name="currentSession"
+        :version="appVersion"
+        :connected="!showSetup"
         style="flex:1;min-height:0"
         @session-updated="loadSessions"
       />

@@ -254,8 +254,8 @@ body {
 }
 /* 浅绿 — 消息 & 加载适配 */
 [data-theme="retro"] .user-body {
-  color: #FFFFFF;
-  background: #4CAF50;
+  color: #1C1B1F;
+  background: #C8E6C9;
 }
 [data-theme="retro"] .assistant-body {
   background: #F5F5F5;
@@ -311,7 +311,8 @@ body {
 [data-theme="retro-yellow"] ::-webkit-scrollbar-thumb:hover { background: #b8a07a; }
 /* 复古黄 — 消息 & 加载适配 */
 [data-theme="retro-yellow"] .user-body {
-  color: #f5e6c8;
+  color: #3c2415;
+  background: #e8d5b0;
 }
 [data-theme="retro-yellow"] .assistant-body {
   background: #ecdbc2;
