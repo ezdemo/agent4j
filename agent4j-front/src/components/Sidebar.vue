@@ -274,7 +274,7 @@ const formatName = (n) => {
   border-bottom: 1px solid var(--glass-border);
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  gap: 10px;
 }
 
 .sidebar-logo {
@@ -313,6 +313,8 @@ const formatName = (n) => {
   cursor: pointer;
   display: flex;
   align-items: center;
+  justify-content: center;
+  flex: 1;
   gap: 6px;
   transition: all 0.15s;
   font-family: inherit;
