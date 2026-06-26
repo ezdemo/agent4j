@@ -31,9 +31,18 @@
     </Transition>
 
     <div class="input-box" :class="{ focused: inputFocused }">
-      <div class="input-row">
-        <!-- TODO 图标 - 已废弃，使用工作流替代 -->
+      <!-- 已选技能标签 -->
+      <div v-if="selectedSkills.length > 0" class="skill-chips-bar">
+        <span v-for="s in selectedSkills" :key="s.name" class="skill-chip">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+          </svg>
+          {{ s.name }}
+          <button class="skill-chip-remove" @click.stop="removeSkill(s)">&times;</button>
+        </span>
+      </div>
 
+      <div class="input-row">
         <textarea ref="inputField" v-model="localText" @keydown="handleKeydown"
                   placeholder="输入消息... (Enter 发送, Tab 补全, / 命令，粘贴图片)" rows="1" @blur="handleBlur"
                   @focus="inputFocused=true"
@@ -131,6 +140,70 @@
           </button>
         </div>
         <div class="model-actions">
+        <!-- 技能指定 -->
+        <div class="skill-selector">
+          <button class="tool-btn" @click="toggleSkillPicker" :class="{ active: selectedSkills.length > 0 }" title="选择技能">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+            </svg>
+            技能
+            <span v-if="selectedSkills.length > 0" class="tool-badge">{{ selectedSkills.length }}</span>
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div class="skill-panel" v-if="showSkillPicker">
+            <div class="skill-panel-search">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
+              </svg>
+              <input ref="skillSearchInput" v-model="skillSearchQuery" type="text" placeholder="搜索技能..." class="skill-search-input" @keydown.esc="showSkillPicker = false"/>
+            </div>
+            <div class="skill-panel-list">
+              <div v-if="skillLoading" class="skill-panel-empty">
+                <span class="loading-dot"></span> 加载中...
+              </div>
+              <div v-else-if="filteredSkills.length === 0" class="skill-panel-empty">无匹配技能</div>
+              <div v-for="s in filteredSkills" :key="s.name" class="skill-panel-item"
+                   :class="{ active: isSkillSelected(s) }" @click="toggleSkill(s)">
+                <div class="skill-item-avatar">
+                  {{ s.name?.charAt(0)?.toUpperCase() || '?' }}
+                </div>
+                <div class="skill-item-info">
+                  <div class="skill-item-name">{{ s.name }}</div>
+                  <div v-if="s.description" class="skill-item-desc">{{ s.description }}</div>
+                </div>
+                <svg v-if="isSkillSelected(s)" class="skill-item-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
+        <!-- 权限切换 -->
+        <div class="permission-selector">
+          <button class="tool-btn" @click="togglePermissionPicker" :title="currentPermission">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            </svg>
+            {{ currentPermission }}
+            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div class="tool-dropdown" v-if="showPermissionPicker">
+            <div class="tool-dropdown-title">权限级别</div>
+            <div class="tool-dropdown-list">
+              <div v-for="opt in permissionOptions" :key="opt.value" class="tool-option"
+                   :class="{ active: opt.value === currentPermission }" @click="pickPermission(opt.value)">
+                <span class="tool-option-name">{{ opt.label }}</span>
+                <svg v-if="opt.value === currentPermission" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </div>
+            </div>
+          </div>
+        </div>
         <div class="reasoning-effort-selector">
           <button class="effort-btn" @click="toggleEffortPicker" :title="'当前推理强度: '+currentReasoningEffort">
             {{ effortLabel }}
@@ -194,10 +267,12 @@ const props = defineProps({
   hasHistory: {type: Boolean, default: false},
   currentReasoningEffort: {type: String, default: 'max'},
   connected: {type: Boolean, default: true},
-  version: {type: String, default: ''}
+  version: {type: String, default: ''},
+  currentSkill: {type: Object, default: null},
+  currentPermission: {type: String, default: '默认权限'}
 })
 
-const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort'])
+const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchSkill', 'switchPermission'])
 
 const inputField = ref(null)
 const inputFocused = ref(false)
@@ -342,9 +417,16 @@ const handleKeydown = (e) => {
 
 const handleSend = () => {
   if (localText.value.trim() && !props.streaming) {
-    emit('send', images.value)
-    // 发送后清空图片，localText 由父组件 v-model 清空
+    let text = localText.value.trim()
+    // 有选中技能时，拼接技能指令到消息顶部
+    if (selectedSkills.value.length > 0) {
+      const skillLines = selectedSkills.value.map(s => `/skill:${s.name}`).join('\n')
+      text = `调用技能：\n${skillLines}\n\n${text}`
+    }
+    emit('send', images.value, text)
+    // 发送后清空图片和技能标签
     images.value = []
+    selectedSkills.value = []
     // 等待父组件清空文本后，重置 textarea 高度
     nextTick(() => autoResize())
   }
@@ -422,10 +504,80 @@ const pickModel = async (name) => {
   showModelPicker.value = false
 }
 
-// 点击外部关闭模型选择器
+// ============= 技能选择（多选） =============
+const showSkillPicker = ref(false)
+const availableSkills = ref([])
+const skillLoading = ref(false)
+const selectedSkills = ref([])
+const skillSearchQuery = ref('')
+const skillSearchInput = ref(null)
+
+const filteredSkills = computed(() => {
+  if (!skillSearchQuery.value) return availableSkills.value
+  const q = skillSearchQuery.value.toLowerCase()
+  return availableSkills.value.filter(s =>
+    (s.name || '').toLowerCase().includes(q) ||
+    (s.description || '').toLowerCase().includes(q)
+  )
+})
+
+const isSkillSelected = (skill) => selectedSkills.value.some(s => s.name === skill.name)
+
+const toggleSkillPicker = async () => {
+  showSkillPicker.value = !showSkillPicker.value
+  if (showSkillPicker.value && availableSkills.value.length === 0 && !skillLoading.value) {
+    skillLoading.value = true
+    try {
+      const r = await agentAPI.getSkills()
+      if (r.success && r.data) availableSkills.value = r.data
+    } catch {}
+    skillLoading.value = false
+  }
+  if (showSkillPicker.value) {
+    skillSearchQuery.value = ''
+    nextTick(() => skillSearchInput.value?.focus())
+  }
+}
+
+const toggleSkill = (skill) => {
+  const idx = selectedSkills.value.findIndex(s => s.name === skill.name)
+  if (idx >= 0) {
+    selectedSkills.value.splice(idx, 1)
+  } else {
+    selectedSkills.value.push(skill)
+  }
+  emit('switchSkill', [...selectedSkills.value])
+}
+
+const removeSkill = (skill) => {
+  selectedSkills.value = selectedSkills.value.filter(s => s.name !== skill.name)
+  emit('switchSkill', [...selectedSkills.value])
+}
+
+
+
+// ============= 权限切换 =============
+const showPermissionPicker = ref(false)
+const permissionOptions = [
+  {value: '默认权限', label: '默认权限'},
+  {value: '自动执行', label: '自动执行'},
+  {value: '需要确认', label: '需要确认'},
+  {value: '严格模式', label: '严格模式'}
+]
+const togglePermissionPicker = () => {
+  showPermissionPicker.value = !showPermissionPicker.value
+}
+const pickPermission = (level) => {
+  emit('switchPermission', level)
+  showPermissionPicker.value = false
+}
+
+// 点击外部关闭选择器
 const handleOutside = (e) => {
   if (!e.target.closest('.model-selector')) showModelPicker.value = false;
   if (!e.target.closest('.reasoning-effort-selector')) showEffortPicker.value = false
+  if (!e.target.closest('.skill-selector')) showSkillPicker.value = false
+  if (!e.target.closest('.permission-selector')) showPermissionPicker.value = false
 }
 
 // ============= 推理强度切换 =============
@@ -1196,6 +1348,289 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   gap: 8px;
 }
 
+/* ============= 技能 & 权限选择器 ============= */
+.skill-selector,
+.permission-selector {
+  position: relative;
+  display: inline-flex;
+  vertical-align: middle;
+}
+
+.tool-btn {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--fg-2);
+  padding: 2px 6px;
+  border-radius: var(--r-sm);
+  transition: all var(--t);
+  cursor: pointer;
+  background: none;
+  border: none;
+  white-space: nowrap;
+}
+
+.tool-btn:hover {
+  background: var(--bg-3);
+}
+
+.tool-btn.active {
+  color: var(--accent);
+}
+
+.tool-btn svg {
+  color: var(--fg-4);
+  flex-shrink: 0;
+}
+
+.tool-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 16px;
+  height: 14px;
+  padding: 0 4px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  border-radius: 7px;
+  line-height: 1;
+}
+
+/* 技能面板 */
+.skill-panel {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 4px;
+  width: 340px;
+  max-height: 420px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.skill-panel-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.skill-panel-search svg {
+  color: var(--fg-4);
+  flex-shrink: 0;
+}
+
+.skill-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: none;
+  font-size: 13px;
+  color: var(--fg);
+}
+
+.skill-search-input::placeholder {
+  color: var(--fg-4);
+}
+
+.skill-panel-list {
+  flex: 1;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.skill-panel-empty {
+  padding: 24px 16px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--fg-4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.skill-panel-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--t);
+}
+
+.skill-panel-item:hover {
+  background: var(--bg-2);
+}
+
+.skill-panel-item.active {
+  background: var(--accent-bg);
+}
+
+.skill-item-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-3);
+  color: var(--fg-3);
+  font-size: 13px;
+  font-weight: 600;
+  flex-shrink: 0;
+  border: 1px solid var(--border);
+}
+
+.skill-item-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.skill-item-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skill-item-desc {
+  font-size: 11px;
+  color: var(--fg-4);
+  margin-top: 1px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.skill-item-check {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
+/* 已选技能标签 */
+.skill-chips-bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  padding: 6px 8px 0;
+}
+
+.skill-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 6px 2px 8px;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  cursor: default;
+}
+
+.skill-chip svg {
+  flex-shrink: 0;
+}
+
+.skill-chip-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  height: 14px;
+  border: none;
+  background: none;
+  color: var(--accent);
+  font-size: 12px;
+  padding: 0;
+  cursor: pointer;
+  border-radius: 50%;
+  transition: all var(--t);
+  line-height: 1;
+}
+
+.skill-chip-remove:hover {
+  background: var(--accent);
+  color: #fff;
+}
+
+/* 权限选择器（下拉式） */
+.tool-dropdown {
+  position: absolute;
+  bottom: 100%;
+  right: 0;
+  margin-bottom: 4px;
+  min-width: 160px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: var(--shadow);
+  z-index: 100;
+  overflow: hidden;
+}
+
+.tool-dropdown-title {
+  padding: 8px 12px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-4);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.tool-dropdown-list {
+  max-height: 200px;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.tool-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 10px;
+  font-size: 12px;
+  color: var(--fg-2);
+  cursor: pointer;
+  border-radius: var(--r-sm);
+  transition: all var(--t);
+}
+
+.tool-option:hover {
+  background: var(--bg-2);
+}
+
+.tool-option.active {
+  color: var(--accent);
+  font-weight: 500;
+}
+
+.tool-option svg {
+  color: var(--accent);
+  flex-shrink: 0;
+}
+
 .reasoning-effort-selector {
   position: relative;
   display: inline-flex;
@@ -1438,6 +1873,15 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   .slash-popup {
     left: 8px;
     right: 8px;
+  }
+
+  .tool-btn {
+    font-size: 11px;
+    padding: 2px 4px;
+  }
+
+  .tool-dropdown {
+    min-width: 140px;
   }
 }
 </style>
