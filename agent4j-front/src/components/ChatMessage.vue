@@ -32,8 +32,8 @@
           <span class="msg-time-group">
             <span class="msg-time">{{ msg.time }}</span>
             <template v-if="fileStats">
-              <span v-if="fileStats.edited > 0" class="msg-file-stat">修改 {{ fileStats.edited }} 文件</span>
-              <span v-if="fileStats.created > 0" class="msg-file-stat">新增 {{ fileStats.created }} 文件</span>
+              <span v-if="fileStats.edited > 0" class="msg-file-stat clickable" @mouseenter="showFileListDelayed('edited', $event)" @mouseleave="hideFileListDelayed">修改 {{ fileStats.edited }} 文件</span>
+              <span v-if="fileStats.created > 0" class="msg-file-stat clickable" @mouseenter="showFileListDelayed('created', $event)" @mouseleave="hideFileListDelayed">新增 {{ fileStats.created }} 文件</span>
             </template>
           </span>
           <button class="copy-msg-btn" @click="$emit('copyMessage', msg)" title="复制消息" v-html="COPY_ICON"></button>
@@ -41,6 +41,22 @@
       </div>
     </template>
   </div>
+
+  <!-- 文件列表弹出 -->
+  <Teleport to="body">
+    <div v-if="showFileList" class="file-list-popover" :class="{ above: fileListPos.above }" :style="{ position: 'fixed', left: fileListPos.x + 'px', top: fileListPos.y + 'px' }" @mouseenter="cancelHideFileList" @mouseleave="hideFileListDelayed">
+      <div class="file-list-header">
+        <span class="file-list-title">{{ fileListType === 'edited' ? '修改的文件' : '新增的文件' }}</span>
+        <span class="file-list-count">{{ fileList.length }} 个</span>
+      </div>
+      <div class="file-list-body">
+        <div v-for="fp in fileList" :key="fp" class="file-list-item" @click="showFileList = false; $emit('openFile', fp)">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          <span class="file-list-path" :title="fp">{{ fp }}</span>
+        </div>
+      </div>
+    </div>
+  </Teleport>
 
   <!-- 链接悬停浮层 -->
   <Teleport to="body">
@@ -100,8 +116,47 @@ const fileStats = computed(() => {
     else if (b.name === 'write') created.add(fp)
   }
   if (edited.size === 0 && created.size === 0) return null
-  return { edited: edited.size, created: created.size }
+  return { edited: edited.size, created: created.size, editedFiles: [...edited], createdFiles: [...created] }
 })
+
+// 文件列表弹出
+const showFileList = ref(false)
+const fileListType = ref('') // 'edited' | 'created'
+const fileList = computed(() => {
+  if (!fileStats.value) return []
+  return fileListType.value === 'edited' ? fileStats.value.editedFiles : fileStats.value.createdFiles
+})
+const fileListPos = ref({ x: 0, y: 0, above: false })
+let fileHideTimer = null
+let fileShowTimer = null
+
+const showFileListDelayed = (type, event) => {
+  clearTimeout(fileHideTimer)
+  clearTimeout(fileShowTimer)
+  // 必须在 setTimeout 外捕获，Vue 事件回调结束后 event 会被回收
+  const rect = event.currentTarget.getBoundingClientRect()
+  fileShowTimer = setTimeout(() => {
+    fileListType.value = type
+    const popH = Math.min(fileList.value.length * 32 + 40, 320)
+    const spaceBelow = window.innerHeight - rect.bottom
+    const above = spaceBelow < popH + 8 && rect.top > popH
+    fileListPos.value = {
+      x: Math.max(8, Math.min(rect.left, window.innerWidth - 300)),
+      y: above ? rect.top - 4 : rect.bottom + 4,
+      above
+    }
+    showFileList.value = true
+  }, 150)
+}
+
+const hideFileListDelayed = () => {
+  clearTimeout(fileShowTimer)
+  fileHideTimer = setTimeout(() => { showFileList.value = false }, 200)
+}
+
+const cancelHideFileList = () => {
+  clearTimeout(fileHideTimer)
+}
 
 // SVG 图标已迁移至 ../utils/icons.js
 
@@ -212,8 +267,8 @@ onBeforeUnmount(() => {
 /* 角色切换时增大间距 */
 .msg.user + .msg.assistant,
 .msg.assistant + .msg.user {
-  margin-top: 8px;
-  margin-bottom: 8px;
+  margin-top: 20px;
+  margin-bottom: 20px;
 }
 
 .msg.user {
@@ -226,15 +281,19 @@ onBeforeUnmount(() => {
 }
 
 .user-body {
-  background: var(--accent);
-  color: #fff;
+  background: var(--accent-bg);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--glass-border);
+  color: var(--fg);
   padding: 8px 12px;
   border-radius: var(--r-lg);
+  box-shadow: var(--glass-shadow);
 }
 
 .user-body ::selection {
-  background: rgba(255, 255, 255, 0.35);
-  color: #000;
+  background: var(--accent);
+  color: #fff;
 }
 
 .user-body .msg-time {
@@ -266,8 +325,8 @@ onBeforeUnmount(() => {
 }
 
 .assistant-body .msg-time {
-  font-size: 10px;
-  color: var(--fg-4);
+  font-size: 12px;
+  color: var(--fg-3);
 }
 
 .msg-text {
@@ -324,8 +383,17 @@ onBeforeUnmount(() => {
 }
 
 .msg-file-stat {
-  font-size: 10px;
-  color: var(--fg-4);
+  font-size: 12px;
+  color: var(--fg-3);
+}
+
+.msg-file-stat.clickable {
+  cursor: pointer;
+  transition: color var(--t);
+}
+
+.msg-file-stat.clickable:hover {
+  color: var(--accent);
 }
 
 .copy-msg-btn {
@@ -342,37 +410,52 @@ onBeforeUnmount(() => {
 }
 
 .user-body .copy-msg-btn {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--fg-3);
+  opacity: 0.5;
 }
 
 .msg-body:hover .copy-msg-btn {
-  opacity: 0.6;
+  opacity: 0.8;
+}
+
+.assistant-body .copy-msg-btn {
+  opacity: 0.5;
+}
+
+.assistant-body:hover .copy-msg-btn {
+  opacity: 0.8;
+}
+
+.user-body:hover .copy-msg-btn {
+  opacity: 0.8;
 }
 
 .copy-msg-btn:hover {
-  opacity: 1;
+  opacity: 1 !important;
   background: var(--glass-bg-2);
 }
 
 .user-body .copy-msg-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
+  background: var(--bg-3);
+  color: var(--accent);
 }
 
 /* 用户消息展开/收起按钮 */
 .user-expand-btn {
   background: none;
   border: none;
-  color: rgba(255, 255, 255, 0.7);
+  color: var(--fg-3);
   font-size: 12px;
   cursor: pointer;
   padding: 2px 0;
   margin-top: 2px;
   text-decoration: underline;
   text-underline-offset: 2px;
+  transition: color var(--t);
 }
 
 .user-expand-btn:hover {
-  color: #fff;
+  color: var(--accent);
 }
 
 /* 撤回按钮 */
@@ -396,7 +479,12 @@ onBeforeUnmount(() => {
 }
 
 .user-body .rollback-btn {
-  color: rgba(255, 255, 255, 0.8);
+  color: var(--fg-3);
+  opacity: 0.5;
+}
+
+.user-body:hover .rollback-btn {
+  opacity: 0.8;
 }
 
 .msg-body:hover .rollback-btn {
@@ -410,8 +498,8 @@ onBeforeUnmount(() => {
 }
 
 .user-body .rollback-btn:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #fff;
+  background: var(--accent-bg);
+  color: var(--accent);
 }
 
 /* 链接悬停浮层 */
@@ -457,5 +545,83 @@ onBeforeUnmount(() => {
 
 .link-popover-btn svg {
   flex-shrink: 0;
+}
+</style>
+
+<style>
+/* 文件列表弹出（非 scoped，因为 Teleport 到 body） */
+.file-list-popover {
+  z-index: 9999;
+  min-width: 280px;
+  max-width: 480px;
+  max-height: 320px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.12);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.file-list-popover.above {
+  transform: translateY(-100%);
+}
+
+.file-list-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  background: var(--bg-2);
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.file-list-title {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+}
+
+.file-list-count {
+  font-size: 11px;
+  color: var(--fg-4);
+  background: var(--bg-3);
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+}
+
+.file-list-body {
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.file-list-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: var(--r-sm);
+  cursor: pointer;
+  transition: background var(--t);
+}
+
+.file-list-item:hover {
+  background: var(--bg-2);
+}
+
+.file-list-item svg {
+  color: var(--fg-4);
+  flex-shrink: 0;
+}
+
+.file-list-path {
+  font-size: 12px;
+  font-family: var(--mono);
+  color: var(--fg-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 </style>

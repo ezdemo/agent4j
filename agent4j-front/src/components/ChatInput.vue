@@ -77,6 +77,12 @@
       <!-- Token 用量 & 模型选择 -->
       <div class="usage-bar">
         <div class="usage-stats">
+        <!-- 连接状态 -->
+        <span class="usage-item status-connected" :class="{ offline: !connected }">
+          <span class="status-dot-sm" :class="{ online: connected }"></span>
+          {{ connected ? '已连接' : '连接中...' }}
+        </span>
+        <span class="usage-sep">|</span>
         <span class="usage-item hide-mobile" :title="'输入: '+fmt(usage.promptTokens)">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3"
@@ -186,7 +192,9 @@ const props = defineProps({
   workspaceHash: {type: String, default: null},
   sessionName: {type: String, default: null},
   hasHistory: {type: Boolean, default: false},
-  currentReasoningEffort: {type: String, default: 'max'}
+  currentReasoningEffort: {type: String, default: 'max'},
+  connected: {type: Boolean, default: true},
+  version: {type: String, default: ''}
 })
 
 const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort'])
@@ -1155,6 +1163,32 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
 .usage-cost-item svg {
   color: var(--yellow);
 }
+
+/* 连接状态 */
+.status-connected {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 11px;
+}
+
+.status-connected.offline {
+  color: var(--yellow);
+}
+
+.status-dot-sm {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--fg-4);
+  flex-shrink: 0;
+}
+
+.status-dot-sm.online {
+  background: var(--green, #10b981);
+  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+}
+
 
 .model-actions {
   display: flex;
