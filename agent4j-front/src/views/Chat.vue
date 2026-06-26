@@ -50,6 +50,20 @@
         </div>
         <p class="empty-title">开始对话</p>
         <p class="empty-desc">输入问题或指令，Agent4j 将为您提供帮助</p>
+        <div class="quick-actions">
+          <button class="quick-action" @click="inputText = 'Refactor this component'">
+            <i class="fas fa-pen-ruler"></i> Refactor
+          </button>
+          <button class="quick-action" @click="inputText = 'Write tests for'">
+            <i class="fas fa-vial"></i> Write tests
+          </button>
+          <button class="quick-action" @click="inputText = 'Fix the bug in'">
+            <i class="fas fa-bug"></i> Fix bug
+          </button>
+          <button class="quick-action" @click="inputText = 'Explain how this works'">
+            <i class="fas fa-lightbulb"></i> Explain
+          </button>
+        </div>
         <div class="empty-suggestions">
           <button v-for="s in suggestions" :key="s" class="suggestion" @click="inputText = s">{{ s }}</button>
         </div>
@@ -1345,6 +1359,44 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 .suggestion:hover {
   border-color: var(--accent);
   color: var(--accent);
+}
+
+.quick-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.quick-action {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  padding: 9px 14px;
+  border-radius: 8px;
+  cursor: pointer;
+  font-size: 13px;
+  color: var(--fg-2);
+  font-family: inherit;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  transition: all 0.15s;
+  font-weight: 500;
+}
+
+.quick-action:hover {
+  border-color: var(--text, var(--fg));
+  color: var(--text, var(--fg));
+}
+
+.quick-action i {
+  font-size: 12px;
+  color: var(--fg-4);
+}
+
+.quick-action:hover i {
+  color: var(--text, var(--fg));
 }
 
 /* AI 准备中动画 */
