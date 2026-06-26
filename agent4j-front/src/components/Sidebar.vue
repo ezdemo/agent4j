@@ -46,21 +46,6 @@
       </div>
     </div>
 
-    <section class="sidebar-section">
-      <div class="section-label">Today</div>
-      <TaskItem
-        v-for="task in filteredTasks"
-        :key="task.id"
-        :title="task.title"
-        :status="task.status"
-        :time="task.time"
-        :is-active="task.id === currentSession && task.workspaceHash === currentSessionWorkspace"
-        @select="$emit('select-session', { workspaceHash: task.workspaceHash, sessionName: task.id })"
-        @delete="$emit('delete-session', { workspaceHash: task.workspaceHash, sessionName: task.id })"
-      />
-      <div v-if="filteredTasks.length === 0" class="sidebar-empty">暂无会话</div>
-    </section>
-
     <div class="project-list">
       <div v-for="p in projectsData" :key="p.workspace.hash" class="project-item">
         <div class="project-header" :class="{ active: p.workspace.hash === currentSessionWorkspace }" @click="toggleProject(p.workspace.hash)">
@@ -133,16 +118,23 @@
       </div>
     </div>
 
-    <div class="sidebar-footer">
-      <div class="user-avatar">{{ userInitials }}</div>
-      <div class="user-info">
-        <div class="user-name">{{ userName }}</div>
-        <div class="user-plan">Pro Plan</div>
-      </div>
+    <div class="sidebar-foot">
+      <button class="foot-btn" @click="$emit('show-tools')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        工具
+      </button>
+      <button class="foot-btn" @click="$emit('show-dashboard')">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+        数据
+      </button>
       <button class="foot-btn" @click="$emit('toggle-theme')">
+        <!-- 浅色：月亮图标 -->
         <svg v-if="theme === 'light'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <!-- 深色：太阳图标 -->
         <svg v-else-if="theme === 'dark'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <!-- 浅绿：Material Design 风格图标 -->
         <svg v-else-if="theme === 'retro'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        <!-- 复古黄：书本图标 -->
         <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
         {{ { light: '浅色', dark: '深色', retro: '浅绿', 'retro-yellow': '复古黄' }[theme] }}
       </button>
@@ -210,27 +202,7 @@ const projectsData = computed(() => {
     .filter(p => p.workspace.name.toLowerCase().includes(q) || p.sessions.length > 0)
 })
 
-// 扁平化任务列表用于显示
-const filteredTasks = computed(() => {
-  const tasks = []
-  projectsData.value.forEach(p => {
-    p.sessions.forEach(s => {
-      tasks.push({
-        id: s.name,
-        title: s.title || formatName(s.name),
-        time: relativeTime(s.mtime),
-        workspaceHash: p.workspace.hash
-      })
-    })
-  })
-  return tasks.slice(0, 20)
-})
 
-// 用户信息
-const userName = ref(localStorage.getItem('agent4j-user') || 'Agent4j 用户')
-const userInitials = computed(() => {
-  return userName.value.slice(0, 2).toUpperCase()
-})
 
 // 展开/折叠单个项目
 const toggleProject = (hash) => {
@@ -394,20 +366,7 @@ const formatName = (n) => {
   border-color: var(--border-2);
 }
 
-.sidebar-section {
-  padding: 4px 8px;
-  flex: 1;
-  overflow-y: auto;
-}
 
-.sidebar-section::-webkit-scrollbar { width: 6px; }
-.sidebar-section::-webkit-scrollbar-thumb {
-  background: transparent;
-  border-radius: 6px;
-}
-.sidebar-section:hover::-webkit-scrollbar-thumb {
-  background: var(--border-2);
-}
 
 .section-label {
   font-size: 11px;
@@ -648,42 +607,7 @@ const formatName = (n) => {
 }
 .session-del:hover { color: var(--red); }
 
-.sidebar-footer {
-  padding: 10px 12px;
-  border-top: 1px solid var(--glass-border);
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
 
-.user-avatar {
-  width: 30px;
-  height: 30px;
-  border-radius: 50%;
-  background: var(--text, var(--fg));
-  color: #fff;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  font-weight: 600;
-  flex-shrink: 0;
-}
-
-.user-info {
-  flex: 1;
-  min-width: 0;
-}
-
-.user-name {
-  font-size: 13px;
-  font-weight: 500;
-}
-
-.user-plan {
-  font-size: 11px;
-  color: var(--fg-4);
-}
 
 .sidebar-foot {
   padding: 8px;
