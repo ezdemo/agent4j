@@ -36,6 +36,14 @@
   --fg-4: #9ca3af;
   --border: #e5e7eb;
   --border-2: #d1d5db;
+  --text: var(--fg);
+  --text-secondary: var(--fg-2);
+  --text-muted: var(--fg-4);
+  --text-faint: #b4b4bb;
+  --bg-subtle: #fafafa;
+  --bg-muted: #f4f4f5;
+  --bg-hover: #f0f0f1;
+  --bg-active: #e8e8ea;
   --accent: var(--blue);
   --accent-bg: var(--blue-bg);
 
@@ -61,8 +69,8 @@
   --r-lg: 10px;
 
   /* 字体 */
-  --sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
-  --mono: 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
+  --sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+  --mono: 'JetBrains Mono', 'SF Mono', 'Cascadia Code', 'Fira Code', Consolas, monospace;
 
   /* 过渡 */
   --t: 0.15s ease;
@@ -125,7 +133,7 @@
   --z-tooltip: 400;
   --z-toast: 500;
   --header-height: 48px;
-  --sidebar-width: 260px;
+  --sidebar-width: 272px;
   --sidebar-collapsed: 48px;
   --footer-height: 36px;
   --input-height: 36px;
@@ -140,6 +148,14 @@
   --fg-2: #a3a3a3;
   --fg-3: #737373;
   --fg-4: #525252;
+  --text: var(--fg);
+  --text-secondary: var(--fg-2);
+  --text-muted: var(--fg-4);
+  --text-faint: #7a7a83;
+  --bg-subtle: #121212;
+  --bg-muted: #1a1a1a;
+  --bg-hover: #222222;
+  --bg-active: #2a2a2a;
   --border: #262626;
   --border-2: #333333;
   --accent: #3b82f6;
