@@ -20,7 +20,7 @@ $old = $c
 $re = [regex]'(?<=<artifactId>agent4j</artifactId>\s*\r?\n\s*<version>)\d[\d.]*-?[A-Z]*(?=</version>)'
 $c = $re.Replace($c, $Version)
 if ($c -ne $old) {
-    $c = $c.TrimStart("`u{FEFF}")
+    $c = $c.TrimStart([char]0xFEFF)
     [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
     Write-Host "  [OK] pom.xml"
 } else { Write-Host "  [--] pom.xml (unchanged)" }
@@ -32,21 +32,11 @@ $old = $c
 $re = [regex]'(?<=<artifactId>agent4j</artifactId>\s*\r?\n\s*<version>)\d[\d.]*-?[A-Z]*(?=</version>)'
 $c = $re.Replace($c, $Version)
 if ($c -ne $old) {
-    $c = $c.TrimStart("`u{FEFF}")
+    $c = $c.TrimStart([char]0xFEFF)
     [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
     Write-Host "  [OK] agent4j-bin/pom.xml"
 } else { Write-Host "  [--] agent4j-bin/pom.xml (unchanged)" }
 
-# 3. agent4j-tool/pom.xml
-$path = Join-Path $root "agent4j-tool/pom.xml"
-$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
-$old = $c
-$c = $re.Replace($c, $Version)
-if ($c -ne $old) {
-    $c = $c.TrimStart("`u{FEFF}")
-    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
-    Write-Host "  [OK] agent4j-tool/pom.xml"
-} else { Write-Host "  [--] agent4j-tool/pom.xml (unchanged)" }
 
 # 4. agent4j-web/pom.xml
 $path = Join-Path $root "agent4j-web/pom.xml"
@@ -54,7 +44,7 @@ $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
 $c = $re.Replace($c, $Version)
 if ($c -ne $old) {
-    $c = $c.TrimStart("`u{FEFF}")
+    $c = $c.TrimStart([char]0xFEFF)
     [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
     Write-Host "  [OK] agent4j-web/pom.xml"
 } else { Write-Host "  [--] agent4j-web/pom.xml (unchanged)" }
@@ -68,7 +58,7 @@ if (Test-Path $path) {
     $re2 = [regex]'(?<=<artifactId>agent4j</artifactId>\s*\r?\n\s*<groupId>site\.sorghum\.agent</groupId>\s*\r?\n\s*<version>)\d[\d.]*-?[A-Z]*(?=</version>)'
     $c = $re2.Replace($c, $Version)
     if ($c -ne $old) {
-        $c = $c.TrimStart("`u{FEFF}")
+        $c = $c.TrimStart([char]0xFEFF)
         [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
         Write-Host "  [OK] agent4j-web/dependency-reduced-pom.xml"
     } else { Write-Host "  [--] agent4j-web/dependency-reduced-pom.xml (unchanged)" }
@@ -100,7 +90,7 @@ $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
 $c = [regex]::Replace($c, '(?<="version"\s*:\s*")[\d.]+(?=")', $Version)
 if ($c -ne $old) {
-    $c = $c.TrimStart("`u{FEFF}")
+    $c = $c.TrimStart([char]0xFEFF)
     [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
     Write-Host "  [OK] agent4j-front/package.json"
 } else { Write-Host "  [--] agent4j-front/package.json (unchanged)" }
@@ -111,7 +101,7 @@ $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
 $c = [regex]::Replace($c.Trim(), '^[\d.]+', $Version)
 if ($c -ne $old.Trim()) {
-    $c = $c.TrimStart("`u{FEFF}")
+    $c = $c.TrimStart([char]0xFEFF)
     [System.IO.File]::WriteAllText($path, $c + [Environment]::NewLine, $utf8NoBom)
     Write-Host "  [OK] agent4j-web/src/installDist/bin/version.txt"
 } else { Write-Host "  [--] agent4j-web/src/installDist/bin/version.txt (unchanged)" }

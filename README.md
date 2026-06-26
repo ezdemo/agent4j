@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js"/>
   <img src="https://img.shields.io/badge/Electron-32.0-47848F?logo=electron"/>
   <img src="https://img.shields.io/badge/license-MIT-green"/>
-  <img src="https://img.shields.io/badge/version-26.6.24.1-lightgrey"/>
+  <img src="https://img.shields.io/badge/version-26.6.26-lightgrey"/>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-📋-brightgreen"/></a>
 </p>
 
@@ -101,33 +101,31 @@ API，一步步把事情干完。
 
 ---
 
-## 🆕 最新更新（v26.6.24.1）
+## 🆕 最新更新（v26.6.26）
 
-### 🔄 工作流增强
-- 新增工作流 DAG 工具及前端可视化渲染，支持复杂工作流设计
-- 增强工作流节点类型和审批机制，支持更多节点类型和人工审批流程
-- 工作流自动完成 END 节点并优化前端面板，自动处理工作流结束状态
-- 添加会话工作流 API 及前端可视化面板，可视化展示执行状态
+### 🤖 视觉工具增强
+- 视觉识别工具支持本地文件路径，参数统一为 image，兼容文件/URL/Base64
+- VisionService 重构支持 ImageBlock，防止日志泄漏图片内容
 
-### 🧩 路径组折叠组件
-- 新增路径组折叠组件，支持连续推理和工具调用的折叠展示
-- 优化长推理链的展示和交互体验
+### 💬 聊天交互增强
+- 添加聊天快捷操作按钮，常见任务一键触发
+- 添加连接状态显示及 UI 细节改进
 
-### 🏗️ 代码重构与优化
-- 移除前端 Java 检查并优化后端性能与稳定性
-- 移除工作流巡检及自动重试逻辑，简化工作流执行
-- 移除目标 (Goal) 巡检及相关功能，清理废弃代码
-- 迁移 pnpm 构建配置并更新 gitignore，优化前端构建流程
+### 🔄 工作流循环控制
+- 新增工作流循环控制节点，支持循环执行和重试等复杂场景
+- DAG 渲染优化，提升工作流可视化体验
 
-### 🐛 界面与交互修复
-- 修复助手消息文件修改/新增统计显示
-- 调整 dock-body 定位与圆角样式
-- 用户长消息添加展开/收起按钮
-- 修复路径组内层块展开状态管理
-- 合并连续 assistant 消息并修复消息 ID 生成
-- 工作流面板仅在会话选中时显示并添加空状态提示
-- 添加工作区后自动切换到新工作区
-- 修复删除工作区后因副作用被重建的问题
+### 🏗️ 代码重构与模块合并
+- 将 agent4j-tool 合并入 agent4j-bin，精简模块结构
+- 侧边栏大幅重构：移除折叠按钮、简化标题、全宽 New Session 按钮
+- 标题栏对齐参考 UI 设计，统一视觉风格
+- 侧边栏按钮使用 CSS 变量适配多主题（含暗色与复古主题）
+
+### 🐛 界面与后端修复
+- 标题栏按钮颜色加深，侧边栏按钮标签和颜色修正
+- 侧边栏响应式断点支持 272px 宽度
+- 修复分组 ID 生成逻辑，修复 TrimStart 中 BOM 字符转义语法
+- 移除未使用的 TaskItem 组件及旧版打包 CSS
 
 > 📋 完整变更记录请查看 [CHANGELOG.md](CHANGELOG.md)
 
@@ -225,42 +223,31 @@ Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）** �
 
 ```
 agent4j/
-├── agent4j-tool/              # 工具抽象层
-│   ├── AgentTool.java          # 工具基类
-│   ├── ToolContext.java        # 执行上下文
-│   ├── AgentOutput.java        # 输出接口
-│   ├── terminal/               # Shell 执行（白名单/解析/进程管理）
-│   ├── job/                    # 后台作业
-│   ├── memory/                 # 记忆系统
-│   ├── plan/                   # 计划系统
-│   ├── interact/               # 用户交互
-│   └── solon/                  # Solon 集成（技能/MCP/OpenAPI/插件）
-│
-├── agent4j-bin/               # 核心引擎
-│   ├── agent/
+├── agent4j-bin/               # 核心引擎（含工具抽象层）
+│   ├── agent/                 # 推理循环
 │   │   ├── AgentLoop.java      # 推理循环
 │   │   ├── Agent4jAgent.java   # Agent 工厂
 │   │   ├── SubAgent.java       # 子代理
-│   │   ├── ConversationContext.java  # 对话上下文
-│   │   ├── ContextFolding.java # 上下文折叠
-│   │   ├── StormBreaker.java   # 风暴断路器
-│   │   ├── MessageHealer.java  # 消息自愈
-│   │   └── HitlManager.java    # 人工审批
-│   ├── tool/
-│   │   ├── ToolRegistry.java   # 工具注册中心
-│   │   ├── ToolDispatcher.java # 工具调度器
-│   │   └── ToolSystemInitializer.java
-│   ├── model/                  # LLM 客户端
-│   ├── session/                # 会话持久化
-│   ├── workspace/              # 共享工作区
-│   ├── mcp/                    # MCP 管理
-│   ├── command/                # 聊天命令
-│   └── config/                 # ~/.agent4j/config.json
+│   │   ├── context/            # 对话上下文 / 上下文折叠
+│   │   ├── model/              # LLM 客户端
+│   │   └── hitl/               # 人工审批
+│   ├── tool/                  # 工具系统（原 agent4j-tool 已合并）
+│   │   ├── AgentTool.java      # 工具基类
+│   │   ├── ToolContext.java     # 执行上下文
+│   │   ├── builtin/            # 内置工具
+│   │   ├── executor/           # Shell / 交互式命令执行
+│   │   ├── solon/              # Solon 集成（技能/MCP/OpenAPI/插件）
+│   │   └── vision/             # 视觉识别工具
+│   ├── session/               # 会话持久化
+│   ├── workspace/             # 共享工作区
+│   ├── workflow/              # 工作流引擎
+│   ├── command/               # 聊天命令
+│   └── config/                # ~/.agent4j/config.json
 │
 ├── agent4j-web/               # Web 后端
-│   ├── controller/             # REST 接口
-│   ├── service/                # Agent 管理 / SSE 推送
-│   └── market/                 # 技能市场
+│   ├── controller/            # REST 接口
+│   ├── service/               # Agent 管理 / SSE 推送
+│   └── market/                # 技能市场
 │
 ├── agent4j-front/             # Vue 3 前端 + Electron 桌面端
 │   ├── src/
@@ -268,18 +255,19 @@ agent4j/
 │   │   ├── views/
 │   │   ├── services/
 │   │   │   ├── api.js
-│   │   │   └── platform.js      # 平台适配层（Electron/Web）
+│   │   │   └── platform.js    # 平台适配层（Electron/Web）
 │   │   └── stores/app.js
 │   ├── electron/
-│   │   ├── main.cjs             # Electron 主进程
-│   │   └── preload.cjs          # 预加载脚本
-│   ├── electron-builder.json    # 打包配置
+│   │   ├── main.cjs           # Electron 主进程
+│   │   └── preload.cjs        # 预加载脚本
+│   ├── electron-builder.json  # 打包配置
 │   └── vite.config.js
 │
-├── intro/                      # 官网
-├── docs/superpowers/           # 文档
-├── pom.xml                     # Maven 父 POM
-└── LICENSE                     # MIT
+├── agent4j-tui/               # TUI 终端界面
+├── intro/                     # 官网
+├── docs/superpowers/          # 文档
+├── pom.xml                    # Maven 父 POM
+└── LICENSE                    # MIT
 ```
 
 ---

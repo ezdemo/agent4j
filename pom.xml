@@ -11,11 +11,10 @@
     </parent>
     <groupId>site.sorghum.agent</groupId>
     <artifactId>agent4j</artifactId>
-    <version>26.6.24.1</version>
+    <version>26.6.26</version>
     <packaging>pom</packaging>
 
     <modules>
-        <module>agent4j-tool</module>
         <module>agent4j-bin</module>
         <module>agent4j-web</module>
     </modules>

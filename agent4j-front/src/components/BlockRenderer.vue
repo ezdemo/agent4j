@@ -92,9 +92,11 @@
           <span v-else-if="block._allDone" v-html="CHECK_ICON_SM"></span>
           <span v-else v-html="CIRCLE_ICON"></span>
         </span>
-        <span class="path-label">路径</span>
-        <span class="path-steps">{{ block._blocks.length }} 步</span>
-        <span class="tool-param" :title="block._pathNames">{{ truncatePath(block._pathNames, 60) }}</span>
+        <span class="path-label">执行</span>
+        <span v-if="block._toolCount > 0" class="path-steps">{{ block._toolCount }} 个工具</span>
+        <span v-else class="path-steps">推理</span>
+        <span v-if="block._toolCount > 0" class="tool-param" :title="block._pathNames">{{ truncatePath(block._uniqueToolNames, 60) }}</span>
+        <span v-else class="tool-param">reason</span>
         <span class="default-icon"
               v-html="CHEVRON_DOWN_ICON"
               :style="{
@@ -315,7 +317,7 @@ const emit = defineEmits(['sendChoice', 'openFile'])
 const WORKFLOW_TOOLS = ['workflow_create_dag', 'workflow_visualize']
 
 // ── 工具分组折叠状态 ──
-let _groupSeq = 0
+
 const toolGroupsExpanded = ref({})
 
 const toggleToolGroup = (groupId) => {
@@ -358,12 +360,14 @@ const processedBlocks = computed(() => {
         }
       }
       // 不管几个都合并为 path_group（单个 reasoning 也要折叠）
-      _groupSeq++
-      const gid = `pg-${_groupSeq}`
+      const gid = `pg-${i}`
       // 给每个内层块分配唯一 ID 用于展开状态跟踪
       group.forEach((item, idx) => { item._itemId = `${gid}-${idx}` })
       const toolCount = group.filter(x => x.type === 'tool_call').length
+      const thinkCount = group.filter(x => x.type === 'reasoning').length
       const pathNames = group.map(x => x.type === 'reasoning' ? 'think' : x.name).join(' → ')
+      // Unique tool names for inline display (Cowork style)
+      const uniqueToolNames = [...new Set(group.filter(x => x.type === 'tool_call').map(x => x.name))].join(' › ')
       const allDone = group.filter(x => x.type === 'tool_call').every(t => t.status === '成功')
       const running = group.filter(x => x.type === 'tool_call').some(t => t.status === '执行中')
       out.push({
@@ -371,7 +375,9 @@ const processedBlocks = computed(() => {
         _groupId: gid,
         _blocks: group,
         _toolCount: toolCount,
+        _thinkCount: thinkCount,
         _pathNames: pathNames,
+        _uniqueToolNames: uniqueToolNames,
         _allDone: toolCount === 0 ? true : allDone,
         _running: running
       })
@@ -818,6 +824,11 @@ const parseResult = (block) => {
   border-color: var(--green-bg);
 }
 
+.block-finish .tool-name {
+  color: var(--fg-2);
+  font-weight: 500;
+}
+
 .finish-content {
   font-size: 14px;
   line-height: 1.6;
@@ -1024,7 +1035,7 @@ const parseResult = (block) => {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 6px 10px;
+  padding: 8px 10px;
   cursor: pointer;
   transition: background var(--t);
 }
@@ -1082,7 +1093,7 @@ const parseResult = (block) => {
 }
 
 .tool-detail {
-  padding: 0 10px 8px;
+  padding: 10px 10px 8px;
   border-top: 1px solid var(--border);
 }
 

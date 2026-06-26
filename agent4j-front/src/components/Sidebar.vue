@@ -1,21 +1,15 @@
 <template>
   <aside class="sidebar" :class="{ collapsed: !sideOpen }">
-    <div class="sidebar-head">
-      <div class="logo">
-        <span>Agent4j</span>
-      </div>
-      <button class="btn-icon-sm" @click="$emit('update:sideOpen', !sideOpen)">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 17l-5-5 5-5M18 17l-5-5 5-5"/></svg>
-      </button>
+    <div class="sidebar-header">
+      <button class="new-task-btn" @click="$emit('show-workspace-picker')">+ 新建会话</button>
+
     </div>
 
-    <button class="btn btn-secondary btn-sm new-btn" @click="$emit('show-workspace-picker')">
-      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-      新建对话
-    </button>
-
     <div class="sidebar-search">
-      <input v-model="searchQuery" placeholder="搜索会话..." />
+      <div class="search-wrapper">
+        <i class="fas fa-search"></i>
+        <input class="search-input" v-model="searchQuery" placeholder="搜索会话..." />
+      </div>
     </div>
 
     <!-- 工作区选择器 -->
@@ -201,6 +195,8 @@ const projectsData = computed(() => {
     .filter(p => p.workspace.name.toLowerCase().includes(q) || p.sessions.length > 0)
 })
 
+
+
 // 展开/折叠单个项目
 const toggleProject = (hash) => {
   const s = new Set(expandedWorkspaces.value)
@@ -253,7 +249,7 @@ const formatName = (n) => {
 
 <style scoped>
 .sidebar {
-  width: 260px;
+  width: 272px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -271,46 +267,110 @@ const formatName = (n) => {
   pointer-events: none;
 }
 
-.sidebar-head {
+.sidebar-header {
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--glass-border);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  padding: 12px;
-  border-bottom: 1px solid var(--glass-border);
+  gap: 10px;
 }
 
-.logo {
+.sidebar-logo {
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
+}
+
+.sidebar-logo-icon {
+  width: 26px;
+  height: 26px;
+  background: var(--text, var(--fg));
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+}
+
+.sidebar-logo-text {
   font-size: 14px;
   font-weight: 600;
-  color: var(--fg);
+  letter-spacing: -0.3px;
 }
 
-.new-btn {
-  width: calc(100% - 24px);
-  margin: 10px 12px 0;
+.new-task-btn {
+  background: var(--fg);
+  color: var(--bg);
+  border: none;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
   justify-content: center;
+  flex: 1;
+  gap: 6px;
+  transition: all 0.15s;
+  font-family: inherit;
+}
+
+.new-task-btn:hover {
+  opacity: 0.85;
 }
 
 .sidebar-search {
-  padding: 8px 12px;
+  padding: 12px 12px 8px;
 }
-.sidebar-search input {
-  width: 100%;
-  padding: 5px 8px;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  border-radius: var(--r);
+
+.search-wrapper {
+  position: relative;
+}
+
+.search-wrapper i {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: var(--fg-4);
   font-size: 12px;
+}
+
+.search-input {
+  width: 100%;
+  background: var(--bg-3);
+  border: 1px solid transparent;
+  border-radius: 7px;
+  padding: 7px 10px 7px 30px;
   color: var(--fg);
-}
-.sidebar-search input:focus {
+  font-size: 13px;
+  font-family: inherit;
   outline: none;
-  border-color: var(--accent);
+  transition: all 0.15s;
 }
-.sidebar-search input::placeholder { color: var(--fg-4); }
+
+.search-input::placeholder {
+  color: var(--fg-4);
+}
+
+.search-input:focus {
+  background: var(--bg);
+  border-color: var(--border-2);
+}
+
+
+
+.section-label {
+  font-size: 11px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--fg-4);
+  padding: 12px 8px 6px;
+}
 
 .sidebar-section-title {
   display: flex;
@@ -542,6 +602,8 @@ const formatName = (n) => {
 }
 .session-del:hover { color: var(--red); }
 
+
+
 .sidebar-foot {
   padding: 8px;
   border-top: 1px solid var(--glass-border);
@@ -568,7 +630,7 @@ const formatName = (n) => {
 @media (max-width: 768px) {
   .sidebar {
     position: fixed;
-    left: -260px;
+    left: -272px;
     top: 33px;
     bottom: 0;
     z-index: 200;

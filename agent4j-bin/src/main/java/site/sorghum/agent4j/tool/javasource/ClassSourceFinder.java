@@ -10,13 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.util.ArrayDeque;
-import java.util.ArrayList;
-import java.util.Deque;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -434,7 +428,7 @@ public class ClassSourceFinder {
      * 可减少约 60-80% 的 token，同时保留方法签名和字节码指令供 AI 消费。
      * </p>
      */
-    static String compressJavapOutput(String raw) {
+    public static String compressJavapOutput(String raw) {
         String[] lines = raw.split("\n");
         StringBuilder out = new StringBuilder(raw.length());
         Integer skipUntilIndent = null;
