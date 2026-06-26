@@ -711,7 +711,7 @@ const formatName = (n) => {
 @media (max-width: 768px) {
   .sidebar {
     position: fixed;
-    left: -260px;
+    left: -272px;
     top: 33px;
     bottom: 0;
     z-index: 200;
