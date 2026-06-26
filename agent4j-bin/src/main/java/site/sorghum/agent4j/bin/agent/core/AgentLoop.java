@@ -701,9 +701,13 @@ public class AgentLoop implements AgentLoopController {
             // ---- 调用了工具 → 重置无工具计数 ----
             noToolCallStreak = 0;
 
-            // ---- HITL 拦截 ----
+            // ---- HITL 拦截（finish/ask_choice 等免审批工具直接放行） ----
             if (hitlManager.isHitlMode()) {
-                return hitlManager.interceptForHITL(toolCalls, sr.content(), sr.reasoningContent(), output);
+                String hitlPrompt = hitlManager.interceptForHITL(toolCalls, sr.content(), sr.reasoningContent(), output);
+                if (hitlPrompt != null) {
+                    return hitlPrompt;
+                }
+                // 免审批工具：跳过拦截，继续执行
             }
 
             // ---- 6. 并行执行工具调用 ----
