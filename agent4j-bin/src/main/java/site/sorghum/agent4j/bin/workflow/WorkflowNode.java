@@ -61,6 +61,18 @@ public class WorkflowNode {
     /** 子工作流ID */
     private String subWorkflowId;
 
+    // 循环节点专用
+    /** 循环体起始节点ID（回跳目标） */
+    private String loopTarget;
+    /** 最大迭代次数（防死循环） */
+    @Builder.Default
+    private int maxIterations = 10;
+    /** 当前迭代次数 */
+    @Builder.Default
+    private int iterationCount = 0;
+    /** 循环退出条件描述 */
+    private String breakCondition;
+
     /**
      * 判断节点是否已完成（成功或跳过）。
      */
