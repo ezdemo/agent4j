@@ -96,6 +96,12 @@ public class WorkflowVisualizationTool extends AbsToolProvider implements SolonT
             if (node.getCondition() != null) {
                 nodeObj.set("condition", node.getCondition());
             }
+            if (node.getType() == NodeType.LOOP) {
+                if (node.getLoopTarget() != null) nodeObj.set("loopTarget", node.getLoopTarget());
+                nodeObj.set("maxIterations", node.getMaxIterations());
+                nodeObj.set("iterationCount", node.getIterationCount());
+                if (node.getBreakCondition() != null) nodeObj.set("breakCondition", node.getBreakCondition());
+            }
         }
         
         // 边列表
@@ -116,7 +122,7 @@ public class WorkflowVisualizationTool extends AbsToolProvider implements SolonT
         
         // 执行路径
         ONode pathArr = response.getOrNew("executionPath").asArray();
-        buildExecutionPath(workflow, "start", pathArr);
+        buildExecutionPath(workflow, "start", pathArr, new java.util.HashSet<>());
         
         return response.toJson();
     }
@@ -124,9 +130,19 @@ public class WorkflowVisualizationTool extends AbsToolProvider implements SolonT
     /**
      * 递归构建执行路径。
      */
-    private void buildExecutionPath(Workflow workflow, String nodeId, ONode pathArr) {
+    private void buildExecutionPath(Workflow workflow, String nodeId, ONode pathArr, java.util.Set<String> visited) {
         WorkflowNode node = workflow.findNode(nodeId);
         if (node == null) return;
+
+        // 循环检测：截断环路
+        if (visited.contains(nodeId)) {
+            ONode pathNode = pathArr.addNew();
+            pathNode.set("id", node.getId());
+            pathNode.set("description", node.getDescription() + " (循环)");
+            pathNode.set("status", node.getStatus().name());
+            return;
+        }
+        visited.add(nodeId);
         
         ONode pathNode = pathArr.addNew();
         pathNode.set("id", node.getId());
@@ -138,7 +154,7 @@ public class WorkflowVisualizationTool extends AbsToolProvider implements SolonT
         if (!successors.isEmpty()) {
             ONode nextArr = pathNode.getOrNew("next").asArray();
             for (String successorId : successors) {
-                buildExecutionPath(workflow, successorId, nextArr);
+                buildExecutionPath(workflow, successorId, nextArr, new java.util.HashSet<>(visited));
             }
         }
     }

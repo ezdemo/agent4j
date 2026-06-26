@@ -32,10 +32,12 @@ public class WorkflowMarkNodeTool extends AbsToolProvider implements SolonToTool
                 如果所有节点都已完成，工作流会自动标记为已完成。
                 注意：对于 CONDITION 类型节点，必须传入 conditionResult 参数（值为选中的目标节点ID，如 "n4"），
                 系统会自动跳过其他未选中的分支。
+                注意：对于 LOOP 类型节点，必须传入 loopResult 参数（"continue" 继续循环 或 "break" 退出循环）。
                 """)
     public String workflowMarkNode(@Param(name = "nodeId", description = "已完成的节点ID（如 'n1', 'n2'）") String nodeId,
                                    @Param(name = "result", description = "该节点的执行结果摘要，记录在工作流中供后续查阅", required = false) String result,
                                    @Param(name = "conditionResult", description = "CONDITION 节点专用：选中的分支节点ID（如 'n4'），引擎会自动跳过其他分支", required = false) String conditionResult,
+                                   @Param(name = "loopResult", description = "LOOP 节点专用：'continue' 继续下一轮循环 或 'break' 退出循环", required = false) String loopResult,
                                    @Param(name = "sessionId", description = "会话 ID。留空自动从上下文获取当前会话", required = false) String sessionId,
                                    ToolContext ctx) {
         // 校验 nodeId
@@ -89,6 +91,31 @@ public class WorkflowMarkNodeTool extends AbsToolProvider implements SolonToTool
                         // 未选中的分支：递归跳过整条子树（智能跳过，不影响汇合节点）
                         workflow.skipBranch(succId, nodeId);
                     }
+                }
+            }
+
+            // 如果是 LOOP 节点且提供了 loopResult，处理循环逻辑
+            if (node.getType() == NodeType.LOOP && loopResult != null && !loopResult.isBlank()) {
+                if ("continue".equalsIgnoreCase(loopResult.trim())) {
+                    // 继续循环：重置循环体节点，递增迭代计数
+                    int newIteration = node.getIterationCount() + 1;
+                    if (newIteration >= node.getMaxIterations()) {
+                        // 达到最大迭代次数，强制退出
+                        node.setIterationCount(newIteration);
+                        workflowStore.save(workflow);
+                        return "\u26a0\ufe0f 节点 " + nodeId + " 已达最大迭代次数（" + node.getMaxIterations() + " 轮），强制退出循环。\n当前进度：" + workflow.progressText();
+                    }
+                    node.setIterationCount(newIteration);
+                    // 重置循环体节点为下一次迭代
+                    workflow.resetLoopBody(nodeId);
+                    workflowStore.save(workflow);
+                    return "\ud83d\udd04 节点 " + nodeId + " 继续循环（第 " + newIteration + "/" + node.getMaxIterations() + " 轮）。\n循环体节点已重置，请继续执行。";
+                } else if ("break".equalsIgnoreCase(loopResult.trim())) {
+                    // 退出循环：标记 LOOP 为完成，迭代计数 +1
+                    node.setIterationCount(node.getIterationCount() + 1);
+                } else {
+                    node.setStatus(NodeStatus.PENDING); // 回滚状态
+                    return "PARAM_INVALID: loopResult 必须为 'continue' 或 'break'，收到: " + loopResult;
                 }
             }
 

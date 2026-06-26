@@ -419,6 +419,11 @@ public class WorkflowEngine {
             if (node.getType() == NodeType.CONDITION && node.getCondition() != null) {
                 sb.append("    条件: ").append(node.getCondition()).append("\n");
             }
+            if (node.getType() == NodeType.LOOP) {
+                sb.append("    循环体起始: ").append(node.getLoopTarget())
+                        .append(", 最大迭代: ").append(node.getMaxIterations())
+                        .append(", 退出条件: ").append(node.getBreakCondition()).append("\n");
+            }
         }
         sb.append("\n依赖关系:\n");
         for (WorkflowEdge edge : workflow.getEdges()) {

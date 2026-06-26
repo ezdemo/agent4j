@@ -15,5 +15,7 @@ public enum EdgeType {
     /** 默认路径 */
     DEFAULT,
     /** 条件选择边（N路分支，由 conditionResult 指定目标节点ID） */
-    CONDITION_SELECT
+    CONDITION_SELECT,
+    /** 循环回边（LOOP 节点到循环体起始节点） */
+    LOOP_BACK
 }
