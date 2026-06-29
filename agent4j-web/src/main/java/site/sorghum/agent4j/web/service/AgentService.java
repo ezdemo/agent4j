@@ -13,6 +13,7 @@ import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.bin.config.ConfigService;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
+import site.sorghum.agent4j.bin.model.ModelPriceProvider;
 import site.sorghum.agent4j.bin.session.JsonlSessionStore;
 import site.sorghum.agent4j.bin.session.SessionStore;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
@@ -776,11 +777,25 @@ public class AgentService {
             Map<String, long[]> mu = agent.getModelUsage();
 
             if (mu != null && !mu.isEmpty()) {
+                // 全局价格提供者（与 UsageCostCalculator.calc() 行为对齐：config 优先，provider 兜底）
+                ModelPriceProvider priceProvider = ModelMetaPriceProvider.getInstance();
+
                 // 按模型分别计算费用
                 for (Map.Entry<String, long[]> entry : mu.entrySet()) {
                     String modelName = entry.getKey();
                     long[] usage = entry.getValue();
+
+                    // 1) 优先从用户配置中取价
                     Map<String, Double> modelPrice = prices.get(modelName);
+
+                    // 2) 配置中没有时回退到 ModelPriceProvider（与 DashboardService / UsageCostCalculator 保持一致）
+                    if ((modelPrice == null || modelPrice.isEmpty()) && priceProvider != null) {
+                        modelPrice = priceProvider.getModelPrice(modelName);
+                        if (modelPrice == null || modelPrice.isEmpty()) {
+                            log.debug("[usage] 模型 '{}' 既无 config.price() 配置，也无 ModelPriceProvider 元数据，跳过计价", modelName);
+                        }
+                    }
+
                     if (modelPrice != null && !modelPrice.isEmpty()) {
                         hasPrice = true;
                         double inputRate = modelPrice.getOrDefault("input", 0.0);
