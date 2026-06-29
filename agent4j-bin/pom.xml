@@ -72,6 +72,20 @@
             <version>${solon.version}</version>
         </dependency>
 
+        <!-- ACP Agent SDK -->
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-core</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-agent-support</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>com.agentclientprotocol</groupId>
+            <artifactId>acp-annotations</artifactId>
+        </dependency>
+
     </dependencies>
 
 </project>
