@@ -51,6 +51,26 @@
                 <artifactId>snack4-jsonpath</artifactId>
                 <version>4.0.49</version>
             </dependency>
+            <dependency>
+                <groupId>com.agentclientprotocol</groupId>
+                <artifactId>acp-core</artifactId>
+                <version>0.14.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.agentclientprotocol</groupId>
+                <artifactId>acp-agent-support</artifactId>
+                <version>0.14.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.agentclientprotocol</groupId>
+                <artifactId>acp-annotations</artifactId>
+                <version>0.14.0</version>
+            </dependency>
+            <dependency>
+                <groupId>com.agentclientprotocol</groupId>
+                <artifactId>acp-websocket-jetty</artifactId>
+                <version>0.14.0</version>
+            </dependency>
         </dependencies>
     </dependencyManagement>
     <build>
