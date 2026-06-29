@@ -1757,7 +1757,6 @@ import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
 import {
   agentAPI,
-  chatAPI,
   configAPI,
   DEFAULT_API_BASE,
   lspAPI,
@@ -1893,18 +1892,14 @@ async function selectPet(name) {
   }
 }
 
+// 初始化宠物：转发给父组件（App.vue）跳到聊天界面执行
 async function initPet() {
   petIniting.value = true
   try {
-    const res = await chatAPI.sendMessage('调用 npx petdex@latest install boba 初始化一个宠物')
-    if (res.success) {
-      message.success('宠物初始化成功，正在刷新列表...')
-      await loadPets()
-    } else {
-      message.error(res.error || '初始化失败')
-    }
-  } catch (err) {
-    message.error('初始化失败: ' + (err.message || ''))
+    emit('init-pet')
+  } catch (e) {
+    console.warn('初始化宠物失败:', e)
+    message.error('初始化失败: ' + (e.message || ''))
   } finally {
     petIniting.value = false
   }
@@ -1959,7 +1954,7 @@ const showUpdateModal = ref(false)
 const electronVersion = ref('')
 const autoUpdating = ref(false)
 
-const emit = defineEmits(['auto-update'])
+const emit = defineEmits(['auto-update', 'init-pet'])
 
 // 桌面端版本信息（由 handleCheckVersion 一并更新）
 const desktopInfo = ref({
