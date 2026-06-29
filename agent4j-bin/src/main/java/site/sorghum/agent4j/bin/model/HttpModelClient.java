@@ -755,6 +755,7 @@ public class HttpModelClient implements ModelClient {
             body.set("reasoning_effort", reasoningEffort);
             body.set("chat_template_kwargs", ONode.ofJson("{}").set("enable_thinking", true));
             body.set("enable_thinking", true);
+            body.set("thinking",ONode.ofJson("{}").set("type","enabled"));
         }
 
         ONode msgs = body.getOrNew(FIELD_MESSAGES).asArray();
