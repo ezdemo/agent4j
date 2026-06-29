@@ -72,6 +72,9 @@ export const useAppStore = defineStore('app', () => {
   const notifications = ref([])
   const isLoading = ref(false)
   
+  // 活跃宠物名称（用于跨组件同步）
+  const activePetName = ref('')
+  
   // 计算属性
   const isConnected = computed(() => connectionStatus.value === 'connected')
   const hasMessages = computed(() => messages.value.length > 0)
@@ -447,6 +450,7 @@ export const useAppStore = defineStore('app', () => {
     activeModal,
     notifications,
     isLoading,
+    activePetName,
     isConnected,
     hasMessages,
     unreadNotifications,

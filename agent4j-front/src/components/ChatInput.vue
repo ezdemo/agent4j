@@ -255,7 +255,8 @@
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {agentAPI} from '../services/api'
+import {useAppStore} from '../stores/app'
+import {agentAPI, petAPI} from '../services/api'
 import PetSprite from './PetSprite.vue'
 
 const props = defineProps({
@@ -636,17 +637,19 @@ onBeforeUnmount(() => document.removeEventListener('click', handleOutside))
 const petSpritesheetUrl = ref('')
 const petPosition = ref({ x: 0, y: 0 })
 const petSizeIndex = ref(1)
-let petApiBase = ''
 
 async function loadPet() {
   try {
-    petApiBase = localStorage.getItem('agent4j-api-base') || 'http://localhost:4567'
-    const resp = await fetch(petApiBase + '/api/pet/info')
-    if (!resp.ok) return
-    const json = await resp.json()
-    const petData = typeof json.data === 'string' ? JSON.parse(json.data) : json.data
-    if (petData && petData.spritesheetPath) {
-      petSpritesheetUrl.value = petApiBase + '/api/pet/spritesheet?t=' + Date.now()
+    const resp = await petAPI.getInfo()
+    const petData = resp.data
+    if (petData && petData.active && (petData.spritesheetUrl || petData.spritesheetPath)) {
+      // 兼容新旧字段名：spritesheetUrl（新）或 spritesheetPath（旧）
+      const url = petData.spritesheetUrl || petData.spritesheetPath
+      if (url && !url.startsWith('/api/')) {
+        petSpritesheetUrl.value = petAPI.getSpritesheetUrl() + '?t=' + Date.now()
+      } else if (url) {
+        petSpritesheetUrl.value = url + '?t=' + Date.now()
+      }
       if (petData.position) {
         petPosition.value = { x: petData.position.x || 0, y: petData.position.y || 0 }
       }
@@ -658,26 +661,24 @@ async function loadPet() {
 }
 loadPet()
 
+const appStore = useAppStore()
+// 当其他组件（如设置页）切换宠物时，重新加载
+watch(() => appStore.activePetName, (newName, oldName) => {
+  if (newName && newName !== oldName) {
+    loadPet()
+  }
+})
+
 async function savePetPosition(pos) {
-  if (!petApiBase) return
   try {
-    await fetch(petApiBase + '/api/pet/position', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(pos),
-    })
+    await petAPI.savePosition(pos)
   } catch { /* 保存失败静默 */ }
 }
 
 async function savePetSize(idx) {
   petSizeIndex.value = idx
-  if (!petApiBase) return
   try {
-    await fetch(petApiBase + '/api/pet/position', {
-      method: 'PUT',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ sizeIndex: idx }),
-    })
+    await petAPI.savePosition({ sizeIndex: idx })
   } catch { /* 保存失败静默 */ }
 }
 
