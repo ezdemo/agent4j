@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js"/>
   <img src="https://img.shields.io/badge/Electron-32.0-47848F?logo=electron"/>
   <img src="https://img.shields.io/badge/license-MIT-green"/>
-  <img src="https://img.shields.io/badge/version-26.6.26-lightgrey"/>
+  <img src="https://img.shields.io/badge/version-26.6.29-lightgrey"/>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-📋-brightgreen"/></a>
 </p>
 
@@ -101,31 +101,22 @@ API，一步步把事情干完。
 
 ---
 
-## 🆕 最新更新（v26.6.26）
+## 🆕 最新更新（v26.6.29）
 
-### 🤖 视觉工具增强
-- 视觉识别工具支持本地文件路径，参数统一为 image，兼容文件/URL/Base64
-- VisionService 重构支持 ImageBlock，防止日志泄漏图片内容
+### 🐾 桌面宠物精灵
+- 新增桌面宠物精灵组件 (PetSprite)，支持精灵图动画与拖拽移动
+- 多宠物选择与切换，设置页面管理和切换不同宠物
+- 宠物初始化与快捷安装提示，首次使用引导安装
 
-### 💬 聊天交互增强
-- 添加聊天快捷操作按钮，常见任务一键触发
-- 添加连接状态显示及 UI 细节改进
+### 🛠️ 技能选择与权限切换
+- 聊天输入框内可搜索并多选技能，自动拼接到消息中
+- 自由模式/审批模式一键切换，无需进入设置
 
-### 🔄 工作流循环控制
-- 新增工作流循环控制节点，支持循环执行和重试等复杂场景
-- DAG 渲染优化，提升工作流可视化体验
+### 🔒 HITL 免审批工具
+- `finish` / `ask_choice` 等纯交互控制流工具直接放行，无需用户确认
 
-### 🏗️ 代码重构与模块合并
-- 将 agent4j-tool 合并入 agent4j-bin，精简模块结构
-- 侧边栏大幅重构：移除折叠按钮、简化标题、全宽 New Session 按钮
-- 标题栏对齐参考 UI 设计，统一视觉风格
-- 侧边栏按钮使用 CSS 变量适配多主题（含暗色与复古主题）
-
-### 🐛 界面与后端修复
-- 标题栏按钮颜色加深，侧边栏按钮标签和颜色修正
-- 侧边栏响应式断点支持 272px 宽度
-- 修复分组 ID 生成逻辑，修复 TrimStart 中 BOM 字符转义语法
-- 移除未使用的 TaskItem 组件及旧版打包 CSS
+### 🧠 模型适配
+- HttpModelClient 添加 `thinking` 字段，兼容更多推理模型配置
 
 > 📋 完整变更记录请查看 [CHANGELOG.md](CHANGELOG.md)
 
