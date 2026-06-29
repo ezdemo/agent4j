@@ -455,6 +455,15 @@ public class Agent4jConfig {
     }
 
     /**
+     * 获取当前活跃宠物名称。
+     * 从 config.json 的 activePet 字段读取。
+     * 未配置时返回 null。
+     */
+    public String activePet() {
+        return root.select("$.activePet").getString();
+    }
+
+    /**
      * 获取可用模型列表。
      * 从 config.json 的 availableModels 数组读取。
      */

@@ -86,7 +86,8 @@ public class ConfigController {
                 cfg.blockedPaths(),
                 maskedKey,
                 cfg.price(),
-                visionConfig
+                visionConfig,
+                cfg.activePet()
         );
         return ApiResponse.ok(data);
     }
