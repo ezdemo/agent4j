@@ -33,6 +33,7 @@ const SIZE_LEVELS = [
   { label: '小', scale: 0.4 },
   { label: '中', scale: 0.55 },
   { label: '大', scale: 0.75 },
+  { label: '超大', scale: 1.0 },
 ]
 
 const DRAG_THRESHOLD = 4
@@ -250,7 +251,6 @@ watch(() => props.spritesheetUrl, (url) => {
 }
 .pet-sprite.pet-hidden { opacity: 0; }
 .pet-sprite.pet-dragging { cursor: grabbing; opacity: 0.85; }
-.pet-sprite:hover { filter: brightness(1.1); }
 .pet-sprite-frame {
   background-repeat: no-repeat;
   image-rendering: pixelated;

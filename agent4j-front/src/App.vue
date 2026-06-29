@@ -204,7 +204,7 @@
             <button class="btn-icon-sm" @click="showSettings = false">×</button>
           </div>
           <div class="modal-body">
-            <SettingsView @auto-update="handleAutoUpdate" />
+            <SettingsView @auto-update="handleAutoUpdate" @init-pet="handleInitPet" />
           </div>
         </div>
       </div>
@@ -1187,62 +1187,93 @@ function copyText(text) {
   }
 }
 
-// 自动更新：选择工作区 → 创建新会话 → 发送更新命令
+// 公共流程：选择工作区 → 创建新会话 → 关闭弹窗 → 等待一帧 → 发送命令
+// 用于"自动更新"、"初始化宠物"等需要跳到聊天界面跑命令的场景
+const runInFreshSession = async (cmd, opts = {}) => {
+  const {
+    successMessage = '已新建会话',
+    closeSettings = true,
+    closeUpdateModal = false
+  } = opts
+
+  // 1. 获取工作区列表
+  const wsRes = await configAPI.listWorkspaces()
+  let wsHash = null
+  if (wsRes.success && wsRes.data && wsRes.data.length > 0) {
+    // 优先使用当前工作区，否则选择第一个
+    const currentWs = wsRes.data.find(w => w.hash === currentSessionWorkspace.value)
+    if (currentWs) {
+      wsHash = currentWs.hash
+    } else {
+      wsHash = wsRes.data[0].hash
+    }
+  } else {
+    message.error('没有可用的工作区，请先打开一个项目')
+    return false
+  }
+
+  // 2. 切换工作区上下文
+  const ws = wsRes.data.find(w => w.hash === wsHash)
+  if (ws) {
+    await configAPI.switchWorkspace(ws.path)
+    workspaces.value = wsRes.data
+  }
+
+  // 3. 创建新会话
+  const params = { workspaceHash: wsHash }
+  const r = await sessionsAPI.createNew(params)
+  if (r.success && r.data?.sessionName) {
+    currentSession.value = r.data.sessionName
+    if (r.data.workspaceHash) currentSessionWorkspace.value = r.data.workspaceHash
+    chatRef.value?.resetLocalMessages()
+    await loadSessions()
+    await loadWorkspaces()
+    message.success(successMessage)
+  } else {
+    message.error('新建会话失败')
+    return false
+  }
+
+  // 4. 关闭弹窗
+  if (closeSettings) showSettings.value = false
+  if (closeUpdateModal) showUpdateModal.value = false
+
+  // 5. 稍等一帧让 UI 刷新，然后发送命令
+  await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 300)))
+  await chatRef.value?.sendCommand(cmd)
+  return true
+}
+
+// 自动更新：复用 runInFreshSession 跳到聊天界面发送更新命令
 const handleAutoUpdate = async () => {
   autoUpdating.value = true
   try {
-    // 1. 获取工作区列表
-    const wsRes = await configAPI.listWorkspaces()
-    let wsHash = null
-    if (wsRes.success && wsRes.data && wsRes.data.length > 0) {
-      // 优先使用当前工作区，否则选择第一个
-      const currentWs = wsRes.data.find(w => w.hash === currentSessionWorkspace.value)
-      if (currentWs) {
-        wsHash = currentWs.hash
-      } else {
-        wsHash = wsRes.data[0].hash
-      }
-    } else {
-      message.error('没有可用的工作区，请先打开一个项目')
-      return
-    }
-
-    // 2. 切换工作区上下文
-    const ws = wsRes.data.find(w => w.hash === wsHash)
-    if (ws) {
-      await configAPI.switchWorkspace(ws.path)
-      workspaces.value = wsRes.data
-    }
-
-    // 3. 创建新会话
-    const params = { workspaceHash: wsHash }
-    const r = await sessionsAPI.createNew(params)
-    if (r.success && r.data?.sessionName) {
-      currentSession.value = r.data.sessionName
-      if (r.data.workspaceHash) currentSessionWorkspace.value = r.data.workspaceHash
-      chatRef.value?.resetLocalMessages()
-      await loadSessions()
-      await loadWorkspaces()
-      message.success('已新建更新会话')
-    } else {
-      message.error('新建会话失败')
-      return
-    }
-
-    // 4. 关闭设置和更新弹窗
-    showSettings.value = false
-    showUpdateModal.value = false
-
-    // 5. 稍等一帧让 UI 刷新，然后发送更新命令
-    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 300)))
-
     const updateCommand = "请帮我执行 Agent4j 自动更新。根据当前操作系统平台，选择并运行对应的更新脚本：\n\n- Windows 系统：在 PowerShell 中运行 `irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex`\n- macOS / Linux 系统：在终端中运行 `curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash`\n\n请先判断当前系统平台，然后执行对应的脚本。执行完成后请报告结果。"
-    await chatRef.value?.sendCommand(updateCommand)
+    await runInFreshSession(updateCommand, {
+      successMessage: '已新建更新会话',
+      closeSettings: true,
+      closeUpdateModal: true
+    })
   } catch (e) {
     console.error('自动更新失败:', e)
     message.error('自动更新失败: ' + (e.message || '未知错误'))
   } finally {
     autoUpdating.value = false
+  }
+}
+
+// 初始化宠物：复用 runInFreshSession 跳到聊天界面发送 npx petdex install 命令
+const handleInitPet = async () => {
+  try {
+    const initCommand = '调用 npx petdex@latest install boba 初始化一个宠物'
+    await runInFreshSession(initCommand, {
+      successMessage: '已新建宠物初始化会话',
+      closeSettings: true,
+      closeUpdateModal: false
+    })
+  } catch (e) {
+    console.error('初始化宠物失败:', e)
+    message.error('初始化宠物失败: ' + (e.message || '未知错误'))
   }
 }
 

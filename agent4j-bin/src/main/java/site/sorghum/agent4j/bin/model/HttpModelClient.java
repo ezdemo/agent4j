@@ -523,7 +523,9 @@ public class HttpModelClient implements ModelClient {
     private static class SseParseResult {
         String sseErrorData;
         ONode toolCallsAccum;
-        /** 每个请求 ID 上次报告的 usage 值，用于计算差量（某些平台会在同一流中多次发送 usage） */
+        /**
+         * 每个请求 ID 上次报告的 usage 值，用于计算差量（某些平台会在同一流中多次发送 usage）
+         */
         final Map<String, int[]> lastUsage = new HashMap<>();
     }
 
@@ -580,7 +582,7 @@ public class HttpModelClient implements ModelClient {
         if (delta == null || delta.isNull()) return;
 
         // reasoning content
-        ONode rd = delta.get(FIELD_REASONING_CONTENT) == null ? delta.get(FIELD_REASONING_CONTENT_V2) : delta.get(FIELD_REASONING_CONTENT);
+        ONode rd = delta.get(FIELD_REASONING_CONTENT).isNull() ? delta.get(FIELD_REASONING_CONTENT_V2) : delta.get(FIELD_REASONING_CONTENT);
         // 回设
         delta.set(FIELD_REASONING_CONTENT, rd);
         if (rd != null && rd.isString()) {
@@ -747,7 +749,7 @@ public class HttpModelClient implements ModelClient {
      * 对 tool 消息做防御性检查（缺少 tool_call_id 时跳过）。
      */
     private ONode buildBody(List<ChatMessage> messages,
-                             ONode tools) {
+                            ONode tools) {
         ONode body = new ONode(ONode.ofJson("{}").options()).asObject();
         // 剥离模型名称中的上下文大小后缀，例如 "mimo-v2.5[512k]" → "mimo-v2.5"
         body.set(FIELD_MODEL, ModelContextUtils.stripContextSizeSuffix(model));
@@ -755,7 +757,10 @@ public class HttpModelClient implements ModelClient {
             body.set("reasoning_effort", reasoningEffort);
             body.set("chat_template_kwargs", ONode.ofJson("{}").set("enable_thinking", true));
             body.set("enable_thinking", true);
-            body.set("thinking",ONode.ofJson("{}").set("type","enabled"));
+            if (model.contains("minimax")) {
+                body.set("reasoning_split", true);
+                body.set("stream_options",ONode.ofJson("{}").set("include_usage", true));
+            }
         }
 
         ONode msgs = body.getOrNew(FIELD_MESSAGES).asArray();
