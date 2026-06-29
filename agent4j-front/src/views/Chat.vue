@@ -229,6 +229,7 @@
         :connected="props.connected"
         :currentSkill="currentSkill"
         :currentPermission="currentPermission"
+        :petState="petState"
         @send="(imgs, text) => sendMessage(imgs, text)"
         @abort="abortChat"
         @clear="clearChat"
@@ -533,6 +534,24 @@ const hasAssistant = computed(() => {
 // 是否正在等待 AI 回复（用于显示加载动画）
 const waitingForAI = computed(() => {
   return streaming.value && !hasAssistant.value
+})
+
+// ── 宠物状态：根据流式事件推断当前阶段 ──
+const petState = computed(() => {
+  if (!streaming.value) return 'idle'
+  // 等待 AI 响应
+  if (!hasAssistant.value) return 'waiting'
+  // 有流了，取最后一条 assistant 的最后一个 block 判断
+  const msgs = messages.value
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === 'assistant' && msgs[i].blocks?.length) {
+      const lastBlock = msgs[i].blocks[msgs[i].blocks.length - 1]
+      if (lastBlock.type === 'reasoning') return 'thinking'
+      if (lastBlock.type === 'tool_call') return 'tool_call'
+      if (lastBlock.type === 'content') return 'content'
+    }
+  }
+  return 'waiting'
 })
 
 // ===== 消息缩略图 dock =====

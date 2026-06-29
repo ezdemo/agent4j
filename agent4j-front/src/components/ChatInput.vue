@@ -241,12 +241,22 @@
         </div>
       </div>
     </div>
+
+    <!-- 桌面宠物精灵 -->
+    <PetSprite v-if="petSpritesheetUrl" class="pet-float"
+               :spritesheet-url="petSpritesheetUrl"
+               :state="petState"
+               :initial-x="petPosition.x" :initial-y="petPosition.y"
+               :initial-size-index="petSizeIndex"
+               @position-change="savePetPosition"
+               @size-change="savePetSize" />
   </div>
 </template>
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {agentAPI} from '../services/api'
+import PetSprite from './PetSprite.vue'
 
 const props = defineProps({
   inputText: {type: String, default: ''},
@@ -261,7 +271,8 @@ const props = defineProps({
   connected: {type: Boolean, default: true},
   version: {type: String, default: ''},
   currentSkill: {type: Object, default: null},
-  currentPermission: {type: Boolean, default: false}
+  currentPermission: {type: Boolean, default: false},
+  petState: {type: String, default: 'idle'}
 })
 
 const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchSkill', 'switchPermission'])
@@ -621,6 +632,55 @@ onMounted(() => {
 })
 onBeforeUnmount(() => document.removeEventListener('click', handleOutside))
 
+// ── 桌面宠物精灵图 ──
+const petSpritesheetUrl = ref('')
+const petPosition = ref({ x: 0, y: 0 })
+const petSizeIndex = ref(1)
+let petApiBase = ''
+
+async function loadPet() {
+  try {
+    petApiBase = localStorage.getItem('agent4j-api-base') || 'http://localhost:4567'
+    const resp = await fetch(petApiBase + '/api/pet/info')
+    if (!resp.ok) return
+    const json = await resp.json()
+    const petData = typeof json.data === 'string' ? JSON.parse(json.data) : json.data
+    if (petData && petData.spritesheetPath) {
+      petSpritesheetUrl.value = petApiBase + '/api/pet/spritesheet?t=' + Date.now()
+      if (petData.position) {
+        petPosition.value = { x: petData.position.x || 0, y: petData.position.y || 0 }
+      }
+      if (typeof petData.sizeIndex === 'number') {
+        petSizeIndex.value = petData.sizeIndex
+      }
+    }
+  } catch { /* pet 不可用时静默 */ }
+}
+loadPet()
+
+async function savePetPosition(pos) {
+  if (!petApiBase) return
+  try {
+    await fetch(petApiBase + '/api/pet/position', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(pos),
+    })
+  } catch { /* 保存失败静默 */ }
+}
+
+async function savePetSize(idx) {
+  petSizeIndex.value = idx
+  if (!petApiBase) return
+  try {
+    await fetch(petApiBase + '/api/pet/position', {
+      method: 'PUT',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ sizeIndex: idx }),
+    })
+  } catch { /* 保存失败静默 */ }
+}
+
 // 暴露焦點方法给父组件
 defineExpose({focus: () => inputField.value?.focus(), autoResize})
 </script>
@@ -646,6 +706,8 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   padding: 6px 8px 0;
   transition: border-color var(--t);
   box-shadow: var(--glass-shadow);
+  position: relative;
+  z-index: 10;
 }
 
 .input-box.focused {
@@ -1814,5 +1876,14 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   .tool-dropdown {
     min-width: 140px;
   }
+}
+
+/* 宠物精灵浮层 — 优先级低于输入面板 */
+:deep(.pet-float) {
+  position: absolute;
+  bottom: 60px;
+  right: 16px;
+  z-index: 5;
+  pointer-events: auto;
 }
 </style>
