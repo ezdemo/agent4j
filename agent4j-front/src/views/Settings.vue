@@ -125,7 +125,7 @@
                     @click="selectPet(pet.name)"
                 >
                   <!-- 宠物预览 -->
-                  <div class="pet-preview" :title="activePetName === pet.name ? '点击切换动画' : '点击选择此宠物'">
+                  <div class="pet-preview" title="点击切换动画">
                     <PetSprite
                         v-if="pet.hasSpritesheet"
                         :spritesheet-url="pet.spritesheetUrl + '?t=' + Date.now()"
@@ -151,6 +151,29 @@
                     </svg>
                   </div>
                 </div>
+              </div>
+              <!-- 初始化按钮 -->
+              <div class="pet-init-bar">
+                <button :disabled="petIniting" class="btn btn-secondary" @click="initPet">
+                  <svg v-if="petIniting" class="animate-spin" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                    <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                  </svg>
+                  <svg v-else fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                    <path d="M12 2C8 2 4 5 4 9c0 3 2 6 4 8l4 5 4-5c2-2 4-5 4-8 0-4-4-7-8-7z"/>
+                    <line x1="12" y1="9" x2="12" y2="15"/>
+                    <line x1="9" y1="12" x2="15" y2="12"/>
+                  </svg>
+                  {{ petIniting ? '初始化中...' : '初始化宠物' }}
+                </button>
+                <button class="btn btn-ghost" @click="openPetWebsite">
+                  <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" x2="21" y1="14" y2="3"/>
+                  </svg>
+                  去网站看看
+                </button>
+                <span class="pet-init-hint">通过 npx petdex 快速安装一个默认宠物</span>
               </div>
             </div>
           </div>
@@ -1734,6 +1757,7 @@ import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
 import {
   agentAPI,
+  chatAPI,
   configAPI,
   DEFAULT_API_BASE,
   lspAPI,
@@ -1814,6 +1838,7 @@ const petsLoading = ref(false)
 const petsError = ref('')
 const activePetName = ref('')
 const activePetAnim = ref('idle')
+const petIniting = ref(false)
 
 // 宠物动画列表（循环切换）
 const PET_ANIM_NAMES = ['idle', 'waving', 'jumping', 'running-right', 'running-left', 'waiting', 'review']
@@ -1853,17 +1878,12 @@ async function loadPets() {
 }
 
 async function selectPet(name) {
-  if (name === activePetName.value) {
-    // 点击已激活的宠物→切换动画
-    cyclePetAnim()
-    return
-  }
+  if (name === activePetName.value) return // 已激活的不用重复切换
   try {
     const res = await petAPI.setActive(name)
     if (res.success) {
       activePetName.value = name
       store.activePetName = name
-      activePetAnim.value = 'idle'
       message.success('已切换到宠物: ' + name)
     } else {
       message.error(res.error || '切换宠物失败')
@@ -1873,6 +1893,30 @@ async function selectPet(name) {
   }
 }
 
+async function initPet() {
+  petIniting.value = true
+  try {
+    const res = await chatAPI.sendMessage('调用 npx petdex@latest install boba 初始化一个宠物')
+    if (res.success) {
+      message.success('宠物初始化成功，正在刷新列表...')
+      await loadPets()
+    } else {
+      message.error(res.error || '初始化失败')
+    }
+  } catch (err) {
+    message.error('初始化失败: ' + (err.message || ''))
+  } finally {
+    petIniting.value = false
+  }
+}
+
+function openPetWebsite() {
+  if (platform.isElectron) {
+    window.electronAPI.openExternal('https://petdex.dev/')
+  } else {
+    window.open('https://petdex.dev/', '_blank')
+  }
+}
 // 技能市场状态
 const skillMarket = reactive({
   markets: [],
@@ -5907,6 +5951,7 @@ onMounted(() => {
   justify-content: center;
   overflow: hidden;
   border-radius: var(--r);
+  pointer-events: none; /* 阻止 PetSprite 自身的单击改大小 */
 }
 .pet-no-sprite-placeholder {
   width: 96px;
@@ -5939,5 +5984,19 @@ onMounted(() => {
   position: absolute;
   top: 8px;
   right: 8px;
+}
+
+/* 初始化按钮栏 */
+.pet-init-bar {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pet-init-hint {
+  font-size: 12px;
+  color: var(--fg-3);
 }
 </style>
