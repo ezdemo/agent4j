@@ -1,6 +1,6 @@
 {
   "name": "agent4j-front",
-  "version": "26.6.26",
+  "version": "26.6.29",
   "private": true,
   "main": "dist/main/main.cjs",
   "type": "module",

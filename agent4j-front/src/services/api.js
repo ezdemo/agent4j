@@ -881,5 +881,25 @@ export const scheduleAPI = {
   }
 }
 
+export const petAPI = {
+  /** 获取宠物元数据（旧版兼容，同 getActive） */
+  getInfo: () => api.get('/pets/active'),
+  /** 保存位置/大小 */
+  savePosition: (pos) => api.put('/pets/position', pos),
+  /** 获取当前活跃宠物的 spritesheet URL */
+  getSpritesheetUrl: () => '/api/pets/active/spritesheet',
+
+  /** 列出所有可用宠物 */
+  listPets: () => api.get('/pets'),
+  /** 获取指定宠物元数据 */
+  getPetInfo: (name) => api.get(`/pets/${name}`),
+  /** 获取指定宠物的 spritesheet URL */
+  getPetSpritesheetUrl: (name) => `/api/pets/${name}/spritesheet`,
+  /** 获取当前活跃宠物信息 */
+  getActive: () => api.get('/pets/active'),
+  /** 设置活跃宠物 */
+  setActive: (name) => api.put('/pets/active', { name }),
+}
+
 export default api
 

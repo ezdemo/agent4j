@@ -20,7 +20,8 @@ public record ConfigDTO(
         List<String> blockedPaths,
         String apiKey,
         Map<String, Map<String, Double>> price,
-        VisionConfig vision
+        VisionConfig vision,
+        String activePet
 ) {
     /**
      * 视觉模型配置。

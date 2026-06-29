@@ -227,7 +227,10 @@
         :hasHistory="hasHistory"
         :version="props.version"
         :connected="props.connected"
-        @send="(imgs) => sendMessage(imgs)"
+        :currentSkill="currentSkill"
+        :currentPermission="currentPermission"
+        :petState="petState"
+        @send="(imgs, text) => sendMessage(imgs, text)"
         @abort="abortChat"
         @clear="clearChat"
         @export="exportChat"
@@ -236,6 +239,8 @@
         @switchReasoningEffort="handleSwitchReasoningEffort"
         @refreshModels="loadUsage"
         @continue="continueChat"
+        @switchSkill="handleSwitchSkill"
+        @switchPermission="handleSwitchPermission"
     />
   </div>
 </template>
@@ -280,6 +285,26 @@ const handleSwitchReasoningEffort = async (value) => {
     }
   } catch (e) {
     console.error('切换推理强度失败:', e)
+  }
+}
+
+// ============= 技能切换（多选） =============
+const currentSkill = ref([])
+const handleSwitchSkill = (skills) => {
+  currentSkill.value = skills
+}
+
+// ============= 权限切换（hitl） =============
+const currentPermission = ref(false)
+const handleSwitchPermission = async (hitl) => {
+  if (hitl === currentPermission.value) return
+  try {
+    const r = await configAPI.updateConfig({hitl})
+    if (r.success) {
+      currentPermission.value = hitl
+    }
+  } catch (e) {
+    console.error('切换权限模式失败:', e)
   }
 }
 
@@ -397,6 +422,7 @@ const loadUsage = async (override) => {
     }
     if (configRes.status === 'fulfilled' && configRes.value.success) {
       currentReasoningEffort.value = configRes.value.data?.reasoningEffort || 'max'
+      currentPermission.value = !!configRes.value.data?.hitl
     }
   } catch {
   }
@@ -508,6 +534,24 @@ const hasAssistant = computed(() => {
 // 是否正在等待 AI 回复（用于显示加载动画）
 const waitingForAI = computed(() => {
   return streaming.value && !hasAssistant.value
+})
+
+// ── 宠物状态：根据流式事件推断当前阶段 ──
+const petState = computed(() => {
+  if (!streaming.value) return 'idle'
+  // 等待 AI 响应
+  if (!hasAssistant.value) return 'waiting'
+  // 有流了，取最后一条 assistant 的最后一个 block 判断
+  const msgs = messages.value
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    if (msgs[i].role === 'assistant' && msgs[i].blocks?.length) {
+      const lastBlock = msgs[i].blocks[msgs[i].blocks.length - 1]
+      if (lastBlock.type === 'reasoning') return 'thinking'
+      if (lastBlock.type === 'tool_call') return 'tool_call'
+      if (lastBlock.type === 'content') return 'content'
+    }
+  }
+  return 'waiting'
 })
 
 // ===== 消息缩略图 dock =====
@@ -667,8 +711,8 @@ const openFile = async (filePath) => {
  *   收到有内容的 SSE 事件时才创建助手气泡
  * - /skill: 命令：显示用户气泡 + 助手气泡（正常流程）
  */
-const sendMessage = async (images = []) => {
-  const text = inputText.value.trim()
+const sendMessage = async (images = [], overrideText = null) => {
+  const text = overrideText || inputText.value.trim()
   if ((!text || streaming.value) && images.length === 0) return
   const sessionName = props.sessionName
   if (!sessionName) return

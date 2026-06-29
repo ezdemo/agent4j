@@ -34,7 +34,7 @@
           <h2>{{ currentTab?.label || '设置' }}</h2>
           <p class="header-desc">{{ currentTab?.description }}</p>
         </div>
-        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'about'" class="header-actions">
+        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'about' && activeTab !== 'pet'" class="header-actions">
           <button v-if="activeTab === 'ai' || activeTab === 'vision'" class="btn btn-secondary" style="padding:6px 12px;" @click="openAutoFillDialog" title="自动填入配置">
             <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
               <polyline points="1 4 1 10 7 10"/>
@@ -88,6 +88,92 @@
                     </button>
                   </div>
                 </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 宠物设置 -->
+        <section v-if="activeTab === 'pet'" class="settings-section">
+          <div class="section-card">
+            <div class="card-header">
+              <h3>宠物选择</h3>
+              <p>选择一个桌面宠物陪你工作</p>
+            </div>
+            <div class="card-body">
+              <div v-if="petsLoading" class="pets-loading">
+                <span class="loading-dot"></span> 加载宠物列表...
+              </div>
+              <div v-else-if="petsError" class="pets-error">
+                <p>{{ petsError }}</p>
+              </div>
+              <div v-else-if="petsList.length === 0" class="pets-empty">
+                <div class="empty-icon">
+                  <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
+                    <path d="M12 2C8 2 4 5 4 9c0 3 2 6 4 8l4 5 4-5c2-2 4-5 4-8 0-4-4-7-8-7z"/>
+                  </svg>
+                </div>
+                <p>暂无可用的宠物</p>
+                <p class="hint">请将宠物文件夹放入 ~/.codex/pets/ 目录</p>
+              </div>
+              <div v-else class="pets-grid">
+                <div
+                    v-for="pet in petsList"
+                    :key="pet.name"
+                    :class="{ 'pet-active': activePetName === pet.name, 'pet-no-spritesheet': !pet.hasSpritesheet }"
+                    class="pet-card"
+                    @click="selectPet(pet.name)"
+                >
+                  <!-- 宠物预览 -->
+                  <div class="pet-preview" title="点击切换动画">
+                    <PetSprite
+                        v-if="pet.hasSpritesheet"
+                        :spritesheet-url="pet.spritesheetUrl + '?t=' + Date.now()"
+                        :state="activePetName === pet.name ? activePetAnim : 'idle'"
+                        :initial-size-index="0"
+                    />
+                    <div v-else class="pet-no-sprite-placeholder">
+                      <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" opacity="0.3">
+                        <path d="M12 2C8 2 4 5 4 9c0 3 2 6 4 8l4 5 4-5c2-2 4-5 4-8 0-4-4-7-8-7z"/>
+                      </svg>
+                    </div>
+                  </div>
+                  <!-- 宠物信息 -->
+                  <div class="pet-info">
+                    <div class="pet-name">{{ pet.displayName || pet.name }}</div>
+                    <div v-if="pet.description" class="pet-desc">{{ pet.description }}</div>
+                  </div>
+                  <!-- 选中标识 -->
+                  <div v-if="activePetName === pet.name" class="pet-check">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="var(--accent)" stroke="white" stroke-width="3">
+                      <circle cx="12" cy="12" r="10"/>
+                      <polyline points="8 12 11 15 16 9" stroke="white" fill="none"/>
+                    </svg>
+                  </div>
+                </div>
+              </div>
+              <!-- 初始化按钮 -->
+              <div class="pet-init-bar">
+                <button :disabled="petIniting" class="btn btn-secondary" @click="initPet">
+                  <svg v-if="petIniting" class="animate-spin" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                    <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                  </svg>
+                  <svg v-else fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                    <path d="M12 2C8 2 4 5 4 9c0 3 2 6 4 8l4 5 4-5c2-2 4-5 4-8 0-4-4-7-8-7z"/>
+                    <line x1="12" y1="9" x2="12" y2="15"/>
+                    <line x1="9" y1="12" x2="15" y2="12"/>
+                  </svg>
+                  {{ petIniting ? '初始化中...' : '初始化宠物' }}
+                </button>
+                <button class="btn btn-ghost" @click="openPetWebsite">
+                  <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                    <polyline points="15 3 21 3 21 9"/>
+                    <line x1="10" x2="21" y1="14" y2="3"/>
+                  </svg>
+                  去网站看看
+                </button>
+                <span class="pet-init-hint">通过 npx petdex 快速安装一个默认宠物</span>
               </div>
             </div>
           </div>
@@ -1671,11 +1757,13 @@ import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
 import {
   agentAPI,
+  chatAPI,
   configAPI,
   DEFAULT_API_BASE,
   lspAPI,
   mcpAPI,
   openApiAPI,
+  petAPI,
   skillMarketAPI,
   systemAPI,
   toolsAPI
@@ -1683,6 +1771,7 @@ import {
 import {md} from '../utils/highlight'
 import platform from '../services/platform'
 import VersionInfoPanel from '../components/VersionInfoPanel.vue'
+import PetSprite from '../components/PetSprite.vue'
 
 const store = useAppStore()
 
@@ -1743,6 +1832,91 @@ const filteredTools = computed(() => {
   return allTools.value.filter(t => (t.name || t).toLowerCase().includes(q))
 })
 
+// 宠物设置状态
+const petsList = ref([])
+const petsLoading = ref(false)
+const petsError = ref('')
+const activePetName = ref('')
+const activePetAnim = ref('idle')
+const petIniting = ref(false)
+
+// 宠物动画列表（循环切换）
+const PET_ANIM_NAMES = ['idle', 'waving', 'jumping', 'running-right', 'running-left', 'waiting', 'review']
+
+function cyclePetAnim() {
+  const idx = PET_ANIM_NAMES.indexOf(activePetAnim.value)
+  activePetAnim.value = PET_ANIM_NAMES[(idx + 1) % PET_ANIM_NAMES.length]
+}
+
+async function loadPets() {
+  petsLoading.value = true
+  petsError.value = ''
+  try {
+    const [listRes, activeRes] = await Promise.all([
+      petAPI.listPets(),
+      petAPI.getActive()
+    ])
+    if (listRes.success && Array.isArray(listRes.data)) {
+      petsList.value = listRes.data.map(p => ({
+        ...p,
+        spritesheetUrl: petAPI.getPetSpritesheetUrl(p.name)
+      }))
+    } else {
+      petsList.value = []
+      if (!listRes.success) petsError.value = listRes.error || '加载宠物列表失败'
+    }
+    if (activeRes.success && activeRes.data && activeRes.data.active) {
+      activePetName.value = activeRes.data.name
+      store.activePetName = activeRes.data.name
+    }
+  } catch (err) {
+    console.error('加载宠物设置失败:', err)
+    petsError.value = err.message || '无法连接服务器'
+  } finally {
+    petsLoading.value = false
+  }
+}
+
+async function selectPet(name) {
+  if (name === activePetName.value) return // 已激活的不用重复切换
+  try {
+    const res = await petAPI.setActive(name)
+    if (res.success) {
+      activePetName.value = name
+      store.activePetName = name
+      message.success('已切换到宠物: ' + name)
+    } else {
+      message.error(res.error || '切换宠物失败')
+    }
+  } catch (err) {
+    message.error('切换宠物失败: ' + (err.message || ''))
+  }
+}
+
+async function initPet() {
+  petIniting.value = true
+  try {
+    const res = await chatAPI.sendMessage('调用 npx petdex@latest install boba 初始化一个宠物')
+    if (res.success) {
+      message.success('宠物初始化成功，正在刷新列表...')
+      await loadPets()
+    } else {
+      message.error(res.error || '初始化失败')
+    }
+  } catch (err) {
+    message.error('初始化失败: ' + (err.message || ''))
+  } finally {
+    petIniting.value = false
+  }
+}
+
+function openPetWebsite() {
+  if (platform.isElectron) {
+    window.electronAPI.openExternal('https://petdex.dev/')
+  } else {
+    window.open('https://petdex.dev/', '_blank')
+  }
+}
 // 技能市场状态
 const skillMarket = reactive({
   markets: [],
@@ -2011,6 +2185,14 @@ const tabs = computed(() => [
     </svg>`
   },
   {
+    id: 'pet',
+    label: '宠物',
+    description: '桌面宠物选择与预览',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 2C8 2 4 5 4 9c0 3 2 6 4 8l4 5 4-5c2-2 4-5 4-8 0-4-4-7-8-7z"/><circle cx="9" cy="8" r="1"/><circle cx="15" cy="8" r="1"/><path d="M9 12c1 1 2 2 3 2s2-1 3-2"/>
+    </svg>`
+  },
+  {
     id: 'server',
     label: '服务器',
     description: '后端服务连接配置',
@@ -2158,6 +2340,9 @@ watch(activeTab, async (tab) => {
     // 进入关于页面时自动检查更新（含版本刷新+远程检查）
     handleCheckVersion()
   }
+  if (tab === 'pet') {
+    loadPets()
+  }
 })
 
 // 加载设置
@@ -2203,6 +2388,12 @@ const loadSettings = async () => {
       // 加载禁用工具列表
       if (config.disabledTools && Array.isArray(config.disabledTools)) {
         settings.security.disabledToolsText = config.disabledTools.join('\n')
+      }
+
+      // 加载活跃宠物名称
+      if (config.activePet) {
+        activePetName.value = config.activePet
+      store.activePetName = config.activePet || ''
       }
 
       // 加载视觉模型配置
@@ -5700,5 +5891,112 @@ onMounted(() => {
   border-radius: var(--r-sm);
   font-size: 11px;
   font-family: var(--mono);
+}
+
+/* ── 宠物设置 ── */
+.pets-loading, .pets-error, .pets-empty {
+  padding: 40px 20px;
+  text-align: center;
+  color: var(--fg-3);
+}
+.pets-error {
+  color: var(--danger);
+}
+.pets-empty .empty-icon {
+  margin-bottom: 12px;
+}
+.pets-empty .hint {
+  font-size: 12px;
+  margin-top: 8px;
+  color: var(--fg-3);
+}
+.pets-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 16px;
+}
+.pet-card {
+  position: relative;
+  background: var(--bg);
+  border: 2px solid var(--border);
+  border-radius: var(--r-lg);
+  padding: 16px;
+  cursor: pointer;
+  transition: all var(--t);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  text-align: center;
+}
+.pet-card:hover {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+.pet-card.pet-active {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+.pet-card.pet-no-spritesheet {
+  opacity: 0.6;
+  cursor: default;
+}
+.pet-preview {
+  width: 96px;
+  height: 104px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--r);
+  pointer-events: none; /* 阻止 PetSprite 自身的单击改大小 */
+}
+.pet-no-sprite-placeholder {
+  width: 96px;
+  height: 104px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.pet-info {
+  flex: 1;
+  min-width: 0;
+}
+.pet-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--fg);
+  margin-bottom: 4px;
+}
+.pet-desc {
+  font-size: 12px;
+  color: var(--fg-3);
+  line-height: 1.4;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.pet-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+}
+
+/* 初始化按钮栏 */
+.pet-init-bar {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.pet-init-hint {
+  font-size: 12px;
+  color: var(--fg-3);
 }
 </style>
