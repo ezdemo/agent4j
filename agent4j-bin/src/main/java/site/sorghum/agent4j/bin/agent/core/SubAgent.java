@@ -6,7 +6,9 @@ import site.sorghum.agent4j.bin.agent.listener.AgentLoopListener;
 import site.sorghum.agent4j.bin.agent.model.UserMessage;
 import site.sorghum.agent4j.bin.agent.output.SubAgentAgentOutput;
 import site.sorghum.agent4j.bin.agent.prompt.PromptPrefix;
+import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.bin.model.ModelClient;
+import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.tool.AgentLoopController;
 import site.sorghum.agent4j.tool.AgentOutput;
@@ -28,22 +30,22 @@ public class SubAgent {
 
     /**
      * 子代理禁止使用的工具名集合（全局维护，新增工具自动对子代理可用）。
-     * <p>排除：递归 spawn（task 工具）、计划管理、用户交互、会话任务跟踪。</p>
-     * <p>子代理创建时复制父工具集时过滤此名单：</p>
+     * <p>排除：递归 spawn、工作流管理、会话任务跟踪、用户交互。</p>
      * <ul>
-     *   <li><b>task</b> — 防止递归子代理 spawn（子代理不应再创建子代理）</li>
-     *   <li>submit_plan / mark_step_complete / revise_plan — 计划管理，主代理专用</li>
+     *   <li><b>task</b> — 防止递归子代理 spawn</li>
+     *   <li>workflow_start / workflow_step / workflow_status — 工作流管理，主代理专用</li>
+     *   <li>goal_mark_step — 目标跟踪，主代理专用</li>
      *   <li>ask_choice — 用户交互，主代理专用（子代理无用户交互）</li>
      * </ul>
      * <p>public 可见性供 {@code TaskTool} 构建子代理 system prompt 时保持一致的过滤逻辑。</p>
      */
     public static final Set<String> SUB_AGENT_DENY = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "task",                // 防止递归子代理 spawn
-            "multi_task",          // 防止递归多子代理 spawn
-            "submit_plan",         // 计划管理（主代理专用）
-            "mark_step_complete",  // 计划管理（主代理专用）
-            "revise_plan",         // 计划管理（主代理专用）
-            "ask_choice"          // 用户交互（主代理专用）
+            "workflow_start",      // 工作流创建（主代理专用）
+            "workflow_step",       // 工作流转步（主代理专用）
+            "workflow_status",     // 工作流状态（主代理专用）
+            "goal_mark_step",      // 目标步骤标记（主代理专用）
+            "ask_choice"           // 用户交互（主代理专用）
     )));
 
     private final ModelClient client;
@@ -59,6 +61,12 @@ public class SubAgent {
      * 通过 {@link #setOutput(AgentOutput)} 由 TaskTool 注入。
      */
     private AgentOutput parentOutput = null;
+    /** 父会话 ID（用于子代理 tools 中的 sessionId 传递） */
+    private String sessionId = null;
+    /** 父会话服务（用于子代理 token 用量直接上报） */
+    private SessionService sessionService = null;
+    /** 代理配置（继承父级，确保上下文折叠/工具超时等行为一致） */
+    private Agent4jConfig config = null;
     /**
      * 获取按模型分别累计的 token 用量: model -> [prompt, completion, cacheHit, cacheMiss]
      */
@@ -121,6 +129,27 @@ public class SubAgent {
     }
 
     /**
+     * 设置父会话 ID，用于子代理 tools 中的 sessionId 传递。
+     */
+    public void setSessionId(String sessionId) {
+        this.sessionId = sessionId;
+    }
+
+    /**
+     * 设置父会话服务，用于子代理 token 用量直接上报。
+     */
+    public void setSessionService(SessionService sessionService) {
+        this.sessionService = sessionService;
+    }
+
+    /**
+     * 设置代理配置，继承父级以确保上下文折叠/工具超时等行为一致。
+     */
+    public void setConfig(Agent4jConfig config) {
+        this.config = config;
+    }
+
+    /**
      * 是否有用量数据
      */
     public boolean hasUsage() {
@@ -139,7 +168,12 @@ public class SubAgent {
     public String run(String task, AgentLoopListener listener) throws IOException {
         ConversationContext ctx = new ConversationContext(
                 new PromptPrefix(systemPrompt, registry.toOpenAiTools()));
-        AgentLoop subLoop = new AgentLoop(client, registry, ctx);
+        // 继承父级配置（config、sessionId、sessionService），确保子代理行为一致
+        // 注意：hitlDefault=false — 子代理的工具调用不经过 HITL 审批。
+        //        子代理是隔离的子任务，应独立高效完成，不应阻塞等待人工审批。
+        //        父代理的 HITL 审批仍会拦截父级层面的工具调用（如 task 工具本身）。
+        Agent4jConfig effectiveConfig = (this.config != null) ? this.config : Agent4jConfig.getInstance();
+        AgentLoop subLoop = new AgentLoop(client, registry, ctx, false, effectiveConfig);
 
         // 传播父级中断源：子代理主循环会同时检查自身中断标志和父级的 isAbortRequested()
         if (parentController != null) {
@@ -152,6 +186,14 @@ public class SubAgent {
         if (parentOutput != null) {
             AgentOutput wrapped = new SubAgentAgentOutput(parentOutput, task);
             subLoop.setOutput(wrapped);
+        }
+
+        // 继承父级 sessionId 和 sessionService（用于 tools 中正确的会话上下文和用量上报）
+        if (sessionId != null) {
+            subLoop.setSessionId(sessionId);
+        }
+        if (sessionService != null) {
+            subLoop.setSessionService(sessionService);
         }
 
         // 创建用量捕获监听器：拦截 onUsage 记录到 SubAgent 字段，同时委托给外部 listener
