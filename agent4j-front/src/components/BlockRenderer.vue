@@ -163,8 +163,15 @@
                 </span>
               </div>
               <div v-if="pathItemExpanded[ib._itemId]" class="tool-detail">
-                <pre v-if="ib.args"><code>{{ fmtArgs(ib.args) }}</code></pre>
-                <pre v-if="ib.result"><code>{{ ib.result }}</code></pre>
+                <!-- 工作流工具：用 WorkflowSteps 渲染 -->
+                <div v-if="isWorkflowTool(ib)" class="workflow-tool-detail">
+                  <WorkflowSteps :data="getWorkflowData(ib)" />
+                </div>
+                <!-- 其他工具：正常显示 -->
+                <template v-else>
+                  <pre v-if="ib.args"><code>{{ fmtArgs(ib.args) }}</code></pre>
+                  <pre v-if="ib.result"><code>{{ ib.result }}</code></pre>
+                </template>
               </div>
             </div>
           </div>
@@ -212,7 +219,7 @@
           </span>
         </div>
         <div v-if="block.expanded" class="workflow-tool-detail">
-          <WorkflowDagRenderer :data="getWorkflowData(block)" />
+          <WorkflowSteps :data="getWorkflowData(block)" />
         </div>
       </div>
       <!-- 工作流工具执行中 -->
@@ -305,7 +312,7 @@ import {sanitize} from '../utils/sanitize'
 import {CHECK_ICON_SM, CHEVRON_DOWN_ICON, CIRCLE_ICON, SPINNER_ICON, THINKING_ICON} from '../utils/icons'
 import {LRUCache} from '../utils/cache'
 import {ref, computed} from 'vue'
-import WorkflowDagRenderer from './WorkflowDagRenderer.vue'
+import WorkflowSteps from './WorkflowSteps.vue'
 
 const props = defineProps({
   blocks: {type: Array, required: true}
@@ -314,7 +321,7 @@ const props = defineProps({
 const emit = defineEmits(['sendChoice', 'openFile'])
 
 // 工作流工具列表（需要在 processedBlocks 之前定义）
-const WORKFLOW_TOOLS = ['workflow_create_dag', 'workflow_visualize']
+const WORKFLOW_TOOLS = ['workflow_start', 'workflow_step', 'workflow_status']
 
 // ── 工具分组折叠状态 ──
 
@@ -363,6 +370,12 @@ const processedBlocks = computed(() => {
       const gid = `pg-${i}`
       // 给每个内层块分配唯一 ID 用于展开状态跟踪
       group.forEach((item, idx) => { item._itemId = `${gid}-${idx}` })
+      // 工作流工具在 path_group 中自动展开
+      group.forEach((item) => {
+        if (item.type === 'tool_call' && isWorkflowTool(item)) {
+          pathItemExpanded.value = {...pathItemExpanded.value, [item._itemId]: true}
+        }
+      })
       const toolCount = group.filter(x => x.type === 'tool_call').length
       const thinkCount = group.filter(x => x.type === 'reasoning').length
       const pathNames = group.map(x => x.type === 'reasoning' ? 'think' : x.name).join(' → ')
@@ -383,6 +396,10 @@ const processedBlocks = computed(() => {
       })
       i = j
     } else {
+      // 独立工具块：工作流工具自动展开
+      if (b.type === 'tool_call' && isWorkflowTool(b) && b.expanded === undefined) {
+        b.expanded = true
+      }
       out.push(b)
       i++
     }
@@ -561,11 +578,11 @@ const initWorkflowToolExpanded = (block) => {
 
 const getWorkflowTitle = (block) => {
   try {
-    if (block.name === 'workflow_create_dag') {
-      const args = parseArgs(block)
-      return args?.title || ''
+    if (block.name === 'workflow_start') {
+      const result = parseResult(block)
+      return result?.title || ''
     }
-    if (block.name === 'workflow_visualize') {
+    if (block.name === 'workflow_status' || block.name === 'workflow_step') {
       const result = parseResult(block)
       return result?.title || ''
     }
@@ -577,14 +594,8 @@ const getWorkflowTitle = (block) => {
 
 const getWorkflowData = (block) => {
   try {
-    if (block.name === 'workflow_create_dag') {
-      const result = parseResult(block)
-      return result || {}
-    }
-    if (block.name === 'workflow_visualize') {
-      const result = parseResult(block)
-      return result || {}
-    }
+    const result = parseResult(block)
+    if (result) return result
   } catch (e) {
     // ignore
   }

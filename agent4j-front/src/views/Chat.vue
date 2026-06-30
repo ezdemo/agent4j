@@ -96,17 +96,7 @@
       </div>
     </div>
 
-    <!-- 工作流状态面板（左侧指示条，仅会话选中时显示） -->
-    <div v-if="props.sessionName" class="workflow-dock">
-      <div class="dock-trigger" @mouseenter="loadWorkflow"></div>
-      <div v-if="workflowData" class="dock-body">
-        <WorkflowDagRenderer :data="workflowData" />
-      </div>
-      <div v-else class="dock-body dock-empty">
-        <span class="dock-empty-text">暂无工作流</span>
-        <button class="dock-empty-btn" @click="inputText = '/workflow create '">去创建</button>
-      </div>
-    </div>
+    <!-- 工作流 TODO 指示器（已迁移至 ChatInput 组件中） -->
 
     <!-- 消息缩略图 dock（右侧 dock 栏，仅用户消息） -->
     <div v-if="userMessages.length > 0" class="msg-thumb-dock">
@@ -253,7 +243,7 @@ import {sanitize} from '../utils/sanitize'
 import ChatInput from '../components/ChatInput.vue'
 import ChatMessage from '../components/ChatMessage.vue'
 import DiffViewer from '../components/DiffViewer.vue'
-import WorkflowDagRenderer from '../components/WorkflowDagRenderer.vue'
+
 import {useAppStore} from '../stores/app'
 
 // ============= 模型切换 =============
@@ -369,36 +359,7 @@ const usage = ref({
 const currentModel = ref('')
 const availableModels = ref([])
 
-// ==================== 工作流状态 ====================
-const workflowData = ref(null)
-const workflowLoading = ref(false)
-const workflowCollapsed = ref(false)
-
-const loadWorkflow = async () => {
-  if (!props.workspaceHash || !props.sessionName) {
-    workflowData.value = null
-    return
-  }
-  workflowLoading.value = true
-  try {
-    const { sessionsAPI } = await import('../services/api')
-    const res = await sessionsAPI.getWorkflow(props.sessionName, props.workspaceHash)
-    if (res.success && res.data) {
-      workflowData.value = res.data
-    } else {
-      workflowData.value = null
-    }
-  } catch (e) {
-    workflowData.value = null
-  } finally {
-    workflowLoading.value = false
-  }
-}
-
-// 监听会话变化，加载工作流
-watch([() => props.workspaceHash, () => props.sessionName], () => {
-  loadWorkflow()
-}, { immediate: true })
+// ==================== 工作流 TODO（已迁移至 ChatInput 组件中）====================
 
 const loadUsage = async (override) => {
   try {
@@ -1947,113 +1908,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   user-select: none;
 }
 
-/* ===== 工作流指示条（左侧边缘侧滑） ===== */
-.workflow-dock {
-  position: absolute;
-  left: 0;
-  top: 30%;
-  bottom: 30%;
-  z-index: 60;
-  width: min(85vw, 780px);
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.dock-trigger {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 10px;
-  pointer-events: auto;
-  cursor: default;
-  z-index: 2;
-}
-
-.dock-trigger::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 7px;
-  border-radius: 0 4px 4px 0;
-  background: var(--accent);
-  opacity: 0.5;
-  transition: opacity 0.25s ease;
-}
-
-.workflow-dock:has(.dock-trigger:hover) .dock-trigger::before,
-.workflow-dock:has(.dock-body:hover) .dock-trigger::before {
-  opacity: 0;
-}
-
-.dock-body {
-  position: absolute;
-  left: 12px;
-  top: 8px;
-  bottom: 8px;
-  right: 8px;
-  padding: 12px 16px;
-  overflow-y: auto;
-  pointer-events: auto;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
-  border-radius: var(--r-lg);
-  transform: translateX(calc(-100% - 12px));
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.25s ease;
-  opacity: 0;
-}
-
-.workflow-dock:has(.dock-trigger:hover) .dock-body,
-.workflow-dock:has(.dock-body:hover) .dock-body {
-  transform: translateX(0);
-  opacity: 1;
-}
-
-.dock-body :deep(.workflow-dag) {
-  border: none;
-  padding: 0;
-  background: transparent;
-}
-
-.dock-body :deep(.workflow-header) {
-  margin-bottom: 6px;
-  padding-bottom: 6px;
-}
-
-/* 空状态 */
-.dock-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  text-align: center;
-}
-
-.dock-empty-text {
-  font-size: 12px;
-  color: var(--fg-3);
-}
-
-.dock-empty-btn {
-  font-size: 11px;
-  color: var(--accent);
-  background: none;
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  padding: 3px 12px;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-}
-
-.dock-empty-btn:hover {
-  background: var(--accent);
-  color: #fff;
-}
+/* ===== 工作流 TODO（已迁移至 ChatInput 组件中） ===== */
 
 /* ===== 消息缩略图 dock（右侧 dock 栏） ===== */
 .msg-thumb-dock {
