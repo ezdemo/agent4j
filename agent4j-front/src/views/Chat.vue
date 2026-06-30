@@ -83,6 +83,8 @@
           @open-file="openFile"
       />
 
+
+
       <!-- 加载中：AI 准备中 -->
       <div v-if="waitingForAI" class="msg assistant">
         <div class="msg-body assistant-body">
@@ -121,40 +123,7 @@
       </svg>
     </button>
 
-    <!-- 子代理浮窗入口按钮 -->
-    <button v-if="hasSubAgentOutput" class="sub-float-btn" @click="subAgentModalOpen = true">
-      子代理
-      <span class="badge">{{ subAgentSessions.length }}</span>
-    </button>
 
-    <!-- 子代理 Modal -->
-    <Teleport to="body">
-      <div v-if="subAgentModalOpen" class="sub-modal-overlay" @click.self="subAgentModalOpen = false">
-        <div class="sub-modal">
-          <div class="sub-modal-head">
-            <h3>子代理输出</h3>
-            <button class="sub-modal-close" @click="subAgentModalOpen = false">&times;</button>
-          </div>
-          <div class="sub-modal-body" ref="subModalBody">
-            <template v-if="subAgentSessions.length === 0">
-              <div style="text-align:center;color:var(--fg-3);padding:40px 0;">暂无子代理输出</div>
-            </template>
-            <div class="sub-session">
-              <div class="sub-session-body">
-                <template v-for="(session, si) in subAgentSessions" :key="session.id">
-                  <ChatMessage
-                      :msg="{ role: 'assistant', blocks: session.blocks, id: session.id }"
-                      :idx="si"
-                      :snapshot-rollback-loading="{}"
-                      @copy-message="copyMessage"
-                  />
-                </template>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
 
     <!-- 系统提示词 Modal -->
     <Teleport to="body">
@@ -387,45 +356,6 @@ const loadUsage = async (override) => {
     }
   } catch {
   }
-}
-
-// ==================== 子代理 Modal 状态 ====================
-// 收集子代理的 sub_xxx 事件，在独立 Modal 中渲染，不占用主消息流
-const subAgentBlocks = ref([])        // 当前正在进行的子代理的 blocks
-const subAgentSessions = ref([])      // 已完成的子代理会话列表
-const subAgentModalOpen = ref(false)
-const subAgentModalTask = ref('')
-const subAgentSessionId = ref(0)      // 自增 ID
-const hasSubAgentOutput = computed(() => subAgentSessions.value.length > 0)
-const subModalBody = ref(null)        // 子代理 Modal 容器 ref，用于自动滚底
-
-// 子代理 Modal 内容变化时始终滚动到底部
-const scrollSubModalToBottom = async () => {
-  await nextTick()
-  await nextTick() // 两层 nextTick 确保 Vue 渲染完成
-  const el = subModalBody.value
-  if (el) el.scrollTop = el.scrollHeight
-}
-
-watch([subAgentSessions, subAgentBlocks], async () => {
-  if (subAgentModalOpen.value) {
-    await scrollSubModalToBottom()
-  }
-})
-
-// 打开 Modal 时滚动到底部（显示最新内容）
-watch(subAgentModalOpen, async (open) => {
-  if (open) {
-    await scrollSubModalToBottom()
-  }
-})
-
-// 切换会话/清空时重置子代理状态
-const resetSubAgentState = () => {
-  subAgentBlocks.value = []
-  subAgentSessions.value = []
-  subAgentSessionId.value = 0
-  subAgentModalOpen.value = false
 }
 
 // 日志通知列表（逐条堆叠，每条6秒后自动移除）
@@ -682,8 +612,6 @@ const sendMessage = async (images = [], overrideText = null) => {
   // 静默命令不显示用户气泡（系统命令、模式切换、HITL 审批等）
   const isSilent = SILENT_CMDS.has(firstWord)
 
-  // 每条新消息开始时重置子代理状态
-  resetSubAgentState()
 
   // 静默命令不显示用户气泡
   if (!isSilent) {
@@ -732,73 +660,82 @@ const sendMessage = async (images = [], overrideText = null) => {
 
           const msg = getMsg()
           if (!msg) return
-          // ===== 子代理事件（独立通道，不占用主消息流） =====
-          if (data.type === 'sub_content') {
-            const lb = subAgentBlocks.value[subAgentBlocks.value.length - 1]
-            if (lb?.type === 'content') lb.content += (data.content || '')
-            else subAgentBlocks.value.push({type: 'content', content: data.content || ''})
-          } else if (data.type === 'sub_reasoning') {
-            const lb = subAgentBlocks.value[subAgentBlocks.value.length - 1]
-            if (lb?.type === 'reasoning') lb.content += (data.content || '')
-            else subAgentBlocks.value.push({type: 'reasoning', content: data.content || '', showContent: false})
-          } else if (data.type === 'sub_tool_call') {
-            let name = data.name || '', args = data.args || data.arguments || ''
-            if (typeof args === 'string') try {
-              args = JSON.parse(args)
-            } catch {
+          // ===== 子代理事件：注入 sub_agent 容器块，内部渲染 =====
+          if (data.type === 'sub_content' || data.type === 'sub_reasoning' ||
+              data.type === 'sub_tool_call' || data.type === 'sub_error') {
+            // 获取或创建子代理容器块
+            let container = msg.blocks[msg.blocks.length - 1]
+            if (!container || container.type !== 'sub_agent') {
+              container = { type: 'sub_agent', blocks: [], status: '运行中', taskName: '子代理', expanded: true }
+              msg.blocks.push(container)
             }
-            subAgentBlocks.value.push({
-              type: 'tool_call',
-              name: name || 'unknown',
-              status: '执行中',
-              args,
-              result: '',
-              expanded: true
-            })
-          } else if (data.type === 'sub_tool_result') {
-            let result = data.result || data.content || ''
-            const rn = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
-            let targetName = data.name || ''
-            // 优先按 name 匹配（异步执行时完成顺序与调用顺序可能不同）
-            let matched = false
-            if (targetName) {
-              for (let i = subAgentBlocks.value.length - 1; i >= 0; i--) {
-                if (subAgentBlocks.value[i].type === 'tool_call' && subAgentBlocks.value[i].name === targetName && !subAgentBlocks.value[i].result) {
-                  subAgentBlocks.value[i].result = rn;
-                  subAgentBlocks.value[i].status = '成功';
-                  subAgentBlocks.value[i].expanded = false;
-                  matched = true
-                  break
-                }
+            // 向容器内添加内容
+            if (data.type === 'sub_content') {
+              const lb = container.blocks[container.blocks.length - 1]
+              if (lb?.type === 'content') lb.content += (data.content || '')
+              else container.blocks.push({type: 'content', content: data.content || ''})
+            } else if (data.type === 'sub_reasoning') {
+              const lb = container.blocks[container.blocks.length - 1]
+              if (lb?.type === 'reasoning') lb.content += (data.content || '')
+              else container.blocks.push({type: 'reasoning', content: data.content || '', showContent: false})
+            } else if (data.type === 'sub_tool_call') {
+              let name = data.name || '', args = data.args || data.arguments || ''
+              if (typeof args === 'string') try {
+                args = JSON.parse(args)
+              } catch {
               }
+              container.blocks.push({
+                type: 'tool_call',
+                name: name || 'unknown',
+                status: '执行中',
+                args,
+                result: '',
+                expanded: true
+              })
+            } else if (data.type === 'sub_error') {
+              const errText = data.error || data.content || '未知错误'
+              container.blocks.push({type: 'content', content: '❌ ' + errText})
             }
-            if (!matched) {
-              for (let i = subAgentBlocks.value.length - 1; i >= 0; i--) {
-                if (subAgentBlocks.value[i].type === 'tool_call' && !subAgentBlocks.value[i].result) {
-                  subAgentBlocks.value[i].result = rn;
-                  subAgentBlocks.value[i].status = '成功';
-                  subAgentBlocks.value[i].expanded = false;
-                  break
+          } else if (data.type === 'sub_tool_result') {
+            // 在最后一个子代理容器中匹配 tool_call
+            for (let i = msg.blocks.length - 1; i >= 0; i--) {
+              if (msg.blocks[i].type === 'sub_agent') {
+                const c = msg.blocks[i]
+                let result = data.result || data.content || ''
+                const rn = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
+                let targetName = data.name || ''
+                let matched = false
+                if (targetName) {
+                  for (let j = c.blocks.length - 1; j >= 0; j--) {
+                    if (c.blocks[j].type === 'tool_call' && c.blocks[j].name === targetName && !c.blocks[j].result) {
+                      c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].expanded = false
+                      matched = true; break
+                    }
+                  }
                 }
+                if (!matched) {
+                  for (let j = c.blocks.length - 1; j >= 0; j--) {
+                    if (c.blocks[j].type === 'tool_call' && !c.blocks[j].result) {
+                      c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].expanded = false
+                      break
+                    }
+                  }
+                }
+                break
               }
             }
           } else if (data.type === 'sub_complete') {
-            // 子代理完成 → 将当前 blocks 归档为一个会话
-            if (subAgentBlocks.value.length > 0) {
-              subAgentSessionId.value++
-              const taskName = data?.task || data?.content?.task || '子代理'
-              subAgentSessions.value.push({
-                id: subAgentSessionId.value,
-                taskName: typeof taskName === 'string' ? taskName : '子代理',
-                blocks: [...subAgentBlocks.value]
-              })
-              subAgentBlocks.value = []
+            // 标记子代理容器完成
+            for (let i = msg.blocks.length - 1; i >= 0; i--) {
+              if (msg.blocks[i].type === 'sub_agent') {
+                msg.blocks[i].status = '已完成'
+                msg.blocks[i].taskName = data?.task || msg.blocks[i].taskName || '子代理'
+                msg.blocks[i].expanded = false
+                break
+              }
             }
-          } else if (data.type === 'sub_error') {
-            const errText = data.error || data.content || '未知错误'
-            subAgentBlocks.value.push({type: 'content', content: '❌ ' + errText})
           } else if (data.type === 'sub_usage' || data.type === 'sub_choice' || data.type === 'sub_log') {
-            // 子代理用量/选择/日志暂不处理
+            // 暂不处理
             // ===== 普通主代理事件 =====
           } else if (data.type === 'reasoning') {
             const lb = msg.blocks[msg.blocks.length - 1]
@@ -1013,7 +950,6 @@ const rollbackSnapshot = async (msgId) => {
 
 const clearChat = async () => {
   store.clearSessionMessages(props.sessionName)
-  resetSubAgentState()
   // 发送 /new 给后端清空会话
   store.setSessionStreaming(props.sessionName, true)
   try {
@@ -1032,7 +968,6 @@ const clearChat = async () => {
 // 暴露给父组件的清空方法（/new 属于 SILENT_CMDS，不显示气泡）
 const clearMessages = () => {
   store.clearSessionMessages(props.sessionName)
-  resetSubAgentState()
   store.setSessionStreaming(props.sessionName, true)
   try {
     chatAPI.sendMessageStream('/new', () => {
@@ -1057,7 +992,6 @@ const continueChat = async () => {
 // 仅清空本地消息，不请求后端（配合 REST API 创建新会话时使用）
 const resetLocalMessages = () => {
   store.clearSessionMessages(props.sessionName)
-  resetSubAgentState()
 }
 
 const exportChat = () => {
@@ -1222,7 +1156,6 @@ const refreshHistory = async (name) => {
 
 const loadSession = async (name, workspaceHash) => {
   try {
-    resetSubAgentState()
     const {sessionsAPI} = await import('../services/api')
     await sessionsAPI.switchSession(name, workspaceHash)
     const existing = store.getSessionMessages(name)
@@ -1608,137 +1541,6 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   transform: translateY(-10px) scale(0.95);
 }
 
-
-/* ==================== 子代理 Modal ==================== */
-.sub-modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.sub-modal {
-  width: min(90vw, 860px);
-  height: min(85vh, 700px);
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--blur));
-  -webkit-backdrop-filter: blur(var(--blur));
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  box-shadow: var(--glass-shadow);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.sub-modal-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.sub-modal-head h3 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sub-modal-close {
-  background: none;
-  border: none;
-  color: var(--fg-3);
-  cursor: pointer;
-  font-size: 18px;
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-
-.sub-modal-close:hover {
-  background: var(--bg-2);
-  color: var(--fg);
-}
-
-.sub-modal-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-}
-
-/* 子代理会话卡片 */
-.sub-session {
-  margin-bottom: 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-  padding: 12px;
-}
-
-.sub-session-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  background: var(--bg-2);
-  border-bottom: 1px solid var(--border);
-  color: var(--fg-2);
-}
-
-.sub-session-body {
-  padding: 0;
-}
-
-.sub-session-task {
-  padding: 6px 12px 2px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--accent);
-}
-
-/* 浮动入口按钮 */
-.sub-float-btn {
-  position: fixed;
-  right: 24px;
-  bottom: 170px;
-  z-index: 100;
-  padding: 8px 14px;
-  border-radius: 20px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s ease;
-}
-
-.sub-float-btn:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-}
-
-.sub-float-btn .badge {
-  background: rgba(255, 255, 255, 0.25);
-  border-radius: 10px;
-  padding: 0 6px;
-  font-size: 11px;
-  min-width: 18px;
-  text-align: center;
-}
 
 /* ===== 系统提示词弹窗 ===== */
 .prompt-modal-overlay {

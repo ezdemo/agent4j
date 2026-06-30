@@ -270,6 +270,75 @@
       </div>
     </template>
 
+    <!-- 子代理块（工具调用风格折叠块） -->
+    <div v-else-if="block.type === 'sub_agent'" class="block-tool">
+      <div class="tool-head" @click="block.expanded = !block.expanded">
+        <span class="tool-icon default-icon 成功">
+          <span v-html="CHECK_ICON_SM"></span>
+        </span>
+        <code class="tool-name">子代理</code>
+        <span class="tool-status 成功">{{ block.status }}</span>
+        <span class="tool-param">{{ block.blocks?.length || 0 }} 步</span>
+        <span class="default-icon"
+              v-html="CHEVRON_DOWN_ICON"
+              :style="{
+                transform: block.expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                display: 'inline-block',
+                transition: 'transform 0.25s ease',
+                lineHeight: 0
+              }">
+        </span>
+      </div>
+      <div v-if="block.expanded" class="tool-group-detail">
+        <div v-for="(sb, sbi) in block.blocks" :key="sbi" class="tool-group-item-block">
+          <!-- 子代理内层工具 -->
+          <div v-if="sb.type === 'tool_call'" class="block-tool">
+            <div class="tool-head" @click="sb.expanded = !sb.expanded">
+              <span class="tool-icon default-icon" :class="sb.status">
+                <span v-if="sb.status === '执行中'" v-html="SPINNER_ICON"></span>
+                <span v-else-if="sb.status === '成功'" v-html="CHECK_ICON_SM"></span>
+                <span v-else v-html="CIRCLE_ICON"></span>
+              </span>
+              <code class="tool-name">{{ sb.name }}</code>
+              <span class="tool-status" :class="sb.status">{{ sb.status }}</span>
+              <span class="default-icon"
+                    v-html="CHEVRON_DOWN_ICON"
+                    :style="{
+                      transform: sb.expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                      display: 'inline-block',
+                      transition: 'transform 0.25s ease',
+                      lineHeight: 0
+                    }">
+              </span>
+            </div>
+            <div v-if="sb.expanded" class="tool-detail">
+              <pre v-if="sb.args"><code>{{ fmtArgs(sb.args) }}</code></pre>
+              <pre v-if="sb.result"><code>{{ sb.result }}</code></pre>
+            </div>
+          </div>
+          <!-- 子代理内层 reasoning -->
+          <div v-else-if="sb.type === 'reasoning'" class="block-reasoning">
+            <div class="reasoning-head" @click="sb.showContent = !sb.showContent">
+              <span class="default-icon" v-html="THINKING_ICON"></span>
+              <span>思考</span>
+              <span class="default-icon"
+                    v-html="CHEVRON_DOWN_ICON"
+                    :style="{
+                      transform: sb.showContent ? 'rotate(180deg)' : 'rotate(0deg)',
+                      display: 'inline-block',
+                      transition: 'transform 0.25s ease',
+                      lineHeight: 0
+                    }">
+              </span>
+            </div>
+            <div v-if="sb.showContent" class="reasoning-text" v-html="fmt(sb.content)"></div>
+          </div>
+          <!-- 子代理内层 content -->
+          <div v-else-if="sb.type === 'content' && sb.content" class="block-content" v-html="fmt(sb.content)"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- 选项按钮（choice） -->
     <div v-else-if="block.type === 'choice'" class="block-choice">
       <!-- 未选择：显示问题 + 选项卡片 -->
