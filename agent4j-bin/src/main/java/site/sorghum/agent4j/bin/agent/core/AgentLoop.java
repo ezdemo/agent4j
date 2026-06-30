@@ -108,6 +108,9 @@ public class AgentLoop implements AgentLoopController {
     /** 外部中断源（Runnable）—— 由父级 AgentLoopController 设置，子代理主循环会同步检查 */
     private volatile Runnable externalAbortSource = null;
 
+    /** 父级 AgentLoopController 引用（直接持有，用于 isAbortRequested() 中即时检测父级中断） */
+    private volatile AgentLoopController externalAbortController = null;
+
     /** 当前正在执行的工具 Future 数组（用于 abort 时取消） */
     private volatile CompletableFuture<ChatMessage>[] activeToolFutures = null;
 
@@ -208,10 +211,17 @@ public class AgentLoop implements AgentLoopController {
 
     /**
      * 检查用户是否已请求中断（供 AgentLoopController 接口实现）。
+     * <p>子代理中此方法还会同步检查父级的中断状态，确保在长工具执行期间也能及时响应父级中止。</p>
      */
     @Override
     public boolean isAbortRequested() {
-        return userAbortRequested;
+        if (userAbortRequested) return true;
+        // 子代理场景：直接检查父级是否已请求中断
+        if (externalAbortController != null && externalAbortController.isAbortRequested()) {
+            doAbort();
+            return true;
+        }
+        return false;
     }
 
     /** 重置用户中断标志（每回合开始时调用） */
@@ -239,8 +249,10 @@ public class AgentLoop implements AgentLoopController {
     public void setExternalAbortSource(AgentLoopController parentController) {
         if (parentController == null) {
             this.externalAbortSource = null;
+            this.externalAbortController = null;
             return;
         }
+        this.externalAbortController = parentController;
         // 捕获父级引用，创建轻量 Runnable：检查父级中断状态，若已中断则同步到本循环
         this.externalAbortSource = () -> {
             if (parentController.isAbortRequested() && !userAbortRequested) {
@@ -304,6 +316,11 @@ public class AgentLoop implements AgentLoopController {
     @Override
     public <T>T getToolRegistry() {
         return (T) registry;
+    }
+
+    @Override
+    public SessionService getSessionService() {
+        return this.sessionService;
     }
 
     // ==================== 内部辅助方法 ====================
@@ -1037,8 +1054,6 @@ public class AgentLoop implements AgentLoopController {
         ParsedToolCalls parsed = parseAndFilterToolCalls(tcArray);
         List<ONode> finalTcArray = parsed.nodeList();
 
-        TaskTool.clearUsageCollector();
-
         // 2. 异步并行分发
         DispatchResult dispatch = dispatchToolCallsAsync(finalTcArray);
 
@@ -1051,16 +1066,6 @@ public class AgentLoop implements AgentLoopController {
             hitlManager.setSandboxPending(toolCalls, hitlEx.getDetails());
             safeOutput("hitl", () -> output.onLog(LogLevel.WARN,
                     "[hitl] 沙箱越界触发强制审批: " + hitlEx.getDetails()));
-        }
-
-        // 5. 收集子代理 token 用量
-        if (sessionService != null) {
-            var subUsage = TaskTool.drainUsageCollector();
-            for (var ur : subUsage) {
-                sessionService.addUsage(ur.model(),
-                        (int) ur.prompt(), (int) ur.completion(),
-                        (int) ur.cacheHit(), (int) ur.cacheMiss());
-            }
         }
 
         return new ToolExecutionResult(parsed.tcList(), toolResults, dispatch.anySuppressed().get());
@@ -1116,6 +1121,11 @@ public class AgentLoop implements AgentLoopController {
         for (int i = 0; i < tcCount; i++) {
             final int idx = i;
             futures[i] = CompletableFuture.supplyAsync(() -> {
+                // 同步外部中断源（子代理检查父级 abort 状态，确保父级中断后工具不继续执行）
+                Runnable extAbort = externalAbortSource;
+                if (extAbort != null) {
+                    extAbort.run();
+                }
                 // 用户已中断 → 立即返回，不执行工具
                 if (userAbortRequested) {
                     ONode tc = tcArray.get(idx);
@@ -1160,6 +1170,7 @@ public class AgentLoop implements AgentLoopController {
                         return toolResult(toolCall.getId(), result);
                     }
                 } finally {
+                    ToolContext.clearCurrentController();
                     TaskTool.clearCurrentOutput();
                 }
             });

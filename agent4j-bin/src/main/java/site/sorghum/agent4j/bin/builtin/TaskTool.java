@@ -8,6 +8,7 @@ import org.noear.solon.annotation.Inject;
 import org.noear.solon.annotation.Param;
 import site.sorghum.agent4j.bin.agent.core.SubAgent;
 import site.sorghum.agent4j.bin.model.ModelClient;
+import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.tool.AgentLoopController;
 import site.sorghum.agent4j.tool.AgentOutput;
@@ -16,8 +17,6 @@ import site.sorghum.agent4j.tool.solon.SolonToTools;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Map;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Task 工具 —— 创建隔离子代理处理复杂多步任务。
@@ -62,52 +61,14 @@ public class TaskTool extends AbsToolProvider implements SolonToTools {
         PARENT_OUTPUT_TL.remove();
     }
 
-    // ==================== 子代理用量收集器 ====================
-
-    /**
-     * 全局用量收集队列，AgentLoop 在 dispatch 前清空、dispatch 后读取
-     * package-private 可见性
-     */
-    static final ConcurrentLinkedQueue<UsageRecord> subAgentUsageCollector = new ConcurrentLinkedQueue<>();
-
-    /**
-     * 添加用量记录
-     *
-     * @param record 用量记录
-     */
-    public static void addUsageRecord(UsageRecord record) {
-        if (record != null) {
-            subAgentUsageCollector.add(record);
-        }
-    }
-
     @Inject
     private ModelClient modelClient;
 
-    /**
-     * 清空收集器（在并行 dispatch 前调用）
-     */
-    public static void clearUsageCollector() {
-        subAgentUsageCollector.clear();
-    }
-
-    /**
-     * 获取收集器并清空（在并行 dispatch 完成后调用）
-     */
-    public static ConcurrentLinkedQueue<UsageRecord> drainUsageCollector() {
-        ConcurrentLinkedQueue<UsageRecord> drained = new ConcurrentLinkedQueue<>();
-        UsageRecord ur;
-        while ((ur = subAgentUsageCollector.poll()) != null) {
-            drained.add(ur);
-        }
-        return drained;
-    }
-
     @ToolMapping(name = "task", description = """
-                创建隔离子代理处理复杂多步任务。子代理有独立上下文，完成后返回结果给主代理。
-                适用于深入调查多个文件或独立功能实现。
-                参数: name(必填), arguments(可选), systemPrompt(可选)。可写。
-                注意：子代理不可再创建子代理（task 工具对子代理不可用）。
+                 创建隔离子代理处理复杂多步任务。子代理有独立上下文，完成后返回结果给主代理。
+                 适用于深入调查多个文件或独立功能实现。
+                 参数: name(必填), arguments(可选), systemPrompt(可选)。可写。
+                 注意：子代理不可再创建子代理（task 工具对子代理不可用）。
                 """)
     public String task(@Param(name = "name", description = "技能/任务名称，用于标识子代理的任务类型") String name,
                        @Param(name = "arguments", description = "技能参数描述/任务详情，作为子代理的初始指令", required = false) String arguments,
@@ -142,9 +103,11 @@ public class TaskTool extends AbsToolProvider implements SolonToTools {
                 }
                 // 注入工具使用指引（同父 Agent 的 buildToolInstructions）
                 sb.append("""
-                        编辑文件时使用 edit_file（SEARCH/REPLACE，search 必须唯一）。
-                        多文件批量编辑使用 multi_edit。
-                        不确定文件位置时用 glob/grep 搜索，需要构建/测试时用 run_command。
+                        编辑文件用 `edit`（SEARCH/REPLACE，search 必须唯一，先 `read` 确认内容）。
+                        批量编辑用 `edit`（单次调用多 edits）。
+                        不确定文件位置时用 `glob`/`grep`。
+                        需要构建/测试时用 `bash`。
+                        结束对话**必须**调用 `finish`，纯文本回复不会退出循环。
                         """.stripIndent().trim());
                 systemPrompt = sb.toString();
             }
@@ -160,15 +123,29 @@ public class TaskTool extends AbsToolProvider implements SolonToTools {
                 sub.setOutput(parentOutput);
             }
 
+            // 继承父级 sessionId 和 sessionService，使子代理的 tools 有正确的会话上下文
+            // 且子代理的 token 用量可直接上报，无需经过 static collector
+            String parentSessionId = ctx.getSessionId();
+            if (parentSessionId != null) {
+                sub.setSessionId(parentSessionId);
+            }
+            SessionService parentSessionService = (parentController != null) ? parentController.getSessionService() : null;
+            if (parentSessionService != null) {
+                sub.setSessionService(parentSessionService);
+            }
+
             String result = sub.run(arguments, new SubAgentListener());
 
-            // 将子代理的 token 用量报告给父会话
-            if (sub.hasUsage()) {
-                Map<String, long[]> usage = sub.getModelUsage();
-                for (Map.Entry<String, long[]> e : usage.entrySet()) {
+            // 子代理的 token 用量通过 SubAgent 的 capturingListener 累积到 SubAgent 字段中，
+            // 此处将其上报到父会话的 sessionService（累加到会话总用量）。
+            // sessionService.updateLastPromptTokens 已在子 AgentLoop 的 streamLLM 中调用。
+            // 注意：streamLLM 中调用的是 updateLastPromptTokens（更新最新 prompt tokens），
+            // 而非 addUsage（累加总量），所以这里需要用 SubAgent 累积的字段进行 addUsage。
+            if (sub.hasUsage() && parentSessionService != null) {
+                var usage = sub.getModelUsage();
+                for (var e : usage.entrySet()) {
                     long[] u = e.getValue();
-                    subAgentUsageCollector.add(new UsageRecord(
-                            e.getKey(), u[0], u[1], u[2], u[3]));
+                    parentSessionService.addUsage(e.getKey(), (int) u[0], (int) u[1], (int) u[2], (int) u[3]);
                 }
             }
 
@@ -193,11 +170,5 @@ public class TaskTool extends AbsToolProvider implements SolonToTools {
                 参数: name(必填), arguments(可选), systemPrompt(可选)。可写。
                 注意：子代理不可再创建子代理（task 工具对子代理不可用）。
                 """;
-    }
-
-    /**
-     * 用量记录（线程安全，用于跨 Future 收集）
-     */
-    public record UsageRecord(String model, long prompt, long completion, long cacheHit, long cacheMiss) {
     }
 }

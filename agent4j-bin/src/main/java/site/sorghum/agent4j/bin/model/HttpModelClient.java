@@ -761,6 +761,10 @@ public class HttpModelClient implements ModelClient {
                 body.set("reasoning_split", true);
                 body.set("stream_options",ONode.ofJson("{}").set("include_usage", true));
             }
+            if (model.toLowerCase().contains("glm")){
+                body.remove("enable_thinking");
+                body.remove("chat_template_kwargs");
+            }
         }
 
         ONode msgs = body.getOrNew(FIELD_MESSAGES).asArray();

@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.tool;
 
+import site.sorghum.agent4j.bin.session.SessionService;
+
 /**
  * AgentLoop 控制接口 —— 工具通过此接口影响推理循环的控制流。
  * <p>
@@ -79,4 +81,12 @@ public interface AgentLoopController {
      * 获取工具注册类
      */
     <T>T getToolRegistry();
+
+    /**
+     * 获取会话管理服务（可为 null，表示无会话持久化）。
+     * <p>子代理通过此接口向父会话上报 token 用量。</p>
+     */
+    default SessionService getSessionService() {
+        return null;
+    }
 }
