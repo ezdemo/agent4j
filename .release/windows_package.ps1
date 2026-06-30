@@ -61,15 +61,22 @@ foreach ($d in (Get-ChildItem -Path $StaticDir -Directory)) {
 Write-Host "[2/4] Clear done (config.json kept)." -ForegroundColor Green
 Write-Host ""
 
-# ---------- step 3: copy dist/renderer -> static ----------
-Write-Host "[3/4] Copy dist/renderer to static ..." -ForegroundColor Yellow
+# ---------- step 3: copy dist/renderer -> static (exclude config.json) ----------
+Write-Host "[3/4] Copy dist/renderer to static (exclude config.json) ..." -ForegroundColor Yellow
 if (-not (Test-Path $DistDir)) {
     Write-Host "[ERROR] dist/renderer dir not found: $DistDir" -ForegroundColor Red
     exit 1
 }
 
-Copy-Item -Path "$DistDir\*" -Destination $StaticDir -Recurse -Force -ErrorAction Stop
-Write-Host "[3/4] Copy done." -ForegroundColor Green
+foreach ($f in (Get-ChildItem -Path $DistDir -File)) {
+    if ($f.Name -ne "config.json") {
+        Copy-Item -Path $f.FullName -Destination $StaticDir -Force -ErrorAction Stop
+    }
+}
+foreach ($d in (Get-ChildItem -Path $DistDir -Directory)) {
+    Copy-Item -Path $d.FullName -Destination $StaticDir -Recurse -Force -ErrorAction Stop
+}
+Write-Host "[3/4] Copy done (config.json excluded)." -ForegroundColor Green
 Write-Host ""
 
 # ---------- step 4: Maven package ----------
