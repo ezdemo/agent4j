@@ -22,6 +22,9 @@ public class ToolRegistry {
 
     private final LinkedHashMap<String, FunctionTool> functionToolMap = new LinkedHashMap<>();
 
+    /** 所有扫描到的工具（包括禁用的），用于前端展示 */
+    private final LinkedHashMap<String, FunctionTool> allScannedTools = new LinkedHashMap<>();
+
     /** 缓存的 OpenAI tools 格式（refresh 时失效） */
     private ONode cachedOpenAiTools = null;
 
@@ -98,12 +101,16 @@ public class ToolRegistry {
     public void refresh() {
         Set<String> disabled = getCurrentDisabledTools();
         functionToolMap.clear();
+        allScannedTools.clear();
         cachedOpenAiTools = null; // 失效缓存
 
         // 使用 ToolScanUtil 统一扫描（Solon IoC + Skill 文件系统）
         List<FunctionTool> functionToolsList = ToolScanUtil.scanTools(workspace);
 
         for (FunctionTool tool : functionToolsList) {
+            // 保存所有扫描到的工具（包括禁用的）
+            allScannedTools.put(tool.name(), tool);
+
             if (disabled.contains(tool.name())) {
                 continue; // 跳过禁用工具
             }
@@ -153,14 +160,35 @@ public class ToolRegistry {
         for (FunctionTool def : this.functionToolMap.values()) {
             copy.functionToolMap.put(def.name(), def);
         }
+        for (FunctionTool def : this.allScannedTools.values()) {
+            copy.allScannedTools.put(def.name(), def);
+        }
         return copy;
     }
 
     /**
-     * 返回所有工具的不可变视图。
+     * 返回所有已启用工具的不可变视图。
      */
     public Map<String, FunctionTool> all() {
         return Collections.unmodifiableMap(functionToolMap);
+    }
+
+    /**
+     * 返回所有扫描到的工具（包括已禁用的）的不可变视图。
+     */
+    public Map<String, FunctionTool> allScanned() {
+        return Collections.unmodifiableMap(allScannedTools);
+    }
+
+    /**
+     * 判断指定工具当前是否已启用。
+     *
+     * @param toolName 工具名称
+     * @return true 表示已启用，false 表示已禁用
+     */
+    public boolean isEnabled(String toolName) {
+        Set<String> disabled = getCurrentDisabledTools();
+        return !disabled.contains(toolName) && !forceDenyTools.contains(toolName);
     }
 
     /**

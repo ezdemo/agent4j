@@ -111,7 +111,7 @@ public class ConfigController {
             // baseUrl/apiKey 已在上方处理，跳过
             if ("baseUrl".equals(key) || "apiKey".equals(key)) continue;
             // 只发布已知的运行时配置键
-            if ("model".equals(key) || "reasoningEffort".equals(key) || "hitl".equals(key)) {
+            if ("model".equals(key) || "reasoningEffort".equals(key) || "hitl".equals(key) || "disabledTools".equals(key)) {
                 Dami.bus().send("config.changed", new ConfigChangedEvent(key, entry.getValue()));
             }
         }

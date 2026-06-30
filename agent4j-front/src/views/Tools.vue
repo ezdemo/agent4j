@@ -92,6 +92,20 @@
           <div class="stat-label">风暴豁免</div>
         </div>
       </div>
+      
+      <div class="stat-card disabled-stat">
+        <div class="stat-icon disabled">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10"/>
+            <line x1="15" y1="9" x2="9" y2="15"/>
+            <line x1="9" y1="9" x2="15" y2="15"/>
+          </svg>
+        </div>
+        <div class="stat-content">
+          <div class="stat-value">{{ disabledToolsCount }}</div>
+          <div class="stat-label">已禁用</div>
+        </div>
+      </div>
     </div>
     
     <!-- 筛选器 -->
@@ -147,7 +161,10 @@
           v-for="tool in filteredTools" 
           :key="tool.name"
           class="tool-card"
-          :class="{ expanded: expandedTools.includes(tool.name) }"
+          :class="{ 
+            expanded: expandedTools.includes(tool.name),
+            disabled: !tool.enabled 
+          }"
         >
           <div class="tool-header" @click="toggleDetails(tool.name)">
             <div class="tool-info">
@@ -157,7 +174,10 @@
                 </svg>
               </div>
               <div class="tool-details">
-                <div class="tool-name">{{ tool.name }}</div>
+                <div class="tool-name">
+                  {{ tool.name }}
+                  <span v-if="!tool.enabled" class="badge disabled">已禁用</span>
+                </div>
                 <div class="tool-badges">
                   <span v-if="tool.readonly" class="badge readonly">只读</span>
                   <span v-if="tool.write" class="badge write">写入</span>
@@ -165,18 +185,31 @@
                 </div>
               </div>
             </div>
-            <svg 
-              width="16" 
-              height="16" 
-              viewBox="0 0 24 24" 
-              fill="none" 
-              stroke="currentColor" 
-              stroke-width="2"
-              class="expand-icon"
-              :class="{ expanded: expandedTools.includes(tool.name) }"
-            >
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
+            <div class="tool-actions" @click.stop>
+              <button 
+                class="toggle-btn"
+                :class="{ enabled: tool.enabled }"
+                :disabled="togglingTool === tool.name"
+                @click="toggleTool(tool)"
+                :title="tool.enabled ? '禁用此工具' : '启用此工具'"
+              >
+                <div class="toggle-track">
+                  <div class="toggle-thumb"></div>
+                </div>
+              </button>
+              <svg 
+                width="16" 
+                height="16" 
+                viewBox="0 0 24 24" 
+                fill="none" 
+                stroke="currentColor" 
+                stroke-width="2"
+                class="expand-icon"
+                :class="{ expanded: expandedTools.includes(tool.name) }"
+              >
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </div>
           </div>
           
           <div class="tool-description">{{ tool.description }}</div>
@@ -250,19 +283,22 @@ const loading = ref(false)
 const refreshing = ref(false)
 const error = ref('')
 const tools = ref([])
+const togglingTool = ref('')
 
 // 筛选器配置
 const filters = [
   { label: '全部', value: 'all', icon: '🔧' },
   { label: '只读', value: 'readonly', icon: '👁' },
   { label: '写入', value: 'write', icon: '✏️' },
-  { label: '豁免', value: 'exempt', icon: '🛡' }
+  { label: '豁免', value: 'exempt', icon: '🛡' },
+  { label: '已禁用', value: 'disabled', icon: '🚫' }
 ]
 
 // 计算属性
 const readonlyToolsCount = computed(() => tools.value.filter(t => t.readonly).length)
 const writeToolsCount = computed(() => tools.value.filter(t => t.write).length)
 const stormExemptCount = computed(() => tools.value.filter(t => t.stormExempt).length)
+const disabledToolsCount = computed(() => tools.value.filter(t => !t.enabled).length)
 
 const filteredTools = computed(() => {
   let result = tools.value
@@ -287,6 +323,9 @@ const filteredTools = computed(() => {
         break
       case 'exempt':
         result = result.filter(t => t.stormExempt)
+        break
+      case 'disabled':
+        result = result.filter(t => !t.enabled)
         break
     }
   }
@@ -314,6 +353,7 @@ const loadTools = async () => {
         readonly: tool.readonly || false,
         write: !tool.readonly || false,
         stormExempt: tool.stormExempt || false,
+        enabled: tool.enabled !== undefined ? tool.enabled : true,
         params: tool.parameters ? Object.entries(tool.parameters).map(([name, param]) => ({
           name,
           type: param.type || 'string',
@@ -345,6 +385,7 @@ const getDefaultTools = () => [
     readonly: true,
     write: false,
     stormExempt: true,
+    enabled: true,
     params: [
       { name: 'file_path', type: 'string', required: true, description: '文件相对路径（如 \"src/demo.md\"）或逻辑路径（如 \"@pool\"）。\".\" 表示当前根目录。' },
       { name: 'offset', type: 'int', required: false, description: '开始读取的行号（默认从1开始索引）' },
@@ -359,6 +400,7 @@ const getDefaultTools = () => [
     readonly: false,
     write: true,
     stormExempt: false,
+    enabled: true,
     params: [
       { name: 'file_path', type: 'string', required: true, description: '文件相对路径（如 \"src/demo.md\"）。\".\" 表示当前根目录。' },
       { name: 'edits', type: 'array', required: true, description: '编辑操作列表，每个元素包含 old_str、old_StrStartLine、new_str、replace_all' }
@@ -372,6 +414,7 @@ const getDefaultTools = () => [
     readonly: false,
     write: true,
     stormExempt: false,
+    enabled: true,
     params: [
       { name: 'file_path', type: 'string', required: true, description: '文件相对路径（如 \"src/demo.md\"）。\".\" 表示当前根目录。' },
       { name: 'content', type: 'string', required: true, description: '完整文本内容。' }
@@ -385,6 +428,7 @@ const getDefaultTools = () => [
     readonly: false,
     write: true,
     stormExempt: false,
+    enabled: true,
     params: [
       { name: 'command', type: 'string', required: true, description: '要执行的指令。' },
       { name: 'timeout', type: 'int', required: false, description: '可选超时时间，单位为毫秒（默认 120000）' }
@@ -407,6 +451,7 @@ const getFilterCount = (filter) => {
     case 'readonly': return readonlyToolsCount.value
     case 'write': return writeToolsCount.value
     case 'exempt': return stormExemptCount.value
+    case 'disabled': return disabledToolsCount.value
     default: return 0
   }
 }
@@ -423,6 +468,21 @@ const toggleDetails = (toolName) => {
 const resetFilters = () => {
   searchQuery.value = ''
   activeFilter.value = 'all'
+}
+
+// 切换工具启用/禁用状态
+const toggleTool = async (tool) => {
+  togglingTool.value = tool.name
+  try {
+    await toolsAPI.toggle(tool.name)
+    tool.enabled = !tool.enabled
+    // 刷新列表确保数据一致
+    await loadTools()
+  } catch (err) {
+    console.error('切换工具状态失败:', err)
+  } finally {
+    togglingTool.value = ''
+  }
 }
 
 // 生命周期
@@ -1094,4 +1154,97 @@ onMounted(() => {
   background: var(--bg-tertiary);
   border-color: var(--border);
 }
+
+/* ========== 禁用工具相关样式 ========== */
+
+/* 已禁用统计卡片 */
+.stat-icon.disabled {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+/* 已禁用工具卡片 */
+.tool-card.disabled {
+  opacity: 0.6;
+  border-color: var(--border-muted);
+}
+
+.tool-card.disabled:hover {
+  border-color: var(--border-muted);
+  box-shadow: none;
+}
+
+.tool-card.disabled .tool-name {
+  text-decoration: line-through;
+  opacity: 0.7;
+}
+
+/* 已禁用徽标 */
+.badge.disabled {
+  background: var(--danger-bg);
+  color: var(--danger);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-sm);
+  margin-left: 0.4rem;
+}
+
+/* 工具卡片右侧操作区 */
+.tool-actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+/* 切换开关 */
+.toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+}
+
+.toggle-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toggle-track {
+  width: 36px;
+  height: 20px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  position: relative;
+  transition: all var(--transition-fast);
+}
+
+.toggle-btn.enabled .toggle-track {
+  background: var(--success);
+  border-color: var(--success);
+}
+
+.toggle-thumb {
+  width: 16px;
+  height: 16px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: all var(--transition-fast);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+
+.toggle-btn.enabled .toggle-thumb {
+  left: 18px;
+}
+
+.toggle-btn:hover .toggle-thumb {
+  box-shadow: 0 1px 4px rgba(0,0,0,0.3);
+}
+
 </style>
