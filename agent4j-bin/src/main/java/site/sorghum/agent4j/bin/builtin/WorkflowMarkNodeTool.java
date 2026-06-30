@@ -28,11 +28,6 @@ public class WorkflowMarkNodeTool extends AbsToolProvider implements SolonToTool
 
     @ToolMapping(name = "workflow_mark_node", description = """
                 标记当前会话工作流中的某个节点为"已完成"。
-                每完成一个节点后调用此工具，参数传入节点ID。
-                如果所有节点都已完成，工作流会自动标记为已完成。
-                注意：对于 CONDITION 类型节点，必须传入 conditionResult 参数（值为选中的目标节点ID，如 "n4"），
-                系统会自动跳过其他未选中的分支。
-                注意：对于 LOOP 类型节点，必须传入 loopResult 参数（"continue" 继续循环 或 "break" 退出循环）。
                 """)
     public String workflowMarkNode(@Param(name = "nodeId", description = "已完成的节点ID（如 'n1', 'n2'）") String nodeId,
                                    @Param(name = "result", description = "该节点的执行结果摘要，记录在工作流中供后续查阅", required = false) String result,
@@ -174,9 +169,13 @@ public class WorkflowMarkNodeTool extends AbsToolProvider implements SolonToTool
     @Override
     public String getSystemPrompt() {
         return """
-                标记当前会话工作流中的某个节点为"已完成"。
+                ## workflow_mark_node
+                
                 每完成一个节点后调用此工具，参数传入节点ID。
                 如果所有节点都已完成，工作流会自动标记为已完成。
+                注意：对于 CONDITION 类型节点，必须传入 conditionResult 参数（值为选中的目标节点ID，如 "n4"），
+                系统会自动跳过其他未选中的分支。
+                注意：对于 LOOP 类型节点，必须传入 loopResult 参数（"continue" 继续循环 或 "break" 退出循环）。
                 """;
     }
 }

@@ -186,6 +186,8 @@ public class TaskTool extends AbsToolProvider implements SolonToTools {
     @Override
     public String getSystemPrompt() {
         return """
+                ## Task 工具
+                
                 创建隔离子代理处理复杂多步任务。子代理有独立上下文，完成后返回结果给主代理。
                 适用于深入调查多个文件或独立功能实现。
                 参数: name(必填), arguments(可选), systemPrompt(可选)。可写。

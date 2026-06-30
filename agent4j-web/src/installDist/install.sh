@@ -255,6 +255,15 @@ if [ -f "$SOURCE_AGENTS" ]; then
     echo "      Copied agent4j.md"
 fi
 
+# 复制 plugin 目录（先清空再覆盖）
+SOURCE_PLUGIN="$SOURCE_DIR/plugin"
+TARGET_PLUGIN="$TARGET_DIR/plugin"
+if [ -d "$SOURCE_PLUGIN" ]; then
+    rm -rf "$TARGET_PLUGIN" 2>/dev/null || true
+    cp -R "$SOURCE_PLUGIN" "$TARGET_PLUGIN" 2>/dev/null || true
+    echo "      Copied plugin/ directory"
+fi
+
 # =============================================
 # [4/5] 恢复 config.json 和 agent4j.md（如果之前存在）
 # =============================================

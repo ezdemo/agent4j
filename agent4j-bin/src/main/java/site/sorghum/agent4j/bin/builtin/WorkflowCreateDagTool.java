@@ -33,213 +33,7 @@ public class WorkflowCreateDagTool extends AbsToolProvider implements SolonToToo
 
     @ToolMapping(name = "workflow_create_dag", description = """
             创建一个完整的工作流 DAG（有向无环图）结构。
-            
-            使用场景：
-            - 当用户要求创建一个复杂的工作流时
-            - 当任务需要条件分支或并行执行时
-            - 当需要明确的依赖关系时
-            - 当子任务需要隔离的子代理执行时
-            
-            ═══════════════════════════════════════════════
-            参数说明
-            ═══════════════════════════════════════════════
-            - title: 工作流标题
-            - description: 工作流详细描述
-            - nodesJson: 节点数组的 JSON 字符串
-            - edgesJson: 边数组的 JSON 字符串
-            
-            ═══════════════════════════════════════════════
-            节点类型（type）
-            ═══════════════════════════════════════════════
-            - ACTION:    普通动作（默认）。直接执行，适合简单任务（创建文件、运行命令等）
-            - PARALLEL:  并行 fork 点。系统并发执行 parallelBranches 中的所有分支
-            - CONDITION: 条件判断。系统自动评估条件并选择一个后继分支
-            - SUBFLOW:   子代理执行。适合复杂任务（需求分析、架构设计、多步推理），会自动创建子代理
-            - HITL:      人工审批。暂停工作流等待用户 approve/deny
-            - LOOP:      循环控制。支持重试直到成功、迭代处理等循环场景，需设置 loopTarget、maxIterations、breakCondition
-            （start 和 end 节点由系统自动生成，不需要你创建）
-            
-            ═══════════════════════════════════════════════
-            边类型（type）
-            ═══════════════════════════════════════════════
-            - NORMAL:           普通依赖（默认）
-            - CONDITION_SELECT: 条件选择边（用于 CONDITION 节点的 N 路分支）
-            - CONDITION_TRUE:   条件为真（兼容旧版，推荐用 CONDITION_SELECT）
-            - CONDITION_FALSE:  条件为假（兼容旧版，推荐用 CONDITION_SELECT）
-            - LOOP_BACK:        循环回边（LOOP 节点到循环体起始节点，必填）
-            边额外字段：
-            - label: 边标签（可选，用于 CONDITION_SELECT 标注分支含义，如 "通过"/"失败"）
-            
-            ═══════════════════════════════════════════════
-            节点额外字段
-            ═══════════════════════════════════════════════
-            PARALLEL 节点：
-            - parallelBranches: ["n2", "n3"]  并行分支的起始节点ID列表（必填）
-            
-            CONDITION 节点：
-            - condition: "描述判断条件"  条件表达式（必填）
-            
-            HITL 节点：
-            - approvalPrompt: "审批提示文本"
-            
-            LOOP 节点：
-            - loopTarget: "n2"  循环体起始节点ID（必填）
-            - maxIterations: 10  最大迭代次数（可选，默认10，防死循环）
-            - breakCondition: "退出条件描述"  循环退出条件（必填）
-            
-            ═══════════════════════════════════════════════
-            ⭐ DAG 构建规则（重要！）
-            ═══════════════════════════════════════════════
-            
-            1. 【基本结构】
-               - start 和 end 节点由系统自动添加，不要在 nodes 中创建
-               - 必须有从 start 出发的边和到达 end 的边
-               - 所有节点必须可达（不能有孤立节点）
-               - 不能有循环依赖
-            
-            2. 【串行流程】
-               start → n1 → n2 → n3 → end
-               edges: [{"from":"start","to":"n1"}, {"from":"n1","to":"n2"}, {"from":"n2","to":"n3"}, {"from":"n3","to":"end"}]
-            
-            3. 【并行分支】⭐
-               用 PARALLEL 节点作为 fork 点，parallelBranches 列出并行分支起始节点。
-               汇聚节点用多个入边实现 join（系统自动等待所有前驱完成）。
-               
-               示例：并行开发前端和后端，然后集成测试
-               ```
-               nodes: [
-                 {"id":"n1","description":"设计","type":"ACTION"},
-                 {"id":"n_fork","description":"并行开发","type":"PARALLEL","parallelBranches":["n2","n3"]},
-                 {"id":"n2","description":"前端开发","type":"ACTION"},
-                 {"id":"n3","description":"后端开发","type":"ACTION"},
-                 {"id":"n4","description":"集成测试","type":"ACTION"}
-               ]
-               edges: [
-                 {"from":"start","to":"n1"},
-                 {"from":"n1","to":"n_fork"},
-                 {"from":"n_fork","to":"n2"},
-                 {"from":"n_fork","to":"n3"},
-                 {"from":"n2","to":"n4"},
-                 {"from":"n3","to":"n4"},
-                 {"from":"n4","to":"end"}
-               ]
-               ```
-               关键：n4 有两个入边（n2→n4, n3→n4），系统自动等待 n2 和 n3 都完成才执行 n4。
-            
-            4. 【多条件分支】⭐
-               用 CONDITION 节点 + CONDITION_SELECT 边实现 N 路分支。
-               系统通过子代理评估条件，选择一个分支执行，自动跳过其他分支。
-               
-               示例：测试结果判断（3 个分支）
-               ```
-               nodes: [
-                 {"id":"n1","description":"运行测试","type":"ACTION"},
-                 {"id":"n_cond","description":"评估测试结果","type":"CONDITION","condition":"测试通过率"},
-                 {"id":"n_pass","description":"部署","type":"ACTION"},
-                 {"id":"n_fail","description":"修复失败用例","type":"ACTION"},
-                 {"id":"n_rollback","description":"回滚","type":"ACTION"}
-               ]
-               edges: [
-                 {"from":"start","to":"n1"},
-                 {"from":"n1","to":"n_cond"},
-                 {"from":"n_cond","to":"n_pass","type":"CONDITION_SELECT","label":"全部通过"},
-                 {"from":"n_cond","to":"n_fail","type":"CONDITION_SELECT","label":"部分失败"},
-                 {"from":"n_cond","to":"n_rollback","type":"CONDITION_SELECT","label":"严重失败"},
-                 {"from":"n_pass","to":"end"},
-                 {"from":"n_fail","to":"end"},
-                 {"from":"n_rollback","to":"end"}
-               ]
-               ```
-               关键：条件分支的汇聚节点（如 end）同样用多入边 join。
-            
-            5. 【ACTION vs SUBFLOW】⭐
-               ACTION: 直接执行，LLM 自己做。适合简单任务（创建文件、运行命令、写配置等）。
-               SUBFLOW: 创建子代理执行。适合复杂任务（需求分析、架构设计、大规模重构等需要深度推理的场景）。
-               
-               大多数节点用 ACTION 就够了，只有真正复杂的任务才用 SUBFLOW。
-               
-               示例：
-               ```
-               nodes: [
-                 {"id":"n1","description":"分析需求文档，输出 API 接口规范","type":"SUBFLOW"},
-                 {"id":"n2","description":"根据规范创建数据库表","type":"ACTION"},
-                 {"id":"n3","description":"实现 API 接口","type":"ACTION"}
-               ]
-               ```
-            
-            6. 【人工审批】
-               HITL 节点会暂停工作流，等待用户通过 /workflow approve 或 /workflow deny 操作。
-               
-               ```
-               nodes: [
-                 {"id":"n1","description":"生成部署方案","type":"ACTION"},
-                 {"id":"n2","description":"人工确认部署","type":"HITL","approvalPrompt":"确认部署到生产环境？"},
-                 {"id":"n3","description":"执行部署","type":"ACTION"}
-               ]
-               ```
-            
-            7. 【循环控制】⭐
-                用 LOOP 节点 + LOOP_BACK 边实现循环。LOOP 节点每轮评估是否继续循环。
-                LOOP_BACK 边从循环体末尾指回 LOOP 节点，系统自动重置循环体节点为下一次迭代。
-
-                示例：重试调用 API 直到成功（最多 5 次）
-                ```
-                nodes: [
-                  {"id":"n_loop","description":"重试直到 API 调用成功","type":"LOOP","loopTarget":"n_retry","maxIterations":5,"breakCondition":"API 调用成功"},
-                  {"id":"n_retry","description":"调用外部 API","type":"ACTION"},
-                  {"id":"n_ok","description":"处理成功结果","type":"ACTION"}
-                ]
-                edges: [
-                  {"from":"start","to":"n_loop"},
-                  {"from":"n_loop","to":"n_retry"},
-                  {"from":"n_retry","to":"n_loop","type":"LOOP_BACK"},
-                  {"from":"n_loop","to":"n_ok"},
-                  {"from":"n_ok","to":"end"}
-                ]
-                ```
-                关键：n_loop 有两条出边——到 n_retry（循环体）和到 n_ok（退出循环）。
-                n_retry 通过 LOOP_BACK 边指回 n_loop，每轮迭代完成后系统重置 n_retry 并重新评估 LOOP。
-
-             8. 【综合示例】（并发 + 多条件 + 子代理）
-               用户需求："分析需求，并行开发前后端，测试通过后人工确认部署"
-               ```
-               nodes: [
-                 {"id":"n1","description":"分析需求文档，输出设计文档","type":"SUBFLOW"},
-                 {"id":"n_fork","description":"并行开发","type":"PARALLEL","parallelBranches":["n2","n3"]},
-                 {"id":"n2","description":"实现前端页面","type":"ACTION"},
-                 {"id":"n3","description":"实现后端 API","type":"ACTION"},
-                 {"id":"n4","description":"运行集成测试","type":"ACTION"},
-                 {"id":"n_cond","description":"评估测试结果","type":"CONDITION","condition":"集成测试是否全部通过"},
-                 {"id":"n5","description":"确认部署","type":"HITL","approvalPrompt":"测试已通过，确认部署到生产？"},
-                 {"id":"n6","description":"修复失败的用例","type":"ACTION"}
-               ]
-               edges: [
-                 {"from":"start","to":"n1"},
-                 {"from":"n1","to":"n_fork"},
-                 {"from":"n_fork","to":"n2"},
-                 {"from":"n_fork","to":"n3"},
-                 {"from":"n2","to":"n4"},
-                 {"from":"n3","to":"n4"},
-                 {"from":"n4","to":"n_cond"},
-                 {"from":"n_cond","to":"n5","type":"CONDITION_SELECT","label":"全部通过"},
-                 {"from":"n_cond","to":"n6","type":"CONDITION_SELECT","label":"有失败"},
-                 {"from":"n5","to":"end"},
-                 {"from":"n6","to":"end"}
-               ]
-               ```
-            
-            ═══════════════════════════════════════════════
-            常见错误（请避免）
-            ═══════════════════════════════════════════════
-            ❌ 在 nodes 中创建 start 或 end 节点（系统自动添加）
-            ❌ PARALLEL 节点没有 parallelBranches 字段
-            ❌ CONDITION 节点没有 condition 字段
-            ❌ 条件分支用 NORMAL 边而不是 CONDITION_SELECT 边
-            ❌ 并行分支的汇聚节点缺少某个分支的入边（会导致 join 不完整）
-            ❌ 节点之间存在循环依赖（必须通过 LOOP + LOOP_BACK 实现循环）
-            ❌ LOOP 节点没有 loopTarget 或 breakCondition 字段
-            ❌ LOOP_BACK 边的目标不是 LOOP 节点
-            ❌ 节点描述过于笼统（如"处理数据"，应该具体到"解析 CSV 文件并计算统计值"）
+         
             """)
     public String workflowCreateDag(
             @Param(name = "title", description = "工作流标题") String title,
@@ -680,9 +474,214 @@ public class WorkflowCreateDagTool extends AbsToolProvider implements SolonToToo
     @Override
     public String getSystemPrompt() {
         return """
-                创建一个完整的工作流 DAG（有向无环图）结构。
-                当用户要求创建复杂的工作流、需要条件分支或并行执行时使用此工具。
-                支持 ACTION/PARALLEL/CONDITION/SUBFLOW/HITL 五种节点类型。
-                """;
+            ## workflow_create_dag
+            
+            创建工作流 DAG 图。
+            使用场景：
+            - 当用户要求创建一个复杂的工作流时
+            - 当任务需要条件分支或并行执行时
+            - 当需要明确的依赖关系时
+            - 当子任务需要隔离的子代理执行时
+            
+            ═══════════════════════════════════════════════
+            参数说明
+            ═══════════════════════════════════════════════
+            - title: 工作流标题
+            - description: 工作流详细描述
+            - nodesJson: 节点数组的 JSON 字符串
+            - edgesJson: 边数组的 JSON 字符串
+            
+            ═══════════════════════════════════════════════
+            节点类型（type）
+            ═══════════════════════════════════════════════
+            - ACTION:    普通动作（默认）。直接执行，适合简单任务（创建文件、运行命令等）
+            - PARALLEL:  并行 fork 点。系统并发执行 parallelBranches 中的所有分支
+            - CONDITION: 条件判断。系统自动评估条件并选择一个后继分支
+            - SUBFLOW:   子代理执行。适合复杂任务（需求分析、架构设计、多步推理），会自动创建子代理
+            - HITL:      人工审批。暂停工作流等待用户 approve/deny
+            - LOOP:      循环控制。支持重试直到成功、迭代处理等循环场景，需设置 loopTarget、maxIterations、breakCondition
+            （start 和 end 节点由系统自动生成，不需要你创建）
+            
+            ═══════════════════════════════════════════════
+            边类型（type）
+            ═══════════════════════════════════════════════
+            - NORMAL:           普通依赖（默认）
+            - CONDITION_SELECT: 条件选择边（用于 CONDITION 节点的 N 路分支）
+            - CONDITION_TRUE:   条件为真（兼容旧版，推荐用 CONDITION_SELECT）
+            - CONDITION_FALSE:  条件为假（兼容旧版，推荐用 CONDITION_SELECT）
+            - LOOP_BACK:        循环回边（LOOP 节点到循环体起始节点，必填）
+            边额外字段：
+            - label: 边标签（可选，用于 CONDITION_SELECT 标注分支含义，如 "通过"/"失败"）
+            
+            ═══════════════════════════════════════════════
+            节点额外字段
+            ═══════════════════════════════════════════════
+            PARALLEL 节点：
+            - parallelBranches: ["n2", "n3"]  并行分支的起始节点ID列表（必填）
+            
+            CONDITION 节点：
+            - condition: "描述判断条件"  条件表达式（必填）
+            
+            HITL 节点：
+            - approvalPrompt: "审批提示文本"
+            
+            LOOP 节点：
+            - loopTarget: "n2"  循环体起始节点ID（必填）
+            - maxIterations: 10  最大迭代次数（可选，默认10，防死循环）
+            - breakCondition: "退出条件描述"  循环退出条件（必填）
+            
+            ═══════════════════════════════════════════════
+            ⭐ DAG 构建规则（重要！）
+            ═══════════════════════════════════════════════
+            
+            1. 【基本结构】
+               - start 和 end 节点由系统自动添加，不要在 nodes 中创建
+               - 必须有从 start 出发的边和到达 end 的边
+               - 所有节点必须可达（不能有孤立节点）
+               - 不能有循环依赖
+            
+            2. 【串行流程】
+               start → n1 → n2 → n3 → end
+               edges: [{"from":"start","to":"n1"}, {"from":"n1","to":"n2"}, {"from":"n2","to":"n3"}, {"from":"n3","to":"end"}]
+            
+            3. 【并行分支】⭐
+               用 PARALLEL 节点作为 fork 点，parallelBranches 列出并行分支起始节点。
+               汇聚节点用多个入边实现 join（系统自动等待所有前驱完成）。
+               
+               示例：并行开发前端和后端，然后集成测试
+               ```
+               nodes: [
+                 {"id":"n1","description":"设计","type":"ACTION"},
+                 {"id":"n_fork","description":"并行开发","type":"PARALLEL","parallelBranches":["n2","n3"]},
+                 {"id":"n2","description":"前端开发","type":"ACTION"},
+                 {"id":"n3","description":"后端开发","type":"ACTION"},
+                 {"id":"n4","description":"集成测试","type":"ACTION"}
+               ]
+               edges: [
+                 {"from":"start","to":"n1"},
+                 {"from":"n1","to":"n_fork"},
+                 {"from":"n_fork","to":"n2"},
+                 {"from":"n_fork","to":"n3"},
+                 {"from":"n2","to":"n4"},
+                 {"from":"n3","to":"n4"},
+                 {"from":"n4","to":"end"}
+               ]
+               ```
+               关键：n4 有两个入边（n2→n4, n3→n4），系统自动等待 n2 和 n3 都完成才执行 n4。
+            
+            4. 【多条件分支】⭐
+               用 CONDITION 节点 + CONDITION_SELECT 边实现 N 路分支。
+               系统通过子代理评估条件，选择一个分支执行，自动跳过其他分支。
+               
+               示例：测试结果判断（3 个分支）
+               ```
+               nodes: [
+                 {"id":"n1","description":"运行测试","type":"ACTION"},
+                 {"id":"n_cond","description":"评估测试结果","type":"CONDITION","condition":"测试通过率"},
+                 {"id":"n_pass","description":"部署","type":"ACTION"},
+                 {"id":"n_fail","description":"修复失败用例","type":"ACTION"},
+                 {"id":"n_rollback","description":"回滚","type":"ACTION"}
+               ]
+               edges: [
+                 {"from":"start","to":"n1"},
+                 {"from":"n1","to":"n_cond"},
+                 {"from":"n_cond","to":"n_pass","type":"CONDITION_SELECT","label":"全部通过"},
+                 {"from":"n_cond","to":"n_fail","type":"CONDITION_SELECT","label":"部分失败"},
+                 {"from":"n_cond","to":"n_rollback","type":"CONDITION_SELECT","label":"严重失败"},
+                 {"from":"n_pass","to":"end"},
+                 {"from":"n_fail","to":"end"},
+                 {"from":"n_rollback","to":"end"}
+               ]
+               ```
+               关键：条件分支的汇聚节点（如 end）同样用多入边 join。
+            
+            5. 【ACTION vs SUBFLOW】⭐
+               ACTION: 直接执行，LLM 自己做。适合简单任务（创建文件、运行命令、写配置等）。
+               SUBFLOW: 创建子代理执行。适合复杂任务（需求分析、架构设计、大规模重构等需要深度推理的场景）。
+               
+               大多数节点用 ACTION 就够了，只有真正复杂的任务才用 SUBFLOW。
+               
+               示例：
+               ```
+               nodes: [
+                 {"id":"n1","description":"分析需求文档，输出 API 接口规范","type":"SUBFLOW"},
+                 {"id":"n2","description":"根据规范创建数据库表","type":"ACTION"},
+                 {"id":"n3","description":"实现 API 接口","type":"ACTION"}
+               ]
+               ```
+            
+            6. 【人工审批】
+               HITL 节点会暂停工作流，等待用户通过 /workflow approve 或 /workflow deny 操作。
+               
+               ```
+               nodes: [
+                 {"id":"n1","description":"生成部署方案","type":"ACTION"},
+                 {"id":"n2","description":"人工确认部署","type":"HITL","approvalPrompt":"确认部署到生产环境？"},
+                 {"id":"n3","description":"执行部署","type":"ACTION"}
+               ]
+               ```
+            
+            7. 【循环控制】⭐
+                用 LOOP 节点 + LOOP_BACK 边实现循环。LOOP 节点每轮评估是否继续循环。
+                LOOP_BACK 边从循环体末尾指回 LOOP 节点，系统自动重置循环体节点为下一次迭代。
+
+                示例：重试调用 API 直到成功（最多 5 次）
+                ```
+                nodes: [
+                  {"id":"n_loop","description":"重试直到 API 调用成功","type":"LOOP","loopTarget":"n_retry","maxIterations":5,"breakCondition":"API 调用成功"},
+                  {"id":"n_retry","description":"调用外部 API","type":"ACTION"},
+                  {"id":"n_ok","description":"处理成功结果","type":"ACTION"}
+                ]
+                edges: [
+                  {"from":"start","to":"n_loop"},
+                  {"from":"n_loop","to":"n_retry"},
+                  {"from":"n_retry","to":"n_loop","type":"LOOP_BACK"},
+                  {"from":"n_loop","to":"n_ok"},
+                  {"from":"n_ok","to":"end"}
+                ]
+                ```
+                关键：n_loop 有两条出边——到 n_retry（循环体）和到 n_ok（退出循环）。
+                n_retry 通过 LOOP_BACK 边指回 n_loop，每轮迭代完成后系统重置 n_retry 并重新评估 LOOP。
+
+             8. 【综合示例】（并发 + 多条件 + 子代理）
+               用户需求："分析需求，并行开发前后端，测试通过后人工确认部署"
+               ```
+               nodes: [
+                 {"id":"n1","description":"分析需求文档，输出设计文档","type":"SUBFLOW"},
+                 {"id":"n_fork","description":"并行开发","type":"PARALLEL","parallelBranches":["n2","n3"]},
+                 {"id":"n2","description":"实现前端页面","type":"ACTION"},
+                 {"id":"n3","description":"实现后端 API","type":"ACTION"},
+                 {"id":"n4","description":"运行集成测试","type":"ACTION"},
+                 {"id":"n_cond","description":"评估测试结果","type":"CONDITION","condition":"集成测试是否全部通过"},
+                 {"id":"n5","description":"确认部署","type":"HITL","approvalPrompt":"测试已通过，确认部署到生产？"},
+                 {"id":"n6","description":"修复失败的用例","type":"ACTION"}
+               ]
+               edges: [
+                 {"from":"start","to":"n1"},
+                 {"from":"n1","to":"n_fork"},
+                 {"from":"n_fork","to":"n2"},
+                 {"from":"n_fork","to":"n3"},
+                 {"from":"n2","to":"n4"},
+                 {"from":"n3","to":"n4"},
+                 {"from":"n4","to":"n_cond"},
+                 {"from":"n_cond","to":"n5","type":"CONDITION_SELECT","label":"全部通过"},
+                 {"from":"n_cond","to":"n6","type":"CONDITION_SELECT","label":"有失败"},
+                 {"from":"n5","to":"end"},
+                 {"from":"n6","to":"end"}
+               ]
+               ```
+            
+            ═══════════════════════════════════════════════
+            常见错误（请避免）
+            ═══════════════════════════════════════════════
+            ❌ 在 nodes 中创建 start 或 end 节点（系统自动添加）
+            ❌ PARALLEL 节点没有 parallelBranches 字段
+            ❌ CONDITION 节点没有 condition 字段
+            ❌ 条件分支用 NORMAL 边而不是 CONDITION_SELECT 边
+            ❌ 并行分支的汇聚节点缺少某个分支的入边（会导致 join 不完整）
+            ❌ 节点之间存在循环依赖（必须通过 LOOP + LOOP_BACK 实现循环）
+            ❌ LOOP 节点没有 loopTarget 或 breakCondition 字段
+            ❌ LOOP_BACK 边的目标不是 LOOP 节点
+            ❌ 节点描述过于笼统（如"处理数据"，应该具体到"解析 CSV 文件并计算统计值"）""";
     }
 }
