@@ -390,32 +390,29 @@ public class AgentLoop implements AgentLoopController {
                 | allowCustom | 否 | 是否允许自定义输入，默认 false |
                 
                 
-                ### workflow_create_dag — 创建工作流 DAG
-                创建复杂工作流（有向无环图），支持条件分支和并行执行。
+                ### workflow_start — 创建工作流
+                创建有序步骤工作流。适合多步骤跟踪、人工审批、失败恢复场景。
                 | 参数 | 必填 | 说明 |
                 |------|------|------|
                 | title | 是 | 工作流标题 |
                 | description | 是 | 工作流详细描述 |
-                | nodesJson | 是 | 节点数组 JSON：`[{id, description, type?, condition?}]` |
-                | edgesJson | 是 | 边数组 JSON：`[{from, to, type?}]` |
+                | steps | 是 | 步骤数组 JSON，如 `[{"description":"分析需求","kind":"step"},{"description":"人工确认","kind":"hitl"}]` |
                 
                 ---
                 
-                ### workflow_visualize — 查看工作流
-                可视化查看当前会话的工作流结构（节点列表、依赖关系和执行状态）。
+                ### workflow_step — 标记步骤完成
+                标记当前步骤完成/失败/跳过，自动推进到下一步。不需要指定步骤ID。
                 | 参数 | 必填 | 说明 |
                 |------|------|------|
-                | sessionId | 否 | 会话 ID，留空自动获取 |
+                | action | 是 | `done`（完成）| `fail`（失败）| `skip`（跳过）|
+                | result | 否 | 执行结果摘要（支持 Markdown）|
                 
                 ---
                 
-                ### workflow_mark_node — 标记节点完成
-                标记当前会话工作流中的某个节点为"已完成"。
-                每完成一个节点后调用此工具，如果所有节点都已完成，工作流自动标记为已完成。
+                ### workflow_status — 查看工作流状态
+                返回当前工作流的步骤列表和进度。
                 | 参数 | 必填 | 说明 |
                 |------|------|------|
-                | nodeId | 是 | 已完成的节点ID（如 'n1', 'n2'）|
-                | result | 否 | 该节点的执行结果摘要 |
                 | sessionId | 否 | 会话 ID，留空自动获取 |
                 
                 ---

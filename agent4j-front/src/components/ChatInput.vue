@@ -43,6 +43,28 @@
       </div>
 
       <div class="input-row">
+        <!-- 工作流 TODO 按钮 -->
+        <div class="wf-todo-wrap" @mouseenter="onWfEnter" @mouseleave="onWfLeave">
+          <button class="todo-btn" :class="{ has: !!wfData, active: !!wfData }" title="工作流进度">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+              <polyline points="9 14 11 16 15 10"/>
+            </svg>
+          </button>
+          <!-- 悬浮弹出 -->
+          <Transition name="wf-popup">
+            <div v-if="wfHover" class="wf-popup">
+              <div v-if="wfData" class="wf-popup-body">
+                <WorkflowSteps :data="wfData" />
+              </div>
+              <div v-else class="wf-popup-empty">
+                <span>暂无工作流</span>
+                <span class="wf-popup-hint">AI 调用 workflow_start 后自动创建</span>
+              </div>
+            </div>
+          </Transition>
+        </div>
+
         <textarea ref="inputField" v-model="localText" @keydown="handleKeydown"
                   placeholder="输入消息... (Enter 发送, Tab 补全, / 命令，粘贴图片)" rows="1" @blur="handleBlur"
                   @focus="inputFocused=true"
@@ -258,6 +280,7 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useAppStore} from '../stores/app'
 import {agentAPI, petAPI} from '../services/api'
 import PetSprite from './PetSprite.vue'
+import WorkflowSteps from './WorkflowSteps.vue'
 
 const props = defineProps({
   inputText: {type: String, default: ''},
@@ -558,7 +581,40 @@ const removeSkill = (skill) => {
   emit('switchSkill', [...selectedSkills.value])
 }
 
+// ============= 工作流 TODO =============
+const wfData = ref(null)
+const wfHover = ref(false)
+let wfLoadTimer = null
 
+const loadWorkflow = async () => {
+  if (!props.workspaceHash || !props.sessionName) {
+    wfData.value = null
+    return
+  }
+  try {
+    const { sessionsAPI } = await import('../services/api')
+    const res = await sessionsAPI.getWorkflow(props.sessionName, props.workspaceHash)
+    if (res.success && res.data) {
+      wfData.value = res.data
+    } else {
+      wfData.value = null
+    }
+  } catch {
+    wfData.value = null
+  }
+}
+
+watch([() => props.workspaceHash, () => props.sessionName], () => {
+  loadWorkflow()
+}, { immediate: true })
+
+const onWfEnter = () => {
+  wfHover.value = true
+  loadWorkflow()
+}
+const onWfLeave = () => {
+  wfHover.value = false
+}
 
 // ============= 权限切换 =============
 const showPermissionPicker = ref(false)
@@ -1886,5 +1942,67 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   right: 16px;
   z-index: 5;
   pointer-events: auto;
+}
+
+/* ============= 工作流 TODO ============= */
+.wf-todo-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.wf-todo-wrap .todo-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r);
+  color: var(--fg-4);
+  transition: all var(--t);
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.wf-todo-wrap .todo-btn:hover { background: var(--bg-3); color: var(--accent); }
+.wf-todo-wrap .todo-btn.active { color: var(--accent); }
+
+.wf-popup {
+  position: absolute;
+  bottom: calc(100% + 6px);
+  left: 0;
+  min-width: 280px;
+  max-width: 360px;
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  box-shadow: var(--glass-shadow);
+  z-index: 100;
+  padding: 10px;
+}
+
+.wf-popup-empty {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--fg-3);
+}
+.wf-popup-hint {
+  font-size: 10px;
+  color: var(--fg-4);
+}
+
+.wf-popup-enter-active,
+.wf-popup-leave-active {
+  transition: opacity 0.15s, transform 0.15s;
+}
+.wf-popup-enter-from,
+.wf-popup-leave-to {
+  opacity: 0;
+  transform: translateY(4px);
 }
 </style>
