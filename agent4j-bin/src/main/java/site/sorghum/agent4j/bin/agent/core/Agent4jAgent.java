@@ -116,6 +116,7 @@ public class Agent4jAgent {
                     case "model" -> setModel((String) e.value());
                     case "reasoningEffort" -> setReasoningEffort((String) e.value());
                     case "hitl" -> setHitlMode((Boolean) e.value());
+                    case "disabledTools" -> refreshTools();
                     default -> log.warn("[bus] 未知配置键: {}", e.key());
                 }
             } catch (Exception ex) {
@@ -457,6 +458,14 @@ public class Agent4jAgent {
      */
     public void setReasoningEffort(String reasoningEffort) {
         loop.setReasoningEffort(reasoningEffort);
+    }
+
+    /**
+     * 刷新工具列表（工具启用/禁用状态变更后调用）。
+     */
+    public void refreshTools() {
+        loop.refreshTools();
+        log.info("[agent] 工具列表已刷新");
     }
 
     /**

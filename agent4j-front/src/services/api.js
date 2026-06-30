@@ -361,7 +361,7 @@ export const sessionsAPI = {
 
 // 工具 API
 export const toolsAPI = {
-  // 列出所有已注册工具 - GET /api/tools
+  // 列出所有已注册工具（含已禁用的）- GET /api/tools
   list: () => {
     return api.get('/tools')
   },
@@ -369,6 +369,11 @@ export const toolsAPI = {
   // 获取工具详情 - GET /api/tools/{name}
   getDetails: (name) => {
     return api.get(`/tools/${name}`)
+  },
+  
+  // 切换工具启用/禁用状态 - POST /api/tools/{name}/toggle
+  toggle: (name) => {
+    return api.post(`/tools/${name}/toggle`)
   },
   
   // 直接执行工具 - POST /api/tools/{name}/execute

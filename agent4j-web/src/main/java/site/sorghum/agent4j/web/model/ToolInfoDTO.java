@@ -10,6 +10,7 @@ public record ToolInfoDTO(
         String description,
         boolean readOnly,
         boolean stormExempt,
+        boolean enabled,
         List<ToolParamInfoDTO> params
 ) {
 }

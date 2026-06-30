@@ -9,6 +9,9 @@ import java.util.Collection;
 
 @Component
 public class Agent4JMcpSkill extends McpGatewayTalent implements SolonToTools {
+    public Agent4JMcpSkill() {
+
+    }
 
     @Override
     public Collection<FunctionTool> getSolonTools() {

@@ -78,7 +78,6 @@ public class PluginToolProvider implements SolonToTools {
                         log.debug("注册插件工具: {} ({} -> {})", nd.name, pluginDir.getFileName(), dirName);
                     }
                 }
-                if (count == 0) log.warn("插件目录 {} 下未找到含 skill.md 的子目录", pluginDir);
             }
         } catch (IOException e) {
             log.error("扫描插件目录失败: {}", root, e);

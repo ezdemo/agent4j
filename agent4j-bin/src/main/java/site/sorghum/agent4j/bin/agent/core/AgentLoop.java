@@ -339,9 +339,16 @@ public class AgentLoop implements AgentLoopController {
         return ChatMessage.tool(id, result);
     }
 
-    private ONode refreshTools() {
+    public ONode refreshTools() {
         registry.refresh();
         return registry.toOpenAiTools();
+    }
+
+    /**
+     * 获取工具注册表实例。
+     */
+    public ToolRegistry getToolRegistryInstance() {
+        return registry;
     }
 
     private String buildToolInstructions() {

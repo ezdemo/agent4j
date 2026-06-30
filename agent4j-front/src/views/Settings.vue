@@ -633,154 +633,6 @@
           </div>
         </section>
 
-        <!-- 安全设置 -->
-        <section v-if="activeTab === 'security'" class="settings-section">
-          <div class="section-card">
-            <div class="card-header">
-              <h3>安全防护</h3>
-              <p>配置安全策略和防护机制</p>
-            </div>
-            <div class="card-body">
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="setting-label">风暴断路器</label>
-                  <p class="setting-hint">防止工具调用死循环（滑动窗口去重）</p>
-                </div>
-                <div class="setting-control">
-                  <label class="toggle-switch disabled">
-                    <input v-model="settings.security.stormBreaker" disabled type="checkbox"/>
-                    <span class="toggle-slider"></span>
-                  </label>
-                  <span class="setting-status">已启用</span>
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="setting-label">路径穿越防护</label>
-                  <p class="setting-hint">阻止访问工作区外的文件</p>
-                </div>
-                <div class="setting-control">
-                  <label class="toggle-switch disabled">
-                    <input v-model="settings.security.pathTraversal" disabled type="checkbox"/>
-                    <span class="toggle-slider"></span>
-                  </label>
-                  <span class="setting-status">已启用</span>
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="setting-label">命令白名单</label>
-                  <p class="setting-hint">只允许执行白名单中的命令</p>
-                </div>
-                <div class="setting-control">
-                  <label class="toggle-switch disabled">
-                    <input v-model="settings.security.commandWhitelist" disabled type="checkbox"/>
-                    <span class="toggle-slider"></span>
-                  </label>
-                  <span class="setting-status">已启用</span>
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="setting-label">审计日志</label>
-                  <p class="setting-hint">记录所有工具调用操作</p>
-                </div>
-                <div class="setting-control">
-                  <label class="toggle-switch disabled">
-                    <input v-model="settings.security.auditLog" disabled type="checkbox"/>
-                    <span class="toggle-slider"></span>
-                  </label>
-                  <span class="setting-status">已启用</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 禁用工具 -->
-          <div class="section-card" style="margin-top:16px;">
-            <div class="card-header">
-              <h3>禁用工具</h3>
-              <p>禁用的工具将被 Agent 忽略，每行一个工具名称</p>
-            </div>
-            <div class="card-body">
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="setting-label">已禁用的工具</label>
-                  <p class="setting-hint">留空表示不禁用任何工具</p>
-                </div>
-                <div class="setting-control">
-                  <div class="input-group" style="align-items:stretch;">
-                    <textarea
-                      v-model="settings.security.disabledToolsText"
-                      class="form-textarea"
-                      placeholder="tool_write&#10;tool_delete&#10;bash"
-                      rows="4"
-                      style="flex:1;"
-                    ></textarea>
-                    <button
-                      :disabled="loadingTools"
-                      class="btn btn-secondary"
-                      style="padding:6px;"
-                      @click="fetchAndFillTools"
-                      title="从已有工具中获取"
-                    >
-                      <svg v-if="loadingTools" class="animate-spin" fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
-                        <path d="M21 12a9 9 0 11-6.219-8.56"/>
-                      </svg>
-                      <svg v-else fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
-                        <polyline points="1 4 1 10 7 10"/>
-                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-                      </svg>
-                      从已有工具获取
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 工具有多选弹窗 -->
-              <Teleport to="body">
-                <div v-if="showToolPicker" class="remote-models-mask" @click.self="showToolPicker = false">
-                  <div class="remote-models-dialog">
-                    <div class="remote-models-head">
-                      <span>选择要禁用的工具</span>
-                      <button class="btn-icon-xs" @click="showToolPicker = false">×</button>
-                    </div>
-                    <div class="remote-models-body">
-                      <div class="remote-models-search">
-                        <input v-model="toolSearchQuery" class="form-input" placeholder="搜索工具..." type="text" />
-                      </div>
-                      <div v-if="allTools.length === 0" class="remote-models-empty">暂无可用工具</div>
-                      <div v-else class="remote-models-list">
-                        <label
-                          v-for="tool in filteredTools"
-                          :key="tool.name || tool"
-                          class="remote-model-item"
-                        >
-                          <input
-                            :checked="selectedDisabledTools.has(tool.name || tool)"
-                            type="checkbox"
-                            @change="toggleDisabledTool(tool.name || tool)"
-                          />
-                          <span class="remote-model-name">{{ tool.name || tool }}</span>
-                          <span v-if="tool.description" class="remote-model-desc">{{ tool.description }}</span>
-                        </label>
-                      </div>
-                    </div>
-                    <div class="remote-models-foot">
-                      <button class="btn" @click="showToolPicker = false">取消</button>
-                      <button class="btn btn-primary" @click="confirmDisabledTools">确认禁用 ({{ selectedDisabledTools.size }})</button>
-                    </div>
-                  </div>
-                </div>
-              </Teleport>
-            </div>
-          </div>
-        </section>
-
-        <!-- OpenAPI 设置 -->
         <section v-if="activeTab === 'openapi'" class="settings-section">
           <div class="section-card">
             <div class="card-header">
@@ -1304,7 +1156,7 @@ X-Custom-Header=value"
                     <line x1="12" x2="12" y1="9" y2="13"/>
                     <line x1="12" x2="12.01" y1="17" y2="17"/>
                   </svg>
-                  <p style="margin:0;font-size:13px;color:var(--yellow-8, #854d0e);">LSP 已被完全禁用，所有语言服务器将不会启动。在「安全 → 禁用工具」中移除 "lsp" 即可恢复。</p>
+                  <p style="margin:0;font-size:13px;color:var(--yellow-8, #854d0e);">LSP 已被完全禁用，所有语言服务器将不会启动。在左下角「工具」弹窗或工具箱中启用 "lsp" 即可恢复。</p>
                 </div>
                 <div v-if="lspLoading" class="mcp-state-box">
                   <svg class="animate-spin" fill="none" height="24" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="24">
@@ -1835,19 +1687,6 @@ const remoteModelList = ref([])
 const selectedRemoteModels = ref(new Set())
 const remoteSearchQuery = ref('')
 
-// 禁用工具状态
-const loadingTools = ref(false)
-const showToolPicker = ref(false)
-const allTools = ref([])
-const selectedDisabledTools = ref(new Set())
-const toolSearchQuery = ref('')
-
-const filteredTools = computed(() => {
-  const q = toolSearchQuery.value.trim().toLowerCase()
-  if (!q) return allTools.value
-  return allTools.value.filter(t => (t.name || t).toLowerCase().includes(q))
-})
-
 // 宠物设置状态
 const petsList = ref([])
 const petsLoading = ref(false)
@@ -2264,14 +2103,6 @@ const tabs = computed(() => [
     description: '工作目录和编辑行为配置',
     icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
-    </svg>`
-  },
-  {
-    id: 'security',
-    label: '安全',
-    description: '安全策略和防护机制',
-    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
     </svg>`
   },
   {
@@ -2937,50 +2768,6 @@ const fillPricesFromModels = () => {
   settings.ai.prices = newPrices
   hasChanges.value = true
   message.success(`已从模型列表生成 ${models.length} 个价格条目`)
-}
-
-// ==================== 禁用工具操作 ====================
-
-// 从已有工具中获取并打开选择弹窗
-const fetchAndFillTools = async () => {
-  loadingTools.value = true
-  try {
-    const res = await toolsAPI.list()
-    if (res.success && res.data) {
-      allTools.value = res.data
-    } else {
-      allTools.value = res.data || []
-    }
-  } catch (err) {
-    console.error('获取工具列表失败:', err)
-    message.error('获取工具列表失败: ' + (err.message || err))
-    allTools.value = []
-  } finally {
-    loadingTools.value = false
-  }
-
-  // 初始化已选状态
-  const currentDisabled = settings.security.disabledToolsText.split('\n').map(s => s.trim()).filter(s => s)
-  selectedDisabledTools.value = new Set(currentDisabled)
-  toolSearchQuery.value = ''
-  showToolPicker.value = true
-}
-
-const toggleDisabledTool = (toolName) => {
-  const set = selectedDisabledTools.value
-  if (set.has(toolName)) {
-    set.delete(toolName)
-  } else {
-    set.add(toolName)
-  }
-  // 触发响应式更新
-  selectedDisabledTools.value = new Set(set)
-}
-
-const confirmDisabledTools = () => {
-  settings.security.disabledToolsText = Array.from(selectedDisabledTools.value).join('\n')
-  hasChanges.value = true
-  showToolPicker.value = false
 }
 
 const openapiLoading = ref(false)

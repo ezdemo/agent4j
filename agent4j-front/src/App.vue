@@ -161,12 +161,37 @@
               <button class="btn-icon-sm" @click="showTools = false">×</button>
             </div>
           </div>
-          <div class="modal-body">
-            <div v-for="t in tools" :key="t.name" class="tool-row">
-              <code>{{ t.name }}</code>
-              <span>{{ t.description }}</span>
+          <div class="modal-body tool-modal-body">
+            <!-- 筛选栏 -->
+            <div class="tool-filter-bar">
+              <button
+                v-for="f in toolFilters"
+                :key="f.value"
+                class="tool-filter-btn"
+                :class="{ active: toolFilter === f.value }"
+                @click="toolFilter = f.value"
+              >{{ f.label }}</button>
             </div>
-            <div v-if="!tools.length" class="modal-empty">加载中...</div>
+            <div v-if="filteredTools.length === 0" class="modal-empty">暂无工具</div>
+            <div v-for="t in filteredTools" :key="t.name" class="tool-row" :class="{ disabled: !t.enabled }">
+              <div class="tool-row-info" @click="toggleTool(t)">
+                <code>{{ t.name }}</code>
+                <span class="tool-row-desc">{{ t.description }}</span>
+              </div>
+              <div class="tool-row-actions">
+                <span v-if="!t.enabled" class="tool-status-badge disabled">已禁用</span>
+                <button
+                  class="tool-toggle-btn"
+                  :class="{ enabled: t.enabled }"
+                  :disabled="refreshingTools"
+                  @click.stop="toggleTool(t)"
+                  :title="t.enabled ? '禁用' : '启用'">
+                  <div class="toggle-track">
+                    <div class="toggle-thumb"></div>
+                  </div>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -366,6 +391,18 @@ const tools = ref([])
 const config = ref({})
 const showTools = ref(false)
 const refreshingTools = ref(false)
+const toolFilter = ref('all')
+const toolFilters = [
+  { label: '全部', value: 'all' },
+  { label: '已启用', value: 'enabled' },
+  { label: '已禁用', value: 'disabled' }
+]
+const filteredTools = computed(() => {
+  if (toolFilter.value === 'all') return tools.value
+  if (toolFilter.value === 'enabled') return tools.value.filter(t => t.enabled)
+  if (toolFilter.value === 'disabled') return tools.value.filter(t => !t.enabled)
+  return tools.value
+})
 const isDesktopEnv = ref(false)
 const showSetup = ref(true)  // SplashScreen (桌面) 或 SetupScreen (Web) 成功后设为 false
 
@@ -664,6 +701,18 @@ const refreshTools = async () => {
     const r = await toolsAPI.list()
     if (r.success) tools.value = r.data || []
   } catch {}
+  refreshingTools.value = false
+}
+
+// 切换工具启用/禁用状态
+const toggleTool = async (tool) => {
+  refreshingTools.value = true
+  try {
+    await toolsAPI.toggle(tool.name)
+    tool.enabled = !tool.enabled
+  } catch (err) {
+    console.error('切换工具状态失败:', err)
+  }
   refreshingTools.value = false
 }
 
@@ -1434,20 +1483,134 @@ watch(showSettings, (newVal) => {
 
 .tool-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  padding: 8px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border);
   font-size: 13px;
+  transition: opacity var(--transition-fast);
 }
 .tool-row:last-child { border-bottom: none; }
-.tool-row code {
+.tool-row.disabled {
+  opacity: 0.55;
+}
+.tool-row.disabled code {
+  text-decoration: line-through;
+}
+
+.tool-row-info {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  cursor: default;
+}
+.tool-row-info code {
   font-weight: 600;
   color: var(--accent);
   flex-shrink: 0;
   min-width: 100px;
 }
-.tool-row span { color: var(--fg-3); }
+.tool-row-desc {
+  color: var(--fg-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.tool-status-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  white-space: nowrap;
+}
+
+/* 切换开关 */
+.tool-toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+}
+.tool-toggle-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.tool-toggle-btn .toggle-track {
+  width: 34px;
+  height: 18px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  position: relative;
+  transition: all var(--transition-fast);
+}
+.tool-toggle-btn.enabled .toggle-track {
+  background: var(--success);
+  border-color: var(--success);
+}
+.tool-toggle-btn .toggle-thumb {
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: all var(--transition-fast);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.tool-toggle-btn.enabled .toggle-thumb {
+  left: 18px;
+}
+
+/* 工具弹窗 body 限制高度 */
+.tool-modal-body {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* 筛选栏 */
+.tool-filter-bar {
+  display: flex;
+  gap: 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.tool-filter-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.tool-filter-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tool-filter-btn.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
 
 .config-row {
   display: flex;
