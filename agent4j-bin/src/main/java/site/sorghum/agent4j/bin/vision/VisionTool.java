@@ -187,6 +187,8 @@ public class VisionTool extends AbsToolProvider implements SolonToTools {
     @Override
     public String getSystemPrompt() {
         return """
+                ## vision_recognize
+                
                 图片识别工具：支持传入本地文件路径、网络链接（HTTP/HTTPS）或 Base64 Data URI，返回图片识别结果。
                 参数: image(必填, 图片路径或URL), prompt(可选, 指导识别的提示词)。
                 返回: 包含思考块和内容块的识别结果。

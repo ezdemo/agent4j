@@ -246,6 +246,15 @@ if (Test-Path $SOURCE_AGENTS) {
     Write-Host "      Copied agent4j.md" -ForegroundColor Gray
 }
 
+# 复制 plugin 目录（先清空再覆盖）
+$SOURCE_PLUGIN = Join-Path $SOURCE_DIR "plugin"
+$TARGET_PLUGIN = Join-Path $TARGET_DIR "plugin"
+if (Test-Path $SOURCE_PLUGIN) {
+    if (Test-Path $TARGET_PLUGIN) { Remove-Item -Recurse -Force $TARGET_PLUGIN }
+    Copy-Item $SOURCE_PLUGIN $TARGET_PLUGIN -Recurse -Force
+    Write-Host "      Copied plugin/ directory" -ForegroundColor Gray
+}
+
 Write-Host "      Files copied successfully" -ForegroundColor Green
 
 # =============================================

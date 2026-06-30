@@ -167,6 +167,8 @@ public class WorkflowVisualizationTool extends AbsToolProvider implements SolonT
     @Override
     public String getSystemPrompt() {
         return """
+                ## workflow_visualize
+                
                 可视化显示当前会话的工作流结构。
                 返回工作流的节点列表、依赖关系和执行状态。
                 """;

@@ -17,4 +17,9 @@ public class Agent4JMcpSkill extends McpGatewayTalent implements SolonToTools {
     public Collection<FunctionTool> getSolonTools() {
         return this.getTools(null);
     }
+
+    @Override
+    public String getSystemPrompt() {
+        return getInstruction(null);
+    }
 }
