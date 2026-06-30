@@ -98,7 +98,25 @@
           <div class="section-card">
             <div class="card-header">
               <h3>宠物选择</h3>
-              <p>选择一个桌面宠物陪你工作</p>
+              <p class="card-header-row">选择一个桌面宠物陪你工作
+                <span class="pet-top-bar">
+                  <button class="btn btn-ghost" @click="openPetWebsite">
+                    <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                      <polyline points="15 3 21 3 21 9"/>
+                      <line x1="10" x2="21" y1="14" y2="3"/>
+                    </svg>
+                    去网站看看
+                  </button>
+                  <button class="btn btn-ghost" @click="loadPets">
+                    <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <path d="M1 4v6h6M23 20v-6h-6"/>
+                      <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                    </svg>
+                    刷新
+                  </button>
+                </span>
+              </p>
             </div>
             <div class="card-body">
               <div v-if="petsLoading" class="pets-loading">
@@ -114,7 +132,22 @@
                   </svg>
                 </div>
                 <p>暂无可用的宠物</p>
-                <p class="hint">请将宠物文件夹放入 ~/.codex/pets/ 目录</p>
+                <p class="hint">请将宠物文件夹放入 ~/.petdex/pets/ 目录</p>
+                <!-- 无宠物时显示初始化按钮 -->
+                <div class="pet-init-inline">
+                  <button :disabled="petIniting" class="btn btn-secondary" @click="initPet">
+                    <svg v-if="petIniting" class="animate-spin" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                    </svg>
+                    <svg v-else fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <path d="M12 2C8 2 4 5 4 9c0 3 2 6 4 8l4 5 4-5c2-2 4-5 4-8 0-4-4-7-8-7z"/>
+                      <line x1="12" y1="9" x2="12" y2="15"/>
+                      <line x1="9" y1="12" x2="15" y2="12"/>
+                    </svg>
+                    {{ petIniting ? '初始化中...' : '初始化宠物' }}
+                  </button>
+                  <span class="pet-init-hint">通过 npx petdex 快速安装一个默认宠物</span>
+                </div>
               </div>
               <div v-else class="pets-grid">
                 <div
@@ -150,30 +183,14 @@
                       <polyline points="8 12 11 15 16 9" stroke="white" fill="none"/>
                     </svg>
                   </div>
+                  <!-- 删除按钮 -->
+                  <button class="pet-delete-btn" title="删除此宠物" @click.stop="deletePet(pet.name)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                  </button>
                 </div>
-              </div>
-              <!-- 初始化按钮 -->
-              <div class="pet-init-bar">
-                <button :disabled="petIniting" class="btn btn-secondary" @click="initPet">
-                  <svg v-if="petIniting" class="animate-spin" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                    <path d="M21 12a9 9 0 11-6.219-8.56"/>
-                  </svg>
-                  <svg v-else fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                    <path d="M12 2C8 2 4 5 4 9c0 3 2 6 4 8l4 5 4-5c2-2 4-5 4-8 0-4-4-7-8-7z"/>
-                    <line x1="12" y1="9" x2="12" y2="15"/>
-                    <line x1="9" y1="12" x2="15" y2="12"/>
-                  </svg>
-                  {{ petIniting ? '初始化中...' : '初始化宠物' }}
-                </button>
-                <button class="btn btn-ghost" @click="openPetWebsite">
-                  <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                    <polyline points="15 3 21 3 21 9"/>
-                    <line x1="10" x2="21" y1="14" y2="3"/>
-                  </svg>
-                  去网站看看
-                </button>
-                <span class="pet-init-hint">通过 npx petdex 快速安装一个默认宠物</span>
               </div>
             </div>
           </div>
@@ -1890,6 +1907,34 @@ async function selectPet(name) {
   } catch (err) {
     message.error('切换宠物失败: ' + (err.message || ''))
   }
+}
+
+// 删除宠物
+async function deletePet(name) {
+  Modal.confirm({
+    title: '删除宠物',
+    content: `确定要删除宠物「${name}」吗？此操作不可恢复。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        const res = await petAPI.deletePet(name)
+        if (res.success) {
+          if (activePetName.value === name) {
+            activePetName.value = ''
+            store.activePetName = ''
+          }
+          message.success('宠物已删除: ' + name)
+          await loadPets()
+        } else {
+          message.error(res.error || '删除宠物失败')
+        }
+      } catch (err) {
+        message.error('删除宠物失败: ' + (err.message || ''))
+      }
+    }
+  })
 }
 
 // 初始化宠物：转发给父组件（App.vue）跳到聊天界面执行
@@ -5981,16 +6026,53 @@ onMounted(() => {
   right: 8px;
 }
 
-/* 初始化按钮栏 */
-.pet-init-bar {
+.pet-delete-btn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--r);
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--t);
+  z-index: 2;
+}
+.pet-card:hover .pet-delete-btn {
+  opacity: 1;
+}
+.pet-delete-btn:hover {
+  background: var(--danger);
+}
+
+/* 顶部操作栏 — 与描述同行 */
+.card-header-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pet-top-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 无宠物时的初始化区域 */
+.pet-init-inline {
   margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
   gap: 12px;
+  justify-content: center;
 }
-.pet-init-hint {
+.pet-init-inline .pet-init-hint {
   font-size: 12px;
   color: var(--fg-3);
 }

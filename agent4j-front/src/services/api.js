@@ -895,6 +895,8 @@ export const petAPI = {
   getPetInfo: (name) => api.get(`/pets/${name}`),
   /** 获取指定宠物的 spritesheet URL */
   getPetSpritesheetUrl: (name) => `/api/pets/${name}/spritesheet`,
+  /** 删除指定宠物（清空文件夹） */
+  deletePet: (name) => api.delete(`/pets/${name}`),
   /** 获取当前活跃宠物信息 */
   getActive: () => api.get('/pets/active'),
   /** 设置活跃宠物 */

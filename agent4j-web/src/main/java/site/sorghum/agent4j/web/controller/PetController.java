@@ -21,7 +21,7 @@ import java.nio.file.Paths;
 /**
  * 桌面宠物 API — 支持多宠物选择。
  * <p>
- * 宠物文件位于 {@code ~/.codex/pets/} 目录，每个子文件夹代表一个宠物，
+ * 宠物文件位于 {@code ~/.petdex/pets/} 目录，每个子文件夹代表一个宠物，
  * 内含 pet.json（元数据）和 spritesheet.webp（精灵图）。
  * 当前活跃宠物名称写入 config.json 的 activePet 字段。
  * </p>
@@ -34,7 +34,7 @@ import java.nio.file.Paths;
 public class PetController {
 
     private static final Path PETS_DIR =
-            Paths.get(System.getProperty("user.home"), ".codex", "pets");
+            Paths.get(System.getProperty("user.home"), ".petdex", "pets");
 
     private static final Path POSITION_DIR =
             Paths.get(System.getProperty("user.home"), ".agent4j", "pet");
@@ -46,7 +46,7 @@ public class PetController {
 
     // ──────────────────── 列出所有可用宠物 ────────────────────
 
-    @ApiOperation(value = "列出所有可用宠物", notes = "扫描 ~/.codex/pets/ 子文件夹，返回每个宠物的元数据摘要")
+    @ApiOperation(value = "列出所有可用宠物", notes = "扫描 ~/.petdex/pets/ 子文件夹，返回每个宠物的元数据摘要")
     @Get
     @Mapping("")
     @SneakyThrows
@@ -200,6 +200,34 @@ public class PetController {
 
         configService.updateConfig(Map.of("activePet", name));
         return ApiResponse.ok("已切换到宠物: " + name);
+    }
+
+    // ──────────────────── 删除宠物（清空文件夹） ────────────────────
+
+    @ApiOperation(value = "删除宠物", notes = "删除指定宠物的整个目录（清空 pet 文件夹）")
+    @Delete
+    @Mapping("/{name}")
+    @SneakyThrows
+    public ApiResponse<String> deletePet(@Param("name") String name) {
+        Path petDir = PETS_DIR.resolve(name);
+        if (!Files.isDirectory(petDir)) {
+            return ApiResponse.fail("宠物不存在: " + name);
+        }
+        // 递归删除宠物目录
+        try (var walk = Files.walk(petDir)) {
+            walk.sorted(java.util.Comparator.reverseOrder())
+                    .forEach(p -> {
+                        try {
+                            Files.deleteIfExists(p);
+                        } catch (Exception ignored) {}
+                    });
+        }
+        // 如果已激活该宠物则清除 activePet
+        String activeName = configService.getConfig().activePet();
+        if (name.equals(activeName)) {
+            configService.updateConfig(Map.of("activePet", ""));
+        }
+        return ApiResponse.ok("宠物已删除: " + name);
     }
 
     // ──────────────────── 保存宠物位置/大小 ────────────────────
