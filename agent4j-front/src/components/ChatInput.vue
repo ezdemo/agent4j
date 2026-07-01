@@ -156,7 +156,7 @@
           <span class="usage-context-circle"
                 :title="'上下文: '+fmt(usage.lastPromptTokens||usage.promptTokens)+' / '+fmt(usage.maxContextTokens)">
             <svg viewBox="0 0 32 32" class="context-ring">
-              <circle cx="16" cy="16" r="13" fill="none" stroke="var(--bg-3)" stroke-width="4" />
+              <circle cx="16" cy="16" r="13" fill="none" stroke="var(--border)" stroke-width="4" />
               <circle cx="16" cy="16" r="13" fill="none" stroke="var(--fg-3)"
                       stroke-width="4" stroke-linecap="round"
                       :stroke-dasharray="81.68" :stroke-dashoffset="81.68 * (1 - Math.min(ctxPct,100)/100)"
