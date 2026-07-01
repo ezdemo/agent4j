@@ -114,46 +114,55 @@
           {{ connected ? '已连接' : '连接中...' }}
         </span>
         <span class="usage-sep">|</span>
-        <span class="usage-item hide-mobile" :title="'输入: '+fmt(usage.promptTokens)">
+        <!-- 总 token（点击展开详情） -->
+        <span class="usage-item usage-total" @click="showUsageDetail = !showUsageDetail" title="点击展开/折叠详情">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3"
-                                                                                                         x2="12"
-                                                                                                         y2="15"/>
+            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
           </svg>
-          输入 {{ fmt(usage.promptTokens) }}
+          {{ fmt(usage.totalTokens || 0) }}
+          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="usage-expand-icon" :class="{ open: showUsageDetail }">
+            <polyline points="6 9 12 15 18 9"/>
+          </svg>
         </span>
+        <!-- 详情：输入/输出/缓存/价格 -->
+        <template v-if="showUsageDetail">
+          <span class="usage-item hide-mobile" :title="'输入: '+fmt(usage.promptTokens)">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            输入 {{ fmt(usage.promptTokens) }}
+          </span>
           <span class="usage-item hide-mobile" :title="'输出: '+fmt(usage.completionTokens)">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12"
-                                                                                                            y1="15"
-                                                                                                            x2="12"
-                                                                                                            y2="3"/>
-          </svg>
-          输出 {{ fmt(usage.completionTokens) }}
-        </span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+            </svg>
+            输出 {{ fmt(usage.completionTokens) }}
+          </span>
           <span class="usage-item hide-mobile"
                 :title="'缓存命中: '+fmt(usage.cacheHit)+' / 未命中: '+fmt(usage.cacheMiss)">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-          </svg>
-          缓存 {{ cacheRate }}%
-        </span>
-          <span class="usage-item usage-cost-item" v-if="usage.hasPrice">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-          </svg>
-          ¥{{ (usage.totalCost || 0).toFixed(2) }}
-        </span>
-          <span class="usage-sep">|</span>
-          <span class="usage-context-wrap"
-                :title="'上下文: '+fmt(usage.lastPromptTokens||usage.promptTokens)+' / '+fmt(usage.maxContextTokens)">
-          上下文
-          <span class="usage-progress">
-            <span class="usage-progress-bar" :style="{ width: Math.min(ctxPct,100)+'%' }"
-                  :class="{ high: ctxPct>=80, medium: ctxPct>=50 && ctxPct<80 }"></span>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
+            </svg>
+            缓存 {{ cacheRate }}%
           </span>
-          <span class="usage-value" :class="{ high: ctxPct>=80, medium: ctxPct>=50 && ctxPct<80 }">{{ ctxPct }}%</span>
-        </span>
+          <span class="usage-item usage-cost-item" v-if="usage.hasPrice">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
+            </svg>
+            ¥{{ (usage.totalCost || 0).toFixed(2) }}
+          </span>
+        </template>
+          <span class="usage-sep">|</span>
+          <span class="usage-context-circle"
+                :title="'上下文: '+fmt(usage.lastPromptTokens||usage.promptTokens)+' / '+fmt(usage.maxContextTokens)">
+            <svg viewBox="0 0 32 32" class="context-ring">
+              <circle cx="16" cy="16" r="13" fill="none" stroke="var(--border)" stroke-width="4" />
+              <circle cx="16" cy="16" r="13" fill="none" stroke="var(--fg-3)"
+                      stroke-width="4" stroke-linecap="round"
+                      :stroke-dasharray="81.68" :stroke-dashoffset="81.68 * (1 - Math.min(ctxPct,100)/100)"
+                      transform="rotate(-90 16 16)" />
+            </svg>
+          </span>
           <button class="usage-refresh" @click="$emit('refreshUsage')" title="刷新用量">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M23 4v6h-6"/>
@@ -530,6 +539,9 @@ const pickModel = async (name) => {
   emit('switchModel', name)
   showModelPicker.value = false
 }
+
+// ============= 用量详情折叠 =============
+const showUsageDetail = ref(false)
 
 // ============= 技能选择（多选） =============
 const showSkillPicker = ref(false)
@@ -1346,46 +1358,40 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   font-size: 14px;
 }
 
-.usage-context-wrap {
-  display: flex;
+.usage-total {
+  cursor: pointer;
+  user-select: none;
+}
+
+.usage-total:hover {
+  color: var(--fg-2);
+}
+
+.usage-expand-icon {
+  transition: transform 0.2s ease;
+}
+
+.usage-expand-icon.open {
+  transform: rotate(180deg);
+}
+
+.usage-context-circle {
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
   cursor: pointer;
 }
 
+.context-ring {
+  width: 14px;
+  height: 14px;
+}
+
 .usage-progress {
-  display: inline-block;
-  width: 80px;
-  height: 5px;
-  background: var(--bg-3);
-  border-radius: 3px;
-  overflow: hidden;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
-  vertical-align: middle;
-}
-
-.usage-progress-bar {
-  display: block;
-  height: 100%;
-  min-width: 2px;
-  background: var(--accent);
-  opacity: 0.65;
-  border-radius: 3px;
-  transition: width 0.5s ease;
-}
-
-.usage-progress-bar.medium {
-  background: var(--yellow);
-}
-
-.usage-progress-bar.high {
-  background: var(--red);
+  display: none;
 }
 
 .usage-value {
-  font-weight: 500;
-  color: var(--fg-2);
-  font-family: var(--mono);
+  display: none;
 }
 
 .usage-value.high {
