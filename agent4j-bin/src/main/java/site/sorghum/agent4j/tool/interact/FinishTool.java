@@ -23,7 +23,7 @@ import java.util.Collection;
  */
 @Component
 public class FinishTool extends AbsToolProvider implements SolonToTools {
-    public static final String TIPS = "[系统提示] 如果有足够信息，请调用 `finish` 提交结果；否则请继续调用工具。";
+    public static final String TIPS = "[系统提示] 如果有足够信息，请调用 `finish` 提交结果；如果询问用户下一步动作，请调用`ask_choice`工具，否则请继续推理。";
 
     @ToolMapping(description = """
                 对话结束信号 —— 当你认为对话可以结束，准备给出最终回答时调用此工具。
