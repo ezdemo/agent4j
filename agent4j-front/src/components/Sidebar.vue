@@ -138,6 +138,7 @@
       </button>
     </div>
   </aside>
+
 </template>
 
 <script setup>
@@ -638,4 +639,6 @@ const formatName = (n) => {
   }
   .sidebar:not(.collapsed) { left: 0; }
 }
+
+
 </style>
