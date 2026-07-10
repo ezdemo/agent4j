@@ -883,6 +883,7 @@ public class HttpModelClient implements ModelClient {
 
     /**
      * 写入一次 AI API 调用的请求日志到 ~/.agent4j/logs/http/{sessionName}.log。
+     * 只保留最近 2 次请求记录，旧记录自动丢弃。
      */
     private void writeApiLog(String requestBody) {
         String sessionName = CURRENT_LOG_SESSION.get();
@@ -893,20 +894,38 @@ public class HttpModelClient implements ModelClient {
             java.nio.file.Files.createDirectories(API_LOG_DIR);
             java.nio.file.Path logFile = API_LOG_DIR.resolve(sanitizeFileName(sessionName) + ".log");
 
-            StringBuilder sb = new StringBuilder();
-            sb.append("================================================================================\n");
-            sb.append(">>> AI API Call : ").append(API_TS_FMT.format(java.time.Instant.now())).append('\n');
-            sb.append(">>> Model       : ").append(model).append('\n');
-            sb.append(">>> URL         : ").append(apiUrl).append('\n');
-            sb.append(">>> Request     :\n");
-            sb.append(requestBody).append('\n');
-            sb.append("<<< END\n");
-            sb.append('\n');
+            StringBuilder newEntry = new StringBuilder();
+            newEntry.append("================================================================================\n");
+            newEntry.append(">>> AI API Call : ").append(API_TS_FMT.format(java.time.Instant.now())).append('\n');
+            newEntry.append(">>> URL         : ").append(apiUrl).append('\n');
+            newEntry.append(">>> Request     :\n");
+            newEntry.append(requestBody).append('\n');
+            newEntry.append("<<< END\n");
+            newEntry.append('\n');
 
-            java.nio.file.Files.writeString(logFile, sb.toString(),
+            // 只保留最近 2 条：取已有日志的最后 1 条 + 当前新条目
+            String existing = "";
+            if (java.nio.file.Files.exists(logFile)) {
+                existing = java.nio.file.Files.readString(logFile);
+            }
+            String[] parts = existing.split("(?m)^={60,}$");
+            // parts[0] 是分隔符前的空串，跳过；取最后 1 条旧记录
+            StringBuilder keep = new StringBuilder();
+            if (parts.length > 0) {
+                for (int i = Math.max(0, parts.length - 1); i < parts.length; i++) {
+                    String p = parts[i].trim();
+                    if (!p.isEmpty()) {
+                        keep.append("================================================================================\n");
+                        keep.append(p).append('\n');
+                    }
+                }
+            }
+            keep.append(newEntry);
+
+            java.nio.file.Files.writeString(logFile, keep.toString(),
                     java.nio.charset.StandardCharsets.UTF_8,
                     java.nio.file.StandardOpenOption.CREATE,
-                    java.nio.file.StandardOpenOption.APPEND);
+                    java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
         } catch (Exception e) {
             log.warn("[api-log] 写入 AI 调用日志失败: {}", e.getMessage());
         }

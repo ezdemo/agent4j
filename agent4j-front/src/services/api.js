@@ -356,7 +356,8 @@ export const sessionsAPI = {
   getWorkflow: (name, workspaceHash) => {
     const params = workspaceHash ? { workspaceHash } : {}
     return api.get(`/sessions/${name}/workflow`, { params })
-  }
+  },
+
 }
 
 // 工具 API
