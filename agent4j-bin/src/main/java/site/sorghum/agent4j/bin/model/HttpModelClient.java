@@ -28,6 +28,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 public class HttpModelClient implements ModelClient {
 
+    /**
+     * 当前请求对应的会话名称，供日志记录使用。
+     * 由上层（如 AgentService）在调用 chat/chatStream 前设置，调用后清理。
+     */
+    public static final ThreadLocal<String> CURRENT_LOG_SESSION = new ThreadLocal<>();
+
     private static final MediaType MEDIA_TYPE_JSON = MediaType.parse("application/json; charset=utf-8");
 
     /**
@@ -383,6 +389,9 @@ public class HttpModelClient implements ModelClient {
                     throw new IOException("API error " + status + ": " + responseText);
                 }
 
+                // ★ 记录请求日志
+                writeApiLog(jsonBody);
+
                 ONode resp = ONode.ofJson(responseText);
                 ONode choices = resp.get(FIELD_CHOICES);
                 if (choices == null || !choices.isArray() || choices.getArray().isEmpty()) {
@@ -466,6 +475,9 @@ public class HttpModelClient implements ModelClient {
                 try (BufferedReader reader = new BufferedReader(
                         new InputStreamReader(body.byteStream(), StandardCharsets.UTF_8))) {
                     SseParseResult parseResult = processSseStream(reader, callback);
+
+                    // ★ 记录请求日志
+                    writeApiLog(jsonBody);
 
                     // ★ SSE流错误重试逻辑
                     if (parseResult.sseErrorData != null) {
@@ -858,5 +870,49 @@ public class HttpModelClient implements ModelClient {
         }
 
         return body;
+    }
+
+    // ==================== API 请求/响应日志 ====================
+
+    private static final java.nio.file.Path API_LOG_DIR =
+            java.nio.file.Paths.get(System.getProperty("user.home"), ".agent4j", "logs", "http");
+
+    private static final java.time.format.DateTimeFormatter API_TS_FMT =
+            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
+                    .withZone(java.time.ZoneId.systemDefault());
+
+    /**
+     * 写入一次 AI API 调用的请求日志到 ~/.agent4j/logs/http/{sessionName}.log。
+     */
+    private void writeApiLog(String requestBody) {
+        String sessionName = CURRENT_LOG_SESSION.get();
+        if (sessionName == null || sessionName.isEmpty()) {
+            sessionName = "unknown";
+        }
+        try {
+            java.nio.file.Files.createDirectories(API_LOG_DIR);
+            java.nio.file.Path logFile = API_LOG_DIR.resolve(sanitizeFileName(sessionName) + ".log");
+
+            StringBuilder sb = new StringBuilder();
+            sb.append("================================================================================\n");
+            sb.append(">>> AI API Call : ").append(API_TS_FMT.format(java.time.Instant.now())).append('\n');
+            sb.append(">>> Model       : ").append(model).append('\n');
+            sb.append(">>> URL         : ").append(apiUrl).append('\n');
+            sb.append(">>> Request     :\n");
+            sb.append(requestBody).append('\n');
+            sb.append("<<< END\n");
+            sb.append('\n');
+
+            java.nio.file.Files.writeString(logFile, sb.toString(),
+                    java.nio.charset.StandardCharsets.UTF_8,
+                    java.nio.file.StandardOpenOption.CREATE,
+                    java.nio.file.StandardOpenOption.APPEND);
+        } catch (Exception e) {
+            log.warn("[api-log] 写入 AI 调用日志失败: {}", e.getMessage());
+        }
+    }
+
+    private static String sanitizeFileName(String name) {
+        return name.replaceAll("[\\\\/:*?\"<>|]", "_");
     }
 }

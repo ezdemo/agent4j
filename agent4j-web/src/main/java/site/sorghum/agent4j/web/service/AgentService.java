@@ -548,6 +548,7 @@ public class AgentService {
         // 设置当前会话名称到 ThreadLocal，供工具执行时获取
         String effectiveSessionName = sessionName != null ? sessionName : "default";
         CURRENT_SESSION_NAME.set(effectiveSessionName);
+        HttpModelClient.CURRENT_LOG_SESSION.set(effectiveSessionName);
 
         try {
             Agent4jAgent agent = getOrCreateAgent(sessionKey);
@@ -560,6 +561,7 @@ public class AgentService {
         } finally {
             // 清理 ThreadLocal
             CURRENT_SESSION_NAME.remove();
+            HttpModelClient.CURRENT_LOG_SESSION.remove();
             // 刷入会话数据
             Agent4jAgent agent = sessionCache.get(sessionKey);
             if (agent != null) {
@@ -581,6 +583,7 @@ public class AgentService {
         // 设置当前会话名称到 ThreadLocal，供工具执行时获取
         String effectiveSessionName = sessionName != null ? sessionName : "default";
         CURRENT_SESSION_NAME.set(effectiveSessionName);
+        HttpModelClient.CURRENT_LOG_SESSION.set(effectiveSessionName);
 
         try {
             Agent4jAgent agent = getOrCreateAgent(sessionKey);
@@ -606,6 +609,7 @@ public class AgentService {
         } finally {
             // 清理 ThreadLocal
             CURRENT_SESSION_NAME.remove();
+            HttpModelClient.CURRENT_LOG_SESSION.remove();
             // 恢复 Agent 输出
             Agent4jAgent agent = sessionCache.get(sessionKey);
             if (agent != null) {
@@ -1170,6 +1174,7 @@ public class AgentService {
 
         String effectiveSessionName = sessionName != null ? sessionName : "default";
         CURRENT_SESSION_NAME.set(effectiveSessionName);
+        HttpModelClient.CURRENT_LOG_SESSION.set(effectiveSessionName);
 
         try {
             Agent4jAgent agent = getOrCreateAgent(sessionKey);

@@ -896,12 +896,14 @@ public class AgentLoop implements AgentLoopController {
             log.warn("[prepare] output.onLog异常: {}", e.getMessage());
         }
 
-        // 注入动态工具使用指引
+        // 注入动态工具使用指引到系统提示词
         String instr = buildToolInstructions();
         if (!instr.isEmpty()) {
-            List<ChatMessage> withInstr = new ArrayList<>(messages.size() + 1);
-            withInstr.add(messages.get(0)); // system prompt
-            withInstr.add(ChatMessage.ofUser(instr));
+            ChatMessage sysMsg = messages.get(0);
+            String enhancedContent = sysMsg.getContent() + "\n\n" + instr;
+            ChatMessage enhancedSys = ChatMessage.ofSystem(enhancedContent);
+            List<ChatMessage> withInstr = new ArrayList<>(messages.size());
+            withInstr.add(enhancedSys);
             withInstr.addAll(messages.subList(1, messages.size()));
             messages = withInstr;
         }
