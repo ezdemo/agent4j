@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import org.noear.solon.annotation.*;
 import org.noear.solon.core.handle.Context;
+import site.sorghum.agent4j.bin.agent.hitl.SubAgentHITLBroker;
 import site.sorghum.agent4j.bin.agent.model.UserMessage;
 import site.sorghum.agent4j.web.common.WebErrorMessages;
 import site.sorghum.agent4j.web.model.ApiResponse;
@@ -14,6 +15,7 @@ import site.sorghum.agent4j.web.service.AgentService;
 import site.sorghum.agent4j.web.service.SnapshotService;
 import site.sorghum.agent4j.web.service.SseEmitter;
 
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -52,6 +54,28 @@ public class ChatController {
     public ApiResponse<String> abort() {
         agentService.abortCurrentChat();
         return ApiResponse.ok("已发送中断请求");
+    }
+
+    /**
+     * 子代理 HITL 审批端点 —— 前端用户点击审批按钮后调用。
+     * <p>释放对应 subId 的 CountDownLatch，使阻塞在 SubAgent.run() 中的子代理恢复执行。</p>
+     */
+    @Post
+    @Mapping("/sub-hitl/{subId}")
+    public ApiResponse<Map<String, Object>> approveSubHitl(@Path int subId, @Body String body) {
+        String action = "";
+        try {
+            var node = org.noear.snack4.ONode.ofJson(body);
+            action = node.get("action").getString();
+        } catch (Exception e) {
+            return ApiResponse.fail("无法解析请求体: " + e.getMessage());
+        }
+        if (!"approve".equals(action) && !"deny".equals(action)) {
+            return ApiResponse.fail("action 必须为 'approve' 或 'deny'");
+        }
+        SubAgentHITLBroker.resolve(subId, "approve".equals(action));
+        log.info("[sub-hitl] 子代理审批: subId={}, action={}", subId, action);
+        return ApiResponse.ok(Map.of("subId", subId, "action", action));
     }
 
     @ApiOperation(value = "SSE 流式聊天", notes = "通过 Server-Sent Events 流式返回聊天回复，支持实时推送内容片段")

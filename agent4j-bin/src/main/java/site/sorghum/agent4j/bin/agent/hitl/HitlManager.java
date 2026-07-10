@@ -162,7 +162,42 @@ public class HitlManager {
         this.pendingHITTcList = tcList;
         this.hitlState = HitlState.PENDING;
 
-        // 构建审批提示
+        // 构建 title（工具名）和 description（工具参数）
+        StringBuilder titleSb = new StringBuilder();
+        StringBuilder descSb = new StringBuilder();
+        for (int i = 0; i < tcList.size(); i++) {
+            ToolCallEntry tc = tcList.get(i);
+            if (i > 0) {
+                titleSb.append("、");
+                descSb.append("\n");
+            }
+            titleSb.append(tc.name());
+            Object argsObj = tc.arguments();
+            String args = argsObj != null ? argsObj.toString() : null;
+            if (args != null && !args.isEmpty() && !"{}".equals(args)) {
+                String display = args.length() > 200 ? args.substring(0, 200) + "..." : args;
+                descSb.append("`").append(tc.name()).append("` ").append(display);
+            }
+        }
+        String title = titleSb.toString();
+        String description = !descSb.isEmpty() ? descSb.toString() : null;
+
+        // 发送审批选项（工具信息通过 title/description 传递，不再发 HITL 文本）
+        try {
+            output.onChoice(Arrays.asList(
+                    new ChoiceOption("/agree", "同意执行"),
+                    new ChoiceOption("/deny", "拒绝执行")
+            ), title, description);
+        } catch (Exception e) {
+            log.debug("[hitl] output.onChoice异常(SSE可能已断开): {}", e.getMessage());
+        }
+        try {
+            output.onContentComplete();
+        } catch (Exception e) {
+            log.debug("[hitl] output.onContentComplete异常(SSE可能已断开): {}", e.getMessage());
+        }
+
+        // 构建返回值文本（供 AgentLoop 日志/降级使用，不再通过 SSE 发送）
         StringBuilder sb = new StringBuilder();
         sb.append("⏸️  **HITL 模式：以下工具调用需要审批**\n\n");
         for (ToolCallEntry tc : tcList) {
@@ -177,27 +212,7 @@ public class HitlManager {
             sb.append("\n");
         }
         sb.append("\n请选择：");
-
-        String message = sb.toString();
-        try {
-            output.onContentDelta(message);
-        } catch (Exception e) {
-            log.debug("[hitl] output.onContentDelta异常(SSE可能已断开): {}", e.getMessage());
-        }
-        try {
-            output.onChoice(Arrays.asList(
-                    new ChoiceOption("/agree", "同意执行"),
-                    new ChoiceOption("/deny", "拒绝执行")
-            ));
-        } catch (Exception e) {
-            log.debug("[hitl] output.onChoice异常(SSE可能已断开): {}", e.getMessage());
-        }
-        try {
-            output.onContentComplete();
-        } catch (Exception e) {
-            log.debug("[hitl] output.onContentComplete异常(SSE可能已断开): {}", e.getMessage());
-        }
-        return message;
+        return sb.toString();
     }
 
     // ==================== 沙箱越界 HITL 拦截 ====================
@@ -217,15 +232,10 @@ public class HitlManager {
                 "> " + details + "\n\n" +
                 "请选择：";
         try {
-            output.onContentDelta(message);
-        } catch (Exception e) {
-            log.debug("[sandbox-hitl] output.onContentDelta异常(SSE可能已断开): {}", e.getMessage());
-        }
-        try {
             output.onChoice(Arrays.asList(
                     new ChoiceOption("/agree", "同意执行"),
                     new ChoiceOption("/deny", "拒绝执行")
-            ));
+            ), "沙箱越界", details);
         } catch (Exception e) {
             log.debug("[sandbox-hitl] output.onChoice异常: {}", e.getMessage());
         }

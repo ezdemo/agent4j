@@ -570,7 +570,26 @@ const onScroll = () => {
 }
 
 /** 用户点击选项按钮 → 直接发送 value 作为消息，清理旧工具卡片 */
-const sendChoice = (value, block) => {
+const sendChoice = async (value, block) => {
+  // 子代理 HITL 审批：调用 REST API 而非发送聊天消息
+  if (block?.subId != null) {
+    // 解析 action：/agree → approve, /deny → deny
+    const action = value === '/agree' ? 'approve' : 'deny'
+    try {
+      await fetch('/api/chat/sub-hitl/' + block.subId, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+      })
+      // 标记已选择
+      block.resolved = true
+      block.selectedTitle = action === 'approve' ? '同意执行' : '拒绝执行'
+    } catch (e) {
+      console.error('子代理 HITL 审批请求失败:', e)
+    }
+    return
+  }
+  // 主代理 HITL 审批：发送聊天消息
   // 标记已选择
   if (block) {
     block.resolved = true
@@ -660,15 +679,23 @@ const sendMessage = async (images = [], overrideText = null) => {
 
           const msg = getMsg()
           if (!msg) return
+
+          // 按 subId 查找或创建子代理容器块（用于并行子代理事件路由）
+          const findSubAgentBlock = (subId) => {
+            for (let i = msg.blocks.length - 1; i >= 0; i--) {
+              if (msg.blocks[i].type === 'sub_agent' && msg.blocks[i].subId === subId) {
+                return msg.blocks[i]
+              }
+            }
+            const container = { type: 'sub_agent', subId, blocks: [], status: '运行中', taskName: '子代理', expanded: true }
+            msg.blocks.push(container)
+            return container
+          }
+
           // ===== 子代理事件：注入 sub_agent 容器块，内部渲染 =====
           if (data.type === 'sub_content' || data.type === 'sub_reasoning' ||
               data.type === 'sub_tool_call' || data.type === 'sub_error') {
-            // 获取或创建子代理容器块
-            let container = msg.blocks[msg.blocks.length - 1]
-            if (!container || container.type !== 'sub_agent') {
-              container = { type: 'sub_agent', blocks: [], status: '运行中', taskName: '子代理', expanded: true }
-              msg.blocks.push(container)
-            }
+            const container = findSubAgentBlock(data.subId)
             // 向容器内添加内容
             if (data.type === 'sub_content') {
               const lb = container.blocks[container.blocks.length - 1]
@@ -699,44 +726,52 @@ const sendMessage = async (images = [], overrideText = null) => {
               container.blocks.push({type: 'content', content: '❌ ' + errText})
             }
           } else if (data.type === 'sub_tool_result') {
-            // 在最后一个子代理容器中匹配 tool_call
-            for (let i = msg.blocks.length - 1; i >= 0; i--) {
-              if (msg.blocks[i].type === 'sub_agent') {
-                const c = msg.blocks[i]
-                let result = data.result || data.content || ''
-                const rn = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
-                let targetName = data.name || ''
-                let matched = false
-                if (targetName) {
-                  for (let j = c.blocks.length - 1; j >= 0; j--) {
-                    if (c.blocks[j].type === 'tool_call' && c.blocks[j].name === targetName && !c.blocks[j].result) {
-                      c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].expanded = false
-                      matched = true; break
-                    }
-                  }
+            const c = findSubAgentBlock(data.subId)
+            let result = data.result || data.content || ''
+            const rn = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
+            let targetName = data.name || ''
+            let matched = false
+            if (targetName) {
+              for (let j = c.blocks.length - 1; j >= 0; j--) {
+                if (c.blocks[j].type === 'tool_call' && c.blocks[j].name === targetName && !c.blocks[j].result) {
+                  c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].expanded = false
+                  matched = true; break
                 }
-                if (!matched) {
-                  for (let j = c.blocks.length - 1; j >= 0; j--) {
-                    if (c.blocks[j].type === 'tool_call' && !c.blocks[j].result) {
-                      c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].expanded = false
-                      break
-                    }
-                  }
+              }
+            }
+            if (!matched) {
+              for (let j = c.blocks.length - 1; j >= 0; j--) {
+                if (c.blocks[j].type === 'tool_call' && !c.blocks[j].result) {
+                  c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].expanded = false
+                  break
                 }
-                break
               }
             }
           } else if (data.type === 'sub_complete') {
-            // 标记子代理容器完成
-            for (let i = msg.blocks.length - 1; i >= 0; i--) {
-              if (msg.blocks[i].type === 'sub_agent') {
-                msg.blocks[i].status = '已完成'
-                msg.blocks[i].taskName = data?.task || msg.blocks[i].taskName || '子代理'
-                msg.blocks[i].expanded = false
-                break
-              }
+            const c = findSubAgentBlock(data.subId)
+            c.status = '已完成'
+            c.taskName = data?.task || c.taskName || '子代理'
+            c.expanded = false
+          } else if (data.type === 'sub_choice') {
+            // 子代理 HITL 审批 → 作为顶级 choice 块渲染在主消息流中
+            let options = data.options || []
+            if (typeof options === 'string') {
+              try { options = JSON.parse(options) } catch {}
             }
-          } else if (data.type === 'sub_usage' || data.type === 'sub_choice' || data.type === 'sub_log') {
+            const title = data.title || ''
+            const desc = data.description || ''
+            const question = title
+                ? '子代理将执行：' + title.split('、').map(n => '`' + n + '`').join('、')
+                : '子代理工具调用需要审批'
+            msg.blocks.push({
+              type: 'choice',
+              subId: data.subId,
+              options: options,
+              question,
+              description: desc,
+              resolved: false
+            })
+          } else if (data.type === 'sub_usage' || data.type === 'sub_log') {
             // 暂不处理
             // ===== 普通主代理事件 =====
           } else if (data.type === 'reasoning') {
@@ -797,7 +832,7 @@ const sendMessage = async (images = [], overrideText = null) => {
               usage.value = {...usage.value, ...data}
             }
           } else if (data.type === 'choice') {
-            // 选项按钮（如 HITL 审批）
+            // 选项按钮（如 HITL 审批、ask_choice）
             let options = data.options || []
             if (typeof options === 'string') {
               try {
@@ -806,10 +841,12 @@ const sendMessage = async (images = [], overrideText = null) => {
               }
             }
             if (Array.isArray(options) && options.length > 0) {
-              // 尝试从同消息的 ask_choice tool_call 中获取 question 和 summary
-              let question = data.question || ''
+              // HITL 审批：使用后端传入的 title/description
+              let question = data.title || data.question || ''
+              const description = data.description || ''
               let toolOptions = null
-              if (msg.blocks) {
+              // 尝试从同消息的 ask_choice tool_call 中获取 question 和 summary（向后兼容）
+              if (!question && msg.blocks) {
                 for (let i = msg.blocks.length - 1; i >= 0; i--) {
                   const b = msg.blocks[i]
                   if (b.type === 'tool_call' && b.name === 'ask_choice') {
@@ -831,7 +868,7 @@ const sendMessage = async (images = [], overrideText = null) => {
                   return opt
                 })
               }
-              msg.blocks.push({type: 'choice', options, question})
+              msg.blocks.push({type: 'choice', options, question, description})
             }
           } else if (data.type === 'log') {
             // 系统日志（如 [compact] 折叠结果）→ 仅展示 INFO 及以上级别

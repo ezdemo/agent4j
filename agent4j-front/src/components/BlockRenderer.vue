@@ -351,6 +351,7 @@
           </span>
           <span class="choice-q-text">{{ block.question }}</span>
         </div>
+        <div class="choice-desc" v-if="block.description">{{ block.description }}</div>
         <div class="choice-buttons">
           <button
               v-for="opt in (block.options || [])"
@@ -1301,6 +1302,15 @@ const parseResult = (block) => {
 .choice-q-text {
   flex: 1;
   font-weight: 500;
+}
+
+/* 选项描述 — 工具参数详情等 */
+.choice-desc {
+  padding: 0 12px 6px;
+  font-size: 0.85em;
+  color: var(--color-text-secondary, #666);
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 /* 选项列表 — 横向 wrap */
