@@ -672,12 +672,14 @@ const sendMessage = async (images = [], overrideText = null) => {
             // 向容器内添加内容
             if (data.type === 'sub_content') {
               const lb = container.blocks[container.blocks.length - 1]
-              if (lb?.type === 'content') lb.content += (data.content || '')
-              else container.blocks.push({type: 'content', content: data.content || ''})
+              const content = data.token || data.content || ''
+              if (lb?.type === 'content') lb.content += content
+              else container.blocks.push({type: 'content', content: content})
             } else if (data.type === 'sub_reasoning') {
               const lb = container.blocks[container.blocks.length - 1]
-              if (lb?.type === 'reasoning') lb.content += (data.content || '')
-              else container.blocks.push({type: 'reasoning', content: data.content || '', showContent: false})
+              const reasoningContent = data.token || data.content || ''
+              if (lb?.type === 'reasoning') lb.content += reasoningContent
+              else container.blocks.push({type: 'reasoning', content: reasoningContent, showContent: false})
             } else if (data.type === 'sub_tool_call') {
               let name = data.name || '', args = data.args || data.arguments || ''
               if (typeof args === 'string') try {
