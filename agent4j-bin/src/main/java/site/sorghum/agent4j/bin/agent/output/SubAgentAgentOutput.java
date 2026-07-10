@@ -54,6 +54,14 @@ public class SubAgentAgentOutput implements AgentOutput {
         this.subId = SUB_ID_COUNTER.incrementAndGet();
     }
 
+    /**
+     * 获取子代理唯一标识（自增整数）。
+     * 用于 HITL Broker 注册和前端事件路由。
+     */
+    public int getSubId() {
+        return subId;
+    }
+
     // ==================== JSON 拼接辅助 ====================
 
     /** 构建 subId 前缀 JSON 片段 */
@@ -150,8 +158,20 @@ public class SubAgentAgentOutput implements AgentOutput {
 
     @Override
     public void onChoice(List<ChoiceOption> options) {
+        onChoice(options, null, null);
+    }
+
+    @Override
+    public void onChoice(List<ChoiceOption> options, String title, String description) {
         if (options != null && !options.isEmpty()) {
-            StringBuilder sb = new StringBuilder(subIdPrefix() + "\"options\":[");
+            StringBuilder sb = new StringBuilder(subIdPrefix());
+            if (title != null && !title.isEmpty()) {
+                sb.append("\"title\":").append(escapeJson(title)).append(",");
+            }
+            if (description != null && !description.isEmpty()) {
+                sb.append("\"description\":").append(escapeJson(description)).append(",");
+            }
+            sb.append("\"options\":[");
             for (int i = 0; i < options.size(); i++) {
                 if (i > 0) sb.append(",");
                 sb.append("{\"title\":").append(escapeJson(options.get(i).title()));

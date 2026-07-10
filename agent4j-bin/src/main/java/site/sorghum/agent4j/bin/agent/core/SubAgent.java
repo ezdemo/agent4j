@@ -1,7 +1,9 @@
 package site.sorghum.agent4j.bin.agent.core;
 
 import lombok.Getter;
+import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.bin.agent.context.ConversationContext;
+import site.sorghum.agent4j.bin.agent.hitl.SubAgentHITLBroker;
 import site.sorghum.agent4j.bin.agent.listener.AgentLoopListener;
 import site.sorghum.agent4j.bin.agent.model.UserMessage;
 import site.sorghum.agent4j.bin.agent.output.SubAgentAgentOutput;
@@ -15,6 +17,7 @@ import site.sorghum.agent4j.tool.AgentOutput;
 
 import java.io.IOException;
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 
 /**
  * 子代理 —— 隔离的子 AgentLoop，继承父工具集。
@@ -26,6 +29,7 @@ import java.util.*;
  *
  * @author Sorghum
  */
+@Slf4j
 public class SubAgent {
 
     /**
@@ -67,6 +71,12 @@ public class SubAgent {
     private SessionService sessionService = null;
     /** 代理配置（继承父级，确保上下文折叠/工具超时等行为一致） */
     private Agent4jConfig config = null;
+    /** 子代理是否启用 HITL（默认 false，向后兼容）。可通过 {@link #setHitlEnabled(boolean)} 或环境变量 AGENT4J_SUB_HITL 启用 */
+    private boolean hitlEnabled = false;
+    /** 子代理的 AgentLoop 引用（用于 HITL 暂停-恢复） */
+    private AgentLoop subLoop = null;
+    /** 子代理唯一标识（由 SubAgentAgentOutput 分配，用于 HITL Broker 注册） */
+    private int subAgentId = 0;
     /**
      * 获取按模型分别累计的 token 用量: model -> [prompt, completion, cacheHit, cacheMiss]
      */
@@ -157,6 +167,21 @@ public class SubAgent {
     }
 
     /**
+     * 设置子代理 HITL 模式。启用后子代理的工具调用将经过 HITL 审批（与主代理行为一致）。
+     * <p>默认关闭，保持向后兼容。可通过环境变量 AGENT4J_SUB_HITL=true 全局启用。</p>
+     */
+    public void setHitlEnabled(boolean enabled) {
+        this.hitlEnabled = enabled;
+    }
+
+    /**
+     * 获取子代理唯一标识（由 SubAgentAgentOutput 创建时分配）。
+     */
+    public int getSubAgentId() {
+        return subAgentId;
+    }
+
+    /**
      * 运行子代理，返回最终回复。
      * 子代理拥有独立的 ConversationContext 和 AgentLoop，
      * 继承父级工具集（排除递归 spawn 和用户交互工具）。
@@ -169,11 +194,13 @@ public class SubAgent {
         ConversationContext ctx = new ConversationContext(
                 new PromptPrefix(systemPrompt, registry.toOpenAiTools()));
         // 继承父级配置（config、sessionId、sessionService），确保子代理行为一致
-        // 注意：hitlDefault=false — 子代理的工具调用不经过 HITL 审批。
-        //        子代理是隔离的子任务，应独立高效完成，不应阻塞等待人工审批。
-        //        父代理的 HITL 审批仍会拦截父级层面的工具调用（如 task 工具本身）。
+        // HITL 模式：默认关闭，由 TaskTool 根据父代理 isHitlMode() 自动同步；
+        // 也可通过环境变量 AGENT4J_SUB_HITL=true 强制启用（调试用）。
+        boolean effectiveHitl = this.hitlEnabled ||
+                Boolean.parseBoolean(System.getenv().getOrDefault("AGENT4J_SUB_HITL", "false"));
         Agent4jConfig effectiveConfig = (this.config != null) ? this.config : Agent4jConfig.getInstance();
-        AgentLoop subLoop = new AgentLoop(client, registry, ctx, false, effectiveConfig);
+        this.subLoop = new AgentLoop(client, registry, ctx, effectiveHitl, effectiveConfig);
+        AgentLoop subLoop = this.subLoop;
 
         // 传播父级中断源：子代理主循环会同时检查自身中断标志和父级的 isAbortRequested()
         if (parentController != null) {
@@ -184,7 +211,8 @@ public class SubAgent {
         // 使用 SubAgentAgentOutput 包装器将所有事件以 sub_xxx 前缀独立通道发送，
         // 前端在独立 Modal 中渲染子代理输出，不占用主消息流。
         if (parentOutput != null) {
-            AgentOutput wrapped = new SubAgentAgentOutput(parentOutput, task);
+            SubAgentAgentOutput wrapped = new SubAgentAgentOutput(parentOutput, task);
+            this.subAgentId = wrapped.getSubId();
             subLoop.setOutput(wrapped);
         }
 
@@ -236,6 +264,50 @@ public class SubAgent {
             }
         };
         subLoop.setListener(capturingListener);
-        return subLoop.run(UserMessage.of(task));
+        String result = subLoop.run(UserMessage.of(task));
+
+        // ==================== HITL 暂停-恢复循环 ====================
+        // 当子代理的 HitlManager 拦截工具调用时，mainLoop 返回 HITL prompt，
+        // subLoop.hasPendingHITL() 为 true。此时阻塞等待用户审批，审批后通过
+        // subLoop.run(null) 触发 resumeAfterHITL → mainLoop 继续推理。
+        // 如果子代理在执行中再次触发 HITL，while 循环会再次进入等待。
+        while (subLoop.hasPendingHITL()) {
+            // sub_choice 事件已由 HitlManager 通过 SubAgentAgentOutput 发送到前端
+            log.info("[sub] 子代理 HITL 审批等待中, subId={}", subAgentId);
+
+            // 注册到 Broker，然后轮询等待（每秒检查中断状态）
+            SubAgentHITLBroker.Pending pending = SubAgentHITLBroker.register(subAgentId);
+            boolean approved = false;
+            boolean released = false;
+            try {
+                while (!released) {
+                    released = pending.latch().await(1, TimeUnit.SECONDS);
+                    // 检查父代理或用户是否已请求中断
+                    if (!released && subLoop.isAbortRequested()) {
+                        log.info("[sub] 子代理 HITL 被中断信号取消, subId={}", subAgentId);
+                        SubAgentHITLBroker.resolve(subAgentId, false);
+                        // 等待 resolve 生效
+                        pending.latch().await(100, TimeUnit.MILLISECONDS);
+                        released = true;
+                    }
+                }
+                approved = pending.approved().get();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                approved = false;
+            } finally {
+                SubAgentHITLBroker.remove(subAgentId);
+            }
+
+            log.info("[sub] 子代理 HITL 审批结果: {}, subId={}", approved ? "批准" : "拒绝", subAgentId);
+            if (approved) {
+                subLoop.approveHITL();
+            } else {
+                subLoop.denyHITL();
+            }
+            result = subLoop.run(null); // 触发 resumeAfterHITL → mainLoop 继续
+        }
+
+        return result;
     }
 }

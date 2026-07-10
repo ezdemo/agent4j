@@ -89,4 +89,14 @@ public interface AgentLoopController {
     default SessionService getSessionService() {
         return null;
     }
+
+    /**
+     * 获取当前 HITL 模式状态。
+     * <p>子代理通过此接口继承父代理的 HITL 开关状态。</p>
+     *
+     * @return true 表示 HITL 审批模式已开启
+     */
+    default boolean isHitlMode() {
+        return false;
+    }
 }

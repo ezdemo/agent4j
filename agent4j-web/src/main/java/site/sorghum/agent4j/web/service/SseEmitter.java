@@ -112,7 +112,20 @@ public class SseEmitter {
     }
 
     public void sendChoice(List<?> options) {
+        sendChoice(null, null, options);
+    }
+
+    /**
+     * 发送 choice 事件（带标题和描述）。
+     */
+    public void sendChoice(String title, String description, List<?> options) {
         ONode root = ONode.ofJson("{}").asObject();
+        if (title != null && !title.isEmpty()) {
+            root.set("title", title);
+        }
+        if (description != null && !description.isEmpty()) {
+            root.set("description", description);
+        }
         ONode arr = root.getOrNew("options").asArray();
         for (Object opt : options) {
             ONode item = arr.addNew();
