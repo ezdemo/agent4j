@@ -570,6 +570,11 @@ const onScroll = () => {
 }
 
 /** 用户点击选项按钮 → 直接发送 value 作为消息，清理旧工具卡片 */
+// HITL 审批 question 格式化：将工具名转为 `tool` 形式的展示文本
+const formatHitlQuestion = (title) => {
+  return '将执行 ' + title.split('、').map(n => '`' + n + '`').join('、')
+}
+
 const sendChoice = async (value, block) => {
   // 子代理 HITL 审批：调用 REST API 而非发送聊天消息
   if (block?.subId != null) {
@@ -761,7 +766,7 @@ const sendMessage = async (images = [], overrideText = null) => {
             const title = data.title || ''
             const desc = data.description || ''
             const question = title
-                ? '子代理将执行：' + title.split('、').map(n => '`' + n + '`').join('、')
+                ? '子代理 ' + formatHitlQuestion(title)
                 : '子代理工具调用需要审批'
             msg.blocks.push({
               type: 'choice',
@@ -842,7 +847,9 @@ const sendMessage = async (images = [], overrideText = null) => {
             }
             if (Array.isArray(options) && options.length > 0) {
               // HITL 审批：使用后端传入的 title/description
-              let question = data.title || data.question || ''
+              let question = data.title
+                ? formatHitlQuestion(data.title)
+                : (data.question || '')
               const description = data.description || ''
               let toolOptions = null
               // 尝试从同消息的 ask_choice tool_call 中获取 question 和 summary（向后兼容）
