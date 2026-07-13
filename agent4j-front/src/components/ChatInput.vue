@@ -207,8 +207,8 @@
         <!-- 权限切换 -->
         <div class="permission-hitl-selector">
           <div class="reasoning-effort-selector">
-            <button class="effort-btn" @click="togglePermissionPicker" :title="currentPermission ? '审批模式' : '自由模式'">
-              {{ currentPermission ? '审批' : '自由' }}
+            <button class="effort-btn" @click="togglePermissionPicker" :title="'当前权限模式: '+currentPermission">
+              {{ permissionLabel }}
               <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="6 9 12 15 18 9"/>
               </svg>
@@ -304,7 +304,7 @@ const props = defineProps({
   connected: {type: Boolean, default: true},
   version: {type: String, default: ''},
   currentSkill: {type: Object, default: null},
-  currentPermission: {type: Boolean, default: false},
+  currentPermission: {type: String, default: 'free'},
   petState: {type: String, default: 'idle'}
 })
 
@@ -631,9 +631,14 @@ const onWfLeave = () => {
 // ============= 权限切换 =============
 const showPermissionPicker = ref(false)
 const permissionOptions = [
-  {value: false, label: '自由模式'},
-  {value: true, label: '审批模式'}
+  {value: 'free', label: '自由模式'},
+  {value: 'approval', label: '审批模式'},
+  {value: 'auto', label: '自动模式'}
 ]
+const permissionLabel = computed(() => {
+  const found = permissionOptions.find(o => o.value === props.currentPermission)
+  return found ? found.label : props.currentPermission
+})
 const togglePermissionPicker = () => {
   showPermissionPicker.value = !showPermissionPicker.value
 }

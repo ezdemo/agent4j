@@ -254,13 +254,13 @@ const handleSwitchSkill = (skills) => {
 }
 
 // ============= 权限切换（hitl） =============
-const currentPermission = ref(false)
-const handleSwitchPermission = async (hitl) => {
-  if (hitl === currentPermission.value) return
+const currentPermission = ref('free')
+const handleSwitchPermission = async (mode) => {
+  if (mode === currentPermission.value) return
   try {
-    const r = await configAPI.updateConfig({hitl})
+    const r = await configAPI.updateConfig({hitl: mode})
     if (r.success) {
-      currentPermission.value = hitl
+      currentPermission.value = mode
     }
   } catch (e) {
     console.error('切换权限模式失败:', e)
@@ -352,7 +352,7 @@ const loadUsage = async (override) => {
     }
     if (configRes.status === 'fulfilled' && configRes.value.success) {
       currentReasoningEffort.value = configRes.value.data?.reasoningEffort || 'max'
-      currentPermission.value = !!configRes.value.data?.hitl
+      currentPermission.value = configRes.value.data?.hitl || 'free'
     }
   } catch {
   }

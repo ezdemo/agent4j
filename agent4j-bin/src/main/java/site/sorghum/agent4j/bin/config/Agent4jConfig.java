@@ -65,7 +65,7 @@ public class Agent4jConfig {
                   "editMode": "auto",
                   "reasoningEffort": "high",
                   "lang": "ZH",
-                  "hitl": false,
+                  "hitl": "free",
                   "maxContextChars": 200000,
                   "keepTailChars": 80000,
                   "toolTimeoutSec": 360,
@@ -237,14 +237,24 @@ public class Agent4jConfig {
     }
 
     /**
-     * 获取 HITL（Human-In-The-Loop）模式默认状态。
-     * true = 启动时默认开启 HITL，执行非只读工具前需用户审批。
-     * false = 默认关闭。未配置时默认 false。
+     * 获取 HITL（Human-In-The-Loop）模式。
+     * <ul>
+     *   <li>{@code "free"} — 自由模式，所有工具直接执行，无需审批</li>
+     *   <li>{@code "approval"} — 审批模式，非只读工具执行前需用户审批</li>
+     *   <li>{@code "auto"} — 自动模式，自动批准所有工具调用</li>
+     * </ul>
+     * <p>向后兼容旧的 boolean 配置：{@code true → "approval"}，{@code false → "free"}。</p>
+     * 未配置时默认 {@code "free"}。
      */
-    public boolean hitl() {
+    public String hitl() {
         ONode n = root.select("$.hitl");
-        if (n == null || n.isNull()) return false;
-        return n.getBoolean();
+        if (n == null || n.isNull()) return "free";
+        // 向后兼容：旧版 config.json 中 hitl 为 boolean 值
+        if (n.isBoolean()) {
+            return n.getBoolean() ? "approval" : "free";
+        }
+        String val = n.getString();
+        return val != null ? val : "free";
     }
 
     /**

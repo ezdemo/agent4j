@@ -115,7 +115,7 @@ public class Agent4jAgent {
                 switch (e.key()) {
                     case "model" -> setModel((String) e.value());
                     case "reasoningEffort" -> setReasoningEffort((String) e.value());
-                    case "hitl" -> setHitlMode((Boolean) e.value());
+                    case "hitl" -> setHitlMode(String.valueOf(e.value()));
                     case "disabledTools" -> refreshTools();
                     default -> log.warn("[bus] 未知配置键: {}", e.key());
                 }
@@ -143,10 +143,10 @@ public class Agent4jAgent {
      *
      * @param client   模型客户端（HttpModelClient 或共享实例）
      * @param registry 工具注册表
-     * @param hitl     是否启用人工审批
+     * @param hitl     HITL 模式（free / approval / auto）
      * @return 构造完成的 AgentLoop 实例
      */
-    private AgentLoop initSessionAndLoop(ModelClient client, ToolRegistry registry, boolean hitl) {
+    private AgentLoop initSessionAndLoop(ModelClient client, ToolRegistry registry, String hitl) {
         try {
             final String workspacePath = this.workspace != null
                     ? this.workspace.toAbsolutePath().toString()
@@ -430,8 +430,18 @@ public class Agent4jAgent {
     }
 
     // ========== HITL (Human-In-The-Loop) ==========
+
     /**
-     * 获取 HITL 模式状态
+     * 获取当前 HITL 模式名称。
+     *
+     * @return "free" / "approval" / "auto"
+     */
+    public String getHitlMode() {
+        return loop.getHitlMode();
+    }
+
+    /**
+     * 获取 HITL 是否处于启用状态（审批模式或自动模式均视为启用）。
      */
     public boolean isHitlMode() {
         return loop.isHitlMode();
@@ -439,9 +449,11 @@ public class Agent4jAgent {
 
     /**
      * 直接设置 HITL 模式（用于配置热更新）
+     *
+     * @param mode "free" / "approval" / "auto"，向后兼容 "true"/"false"
      */
-    public void setHitlMode(boolean on) {
-        loop.setHitlMode(on);
+    public void setHitlMode(String mode) {
+        loop.setHitlMode(mode);
     }
 
     /**
@@ -570,7 +582,7 @@ public class Agent4jAgent {
         Path workspace = null;
         Set<String> disabledTools;
         List<String> blockedPaths;
-        boolean hitl;
+        String hitl = "free";
         /**
          * 命令注册表（Solon 自动收集的 ChatCommand Bean）
          */
@@ -666,7 +678,7 @@ public class Agent4jAgent {
             return this;
         }
 
-        public Builder hitl(boolean v) {
+        public Builder hitl(String v) {
             this.hitl = v;
             return this;
         }

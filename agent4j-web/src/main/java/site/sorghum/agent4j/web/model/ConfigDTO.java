@@ -15,7 +15,7 @@ public record ConfigDTO(
         String editMode,
         String reasoningEffort,
         String lang,
-        boolean hitl,
+        String hitl,
         Set<String> disabledTools,
         List<String> blockedPaths,
         String apiKey,

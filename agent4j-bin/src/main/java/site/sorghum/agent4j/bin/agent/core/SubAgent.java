@@ -71,8 +71,8 @@ public class SubAgent {
     private SessionService sessionService = null;
     /** 代理配置（继承父级，确保上下文折叠/工具超时等行为一致） */
     private Agent4jConfig config = null;
-    /** 子代理是否启用 HITL（默认 false，向后兼容）。可通过 {@link #setHitlEnabled(boolean)} 或环境变量 AGENT4J_SUB_HITL 启用 */
-    private boolean hitlEnabled = false;
+    /** 子代理 HITL 模式。默认 "free"，向下兼容：true → "approval"，false → "free"。可通过 {@link #setHitlMode(String)} 或环境变量 AGENT4J_SUB_HITL 覆盖 */
+    private String hitlMode = "free";
     /** 子代理的 AgentLoop 引用（用于 HITL 暂停-恢复） */
     private AgentLoop subLoop = null;
     /** 子代理唯一标识（由 SubAgentAgentOutput 分配，用于 HITL Broker 注册） */
@@ -167,11 +167,20 @@ public class SubAgent {
     }
 
     /**
-     * 设置子代理 HITL 模式。启用后子代理的工具调用将经过 HITL 审批（与主代理行为一致）。
-     * <p>默认关闭，保持向后兼容。可通过环境变量 AGENT4J_SUB_HITL=true 全局启用。</p>
+     * 设置子代理 HITL 模式。
+     * <p>默认 "free"，保持向后兼容。可通过环境变量 AGENT4J_SUB_HITL 全局覆盖（接受 free/approval/auto 或 true/false）。</p>
+     *
+     * @param mode "free" / "approval" / "auto"，向后兼容 "true"/"false"
      */
-    public void setHitlEnabled(boolean enabled) {
-        this.hitlEnabled = enabled;
+    public void setHitlMode(String mode) {
+        this.hitlMode = mode;
+    }
+
+    /**
+     * 获取子代理 HITL 模式。
+     */
+    public String getHitlMode() {
+        return hitlMode;
     }
 
     /**
@@ -194,10 +203,10 @@ public class SubAgent {
         ConversationContext ctx = new ConversationContext(
                 new PromptPrefix(systemPrompt, registry.toOpenAiTools()));
         // 继承父级配置（config、sessionId、sessionService），确保子代理行为一致
-        // HITL 模式：默认关闭，由 TaskTool 根据父代理 isHitlMode() 自动同步；
-        // 也可通过环境变量 AGENT4J_SUB_HITL=true 强制启用（调试用）。
-        boolean effectiveHitl = this.hitlEnabled ||
-                Boolean.parseBoolean(System.getenv().getOrDefault("AGENT4J_SUB_HITL", "false"));
+        // HITL 模式：默认 free，由 TaskTool 根据父代理同步；
+        // 也可通过环境变量 AGENT4J_SUB_HITL 强制覆盖（接受 free/approval/auto 或 true/false）。
+        String envHitl = System.getenv("AGENT4J_SUB_HITL");
+        String effectiveHitl = (envHitl != null && !envHitl.isEmpty()) ? envHitl : this.hitlMode;
         Agent4jConfig effectiveConfig = (this.config != null) ? this.config : Agent4jConfig.getInstance();
         this.subLoop = new AgentLoop(client, registry, ctx, effectiveHitl, effectiveConfig);
         AgentLoop subLoop = this.subLoop;
