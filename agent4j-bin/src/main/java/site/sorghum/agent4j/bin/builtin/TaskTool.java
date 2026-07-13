@@ -119,7 +119,7 @@ public class TaskTool extends AbsToolProvider implements SolonToTools {
 
             // 继承父代理的 HITL 模式：主代理开启 HITL 时子代理自动同步
             if (parentController != null && parentController.isHitlMode()) {
-                sub.setHitlEnabled(true);
+                sub.setHitlMode("approval");
             }
 
             // 将父 Agent 的 AgentOutput 传递给子代理，使其流式输出能实时推送给用户

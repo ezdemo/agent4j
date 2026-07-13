@@ -370,7 +370,7 @@ public class AgentService {
             String apiKey = cfg.apiKey();
             String model = cfg.model();
             String reasoningEffort = cfg.reasoningEffort();
-            boolean hitl = cfg.hitl();
+            String hitl = cfg.hitl();
 
             Agent4jAgent.Builder builder = Agent4jAgent.builder()
                     .config(cfg)
@@ -432,7 +432,7 @@ public class AgentService {
         int cacheSize = sessionCache.size();
 
         int historySize = 0;
-        boolean hitlMode = false;
+        String hitlMode = "free";
         String sessionName = null;
         long promptTokens = 0;
         long completionTokens = 0;
@@ -442,7 +442,7 @@ public class AgentService {
         Agent4jAgent agent = sessionCache.get(defaultKey);
         if (agent != null) {
             historySize = agent.historySize();
-            hitlMode = agent.isHitlMode();
+            hitlMode = agent.getHitlMode();
             SessionStore store = agent.getSessionStore();
             if (store != null) {
                 sessionName = store.currentName();

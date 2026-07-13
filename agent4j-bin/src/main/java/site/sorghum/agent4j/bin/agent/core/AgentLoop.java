@@ -127,20 +127,20 @@ public class AgentLoop implements AgentLoopController {
     // ==================== 构造器 ====================
 
     public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx) {
-        this(client, registry, ctx, false, null);
+        this(client, registry, ctx, "free", null);
     }
 
-    public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx, boolean hitlDefault) {
-        this(client, registry, ctx, hitlDefault, null);
+    public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx, String hitlMode) {
+        this(client, registry, ctx, hitlMode, null);
     }
 
     public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx,
-                     boolean hitlDefault, Agent4jConfig config) {
+                     String hitlMode, Agent4jConfig config) {
         this.client = client;
         this.registry = registry;
         this.ctx = ctx;
         this.config = config;
-        this.hitlManager = new HitlManager(hitlDefault);
+        this.hitlManager = new HitlManager(hitlMode);
     }
 
     // ==================== 公共控制 API ====================
@@ -155,9 +155,16 @@ public class AgentLoop implements AgentLoopController {
         return hitlManager.isHitlMode();
     }
 
+    /**
+     * 获取当前 HITL 模式名称。
+     */
+    public String getHitlMode() {
+        return hitlManager.getHitlMode();
+    }
+
     /** 设置 HITL 模式（用于配置热更新） */
-    public void setHitlMode(boolean on) {
-        hitlManager.setHitlMode(on);
+    public void setHitlMode(String mode) {
+        hitlManager.setHitlMode(mode);
     }
 
     /** 批准待执行的工具调用 */

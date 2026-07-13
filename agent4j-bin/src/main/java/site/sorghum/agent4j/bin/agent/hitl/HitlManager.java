@@ -1,7 +1,6 @@
 package site.sorghum.agent4j.bin.agent.hitl;
 
 import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import site.sorghum.agent4j.bin.agent.model.HitlState;
@@ -23,17 +22,34 @@ import java.util.List;
  * </ul>
  * </p>
  *
+ * <h3>HITL 模式</h3>
+ * <ul>
+ *   <li>{@link #MODE_FREE free} — 自由模式，所有工具直接执行，无需审批</li>
+ *   <li>{@link #MODE_APPROVAL approval} — 审批模式，非只读工具执行前需用户审批</li>
+ *   <li>{@link #MODE_AUTO auto} — 自动模式，自动批准所有工具调用（无用户交互）</li>
+ * </ul>
+ *
  * @author Sorghum
  */
 @Slf4j
 public class HitlManager {
 
+    // ==================== HITL 模式常量 ====================
+
+    /** 自由模式：所有工具直接执行，无需审批 */
+    public static final String MODE_FREE = "free";
+    /** 审批模式：非只读工具执行前需用户审批 */
+    public static final String MODE_APPROVAL = "approval";
+    /** 自动模式：自动批准所有工具调用（无用户交互） */
+    public static final String MODE_AUTO = "auto";
+
+    /** 所有模式的列表（用于 toggle 循环） */
+    private static final String[] MODES = {MODE_FREE, MODE_APPROVAL, MODE_AUTO};
+
     // ==================== 普通 HITL 状态 ====================
 
-    /** HITL 模式开关（true = 执行非只读工具前需用户审批） */
-    @Setter
-    @Getter
-    private volatile boolean hitlMode;
+    /** HITL 模式（free / approval / auto） */
+    private volatile String hitlMode = MODE_FREE;
 
     /** HITL 当前审批状态 */
     private volatile HitlState hitlState = HitlState.NONE;
@@ -66,18 +82,65 @@ public class HitlManager {
     private volatile String pendingSandboxHITDetails;
 
     public HitlManager() {
-        this(false);
+        this(MODE_FREE);
     }
 
-    public HitlManager(boolean hitlDefault) {
-        this.hitlMode = hitlDefault;
+    /**
+     * @param hitlMode HITL 模式，接受 "free" / "approval" / "auto"，向后兼容 "true" / "false"
+     */
+    public HitlManager(String hitlMode) {
+        this.hitlMode = normalizeMode(hitlMode);
+    }
+
+    /**
+     * 将字符串规范化为有效的 HITL 模式（向后兼容 boolean 值）。
+     */
+    private static String normalizeMode(String mode) {
+        if (mode == null) return MODE_FREE;
+        return switch (mode.toLowerCase()) {
+            case "approval", "approve", "true" -> MODE_APPROVAL;
+            case "auto" -> MODE_AUTO;
+            default -> MODE_FREE; // false, free, unknown
+        };
     }
 
     // ==================== 基础状态控制 ====================
 
-    /** 切换 HITL 模式 */
+    /**
+     * 切换 HITL 模式：free → approval → auto → free …
+     */
     public synchronized void toggleHitl() {
-        hitlMode = !hitlMode;
+        for (int i = 0; i < MODES.length; i++) {
+            if (MODES[i].equals(hitlMode)) {
+                hitlMode = MODES[(i + 1) % MODES.length];
+                return;
+            }
+        }
+        hitlMode = MODE_FREE; // 兜底
+    }
+
+    /**
+     * 获取当前 HITL 模式名称。
+     */
+    public String getHitlMode() {
+        return hitlMode;
+    }
+
+    /**
+     * 设置 HITL 模式。
+     *
+     * @param mode "free" / "approval" / "auto"，向后兼容 "true"/"false"
+     */
+    public void setHitlMode(String mode) {
+        this.hitlMode = normalizeMode(mode);
+    }
+
+    /**
+     * 是否启用 HITL 机制（审批模式或自动模式均视为启用）。
+     * 自由模式下返回 false。
+     */
+    public boolean isHitlMode() {
+        return MODE_APPROVAL.equals(hitlMode) || MODE_AUTO.equals(hitlMode);
     }
 
     /** 批准待执行的工具调用 */
@@ -136,14 +199,19 @@ public class HitlManager {
     }
 
     /**
-     * HITL 拦截：暂存工具调用，通过 {@code output} 向用户发送审批提示。
+     * HITL 拦截：根据当前模式决定是否暂存工具调用等待用户审批。
+     * <ul>
+     *   <li>自由模式 ({@link #MODE_FREE})：直接放行，返回 {@code null}</li>
+     *   <li>自动模式 ({@link #MODE_AUTO})：自动批准，返回 {@code null}</li>
+     *   <li>审批模式 ({@link #MODE_APPROVAL})：暂存并等待用户审批</li>
+     * </ul>
      * <p>如果本轮工具调用全部为免审批工具（finish/ask_choice），直接放行返回 {@code null}。</p>
      *
      * @param toolCalls       工具调用 ONode 数组
      * @param content         assistant 消息的 content
      * @param reasoningContent assistant 消息的 reasoning_content
      * @param output          输出接口（用于发送审批提示）
-     * @return 审批提示文本，全部免审批时返回 {@code null}
+     * @return 审批提示文本，直接放行时返回 {@code null}
      */
     public String interceptForHITL(ONode toolCalls, String content, String reasoningContent,
                                    AgentOutput output) {
@@ -155,7 +223,24 @@ public class HitlManager {
             return null;
         }
 
-        // 暂存状态
+        // ---- 根据模式决定行为 ----
+        if (MODE_FREE.equals(hitlMode)) {
+            // 自由模式：不拦截，直接放行
+            return null;
+        }
+
+        if (MODE_AUTO.equals(hitlMode)) {
+            // 自动模式：自动批准，直接放行（暂存状态供后续使用）
+            log.debug("[hitl] 自动模式：自动批准工具调用: {}", tcList.stream().map(ToolCallEntry::name).toList());
+            this.hitlState = HitlState.APPROVED;
+            this.pendingHITLToolCalls = toolCalls;
+            this.pendingHITLContent = content;
+            this.pendingHITLReasoning = reasoningContent;
+            this.pendingHITTcList = tcList;
+            return null;
+        }
+
+        // ---- 审批模式：暂存状态，等待用户审批 ----
         this.pendingHITLToolCalls = toolCalls;
         this.pendingHITLContent = content;
         this.pendingHITLReasoning = reasoningContent;

@@ -112,26 +112,26 @@
           <!-- 内层思考 -->
           <div v-if="ib.type === 'reasoning'" class="tool-group-item-block">
             <div class="block-reasoning">
-              <div class="reasoning-head" @click="togglePathItem(ib._itemId)">
+              <div class="reasoning-head" @click="togglePathItem(block._groupId, ibi)">
                 <span class="default-icon" v-html="THINKING_ICON"></span>
                 <span>思考</span>
                 <span class="default-icon"
                       v-html="CHEVRON_DOWN_ICON"
                       :style="{
-                        transform: pathItemExpanded[ib._itemId] ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transform: pathItemExpanded[getPathItemKey(block._groupId, ibi)] ? 'rotate(180deg)' : 'rotate(0deg)',
                         display: 'inline-block',
                         transition: 'transform 0.25s ease',
                         lineHeight: 0
                       }">
                 </span>
               </div>
-              <div v-if="pathItemExpanded[ib._itemId]" class="reasoning-text" v-html="fmt(ib.content)"></div>
+              <div v-if="pathItemExpanded[getPathItemKey(block._groupId, ibi)]" class="reasoning-text" v-html="fmt(ib.content)"></div>
             </div>
           </div>
           <!-- 内层工具 -->
           <div v-else-if="ib.type === 'tool_call'" class="tool-group-item-block">
             <div class="block-tool">
-              <div class="tool-head" @click="togglePathItem(ib._itemId)">
+              <div class="tool-head" @click="togglePathItem(block._groupId, ibi)">
                 <span class="tool-icon default-icon" :class="ib.status">
                   <span v-if="ib.status === '执行中'" v-html="SPINNER_ICON"></span>
                   <span v-else-if="ib.status === '成功'" v-html="CHECK_ICON_SM"></span>
@@ -155,14 +155,14 @@
                 <span class="default-icon"
                       v-html="CHEVRON_DOWN_ICON"
                       :style="{
-                        transform: pathItemExpanded[ib._itemId] ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transform: pathItemExpanded[getPathItemKey(block._groupId, ibi)] ? 'rotate(180deg)' : 'rotate(0deg)',
                         display: 'inline-block',
                         transition: 'transform 0.25s ease',
                         lineHeight: 0
                       }">
                 </span>
               </div>
-              <div v-if="pathItemExpanded[ib._itemId]" class="tool-detail">
+              <div v-if="pathItemExpanded[getPathItemKey(block._groupId, ibi)]" class="tool-detail">
                 <!-- 工作流工具：用 WorkflowSteps 渲染 -->
                 <div v-if="isWorkflowTool(ib)" class="workflow-tool-detail">
                   <WorkflowSteps :data="getWorkflowData(ib)" />
@@ -382,7 +382,7 @@ import {md} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
 import {CHECK_ICON_SM, CHEVRON_DOWN_ICON, CIRCLE_ICON, SPINNER_ICON, THINKING_ICON} from '../utils/icons'
 import {LRUCache} from '../utils/cache'
-import {ref, computed} from 'vue'
+import {ref, computed, watchEffect} from 'vue'
 import WorkflowSteps from './WorkflowSteps.vue'
 
 const props = defineProps({
@@ -412,7 +412,10 @@ const togglePathGroup = (groupId) => {
 // ── 路径组内层块折叠状态（key = groupId-index） ──
 const pathItemExpanded = ref({})
 
-const togglePathItem = (key) => {
+const getPathItemKey = (groupId, index) => `${groupId}-${index}`
+
+const togglePathItem = (groupId, index) => {
+  const key = getPathItemKey(groupId, index)
   pathItemExpanded.value = {...pathItemExpanded.value, [key]: !pathItemExpanded.value[key]}
 }
 
@@ -439,14 +442,8 @@ const processedBlocks = computed(() => {
       }
       // 不管几个都合并为 path_group（单个 reasoning 也要折叠）
       const gid = `pg-${i}`
-      // 给每个内层块分配唯一 ID 用于展开状态跟踪
-      group.forEach((item, idx) => { item._itemId = `${gid}-${idx}` })
       // 工作流工具在 path_group 中自动展开
-      group.forEach((item) => {
-        if (item.type === 'tool_call' && isWorkflowTool(item)) {
-          pathItemExpanded.value = {...pathItemExpanded.value, [item._itemId]: true}
-        }
-      })
+      // (已移到 watchEffect 中处理，避免 computed 内修改 reactive 状态)
       const toolCount = group.filter(x => x.type === 'tool_call').length
       const thinkCount = group.filter(x => x.type === 'reasoning').length
       const pathNames = group.map(x => x.type === 'reasoning' ? 'think' : x.name).join(' → ')
@@ -467,10 +464,6 @@ const processedBlocks = computed(() => {
       })
       i = j
     } else {
-      // 独立工具块：工作流工具自动展开
-      if (b.type === 'tool_call' && isWorkflowTool(b) && b.expanded === undefined) {
-        b.expanded = true
-      }
       out.push(b)
       i++
     }
@@ -681,6 +674,27 @@ const parseResult = (block) => {
     return null
   }
 }
+
+// ── 副作用：从 computed 中移出，用 watchEffect 处理自动展开 ──
+
+watchEffect(() => {
+  const blocks = processedBlocks.value
+  if (!blocks) return
+  for (const block of blocks) {
+    if (block.type === 'path_group' && block._blocks) {
+      block._blocks.forEach((item, idx) => {
+        const key = getPathItemKey(block._groupId, idx)
+        if (item.type === 'tool_call' && isWorkflowTool(item) && !pathItemExpanded.value[key]) {
+          pathItemExpanded.value = {...pathItemExpanded.value, [key]: true}
+        }
+      })
+    }
+    // 独立工具块：工作流工具自动展开
+    if (block.type === 'tool_call' && isWorkflowTool(block) && block.expanded === undefined) {
+      block.expanded = true
+    }
+  }
+})
 </script>
 
 <style scoped>

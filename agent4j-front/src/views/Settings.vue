@@ -612,18 +612,25 @@
                 </div>
                 <div class="setting-control">
                   <div class="radio-group">
-                    <label :class="{ active: settings.workspace.mode === true }" class="radio-option">
-                      <input v-model="settings.workspace.mode" :value="true" type="radio"/>
-                      <span class="radio-label">
-                        <span class="radio-title">手动模式</span>
-                        <span class="radio-desc">写入操作需审批</span>
-                      </span>
-                    </label>
-                    <label :class="{ active: settings.workspace.mode === false }" class="radio-option">
-                      <input v-model="settings.workspace.mode" :value="false" type="radio"/>
+                    <label :class="{ active: settings.workspace.mode === 'free' }" class="radio-option">
+                      <input v-model="settings.workspace.mode" :value="'free'" type="radio"/>
                       <span class="radio-label">
                         <span class="radio-title">自由模式</span>
-                        <span class="radio-desc">直接执行写入</span>
+                        <span class="radio-desc">所有工具直接执行，无需审批</span>
+                      </span>
+                    </label>
+                    <label :class="{ active: settings.workspace.mode === 'approval' }" class="radio-option">
+                      <input v-model="settings.workspace.mode" :value="'approval'" type="radio"/>
+                      <span class="radio-label">
+                        <span class="radio-title">审批模式</span>
+                        <span class="radio-desc">非只读工具执行前需用户审批</span>
+                      </span>
+                    </label>
+                    <label :class="{ active: settings.workspace.mode === 'auto' }" class="radio-option">
+                      <input v-model="settings.workspace.mode" :value="'auto'" type="radio"/>
+                      <span class="radio-label">
+                        <span class="radio-title">自动模式</span>
+                        <span class="radio-desc">自动批准所有工具调用</span>
                       </span>
                     </label>
                   </div>
@@ -1712,7 +1719,7 @@ const settings = reactive({
   server: {apiBaseUrl: '', autoConnect: true},
   ai: {baseUrl: '', apiKey: '', model: '', reasoningEffort: 'max', availableModelsText: '', prices: {}},
   vision: {baseUrl: '', apiKey: '', model: ''},
-  workspace: {dir: '', mode: false},
+  workspace: {dir: '', mode: 'free'},
   security: {
     stormBreaker: true,
     pathTraversal: true,
@@ -2322,7 +2329,7 @@ const loadSettings = async () => {
       }
 
       settings.workspace.dir = config.workspaceDir || config.workspace || '.'
-      settings.workspace.mode = config.hitl === true
+      settings.workspace.mode = config.hitl === true ? 'approval' : (config.hitl || 'free')
 
       // 加载模型价格
       if (config.price && typeof config.price === 'object') {
@@ -2378,7 +2385,7 @@ const loadSettings = async () => {
     settings.ai.model = 'deepseek-v4-flash'
     settings.ai.reasoningEffort = 'max'
     settings.workspace.dir = '.'
-    settings.workspace.mode = false
+    settings.workspace.mode = 'free'
     availableModels.value = [
       {name: 'deepseek-v4-flash', active: true},
       {name: 'gpt-4', active: false},
@@ -2429,7 +2436,7 @@ const saveSettings = async () => {
       model: settings.ai.model,
       reasoningEffort: settings.ai.reasoningEffort,
       availableModels: settings.ai.availableModelsText.split('\n').map(s => s.trim()).filter(s => s),
-      hitl: settings.workspace.mode === true,
+      hitl: settings.workspace.mode,
       security: {...settings.security},
       price: settings.ai.prices,
       disabledTools: settings.security.disabledToolsText.split('\n').map(s => s.trim()).filter(s => s),
