@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="app" :data-theme="theme">
     <!-- 启动画面 (仅桌面环境) -->
     <SplashScreen
@@ -180,6 +180,7 @@
               </div>
               <div class="tool-row-actions">
                 <span v-if="!t.enabled" class="tool-status-badge disabled">已禁用</span>
+                <span v-if="t.autoApproved" class="tool-status-badge auto-approved">自动放行</span>
                 <button
                   class="tool-toggle-btn"
                   :class="{ enabled: t.enabled }"
@@ -187,6 +188,16 @@
                   @click.stop="toggleTool(t)"
                   :title="t.enabled ? '禁用' : '启用'">
                   <div class="toggle-track">
+                    <div class="toggle-thumb"></div>
+                  </div>
+                </button>
+                <button
+                  class="tool-toggle-btn auto-toggle"
+                  :class="{ enabled: t.autoApproved }"
+                  :disabled="refreshingTools"
+                  @click.stop="toggleAutoTool(t)"
+                  title="自动放行">
+                  <div class="toggle-track auto-track">
                     <div class="toggle-thumb"></div>
                   </div>
                 </button>
@@ -395,12 +406,14 @@ const toolFilter = ref('all')
 const toolFilters = [
   { label: '全部', value: 'all' },
   { label: '已启用', value: 'enabled' },
-  { label: '已禁用', value: 'disabled' }
+  { label: '已禁用', value: 'disabled' },
+  { label: '自动放行', value: 'autoApproved' },
 ]
 const filteredTools = computed(() => {
   if (toolFilter.value === 'all') return tools.value
   if (toolFilter.value === 'enabled') return tools.value.filter(t => t.enabled)
   if (toolFilter.value === 'disabled') return tools.value.filter(t => !t.enabled)
+  if (toolFilter.value === 'autoApproved') return tools.value.filter(t => t.autoApproved)
   return tools.value
 })
 const isDesktopEnv = ref(false)
@@ -712,6 +725,18 @@ const toggleTool = async (tool) => {
     tool.enabled = !tool.enabled
   } catch (err) {
     console.error('切换工具状态失败:', err)
+  }
+  refreshingTools.value = false
+}
+
+// 切换工具自动放行状态
+const toggleAutoTool = async (tool) => {
+  refreshingTools.value = true
+  try {
+    await toolsAPI.autoToggle(tool.name)
+    tool.autoApproved = !tool.autoApproved
+  } catch (err) {
+    console.error('切换自动放行状态失败:', err)
   }
   refreshingTools.value = false
 }
@@ -1575,6 +1600,29 @@ watch(showSettings, (newVal) => {
 }
 .tool-toggle-btn.enabled .toggle-thumb {
   left: 18px;
+}
+
+/* 自动放行开关 */
+.tool-toggle-btn.auto-toggle .toggle-track.auto-track {
+  width: 28px;
+  height: 16px;
+}
+.tool-toggle-btn.auto-toggle.enabled .toggle-track.auto-track {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+.tool-toggle-btn.auto-toggle .toggle-thumb {
+  width: 12px;
+  height: 12px;
+  top: 2px;
+  left: 2px;
+}
+.tool-toggle-btn.auto-toggle.enabled .toggle-thumb {
+  left: 14px;
+}
+.tool-status-badge.auto-approved {
+  background: var(--accent-soft, #e8f4fd);
+  color: var(--brand-primary, #3b82f6);
 }
 
 /* 工具弹窗 body 限制高度 */

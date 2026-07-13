@@ -1,4 +1,5 @@
-﻿import axios from 'axios'
+import axios from 'axios'
+import { message } from 'ant-design-vue'
 
 /** 默认兜底值，运行时优先读 public/config.json */
 export const DEFAULT_API_BASE = 'http://localhost:4567'
@@ -67,71 +68,70 @@ api.interceptors.response.use(
       const duration = Date.now() - parseInt(requestTime)
       console.debug(`API请求完成: ${response.config.url} (${duration}ms)`)
     }
-    
-    return response.data
+
+    const data = response.data
+    // 后端业务错误（HTTP 200 但 success=false）
+    if (data && data.success === false) {
+      const errMsg = data.error || data.message || '操作失败'
+      message.error(errMsg)
+      return Promise.reject({ code: response.status, message: errMsg, data })
+    }
+
+    return data
   },
   (error) => {
     console.error('API Error:', error)
-    
-    // 处理特定错误状态码
+
     if (error.response) {
       const { status, data } = error.response
-      
+      const errorMsg = data?.error || data?.message || error.message || '未知错误'
+
       switch (status) {
         case 401:
-          // 未授权，清除令牌并跳转到登录页
           localStorage.removeItem('agent4j-token')
           window.location.href = '/login'
           break
-          
         case 403:
-          console.error('权限不足:', data?.message || '未知错误')
+          message.error('权限不足: ' + errorMsg)
           break
-          
         case 404:
-          console.error('资源不存在:', error.config.url)
+          message.error('资源不存在: ' + (error.config?.url || ''))
           break
-          
         case 429:
-          console.error('请求过于频繁，请稍后重试')
+          message.warning('请求过于频繁，请稍后重试')
           break
-          
-        case 500:
-          console.error('服务器内部错误:', data?.message || '未知错误')
-          break
-          
-        case 502:
-        case 503:
-        case 504:
-          console.error('服务暂时不可用，请稍后重试')
-          break
+        default:
+          if (status >= 500) {
+            message.error('服务器错误: ' + errorMsg)
+          } else {
+            message.error(errorMsg)
+          }
       }
-      
-      // 返回结构化错误信息
+
       return Promise.reject({
         code: status,
-        message: data?.message || error.message,
+        message: errorMsg,
         data: data
       })
     }
-    
-    // 网络错误
+
     if (error.code === 'ECONNABORTED') {
-      console.error('请求超时')
+      message.error('请求超时，请检查网络连接')
       return Promise.reject({
         code: 'TIMEOUT',
         message: '请求超时，请检查网络连接'
       })
     }
-    
+
     if (!window.navigator.onLine) {
-      console.error('网络连接已断开')
+      message.error('网络连接已断开')
       return Promise.reject({
         code: 'OFFLINE',
         message: '网络连接已断开'
       })
     }
-    
+
+    message.error('请求失败: ' + (error.message || '未知错误'))
     return Promise.reject(error)
   }
 )
@@ -380,6 +380,11 @@ export const toolsAPI = {
   // 直接执行工具 - POST /api/tools/{name}/execute
   execute: (name, args) => {
     return api.post(`/tools/${name}/execute`, { arguments: args })
+  },
+  
+  // 切换工具自动放行状态 - POST /api/tools/{name}/auto-toggle
+  autoToggle: (name) => {
+    return api.post(`/tools/${name}/auto-toggle`)
   },
   
   // 搜索工具 - GET /api/tools/search

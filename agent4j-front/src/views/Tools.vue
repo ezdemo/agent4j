@@ -177,6 +177,7 @@
                 <div class="tool-name">
                   {{ tool.name }}
                   <span v-if="!tool.enabled" class="badge disabled">已禁用</span>
+                  <span v-if="tool.autoApproved" class="badge auto-approved">自动放行</span>
                 </div>
                 <div class="tool-badges">
                   <span v-if="tool.readonly" class="badge readonly">只读</span>
@@ -194,6 +195,17 @@
                 :title="tool.enabled ? '禁用此工具' : '启用此工具'"
               >
                 <div class="toggle-track">
+                  <div class="toggle-thumb"></div>
+                </div>
+              </button>
+              <button 
+                class="toggle-btn auto-toggle"
+                :class="{ enabled: tool.autoApproved }"
+                :disabled="togglingTool === tool.name"
+                @click="toggleAutoTool(tool)"
+                title="自动放行"
+              >
+                <div class="toggle-track auto-track">
                   <div class="toggle-thumb"></div>
                 </div>
               </button>
@@ -291,7 +303,8 @@ const filters = [
   { label: '只读', value: 'readonly', icon: '👁' },
   { label: '写入', value: 'write', icon: '✏️' },
   { label: '豁免', value: 'exempt', icon: '🛡' },
-  { label: '已禁用', value: 'disabled', icon: '🚫' }
+  { label: '已禁用', value: 'disabled', icon: '🚫' },
+  { label: '自动放行', value: 'autoApproved', icon: '⚡' },
 ]
 
 // 计算属性
@@ -299,6 +312,7 @@ const readonlyToolsCount = computed(() => tools.value.filter(t => t.readonly).le
 const writeToolsCount = computed(() => tools.value.filter(t => t.write).length)
 const stormExemptCount = computed(() => tools.value.filter(t => t.stormExempt).length)
 const disabledToolsCount = computed(() => tools.value.filter(t => !t.enabled).length)
+const autoApprovedCount = computed(() => tools.value.filter(t => t.autoApproved).length)
 
 const filteredTools = computed(() => {
   let result = tools.value
@@ -326,6 +340,9 @@ const filteredTools = computed(() => {
         break
       case 'disabled':
         result = result.filter(t => !t.enabled)
+      case 'autoApproved':
+        result = result.filter(t => t.autoApproved)
+        break
         break
     }
   }
@@ -354,6 +371,7 @@ const loadTools = async () => {
         write: !tool.readonly || false,
         stormExempt: tool.stormExempt || false,
         enabled: tool.enabled !== undefined ? tool.enabled : true,
+        autoApproved: tool.autoApproved || false,
         params: tool.parameters ? Object.entries(tool.parameters).map(([name, param]) => ({
           name,
           type: param.type || 'string',
@@ -452,6 +470,7 @@ const getFilterCount = (filter) => {
     case 'write': return writeToolsCount.value
     case 'exempt': return stormExemptCount.value
     case 'disabled': return disabledToolsCount.value
+    case 'autoApproved': return autoApprovedCount.value
     default: return 0
   }
 }
@@ -480,6 +499,20 @@ const toggleTool = async (tool) => {
     await loadTools()
   } catch (err) {
     console.error('切换工具状态失败:', err)
+  } finally {
+    togglingTool.value = ''
+  }
+}
+
+// 切换工具自动放行状态
+const toggleAutoTool = async (tool) => {
+  togglingTool.value = tool.name
+  try {
+    await toolsAPI.autoToggle(tool.name)
+    tool.autoApproved = !tool.autoApproved
+    await loadTools()
+  } catch (err) {
+    console.error('切换自动放行状态失败:', err)
   } finally {
     togglingTool.value = ''
   }
@@ -1247,4 +1280,38 @@ onMounted(() => {
   box-shadow: 0 1px 4px rgba(0,0,0,0.3);
 }
 
+/* 自动放行开关样式 */
+.toggle-btn.auto-toggle .toggle-track.auto-track {
+  width: 30px;
+  height: 17px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+}
+
+.toggle-btn.auto-toggle.enabled .toggle-track.auto-track {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+
+.toggle-btn.auto-toggle .toggle-thumb {
+  width: 13px;
+  height: 13px;
+  top: 2px;
+  left: 2px;
+}
+
+.toggle-btn.auto-toggle.enabled .toggle-thumb {
+  left: 15px;
+}
+
+/* 自动放行徽标 */
+.badge.auto-approved {
+  background: var(--accent-soft, #e8f4fd);
+  color: var(--brand-primary, #3b82f6);
+  font-size: 0.7rem;
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-sm);
+  margin-left: 0.4rem;
+}
 </style>

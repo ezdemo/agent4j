@@ -12,9 +12,9 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Java-17-blue?logo=openjdk"/>
-  <img src="https://img.shields.io/badge/Solon-4.0.0--M3-important?logo=java"/>
+  <img src="https://img.shields.io/badge/Solon-4.0.2-important?logo=java"/>
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js"/>
-  <img src="https://img.shields.io/badge/Electron-32.0-47848F?logo=electron"/>
+  <img src="https://img.shields.io/badge/Electron-42.4-47848F?logo=electron"/>
   <img src="https://img.shields.io/badge/license-MIT-green"/>
   <img src="https://img.shields.io/badge/version-26.6.29-lightgrey"/>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-📋-brightgreen"/></a>
@@ -340,7 +340,7 @@ agent4j/
 | 层       | 技术                                  |
 |---------|-------------------------------------|
 | **语言**  | Java 17                             |
-| **后端**  | Solon 4.0.0-M3 + Snack4 + OkHttp    |
+| **后端**  | Solon 4.0.2 + Snack4 + OkHttp        |
 | **前端**  | Vue 3.4 + Vite 5 + Ant Design Vue 4 |
 | **桌面**  | Electron + Node.js                    |
 | **持久化** | JSON Lines                          |
