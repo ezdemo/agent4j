@@ -114,6 +114,18 @@ class JsonlSessionStoreTest {
     }
 
     @Test
+    void bindToPreservesReplicaName() throws IOException {
+        String name = "原会话[复刻]";
+        assertTrue(store.bindTo(name));
+        assertEquals(name, store.currentName());
+
+        store.append(ChatMessage.ofUser("copied"));
+        store.flush();
+
+        assertTrue(store.list().stream().anyMatch(session -> name.equals(session.name())));
+    }
+
+    @Test
     void listReturnsSessions() throws IOException {
         ChatMessage msg = ChatMessage.ofUser("hi");
         store.append(msg);

@@ -293,6 +293,8 @@ export const agentAPI = {
 }
 
 // 会话 API
+const sessionPathName = (name) => encodeURIComponent(name)
+
 export const sessionsAPI = {
   // 列出所有会话 - GET /api/sessions?workspaceHash=xxx
   list: (workspaceHash) => {
@@ -309,17 +311,22 @@ export const sessionsAPI = {
   createNew: (params) => {
     return api.post('/sessions/new', null, { params: params || {} })
   },
+  // 分支会话 - POST /api/sessions/{name}/branch?workspaceHash=xxx&messageCount=N
+  branchSession: (name, workspaceHash, messageCount) => {
+    const params = { workspaceHash, messageCount }
+    return api.post(`/sessions/${sessionPathName(name)}/branch`, null, { params })
+  },
   
   // 切换会话 - POST /api/sessions/{name}?workspaceHash=xxx
   switchSession: (name, workspaceHash) => {
     const params = workspaceHash ? { workspaceHash } : {}
-    return api.post(`/sessions/${name}`, null, { params })
+    return api.post(`/sessions/${sessionPathName(name)}`, null, { params })
   },
   
   // 删除会话 - DELETE /api/sessions/{name}?workspaceHash=xxx
   deleteSession: (name, workspaceHash) => {
     const params = workspaceHash ? { workspaceHash } : {}
-    return api.delete(`/sessions/${name}`, { params })
+    return api.delete(`/sessions/${sessionPathName(name)}`, { params })
   },
 
   // 清空所有会话 - DELETE /api/sessions?workspaceHash=xxx
@@ -330,17 +337,17 @@ export const sessionsAPI = {
   
   // 获取会话详情 - GET /api/sessions/{name}
   getDetails: (name) => {
-    return api.get(`/sessions/${name}`)
+    return api.get(`/sessions/${sessionPathName(name)}`)
   },
   
   // 重命名会话 - PUT /api/sessions/{name}
   renameSession: (name, newName) => {
-    return api.put(`/sessions/${name}`, { name: newName })
+    return api.put(`/sessions/${sessionPathName(name)}`, { name: newName })
   },
   
   // 导出会话 - GET /api/sessions/{name}/export
   exportSession: (name) => {
-    return api.get(`/sessions/${name}/export`, { responseType: 'blob' })
+    return api.get(`/sessions/${sessionPathName(name)}/export`, { responseType: 'blob' })
   },
   
   // 导入会话 - POST /api/sessions/import
@@ -355,7 +362,7 @@ export const sessionsAPI = {
   // 获取会话工作流 - GET /api/sessions/{name}/workflow?workspaceHash=xxx
   getWorkflow: (name, workspaceHash) => {
     const params = workspaceHash ? { workspaceHash } : {}
-    return api.get(`/sessions/${name}/workflow`, { params })
+    return api.get(`/sessions/${sessionPathName(name)}/workflow`, { params })
   },
 
 }

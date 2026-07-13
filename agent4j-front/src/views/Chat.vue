@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="chat">
     <!-- 可选头部 -->
     <div v-if="!hideHeader" class="chat-head">
@@ -76,9 +76,11 @@
           :idx="idx"
           :msg="msg"
           :snapshot-rollback-loading="snapshotRollbackLoading"
+          :branch-disabled="streaming || branchingSession"
           @preview-image="previewImage"
           @rollback-snapshot="rollbackSnapshot"
           @copy-message="copyMessage"
+          @branch-session="branchSession"
           @send-choice="sendChoice"
           @open-file="openFile"
       />
@@ -206,9 +208,10 @@
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {agentAPI, chatAPI, configAPI, gitAPI, snapshotAPI} from '../services/api'
+import {agentAPI, chatAPI, configAPI, gitAPI, sessionsAPI, snapshotAPI} from '../services/api'
 import {md} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
+import {getAssistantTurnBoundaries} from '../utils/sessionBranch'
 import ChatInput from '../components/ChatInput.vue'
 import ChatMessage from '../components/ChatMessage.vue'
 import DiffViewer from '../components/DiffViewer.vue'
@@ -275,7 +278,7 @@ const props = defineProps({
   connected: {type: Boolean, default: true}
 })
 
-const emit = defineEmits(['sessionUpdated'])
+const emit = defineEmits(['sessionUpdated', 'sessionBranched'])
 const store = useAppStore()
 
 const messagesContainer = ref(null)
@@ -313,6 +316,7 @@ const closeDiffViewer = () => {
 
 const messages = computed(() => store.getSessionMessages(props.sessionName))
 const streaming = computed(() => store.getSessionStreaming(props.sessionName))
+const branchingSession = ref(false)
 const hasHistory = computed(() => messages.value.length > 0)
 const planMode = ref(false)
 
@@ -513,6 +517,35 @@ const copyMessage = (msg) => {
     window.dispatchEvent(new CustomEvent('copy-success', {detail: '消息已复制'}))
   }).catch(() => {
   })
+}
+
+// 分支到新会话：复制当前消息及之前的消息到新会话
+const branchSession = async (msg, msgIdx) => {
+  if (!props.sessionName || !props.workspaceHash || streaming.value || branchingSession.value) return
+  branchingSession.value = true
+  try {
+    let count = msg.sourceMessageCount
+    if (!count) {
+      const history = await agentAPI.getHistory(props.workspaceHash, props.sessionName)
+      const assistantOrdinal = messages.value.slice(0, msgIdx + 1)
+          .filter(item => item.role === 'assistant').length - 1
+      count = history.success ? getAssistantTurnBoundaries(history.data || [])[assistantOrdinal] : null
+    }
+    if (!Number.isInteger(count) || count <= 0) {
+      throw new Error('无法确定完整的助手消息边界')
+    }
+    const r = await sessionsAPI.branchSession(props.sessionName, props.workspaceHash, count)
+    if (r.success && r.data?.sessionName) {
+      window.dispatchEvent(new CustomEvent('copy-success', {detail: '已分支到新会话'}))
+      emit('sessionBranched', r.data.sessionName)
+    } else {
+      window.dispatchEvent(new CustomEvent('copy-success', {detail: r.error || '分支失败'}))
+    }
+  } catch (err) {
+    window.dispatchEvent(new CustomEvent('copy-success', {detail: '分支失败: ' + (err.message || err)}))
+  } finally {
+    branchingSession.value = false
+  }
 }
 
 // 输入框事件已迁移到 ChatInput 组件
@@ -1114,6 +1147,8 @@ const loadHistory = async (sessionName, force = false) => {
     const r = await agentAPI.getHistory(props.workspaceHash, targetSession)
     if (r.success && r.data) {
       const raw = r.data, tr = {}
+      const assistantBoundaries = getAssistantTurnBoundaries(raw)
+      let assistantTurn = 0
       for (const m of raw) if (m.role === 'tool' && m.tool_call_id) tr[m.tool_call_id] = m.content || ''
       const merged = []
       let lastAssistantItem = null
@@ -1150,7 +1185,7 @@ const loadHistory = async (sessionName, force = false) => {
           // assistant消息：合并连续的assistant消息
           if (!lastAssistantItem) {
             // 创建新的assistant item
-            lastAssistantItem = {id: Date.now() + idCounter++, role: 'assistant', time: formatTimestamp(m.timestamp), blocks: []}
+            lastAssistantItem = {id: Date.now() + idCounter++, role: 'assistant', time: formatTimestamp(m.timestamp), blocks: [], sourceMessageCount: assistantBoundaries[assistantTurn++]}
             merged.push(lastAssistantItem)
           } else {
             // 更新时间戳为最新的

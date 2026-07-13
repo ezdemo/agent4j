@@ -480,6 +480,7 @@ public class AgentService {
         SessionStore store = agent.getSessionStore();
         if (store != null) {
             try {
+                store.flush();
                 return store.load();
             } catch (IOException e) {
                 log.warn("[web] 加载会话历史失败: {}", e.getMessage());
@@ -680,9 +681,20 @@ public class AgentService {
         }
         List<SessionInfoDTO> sessions = new ArrayList<>();
         for (SessionStore.SessionInfo sessionInfo : store.list()) {
+            String title = store.getTitle(sessionInfo.name());
+            if (title == null) {
+                int replicaSuffix = sessionInfo.name().lastIndexOf("[复刻]");
+                if (replicaSuffix > 0) {
+                    String sourceTitle = store.getTitle(sessionInfo.name().substring(0, replicaSuffix));
+                    if (sourceTitle != null && !sourceTitle.isBlank()) {
+                        title = sourceTitle + sessionInfo.name().substring(replicaSuffix);
+                        store.updateTitle(sessionInfo.name(), title);
+                    }
+                }
+            }
             sessions.add(new SessionInfoDTO(
                     sessionInfo.name(),
-                    store.getTitle(sessionInfo.name()),
+                    title,
                     sessionInfo.messageCount(),
                     sessionInfo.name().equals(activeSession),
                     sessionInfo.mtime()
@@ -707,6 +719,61 @@ public class AgentService {
         String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
         sessionCache.setCurrentName(resolvedPath, sessionName);
         return true;
+    }
+
+    /**
+     * 从指定会话分支：复制原始历史的完整前缀到新会话，并切换过去。
+     *
+     * @param workspacePath 工作区路径
+     * @param sourceSession  源会话名称
+     * @param messageCount   原始历史的排他结束位置
+     * @return 新会话名称
+     */
+    public String branchSession(String workspacePath, String sourceSession, int messageCount) throws Exception {
+        if (!isReady()) throw new ServiceException("Agent 未初始化");
+        String sessionKey = generateSessionKey(workspacePath, sourceSession);
+        Agent4jAgent agent = getOrCreateAgent(sessionKey);
+        SessionStore store = agent.getSessionStore();
+        if (store == null) throw new ServiceException("会话存储不可用");
+
+        // 加载源会话消息
+        store.flush();
+        List<ChatMessage> sourceMessages = store.load(sourceSession);
+        List<ChatMessage> branchMessages = copyBranchMessages(sourceMessages, messageCount);
+        String sourceTitle = store.getTitle(sourceSession);
+
+        // Use an independent store so the source agent remains bound to its session.
+        WorkspaceManager workspaceManager = new WorkspaceManager();
+        Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
+        JsonlSessionStore branchStore = new JsonlSessionStore(sessionsDir);
+        try {
+            String newName = "agent4j-" + System.currentTimeMillis();
+            if (!branchStore.bindTo(newName)) throw new ServiceException("无法创建新会话");
+            branchStore.rewrite(branchMessages);
+            branchStore.updateTitle(newName, branchTitle(sourceTitle, sourceSession));
+            branchStore.flush();
+
+            // 切换到新会话
+            switchSession(workspacePath, newName);
+            return newName;
+        } finally {
+            branchStore.shutdown();
+        }
+    }
+
+    static List<ChatMessage> copyBranchMessages(List<ChatMessage> sourceMessages, int messageCount) {
+        if (sourceMessages == null || sourceMessages.isEmpty()) {
+            throw new ServiceException("源会话没有消息");
+        }
+        if (messageCount < 1 || messageCount > sourceMessages.size()) {
+            throw new ServiceException("messageCount 超出源会话消息范围");
+        }
+        return new ArrayList<>(sourceMessages.subList(0, messageCount));
+    }
+
+    static String branchTitle(String sourceTitle, String sourceSession) {
+        String title = sourceTitle == null || sourceTitle.isBlank() ? sourceSession : sourceTitle;
+        return title + "[复刻]";
     }
 
     /**
