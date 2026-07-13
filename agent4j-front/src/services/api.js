@@ -1,5 +1,5 @@
 import axios from 'axios'
-import { message } from 'ant-design-vue'
+import {message} from 'ant-design-vue'
 
 /** 默认兜底值，运行时优先读 public/config.json */
 export const DEFAULT_API_BASE = 'http://localhost:4567'
@@ -752,12 +752,13 @@ export const snapshotAPI = {
     return api.post('/snapshots/checkpoint', null, { params })
   },
 
-    // 撤回到快照 - POST /api/snapshots/rollback?workspaceHash=xxx&msgId=xxx&sessionName=xxx
-    rollback: (workspaceHash, msgId, sessionName) => {
+    // 撤回消息，可选恢复工作区代码 - POST /api/snapshots/rollback?workspaceHash=xxx&msgId=xxx&sessionName=xxx&rollbackCode=true
+    rollback: (workspaceHash, msgId, sessionName, rollbackCode = true) => {
     const params = {}
     if (workspaceHash) params.workspaceHash = workspaceHash
     params.msgId = msgId
         if (sessionName) params.sessionName = sessionName
+        params.rollbackCode = rollbackCode
     return api.post('/snapshots/rollback', null, { params })
   },
 

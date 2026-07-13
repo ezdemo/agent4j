@@ -78,7 +78,7 @@
           :snapshot-rollback-loading="snapshotRollbackLoading"
           :branch-disabled="streaming || branchingSession"
           @preview-image="previewImage"
-          @rollback-snapshot="rollbackSnapshot"
+          @rollback-snapshot="openRollbackDialog"
           @copy-message="copyMessage"
           @branch-session="branchSession"
           @send-choice="sendChoice"
@@ -203,6 +203,27 @@
         @switchSkill="handleSwitchSkill"
         @switchPermission="handleSwitchPermission"
     />
+
+    <Teleport to="body">
+      <div v-if="rollbackDialog.visible" class="rollback-dialog-mask" @click.self="closeRollbackDialog">
+        <div class="rollback-dialog" role="alertdialog" aria-modal="true" aria-labelledby="rollback-dialog-title">
+          <div class="rollback-dialog-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"/>
+              <line x1="12" y1="8" x2="12" y2="12"/>
+              <line x1="12" y1="16" x2="12.01" y2="16"/>
+            </svg>
+          </div>
+          <div id="rollback-dialog-title" class="rollback-dialog-title">撤回消息</div>
+          <p class="rollback-dialog-copy">将删除当前消息及其后的会话内容。撤回代码会将工作区恢复到发送此消息前的状态。</p>
+          <div class="rollback-dialog-actions">
+            <button class="rollback-dialog-btn" type="button" @click="closeRollbackDialog">取消</button>
+            <button class="rollback-dialog-btn rollback-dialog-btn-message" type="button" @click="confirmRollback(false)">只撤回消息</button>
+            <button class="rollback-dialog-btn rollback-dialog-btn-code" type="button" @click="confirmRollback(true)">撤回消息和代码</button>
+          </div>
+        </div>
+      </div>
+    </Teleport>
   </div>
 </template>
 
@@ -287,6 +308,7 @@ const inputText = ref('')
 // 快照检查点：msgId -> snapshotId 映射（用于消息关联和撤回按钮显示）
 const snapshotMap = ref(new Map())
 const snapshotRollbackLoading = ref(new Map()) // msgId -> 是否正在撤回
+const rollbackDialog = ref({visible: false, msgId: null})
 
 // 图片预览
 const imagePreviewUrl = ref('')
@@ -980,15 +1002,30 @@ const abortChat = async () => {
   store.setSessionStreaming(props.sessionName, false)
 }
 
-/** 撤回快照：回滚到 AI 修改前的状态，并截断会话消息 + 回填输入框 */
-const rollbackSnapshot = async (msgId) => {
+const openRollbackDialog = (msgId) => {
+  if (!msgId || snapshotRollbackLoading.value.get(msgId)) return
+  rollbackDialog.value = {visible: true, msgId}
+}
+
+const closeRollbackDialog = () => {
+  rollbackDialog.value = {visible: false, msgId: null}
+}
+
+const confirmRollback = (rollbackCode) => {
+  const msgId = rollbackDialog.value.msgId
+  closeRollbackDialog()
+  rollbackSnapshot(msgId, rollbackCode)
+}
+
+/** 撤回会话消息，并按选择决定是否恢复 AI 修改的代码。 */
+const rollbackSnapshot = async (msgId, rollbackCode) => {
   if (!msgId) return
   const loadingKey = msgId
   if (snapshotRollbackLoading.value.get(loadingKey)) return // 防止重复点击
   snapshotRollbackLoading.value.set(loadingKey, true)
 
   try {
-    const res = await snapshotAPI.rollback(props.workspaceHash, msgId, props.sessionName)
+    const res = await snapshotAPI.rollback(props.workspaceHash, msgId, props.sessionName, rollbackCode)
     if (res.success) {
       addLog({level: 'INFO', text: `✅ ${res.data?.message || '工作区已恢复'}`, time: Date.now()})
       // 截断该消息之后的所有快照记录
@@ -1887,6 +1924,100 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   margin-left: 2px;
 }
 
+/* ===== 撤回确认 ===== */
+.rollback-dialog-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.42);
+}
+
+.rollback-dialog {
+  width: min(460px, 100%);
+  padding: 22px;
+  border: 1px solid color-mix(in srgb, var(--yellow) 45%, var(--border));
+  border-radius: var(--r-lg);
+  background: var(--bg);
+  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.28);
+}
+
+.rollback-dialog-icon {
+  display: inline-grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--yellow) 16%, transparent);
+  color: var(--yellow);
+}
+
+.rollback-dialog-title {
+  margin-top: 12px;
+  color: var(--fg);
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.rollback-dialog-copy {
+  margin: 7px 0 20px;
+  color: var(--fg-3);
+  font-size: 13px;
+  line-height: 1.55;
+}
+
+.rollback-dialog-actions {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.rollback-dialog-btn {
+  min-height: 36px;
+  padding: 7px 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg-2);
+  color: var(--fg-2);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 600;
+  transition: background var(--t), border-color var(--t), color var(--t), box-shadow var(--t);
+}
+
+.rollback-dialog-btn:hover {
+  border-color: color-mix(in srgb, var(--fg-3) 55%, var(--border));
+  background: var(--bg-3);
+  box-shadow: 0 2px 8px color-mix(in srgb, #000000 10%, transparent);
+}
+
+.rollback-dialog-btn-message {
+  border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
+  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
+  color: color-mix(in srgb, var(--accent) 82%, var(--fg));
+}
+
+.rollback-dialog-btn-message:hover {
+  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
+  background: color-mix(in srgb, var(--accent) 13%, var(--bg));
+}
+
+.rollback-dialog-btn-code {
+  border-color: color-mix(in srgb, var(--red) 38%, var(--border));
+  background: color-mix(in srgb, var(--red) 9%, var(--bg));
+  color: color-mix(in srgb, var(--red) 80%, var(--fg));
+}
+
+.rollback-dialog-btn-code:hover {
+  border-color: color-mix(in srgb, var(--red) 58%, var(--border));
+  background: color-mix(in srgb, var(--red) 14%, var(--bg));
+  color: color-mix(in srgb, var(--red) 88%, var(--fg));
+}
+
 /* ===== 移动端适配 ===== */
 @media (max-width: 640px) {
   .messages { padding: 12px 8px 100px; }
@@ -1901,6 +2032,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   .msg-thumb-dock { display: none; } /* 手机端隐藏缩略图dock */
   .chat-head { padding: 6px 10px; }
     .chat-head-title { font-size: 13px; }
+  .rollback-dialog-actions { grid-template-columns: 1fr; }
 }
 
 </style>
