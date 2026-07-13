@@ -12,15 +12,12 @@ import org.noear.solon.ai.chat.interceptor.ToolRequest;
 import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.ai.chat.tool.ToolCall;
 import org.noear.solon.ai.chat.tool.ToolResult;
-import site.sorghum.agent4j.bin.agent.context.ContextFolding;
-import site.sorghum.agent4j.bin.agent.context.ConversationContext;
-import site.sorghum.agent4j.bin.agent.context.MessageHealer;
+import site.sorghum.agent4j.bin.agent.context.*;
 import site.sorghum.agent4j.bin.agent.hitl.HitlManager;
 import site.sorghum.agent4j.bin.agent.listener.AgentLoopListener;
 import site.sorghum.agent4j.bin.agent.listener.NoOpAgentLoopListener;
 import site.sorghum.agent4j.bin.agent.model.*;
 import site.sorghum.agent4j.bin.agent.output.ConsoleAgentOutput;
-
 import site.sorghum.agent4j.bin.agent.resilient.ReasonBreaker;
 import site.sorghum.agent4j.bin.agent.resilient.Scavenger;
 import site.sorghum.agent4j.bin.builtin.TaskTool;
@@ -101,6 +98,10 @@ public class AgentLoop implements AgentLoopController {
     /** 最近一次 API 返回的 prompt_tokens（0 = 尚无数据，回退到字符估算） */
     @Getter
     private int lastPromptTokens = 0;
+
+    /** 最近一次请求的离线上下文构成，用于展示和折叠预检。 */
+    @Getter
+    private volatile ContextTokenEstimate lastContextEstimate;
 
     /** 用户主动中断标志（前端点击停止按钮时设置） */
     private volatile boolean userAbortRequested = false;
@@ -373,6 +374,18 @@ public class AgentLoop implements AgentLoopController {
      */
     public ToolRegistry getToolRegistryInstance() {
         return registry;
+    }
+
+    /**
+     * 从当前上下文重新计算 token 构成。
+     * <p>供历史会话在未执行新一轮模型请求时按持久化消息生成预估。</p>
+     */
+    public ContextTokenEstimate estimateCurrentContext() {
+        ONode tools = refreshTools();
+        ContextTokenEstimate estimate = ContextTokenEstimator.estimate(
+                ctx.buildMessages(), tools, buildToolInstructions());
+        lastContextEstimate = estimate;
+        return estimate;
     }
 
     private String buildToolInstructions() {
@@ -671,7 +684,7 @@ public class AgentLoop implements AgentLoopController {
             ONode tools = refreshTools();
 
             // ---- 1. 消息准备：构建 + Healing + 折叠 ----
-            PreparedMessages prepared = prepareMessages(step);
+            PreparedMessages prepared = prepareMessages(step, tools);
             List<ChatMessage> messages = prepared.messages();
 
             // ---- 2. 流式调用 LLM ----
@@ -868,18 +881,21 @@ public class AgentLoop implements AgentLoopController {
 
     // ==================== 步骤 1: 消息准备 ====================
 
-    private PreparedMessages prepareMessages(int step) throws IOException {
+    private PreparedMessages prepareMessages(int step, ONode tools) throws IOException {
         List<ChatMessage> messages = ctx.buildMessages();
         MessageHealer.HealResult healResult = MessageHealer.heal(messages);
         messages = healResult.messages();
+
+        String instr = buildToolInstructions();
+        ContextTokenEstimate beforeFold = ContextTokenEstimator.estimate(messages, tools, instr);
 
         // 预检：token 数接近上下文窗口 80% 时折叠
         boolean foldedThisStep = false;
         int maxCtx = client.getMaxContextTokens();
         int tokenThreshold = (int) (maxCtx * 0.8);
-        int estimatedPromptTokens = lastPromptTokens > 0
-                ? lastPromptTokens
-                : ContextFolding.estimateChars(messages) / 2;
+        int estimatedPromptTokens = beforeFold.exactTokenizer() || lastPromptTokens <= 0
+                ? beforeFold.totalTokens()
+                : lastPromptTokens;
         boolean needFold = estimatedPromptTokens > tokenThreshold;
         if (needFold) {
             try {
@@ -904,7 +920,6 @@ public class AgentLoop implements AgentLoopController {
         }
 
         // 注入动态工具使用指引到系统提示词
-        String instr = buildToolInstructions();
         if (!instr.isEmpty()) {
             ChatMessage sysMsg = messages.get(0);
             String enhancedContent = sysMsg.getContent() + "\n\n" + instr;
@@ -914,6 +929,8 @@ public class AgentLoop implements AgentLoopController {
             withInstr.addAll(messages.subList(1, messages.size()));
             messages = withInstr;
         }
+
+        lastContextEstimate = ContextTokenEstimator.estimate(messages, tools, null);
 
         return new PreparedMessages(messages, foldedThisStep);
     }

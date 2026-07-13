@@ -351,12 +351,14 @@ const usage = ref({
   maxContextTokens: 128000,
   lastPromptTokens: 0
 })
+let usageRequestId = 0
 const currentModel = ref('')
 const availableModels = ref([])
 
 // ==================== 工作流 TODO（已迁移至 ChatInput 组件中）====================
 
 const loadUsage = async (override) => {
+  const requestId = ++usageRequestId
   try {
     const params = {}
     const wsHash = override?.workspaceHash ?? props.workspaceHash
@@ -369,6 +371,8 @@ const loadUsage = async (override) => {
       configAPI.getModels(),
       configAPI.getConfig()
     ])
+    // 会话切换可能在请求返回前再次发生，过期响应不得覆盖当前会话的用量。
+    if (requestId !== usageRequestId) return
     if (usageRes.status === 'fulfilled' && usageRes.value.success) {
       usage.value = {...usage.value, ...usageRes.value.data}
     }

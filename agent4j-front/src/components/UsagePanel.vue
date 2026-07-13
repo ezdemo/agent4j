@@ -93,6 +93,24 @@
         </div>
       </div>
 
+      <div v-if="contextEstimate" class="usage-composition">
+        <div class="usage-composition-header">
+          <span>上下文构成</span>
+          <span class="usage-composition-method">{{ contextEstimate.exactTokenizer ? '离线分词' : '字符估算' }}</span>
+        </div>
+        <div class="usage-composition-total">约 {{ formatNumber(contextEstimate.totalTokens) }} tokens</div>
+        <div class="usage-composition-bar">
+          <span v-for="item in compositionItems" :key="item.key" :class="item.key" :style="{ width: item.percent + '%' }" :title="item.label + ': ' + formatNumber(item.value)"></span>
+        </div>
+        <div class="usage-composition-list">
+          <div v-for="item in compositionItems" :key="item.key" class="usage-composition-item">
+            <span class="usage-composition-dot" :class="item.key"></span>
+            <span>{{ item.label }}</span>
+            <span>{{ formatNumber(item.value) }} · {{ item.percent.toFixed(1) }}%</span>
+          </div>
+        </div>
+      </div>
+
       <!-- 费用估算 -->
       <div v-if="usage.hasPrice" class="usage-cost">
         <div class="usage-cost-header">
@@ -126,8 +144,8 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, watch } from 'vue'
-import { configAPI } from '../services/api'
+import {computed, onMounted, ref, watch} from 'vue'
+import {configAPI} from '../services/api'
 
 const props = defineProps({
   autoRefresh: { type: Boolean, default: false },
@@ -175,6 +193,24 @@ const contextUsage = computed(() => {
 const contextRemaining = computed(() => {
   if (!usage.value) return maxContextTokens.value
   return Math.max(0, maxContextTokens.value - lastPromptTokens.value)
+})
+
+const contextEstimate = computed(() => usage.value?.contextEstimate || null)
+
+const compositionItems = computed(() => {
+  const estimate = contextEstimate.value
+  if (!estimate || estimate.totalTokens <= 0) return []
+  const items = [
+    { key: 'system', label: '系统提示', value: estimate.systemTokens || 0 },
+    { key: 'tools', label: '工具定义', value: estimate.toolDefinitionTokens || 0 },
+    { key: 'user', label: '用户消息', value: estimate.userTokens || 0 },
+    { key: 'assistant', label: '助手历史', value: estimate.assistantTokens || 0 },
+    { key: 'result', label: '工具结果', value: estimate.toolResultTokens || 0 }
+  ]
+  return items.filter(item => item.value > 0).map(item => ({
+    ...item,
+    percent: Math.min(100, item.value / estimate.totalTokens * 100)
+  }))
 })
 
 const formatNumber = (num) => {
@@ -350,7 +386,8 @@ defineExpose({ refresh })
 
 /* 缓存命中率 */
 .usage-cache,
-.usage-context {
+.usage-context,
+.usage-composition {
   padding: 12px;
   background: var(--bg);
   border-radius: var(--r);
@@ -358,7 +395,8 @@ defineExpose({ refresh })
 }
 
 .usage-cache:last-child,
-.usage-context:last-child {
+.usage-context:last-child,
+.usage-composition:last-child {
   margin-bottom: 0;
 }
 
@@ -446,6 +484,67 @@ defineExpose({ refresh })
   font-size: 11px;
   color: var(--fg-4);
   text-align: center;
+}
+
+.usage-composition-header,
+.usage-composition-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.usage-composition-header {
+  color: var(--fg-2);
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.usage-composition-method {
+  color: var(--fg-4);
+  font-size: 11px;
+  font-weight: 400;
+}
+
+.usage-composition-total {
+  margin: 5px 0 8px;
+  color: var(--fg-3);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.usage-composition-bar {
+  display: flex;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--bg-3);
+  margin-bottom: 9px;
+}
+
+.usage-composition-bar span { min-width: 0; }
+.usage-composition-bar .system, .usage-composition-dot.system { background: var(--accent); }
+.usage-composition-bar .tools, .usage-composition-dot.tools { background: var(--blue); }
+.usage-composition-bar .user, .usage-composition-dot.user { background: var(--green); }
+.usage-composition-bar .assistant, .usage-composition-dot.assistant { background: var(--yellow); }
+.usage-composition-bar .result, .usage-composition-dot.result { background: var(--red); }
+
+.usage-composition-list { display: grid; gap: 5px; }
+
+.usage-composition-item {
+  color: var(--fg-4);
+  font-size: 11px;
+  gap: 6px;
+}
+
+.usage-composition-item span:last-child {
+  margin-left: auto;
+  font-family: var(--mono);
+}
+
+.usage-composition-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
 }
 
 /* 费用估算 */

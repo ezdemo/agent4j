@@ -5,6 +5,7 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.dami2.Dami;
 import org.noear.dami2.bus.EventListener;
+import site.sorghum.agent4j.bin.agent.context.ContextTokenEstimate;
 import site.sorghum.agent4j.bin.agent.context.ConversationContext;
 import site.sorghum.agent4j.bin.agent.listener.AgentLoopListener;
 import site.sorghum.agent4j.bin.agent.model.ChatMessage;
@@ -364,6 +365,16 @@ public class Agent4jAgent {
      */
     public int getMaxContextTokens() {
         return loop != null ? loop.getMaxContextTokens() : DEFAULT_FALLBACK_MAX_TOKENS;
+    }
+
+    /** 获取最近一次请求的离线上下文构成。 */
+    public ContextTokenEstimate getLastContextEstimate() {
+        return loop != null ? loop.getLastContextEstimate() : null;
+    }
+
+    /** 根据已加载的会话历史重算离线上下文构成。 */
+    public ContextTokenEstimate estimateCurrentContext() {
+        return loop != null ? loop.estimateCurrentContext() : null;
     }
 
     /**

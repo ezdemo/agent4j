@@ -132,56 +132,64 @@
           {{ connected ? '已连接' : '连接中...' }}
         </span>
         <span class="usage-sep">|</span>
-        <!-- 总 token（点击展开详情） -->
-        <span class="usage-item usage-total" @click="showUsageDetail = !showUsageDetail" title="点击展开/折叠详情">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
-          </svg>
-          {{ fmt(usage.totalTokens || 0) }}
-          <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" class="usage-expand-icon" :class="{ open: showUsageDetail }">
-            <polyline points="6 9 12 15 18 9"/>
-          </svg>
-        </span>
-        <!-- 详情：输入/输出/缓存/价格 -->
-        <template v-if="showUsageDetail">
-          <span class="usage-item hide-mobile" :title="'输入: '+fmt(usage.promptTokens)">
+        <div class="usage-context-control"
+             @mouseenter="refreshContextComposition"
+             @mouseleave="showContextComposition = false">
+          <!-- 会话总 token -->
+          <span class="usage-item usage-total">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
             </svg>
-            输入 {{ fmt(usage.promptTokens) }}
+            {{ fmt(usage.totalTokens || 0) }}
           </span>
-          <span class="usage-item hide-mobile" :title="'输出: '+fmt(usage.completionTokens)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
-            </svg>
-            输出 {{ fmt(usage.completionTokens) }}
-          </span>
-          <span class="usage-item hide-mobile"
-                :title="'缓存命中: '+fmt(usage.cacheHit)+' / 未命中: '+fmt(usage.cacheMiss)">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-            </svg>
-            缓存 {{ cacheRate }}%
-          </span>
-          <span class="usage-item usage-cost-item" v-if="usage.hasPrice">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-            </svg>
-            ¥{{ (usage.totalCost || 0).toFixed(2) }}
-          </span>
-        </template>
           <span class="usage-sep">|</span>
-          <span class="usage-context-circle"
-                :title="'上下文: '+fmt(usage.lastPromptTokens||usage.promptTokens)+' / '+fmt(usage.maxContextTokens)">
-            <svg viewBox="0 0 32 32" class="context-ring">
-              <circle cx="16" cy="16" r="13" fill="none" stroke="var(--border)" stroke-width="4" />
-              <circle cx="16" cy="16" r="13" fill="none" stroke="var(--fg-3)"
-                      stroke-width="4" stroke-linecap="round"
-                      :stroke-dasharray="81.68" :stroke-dashoffset="81.68 * (1 - Math.min(ctxPct,100)/100)"
-                      transform="rotate(-90 16 16)" />
-            </svg>
-          </span>
-          <button class="usage-refresh" @click="$emit('refreshUsage')" title="刷新用量">
+            <span class="usage-context-circle"
+                  :title="'上下文: '+fmt(usage.lastPromptTokens||usage.promptTokens)+' / '+fmt(usage.maxContextTokens)">
+              <svg viewBox="0 0 32 32" class="context-ring">
+                <circle cx="16" cy="16" r="13" fill="none" stroke="var(--border)" stroke-width="4" />
+                <circle cx="16" cy="16" r="13" fill="none" stroke="var(--fg-3)"
+                        stroke-width="4" stroke-linecap="round"
+                        :stroke-dasharray="81.68" :stroke-dashoffset="81.68 * (1 - Math.min(ctxPct,100)/100)"
+                        transform="rotate(-90 16 16)" />
+              </svg>
+            </span>
+            <div v-if="showContextComposition && contextEstimate" class="usage-composition-popover">
+              <div class="usage-composition-head">
+                <span>上下文构成</span>
+                <span>{{ fmt(contextTotalTokens) }} / {{ fmt(maxContextTokens) }}</span>
+              </div>
+              <div class="usage-composition-metrics">
+                <div>
+                  <span>输入</span>
+                  <strong>{{ fmt(usage.promptTokens) }}</strong>
+                </div>
+                <div>
+                  <span>输出</span>
+                  <strong>{{ fmt(usage.completionTokens) }}</strong>
+                </div>
+                <div>
+                  <span>缓存</span>
+                  <strong>{{ cacheRate }}%</strong>
+                </div>
+                <div>
+                  <span>费用</span>
+                  <strong>¥{{ Number(usage.totalCost || 0).toFixed(2) }}</strong>
+                </div>
+              </div>
+              <div class="usage-composition-bar">
+                <span v-for="item in compositionItems" :key="item.key" :class="item.key"
+                      :style="{ width: item.percent + '%' }"></span>
+              </div>
+              <div class="usage-composition-list">
+                <div v-for="item in compositionItems" :key="item.key" class="usage-composition-row">
+                  <span class="usage-composition-dot" :class="item.key"></span>
+                  <span>{{ item.label }}</span>
+                  <span>{{ item.percent.toFixed(1) }}%</span>
+                </div>
+              </div>
+            </div>
+        </div>
+        <button class="usage-refresh" @click="$emit('refreshUsage')" title="刷新用量">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M23 4v6h-6"/>
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -577,9 +585,6 @@ const pickModel = async (name) => {
   showModelPicker.value = false
 }
 
-// ============= 用量详情折叠 =============
-const showUsageDetail = ref(false)
-
 // ============= 技能选择（多选） =============
 const showSkillPicker = ref(false)
 const availableSkills = ref([])
@@ -751,6 +756,30 @@ const ctxPct = computed(() => {
   const pct = Math.round((c / m) * 100)
   // 小于 5% 时至少展示 5%，让填充条肉眼可见
   return Math.max(5, Math.min(pct, 100))
+})
+const contextEstimate = computed(() => props.usage.contextEstimate || null)
+const contextTotalTokens = computed(() => Number(props.usage.lastPromptTokens) || 0)
+const maxContextTokens = computed(() => Number(props.usage.maxContextTokens) || 128000)
+const showContextComposition = ref(false)
+const refreshContextComposition = () => {
+  showContextComposition.value = true
+  emit('refreshUsage')
+}
+const compositionItems = computed(() => {
+  const estimate = contextEstimate.value
+  if (!estimate || estimate.totalTokens <= 0) return []
+  const total = estimate.totalTokens
+  const items = [
+    { key: 'system', label: '系统提示', value: estimate.systemTokens || 0 },
+    { key: 'tools', label: '工具定义', value: estimate.toolDefinitionTokens || 0 },
+    { key: 'user', label: '用户消息', value: estimate.userTokens || 0 },
+    { key: 'assistant', label: '助手历史', value: estimate.assistantTokens || 0 },
+    { key: 'result', label: '工具结果', value: estimate.toolResultTokens || 0 }
+  ]
+  return items.filter(item => item.value > 0).map(item => ({
+    ...item,
+    percent: total > 0 ? Math.min(100, item.value / total * 100) : 0
+  }))
 })
 
 onMounted(() => {
@@ -1390,6 +1419,7 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   color: var(--fg-3);
   border-top: 1px solid var(--glass-border);
   margin-top: 4px;
+  position: relative;
 }
 
 .usage-stats {
@@ -1416,26 +1446,18 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   font-size: 14px;
 }
 
-.usage-total {
-  cursor: pointer;
-  user-select: none;
-}
-
-.usage-total:hover {
-  color: var(--fg-2);
-}
-
-.usage-expand-icon {
-  transition: transform 0.2s ease;
-}
-
-.usage-expand-icon.open {
-  transform: rotate(180deg);
+.usage-context-control {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
 }
 
 .usage-context-circle {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   cursor: pointer;
 }
 
@@ -1479,14 +1501,104 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   color: var(--fg-2);
 }
 
-.usage-cost-item {
-  color: var(--yellow);
-  font-weight: 500;
+.usage-composition-popover {
+  position: absolute;
+  z-index: 30;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 300px;
+  max-width: calc(100vw - 24px);
+  padding: 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  background: var(--bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
+  font-size: 11px;
+}
+
+.usage-composition-head,
+.usage-composition-row {
+  display: flex;
+  align-items: center;
+}
+
+.usage-composition-head {
+  justify-content: space-between;
+  color: var(--fg-2);
+  font-weight: 600;
+}
+
+.usage-composition-head span:last-child,
+.usage-composition-row span:last-child {
+  margin-left: auto;
+  color: var(--fg-4);
   font-family: var(--mono);
 }
 
-.usage-cost-item svg {
-  color: var(--yellow);
+.usage-composition-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.usage-composition-metrics div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: var(--r-sm);
+  background: var(--bg-2);
+}
+
+.usage-composition-metrics span {
+  color: var(--fg-4);
+}
+
+.usage-composition-metrics strong {
+  color: var(--fg-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.usage-composition-bar {
+  display: flex;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--bg-3);
+  margin: 8px 0;
+}
+
+.usage-composition-bar span { min-width: 0; }
+.usage-composition-bar .system, .usage-composition-dot.system { background: var(--accent); }
+.usage-composition-bar .tools, .usage-composition-dot.tools { background: var(--blue); }
+.usage-composition-bar .user, .usage-composition-dot.user { background: var(--green); }
+.usage-composition-bar .assistant, .usage-composition-dot.assistant { background: var(--yellow); }
+.usage-composition-bar .result, .usage-composition-dot.result { background: var(--red); }
+
+.usage-composition-list { display: grid; gap: 5px; }
+
+.usage-composition-row {
+  gap: 6px;
+  color: var(--fg-3);
+}
+
+.usage-composition-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+@media (max-width: 640px) {
+  .usage-composition-popover {
+    left: 0;
+    transform: none;
+  }
 }
 
 /* 连接状态 */
