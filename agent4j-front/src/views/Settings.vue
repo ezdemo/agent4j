@@ -284,6 +284,7 @@
                   <div class="input-with-toggle">
                     <input
                         v-model="settings.ai.apiKey"
+                        autocomplete="new-password"
                         :type="showApiKey ? 'text' : 'password'"
                         class="form-input"
                         placeholder="sk-..."
@@ -486,6 +487,13 @@
                 <h3>视觉模型配置</h3>
                 <p>配置图片识别服务的 API 连接与模型参数</p>
               </div>
+              <button class="btn btn-secondary" @click="copyVisionFromAi" title="从 AI 模型配置复制 API 地址和密钥">
+                <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                  <rect height="13" rx="2" ry="2" width="13" x="9" y="9"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                从 AI 模型复制
+              </button>
             </div>
             <div class="card-body">
               <div class="setting-row">
@@ -512,6 +520,7 @@
                   <div class="input-with-toggle">
                     <input
                         v-model="settings.vision.apiKey"
+                        autocomplete="new-password"
                         :type="showVisionApiKey ? 'text' : 'password'"
                         class="form-input"
                         placeholder="sk-..."
@@ -1632,7 +1641,7 @@ X-Custom-Header=value"
           </div>
           <div class="auto-fill-field">
             <label class="auto-fill-label">API 密钥</label>
-            <input v-model="autoFillApiKey" class="form-input" placeholder="sk-..." type="password" />
+            <input v-model="autoFillApiKey" class="form-input" placeholder="sk-..." type="password" autocomplete="new-password" />
           </div>
         </div>
         <div class="auto-fill-foot">
@@ -2768,6 +2777,30 @@ const fetchAndPickVisionModel = async () => {
     message.error('获取视觉模型列表失败: ' + (err.message || err))
   } finally {
     visionModelsLoading.value = false
+  }
+}
+
+// 从 AI 模型配置复制到视觉模型配置（通过后端接口，不暴露密钥）
+const copyVisionFromAi = async () => {
+  try {
+    const res = await configAPI.copyVisionFromAi()
+    if (res.success && res.data) {
+      settings.vision.baseUrl = res.data.baseUrl || settings.vision.baseUrl
+      hasChanges.value = true
+      message.success('已从 AI 模型复制配置')
+      // 尝试获取视觉模型列表
+      try {
+        const modelRes = await configAPI.getRemoteVisionModels()
+        if (modelRes.success && modelRes.data && modelRes.data.length > 0) {
+          visionModels.value = modelRes.data
+          settings.vision.model = modelRes.data[0]
+        }
+      } catch {}
+    } else {
+      message.error(res.error || '复制配置失败')
+    }
+  } catch (err) {
+    message.error('复制配置失败: ' + (err.message || err))
   }
 }
 

@@ -122,6 +122,32 @@ public class ConfigController {
         return ApiResponse.ok("配置已更新");
     }
 
+    @ApiOperation(value = "从 AI 模型复制视觉配置", notes = "将 AI 模型的 baseUrl 和 apiKey 复制到视觉模型配置（后端操作，不暴露密钥）")
+    @Post
+    @Mapping("/config/copy-vision-from-ai")
+    public ApiResponse<Map<String, String>> copyVisionFromAi() {
+        Agent4jConfig cfg = configService.getConfig();
+        String aiBaseUrl = cfg.baseUrl();
+        String aiApiKey = cfg.apiKey();
+        if (aiBaseUrl == null || aiBaseUrl.isEmpty()) {
+            throw new ServiceException("AI 模型 API 地址未配置");
+        }
+        // 构造视觉模型的 baseUrl：将 /chat/completions 替换为 /models 获取列表用的地址
+        String visionBaseUrl = aiBaseUrl.replaceAll("/chat/completions/?$", "").replaceAll("/+$", "") + "/chat/completions";
+        Map<String, Object> update = new LinkedHashMap<>();
+        Map<String, Object> vision = new LinkedHashMap<>();
+        vision.put("baseUrl", visionBaseUrl);
+        if (aiApiKey != null && !aiApiKey.isEmpty()) {
+            vision.put("apiKey", aiApiKey);
+        }
+        update.put("vision", vision);
+        configService.updateConfig(update);
+
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("baseUrl", visionBaseUrl);
+        return ApiResponse.ok(result);
+    }
+
     @ApiOperation(value = "获取可用模型列表", notes = "返回配置中声明的所有可用模型及当前使用的模型")
     @SneakyThrows
     @Get
