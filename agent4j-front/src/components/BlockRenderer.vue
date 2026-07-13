@@ -382,7 +382,7 @@ import {md} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
 import {CHECK_ICON_SM, CHEVRON_DOWN_ICON, CIRCLE_ICON, SPINNER_ICON, THINKING_ICON} from '../utils/icons'
 import {LRUCache} from '../utils/cache'
-import {ref, computed, watchEffect} from 'vue'
+import {computed, ref, watchEffect} from 'vue'
 import WorkflowSteps from './WorkflowSteps.vue'
 
 const props = defineProps({

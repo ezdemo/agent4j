@@ -68,8 +68,9 @@
           </button>
           <button class="btn-icon-sm project-clear" title="清空该项目所有会话" @click.stop="$emit('clear-project', p.workspace.hash)" :disabled="p.sessions.length === 0">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              <path d="M22 4H8l-6 8 6 8h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Z"/>
+              <line x1="17" y1="9" x2="11" y2="15"/>
+              <line x1="11" y1="9" x2="17" y2="15"/>
             </svg>
           </button>
         </div>
@@ -142,7 +143,7 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import {computed, ref} from 'vue'
 
 const props = defineProps({
   sideOpen: { type: Boolean, default: true },
