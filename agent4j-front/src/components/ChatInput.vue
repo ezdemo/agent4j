@@ -228,23 +228,41 @@
           </div>
         </div>
         <div class="reasoning-effort-selector">
-          <button class="effort-btn" @click="toggleEffortPicker" :title="'当前推理强度: '+currentReasoningEffort">
-            {{ effortLabel }}
+          <button class="effort-btn" @click="toggleEffortPicker" :title="`当前推理强度: ${selectedReasoningEffort.label}`">
+            {{ selectedReasoningEffort.label }}
             <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="6 9 12 15 18 9"/>
             </svg>
           </button>
-          <div class="effort-dropdown" v-if="showEffortPicker">
-            <div class="effort-dropdown-title">推理强度</div>
-            <div class="effort-dropdown-list">
-              <div v-for="opt in effortOptions" :key="opt.value" class="effort-option"
-                   :class="{ active: opt.value === currentReasoningEffort }" @click="pickEffort(opt.value)">
-                <span class="effort-option-name">{{ opt.label }}</span>
-                <svg v-if="opt.value === currentReasoningEffort" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="2">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
+          <div v-if="showEffortPicker" class="chat-reasoning-popover"
+               :style="{ '--effort-progress': `${reasoningEffortProgress}%` }">
+            <div class="chat-reasoning-summary">
+              <span class="chat-reasoning-value">{{ selectedReasoningEffort.label }}</span>
+              <span>{{ selectedReasoningEffort.description }}</span>
+            </div>
+            <div class="chat-reasoning-track">
+              <input
+                  :value="reasoningEffortIndex"
+                  aria-label="推理强度"
+                  class="chat-reasoning-input"
+                  max="4"
+                  min="0"
+                  step="1"
+                  type="range"
+                  @input="updateReasoningEffort($event.target.value)"
+                  @change="commitReasoningEffort($event.target.value)"
+              />
+              <div aria-hidden="true" class="chat-reasoning-ticks">
+                <span v-for="(_, index) in effortOptions" :key="index"
+                      :class="{ active: index <= reasoningEffortIndex }"></span>
               </div>
+            </div>
+            <div class="chat-reasoning-levels">
+              <button v-for="(option, index) in effortOptions" :key="option.value"
+                      :aria-pressed="index === reasoningEffortIndex" :class="{ active: index === reasoningEffortIndex }"
+                      type="button" @click="selectReasoningEffort(index)">
+                {{ option.label }}
+              </button>
             </div>
           </div>
         </div>
@@ -658,26 +676,36 @@ const handleOutside = (e) => {
 // ============= 推理强度切换 =============
 const showEffortPicker = ref(false)
 const effortOptions = [
-  {value: 'none', label: '无'},
-  {value: 'low', label: '低'},
-  {value: 'medium', label: '中'},
-  {value: 'high', label: '高'},
-  {value: 'max', label: '最大'}
+  {value: 'none', label: '无', description: '直接响应'},
+  {value: 'low', label: '低', description: '快速响应'},
+  {value: 'medium', label: '中', description: '速度与深度兼顾'},
+  {value: 'high', label: '高', description: '更充分地思考'},
+  {value: 'max', label: '最大', description: '优先获得最完整的推理'}
 ]
-const effortLabel = computed(() => {
-  const found = effortOptions.find(o => o.value === props.currentReasoningEffort)
-  return found ? found.label : props.currentReasoningEffort
-})
+const reasoningEffortIndex = ref(4)
+const selectedReasoningEffort = computed(() => effortOptions[reasoningEffortIndex.value])
+const reasoningEffortProgress = computed(() => (
+  reasoningEffortIndex.value / (effortOptions.length - 1)
+) * 100)
+watch(() => props.currentReasoningEffort, (value) => {
+  const index = effortOptions.findIndex(option => option.value === value)
+  reasoningEffortIndex.value = index === -1 ? effortOptions.length - 1 : index
+}, {immediate: true})
+const updateReasoningEffort = (index) => {
+  const nextIndex = Number(index)
+  const next = effortOptions[nextIndex]
+  if (!next) return
+  reasoningEffortIndex.value = nextIndex
+}
+const commitReasoningEffort = (index) => {
+  updateReasoningEffort(index)
+  const next = effortOptions[reasoningEffortIndex.value]
+  if (next.value !== props.currentReasoningEffort) emit('switchReasoningEffort', next.value)
+  showEffortPicker.value = false
+}
+const selectReasoningEffort = (index) => commitReasoningEffort(index)
 const toggleEffortPicker = () => {
   showEffortPicker.value = !showEffortPicker.value
-}
-const pickEffort = async (value) => {
-  if (value === props.currentReasoningEffort) {
-    showEffortPicker.value = false;
-    return
-  }
-  emit('switchReasoningEffort', value)
-  showEffortPicker.value = false
 }
 
 // ============= Usage =============
@@ -1777,6 +1805,145 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
 
 .effort-option svg {
   color: var(--accent);
+}
+
+.chat-reasoning-popover {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  z-index: 100;
+  width: min(290px, calc(100vw - 28px));
+  margin-bottom: 8px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
+  border-radius: var(--r);
+  background: linear-gradient(135deg, var(--bg), color-mix(in srgb, var(--accent) 7%, var(--bg)));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 12%, transparent), var(--shadow), 0 12px 28px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.chat-reasoning-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 11px;
+  color: var(--fg-3);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.chat-reasoning-value {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.chat-reasoning-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 22px;
+}
+
+.chat-reasoning-input {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 6px;
+  margin: 0;
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent) 0 var(--effort-progress), var(--bg-3) var(--effort-progress) 100%);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, #000000 18%, transparent);
+}
+
+.chat-reasoning-input:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-bg), inset 0 1px 2px color-mix(in srgb, #000000 18%, transparent);
+}
+
+.chat-reasoning-input::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  appearance: none;
+  border: 3px solid var(--bg);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 70%, transparent);
+  transition: transform var(--t), box-shadow var(--t);
+}
+
+.chat-reasoning-input:hover::-webkit-slider-thumb,
+.chat-reasoning-input:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 18px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+.chat-reasoning-input::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border: 3px solid var(--bg);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.chat-reasoning-ticks {
+  position: absolute;
+  top: 50%;
+  left: 7px;
+  right: 7px;
+  z-index: 3;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.chat-reasoning-ticks span {
+  width: 4px;
+  height: 4px;
+  border: 1px solid var(--bg);
+  border-radius: 50%;
+  background: var(--fg-4);
+  transition: background var(--t), transform var(--t);
+}
+
+.chat-reasoning-ticks span.active {
+  background: var(--bg);
+  transform: scale(1.18);
+}
+
+.chat-reasoning-levels {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  margin-top: 6px;
+}
+
+.chat-reasoning-levels button {
+  min-width: 0;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-4);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 10px;
+  line-height: 1.2;
+  transition: color var(--t), text-shadow var(--t), transform var(--t);
+}
+
+.chat-reasoning-levels button:hover {
+  color: var(--fg-2);
+  transform: translateY(-1px);
+}
+
+.chat-reasoning-levels button.active {
+  color: var(--accent);
+  font-weight: 700;
+  text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
 .model-selector {

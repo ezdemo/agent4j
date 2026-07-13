@@ -335,19 +335,40 @@
                   <label class="setting-label">推理强度</label>
                   <p class="setting-hint">AI 推理的详细程度</p>
                 </div>
-                <div class="setting-control">
-                  <div class="select-wrapper">
-                    <select v-model="settings.ai.reasoningEffort" class="form-select">
-                      <option value="none">无 - 不推理</option>
-                      <option value="low">低 - 快速响应</option>
-                      <option value="medium">中 - 平衡模式</option>
-                      <option value="high">高 - 深度思考</option>
-                      <option value="max">最大 - 极致推理</option>
-                    </select>
-                    <svg class="select-arrow" fill="none" height="12" stroke="currentColor" stroke-width="2"
-                         viewBox="0 0 24 24" width="12">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
+                <div class="setting-control reasoning-effort-control">
+                  <div class="reasoning-slider" :style="{ '--effort-progress': `${reasoningEffortProgress}%` }">
+                    <div class="reasoning-slider-summary">
+                      <span class="reasoning-slider-value">{{ selectedReasoningEffort.label }}</span>
+                      <span>{{ selectedReasoningEffort.description }}</span>
+                    </div>
+                    <div class="reasoning-slider-track">
+                      <input
+                          :value="reasoningEffortIndex"
+                          aria-label="推理强度"
+                          class="reasoning-slider-input"
+                          max="4"
+                          min="0"
+                          step="1"
+                          type="range"
+                          @input="setReasoningEffort($event.target.value)"
+                      />
+                      <div aria-hidden="true" class="reasoning-slider-ticks">
+                        <span v-for="(_, index) in reasoningEffortLevels" :key="index"
+                              :class="{ active: index <= reasoningEffortIndex }"></span>
+                      </div>
+                    </div>
+                    <div class="reasoning-slider-levels">
+                      <button
+                          v-for="(level, index) in reasoningEffortLevels"
+                          :key="level.value"
+                          :aria-pressed="index === reasoningEffortIndex"
+                          :class="{ active: index === reasoningEffortIndex }"
+                          type="button"
+                          @click="setReasoningEffort(index)"
+                      >
+                        {{ level.shortLabel }}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1707,8 +1728,7 @@ import {
   openApiAPI,
   petAPI,
   skillMarketAPI,
-  systemAPI,
-  toolsAPI
+  systemAPI
 } from '../services/api'
 import {md} from '../utils/highlight'
 import platform from '../services/platform'
@@ -1737,6 +1757,26 @@ const settings = reactive({
     disabledToolsText: ''
   }
 })
+
+const reasoningEffortLevels = [
+  {value: 'none', label: '无推理', shortLabel: '无', description: '直接响应'},
+  {value: 'low', label: '低强度', shortLabel: '低', description: '快速响应'},
+  {value: 'medium', label: '平衡', shortLabel: '中', description: '速度与深度兼顾'},
+  {value: 'high', label: '高强度', shortLabel: '高', description: '更充分地思考'},
+  {value: 'max', label: '极致推理', shortLabel: '最大', description: '优先获得最完整的推理'}
+]
+
+const reasoningEffortIndex = computed(() => {
+  const index = reasoningEffortLevels.findIndex(level => level.value === settings.ai.reasoningEffort)
+  return index === -1 ? reasoningEffortLevels.length - 1 : index
+})
+const selectedReasoningEffort = computed(() => reasoningEffortLevels[reasoningEffortIndex.value])
+const reasoningEffortProgress = computed(() => (
+  reasoningEffortIndex.value / (reasoningEffortLevels.length - 1)
+) * 100)
+const setReasoningEffort = (index) => {
+  settings.ai.reasoningEffort = reasoningEffortLevels[Number(index)]?.value || 'max'
+}
 
 const activeTab = ref('general')
 const showApiKey = ref(false)
@@ -4362,6 +4402,145 @@ const saveAgent4jMd = async () => {
   transform: translateY(-50%);
   color: var(--fg-3);
   pointer-events: none;
+}
+
+/* 推理强度滑条 */
+.reasoning-effort-control {
+  min-width: 280px;
+}
+
+.reasoning-slider {
+  width: 100%;
+  padding: 10px 12px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
+  border-radius: var(--r);
+  background: linear-gradient(135deg, var(--bg), color-mix(in srgb, var(--accent) 7%, var(--bg)));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 12%, transparent), 0 6px 18px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.reasoning-slider-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: var(--fg-3);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.reasoning-slider-value {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.reasoning-slider-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 22px;
+}
+
+.reasoning-slider-input {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 6px;
+  margin: 0;
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent) 0 var(--effort-progress), var(--bg-3) var(--effort-progress) 100%);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, #000000 18%, transparent);
+}
+
+.reasoning-slider-input:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-bg), inset 0 1px 2px color-mix(in srgb, #000000 18%, transparent);
+}
+
+.reasoning-slider-input::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  appearance: none;
+  border: 3px solid var(--bg);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 70%, transparent);
+  transition: transform var(--t), box-shadow var(--t);
+}
+
+.reasoning-slider-input:hover::-webkit-slider-thumb,
+.reasoning-slider-input:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 18px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+.reasoning-slider-input::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border: 3px solid var(--bg);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.reasoning-slider-ticks {
+  position: absolute;
+  top: 50%;
+  left: 7px;
+  right: 7px;
+  z-index: 3;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.reasoning-slider-ticks span {
+  width: 4px;
+  height: 4px;
+  border: 1px solid var(--bg);
+  border-radius: 50%;
+  background: var(--fg-4);
+  transition: background var(--t), transform var(--t);
+}
+
+.reasoning-slider-ticks span.active {
+  background: var(--bg);
+  transform: scale(1.18);
+}
+
+.reasoning-slider-levels {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  margin-top: 5px;
+}
+
+.reasoning-slider-levels button {
+  min-width: 0;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-4);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 10px;
+  line-height: 1.2;
+  transition: color var(--t), text-shadow var(--t), transform var(--t);
+}
+
+.reasoning-slider-levels button:hover {
+  color: var(--fg-2);
+  transform: translateY(-1px);
+}
+
+.reasoning-slider-levels button.active {
+  color: var(--accent);
+  font-weight: 700;
+  text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
 }
 
 /* 主题选择 */
