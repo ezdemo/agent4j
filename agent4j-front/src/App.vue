@@ -69,6 +69,7 @@
         :connected="!showSetup"
         style="flex:1;min-height:0"
         @session-updated="loadSessions"
+        @session-branched="onSessionBranched"
       />
     </main>
 
@@ -624,7 +625,7 @@ const fmtTokens = n => !n ? '0' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : Stri
 
 const formatName = n => {
   const m = n.match(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/)
-  return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}` : n.replace(/[-_]+/g, ' ').slice(0, 24)
+  return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}${n.slice(m.index + m[0].length)}` : n.replace(/[-_]+/g, ' ').slice(0, 24)
 }
 
 const themeOrder = ['light', 'dark', 'retro', 'retro-yellow']
@@ -771,6 +772,17 @@ const loadSessions = async () => {
       sessions.value = grouped[wsHash] || []
     }
   } catch {}
+}
+
+// 分支会话：切换到新会话并刷新列表
+const onSessionBranched = async (newSessionName) => {
+  currentSession.value = newSessionName
+  await nextTick()
+  await Promise.all([
+    loadSessions(),
+    chatRef.value?.loadSession(newSessionName, currentSessionWorkspace.value)
+  ])
+  message.success("已分支到新会话")
 }
 
 // 加载工作区列表

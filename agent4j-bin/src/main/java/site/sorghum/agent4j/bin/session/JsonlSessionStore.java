@@ -116,7 +116,7 @@ public class JsonlSessionStore implements SessionStore {
     // ---- 文件管理 ----
 
     private static String sanitize(String name) {
-        return name.replaceAll("[^a-zA-Z0-9_\\-]", "_");
+        return name.replaceAll("[^\\p{L}\\p{N}_\\-\\[\\]]", "_");
     }
 
     public static String serializeMessage(ChatMessage msg) {

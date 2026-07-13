@@ -12,12 +12,14 @@
         </div>
         <div class="msg-footer">
           <span class="msg-time">{{ msg.time }}</span>
+          <span class="msg-actions">
           <button v-if="msg.snapshotId" class="rollback-btn"
                   :class="{ loading: snapshotRollbackLoading.get(msg.snapshotId) }"
                   @click="$emit('rollbackSnapshot', msg.snapshotId)"
                   title="撤回 AI 修改，恢复到发送前状态"
                   v-html="ROLLBACK_ICON"></button>
           <button class="copy-msg-btn" @click="$emit('copyMessage', msg)" title="复制消息" v-html="COPY_ICON"></button>
+          </span>
         </div>
       </div>
     </template>
@@ -36,7 +38,10 @@
               <span v-if="fileStats.created > 0" class="msg-file-stat clickable" @mouseenter="showFileListDelayed('created', $event)" @mouseleave="hideFileListDelayed">新增 {{ fileStats.created }} 文件</span>
             </template>
           </span>
+          <span class="msg-actions">
           <button class="copy-msg-btn" @click="$emit('copyMessage', msg)" title="复制消息" v-html="COPY_ICON"></button>
+          <button class="copy-msg-btn" :disabled="branchDisabled" @click="$emit('branchSession', msg, idx)" title="继续到新会话" v-html="BRANCH_ICON"></button>
+          </span>
         </div>
       </div>
     </template>
@@ -78,7 +83,7 @@
 </template>
 
 <script setup>
-import {COPY_ICON, ROLLBACK_ICON} from '../utils/icons'
+import {COPY_ICON, ROLLBACK_ICON, BRANCH_ICON} from '../utils/icons'
 import BlockRenderer from './BlockRenderer.vue'
 import {onMounted, onBeforeUnmount, reactive, ref, computed} from 'vue'
 import platform from '../services/platform'
@@ -86,10 +91,11 @@ import platform from '../services/platform'
 const props = defineProps({
   msg: {type: Object, required: true},
   idx: {type: Number, default: 0},
-  snapshotRollbackLoading: {type: Object, required: true}
+  snapshotRollbackLoading: {type: Object, required: true},
+  branchDisabled: {type: Boolean, default: false}
 })
 
-const emit = defineEmits(['previewImage', 'rollbackSnapshot', 'copyMessage', 'sendChoice', 'openFile'])
+const emit = defineEmits(['previewImage', 'rollbackSnapshot', 'copyMessage', 'branchSession', 'sendChoice', 'openFile'])
 
 const isElectron = platform.isElectron
 
@@ -380,6 +386,13 @@ onBeforeUnmount(() => {
   display: inline-flex;
   align-items: center;
   gap: 6px;
+}
+
+.msg-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
 }
 
 .msg-file-stat {

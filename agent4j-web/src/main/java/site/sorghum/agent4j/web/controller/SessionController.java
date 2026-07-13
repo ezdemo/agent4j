@@ -124,6 +124,20 @@ public class SessionController {
         return ApiResponse.ok("已清除所有 Agent 缓存");
     }
 
+    @ApiOperation(value = "分支会话", notes = "复制原始历史中从开头到指定排他结束位置的消息到新会话，并切换过去")
+    @Post
+    @Mapping("/{name}/branch")
+    public ApiResponse<SessionCreateDTO> branchSession(
+            @ApiParam(value = "源会话名称") @Path("name") String name,
+            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
+            @ApiParam(value = "原始历史的排他结束位置", required = true) @Param(value = "messageCount", required = true) Integer messageCount) throws Exception {
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        if (messageCount == null || messageCount <= 0) throw new ServiceException("messageCount 必须大于 0");
+        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+        String newName = agentService.branchSession(workspacePath, name, messageCount);
+        return ApiResponse.ok(new SessionCreateDTO("已分支到新会话", workspaceHash, newName));
+    }
+
     @ApiOperation(value = "获取缓存统计", notes = "返回当前 Agent 缓存的数量和上限")
     @Get
     @Mapping("/stats")
