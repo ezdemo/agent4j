@@ -66,6 +66,7 @@ public class Agent4jConfig {
                   "reasoningEffort": "high",
                   "lang": "ZH",
                   "hitl": "free",
+                  "autoWhitelist": [],
                   "maxContextChars": 200000,
                   "keepTailChars": 80000,
                   "toolTimeoutSec": 360,
@@ -255,6 +256,35 @@ public class Agent4jConfig {
         }
         String val = n.getString();
         return val != null ? val : "free";
+    }
+
+    /**
+     * 获取 HITL 自动模式的工具白名单。
+     * <p>
+     * 仅在 hitl 模式为 {@code "auto"} 时生效。
+     * 工具名称匹配白名单中的任一规则时自动放行，否则需走审批流程。
+     * 支持 glob 通配符：{@code *} 匹配任意字符序列。
+     * </p>
+     * <ul>
+     *   <li>{@code "*"} — 匹配所有工具（等同于旧版 auto 行为）</li>
+     *   <li>{@code "read_*"} — 匹配以 "read_" 开头的工具</li>
+     *   <li>{@code "finish"} — 精确匹配 "finish" 工具</li>
+     * </ul>
+     * <p>未配置或为空时返回空列表，auto 模式下所有非免审工具需走审批。</p>
+     */
+    public List<String> autoWhitelist() {
+        ONode arr = root.select("$.autoWhitelist");
+        List<String> result = new ArrayList<>();
+        if (arr != null && arr.isArray()) {
+            for (ONode item : arr.getArray()) {
+                String val = item.getString();
+                if (val != null && !val.isEmpty()) {
+                    result.add(val);
+                }
+            }
+        }
+        // 未配置或为空时返回空列表，auto 模式下等同于全部需审批
+        return result;
     }
 
     /**

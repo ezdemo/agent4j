@@ -8,6 +8,7 @@ import site.sorghum.agent4j.bin.agent.model.ToolCallEntry;
 import site.sorghum.agent4j.tool.AgentOutput;
 import site.sorghum.agent4j.tool.ChoiceOption;
 
+import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -26,7 +27,7 @@ import java.util.List;
  * <ul>
  *   <li>{@link #MODE_FREE free} — 自由模式，所有工具直接执行，无需审批</li>
  *   <li>{@link #MODE_APPROVAL approval} — 审批模式，非只读工具执行前需用户审批</li>
- *   <li>{@link #MODE_AUTO auto} — 自动模式，自动批准所有工具调用（无用户交互）</li>
+ *   <li>{@link #MODE_AUTO auto} — 自动模式，基于白名单自动过滤（匹配白名单的工具自动放行，否则需审批）</li>
  * </ul>
  *
  * @author Sorghum
@@ -40,7 +41,7 @@ public class HitlManager {
     public static final String MODE_FREE = "free";
     /** 审批模式：非只读工具执行前需用户审批 */
     public static final String MODE_APPROVAL = "approval";
-    /** 自动模式：自动批准所有工具调用（无用户交互） */
+    /** 自动模式：基于白名单自动过滤（匹配白名单的工具自动放行，否则需审批） */
     public static final String MODE_AUTO = "auto";
 
     /** 所有模式的列表（用于 toggle 循环） */
@@ -202,7 +203,7 @@ public class HitlManager {
      * HITL 拦截：根据当前模式决定是否暂存工具调用等待用户审批。
      * <ul>
      *   <li>自由模式 ({@link #MODE_FREE})：直接放行，返回 {@code null}</li>
-     *   <li>自动模式 ({@link #MODE_AUTO})：自动批准，返回 {@code null}</li>
+     *   <li>自动模式 ({@link #MODE_AUTO})：白名单匹配时自动放行，不匹配时降级为审批</li>
      *   <li>审批模式 ({@link #MODE_APPROVAL})：暂存并等待用户审批</li>
      * </ul>
      * <p>如果本轮工具调用全部为免审批工具（finish/ask_choice），直接放行返回 {@code null}。</p>
@@ -230,14 +231,27 @@ public class HitlManager {
         }
 
         if (MODE_AUTO.equals(hitlMode)) {
-            // 自动模式：自动批准，直接放行（暂存状态供后续使用）
-            log.debug("[hitl] 自动模式：自动批准工具调用: {}", tcList.stream().map(ToolCallEntry::name).toList());
-            this.hitlState = HitlState.APPROVED;
-            this.pendingHITLToolCalls = toolCalls;
-            this.pendingHITLContent = content;
-            this.pendingHITLReasoning = reasoningContent;
-            this.pendingHITTcList = tcList;
-            return null;
+            // 自动模式：基于白名单过滤
+            List<String> whitelist = Agent4jConfig.getInstance().autoWhitelist();
+            boolean allMatched = tcList.stream().allMatch(tc -> matchesWhitelist(tc.name(), whitelist));
+
+            if (allMatched) {
+                // 白名单匹配：自动放行
+                log.debug("[hitl] 自动模式：白名单匹配，自动放行: {}", tcList.stream().map(ToolCallEntry::name).toList());
+                this.hitlState = HitlState.APPROVED;
+                this.pendingHITLToolCalls = toolCalls;
+                this.pendingHITLContent = content;
+                this.pendingHITLReasoning = reasoningContent;
+                this.pendingHITTcList = tcList;
+                return null;
+            }
+
+            // 白名单不匹配：降级为审批流程
+            List<String> rejected = tcList.stream()
+                    .filter(tc -> !matchesWhitelist(tc.name(), whitelist))
+                    .map(ToolCallEntry::name).toList();
+            log.debug("[hitl] 自动模式：白名单不匹配，需审批: {}", rejected);
+            // 继续走下方审批逻辑
         }
 
         // ---- 审批模式：暂存状态，等待用户审批 ----
@@ -380,6 +394,62 @@ public class HitlManager {
         this.pendingSandboxHITToolCalls = toolCalls;
         this.pendingSandboxHITDetails = details;
         this.hitlState = HitlState.PENDING;
+    }
+
+    // ==================== 白名单匹配 ====================
+
+    /**
+     * 判断工具名称是否匹配白名单中的任一规则。
+     * <p>
+     * 支持 glob 通配符 {@code *}，匹配任意字符序列（包括空串）。
+     * 例如：
+     * <ul>
+     *   <li>{@code "*"} 匹配所有工具</li>
+     *   <li>{@code "read_*"} 匹配以 "read_" 开头的工具</li>
+     *   <li>{@code "workspace_*"} 匹配以 "workspace_" 开头的工具</li>
+     *   <li>{@code "finish"} 精确匹配 "finish"</li>
+     * </ul>
+     *
+     * @param toolName  工具名称
+     * @param whitelist 白名单规则列表
+     * @return 匹配任一规则返回 true
+     */
+    static boolean matchesWhitelist(String toolName, List<String> whitelist) {
+        if (toolName == null || whitelist == null || whitelist.isEmpty()) return false;
+        for (String pattern : whitelist) {
+            if (globMatch(pattern, toolName)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * 简单 glob 匹配 —— 仅支持 {@code *} 通配符。
+     * {@code *} 匹配任意字符序列（包括空串），其余字符逐字匹配。
+     */
+    private static boolean globMatch(String pattern, String text) {
+        if (pattern == null || text == null) return false;
+        if ("*".equals(pattern)) return true;
+
+        int pIdx = 0, tIdx = 0;
+        int starIdx = -1, matchIdx = -1;
+
+        while (tIdx < text.length()) {
+            if (pIdx < pattern.length() && (pattern.charAt(pIdx) == text.charAt(tIdx) || pattern.charAt(pIdx) == '?')) {
+                pIdx++;
+                tIdx++;
+            } else if (pIdx < pattern.length() && pattern.charAt(pIdx) == '*') {
+                starIdx = pIdx++;
+                matchIdx = tIdx;
+            } else if (starIdx >= 0) {
+                pIdx = starIdx + 1;
+                matchIdx++;
+                tIdx = matchIdx;
+            } else {
+                return false;
+            }
+        }
+        while (pIdx < pattern.length() && pattern.charAt(pIdx) == '*') pIdx++;
+        return pIdx == pattern.length();
     }
 
     // ==================== 内部方法 ====================
