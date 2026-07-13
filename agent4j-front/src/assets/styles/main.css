@@ -262,7 +262,7 @@ body {
 /* 浅绿 — 消息 & 加载适配 */
 [data-theme="retro"] .user-body {
   color: #1C1B1F;
-  background: #C8E6C9;
+  background: #F3FBF3;
 }
 [data-theme="retro"] .new-task-btn {
   background: #4CAF50;

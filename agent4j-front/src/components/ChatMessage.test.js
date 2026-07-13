@@ -10,7 +10,7 @@ const mountMessage = (msg, branchDisabled = false) => shallowMount(ChatMessage, 
 })
 
 describe('ChatMessage branching', () => {
-  it('shows automatic user blocks in a hover popover while keeping the user text visible', async () => {
+  it('expands automatic user blocks on demand while keeping the user text visible', async () => {
     const wrapper = mountMessage({
       id: 1,
       role: 'user',
@@ -18,9 +18,10 @@ describe('ChatMessage branching', () => {
     })
 
     expect(wrapper.find('.user-auto-message').exists()).toBe(true)
-    expect(wrapper.find('.user-auto-message-trigger').text()).toContain('调用技能：')
-    await wrapper.find('.user-auto-message').trigger('mouseenter')
-    expect(wrapper.find('.user-auto-message-popover').text()).toContain('/skill:hv-analysis')
+    expect(wrapper.find('.user-auto-message-trigger').text()).toContain('折叠块')
+    expect(wrapper.find('.user-auto-message-detail').exists()).toBe(false)
+    await wrapper.find('.user-auto-message-trigger').trigger('click')
+    expect(wrapper.find('.user-auto-message-detail').text()).toContain('/skill:hv-analysis')
     expect(wrapper.find('.msg-text').text()).toBe('你好啊')
   })
 

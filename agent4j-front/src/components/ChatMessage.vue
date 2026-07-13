@@ -3,15 +3,16 @@
     <!-- 用户消息 -->
     <template v-if="msg.role === 'user'">
       <div class="msg-body user-body">
-        <div v-if="userCollapsedBlock" ref="userAutoMessageRef" class="user-auto-message"
-             tabindex="0" @focusin="showUserAutoMessagePopover" @focusout="hideUserAutoMessagePopover"
-             @mouseenter="showUserAutoMessagePopover" @mouseleave="hideUserAutoMessagePopover">
-          <div class="user-auto-message-trigger">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M8 9l-3 3 3 3M16 9l3 3-3 3M14 5l-4 14"/>
+        <div v-if="userCollapsedBlock" class="user-auto-message">
+          <button class="user-auto-message-trigger" type="button" :aria-expanded="userAutoMessageExpanded"
+                  @click="userAutoMessageExpanded = !userAutoMessageExpanded">
+            <span class="user-auto-message-title">折叠块</span>
+            <svg class="user-auto-message-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
             </svg>
-            <span>{{ userCollapsedBlockTitle }}</span>
-            <span v-if="userCollapsedBlockCount" class="user-auto-message-count">{{ userCollapsedBlockCount }}</span>
+          </button>
+          <div v-if="userAutoMessageExpanded" class="user-auto-message-detail">
+            <div class="user-auto-message-content">{{ userCollapsedBlock }}</div>
           </div>
         </div>
         <div v-if="userDisplayText" class="msg-text">{{ userDisplayText }}</div>
@@ -58,14 +59,6 @@
     </template>
   </div>
 
-  <Teleport to="body">
-    <div v-if="userAutoMessagePopoverVisible" ref="userAutoMessagePopoverRef" class="user-auto-message-popover"
-         :style="userAutoMessagePopoverStyle" role="tooltip"
-         @mouseenter="showUserAutoMessagePopover" @mouseleave="hideUserAutoMessagePopover">
-      <pre>{{ userCollapsedBlock }}</pre>
-    </div>
-  </Teleport>
-
   <!-- 文件列表弹出 -->
   <Teleport to="body">
     <div v-if="showFileList" class="file-list-popover" :class="{ above: fileListPos.above }" :style="{ position: 'fixed', left: fileListPos.x + 'px', top: fileListPos.y + 'px' }" @mouseenter="cancelHideFileList" @mouseleave="hideFileListDelayed">
@@ -104,7 +97,7 @@
 <script setup>
 import {BRANCH_ICON, COPY_ICON, ROLLBACK_ICON} from '../utils/icons'
 import BlockRenderer from './BlockRenderer.vue'
-import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref} from 'vue'
+import {computed, onBeforeUnmount, onMounted, reactive, ref} from 'vue'
 import platform from '../services/platform'
 
 const props = defineProps({
@@ -126,12 +119,6 @@ const userCollapsedBlock = computed(() => {
   const match = (props.msg.content || '').match(COLLAPSIBLE_USER_BLOCK)
   return match ? match[1] : ''
 })
-const userCollapsedBlockTitle = computed(() => (
-  userCollapsedBlock.value.split(/\r?\n/, 1)[0] || '消息详情'
-))
-const userCollapsedBlockCount = computed(() => (
-  userCollapsedBlock.value.split(/\r?\n/).filter(line => line.trim().startsWith('/skill:')).length
-))
 const userBodyText = computed(() => (
   (props.msg.content || '').replace(COLLAPSIBLE_USER_BLOCK, '')
 ))
@@ -141,38 +128,7 @@ const userDisplayText = computed(() => {
   if (userExpanded.value || c.length <= USER_MAX_LEN) return c
   return c.slice(0, USER_MAX_LEN) + '...'
 })
-const userAutoMessageRef = ref(null)
-const userAutoMessagePopoverRef = ref(null)
-const userAutoMessagePopoverVisible = ref(false)
-const userAutoMessagePopoverStyle = ref({left: '0px', top: '0px'})
-let userAutoMessageHideTimer = null
-const updateUserAutoMessagePopoverPosition = () => {
-  const trigger = userAutoMessageRef.value
-  const popover = userAutoMessagePopoverRef.value
-  if (!trigger || !popover) return
-
-  const triggerRect = trigger.getBoundingClientRect()
-  const popoverRect = popover.getBoundingClientRect()
-  const margin = 8
-  const spaceAbove = triggerRect.top
-  const spaceBelow = window.innerHeight - triggerRect.bottom
-  const top = spaceAbove >= popoverRect.height + margin || spaceAbove >= spaceBelow
-    ? triggerRect.top - popoverRect.height - margin
-    : triggerRect.bottom + margin
-  const left = Math.max(margin, Math.min(triggerRect.right - popoverRect.width, window.innerWidth - popoverRect.width - margin))
-  userAutoMessagePopoverStyle.value = {left: `${left}px`, top: `${top}px`}
-}
-const showUserAutoMessagePopover = () => {
-  clearTimeout(userAutoMessageHideTimer)
-  userAutoMessagePopoverVisible.value = true
-  nextTick(updateUserAutoMessagePopoverPosition)
-}
-const hideUserAutoMessagePopover = () => {
-  clearTimeout(userAutoMessageHideTimer)
-  userAutoMessageHideTimer = setTimeout(() => {
-    userAutoMessagePopoverVisible.value = false
-  }, 120)
-}
+const userAutoMessageExpanded = ref(false)
 
 // 助手消息文件统计（edit=修改, write=新增，按 file_path 去重）
 const fileStats = computed(() => {
@@ -315,8 +271,6 @@ onMounted(() => {
   el.addEventListener('mouseover', onMsgMouseOver)
   el.addEventListener('mouseout', onMsgMouseOut)
   el.addEventListener('click', onMsgClick)
-  window.addEventListener('resize', updateUserAutoMessagePopoverPosition)
-  window.addEventListener('scroll', updateUserAutoMessagePopoverPosition, true)
 })
 onBeforeUnmount(() => {
   const el = msgRef.value
@@ -326,9 +280,6 @@ onBeforeUnmount(() => {
     el.removeEventListener('click', onMsgClick)
   }
   clearTimeout(hideTimer)
-  clearTimeout(userAutoMessageHideTimer)
-  window.removeEventListener('resize', updateUserAutoMessagePopoverPosition)
-  window.removeEventListener('scroll', updateUserAutoMessagePopoverPosition, true)
 })
 
 
@@ -350,6 +301,11 @@ onBeforeUnmount(() => {
 .msg.user {
   display: flex;
   justify-content: flex-end;
+}
+
+.msg.user .msg-body {
+  box-sizing: border-box;
+  width: min(480px, 85vw);
 }
 
 .msg-body {
@@ -415,81 +371,74 @@ onBeforeUnmount(() => {
 }
 
 .user-auto-message {
-  position: relative;
-  display: inline-flex;
+  display: block;
   margin: 0 0 6px;
-  outline: none;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
 }
 
 .user-auto-message-trigger {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
-  padding: 3px 7px 3px 4px;
-  border: 1px solid color-mix(in srgb, var(--accent) 28%, var(--border));
-  border-radius: var(--r-sm);
-  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
-  color: var(--fg-2);
-  font-size: 11px;
-  font-weight: 600;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
   user-select: none;
 }
 
 .user-auto-message-trigger svg {
-  box-sizing: content-box;
-  padding: 2px;
-  border-radius: 50%;
-  background: var(--accent-bg);
   flex-shrink: 0;
-  color: var(--accent);
 }
 
-.user-auto-message:hover .user-auto-message-trigger,
-.user-auto-message:focus-visible .user-auto-message-trigger {
-  background: color-mix(in srgb, var(--accent) 14%, transparent);
+.user-auto-message-trigger:hover,
+.user-auto-message-trigger:focus-visible {
+  background: var(--bg-2);
+  outline: none;
 }
 
-.user-auto-message-popover {
-  position: fixed;
-  z-index: 1000;
-  display: flex;
-  box-sizing: border-box;
-  width: 340px;
-  max-width: calc(100vw - 24px);
-  height: 176px;
-  padding: 8px 10px;
-  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
-  border-radius: var(--r-sm);
-  background: var(--bg);
-  box-shadow: var(--shadow), 0 8px 20px color-mix(in srgb, #000000 15%, transparent);
+.user-auto-message-title {
+  color: var(--fg-2);
+  font-size: 12px;
+  font-weight: 500;
 }
 
-.user-auto-message-popover pre {
+.user-auto-message-chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: transform var(--t);
+  color: var(--fg-4);
+}
+
+.user-auto-message-trigger[aria-expanded="true"] .user-auto-message-chevron {
+  transform: rotate(180deg);
+}
+
+.user-auto-message-detail {
+  padding: 10px 10px 8px;
+  border-top: 1px solid var(--border);
+}
+
+.user-auto-message-content {
   margin: 0;
-  min-width: 0;
-  width: 100%;
-  height: 100%;
-  overflow-x: auto;
-  overflow-y: auto;
   color: var(--fg-2);
   font-family: var(--mono);
   font-size: 11px;
   line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
-}
-
-.user-auto-message-count {
-  display: inline-grid;
-  min-width: 15px;
-  height: 15px;
-  padding: 0 3px;
-  place-items: center;
-  border-radius: 999px;
-  background: color-mix(in srgb, var(--accent) 18%, transparent);
-  color: var(--accent);
-  font-size: 9px;
-  line-height: 1;
 }
 
 /* 用户消息中的图片 */
