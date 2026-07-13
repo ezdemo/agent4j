@@ -460,6 +460,18 @@ export const configAPI = {
   // 删除工作区 - DELETE /api/workspaces/{hash}
   deleteWorkspace: (hash) => {
     return api.delete(`/workspaces/${hash}`)
+  },
+
+  // 获取 agent4j.md 内容 - GET /api/agent4j-md
+  getAgent4jMd: () => {
+    return api.get('/agent4j-md')
+  },
+
+  // 更新 agent4j.md 内容 - PUT /api/agent4j-md
+  updateAgent4jMd: (content) => {
+    return api.put('/agent4j-md', content, {
+      headers: { 'Content-Type': 'text/plain' }
+    })
   }
 }
 

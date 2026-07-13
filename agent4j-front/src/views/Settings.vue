@@ -34,7 +34,7 @@
           <h2>{{ currentTab?.label || '设置' }}</h2>
           <p class="header-desc">{{ currentTab?.description }}</p>
         </div>
-        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'about' && activeTab !== 'pet'" class="header-actions">
+        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'about' && activeTab !== 'pet' && activeTab !== 'prompt'" class="header-actions">
           <button v-if="activeTab === 'ai' || activeTab === 'vision'" class="btn btn-secondary" style="padding:6px 12px;" @click="openAutoFillDialog" title="自动填入配置">
             <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
               <polyline points="1 4 1 10 7 10"/>
@@ -1368,6 +1368,64 @@ X-Custom-Header=value"
           </div>
         </section>
 
+        <!-- ==================== 系统提示词 ==================== -->
+        <section v-if="activeTab === 'prompt'" class="settings-section">
+          <div class="section-card" style="display:flex;flex-direction:column;height:100%">
+            <div class="card-header">
+              <h3>系统提示词</h3>
+              <p>编辑 ~/.agent4j/agent4j.md — 保存后自动重新初始化 Agent，新会话将生效</p>
+            </div>
+            <div class="card-body" style="flex:1;display:flex;flex-direction:column;padding:0;overflow:hidden">
+              <div v-if="promptLoading" class="state-box" style="flex:1">
+                <svg class="animate-spin" fill="none" height="24" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="24">
+                  <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                </svg>
+                <p>加载中...</p>
+              </div>
+              <div v-else style="flex:1;display:flex;flex-direction:column;padding:12px;gap:8px;overflow:hidden">
+                <div style="flex:1;position:relative;overflow:hidden;border:1px solid var(--border);border-radius:var(--r)">
+                  <textarea
+                    v-model="promptContent"
+                    class="prompt-editor"
+                    placeholder="在此输入系统提示词内容（Markdown 格式）…"
+                    spellcheck="false"
+                  ></textarea>
+                </div>
+                <div class="prompt-toolbar">
+                  <span class="prompt-info">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="12" y1="16" x2="12" y2="12"/>
+                      <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    {{ promptContent.length }} 字符
+                  </span>
+                  <div style="display:flex;gap:8px">
+                    <button class="btn" @click="loadAgent4jMd" :disabled="promptSaving">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="1 4 1 10 7 10"/>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                      </svg>
+                      刷新
+                    </button>
+                    <button class="btn btn-primary" :disabled="promptSaving" @click="saveAgent4jMd">
+                      <svg v-if="promptSaving" class="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                      </svg>
+                      <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                        <polyline points="17 21 17 13 7 13 7 21"/>
+                        <polyline points="7 3 7 8 15 8"/>
+                      </svg>
+                      {{ promptSaving ? '保存中...' : '保存' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- ==================== 关于 ==================== -->
         <section v-if="activeTab === 'about'" class="settings-section">
           <div class="section-card">
@@ -1686,6 +1744,11 @@ const showRemoteModelsDialog = ref(false)
 const remoteModelList = ref([])
 const selectedRemoteModels = ref(new Set())
 const remoteSearchQuery = ref('')
+
+// 系统提示词编辑
+const promptContent = ref('')
+const promptLoading = ref(false)
+const promptSaving = ref(false)
 
 // 宠物设置状态
 const petsList = ref([])
@@ -2106,6 +2169,18 @@ const tabs = computed(() => [
     </svg>`
   },
   {
+    id: 'prompt',
+    label: '系统提示词',
+    description: '编辑 ~/.agent4j/agent4j.md 系统提示词文件',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/>
+      <line x1="16" y1="17" x2="8" y2="17"/>
+      <polyline points="10 9 9 9 8 9"/>
+    </svg>`
+  },
+  {
     id: 'openapi',
     label: 'OpenAPI',
     description: '管理 OpenAPI 接口源',
@@ -2213,6 +2288,9 @@ watch(activeTab, async (tab) => {
   }
   if (tab === 'pet') {
     loadPets()
+  }
+  if (tab === 'prompt') {
+    loadAgent4jMd()
   }
 })
 
@@ -3516,6 +3594,45 @@ onMounted(() => {
   loadSettings()
   loadOpenApiData()
 })
+
+// 加载系统提示词
+const loadAgent4jMd = async () => {
+  promptLoading.value = true
+  try {
+    const res = await configAPI.getAgent4jMd()
+    if (res.success) {
+      promptContent.value = res.data || ''
+    } else {
+      message.error(res.error || '加载失败')
+    }
+  } catch (err) {
+    console.error('加载 agent4j.md 失败:', err)
+    message.error('加载失败: ' + (err.message || ''))
+  } finally {
+    promptLoading.value = false
+  }
+}
+
+// 保存系统提示词
+const saveAgent4jMd = async () => {
+  promptSaving.value = true
+  try {
+    const res = await configAPI.updateAgent4jMd(promptContent.value)
+    if (res.success) {
+      message.success(res.data || '已保存')
+    } else {
+      message.error(res.error || '保存失败')
+    }
+  } catch (err) {
+    console.error('保存 agent4j.md 失败:', err)
+    message.error('保存失败: ' + (err.message || ''))
+  } finally {
+    promptSaving.value = false
+  }
+}
+
+// Tab 切换时加载系统提示词 — 追加到已有 watch(activeTab) 中
+// 注意：该逻辑在已有 watch(activeTab) 内，无需重复
 </script>
 
 <style scoped>
@@ -5860,6 +5977,39 @@ onMounted(() => {
   justify-content: center;
 }
 .pet-init-inline .pet-init-hint {
+  font-size: 12px;
+  color: var(--fg-3);
+}
+
+/* ======== 系统提示词编辑器 ======== */
+.prompt-editor {
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 16px;
+  tab-size: 2;
+}
+.prompt-editor::placeholder {
+  color: var(--fg-3);
+}
+.prompt-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 4px;
+}
+.prompt-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: var(--fg-3);
 }

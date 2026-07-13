@@ -349,9 +349,10 @@
                 cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01"
                                                                                               y2="17"/></svg>
           </span>
+          <span class="choice-badge">HITL 审批</span>
           <span class="choice-q-text">{{ block.question }}</span>
         </div>
-        <div class="choice-desc" v-if="block.description">{{ block.description }}</div>
+        <pre v-if="block.description" class="choice-desc"><code>{{ block.description }}</code></pre>
         <div class="choice-buttons">
           <button
               v-for="opt in (block.options || [])"
@@ -1304,13 +1305,35 @@ const parseResult = (block) => {
   font-weight: 500;
 }
 
-/* 选项描述 — 工具参数详情等 */
+/* 选项描述 — 工具参数详情等（代码块风格） */
 .choice-desc {
-  padding: 0 12px 6px;
-  font-size: 0.85em;
-  color: var(--color-text-secondary, #666);
-  white-space: pre-wrap;
-  word-break: break-word;
+  margin: 0 12px 8px;
+  padding: 6px 10px;
+  background: var(--color-code-bg, #f6f8fa);
+  border-radius: 6px;
+  font-size: 0.82em;
+  line-height: 1.45;
+  overflow-x: auto;
+}
+.choice-desc code {
+  background: none;
+  padding: 0;
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', 'Consolas', monospace);
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+/* HITL 审批小徽章 */
+.choice-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  margin-right: 6px;
+  background: #f0a02020;
+  border: 1px solid #f0a02040;
+  border-radius: 4px;
+  font-size: 0.78em;
+  font-weight: 600;
+  color: #b8780a;
+  vertical-align: middle;
 }
 
 /* 选项列表 — 横向 wrap */

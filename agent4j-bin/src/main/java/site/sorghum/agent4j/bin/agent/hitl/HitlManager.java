@@ -176,7 +176,7 @@ public class HitlManager {
             String args = argsObj != null ? argsObj.toString() : null;
             if (args != null && !args.isEmpty() && !"{}".equals(args)) {
                 String display = args.length() > 200 ? args.substring(0, 200) + "..." : args;
-                descSb.append("`").append(tc.name()).append("` ").append(display);
+                descSb.append(tc.name()).append(" ").append(display);
             }
         }
         String title = titleSb.toString();

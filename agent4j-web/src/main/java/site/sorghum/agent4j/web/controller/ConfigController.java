@@ -19,6 +19,9 @@ import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
 import site.sorghum.agent4j.web.service.DashboardService;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.*;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -322,6 +325,39 @@ public class ConfigController {
             return ApiResponse.ok("工作区已删除");
         }
         throw new ServiceException("删除工作区失败");
+    }
+
+    // ============ agent4j.md 编辑 ============
+
+    @ApiOperation(value = "获取 agent4j.md 内容", notes = "读取 ~/.agent4j/agent4j.md 文件内容")
+    @Get
+    @Mapping("/agent4j-md")
+    @SneakyThrows
+    public ApiResponse<String> getAgent4jMd() {
+        Path path = Paths.get(System.getProperty("user.home"), ".agent4j", "agent4j.md");
+        if (Files.exists(path)) {
+            String content = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
+            return ApiResponse.ok(content);
+        }
+        return ApiResponse.ok("");
+    }
+
+    @ApiOperation(value = "更新 agent4j.md 内容", notes = "写入 ~/.agent4j/agent4j.md 文件，保存后自动重新初始化 Agent")
+    @Put
+    @Mapping("/agent4j-md")
+    @SneakyThrows
+    public ApiResponse<String> updateAgent4jMd(@ApiParam(value = "Markdown 内容") @Body String content) {
+        Path dir = Paths.get(System.getProperty("user.home"), ".agent4j");
+        if (!Files.exists(dir)) {
+            Files.createDirectories(dir);
+        }
+        Path path = dir.resolve("agent4j.md");
+        Files.write(path, content.getBytes(StandardCharsets.UTF_8));
+        // 触发 Agent 重新初始化，使新提示词生效（新会话会读取更新后的内容）
+        if (agentService.isReady()) {
+            agentService.reinitialize();
+        }
+        return ApiResponse.ok("agent4j.md 已保存，Agent 已重新初始化，新会话将使用更新后的提示词");
     }
 
     // ============ 数据面板 ============
