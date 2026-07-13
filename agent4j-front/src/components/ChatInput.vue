@@ -33,13 +33,31 @@
     <div class="input-box" :class="{ focused: inputFocused }">
       <!-- 已选技能标签 -->
       <div v-if="selectedSkills.length > 0" class="skill-chips-bar">
-        <span v-for="s in selectedSkills" :key="s.name" class="skill-chip">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-          </svg>
-          {{ s.name }}
-          <button class="skill-chip-remove" @click.stop="removeSkill(s)">&times;</button>
-        </span>
+        <div class="skill-chips-heading">
+          <span class="skill-chips-title">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+            </svg>
+            已选 {{ selectedSkills.length }} 个技能
+          </span>
+          <button class="skill-clear-all" type="button" @click="clearSelectedSkills">清除</button>
+        </div>
+        <div class="skill-chips-list">
+          <span v-for="s in selectedSkills" :key="s.name" class="skill-chip">
+            <span class="skill-chip-icon">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+              </svg>
+            </span>
+            <span class="skill-chip-name" :title="s.name">{{ s.name }}</span>
+            <button class="skill-chip-remove" type="button" :aria-label="`移除技能 ${s.name}`" :title="`移除 ${s.name}`"
+                    @click.stop="removeSkill(s)">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </button>
+          </span>
+        </div>
       </div>
 
       <div class="input-row">
@@ -185,6 +203,7 @@
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
               <input ref="skillSearchInput" v-model="skillSearchQuery" type="text" placeholder="搜索技能..." class="skill-search-input" @keydown.esc="showSkillPicker = false"/>
+              <span v-if="selectedSkills.length" class="skill-selection-count">{{ selectedSkills.length }}</span>
             </div>
             <div class="skill-panel-list">
               <div v-if="skillLoading" class="skill-panel-empty">
@@ -229,7 +248,7 @@
         </div>
         <div class="reasoning-effort-selector">
           <button class="effort-btn" @click="toggleEffortPicker" :title="`当前推理强度: ${selectedReasoningEffort.label}`">
-            {{ selectedReasoningEffort.label }}
+            <span class="effort-current-label">{{ selectedReasoningEffort.label }}</span>
             <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="6 9 12 15 18 9"/>
             </svg>
@@ -475,7 +494,7 @@ const handleSend = () => {
     // 有选中技能时，拼接技能指令到消息顶部
     if (selectedSkills.value.length > 0) {
       const skillLines = selectedSkills.value.map(s => `/skill:${s.name}`).join('\n')
-      text = `调用技能：\n${skillLines}\n\n${text}`
+      text = `\`\`\`折叠块\n调用技能：\n${skillLines}\n\`\`\`\n\n${text}`
     }
     emit('send', images.value, text)
     // 发送后清空图片和技能标签
@@ -609,6 +628,12 @@ const toggleSkill = (skill) => {
 const removeSkill = (skill) => {
   selectedSkills.value = selectedSkills.value.filter(s => s.name !== skill.name)
   emit('switchSkill', [...selectedSkills.value])
+}
+
+const clearSelectedSkills = () => {
+  if (selectedSkills.value.length === 0) return
+  selectedSkills.value = []
+  emit('switchSkill', [])
 }
 
 // ============= 工作流 TODO =============
@@ -1513,7 +1538,7 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   width: 340px;
   max-height: 420px;
   background: var(--bg);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
   border-radius: var(--r);
   box-shadow: var(--shadow);
   z-index: 100;
@@ -1550,6 +1575,20 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   color: var(--fg-4);
 }
 
+.skill-selection-count {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .skill-panel-list {
   flex: 1;
   overflow-y: auto;
@@ -1574,15 +1613,19 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   padding: 8px 10px;
   border-radius: var(--r-sm);
   cursor: pointer;
-  transition: background var(--t);
+  border: 1px solid transparent;
+  transition: background var(--t), border-color var(--t), transform var(--t);
 }
 
 .skill-panel-item:hover {
   background: var(--bg-2);
+  transform: translateX(1px);
 }
 
 .skill-panel-item.active {
-  background: var(--accent-bg);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 13%, var(--bg));
+  box-shadow: inset 3px 0 var(--accent);
 }
 
 .skill-item-info {
@@ -1609,56 +1652,118 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
 }
 
 .skill-item-check {
-  color: var(--accent);
+  padding: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--bg);
   flex-shrink: 0;
 }
 
 /* 已选技能标签 */
 .skill-chips-bar {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
-  padding: 6px 8px 0;
+  margin-bottom: 4px;
+  padding: 7px 2px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+}
+
+.skill-chips-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.skill-chips-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--fg-3);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.skill-chips-title svg {
+  color: var(--accent);
+}
+
+.skill-clear-all {
+  border: none;
+  background: transparent;
+  color: var(--fg-4);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 11px;
+  line-height: 1;
+  transition: color var(--t);
+}
+
+.skill-clear-all:hover {
+  color: var(--red);
+}
+
+.skill-chips-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 
 .skill-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 6px 2px 8px;
-  background: var(--accent-bg);
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 12px;
+  max-width: 100%;
+  gap: 5px;
+  padding: 3px 4px 3px 5px;
+  background: color-mix(in srgb, var(--accent) 11%, var(--bg));
+  color: var(--fg-2);
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
+  border-radius: var(--r-sm);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.4;
   cursor: default;
+}
+
+.skill-chip-icon {
+  display: inline-grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border-radius: var(--r-sm);
+  background: var(--accent-bg);
+  color: var(--accent);
+  flex-shrink: 0;
 }
 
 .skill-chip svg {
   flex-shrink: 0;
 }
 
+.skill-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .skill-chip-remove {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   border: none;
-  background: none;
-  color: var(--accent);
-  font-size: 12px;
+  background: transparent;
+  color: var(--fg-4);
   padding: 0;
   cursor: pointer;
-  border-radius: 50%;
+  border-radius: var(--r-sm);
   transition: all var(--t);
-  line-height: 1;
 }
 
 .skill-chip-remove:hover {
-  background: var(--accent);
+  background: var(--red);
   color: #fff;
 }
 
@@ -1751,6 +1856,12 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   width: 8px;
   height: 8px;
   flex-shrink: 0;
+}
+
+.effort-current-label {
+  display: inline-grid;
+  width: 2em;
+  place-items: center;
 }
 
 .effort-dropdown {

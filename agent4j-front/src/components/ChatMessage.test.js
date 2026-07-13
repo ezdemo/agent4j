@@ -10,6 +10,20 @@ const mountMessage = (msg, branchDisabled = false) => shallowMount(ChatMessage, 
 })
 
 describe('ChatMessage branching', () => {
+  it('shows automatic user blocks in a hover popover while keeping the user text visible', async () => {
+    const wrapper = mountMessage({
+      id: 1,
+      role: 'user',
+      content: '```折叠块\n调用技能：\n/skill:hv-analysis\n```\n\n你好啊'
+    })
+
+    expect(wrapper.find('.user-auto-message').exists()).toBe(true)
+    expect(wrapper.find('.user-auto-message-trigger').text()).toContain('调用技能：')
+    await wrapper.find('.user-auto-message').trigger('mouseenter')
+    expect(wrapper.find('.user-auto-message-popover').text()).toContain('/skill:hv-analysis')
+    expect(wrapper.find('.msg-text').text()).toBe('你好啊')
+  })
+
   it('does not offer branching for user messages', () => {
     expect(mountMessage({id: 1, role: 'user', content: 'hello'}).find('[title="继续到新会话"]').exists()).toBe(false)
   })
