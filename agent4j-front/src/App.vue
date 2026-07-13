@@ -1401,10 +1401,35 @@ watch(showSettings, (newVal) => {
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
   border-radius: 10px;
   border: 1px solid var(--border-2);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
   background: var(--bg);
+}
+
+.app input,
+.app textarea,
+.app [contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+:global(body > [class*="modal"]),
+:global(body > [class*="dialog"]) {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+:global(body > [class*="modal"] input),
+:global(body > [class*="modal"] textarea),
+:global(body > [class*="modal"] [contenteditable="true"]),
+:global(body > [class*="dialog"] input),
+:global(body > [class*="dialog"] textarea),
+:global(body > [class*="dialog"] [contenteditable="true"]) {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 [data-theme="dark"] .app {

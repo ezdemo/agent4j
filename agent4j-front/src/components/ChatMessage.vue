@@ -284,6 +284,8 @@ onBeforeUnmount(() => {
 
 .msg-body {
   max-width: 85%;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .user-body {
