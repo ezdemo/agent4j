@@ -10,6 +10,8 @@ import org.noear.solon.ai.mcp.client.McpClientProvider;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
 import org.noear.solon.annotation.Inject;
+import org.noear.solon.core.event.AppLoadEndEvent;
+import org.noear.solon.core.event.EventListener;
 import site.sorghum.agent4j.bin.config.ConfigService;
 import site.sorghum.agent4j.tool.solon.mcp.Agent4JMcpSkill;
 
@@ -35,7 +37,7 @@ import java.util.stream.Collectors;
  */
 @Slf4j
 @Component
-public class McpManageService {
+public class McpManageService implements EventListener<AppLoadEndEvent> {
 
     private static final String CONFIG_FILE = "mcp-servers.json";
 
@@ -51,7 +53,6 @@ public class McpManageService {
     /**
      * 初始化：从持久化文件加载已注册的 MCP 服务器，并注册到 skill。
      */
-    @Init
     public void init() {
         McpPersistenceData data = loadFromFile();
         if (data != null) {
@@ -321,6 +322,11 @@ public class McpManageService {
             log.warn("读取 MCP 配置失败: {}", path, e);
             return null;
         }
+    }
+
+    @Override
+    public void onEvent(AppLoadEndEvent event) throws Throwable {
+        init();
     }
 
     // ==================== 内部数据模型 ====================
