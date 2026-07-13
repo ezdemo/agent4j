@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
 import org.noear.solon.annotation.Inject;
+import site.sorghum.agent4j.bin.agent.context.ContextTokenEstimate;
 import site.sorghum.agent4j.bin.agent.context.ConversationContext;
 import site.sorghum.agent4j.bin.agent.core.Agent4jAgent;
 import site.sorghum.agent4j.bin.agent.model.ChatMessage;
@@ -810,6 +811,15 @@ public class AgentService {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         Agent4jAgent agent = sessionCache.get(sessionKey);
 
+        // 历史会话可能尚未进入 Agent 缓存。按会话名加载 JSONL 后，仍可离线重算上下文构成。
+        if (agent == null && sessionName != null && !sessionName.isBlank()) {
+            try {
+                agent = getOrCreateAgent(sessionKey);
+            } catch (RuntimeException e) {
+                log.warn("[usage] 加载历史会话 '{}' 失败: {}", sessionName, e.getMessage());
+            }
+        }
+
         long promptTokens = 0;
         long completionTokens = 0;
         long cacheHit = 0;
@@ -843,7 +853,7 @@ public class AgentService {
 
             if (agent == null) {
                 log.warn("[usage] Agent 为 null，无法获取模型用量");
-                return new UsageDTO(0, 0, 0, 0, 0, maxContextTokens, 0, null, false, 0, 0, 0, 0, null);
+                return new UsageDTO(0, 0, 0, 0, 0, maxContextTokens, 0, null, false, 0, 0, 0, 0, null, null);
             }
             Map<String, long[]> mu = agent.getModelUsage();
 
@@ -899,13 +909,17 @@ public class AgentService {
             // 价格计算失败不影响主逻辑
         }
 
+        ContextTokenEstimate contextEstimate = agent != null ? agent.getLastContextEstimate() : null;
+        if (contextEstimate == null && agent != null) {
+            contextEstimate = agent.estimateCurrentContext();
+        }
         return new UsageDTO(
                 promptTokens, completionTokens, cacheHit, cacheMiss,
                 lastPromptTokens, maxContextTokens,
                 promptTokens + completionTokens,
                 currentModel, hasPrice,
                 inputCost, cacheCost, outputCost, totalCost,
-                currency
+                currency, contextEstimate
         );
     }
 

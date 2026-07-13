@@ -60,6 +60,13 @@
             <version>${okhttp.version}</version>
         </dependency>
 
+        <!-- Hugging Face tokenizer.json 的本地 BPE 计数器（含各平台 native 库） -->
+        <dependency>
+            <groupId>ai.djl.huggingface</groupId>
+            <artifactId>tokenizers</artifactId>
+            <version>0.28.0</version>
+        </dependency>
+
         <!-- DamiBus 本地事件总线 -->
         <dependency>
             <groupId>org.noear</groupId>
