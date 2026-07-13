@@ -343,8 +343,8 @@ onBeforeUnmount(() => {
   -webkit-backdrop-filter: blur(var(--blur-sm));
   border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
-  padding: 8px 12px;
-  box-shadow: var(--glass-shadow);
+  padding: 9px 13px;
+  box-shadow: 0 7px 18px rgba(22, 28, 36, 0.06);
 }
 
 .msg-blocks {
