@@ -68,7 +68,7 @@
         :version="appVersion"
         :connected="!showSetup"
         style="flex:1;min-height:0"
-        @session-updated="loadSessions"
+        @session-updated="onSessionUpdated"
         @session-branched="onSessionBranched"
       />
     </main>
@@ -772,6 +772,29 @@ const loadSessions = async () => {
       sessions.value = grouped[wsHash] || []
     }
   } catch {}
+}
+
+const onSessionUpdated = (sessionName, optimistic = false) => {
+  if (!optimistic || !sessionName || !currentSessionWorkspace.value) {
+    return loadSessions()
+  }
+
+  const workspaceHash = currentSessionWorkspace.value
+  const existing = workspaceSessions.value[workspaceHash] || []
+  if (existing.some(session => session.name === sessionName)) return
+
+  const addedSession = {
+    name: sessionName,
+    title: null,
+    messageCount: 1,
+    active: sessionName === currentSession.value,
+    mtime: Date.now()
+  }
+  const updated = [addedSession, ...existing]
+  workspaceSessions.value = {...workspaceSessions.value, [workspaceHash]: updated}
+  if (workspaceHash === currentSessionWorkspace.value) {
+    sessions.value = updated
+  }
 }
 
 // 分支会话：切换到新会话并刷新列表

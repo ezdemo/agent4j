@@ -675,6 +675,8 @@ const sendMessage = async (images = [], overrideText = null) => {
     const userMsg = {id: Date.now(), role: 'user', content: text, time: now(), snapshotId: null}
     if (images.length > 0) userMsg.images = images
     store.addSessionMessage(sessionName, userMsg)
+    // Empty sessions are intentionally hidden. Show the session as soon as it has a user message.
+    emit('sessionUpdated', sessionName, true)
   }
   userScrolledAway = false
   inputText.value = ''
@@ -950,6 +952,7 @@ const sendMessage = async (images = [], overrideText = null) => {
           store.setSessionStreaming(sessionName, false)
           const msg = getMsg()
           if (msg && !msg.blocks.length) msg.blocks.push({type: 'content', content: '连接错误'})
+          emit('sessionUpdated')
         },
         // 传递工作区、会话和图片信息
         {
@@ -961,6 +964,7 @@ const sendMessage = async (images = [], overrideText = null) => {
     store.setSessionController(sessionName, streamResult)
   } catch {
     store.setSessionStreaming(sessionName, false)
+    emit('sessionUpdated')
   }
   await scroll()
 }
