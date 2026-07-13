@@ -30,42 +30,35 @@
 
     <!-- 消息区 -->
     <div ref="messagesContainer" class="messages">
-      <!-- 空状态：无会话 -->
-      <div v-if="!props.sessionName" class="empty">
-        <div class="empty-icon">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
+      <!-- 空状态：无会话或新建的空会话 -->
+      <div v-if="!props.sessionName || messages.length === 0" class="empty empty-welcome">
+        <div class="empty-welcome-mark">
+          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
+            <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/>
           </svg>
         </div>
-        <p class="empty-title">未选择会话</p>
-        <p class="empty-desc">请从左侧选择一个已有会话，或点击「新建对话」开始新会话</p>
-      </div>
-
-      <!-- 空状态：有会话但无消息 -->
-      <div v-else-if="messages.length === 0" class="empty">
-        <div class="empty-icon">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-          </svg>
-        </div>
-        <p class="empty-title">开始对话</p>
-        <p class="empty-desc">输入问题或指令，Agent4j 将为您提供帮助</p>
-        <div class="quick-actions">
-          <button class="quick-action" @click="inputText = 'Refactor this component'">
-            <i class="fas fa-pen-ruler"></i> Refactor
+        <h1 class="empty-welcome-title">今天在 Agent4j 中做什么？</h1>
+        <div class="welcome-actions">
+          <button class="welcome-action explore" @click="startWelcomeTask('探索当前项目的代码结构，找出关键模块和调用关系。')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/><path d="M8.5 11h5M11 8.5v5"/></svg>
+            <span>探索代码</span>
+            <small>梳理结构与关键调用</small>
           </button>
-          <button class="quick-action" @click="inputText = 'Write tests for'">
-            <i class="fas fa-vial"></i> Write tests
+          <button class="welcome-action build" @click="startWelcomeTask('分析当前项目并实现一个新功能。')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m14 6 4 4-9.5 9.5H4.5v-4z"/><path d="m13 7 4 4"/></svg>
+            <span>构建功能</span>
+            <small>实现功能、应用或工具</small>
           </button>
-          <button class="quick-action" @click="inputText = 'Fix the bug in'">
-            <i class="fas fa-bug"></i> Fix bug
+          <button class="welcome-action review" @click="startWelcomeTask('审查当前项目的代码，找出风险并提出改进建议。')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4v5h5"/><path d="M20 20v-5h-5"/><path d="M19 9A7 7 0 0 0 6.2 6.2L4 9m16 6-2.2 2.8A7 7 0 0 1 5 15"/></svg>
+            <span>审查代码</span>
+            <small>识别风险并给出建议</small>
           </button>
-          <button class="quick-action" @click="inputText = 'Explain how this works'">
-            <i class="fas fa-lightbulb"></i> Explain
+          <button class="welcome-action fix" @click="startWelcomeTask('定位当前项目中的问题并修复它。')">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m14.7 6.3 3 3"/><path d="m6.2 17.8 4.6-4.6"/><path d="M14.7 6.3a5.5 5.5 0 0 0-7.4 7.4l-4.5 4.5a1.6 1.6 0 0 0 2.3 2.3l4.5-4.5a5.5 5.5 0 0 0 7.4-7.4z"/></svg>
+            <span>修复问题</span>
+            <small>定位故障并验证修复</small>
           </button>
-        </div>
-        <div class="empty-suggestions">
-          <button v-for="s in suggestions" :key="s" class="suggestion" @click="inputText = s">{{ s }}</button>
         </div>
       </div>
 
@@ -299,11 +292,18 @@ const props = defineProps({
   connected: {type: Boolean, default: true}
 })
 
-const emit = defineEmits(['sessionUpdated', 'sessionBranched'])
+const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask'])
 const store = useAppStore()
 
 const messagesContainer = ref(null)
 const inputText = ref('')
+const startWelcomeTask = (prompt) => {
+  if (props.sessionName) {
+    inputText.value = prompt
+    return
+  }
+  emit('startTask', prompt)
+}
 
 // 快照检查点：msgId -> snapshotId 映射（用于消息关联和撤回按钮显示）
 const snapshotMap = ref(new Map())
@@ -1307,7 +1307,11 @@ onMounted(() => {
   if (props.sessionName) loadHistory()
 })
 
-defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, exportChat, refreshHistory})
+const setDraft = (text) => {
+  inputText.value = text || ''
+}
+
+defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, exportChat, refreshHistory, setDraft})
 </script>
 
 <style scoped>
@@ -1928,6 +1932,68 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   margin-left: 2px;
 }
 
+.empty-welcome {
+  color: var(--fg);
+  padding: 40px 24px 96px;
+}
+
+.empty-welcome-mark {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 26px;
+  color: var(--fg-4);
+}
+
+.empty-welcome-title {
+  margin: 0 0 42px;
+  color: var(--fg);
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.welcome-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 16px;
+  width: min(100%, 980px);
+}
+
+.welcome-action {
+  min-height: 142px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--t), background var(--t), box-shadow var(--t), transform var(--t);
+}
+
+.welcome-action:hover {
+  background: var(--bg-2);
+  border-color: var(--border-2);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.welcome-action svg { margin-bottom: auto; }
+.welcome-action span { font-size: 16px; font-weight: 600; }
+.welcome-action small { color: var(--fg-3); font-size: 12px; line-height: 1.45; }
+.welcome-action.explore svg { color: var(--blue); }
+.welcome-action.build svg { color: #7c3aed; }
+.welcome-action.review svg { color: var(--green); }
+.welcome-action.fix svg { color: var(--red); }
+
 /* ===== 撤回确认 ===== */
 .rollback-dialog-mask {
   position: fixed;
@@ -2023,11 +2089,25 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 }
 
 /* ===== 移动端适配 ===== */
+@media (max-width: 1100px) {
+  .welcome-actions {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    max-width: 620px;
+  }
+}
+
 @media (max-width: 640px) {
   .messages { padding: 12px 8px 100px; }
   .msg-body { max-width: 95%; }
   .empty-title { font-size: 14px; }
   .empty-desc { font-size: 12px; }
+  .empty-welcome { padding: 28px 16px 72px; }
+  .empty-welcome-mark { margin-bottom: 16px; }
+  .empty-welcome-title { margin-bottom: 24px; font-size: 24px; }
+  .welcome-actions { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .welcome-action { min-height: 118px; padding: 14px; }
+  .welcome-action span { font-size: 14px; }
+  .welcome-action small { font-size: 11px; }
   .suggestion { font-size: 11px; padding: 3px 8px; }
   .scroll-bottom-btn { right: 12px; bottom: 100px; width: 32px; height: 32px; }
   .ai-preparing { padding: 6px 10px; }

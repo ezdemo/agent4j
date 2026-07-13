@@ -70,6 +70,7 @@
         style="flex:1;min-height:0"
         @session-updated="onSessionUpdated"
         @session-branched="onSessionBranched"
+        @start-task="startTaskFromWelcome"
       />
     </main>
 
@@ -595,6 +596,7 @@ const copyPrompt = () => {
 
 // 工作区相关
 const showWorkspacePicker = ref(false)
+const pendingStarterPrompt = ref('')
 const workspaces = ref([])
 
 // 按工作区 hash 分组的会话
@@ -839,6 +841,7 @@ const handleSwitchWorkspace = async (hash) => {
       await loadSessions()
       currentSessionWorkspace.value = hash
       await newChat(true)
+      await applyPendingStarterPrompt()
       message.success('已切换工作区')
     } else {
       message.error(r.message || '切换工作区失败')
@@ -863,6 +866,7 @@ const handleAddWorkspace = async (path) => {
       const newWs = workspaces.value.find(w => w.path === r.data.workspace)
       if (newWs) currentSessionWorkspace.value = newWs.hash
       await newChat(true)
+      await applyPendingStarterPrompt()
       message.success('已添加工作区')
     } else {
       message.error(r.message || '添加工作区失败')
@@ -1004,6 +1008,19 @@ const newChat = async (skipReload = false) => {
     console.error('新建会话失败:', e)
     message.error('新建对话失败: ' + e.message)
   }
+}
+
+const startTaskFromWelcome = async (prompt) => {
+  pendingStarterPrompt.value = prompt || ''
+  showWorkspacePicker.value = true
+}
+
+const applyPendingStarterPrompt = async () => {
+  const prompt = pendingStarterPrompt.value
+  pendingStarterPrompt.value = ''
+  if (!prompt) return
+  await nextTick()
+  chatRef.value?.setDraft(prompt)
 }
 
 const loadSession = name => {
