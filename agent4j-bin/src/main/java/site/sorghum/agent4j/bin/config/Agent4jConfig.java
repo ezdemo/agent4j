@@ -66,7 +66,14 @@ public class Agent4jConfig {
                   "reasoningEffort": "high",
                   "lang": "ZH",
                   "hitl": "free",
-                  "autoWhitelist": [],
+                  "autoWhitelist": [
+                    "resolve-library-id", "query-docs", "skillrefresh", "skilllist",
+                    "read", "glob", "write", "ls", "grep", "edit", "finish",
+                    "java_source", "workflow_step", "workspace_read", "webfetch",
+                    "codesearch", "ask_choice", "workspace_list", "workspace_write",
+                    "call_api", "workflow_start", "task", "workflow_status",
+                    "vision_recognize", "skillread", "codegraph_explore"
+                  ],
                   "maxContextChars": 200000,
                   "keepTailChars": 80000,
                   "toolTimeoutSec": 360,
