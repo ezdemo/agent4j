@@ -180,7 +180,6 @@
         :sessionName="props.sessionName"
         :hasHistory="hasHistory"
         :version="props.version"
-        :connected="props.connected"
         :currentSkill="currentSkill"
         :currentPermission="currentPermission"
         :petState="petState"
@@ -288,8 +287,7 @@ const props = defineProps({
   hideHeader: {type: Boolean, default: false},
   workspaceHash: {type: String, default: null},
   sessionName: {type: String, default: null},
-  version: {type: String, default: ''},
-  connected: {type: Boolean, default: true}
+  version: {type: String, default: ''}
 })
 
 const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask'])

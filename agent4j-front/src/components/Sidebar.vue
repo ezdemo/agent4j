@@ -68,9 +68,9 @@
           </button>
           <button class="btn-icon-sm project-clear" title="清空该项目所有会话" @click.stop="$emit('clear-project', p.workspace.hash)" :disabled="p.sessions.length === 0">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M22 4H8l-6 8 6 8h14a2 2 0 0 0 2-2V6a2 2 0 0 0-2-2Z"/>
-              <line x1="17" y1="9" x2="11" y2="15"/>
-              <line x1="11" y1="9" x2="17" y2="15"/>
+              <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/>
+              <path d="M22 21H7"/>
+              <path d="m5 11 9 9"/>
             </svg>
           </button>
         </div>

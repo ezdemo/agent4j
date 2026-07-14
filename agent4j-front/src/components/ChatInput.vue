@@ -126,12 +126,6 @@
       <!-- Token 用量 & 模型选择 -->
       <div class="usage-bar">
         <div class="usage-stats">
-        <!-- 连接状态 -->
-        <span class="usage-item status-connected" :class="{ offline: !connected }">
-          <span class="status-dot-sm" :class="{ online: connected }"></span>
-          {{ connected ? '已连接' : '连接中...' }}
-        </span>
-        <span class="usage-sep">|</span>
         <div class="usage-context-control"
              @mouseenter="refreshContextComposition"
              @mouseleave="showContextComposition = false">
@@ -346,7 +340,6 @@ const props = defineProps({
   sessionName: {type: String, default: null},
   hasHistory: {type: Boolean, default: false},
   currentReasoningEffort: {type: String, default: 'max'},
-  connected: {type: Boolean, default: true},
   version: {type: String, default: ''},
   currentSkill: {type: Object, default: null},
   currentPermission: {type: String, default: 'free'},
@@ -1600,32 +1593,6 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
     transform: none;
   }
 }
-
-/* 连接状态 */
-.status-connected {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-}
-
-.status-connected.offline {
-  color: var(--yellow);
-}
-
-.status-dot-sm {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--fg-4);
-  flex-shrink: 0;
-}
-
-.status-dot-sm.online {
-  background: var(--green, #10b981);
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
-}
-
 
 .model-actions {
   display: flex;
