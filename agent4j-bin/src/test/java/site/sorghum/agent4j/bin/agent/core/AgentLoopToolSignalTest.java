@@ -21,6 +21,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AgentLoopToolSignalTest {
 
     @Test
+    void terminateOnNoToolCallCanBeUpdatedAtRuntime() {
+        AgentLoop loop = new AgentLoop(null, registryWith(tool("status", args -> "ok")), null);
+
+        assertTrue(loop.terminateOnNoToolCall());
+        loop.setTerminateOnNoToolCall(false);
+        assertFalse(loop.terminateOnNoToolCall());
+    }
+
+    @Test
     void repeatedToolCallSetsSuppressionSignalAndSkipsExecution() {
         AtomicInteger executions = new AtomicInteger();
         ToolRegistry registry = registryWith(tool("edit", args -> {

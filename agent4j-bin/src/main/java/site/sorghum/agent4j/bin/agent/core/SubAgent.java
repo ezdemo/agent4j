@@ -223,6 +223,9 @@ public class SubAgent {
         Agent4jConfig effectiveConfig = (this.config != null) ? this.config : Agent4jConfig.getInstance();
         this.subLoop = new AgentLoop(client, registry, ctx, this.hitlMode, effectiveConfig);
         AgentLoop subLoop = this.subLoop;
+        if (parentController != null) {
+            subLoop.setTerminateOnNoToolCall(parentController.terminateOnNoToolCall());
+        }
 
         if (abortRequested.get()) {
             subLoop.requestUserAbort();

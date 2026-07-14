@@ -21,7 +21,8 @@ public record ConfigDTO(
         String apiKey,
         Map<String, Map<String, Double>> price,
         VisionConfig vision,
-        String activePet
+        String activePet,
+        boolean terminateOnNoToolCall
 ) {
     /**
      * 视觉模型配置。

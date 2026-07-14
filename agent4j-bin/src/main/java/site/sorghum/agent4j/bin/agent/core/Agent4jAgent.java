@@ -105,7 +105,8 @@ public class Agent4jAgent {
                 b.workspace, b.apiUrl, b.apiKey,
                 b.disabledTools, b.blockedPaths, prompt);
         this.ctx = new ConversationContext(initResult.promptPrefix);
-        this.loop = initSessionAndLoop(client, initResult.toolRegistry, b.hitl);
+        Agent4jConfig loopConfig = b.agent4jConfig != null ? b.agent4jConfig : Agent4jConfig.getInstance();
+        this.loop = initSessionAndLoop(client, initResult.toolRegistry, b.hitl, loopConfig);
 
         //  —— 每个 Agent 自监听自更新（保存引用以便 dispose 时注销）
         this.configListener = event -> {
@@ -117,6 +118,7 @@ public class Agent4jAgent {
                     case "model" -> setModel((String) e.value());
                     case "reasoningEffort" -> setReasoningEffort((String) e.value());
                     case "hitl" -> setHitlMode(String.valueOf(e.value()));
+                    case "terminateOnNoToolCall" -> setTerminateOnNoToolCall(Boolean.parseBoolean(String.valueOf(e.value())));
                     case "disabledTools" -> refreshTools();
                     default -> log.warn("[bus] 未知配置键: {}", e.key());
                 }
@@ -147,7 +149,8 @@ public class Agent4jAgent {
      * @param hitl     HITL 模式（free / approval / auto）
      * @return 构造完成的 AgentLoop 实例
      */
-    private AgentLoop initSessionAndLoop(ModelClient client, ToolRegistry registry, String hitl) {
+    private AgentLoop initSessionAndLoop(ModelClient client, ToolRegistry registry, String hitl,
+                                         Agent4jConfig config) {
         try {
             final String workspacePath = this.workspace != null
                     ? this.workspace.toAbsolutePath().toString()
@@ -161,7 +164,7 @@ public class Agent4jAgent {
             throw new RuntimeException("[session] Agent4j 会话初始化失败，无法继续运行", e);
         }
 
-        final AgentLoop agentLoop = new AgentLoop(client, registry, ctx, hitl,Agent4jConfig.getInstance());
+        final AgentLoop agentLoop = new AgentLoop(client, registry, ctx, hitl, config);
         agentLoop.setSessionService(this.sessionService);
         return agentLoop;
     }
@@ -481,6 +484,11 @@ public class Agent4jAgent {
      */
     public void setReasoningEffort(String reasoningEffort) {
         loop.setReasoningEffort(reasoningEffort);
+    }
+
+    /** 运行时更新无工具调用时的结束策略。 */
+    public void setTerminateOnNoToolCall(boolean enabled) {
+        loop.setTerminateOnNoToolCall(enabled);
     }
 
     /**

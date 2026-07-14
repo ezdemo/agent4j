@@ -285,6 +285,15 @@
                 {{ option.label }}
               </button>
             </div>
+            <label class="chat-reasoning-end-toggle">
+              <span>无工具调用时结束</span>
+              <input
+                  :checked="props.terminateOnNoToolCall"
+                  type="checkbox"
+                  @change="emit('switchTerminateOnNoToolCall', $event.target.checked)"
+              />
+              <span class="chat-reasoning-toggle-slider"></span>
+            </label>
           </div>
         </div>
         <div class="model-selector" v-if="currentModel">
@@ -340,13 +349,14 @@ const props = defineProps({
   sessionName: {type: String, default: null},
   hasHistory: {type: Boolean, default: false},
   currentReasoningEffort: {type: String, default: 'max'},
+  terminateOnNoToolCall: {type: Boolean, default: true},
   version: {type: String, default: ''},
   currentSkill: {type: Object, default: null},
   currentPermission: {type: String, default: 'free'},
   petState: {type: String, default: 'idle'}
 })
 
-const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchSkill', 'switchPermission'])
+const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission'])
 
 const inputField = ref(null)
 const inputFocused = ref(false)
@@ -2134,6 +2144,60 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   color: var(--accent);
   font-weight: 700;
   text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.chat-reasoning-end-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+  color: var(--fg-2);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.chat-reasoning-end-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chat-reasoning-toggle-slider {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  transition: background var(--t);
+}
+
+.chat-reasoning-toggle-slider::before {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--fg-4);
+  content: '';
+  transition: transform var(--t), background var(--t);
+}
+
+.chat-reasoning-end-toggle input:checked + .chat-reasoning-toggle-slider {
+  background: var(--accent);
+}
+
+.chat-reasoning-end-toggle input:checked + .chat-reasoning-toggle-slider::before {
+  transform: translateX(14px);
+  background: var(--bg);
+}
+
+.chat-reasoning-end-toggle input:focus-visible + .chat-reasoning-toggle-slider {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .model-selector {

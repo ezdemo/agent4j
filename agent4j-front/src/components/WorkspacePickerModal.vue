@@ -29,9 +29,6 @@
                 <div class="workspace-item-path">{{ formatWorkspacePath(w.path) }}</div>
               </div>
               <span class="workspace-item-count" :title="`${w.sessionCount} 个会话`">{{ w.sessionCount }}</span>
-              <button class="btn-icon-sm workspace-del" @click.stop="handleDeleteWorkspace(w.hash)" title="删除">
-                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
-              </button>
             </div>
           </div>
         </div>
@@ -75,7 +72,7 @@ const props = defineProps({
   isDesktopEnv: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['update:show', 'switchWorkspace', 'addWorkspace', 'deleteWorkspace'])
+const emit = defineEmits(['update:show', 'switchWorkspace', 'addWorkspace'])
 
 const newWorkspacePath = ref('')
 const workspacePathInput = ref(null)
@@ -123,11 +120,6 @@ function handleAddWorkspace() {
   if (!path) return
   emit('addWorkspace', path)
   newWorkspacePath.value = ''
-}
-
-// 删除工作区
-function handleDeleteWorkspace(hash) {
-  emit('deleteWorkspace', hash)
 }
 
 function formatWorkspacePath(path) {
@@ -295,20 +287,6 @@ function formatWorkspacePath(path) {
 .workspace-item.active .workspace-item-count {
   color: var(--fg-3);
 }
-.workspace-item .workspace-del {
-  position: absolute;
-  top: 5px;
-  right: 5px;
-  opacity: 0;
-  transition: opacity var(--t);
-}
-.workspace-item:hover .workspace-del {
-  opacity: 1;
-}
-.workspace-item .workspace-del:hover {
-  color: var(--red);
-}
-
 /* 添加工作区输入区 */
 .workspace-add {
   padding: 8px;

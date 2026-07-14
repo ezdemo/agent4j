@@ -76,9 +76,10 @@ public class Agent4jConfig {
                   ],
                   "maxContextChars": 200000,
                   "keepTailChars": 80000,
-                  "toolTimeoutSec": 360,
-                  "subAgentTimeoutSec": 3600,
-                  "maxSelfCorrectionAttempts": 5,
+                   "toolTimeoutSec": 360,
+                   "subAgentTimeoutSec": 3600,
+                   "terminateOnNoToolCall": true,
+                   "maxSelfCorrectionAttempts": 5,
                   "maxStreamErrorRetries": 10,
                   "flushIntervalSec": 30,
                   "foldHeadCharsLimit": 60000,
@@ -418,6 +419,15 @@ public class Agent4jConfig {
     public int subAgentTimeoutSec() {
         ONode n = root.select("$.subAgentTimeoutSec");
         return n != null && !n.isNull() ? n.getInt() : 3600;
+    }
+
+    /**
+     * 无工具调用时是否将模型文本作为最终回答。
+     * false 时追加 FinishTool.TIPS 并要求模型继续调用 finish（连续三次无工具调用后兜底结束）。
+     */
+    public boolean terminateOnNoToolCall() {
+        ONode n = root.select("$.terminateOnNoToolCall");
+        return n == null || n.isNull() || n.getBoolean();
     }
 
     /**

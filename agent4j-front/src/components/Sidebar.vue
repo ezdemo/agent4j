@@ -66,7 +66,7 @@
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
             </svg>
           </button>
-          <button class="btn-icon-sm project-clear" title="清空该项目所有会话" @click.stop="$emit('clear-project', p.workspace.hash)" :disabled="p.sessions.length === 0">
+          <button class="btn-icon-sm project-clear" title="管理项目会话" @click.stop="$emit('manage-project', p.workspace.hash)">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/>
               <path d="M22 21H7"/>
@@ -161,7 +161,7 @@ defineEmits([
   'refresh-sessions',
   'new-project-chat',
   'refresh-project',
-  'clear-project',
+  'manage-project',
   'select-session',
   'refresh-session-chat',
   'delete-session',
