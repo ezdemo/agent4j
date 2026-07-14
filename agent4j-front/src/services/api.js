@@ -479,6 +479,16 @@ export const configAPI = {
     return api.delete(`/workspaces/${hash}`)
   },
 
+  // 保存工作区排序 - PUT /api/workspaces/order
+  saveWorkspaceOrder: (order) => {
+    return api.put('/workspaces/order', order)
+  },
+
+  // 获取工作区排序 - GET /api/workspaces/order
+  getWorkspaceOrder: () => {
+    return api.get('/workspaces/order')
+  },
+
   // 获取 agent4j.md 内容 - GET /api/agent4j-md
   getAgent4jMd: () => {
     return api.get('/agent4j-md')

@@ -20,8 +20,9 @@ import site.sorghum.agent4j.web.service.AgentService;
 import site.sorghum.agent4j.web.service.DashboardService;
 
 import java.nio.charset.StandardCharsets;
-import java.nio.file.*;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -354,6 +355,41 @@ public class ConfigController {
             return ApiResponse.ok("工作区已删除");
         }
         throw new ServiceException("删除工作区失败");
+    }
+
+    @ApiOperation(value = "保存工作区排序", notes = "将工作区 hash 数组按顺序保存到配置中")
+    @Put
+    @Mapping("/workspaces/order")
+    public ApiResponse<String> saveWorkspaceOrder(@ApiParam(value = "工作区 hash 有序列表") @Body List<String> order) {
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        if (order == null) throw new ServiceException("排序数据不能为空");
+        configService.updateConfig(Collections.singletonMap("workspaceOrder", order));
+        return ApiResponse.ok("排序已保存");
+    }
+
+    @ApiOperation(value = "获取工作区排序", notes = "返回保存的工作区 hash 排序数组")
+    @Get
+    @Mapping("/workspaces/order")
+    public ApiResponse<List<String>> getWorkspaceOrder() {
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        try {
+            Path configPath = Paths.get(System.getProperty("user.home"), ".agent4j", "config.json");
+            if (Files.exists(configPath)) {
+                String json = new String(Files.readAllBytes(configPath), StandardCharsets.UTF_8);
+                ONode node = ONode.ofJson(json);
+                ONode orderNode = node.get("workspaceOrder");
+                if (orderNode != null && orderNode.isArray()) {
+                    List<String> order = new ArrayList<>();
+                    for (ONode item : orderNode.getArray()) {
+                        String s = item.getString();
+                        if (s != null) order.add(s);
+                    }
+                    return ApiResponse.ok(order);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return ApiResponse.ok(new ArrayList<>());
     }
 
     // ============ agent4j.md 编辑 ============
