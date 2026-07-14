@@ -857,7 +857,7 @@ public class HttpModelClient implements ModelClient {
             }
             if (m.getReasoningContent() != null) msg.set(FIELD_REASONING_CONTENT, m.getReasoningContent());
             if (m.getToolCallId() != null) msg.set("tool_call_id", m.getToolCallId());
-            if (!m.hasContent()) {
+            if (msg.get(FIELD_CONTENT).isNull() ) {
                 msg.set(FIELD_CONTENT, "");
             }
             if (!skip) {
