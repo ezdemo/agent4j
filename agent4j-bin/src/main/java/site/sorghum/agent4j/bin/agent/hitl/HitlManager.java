@@ -236,13 +236,6 @@ public class HitlManager {
             boolean allMatched = tcList.stream().allMatch(tc -> matchesWhitelist(tc.name(), whitelist));
 
             if (allMatched) {
-                // 白名单匹配：自动放行
-                log.debug("[hitl] 自动模式：白名单匹配，自动放行: {}", tcList.stream().map(ToolCallEntry::name).toList());
-                this.hitlState = HitlState.APPROVED;
-                this.pendingHITLToolCalls = toolCalls;
-                this.pendingHITLContent = content;
-                this.pendingHITLReasoning = reasoningContent;
-                this.pendingHITTcList = tcList;
                 return null;
             }
 
