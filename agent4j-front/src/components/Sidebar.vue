@@ -53,8 +53,7 @@
             <div class="project-name">{{ p.workspace.name }}</div>
             <div class="project-meta-row">
               <span class="project-path">{{ truncatePath(p.workspace.path) }}</span>
-              <span class="project-sep">·</span>
-              <span class="project-time">{{ relativeTime(p.workspace.lastAccessedAt) }}</span>
+              
             </div>
           </div>
           <button class="btn-icon-sm project-new" title="新建会话" @click.stop="$emit('new-project-chat', p.workspace.hash)">
@@ -86,7 +85,7 @@
             <span class="session-dot" :class="{ on: s.name === currentSession && currentSessionWorkspace === p.workspace.hash }"></span>
             <div class="session-info">
               <div class="session-name">{{ s.title || formatName(s.name) }}</div>
-              <div class="session-meta">{{ s.messageCount || 0 }}条 · {{ relativeTime(s.mtime) }}</div>
+              <div class="session-meta"><span class="session-count">{{ s.messageCount || 0 }}条</span></div>
             </div>
             <div class="session-item-actions">
               <button class="btn-icon-sm session-refresh" title="刷新" @click.stop="$emit('refresh-session-chat', s.name)">
@@ -227,21 +226,7 @@ const truncatePath = (p) => {
   return p.slice(0, 36) + '...'
 }
 
-const relativeTime = (t) => {
-  if (!t) return ''
-  const d = Date.now() - (typeof t === 'number' ? t : Date.parse(t))
-  if (!Number.isFinite(d)) return ''
-  const min = d / 6e4
-  if (min < 1) return '刚刚'
-  if (min < 60) return Math.floor(min) + 'm'
-  const hour = min / 60
-  if (hour < 24) return Math.floor(hour) + 'h'
-  const day = hour / 24
-  if (day < 7) return Math.floor(day) + 'd'
-  if (day < 30) return Math.floor(day / 7) + 'w'
-  if (day < 365) return Math.floor(day / 30) + 'mo'
-  return Math.floor(day / 365) + 'y'
-}
+
 
 const formatName = (n) => {
   const m = n.match(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/)
@@ -250,12 +235,7 @@ const formatName = (n) => {
 </script>
 
 <style scoped>
-.sidebar {
-  width: 272px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--glass-bg-2);
+.sidebar { width: 272px; flex-shrink: 0; display: flex; flex-direction: column; overflow-x: hidden; background: var(--glass-bg-2);
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
   border-right: 1px solid var(--glass-border);
@@ -406,11 +386,7 @@ const formatName = (n) => {
   gap: 2px;
 }
 
-.project-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px 0;
-}
+.project-list { flex: 1; overflow-x: hidden; overflow-y: auto; padding: 4px 0; }
 
 .project-item + .project-item {
   border-top: 1px solid var(--border);
@@ -482,13 +458,9 @@ const formatName = (n) => {
   min-width: 0;
 }
 
-.project-sep {
-  flex-shrink: 0;
-}
 
-.project-time {
-  flex-shrink: 0;
-}
+
+
 
 .project-count {
   font-size: 11px;
@@ -577,11 +549,7 @@ const formatName = (n) => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.session-meta {
-  font-size: 11px;
-  color: var(--fg-4);
-  margin-top: 1px;
-}
+.session-meta { font-size: 11px; color: var(--fg-4); margin-top: 1px; }
 
 .session-item-actions {
   display: flex;
@@ -643,3 +611,14 @@ const formatName = (n) => {
 
 
 </style>
+
+
+
+
+
+
+
+
+
+
+
