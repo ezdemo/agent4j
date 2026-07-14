@@ -39,6 +39,13 @@ public class UserMessage {
     @Setter
     private String snapshotId;
 
+    /**
+     * 消息撤回定位 ID。每条用户消息都有该值；即使没有工作区快照，也可撤回会话消息。
+     */
+    @Getter
+    @Setter
+    private String rollbackId;
+
     private UserMessage(String text, List<String> images) {
         this.text = text;
         this.images = images != null ? List.copyOf(images) : Collections.emptyList();

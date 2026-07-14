@@ -753,12 +753,13 @@ export const snapshotAPI = {
   },
 
     // 撤回消息，可选恢复工作区代码 - POST /api/snapshots/rollback?workspaceHash=xxx&msgId=xxx&sessionName=xxx&rollbackCode=true
-    rollback: (workspaceHash, msgId, sessionName, rollbackCode = true) => {
-    const params = {}
-    if (workspaceHash) params.workspaceHash = workspaceHash
-    params.msgId = msgId
+    rollback: (workspaceHash, msgId, sessionName, rollbackCode = true, rollbackTimestamp = null) => {
+      const params = {}
+      if (workspaceHash) params.workspaceHash = workspaceHash
+    if (msgId) params.msgId = msgId
         if (sessionName) params.sessionName = sessionName
         params.rollbackCode = rollbackCode
+        if (rollbackTimestamp) params.rollbackTimestamp = rollbackTimestamp
     return api.post('/snapshots/rollback', null, { params })
   },
 

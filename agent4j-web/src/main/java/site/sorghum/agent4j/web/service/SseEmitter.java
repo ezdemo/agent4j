@@ -169,11 +169,12 @@ public class SseEmitter {
     }
 
     /**
-     * 发送快照事件 —— 通知前端当前消息的快照 ID（可用于撤回）。
+     * 发送消息撤回点事件，并标记是否同时创建了代码快照。
      */
-    public void sendSnapshot(String msgId) {
+    public void sendSnapshot(String msgId, boolean hasCodeSnapshot) {
         ONode node = ONode.ofJson("{}").asObject();
         node.set("msgId", msgId);
+        node.set("hasCodeSnapshot", hasCodeSnapshot);
         send("snapshot", node.toJson());
     }
 

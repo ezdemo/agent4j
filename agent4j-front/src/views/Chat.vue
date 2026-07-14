@@ -69,6 +69,7 @@
           :idx="idx"
           :msg="msg"
           :snapshot-rollback-loading="snapshotRollbackLoading"
+          :rollback-disabled="streaming"
           :branch-disabled="streaming || branchingSession"
           @preview-image="previewImage"
           @rollback-snapshot="openRollbackDialog"
@@ -310,12 +311,17 @@ const startWelcomeTask = (prompt) => {
 // 快照检查点：msgId -> snapshotId 映射（用于消息关联和撤回按钮显示）
 const snapshotMap = ref(new Map())
 const snapshotRollbackLoading = ref(new Map()) // msgId -> 是否正在撤回
-const rollbackDialog = ref({visible: false, msgId: null})
-const rollbackActions = [
-  {key: 'cancel', label: '取消'},
-  {key: 'message', label: '只撤回消息', variant: 'accent'},
-  {key: 'code', label: '撤回消息和代码', variant: 'danger'}
-]
+const rollbackDialog = ref({visible: false, msgId: null, canRollbackCode: false})
+const rollbackActions = computed(() => {
+  const actions = [
+    {key: 'cancel', label: '取消'},
+    {key: 'message', label: '只撤回消息', variant: 'accent'}
+  ]
+  if (rollbackDialog.value.canRollbackCode) {
+    actions.push({key: 'code', label: '撤回消息和代码', variant: 'danger'})
+  }
+  return actions
+})
 
 // 图片预览
 const imagePreviewUrl = ref('')
@@ -706,7 +712,7 @@ const sendMessage = async (images = [], overrideText = null) => {
 
   // 静默命令不显示用户气泡
   if (!isSilent) {
-    const userMsg = {id: Date.now(), role: 'user', content: text, time: now(), snapshotId: null}
+    const userMsg = {id: Date.now(), role: 'user', content: text, time: now(), snapshotId: null, rollbackId: null}
     if (images.length > 0) userMsg.images = images
     store.addSessionMessage(sessionName, userMsg)
     // Empty sessions are intentionally hidden. Show the session as soon as it has a user message.
@@ -953,15 +959,18 @@ const sendMessage = async (images = [], overrideText = null) => {
             const text = data.message || data.content || ''
             addLog({level, text, time: Date.now()})
           } else if (data.type === 'snapshot') {
-            // 快照检查点事件：记录快照 ID，关联到当前用户消息，用于后续撤回
+            // 每条用户消息都会收到撤回定位 ID；只有实际创建快照时才可撤回代码。
             if (data.msgId) {
-              store.addSnapshot(sessionName, data.msgId, data.msgId)
-              snapshotMap.value.set(data.msgId, data.msgId)
-              // 将快照 ID 关联到最后一条用户消息
+              if (data.hasCodeSnapshot) {
+                store.addSnapshot(sessionName, data.msgId, data.msgId)
+                snapshotMap.value.set(data.msgId, data.msgId)
+              }
+              // 将撤回定位 ID 关联到最后一条尚未关联的用户消息
               const msgs = store.getSessionMessages(sessionName)
               for (let i = msgs.length - 1; i >= 0; i--) {
-                if (msgs[i].role === 'user' && !msgs[i].snapshotId) {
-                  msgs[i].snapshotId = data.msgId
+                if (msgs[i].role === 'user' && !msgs[i].rollbackId) {
+                  msgs[i].rollbackId = data.msgId
+                  if (data.hasCodeSnapshot) msgs[i].snapshotId = data.msgId
                   break
                 }
               }
@@ -1014,19 +1023,21 @@ const abortChat = async () => {
   store.setSessionStreaming(props.sessionName, false)
 }
 
-const openRollbackDialog = (msgId) => {
-  if (!msgId || snapshotRollbackLoading.value.get(msgId)) return
-  rollbackDialog.value = {visible: true, msgId}
+const openRollbackDialog = (msgId, canRollbackCode, rollbackTimestamp) => {
+  const rollbackKey = msgId || rollbackTimestamp
+  if (streaming.value || !rollbackKey || snapshotRollbackLoading.value.get(rollbackKey)) return
+  rollbackDialog.value = {visible: true, msgId, rollbackTimestamp, canRollbackCode}
 }
 
 const closeRollbackDialog = () => {
-  rollbackDialog.value = {visible: false, msgId: null}
+  rollbackDialog.value = {visible: false, msgId: null, rollbackTimestamp: null, canRollbackCode: false}
 }
 
 const confirmRollback = (rollbackCode) => {
   const msgId = rollbackDialog.value.msgId
+  const rollbackTimestamp = rollbackDialog.value.rollbackTimestamp
   closeRollbackDialog()
-  rollbackSnapshot(msgId, rollbackCode)
+  rollbackSnapshot(msgId, rollbackCode, rollbackTimestamp)
 }
 
 const handleRollbackAction = (action) => {
@@ -1038,14 +1049,14 @@ const handleRollbackAction = (action) => {
 }
 
 /** 撤回会话消息，并按选择决定是否恢复 AI 修改的代码。 */
-const rollbackSnapshot = async (msgId, rollbackCode) => {
-  if (!msgId) return
-  const loadingKey = msgId
+const rollbackSnapshot = async (msgId, rollbackCode, rollbackTimestamp) => {
+  const loadingKey = msgId || rollbackTimestamp
+  if (streaming.value || !loadingKey) return
   if (snapshotRollbackLoading.value.get(loadingKey)) return // 防止重复点击
   snapshotRollbackLoading.value.set(loadingKey, true)
 
   try {
-    const res = await snapshotAPI.rollback(props.workspaceHash, msgId, props.sessionName, rollbackCode)
+    const res = await snapshotAPI.rollback(props.workspaceHash, msgId, props.sessionName, rollbackCode, rollbackTimestamp)
     if (res.success) {
       addLog({level: 'INFO', text: `✅ ${res.data?.message || '工作区已恢复'}`, time: Date.now()})
       // 截断该消息之后的所有快照记录
@@ -1059,7 +1070,8 @@ const rollbackSnapshot = async (msgId, rollbackCode) => {
       // 优先使用后端返回的 rollbackUserText（从 JSONL 持久化数据中取得）
       let rollbackContent = res.data?.rollbackUserText || ''
       for (let i = 0; i < msgs.length; i++) {
-        if (msgs[i].snapshotId === msgId) {
+        if ((msgId && (msgs[i].rollbackId === msgId || msgs[i].snapshotId === msgId))
+            || (!msgId && msgs[i].rollbackTimestamp === rollbackTimestamp)) {
           targetIdx = i
           // 如果后端没返回文本，从前端消息中取
           if (!rollbackContent) rollbackContent = msgs[i].content || ''
@@ -1240,6 +1252,9 @@ const loadHistory = async (sessionName, force = false) => {
           if (m.snapshot_id) {
             item.snapshotId = m.snapshot_id
           }
+          // rollback_id 独立于代码快照；旧会话则以 snapshot_id 兼容。
+          item.rollbackId = m.rollback_id || m.snapshot_id || null
+          item.rollbackTimestamp = m.timestamp || null
           merged.push(item)
           lastAssistantItem = null // 重置
         } else {

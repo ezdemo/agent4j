@@ -25,10 +25,11 @@
         <div class="msg-footer">
           <span class="msg-time">{{ msg.time }}</span>
           <span class="msg-actions">
-          <button v-if="msg.snapshotId" class="rollback-btn"
-                  :class="{ loading: snapshotRollbackLoading.get(msg.snapshotId) }"
-                  @click="$emit('rollbackSnapshot', msg.snapshotId)"
-                  title="撤回 AI 修改，恢复到发送前状态"
+          <button class="rollback-btn"
+                  :class="{ loading: snapshotRollbackLoading.get(rollbackKey) }"
+                  :disabled="rollbackDisabled"
+                  @click="$emit('rollbackSnapshot', rollbackId, Boolean(msg.snapshotId), msg.rollbackTimestamp)"
+                  :title="rollbackDisabled ? 'AI 输出中，无法撤回' : '撤回此消息及其后的会话内容'"
                   v-html="ROLLBACK_ICON"></button>
           <button class="copy-msg-btn" @click="$emit('copyMessage', msg)" title="复制消息" v-html="COPY_ICON"></button>
           </span>
@@ -104,6 +105,7 @@ const props = defineProps({
   msg: {type: Object, required: true},
   idx: {type: Number, default: 0},
   snapshotRollbackLoading: {type: Object, required: true},
+  rollbackDisabled: {type: Boolean, default: false},
   branchDisabled: {type: Boolean, default: false}
 })
 
@@ -129,6 +131,8 @@ const userDisplayText = computed(() => {
   return c.slice(0, USER_MAX_LEN) + '...'
 })
 const userAutoMessageExpanded = ref(false)
+const rollbackId = computed(() => props.msg.rollbackId || props.msg.snapshotId)
+const rollbackKey = computed(() => rollbackId.value || props.msg.rollbackTimestamp)
 
 // 助手消息文件统计（edit=修改, write=新增，按 file_path 去重）
 const fileStats = computed(() => {
@@ -588,6 +592,11 @@ onBeforeUnmount(() => {
 .rollback-btn.loading {
   opacity: 0.5;
   pointer-events: none;
+}
+
+.rollback-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
 }
 
 .user-body .rollback-btn {
