@@ -666,6 +666,7 @@
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
         </section>
@@ -2480,8 +2481,6 @@ const saveSettings = async () => {
 
     // 准备配置更新
     const configToUpdate = {
-      baseUrl: settings.ai.baseUrl,
-      apiKey: settings.ai.apiKey,
       model: settings.ai.model,
       reasoningEffort: settings.ai.reasoningEffort,
       availableModels: settings.ai.availableModelsText.split('\n').map(s => s.trim()).filter(s => s),
@@ -2493,6 +2492,14 @@ const saveSettings = async () => {
         baseUrl: settings.vision.baseUrl,
         model: settings.vision.model
       }
+    }
+
+    // 仅在实际变更时发送连接配置，避免保存其他设置时重建 Agent。
+    if (baseUrlChanged) {
+      configToUpdate.baseUrl = settings.ai.baseUrl
+    }
+    if (apiKeyChanged && settings.ai.apiKey.trim()) {
+      configToUpdate.apiKey = settings.ai.apiKey
     }
     
     // 只有当 vision.apiKey 不为空时才保存（后端返回空字符串，不会误存）

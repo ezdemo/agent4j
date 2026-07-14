@@ -90,7 +90,8 @@ public class ConfigController {
                 maskedKey,
                 cfg.price(),
                 visionConfig,
-                cfg.activePet()
+                cfg.activePet(),
+                cfg.terminateOnNoToolCall()
         );
         return ApiResponse.ok(data);
     }
@@ -103,9 +104,10 @@ public class ConfigController {
         configService.updateConfig(body);
 
         // baseUrl 或 apiKey 变更 → 销毁重建（因 HttpModelClient 的 apiUrl/apiKey 为 final）
+        boolean agentReinitialized = false;
         if ((body.containsKey("baseUrl") || body.containsKey("apiKey")) && agentService.isReady()) {
             agentService.reinitialize();
-            return ApiResponse.ok("API 地址/密钥已更新，Agent 已重新初始化");
+            agentReinitialized = true;
         }
 
         // model、reasoningEffort、hitl 等运行时配置 → 通过 DamiBus 广播，由监听者处理
@@ -114,12 +116,13 @@ public class ConfigController {
             // baseUrl/apiKey 已在上方处理，跳过
             if ("baseUrl".equals(key) || "apiKey".equals(key)) continue;
             // 只发布已知的运行时配置键
-            if ("model".equals(key) || "reasoningEffort".equals(key) || "hitl".equals(key) || "disabledTools".equals(key)) {
+            if ("model".equals(key) || "reasoningEffort".equals(key) || "hitl".equals(key)
+                    || "terminateOnNoToolCall".equals(key) || "disabledTools".equals(key)) {
                 Dami.bus().send("config.changed", new ConfigChangedEvent(key, entry.getValue()));
             }
         }
 
-        return ApiResponse.ok("配置已更新");
+        return ApiResponse.ok(agentReinitialized ? "API 地址/密钥已更新，Agent 已重新初始化" : "配置已更新");
     }
 
     @ApiOperation(value = "从 AI 模型复制视觉配置", notes = "将 AI 模型的 baseUrl 和 apiKey 复制到视觉模型配置（后端操作，不暴露密钥）")

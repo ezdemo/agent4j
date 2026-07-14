@@ -287,6 +287,7 @@ agent4j/
 | `keepTailChars`   | int      | `80000`                     | 保留尾部预算                           |
 | `toolTimeoutSec`  | int      | `360`                       | 工具超时                             |
 | `subAgentTimeoutSec` | int   | `3600`                      | 子代理完整执行超时                       |
+| `terminateOnNoToolCall` | boolean | `true`                   | 无工具调用时结束；`false` 时追加 `FinishTool.TIPS` 强制继续 |
 | `disabledTools`   | string[] | `[]`                        | 禁用工具                             |
 | `blockedPaths`    | string[] | `[]`                        | 路径拦截                             |
 

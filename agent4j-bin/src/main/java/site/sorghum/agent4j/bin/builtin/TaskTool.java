@@ -82,6 +82,7 @@ public class TaskTool extends AbsToolProvider implements SolonToTools {
             }
 
             ToolRegistry registry = ctx.getLoopController().getToolRegistry();
+            AgentLoopController parentController = ctx.getLoopController();
 
             // 构建子代理的 system prompt
             // 优先使用调用方传入的 systemPrompt，否则自动组合：任务描述 + 工具规范 + 使用指引
@@ -107,14 +108,16 @@ public class TaskTool extends AbsToolProvider implements SolonToTools {
                         批量编辑用 `edit`（单次调用多 edits）。
                         不确定文件位置时用 `glob`/`grep`。
                         需要构建/测试时用 `bash`。
-                        结束对话**必须**调用 `finish`，纯文本回复不会退出循环。
-                        """.stripIndent().trim());
+                        """.stripIndent());
+                boolean terminateOnNoToolCall = parentController == null
+                        || parentController.terminateOnNoToolCall();
+                sb.append(terminateOnNoToolCall
+                        ? "无工具调用时，模型的纯文本回复会结束对话。"
+                        : "结束对话必须调用 `finish`，纯文本回复不会退出循环。");
                 systemPrompt = sb.toString();
             }
 
             // 获取父级 AgentLoopController，传播中断信号到子代理
-            AgentLoopController parentController = ctx.getLoopController();
-
             ModelClient parentClient = parentController != null ? parentController.getModelClient() : null;
             ModelClient sourceClient = parentClient != null ? parentClient : modelClient;
             SubAgent sub = new SubAgent(sourceClient.fork(), registry, systemPrompt, parentController);

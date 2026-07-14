@@ -1,5 +1,5 @@
 <template>
-  <template v-if="processedBlocks.length > 0" v-for="(block, bi) in processedBlocks" :key="bi">
+  <template v-if="processedBlocks.length > 0" v-for="(block, bi) in processedBlocks" :key="getBlockKey(block, bi)">
     <!-- 思考 -->
     <div v-if="block.type === 'reasoning'" class="block-reasoning">
       <div class="reasoning-head" @click="block.showContent = !block.showContent">
@@ -272,7 +272,7 @@
 
     <!-- 子代理块（工具调用风格折叠块） -->
     <div v-else-if="block.type === 'sub_agent'" class="block-tool">
-      <div class="tool-head" @click="block.expanded = !block.expanded">
+      <div class="tool-head" @click="toggleSubAgent(block)">
         <span class="tool-icon default-icon 成功">
           <span v-html="CHECK_ICON_SM"></span>
         </span>
@@ -282,14 +282,14 @@
         <span class="default-icon"
               v-html="CHEVRON_DOWN_ICON"
               :style="{
-                transform: block.expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                transform: isSubAgentExpanded(block) ? 'rotate(180deg)' : 'rotate(0deg)',
                 display: 'inline-block',
                 transition: 'transform 0.25s ease',
                 lineHeight: 0
               }">
         </span>
       </div>
-      <div v-if="block.expanded" class="tool-group-detail">
+      <div v-if="isSubAgentExpanded(block)" class="tool-group-detail">
         <div v-for="(sb, sbi) in block.blocks" :key="sbi" class="tool-group-item-block">
           <!-- 子代理内层工具 -->
           <div v-if="sb.type === 'tool_call'" class="block-tool">
@@ -397,6 +397,33 @@ const WORKFLOW_TOOLS = ['workflow_start', 'workflow_step', 'workflow_status']
 // ── 工具分组折叠状态 ──
 
 const toolGroupsExpanded = ref({})
+
+// Stream events may replace a sub-agent block while it is still running. Keep
+// the user's explicit expansion choice separate from those transient objects.
+const subAgentExpanded = ref({})
+
+const getSubAgentKey = block => `sub-agent-${block.subId || block._id || ''}`
+
+const isSubAgentExpanded = block => {
+  const key = getSubAgentKey(block)
+  return Object.hasOwn(subAgentExpanded.value, key)
+      ? subAgentExpanded.value[key]
+      : Boolean(block.expanded)
+}
+
+const toggleSubAgent = block => {
+  const key = getSubAgentKey(block)
+  subAgentExpanded.value = {
+    ...subAgentExpanded.value,
+    [key]: !isSubAgentExpanded(block)
+  }
+}
+
+const getBlockKey = (block, index) => {
+  if (block.type === 'sub_agent') return getSubAgentKey(block)
+  if (block.type === 'path_group' || block.type === 'tool_group') return block._groupId
+  return block._id || `${block.type}-${index}`
+}
 
 const toggleToolGroup = (groupId) => {
   toolGroupsExpanded.value = {...toolGroupsExpanded.value, [groupId]: !toolGroupsExpanded.value[groupId]}

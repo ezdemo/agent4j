@@ -48,7 +48,7 @@
       @refresh-sessions="refreshSessionList"
       @new-project-chat="newProjectChat"
       @refresh-project="refreshProjectSessions"
-      @clear-project="clearProjectSessions"
+      @manage-project="openProjectSessionDialog"
       @select-session="onSidebarSelectSession"
       @refresh-session-chat="refreshSessionChat"
       @delete-session="onSidebarDeleteSession"
@@ -137,8 +137,24 @@
       :is-desktop-env="isDesktopEnv"
       @switch-workspace="handleSwitchWorkspace"
       @add-workspace="handleAddWorkspace"
-      @delete-workspace="handleDeleteWorkspace"
     />
+
+    <ActionConfirmDialog
+        :model-value="projectSessionDialog.visible"
+        title="管理项目会话"
+        :message="`“${projectSessionDialog.name}”的会话可单独清空，或连同项目记录一起删除。`"
+        :actions="projectSessionActions"
+        :pending="projectSessionDialog.pending"
+        @update:model-value="value => { if (!value) closeProjectSessionDialog() }"
+        @action="handleProjectSessionAction"
+    >
+      <template #icon>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/>
+          <path d="M22 21H7"/><path d="m5 11 9 9"/>
+        </svg>
+      </template>
+    </ActionConfirmDialog>
 
     <!-- 工具弹窗 -->
     <Teleport to="body">
@@ -383,6 +399,7 @@ import RightPanel from './components/RightPanel.vue'
 import VersionInfoPanel from './components/VersionInfoPanel.vue'
 import ElementPanel from './components/ElementPanel.vue'
 import WorkspacePickerModal from './components/WorkspacePickerModal.vue'
+import ActionConfirmDialog from './components/ActionConfirmDialog.vue'
 import ChatView from './views/Chat.vue'
 import SettingsView from './views/Settings.vue'
 import DashboardPanel from './components/Dashboard.vue'
@@ -876,20 +893,26 @@ const handleAddWorkspace = async (path) => {
 }
 
 // 删除工作区
-const handleDeleteWorkspace = async (hash) => {
-  const ok = await confirm({ message: '确定要删除此工作区吗？' })
-  if (!ok) return
-  
+const deleteWorkspace = async (hash) => {
   try {
     const r = await configAPI.deleteWorkspace(hash)
     if (r.success) {
+      if (currentSessionWorkspace.value === hash) {
+        currentSession.value = ''
+        currentSessionWorkspace.value = null
+        chatRef.value?.resetLocalMessages()
+      }
       await loadWorkspaces()
+      await loadSessions()
       message.success('工作区已删除')
+      return true
     } else {
       message.error(r.message || '删除工作区失败')
+      return false
     }
   } catch (e) {
     message.error('删除工作区失败: ' + e.message)
+    return false
   }
 }
 
@@ -959,10 +982,6 @@ const refreshProjectSessions = async (wsHash) => {
 const clearProjectSessions = async (wsHash) => {
   const hash = wsHash || currentSessionWorkspace.value
   if (!hash) return
-  const ws = workspaces.value.find(w => w.hash === hash)
-  const name = ws ? ws.name : hash
-  const ok = await confirm({ message: `确定要清空「${name}」的所有会话吗？此操作不可恢复。` })
-  if (!ok) return
   try {
     await sessionsAPI.clearAll(hash)
     await loadSessions()
@@ -971,8 +990,60 @@ const clearProjectSessions = async (wsHash) => {
       chatRef.value?.resetLocalMessages()
     }
     message.success('会话已清空')
+    return true
   } catch (e) {
     message.error('清空会话失败: ' + e.message)
+    return false
+  }
+}
+
+const projectSessionDialog = ref({visible: false, workspaceHash: null, name: '', pending: false})
+const projectSessionActions = [
+  {key: 'cancel', label: '取消'},
+  {key: 'clear', label: '清空会话列表', variant: 'accent'},
+  {key: 'delete', label: '删除项目', variant: 'danger'}
+]
+
+const openProjectSessionDialog = (workspaceHash) => {
+  const workspace = workspaces.value.find(w => w.hash === workspaceHash)
+  projectSessionDialog.value = {
+    visible: true,
+    workspaceHash,
+    name: workspace?.name || workspaceHash,
+    pending: false
+  }
+}
+
+const closeProjectSessionDialog = () => {
+  if (projectSessionDialog.value.pending) return
+  projectSessionDialog.value.visible = false
+}
+
+const confirmClearProjectSessions = async () => {
+  const {workspaceHash} = projectSessionDialog.value
+  if (!workspaceHash) return
+  projectSessionDialog.value.pending = true
+  const cleared = await clearProjectSessions(workspaceHash)
+  projectSessionDialog.value.pending = false
+  if (cleared) projectSessionDialog.value.visible = false
+}
+
+const confirmDeleteWorkspace = async () => {
+  const {workspaceHash} = projectSessionDialog.value
+  if (!workspaceHash) return
+  projectSessionDialog.value.pending = true
+  const deleted = await deleteWorkspace(workspaceHash)
+  projectSessionDialog.value.pending = false
+  if (deleted) projectSessionDialog.value.visible = false
+}
+
+const handleProjectSessionAction = (action) => {
+  if (action === 'cancel') {
+    closeProjectSessionDialog()
+  } else if (action === 'clear') {
+    confirmClearProjectSessions()
+  } else if (action === 'delete') {
+    confirmDeleteWorkspace()
   }
 }
 

@@ -89,6 +89,7 @@ public class AgentLoop implements AgentLoopController {
     private final ModelClient client;
     private final ToolRegistry registry;
     private final Agent4jConfig config;
+    private volatile boolean terminateOnNoToolCall;
     @Getter
     private final ConversationContext ctx;
     private final ReasonBreaker reasonBreaker = new ReasonBreaker();
@@ -156,6 +157,7 @@ public class AgentLoop implements AgentLoopController {
         this.registry = registry;
         this.ctx = ctx;
         this.config = config;
+        this.terminateOnNoToolCall = config == null || config.terminateOnNoToolCall();
         this.hitlManager = new HitlManager(hitlMode);
         this.stormBreaker = StormBreaker.fromConfig(config);
     }
@@ -214,6 +216,16 @@ public class AgentLoop implements AgentLoopController {
     /** 运行时切换推理强度（热更新） */
     public void setReasoningEffort(String reasoningEffort) {
         client.setReasoningEffort(reasoningEffort);
+    }
+
+    @Override
+    public boolean terminateOnNoToolCall() {
+        return terminateOnNoToolCall;
+    }
+
+    /** 运行时更新无工具调用时的结束策略。 */
+    public void setTerminateOnNoToolCall(boolean enabled) {
+        this.terminateOnNoToolCall = enabled;
     }
 
     /** 手动触发上下文折叠（/compact 命令） */
@@ -432,7 +444,7 @@ public class AgentLoop implements AgentLoopController {
                 - 批量编辑用 `edit`（单次调用多 edits）
                 - 不确定文件位置时用 `glob`/`grep`
                 - 需要构建/测试时用 `bash`
-                - 结束对话**必须**调用 `finish`，纯文本回复不会退出循环
+                %s
                 
                 ---
                 
@@ -628,7 +640,9 @@ public class AgentLoop implements AgentLoopController {
                 - **OpenAPI** — 自动将 REST API 转为工具
                 - **Plugin** — `~/.agent4j/plugin/` 下含 `tool.json` + `skill.md` 的目录自动注册
 
-                """;
+                """.formatted(terminateOnNoToolCall()
+                ? "- 无工具调用时，模型的纯文本回复会结束对话"
+                : "- 结束对话**必须**调用 `finish`，纯文本回复不会退出循环");
     }
 
     // ==================== 主入口：run() ====================
@@ -756,27 +770,25 @@ public class AgentLoop implements AgentLoopController {
             ONode toolCalls = scavengeToolCalls(sr.toolCalls(), sr.reasoningContent(), sr.content());
             boolean hasToolCalls = toolCalls != null && toolCalls.isArray() && !toolCalls.getArray().isEmpty();
 
-            // ---- 5. 无 tool calls → 不是终止信号，是需纠正的状态 ----
+            // ---- 5. 无 tool calls → 根据配置结束或要求模型继续 ----
             if (!hasToolCalls) {
                 ctx.addAssistant(sr.content(), null, sr.reasoningContent());
+                if (terminateOnNoToolCall()) {
+                    return sr.content() == null ? "" : sr.content();
+                }
+
                 noToolCallStreak++;
                 log.warn("[loop] 第 {} 次无工具调用，累积无工具轮数: {}", step, noToolCallStreak);
-
                 if (noToolCallStreak >= 3) {
                     log.warn("[loop] 连续 {} 轮无工具调用，降级终止", noToolCallStreak);
-                    int streak = noToolCallStreak;
-                    safeOutput("noToolMax", () -> output.onLog(LogLevel.WARN,
-                            "[loop] 连续 " + streak + " 轮无工具调用，降级终止"));
                     String degraded = ctx.getLastAssistantContent();
                     return degraded != null && !degraded.isEmpty() ? degraded : "任务中断，未完成（已收集部分结果）";
                 }
 
-                // 渐进式轻推
                 ctx.addUser(FinishTool.TIPS);
                 continue;
             }
 
-            // ---- 调用了工具 → 重置无工具计数 ----
             noToolCallStreak = 0;
 
             // ---- HITL 拦截（finish/ask_choice 等免审批工具直接放行） ----
@@ -803,7 +815,7 @@ public class AgentLoop implements AgentLoopController {
                 ctx.addToolResult(tr.getToolCallId(), tr.getContent());
             }
 
-            // ---- 7.5. 唯一正常退出：finish 工具被调用 ----
+            // ---- 7.5. finish 工具显式结束本轮 ----
             if (finishContent != null) {
                 String result = finishContent;
                 finishContent = null;

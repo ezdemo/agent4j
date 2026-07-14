@@ -176,6 +176,7 @@
         :currentModel="currentModel"
         :availableModels="availableModels"
         :currentReasoningEffort="currentReasoningEffort"
+        :terminateOnNoToolCall="terminateOnNoToolCall"
         :workspaceHash="props.workspaceHash"
         :sessionName="props.sessionName"
         :hasHistory="hasHistory"
@@ -190,32 +191,21 @@
         @refreshUsage="loadUsage"
         @switchModel="handleSwitchModel"
         @switchReasoningEffort="handleSwitchReasoningEffort"
+        @switchTerminateOnNoToolCall="handleSwitchTerminateOnNoToolCall"
         @refreshModels="loadUsage"
         @continue="continueChat"
         @switchSkill="handleSwitchSkill"
         @switchPermission="handleSwitchPermission"
     />
 
-    <Teleport to="body">
-      <div v-if="rollbackDialog.visible" class="rollback-dialog-mask" @click.self="closeRollbackDialog">
-        <div class="rollback-dialog" role="alertdialog" aria-modal="true" aria-labelledby="rollback-dialog-title">
-          <div class="rollback-dialog-icon">
-            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <circle cx="12" cy="12" r="10"/>
-              <line x1="12" y1="8" x2="12" y2="12"/>
-              <line x1="12" y1="16" x2="12.01" y2="16"/>
-            </svg>
-          </div>
-          <div id="rollback-dialog-title" class="rollback-dialog-title">撤回消息</div>
-          <p class="rollback-dialog-copy">将删除当前消息及其后的会话内容。撤回代码会将工作区恢复到发送此消息前的状态。</p>
-          <div class="rollback-dialog-actions">
-            <button class="rollback-dialog-btn" type="button" @click="closeRollbackDialog">取消</button>
-            <button class="rollback-dialog-btn rollback-dialog-btn-message" type="button" @click="confirmRollback(false)">只撤回消息</button>
-            <button class="rollback-dialog-btn rollback-dialog-btn-code" type="button" @click="confirmRollback(true)">撤回消息和代码</button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
+    <ActionConfirmDialog
+        :model-value="rollbackDialog.visible"
+        title="撤回消息"
+        message="将删除当前消息及其后的会话内容。撤回代码会将工作区恢复到发送此消息前的状态。"
+        :actions="rollbackActions"
+        @update:model-value="value => { if (!value) closeRollbackDialog() }"
+        @action="handleRollbackAction"
+    />
   </div>
 </template>
 
@@ -228,6 +218,7 @@ import {getAssistantTurnBoundaries} from '../utils/sessionBranch'
 import ChatInput from '../components/ChatInput.vue'
 import ChatMessage from '../components/ChatMessage.vue'
 import DiffViewer from '../components/DiffViewer.vue'
+import ActionConfirmDialog from '../components/ActionConfirmDialog.vue'
 
 import {useAppStore} from '../stores/app'
 
@@ -250,6 +241,7 @@ const handleSwitchModel = async (modelName) => {
 
 // ============= 推理强度切换 =============
 const currentReasoningEffort = ref('max')
+const terminateOnNoToolCall = ref(true)
 
 const handleSwitchReasoningEffort = async (value) => {
   if (value === currentReasoningEffort.value) return
@@ -260,6 +252,18 @@ const handleSwitchReasoningEffort = async (value) => {
     }
   } catch (e) {
     console.error('切换推理强度失败:', e)
+  }
+}
+
+const handleSwitchTerminateOnNoToolCall = async (value) => {
+  if (value === terminateOnNoToolCall.value) return
+  try {
+    const r = await configAPI.updateConfig({terminateOnNoToolCall: value})
+    if (r.success) {
+      terminateOnNoToolCall.value = value
+    }
+  } catch (e) {
+    console.error('更新无工具调用结束策略失败:', e)
   }
 }
 
@@ -307,6 +311,11 @@ const startWelcomeTask = (prompt) => {
 const snapshotMap = ref(new Map())
 const snapshotRollbackLoading = ref(new Map()) // msgId -> 是否正在撤回
 const rollbackDialog = ref({visible: false, msgId: null})
+const rollbackActions = [
+  {key: 'cancel', label: '取消'},
+  {key: 'message', label: '只撤回消息', variant: 'accent'},
+  {key: 'code', label: '撤回消息和代码', variant: 'danger'}
+]
 
 // 图片预览
 const imagePreviewUrl = ref('')
@@ -380,6 +389,7 @@ const loadUsage = async (override) => {
     }
     if (configRes.status === 'fulfilled' && configRes.value.success) {
       currentReasoningEffort.value = configRes.value.data?.reasoningEffort || 'max'
+      terminateOnNoToolCall.value = configRes.value.data?.terminateOnNoToolCall !== false
       currentPermission.value = configRes.value.data?.hitl || 'free'
     }
   } catch {
@@ -1017,6 +1027,14 @@ const confirmRollback = (rollbackCode) => {
   const msgId = rollbackDialog.value.msgId
   closeRollbackDialog()
   rollbackSnapshot(msgId, rollbackCode)
+}
+
+const handleRollbackAction = (action) => {
+  if (action === 'cancel') {
+    closeRollbackDialog()
+    return
+  }
+  confirmRollback(action === 'code')
 }
 
 /** 撤回会话消息，并按选择决定是否恢复 AI 修改的代码。 */
@@ -1992,100 +2010,6 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 .welcome-action.review svg { color: var(--green); }
 .welcome-action.fix svg { color: var(--red); }
 
-/* ===== 撤回确认 ===== */
-.rollback-dialog-mask {
-  position: fixed;
-  inset: 0;
-  z-index: 500;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 16px;
-  background: rgba(0, 0, 0, 0.42);
-}
-
-.rollback-dialog {
-  width: min(460px, 100%);
-  padding: 22px;
-  border: 1px solid color-mix(in srgb, var(--yellow) 45%, var(--border));
-  border-radius: var(--r-lg);
-  background: var(--bg);
-  box-shadow: 0 16px 42px rgba(0, 0, 0, 0.28);
-}
-
-.rollback-dialog-icon {
-  display: inline-grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 50%;
-  background: color-mix(in srgb, var(--yellow) 16%, transparent);
-  color: var(--yellow);
-}
-
-.rollback-dialog-title {
-  margin-top: 12px;
-  color: var(--fg);
-  font-size: 16px;
-  font-weight: 700;
-}
-
-.rollback-dialog-copy {
-  margin: 7px 0 20px;
-  color: var(--fg-3);
-  font-size: 13px;
-  line-height: 1.55;
-}
-
-.rollback-dialog-actions {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
-}
-
-.rollback-dialog-btn {
-  min-height: 36px;
-  padding: 7px 8px;
-  border: 1px solid var(--border);
-  border-radius: var(--r-sm);
-  background: var(--bg-2);
-  color: var(--fg-2);
-  cursor: pointer;
-  font-family: var(--sans);
-  font-size: 12px;
-  font-weight: 600;
-  transition: background var(--t), border-color var(--t), color var(--t), box-shadow var(--t);
-}
-
-.rollback-dialog-btn:hover {
-  border-color: color-mix(in srgb, var(--fg-3) 55%, var(--border));
-  background: var(--bg-3);
-  box-shadow: 0 2px 8px color-mix(in srgb, #000000 10%, transparent);
-}
-
-.rollback-dialog-btn-message {
-  border-color: color-mix(in srgb, var(--accent) 36%, var(--border));
-  background: color-mix(in srgb, var(--accent) 8%, var(--bg));
-  color: color-mix(in srgb, var(--accent) 82%, var(--fg));
-}
-
-.rollback-dialog-btn-message:hover {
-  border-color: color-mix(in srgb, var(--accent) 58%, var(--border));
-  background: color-mix(in srgb, var(--accent) 13%, var(--bg));
-}
-
-.rollback-dialog-btn-code {
-  border-color: color-mix(in srgb, var(--red) 38%, var(--border));
-  background: color-mix(in srgb, var(--red) 9%, var(--bg));
-  color: color-mix(in srgb, var(--red) 80%, var(--fg));
-}
-
-.rollback-dialog-btn-code:hover {
-  border-color: color-mix(in srgb, var(--red) 58%, var(--border));
-  background: color-mix(in srgb, var(--red) 14%, var(--bg));
-  color: color-mix(in srgb, var(--red) 88%, var(--fg));
-}
-
 /* ===== 移动端适配 ===== */
 @media (max-width: 1100px) {
   .welcome-actions {
@@ -2114,7 +2038,6 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   .msg-thumb-dock { display: none; } /* 手机端隐藏缩略图dock */
   .chat-head { padding: 6px 10px; }
     .chat-head-title { font-size: 13px; }
-  .rollback-dialog-actions { grid-template-columns: 1fr; }
 }
 
 </style>
