@@ -58,6 +58,12 @@ public class ChatMessage {
     private String snapshotId;
 
     /**
+     * 消息撤回定位 ID（仅 user 消息有效）。没有工作区快照时，仍可据此撤回会话消息。
+     */
+    @ONodeAttr(name = "rollback_id")
+    private String rollbackId;
+
+    /**
      * 消息时间戳（Unix 毫秒），用于前端渲染消息时间。
      */
     @ONodeAttr(name = "timestamp")
@@ -139,6 +145,8 @@ public class ChatMessage {
         msg.toolCallId = toolCallId != null ? toolCallId.toString() : null;
         Object snapshotId = m.get("snapshot_id");
         msg.snapshotId = snapshotId != null ? snapshotId.toString() : null;
+        Object rollbackId = m.get("rollback_id");
+        msg.rollbackId = rollbackId != null ? rollbackId.toString() : null;
         Object timestamp = m.get("timestamp");
         if (timestamp instanceof Number) {
             msg.timestamp = ((Number) timestamp).longValue();
@@ -229,6 +237,7 @@ public class ChatMessage {
         if (toolCallId != null) m.put("tool_call_id", toolCallId);
         if (reasoningContent != null) m.put("reasoning_content", reasoningContent);
         if (snapshotId != null) m.put("snapshot_id", snapshotId);
+        if (rollbackId != null) m.put("rollback_id", rollbackId);
         if (timestamp != null) m.put("timestamp", timestamp);
         if (toolCalls != null && !toolCalls.isEmpty()) {
             List<Map<String, Object>> tcMaps = new ArrayList<>();
@@ -289,6 +298,7 @@ public class ChatMessage {
         copy.toolCallId = this.toolCallId;
         copy.reasoningContent = this.reasoningContent;
         copy.snapshotId = this.snapshotId;
+        copy.rollbackId = this.rollbackId;
         copy.timestamp = this.timestamp;
         return copy;
     }

@@ -106,9 +106,10 @@ public class ChatController {
                 // ★ 创建快照检查点：在 AI 执行修改前保存当前工作区状态
                 String msgId = UUID.randomUUID().toString().substring(0, 8);
                 boolean snapshotCreated = createCheckpointIfNeeded(request.getWorkspaceHash(), msgId, emitter);
-                // 只有快照实际创建成功时，才通过 SSE 通知前端
+                // 每条用户消息都有会话撤回点；代码快照是否可用由事件字段标识。
+                userMsg.setRollbackId(msgId);
+                emitter.sendSnapshot(msgId, snapshotCreated);
                 if (snapshotCreated) {
-                    emitter.sendSnapshot(msgId);
                     // 将快照 ID 传递给 UserMessage，以便 JSONL 持久化
                     userMsg.setSnapshotId(msgId);
                 }

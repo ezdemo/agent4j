@@ -148,6 +148,9 @@ public class JsonlSessionStore implements SessionStore {
         if (msg.getSnapshotId() != null) {
             node.set("snapshot_id", msg.getSnapshotId());
         }
+        if (msg.getRollbackId() != null) {
+            node.set("rollback_id", msg.getRollbackId());
+        }
         if (msg.getTimestamp() != null) {
             node.set("timestamp", msg.getTimestamp());
         }

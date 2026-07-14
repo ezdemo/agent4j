@@ -503,19 +503,19 @@ public class AgentService {
     }
 
     /**
-     * 截断会话历史：删除包含指定 snapshotId 的用户消息及之后的所有消息，
+     * 截断会话历史：删除包含指定撤回定位 ID 的用户消息及之后的所有消息，
      * 同时重写 JSONL 文件使持久化数据同步。
      *
      * @param workspacePath 工作区路径
      * @param sessionName   会话名称
-     * @param snapshotId    要截断的快照 ID
+     * @param rollbackId    要截断的消息撤回定位 ID
      * @return 截断后被删除的用户消息文本（用于回填输入框），null 表示未找到
      */
-    public String truncateHistoryBySnapshotId(String workspacePath, String sessionName, String snapshotId) {
+    public String truncateHistoryBySnapshotId(String workspacePath, String sessionName, String rollbackId, Long rollbackTimestamp) {
         if (sessionName == null || sessionName.isEmpty()) {
             sessionName = getCurrentSessionName(workspacePath);
         }
-        if (sessionName == null || snapshotId == null) return null;
+        if (sessionName == null || (rollbackId == null && rollbackTimestamp == null)) return null;
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         Agent4jAgent agent = getOrCreateAgent(sessionKey);
         ConversationContext ctx = agent.getCtx();
@@ -525,7 +525,10 @@ public class AgentService {
         String rollbackText = null;
         for (int i = 0; i < history.size(); i++) {
             ChatMessage msg = history.get(i);
-            if ("user".equals(msg.getRole()) && snapshotId.equals(msg.getSnapshotId())) {
+            boolean matchesRollbackId = rollbackId != null
+                    && (rollbackId.equals(msg.getRollbackId()) || rollbackId.equals(msg.getSnapshotId()));
+            boolean matchesTimestamp = rollbackTimestamp != null && rollbackTimestamp.equals(msg.getTimestamp());
+            if ("user".equals(msg.getRole()) && (matchesRollbackId || matchesTimestamp)) {
                 targetIdx = i;
                 rollbackText = msg.getContent();
                 break;

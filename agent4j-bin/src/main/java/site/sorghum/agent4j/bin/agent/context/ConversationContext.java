@@ -68,6 +68,9 @@ public class ConversationContext {
         if (msg != null && msg.getSnapshotId() != null) {
             chatMsg.setSnapshotId(msg.getSnapshotId());
         }
+        if (msg != null && msg.getRollbackId() != null) {
+            chatMsg.setRollbackId(msg.getRollbackId());
+        }
         history.add(chatMsg);
         persist(chatMsg);
     }
