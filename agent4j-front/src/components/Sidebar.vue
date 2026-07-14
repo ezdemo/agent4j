@@ -41,7 +41,15 @@
     </div>
 
     <div class="project-list">
-      <div v-for="p in projectsData" :key="p.workspace.hash" class="project-item">
+      <div v-for="(p, idx) in projectsData" :key="p.workspace.hash" class="project-item"
+            :class="{ 'drag-over': dragOverIndex === idx }"
+            draggable="true"
+            @dragstart="onDragStart($event, idx)"
+            @dragover.prevent="onDragOver($event, idx)"
+            @dragleave="onDragLeave"
+            @drop.prevent="onDrop($event, idx)"
+            @dragend="onDragEnd"
+      >
         <div class="project-header" :class="{ active: p.workspace.hash === currentSessionWorkspace }" @click="toggleProject(p.workspace.hash)">
           <svg class="project-chevron" :class="{ open: expandedWorkspaces.has(p.workspace.hash) }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"/>
@@ -154,7 +162,7 @@ const props = defineProps({
   initialDataLoaded: { type: Boolean, default: false }
 })
 
-defineEmits([
+const emit = defineEmits([
   'update:sideOpen',
   'show-workspace-picker',
   'refresh-sessions',
@@ -167,11 +175,14 @@ defineEmits([
   'toggle-theme',
   'show-tools',
   'show-dashboard',
-  'show-settings'
+  'show-settings',
+  'reorder'
 ])
 
 // 本地搜索状态
 const searchQuery = ref('')
+const dragIndex = ref(null)
+const dragOverIndex = ref(null)
 
 // 本地展开/折叠状态
 const expandedWorkspaces = ref(new Set())
@@ -197,6 +208,36 @@ const projectsData = computed(() => {
 })
 
 
+
+function onDragStart(e, index) {
+  dragIndex.value = index
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', String(index))
+}
+
+function onDragOver(e, index) {
+  dragOverIndex.value = index
+}
+
+function onDragLeave() {
+  dragOverIndex.value = null
+}
+
+function onDrop(e, index) {
+  const from = dragIndex.value
+  if (from === null || from === index) return
+  const list = [...props.workspaces]
+  const [item] = list.splice(from, 1)
+  list.splice(index, 0, item)
+  emit('reorder', list)
+  dragIndex.value = null
+  dragOverIndex.value = null
+}
+
+function onDragEnd() {
+  dragIndex.value = null
+  dragOverIndex.value = null
+}
 
 // 展开/折叠单个项目
 const toggleProject = (hash) => {
@@ -388,6 +429,12 @@ const formatName = (n) => {
 
 .project-list { flex: 1; overflow-x: hidden; overflow-y: auto; padding: 4px 0; }
 
+.project-item.drag-over {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+.project-item.dragging {
+  opacity: 0.4;
+}
 .project-item + .project-item {
   border-top: 1px solid var(--border);
 }
