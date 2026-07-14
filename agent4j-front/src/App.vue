@@ -56,6 +56,7 @@
       @show-tools="showTools = true"
       @show-dashboard="showDashboard = true"
       @show-settings="showSettings = true"
+      @reorder="handleReorderWorkspaces"
     />
 
     <!-- 主区域 -->
