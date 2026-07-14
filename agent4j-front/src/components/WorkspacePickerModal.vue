@@ -16,9 +16,20 @@
               v-for="w in workspaces"
               :key="w.hash"
               class="workspace-item"
-              :class="{ active: w.hash === currentSessionWorkspace }"
+              :class="{ active: w.hash === currentSessionWorkspace, 'drag-over': dragOverIndex === workspaces.indexOf(w) }"
+              draggable="true"
+              @dragstart="onDragStart($event, workspaces.indexOf(w))"
+              @dragover.prevent="onDragOver($event, workspaces.indexOf(w))"
+              @dragleave="onDragLeave"
+              @drop.prevent="onDrop($event, workspaces.indexOf(w))"
+              @dragend="onDragEnd"
               @click="handleSwitchWorkspace(w.hash)"
             >
+              <svg class="drag-handle" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <circle cx="9" cy="6" r="1.5"/><circle cx="15" cy="6" r="1.5"/>
+                <circle cx="9" cy="12" r="1.5"/><circle cx="15" cy="12" r="1.5"/>
+                <circle cx="9" cy="18" r="1.5"/><circle cx="15" cy="18" r="1.5"/>
+              </svg>
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
               </svg>
@@ -65,6 +76,9 @@
 <script setup>
 import {ref} from 'vue'
 
+const dragIndex = ref(null)
+const dragOverIndex = ref(null)
+
 const props = defineProps({
   show: { type: Boolean, default: false },
   workspaces: { type: Array, default: () => [] },
@@ -72,11 +86,41 @@ const props = defineProps({
   isDesktopEnv: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['update:show', 'switchWorkspace', 'addWorkspace'])
+const emit = defineEmits(['update:show', 'switchWorkspace', 'addWorkspace', 'reorder'])
 
 const newWorkspacePath = ref('')
 const workspacePathInput = ref(null)
 const folderPicker = ref(null)
+
+function onDragStart(e, index) {
+  dragIndex.value = index
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', String(index))
+}
+
+function onDragOver(e, index) {
+  dragOverIndex.value = index
+}
+
+function onDragLeave() {
+  dragOverIndex.value = null
+}
+
+function onDrop(e, index) {
+  const from = dragIndex.value
+  if (from === null || from === index) return
+  const list = [...props.workspaces]
+  const [item] = list.splice(from, 1)
+  list.splice(index, 0, item)
+  emit('reorder', list)
+  dragIndex.value = null
+  dragOverIndex.value = null
+}
+
+function onDragEnd() {
+  dragIndex.value = null
+  dragOverIndex.value = null
+}
 
 function close() {
   emit('update:show', false)
@@ -216,10 +260,32 @@ function formatWorkspacePath(path) {
   gap: 8px;
 }
 
+.workspace-item .drag-handle {
+  color: var(--fg-4);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity var(--t);
+  flex-shrink: 0;
+  margin-top: 2px;
+}
+.workspace-item:hover .drag-handle {
+  opacity: 0.6;
+}
+.workspace-item:hover .drag-handle:hover {
+  opacity: 1;
+  color: var(--fg-2);
+}
+.workspace-item.drag-over {
+  border-color: var(--accent) !important;
+  box-shadow: 0 0 0 1px var(--accent-bg);
+}
+.workspace-item.dragging {
+  opacity: 0.4;
+}
 .workspace-item {
   position: relative;
   display: grid;
-  grid-template-columns: 16px minmax(0, 1fr);
+  grid-template-columns: 14px 16px minmax(0, 1fr);
   align-items: start;
   gap: 9px;
   min-height: 72px;
