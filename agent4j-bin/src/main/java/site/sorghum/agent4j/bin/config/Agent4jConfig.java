@@ -77,6 +77,7 @@ public class Agent4jConfig {
                   "maxContextChars": 200000,
                   "keepTailChars": 80000,
                   "toolTimeoutSec": 360,
+                  "subAgentTimeoutSec": 3600,
                   "maxSelfCorrectionAttempts": 5,
                   "maxStreamErrorRetries": 10,
                   "flushIntervalSec": 30,
@@ -408,6 +409,15 @@ public class Agent4jConfig {
     public int toolTimeoutSec() {
         ONode n = root.select("$.toolTimeoutSec");
         return n != null && !n.isNull() ? n.getInt() : 360;
+    }
+
+    /**
+     * 获取子代理完整执行超时（秒）。子代理包含多轮模型请求和工具调用，
+     * 因此不使用普通工具的短超时。
+     */
+    public int subAgentTimeoutSec() {
+        ONode n = root.select("$.subAgentTimeoutSec");
+        return n != null && !n.isNull() ? n.getInt() : 3600;
     }
 
     /**

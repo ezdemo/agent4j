@@ -108,18 +108,24 @@ public class ToolRegistry {
         List<FunctionTool> functionToolsList = ToolScanUtil.scanTools(workspace);
 
         for (FunctionTool tool : functionToolsList) {
-            // 保存所有扫描到的工具（包括禁用的）
-            allScannedTools.put(tool.name(), tool);
+            register(tool, disabled);
+        }
+    }
 
-            if (disabled.contains(tool.name())) {
-                continue; // 跳过禁用工具
-            }
-            if (forceDenyTools.contains(tool.name())) {
-                continue; // 跳过强制禁止工具
-            }
+    /**
+     * Registers a function tool and applies the same enablement rules used by refresh().
+     */
+    public void register(FunctionTool tool) {
+        register(tool, getCurrentDisabledTools());
+    }
 
+    private void register(FunctionTool tool, Set<String> disabled) {
+        Objects.requireNonNull(tool, "tool");
+        allScannedTools.put(tool.name(), tool);
+        if (!disabled.contains(tool.name()) && !forceDenyTools.contains(tool.name())) {
             functionToolMap.put(tool.name(), tool);
         }
+        cachedOpenAiTools = null;
     }
 
 
