@@ -308,6 +308,11 @@ public class HttpModelClient implements ModelClient {
         }
     }
 
+    @Override
+    public ModelClient fork() {
+        return new HttpModelClient(apiUrl, apiKey, model, reasoningEffort);
+    }
+
     /**
      * 模型最大上下文窗口 token 数。
      * 优先级：环境变量 AGENT4J_MAX_CONTEXT_TOKENS > 模型名后缀 [大小] > 模型名推断 > 默认 256K。

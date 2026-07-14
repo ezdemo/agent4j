@@ -115,49 +115,66 @@ public class TaskTool extends AbsToolProvider implements SolonToTools {
             // 获取父级 AgentLoopController，传播中断信号到子代理
             AgentLoopController parentController = ctx.getLoopController();
 
-            SubAgent sub = new SubAgent(modelClient, registry, systemPrompt, parentController);
+            ModelClient parentClient = parentController != null ? parentController.getModelClient() : null;
+            ModelClient sourceClient = parentClient != null ? parentClient : modelClient;
+            SubAgent sub = new SubAgent(sourceClient.fork(), registry, systemPrompt, parentController);
 
-            // 继承父代理的 HITL 模式：主代理开启 HITL 时子代理自动同步
-            if (parentController != null && parentController.isHitlMode()) {
-                sub.setHitlMode("approval");
-            }
-
-            // 将父 Agent 的 AgentOutput 传递给子代理，使其流式输出能实时推送给用户
-            AgentOutput parentOutput = getCurrentOutput();
-            if (parentOutput != null) {
-                sub.setOutput(parentOutput);
-            }
-
-            // 继承父级 sessionId 和 sessionService，使子代理的 tools 有正确的会话上下文
-            // 且子代理的 token 用量可直接上报，无需经过 static collector
-            String parentSessionId = ctx.getSessionId();
-            if (parentSessionId != null) {
-                sub.setSessionId(parentSessionId);
-            }
-            SessionService parentSessionService = (parentController != null) ? parentController.getSessionService() : null;
-            if (parentSessionService != null) {
-                sub.setSessionService(parentSessionService);
-            }
-
-            String result = sub.run(arguments, new SubAgentListener());
-
-            // 子代理的 token 用量通过 SubAgent 的 capturingListener 累积到 SubAgent 字段中，
-            // 此处将其上报到父会话的 sessionService（累加到会话总用量）。
-            // sessionService.updateLastPromptTokens 已在子 AgentLoop 的 streamLLM 中调用。
-            // 注意：streamLLM 中调用的是 updateLastPromptTokens（更新最新 prompt tokens），
-            // 而非 addUsage（累加总量），所以这里需要用 SubAgent 累积的字段进行 addUsage。
-            if (sub.hasUsage() && parentSessionService != null) {
-                var usage = sub.getModelUsage();
-                for (var e : usage.entrySet()) {
-                    long[] u = e.getValue();
-                    parentSessionService.addUsage(e.getKey(), (int) u[0], (int) u[1], (int) u[2], (int) u[3]);
+            if (parentController != null) {
+                parentController.registerToolCancellation(sub::abort);
+                if (parentController.getAgentConfig() != null) {
+                    sub.setConfig(parentController.getAgentConfig());
                 }
             }
 
-            return result;
+            try {
+
+                // 精确继承父代理的 HITL 三态设置，避免 auto 被降级成 approval。
+                if (parentController != null) {
+                    sub.setHitlMode(resolveInheritedHitlMode(parentController));
+                }
+
+                // 将父 Agent 的 AgentOutput 传递给子代理，使其流式输出能实时推送给用户
+                AgentOutput parentOutput = getCurrentOutput();
+                if (parentOutput != null) {
+                    sub.setOutput(parentOutput);
+                }
+
+                // 继承父级 sessionId 和 sessionService，使子代理的 tools 有正确的会话上下文
+                // 且子代理的 token 用量可直接上报，无需经过 static collector
+                String parentSessionId = ctx.getSessionId();
+                if (parentSessionId != null) {
+                    sub.setSessionId(parentSessionId);
+                }
+                SessionService parentSessionService = (parentController != null) ? parentController.getSessionService() : null;
+                if (parentSessionService != null) {
+                    sub.setSessionService(parentSessionService);
+                }
+
+                String result = sub.run(arguments, new SubAgentListener());
+
+                // 子代理的 token 用量通过 SubAgent 的 capturingListener 累积到 SubAgent 字段中，
+                // 此处将其上报到父会话的 sessionService（累加到会话总用量）。
+                if (sub.hasUsage() && parentSessionService != null) {
+                    var usage = sub.getModelUsage();
+                    for (var e : usage.entrySet()) {
+                        long[] u = e.getValue();
+                        parentSessionService.addUsage(e.getKey(), (int) u[0], (int) u[1], (int) u[2], (int) u[3]);
+                    }
+                }
+
+                return result;
+            } finally {
+                if (parentController != null) {
+                    parentController.clearToolCancellation();
+                }
+            }
         } catch (IOException e) {
             return "IO_ERROR: " + e.getMessage();
         }
+    }
+
+    static String resolveInheritedHitlMode(AgentLoopController parentController) {
+        return parentController != null ? parentController.getHitlMode() : "free";
     }
 
     @Override

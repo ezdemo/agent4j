@@ -18,6 +18,7 @@ import site.sorghum.agent4j.tool.AgentOutput;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
  * 子代理 —— 隔离的子 AgentLoop，继承父工具集。
@@ -71,10 +72,12 @@ public class SubAgent {
     private SessionService sessionService = null;
     /** 代理配置（继承父级，确保上下文折叠/工具超时等行为一致） */
     private Agent4jConfig config = null;
-    /** 子代理 HITL 模式。默认 "free"，向下兼容：true → "approval"，false → "free"。可通过 {@link #setHitlMode(String)} 或环境变量 AGENT4J_SUB_HITL 覆盖 */
+    /** 子代理 HITL 模式。默认 "free"，由父代理精确继承 free/approval/auto。 */
     private String hitlMode = "free";
     /** 子代理的 AgentLoop 引用（用于 HITL 暂停-恢复） */
-    private AgentLoop subLoop = null;
+    private volatile AgentLoop subLoop = null;
+    /** 在子循环创建前收到的取消信号。 */
+    private final AtomicBoolean abortRequested = new AtomicBoolean(false);
     /** 子代理唯一标识（由 SubAgentAgentOutput 分配，用于 HITL Broker 注册） */
     private int subAgentId = 0;
     /**
@@ -168,7 +171,7 @@ public class SubAgent {
 
     /**
      * 设置子代理 HITL 模式。
-     * <p>默认 "free"，保持向后兼容。可通过环境变量 AGENT4J_SUB_HITL 全局覆盖（接受 free/approval/auto 或 true/false）。</p>
+     * <p>默认 "free"，保持向后兼容；TaskTool 会传入父代理当前的完整模式。</p>
      *
      * @param mode "free" / "approval" / "auto"，向后兼容 "true"/"false"
      */
@@ -191,6 +194,17 @@ public class SubAgent {
     }
 
     /**
+     * 显式停止子代理。可在子循环创建前调用，创建后会中止模型流和活动工具。
+     */
+    public void abort() {
+        abortRequested.set(true);
+        AgentLoop loop = subLoop;
+        if (loop != null) {
+            loop.requestUserAbort();
+        }
+    }
+
+    /**
      * 运行子代理，返回最终回复。
      * 子代理拥有独立的 ConversationContext 和 AgentLoop，
      * 继承父级工具集（排除递归 spawn 和用户交互工具）。
@@ -200,21 +214,24 @@ public class SubAgent {
      * @return 子代理的最终回复文本
      */
     public String run(String task, AgentLoopListener listener) throws IOException {
+        if (abortRequested.get()) {
+            return "⏹️ 子代理已取消";
+        }
         ConversationContext ctx = new ConversationContext(
                 new PromptPrefix(systemPrompt, registry.toOpenAiTools()));
-        // 继承父级配置（config、sessionId、sessionService），确保子代理行为一致
-        // HITL 模式：默认 free，由 TaskTool 根据父代理同步；
-        // 也可通过环境变量 AGENT4J_SUB_HITL 强制覆盖（接受 free/approval/auto 或 true/false）。
-        String envHitl = System.getenv("AGENT4J_SUB_HITL");
-        String effectiveHitl = (envHitl != null && !envHitl.isEmpty()) ? envHitl : this.hitlMode;
+        // 继承父级配置（config、sessionId、sessionService）和父代理的完整 HITL 模式。
         Agent4jConfig effectiveConfig = (this.config != null) ? this.config : Agent4jConfig.getInstance();
-        this.subLoop = new AgentLoop(client, registry, ctx, effectiveHitl, effectiveConfig);
+        this.subLoop = new AgentLoop(client, registry, ctx, this.hitlMode, effectiveConfig);
         AgentLoop subLoop = this.subLoop;
 
-        // 传播父级中断源：子代理主循环会同时检查自身中断标志和父级的 isAbortRequested()
-        if (parentController != null) {
-            subLoop.setExternalAbortSource(parentController);
+        if (abortRequested.get()) {
+            subLoop.requestUserAbort();
+            return "⏹️ 子代理已取消";
         }
+
+        // 同时观察显式子代理取消和父级用户中断，覆盖 run() 启动前后的竞争窗口。
+        subLoop.setExternalAbortCheck(() -> abortRequested.get()
+                || (parentController != null && parentController.isAbortRequested()));
 
         // 将父代理的 AgentOutput 传递给子代理的推理循环，
         // 使用 SubAgentAgentOutput 包装器将所有事件以 sub_xxx 前缀独立通道发送，

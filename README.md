@@ -286,6 +286,7 @@ agent4j/
 | `maxContextChars` | int      | `200000`                    | 上下文上限                            |
 | `keepTailChars`   | int      | `80000`                     | 保留尾部预算                           |
 | `toolTimeoutSec`  | int      | `360`                       | 工具超时                             |
+| `subAgentTimeoutSec` | int   | `3600`                      | 子代理完整执行超时                       |
 | `disabledTools`   | string[] | `[]`                        | 禁用工具                             |
 | `blockedPaths`    | string[] | `[]`                        | 路径拦截                             |
 

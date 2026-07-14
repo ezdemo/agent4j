@@ -1,6 +1,8 @@
 package site.sorghum.agent4j.tool;
 
 import site.sorghum.agent4j.bin.session.SessionService;
+import site.sorghum.agent4j.bin.config.Agent4jConfig;
+import site.sorghum.agent4j.bin.model.ModelClient;
 
 /**
  * AgentLoop 控制接口 —— 工具通过此接口影响推理循环的控制流。
@@ -90,13 +92,42 @@ public interface AgentLoopController {
         return null;
     }
 
+    /** 获取当前循环使用的模型客户端，供子代理创建隔离副本。 */
+    default ModelClient getModelClient() {
+        return null;
+    }
+
+    /** 获取当前循环配置，供子代理继承超时等运行参数。 */
+    default Agent4jConfig getAgentConfig() {
+        return null;
+    }
+
+    /** 注册当前工具的显式取消动作。 */
+    default void registerToolCancellation(Runnable cancellation) {
+    }
+
+    /** 清除当前工具的显式取消动作。 */
+    default void clearToolCancellation() {
+    }
+
     /**
      * 获取当前 HITL 模式状态。
-     * <p>子代理通过此接口继承父代理的 HITL 开关状态。</p>
+     * <p>保留该布尔接口用于兼容只区分开启/关闭的调用方。</p>
      *
-     * @return true 表示 HITL 审批模式已开启
+     * @return true 表示 HITL 审批或自动模式已开启
      */
     default boolean isHitlMode() {
         return false;
+    }
+
+    /**
+     * 获取当前 HITL 的完整模式，供子代理精确继承父代理设置。
+     * <p>旧控制器若只实现了 {@link #isHitlMode()}，默认映射为
+     * {@code approval/free}，保持二态行为兼容。</p>
+     *
+     * @return {@code free}、{@code approval} 或 {@code auto}
+     */
+    default String getHitlMode() {
+        return isHitlMode() ? "approval" : "free";
     }
 }
