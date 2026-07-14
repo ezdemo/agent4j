@@ -832,30 +832,35 @@ const onSessionBranched = async (newSessionName) => {
 const loadWorkspaces = async () => {
   try {
     const r = await configAPI.listWorkspaces()
-    if (r.success) workspaces.value = applyWorkspaceOrder(r.data || [])
+    if (r.success) workspaces.value = await applyWorkspaceOrder(r.data || [])
   } catch (e) {
     console.error('加载工作区列表失败:', e)
   }
 }
 
-// 从 localStorage 恢复工作区排序
-const WORKSPACE_ORDER_KEY = 'agent4j_workspace_order'
-function applyWorkspaceOrder(list) {
+// 从服务端恢复工作区排序
+async function applyWorkspaceOrder(list) {
   if (!list || list.length === 0) return list
   try {
-    const saved = JSON.parse(localStorage.getItem(WORKSPACE_ORDER_KEY) || '[]')
-    if (!saved.length) return list
-    const map = new Map(list.map(w => [w.hash, w]))
-    const ordered = saved.filter(h => map.has(h)).map(h => map.get(h))
-    const rest = list.filter(w => !saved.includes(w.hash))
-    return [...ordered, ...rest]
-  } catch { return list }
+    const r = await configAPI.getWorkspaceOrder()
+    if (r.success && r.data && r.data.length) {
+      const map = new Map(list.map(w => [w.hash, w]))
+      const ordered = r.data.filter(h => map.has(h)).map(h => map.get(h))
+      const rest = list.filter(w => !r.data.includes(w.hash))
+      return [...ordered, ...rest]
+    }
+  } catch {}
+  return list
 }
 
-// 拖拽排序后保存顺序
-function handleReorderWorkspaces(newList) {
+// 拖拽排序后保存到服务端
+async function handleReorderWorkspaces(newList) {
   workspaces.value = newList
-  localStorage.setItem(WORKSPACE_ORDER_KEY, JSON.stringify(newList.map(w => w.hash)))
+  try {
+    await configAPI.saveWorkspaceOrder(newList.map(w => w.hash))
+  } catch (e) {
+    console.error('保存工作区排序失败:', e)
+  }
 }
 
 // 切换工作区（仅持久化上下文，不新建会话）
@@ -1434,7 +1439,7 @@ const runInFreshSession = async (cmd, opts = {}) => {
   const ws = wsRes.data.find(w => w.hash === wsHash)
   if (ws) {
     await configAPI.switchWorkspace(ws.path)
-    workspaces.value = applyWorkspaceOrder(wsRes.data)
+    workspaces.value = await applyWorkspaceOrder(wsRes.data)
   }
 
   // 3. 创建新会话
