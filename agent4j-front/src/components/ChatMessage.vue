@@ -334,13 +334,6 @@ onBeforeUnmount(() => {
   color: #fff;
 }
 
-.user-body .msg-time {
-  font-size: 10px;
-  opacity: 0.7;
-  margin-top: 4px;
-  text-align: left;
-}
-
 .assistant-body {
   background: var(--glass-bg-2);
   backdrop-filter: blur(var(--blur-sm));
@@ -362,9 +355,13 @@ onBeforeUnmount(() => {
   color: #fff;
 }
 
+.user-body .msg-time,
 .assistant-body .msg-time {
   font-size: 12px;
   color: var(--fg-3);
+  opacity: 1;
+  margin-top: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .msg-text {
@@ -525,8 +522,8 @@ onBeforeUnmount(() => {
   color: var(--fg-3);
 }
 
+.assistant-body .copy-msg-btn,
 .user-body .copy-msg-btn {
-  color: var(--fg-3);
   opacity: 0.5;
 }
 
@@ -534,26 +531,9 @@ onBeforeUnmount(() => {
   opacity: 0.8;
 }
 
-.assistant-body .copy-msg-btn {
-  opacity: 0.5;
-}
-
-.assistant-body:hover .copy-msg-btn {
-  opacity: 0.8;
-}
-
-.user-body:hover .copy-msg-btn {
-  opacity: 0.8;
-}
-
 .copy-msg-btn:hover {
   opacity: 1 !important;
   background: var(--glass-bg-2);
-}
-
-.user-body .copy-msg-btn:hover {
-  background: var(--bg-3);
-  color: var(--accent);
 }
 
 /* 用户消息展开/收起按钮 */
@@ -576,7 +556,7 @@ onBeforeUnmount(() => {
 
 /* 撤回按钮 */
 .rollback-btn {
-  opacity: 0;
+  opacity: 0.5;
   background: none;
   border: none;
   font-size: 12px;
@@ -586,7 +566,6 @@ onBeforeUnmount(() => {
   transition: opacity 0.2s, background 0.2s;
   line-height: 1;
   color: var(--fg-3);
-  margin-left: auto;
 }
 
 .rollback-btn.loading {
@@ -599,28 +578,13 @@ onBeforeUnmount(() => {
   opacity: 0.3;
 }
 
-.user-body .rollback-btn {
-  color: var(--fg-3);
-  opacity: 0.5;
-}
-
-.user-body:hover .rollback-btn {
+.msg-body:hover .rollback-btn {
   opacity: 0.8;
 }
 
-.msg-body:hover .rollback-btn {
-  opacity: 0.6;
-}
-
 .rollback-btn:hover {
-  opacity: 1;
-  background: rgba(231, 76, 60, 0.12);
-  color: var(--accent-5, #e74c3c);
-}
-
-.user-body .rollback-btn:hover {
-  background: var(--accent-bg);
-  color: var(--accent);
+  opacity: 1 !important;
+  background: var(--glass-bg-2);
 }
 
 /* 链接悬停浮层 */
