@@ -322,7 +322,7 @@
     </div>
 
     <!-- 桌面宠物精灵 -->
-    <PetSprite v-if="petSpritesheetUrl" class="pet-float"
+    <PetSprite v-if="petSpritesheetUrl && !welcomeMode" class="pet-float"
                :spritesheet-url="petSpritesheetUrl"
                :state="petState"
                :initial-x="petPosition.x" :initial-y="petPosition.y"

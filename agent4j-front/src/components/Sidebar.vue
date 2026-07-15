@@ -1,7 +1,7 @@
 <template>
   <aside class="sidebar" :class="{ collapsed: !sideOpen }">
     <div class="sidebar-shortcuts">
-      <button class="shortcut-row" @click="$emit('show-workspace-picker')">
+      <button class="shortcut-row" @click="$emit('new-chat')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
           <circle cx="12" cy="12" r="9"/>
           <path d="M12 8v8M8 12h8"/>
@@ -17,7 +17,7 @@
         <span>搜索</span>
         <kbd>Ctrl+K</kbd>
       </button>
-      <button class="shortcut-row" @click="$emit('show-tools')">
+      <button class="shortcut-row" @click="$emit('show-skill-market')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
           <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
         </svg>
@@ -37,9 +37,6 @@
 
     <div class="project-toolbar">
       <div class="project-tabs" aria-label="项目视图">
-        <button class="project-tab" type="button" title="分组视图">
-          <span>#</span> 分组
-        </button>
         <button class="project-tab active" type="button" title="项目视图">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/>
@@ -82,7 +79,7 @@
             @drop.prevent="onDrop($event, idx)"
             @dragend="onDragEnd"
       >
-        <div class="project-header" :class="{ active: p.workspace.hash === currentSessionWorkspace }" @click="toggleProject(p.workspace.hash)">
+        <div class="project-header" :class="{ active: p.workspace.hash === currentSessionWorkspace && !(currentSession && currentSessionWorkspace === p.workspace.hash) }" @click="toggleProject(p.workspace.hash)">
           <svg class="project-chevron" :class="{ open: expandedWorkspaces.has(p.workspace.hash) }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <polyline points="9 18 15 12 9 6"/>
           </svg>
@@ -122,10 +119,8 @@
             :class="{ active: s.name === currentSession && currentSessionWorkspace === p.workspace.hash }"
             @click="$emit('select-session', { workspaceHash: p.workspace.hash, sessionName: s.name })"
           >
-            <span class="session-dot" :class="{ on: s.name === currentSession && currentSessionWorkspace === p.workspace.hash }"></span>
             <div class="session-info">
               <div class="session-name">{{ s.title || formatName(s.name) }}</div>
-              <div class="session-meta"><span class="session-count">{{ s.messageCount || 0 }}条</span></div>
             </div>
             <div class="session-item-actions">
               <button class="btn-icon-sm session-refresh" title="刷新" @click.stop="$emit('refresh-session-chat', s.name)">
@@ -162,13 +157,11 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
       </button>
       <button class="foot-icon" title="切换主题" @click="$emit('toggle-theme')">
-        <!-- 浅色：月亮图标 -->
-        <svg v-if="theme === 'light'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+        <!-- 灰色：月亮图标 -->
+        <svg v-if="theme === 'gray'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         <!-- 深色：太阳图标 -->
         <svg v-else-if="theme === 'dark'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-        <!-- 浅绿：Material Design 风格图标 -->
-        <svg v-else-if="theme === 'retro'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-        <!-- 复古黄：书本图标 -->
+        <!-- 黄色：书本图标 -->
         <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
       </button>
       <button class="foot-icon" title="设置" @click="$emit('show-settings')">
@@ -185,7 +178,7 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref} from 'vue'
 
 const props = defineProps({
   sideOpen: { type: Boolean, default: true },
-  theme: { type: String, default: 'light' },
+  theme: { type: String, default: 'gray' },
   currentSession: { type: String, default: '' },
   currentSessionWorkspace: { type: String, default: null },
   workspaces: { type: Array, default: () => [] },
@@ -195,6 +188,7 @@ const props = defineProps({
 
 const emit = defineEmits([
   'update:sideOpen',
+  'new-chat',
   'show-workspace-picker',
   'refresh-sessions',
   'new-project-chat',
@@ -204,6 +198,7 @@ const emit = defineEmits([
   'refresh-session-chat',
   'delete-session',
   'toggle-theme',
+  'show-skill-market',
   'show-tools',
   'show-dashboard',
   'show-settings',
@@ -243,7 +238,7 @@ const handleShortcut = (event) => {
   }
   if (event.key.toLowerCase() === 'n') {
     event.preventDefault()
-    emit('show-workspace-picker')
+    emit('new-chat')
   }
 }
 
@@ -723,7 +718,7 @@ const formatName = (n) => {
 
 <style scoped>
 .sidebar {
-  width: 332px;
+  width: 260px;
   background: #f4f4f6;
   border-right: 1px solid #e2e2e6;
   box-shadow: none;
@@ -903,7 +898,7 @@ const formatName = (n) => {
 
 .session-item { gap: 7px; }
 .session-item:hover { background: #ececef; }
-.session-item.active { background: var(--accent-bg); }
+.session-item.active { background: #e8e8ea; }
 .session-name { font-size: 13px; }
 .sidebar-empty { padding: 28px 16px; }
 
@@ -956,12 +951,13 @@ const formatName = (n) => {
 
 [data-theme="dark"] .project-header:hover,
 [data-theme="dark"] .project-header.active,
-[data-theme="dark"] .session-item:hover {
+[data-theme="dark"] .session-item:hover,
+[data-theme="dark"] .session-item.active {
   background: #242424;
 }
 
 @media (max-width: 768px) {
-  .sidebar { left: -332px; }
+  .sidebar { left: -260px; }
 }
 </style>
 
