@@ -1245,6 +1245,29 @@ defineExpose({ loadStatus })
 }
 .git-empty svg { color: var(--green); }
 
+/* 与左侧栏保持相同的信息密度：13px 正文，12px 次级信息。 */
+.commit-select-all,
+.author-btn,
+.generate-btn,
+.git-section-header,
+.git-history-trigger,
+.git-history-modal-head small,
+.commit-hash {
+  font-size: 12px;
+}
+.commit-input,
+.commit-button,
+.git-file,
+.git-history-empty,
+.commit-message,
+.git-empty {
+  font-size: 13px;
+}
+.model-warning-bar { font-size: 11px; }
+.git-section-header { text-transform: none; letter-spacing: 0; }
+.commit-date,
+.commit-author { font-size: 11px; }
+
 [data-theme="dark"] .git-branch { background: #1d1d1f; border-color: #303033; }
 [data-theme="dark"] .commit-area { background: #242426; border-color: #363638; }
 [data-theme="dark"] .git-file:hover,
