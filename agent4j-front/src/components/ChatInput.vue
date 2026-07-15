@@ -1597,8 +1597,8 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize, closePickers})
 }
 
 .usage-composition-bar span { min-width: 0; }
-.usage-composition-bar .system, .usage-composition-dot.system { background: var(--accent); }
-.usage-composition-bar .tools, .usage-composition-dot.tools { background: var(--blue); }
+.usage-composition-bar .system, .usage-composition-dot.system { background: #566274; }
+.usage-composition-bar .tools, .usage-composition-dot.tools { background: #8b6048; }
 .usage-composition-bar .user, .usage-composition-dot.user { background: var(--green); }
 .usage-composition-bar .assistant, .usage-composition-dot.assistant { background: var(--yellow); }
 .usage-composition-bar .result, .usage-composition-dot.result { background: var(--red); }
