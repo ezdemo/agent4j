@@ -26,7 +26,7 @@
       :version="appVersion"
       :hasNewVersion="hasNewVersion || desktopHasNewVersion"
       @toggleSide="sideOpen = !sideOpen"
-      @openSettings="showSettings = true"
+      @openSettings="openSettings"
       @toggleGit="toggleRightPanel()"
       @toggleElement="toggleElementPanel()"
       @viewPrompt="viewSystemPrompt"
@@ -44,6 +44,7 @@
       :workspaces="workspaces"
       :workspaceSessions="workspaceSessions"
       :initialDataLoaded="initialDataLoaded"
+      @new-chat="createNewChat"
       @show-workspace-picker="showWorkspacePicker = true"
       @refresh-sessions="refreshSessionList"
       @new-project-chat="newProjectChat"
@@ -53,15 +54,18 @@
       @refresh-session-chat="refreshSessionChat"
       @delete-session="onSidebarDeleteSession"
       @toggle-theme="toggleTheme"
+      @show-skill-market="mainView = 'skills'"
       @show-tools="showTools = true"
       @show-dashboard="showDashboard = true"
-      @show-settings="showSettings = true"
+      @show-settings="openSettings"
       @reorder="handleReorderWorkspaces"
     />
 
     <!-- 主区域 -->
     <main class="main">
+      <SettingsView v-if="mainView === 'skills'" market-only />
       <ChatView 
+        v-else
         ref="chatRef" 
         hide-header 
         :workspace-hash="currentSessionWorkspace"
@@ -261,7 +265,7 @@
             <button class="btn-icon-sm" @click="showSettings = false">×</button>
           </div>
           <div class="modal-body">
-            <SettingsView @auto-update="handleAutoUpdate" @init-pet="handleInitPet" />
+            <SettingsView :initial-tab="settingsInitialTab" @auto-update="handleAutoUpdate" @init-pet="handleInitPet" />
           </div>
         </div>
       </div>
@@ -416,6 +420,11 @@ const { confirm } = useConfirm()
 // 主题：统一从 Pinia store 读写，确保设置页和主页一致
 const theme = computed({ get: () => store.settings.theme, set: (v) => { store.settings.theme = v } })
 const sideOpen = ref(true)
+const mainView = ref('chat')
+const SIDEBAR_AUTO_COLLAPSE_WIDTH = 1024
+const collapseSidebarForNarrowViewport = () => {
+  if (window.innerWidth < SIDEBAR_AUTO_COLLAPSE_WIDTH) sideOpen.value = false
+}
 const sessions = ref([])
 const currentSession = ref('')
 const status = ref({})
@@ -453,8 +462,17 @@ async function detectEnvironment() {
 }
 const showConfig = ref(false)
 const showSettings = ref(false)
+const settingsInitialTab = ref('general')
 const showDashboard = ref(false)
 const rightPanelOpen = ref(false)
+const openSettings = () => {
+  settingsInitialTab.value = 'general'
+  showSettings.value = true
+}
+const createNewChat = async () => {
+  mainView.value = 'chat'
+  await newChat()
+}
 const rightPanelTab = ref('git')
 const elementPanelOpen = ref(false)
 const elementPanelWidth = ref(360)
@@ -516,6 +534,8 @@ function onElementResizeEnd() {
 
 // 加载保存的元素面板宽度
 onMounted(() => {
+  collapseSidebarForNarrowViewport()
+  window.addEventListener('resize', collapseSidebarForNarrowViewport)
   try {
     const saved = localStorage.getItem('agent4j-element-panel-width')
     if (saved) {
@@ -650,7 +670,7 @@ const formatName = n => {
   return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}${n.slice(m.index + m[0].length)}` : n.replace(/[-_]+/g, ' ').slice(0, 24)
 }
 
-const themeOrder = ['light', 'dark', 'retro', 'retro-yellow']
+const themeOrder = ['gray', 'dark']
 const toggleTheme = () => {
   const idx = themeOrder.indexOf(store.settings.theme)
   store.settings.theme = themeOrder[(idx + 1) % themeOrder.length]
@@ -1087,6 +1107,7 @@ const handleProjectSessionAction = (action) => {
 
 // Sidebar 事件：选择会话
 const onSidebarSelectSession = ({ workspaceHash, sessionName }) => {
+  mainView.value = 'chat'
   loadProjectSession(workspaceHash, sessionName)
 }
 
@@ -1254,6 +1275,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   stopHeartbeat()
+  window.removeEventListener('resize', collapseSidebarForNarrowViewport)
   window.removeEventListener('agent4j:open-in-element', onOpenInElement)
 })
 

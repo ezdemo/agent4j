@@ -1,7 +1,7 @@
 <template>
-  <div class="settings-page">
+  <div class="settings-page" :class="{ 'market-only': marketOnly }">
     <!-- 左侧导航 -->
-    <nav class="settings-nav">
+    <nav v-if="!marketOnly" class="settings-nav">
       <div class="nav-header">
         <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
           <circle cx="12" cy="12" r="3"/>
@@ -29,7 +29,7 @@
     <!-- 主内容区 -->
     <main class="settings-main">
       <!-- 顶部操作栏 -->
-      <header class="settings-header">
+      <header v-if="!marketOnly" class="settings-header">
         <div class="header-title">
           <h2>{{ currentTab?.label || '设置' }}</h2>
           <p class="header-desc">{{ currentTab?.description }}</p>
@@ -1737,6 +1737,10 @@ import VersionInfoPanel from '../components/VersionInfoPanel.vue'
 import PetSprite from '../components/PetSprite.vue'
 
 const store = useAppStore()
+const props = defineProps({
+  initialTab: {type: String, default: 'general'},
+  marketOnly: {type: Boolean, default: false}
+})
 
 // 主题直接绑定 store
 const settings = reactive({
@@ -1779,7 +1783,7 @@ const setReasoningEffort = (index) => {
   settings.ai.reasoningEffort = reasoningEffortLevels[Number(index)]?.value || 'max'
 }
 
-const activeTab = ref('general')
+const activeTab = ref(props.marketOnly ? 'skill-market' : props.initialTab)
 const showApiKey = ref(false)
 const showVisionApiKey = ref(false)
 const loading = ref(false)
@@ -2266,14 +2270,6 @@ const tabs = computed(() => [
     description: '配置语言服务器用于代码智能分析',
     icon: `<svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`
   },
-  {
-    id: 'skill-market',
-    label: '技能市场',
-    description: '浏览、搜索和安装社区技能',
-    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-    </svg>`
-  },
   // Electron 桌面端专属设置（已合并到关于页面的 VersionInfoPanel 中）
   {
     id: 'about',
@@ -2312,10 +2308,8 @@ async function openDesktopDownload(url) {
 
 // 主题选项
 const themes = [
-  {value: 'light', label: '浅色'},
-  {value: 'dark', label: '深色'},
-  {value: 'retro', label: '浅绿'},
-  {value: 'retro-yellow', label: '复古黄'}
+  {value: 'gray', label: '灰色'},
+  {value: 'dark', label: '深色'}
 ]
 
 // 计算属性
@@ -2349,6 +2343,10 @@ watch(activeTab, async (tab) => {
   if (tab === 'prompt') {
     loadAgent4jMd()
   }
+}, {immediate: true})
+
+watch(() => props.initialTab, (tab) => {
+  activeTab.value = tab || 'general'
 })
 
 // 加载设置
@@ -3732,6 +3730,37 @@ const saveAgent4jMd = async () => {
   font-family: var(--sans);
 }
 
+.settings-page.market-only {
+  width: 100%;
+  height: 100%;
+}
+
+.market-only .settings-main {
+  min-width: 0;
+}
+
+.market-only .settings-content {
+  padding: 28px clamp(20px, 5vw, 72px);
+}
+
+.market-only .settings-section,
+.market-only .section-card {
+  width: 100%;
+  max-width: none;
+}
+
+.market-only .skill-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 1150px) {
+  .market-only .skill-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 /* 左侧导航 */
 .settings-nav {
   width: 220px;
@@ -4587,20 +4616,12 @@ const saveAgent4jMd = async () => {
   flex-shrink: 0;
 }
 
-.theme-preview.light {
-  background: linear-gradient(135deg, #ffffff 50%, #f3f4f6 50%);
+.theme-preview.gray {
+  background: linear-gradient(135deg, #fafafa 50%, #d4d4d8 50%);
 }
 
 .theme-preview.dark {
   background: linear-gradient(135deg, #0c0c0c 50%, #1f1f1f 50%);
-}
-
-.theme-preview.retro {
-  background: linear-gradient(135deg, #4CAF50 50%, #E8F5E9 50%);
-}
-
-.theme-preview.retro-yellow {
-  background: linear-gradient(135deg, #1a1a0a 50%, #2a2a1a 50%);
 }
 
 .theme-name {
@@ -4930,7 +4951,7 @@ const saveAgent4jMd = async () => {
   }
 
   .theme-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .input-group {

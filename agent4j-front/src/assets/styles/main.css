@@ -1,10 +1,10 @@
 /* Agent4j — 简洁工具风格 */
 :root {
-  /* 主色调 - 克制的蓝色 */
-  --blue: #2563eb;
-  --blue-light: #3b82f6;
-  --blue-dark: #1d4ed8;
-  --blue-bg: #eff6ff;
+  /* 主色调 - 中性灰 */
+  --blue: #52525b;
+  --blue-light: #71717a;
+  --blue-dark: #3f3f46;
+  --blue-bg: #f4f4f5;
 
   /* 中性色 */
   --gray-50: #f9fafb;
@@ -44,7 +44,7 @@
   --bg-muted: #f4f4f5;
   --bg-hover: #f0f0f1;
   --bg-active: #e8e8ea;
-  --accent: var(--blue);
+  --accent: #52525b;
   --accent-bg: var(--blue-bg);
 
   /* 毛玻璃 — 浅色模式：半透明但清晰可辨 */
@@ -158,9 +158,9 @@
   --bg-active: #2a2a2a;
   --border: #262626;
   --border-2: #333333;
-  --accent: #3b82f6;
-  --accent-bg: #172554;
-  --blue-bg: #172554;
+  --accent: #a1a1aa;
+  --accent-bg: #27272a;
+  --blue-bg: #27272a;
   --green-bg: #052e16;
   --yellow-bg: #422006;
   --red-bg: #450a0a;
@@ -561,6 +561,21 @@ textarea { resize: none; }
 [data-theme="retro-yellow"] .ant-btn-primary:hover {
   background: var(--blue-dark, var(--accent));
   border-color: var(--blue-dark, var(--accent));
+}
+[data-theme="dark"] .btn-primary {
+  background: #d4d4d8;
+  border-color: #d4d4d8;
+  color: #18181b;
+}
+[data-theme="dark"] .btn-primary:hover:not(:disabled) {
+  background: #f4f4f5;
+  border-color: #f4f4f5;
+}
+[data-theme="dark"] .btn-primary:disabled {
+  background: #303034;
+  border-color: #3f3f46;
+  color: #777780;
+  opacity: 1;
 }
 [data-theme="retro"] .ant-btn-primary:hover {
   color: #FFFFFF;

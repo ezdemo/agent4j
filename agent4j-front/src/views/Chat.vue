@@ -34,7 +34,7 @@
       <div v-if="!props.sessionName || messages.length === 0" class="empty welcome-screen">
         <div class="welcome-watermark" aria-hidden="true">A</div>
         <section class="welcome-panel">
-          <h1 class="welcome-heading">{{ welcomeGreeting }}，有什么想让我帮忙的吗</h1>
+          <h1 class="welcome-heading">{{ welcomeGreeting }}</h1>
           <div class="welcome-composer">
             <div class="welcome-workspace-row">
               <button class="welcome-workspace-button" type="button" @click="toggleWelcomeWorkspace">
@@ -159,6 +159,7 @@
     />
 
     <!-- 输入区（独立组件） -->
+    <Transition name="welcome-input-drop">
     <ChatInput v-if="props.sessionName && messages.length > 0"
         v-model:inputText="inputText"
         :streaming="streaming"
@@ -187,6 +188,7 @@
         @switchSkill="handleSwitchSkill"
         @switchPermission="handleSwitchPermission"
     />
+    </Transition>
 
     <ActionConfirmDialog
         :model-value="rollbackDialog.visible"
@@ -304,11 +306,20 @@ const welcomeSkillSelector = ref(null)
 
 const welcomeGreeting = computed(() => {
   const hour = new Date().getHours()
-  if (hour < 6) return '夜深了'
-  if (hour < 11) return '早上好'
-  if (hour < 14) return '中午好'
-  if (hour < 18) return '下午好'
-  return '晚上好'
+  const period = hour < 5 ? '凌晨好' : hour < 8 ? '早晨好' : hour < 12 ? '上午好' : hour < 14 ? '中午好' : hour < 18 ? '下午好' : hour < 22 ? '晚间好' : '深夜好'
+  const prompts = [
+    '有什么想让我帮忙的吗？',
+    '想先从哪件事开始？',
+    '今天准备推进什么？',
+    '有什么问题需要一起解决？',
+    '把接下来的任务交给我吧。',
+    '需要我帮你梳理一下思路吗？',
+    '想先查看项目的哪个部分？',
+    '有什么任务需要我协助完成？',
+    '准备好开始下一项工作了吗？',
+    '现在最想解决的问题是什么？'
+  ]
+  return `${period}，${prompts[Math.floor(Math.random() * prompts.length)]}`
 })
 
 const selectedWelcomeWorkspace = computed(() =>
@@ -2141,6 +2152,15 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 }
 
 .messages.messages-welcome { padding: 0; }
+
+.welcome-input-drop-enter-active {
+  transition: opacity 220ms ease-out, transform 420ms cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+
+.welcome-input-drop-enter-from {
+  opacity: 0.35;
+  transform: translateY(-180px);
+}
 
 </style>
 
