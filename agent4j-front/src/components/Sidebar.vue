@@ -1,7 +1,7 @@
 <template>
   <aside ref="sidebarRoot" class="sidebar" :class="{ collapsed: !sideOpen }">
     <div class="sidebar-shortcuts">
-      <button class="shortcut-row" @click="$emit('new-chat')">
+      <button class="shortcut-row shortcut-row-primary" @click="$emit('new-chat')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
           <circle cx="12" cy="12" r="9"/>
           <path d="M12 8v8M8 12h8"/>
@@ -76,14 +76,15 @@
             @dragover.prevent="onDragOver($event, idx)"
             @dragleave="onDragLeave"
             @drop.prevent="onDrop($event, idx)"
-            @dragend="onDragEnd"
+        @dragend="onDragEnd"
       >
         <div class="project-header" :class="{ active: p.workspace.hash === currentSessionWorkspace && !(currentSession && currentSessionWorkspace === p.workspace.hash) }" @click="toggleProject(p.workspace.hash)">
-          <svg class="project-chevron" :class="{ open: expandedWorkspaces.has(p.workspace.hash) }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="9 18 15 12 9 6"/>
+          <svg v-if="expandedWorkspaces.has(p.workspace.hash)" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="project-icon" aria-label="展开的项目">
+            <path d="M3.5 8.5A2.5 2.5 0 0 1 6 6h4.2l1.9 2h5.4A2.5 2.5 0 0 1 20 10.5v6A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/>
+            <path d="M3.5 10.5h17"/>
           </svg>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="project-icon">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          <svg v-else width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="project-icon" aria-label="折叠的项目">
+            <path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h4.2l1.9 2h5.4A2.5 2.5 0 0 1 20 9.5v7A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/>
           </svg>
           <div class="project-info">
             <div class="project-name">{{ p.workspace.name }}</div>
@@ -713,16 +714,17 @@ const formatName = (n) => {
 <style scoped>
 .sidebar {
   width: 260px;
-  background: #f4f4f6;
-  border-right: 1px solid #e2e2e6;
+  background: #f7f7f8;
+  border-right: 1px solid #dcdde1;
   box-shadow: none;
 }
 
 .sidebar-shortcuts {
   display: grid;
-  gap: 2px;
-  padding: 14px 12px 12px;
-  border-bottom: 1px solid #e2e2e6;
+  gap: 4px;
+  padding: 12px 10px;
+  border-bottom: 1px solid #dedfe3;
+  background: #fafafb;
 }
 
 .shortcut-row {
@@ -730,10 +732,10 @@ const formatName = (n) => {
   grid-template-columns: 22px minmax(0, 1fr) auto;
   align-items: center;
   gap: 8px;
-  min-height: 38px;
+  min-height: 36px;
   padding: 0 8px;
   border: 0;
-  border-radius: 5px;
+  border-radius: 6px;
   background: transparent;
   color: var(--fg-2);
   font: inherit;
@@ -745,7 +747,7 @@ const formatName = (n) => {
 
 .shortcut-row:hover,
 .shortcut-row:focus-visible {
-  background: var(--bg);
+  background: #eeeeF1;
   color: var(--fg);
   outline: none;
 }
@@ -754,6 +756,24 @@ const formatName = (n) => {
 .shortcut-row kbd {
   color: var(--fg-4);
   font: 12px var(--sans);
+}
+
+.shortcut-row-primary {
+  background: #e5e6e9;
+  box-shadow: inset 0 0 0 1px #d9dade;
+  color: #202127;
+  font-weight: 600;
+}
+
+.shortcut-row-primary svg,
+.shortcut-row-primary kbd {
+  color: #50525b;
+}
+
+.shortcut-row-primary:hover,
+.shortcut-row-primary:focus-visible {
+  background: #dcdee2;
+  color: #17181c;
 }
 
 .sidebar-search {
@@ -790,9 +810,10 @@ const formatName = (n) => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 44px;
+  min-height: 42px;
   padding: 0 12px;
-  border-bottom: 1px solid #e2e2e6;
+  border-bottom: 1px solid #dedfe3;
+  background: #f2f2f4;
 }
 
 .project-tabs,
@@ -812,9 +833,10 @@ const formatName = (n) => {
   border: 0;
   border-radius: 4px;
   background: transparent;
-  color: var(--fg-4);
+  color: var(--fg-3);
   font: inherit;
   font-size: 12px;
+  font-weight: 600;
   cursor: default;
 }
 
@@ -840,27 +862,29 @@ const formatName = (n) => {
 }
 
 .project-list {
-  padding: 8px 6px;
-  background: #f4f4f6;
+  padding: 8px;
+  background: #f7f7f8;
 }
 
 .project-item + .project-item { border-top: 0; }
+.project-item + .project-item { margin-top: 5px; }
 .project-header {
   gap: 7px;
-  min-height: 36px;
-  padding: 6px 8px 6px 10px;
+  min-height: 38px;
+  padding: 6px 7px 6px 9px;
   border-radius: 5px;
 }
 
-.project-header:hover { background: #ececef; }
+.project-header:hover { background: #eceef1; }
 .project-header.active {
-  background: #ececef;
+  background: #e7e8eb;
+  box-shadow: inset 0 0 0 1px #dddee2;
 }
 
 .project-header.active .project-name { color: var(--fg); }
 .project-chevron { display: none; }
-.project-icon { color: var(--fg-3); }
-.project-name { font-size: 14px; font-weight: 500; }
+.project-icon { color: #6b6f7c; }
+.project-name { font-size: 13px; font-weight: 600; }
 .project-meta-row { display: none; }
 
 .project-new,
@@ -870,32 +894,40 @@ const formatName = (n) => {
   height: 24px !important;
 }
 
-.project-sessions { padding-bottom: 4px; }
+.project-sessions {
+  margin: 1px 0 4px 18px;
+  padding: 2px 0 2px 5px;
+  border-left: 1px solid #dedfe3;
+}
 .project-empty {
-  padding: 8px 10px 9px 31px;
+  padding: 7px 8px;
   color: var(--fg-4);
   font-size: 13px;
 }
 
 .project-sessions .session-item {
-  padding: 6px 8px 6px 31px;
+  padding: 6px 7px;
   border-radius: 5px;
 }
 
 .session-item { gap: 7px; }
-.session-item:hover { background: #ececef; }
-.session-item.active { background: #e8e8ea; }
+.session-item:hover { background: #eceef1; }
+.session-item.active {
+  background: #e2e3e7;
+  box-shadow: inset 0 0 0 1px #d9dade;
+}
 .session-name { font-size: 13px; }
+.session-item.active .session-name { font-weight: 600; }
 .sidebar-empty { padding: 28px 16px; }
 
 .sidebar-foot {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 64px;
-  padding: 10px 14px;
-  border-top: 1px solid #e2e2e6;
-  background: #f4f4f6;
+  min-height: 58px;
+  padding: 9px 12px;
+  border-top: 1px solid #dedfe3;
+  background: #f2f2f4;
 }
 
 .sidebar-identity {
@@ -914,7 +946,8 @@ const formatName = (n) => {
   height: 30px;
   place-items: center;
   border-radius: 50%;
-  background: #202126;
+  background: #292b33;
+  box-shadow: 0 0 0 2px #e4e5e8;
   color: #fff;
   font-size: 10px;
   font-weight: 700;
@@ -933,6 +966,7 @@ const formatName = (n) => {
 [data-theme="dark"] .sidebar-shortcuts,
 [data-theme="dark"] .project-toolbar {
   border-color: #2c2c2c;
+  background: #1d1d1f;
 }
 
 [data-theme="dark"] .project-header:hover,
@@ -940,6 +974,21 @@ const formatName = (n) => {
 [data-theme="dark"] .session-item:hover,
 [data-theme="dark"] .session-item.active {
   background: #242424;
+}
+
+[data-theme="dark"] .shortcut-row-primary {
+  background: #2a2a2d;
+  box-shadow: inset 0 0 0 1px #38383b;
+  color: #f1f1f2;
+}
+
+[data-theme="dark"] .shortcut-row-primary svg,
+[data-theme="dark"] .shortcut-row-primary kbd {
+  color: #bdbec3;
+}
+
+[data-theme="dark"] .project-sessions {
+  border-color: #353536;
 }
 
 @media (max-width: 768px) {
