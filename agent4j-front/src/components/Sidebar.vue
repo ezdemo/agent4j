@@ -1,20 +1,52 @@
 <template>
   <aside class="sidebar" :class="{ collapsed: !sideOpen }">
-    <div class="sidebar-header">
-      <button class="new-task-btn" @click="$emit('show-workspace-picker')">+ 新建会话</button>
-
+    <div class="sidebar-shortcuts">
+      <button class="shortcut-row" @click="$emit('show-workspace-picker')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 8v8M8 12h8"/>
+        </svg>
+        <span>新建任务</span>
+        <kbd>Ctrl+N</kbd>
+      </button>
+      <button class="shortcut-row" @click="toggleSearch">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="11" cy="11" r="6"/>
+          <path d="m16 16 4 4"/>
+        </svg>
+        <span>搜索</span>
+        <kbd>Ctrl+K</kbd>
+      </button>
+      <button class="shortcut-row" @click="$emit('show-tools')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+        </svg>
+        <span>技能</span>
+      </button>
     </div>
 
-    <div class="sidebar-search">
+    <div v-if="searchOpen" class="sidebar-search">
       <div class="search-wrapper">
-        <i class="fas fa-search"></i>
-        <input class="search-input" v-model="searchQuery" placeholder="搜索会话..." />
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="6"/>
+          <path d="m16 16 4 4"/>
+        </svg>
+        <input ref="searchInput" class="search-input" v-model="searchQuery" placeholder="搜索会话..." @keydown.esc="closeSearch" />
       </div>
     </div>
 
-    <!-- 工作区选择器 -->
-    <div class="sidebar-section-title">
-      <span>项目</span>
+    <div class="project-toolbar">
+      <div class="project-tabs" aria-label="项目视图">
+        <button class="project-tab" type="button" title="分组视图">
+          <span>#</span> 分组
+        </button>
+        <button class="project-tab active" type="button" title="项目视图">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/>
+          </svg>
+          项目
+        </button>
+      </div>
       <div class="sidebar-section-actions">
         <button
           class="btn-icon-sm"
@@ -121,15 +153,15 @@
     </div>
 
     <div class="sidebar-foot">
-      <button class="foot-btn" @click="$emit('show-tools')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-        工具
-      </button>
-      <button class="foot-btn" @click="$emit('show-dashboard')">
+      <div class="sidebar-identity">
+        <div class="identity-avatar">A4</div>
+        <span>Agent4j</span>
+      </div>
+      <div class="sidebar-foot-actions">
+      <button class="foot-icon" title="数据面板" @click="$emit('show-dashboard')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
-        数据
       </button>
-      <button class="foot-btn" @click="$emit('toggle-theme')">
+      <button class="foot-icon" title="切换主题" @click="$emit('toggle-theme')">
         <!-- 浅色：月亮图标 -->
         <svg v-if="theme === 'light'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         <!-- 深色：太阳图标 -->
@@ -138,19 +170,18 @@
         <svg v-else-if="theme === 'retro'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
         <!-- 复古黄：书本图标 -->
         <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-        {{ { light: '浅色', dark: '深色', retro: '浅绿', 'retro-yellow': '复古黄' }[theme] }}
       </button>
-      <button class="foot-btn" @click="$emit('show-settings')">
+      <button class="foot-icon" title="设置" @click="$emit('show-settings')">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        设置
       </button>
+      </div>
     </div>
   </aside>
 
 </template>
 
 <script setup>
-import {computed, ref} from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, ref} from 'vue'
 
 const props = defineProps({
   sideOpen: { type: Boolean, default: true },
@@ -181,12 +212,43 @@ const emit = defineEmits([
 
 // 本地搜索状态
 const searchQuery = ref('')
+const searchOpen = ref(false)
+const searchInput = ref(null)
 const dragIndex = ref(null)
 const dragOverIndex = ref(null)
 
 // 本地展开/折叠状态
 const expandedWorkspaces = ref(new Set())
 const allProjectsExpanded = ref(true)
+
+const toggleSearch = async () => {
+  searchOpen.value = !searchOpen.value
+  if (searchOpen.value) {
+    await nextTick()
+    searchInput.value?.focus()
+  }
+}
+
+const closeSearch = () => {
+  searchOpen.value = false
+  searchQuery.value = ''
+}
+
+const handleShortcut = (event) => {
+  if (!event.ctrlKey && !event.metaKey) return
+  if (event.key.toLowerCase() === 'k') {
+    event.preventDefault()
+    if (!searchOpen.value) toggleSearch()
+    else searchInput.value?.focus()
+  }
+  if (event.key.toLowerCase() === 'n') {
+    event.preventDefault()
+    emit('show-workspace-picker')
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', handleShortcut))
+onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut))
 
 // 根据 props + searchQuery 计算项目列表
 const projectsData = computed(() => {
@@ -657,6 +719,250 @@ const formatName = (n) => {
 }
 
 
+</style>
+
+<style scoped>
+.sidebar {
+  width: 332px;
+  background: #f4f4f6;
+  border-right: 1px solid #e2e2e6;
+  box-shadow: none;
+}
+
+.sidebar-shortcuts {
+  display: grid;
+  gap: 2px;
+  padding: 14px 12px 12px;
+  border-bottom: 1px solid #e2e2e6;
+}
+
+.shortcut-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t), color var(--t);
+}
+
+.shortcut-row:hover,
+.shortcut-row:focus-visible {
+  background: var(--bg);
+  color: var(--fg);
+  outline: none;
+}
+
+.shortcut-row svg { color: var(--fg-3); }
+.shortcut-row kbd {
+  color: var(--fg-4);
+  font: 12px var(--sans);
+}
+
+.sidebar-search {
+  padding: 10px 12px 4px;
+}
+
+.search-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg-4);
+}
+
+.search-wrapper i { display: none; }
+.search-wrapper > svg { flex: 0 0 auto; }
+.search-input {
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.search-input:focus {
+  background: transparent;
+  border: 0;
+}
+
+.project-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 12px;
+  border-bottom: 1px solid #e2e2e6;
+}
+
+.project-tabs,
+.sidebar-section-actions,
+.sidebar-foot-actions {
+  display: flex;
+  align-items: center;
+}
+
+.project-tabs { gap: 3px; }
+.project-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 27px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-4);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.project-tab.active {
+  background: var(--bg);
+  color: var(--fg-2);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+
+.sidebar-section-actions { gap: 1px; }
+.sidebar .btn-icon-sm,
+.foot-icon {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-4);
+  cursor: pointer;
+  transition: background var(--t), color var(--t);
+}
+
+.sidebar .btn-icon-sm:hover,
+.foot-icon:hover {
+  background: var(--bg);
+  color: var(--fg-2);
+}
+
+.project-list {
+  padding: 8px 6px;
+  background: #f4f4f6;
+}
+
+.project-item + .project-item { border-top: 0; }
+.project-header {
+  gap: 7px;
+  min-height: 36px;
+  padding: 6px 8px;
+  border-left: 2px solid transparent;
+  border-radius: 5px;
+}
+
+.project-header:hover { background: #ececef; }
+.project-header.active {
+  border-left-color: var(--accent);
+  background: #ececef;
+}
+
+.project-header.active .project-name { color: var(--fg); }
+.project-chevron { display: none; }
+.project-icon { color: var(--fg-3); }
+.project-name { font-size: 14px; font-weight: 500; }
+.project-meta-row { display: none; }
+
+.project-new,
+.project-refresh,
+.project-clear {
+  width: 24px !important;
+  height: 24px !important;
+}
+
+.project-sessions { padding-bottom: 4px; }
+.project-empty {
+  padding: 8px 10px 9px 31px;
+  color: var(--fg-4);
+  font-size: 13px;
+}
+
+.project-sessions .session-item {
+  padding: 6px 8px 6px 31px;
+  border-radius: 5px;
+}
+
+.session-item { gap: 7px; }
+.session-item:hover { background: #ececef; }
+.session-item.active { background: var(--accent-bg); }
+.session-name { font-size: 13px; }
+.sidebar-empty { padding: 28px 16px; }
+
+.sidebar-foot {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 64px;
+  padding: 10px 14px;
+  border-top: 1px solid #e2e2e6;
+  background: #f4f4f6;
+}
+
+.sidebar-identity {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  color: var(--fg-2);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.identity-avatar {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: 50%;
+  background: #202126;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0;
+}
+
+.sidebar-foot-actions { gap: 2px; }
+
+[data-theme="dark"] .sidebar,
+[data-theme="dark"] .project-list,
+[data-theme="dark"] .sidebar-foot {
+  background: #171717;
+  border-color: #2c2c2c;
+}
+
+[data-theme="dark"] .sidebar-shortcuts,
+[data-theme="dark"] .project-toolbar {
+  border-color: #2c2c2c;
+}
+
+[data-theme="dark"] .project-header:hover,
+[data-theme="dark"] .project-header.active,
+[data-theme="dark"] .session-item:hover {
+  background: #242424;
+}
+
+@media (max-width: 768px) {
+  .sidebar { left: -332px; }
+}
 </style>
 
 

@@ -1,5 +1,5 @@
 <template>
-  <div class="input-area">
+  <div class="input-area" :class="{ 'welcome-mode': welcomeMode }">
     <!-- 斜杠命令弹窗 -->
     <Transition name="slash-popup">
       <div v-if="slashPopupOpen" class="slash-popup">
@@ -353,7 +353,8 @@ const props = defineProps({
   version: {type: String, default: ''},
   currentSkill: {type: Object, default: null},
   currentPermission: {type: String, default: 'free'},
-  petState: {type: String, default: 'idle'}
+  petState: {type: String, default: 'idle'},
+  welcomeMode: {type: Boolean, default: false}
 })
 
 const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission'])
@@ -2144,6 +2145,15 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   color: var(--accent);
   font-weight: 700;
   text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.input-area.welcome-mode {
+  position: relative;
+  padding: 0;
+}
+
+.input-area.welcome-mode .input-box {
+  width: 100%;
 }
 
 .chat-reasoning-end-toggle {
