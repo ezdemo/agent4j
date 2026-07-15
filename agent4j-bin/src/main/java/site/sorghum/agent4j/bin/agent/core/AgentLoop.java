@@ -21,7 +21,7 @@ import site.sorghum.agent4j.bin.agent.output.ConsoleAgentOutput;
 import site.sorghum.agent4j.bin.agent.resilient.ReasonBreaker;
 import site.sorghum.agent4j.bin.agent.resilient.Scavenger;
 import site.sorghum.agent4j.bin.agent.resilient.StormBreaker;
-import site.sorghum.agent4j.bin.builtin.TaskTool;
+import site.sorghum.agent4j.bin.builtin.SubAgentTool;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.model.UserMessageSanitizer;
@@ -458,13 +458,13 @@ public class AgentLoop implements AgentLoopController {
                 
                 ---
                 
-                ### task — 创建子代理
-                子代理有独立上下文，继承父工具集（排除 task/ask_choice/finish），不可递归创建。
+                ### sub_agent — 创建预设角色子代理
+                子代理有独立上下文，不可递归创建。explore/review/plan 仅可使用只读工具。
                 | 参数 | 必填 | 说明 |
                 |------|------|------|
-                | name | 是 | 任务名称 |
-                | arguments | 否 | 任务详情/初始指令 |
-                | systemPrompt | 否 | 系统提示词覆盖，为空自动生成 |
+                | profile | 是 | explore / implement / test / review / plan |
+                | task | 是 | 具体任务 |
+                | instructions | 否 | 补充要求，不能覆盖角色约束 |
                 
                 ---
                 
@@ -1260,7 +1260,7 @@ public class AgentLoop implements AgentLoopController {
                 }
 
                 if (capturedOutput != null) {
-                    TaskTool.setCurrentOutput(capturedOutput);
+                    SubAgentTool.setCurrentOutput(capturedOutput);
                 }
                 currentToolControl.set(control);
                 try {
@@ -1317,7 +1317,7 @@ public class AgentLoop implements AgentLoopController {
                 } finally {
                     currentToolControl.remove();
                     ToolContext.clearCurrentController();
-                    TaskTool.clearCurrentOutput();
+                    SubAgentTool.clearCurrentOutput();
                 }
             });
         }
@@ -1408,7 +1408,7 @@ public class AgentLoop implements AgentLoopController {
     }
 
     private static boolean isSubAgentCall(ONode toolCall) {
-        return "task".equals(toolName(toolCall));
+        return "sub_agent".equals(toolName(toolCall));
     }
 
     private static String toolName(ONode toolCall) {

@@ -174,6 +174,7 @@ Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）** �
 - **继承工具**：复制父代理的工具集，排除递归 spawn
 - **独立通道**：子代理输出通过独立事件流推送
 - **用量统计**：按模型统计 token 消耗
+- **预设角色**：`explore`、`implement`、`test`、`review`、`plan`；探索、审查和方案角色只能使用只读工具
 
 ### 👤 人工审批（HITL）
 
@@ -323,7 +324,7 @@ agent4j/
 | `glob` / `grep` / `ls`                                                      | 搜索文件与内容    |
 | `bash`                                                                      | 跑命令        |
 | `bash_start` / `bash_wait` / `bash_stdin` / `bash_stop`                     | 交互式命令会话    |
-| `task` / `multi_task`                                                       | 派生子代理      |
+| `sub_agent`                                                                 | 派生预设角色子代理 |
 | `workspace_read` / `workspace_write` / `workspace_list` | 工作区操作      |
 | `webfetch`                                                                  | 抓网页        |
 | `codesearch`                                                                | 搜索代码       |
