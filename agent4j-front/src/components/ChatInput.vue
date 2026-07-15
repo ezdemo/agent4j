@@ -357,7 +357,7 @@ const props = defineProps({
   welcomeMode: {type: Boolean, default: false}
 })
 
-const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission'])
+const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission', 'pickerOpen'])
 
 const inputField = ref(null)
 const inputFocused = ref(false)
@@ -575,8 +575,11 @@ const autoResize = () => {
 // ============= 模型切换 =============
 const showModelPicker = ref(false)
 const toggleModelPicker = () => {
-  showModelPicker.value = !showModelPicker.value
-  if (showModelPicker.value) {
+  const nextOpen = !showModelPicker.value
+  if (nextOpen) closePickers('model')
+  showModelPicker.value = nextOpen
+  if (nextOpen) {
+    emit('pickerOpen', 'model')
     emit('refreshModels')
   }
 }
@@ -609,8 +612,11 @@ const filteredSkills = computed(() => {
 const isSkillSelected = (skill) => selectedSkills.value.some(s => s.name === skill.name)
 
 const toggleSkillPicker = async () => {
-  showSkillPicker.value = !showSkillPicker.value
-  if (showSkillPicker.value && availableSkills.value.length === 0 && !skillLoading.value) {
+  const nextOpen = !showSkillPicker.value
+  if (nextOpen) closePickers('skill')
+  showSkillPicker.value = nextOpen
+  if (nextOpen) emit('pickerOpen', 'skill')
+  if (nextOpen && availableSkills.value.length === 0 && !skillLoading.value) {
     skillLoading.value = true
     try {
       const r = await agentAPI.getSkills()
@@ -618,7 +624,7 @@ const toggleSkillPicker = async () => {
     } catch {}
     skillLoading.value = false
   }
-  if (showSkillPicker.value) {
+  if (nextOpen) {
     skillSearchQuery.value = ''
     nextTick(() => skillSearchInput.value?.focus())
   }
@@ -692,7 +698,10 @@ const permissionLabel = computed(() => {
   return found ? found.label : props.currentPermission
 })
 const togglePermissionPicker = () => {
-  showPermissionPicker.value = !showPermissionPicker.value
+  const nextOpen = !showPermissionPicker.value
+  if (nextOpen) closePickers('permission')
+  showPermissionPicker.value = nextOpen
+  if (nextOpen) emit('pickerOpen', 'permission')
 }
 const pickPermission = (level) => {
   emit('switchPermission', level)
@@ -709,6 +718,13 @@ const handleOutside = (e) => {
 
 // ============= 推理强度切换 =============
 const showEffortPicker = ref(false)
+const closePickers = (except = '') => {
+  if (except !== 'model') showModelPicker.value = false
+  if (except !== 'skill') showSkillPicker.value = false
+  if (except !== 'permission') showPermissionPicker.value = false
+  if (except !== 'effort') showEffortPicker.value = false
+  showContextComposition.value = false
+}
 const effortOptions = [
   {value: 'none', label: '无', description: '直接响应'},
   {value: 'low', label: '低', description: '快速响应'},
@@ -739,7 +755,10 @@ const commitReasoningEffort = (index) => {
 }
 const selectReasoningEffort = (index) => commitReasoningEffort(index)
 const toggleEffortPicker = () => {
-  showEffortPicker.value = !showEffortPicker.value
+  const nextOpen = !showEffortPicker.value
+  if (nextOpen) closePickers('effort')
+  showEffortPicker.value = nextOpen
+  if (nextOpen) emit('pickerOpen', 'effort')
 }
 
 // ============= Usage =============
@@ -842,7 +861,7 @@ async function savePetSize(idx) {
 }
 
 // 暴露焦點方法给父组件
-defineExpose({focus: () => inputField.value?.focus(), autoResize})
+defineExpose({focus: () => inputField.value?.focus(), autoResize, closePickers})
 </script>
 
 <style scoped>
@@ -1631,7 +1650,7 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
   border-radius: var(--r);
   box-shadow: var(--shadow);
-  z-index: 100;
+  z-index: 200;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1698,12 +1717,16 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
 
 .skill-panel-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 54px;
   gap: 10px;
   padding: 8px 10px;
+  box-sizing: border-box;
   border-radius: var(--r-sm);
   cursor: pointer;
   border: 1px solid transparent;
+  text-align: left;
   transition: background var(--t), border-color var(--t), transform var(--t);
 }
 
@@ -1719,23 +1742,32 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
 }
 
 .skill-item-info {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   flex: 1;
   min-width: 0;
+  text-align: left;
 }
 
 .skill-item-name {
+  display: block;
   font-size: 13px;
   font-weight: 600;
   color: var(--fg);
+  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .skill-item-desc {
+  display: block;
   font-size: 11px;
   color: var(--fg-4);
   margin-top: 1px;
+  line-height: 1.35;
+  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -2150,10 +2182,17 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
 .input-area.welcome-mode {
   position: relative;
   padding: 0;
+  z-index: 30;
+  overflow: visible;
 }
 
 .input-area.welcome-mode .input-box {
   width: 100%;
+  overflow: visible;
+}
+
+.input-area.welcome-mode .skill-selector {
+  z-index: 120;
 }
 
 .chat-reasoning-end-toggle {

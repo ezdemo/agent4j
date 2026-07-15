@@ -12,12 +12,17 @@ import site.sorghum.agent4j.web.market.MarketDetail;
 import site.sorghum.agent4j.web.market.MarketItem;
 import site.sorghum.agent4j.web.market.MarketManager;
 import site.sorghum.agent4j.web.model.ApiResponse;
+import site.sorghum.agent4j.tool.solon.common.Agent4JSkillProvider;
 
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.Comparator;
 import java.util.List;
+import java.util.stream.Stream;
 
 /**
  * 技能市场 API 控制器 — 提供技能市场的浏览、搜索和安装能力。
@@ -93,10 +98,11 @@ public class SkillMarketController {
 
         Market market = marketManager.getMarketByName(marketName);
 
-        // 确定安装目标目录：使用 ~/.claude/skills（与 PoolManager 注册的 @skill 路径一致）
+        // 与 Agent 技能池使用同一个唯一目录。
         Path skillsDir = getSkillsInstallDir();
 
         String displayName = market.install(slug, skillsDir);
+        Agent4JSkillProvider.refreshAllSkillPools();
 
         log.info("技能安装成功: {} ({})", displayName, slug);
         return ApiResponse.ok(displayName);
@@ -117,21 +123,14 @@ public class SkillMarketController {
         }
 
         Path skillsDir = getSkillsInstallDir();
-        Path targetDir = skillsDir.resolve(slug);
+        Path targetDir = findSkillDirectory(skillsDir, slug);
 
-        if (!Files.exists(targetDir)) {
-            // 也尝试其它可能的技能目录
-            Path altDir = Paths.get(
-                    System.getProperty("user.home"),
-                    ".agent4j", "skills", slug);
-            if (Files.exists(altDir)) {
-                targetDir = altDir;
-            } else {
-                return ApiResponse.fail("技能未找到: " + slug);
-            }
+        if (targetDir == null) {
+            return ApiResponse.fail("技能未找到: " + slug);
         }
 
         deleteDirectory(targetDir);
+        Agent4JSkillProvider.refreshAllSkillPools();
         log.info("技能卸载成功: {}", slug);
         return ApiResponse.ok(null);
     }
@@ -150,24 +149,61 @@ public class SkillMarketController {
                 });
     }
 
-    /**
-     * 获取技能安装目录。
-     * 优先使用 ~/.agent4j/skills，否则使用 ~/.claude/skills。
-     */
+    /** 获取 Agent4j 唯一的技能安装目录。 */
     private Path getSkillsInstallDir() {
-        // 尝试 ~/.agent4j/skills
-        Path agent4jSkills = Paths.get(System.getProperty("user.home"), ".agent4j", "skills");
-        if (Files.exists(agent4jSkills)) {
-            return agent4jSkills;
+        return Paths.get(System.getProperty("user.home"), ".agent4j", "skills");
+    }
+
+    /**
+     * 市场技能通常以 slug 作为目录名；对于手动安装或第三方工具保留作者前缀的情况，
+     * 再根据 SKILL.md frontmatter 中的 name 定位实际目录。
+     */
+    private Path findSkillDirectory(Path skillsDir, String slug) {
+        Path directDir = skillsDir.resolve(slug);
+        if (Files.isDirectory(directDir)) {
+            return directDir;
+        }
+        if (!Files.isDirectory(skillsDir)) {
+            return null;
         }
 
-        // 尝试 ~/.claude/skills（与 PoolManager 默认注册的 @skill 路径一致）
-        Path claudeSkills = Paths.get(System.getProperty("user.home"), ".claude", "skills");
-        if (Files.exists(claudeSkills)) {
-            return claudeSkills;
+        try (Stream<Path> entries = Files.list(skillsDir)) {
+            return entries
+                    .filter(Files::isDirectory)
+                    .filter(dir -> hasSkillName(dir, slug))
+                    .findFirst()
+                    .orElse(null);
+        } catch (IOException e) {
+            log.warn("扫描技能目录失败: {}", skillsDir, e);
+            return null;
+        }
+    }
+
+    private boolean hasSkillName(Path skillDir, String slug) {
+        Path skillFile = skillDir.resolve("SKILL.md");
+        if (!Files.isRegularFile(skillFile)) {
+            return false;
         }
 
-        // 默认使用 ~/.claude/skills
-        return claudeSkills;
+        try (BufferedReader reader = Files.newBufferedReader(skillFile, StandardCharsets.UTF_8)) {
+            if (!"---".equals(reader.readLine())) {
+                return false;
+            }
+
+            String line;
+            while ((line = reader.readLine()) != null && !"---".equals(line)) {
+                if (line.startsWith("name:")) {
+                    String name = line.substring("name:".length()).trim();
+                    if (name.length() > 1 && ((name.startsWith("\"") && name.endsWith("\""))
+                            || (name.startsWith("'") && name.endsWith("'")))) {
+                        name = name.substring(1, name.length() - 1);
+                    }
+                    return slug.equals(name);
+                }
+            }
+        } catch (IOException e) {
+            log.debug("读取技能定义失败: {}", skillFile, e);
+        }
+        return false;
     }
 }
