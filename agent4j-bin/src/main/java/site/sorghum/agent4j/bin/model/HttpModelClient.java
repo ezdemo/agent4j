@@ -309,6 +309,11 @@ public class HttpModelClient implements ModelClient {
     }
 
     @Override
+    public void resetStreamAbort() {
+        abortRequested.set(false);
+    }
+
+    @Override
     public ModelClient fork() {
         return new HttpModelClient(apiUrl, apiKey, model, reasoningEffort);
     }
@@ -558,13 +563,13 @@ public class HttpModelClient implements ModelClient {
         String line;
         while ((line = reader.readLine()) != null) {
             if (abortRequested.compareAndSet(true, false)) {
-                log.debug("流式请求被 ReasonBreaker 中断");
+                log.info("流式请求被 ReasonBreaker 中断");
                 break;
             }
             if (!line.startsWith("data: ")) continue;
             String data = line.substring(6).trim();
             if ("[DONE]".equals(data)) {
-                log.debug("收到SSE流结束标记");
+                log.info("收到SSE流结束标记");
                 break;
             }
             if (data.trim().startsWith("{\"error\":")) {
