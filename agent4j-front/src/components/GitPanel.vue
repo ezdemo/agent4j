@@ -53,12 +53,17 @@
       <template v-else>
         <!-- 分支信息 -->
         <div class="git-branch">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
-          <span class="branch-name">{{ branchName }}</span>
-          <span class="change-count" v-if="hasChanges">{{ changedCount + untrackedCount }}</span>
+          <div class="branch-info">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="6" y1="3" x2="6" y2="15"/><circle cx="18" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M18 9a9 9 0 0 1-9 9"/></svg>
+            <div>
+              <span class="branch-label">当前分支</span>
+              <span class="branch-name">{{ branchName }}</span>
+            </div>
+          </div>
+          <span class="change-count" v-if="hasChanges">{{ changedCount + untrackedCount }} 待提交</span>
         </div>
 
-        <!-- 可滚动主体区 -->
+        <!-- 固定提交区 + 独立滚动的变更文件区 -->
         <div class="git-body">
           <!-- 提交区域 -->
           <div class="commit-area" v-if="hasChanges">
@@ -164,32 +169,41 @@
           </div>
         </div>
 
-        <!-- 提交历史 -->
-        <div class="git-history">
-          <div class="git-section-header history" @click="showCommitHistory = !showCommitHistory">
-            <div class="section-left">
-              <svg class="chevron" :class="{ open: showCommitHistory }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
-              <span>历史提交</span>
-            </div>
-            <span class="section-count" v-if="commits.length">{{ commits.length }}</span>
-          </div>
-          <template v-if="showCommitHistory">
-            <div v-if="historyLoading" class="git-history-loading">
-              <div class="loading-spinner"></div>
-            </div>
-            <div v-else-if="commits.length === 0" class="git-history-empty">暂无提交记录</div>
-            <div v-else class="git-commit-list">
-              <div v-for="c in commits" :key="c.hash" class="git-commit-item">
-                <div class="commit-top">
-                  <code class="commit-hash" :title="c.hash">{{ c.shortHash }}</code>
-                  <span class="commit-date" :title="c.date">{{ fmtRelative(c.date) }}</span>
+        <button class="git-history-trigger" type="button" @click="openCommitHistory">
+          <span>
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 12a9 9 0 1 0 3-6.7"/><path d="M3 4v5h5"/><path d="M12 7v5l3 2"/></svg>
+            历史提交
+          </span>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+        </button>
+
+        <Teleport to="body">
+          <div v-if="showCommitHistory" class="diff-overlay git-history-overlay" @click.self="showCommitHistory = false">
+            <section class="git-history-modal" role="dialog" aria-modal="true" aria-label="历史提交">
+              <header class="git-history-modal-head">
+                <div>
+                  <span>历史提交</span>
+                  <small>最近 {{ commits.length }} 条</small>
                 </div>
-                <div class="commit-message">{{ c.message }}</div>
-                <div class="commit-author">{{ c.author }}</div>
+                <button class="btn-icon-sm" type="button" title="关闭" @click="showCommitHistory = false">
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+                </button>
+              </header>
+              <div v-if="historyLoading" class="git-history-loading"><div class="loading-spinner"></div></div>
+              <div v-else-if="commits.length === 0" class="git-history-empty">暂无提交记录</div>
+              <div v-else class="git-commit-list">
+                <div v-for="c in commits" :key="c.hash" class="git-commit-item">
+                  <div class="commit-top">
+                    <code class="commit-hash" :title="c.hash">{{ c.shortHash }}</code>
+                    <span class="commit-date" :title="c.date">{{ fmtRelative(c.date) }}</span>
+                  </div>
+                  <div class="commit-message">{{ c.message }}</div>
+                  <div class="commit-author">{{ c.author }}</div>
+                </div>
               </div>
-            </div>
-          </template>
-        </div>
+            </section>
+          </div>
+        </Teleport>
 
         <!-- Diff 预览弹层（复用 DiffViewer 组件） -->
         <DiffViewer
@@ -264,7 +278,7 @@ const untrackedFiles = ref([])
 // 折叠控制
 const showChanged = ref(true)
 const showUntracked = ref(false)
-const showCommitHistory = ref(true)
+const showCommitHistory = ref(false)
 
 // 提交历史
 const commits = ref([])
@@ -432,8 +446,6 @@ const loadStatus = async () => {
       untrackedFiles.value = d.untracked || []
       // 从状态中读取配置的模型
       if (d.model) commitModel.value = d.model
-      // 仓库初始化后加载提交历史
-      if (initialized.value) await loadCommitHistory()
     } else {
       // 回退到 diff 接口
       await loadDiffFallback()
@@ -477,6 +489,11 @@ const loadCommitHistory = async () => {
   } finally {
     historyLoading.value = false
   }
+}
+
+const openCommitHistory = async () => {
+  showCommitHistory.value = true
+  await loadCommitHistory()
 }
 
 const fmtRelative = (dateStr) => {
@@ -621,10 +638,8 @@ defineExpose({ loadStatus })
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: var(--glass-bg-2);
-  backdrop-filter: blur(var(--blur));
-  -webkit-backdrop-filter: blur(var(--blur));
-  border-left: 1px solid var(--glass-border);
+  background: transparent;
+  border-left: 0;
   overflow: hidden;
 }
 
@@ -661,7 +676,7 @@ defineExpose({ loadStatus })
 
 /* 加载 */
 .git-loading { display: flex; align-items: center; justify-content: center; padding: 24px; }
-.git-error { padding: 12px; font-size: 12px; color: var(--red); text-align: center; }
+.git-error { padding: 12px; font-size: 13px; color: var(--red); text-align: center; }
 
 /* 三态 */
 .git-state-unavailable,
@@ -674,17 +689,17 @@ defineExpose({ loadStatus })
   text-align: center;
 }
 .git-state-unavailable svg { color: var(--fg-4); }
-.git-state-unavailable p { font-size: 13px; color: var(--fg-3); margin: 0; }
-.git-state-unavailable .hint { font-size: 11px; color: var(--fg-4); }
+.git-state-unavailable p { font-size: 14px; color: var(--fg-3); margin: 0; }
+.git-state-unavailable .hint { font-size: 12px; color: var(--fg-4); }
 
 .git-state-uninit svg { color: var(--accent); }
-.git-state-uninit p { font-size: 13px; color: var(--fg-2); margin: 0; }
+.git-state-uninit p { font-size: 14px; color: var(--fg-2); margin: 0; }
 
 .init-checkbox {
   display: flex;
   align-items: center;
   gap: 6px;
-  font-size: 12px;
+  font-size: 13px;
   color: var(--fg-3);
   cursor: pointer;
 }
@@ -697,7 +712,7 @@ defineExpose({ loadStatus })
   border-radius: 6px;
   background: var(--accent);
   color: #fff;
-  font-size: 13px;
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
   transition: opacity var(--t);
@@ -709,31 +724,41 @@ defineExpose({ loadStatus })
 .git-branch {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 8px 12px;
-  border-bottom: 1px solid var(--border);
-  font-size: 12px;
+  justify-content: space-between;
+  padding: 10px 12px;
+  border-bottom: 1px solid #dedfe3;
+  background: #fafafb;
+  font-size: 13px;
 }
-.git-branch svg { color: var(--fg-4); flex-shrink: 0; }
-.branch-name { font-weight: 600; font-family: var(--mono); color: var(--accent); }
+
+.branch-info { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.git-branch svg { color: #697181; flex-shrink: 0; }
+.branch-info > div { display: grid; gap: 1px; }
+.branch-label { color: var(--fg-4); font-size: 12px; line-height: 1; }
+.branch-name { font-weight: 700; font-family: var(--mono); color: var(--fg-2); }
 .change-count {
-  margin-left: auto;
-  background: var(--accent-bg);
-  color: var(--accent);
-  font-size: 10px;
+  background: #e3e5e8;
+  color: #4d5562;
+  font-size: 12px;
   font-weight: 600;
-  padding: 1px 6px;
-  border-radius: 8px;
+  padding: 3px 6px;
+  border-radius: 4px;
 }
 
 /* 提交区域 */
-.commit-area { padding: 8px 12px; border-bottom: 1px solid var(--border); }
+.commit-area {
+  margin: 8px 8px 5px;
+  padding: 10px;
+  border: 1px solid #dedfe3;
+  border-radius: 6px;
+  background: #f2f2f4;
+}
 .commit-select-all {
   display: flex;
   align-items: center;
   gap: 6px;
   margin-bottom: 6px;
-  font-size: 11px;
+  font-size: 12px;
   color: var(--fg-3);
 }
 .select-all-label {
@@ -744,10 +769,10 @@ defineExpose({ loadStatus })
   width: 100%;
   padding: 6px 8px;
   border: 1px solid var(--border);
-  border-radius: 4px;
+  border-radius: 5px;
   background: var(--bg);
   color: var(--fg);
-  font-size: 12px;
+  font-size: 13px;
   font-family: var(--mono);
   resize: vertical;
   box-sizing: border-box;
@@ -775,7 +800,7 @@ defineExpose({ loadStatus })
   padding-right: 20px;
 }
 .model-warning-bar {
-  font-size: 10px;
+  font-size: 13px;
   color: #e74c3c;
   margin-top: 2px;
   padding: 0 2px;
@@ -789,7 +814,7 @@ defineExpose({ loadStatus })
   border-radius: 4px;
   background: var(--bg-2);
   color: var(--fg-3);
-  font-size: 11px;
+  font-size: 12px;
   cursor: pointer;
   transition: border-color var(--t), color var(--t);
   white-space: nowrap;
@@ -930,7 +955,7 @@ defineExpose({ loadStatus })
 .commit-actions {
   display: flex;
   gap: 6px;
-  margin-top: 6px;
+  margin-top: 8px;
 }
 .generate-btn {
   display: inline-flex;
@@ -941,7 +966,7 @@ defineExpose({ loadStatus })
   border-radius: 4px;
   background: var(--bg-2);
   color: var(--fg-2);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 500;
   cursor: pointer;
   transition: background var(--t), border-color var(--t);
@@ -971,7 +996,7 @@ defineExpose({ loadStatus })
   border-radius: 4px;
   background: var(--accent);
   color: #fff;
-  font-size: 12px;
+  font-size: 13px;
   font-weight: 600;
   cursor: pointer;
   transition: opacity var(--t);
@@ -980,14 +1005,24 @@ defineExpose({ loadStatus })
 .commit-button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* 文件列表 */
-/* 主体可滚动区 */
-.git-body { flex: 1; overflow-y: auto; }
-.git-files { padding: 4px 0; }
+.git-body {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+.git-files {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 2px 4px 6px;
+}
 .git-section-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px 4px;
+  padding: 8px 8px 5px;
   font-size: 11px;
   font-weight: 600;
   color: var(--fg-4);
@@ -1008,12 +1043,14 @@ defineExpose({ loadStatus })
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 12px;
+  margin: 1px 0;
+  padding: 6px 8px;
+  border-radius: 5px;
   font-size: 12px;
   cursor: pointer;
   transition: background var(--t);
 }
-.git-file:hover { background: var(--bg-3); }
+.git-file:hover { background: #eceef1; }
 
 .file-status {
   flex-shrink: 0;
@@ -1091,18 +1128,82 @@ defineExpose({ loadStatus })
 [data-theme="dark"] .toggle-btn.add { background: #052e16; color: #4ade80; }
 
 /* 提交历史 */
-.git-history { border-top: 1px solid var(--border); }
-.git-section-header.history { padding: 7px 12px; }
+.git-history-trigger {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: 0 12px;
+  border: 0;
+  border-top: 1px solid #dedfe3;
+  background: #f2f2f4;
+  color: var(--fg-3);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--t), color var(--t);
+}
+.git-history-trigger > span { display: inline-flex; align-items: center; gap: 7px; }
+.git-history-trigger:hover { background: #e7e8eb; color: var(--fg); }
+.git-history-trigger > svg { color: var(--fg-4); }
+
+.git-history-modal {
+  display: flex;
+  width: min(720px, calc(100vw - 48px));
+  height: min(76vh, 720px);
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid #d7d9de;
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: 0 18px 44px rgba(25, 27, 33, 0.2);
+}
+.git-history-modal-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 52px;
+  padding: 0 12px 0 16px;
+  border-bottom: 1px solid #dedfe3;
+  background: #f4f4f6;
+}
+.git-history-modal-head > div { display: grid; gap: 2px; }
+.git-history-modal-head span { color: var(--fg); font-size: 14px; font-weight: 700; }
+.git-history-modal-head small { color: var(--fg-4); font-size: 11px; }
 .git-history-loading { display: flex; justify-content: center; padding: 12px; }
 .git-history-empty { padding: 12px; font-size: 11px; color: var(--fg-4); text-align: center; }
-.git-commit-list { max-height: 240px; overflow-y: auto; }
+.git-commit-list { position: relative; flex: 1; overflow-y: auto; padding: 4px 8px 8px 22px; }
+.git-commit-list::before {
+  position: absolute;
+  top: 12px;
+  bottom: 12px;
+  left: 14px;
+  width: 1px;
+  background: #dedfe3;
+  content: '';
+}
 .git-commit-item {
-  padding: 7px 12px;
-  border-bottom: 1px solid var(--border);
+  position: relative;
+  margin-bottom: 2px;
+  padding: 8px 7px;
+  border-bottom: 0;
+  border-radius: 5px;
   cursor: default;
   transition: background var(--t);
 }
-.git-commit-item:hover { background: var(--bg-3); }
+.git-commit-item::before {
+  position: absolute;
+  top: 14px;
+  left: -13px;
+  width: 7px;
+  height: 7px;
+  border: 2px solid #fafafb;
+  border-radius: 50%;
+  background: #707784;
+  content: '';
+}
+.git-commit-item:hover { background: #eceef1; }
 .commit-top {
   display: flex;
   align-items: center;
@@ -1143,4 +1244,17 @@ defineExpose({ loadStatus })
   color: var(--fg-4);
 }
 .git-empty svg { color: var(--green); }
+
+[data-theme="dark"] .git-branch { background: #1d1d1f; border-color: #303033; }
+[data-theme="dark"] .commit-area { background: #242426; border-color: #363638; }
+[data-theme="dark"] .git-file:hover,
+[data-theme="dark"] .git-commit-item:hover { background: #29292c; }
+[data-theme="dark"] .git-commit-list::before { background: #363638; }
+[data-theme="dark"] .git-commit-item::before { border-color: #1d1d1f; background: #9aa1ac; }
+[data-theme="dark"] .change-count { background: #303033; color: #c3c6cc; }
+[data-theme="dark"] .git-history-trigger,
+[data-theme="dark"] .git-history-modal-head { background: #202023; border-color: #303033; }
+[data-theme="dark"] .git-history-trigger:hover { background: #2a2a2d; }
+[data-theme="dark"] .git-history-modal { border-color: #38383b; background: #171719; }
+[data-theme="dark"] .git-history-modal .git-commit-item::before { border-color: #171719; }
 </style>
