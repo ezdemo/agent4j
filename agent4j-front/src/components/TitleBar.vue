@@ -26,16 +26,18 @@
         </svg>
         <span class="tb-session">{{ session }}</span>
       </div>
-      <a href="https://gitee.com/ezdemo/agent4j" @click.prevent="openExternal('https://gitee.com/ezdemo/agent4j')" class="tb-btn star-btn" title="Gitee 上给我们点个 Star 吧">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M11.984 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.016 0zm6.09 5.333c.328 0 .593.266.592.593v1.482a.594.594 0 0 1-.593.592H9.777c-.982 0-1.778.796-1.778 1.778v5.63c0 .327.266.592.593.592h5.63c.982 0 1.778-.796 1.778-1.778v-.296a.593.593 0 0 0-.592-.593h-4.15a.592.592 0 0 1-.592-.592v-1.482a.593.593 0 0 1 .593-.592h6.815c.327 0 .593.265.593.592v3.408a4 4 0 0 1-4 4H5.926a.593.593 0 0 1-.593-.593V9.778a4.444 4.444 0 0 1 4.445-4.444h8.296Z"/>
-        </svg>
-      </a>
-      <a href="https://github.com/ezdemo/agent4j" @click.prevent="openExternal('https://github.com/ezdemo/agent4j')" class="tb-btn star-btn" title="GitHub 上给我们点个 Star 吧">
-        <svg width="13" height="13" viewBox="0 0 24 24" fill="currentColor">
-          <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
-        </svg>
-      </a>
+      <div class="tb-community" aria-label="开源主页">
+        <a href="https://gitee.com/ezdemo/agent4j" @click.prevent="openExternal('https://gitee.com/ezdemo/agent4j')" class="tb-btn star-btn" title="Gitee 上给我们点个 Star 吧">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M11.984 0A12 12 0 0 0 0 12a12 12 0 0 0 12 12 12 12 0 0 0 12-12A12 12 0 0 0 12 0a12 12 0 0 0-.016 0zm6.09 5.333c.328 0 .593.266.592.593v1.482a.594.594 0 0 1-.593.592H9.777c-.982 0-1.778.796-1.778 1.778v5.63c0 .327.266.592.593.592h5.63c.982 0 1.778-.796 1.778-1.778v-.296a.593.593 0 0 0-.592-.593h-4.15a.592.592 0 0 1-.592-.592v-1.482a.593.593 0 0 1 .593-.592h6.815c.327 0 .593.265.593.592v3.408a4 4 0 0 1-4 4H5.926a.593.593 0 0 1-.593-.593V9.778a4.444 4.444 0 0 1 4.445-4.444h8.296Z"/>
+          </svg>
+        </a>
+        <a href="https://github.com/ezdemo/agent4j" @click.prevent="openExternal('https://github.com/ezdemo/agent4j')" class="tb-btn star-btn" title="GitHub 上给我们点个 Star 吧">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+          </svg>
+        </a>
+      </div>
     </div>
 
     <!-- 右侧：操作按钮 + 窗口控制 -->
@@ -164,14 +166,14 @@ const closeWindow = async () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 36px;
-  min-height: 36px;
-  padding: 0 6px 0 10px;
-  background: var(--glass-bg-2);
+  height: 46px;
+  min-height: 46px;
+  padding: 0 8px 0 10px;
+  background: var(--bg);
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
   border-bottom: 1px solid var(--glass-border);
-  border-radius: 10px 10px 0 0;
+  border-radius: 0;
   user-select: none;
   -webkit-app-region: drag;
   z-index: 200;
@@ -181,13 +183,13 @@ const closeWindow = async () => {
 .titlebar-left {
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   min-width: 0;
 }
 
 .tb-btn {
-  width: 28px;
-  height: 28px;
+  width: 32px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -211,71 +213,86 @@ const closeWindow = async () => {
 }
 
 .sidebar-toggle.active {
-  background: var(--accent-bg);
-  color: var(--accent);
+  background: var(--bg-3);
+  color: var(--fg);
 }
 
 .tb-brand {
   display: flex;
   align-items: center;
-  gap: 5px;
+  gap: 7px;
+  padding-right: 10px;
+  border-right: 1px solid var(--border);
   flex-shrink: 0;
 }
 
 .titlebar-logo-img {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   object-fit: contain;
 }
 
 .tb-brand-name {
-  font-size: 12px;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 700;
   color: var(--fg);
-  letter-spacing: -0.01em;
+  letter-spacing: 0;
 }
 
 .tb-breadcrumb {
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
-  margin-left: 2px;
+  height: 30px;
+  margin-left: 0;
+  padding: 0 9px 0 5px;
+  border-radius: 5px;
+  background: var(--bg-2);
 }
 .tb-breadcrumb svg {
   color: var(--fg-4);
   flex-shrink: 0;
-  opacity: 0.5;
+  opacity: 0.7;
 }
 .tb-session {
-  font-size: 12px;
-  color: var(--fg-3);
-  font-weight: 500;
+  font-size: 13px;
+  color: var(--fg-2);
+  font-weight: 600;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  max-width: 200px;
+  max-width: 280px;
+}
+
+.tb-community {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: 2px;
+  padding-left: 6px;
+  border-left: 1px solid var(--border);
 }
 
 /* ── 右侧 ── */
 .titlebar-right {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   flex-shrink: 0;
 }
 
 .tb-sep {
   width: 1px;
-  height: 14px;
+  height: 18px;
   background: var(--border);
   margin: 0 4px;
 }
 
 /* ── 窗口控制按钮 ── */
 .tb-win-btn {
-  width: 36px;
-  height: 28px;
+  width: 40px;
+  height: 32px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -299,8 +316,8 @@ const closeWindow = async () => {
 /* ── 响应式 ── */
 @media (max-width: 768px) {
   .titlebar {
-    height: 32px;
-    min-height: 32px;
+    height: 38px;
+    min-height: 38px;
   }
   .tb-breadcrumb {
     display: none;
@@ -326,10 +343,10 @@ const closeWindow = async () => {
 /* 版本号 */
 .tb-version {
   font-family: var(--font-mono);
-  font-size: 10px;
+  font-size: 11px;
   color: var(--fg-4);
-  margin-left: 4px;
-  padding: 1px 5px;
+  margin-left: 2px;
+  padding: 2px 6px;
   border-radius: 4px;
   cursor: pointer;
   transition: all var(--t);
@@ -385,6 +402,7 @@ a.tb-btn {
 }
 
 .star-btn:hover {
-  color: #eab308; /* 黄色 */
+  color: var(--fg);
+  background: var(--bg-3);
 }
 </style>
