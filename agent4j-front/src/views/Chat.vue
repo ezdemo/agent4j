@@ -35,7 +35,7 @@
         <div class="welcome-watermark" aria-hidden="true">A</div>
         <section class="welcome-panel">
           <h1 class="welcome-heading">{{ welcomeGreeting }}</h1>
-          <div class="welcome-composer">
+          <div class="welcome-composer" :class="{ 'workspace-menu-open': welcomeWorkspaceMenuOpen }">
             <div class="welcome-workspace-row">
               <button class="welcome-workspace-button" type="button" @click="toggleWelcomeWorkspace">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>
@@ -43,20 +43,28 @@
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
               </button>
               <div v-if="welcomeWorkspaceMenuOpen" class="welcome-workspace-menu">
-                <button v-for="workspace in workspaces" :key="workspace.hash" type="button"
-                        :class="{ active: workspace.hash === welcomeWorkspaceHash }"
-                        @click="selectWelcomeWorkspace(workspace.hash)">
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>
-                  {{ workspace.name }}
-                </button>
-                <span v-if="workspaces.length === 0" class="welcome-workspace-empty">暂无可用项目</span>
+                <div class="welcome-workspace-menu-actions">
+                  <button class="welcome-workspace-manage" type="button" @click="openWelcomeWorkspaceManager">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/><path d="M12 10v6m-3-3h6"/></svg>
+                    项目管理
+                  </button>
+                </div>
+                <div class="welcome-workspace-list">
+                  <button v-for="workspace in workspaces" :key="workspace.hash" type="button"
+                          :class="{ active: workspace.hash === welcomeWorkspaceHash }"
+                          @click="selectWelcomeWorkspace(workspace.hash)">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>
+                    {{ workspace.name }}
+                  </button>
+                  <span v-if="workspaces.length === 0" class="welcome-workspace-empty">暂无可用项目</span>
+                </div>
               </div>
             </div>
-            <ChatInput welcome-mode v-model:input-text="welcomeText" :usage="usage" :current-model="currentModel" :available-models="availableModels"
+            <ChatInput ref="welcomeInput" welcome-mode v-model:input-text="welcomeText" :usage="usage" :current-model="currentModel" :available-models="availableModels"
                        :current-reasoning-effort="currentReasoningEffort" :terminate-on-no-tool-call="terminateOnNoToolCall" :current-permission="currentPermission"
                        :workspace-hash="welcomeWorkspaceHash" :current-skill="currentSkill" @send="sendWelcomeMessage" @switch-model="handleSwitchModel"
                        @switch-reasoning-effort="handleSwitchReasoningEffort" @switch-terminate-on-no-tool-call="handleSwitchTerminateOnNoToolCall"
-                       @switch-permission="handleSwitchPermission" @switch-skill="handleSwitchSkill" />
+                       @switch-permission="handleSwitchPermission" @switch-skill="handleSwitchSkill" @picker-open="handleWelcomePickerOpen" />
           </div>
         </section>
       </div>
@@ -290,7 +298,7 @@ const props = defineProps({
   version: {type: String, default: ''}
 })
 
-const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask', 'switchWorkspace'])
+const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask', 'switchWorkspace', 'manageWorkspaces'])
 const store = useAppStore()
 
 const messagesContainer = ref(null)
@@ -343,6 +351,11 @@ const selectWelcomeWorkspace = (workspaceHash) => {
   emit('switchWorkspace', workspaceHash)
 }
 
+const openWelcomeWorkspaceManager = () => {
+  welcomeWorkspaceMenuOpen.value = false
+  emit('manageWorkspaces')
+}
+
 const closeWelcomeMenus = (except = '') => {
   if (except !== 'workspace') welcomeWorkspaceMenuOpen.value = false
   if (except !== 'model') welcomeModelMenuOpen.value = false
@@ -354,7 +367,12 @@ const closeWelcomeMenus = (except = '') => {
 const toggleWelcomeWorkspace = () => {
   const nextOpen = !welcomeWorkspaceMenuOpen.value
   closeWelcomeMenus('workspace')
+  if (nextOpen) welcomeInput.value?.closePickers()
   welcomeWorkspaceMenuOpen.value = nextOpen
+}
+
+const handleWelcomePickerOpen = () => {
+  closeWelcomeMenus()
 }
 
 const toggleWelcomeModel = () => {
@@ -2193,6 +2211,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   align-items: center;
   width: min(100%, 800px);
   margin: auto;
+  transform: translateY(34px);
 }
 
 .welcome-heading {
@@ -2206,17 +2225,29 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 }
 
 .welcome-composer {
+  position: relative;
+  z-index: 20;
   width: 100%;
-  padding: 0 8px 8px;
+  padding: 0 8px 18px;
   border-radius: 10px;
   background: #f2f2f3;
+  box-shadow: 0 3px 8px rgba(26, 26, 30, 0.06), 0 16px 34px rgba(26, 26, 30, 0.1);
+}
+
+.welcome-composer.workspace-menu-open {
+  z-index: 80;
 }
 
 .welcome-workspace-row {
   position: relative;
+  z-index: 0;
   display: flex;
   align-items: center;
   min-height: 50px;
+}
+
+.workspace-menu-open .welcome-workspace-row {
+  z-index: 60;
 }
 
 .welcome-workspace-button {
@@ -2265,7 +2296,26 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   top: calc(100% - 3px);
   left: 8px;
   width: min(300px, calc(100vw - 64px));
+  height: 248px;
   padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+.welcome-workspace-menu-actions {
+  flex-shrink: 0;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.welcome-workspace-manage {
+  font-weight: 600;
+}
+
+.welcome-workspace-list {
+  min-height: 0;
+  overflow-y: auto;
 }
 
 .welcome-workspace-menu button,
@@ -2501,6 +2551,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 
 @media (max-width: 768px) {
   .welcome-screen { padding: 24px 8px 84px; }
+  .welcome-panel { transform: translateY(16px); }
   .welcome-watermark { top: -52px; font-size: 270px; }
   .welcome-heading { margin-bottom: 28px; font-size: 28px; }
   .welcome-composer-options { gap: 10px; }

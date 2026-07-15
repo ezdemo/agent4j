@@ -1,5 +1,5 @@
 <template>
-  <aside class="sidebar" :class="{ collapsed: !sideOpen }">
+  <aside ref="sidebarRoot" class="sidebar" :class="{ collapsed: !sideOpen }">
     <div class="sidebar-shortcuts">
       <button class="shortcut-row" @click="$emit('new-chat')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
@@ -7,9 +7,9 @@
           <path d="M12 8v8M8 12h8"/>
         </svg>
         <span>新建任务</span>
-        <kbd>Ctrl+N</kbd>
+        <kbd>Ctrl+Alt+N</kbd>
       </button>
-      <button class="shortcut-row" @click="toggleSearch">
+      <button class="shortcut-row" @click="$emit('open-global-search')">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
           <circle cx="11" cy="11" r="6"/>
           <path d="m16 16 4 4"/>
@@ -25,26 +25,28 @@
       </button>
     </div>
 
-    <div v-if="searchOpen" class="sidebar-search">
-      <div class="search-wrapper">
-        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-          <circle cx="11" cy="11" r="6"/>
-          <path d="m16 16 4 4"/>
-        </svg>
-        <input ref="searchInput" class="search-input" v-model="searchQuery" placeholder="搜索会话..." @keydown.esc="closeSearch" />
-      </div>
-    </div>
-
     <div class="project-toolbar">
       <div class="project-tabs" aria-label="项目视图">
-        <button class="project-tab active" type="button" title="项目视图">
+        <div class="project-tab">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
             <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/>
           </svg>
           项目
-        </button>
+        </div>
       </div>
       <div class="sidebar-section-actions">
+        <button
+          class="btn-icon-sm"
+          title="定位当前会话"
+          :disabled="!currentSession"
+          @click="syncActiveSessionIntoView"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="8.5"/>
+            <circle cx="12" cy="12" r="2"/>
+            <path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>
+          </svg>
+        </button>
         <button
           class="btn-icon-sm"
           :title="allProjectsExpanded ? '折叠所有项目会话' : '展开所有项目会话'"
@@ -62,9 +64,6 @@
             <path d="M23 4v6h-6"/>
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
           </svg>
-        </button>
-        <button class="btn-icon-sm" title="添加项目" @click="$emit('show-workspace-picker')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         </button>
       </div>
     </div>
@@ -116,6 +115,7 @@
             v-for="s in p.sessions"
             :key="s.name"
             class="session-item"
+            :data-session-key="`${p.workspace.hash}:${s.name}`"
             :class="{ active: s.name === currentSession && currentSessionWorkspace === p.workspace.hash }"
             @click="$emit('select-session', { workspaceHash: p.workspace.hash, sessionName: s.name })"
           >
@@ -174,7 +174,7 @@
 </template>
 
 <script setup>
-import {computed, nextTick, onBeforeUnmount, onMounted, ref} from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 
 const props = defineProps({
   sideOpen: { type: Boolean, default: true },
@@ -189,7 +189,7 @@ const props = defineProps({
 const emit = defineEmits([
   'update:sideOpen',
   'new-chat',
-  'show-workspace-picker',
+  'open-global-search',
   'refresh-sessions',
   'new-project-chat',
   'refresh-project',
@@ -205,38 +205,21 @@ const emit = defineEmits([
   'reorder'
 ])
 
-// 本地搜索状态
-const searchQuery = ref('')
-const searchOpen = ref(false)
-const searchInput = ref(null)
 const dragIndex = ref(null)
 const dragOverIndex = ref(null)
+const sidebarRoot = ref(null)
 
 // 本地展开/折叠状态
 const expandedWorkspaces = ref(new Set())
 const allProjectsExpanded = ref(true)
 
-const toggleSearch = async () => {
-  searchOpen.value = !searchOpen.value
-  if (searchOpen.value) {
-    await nextTick()
-    searchInput.value?.focus()
-  }
-}
-
-const closeSearch = () => {
-  searchOpen.value = false
-  searchQuery.value = ''
-}
-
 const handleShortcut = (event) => {
   if (!event.ctrlKey && !event.metaKey) return
   if (event.key.toLowerCase() === 'k') {
     event.preventDefault()
-    if (!searchOpen.value) toggleSearch()
-    else searchInput.value?.focus()
+    emit('open-global-search')
   }
-  if (event.key.toLowerCase() === 'n') {
+  if (event.altKey && event.key.toLowerCase() === 'n') {
     event.preventDefault()
     emit('new-chat')
   }
@@ -245,23 +228,13 @@ const handleShortcut = (event) => {
 onMounted(() => window.addEventListener('keydown', handleShortcut))
 onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut))
 
-// 根据 props + searchQuery 计算项目列表
+// 根据 props 计算项目列表
 const projectsData = computed(() => {
   if (!props.workspaces.length) return []
-  if (!searchQuery.value) {
-    return props.workspaces.map(w => ({
-      workspace: w,
-      sessions: props.workspaceSessions[w.hash] || []
-    }))
-  }
-  const q = searchQuery.value.toLowerCase()
-  return props.workspaces
-    .map(w => ({
-      workspace: w,
-      sessions: (props.workspaceSessions[w.hash] || [])
-        .filter(s => (s.title || s.name || '').toLowerCase().includes(q))
-    }))
-    .filter(p => p.workspace.name.toLowerCase().includes(q) || p.sessions.length > 0)
+  return props.workspaces.map(w => ({
+    workspace: w,
+    sessions: props.workspaceSessions[w.hash] || []
+  }))
 })
 
 
@@ -316,6 +289,28 @@ const toggleAllProjects = () => {
   }
   expandedWorkspaces.value = s
 }
+
+const syncActiveSessionIntoView = async () => {
+  const workspaceHash = props.currentSessionWorkspace
+  const sessionName = props.currentSession
+  if (!workspaceHash || !sessionName) return
+
+  if (!expandedWorkspaces.value.has(workspaceHash)) {
+    expandedWorkspaces.value = new Set(expandedWorkspaces.value).add(workspaceHash)
+  }
+
+  await nextTick()
+  requestAnimationFrame(() => {
+    const activeSession = sidebarRoot.value?.querySelector('.session-item.active')
+    activeSession?.scrollIntoView({behavior: 'smooth', block: 'nearest'})
+  })
+}
+
+watch(
+  () => [props.currentSessionWorkspace, props.currentSession, props.workspaceSessions],
+  syncActiveSessionIntoView,
+  {immediate: true}
+)
 
 // 工具函数
 const truncatePath = (p) => {
@@ -509,7 +504,6 @@ const formatName = (n) => {
   background: var(--bg-3);
 }
 .project-header.active {
-  border-left: 2px solid var(--accent);
   background: transparent;
 }
 .project-header.active .project-name {
@@ -821,13 +815,7 @@ const formatName = (n) => {
   color: var(--fg-4);
   font: inherit;
   font-size: 12px;
-  cursor: pointer;
-}
-
-.project-tab.active {
-  background: var(--bg);
-  color: var(--fg-2);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+  cursor: default;
 }
 
 .sidebar-section-actions { gap: 1px; }
@@ -860,14 +848,12 @@ const formatName = (n) => {
 .project-header {
   gap: 7px;
   min-height: 36px;
-  padding: 6px 8px;
-  border-left: 2px solid transparent;
+  padding: 6px 8px 6px 10px;
   border-radius: 5px;
 }
 
 .project-header:hover { background: #ececef; }
 .project-header.active {
-  border-left-color: var(--accent);
   background: #ececef;
 }
 

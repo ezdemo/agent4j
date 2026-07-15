@@ -419,7 +419,7 @@ const shortcuts = [
   { keys: 'Enter', desc: '发送消息' },
   { keys: 'Shift+Enter', desc: '换行' },
   { keys: 'Ctrl+K', desc: '聚焦搜索' },
-  { keys: 'Ctrl+N', desc: '新建对话' },
+  { keys: 'Ctrl+Alt+N', desc: '新建对话' },
   { keys: 'Ctrl+B', desc: '切换侧边栏' },
   { keys: 'Escape', desc: '关闭弹窗' }
 ]

@@ -2128,7 +2128,7 @@ async function installSkill(slug, displayName) {
     if (res.success) {
       message.success(`技能「${displayName || slug}」安装成功！`)
       // 立即更新本地的已安装集合
-      installedSkills.add(slug)
+      installedSkills.value.add(slug)
       // 重新从后端拉取已安装列表，确保同步
       await loadInstalledSkills()
     } else {
@@ -2148,7 +2148,7 @@ async function uninstallSkill(slug, displayName) {
     const res = await skillMarketAPI.uninstall(slug)
     if (res.success) {
       message.success(`技能「${displayName || slug}」已卸载`)
-      installedSkills.delete(slug)
+      installedSkills.value.delete(slug)
       await loadInstalledSkills()
     } else {
       message.error(res.error || '卸载失败')
@@ -2160,13 +2160,16 @@ async function uninstallSkill(slug, displayName) {
   }
 }
 
-// 获取已安装的技能列表
-let installedSkills = new Set()
+// 获取已安装的技能列表。市场 slug 可能与 SKILL.md 的 name 不同，因此两个标识都要保留。
+const installedSkills = ref(new Set())
 async function loadInstalledSkills() {
   try {
     const res = await agentAPI.getSkills()
     if (res.success && res.data) {
-      installedSkills = new Set(res.data.map(s => s.name))
+      installedSkills.value = new Set(res.data.flatMap(skill => [
+        skill.name,
+        skill.directoryName
+      ].filter(Boolean)))
     }
   } catch (err) {
     console.warn('加载已安装技能失败:', err)
@@ -2174,7 +2177,7 @@ async function loadInstalledSkills() {
 }
 
 function isSkillInstalled(slug) {
-  return installedSkills.has(slug)
+  return installedSkills.value.has(slug)
 }
 
 // 标签页配置

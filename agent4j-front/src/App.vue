@@ -45,7 +45,7 @@
       :workspaceSessions="workspaceSessions"
       :initialDataLoaded="initialDataLoaded"
       @new-chat="createNewChat"
-      @show-workspace-picker="showWorkspacePicker = true"
+      @open-global-search="openGlobalSearch"
       @refresh-sessions="refreshSessionList"
       @new-project-chat="newProjectChat"
       @refresh-project="refreshProjectSessions"
@@ -77,6 +77,7 @@
         @session-branched="onSessionBranched"
         @start-task="startTaskFromWelcome"
         @switch-workspace="switchWelcomeWorkspace"
+        @manage-workspaces="showWorkspacePicker = true"
       />
     </main>
 
@@ -135,6 +136,42 @@
       </Teleport>
 
     </div><!-- .app-body -->
+
+    <Teleport to="body">
+      <div v-if="showGlobalSearch" class="global-search-mask" @mousedown.self="closeGlobalSearch">
+        <section class="global-search-panel" role="dialog" aria-modal="true" aria-label="搜索会话">
+          <div class="global-search-input-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+            <input
+              ref="globalSearchInput"
+              v-model="globalSearchQuery"
+              type="search"
+              placeholder="搜索会话..."
+              @keydown="handleGlobalSearchKeydown"
+            />
+            <kbd>Esc</kbd>
+          </div>
+          <div class="global-search-results" role="listbox">
+            <button
+              v-for="(item, index) in globalSearchResults"
+              :key="`${item.workspaceHash}:${item.sessionName}`"
+              class="global-search-result"
+              :class="{ active: index === globalSearchActiveIndex }"
+              type="button"
+              role="option"
+              :aria-selected="index === globalSearchActiveIndex"
+              @mouseenter="globalSearchActiveIndex = index"
+              @click="selectGlobalSearchResult(item)"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h12l4 4v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/><path d="M6 13h12M6 17h8"/></svg>
+              <span class="global-search-result-main">{{ item.title }}</span>
+              <span class="global-search-result-workspace">{{ item.workspaceName }}</span>
+            </button>
+            <div v-if="globalSearchResults.length === 0" class="global-search-empty">未找到会话</div>
+          </div>
+        </section>
+      </div>
+    </Teleport>
 
     <!-- 工作区选择弹窗 -->
     <WorkspacePickerModal
@@ -641,6 +678,29 @@ const workspaces = ref([])
 
 // 按工作区 hash 分组的会话
 const workspaceSessions = ref({})
+const showGlobalSearch = ref(false)
+const globalSearchQuery = ref('')
+const globalSearchInput = ref(null)
+const globalSearchActiveIndex = ref(0)
+
+const globalSearchResults = computed(() => {
+  const query = globalSearchQuery.value.trim().toLowerCase()
+  const items = workspaces.value.flatMap(workspace =>
+    (workspaceSessions.value[workspace.hash] || []).map(session => ({
+      workspaceHash: workspace.hash,
+      workspaceName: workspace.name,
+      sessionName: session.name,
+      title: session.title || formatName(session.name),
+      mtime: session.mtime || 0
+    }))
+  )
+
+  return items
+    .filter(item => !query || [item.title, item.sessionName, item.workspaceName]
+      .some(value => value?.toLowerCase().includes(query)))
+    .sort((a, b) => b.mtime - a.mtime)
+    .slice(0, 50)
+})
 
 const currentSessionTitle = computed(() => {
   if (!currentSession.value) return '新对话'
@@ -750,6 +810,44 @@ const loadData = async () => {
   await loadSessions()
   initialDataLoaded.value = true
 }
+
+const openGlobalSearch = async () => {
+  globalSearchQuery.value = ''
+  globalSearchActiveIndex.value = 0
+  showGlobalSearch.value = true
+  await nextTick()
+  globalSearchInput.value?.focus()
+}
+
+const closeGlobalSearch = () => {
+  showGlobalSearch.value = false
+  globalSearchQuery.value = ''
+}
+
+const selectGlobalSearchResult = (item) => {
+  closeGlobalSearch()
+  onSidebarSelectSession(item)
+}
+
+const handleGlobalSearchKeydown = (event) => {
+  const resultCount = globalSearchResults.value.length
+  if (event.key === 'Escape') {
+    closeGlobalSearch()
+  } else if (event.key === 'ArrowDown' && resultCount > 0) {
+    event.preventDefault()
+    globalSearchActiveIndex.value = Math.min(globalSearchActiveIndex.value + 1, resultCount - 1)
+  } else if (event.key === 'ArrowUp' && resultCount > 0) {
+    event.preventDefault()
+    globalSearchActiveIndex.value = Math.max(globalSearchActiveIndex.value - 1, 0)
+  } else if (event.key === 'Enter' && resultCount > 0) {
+    event.preventDefault()
+    selectGlobalSearchResult(globalSearchResults.value[globalSearchActiveIndex.value])
+  }
+}
+
+watch(globalSearchQuery, () => {
+  globalSearchActiveIndex.value = 0
+})
 
 // 刷新工具列表（不干扰其他数据）
 const refreshTools = async () => {
@@ -1004,6 +1102,8 @@ const newProjectChat = async (wsHash) => {
       await switchWorkspaceContext(wsHash)
       currentSession.value = r.data.sessionName
       currentSessionWorkspace.value = wsHash
+      mainView.value = 'chat'
+      await nextTick()
       chatRef.value?.resetLocalMessages()
       await loadSessions()
       message.success('已新建对话')
@@ -1631,6 +1731,111 @@ watch(showSettings, (newVal) => {
   min-width: 0;
   background: var(--bg);
   position: relative;
+}
+
+.global-search-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: min(16vh, 140px) 16px 24px;
+  background: rgba(18, 18, 20, 0.1);
+}
+
+.global-search-panel {
+  width: min(680px, 100%);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+}
+
+.global-search-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-4);
+}
+
+.global-search-input-wrap input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 15px;
+}
+
+.global-search-input-wrap input::placeholder { color: var(--fg-4); }
+
+.global-search-input-wrap kbd {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg-4);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.global-search-results {
+  max-height: min(55vh, 440px);
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.global-search-result {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+  text-align: left;
+}
+
+.global-search-result:hover,
+.global-search-result.active {
+  background: var(--bg-3);
+  color: var(--fg);
+}
+
+.global-search-result-main,
+.global-search-result-workspace {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.global-search-result-main {
+  color: var(--fg);
+  font-size: 14px;
+}
+
+.global-search-result-workspace {
+  max-width: 180px;
+  color: var(--fg-4);
+  font-size: 12px;
+}
+
+.global-search-empty {
+  padding: 28px 12px;
+  color: var(--fg-4);
+  font-size: 13px;
+  text-align: center;
 }
 
 /* Git 面板滑动动画 */
