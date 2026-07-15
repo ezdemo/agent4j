@@ -32,7 +32,6 @@
     <div ref="messagesContainer" class="messages" :class="{ 'messages-welcome': !props.sessionName || messages.length === 0 }">
       <!-- 空状态：无会话或新建的空会话 -->
       <div v-if="!props.sessionName || messages.length === 0" class="empty welcome-screen">
-        <div class="welcome-watermark" aria-hidden="true">A</div>
         <section class="welcome-panel">
           <h1 class="welcome-heading">{{ welcomeGreeting }}</h1>
           <div class="welcome-composer" :class="{ 'workspace-menu-open': welcomeWorkspaceMenuOpen }">
@@ -2191,20 +2190,6 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   isolation: isolate;
 }
 
-.welcome-watermark {
-  position: absolute;
-  top: -144px;
-  left: 50%;
-  z-index: -1;
-  color: #f3f3f4;
-  font-family: Georgia, serif;
-  font-size: 430px;
-  font-weight: 400;
-  line-height: 1;
-  transform: translateX(-50%) rotate(-10deg);
-  user-select: none;
-}
-
 .welcome-panel {
   display: flex;
   flex-direction: column;
@@ -2538,7 +2523,6 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 
 .welcome-send-button:disabled { cursor: not-allowed; opacity: 0.42; }
 
-[data-theme="dark"] .welcome-watermark { color: #151515; }
 [data-theme="dark"] .welcome-heading { color: var(--fg); }
 [data-theme="dark"] .welcome-composer { background: #202020; }
 [data-theme="dark"] .welcome-workspace-button:hover,
@@ -2552,7 +2536,6 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 @media (max-width: 768px) {
   .welcome-screen { padding: 24px 8px 84px; }
   .welcome-panel { transform: translateY(16px); }
-  .welcome-watermark { top: -52px; font-size: 270px; }
   .welcome-heading { margin-bottom: 28px; font-size: 28px; }
   .welcome-composer-options { gap: 10px; }
   .welcome-model-button { max-width: 130px; }
