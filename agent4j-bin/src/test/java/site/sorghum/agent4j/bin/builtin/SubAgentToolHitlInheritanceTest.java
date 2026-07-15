@@ -6,7 +6,7 @@ import site.sorghum.agent4j.bin.tool.ToolRegistry;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-class TaskToolHitlInheritanceTest {
+class SubAgentToolHitlInheritanceTest {
 
     @Test
     void subAgentInheritsEveryParentHitlModeWithoutCollapsingAuto() {
@@ -15,7 +15,7 @@ class TaskToolHitlInheritanceTest {
         for (String mode : new String[]{"free", "approval", "auto"}) {
             AgentLoop parent = new AgentLoop(null, registry, null, mode);
 
-            assertEquals(mode, TaskTool.resolveInheritedHitlMode(parent));
+            assertEquals(mode, SubAgentTool.resolveInheritedHitlMode(parent));
         }
     }
 }

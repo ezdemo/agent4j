@@ -41,6 +41,13 @@ public class ToolRegistry {
     @Getter
     private Set<String> forceDenyTools = Collections.emptySet();
 
+    /**
+     * 强制允许的工具名称集合。非 null 时只有集合内的工具可被注册和调用。
+     * 用于探索、审查等只读子代理，避免仅靠提示词约束写操作。
+     */
+    @Getter
+    private Set<String> forceAllowTools = null;
+
     // ==================== 动态刷新上下文 ====================
     @Getter
     private Path workspace;
@@ -77,6 +84,25 @@ public class ToolRegistry {
      */
     public void setForceDenyTools(Set<String> denyTools) {
         this.forceDenyTools = denyTools != null ? new HashSet<>(denyTools) : Collections.emptySet();
+        applyForceToolFilters();
+    }
+
+    /**
+     * 设置强制允许的工具名称集合。传 null 表示不限制；空集合表示不允许任何工具。
+     */
+    public void setForceAllowTools(Set<String> allowTools) {
+        this.forceAllowTools = allowTools != null ? new HashSet<>(allowTools) : null;
+        applyForceToolFilters();
+    }
+
+    private void applyForceToolFilters() {
+        functionToolMap.entrySet().removeIf(entry -> !isForceAllowed(entry.getKey())
+                || forceDenyTools.contains(entry.getKey()));
+        cachedOpenAiTools = null;
+    }
+
+    private boolean isForceAllowed(String toolName) {
+        return forceAllowTools == null || forceAllowTools.contains(toolName);
     }
 
 
@@ -122,7 +148,8 @@ public class ToolRegistry {
     private void register(FunctionTool tool, Set<String> disabled) {
         Objects.requireNonNull(tool, "tool");
         allScannedTools.put(tool.name(), tool);
-        if (!disabled.contains(tool.name()) && !forceDenyTools.contains(tool.name())) {
+        if (!disabled.contains(tool.name()) && !forceDenyTools.contains(tool.name())
+                && isForceAllowed(tool.name())) {
             functionToolMap.put(tool.name(), tool);
         }
         cachedOpenAiTools = null;
@@ -155,6 +182,10 @@ public class ToolRegistry {
                 ? Collections.emptySet()
                 : new HashSet<>(this.disabledToolsSnapshot);
         copy.useSnapshot = this.useSnapshot;
+        copy.forceDenyTools = this.forceDenyTools.isEmpty()
+                ? Collections.emptySet()
+                : new HashSet<>(this.forceDenyTools);
+        copy.forceAllowTools = this.forceAllowTools == null ? null : new HashSet<>(this.forceAllowTools);
         // 复制刷新上下文
         copy.workspace = this.workspace;
         copy.apiUrl = this.apiUrl;
@@ -194,7 +225,8 @@ public class ToolRegistry {
      */
     public boolean isEnabled(String toolName) {
         Set<String> disabled = getCurrentDisabledTools();
-        return !disabled.contains(toolName) && !forceDenyTools.contains(toolName);
+        return !disabled.contains(toolName) && !forceDenyTools.contains(toolName)
+                && isForceAllowed(toolName);
     }
 
     /**

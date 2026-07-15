@@ -19,7 +19,7 @@ import java.io.IOException;
 import java.util.Collection;
 
 /**
- * Task 工具 —— 创建隔离子代理处理复杂多步任务。
+ * SubAgent 工具 —— 创建具有预设角色的隔离子代理。
  * <p>
  * 使用 {@link SubAgent} 继承父工具集，排除递归 spawn 和用户交互工具。
  * </p>
@@ -27,13 +27,13 @@ import java.util.Collection;
  * @author Sorghum
  */
 @Component
-public class TaskTool extends AbsToolProvider implements SolonToTools {
+public class SubAgentTool extends AbsToolProvider implements SolonToTools {
 
     // ==================== 父 AgentOutput 传播 ====================
 
     /**
      * 线程局部变量 — 持有父 Agent 的 AgentOutput 引用。
-     * AgentLoop.executeToolCalls() 在异步分发前设置，TaskTool.execute() 在创建 SubAgent 时读取。
+     * AgentLoop.executeToolCalls() 在异步分发前设置，SubAgentTool.subAgent() 在创建 SubAgent 时读取。
      * 使得子代理的流式输出能通过父代理的输出通道（Console/SseEmitter）实时推送给用户。
      */
     private static final ThreadLocal<AgentOutput> PARENT_OUTPUT_TL = new ThreadLocal<>();
@@ -64,17 +64,25 @@ public class TaskTool extends AbsToolProvider implements SolonToTools {
     @Inject
     private ModelClient modelClient;
 
-    @ToolMapping(name = "task", description = """
-                 创建隔离子代理处理复杂多步任务。子代理有独立上下文，完成后返回结果给主代理。
-                 适用于深入调查多个文件或独立功能实现。
-                 参数: name(必填), arguments(可选), systemPrompt(可选)。可写。
-                 注意：子代理不可再创建子代理（task 工具对子代理不可用）。
+    @ToolMapping(name = "sub_agent", description = """
+                 派生一个带预设角色的隔离子代理，完成后将结果返回给主代理。
+                 可用角色: explore（只读探索）, implement（实现）, test（测试）, review（只读审查）, plan（只读方案）。
+                 参数: profile(必填), task(必填), instructions(可选)。
+                 注意：explore/review/plan 只能使用只读工具；子代理不可再创建子代理。
                 """)
-    public String task(@Param(name = "name", description = "技能/任务名称，用于标识子代理的任务类型") String name,
-                       @Param(name = "arguments", description = "技能参数描述/任务详情，作为子代理的初始指令", required = false) String arguments,
-                       @Param(name = "systemPrompt", description = "可选的子代理系统提示词覆盖，为空时自动生成", required = false) String customSystemPrompt,
-                       ToolContext ctx) {
-        if (arguments == null) arguments = name;
+    public String subAgent(@Param(name = "profile", description = "子代理角色: explore / implement / test / review / plan") String profile,
+                           @Param(name = "task", description = "需要子代理完成的具体任务") String task,
+                           @Param(name = "instructions", description = "可选的补充要求，不会覆盖角色约束", required = false) String instructions,
+                           ToolContext ctx) {
+        if (task == null || task.isBlank()) {
+            return "INVALID_SUB_AGENT_TASK: task 不能为空";
+        }
+        final SubAgentProfile selectedProfile;
+        try {
+            selectedProfile = SubAgentProfile.from(profile);
+        } catch (IllegalArgumentException e) {
+            return "INVALID_SUB_AGENT_PROFILE: " + e.getMessage();
+        }
         try {
             // 检查父级是否已请求中断（通过 AgentLoopController 传播的 ThreadLocal）
             if (ctx.getLoopController() != null && ctx.getLoopController().isAbortRequested()) {
@@ -84,43 +92,31 @@ public class TaskTool extends AbsToolProvider implements SolonToTools {
             ToolRegistry registry = ctx.getLoopController().getToolRegistry();
             AgentLoopController parentController = ctx.getLoopController();
 
-            // 构建子代理的 system prompt
-            // 优先使用调用方传入的 systemPrompt，否则自动组合：任务描述 + 工具规范 + 使用指引
-            String systemPrompt;
-            if (customSystemPrompt != null && !customSystemPrompt.isEmpty()) {
-                systemPrompt = customSystemPrompt;
-            } else {
-                StringBuilder sb = new StringBuilder();
-                sb.append("你是一个子代理，专注于完成以下任务：").append(arguments).append("\n\n");
-                sb.append("## 可用工具规范\n\n");
-                // 收集并附加工具规范（与 SubAgent 构造函数保持一致的过滤逻辑）
-                for (FunctionTool def : registry.all().values()) {
-                    if (!SubAgent.SUB_AGENT_DENY.contains(def.name())) {
-                        String spec = def.descriptionAndMeta();
-                        if (spec != null && !spec.isEmpty()) {
-                            sb.append(spec).append("\n\n---\n\n");
-                        }
+            StringBuilder systemPromptBuilder = new StringBuilder(
+                    selectedProfile.buildSystemPrompt(task, instructions));
+            systemPromptBuilder.append("\n\n## 可用工具规范\n\n");
+            for (FunctionTool def : registry.all().values()) {
+                if (!SubAgent.SUB_AGENT_DENY.contains(def.name())
+                        && (selectedProfile.allowedTools() == null
+                        || selectedProfile.allowedTools().contains(def.name()))) {
+                    String spec = def.descriptionAndMeta();
+                    if (spec != null && !spec.isEmpty()) {
+                        systemPromptBuilder.append(spec).append("\n\n---\n\n");
                     }
                 }
-                // 注入工具使用指引（同父 Agent 的 buildToolInstructions）
-                sb.append("""
-                        编辑文件用 `edit`（SEARCH/REPLACE，search 必须唯一，先 `read` 确认内容）。
-                        批量编辑用 `edit`（单次调用多 edits）。
-                        不确定文件位置时用 `glob`/`grep`。
-                        需要构建/测试时用 `bash`。
-                        """.stripIndent());
-                boolean terminateOnNoToolCall = parentController == null
-                        || parentController.terminateOnNoToolCall();
-                sb.append(terminateOnNoToolCall
-                        ? "无工具调用时，模型的纯文本回复会结束对话。"
-                        : "结束对话必须调用 `finish`，纯文本回复不会退出循环。");
-                systemPrompt = sb.toString();
             }
+            boolean terminateOnNoToolCall = parentController == null
+                    || parentController.terminateOnNoToolCall();
+            systemPromptBuilder.append(terminateOnNoToolCall
+                    ? "无工具调用时，模型的纯文本回复会结束对话。"
+                    : "结束对话必须调用 `finish`，纯文本回复不会退出循环。");
+            String systemPrompt = systemPromptBuilder.toString();
 
             // 获取父级 AgentLoopController，传播中断信号到子代理
             ModelClient parentClient = parentController != null ? parentController.getModelClient() : null;
             ModelClient sourceClient = parentClient != null ? parentClient : modelClient;
             SubAgent sub = new SubAgent(sourceClient.fork(), registry, systemPrompt, parentController);
+            sub.setAllowedTools(selectedProfile.allowedTools());
 
             if (parentController != null) {
                 parentController.registerToolCancellation(sub::abort);
@@ -153,7 +149,7 @@ public class TaskTool extends AbsToolProvider implements SolonToTools {
                     sub.setSessionService(parentSessionService);
                 }
 
-                String result = sub.run(arguments, new SubAgentListener());
+                String result = sub.run(task, new SubAgentListener());
 
                 // 子代理的 token 用量通过 SubAgent 的 capturingListener 累积到 SubAgent 字段中，
                 // 此处将其上报到父会话的 sessionService（累加到会话总用量）。
@@ -188,12 +184,12 @@ public class TaskTool extends AbsToolProvider implements SolonToTools {
     @Override
     public String getSystemPrompt() {
         return """
-                ## Task 工具
+                ## SubAgent 工具
                 
-                创建隔离子代理处理复杂多步任务。子代理有独立上下文，完成后返回结果给主代理。
-                适用于深入调查多个文件或独立功能实现。
-                参数: name(必填), arguments(可选), systemPrompt(可选)。可写。
-                注意：子代理不可再创建子代理（task 工具对子代理不可用）。
+                派生一个带预设角色的隔离子代理，完成后将结果返回给主代理。
+                角色: explore（只读探索）, implement（实现）, test（测试）, review（只读审查）, plan（只读方案）。
+                参数: profile(必填), task(必填), instructions(可选)。
+                注意：只读角色只能使用只读工具；子代理不可再创建子代理。
                 """;
     }
 }

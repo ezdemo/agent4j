@@ -29,6 +29,35 @@ public class Agent4jConfig {
 
     private Agent4jConfig(ONode root) {
         this.root = root;
+        migrateRenamedTool(root, "task", "sub_agent");
+    }
+
+    /** 将历史工具名迁移到当前名称，保留用户原有的启用或禁用语义。 */
+    private static void migrateRenamedTool(ONode config, String previousName, String currentName) {
+        if (config == null || !config.isObject()) return;
+        for (String key : new String[]{"autoWhitelist", "disabledTools"}) {
+            ONode tools = config.get(key);
+            if (tools == null || !tools.isArray()) continue;
+
+            LinkedHashSet<String> migrated = new LinkedHashSet<>();
+            boolean changed = false;
+            for (ONode item : tools.getArray()) {
+                String toolName = item.getString();
+                if (previousName.equals(toolName)) {
+                    toolName = currentName;
+                    changed = true;
+                }
+                if (toolName != null && !toolName.isEmpty()) {
+                    migrated.add(toolName);
+                }
+            }
+            if (changed) {
+                tools.clear();
+                for (String toolName : migrated) {
+                    tools.add(toolName);
+                }
+            }
+        }
     }
 
     /**
@@ -71,7 +100,7 @@ public class Agent4jConfig {
                     "read", "glob", "write", "ls", "grep", "edit", "finish",
                     "java_source", "workflow_step", "workspace_read", "webfetch",
                     "codesearch", "ask_choice", "workspace_list", "workspace_write",
-                    "call_api", "workflow_start", "task", "workflow_status",
+                    "call_api", "workflow_start", "sub_agent", "workflow_status",
                     "vision_recognize", "skillread", "codegraph_explore"
                   ],
                   "maxContextChars": 200000,
@@ -623,6 +652,7 @@ public class Agent4jConfig {
     public void save() throws IOException {
         // 保存前补充默认配置中缺失的字段
         mergeDefaults(root, defaultConfigNode());
+        migrateRenamedTool(root, "task", "sub_agent");
         Path configPath = getConfigPath();
         String json = JsonWriter.write(root, Options.of(Feature.Write_PrettyFormat));
         Files.writeString(configPath, json);

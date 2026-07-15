@@ -11,8 +11,8 @@ import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.tool.ToolContext;
 
-import java.lang.reflect.Constructor;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Set;
@@ -20,31 +20,28 @@ import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotSame;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class AgentLoopToolTimeoutTest {
 
     @Test
-    void taskUsesDedicatedTimeoutInsteadOfRegularToolTimeout() throws Exception {
-        ToolRegistry registry = registryWith(tool("task", args -> {
+    void subAgentUsesDedicatedTimeoutInsteadOfRegularToolTimeout() throws Exception {
+        ToolRegistry registry = registryWith(tool("sub_agent", args -> {
             Thread.sleep(1_200);
             return "completed";
         }));
         AgentLoop loop = loop(registry, 1, 3);
 
-        ToolExecutionResult result = loop.executeToolCalls(toolCalls("task"));
+        ToolExecutionResult result = loop.executeToolCalls(toolCalls("sub_agent"));
 
         assertEquals("completed", result.toolResults().get(0).getContent());
     }
 
     @Test
-    void taskTimeoutRunsExplicitCancellation() throws Exception {
+    void subAgentTimeoutRunsExplicitCancellation() throws Exception {
         AtomicBoolean cancelled = new AtomicBoolean(false);
         CountDownLatch cancellationObserved = new CountDownLatch(1);
-        ToolRegistry registry = registryWith(tool("task", args -> {
+        ToolRegistry registry = registryWith(tool("sub_agent", args -> {
             ToolContext context = (ToolContext) args.get("ctx");
             context.getLoopController().registerToolCancellation(() -> {
                 cancelled.set(true);
@@ -57,7 +54,7 @@ class AgentLoopToolTimeoutTest {
         }));
         AgentLoop loop = loop(registry, 5, 1);
 
-        ToolExecutionResult result = loop.executeToolCalls(toolCalls("task"));
+        ToolExecutionResult result = loop.executeToolCalls(toolCalls("sub_agent"));
 
         assertTrue(result.toolResults().get(0).getContent().contains("子代理执行超时（1s）"));
         assertTrue(cancellationObserved.await(1, TimeUnit.SECONDS));

@@ -37,15 +37,15 @@ public class SubAgent {
      * 子代理禁止使用的工具名集合（全局维护，新增工具自动对子代理可用）。
      * <p>排除：递归 spawn、工作流管理、会话任务跟踪、用户交互。</p>
      * <ul>
-     *   <li><b>task</b> — 防止递归子代理 spawn</li>
+     *   <li><b>sub_agent</b> — 防止递归子代理 spawn</li>
      *   <li>workflow_start / workflow_step / workflow_status — 工作流管理，主代理专用</li>
      *   <li>goal_mark_step — 目标跟踪，主代理专用</li>
      *   <li>ask_choice — 用户交互，主代理专用（子代理无用户交互）</li>
      * </ul>
-     * <p>public 可见性供 {@code TaskTool} 构建子代理 system prompt 时保持一致的过滤逻辑。</p>
+     * <p>public 可见性供 {@code SubAgentTool} 构建子代理 system prompt 时保持一致的过滤逻辑。</p>
      */
     public static final Set<String> SUB_AGENT_DENY = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
-            "task",                // 防止递归子代理 spawn
+            "sub_agent",           // 防止递归子代理 spawn
             "workflow_start",      // 工作流创建（主代理专用）
             "workflow_step",       // 工作流转步（主代理专用）
             "workflow_status",     // 工作流状态（主代理专用）
@@ -63,7 +63,7 @@ public class SubAgent {
     private final AgentLoopController parentController;
     /**
      * 父代理的 AgentOutput 引用 —— 用于将子代理的流式输出实时推送给用户。
-     * 通过 {@link #setOutput(AgentOutput)} 由 TaskTool 注入。
+     * 通过 {@link #setOutput(AgentOutput)} 由 SubAgentTool 注入。
      */
     private AgentOutput parentOutput = null;
     /** 父会话 ID（用于子代理 tools 中的 sessionId 传递） */
@@ -162,6 +162,11 @@ public class SubAgent {
         this.config = config;
     }
 
+    /** 设置角色级工具白名单；传 null 表示继承父代理的全部可用工具。 */
+    public void setAllowedTools(Set<String> allowedTools) {
+        this.registry.setForceAllowTools(allowedTools);
+    }
+
     /**
      * 是否有用量数据
      */
@@ -171,7 +176,7 @@ public class SubAgent {
 
     /**
      * 设置子代理 HITL 模式。
-     * <p>默认 "free"，保持向后兼容；TaskTool 会传入父代理当前的完整模式。</p>
+     * <p>默认 "free"，保持向后兼容；SubAgentTool 会传入父代理当前的完整模式。</p>
      *
      * @param mode "free" / "approval" / "auto"，向后兼容 "true"/"false"
      */
