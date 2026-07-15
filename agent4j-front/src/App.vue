@@ -66,11 +66,13 @@
         hide-header 
         :workspace-hash="currentSessionWorkspace"
         :session-name="currentSession"
+        :workspaces="workspaces"
         :version="appVersion"
         style="flex:1;min-height:0"
         @session-updated="onSessionUpdated"
         @session-branched="onSessionBranched"
         @start-task="startTaskFromWelcome"
+        @switch-workspace="switchWelcomeWorkspace"
       />
     </main>
 
@@ -724,6 +726,7 @@ const loadData = async () => {
     }
   } catch {}
   await loadWorkspaces()
+  await initializeWorkspaceContext()
   await loadSessions()
   initialDataLoaded.value = true
 }
@@ -869,6 +872,14 @@ const switchWorkspaceContext = async (hash) => {
   if (!ws) return
   await configAPI.switchWorkspace(ws.path)
   workspace.value = ws.path
+}
+
+const initializeWorkspaceContext = async () => {
+  if (currentSessionWorkspace.value || workspaces.value.length === 0) return
+  const activeWorkspace = workspaces.value.find(item => item.path === workspace.value)
+  const targetWorkspace = activeWorkspace || workspaces.value[0]
+  await switchWorkspaceContext(targetWorkspace.hash)
+  currentSessionWorkspace.value = targetWorkspace.hash
 }
 
 // 切换工作区（用户主动操作，切换后新建会话）
@@ -1107,9 +1118,37 @@ const newChat = async (skipReload = false) => {
   }
 }
 
-const startTaskFromWelcome = async (prompt) => {
-  pendingStarterPrompt.value = prompt || ''
-  showWorkspacePicker.value = true
+const startTaskFromWelcome = async (request) => {
+  const prompt = typeof request === 'string' ? request : request?.prompt || ''
+  const workspaceHash = typeof request === 'string' ? null : request?.workspaceHash
+
+  if (!workspaceHash) {
+    pendingStarterPrompt.value = prompt
+    showWorkspacePicker.value = true
+    return
+  }
+
+  try {
+    await switchWorkspaceContext(workspaceHash)
+    currentSessionWorkspace.value = workspaceHash
+    await newChat(true)
+    await nextTick()
+    await chatRef.value?.startWelcomePrompt(prompt)
+  } catch (e) {
+    console.error('从欢迎页创建会话失败:', e)
+    message.error('创建新会话失败: ' + (e.message || '未知错误'))
+  }
+}
+
+const switchWelcomeWorkspace = async (workspaceHash) => {
+  if (!workspaceHash || workspaceHash === currentSessionWorkspace.value) return
+  try {
+    await switchWorkspaceContext(workspaceHash)
+    currentSessionWorkspace.value = workspaceHash
+  } catch (e) {
+    console.error('从欢迎页切换工作区失败:', e)
+    message.error('切换工作区失败: ' + (e.message || '未知错误'))
+  }
 }
 
 const applyPendingStarterPrompt = async () => {

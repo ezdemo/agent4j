@@ -29,37 +29,36 @@
     </div>
 
     <!-- 消息区 -->
-    <div ref="messagesContainer" class="messages">
+    <div ref="messagesContainer" class="messages" :class="{ 'messages-welcome': !props.sessionName || messages.length === 0 }">
       <!-- 空状态：无会话或新建的空会话 -->
-      <div v-if="!props.sessionName || messages.length === 0" class="empty empty-welcome">
-        <div class="empty-welcome-mark">
-          <svg width="34" height="34" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6">
-            <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z"/>
-          </svg>
-        </div>
-        <h1 class="empty-welcome-title">今天在 Agent4j 中做什么？</h1>
-        <div class="welcome-actions">
-          <button class="welcome-action explore" @click="startWelcomeTask('探索当前项目的代码结构，找出关键模块和调用关系。')">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/><path d="M8.5 11h5M11 8.5v5"/></svg>
-            <span>探索代码</span>
-            <small>梳理结构与关键调用</small>
-          </button>
-          <button class="welcome-action build" @click="startWelcomeTask('分析当前项目并实现一个新功能。')">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m14 6 4 4-9.5 9.5H4.5v-4z"/><path d="m13 7 4 4"/></svg>
-            <span>构建功能</span>
-            <small>实现功能、应用或工具</small>
-          </button>
-          <button class="welcome-action review" @click="startWelcomeTask('审查当前项目的代码，找出风险并提出改进建议。')">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 4v5h5"/><path d="M20 20v-5h-5"/><path d="M19 9A7 7 0 0 0 6.2 6.2L4 9m16 6-2.2 2.8A7 7 0 0 1 5 15"/></svg>
-            <span>审查代码</span>
-            <small>识别风险并给出建议</small>
-          </button>
-          <button class="welcome-action fix" @click="startWelcomeTask('定位当前项目中的问题并修复它。')">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m14.7 6.3 3 3"/><path d="m6.2 17.8 4.6-4.6"/><path d="M14.7 6.3a5.5 5.5 0 0 0-7.4 7.4l-4.5 4.5a1.6 1.6 0 0 0 2.3 2.3l4.5-4.5a5.5 5.5 0 0 0 7.4-7.4z"/></svg>
-            <span>修复问题</span>
-            <small>定位故障并验证修复</small>
-          </button>
-        </div>
+      <div v-if="!props.sessionName || messages.length === 0" class="empty welcome-screen">
+        <div class="welcome-watermark" aria-hidden="true">A</div>
+        <section class="welcome-panel">
+          <h1 class="welcome-heading">{{ welcomeGreeting }}，有什么想让我帮忙的吗</h1>
+          <div class="welcome-composer">
+            <div class="welcome-workspace-row">
+              <button class="welcome-workspace-button" type="button" @click="toggleWelcomeWorkspace">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>
+                <span>{{ selectedWelcomeWorkspace?.name || '选择项目' }}</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div v-if="welcomeWorkspaceMenuOpen" class="welcome-workspace-menu">
+                <button v-for="workspace in workspaces" :key="workspace.hash" type="button"
+                        :class="{ active: workspace.hash === welcomeWorkspaceHash }"
+                        @click="selectWelcomeWorkspace(workspace.hash)">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>
+                  {{ workspace.name }}
+                </button>
+                <span v-if="workspaces.length === 0" class="welcome-workspace-empty">暂无可用项目</span>
+              </div>
+            </div>
+            <ChatInput welcome-mode v-model:input-text="welcomeText" :usage="usage" :current-model="currentModel" :available-models="availableModels"
+                       :current-reasoning-effort="currentReasoningEffort" :terminate-on-no-tool-call="terminateOnNoToolCall" :current-permission="currentPermission"
+                       :workspace-hash="welcomeWorkspaceHash" :current-skill="currentSkill" @send="sendWelcomeMessage" @switch-model="handleSwitchModel"
+                       @switch-reasoning-effort="handleSwitchReasoningEffort" @switch-terminate-on-no-tool-call="handleSwitchTerminateOnNoToolCall"
+                       @switch-permission="handleSwitchPermission" @switch-skill="handleSwitchSkill" />
+          </div>
+        </section>
       </div>
 
       <!-- 消息列表 -->
@@ -159,18 +158,8 @@
       @close="closeDiffViewer"
     />
 
-    <!-- 无会话时：禁用输入框占位 -->
-    <div v-if="!props.sessionName" class="no-session-input-bar">
-      <div class="no-session-input-placeholder">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
-        </svg>
-        <span>请先选择或新建一个会话</span>
-      </div>
-    </div>
-
     <!-- 输入区（独立组件） -->
-    <ChatInput v-else
+    <ChatInput v-if="props.sessionName && messages.length > 0"
         v-model:inputText="inputText"
         :streaming="streaming"
         :usage="usage"
@@ -220,6 +209,9 @@ import ChatInput from '../components/ChatInput.vue'
 import ChatMessage from '../components/ChatMessage.vue'
 import DiffViewer from '../components/DiffViewer.vue'
 import ActionConfirmDialog from '../components/ActionConfirmDialog.vue'
+import PermissionModeSelector from '../components/PermissionModeSelector.vue'
+import ReasoningEffortSelector from '../components/ReasoningEffortSelector.vue'
+import SkillSelector from '../components/SkillSelector.vue'
 
 import {useAppStore} from '../stores/app'
 
@@ -292,20 +284,99 @@ const props = defineProps({
   hideHeader: {type: Boolean, default: false},
   workspaceHash: {type: String, default: null},
   sessionName: {type: String, default: null},
+  workspaces: {type: Array, default: () => []},
   version: {type: String, default: ''}
 })
 
-const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask'])
+const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask', 'switchWorkspace'])
 const store = useAppStore()
 
 const messagesContainer = ref(null)
 const inputText = ref('')
-const startWelcomeTask = (prompt) => {
+const welcomeInput = ref(null)
+const welcomeText = ref('')
+const welcomeWorkspaceHash = ref('')
+const welcomeWorkspaceMenuOpen = ref(false)
+const welcomeModelMenuOpen = ref(false)
+const welcomePermissionSelector = ref(null)
+const welcomeEffortSelector = ref(null)
+const welcomeSkillSelector = ref(null)
+
+const welcomeGreeting = computed(() => {
+  const hour = new Date().getHours()
+  if (hour < 6) return '夜深了'
+  if (hour < 11) return '早上好'
+  if (hour < 14) return '中午好'
+  if (hour < 18) return '下午好'
+  return '晚上好'
+})
+
+const selectedWelcomeWorkspace = computed(() =>
+  props.workspaces.find(workspace => workspace.hash === welcomeWorkspaceHash.value)
+)
+
+
+watch(() => props.workspaceHash, (hash) => {
+  if (hash) welcomeWorkspaceHash.value = hash
+}, {immediate: true})
+
+watch(() => props.workspaces, (workspaces) => {
+  if (!workspaces.some(workspace => workspace.hash === welcomeWorkspaceHash.value)) {
+    welcomeWorkspaceHash.value = workspaces[0]?.hash || ''
+  }
+}, {immediate: true})
+
+
+const selectWelcomeWorkspace = (workspaceHash) => {
+  welcomeWorkspaceMenuOpen.value = false
+  emit('switchWorkspace', workspaceHash)
+}
+
+const closeWelcomeMenus = (except = '') => {
+  if (except !== 'workspace') welcomeWorkspaceMenuOpen.value = false
+  if (except !== 'model') welcomeModelMenuOpen.value = false
+  if (except !== 'permission') welcomePermissionSelector.value?.close()
+  if (except !== 'effort') welcomeEffortSelector.value?.close()
+  if (except !== 'skill') welcomeSkillSelector.value?.close()
+}
+
+const toggleWelcomeWorkspace = () => {
+  const nextOpen = !welcomeWorkspaceMenuOpen.value
+  closeWelcomeMenus('workspace')
+  welcomeWorkspaceMenuOpen.value = nextOpen
+}
+
+const toggleWelcomeModel = () => {
+  const nextOpen = !welcomeModelMenuOpen.value
+  closeWelcomeMenus('model')
+  welcomeModelMenuOpen.value = nextOpen
+}
+
+const handleWelcomeOutsideClick = (event) => {
+  const target = event.target
+  if (target.closest('.welcome-workspace-row, .welcome-model-selector, .permission-selector, .reasoning-selector, .skill-selector')) return
+  closeWelcomeMenus()
+}
+
+const selectWelcomeModel = async (modelName) => {
+  welcomeModelMenuOpen.value = false
+  await handleSwitchModel(modelName)
+}
+
+
+const sendWelcomeMessage = async (images, messageText) => {
+  const prompt = messageText?.trim()
+  if (!prompt) return
+
   if (props.sessionName) {
-    inputText.value = prompt
+    welcomeText.value = ''
+    await sendMessage(images, prompt)
     return
   }
-  emit('startTask', prompt)
+
+  if (!welcomeWorkspaceHash.value) return
+  welcomeText.value = ''
+  emit('startTask', {prompt, workspaceHash: welcomeWorkspaceHash.value})
 }
 
 // 快照检查点：msgId -> snapshotId 映射（用于消息关联和撤回按钮显示）
@@ -380,20 +451,27 @@ const loadUsage = async (override) => {
     if (sessName) params.sessionName = sessName
 
     const [usageRes, modelsRes, configRes] = await Promise.allSettled([
-      configAPI.getUsage(params),
+      wsHash ? configAPI.getUsage(params) : Promise.resolve(null),
       configAPI.getModels(),
       configAPI.getConfig()
     ])
     // 会话切换可能在请求返回前再次发生，过期响应不得覆盖当前会话的用量。
     if (requestId !== usageRequestId) return
-    if (usageRes.status === 'fulfilled' && usageRes.value.success) {
+    if (usageRes.status === 'fulfilled' && usageRes.value?.success) {
       usage.value = {...usage.value, ...usageRes.value.data}
     }
+    const configuredModel = configRes.status === 'fulfilled' && configRes.value.success
+      ? configRes.value.data?.model || ''
+      : ''
     if (modelsRes.status === 'fulfilled' && modelsRes.value.success) {
-      currentModel.value = modelsRes.value.data?.current || ''
+      currentModel.value = modelsRes.value.data?.current
+        || modelsRes.value.data?.models?.find(model => model.active)?.name
+        || configuredModel
+        || currentModel.value
       availableModels.value = modelsRes.value.data?.models || []
     }
     if (configRes.status === 'fulfilled' && configRes.value.success) {
+      if (!currentModel.value) currentModel.value = configuredModel
       currentReasoningEffort.value = configRes.value.data?.reasoningEffort || 'max'
       terminateOnNoToolCall.value = configRes.value.data?.terminateOnNoToolCall !== false
       currentPermission.value = configRes.value.data?.hitl || 'free'
@@ -422,14 +500,12 @@ const formatTime = (t) => {
 // 监听 workspace 和 session 变化，重新加载 usage
 watch([() => props.workspaceHash, () => props.sessionName], ([ws, sess]) => {
   if (ws || sess) {
-    if (sess) {
-      loadUsage()
-    }
+    loadUsage()
   }
 })
 
 onMounted(() => {
-  if (props.sessionName) loadUsage()
+  loadUsage()
   // 监听复制成功事件
   window.addEventListener('copy-success', (e) => {
     addLog({level: 'INFO', text: '✅ ' + (e.detail || '已复制'), time: Date.now()})
@@ -1333,16 +1409,25 @@ const sendCommand = async cmd => {
   await sendMessage()
 }
 
+const startWelcomePrompt = async (prompt) => {
+  inputText.value = prompt || ''
+  await nextTick()
+  await sendMessage()
+}
+
 // 加载历史消息（仅在明确选了 session 时）
 onMounted(() => {
+  document.addEventListener('click', handleWelcomeOutsideClick)
   if (props.sessionName) loadHistory()
 })
+
+onBeforeUnmount(() => document.removeEventListener('click', handleWelcomeOutsideClick))
 
 const setDraft = (text) => {
   inputText.value = text || ''
 }
 
-defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, exportChat, refreshHistory, setDraft})
+defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, startWelcomePrompt, exportChat, refreshHistory, setDraft})
 </script>
 
 <style scoped>
@@ -2055,4 +2140,359 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
     .chat-head-title { font-size: 13px; }
 }
 
+.messages.messages-welcome { padding: 0; }
+
+</style>
+
+<style scoped>
+.welcome-screen {
+  position: relative;
+  min-height: 100%;
+  padding: 40px 24px 132px;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.welcome-watermark {
+  position: absolute;
+  top: -144px;
+  left: 50%;
+  z-index: -1;
+  color: #f3f3f4;
+  font-family: Georgia, serif;
+  font-size: 430px;
+  font-weight: 400;
+  line-height: 1;
+  transform: translateX(-50%) rotate(-10deg);
+  user-select: none;
+}
+
+.welcome-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, 800px);
+  margin: auto;
+}
+
+.welcome-heading {
+  margin: 0 0 54px;
+  color: #29292d;
+  font-size: 36px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.welcome-composer {
+  width: 100%;
+  padding: 0 8px 8px;
+  border-radius: 10px;
+  background: #f2f2f3;
+}
+
+.welcome-workspace-row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-height: 50px;
+}
+
+.welcome-workspace-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.welcome-workspace-button:hover,
+.welcome-workspace-button:focus-visible {
+  background: #e7e7e9;
+  outline: none;
+}
+
+.welcome-workspace-button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.welcome-workspace-button > svg:first-child { color: var(--fg-3); }
+.welcome-workspace-button > svg:last-child { color: var(--fg-4); }
+
+.welcome-workspace-menu,
+.welcome-model-menu {
+  position: absolute;
+  z-index: 20;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  box-shadow: var(--shadow-lg);
+}
+
+.welcome-workspace-menu {
+  top: calc(100% - 3px);
+  left: 8px;
+  width: min(300px, calc(100vw - 64px));
+  padding: 4px;
+}
+
+.welcome-workspace-menu button,
+.welcome-model-menu button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.welcome-workspace-menu button:hover,
+.welcome-workspace-menu button.active,
+.welcome-model-menu button:hover,
+.welcome-model-menu button.active {
+  background: var(--bg-3);
+  color: var(--fg);
+}
+
+.welcome-workspace-empty {
+  display: block;
+  padding: 10px;
+  color: var(--fg-4);
+  font-size: 12px;
+}
+
+.welcome-composer textarea {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  padding: 16px;
+  border: 1px solid #dedee1;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  outline: none;
+  resize: none;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.welcome-composer textarea::placeholder { color: #aaaaaf; }
+.welcome-composer textarea:focus { border-color: var(--accent); }
+.welcome-composer:focus-within .welcome-composer-footer { border-color: var(--accent); }
+
+.welcome-composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 54px;
+  padding: 8px 10px 8px 15px;
+  border: 1px solid #dedee1;
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  background: var(--bg);
+}
+
+.welcome-composer-options,
+.welcome-composer-actions,
+.welcome-option {
+  display: flex;
+  align-items: center;
+}
+
+.welcome-composer-options { gap: 16px; }
+.welcome-option {
+  gap: 6px;
+  color: var(--fg-2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.welcome-option:first-child { color: var(--fg-3); }
+.welcome-composer-actions { gap: 10px; }
+
+.welcome-model-selector { position: relative; }
+.welcome-model-button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 210px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-2);
+  font: 13px var(--mono);
+  cursor: pointer;
+}
+
+.welcome-model-button:hover { background: var(--bg-3); }
+.welcome-model-button:disabled { cursor: default; opacity: 0.7; }
+.welcome-model-button:disabled:hover { background: transparent; }
+.welcome-model-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.welcome-model-button svg { flex: 0 0 auto; color: var(--fg-4); }
+
+.welcome-model-menu {
+  right: 0;
+  bottom: calc(100% + 8px);
+  min-width: 190px;
+  padding: 4px;
+}
+
+.welcome-model-menu button { font-family: var(--mono); }
+
+.welcome-control { position: relative; }
+.welcome-control-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.welcome-control-button:hover { background: var(--bg-3); }
+.welcome-control-button svg { color: var(--fg-4); }
+
+.welcome-control-menu,
+.welcome-effort-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  box-shadow: var(--shadow-lg);
+}
+
+.welcome-control-menu {
+  min-width: 128px;
+  padding: 4px;
+}
+
+.welcome-control-menu button {
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.welcome-control-menu button:hover,
+.welcome-control-menu button.active {
+  background: var(--bg-3);
+  color: var(--accent);
+}
+
+.welcome-effort-menu {
+  width: min(270px, calc(100vw - 28px));
+  padding: 12px;
+}
+
+.welcome-effort-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: var(--fg-3);
+  font-size: 11px;
+}
+
+.welcome-effort-summary strong { color: var(--accent); font-size: 13px; }
+.welcome-effort-range { width: 100%; accent-color: var(--accent); cursor: pointer; }
+.welcome-effort-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+  color: var(--fg-4);
+  font-size: 10px;
+}
+
+.welcome-send-button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: #707177;
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--t), transform var(--t);
+}
+
+.welcome-send-button:hover:not(:disabled) {
+  background: #4e4f54;
+  transform: translateY(-1px);
+}
+
+.welcome-send-button:disabled { cursor: not-allowed; opacity: 0.42; }
+
+[data-theme="dark"] .welcome-watermark { color: #151515; }
+[data-theme="dark"] .welcome-heading { color: var(--fg); }
+[data-theme="dark"] .welcome-composer { background: #202020; }
+[data-theme="dark"] .welcome-workspace-button:hover,
+[data-theme="dark"] .welcome-workspace-button:focus-visible { background: #2b2b2b; }
+[data-theme="dark"] .welcome-composer textarea,
+[data-theme="dark"] .welcome-composer-footer {
+  border-color: #303030;
+  background: #171717;
+}
+
+@media (max-width: 768px) {
+  .welcome-screen { padding: 24px 8px 84px; }
+  .welcome-watermark { top: -52px; font-size: 270px; }
+  .welcome-heading { margin-bottom: 28px; font-size: 28px; }
+  .welcome-composer-options { gap: 10px; }
+  .welcome-model-button { max-width: 130px; }
+}
+
+@media (max-width: 520px) {
+  .welcome-heading { font-size: 24px; }
+  .welcome-composer-footer { align-items: flex-end; gap: 10px; }
+  .welcome-composer-options { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .welcome-model-button { max-width: 94px; }
+  .welcome-control-button { padding-inline: 4px; }
+  .welcome-composer-actions { gap: 4px; }
+}
 </style>
