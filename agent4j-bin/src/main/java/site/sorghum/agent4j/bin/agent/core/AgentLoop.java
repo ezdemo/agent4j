@@ -261,6 +261,7 @@ public class AgentLoop implements AgentLoopController {
     /** 重置用户中断标志（每回合开始时调用） */
     public void resetUserAbort() {
         userAbortRequested = false;
+        client.resetStreamAbort();
     }
 
     public void setListener(AgentLoopListener listener) {

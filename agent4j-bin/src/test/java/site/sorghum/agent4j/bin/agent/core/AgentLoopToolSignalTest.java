@@ -6,10 +6,13 @@ import org.noear.solon.ai.chat.tool.FunctionToolDesc;
 import site.sorghum.agent4j.bin.agent.model.HitlState;
 import site.sorghum.agent4j.bin.agent.model.ToolExecutionResult;
 import site.sorghum.agent4j.bin.agent.hitl.HitlManager;
+import site.sorghum.agent4j.bin.agent.model.ChatMessage;
+import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.tool.HitlRequiredException;
 
 import java.nio.file.Paths;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -27,6 +30,40 @@ class AgentLoopToolSignalTest {
         assertTrue(loop.terminateOnNoToolCall());
         loop.setTerminateOnNoToolCall(false);
         assertFalse(loop.terminateOnNoToolCall());
+    }
+
+    @Test
+    void resetUserAbortAlsoClearsModelStreamAbort() {
+        AtomicInteger resets = new AtomicInteger();
+        ModelClient client = new ModelClient() {
+            @Override
+            public ONode chat(List<ChatMessage> messages, ONode tools) {
+                return null;
+            }
+
+            @Override
+            public void chatStream(List<ChatMessage> messages, ONode tools, StreamCallback callback) {
+            }
+
+            @Override
+            public String getModel() {
+                return "test";
+            }
+
+            @Override
+            public void setModel(String model) {
+            }
+
+            @Override
+            public void resetStreamAbort() {
+                resets.incrementAndGet();
+            }
+        };
+        AgentLoop loop = new AgentLoop(client, registryWith(tool("status", args -> "ok")), null);
+
+        loop.resetUserAbort();
+
+        assertEquals(1, resets.get());
     }
 
     @Test
