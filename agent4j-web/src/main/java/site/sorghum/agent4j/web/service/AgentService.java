@@ -605,7 +605,7 @@ public class AgentService {
             // HITL 待审批时跳过：interceptForHITL/interceptForSandboxHITL 已通过
             // output.onContentDelta() 发送过 HITL 消息，此处不应重复发送
             if (reply != null && !reply.isEmpty() && agent.noPendingHITL()) {
-                emitter.sendFileChanges(SessionFileChangeTracker.drain(Paths.get(workspacePath), effectiveSessionName));
+                agent.getCurrentTurnFileChanges().forEach(emitter::sendFileChanges);
                 emitter.sendComplete(reply);
             }
         } catch (Exception e) {

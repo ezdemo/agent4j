@@ -22,9 +22,29 @@
 
 ---
 
-## 🚀 快速开始
+## 📖 这是什么？
 
-> 📋 [更新日志](CHANGELOG.md) — 查看各版本变更记录
+**Agent4j** 是一个纯 Java 17 的 AI 编码代理。和 Claude Code、Codex、OpenCode、Reasonix 一样——你给它一个任务，它能自己读代码、写代码、跑命令、调 API，一步步把事情干完。
+
+核心是一个 **推理循环（Reasoning Loop）**：
+
+```
+用户说 → LLM 想 → 调工具 → 看结果 → LLM 再想 → 再调工具 → …… → 干完
+```
+
+| 对标产品            | 实现语言          |
+|-----------------|---------------|
+| **Claude Code** | TypeScript    |
+| **Codex**       | TypeScript    |
+| **OpenCode**    | Go            |
+| **Reasonix**    | Rust          |
+| **Agent4j**     | **Java 17** ✅ |
+
+如果你在用 Java 技术栈，又想有一个 AI 编码代理来帮忙写代码、改代码、跑构建、查日志——Agent4j 是你的选择。
+
+---
+
+## 🚀 快速开始
 
 ### 一键安装
 
@@ -60,29 +80,6 @@ agent4j web 0
 
 ---
 
-## 📖 这是什么？
-
-**Agent4j** 是一个纯 Java 17 的 AI 编码代理。和 Claude Code、Codex、OpenCode、Reasonix 一样——你给它一个任务，它能自己读代码、写代码、跑命令、调
-API，一步步把事情干完。
-
-核心是一个 **推理循环（Reasoning Loop）**：
-
-```
-用户说 → LLM 想 → 调工具 → 看结果 → LLM 再想 → 再调工具 → …… → 干完
-```
-
-| 对标产品            | 实现语言          |
-|-----------------|---------------|
-| **Claude Code** | TypeScript    |
-| **Codex**       | TypeScript    |
-| **OpenCode**    | Go            |
-| **Reasonix**    | Rust          |
-| **Agent4j**     | **Java 17** ✅ |
-
-如果你在用 Java 技术栈，又想有一个 AI 编码代理来帮忙写代码、改代码、跑构建、查日志——Agent4j 是你的选择。
-
----
-
 ## 📸 界面预览
 
 ### 主界面
@@ -98,41 +95,6 @@ API，一步步把事情干完。
   &nbsp;&nbsp;
   <img src="img/data_dashboard_2.png" width="45%" alt="数据面板 2"/>
 </p>
-
----
-
-## 🆕 最新更新（v26.6.29）
-
-### 🐾 桌面宠物精灵
-- 新增桌面宠物精灵组件 (PetSprite)，支持精灵图动画与拖拽移动
-- 多宠物选择与切换，设置页面管理和切换不同宠物
-- 宠物初始化与快捷安装提示，首次使用引导安装
-
-### 🛠️ 技能选择与权限切换
-- 聊天输入框内可搜索并多选技能，自动拼接到消息中
-- 自由模式/审批模式一键切换，无需进入设置
-
-### 🔒 HITL 免审批工具
-- `finish` / `ask_choice` 等纯交互控制流工具直接放行，无需用户确认
-
-### 🧠 模型适配
-- HttpModelClient 添加 `thinking` 字段，兼容更多推理模型配置
-
-> 📋 完整变更记录请查看 [CHANGELOG.md](CHANGELOG.md)
-
----
-
-## ⚡ 前缀缓存命中率
-
-Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）** 能力——系统提示词、工具定义、项目文档等每次都在 prompt
-开头的重复内容，直接命中 KV cache：
-
-| 模型                                                | 缓存命中率     | 效果               |
-|---------------------------------------------------|-----------|------------------|
-| **DeepSeek**（deepseek-v4-flash / deepseek-v4-pro） | **≥ 97%** | 输入 token 费用降至 3% |
-| **小米 Mimo**（mimo-v2.5 / mimo-v2.5-pro）            | **≥ 98%** | 输入 token 费用降至 2% |
-
-实际编码会话中，消息列表头部的大量系统指令和工具描述每次都一样，前缀缓存命中后这部分 token 几乎免费。
 
 ---
 
@@ -153,7 +115,7 @@ Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）** �
 
 - **声明式工具**：继承 `AgentTool` 基类，定义名称、参数、执行逻辑即可
 - **自动注册**：Solon `@Component` 自动发现
-- **MCP 支持**：接入 Model Context Protocol 服务器
+- **MCP 支持**：接入 Model Context Protocol 协议
 
 <p align="center">
   <img src="img/mcp_setting.png" width="60%" alt="MCP 设置"/>
@@ -186,8 +148,7 @@ Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）** �
 
 - 多会话创建、切换、搜索、删除
 - JSONL 格式持久化，工作区隔离
-- 自动生成会话标题
-- 记录每次的 token 用量
+- 自动生成会话标题，记录每次 token 用量
 - 消息快照系统（基于 Git 的检查点与撤回）
 
 ### 🌐 三种界面
@@ -201,13 +162,33 @@ Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）** �
 ### 🎨 前端
 
 - 深色、浅色、复古绿、复古黄四套主题
-- SSE 流式打字机效果
-- 工具调用可视化
-- Git 面板
-- 工作区管理
-- 毛玻璃视觉效果
-- 代码语法高亮（Shiki/Shikiji）
-- 消息时间戳与流式加载动画
+- SSE 流式打字机效果，工具调用可视化
+- Git 面板、工作区管理、代码语法高亮（Shiki/Shikiji）
+- 毛玻璃视觉效果、消息时间戳与流式加载动画
+
+---
+
+## 🆕 近期亮点
+
+> 📋 完整更新历史请查看 [CHANGELOG.md](CHANGELOG.md)
+
+- **桌面宠物精灵**：精灵图动画、拖拽移动、多宠物切换
+- **技能选择与权限切换**：输入框内搜索多选技能，自由/审批模式一键切换
+- **HITL 免审批工具**：`finish` / `ask_choice` 等控制流工具直接放行
+- **模型适配**：HttpModelClient 新增 `thinking` 字段，兼容更多推理模型
+
+---
+
+## ⚡ 前缀缓存
+
+Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）**能力——系统提示词、工具定义、项目文档等每次都在 prompt 开头的重复内容，直接命中 KV cache：
+
+| 模型                                                | 缓存命中率     | 效果               |
+|---------------------------------------------------|-----------|------------------|
+| **DeepSeek**（deepseek-v4-flash / deepseek-v4-pro） | **≥ 97%** | 输入 token 费用降至 3% |
+| **小米 Mimo**（mimo-v2.5 / mimo-v2.5-pro）            | **≥ 98%** | 输入 token 费用降至 2% |
+
+实际编码会话中，消息列表头部的大量系统指令和工具描述每次都一样，前缀缓存命中后这部分 token 几乎免费。
 
 ---
 
@@ -325,13 +306,13 @@ agent4j/
 | `bash`                                                                      | 跑命令        |
 | `bash_start` / `bash_wait` / `bash_stdin` / `bash_stop`                     | 交互式命令会话    |
 | `sub_agent`                                                                 | 派生预设角色子代理 |
-| `workspace_read` / `workspace_write` / `workspace_list` | 工作区操作      |
+| `workspace_read` / `workspace_write` / `workspace_list`                     | 工作区操作      |
 | `webfetch`                                                                  | 抓网页        |
 | `codesearch`                                                                | 搜索代码       |
-| `java_source`                                                               | Java源码查找   |
+| `java_source`                                                               | Java 源码查找   |
 | `call_api`                                                                  | 调 REST API |
 | `remember` / `recall_memory` / `forget`                                     | 持久记忆       |
-| `vision_recognize`                                                           | 图片识别       |
+| `vision_recognize`                                                          | 图片识别       |
 | `submit_plan` / `revise_plan` / `mark_step_complete`                        | 计划管理       |
 | `ask_choice` / `todo_write`                                                 | 用户交互       |
 | `run_background` / `stop_job` / `wait_for_job` / `job_output` / `list_jobs` | 后台作业       |
@@ -353,14 +334,14 @@ agent4j/
 
 ## 📊 性能
 
-| 指标               | 数据            |
-|------------------|---------------|
-| DeepSeek 前缀缓存命中率 | **≥ 97%**     |
-| 小米 Mimo 前缀缓存命中率  | **≥ 98%**     |
-| 输入成本压缩           | **至原始 2%~3%** |
-| 最大上下文字符          | 200,000       |
-| 会话并发             | 50（LRU）       |
-| 工具超时             | 360 秒可配       |
+| 指标            | 数据      |
+|---------------|---------|
+| 最大上下文字符      | 200,000 |
+| 会话并发         | 50（LRU） |
+| 工具超时         | 360 秒可配 |
+| 子代理超时        | 3600 秒  |
+
+> ⚡ 前缀缓存：DeepSeek **≥ 97%** / 小米 Mimo **≥ 98%**，输入成本降至原始的 **2%~3%**。[详情](#-前缀缓存)
 
 ---
 
@@ -387,10 +368,3 @@ agent4j/
 ## 📄 许可证
 
 MIT License © 2026 Sorghum
-
----
-
-<p align="center">
-  <strong>Agent4j</strong> — 纯 Java 的 AI 编码代理<br>
-  像 Claude Code 一样干活，用 Java 写
-</p>

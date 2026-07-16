@@ -633,7 +633,7 @@ public class AgentLoop implements AgentLoopController {
             }
 
             // ---- 7. 写入 assistant 消息 + 工具结果 ----
-            ctx.addAssistant(sr.content(), ter.tcList(), sr.reasoningContent());
+            ctx.addAssistant(sr.content(), ter.tcList(), sr.reasoningContent(), ter.fileChanges());
             for (ChatMessage tr : ter.toolResults()) {
                 ctx.addToolResult(tr.getToolCallId(), tr.getContent());
             }
@@ -679,6 +679,7 @@ public class AgentLoop implements AgentLoopController {
 
         // 并行执行暂存的工具调用
         ToolExecutionResult ter = executeToolCalls(state.toolCalls());
+        ctx.setLatestAssistantFileChanges(ter.fileChanges());
 
         // 沙箱越界 HITL：暂停并等待用户审批
         if (hitlManager.getState() == HitlState.PENDING && hitlManager.hasSandboxPending()) {
@@ -719,6 +720,7 @@ public class AgentLoop implements AgentLoopController {
         resetUserAbort();
 
         ToolExecutionResult initialTer = executeToolCalls(state.toolCalls());
+        ctx.setLatestAssistantFileChanges(initialTer.fileChanges());
 
         // 写入工具结果
         for (ChatMessage tr : initialTer.toolResults()) {
@@ -946,7 +948,7 @@ public class AgentLoop implements AgentLoopController {
 
     ToolExecutionResult executeToolCalls(ONode toolCalls) {
         if (toolCalls == null){
-            return new ToolExecutionResult(Collections.emptyList(),Collections.emptyList(),false);
+            return new ToolExecutionResult(Collections.emptyList(), Collections.emptyList(), Collections.emptyList(), false);
         }
 
         List<ONode> tcArray = toolCalls.getArray();
@@ -970,7 +972,9 @@ public class AgentLoop implements AgentLoopController {
                     "[hitl] 沙箱越界触发强制审批: " + hitlEx.getDetails()));
         }
 
-        return new ToolExecutionResult(parsed.tcList(), toolResults, dispatch.anySuppressed().get());
+        return new ToolExecutionResult(parsed.tcList(), toolResults,
+                SessionFileChangeTracker.drain(registry.getWorkspace(), getSessionId()),
+                dispatch.anySuppressed().get());
     }
 
     private record ParsedToolCalls(List<ToolCallEntry> tcList, List<ONode> nodeList) {}

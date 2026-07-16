@@ -4,6 +4,7 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import site.sorghum.agent4j.bin.agent.model.ChatMessage;
+import site.sorghum.agent4j.bin.agent.model.FileChange;
 import site.sorghum.agent4j.bin.agent.model.ToolCallEntry;
 import site.sorghum.agent4j.bin.util.ONodeUtil;
 import site.sorghum.agent4j.tool.interact.FinishTool;
@@ -144,6 +145,17 @@ public class JsonlSessionStore implements SessionStore {
         }
         if (msg.getReasoningContent() != null) {
             node.set("reasoning_content", msg.getReasoningContent());
+        }
+        if (msg.getFileChanges() != null && !msg.getFileChanges().isEmpty()) {
+            org.noear.snack4.ONode changes = node.getOrNew("file_changes").asArray();
+            for (FileChange change : msg.getFileChanges()) {
+                org.noear.snack4.ONode item = changes.addNew().asObject();
+                item.set("path", change.path());
+                item.set("additions", change.additions());
+                item.set("deletions", change.deletions());
+                item.set("created", change.created());
+                item.set("diff", change.diff());
+            }
         }
         if (msg.getSnapshotId() != null) {
             node.set("snapshot_id", msg.getSnapshotId());

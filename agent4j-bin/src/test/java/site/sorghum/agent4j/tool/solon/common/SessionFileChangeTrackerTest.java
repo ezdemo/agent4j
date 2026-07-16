@@ -2,6 +2,7 @@ package site.sorghum.agent4j.tool.solon.common;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import site.sorghum.agent4j.bin.agent.model.FileChange;
 
 import java.nio.file.Path;
 import java.util.List;
@@ -23,7 +24,7 @@ class SessionFileChangeTrackerTest {
             SessionFileChangeTracker.clearBinding();
         }
 
-        List<SessionFileChangeTracker.FileChange> changes =
+        List<FileChange> changes =
                 SessionFileChangeTracker.drain(workspace, "session-a");
 
         assertEquals(1, changes.size());
