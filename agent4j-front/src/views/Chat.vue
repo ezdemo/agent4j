@@ -1608,7 +1608,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 48px 100px;
+  padding: 16px 72px 100px;
   position: relative;
 }
 
@@ -1725,7 +1725,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 }
 
 .msg.assistant .msg-body {
-  max-width: 85%;
+  max-width: 78%;
 }
 
 .assistant-body {
