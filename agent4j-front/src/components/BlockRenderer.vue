@@ -1237,7 +1237,7 @@ watchEffect(() => {
   margin-left: auto;
   padding: 4px 8px;
   border: 0;
-  border-radius: 999px;
+  border-radius: var(--r-sm);
   background: transparent;
   color: var(--fg-2);
   font-size: 13px;
