@@ -359,10 +359,10 @@ export const sessionsAPI = {
     })
   },
   
-  // 获取会话工作流 - GET /api/sessions/{name}/workflow?workspaceHash=xxx
-  getWorkflow: (name, workspaceHash) => {
+  // 获取会话清单 - GET /api/sessions/{name}/checklist?workspaceHash=xxx
+  getChecklist: (name, workspaceHash) => {
     const params = workspaceHash ? { workspaceHash } : {}
-    return api.get(`/sessions/${sessionPathName(name)}/workflow`, { params })
+    return api.get(`/sessions/${sessionPathName(name)}/checklist`, { params })
   },
 
 }

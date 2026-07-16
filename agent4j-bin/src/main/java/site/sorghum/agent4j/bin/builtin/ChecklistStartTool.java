@@ -6,8 +6,8 @@ import org.noear.solon.ai.chat.tool.AbsToolProvider;
 import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Param;
-import site.sorghum.agent4j.bin.workflow2.SimpleWorkflow;
-import site.sorghum.agent4j.bin.workflow2.SimpleWorkflowEngine;
+import site.sorghum.agent4j.bin.checklist.Checklist;
+import site.sorghum.agent4j.bin.checklist.ChecklistEngine;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
 import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.solon.SolonToTools;
@@ -17,32 +17,31 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Workflow Start 工具 —— 创建有序步骤工作流。
+ * Checklist Start 工具 —— 创建有序步骤清单。
  * <p>
- * 替代旧的 workflow_create_dag（DAG 图）方式。
- * LLM 传入有序步骤列表，系统创建 SimpleWorkflow 并持久化。
+ * LLM 传入有序步骤列表，系统创建 Checklist 并持久化。
  * </p>
  *
  * @author Sorghum
  */
 @Slf4j
 @Component
-public class WorkflowStartTool extends AbsToolProvider implements SolonToTools {
+public class ChecklistStartTool extends AbsToolProvider implements SolonToTools {
 
-    @ToolMapping(name = "workflow_start", description = """
-            创建一个有序步骤的工作流。
+    @ToolMapping(name = "checklist_start", description = """
+            创建一个有序步骤的工作清单（checklist）。
             
             使用场景：
             - 需要多步骤跟踪和进度可视化时
             - 需要人工审批环节时
             - 需要步骤级失败恢复时
             
-            注意：工作流是有序的线性步骤列表，LLM 在每一步内完全自由推理。
-            每完成一步后调用 workflow_step 标记完成并自动推进到下一步。
+            注意：清单是有序的线性步骤列表，LLM 在每一步内完全自由推理。
+            每完成一步后调用 checklist_step 标记完成并自动推进到下一步。
             """)
-    public String workflowStart(
-            @Param(name = "title", description = "工作流标题") String title,
-            @Param(name = "description", description = "工作流详细描述") String description,
+    public String checklistStart(
+            @Param(name = "title", description = "清单标题") String title,
+            @Param(name = "description", description = "清单详细描述") String description,
             @Param(name = "steps", description = "步骤数组 JSON，如 [{\"description\":\"分析需求\",\"kind\":\"step\"},{\"description\":\"人工确认\",\"kind\":\"hitl\"}]") String stepsJson,
             ToolContext ctx) {
         // 参数校验
@@ -60,7 +59,7 @@ public class WorkflowStartTool extends AbsToolProvider implements SolonToTools {
 
         try {
             // 解析步骤定义
-            List<SimpleWorkflowEngine.StepDef> stepDefs = parseSteps(stepsJson);
+            List<ChecklistEngine.StepDef> stepDefs = parseSteps(stepsJson);
             if (stepDefs.isEmpty()) {
                 return "PARSE_ERROR: 步骤列表为空，请提供至少一个步骤";
             }
@@ -69,9 +68,9 @@ public class WorkflowStartTool extends AbsToolProvider implements SolonToTools {
             String rootDir = ctx.getRootDir().toAbsolutePath().toString();
             WorkspaceManager workspaceManager = WorkspaceManager.getOrCreate(rootDir);
 
-            // 创建工作流
-            SimpleWorkflowEngine engine = new SimpleWorkflowEngine();
-            SimpleWorkflow wf = engine.createWorkflow(
+            // 创建清单
+            ChecklistEngine engine = new ChecklistEngine();
+            Checklist cl = engine.createChecklist(
                     sessionId,
                     workspaceManager.getCurrentWorkspaceHash(),
                     title,
@@ -79,21 +78,21 @@ public class WorkflowStartTool extends AbsToolProvider implements SolonToTools {
                     stepDefs);
 
             // 持久化（使用 KV store）
-            workspaceManager.getWorkflowStore2().save(wf);
+            workspaceManager.getChecklistStore().save(cl);
 
-            log.info("[workflow] 创建工作流成功: title={}, steps={}", title, stepDefs.size());
+            log.info("[checklist] 创建清单成功: title={}, steps={}", title, stepDefs.size());
 
             // 返回状态信息
-            return buildResponse(wf);
+            return buildResponse(cl);
 
         } catch (Exception e) {
-            log.error("[workflow] 创建工作流失败", e);
+            log.error("[checklist] 创建清单失败", e);
             return "CREATE_FAILED: " + e.getMessage();
         }
     }
 
-    private List<SimpleWorkflowEngine.StepDef> parseSteps(String stepsJson) {
-        List<SimpleWorkflowEngine.StepDef> defs = new ArrayList<>();
+    private List<ChecklistEngine.StepDef> parseSteps(String stepsJson) {
+        List<ChecklistEngine.StepDef> defs = new ArrayList<>();
         try {
             org.noear.snack4.ONode arr = org.noear.snack4.ONode.ofJson(stepsJson);
             if (!arr.isArray()) return defs;
@@ -102,31 +101,31 @@ public class WorkflowStartTool extends AbsToolProvider implements SolonToTools {
                 String desc = item.get("description").getString();
                 if (desc == null || desc.isBlank()) continue;
                 String kindStr = item.get("kind").getString();
-                site.sorghum.agent4j.bin.workflow2.StepKind kind = "hitl".equalsIgnoreCase(kindStr)
-                        ? site.sorghum.agent4j.bin.workflow2.StepKind.HITL
+                site.sorghum.agent4j.bin.checklist.StepKind kind = "hitl".equalsIgnoreCase(kindStr)
+                        ? site.sorghum.agent4j.bin.checklist.StepKind.HITL
                         : "fork".equalsIgnoreCase(kindStr)
-                        ? site.sorghum.agent4j.bin.workflow2.StepKind.FORK
-                        : site.sorghum.agent4j.bin.workflow2.StepKind.STEP;
-                defs.add(new SimpleWorkflowEngine.StepDef(desc, kind));
+                        ? site.sorghum.agent4j.bin.checklist.StepKind.FORK
+                        : site.sorghum.agent4j.bin.checklist.StepKind.STEP;
+                defs.add(new ChecklistEngine.StepDef(desc, kind));
             }
         } catch (Exception e) {
-            log.warn("[workflow] 解析步骤 JSON 失败: {}", e.getMessage());
+            log.warn("[checklist] 解析步骤 JSON 失败: {}", e.getMessage());
         }
         return defs;
     }
 
-    private String buildResponse(SimpleWorkflow wf) {
+    private String buildResponse(Checklist cl) {
         var resp = new org.noear.snack4.ONode();
-        resp.set("workflowId", wf.getId());
-        resp.set("title", wf.getTitle());
-        resp.set("status", wf.getStatus());
-        resp.set("currentStepIndex", wf.getCurrentStepIndex());
-        resp.set("totalSteps", wf.getSteps().size());
-        resp.set("progress", wf.progressText());
+        resp.set("checklistId", cl.getId());
+        resp.set("title", cl.getTitle());
+        resp.set("status", cl.getStatus());
+        resp.set("currentStepIndex", cl.getCurrentStepIndex());
+        resp.set("totalSteps", cl.getSteps().size());
+        resp.set("progress", cl.progressText());
 
         var stepsArr = org.noear.snack4.ONode.ofJson("[]").asArray();
         resp.set("steps", stepsArr);
-        for (var step : wf.getSteps()) {
+        for (var step : cl.getSteps()) {
             var s = stepsArr.addNew();
             s.set("id", step.getId());
             s.set("description", step.getDescription());
@@ -134,7 +133,7 @@ public class WorkflowStartTool extends AbsToolProvider implements SolonToTools {
             s.set("status", step.getStatus().name());
         }
 
-        var current = wf.currentStep();
+        var current = cl.currentStep();
         if (current != null) {
             resp.set("currentStep", current.getId() + ": " + current.getDescription());
         }

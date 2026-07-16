@@ -38,7 +38,7 @@ public class SubAgent {
      * <p>排除：递归 spawn、工作流管理、会话任务跟踪、用户交互。</p>
      * <ul>
      *   <li><b>sub_agent</b> — 防止递归子代理 spawn</li>
-     *   <li>workflow_start / workflow_step / workflow_status — 工作流管理，主代理专用</li>
+     *   <li>checklist_start / checklist_step / checklist_status — 清单管理，主代理专用</li>
      *   <li>goal_mark_step — 目标跟踪，主代理专用</li>
      *   <li>ask_choice — 用户交互，主代理专用（子代理无用户交互）</li>
      * </ul>
@@ -46,9 +46,9 @@ public class SubAgent {
      */
     public static final Set<String> SUB_AGENT_DENY = Collections.unmodifiableSet(new HashSet<>(Arrays.asList(
             "sub_agent",           // 防止递归子代理 spawn
-            "workflow_start",      // 工作流创建（主代理专用）
-            "workflow_step",       // 工作流转步（主代理专用）
-            "workflow_status",     // 工作流状态（主代理专用）
+            "checklist_start",      // 清单创建（主代理专用）
+            "checklist_step",       // 清单转步（主代理专用）
+            "checklist_status",     // 清单状态（主代理专用）
             "goal_mark_step",      // 目标步骤标记（主代理专用）
             "ask_choice"           // 用户交互（主代理专用）
     )));

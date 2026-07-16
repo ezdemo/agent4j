@@ -1,4 +1,4 @@
-package site.sorghum.agent4j.bin.workflow2;
+package site.sorghum.agent4j.bin.checklist;
 
 import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
@@ -9,26 +9,28 @@ import java.util.List;
 import java.util.UUID;
 
 /**
- * SimpleWorkflowEngine — 简化工作流引擎。
+ * ChecklistEngine — 执行清单引擎。
  * <p>
- * 管理 SimpleWorkflow 的创建、推进、标记完成/失败等操作。
- * 持久化通过 WorkspaceManager 的 KV store 完成（SimpleWorkflow 本身是 POJO，直接 JSON 序列化）。
+ * 管理 Checklist 的创建、推进、标记完成/失败/跳过等操作。
+ * 持久化通过 WorkspaceManager 的 KV store 完成（Checklist 本身是 POJO，直接 JSON 序列化）。
  * </p>
+ *
+ * @author Sorghum
  */
 @Slf4j
 @Component
-public class SimpleWorkflowEngine {
+public class ChecklistEngine {
 
     /**
-     * 创建工作流。
+     * 创建清单。
      */
-    public SimpleWorkflow createWorkflow(String sessionId, String workspaceHash,
-                                          String title, String description,
-                                          List<StepDef> stepDefs) {
-        List<WorkflowStep> steps = new ArrayList<>();
+    public Checklist createChecklist(String sessionId, String workspaceHash,
+                                      String title, String description,
+                                      List<StepDef> stepDefs) {
+        List<ChecklistStep> steps = new ArrayList<>();
         for (int i = 0; i < stepDefs.size(); i++) {
             StepDef def = stepDefs.get(i);
-            steps.add(WorkflowStep.builder()
+            steps.add(ChecklistStep.builder()
                     .id("step-" + (i + 1))
                     .description(def.description)
                     .kind(def.kind != null ? def.kind : StepKind.STEP)
@@ -37,7 +39,7 @@ public class SimpleWorkflowEngine {
                     .build());
         }
 
-        SimpleWorkflow wf = SimpleWorkflow.builder()
+        Checklist cl = Checklist.builder()
                 .id(UUID.randomUUID().toString().substring(0, 8))
                 .sessionId(sessionId)
                 .workspaceHash(workspaceHash)
@@ -51,84 +53,84 @@ public class SimpleWorkflowEngine {
                 .build();
 
         // 标记第一步为 RUNNING
-        WorkflowStep first = wf.currentStep();
+        ChecklistStep first = cl.currentStep();
         if (first != null) {
             first.setStatus(StepStatus.RUNNING);
         }
 
-        log.info("[workflow2] 创建工作流: id={}, title={}, steps={}", wf.getId(), title, steps.size());
-        return wf;
+        log.info("[checklist] 创建清单: id={}, title={}, steps={}", cl.getId(), title, steps.size());
+        return cl;
     }
 
     /**
      * 标记当前步骤完成。
      */
-    public MarkResult markCurrentDone(SimpleWorkflow wf, String result) {
-        WorkflowStep step = wf.currentStep();
+    public MarkResult markCurrentDone(Checklist cl, String result) {
+        ChecklistStep step = cl.currentStep();
         if (step == null) {
             return MarkResult.error("没有活跃步骤");
         }
         step.setStatus(StepStatus.DONE);
         step.setResult(result);
         step.setCompletedAt(Instant.now());
-        wf.setUpdatedAt(Instant.now());
+        cl.setUpdatedAt(Instant.now());
 
         // 推进到下一步
-        int next = wf.advance();
+        int next = cl.advance();
         if (next < 0) {
-            wf.setStatus("COMPLETED");
-            wf.setCompletedAt(Instant.now());
-            log.info("[workflow2] 工作流完成: id={}", wf.getId());
-            return MarkResult.completed("工作流全部完成");
+            cl.setStatus("COMPLETED");
+            cl.setCompletedAt(Instant.now());
+            log.info("[checklist] 清单完成: id={}", cl.getId());
+            return MarkResult.completed("清单全部完成");
         }
 
         // 标记下一步为 RUNNING
-        WorkflowStep nextStep = wf.currentStep();
+        ChecklistStep nextStep = cl.currentStep();
         if (nextStep != null) {
             nextStep.setStatus(StepStatus.RUNNING);
         }
 
-        return MarkResult.progress("步骤 " + (next - 1) + "/" + wf.getSteps().size() + " 完成，当前: 步骤 " + next);
+        return MarkResult.progress("步骤 " + (next - 1) + "/" + cl.getSteps().size() + " 完成，当前: 步骤 " + next);
     }
 
     /**
      * 标记当前步骤失败。
      */
-    public MarkResult markCurrentFailed(SimpleWorkflow wf, String error) {
-        WorkflowStep step = wf.currentStep();
+    public MarkResult markCurrentFailed(Checklist cl, String error) {
+        ChecklistStep step = cl.currentStep();
         if (step == null) {
             return MarkResult.error("没有活跃步骤");
         }
         step.setStatus(StepStatus.FAILED);
         step.setResult(error);
         step.setCompletedAt(Instant.now());
-        wf.setStatus("FAILED");
-        wf.setUpdatedAt(Instant.now());
-        log.warn("[workflow2] 工作流失败: id={}, step={}, error={}", wf.getId(), step.getId(), error);
-        return MarkResult.failed("步骤 " + wf.getCurrentStepIndex() + " 失败: " + error);
+        cl.setStatus("FAILED");
+        cl.setUpdatedAt(Instant.now());
+        log.warn("[checklist] 清单失败: id={}, step={}, error={}", cl.getId(), step.getId(), error);
+        return MarkResult.failed("步骤 " + cl.getCurrentStepIndex() + " 失败: " + error);
     }
 
     /**
      * 跳过当前步骤。
      */
-    public MarkResult skipCurrent(SimpleWorkflow wf, String reason) {
-        WorkflowStep step = wf.currentStep();
+    public MarkResult skipCurrent(Checklist cl, String reason) {
+        ChecklistStep step = cl.currentStep();
         if (step == null) {
             return MarkResult.error("没有活跃步骤");
         }
         step.setStatus(StepStatus.SKIPPED);
         step.setResult(reason);
         step.setCompletedAt(Instant.now());
-        wf.setUpdatedAt(Instant.now());
+        cl.setUpdatedAt(Instant.now());
 
-        int next = wf.advance();
+        int next = cl.advance();
         if (next < 0) {
-            wf.setStatus("COMPLETED");
-            wf.setCompletedAt(Instant.now());
-            return MarkResult.completed("工作流全部完成（有跳过步骤）");
+            cl.setStatus("COMPLETED");
+            cl.setCompletedAt(Instant.now());
+            return MarkResult.completed("清单全部完成（有跳过步骤）");
         }
 
-        WorkflowStep nextStep = wf.currentStep();
+        ChecklistStep nextStep = cl.currentStep();
         if (nextStep != null) {
             nextStep.setStatus(StepStatus.RUNNING);
         }
@@ -140,18 +142,18 @@ public class SimpleWorkflowEngine {
      * 构建状态 JSON（用于工具返回）。
      * 避免依赖 agent4j-web 的 DTO 类。
      */
-    public org.noear.snack4.ONode toStatusJson(SimpleWorkflow wf) {
+    public org.noear.snack4.ONode toStatusJson(Checklist cl) {
         var resp = new org.noear.snack4.ONode();
-        resp.set("workflowId", wf.getId());
-        resp.set("title", wf.getTitle());
-        resp.set("status", wf.getStatus());
-        resp.set("currentStepIndex", wf.getCurrentStepIndex());
-        resp.set("totalSteps", wf.getSteps().size());
-        resp.set("progress", wf.progressText());
+        resp.set("checklistId", cl.getId());
+        resp.set("title", cl.getTitle());
+        resp.set("status", cl.getStatus());
+        resp.set("currentStepIndex", cl.getCurrentStepIndex());
+        resp.set("totalSteps", cl.getSteps().size());
+        resp.set("progress", cl.progressText());
 
         var stepsArr = org.noear.snack4.ONode.ofJson("[]").asArray();
         resp.set("steps", stepsArr);
-        for (var step : wf.getSteps()) {
+        for (var step : cl.getSteps()) {
             var s = stepsArr.addNew();
             s.set("id", step.getId());
             s.set("description", step.getDescription());

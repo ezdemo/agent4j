@@ -98,9 +98,9 @@ public class Agent4jConfig {
                   "autoWhitelist": [
                     "resolve-library-id", "query-docs", "skillrefresh", "skilllist",
                     "read", "glob", "write", "ls", "grep", "edit", "finish",
-                    "java_source", "workflow_step", "workspace_read", "webfetch",
+                    "java_source", "checklist_step", "workspace_read", "webfetch",
                     "codesearch", "ask_choice", "workspace_list", "workspace_write",
-                    "call_api", "workflow_start", "sub_agent", "workflow_status",
+                    "call_api", "checklist_start", "sub_agent", "checklist_status",
                     "vision_recognize", "skillread", "codegraph_explore"
                   ],
                   "maxContextChars": 200000,

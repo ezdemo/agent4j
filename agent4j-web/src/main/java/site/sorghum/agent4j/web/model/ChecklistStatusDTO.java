@@ -8,7 +8,7 @@ import lombok.NoArgsConstructor;
 import java.util.List;
 
 /**
- * 工作流状态 DTO —— 替代旧的 WorkflowVisualizationDTO。
+ * 清单状态 DTO。
  * <p>
  * 简化版：只包含步骤列表和进度信息，不含 DAG 图结构。
  * </p>
@@ -19,9 +19,9 @@ import java.util.List;
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class WorkflowStatusDTO {
-    /** 工作流 ID */
-    private String workflowId;
+public class ChecklistStatusDTO {
+    /** 清单 ID */
+    private String checklistId;
     /** 标题 */
     private String title;
     /** 状态 ACTIVE | PAUSED | COMPLETED | FAILED */
