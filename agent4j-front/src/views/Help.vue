@@ -435,6 +435,7 @@ const commands = [
   { name: '/sessions', desc: '列出历史会话', example: '/sessions' },
   { name: '/load', desc: '加载指定会话', example: '/load 3' },
   { name: '/init', desc: '自动分析项目生成文档', example: '/init' },
+  { name: '/goal', desc: '创建和管理当前会话 Goal', example: '/goal create 修复登录问题' },
   { name: '/hitl', desc: '切换 HITL 模式', example: '/hitl' },
   { name: '/help', desc: '显示帮助信息', example: '/help' },
   { name: '/exit', desc: '退出系统', example: '/exit' }
@@ -449,7 +450,8 @@ const tools = [
   { name: 'glob', desc: '按通配符模式搜索文件', params: 'pattern, path', readonly: true },
   { name: 'grep', desc: '递归搜索内容', params: 'pattern, path, include?', readonly: true },
   { name: 'ls', desc: '列出目录内容', params: 'path, recursive?, show_hidden?', readonly: true },
-  { name: 'sub_agent', desc: '创建预设角色子代理', params: 'profile, task, instructions?', readonly: false }
+  { name: 'sub_agent', desc: '创建预设角色子代理', params: 'profile, task, instructions?', readonly: false },
+  { name: 'goal_create / goal_update_step / goal_complete', desc: '创建、推进和验证会话 Goal', params: 'objective / stepIndex, status, evidence / summary', readonly: false }
 ]
 
 // 故障排除

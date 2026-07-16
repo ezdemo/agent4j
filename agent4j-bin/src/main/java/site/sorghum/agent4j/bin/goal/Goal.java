@@ -34,11 +34,12 @@ public class Goal {
     private String description;
     /** 目标状态 */
     private GoalStatus status;
-    /** 每步最大重试次数（默认 3） */
-    @Builder.Default
-    private int maxRetries = 3;
     /** 验证命令（如 "mvn test"），可为 null */
     private String verifyCommand;
+    /** 目标完成时的验证摘要 */
+    private String completionSummary;
+    /** 阻塞原因，status=BLOCKED 时必填 */
+    private String blockedReason;
 
     /** 步骤列表 */
     @Builder.Default
@@ -50,6 +51,11 @@ public class Goal {
     private Instant updatedAt;
     /** 完成时间 */
     private Instant completedAt;
+
+    /** 是否仍需继续推进。 */
+    public boolean isOpen() {
+        return status == GoalStatus.ACTIVE || status == GoalStatus.PAUSED || status == GoalStatus.BLOCKED;
+    }
 
     /**
      * 生成进度文本：如 "3/6 (50%)"
@@ -67,5 +73,13 @@ public class Goal {
     public boolean isAllDone() {
         return steps != null && !steps.isEmpty() && steps.stream().allMatch(
                 s -> s.getStatus() == StepStatus.DONE || s.getStatus() == StepStatus.SKIPPED);
+    }
+
+    /** 返回第一个未完成步骤，没有则返回 null。 */
+    public GoalStep nextOpenStep() {
+        if (steps == null) return null;
+        return steps.stream().filter(step -> step.getStatus() != StepStatus.DONE
+                        && step.getStatus() != StepStatus.SKIPPED)
+                .findFirst().orElse(null);
     }
 }

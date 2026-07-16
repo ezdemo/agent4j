@@ -39,7 +39,7 @@ public class SubAgent {
      * <ul>
      *   <li><b>sub_agent</b> — 防止递归子代理 spawn</li>
      *   <li>checklist_start / checklist_step / checklist_status — 清单管理，主代理专用</li>
-     *   <li>goal_mark_step — 目标跟踪，主代理专用</li>
+     *   <li>goal_* — 目标跟踪，主代理专用</li>
      *   <li>ask_choice — 用户交互，主代理专用（子代理无用户交互）</li>
      * </ul>
      * <p>public 可见性供 {@code SubAgentTool} 构建子代理 system prompt 时保持一致的过滤逻辑。</p>
@@ -49,7 +49,12 @@ public class SubAgent {
             "checklist_start",      // 清单创建（主代理专用）
             "checklist_step",       // 清单转步（主代理专用）
             "checklist_status",     // 清单状态（主代理专用）
-            "goal_mark_step",      // 目标步骤标记（主代理专用）
+            "goal_create",         // Goal 状态机（主代理专用）
+            "goal_status",
+            "goal_update_step",
+            "goal_complete",
+            "goal_block",
+            "goal_resume",
             "ask_choice"           // 用户交互（主代理专用）
     )));
 

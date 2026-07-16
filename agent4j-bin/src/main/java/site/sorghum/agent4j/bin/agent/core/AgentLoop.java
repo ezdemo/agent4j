@@ -23,13 +23,16 @@ import site.sorghum.agent4j.bin.agent.resilient.Scavenger;
 import site.sorghum.agent4j.bin.agent.resilient.StormBreaker;
 import site.sorghum.agent4j.bin.builtin.SubAgentTool;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
+import site.sorghum.agent4j.bin.goal.Goal;
+import site.sorghum.agent4j.bin.goal.GoalRuntime;
+import site.sorghum.agent4j.bin.goal.GoalService;
 import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.model.UserMessageSanitizer;
 import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
-import site.sorghum.agent4j.tool.solon.common.SessionFileChangeTracker;
 import site.sorghum.agent4j.tool.*;
 import site.sorghum.agent4j.tool.interact.FinishTool;
+import site.sorghum.agent4j.tool.solon.common.SessionFileChangeTracker;
 
 import java.io.IOException;
 import java.util.*;
@@ -95,6 +98,7 @@ public class AgentLoop implements AgentLoopController {
     private final ConversationContext ctx;
     private final ReasonBreaker reasonBreaker = new ReasonBreaker();
     private final StormBreaker stormBreaker;
+    private final GoalService goalService = new GoalService();
     @Getter
     private final HitlManager hitlManager;
 
@@ -321,6 +325,15 @@ public class AgentLoop implements AgentLoopController {
 
     @Override
     public void finish(String content) {
+        Goal openGoal = getOpenGoal();
+        if (openGoal != null) {
+            String reminder = "[Goal guard] 当前 Goal 尚未关闭：" + openGoal.getTitle()
+                    + "（" + openGoal.progressText() + "）。请推进步骤并调用 goal_complete，"
+                    + "或者在确实无法继续时调用 goal_block；不要调用 finish。";
+            injectUserMessage(reminder);
+            safeOutput("goalFinishGuard", () -> output.onLog(LogLevel.WARN, reminder));
+            return;
+        }
         if (content == null || content.isBlank()) {
             // 尝试从上下文获取最后一条 assistant 回复作为回退
             String lastAssistant = ctx.getLastAssistantContent();
@@ -465,7 +478,21 @@ public class AgentLoop implements AgentLoopController {
                 %s
                 """.formatted(terminateOnNoToolCall()
                 ? "- 无工具调用时，模型的纯文本回复会结束对话"
-                : "- 结束对话**必须**调用 `finish`，纯文本回复不会退出循环");
+                : "- 结束对话**必须**调用 `finish`，纯文本回复不会退出循环")
+                + "\n\n" + goalService.instruction(getOpenGoal());
+    }
+
+    private Goal getOpenGoal() {
+        if (sessionId == null || sessionId.isBlank() || registry == null || registry.getWorkspace() == null) {
+            return null;
+        }
+        try {
+            Goal goal = GoalRuntime.forWorkspace(registry.getWorkspace(), sessionId).load();
+            return goal != null && goal.isOpen() ? goal : null;
+        } catch (Exception e) {
+            log.debug("[goal] 读取当前 Goal 失败: {}", e.getMessage());
+            return null;
+        }
     }
 
     // ==================== 主入口：run() ====================
@@ -596,7 +623,8 @@ public class AgentLoop implements AgentLoopController {
             // ---- 5. 无 tool calls → 根据配置结束或要求模型继续 ----
             if (!hasToolCalls) {
                 ctx.addAssistant(sr.content(), null, sr.reasoningContent());
-                if (terminateOnNoToolCall()) {
+                Goal openGoal = getOpenGoal();
+                if (terminateOnNoToolCall() && openGoal == null) {
                     return sr.content() == null ? "" : sr.content();
                 }
 
@@ -608,7 +636,9 @@ public class AgentLoop implements AgentLoopController {
                     return degraded != null && !degraded.isEmpty() ? degraded : "任务中断，未完成（已收集部分结果）";
                 }
 
-                ctx.addUser(FinishTool.TIPS);
+                ctx.addUser(openGoal != null
+                        ? "[Goal guard] Goal 尚未关闭。请继续执行当前步骤，记录证据，并调用 goal_complete 后再结束。"
+                        : FinishTool.TIPS);
                 continue;
             }
 

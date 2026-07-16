@@ -6,12 +6,14 @@ package site.sorghum.agent4j.bin.goal;
  * @author Sorghum
  */
 public enum GoalStatus {
-    /** 活跃：正在执行中 */
+    /** 活跃：允许推进步骤 */
     ACTIVE,
     /** 暂停：用户手动暂停 */
     PAUSED,
-    /** 已完成：所有步骤 DONE */
+    /** 阻塞：需要用户或外部条件才能继续 */
+    BLOCKED,
+    /** 已完成：所有步骤已验证 */
     COMPLETED,
-    /** 失败：某步骤超重试次数 */
-    FAILED
+    /** 已取消：用户明确放弃本目标 */
+    CANCELLED
 }

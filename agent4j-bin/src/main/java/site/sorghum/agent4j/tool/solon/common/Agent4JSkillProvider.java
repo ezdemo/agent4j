@@ -1,6 +1,7 @@
 package site.sorghum.agent4j.tool.solon.common;
 
 import lombok.Getter;
+import lombok.SneakyThrows;
 import org.noear.solon.Solon;
 import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.ai.talents.cli.SkillTalent;
@@ -12,8 +13,11 @@ import org.noear.solon.ai.talents.mount.MountType;
 import site.sorghum.agent4j.tool.solon.SolonToTools;
 import site.sorghum.agent4j.tool.solon.lsp.SharedAgent4JLspSkill;
 
+import java.nio.file.Files;
+import java.nio.file.Paths;
 import java.util.Collection;
 import java.util.Map;
+import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Stream;
 
@@ -26,7 +30,9 @@ public class Agent4JSkillProvider implements SolonToTools {
     @Getter
     public MountManager poolManager;
 
+    @SneakyThrows
     public Agent4JSkillProvider(String workDir) {
+        Files.createDirectories(Paths.get(System.getProperty("user.home"), ".agent4j", "skills"));
         poolManager = new MountManager(workDir) {{
             register(MountDir.builder()
                     .type(MountType.SKILLS)
@@ -63,7 +69,11 @@ public class Agent4JSkillProvider implements SolonToTools {
                 lspTalent
         ).map(
                 talent -> talent.getTools(null)
-        ).flatMap(Collection::stream).toList();
+        ).filter(
+                Objects::nonNull
+        ).flatMap(Collection::stream).filter(
+                Objects::nonNull
+        ).toList();
     }
 
     @Override
