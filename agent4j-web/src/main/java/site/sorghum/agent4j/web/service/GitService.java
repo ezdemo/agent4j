@@ -362,6 +362,30 @@ public class GitService {
     }
 
     /**
+     * 读取工作区当前文件内容，用于前端代码预览，不依赖 Git 状态或提交历史。
+     */
+    public WorkingFileContentDTO getWorkingFileContent(String workspaceHash, String path) throws Exception {
+        String workspacePath = resolveWorkspace(workspaceHash);
+        path = validatePath(path);
+        if (path == null || path.isBlank()) {
+            throw new ServiceException("Invalid path");
+        }
+
+        java.nio.file.Path workspace = java.nio.file.Paths.get(workspacePath).toAbsolutePath().normalize();
+        java.nio.file.Path file = workspace.resolve(path).normalize();
+        if (!file.startsWith(workspace)) {
+            throw new ServiceException("Invalid path");
+        }
+        if (!Files.isRegularFile(file)) {
+            return new WorkingFileContentDTO(null, false, "当前工作区中未找到此文件，可能已移动或删除。");
+        }
+        if (Files.size(file) > 1024 * 1024) {
+            return new WorkingFileContentDTO(null, true, "文件过大，无法预览（最大 1 MB）。");
+        }
+        return new WorkingFileContentDTO(Files.readString(file, StandardCharsets.UTF_8), true, null);
+    }
+
+    /**
      * 获取 Git 提交历史记录，默认返回最近 50 条。
      * <p>
      * 使用 git log 自定义格式输出，按提交时间倒序排列。

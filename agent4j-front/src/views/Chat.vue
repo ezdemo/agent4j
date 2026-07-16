@@ -160,16 +160,21 @@
 
     <!-- Diff 查看器弹窗（复用 DiffViewer 组件） -->
     <DiffViewer
-      :open="diffViewer.open"
-      :file="diffViewer.file"
-      :diff="diffViewer.diff"
-      :stat="diffViewer.stat"
-      @close="closeDiffViewer"
+        :open="diffViewer.open"
+        :file="diffViewer.file"
+        :diff="diffViewer.diff"
+        :content="diffViewer.content"
+        :mode="diffViewer.mode"
+        :loading="diffViewer.loading"
+        :stat="diffViewer.stat"
+        @close="closeDiffViewer"
+        @change-mode="changeDiffViewerMode"
     />
 
     <!-- 输入区（独立组件） -->
     <Transition name="welcome-input-drop">
     <ChatInput v-if="props.sessionName && messages.length > 0"
+        ref="chatInput"
         v-model:inputText="inputText"
         :streaming="streaming"
         :usage="usage"
@@ -313,6 +318,7 @@ const store = useAppStore()
 
 const messagesContainer = ref(null)
 const inputText = ref('')
+const chatInput = ref(null)
 const welcomeInput = ref(null)
 const welcomeText = ref('')
 const welcomeWorkspaceHash = ref('')
@@ -444,29 +450,89 @@ const previewImage = (url) => {
 }
 
 // Diff 查看器
-const diffViewer = ref({ open: false, file: '', diff: '', stat: '' })
-const openDiff = async (filePath) => {
-  diffViewer.value = { open: true, file: filePath, diff: '', stat: '' }
+const diffViewer = ref({ open: false, file: '', diff: '', content: '', mode: 'content', loading: false, stat: '', diffStat: '', contentLoaded: false, contentExists: false, diffLoaded: false })
+
+const loadDiffViewerContent = async () => {
+  const file = diffViewer.value.file
+  if (!file) return
+  diffViewer.value.loading = true
   try {
-    const r = await gitAPI.diffContent(props.workspaceHash, filePath)
+    const r = await gitAPI.workingFileContent(props.workspaceHash, file)
     if (r.success && r.data) {
-      diffViewer.value.diff = r.data.diff || ''
-      diffViewer.value.stat = r.data.stat || ''
+      if (diffViewer.value.file !== file || !diffViewer.value.open) return
+      diffViewer.value.content = r.data.content ?? r.data.message ?? ''
+      diffViewer.value.contentLoaded = true
+      diffViewer.value.contentExists = Boolean(r.data.exists)
+      if (diffViewer.value.mode === 'content') diffViewer.value.stat = diffViewer.value.contentExists ? '当前文件' : '文件不可用'
     }
   } catch (e) {
-    diffViewer.value.diff = '加载 diff 失败: ' + (e.message || '')
+    if (diffViewer.value.file === file && diffViewer.value.open) {
+      diffViewer.value.content = '加载文件失败: ' + (e.message || '')
+      diffViewer.value.contentLoaded = true
+    }
+  } finally {
+    if (diffViewer.value.file === file && diffViewer.value.open) diffViewer.value.loading = false
   }
+}
+
+const loadDiffViewerDiff = async () => {
+  const file = diffViewer.value.file
+  if (!file) return
+  diffViewer.value.loading = true
+  try {
+    const r = await gitAPI.diffContent(props.workspaceHash, file)
+    if (r.success && r.data) {
+      if (diffViewer.value.file !== file || !diffViewer.value.open) return
+      diffViewer.value.diff = r.data.diff || ''
+      diffViewer.value.diffLoaded = true
+      diffViewer.value.diffStat = r.data.stat || ''
+      if (diffViewer.value.mode === 'diff') diffViewer.value.stat = diffViewer.value.diffStat
+    }
+  } catch (e) {
+    if (diffViewer.value.file === file && diffViewer.value.open) {
+      diffViewer.value.diff = '加载 Git diff 失败: ' + (e.message || '')
+      diffViewer.value.diffLoaded = true
+    }
+  } finally {
+    if (diffViewer.value.file === file && diffViewer.value.open) diffViewer.value.loading = false
+  }
+}
+
+const changeDiffViewerMode = async (mode) => {
+  if (!diffViewer.value.open || diffViewer.value.mode === mode) return
+  diffViewer.value.mode = mode
+  if (mode === 'content') {
+    diffViewer.value.stat = diffViewer.value.contentLoaded ? (diffViewer.value.contentExists ? '当前文件' : '文件不可用') : ''
+    if (!diffViewer.value.contentLoaded) await loadDiffViewerContent()
+  }
+  if (mode === 'diff') {
+    diffViewer.value.stat = diffViewer.value.diffStat
+    if (!diffViewer.value.diffLoaded) await loadDiffViewerDiff()
+  }
+}
+
+const openDiff = async (filePath) => {
+  diffViewer.value = { open: true, file: filePath, diff: '', content: '', mode: 'content', loading: true, stat: '当前文件', diffStat: '', contentLoaded: false, contentExists: false, diffLoaded: false }
+  await loadDiffViewerContent()
 }
 const openStoredDiff = (change) => {
   diffViewer.value = {
     open: true,
     file: change?.path || '',
     diff: change?.diff || '此历史记录没有保存差异快照。',
-    stat: `+${change?.additions || 0} -${change?.deletions || 0}`
+    content: '',
+    mode: 'content',
+    loading: true,
+    stat: `+${change?.additions || 0} -${change?.deletions || 0}`,
+    diffStat: `+${change?.additions || 0} -${change?.deletions || 0}`,
+    contentLoaded: false,
+    contentExists: false,
+    diffLoaded: true
   }
+  loadDiffViewerContent()
 }
 const closeDiffViewer = () => {
-  diffViewer.value = { open: false, file: '', diff: '', stat: '' }
+  diffViewer.value = { open: false, file: '', diff: '', content: '', mode: 'content', loading: false, stat: '', diffStat: '', contentLoaded: false, contentExists: false, diffLoaded: false }
 }
 
 const messages = computed(() => store.getSessionMessages(props.sessionName))
@@ -810,9 +876,9 @@ const sendChoice = async (value, block) => {
   sendMessage()
 }
 
-// 打开文件（显示 Git diff）
+// 打开文件（显示当前工作区代码预览）
 const openFile = async (filePath) => {
-  openDiff(filePath)
+  await openDiff(filePath)
 }
 
 // 键盘事件已迁移到 ChatInput 组件
@@ -1538,6 +1604,17 @@ const startWelcomePrompt = async (prompt) => {
   await sendMessage()
 }
 
+const appendFileSelection = async ({ file, content }) => {
+  const text = String(content || '').trim()
+  if (!text) return false
+  const useSessionInput = Boolean(props.sessionName && messages.value.length > 0)
+  const targetInput = useSessionInput ? chatInput.value : welcomeInput.value
+  if (!targetInput?.addFileContext?.({ file, content: text })) return false
+  await nextTick()
+  targetInput.focus?.()
+  return true
+}
+
 // 加载历史消息（仅在明确选了 session 时）
 onMounted(() => {
   document.addEventListener('click', handleWelcomeOutsideClick)
@@ -1550,7 +1627,7 @@ const setDraft = (text) => {
   inputText.value = text || ''
 }
 
-defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, startWelcomePrompt, exportChat, refreshHistory, setDraft})
+defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, startWelcomePrompt, appendFileSelection, exportChat, refreshHistory, setDraft})
 </script>
 
 <style scoped>
