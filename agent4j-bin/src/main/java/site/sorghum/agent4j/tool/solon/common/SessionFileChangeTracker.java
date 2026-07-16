@@ -51,7 +51,7 @@ public final class SessionFileChangeTracker {
         changes.forEach((path, snapshot) -> {
             DiffSnapshot diff = DiffSnapshot.of(path, snapshot.before(), snapshot.after());
             LineStats stats = diff.stats();
-            if (stats.additions() > 0 || stats.deletions() > 0) {
+            if (stats.additions() > 0 || stats.deletions() > 0 || !snapshot.before().equals(snapshot.after())) {
                 result.add(new FileChange(path, stats.additions(), stats.deletions(), snapshot.created(), diff.unified()));
             }
         });
@@ -116,12 +116,18 @@ public final class SessionFileChangeTracker {
         private static DiffSnapshot of(String path, String before, String after) {
             String[] oldLines = LineStats.lines(before);
             String[] newLines = LineStats.lines(after);
+            boolean oldMissingFinalNewline = hasLinesWithoutFinalNewline(before, oldLines);
+            boolean newMissingFinalNewline = hasLinesWithoutFinalNewline(after, newLines);
             StringBuilder out = new StringBuilder("--- a/").append(path).append('\n')
                     .append("+++ b/").append(path).append('\n')
                     .append("@@ -1,").append(oldLines.length).append(" +1,").append(newLines.length).append(" @@\n");
             if ((long) oldLines.length * newLines.length > 4_000_000L) {
-                for (String line : oldLines) out.append('-').append(line).append('\n');
-                for (String line : newLines) out.append('+').append(line).append('\n');
+                for (int index = 0; index < oldLines.length; index++) {
+                    appendLine(out, '-', oldLines[index], index == oldLines.length - 1 && oldMissingFinalNewline);
+                }
+                for (int index = 0; index < newLines.length; index++) {
+                    appendLine(out, '+', newLines[index], index == newLines.length - 1 && newMissingFinalNewline);
+                }
                 return new DiffSnapshot(new LineStats(newLines.length, oldLines.length), out.toString());
             }
             int[][] lcs = new int[oldLines.length + 1][newLines.length + 1];
@@ -130,15 +136,30 @@ public final class SessionFileChangeTracker {
             }
             int additions = 0, deletions = 0, i = 0, j = 0;
             while (i < oldLines.length || j < newLines.length) {
-                if (i < oldLines.length && j < newLines.length && oldLines[i].equals(newLines[j])) {
-                    out.append(' ').append(oldLines[i++]).append('\n'); j++;
+                boolean finalNewlineChanged = i == oldLines.length - 1 && j == newLines.length - 1
+                        && oldMissingFinalNewline != newMissingFinalNewline;
+                if (i < oldLines.length && j < newLines.length && oldLines[i].equals(newLines[j]) && !finalNewlineChanged) {
+                    boolean missingFinalNewline = (i == oldLines.length - 1 && oldMissingFinalNewline)
+                            || (j == newLines.length - 1 && newMissingFinalNewline);
+                    appendLine(out, ' ', oldLines[i++], missingFinalNewline); j++;
                 } else if (j < newLines.length && (i == oldLines.length || lcs[i][j + 1] >= lcs[i + 1][j])) {
-                    out.append('+').append(newLines[j++]).append('\n'); additions++;
+                    appendLine(out, '+', newLines[j], j == newLines.length - 1 && newMissingFinalNewline);
+                    j++; additions++;
                 } else {
-                    out.append('-').append(oldLines[i++]).append('\n'); deletions++;
+                    appendLine(out, '-', oldLines[i], i == oldLines.length - 1 && oldMissingFinalNewline);
+                    i++; deletions++;
                 }
             }
             return new DiffSnapshot(new LineStats(additions, deletions), out.toString());
+        }
+
+        private static boolean hasLinesWithoutFinalNewline(String content, String[] lines) {
+            return lines.length > 0 && !content.endsWith("\n") && !content.endsWith("\r");
+        }
+
+        private static void appendLine(StringBuilder out, char prefix, String line, boolean missingFinalNewline) {
+            out.append(prefix).append(line).append('\n');
+            if (missingFinalNewline) out.append("\\ No newline at end of file\n");
         }
     }
 }

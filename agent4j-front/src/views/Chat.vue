@@ -84,6 +84,7 @@
           @send-choice="sendChoice"
           @open-file="openFile"
           @open-diff="openStoredDiff"
+          @revert-file-changes="openFileRevertDialog"
       />
 
 
@@ -205,6 +206,15 @@
         :actions="rollbackActions"
         @update:model-value="value => { if (!value) closeRollbackDialog() }"
         @action="handleRollbackAction"
+    />
+    <ActionConfirmDialog
+        :model-value="fileRevertDialog.visible"
+        title="撤销本次代码修改"
+        message="将按该回复记录的 diff 反向回打补丁，只撤销本次 AI 修改，不删除会话消息。文件在之后被修改过时会拒绝撤销。"
+        :actions="fileRevertActions"
+        :pending="fileRevertDialog.pending"
+        @update:model-value="value => { if (!value) closeFileRevertDialog() }"
+        @action="handleFileRevertAction"
     />
   </div>
 </template>
@@ -412,6 +422,8 @@ const sendWelcomeMessage = async (images, messageText) => {
 const snapshotMap = ref(new Map())
 const snapshotRollbackLoading = ref(new Map()) // msgId -> 是否正在撤回
 const rollbackDialog = ref({visible: false, msgId: null, canRollbackCode: false})
+const fileRevertDialog = ref({visible: false, pending: false, changes: []})
+const fileRevertActions = [{key: 'cancel', label: '取消'}, {key: 'revert', label: '撤销代码', variant: 'danger'}]
 const rollbackActions = computed(() => {
   const actions = [
     {key: 'cancel', label: '取消'},
@@ -1174,6 +1186,41 @@ const openRollbackDialog = (msgId, canRollbackCode, rollbackTimestamp) => {
   const rollbackKey = msgId || rollbackTimestamp
   if (streaming.value || !rollbackKey || snapshotRollbackLoading.value.get(rollbackKey)) return
   rollbackDialog.value = {visible: true, msgId, rollbackTimestamp, canRollbackCode}
+}
+
+const openFileRevertDialog = (changes) => {
+  if (streaming.value || !Array.isArray(changes) || changes.length === 0) return
+  fileRevertDialog.value = {visible: true, pending: false, changes}
+}
+
+const closeFileRevertDialog = () => {
+  if (fileRevertDialog.value.pending) return
+  fileRevertDialog.value = {visible: false, pending: false, changes: []}
+}
+
+const handleFileRevertAction = async (action) => {
+  if (action === 'cancel') {
+    closeFileRevertDialog()
+    return
+  }
+  const changes = fileRevertDialog.value.changes
+  if (!changes.length || fileRevertDialog.value.pending) return
+  fileRevertDialog.value.pending = true
+  try {
+    const res = await sessionsAPI.revertFileChanges(props.workspaceHash, changes)
+    if (res.success) {
+      addLog({level: 'INFO', text: `✅ ${res.data?.message || '已撤销本次 AI 的文件修改'}`, time: Date.now()})
+      fileRevertDialog.value = {visible: false, pending: false, changes: []}
+      await refreshHistory()
+      emit('sessionUpdated')
+    } else {
+      addLog({level: 'ERROR', text: `❌ 撤销代码失败: ${res.error || '未知错误'}`, time: Date.now()})
+    }
+  } catch (e) {
+    addLog({level: 'ERROR', text: `❌ 撤销代码失败: ${e.message || e}`, time: Date.now()})
+  } finally {
+    if (fileRevertDialog.value.visible) fileRevertDialog.value.pending = false
+  }
 }
 
 const closeRollbackDialog = () => {

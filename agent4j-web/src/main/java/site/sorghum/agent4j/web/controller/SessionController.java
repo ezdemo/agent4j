@@ -12,6 +12,7 @@ import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.common.WebErrorMessages;
 import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
+import site.sorghum.agent4j.web.service.FileChangeRevertService;
 
 import java.util.List;
 import java.util.stream.Collectors;
@@ -32,8 +33,22 @@ public class SessionController {
     @Inject
     private InteractionService interactionService;
 
+    private final FileChangeRevertService fileChangeRevertService = new FileChangeRevertService();
+
     /** 缓存统计默认上限 */
     private static final int DEFAULT_CACHE_LIMIT = 50;
+
+    @ApiOperation(value = "撤销本轮文件变更", notes = "按该助手回复持久化的 diff 反向回打补丁，不撤回会话消息")
+    @Post
+    @Mapping("/file-changes/revert")
+    public ApiResponse<FileChangeRevertDTO> revertFileChanges(
+            @ApiParam(value = "文件变更撤销请求") @Body FileChangeRevertRequest request) {
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        if (request == null) throw new ServiceException("撤销请求不能为空");
+        String workspacePath = agentService.resolveWorkspaceHashOrThrow(request.workspaceHash);
+        int count = fileChangeRevertService.revert(java.nio.file.Paths.get(workspacePath), request.changes);
+        return ApiResponse.ok(new FileChangeRevertDTO("已撤销本次 AI 的文件修改", count));
+    }
     @Get
     @Mapping("")
     public ApiResponse<List<SessionInfoDTO>> list(

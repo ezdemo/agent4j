@@ -311,6 +311,11 @@ export const sessionsAPI = {
   createNew: (params) => {
     return api.post('/sessions/new', null, { params: params || {} })
   },
+
+  // 按助手消息持久化的 diff 反向回打补丁，不影响会话历史
+  revertFileChanges: (workspaceHash, changes) => {
+    return api.post('/sessions/file-changes/revert', { workspaceHash, changes })
+  },
   // 分支会话 - POST /api/sessions/{name}/branch?workspaceHash=xxx&messageCount=N
   branchSession: (name, workspaceHash, messageCount) => {
     const params = { workspaceHash, messageCount }

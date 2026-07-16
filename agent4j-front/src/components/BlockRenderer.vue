@@ -42,6 +42,12 @@
             <b v-if="getFileChangeTotals(block).deletions" class="file-change-del">-{{ getFileChangeTotals(block).deletions }}</b>
           </span>
         </span>
+        <button type="button" class="file-changes-undo" @click.stop="$emit('revertFileChanges', block.changes)">
+          撤销
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 14 4 9l5-5"/><path d="M4 9h7a5 5 0 0 1 0 10h-1"/>
+          </svg>
+        </button>
       </div>
       <template v-if="block.changes.length > 1">
       <button v-for="change in getVisibleFileChanges(block)" :key="change.path" type="button" class="file-change-row"
@@ -431,7 +437,7 @@ const props = defineProps({
   blocks: {type: Array, required: true}
 })
 
-const emit = defineEmits(['sendChoice', 'openFile', 'openDiff'])
+const emit = defineEmits(['sendChoice', 'openFile', 'openDiff', 'revertFileChanges'])
 
 // 清单工具列表（需要在 processedBlocks 之前定义）
 const CHECKLIST_TOOLS = ['checklist_start', 'checklist_step', 'checklist_status']
@@ -1223,6 +1229,22 @@ watchEffect(() => {
   gap: 7px;
   font: 600 12px var(--mono);
 }
+
+.file-changes-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--fg-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.file-changes-undo:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }
 
 .file-change-row {
   display: flex;
