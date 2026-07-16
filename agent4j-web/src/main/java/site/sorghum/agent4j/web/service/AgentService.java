@@ -21,6 +21,7 @@ import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.tool.ToolSystemInitializer;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
 import site.sorghum.agent4j.tool.AgentOutput;
+import site.sorghum.agent4j.tool.solon.common.SessionFileChangeTracker;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.common.UsageCostCalculator;
 import site.sorghum.agent4j.web.model.*;
@@ -552,6 +553,7 @@ public class AgentService {
 
         // 设置当前会话名称到 ThreadLocal，供工具执行时获取
         String effectiveSessionName = sessionName != null ? sessionName : "default";
+        SessionFileChangeTracker.beginTurn(Paths.get(workspacePath), effectiveSessionName);
         CURRENT_SESSION_NAME.set(effectiveSessionName);
         HttpModelClient.CURRENT_LOG_SESSION.set(effectiveSessionName);
 
@@ -587,6 +589,7 @@ public class AgentService {
 
         // 设置当前会话名称到 ThreadLocal，供工具执行时获取
         String effectiveSessionName = sessionName != null ? sessionName : "default";
+        SessionFileChangeTracker.beginTurn(Paths.get(workspacePath), effectiveSessionName);
         CURRENT_SESSION_NAME.set(effectiveSessionName);
         HttpModelClient.CURRENT_LOG_SESSION.set(effectiveSessionName);
 
@@ -602,6 +605,7 @@ public class AgentService {
             // HITL 待审批时跳过：interceptForHITL/interceptForSandboxHITL 已通过
             // output.onContentDelta() 发送过 HITL 消息，此处不应重复发送
             if (reply != null && !reply.isEmpty() && agent.noPendingHITL()) {
+                emitter.sendFileChanges(SessionFileChangeTracker.drain(Paths.get(workspacePath), effectiveSessionName));
                 emitter.sendComplete(reply);
             }
         } catch (Exception e) {

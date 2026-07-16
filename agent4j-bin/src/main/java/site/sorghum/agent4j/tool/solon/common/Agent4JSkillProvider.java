@@ -4,7 +4,6 @@ import lombok.Getter;
 import org.noear.solon.Solon;
 import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.ai.talents.cli.SkillTalent;
-import org.noear.solon.ai.talents.cli.TerminalTalent;
 import org.noear.solon.ai.talents.lsp.LspManager;
 import org.noear.solon.ai.talents.lsp.LspTalent;
 import org.noear.solon.ai.talents.mount.MountDir;
@@ -20,7 +19,7 @@ import java.util.stream.Stream;
 
 public class Agent4JSkillProvider implements SolonToTools {
     SkillTalent skillTalent;
-    TerminalTalent terminalTalent;
+    SessionTerminalTalent terminalTalent;
     @Getter
     LspTalent lspTalent;
     public static Map<String, Agent4JSkillProvider> cliSkillProviderMap = new ConcurrentHashMap<>();
@@ -36,7 +35,7 @@ public class Agent4JSkillProvider implements SolonToTools {
                     .build());
         }};
         skillTalent = new SkillTalent(poolManager);
-        terminalTalent = new TerminalTalent(poolManager);
+        terminalTalent = new SessionTerminalTalent(poolManager, workDir);
         terminalTalent.setSandboxEnabled(false);
         terminalTalent.setBashAsyncEnabled(true);
         lspTalent = new LspTalent(
