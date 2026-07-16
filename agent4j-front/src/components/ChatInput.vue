@@ -79,7 +79,9 @@
       </section>
     </Transition>
 
-    <div class="input-box" :class="{ focused: inputFocused }">
+    <div class="input-box" :class="{ focused: inputFocused, 'file-drop-active': fileDropActive }"
+         @dragenter.prevent="handleFileDragEnter" @dragover.prevent="handleFileDragOver"
+         @dragleave="handleFileDragLeave" @drop.prevent="handleFileDrop">
       <!-- 已引用文件标签 -->
       <div v-if="selectedFileContexts.length > 0" class="file-chips-bar">
         <div class="file-chips-heading">
@@ -94,7 +96,7 @@
             <span class="file-chip-icon">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             </span>
-            <span class="file-chip-name">{{ fileName(context.file) }}</span>
+            <span class="file-chip-name">{{ context.file }}</span>
             <button class="file-chip-remove" type="button" :aria-label="`移除文件 ${context.file}`" title="移除引用"
                     @click.stop="removeSelectedFileContext(context.key)">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -414,6 +416,7 @@ const inputFocused = ref(false)
 const localText = ref(props.inputText)
 const images = ref([]) // 粘贴的图片 base64 Data URI 列表
 const selectedFileContexts = ref([])
+const fileDropActive = ref(false)
 
 // 同步 props 到本地
 watch(() => props.inputText, v => localText.value = v)
@@ -661,12 +664,17 @@ const handleKeydown = (e) => {
 const handleSend = () => {
   if (localText.value.trim() && !props.streaming) {
     let text = localText.value.trim()
-    const contextBlocks = selectedFileContexts.value.map(context => `\`\`\`折叠块\n引用文件：${context.file}\n\`\`\``)
-    if (contextBlocks.length > 0) text = `${contextBlocks.join('\n\n')}\n\n${text}`
-    // 有选中技能时，拼接技能指令到消息顶部
+    const collapsedParts = []
+    if (selectedFileContexts.value.length > 0) {
+      const fileLines = selectedFileContexts.value.map(context => `- ${context.file}`).join('\n')
+      collapsedParts.push(`引用文件：\n${fileLines}`)
+    }
     if (selectedSkills.value.length > 0) {
       const skillLines = selectedSkills.value.map(s => `/skill:${s.name}`).join('\n')
-      text = `\`\`\`折叠块\n调用技能：\n${skillLines}\n\`\`\`\n\n${text}`
+      collapsedParts.push(`调用技能：\n${skillLines}`)
+    }
+    if (collapsedParts.length > 0) {
+      text = `\`\`\`折叠块\n${collapsedParts.join('\n\n')}\n\`\`\`\n\n${text}`
     }
     emit('send', images.value, text)
     // 发送后清空图片、文件引用和技能标签
@@ -713,8 +721,6 @@ const removeImage = (idx) => {
   images.value.splice(idx, 1)
 }
 
-const fileName = (file) => String(file || '未命名文件').split(/[\\/]/).pop() || '未命名文件'
-
 const addFileContext = ({ file }) => {
   const path = String(file || '未命名文件')
   const key = path
@@ -729,6 +735,31 @@ const removeSelectedFileContext = (key) => {
 
 const clearSelectedFileContexts = () => {
   selectedFileContexts.value = []
+}
+
+const hasAgentFilePath = (event) => Array.from(event.dataTransfer?.types || []).includes('application/x-agent4j-file-path')
+
+const handleFileDragEnter = (event) => {
+  if (hasAgentFilePath(event)) fileDropActive.value = true
+}
+
+const handleFileDragOver = (event) => {
+  if (hasAgentFilePath(event)) {
+    event.dataTransfer.dropEffect = 'copy'
+    fileDropActive.value = true
+  }
+}
+
+const handleFileDragLeave = (event) => {
+  if (!event.currentTarget.contains(event.relatedTarget)) fileDropActive.value = false
+}
+
+const handleFileDrop = (event) => {
+  fileDropActive.value = false
+  const path = event.dataTransfer?.getData('application/x-agent4j-file-path')
+  if (!path) return
+  addFileContext({ file: path })
+  nextTick(() => inputField.value?.focus())
 }
 
 /**
@@ -1090,6 +1121,11 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, autoResize
 
 .input-box.focused {
   border-color: var(--accent);
+}
+
+.input-box.file-drop-active {
+  border-color: #4f7cac;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #4f7cac 18%, transparent), var(--glass-shadow);
 }
 
 .input-row {
@@ -2149,7 +2185,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, autoResize
 .file-chip svg { flex-shrink: 0; }
 
 .file-chip-name {
-  max-width: 180px;
+  max-width: 260px;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;

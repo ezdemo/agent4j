@@ -5,7 +5,9 @@
       :class="{ active: displayNode.path === selectedPath }"
       :style="{ paddingLeft: `${10 + depth * 16}px` }"
       type="button"
+      :draggable="!displayNode.directory"
       @click="$emit('toggle', displayNode)"
+      @dragstart="startFileDrag"
     >
       <svg v-if="displayNode.directory" class="tree-chevron" :class="{ expanded: displayNode.expanded }" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
       <span v-else class="tree-indent"></span>
@@ -68,12 +70,21 @@ const fileClass = computed(() => {
 function nodeMatches(node, query) {
   return node.name.toLowerCase().includes(query) || node.children?.some(child => nodeMatches(child, query))
 }
+
+function startFileDrag(event) {
+  if (displayNode.value.directory) return
+  event.dataTransfer.effectAllowed = 'copy'
+  event.dataTransfer.setData('application/x-agent4j-file-path', displayNode.value.path)
+  event.dataTransfer.setData('text/plain', displayNode.value.path)
+}
 </script>
 
 <style scoped>
 .file-tree-node { min-width: 0; }
 .file-tree-row { display: flex; align-items: center; width: 100%; min-height: 30px; padding-right: 8px; border: 0; border-radius: 4px; background: transparent; color: var(--fg-2); cursor: pointer; font: inherit; font-size: 13px; text-align: left; }
 .file-tree-row:hover, .file-tree-row.active { background: var(--bg-3); color: var(--fg); }
+.file-tree-row[draggable="true"] { cursor: grab; }
+.file-tree-row[draggable="true"]:active { cursor: grabbing; }
 .tree-chevron, .tree-indent { width: 14px; height: 14px; flex: 0 0 14px; margin-right: 3px; color: var(--fg-4); transition: transform .15s; }
 .tree-chevron.expanded { transform: rotate(90deg); }
 .file-icon { flex: 0 0 16px; margin-right: 7px; color: var(--fg-4); }
