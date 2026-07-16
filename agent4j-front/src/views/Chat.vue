@@ -1213,11 +1213,9 @@ const handleFileRevertAction = async (action) => {
       fileRevertDialog.value = {visible: false, pending: false, changes: []}
       await refreshHistory()
       emit('sessionUpdated')
-    } else {
-      addLog({level: 'ERROR', text: `❌ 撤销代码失败: ${res.error || '未知错误'}`, time: Date.now()})
     }
-  } catch (e) {
-    addLog({level: 'ERROR', text: `❌ 撤销代码失败: ${e.message || e}`, time: Date.now()})
+  } catch {
+    // The API interceptor already displays the failure notification.
   } finally {
     if (fileRevertDialog.value.visible) fileRevertDialog.value.pending = false
   }
