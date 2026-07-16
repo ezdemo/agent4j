@@ -5,7 +5,7 @@ import io.swagger.annotations.ApiOperation;
 import io.swagger.annotations.ApiParam;
 import lombok.SneakyThrows;
 import org.noear.solon.annotation.*;
-import site.sorghum.agent4j.bin.workflow2.*;
+import site.sorghum.agent4j.bin.checklist.*;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
 import site.sorghum.agent4j.tool.interact.InteractionService;
 import site.sorghum.agent4j.web.common.ServiceException;
@@ -146,31 +146,31 @@ public class SessionController {
         return ApiResponse.ok(new SessionStatsDTO(agentService.getCacheSize(), DEFAULT_CACHE_LIMIT));
     }
 
-    @ApiOperation(value = "获取会话工作流", notes = "返回指定会话的步骤列表工作流状态")
+    @ApiOperation(value = "获取会话清单", notes = "返回指定会话的步骤列表清单状态")
     @Get
-    @Mapping("/{name}/workflow")
-    public ApiResponse<WorkflowStatusDTO> getWorkflow(
+    @Mapping("/{name}/checklist")
+    public ApiResponse<ChecklistStatusDTO> getChecklist(
             @ApiParam(value = "会话名称") @Path("name") String sessionName,
             @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
         
         WorkspaceManager workspaceManager = WorkspaceManager.getOrCreate(workspacePath);
-        SimpleWorkflowStore store = workspaceManager.getWorkflowStore2();
+        ChecklistStore store = workspaceManager.getChecklistStore();
         
         try {
-            SimpleWorkflow wf = store.findBySession(sessionName);
-            if (wf == null) {
+            Checklist cl = store.findBySession(sessionName);
+            if (cl == null) {
                 return ApiResponse.ok(null);
             }
-            return ApiResponse.ok(WorkflowStatusDTO.builder()
-                    .workflowId(wf.getId())
-                    .title(wf.getTitle())
-                    .status(wf.getStatus())
-                    .currentStepIndex(wf.getCurrentStepIndex())
-                    .totalSteps(wf.getSteps().size())
-                    .progress(wf.progressText())
-                    .steps(wf.getSteps().stream().map(s -> WorkflowStatusDTO.StepDTO.builder()
+            return ApiResponse.ok(ChecklistStatusDTO.builder()
+                    .checklistId(cl.getId())
+                    .title(cl.getTitle())
+                    .status(cl.getStatus())
+                    .currentStepIndex(cl.getCurrentStepIndex())
+                    .totalSteps(cl.getSteps().size())
+                    .progress(cl.progressText())
+                    .steps(cl.getSteps().stream().map(s -> ChecklistStatusDTO.StepDTO.builder()
                             .id(s.getId())
                             .description(s.getDescription())
                             .kind(s.getKind().name())
@@ -179,7 +179,7 @@ public class SessionController {
                             .build()).collect(java.util.stream.Collectors.toList()))
                     .build());
         } catch (Exception e) {
-            throw new ServiceException("获取工作流失败: " + e.getMessage());
+            throw new ServiceException("获取清单失败: " + e.getMessage());
         }
     }
     

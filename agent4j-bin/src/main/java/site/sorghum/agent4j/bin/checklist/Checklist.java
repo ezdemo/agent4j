@@ -1,4 +1,4 @@
-package site.sorghum.agent4j.bin.workflow2;
+package site.sorghum.agent4j.bin.checklist;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -8,14 +8,21 @@ import lombok.NoArgsConstructor;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
-import java.util.stream.Collectors;
 
+/**
+ * Checklist — 执行清单（轻量级步骤进度追踪）。
+ * <p>
+ * 替代旧的 DAG Workflow 模型。LLM 定义有序步骤列表，逐步执行并标记进度。
+ * 每一步内 LLM 完全自由推理，不受图约束。
+ * </p>
+ *
+ * @author Sorghum
+ */
 @Data
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class SimpleWorkflow {
+public class Checklist {
     private String id;
     private String sessionId;
     private String workspaceHash;
@@ -23,7 +30,7 @@ public class SimpleWorkflow {
     private String description;
 
     @Builder.Default
-    private List<WorkflowStep> steps = new ArrayList<>();
+    private List<ChecklistStep> steps = new ArrayList<>();
 
     private int currentStepIndex; // 当前执行到第几步（从1开始，0表示未开始）
     private String status;        // ACTIVE | PAUSED | COMPLETED | FAILED
@@ -31,7 +38,7 @@ public class SimpleWorkflow {
     private Instant updatedAt;
     private Instant completedAt;
 
-    public WorkflowStep currentStep() {
+    public ChecklistStep currentStep() {
         if (currentStepIndex < 1 || currentStepIndex > steps.size()) return null;
         return steps.get(currentStepIndex - 1);
     }

@@ -61,23 +61,23 @@
       </div>
 
       <div class="input-row">
-        <!-- 工作流 TODO 按钮 -->
-        <div class="wf-todo-wrap" @mouseenter="onWfEnter" @mouseleave="onWfLeave">
-          <button class="todo-btn" :class="{ has: !!wfData, active: !!wfData }" title="工作流进度">
+        <!-- 清单 TODO 按钮 -->
+        <div class="cl-todo-wrap" @mouseenter="onClEnter" @mouseleave="onClLeave">
+          <button class="todo-btn" :class="{ has: !!clData, active: !!clData }" title="清单进度">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
               <polyline points="9 14 11 16 15 10"/>
             </svg>
           </button>
           <!-- 悬浮弹出 -->
-          <Transition name="wf-popup">
-            <div v-if="wfHover" class="wf-popup">
-              <div v-if="wfData" class="wf-popup-body">
-                <WorkflowSteps :data="wfData" />
+          <Transition name="cl-popup">
+            <div v-if="clHover" class="cl-popup">
+              <div v-if="clData" class="cl-popup-body">
+                <ChecklistSteps :data="clData" />
               </div>
-              <div v-else class="wf-popup-empty">
-                <span>暂无工作流</span>
-                <span class="wf-popup-hint">AI 调用 workflow_start 后自动创建</span>
+              <div v-else class="cl-popup-empty">
+                <span>暂无清单</span>
+                <span class="cl-popup-hint">AI 调用 checklist_start 后自动创建</span>
               </div>
             </div>
           </Transition>
@@ -337,7 +337,7 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useAppStore} from '../stores/app'
 import {agentAPI, petAPI} from '../services/api'
 import PetSprite from './PetSprite.vue'
-import WorkflowSteps from './WorkflowSteps.vue'
+import ChecklistSteps from './ChecklistSteps.vue'
 
 const props = defineProps({
   inputText: {type: String, default: ''},
@@ -651,39 +651,39 @@ const clearSelectedSkills = () => {
   emit('switchSkill', [])
 }
 
-// ============= 工作流 TODO =============
-const wfData = ref(null)
-const wfHover = ref(false)
-let wfLoadTimer = null
+// ============= 清单 TODO =============
+const clData = ref(null)
+const clHover = ref(false)
+let clLoadTimer = null
 
-const loadWorkflow = async () => {
+const loadChecklist = async () => {
   if (!props.workspaceHash || !props.sessionName) {
-    wfData.value = null
+    clData.value = null
     return
   }
   try {
     const { sessionsAPI } = await import('../services/api')
-    const res = await sessionsAPI.getWorkflow(props.sessionName, props.workspaceHash)
+    const res = await sessionsAPI.getChecklist(props.sessionName, props.workspaceHash)
     if (res.success && res.data) {
-      wfData.value = res.data
+      clData.value = res.data
     } else {
-      wfData.value = null
+      clData.value = null
     }
   } catch {
-    wfData.value = null
+    clData.value = null
   }
 }
 
 watch([() => props.workspaceHash, () => props.sessionName], () => {
-  loadWorkflow()
+  loadChecklist()
 }, { immediate: true })
 
-const onWfEnter = () => {
-  wfHover.value = true
-  loadWorkflow()
+const onClEnter = () => {
+  clHover.value = true
+  loadChecklist()
 }
-const onWfLeave = () => {
-  wfHover.value = false
+const onClLeave = () => {
+  clHover.value = false
 }
 
 // ============= 权限切换 =============
@@ -2425,14 +2425,14 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize, closePickers})
   pointer-events: auto;
 }
 
-/* ============= 工作流 TODO ============= */
-.wf-todo-wrap {
+/* ============= 清单 TODO ============= */
+.cl-todo-wrap {
   position: relative;
   display: flex;
   align-items: center;
 }
 
-.wf-todo-wrap .todo-btn {
+.cl-todo-wrap .todo-btn {
   width: 28px;
   height: 28px;
   display: flex;
@@ -2446,10 +2446,10 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize, closePickers})
   cursor: pointer;
   flex-shrink: 0;
 }
-.wf-todo-wrap .todo-btn:hover { background: var(--bg-3); color: var(--accent); }
-.wf-todo-wrap .todo-btn.active { color: var(--accent); }
+.cl-todo-wrap .todo-btn:hover { background: var(--bg-3); color: var(--accent); }
+.cl-todo-wrap .todo-btn.active { color: var(--accent); }
 
-.wf-popup {
+.cl-popup {
   position: absolute;
   bottom: calc(100% + 6px);
   left: 0;
@@ -2465,24 +2465,24 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize, closePickers})
   padding: 10px;
 }
 
-.wf-popup-empty {
+.cl-popup-empty {
   display: flex;
   flex-direction: column;
   gap: 4px;
   font-size: 12px;
   color: var(--fg-3);
 }
-.wf-popup-hint {
+.cl-popup-hint {
   font-size: 10px;
   color: var(--fg-4);
 }
 
-.wf-popup-enter-active,
-.wf-popup-leave-active {
+.cl-popup-enter-active,
+.cl-popup-leave-active {
   transition: opacity 0.15s, transform 0.15s;
 }
-.wf-popup-enter-from,
-.wf-popup-leave-to {
+.cl-popup-enter-from,
+.cl-popup-leave-to {
   opacity: 0;
   transform: translateY(4px);
 }

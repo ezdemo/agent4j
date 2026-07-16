@@ -1,4 +1,4 @@
-package site.sorghum.agent4j.bin.workflow2;
+package site.sorghum.agent4j.bin.checklist;
 
 public enum StepStatus {
     PENDING,

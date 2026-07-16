@@ -6,8 +6,8 @@ import org.noear.solon.ai.chat.tool.AbsToolProvider;
 import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Param;
-import site.sorghum.agent4j.bin.workflow2.SimpleWorkflow;
-import site.sorghum.agent4j.bin.workflow2.SimpleWorkflowEngine;
+import site.sorghum.agent4j.bin.checklist.Checklist;
+import site.sorghum.agent4j.bin.checklist.ChecklistEngine;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
 import site.sorghum.agent4j.tool.ToolContext;
 import site.sorghum.agent4j.tool.solon.SolonToTools;
@@ -16,9 +16,8 @@ import java.util.Collection;
 import java.util.List;
 
 /**
- * Workflow Status 工具 —— 查看工作流状态。
+ * Checklist Status 工具 —— 查看清单状态。
  * <p>
- * 替代旧的 workflow_visualize。
  * 返回当前步骤索引、总步骤数、各步骤状态。
  * </p>
  *
@@ -26,18 +25,18 @@ import java.util.List;
  */
 @Slf4j
 @Component
-public class WorkflowStatusTool extends AbsToolProvider implements SolonToTools {
+public class ChecklistStatusTool extends AbsToolProvider implements SolonToTools {
 
-    @ToolMapping(name = "workflow_status", description = """
-            查看当前会话的工作流状态。
+    @ToolMapping(name = "checklist_status", description = """
+            查看当前会话的清单状态。
             
             返回：
-            - 工作流标题和状态
+            - 清单标题和状态
             - 当前步骤索引 / 总步骤数
             - 各步骤的状态（PENDING / RUNNING / DONE / SKIPPED / FAILED）
             - 进度百分比
             """)
-    public String workflowStatus(
+    public String checklistStatus(
             @Param(name = "sessionId", description = "会话 ID。留空自动从上下文获取当前会话", required = false) String sessionId,
             ToolContext ctx) {
         try {
@@ -51,17 +50,17 @@ public class WorkflowStatusTool extends AbsToolProvider implements SolonToTools 
             String rootDir = ctx.getRootDir().toAbsolutePath().toString();
             WorkspaceManager workspaceManager = WorkspaceManager.getOrCreate(rootDir);
 
-            SimpleWorkflow wf = workspaceManager.getWorkflowStore2().findBySession(sessionId);
-            if (wf == null) {
-                return "WORKFLOW_NOT_FOUND: 当前会话没有活跃工作流。";
+            Checklist cl = workspaceManager.getChecklistStore().findBySession(sessionId);
+            if (cl == null) {
+                return "CHECKLIST_NOT_FOUND: 当前会话没有活跃清单。";
             }
 
-            SimpleWorkflowEngine engine = new SimpleWorkflowEngine();
-            var resp = engine.toStatusJson(wf);
+            ChecklistEngine engine = new ChecklistEngine();
+            var resp = engine.toStatusJson(cl);
             return resp.toJson();
 
         } catch (Exception e) {
-            log.error("[workflow] 获取工作流状态失败", e);
+            log.error("[checklist] 获取清单状态失败", e);
             return "STATUS_FAILED: " + e.getMessage();
         }
     }

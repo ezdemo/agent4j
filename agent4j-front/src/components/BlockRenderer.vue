@@ -163,9 +163,9 @@
                 </span>
               </div>
               <div v-if="pathItemExpanded[getPathItemKey(block._groupId, ibi)]" class="tool-detail">
-                <!-- 工作流工具：用 WorkflowSteps 渲染 -->
-                <div v-if="isWorkflowTool(ib)" class="workflow-tool-detail">
-                  <WorkflowSteps :data="getWorkflowData(ib)" />
+                <!-- 清单工具：用 ChecklistSteps 渲染 -->
+                <div v-if="isChecklistTool(ib)" class="checklist-tool-detail">
+                  <ChecklistSteps :data="getChecklistData(ib)" />
                 </div>
                 <!-- 其他工具：正常显示 -->
                 <template v-else>
@@ -197,9 +197,9 @@
           <span class="tool-status" :class="block.status">{{ block.status }}</span>
         </div>
       </div>
-      <!-- 工作流工具：workflow_create_dag 和 workflow_visualize -->
-      <div v-else-if="isWorkflowTool(block) && block.result" class="block-workflow">
-        <div class="workflow-tool-head" @click="block.expanded = !block.expanded">
+      <!-- 清单工具 -->
+      <div v-else-if="isChecklistTool(block) && block.result" class="block-checklist">
+        <div class="checklist-tool-head" @click="block.expanded = !block.expanded">
           <span class="tool-icon default-icon" :class="block.status">
             <span v-if="block.status === '执行中'" v-html="SPINNER_ICON"></span>
             <span v-else-if="block.status === '成功'" v-html="CHECK_ICON_SM"></span>
@@ -207,7 +207,7 @@
           </span>
           <code class="tool-name">{{ block.name }}</code>
           <span class="tool-status" :class="block.status">{{ block.status }}</span>
-          <span class="workflow-tool-title">{{ getWorkflowTitle(block) }}</span>
+          <span class="checklist-tool-title">{{ getChecklistTitle(block) }}</span>
           <span class="default-icon"
                 v-html="CHEVRON_DOWN_ICON"
                 :style="{
@@ -218,12 +218,12 @@
                 }">
           </span>
         </div>
-        <div v-if="block.expanded" class="workflow-tool-detail">
-          <WorkflowSteps :data="getWorkflowData(block)" />
+        <div v-if="block.expanded" class="checklist-tool-detail">
+          <ChecklistSteps :data="getChecklistData(block)" />
         </div>
       </div>
-      <!-- 工作流工具执行中 -->
-      <div v-else-if="isWorkflowTool(block) && block.status" class="block-tool">
+      <!-- 清单工具执行中 -->
+      <div v-else-if="isChecklistTool(block) && block.status" class="block-tool">
         <div class="tool-head">
           <span class="tool-icon default-icon" :class="block.status" v-html="SPINNER_ICON"></span>
           <code class="tool-name">{{ block.name }}</code>
@@ -383,7 +383,7 @@ import {sanitize} from '../utils/sanitize'
 import {CHECK_ICON_SM, CHEVRON_DOWN_ICON, CIRCLE_ICON, SPINNER_ICON, THINKING_ICON} from '../utils/icons'
 import {LRUCache} from '../utils/cache'
 import {computed, ref, watchEffect} from 'vue'
-import WorkflowSteps from './WorkflowSteps.vue'
+import ChecklistSteps from './ChecklistSteps.vue'
 
 const props = defineProps({
   blocks: {type: Array, required: true}
@@ -391,8 +391,8 @@ const props = defineProps({
 
 const emit = defineEmits(['sendChoice', 'openFile'])
 
-// 工作流工具列表（需要在 processedBlocks 之前定义）
-const WORKFLOW_TOOLS = ['workflow_start', 'workflow_step', 'workflow_status']
+// 清单工具列表（需要在 processedBlocks 之前定义）
+const CHECKLIST_TOOLS = ['checklist_start', 'checklist_step', 'checklist_status']
 
 // ── 工具分组折叠状态 ──
 
@@ -655,25 +655,25 @@ const getChoiceQuestion = (block) => {
   return q.length > 40 ? q.slice(0, 37) + '...' + suffix : q + suffix
 }
 
-// 工作流工具相关方法
-const isWorkflowTool = (block) => {
-  return WORKFLOW_TOOLS.includes(block.name)
+// 清单工具相关方法
+const isChecklistTool = (block) => {
+  return CHECKLIST_TOOLS.includes(block.name)
 }
 
-// 工作流工具默认展开
-const initWorkflowToolExpanded = (block) => {
-  if (isWorkflowTool(block) && block.expanded === undefined) {
+// 清单工具默认展开
+const initChecklistToolExpanded = (block) => {
+  if (isChecklistTool(block) && block.expanded === undefined) {
     block.expanded = true
   }
 }
 
-const getWorkflowTitle = (block) => {
+const getChecklistTitle = (block) => {
   try {
-    if (block.name === 'workflow_start') {
+    if (block.name === 'checklist_start') {
       const result = parseResult(block)
       return result?.title || ''
     }
-    if (block.name === 'workflow_status' || block.name === 'workflow_step') {
+    if (block.name === 'checklist_status' || block.name === 'checklist_step') {
       const result = parseResult(block)
       return result?.title || ''
     }
@@ -683,7 +683,7 @@ const getWorkflowTitle = (block) => {
   return ''
 }
 
-const getWorkflowData = (block) => {
+const getChecklistData = (block) => {
   try {
     const result = parseResult(block)
     if (result) return result
@@ -711,13 +711,13 @@ watchEffect(() => {
     if (block.type === 'path_group' && block._blocks) {
       block._blocks.forEach((item, idx) => {
         const key = getPathItemKey(block._groupId, idx)
-        if (item.type === 'tool_call' && isWorkflowTool(item) && !pathItemExpanded.value[key]) {
+        if (item.type === 'tool_call' && isChecklistTool(item) && !pathItemExpanded.value[key]) {
           pathItemExpanded.value = {...pathItemExpanded.value, [key]: true}
         }
       })
     }
     // 独立工具块：工作流工具自动展开
-    if (block.type === 'tool_call' && isWorkflowTool(block) && block.expanded === undefined) {
+    if (block.type === 'tool_call' && isChecklistTool(block) && block.expanded === undefined) {
       block.expanded = true
     }
   }
@@ -1231,8 +1231,8 @@ watchEffect(() => {
   overflow: auto;
 }
 
-/* 工作流工具 */
-.block-workflow {
+/* 清单工具 */
+.block-checklist {
   background: var(--bg-2, #f9fafb);
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 6px;
@@ -1240,7 +1240,7 @@ watchEffect(() => {
   margin-bottom: 4px;
 }
 
-.workflow-tool-head {
+.checklist-tool-head {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1248,17 +1248,17 @@ watchEffect(() => {
   cursor: pointer;
 }
 
-.workflow-tool-head:hover {
+.checklist-tool-head:hover {
   background: var(--bg-3, #f3f4f6);
 }
 
-.workflow-tool-title {
+.checklist-tool-title {
   font-size: 12px;
   color: var(--fg-2, #6b7280);
   margin-left: 4px;
 }
 
-.workflow-tool-detail {
+.checklist-tool-detail {
   padding: 8px;
   border-top: 1px solid var(--border, #e5e7eb);
 }

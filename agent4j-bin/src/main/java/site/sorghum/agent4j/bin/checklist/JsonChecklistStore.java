@@ -1,4 +1,4 @@
-package site.sorghum.agent4j.bin.workflow2;
+package site.sorghum.agent4j.bin.checklist;
 
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
@@ -9,47 +9,47 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 
 /**
- * JsonSimpleWorkflowStore — 基于 JSON 文件的 SimpleWorkflow 持久化。
+ * JsonChecklistStore — 基于 JSON 文件的 Checklist 持久化。
  * <p>
- * 每个会话一个 JSON 文件，存放在 {workspaceDir}/.agent4j/workflows/{sessionId}.json。
+ * 每个会话一个 JSON 文件，存放在 {workspaceDir}/.agent4j/checklists/{sessionId}.json。
  * </p>
  *
  * @author Sorghum
  */
 @Slf4j
-public class JsonSimpleWorkflowStore implements SimpleWorkflowStore {
+public class JsonChecklistStore implements ChecklistStore {
 
     private final Path storeDir;
 
-    public JsonSimpleWorkflowStore(Path workspaceDir) {
-        this.storeDir = workspaceDir.resolve(".agent4j").resolve("workflows2");
+    public JsonChecklistStore(Path workspaceDir) {
+        this.storeDir = workspaceDir.resolve(".agent4j").resolve("checklists");
         try {
             Files.createDirectories(this.storeDir);
         } catch (IOException e) {
-            log.warn("[workflow2] 创建存储目录失败: {}", e.getMessage());
+            log.warn("[checklist] 创建存储目录失败: {}", e.getMessage());
         }
     }
 
     @Override
-    public void save(SimpleWorkflow workflow) {
+    public void save(Checklist checklist) {
         try {
-            Path file = getFilePath(workflow.getSessionId());
-            String json = serialize(workflow);
+            Path file = getFilePath(checklist.getSessionId());
+            String json = serialize(checklist);
             Files.writeString(file, json, StandardCharsets.UTF_8);
         } catch (Exception e) {
-            log.warn("[workflow2] 保存工作流失败: sessionId={}", workflow.getSessionId(), e);
+            log.warn("[checklist] 保存清单失败: sessionId={}", checklist.getSessionId(), e);
         }
     }
 
     @Override
-    public SimpleWorkflow findBySession(String sessionId) {
+    public Checklist findBySession(String sessionId) {
         try {
             Path file = getFilePath(sessionId);
             if (!Files.exists(file)) return null;
             String json = Files.readString(file, StandardCharsets.UTF_8);
             return deserialize(json);
         } catch (Exception e) {
-            log.warn("[workflow2] 读取工作流失败: sessionId={}", sessionId, e);
+            log.warn("[checklist] 读取清单失败: sessionId={}", sessionId, e);
             return null;
         }
     }
@@ -60,7 +60,7 @@ public class JsonSimpleWorkflowStore implements SimpleWorkflowStore {
             Path file = getFilePath(sessionId);
             Files.deleteIfExists(file);
         } catch (Exception e) {
-            log.warn("[workflow2] 删除工作流失败: sessionId={}", sessionId, e);
+            log.warn("[checklist] 删除清单失败: sessionId={}", sessionId, e);
         }
     }
 
@@ -69,19 +69,19 @@ public class JsonSimpleWorkflowStore implements SimpleWorkflowStore {
         return storeDir.resolve(safeName + ".json");
     }
 
-    private String serialize(SimpleWorkflow wf) {
+    private String serialize(Checklist cl) {
         ONode root = new ONode();
-        root.set("id", wf.getId());
-        root.set("sessionId", wf.getSessionId());
-        root.set("workspaceHash", wf.getWorkspaceHash());
-        root.set("title", wf.getTitle());
-        root.set("description", wf.getDescription());
-        root.set("currentStepIndex", wf.getCurrentStepIndex());
-        root.set("status", wf.getStatus());
+        root.set("id", cl.getId());
+        root.set("sessionId", cl.getSessionId());
+        root.set("workspaceHash", cl.getWorkspaceHash());
+        root.set("title", cl.getTitle());
+        root.set("description", cl.getDescription());
+        root.set("currentStepIndex", cl.getCurrentStepIndex());
+        root.set("status", cl.getStatus());
 
         ONode stepsArr = ONode.ofJson("[]").asArray();
         root.set("steps", stepsArr);
-        for (WorkflowStep step : wf.getSteps()) {
+        for (ChecklistStep step : cl.getSteps()) {
             ONode s = stepsArr.addNew();
             s.set("id", step.getId());
             s.set("description", step.getDescription());
@@ -92,17 +92,17 @@ public class JsonSimpleWorkflowStore implements SimpleWorkflowStore {
             if (step.getCompletedAt() != null) s.set("completedAt", step.getCompletedAt().toString());
         }
 
-        if (wf.getCreatedAt() != null) root.set("createdAt", wf.getCreatedAt().toString());
-        if (wf.getUpdatedAt() != null) root.set("updatedAt", wf.getUpdatedAt().toString());
-        if (wf.getCompletedAt() != null) root.set("completedAt", wf.getCompletedAt().toString());
+        if (cl.getCreatedAt() != null) root.set("createdAt", cl.getCreatedAt().toString());
+        if (cl.getUpdatedAt() != null) root.set("updatedAt", cl.getUpdatedAt().toString());
+        if (cl.getCompletedAt() != null) root.set("completedAt", cl.getCompletedAt().toString());
 
         return root.toJson();
     }
 
-    private SimpleWorkflow deserialize(String json) {
+    private Checklist deserialize(String json) {
         ONode root = ONode.ofJson(json);
 
-        SimpleWorkflow.SimpleWorkflowBuilder wb = SimpleWorkflow.builder()
+        Checklist.ChecklistBuilder cb = Checklist.builder()
                 .id(root.get("id").getString())
                 .sessionId(root.get("sessionId").getString())
                 .workspaceHash(root.get("workspaceHash").getString())
@@ -113,23 +113,23 @@ public class JsonSimpleWorkflowStore implements SimpleWorkflowStore {
 
         if (root.get("createdAt").isObject()) {
             String ca = root.get("createdAt").getString();
-            if (ca != null) wb.createdAt(java.time.Instant.parse(ca));
+            if (ca != null) cb.createdAt(java.time.Instant.parse(ca));
         }
         if (root.get("updatedAt").isObject()) {
             String ua = root.get("updatedAt").getString();
-            if (ua != null) wb.updatedAt(java.time.Instant.parse(ua));
+            if (ua != null) cb.updatedAt(java.time.Instant.parse(ua));
         }
         if (root.get("completedAt").isObject()) {
             String ca2 = root.get("completedAt").getString();
-            if (ca2 != null) wb.completedAt(java.time.Instant.parse(ca2));
+            if (ca2 != null) cb.completedAt(java.time.Instant.parse(ca2));
         }
 
-        var steps = new java.util.ArrayList<WorkflowStep>();
+        var steps = new java.util.ArrayList<ChecklistStep>();
         ONode stepsArr = root.get("steps");
         if (stepsArr.isArray()) {
             for (int i = 0; i < stepsArr.getArray().size(); i++) {
                 ONode s = stepsArr.getArray().get(i);
-                WorkflowStep.WorkflowStepBuilder sb = WorkflowStep.builder()
+                ChecklistStep.ChecklistStepBuilder sb = ChecklistStep.builder()
                         .id(s.get("id").getString())
                         .description(s.get("description").getString())
                         .kind(StepKind.valueOf(s.get("kind").getString()))
@@ -146,8 +146,8 @@ public class JsonSimpleWorkflowStore implements SimpleWorkflowStore {
                 steps.add(sb.build());
             }
         }
-        wb.steps(steps);
+        cb.steps(steps);
 
-        return wb.build();
+        return cb.build();
     }
 }
