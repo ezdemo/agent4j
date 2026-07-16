@@ -31,4 +31,13 @@ public class WorkspaceFileController {
             @ApiParam(value = "相对于工作区的目录路径") @Param(value = "path", required = false) String path) {
         return ApiResponse.ok(workspaceFileService.list(workspaceHash, path));
     }
+
+    @ApiOperation(value = "搜索工作区文件", notes = "仅返回工作区内的普通文件，供聊天输入框 @ 引用")
+    @Get
+    @Mapping("/search")
+    public ApiResponse<List<WorkspaceFileEntryDTO>> search(
+            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
+            @ApiParam(value = "文件名或路径关键字") @Param(value = "query", required = false) String query) {
+        return ApiResponse.ok(workspaceFileService.search(workspaceHash, query));
+    }
 }

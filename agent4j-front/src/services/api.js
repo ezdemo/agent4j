@@ -899,6 +899,10 @@ export const filesAPI = {
   // 获取指定目录的直接子项 - GET /api/files/tree?workspaceHash=xxx&path=src
   list: (workspaceHash, path = '') => {
     return api.get('/files/tree', { params: { workspaceHash, path } })
+  },
+  // 搜索工作区内文件 - GET /api/files/search?workspaceHash=xxx&query=foo
+  search: (workspaceHash, query = '') => {
+    return api.get('/files/search', { params: { workspaceHash, query } })
   }
 }
 

@@ -1,5 +1,31 @@
 <template>
   <div class="input-area" :class="{ 'welcome-mode': welcomeMode }">
+    <!-- @ 文件引用弹窗 -->
+    <Transition name="slash-popup">
+      <div v-if="fileMentionOpen" class="file-mention-popup">
+        <div class="file-mention-header">
+          <span class="file-mention-title">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            引用文件
+          </span>
+          <span class="file-mention-hint">输入文件名筛选</span>
+        </div>
+        <div v-if="fileMentionLoading" class="file-mention-state"><span class="loading-dot"></span> 搜索文件中...</div>
+        <div v-else-if="fileMentionError" class="file-mention-state">{{ fileMentionError }}</div>
+        <div v-else-if="fileMentionFiles.length === 0" class="file-mention-state">未找到文件</div>
+        <div v-else class="file-mention-list">
+          <button v-for="(entry, index) in fileMentionFiles" :key="entry.path" type="button"
+                  class="file-mention-item" :class="{ active: index === activeFileMentionIndex }"
+                  @click="selectMentionFile(entry)" @mouseenter="activeFileMentionIndex = index">
+            <span class="file-mention-icon">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </span>
+            <span class="file-mention-info"><span>{{ entry.name }}</span><small>{{ entry.path }}</small></span>
+          </button>
+        </div>
+      </div>
+    </Transition>
+
     <!-- 斜杠命令弹窗 -->
     <Transition name="slash-popup">
       <div v-if="slashPopupOpen" class="slash-popup">
@@ -69,7 +95,6 @@
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             </span>
             <span class="file-chip-name">{{ fileName(context.file) }}</span>
-            <span class="file-chip-lines">{{ context.lineCount }} 行</span>
             <button class="file-chip-remove" type="button" :aria-label="`移除文件 ${context.file}`" title="移除引用"
                     @click.stop="removeSelectedFileContext(context.key)">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -360,7 +385,7 @@
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useAppStore} from '../stores/app'
-import {agentAPI, petAPI} from '../services/api'
+import {agentAPI, filesAPI, petAPI} from '../services/api'
 import PetSprite from './PetSprite.vue'
 import ChecklistSteps from './ChecklistSteps.vue'
 
@@ -470,11 +495,89 @@ const selectSlashCmd = (cmd) => {
   nextTick(() => inputField.value?.focus())
 }
 
+// ============= @ 文件引用 =============
+const fileMentionOpen = ref(false)
+const fileMentionQuery = ref('')
+const fileMentionFiles = ref([])
+const fileMentionLoading = ref(false)
+const fileMentionError = ref('')
+const activeFileMentionIndex = ref(0)
+let fileMentionStart = -1
+let fileMentionSearchTimer = null
+let fileMentionRequestId = 0
+
+const closeFileMention = () => {
+  fileMentionRequestId++
+  fileMentionOpen.value = false
+  fileMentionLoading.value = false
+  fileMentionError.value = ''
+  fileMentionStart = -1
+  if (fileMentionSearchTimer) {
+    clearTimeout(fileMentionSearchTimer)
+    fileMentionSearchTimer = null
+  }
+}
+
+const searchMentionFiles = async (query) => {
+  if (!props.workspaceHash) {
+    fileMentionFiles.value = []
+    fileMentionError.value = '请选择项目后再引用文件'
+    return
+  }
+  const requestId = ++fileMentionRequestId
+  fileMentionLoading.value = true
+  fileMentionError.value = ''
+  try {
+    const response = await filesAPI.search(props.workspaceHash, query)
+    if (requestId !== fileMentionRequestId) return
+    if (!response.success) throw new Error(response.error || '搜索文件失败')
+    fileMentionFiles.value = response.data || []
+    activeFileMentionIndex.value = 0
+  } catch (e) {
+    if (requestId === fileMentionRequestId) {
+      fileMentionFiles.value = []
+      fileMentionError.value = e.message || '搜索文件失败'
+    }
+  } finally {
+    if (requestId === fileMentionRequestId) fileMentionLoading.value = false
+  }
+}
+
+const updateFileMention = () => {
+  const cursor = inputField.value?.selectionStart ?? localText.value.length
+  const beforeCursor = localText.value.slice(0, cursor)
+  const match = beforeCursor.match(/(^|\s)@([^\s@]*)$/)
+  if (!match) {
+    closeFileMention()
+    return false
+  }
+  fileMentionQuery.value = match[2] || ''
+  fileMentionStart = beforeCursor.lastIndexOf('@')
+  fileMentionOpen.value = true
+  fileMentionError.value = ''
+  fileMentionRequestId++
+  if (fileMentionSearchTimer) clearTimeout(fileMentionSearchTimer)
+  fileMentionSearchTimer = setTimeout(() => searchMentionFiles(fileMentionQuery.value), 140)
+  return true
+}
+
+const selectMentionFile = async (entry) => {
+  if (!entry?.path) return
+  addFileContext({ file: entry.path })
+  const cursor = inputField.value?.selectionStart ?? localText.value.length
+  localText.value = `${localText.value.slice(0, fileMentionStart)}${localText.value.slice(cursor)}`
+  closeFileMention()
+  await nextTick()
+  autoResize()
+  inputField.value?.focus()
+}
+
 // ============= 输入处理 =============
 const handleInput = () => {
   autoResize()
   const m = localText.value.match(/(^|\s)(\/)([^\s]*)$/)
   if (m) {
+    closeFileMention()
     slashPopupOpen.value = true;
     slashQuery.value = m[3] || '';
     activePopupIdx.value = 0;
@@ -482,17 +585,46 @@ const handleInput = () => {
       commandsLoaded.value = false;
       loadCommands()
     }
-  } else slashPopupOpen.value = false
+  } else {
+    slashPopupOpen.value = false
+    updateFileMention()
+  }
 }
 
 const handleBlur = () => {
   inputFocused.value = false;
   setTimeout(() => {
     slashPopupOpen.value = false
+    closeFileMention()
   }, 200)
 }
 
 const handleKeydown = (e) => {
+  if (fileMentionOpen.value) {
+    if (e.key === 'ArrowDown' && fileMentionFiles.value.length > 0) {
+      e.preventDefault()
+      activeFileMentionIndex.value = (activeFileMentionIndex.value + 1) % fileMentionFiles.value.length
+      return
+    }
+    if (e.key === 'ArrowUp' && fileMentionFiles.value.length > 0) {
+      e.preventDefault()
+      activeFileMentionIndex.value = (activeFileMentionIndex.value - 1 + fileMentionFiles.value.length) % fileMentionFiles.value.length
+      return
+    }
+    if (e.key === 'Escape') {
+      e.preventDefault()
+      closeFileMention()
+      return
+    }
+    if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') {
+      const entry = fileMentionFiles.value[activeFileMentionIndex.value]
+      if (entry) {
+        e.preventDefault()
+        selectMentionFile(entry)
+        return
+      }
+    }
+  }
   if (slashPopupOpen.value) {
     if (e.key === 'ArrowDown') {
       e.preventDefault();
@@ -529,9 +661,7 @@ const handleKeydown = (e) => {
 const handleSend = () => {
   if (localText.value.trim() && !props.streaming) {
     let text = localText.value.trim()
-    const contextBlocks = selectedFileContexts.value.map(context =>
-      `\`\`\`折叠块\n引用文件：${context.file}\n选中内容：\n${context.content}\n\`\`\``
-    )
+    const contextBlocks = selectedFileContexts.value.map(context => `\`\`\`折叠块\n引用文件：${context.file}\n\`\`\``)
     if (contextBlocks.length > 0) text = `${contextBlocks.join('\n\n')}\n\n${text}`
     // 有选中技能时，拼接技能指令到消息顶部
     if (selectedSkills.value.length > 0) {
@@ -585,18 +715,11 @@ const removeImage = (idx) => {
 
 const fileName = (file) => String(file || '未命名文件').split(/[\\/]/).pop() || '未命名文件'
 
-const addFileContext = ({ file, content }) => {
-  const text = String(content || '').trim()
-  if (!text) return false
+const addFileContext = ({ file }) => {
   const path = String(file || '未命名文件')
-  const key = `${path}\u0000${text}`
+  const key = path
   if (selectedFileContexts.value.some(context => context.key === key)) return true
-  selectedFileContexts.value.push({
-    key,
-    file: path,
-    content: text,
-    lineCount: text.split('\n').length
-  })
+  selectedFileContexts.value.push({ key, file: path })
   return true
 }
 
@@ -883,6 +1006,7 @@ onMounted(() => {
 })
 onBeforeUnmount(() => {
   stopChecklistPolling()
+  if (fileMentionSearchTimer) clearTimeout(fileMentionSearchTimer)
   document.removeEventListener('click', handleOutside)
 })
 
@@ -1356,6 +1480,98 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, autoResize
 }
 
 /* 斜杠命令弹窗 */
+.file-mention-popup {
+  position: absolute;
+  right: 16px;
+  bottom: 100%;
+  left: 16px;
+  z-index: 100;
+  overflow: hidden;
+  margin-bottom: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--bg);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15);
+}
+
+.file-mention-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.file-mention-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--fg-2);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.file-mention-title svg { color: #4f7cac; }
+.file-mention-hint { color: var(--fg-4); font-size: 11px; }
+
+.file-mention-state {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 76px;
+  gap: 8px;
+  padding: 16px;
+  color: var(--fg-4);
+  font-size: 12px;
+}
+
+.file-mention-list { max-height: 280px; overflow-y: auto; padding: 4px; }
+
+.file-mention-item {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-2);
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.file-mention-item:hover, .file-mention-item.active { background: var(--bg-2); color: var(--fg); }
+
+.file-mention-icon {
+  display: inline-grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, #4f7cac 12%, var(--bg));
+  color: #4f7cac;
+}
+
+.file-mention-info {
+  display: grid;
+  min-width: 0;
+  gap: 1px;
+}
+
+.file-mention-info > span, .file-mention-info small {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-mention-info > span { font-size: 12px; font-weight: 600; }
+.file-mention-info small { color: var(--fg-4); font: 11px var(--mono); }
+
 .slash-popup {
   position: absolute;
   bottom: 100%;
@@ -1938,8 +2154,6 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, autoResize
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-
-.file-chip-lines { color: var(--fg-4); font-size: 10px; font-weight: 500; white-space: nowrap; }
 
 .file-chip-remove {
   display: flex;
