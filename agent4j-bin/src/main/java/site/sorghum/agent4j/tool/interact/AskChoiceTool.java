@@ -79,14 +79,6 @@ public class AskChoiceTool extends AbsToolProvider implements SolonToTools {
         return this.getTools();
     }
 
-    @Override
-    public String getSystemPrompt() {
-        return """
-                ## ask_choice
-                
-                向用户展示选择菜单（2-6 个选项），等待用户选择。allowCustom=true 允许自定义输入。
-                """;
-    }
 }
 
 

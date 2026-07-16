@@ -104,16 +104,4 @@ public class WorkspaceListTool extends AbsToolProvider implements SolonToTools {
     public Collection<FunctionTool> getSolonTools() {
         return this.getTools();
     }
-
-    @Override
-    public String getSystemPrompt() {
-        return """
-                ## workspace_list
-                
-                列出共享工作区中的条目键。支持按前缀过滤，返回所有匹配的 KV 和文档条目的 key 列表。
-                参数: prefix(可选, key 前缀过滤), scope(可选, 作用域预留)。
-                prefix 为空时列出所有条目。
-                只读。
-                """;
-    }
 }

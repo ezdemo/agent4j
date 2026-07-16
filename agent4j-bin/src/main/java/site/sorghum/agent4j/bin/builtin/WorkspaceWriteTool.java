@@ -98,16 +98,4 @@ public class WorkspaceWriteTool extends AbsToolProvider implements SolonToTools 
     public Collection<FunctionTool> getSolonTools() {
         return this.getTools();
     }
-
-    @Override
-    public String getSystemPrompt() {
-        return """
-                ## workspace_write
-                
-                向共享工作区写入 KV 或文档条目。KV 模式存储键值对，文档模式存储富文本内容。
-                参数: key(必填, 条目路径), value(可选, KV 模式值), content(可选, 文档模式内容),
-                      type(可选, 文档 MIME 类型, 默认 text/plain), scope(可选, 作用域预留)。
-                key 为空时返回错误；value 和 content 都为空时返回错误。
-                """;
-    }
 }

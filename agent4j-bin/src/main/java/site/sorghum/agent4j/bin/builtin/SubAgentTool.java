@@ -180,16 +180,4 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
     public Collection<FunctionTool> getSolonTools() {
         return this.getTools();
     }
-
-    @Override
-    public String getSystemPrompt() {
-        return """
-                ## SubAgent 工具
-                
-                派生一个带预设角色的隔离子代理，完成后将结果返回给主代理。
-                角色: explore（只读探索）, implement（实现）, test（测试）, review（只读审查）, plan（只读方案）。
-                参数: profile(必填), task(必填), instructions(可选)。
-                注意：只读角色只能使用只读工具；子代理不可再创建子代理。
-                """;
-    }
 }

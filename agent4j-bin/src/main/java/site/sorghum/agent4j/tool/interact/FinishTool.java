@@ -47,13 +47,4 @@ public class FinishTool extends AbsToolProvider implements SolonToTools {
     public Collection<FunctionTool> getSolonTools() {
         return this.getTools();
     }
-
-    @Override
-    public String getSystemPrompt() {
-        return """
-                ## 结束标志
-                
-                AI 认为对话可以结束并准备给出最终回答时调用finish工具退出推理循环
-                """;
-    }
 }

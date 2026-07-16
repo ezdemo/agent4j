@@ -20,6 +20,6 @@ public class Agent4JMcpSkill extends McpGatewayTalent implements SolonToTools {
 
     @Override
     public String getSystemPrompt() {
-        return getInstruction(null);
+        return "\n" + getInstruction(null);
     }
 }
