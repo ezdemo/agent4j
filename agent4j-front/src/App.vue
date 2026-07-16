@@ -238,7 +238,7 @@
             <div v-for="t in filteredTools" :key="t.name" class="tool-row" :class="{ disabled: !t.enabled }">
               <div class="tool-row-info" @click="toggleTool(t)">
                 <code>{{ t.name }}</code>
-                <span class="tool-row-desc">{{ t.description }}</span>
+                <span class="tool-row-desc" :title="t.description">{{ t.description }}</span>
               </div>
               <div class="tool-row-actions">
                 <span v-if="!t.enabled" class="tool-status-badge disabled">已禁用</span>
