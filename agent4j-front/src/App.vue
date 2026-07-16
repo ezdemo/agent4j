@@ -204,12 +204,16 @@
     <!-- 工具弹窗 -->
     <Teleport to="body">
       <div v-if="showTools" class="modal-mask" @click.self="showTools = false">
-        <div class="modal">
-          <div class="modal-head">
-            <span>工具列表</span>
+        <div class="modal modal-tools" role="dialog" aria-modal="true" aria-label="工具列表">
+          <div class="modal-head tools-modal-head">
+            <span class="tools-modal-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m14.7 6.3 3 3"/><path d="m5 21 5.6-5.6"/><path d="m5.5 15.5-2-2a2.1 2.1 0 0 1 3-3l2 2"/><path d="m18.5 8.5 2 2a2.1 2.1 0 0 1-3 3l-2-2"/><path d="m8 16 8-8"/></svg>
+              工具列表
+              <span class="tools-modal-count">{{ tools.length }}</span>
+            </span>
             <div class="modal-head-actions">
               <button
-                class="btn-icon-sm refresh-tools-btn"
+                class="tools-modal-icon refresh-tools-btn"
                 :class="{ refreshing: refreshingTools }"
                 @click="refreshTools"
                 :disabled="refreshingTools"
@@ -220,7 +224,9 @@
                   <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
                 </svg>
               </button>
-              <button class="btn-icon-sm" @click="showTools = false">×</button>
+              <button class="tools-modal-icon" type="button" title="关闭" aria-label="关闭工具列表" @click="showTools = false">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+              </button>
             </div>
           </div>
           <div class="modal-body tool-modal-body">
@@ -231,38 +237,46 @@
                 :key="f.value"
                 class="tool-filter-btn"
                 :class="{ active: toolFilter === f.value }"
+                :aria-pressed="toolFilter === f.value"
                 @click="toolFilter = f.value"
               >{{ f.label }}</button>
             </div>
             <div v-if="filteredTools.length === 0" class="modal-empty">暂无工具</div>
-            <div v-for="t in filteredTools" :key="t.name" class="tool-row" :class="{ disabled: !t.enabled }">
-              <div class="tool-row-info" @click="toggleTool(t)">
-                <code>{{ t.name }}</code>
-                <span class="tool-row-desc" :title="t.description">{{ t.description }}</span>
+            <div v-else class="tool-list" role="list">
+              <div class="tool-list-head" aria-hidden="true">
+                <span>工具</span>
+                <span>说明</span>
+                <span>自动放行</span>
+                <span>启用</span>
               </div>
-              <div class="tool-row-actions">
-                <span v-if="!t.enabled" class="tool-status-badge disabled">已禁用</span>
-                <span v-if="t.autoApproved" class="tool-status-badge auto-approved">自动放行</span>
-                <button
-                  class="tool-toggle-btn"
-                  :class="{ enabled: t.enabled }"
-                  :disabled="refreshingTools"
-                  @click.stop="toggleTool(t)"
-                  :title="t.enabled ? '禁用' : '启用'">
-                  <div class="toggle-track">
-                    <div class="toggle-thumb"></div>
-                  </div>
+              <div v-for="t in filteredTools" :key="t.name" class="tool-row" :class="{ disabled: !t.enabled }" role="listitem">
+                <button class="tool-row-info" type="button" :title="t.enabled ? '点击禁用' : '点击启用'" @click="toggleTool(t)">
+                  <code>{{ t.name }}</code>
+                  <span v-if="!t.enabled" class="tool-disabled-state">已禁用</span>
                 </button>
-                <button
-                  class="tool-toggle-btn auto-toggle"
-                  :class="{ enabled: t.autoApproved }"
-                  :disabled="refreshingTools"
-                  @click.stop="toggleAutoTool(t)"
-                  title="自动放行">
-                  <div class="toggle-track auto-track">
-                    <div class="toggle-thumb"></div>
-                  </div>
-                </button>
+                <span class="tool-row-desc" :title="t.description">{{ t.description }}</span>
+                <div class="tool-row-actions">
+                  <button
+                    class="tool-toggle-btn auto-toggle"
+                    :class="{ enabled: t.autoApproved }"
+                    :disabled="refreshingTools"
+                    :aria-checked="t.autoApproved"
+                    role="switch"
+                    @click.stop="toggleAutoTool(t)"
+                    title="自动放行">
+                    <div class="toggle-track auto-track"><div class="toggle-thumb"></div></div>
+                  </button>
+                  <button
+                    class="tool-toggle-btn"
+                    :class="{ enabled: t.enabled }"
+                    :disabled="refreshingTools"
+                    :aria-checked="t.enabled"
+                    role="switch"
+                    @click.stop="toggleTool(t)"
+                    :title="t.enabled ? '禁用' : '启用'">
+                    <div class="toggle-track"><div class="toggle-thumb"></div></div>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
@@ -311,10 +325,15 @@
     <!-- 数据面板弹窗 -->
     <Teleport to="body">
       <div v-if="showDashboard" class="modal-mask" @click.self="showDashboard = false">
-        <div class="modal modal-dashboard">
-          <div class="modal-head">
-            <span>数据面板</span>
-            <button class="btn-icon-sm" @click="showDashboard = false">×</button>
+        <div class="modal modal-dashboard" role="dialog" aria-modal="true" aria-label="数据面板">
+          <div class="modal-head dashboard-modal-head">
+            <span class="dashboard-modal-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
+              数据面板
+            </span>
+            <button class="dashboard-modal-close" type="button" title="关闭" aria-label="关闭数据面板" @click="showDashboard = false">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
           </div>
           <div class="modal-body">
             <DashboardPanel ref="dashboardRef" />
@@ -1883,8 +1902,51 @@ watch(showSettings, (newVal) => {
 }
 
 .modal-dashboard {
-  width: min(900px, 95vw);
-  max-height: 85vh;
+  width: 980px;
+  height: 780px;
+  max-width: 92vw;
+  max-height: 84vh;
+  background: var(--bg);
+  border-color: var(--border);
+}
+
+.dashboard-modal-head {
+  min-height: 48px;
+  padding: 0 18px;
+  background: var(--bg);
+}
+
+.dashboard-modal-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.dashboard-modal-title svg {
+  color: var(--accent);
+}
+
+.dashboard-modal-close {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+}
+
+.dashboard-modal-close:hover {
+  background: var(--bg-3);
+  color: var(--fg);
+}
+
+.modal-dashboard .modal-body {
+  padding: 14px 18px 20px;
+  background: var(--bg-2);
 }
 
 .modal-head {
@@ -1932,6 +1994,55 @@ watch(showSettings, (newVal) => {
   gap: 6px;
 }
 
+.modal-tools {
+  width: 980px;
+  height: 780px;
+  max-width: 92vw;
+  max-height: 84vh;
+  background: var(--bg);
+  border-color: var(--border);
+}
+
+.tools-modal-head {
+  min-height: 48px;
+  padding: 0 18px;
+  background: var(--bg);
+}
+
+.tools-modal-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.tools-modal-title > svg { color: var(--accent); }
+
+.tools-modal-count {
+  min-width: 20px;
+  padding: 1px 6px;
+  border-radius: var(--r-sm);
+  background: var(--bg-3);
+  color: var(--fg-3);
+  font: 600 11px var(--mono);
+  text-align: center;
+}
+
+.tools-modal-icon {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+}
+
+.tools-modal-icon:hover:not(:disabled) { background: var(--bg-3); color: var(--fg); }
+.tools-modal-icon:disabled { cursor: wait; opacity: 0.55; }
+
 .refresh-tools-btn {
   transition: all var(--transition-fast);
 }
@@ -1947,37 +2058,53 @@ watch(showSettings, (newVal) => {
 }
 
 .tool-row {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(154px, 0.7fr) minmax(260px, 1.7fr) 74px 52px;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 10px 0;
+  column-gap: 14px;
+  min-height: 50px;
+  padding: 0 12px;
   border-bottom: 1px solid var(--border);
   font-size: 13px;
-  transition: opacity var(--transition-fast);
+  transition: background var(--transition-fast), opacity var(--transition-fast);
 }
 .tool-row:last-child { border-bottom: none; }
+.tool-row:hover { background: var(--bg-2); }
 .tool-row.disabled {
-  opacity: 0.55;
-}
-.tool-row.disabled code {
-  text-decoration: line-through;
+  opacity: 0.7;
 }
 
 .tool-row-info {
   display: flex;
-  align-items: baseline;
-  gap: 12px;
-  flex: 1;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 0;
+  border: 0;
+  background: transparent;
   min-width: 0;
-  cursor: default;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
 }
 .tool-row-info code {
+  overflow: hidden;
+  padding: 3px 6px;
+  border-radius: var(--r-sm);
+  background: var(--bg-3);
   font-weight: 600;
-  color: var(--accent);
-  flex-shrink: 0;
-  min-width: 100px;
+  color: var(--fg-2);
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
+.tool-row:hover .tool-row-info code { color: var(--accent); }
+
+.tool-disabled-state {
+  flex-shrink: 0;
+  color: var(--fg-4);
+  font-size: 11px;
+}
+
 .tool-row-desc {
   color: var(--fg-3);
   overflow: hidden;
@@ -1986,19 +2113,7 @@ watch(showSettings, (newVal) => {
 }
 
 .tool-row-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.tool-status-badge {
-  font-size: 11px;
-  padding: 2px 6px;
-  border-radius: 4px;
-  background: var(--danger-bg);
-  color: var(--danger);
-  white-space: nowrap;
+  display: contents;
 }
 
 /* 切换开关 */
@@ -2006,7 +2121,8 @@ watch(showSettings, (newVal) => {
   background: none;
   border: none;
   cursor: pointer;
-  padding: 2px;
+  justify-self: center;
+  padding: 3px;
   display: flex;
   align-items: center;
 }
@@ -2017,7 +2133,7 @@ watch(showSettings, (newVal) => {
 .tool-toggle-btn .toggle-track {
   width: 34px;
   height: 18px;
-  background: var(--bg-tertiary);
+  background: var(--fg-4);
   border: 1px solid var(--border);
   border-radius: 9px;
   position: relative;
@@ -2044,60 +2160,94 @@ watch(showSettings, (newVal) => {
 
 /* 自动放行开关 */
 .tool-toggle-btn.auto-toggle .toggle-track.auto-track {
-  width: 28px;
-  height: 16px;
+  width: 34px;
+  height: 18px;
 }
 .tool-toggle-btn.auto-toggle.enabled .toggle-track.auto-track {
   background: var(--brand-primary);
   border-color: var(--brand-primary);
 }
 .tool-toggle-btn.auto-toggle .toggle-thumb {
-  width: 12px;
-  height: 12px;
+  width: 14px;
+  height: 14px;
   top: 2px;
   left: 2px;
 }
 .tool-toggle-btn.auto-toggle.enabled .toggle-thumb {
-  left: 14px;
-}
-.tool-status-badge.auto-approved {
-  background: var(--accent-soft, #e8f4fd);
-  color: var(--brand-primary, #3b82f6);
+  left: 18px;
 }
 
 /* 工具弹窗 body 限制高度 */
 .tool-modal-body {
-  max-height: 60vh;
+  max-height: none;
   overflow-y: auto;
+  padding: 14px 18px 18px;
+  background: var(--bg-2);
 }
 
 /* 筛选栏 */
 .tool-filter-bar {
   display: flex;
-  gap: 6px;
-  padding-bottom: 10px;
-  border-bottom: 1px solid var(--border);
-  margin-bottom: 4px;
+  gap: 2px;
+  width: fit-content;
+  padding: 3px;
+  margin-bottom: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--bg);
 }
 .tool-filter-btn {
-  background: none;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  min-height: 28px;
   padding: 3px 10px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
   font-size: 12px;
-  color: var(--fg-muted);
+  color: var(--fg-3);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
 .tool-filter-btn:hover {
-  border-color: var(--accent);
+  background: var(--bg-3);
   color: var(--accent);
 }
 .tool-filter-btn.active {
-  background: var(--accent-soft);
-  border-color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
   color: var(--accent);
   font-weight: 600;
+}
+
+.tool-list {
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--bg);
+}
+
+.tool-list-head {
+  display: grid;
+  grid-template-columns: minmax(154px, 0.7fr) minmax(260px, 1.7fr) 74px 52px;
+  column-gap: 14px;
+  align-items: center;
+  min-height: 34px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-3);
+  color: var(--fg-3);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.tool-list-head span:nth-child(n+3) { text-align: center; }
+
+@media (max-width: 700px) {
+  .modal-tools { width: min(96vw, 620px); }
+  .tool-row,
+  .tool-list-head { grid-template-columns: minmax(120px, 0.8fr) minmax(120px, 1.2fr) 62px 48px; column-gap: 8px; }
+  .tool-row { padding: 0 8px; }
+  .tool-list-head { padding: 0 8px; }
+  .tool-filter-bar { width: 100%; overflow-x: auto; }
+  .tool-filter-btn { flex: 1 0 auto; }
 }
 
 .config-row {
