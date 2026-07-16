@@ -106,17 +106,6 @@ public class JavaSourceTool extends AbsToolProvider implements SolonToTools {
         return this.getTools();
     }
 
-    @Override
-    public String getSystemPrompt() {
-        return """
-                ## java_source
-                
-                通过全限定类名查找并返回 Java 源代码。
-                搜索模式：先遍历项目树查找 `.java` 文件，再扫描 `~/.m2/repository` 中路径包含 `jarKeyword` 的 jar 包。
-                成功时返回源码文本（或反编译字节码），失败时返回清晰的 'not found' 消息。
-                注意：每个类名只调用一次此工具——它是 I/O 密集型操作。
-                """;
-    }
 }
 
 
