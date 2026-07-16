@@ -5,6 +5,9 @@
       <span class="cl-badge" :class="data?.status?.toLowerCase()">{{ statusText }}</span>
       <span class="cl-progress" v-if="data?.totalSteps">{{ data.currentStepIndex }}/{{ data.totalSteps }}</span>
     </div>
+    <div v-if="data?.totalSteps" class="cl-progress-track" aria-hidden="true">
+      <span :style="{ width: `${progressPercent}%` }"></span>
+    </div>
 
     <div class="cl-body">
       <div v-for="(step, i) in data?.steps" :key="step.id" class="cl-row"
@@ -35,6 +38,11 @@ const props = defineProps({ data: Object })
 const STATUS_MAP = { DRAFT: '草稿', ACTIVE: '进行中', PAUSED: '暂停', COMPLETED: '已完成', FAILED: '失败' }
 
 const statusText = computed(() => STATUS_MAP[props.data?.status] || props.data?.status || '')
+const progressPercent = computed(() => {
+  const total = Number(props.data?.totalSteps) || 0
+  const current = Number(props.data?.currentStepIndex) || 0
+  return total ? Math.min(100, Math.max(0, current / total * 100)) : 0
+})
 </script>
 
 <style scoped>
@@ -47,9 +55,7 @@ const statusText = computed(() => STATUS_MAP[props.data?.status] || props.data?.
   display: flex;
   align-items: center;
   gap: 6px;
-  padding-bottom: 6px;
-  margin-bottom: 6px;
-  border-bottom: 1px solid var(--glass-border);
+  min-width: 0;
 }
 
 .cl-title {
@@ -81,6 +87,22 @@ const statusText = computed(() => STATUS_MAP[props.data?.status] || props.data?.
   font-family: var(--mono);
 }
 
+.cl-progress-track {
+  height: 3px;
+  margin: 7px 0 9px;
+  overflow: hidden;
+  border-radius: 99px;
+  background: var(--bg-3);
+}
+
+.cl-progress-track span {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.25s ease;
+}
+
 .cl-body {
   display: flex;
   flex-direction: column;
@@ -89,7 +111,7 @@ const statusText = computed(() => STATUS_MAP[props.data?.status] || props.data?.
 .cl-row {
   display: flex;
   gap: 8px;
-  opacity: 0.4;
+  opacity: 0.38;
   transition: opacity 0.2s;
 }
 .cl-row.current,
@@ -138,7 +160,7 @@ const statusText = computed(() => STATUS_MAP[props.data?.status] || props.data?.
 .cl-body-text {
   flex: 1;
   min-width: 0;
-  padding-bottom: 10px;
+  padding-bottom: 9px;
 }
 
 .cl-desc {
@@ -146,6 +168,11 @@ const statusText = computed(() => STATUS_MAP[props.data?.status] || props.data?.
   color: var(--fg);
   line-height: 1.5;
   word-break: break-word;
+}
+
+.cl-row.current .cl-desc {
+  color: var(--fg);
+  font-weight: 600;
 }
 
 .cl-meta {
