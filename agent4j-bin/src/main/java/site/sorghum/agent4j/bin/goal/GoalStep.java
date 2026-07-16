@@ -26,11 +26,10 @@ public class GoalStep {
     private String description;
     /** 步骤状态 */
     private StepStatus status;
-    /** 已重试次数 */
-    @Builder.Default
-    private int retryCount = 0;
-    /** 最后一次失败的错误信息 */
-    private String lastError;
+    /** 完成或阻塞时记录的可验证证据 */
+    private String evidence;
+    /** 开始时间 */
+    private Instant startedAt;
     /** 完成时间 */
     private Instant completedAt;
 }

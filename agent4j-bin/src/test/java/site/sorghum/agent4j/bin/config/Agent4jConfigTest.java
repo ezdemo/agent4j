@@ -23,13 +23,17 @@ class Agent4jConfigTest {
     @Test
     void migratesTaskToolConfigurationToSubAgent() throws Exception {
         Agent4jConfig config = config("""
-                {"autoWhitelist":["task","read"],"disabledTools":["task"]}
+                {"autoWhitelist":["task","goal_mark_step","read"],"disabledTools":["task","goal_mark_step"]}
                 """);
 
         assertTrue(config.autoWhitelist().contains("sub_agent"));
+        assertTrue(config.autoWhitelist().contains("goal_update_step"));
         assertFalse(config.autoWhitelist().contains("task"));
+        assertFalse(config.autoWhitelist().contains("goal_mark_step"));
         assertTrue(config.disabledTools().contains("sub_agent"));
+        assertTrue(config.disabledTools().contains("goal_update_step"));
         assertFalse(config.disabledTools().contains("task"));
+        assertFalse(config.disabledTools().contains("goal_mark_step"));
     }
 
     private static Agent4jConfig config(String json) throws Exception {

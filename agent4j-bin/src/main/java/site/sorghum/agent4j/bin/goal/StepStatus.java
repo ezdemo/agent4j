@@ -10,10 +10,10 @@ public enum StepStatus {
     PENDING,
     /** 执行中 */
     IN_PROGRESS,
-    /** 已完成 */
+    /** 已完成并已记录证据 */
     DONE,
-    /** 失败（可重试） */
-    FAILED,
+    /** 被外部条件阻塞 */
+    BLOCKED,
     /** 用户手动跳过 */
     SKIPPED
 }

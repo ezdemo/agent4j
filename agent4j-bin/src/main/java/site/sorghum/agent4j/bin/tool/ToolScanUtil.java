@@ -7,11 +7,7 @@ import site.sorghum.agent4j.tool.solon.SolonToTools;
 import site.sorghum.agent4j.tool.solon.common.Agent4JSkillProvider;
 
 import java.nio.file.Path;
-import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
-import java.util.Comparator;
-import java.util.List;
+import java.util.*;
 
 /**
  * 工具扫描工具类 —— 统一管理工具扫描逻辑。
@@ -50,7 +46,7 @@ public class ToolScanUtil {
                         workspace.toAbsolutePath().normalize().toString());
                 agentTools.addAll(solonToTools.getSolonTools());
             } catch (Exception e) {
-                log.error("[tool-scan] Skill 工具扫描失败: " + e.getMessage());
+                log.error("[tool-scan] Skill 工具扫描失败: {}", e.getMessage(), e);
             }
         }
 
@@ -63,7 +59,7 @@ public class ToolScanUtil {
         return Collections.unmodifiableList(agentTools);
     }
 
-    public static String getSkillToolDescription(Path workspace){
+    public static String getSkillToolDescription(Path workspace) {
         StringBuilder content = new StringBuilder();
         // 1. 加载 Skill 工具（从文件系统读取）
         if (workspace != null) {

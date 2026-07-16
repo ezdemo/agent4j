@@ -4,20 +4,15 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.*;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 
 /**
- * JsonlGoalStore — JSONL 格式的目标持久化实现。
- * <p>
- * 存储路径：workspace/{hash}/goals/{sessionId}.jsonl
- * 每个会话一个文件，单行 JSON。
- * 使用与 {@code JsonlSessionStore} 一致的手动序列化模式。
- * </p>
- *
- * @author Sorghum
+ * 每会话一个 JSON 快照的 Goal 存储。
+ * 文件扩展名保留 .jsonl，兼容早期安装；内容始终是一条完整 JSON 记录。
  */
 @Slf4j
 public class JsonlGoalStore implements GoalStore {
@@ -28,183 +23,150 @@ public class JsonlGoalStore implements GoalStore {
         this.goalsDir = workspaceDir.resolve("goals");
     }
 
-    private static String sanitize(String name) {
-        if (name == null) return "unknown";
-        return name.replaceAll("[^a-zA-Z0-9_\\-]", "_");
-    }
-
     @Override
     public void save(Goal goal) throws IOException {
         Files.createDirectories(goalsDir);
-        Path file = goalsDir.resolve(sanitize(goal.getSessionId()) + ".jsonl");
-        String json = serializeGoal(goal);
-        Files.writeString(file, json + "\n", StandardOpenOption.CREATE, StandardOpenOption.TRUNCATE_EXISTING);
-        log.debug("[goal] 已保存目标 {} -> {}", goal.getId(), file);
+        Path target = fileFor(goal.getSessionId());
+        Path temporary = Files.createTempFile(goalsDir, target.getFileName().toString(), ".tmp");
+        try {
+            Files.writeString(temporary, serializeGoal(goal) + "\n", StandardCharsets.UTF_8,
+                    StandardOpenOption.TRUNCATE_EXISTING);
+            try {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING,
+                        StandardCopyOption.ATOMIC_MOVE);
+            } catch (AtomicMoveNotSupportedException ignored) {
+                Files.move(temporary, target, StandardCopyOption.REPLACE_EXISTING);
+            }
+        } finally {
+            Files.deleteIfExists(temporary);
+        }
     }
 
     @Override
     public Goal findBySession(String sessionId) throws IOException {
-        Path file = goalsDir.resolve(sanitize(sessionId) + ".jsonl");
-        try {
-            String json = Files.readString(file).trim();
-            if (json.isEmpty()) return null;
-            return deserializeGoal(json);
-        } catch (NoSuchFileException e) {
-            return null;
-        }
+        Path file = fileFor(sessionId);
+        if (!Files.exists(file)) return null;
+        String json = Files.readString(file, StandardCharsets.UTF_8).trim();
+        return json.isEmpty() ? null : deserializeGoal(json);
     }
 
     @Override
     public List<Goal> findActiveByWorkspace(String workspaceHash) throws IOException {
-        List<Goal> active = new ArrayList<>();
-        if (!Files.isDirectory(goalsDir)) return active;
-        try (DirectoryStream<Path> ds = Files.newDirectoryStream(goalsDir, "*.jsonl")) {
-            for (Path file : ds) {
+        List<Goal> goals = new ArrayList<>();
+        if (!Files.isDirectory(goalsDir)) return goals;
+        try (DirectoryStream<Path> files = Files.newDirectoryStream(goalsDir, "*.jsonl")) {
+            for (Path file : files) {
                 try {
-                    String json = Files.readString(file).trim();
-                    if (json.isEmpty()) continue;
-                    Goal goal = deserializeGoal(json);
-                    // 如果传入了 workspaceHash，校验匹配
-                    if (workspaceHash != null && !workspaceHash.isEmpty()
-                            && !workspaceHash.equals(goal.getWorkspaceHash())) {
-                        continue;
-                    }
-                    if (goal.getStatus() == GoalStatus.ACTIVE || goal.getStatus() == GoalStatus.PAUSED) {
-                        active.add(goal);
+                    Goal goal = deserializeGoal(Files.readString(file, StandardCharsets.UTF_8).trim());
+                    if ((workspaceHash == null || workspaceHash.equals(goal.getWorkspaceHash())) && goal.isOpen()) {
+                        goals.add(goal);
                     }
                 } catch (Exception e) {
-                    log.warn("[goal] 读取目标文件失败: {} - {}", file, e.getMessage());
+                    log.warn("[goal] 忽略无法读取的目标快照 {}: {}", file, e.getMessage());
                 }
             }
         }
-        return active;
+        return goals;
     }
 
     @Override
     public boolean delete(String sessionId) throws IOException {
-        Path file = goalsDir.resolve(sanitize(sessionId) + ".jsonl");
-        return Files.deleteIfExists(file);
+        return Files.deleteIfExists(fileFor(sessionId));
     }
 
-    // ========== 手动序列化/反序列化（与 JsonlSessionStore 一致） ==========
-
-    /**
-     * 将 Goal 序列化为 JSON 字符串。
-     */
     static String serializeGoal(Goal goal) {
-        ONode node = ONode.ofJson("{}");
-        node.set("id", goal.getId());
-        node.set("sessionId", goal.getSessionId());
-        node.set("workspaceHash", goal.getWorkspaceHash());
-        node.set("title", goal.getTitle());
-        node.set("description", goal.getDescription());
-        node.set("status", goal.getStatus() != null ? goal.getStatus().name() : null);
-        node.set("maxRetries", goal.getMaxRetries());
-        if (goal.getVerifyCommand() != null) {
-            node.set("verifyCommand", goal.getVerifyCommand());
+        ONode root = ONode.ofJson("{}");
+        root.set("id", goal.getId());
+        root.set("sessionId", goal.getSessionId());
+        root.set("workspaceHash", goal.getWorkspaceHash());
+        root.set("title", goal.getTitle());
+        root.set("description", goal.getDescription());
+        root.set("status", goal.getStatus().name());
+        root.set("verifyCommand", goal.getVerifyCommand());
+        root.set("completionSummary", goal.getCompletionSummary());
+        root.set("blockedReason", goal.getBlockedReason());
+        setInstant(root, "createdAt", goal.getCreatedAt());
+        setInstant(root, "updatedAt", goal.getUpdatedAt());
+        setInstant(root, "completedAt", goal.getCompletedAt());
+
+        ONode steps = root.getOrNew("steps").asArray();
+        for (GoalStep step : goal.getSteps()) {
+            ONode item = steps.addNew();
+            item.set("index", step.getIndex());
+            item.set("description", step.getDescription());
+            item.set("status", step.getStatus().name());
+            item.set("evidence", step.getEvidence());
+            setInstant(item, "startedAt", step.getStartedAt());
+            setInstant(item, "completedAt", step.getCompletedAt());
         }
-        // 时间戳使用 epoch millis
-        if (goal.getCreatedAt() != null) {
-            node.set("createdAt", goal.getCreatedAt().toEpochMilli());
-        }
-        if (goal.getUpdatedAt() != null) {
-            node.set("updatedAt", goal.getUpdatedAt().toEpochMilli());
-        }
-        if (goal.getCompletedAt() != null) {
-            node.set("completedAt", goal.getCompletedAt().toEpochMilli());
-        }
-        // 步骤列表
-        if (goal.getSteps() != null) {
-            ONode stepsArr = node.getOrNew("steps").asArray();
-            for (GoalStep step : goal.getSteps()) {
-                ONode stepNode = stepsArr.addNew();
-                stepNode.set("index", step.getIndex());
-                stepNode.set("description", step.getDescription());
-                stepNode.set("status", step.getStatus() != null ? step.getStatus().name() : null);
-                stepNode.set("retryCount", step.getRetryCount());
-                if (step.getLastError() != null) {
-                    stepNode.set("lastError", step.getLastError());
-                }
-                if (step.getCompletedAt() != null) {
-                    stepNode.set("completedAt", step.getCompletedAt().toEpochMilli());
-                }
-            }
-        }
-        return node.toJson();
+        return root.toJson();
     }
 
-    /**
-     * 从 JSON 字符串反序列化为 Goal。
-     */
     static Goal deserializeGoal(String json) {
-        ONode node = ONode.ofJson(json);
+        ONode root = ONode.ofJson(json);
         Goal.GoalBuilder builder = Goal.builder()
-                .id(node.get("id").getString())
-                .sessionId(node.get("sessionId").getString())
-                .workspaceHash(node.get("workspaceHash").getString())
-                .title(node.get("title").getString())
-                .description(node.get("description").getString())
-                .status(parseGoalStatus(node.get("status").getString()))
-                .maxRetries(node.get("maxRetries").getInt())
-                .verifyCommand(node.get("verifyCommand").getString());
+                .id(root.get("id").getString())
+                .sessionId(root.get("sessionId").getString())
+                .workspaceHash(root.get("workspaceHash").getString())
+                .title(root.get("title").getString())
+                .description(root.get("description").getString())
+                .status(parseGoalStatus(root.get("status").getString()))
+                .verifyCommand(root.get("verifyCommand").getString())
+                .completionSummary(root.get("completionSummary").getString())
+                .blockedReason(root.get("blockedReason").getString())
+                .createdAt(getInstant(root, "createdAt"))
+                .updatedAt(getInstant(root, "updatedAt"))
+                .completedAt(getInstant(root, "completedAt"));
 
-        // 时间戳
-        if (!node.get("createdAt").isNull()) {
-            builder.createdAt(Instant.ofEpochMilli(node.get("createdAt").getLong()));
-        }
-        if (!node.get("updatedAt").isNull()) {
-            builder.updatedAt(Instant.ofEpochMilli(node.get("updatedAt").getLong()));
-        }
-        if (!node.get("completedAt").isNull()) {
-            builder.completedAt(Instant.ofEpochMilli(node.get("completedAt").getLong()));
-        }
-
-        // 步骤列表
         List<GoalStep> steps = new ArrayList<>();
-        ONode stepsNode = node.get("steps");
-        if (stepsNode.isArray()) {
-            for (ONode stepNode : stepsNode.getArray()) {
-                steps.add(deserializeStep(stepNode));
+        ONode items = root.get("steps");
+        if (items.isArray()) {
+            for (ONode item : items.getArray()) {
+                steps.add(GoalStep.builder()
+                        .index(item.get("index").getInt())
+                        .description(item.get("description").getString())
+                        .status(parseStepStatus(item.get("status").getString()))
+                        .evidence(firstNonBlank(item.get("evidence").getString(), item.get("lastError").getString()))
+                        .startedAt(getInstant(item, "startedAt"))
+                        .completedAt(getInstant(item, "completedAt"))
+                        .build());
             }
         }
-        builder.steps(steps);
-
-        return builder.build();
+        return builder.steps(steps).build();
     }
 
-    /**
-     * 从 ONode 反序列化为 GoalStep。
-     */
-    private static GoalStep deserializeStep(ONode node) {
-        GoalStep.GoalStepBuilder builder = GoalStep.builder()
-                .index(node.get("index").getInt())
-                .description(node.get("description").getString())
-                .status(parseStepStatus(node.get("status").getString()))
-                .retryCount(node.get("retryCount").getInt())
-                .lastError(node.get("lastError").getString());
-
-        if (!node.get("completedAt").isNull()) {
-            builder.completedAt(Instant.ofEpochMilli(node.get("completedAt").getLong()));
-        }
-
-        return builder.build();
+    private Path fileFor(String sessionId) {
+        String safe = sessionId == null ? "unknown" : sessionId.replaceAll("[^a-zA-Z0-9_.-]", "_");
+        return goalsDir.resolve(safe + ".jsonl");
     }
 
-    private static GoalStatus parseGoalStatus(String name) {
-        if (name == null) return GoalStatus.ACTIVE;
+    private static void setInstant(ONode node, String key, Instant value) {
+        if (value != null) node.set(key, value.toEpochMilli());
+    }
+
+    private static Instant getInstant(ONode node, String key) {
+        ONode value = node.get(key);
+        return value == null || value.isNull() ? null : Instant.ofEpochMilli(value.getLong());
+    }
+
+    private static GoalStatus parseGoalStatus(String value) {
         try {
-            return GoalStatus.valueOf(name);
-        } catch (IllegalArgumentException e) {
+            return GoalStatus.valueOf(value);
+        } catch (Exception ignored) {
             return GoalStatus.ACTIVE;
         }
     }
 
-    private static StepStatus parseStepStatus(String name) {
-        if (name == null) return StepStatus.PENDING;
+    private static StepStatus parseStepStatus(String value) {
+        if ("FAILED".equals(value)) return StepStatus.BLOCKED;
         try {
-            return StepStatus.valueOf(name);
-        } catch (IllegalArgumentException e) {
+            return StepStatus.valueOf(value);
+        } catch (Exception ignored) {
             return StepStatus.PENDING;
         }
+    }
+
+    private static String firstNonBlank(String first, String fallback) {
+        return first != null && !first.isBlank() ? first : fallback;
     }
 }

@@ -30,6 +30,7 @@ public class Agent4jConfig {
     private Agent4jConfig(ONode root) {
         this.root = root;
         migrateRenamedTool(root, "task", "sub_agent");
+        migrateRenamedTool(root, "goal_mark_step", "goal_update_step");
     }
 
     /** 将历史工具名迁移到当前名称，保留用户原有的启用或禁用语义。 */
@@ -101,7 +102,8 @@ public class Agent4jConfig {
                     "java_source", "checklist_step", "workspace_read", "webfetch",
                     "codesearch", "ask_choice", "workspace_list", "workspace_write",
                     "call_api", "checklist_start", "sub_agent", "checklist_status",
-                    "vision_recognize", "skillread", "codegraph_explore"
+                    "vision_recognize", "skillread", "codegraph_explore",
+                    "goal_create", "goal_status", "goal_update_step", "goal_complete", "goal_block", "goal_resume"
                   ],
                   "maxContextChars": 200000,
                   "keepTailChars": 80000,
@@ -653,6 +655,7 @@ public class Agent4jConfig {
         // 保存前补充默认配置中缺失的字段
         mergeDefaults(root, defaultConfigNode());
         migrateRenamedTool(root, "task", "sub_agent");
+        migrateRenamedTool(root, "goal_mark_step", "goal_update_step");
         Path configPath = getConfigPath();
         String json = JsonWriter.write(root, Options.of(Feature.Write_PrettyFormat));
         Files.writeString(configPath, json);

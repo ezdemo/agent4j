@@ -6,8 +6,7 @@ import java.util.List;
 /**
  * GoalStore — 目标持久化仓库接口。
  * <p>
- * JSONL 格式存储于 workspace/{hash}/goals/{sessionId}.jsonl。
- * 与 SessionStore 设计风格一致，保证可替换性。
+ * 每个会话保存一个目标快照，存储实现负责原子覆盖写入。
  * </p>
  *
  * @author Sorghum
@@ -20,7 +19,7 @@ public interface GoalStore {
     /** 按会话 ID 加载目标 */
     Goal findBySession(String sessionId) throws IOException;
 
-    /** 加载工作区内所有活跃目标（巡检用） */
+    /** 加载工作区内所有未关闭目标（恢复与管理用） */
     List<Goal> findActiveByWorkspace(String workspaceHash) throws IOException;
 
     /** 删除目标 */
