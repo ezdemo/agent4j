@@ -1,7 +1,7 @@
-# Agent4j — 纯 Java 的 AI 编码代理
+# Loopra — 纯 Java 的 AI 编码代理
 
 <p align="center">
-  <img src="icon.png" width="120" alt="Agent4j Logo"/>
+  <img src="icon.png" width="120" alt="Loopra Logo"/>
 </p>
 
 <p align="center">
@@ -24,7 +24,7 @@
 
 ## 📖 这是什么？
 
-**Agent4j** 是一个纯 Java 17 的 AI 编码代理。和 Claude Code、Codex、OpenCode、Reasonix 一样——你给它一个任务，它能自己读代码、写代码、跑命令、调 API，一步步把事情干完。
+**Loopra** 是一个纯 Java 17 的 AI 编码代理。和 Claude Code、Codex、OpenCode、Reasonix 一样——你给它一个任务，它能自己读代码、写代码、跑命令、调 API，一步步把事情干完。
 
 核心是一个 **推理循环（Reasoning Loop）**：
 
@@ -38,9 +38,9 @@
 | **Codex**       | TypeScript    |
 | **OpenCode**    | Go            |
 | **Reasonix**    | Rust          |
-| **Agent4j**     | **Java 17** ✅ |
+| **Loopra**     | **Java 17** ✅ |
 
-如果你在用 Java 技术栈，又想有一个 AI 编码代理来帮忙写代码、改代码、跑构建、查日志——Agent4j 是你的选择。
+如果你在用 Java 技术栈，又想有一个 AI 编码代理来帮忙写代码、改代码、跑构建、查日志——Loopra 是你的选择。
 
 ---
 
@@ -51,23 +51,23 @@
 **Windows**（PowerShell）：
 
 ```powershell
-irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex
+irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex
 ```
 
 **macOS / Linux**：
 
 ```bash
-curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash
+curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash
 ```
 
 ### 直接运行
 
 ```bash
 # 启动 Web 服务（随机端口，首次自动生成配置）
-agent4j web 0
+loopra web 0
 ```
 
-首次启动会自动创建 `~/.agent4j/config.json`，填入 API Key 和模型后重启：
+首次启动会自动创建 `~/.loopra/config.json`，填入 API Key 和模型后重启：
 
 ```json
 {
@@ -85,7 +85,7 @@ agent4j web 0
 ### 主界面
 
 <p align="center">
-  <img src="img/main_app.png" width="90%" alt="Agent4j 主界面"/>
+  <img src="img/main_app.png" width="90%" alt="Loopra 主界面"/>
 </p>
 
 ### 数据面板
@@ -196,7 +196,7 @@ agent4j web 0
 
 ## ⚡ 前缀缓存
 
-Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）**能力——系统提示词、工具定义、项目文档等每次都在 prompt 开头的重复内容，直接命中 KV cache：
+Loopra 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）**能力——系统提示词、工具定义、项目文档等每次都在 prompt 开头的重复内容，直接命中 KV cache：
 
 | 模型                                                | 缓存命中率     | 效果               |
 |---------------------------------------------------|-----------|------------------|
@@ -210,16 +210,16 @@ Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）**�
 ## 🏗️ 项目结构
 
 ```
-agent4j/
-├── agent4j-bin/               # 核心引擎（含工具抽象层）
+loopra/
+├── loopra-bin/               # 核心引擎（含工具抽象层）
 │   ├── agent/                 # 推理循环
 │   │   ├── AgentLoop.java      # 推理循环
-│   │   ├── Agent4jAgent.java   # Agent 工厂
+│   │   ├── LoopraAgent.java   # Agent 工厂
 │   │   ├── SubAgent.java       # 子代理
 │   │   ├── context/            # 对话上下文 / 上下文折叠
 │   │   ├── model/              # LLM 客户端
 │   │   └── hitl/               # 人工审批
-│   ├── tool/                  # 工具系统（原 agent4j-tool 已合并）
+│   ├── tool/                  # 工具系统（原 loopra-tool 已合并）
 │   │   ├── AgentTool.java      # 工具基类
 │   │   ├── ToolContext.java     # 执行上下文
 │   │   ├── builtin/            # 内置工具
@@ -230,14 +230,14 @@ agent4j/
 │   ├── workspace/             # 共享工作区
 │   ├── workflow/              # 工作流引擎
 │   ├── command/               # 聊天命令
-│   └── config/                # ~/.agent4j/config.json
+│   └── config/                # ~/.loopra/config.json
 │
-├── agent4j-web/               # Web 后端
+├── loopra-web/               # Web 后端
 │   ├── controller/            # REST 接口
 │   ├── service/               # Agent 管理 / SSE 推送
 │   └── market/                # 技能市场
 │
-├── agent4j-front/             # Vue 3 前端 + Electron 桌面端
+├── loopra-front/             # Vue 3 前端 + Electron 桌面端
 │   ├── src/
 │   │   ├── components/
 │   │   ├── views/
@@ -251,7 +251,7 @@ agent4j/
 │   ├── electron-builder.json  # 打包配置
 │   └── vite.config.js
 │
-├── agent4j-tui/               # TUI 终端界面
+├── loopra-tui/               # TUI 终端界面
 ├── intro/                     # 官网
 ├── docs/superpowers/          # 文档
 ├── pom.xml                    # Maven 父 POM
@@ -262,7 +262,7 @@ agent4j/
 
 ## ⚙️ 配置
 
-配置文件 `~/.agent4j/config.json`：
+配置文件 `~/.loopra/config.json`：
 
 <p align="center">
   <img src="img/base_setting.png" width="60%" alt="基础设置"/>

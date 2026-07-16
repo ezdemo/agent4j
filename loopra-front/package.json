@@ -1,0 +1,77 @@
+{
+  "name": "loopra-front",
+  "version": "26.7.16",
+  "private": true,
+  "main": "dist/main/main.cjs",
+  "type": "module",
+  "description": "Loopra - 智能AI代码助手前端",
+  "homepage": "https://loopra.dev",
+  "author": "Loopra Team",
+  "license": "MIT",
+  "scripts": {
+    "dev": "vite",
+    "dev:electron": "pnpm build:main && pnpm build:preload && concurrently -k \"vite\" \"wait-on http://localhost:3000 && electron .\"",
+    "build": "vite build",
+    "preview": "vite preview",
+    "lint": "eslint . --ext .vue,.js,.jsx,.cjs,.mjs --fix",
+    "format": "prettier --write src/",
+    "test": "vitest",
+    "test:ui": "vitest --ui",
+    "test:coverage": "vitest --coverage",
+    "build:renderer": "vite build --outDir dist/renderer",
+    "build:main": "vite build -c vite.main.config.mjs --outDir dist/main",
+    "build:preload": "vite build -c vite.preload.config.mjs --outDir dist/main --emptyOutDir false",
+    "build:vite": "pnpm build:renderer && pnpm build:main && pnpm build:preload",
+    "package": "pnpm build:vite && electron-builder",
+    "package:mac": "pnpm build:vite && electron-builder --mac",
+    "package:win": "pnpm build:vite && electron-builder --win",
+    "package:linux": "pnpm build:vite && electron-builder --linux",
+    "package:all": "pnpm build:vite && electron-builder --mac --win --linux"
+  },
+  "dependencies": {
+    "@ant-design/icons-vue": "^7.0.1",
+    "ant-design-vue": "^4.2.6",
+    "axios": "^1.6.7",
+    "dompurify": "^3.4.10",
+    "highlight.js": "^11.11.1",
+    "marked": "^12.0.0",
+    "pinia": "^2.1.7",
+    "vue": "^3.4.21",
+    "vue-router": "^4.3.0"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
+    "@vitejs/plugin-vue-jsx": "^3.1.0",
+    "@vue/eslint-config-prettier": "^9.0.0",
+    "@vue/test-utils": "^2.4.4",
+    "concurrently": "^9.1.2",
+    "electron": "^42.4.1",
+    "electron-builder": "^26.15.3",
+    "eslint": "^8.57.0",
+    "eslint-plugin-vue": "^9.22.0",
+    "jsdom": "^24.0.0",
+    "prettier": "^3.2.5",
+    "unplugin-auto-import": "^0.17.5",
+    "unplugin-vue-components": "^0.26.0",
+    "vite": "8.0.5",
+    "vitest": "^1.3.1",
+    "wait-on": "^8.0.3"
+  },
+  "engines": {
+    "node": ">=18.0.0",
+    "pnpm": ">=8.0.0"
+  },
+  "browserslist": [
+    "> 1%",
+    "last 2 versions",
+    "not dead",
+    "not ie 11"
+  ],
+  "keywords": [
+    "ai",
+    "agent",
+    "code-assistant",
+    "vue3",
+    "vite"
+  ]
+}

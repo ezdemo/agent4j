@@ -3,26 +3,26 @@
 <head>
     <meta charset="UTF-8"/>
     <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>Agent4j — 纯 Java 的 AI 编码代理 | Java AI Agent Framework</title>
-    <meta content="Agent4j 是一个纯 Java 17 实现的 AI 编码代理框架。推理循环 · 工具调度 · 流式输出 · 会话持久化 · 子代理隔离 — 将 LLM 与可扩展工具系统结合，通过 CLI / Web / Desktop 三种界面，形成自主工作的编码代理。"
+    <title>Loopra — 纯 Java 的 AI 编码代理 | Java AI Agent Framework</title>
+    <meta content="Loopra 是一个纯 Java 17 实现的 AI 编码代理框架。推理循环 · 工具调度 · 流式输出 · 会话持久化 · 子代理隔离 — 将 LLM 与可扩展工具系统结合，通过 CLI / Web / Desktop 三种界面，形成自主工作的编码代理。"
           name="description"/>
-    <meta content="Agent4j, Java AI Agent, Java 编码代理, AI 编码代理, Claude Code Java, Solon框架, AI工具调用, 推理循环"
+    <meta content="Loopra, Java AI Agent, Java 编码代理, AI 编码代理, Claude Code Java, Solon框架, AI工具调用, 推理循环"
           name="keywords"/>
     <meta content="Sorghum" name="author"/>
     <meta content="index, follow" name="robots"/>
 
     <!-- Open Graph -->
-    <meta content="Agent4j — 纯 Java 的 AI 编码代理 | Java AI Agent Framework" property="og:title"/>
+    <meta content="Loopra — 纯 Java 的 AI 编码代理 | Java AI Agent Framework" property="og:title"/>
     <meta content="纯 Java 17 AI 代理框架：推理循环、工具调用、会话管理、流式输出，CLI / Web / Desktop 三端自主工作的编码代理。"
           property="og:description"/>
     <meta content="website" property="og:type"/>
     <meta content="assets/logo.png" property="og:image"/>
-    <meta content="https://agent4j.site" property="og:url"/>
+    <meta content="https://loopra.site" property="og:url"/>
     <meta content="zh_CN" property="og:locale"/>
 
     <!-- Twitter Card -->
     <meta content="summary_large_image" name="twitter:card"/>
-    <meta content="Agent4j — 纯 Java 的 AI 编码代理" name="twitter:title"/>
+    <meta content="Loopra — 纯 Java 的 AI 编码代理" name="twitter:title"/>
     <meta content="纯 Java 17 AI 代理框架：推理循环、工具调用、会话管理，CLI/Web/Desktop 三端自主工作。"
           name="twitter:description"/>
 
@@ -43,7 +43,7 @@
         {
             "@context": "https://schema.org",
             "@type": "SoftwareApplication",
-            "name": "Agent4j",
+            "name": "Loopra",
             "applicationCategory": "DeveloperApplication",
             "operatingSystem": "Windows, macOS, Linux",
             "description": "纯 Java 17 的 AI 编码代理框架，提供推理循环、工具调用、会话管理等功能",
@@ -63,8 +63,8 @@
 <nav class="nav" id="nav">
     <div class="container">
         <a href="#" class="nav-logo">
-            <img alt="Agent4j Logo" height="28" src="assets/logo.png" width="28"/>
-            <span class="bracket">[</span>Agent4j<span class="bracket">]</span>
+            <img alt="Loopra Logo" height="28" src="assets/logo.png" width="28"/>
+            <span class="bracket">[</span>Loopra<span class="bracket">]</span>
             <span class="version">v26.6.9.2</span>
         </a>
         <ul class="nav-links">
@@ -76,7 +76,7 @@
             <li><a href="#config-docs">配置</a></li>
             <li><a href="#docs">文档</a></li>
             <li>
-                <a class="btn btn-ghost btn-sm" href="https://github.com/ezdemo/agent4j" rel="noopener" target="_blank">
+                <a class="btn btn-ghost btn-sm" href="https://github.com/ezdemo/loopra" rel="noopener" target="_blank">
                     <svg fill="currentColor" height="16" viewBox="0 0 24 24" width="16">
                         <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
                     </svg>
@@ -134,7 +134,7 @@
                         </svg>
                         了解更多
                     </a>
-                    <a class="btn btn-ghost btn-lg" href="https://github.com/ezdemo/agent4j" rel="noopener"
+                    <a class="btn btn-ghost btn-lg" href="https://github.com/ezdemo/loopra" rel="noopener"
                        target="_blank">
                         <svg class="icon-svg" fill="currentColor" viewBox="0 0 24 24">
                             <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
@@ -149,10 +149,10 @@
                 <span class="terminal-dot red"></span>
                 <span class="terminal-dot yellow"></span>
                 <span class="terminal-dot green"></span>
-                <span class="terminal-title">agent4j@reasoning-loop:~/project — bash</span>
+                <span class="terminal-title">loopra@reasoning-loop:~/project — bash</span>
             </div>
             <div class="terminal-body">
-                <div class="line"><span class="prompt">❯</span><span class="cmd">agent4j web 0</span></div>
+                <div class="line"><span class="prompt">❯</span><span class="cmd">loopra web 0</span></div>
                 <div class="line"><span class="comment"># 启动 AI 编码代理 ...</span></div>
                 <div class="line"><span class="prompt">❯</span><span class="cmd">重构 UserService 的数据库查询</span>
                 </div>
@@ -199,7 +199,7 @@
     <div class="container">
         <div class="section-header reveal">
             <h2>🏆 对比竞品</h2>
-            <p class="subtitle">Agent4j 是唯一纯 Java 实现的 AI 编码代理</p>
+            <p class="subtitle">Loopra 是唯一纯 Java 实现的 AI 编码代理</p>
         </div>
         <div class="cache-table-wrap reveal" style="max-width: 800px; margin: 0 auto;">
             <table class="cache-table">
@@ -209,7 +209,7 @@
                     <th>Claude Code</th>
                     <th>Codex</th>
                     <th>OpenCode</th>
-                    <th style="color:var(--neon);">Agent4j ✅</th>
+                    <th style="color:var(--neon);">Loopra ✅</th>
                 </tr>
                 </thead>
                 <tbody>
@@ -280,7 +280,7 @@
     <div class="container">
         <div class="section-header reveal">
             <h2>六大核心特性</h2>
-            <p class="subtitle">Agent4j 将 LLM 与可扩展工具系统结合，形成自主工作的编码代理</p>
+            <p class="subtitle">Loopra 将 LLM 与可扩展工具系统结合，形成自主工作的编码代理</p>
         </div>
         <div class="features-grid">
             <div class="feature-card reveal">
@@ -326,7 +326,7 @@
     <div class="container">
         <div class="section-header reveal">
             <h2>深入核心能力</h2>
-            <p class="subtitle">从推理到工具，从子代理到审批，Agent4j 提供企业级 AI 代理所需的一切</p>
+            <p class="subtitle">从推理到工具，从子代理到审批，Loopra 提供企业级 AI 代理所需的一切</p>
         </div>
 
         <div class="detail-features">
@@ -334,7 +334,7 @@
             <div class="detail-feature reveal">
                 <div class="detail-text">
                     <h3><span class="icon-inline">🤖</span> 推理循环 <span class="accent">Reasoning Loop</span></h3>
-                    <p>Agent4j 的核心是一个自动迭代的推理循环。用户给出任务后，LLM 思考、调用工具、观察结果、再思考…
+                    <p>Loopra 的核心是一个自动迭代的推理循环。用户给出任务后，LLM 思考、调用工具、观察结果、再思考…
                         直到任务完成。整个过程流式实时推送。</p>
                     <ul>
                         <li><strong>自动循环</strong> — Prompt → LLM → 工具 → 结果 → LLM，自动迭代</li>
@@ -396,7 +396,7 @@
                 </div>
                 <div class="detail-text">
                     <h3><span class="icon-inline">🛠️</span> 工具系统 <span class="accent">Tool System</span></h3>
-                    <p>Agent4j 内置丰富的工具集，并支持无限扩展。继承 <code>AgentTool</code> 基类，定义名称、参数、执行逻辑即可注册新工具。
+                    <p>Loopra 内置丰富的工具集，并支持无限扩展。继承 <code>AgentTool</code> 基类，定义名称、参数、执行逻辑即可注册新工具。
                     </p>
                     <ul>
                         <li><strong>声明式工具</strong> — 继承 AgentTool 基类，Solon @Component 自动发现</li>
@@ -474,7 +474,7 @@
                 </div>
                 <div class="detail-text">
                     <h3><span class="icon-inline">👤</span> 人工审批 <span class="accent">HITL</span></h3>
-                    <p>Agent4j 在执行写操作前会等待你批准或拒绝，确保每次修改都在你的控制之下。支持快速命令决策。</p>
+                    <p>Loopra 在执行写操作前会等待你批准或拒绝，确保每次修改都在你的控制之下。支持快速命令决策。</p>
                     <ul>
                         <li><strong>自动模式</strong> — 写操作前需要确认，安全可靠</li>
                         <li><strong>YOLO 模式</strong> — 直接执行，无需确认，适合信任场景</li>
@@ -593,8 +593,8 @@
                 <div class="code-block">
                     <button class="copy-btn" onclick="copyCode(this, 'win-install')">复制</button>
                     <code id="win-install">
-                        <span class="comment-line"># 一行命令安装 Agent4j</span><br/>
-                        <span class="cmd-line">irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex</span>
+                        <span class="comment-line"># 一行命令安装 Loopra</span><br/>
+                        <span class="cmd-line">irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex</span>
                     </code>
                 </div>
                 <h3 style="margin-top: 24px;">
@@ -605,7 +605,7 @@
                     <button class="copy-btn" onclick="copyCode(this, 'unix-install')">复制</button>
                     <code id="unix-install">
                         <span class="comment-line"># 一行命令安装</span><br/>
-                        <span class="cmd-line">curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash</span>
+                        <span class="cmd-line">curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash</span>
                     </code>
                 </div>
             </div>
@@ -615,7 +615,7 @@
                     <span class="os-tag">config.json</span>
                 </h3>
                 <p style="color:var(--text-secondary);margin-bottom:16px;font-size:0.9rem;">
-                    首次启动自动生成 <code style="color:var(--neon);">~/.agent4j/config.json</code>，填入 API Key 即可：
+                    首次启动自动生成 <code style="color:var(--neon);">~/.loopra/config.json</code>，填入 API Key 即可：
                 </p>
                 <div class="code-block" style="max-height: 220px; overflow-y: auto;">
                     <button class="copy-btn" onclick="copyCode(this, 'config-json')">复制</button>
@@ -636,7 +636,7 @@
                     <button class="copy-btn" onclick="copyCode(this, 'run-cmd')">复制</button>
                     <code id="run-cmd">
                         <span class="comment-line"># 启动 Web 服务</span><br/>
-                        <span class="cmd-line">agent4j web 0</span>
+                        <span class="cmd-line">loopra web 0</span>
                     </code>
                 </div>
             </div>
@@ -797,7 +797,7 @@
                 <div class="icon-large">💻</div>
                 <h3>CLI 终端</h3>
                 <p>在终端里直接运行。无需图形界面，SSH 远程也能用，适合资深开发者。</p>
-                <span class="tag">agent4j web 0</span>
+                <span class="tag">loopra web 0</span>
             </div>
             <div class="interface-card">
                 <div class="icon-large">🌍</div>
@@ -856,7 +856,7 @@
     <div class="container">
         <div class="section-header reveal">
             <h2>⚙️ 配置参考</h2>
-            <p class="subtitle"><code style="color:var(--neon);">~/.agent4j/config.json</code> 完整配置项说明</p>
+            <p class="subtitle"><code style="color:var(--neon);">~/.loopra/config.json</code> 完整配置项说明</p>
         </div>
         <div class="cache-table-wrap reveal" style="max-width: 900px; margin: 0 auto;">
             <table class="cache-table">
@@ -958,7 +958,7 @@
     <div class="container">
         <div class="section-header reveal">
             <h2>🗺️ 路线图 & 文档</h2>
-            <p class="subtitle">Agent4j 持续进化中 — 已完成 12 项核心能力，3 项开发中</p>
+            <p class="subtitle">Loopra 持续进化中 — 已完成 12 项核心能力，3 项开发中</p>
         </div>
 
         <!-- Download / Install Links -->
@@ -981,7 +981,7 @@
                 <h3 style="margin-bottom: 8px;">文档与源码</h3>
                 <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:20px;">GitHub
                     README、更新日志、许可证</p>
-                <a class="btn btn-outline" href="https://github.com/ezdemo/agent4j" rel="noopener" target="_blank">
+                <a class="btn btn-outline" href="https://github.com/ezdemo/loopra" rel="noopener" target="_blank">
                     <svg class="icon-svg" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
                     </svg>
@@ -1017,19 +1017,19 @@
                 </ul>
                 <h3 style="margin-top:32px;">📚 文档资源</h3>
                 <ul class="roadmap-list">
-                    <li><span class="check">📖</span> <a href="https://github.com/ezdemo/agent4j/blob/main/README.md"
+                    <li><span class="check">📖</span> <a href="https://github.com/ezdemo/loopra/blob/main/README.md"
                                                         rel="noopener" target="_blank">项目 README</a> — 完整使用指南
                     </li>
-                    <li><span class="check">📋</span> <a href="https://github.com/ezdemo/agent4j/blob/main/CHANGELOG.md"
+                    <li><span class="check">📋</span> <a href="https://github.com/ezdemo/loopra/blob/main/CHANGELOG.md"
                                                         rel="noopener" target="_blank">更新日志</a> — 版本变更记录
                     </li>
-                    <li><span class="check">📄</span> <a href="https://github.com/ezdemo/agent4j/blob/main/LICENSE"
+                    <li><span class="check">📄</span> <a href="https://github.com/ezdemo/loopra/blob/main/LICENSE"
                                                         rel="noopener" target="_blank">MIT 许可证</a> — 开源协议
                     </li>
-                    <li><span class="check">🐛</span> <a href="https://github.com/ezdemo/agent4j/issues" rel="noopener"
+                    <li><span class="check">🐛</span> <a href="https://github.com/ezdemo/loopra/issues" rel="noopener"
                                                         target="_blank">问题反馈</a> — 提交 Issue
                     </li>
-                    <li><span class="check">💡</span> <a href="https://github.com/ezdemo/agent4j/discussions"
+                    <li><span class="check">💡</span> <a href="https://github.com/ezdemo/loopra/discussions"
                                                         rel="noopener" target="_blank">讨论区</a> — 社区交流
                     </li>
                 </ul>
@@ -1051,7 +1051,7 @@
                 </svg>
                 立即安装
             </a>
-            <a class="btn btn-ghost btn-lg" href="https://github.com/ezdemo/agent4j" rel="noopener" target="_blank">
+            <a class="btn btn-ghost btn-lg" href="https://github.com/ezdemo/loopra" rel="noopener" target="_blank">
                 <svg class="icon-svg" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
                 </svg>
@@ -1067,8 +1067,8 @@
         <div class="footer-grid">
             <div class="footer-brand">
                 <a class="nav-logo" href="#">
-                    <img alt="Agent4j Logo" height="24" src="assets/logo.png" width="24"/>
-                    <span class="bracket">[</span>Agent4j<span class="bracket">]</span>
+                    <img alt="Loopra Logo" height="24" src="assets/logo.png" width="24"/>
+                    <span class="bracket">[</span>Loopra<span class="bracket">]</span>
                 </a>
                 <p>纯 Java 17 的 AI 编码代理框架。推理循环 · 工具调用 · 流式输出 · 会话管理 · 子代理隔离 · 三端覆盖。</p>
             </div>
@@ -1087,12 +1087,12 @@
                     <li><a href="#quickstart">快速安装</a></li>
                     <li><a href="#config-docs">配置参考</a></li>
                     <li><a href="#docs">路线图</a></li>
-                    <li><a href="https://github.com/ezdemo/agent4j" rel="noopener" target="_blank">GitHub</a></li>
-                    <li><a href="https://github.com/ezdemo/agent4j/blob/main/README.md" rel="noopener" target="_blank">README
+                    <li><a href="https://github.com/ezdemo/loopra" rel="noopener" target="_blank">GitHub</a></li>
+                    <li><a href="https://github.com/ezdemo/loopra/blob/main/README.md" rel="noopener" target="_blank">README
                         文档</a></li>
-                    <li><a href="https://github.com/ezdemo/agent4j/blob/main/CHANGELOG.md" rel="noopener"
+                    <li><a href="https://github.com/ezdemo/loopra/blob/main/CHANGELOG.md" rel="noopener"
                            target="_blank">更新日志</a></li>
-                    <li><a href="https://github.com/ezdemo/agent4j/issues" rel="noopener" target="_blank">问题反馈</a>
+                    <li><a href="https://github.com/ezdemo/loopra/issues" rel="noopener" target="_blank">问题反馈</a>
                     </li>
                 </ul>
             </div>
@@ -1107,7 +1107,7 @@
             </div>
         </div>
         <div class="footer-bottom">
-            <span>© <span data-year="2026">2026</span> Agent4j · 作者 <a href="https://github.com/ezdemo"
+            <span>© <span data-year="2026">2026</span> Loopra · 作者 <a href="https://github.com/ezdemo"
                                                                          rel="noopener" target="_blank">Sorghum</a> · MIT 许可证</span>
             <span>Made with <span class="love">♥</span> in Java</span>
         </div>

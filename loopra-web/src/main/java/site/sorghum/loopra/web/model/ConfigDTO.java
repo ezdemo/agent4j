@@ -1,0 +1,36 @@
+package site.sorghum.loopra.web.model;
+
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+/**
+ * 配置信息（apiKey 脱敏）。
+ */
+public record ConfigDTO(
+        String baseUrl,
+        String model,
+        List<String> availableModels,
+        String workspace,
+        String editMode,
+        String reasoningEffort,
+        String lang,
+        String hitl,
+        Set<String> disabledTools,
+        List<String> blockedPaths,
+        String apiKey,
+        Map<String, Map<String, Double>> price,
+        VisionConfig vision,
+        String activePet,
+        boolean terminateOnNoToolCall
+) {
+    /**
+     * 视觉模型配置。
+     */
+    public record VisionConfig(
+            String baseUrl,
+            String apiKey,
+            String model
+    ) {
+    }
+}

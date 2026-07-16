@@ -2,25 +2,25 @@
 <project version="4">
   <component name="EntryPointsManager">
     <entry_points version="2.0">
-      <entry_point TYPE="field" FQNAME="site.sorghum.agent4j.web.model.ChatRequest message" />
-      <entry_point TYPE="field" FQNAME="site.sorghum.agent4j.web.model.ChatRequest sessionName" />
-      <entry_point TYPE="field" FQNAME="site.sorghum.agent4j.web.model.ChatRequest stream" />
-      <entry_point TYPE="field" FQNAME="site.sorghum.agent4j.web.model.ChatRequest workspaceHash" />
+      <entry_point TYPE="field" FQNAME="site.sorghum.loopra.web.model.ChatRequest message" />
+      <entry_point TYPE="field" FQNAME="site.sorghum.loopra.web.model.ChatRequest sessionName" />
+      <entry_point TYPE="field" FQNAME="site.sorghum.loopra.web.model.ChatRequest stream" />
+      <entry_point TYPE="field" FQNAME="site.sorghum.loopra.web.model.ChatRequest workspaceHash" />
     </entry_points>
-    <pattern value="site.sorghum.agent4j.web.model.ChatRequest" />
+    <pattern value="site.sorghum.loopra.web.model.ChatRequest" />
   </component>
   <component name="ExternalStorageConfigurationManager" enabled="true" />
   <component name="MavenProjectsManager">
     <option name="originalFiles">
       <list>
         <option value="$PROJECT_DIR$/pom.xml" />
-        <option value="$PROJECT_DIR$/agent4j-bin/pom.xml" />
+        <option value="$PROJECT_DIR$/loopra-bin/pom.xml" />
         <option value="$PROJECT_DIR$/workflow-project/05-后端开发代码/pom.xml" />
       </list>
     </option>
     <option name="ignoredFiles">
       <set>
-        <option value="$PROJECT_DIR$/agent4j-tool/pom.xml" />
+        <option value="$PROJECT_DIR$/loopra-tool/pom.xml" />
       </set>
     </option>
   </component>
