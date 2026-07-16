@@ -1,0 +1,25 @@
+{
+  "name": "loopra-tui",
+  "version": "26.6.8.1",
+  "private": true,
+  "type": "module",
+  "description": "loopra 终端 AI 代理 UI - 基于 Ink 的 TUI 框架",
+  "scripts": {
+    "dev": "tsx app/index.tsx",
+    "dev:app": "tsx app/index.tsx --api http://localhost:4567",
+    "typecheck": "tsc --noEmit",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "ink": "^5.1.0",
+    "marked": "^18.0.3",
+    "react": "^18.3.0",
+    "string-width": "^7.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^25.9.0",
+    "@types/react": "^18.3.0",
+    "tsx": "^4.0.0",
+    "typescript": "^5.6.0"
+  }
+}

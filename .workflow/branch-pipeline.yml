@@ -20,11 +20,11 @@ stages:
         displayName: Nodejs 构建
         nodeVersion: 14.16.0
         commands:
-          - cd ./agent4j-tauri && npm install && rm -rf ./dist && npm run build
+          - cd ./loopra-tauri && npm install && rm -rf ./dist && npm run build
         artifacts:
           - name: BUILD_ARTIFACT
             path:
-              - ./agent4j-tauri/dist
+              - ./loopra-tauri/dist
         strategy: {}
       - step: publish@general_artifacts
         name: publish_general_artifacts

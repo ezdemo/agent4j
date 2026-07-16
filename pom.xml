@@ -10,13 +10,13 @@
         <version>4.0.3</version>
     </parent>
     <groupId>site.sorghum.agent</groupId>
-    <artifactId>agent4j</artifactId>
+    <artifactId>loopra</artifactId>
     <version>26.7.16</version>
     <packaging>pom</packaging>
 
     <modules>
-        <module>agent4j-bin</module>
-        <module>agent4j-web</module>
+        <module>loopra-bin</module>
+        <module>loopra-web</module>
     </modules>
 
     <properties>

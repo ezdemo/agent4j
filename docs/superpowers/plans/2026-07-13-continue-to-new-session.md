@@ -13,8 +13,8 @@
 ### Task 1: Persisted Assistant-Turn Boundaries
 
 **Files:**
-- Create: `agent4j-front/src/utils/sessionBranch.js`
-- Create: `agent4j-front/src/utils/sessionBranch.test.js`
+- Create: `loopra-front/src/utils/sessionBranch.js`
+- Create: `loopra-front/src/utils/sessionBranch.test.js`
 
 - [ ] **Step 1: Write failing boundary tests**
 
@@ -84,9 +84,9 @@ Expected: 2 tests pass.
 ### Task 2: Assistant-Only Branch Action
 
 **Files:**
-- Create: `agent4j-front/src/components/ChatMessage.test.js`
-- Modify: `agent4j-front/src/components/ChatMessage.vue`
-- Modify: `agent4j-front/src/views/Chat.vue`
+- Create: `loopra-front/src/components/ChatMessage.test.js`
+- Modify: `loopra-front/src/components/ChatMessage.vue`
+- Modify: `loopra-front/src/views/Chat.vue`
 
 - [ ] **Step 1: Write failing component tests**
 
@@ -152,9 +152,9 @@ Expected: all tests pass.
 ### Task 3: Exact and Isolated Backend Copy
 
 **Files:**
-- Create: `agent4j-web/src/test/java/site/sorghum/agent4j/web/service/AgentServiceBranchTest.java`
-- Modify: `agent4j-web/src/main/java/site/sorghum/agent4j/web/service/AgentService.java`
-- Modify: `agent4j-web/src/main/java/site/sorghum/agent4j/web/controller/SessionController.java`
+- Create: `loopra-web/src/test/java/site/sorghum/loopra/web/service/AgentServiceBranchTest.java`
+- Modify: `loopra-web/src/main/java/site/sorghum/loopra/web/service/AgentService.java`
+- Modify: `loopra-web/src/main/java/site/sorghum/loopra/web/controller/SessionController.java`
 
 - [ ] **Step 1: Write failing prefix-validation tests**
 
@@ -162,9 +162,9 @@ Add package-level tests for a new `AgentService.copyBranchMessages` helper. Veri
 
 ```java
 import org.junit.jupiter.api.Test;
-import site.sorghum.agent4j.bin.agent.model.ChatMessage;
-import site.sorghum.agent4j.bin.agent.model.ToolCallEntry;
-import site.sorghum.agent4j.web.common.ServiceException;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
+import site.sorghum.loopra.web.common.ServiceException;
 
 import java.util.List;
 import java.util.Map;
@@ -195,7 +195,7 @@ void rejectsAnOutOfRangeBoundary() {
 
 - [ ] **Step 2: Run the backend test and confirm it fails**
 
-Run: `mvn -pl agent4j-web -am -DskipTests=false -Dtest=AgentServiceBranchTest -Dsurefire.failIfNoSpecifiedTests=false test`
+Run: `mvn -pl loopra-web -am -DskipTests=false -Dtest=AgentServiceBranchTest -Dsurefire.failIfNoSpecifiedTests=false test`
 
 Expected: FAIL because `copyBranchMessages` does not exist.
 
@@ -211,7 +211,7 @@ Update the controller documentation so `messageCount` is described as the exclus
 
 - [ ] **Step 5: Run focused backend and frontend verification**
 
-Run: `mvn -pl agent4j-web -am -DskipTests=false -Dtest=AgentServiceBranchTest -Dsurefire.failIfNoSpecifiedTests=false test`
+Run: `mvn -pl loopra-web -am -DskipTests=false -Dtest=AgentServiceBranchTest -Dsurefire.failIfNoSpecifiedTests=false test`
 
 Expected: `AgentServiceBranchTest` passes.
 

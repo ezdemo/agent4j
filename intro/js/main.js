@@ -1,5 +1,5 @@
 /* ============================================================
-   Agent4j — Official Website | v2.0
+   Loopra — Official Website | v2.0
    Interactive Functions
    ============================================================ */
 
@@ -226,9 +226,9 @@
     }
 
     // ---------- Console welcome ----------
-    console.log('%c Agent4j %c 纯 Java 的 AI 编码代理 ',
+    console.log('%c Loopra %c 纯 Java 的 AI 编码代理 ',
         'background:#00e676;color:#000;padding:4px 8px;border-radius:4px 0 0 4px;font-weight:bold;font-size:14px;font-family:monospace;',
         'background:#141c24;color:#e8edf2;padding:4px 8px;border-radius:0 4px 4px 0;font-size:14px;font-family:monospace;'
     );
-    console.log('https://github.com/ezdemo/agent4j');
+    console.log('https://github.com/ezdemo/loopra');
 })();

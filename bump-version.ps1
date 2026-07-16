@@ -17,7 +17,7 @@ Write-Host ""
 $path = Join-Path $root "pom.xml"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
-$re = [regex]'(?<=<artifactId>agent4j</artifactId>\s*\r?\n\s*<version>)\d[\d.]*-?[A-Z]*(?=</version>)'
+$re = [regex]'(?<=<artifactId>loopra</artifactId>\s*\r?\n\s*<version>)\d[\d.]*-?[A-Z]*(?=</version>)'
 $c = $re.Replace($c, $Version)
 if ($c -ne $old) {
     $c = $c.TrimStart([char]0xFEFF)
@@ -25,44 +25,44 @@ if ($c -ne $old) {
     Write-Host "  [OK] pom.xml"
 } else { Write-Host "  [--] pom.xml (unchanged)" }
 
-# 2. agent4j-bin/pom.xml
-$path = Join-Path $root "agent4j-bin/pom.xml"
+# 2. loopra-bin/pom.xml
+$path = Join-Path $root "loopra-bin/pom.xml"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
-$re = [regex]'(?<=<artifactId>agent4j</artifactId>\s*\r?\n\s*<version>)\d[\d.]*-?[A-Z]*(?=</version>)'
+$re = [regex]'(?<=<artifactId>loopra</artifactId>\s*\r?\n\s*<version>)\d[\d.]*-?[A-Z]*(?=</version>)'
 $c = $re.Replace($c, $Version)
 if ($c -ne $old) {
     $c = $c.TrimStart([char]0xFEFF)
     [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
-    Write-Host "  [OK] agent4j-bin/pom.xml"
-} else { Write-Host "  [--] agent4j-bin/pom.xml (unchanged)" }
+    Write-Host "  [OK] loopra-bin/pom.xml"
+} else { Write-Host "  [--] loopra-bin/pom.xml (unchanged)" }
 
 
-# 4. agent4j-web/pom.xml
-$path = Join-Path $root "agent4j-web/pom.xml"
+# 4. loopra-web/pom.xml
+$path = Join-Path $root "loopra-web/pom.xml"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
 $c = $re.Replace($c, $Version)
 if ($c -ne $old) {
     $c = $c.TrimStart([char]0xFEFF)
     [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
-    Write-Host "  [OK] agent4j-web/pom.xml"
-} else { Write-Host "  [--] agent4j-web/pom.xml (unchanged)" }
+    Write-Host "  [OK] loopra-web/pom.xml"
+} else { Write-Host "  [--] loopra-web/pom.xml (unchanged)" }
 
-# 4.1 agent4j-web/dependency-reduced-pom.xml
-$path = Join-Path $root "agent4j-web/dependency-reduced-pom.xml"
+# 4.1 loopra-web/dependency-reduced-pom.xml
+$path = Join-Path $root "loopra-web/dependency-reduced-pom.xml"
 if (Test-Path $path) {
     $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
     $old = $c
     # dependency-reduced-pom.xml has <groupId> between <artifactId> and <version>
-    $re2 = [regex]'(?<=<artifactId>agent4j</artifactId>\s*\r?\n\s*<groupId>site\.sorghum\.agent</groupId>\s*\r?\n\s*<version>)\d[\d.]*-?[A-Z]*(?=</version>)'
+    $re2 = [regex]'(?<=<artifactId>loopra</artifactId>\s*\r?\n\s*<groupId>site\.sorghum\.agent</groupId>\s*\r?\n\s*<version>)\d[\d.]*-?[A-Z]*(?=</version>)'
     $c = $re2.Replace($c, $Version)
     if ($c -ne $old) {
         $c = $c.TrimStart([char]0xFEFF)
         [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
-        Write-Host "  [OK] agent4j-web/dependency-reduced-pom.xml"
-    } else { Write-Host "  [--] agent4j-web/dependency-reduced-pom.xml (unchanged)" }
-} else { Write-Host "  [--] agent4j-web/dependency-reduced-pom.xml (not found)" }
+        Write-Host "  [OK] loopra-web/dependency-reduced-pom.xml"
+    } else { Write-Host "  [--] loopra-web/dependency-reduced-pom.xml (unchanged)" }
+} else { Write-Host "  [--] loopra-web/dependency-reduced-pom.xml (not found)" }
 
 # 5. .release/setup.sh
 $path = Join-Path $root ".release/setup.sh"
@@ -84,27 +84,27 @@ if ($c -ne $old) {
     Write-Host "  [OK] .release/setup.ps1"
 } else { Write-Host "  [--] .release/setup.ps1 (unchanged)" }
 
-# 7. agent4j-front/package.json (Electron)
-$path = Join-Path $root "agent4j-front/package.json"
+# 7. loopra-front/package.json (Electron)
+$path = Join-Path $root "loopra-front/package.json"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
 $c = [regex]::Replace($c, '(?<="version"\s*:\s*")[\d.]+(?=")', $Version)
 if ($c -ne $old) {
     $c = $c.TrimStart([char]0xFEFF)
     [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
-    Write-Host "  [OK] agent4j-front/package.json"
-} else { Write-Host "  [--] agent4j-front/package.json (unchanged)" }
+    Write-Host "  [OK] loopra-front/package.json"
+} else { Write-Host "  [--] loopra-front/package.json (unchanged)" }
 
-# 8. agent4j-web/src/installDist/bin/version.txt
-$path = Join-Path $root "agent4j-web/src/installDist/bin/version.txt"
+# 8. loopra-web/src/installDist/bin/version.txt
+$path = Join-Path $root "loopra-web/src/installDist/bin/version.txt"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
 $c = [regex]::Replace($c.Trim(), '^[\d.]+', $Version)
 if ($c -ne $old.Trim()) {
     $c = $c.TrimStart([char]0xFEFF)
     [System.IO.File]::WriteAllText($path, $c + [Environment]::NewLine, $utf8NoBom)
-    Write-Host "  [OK] agent4j-web/src/installDist/bin/version.txt"
-} else { Write-Host "  [--] agent4j-web/src/installDist/bin/version.txt (unchanged)" }
+    Write-Host "  [OK] loopra-web/src/installDist/bin/version.txt"
+} else { Write-Host "  [--] loopra-web/src/installDist/bin/version.txt (unchanged)" }
 
 Write-Host ""
 Write-Host "Done! Version unified to $Version"

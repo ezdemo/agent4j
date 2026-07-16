@@ -176,7 +176,7 @@
 
 #### 🏗️ 代码重构
 
-- 🔄 将 agent4j-tool 合并入 agent4j-bin — 精简模块结构，减少依赖层级
+- 🔄 将 loopra-tool 合并入 loopra-bin — 精简模块结构，减少依赖层级
 
 #### 🎨 侧边栏重构
 
@@ -454,7 +454,7 @@
 
 ### Changed
 
-- 🔄 统一日志输出，替换多处 `System.err` 为 Slf4j — 提升日志管理一致性（`Agent4jConfig`、`HttpModelClient`、`SessionService`、`ToolScanUtil`、`WorkspaceManager`）
+- 🔄 统一日志输出，替换多处 `System.err` 为 Slf4j — 提升日志管理一致性（`LoopraConfig`、`HttpModelClient`、`SessionService`、`ToolScanUtil`、`WorkspaceManager`）
 - 🔄 简化 `SseAgentOutput` 构造函数 — 减少不必要的参数传递
 - 🔄 升级 `electron-builder` 并更新 `pnpm-lock.yaml` 依赖锁定
 
@@ -477,7 +477,7 @@
 #### 📊 数据面板
 
 - ✨ 新增数据面板（Dashboard）— 可视化展示每日 Token 用量、费用统计、模型分布
-- ✨ 后端新增 `DashboardService` — 读取 `~/.agent4j/usage_daily.jsonl` 并聚合统计数据
+- ✨ 后端新增 `DashboardService` — 读取 `~/.loopra/usage_daily.jsonl` 并聚合统计数据
 - ✨ 新增 `UsageCostCalculator` — 提取 Token 费用计算为独立工具类，供多处复用
 - ✨ 前端新增 `Dashboard.vue` 组件 — 支持近 7/14/30 天切换，柱状图 + 模型饼图
 - ✨ `SessionStore` 增加每日用量记录接口 — 请求完成后自动追加日志条目
@@ -613,7 +613,7 @@
 ### Changed
 
 - 🔄 工具调用结果初始展开状态改为折叠 (默认 false)
-- 🔄 日志目录迁移至 `~/.agent4j/logs`
+- 🔄 日志目录迁移至 `~/.loopra/logs`
 - 🔄 优化工具调用展开/折叠逻辑及 FinishTool 行为
 - 🔄 更新前端构建产物及 Help 组件
 
@@ -691,7 +691,7 @@
 
 #### 🖥️ 界面 & 官网
 - ✨ 提取 Sidebar.vue 到独立组件
-- ✨ 添加 Agent4j 官网终端未来主义风格样式
+- ✨ 添加 Loopra 官网终端未来主义风格样式
 
 #### 🔗 工作区与会话
 - ✨ 新建会话关联工作区并修复内部类修饰符
@@ -701,7 +701,7 @@
 - 🔄 统一 LSP 作用域为全局并迁移至 Solon 内置配置
 - 🔄 移除 isActive 工作区概念，改用客户端追踪当前会话工作区
 - 🔄 移除侧边栏组件及相关状态（重构至独立组件）
-- 🔄 重构 Agent4jAgent 与 AgentLoop 并增强健壮性
+- 🔄 重构 LoopraAgent 与 AgentLoop 并增强健壮性
 - 🔄 提取硬编码常量并消除重复错误消息
 - 🔄 将 Git 业务逻辑抽取至 GitService
 - 🔄 使用 Lombok @Getter 替换手写 getter
