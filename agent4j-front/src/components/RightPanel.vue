@@ -16,6 +16,14 @@
         </button>
         <button
           class="rp-tab"
+          :class="{ active: modelValue === 'files' }"
+          @click="$emit('update:modelValue', 'files')"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2.5h6.5A2.5 2.5 0 0 1 21 9v8.5A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>
+          文件
+        </button>
+        <button
+          class="rp-tab"
           :class="{ active: modelValue === 'schedule' }"
           @click="$emit('update:modelValue', 'schedule')"
         >
@@ -25,6 +33,9 @@
       </div>
       <div class="rp-head-actions">
         <button v-if="modelValue === 'git'" class="btn-icon-sm" @click="gitRef?.loadStatus?.()" title="刷新 Git 状态">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+        </button>
+        <button v-if="modelValue === 'files'" class="btn-icon-sm" @click="fileRef?.refresh?.()" title="刷新文件树">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
         <button v-if="modelValue === 'schedule'" class="btn-icon-sm" @click="scheduleRef?.loadTasks?.()" title="刷新定时任务">
@@ -41,6 +52,9 @@
       <div v-show="modelValue === 'git'" class="rp-page">
         <GitPanel ref="gitRef" :workspace-hash="workspaceHash" />
       </div>
+      <div v-show="modelValue === 'files'" class="rp-page">
+        <FilePanel ref="fileRef" :workspace-hash="workspaceHash" @add-to-session="$emit('addToSession', $event)" />
+      </div>
       <div v-show="modelValue === 'schedule'" class="rp-page">
         <SchedulePanel ref="scheduleRef" :workspace-hash="workspaceHash" :session-name="sessionName" :sessions="sessions" />
       </div>
@@ -51,6 +65,7 @@
 <script setup>
 import { ref } from 'vue'
 import GitPanel from './GitPanel.vue'
+import FilePanel from './FilePanel.vue'
 import SchedulePanel from './SchedulePanel.vue'
 
 const props = defineProps({
@@ -61,9 +76,10 @@ const props = defineProps({
   sessions: { type: Array, default: () => [] }
 })
 
-const emit = defineEmits(['update:modelValue', 'close'])
+const emit = defineEmits(['update:modelValue', 'close', 'addToSession'])
 
 const gitRef = ref(null)
+const fileRef = ref(null)
 const scheduleRef = ref(null)
 </script>
 
@@ -112,7 +128,7 @@ const scheduleRef = ref(null)
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-width: 78px;
+  min-width: 64px;
   height: 32px;
   padding: 0 10px;
   font-size: 13px;

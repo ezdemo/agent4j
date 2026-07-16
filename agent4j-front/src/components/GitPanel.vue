@@ -210,8 +210,12 @@
           :open="diffViewer.open"
           :file="diffViewer.file"
           :diff="diffViewer.diff"
+          :content="diffViewer.content"
+          :mode="diffViewer.mode"
+          :loading="diffViewer.loading"
           :stat="diffViewer.stat"
           @close="closeDiffViewer"
+          @change-mode="changeDiffViewerMode"
         />
 
         <!-- 作者配置 Modal -->
@@ -395,7 +399,7 @@ const initCommit = ref(true)
 const feedback = ref(null)
 
 // Diff 预览
-const diffViewer = ref({ open: false, file: '', diff: '', stat: '' })
+const diffViewer = ref({ open: false, file: '', diff: '', content: '', mode: 'content', loading: false, stat: '', diffStat: '', contentLoaded: false, contentExists: false, diffLoaded: false })
 
 const hasChanges = computed(() => {
   const c = changedFiles.value || []
@@ -592,21 +596,72 @@ const handleGenerateMessage = async () => {
   }
 }
 
-const openDiff = async (path) => {
-  diffViewer.value = { open: true, file: path, diff: '', stat: '' }
+const loadDiffViewerContent = async () => {
+  const file = diffViewer.value.file
+  if (!file) return
+  diffViewer.value.loading = true
   try {
-    const r = await gitAPI.diffContent(props.workspaceHash, path)
+    const r = await gitAPI.workingFileContent(props.workspaceHash, file)
     if (r.success && r.data) {
-      diffViewer.value.diff = r.data.diff || ''
-      diffViewer.value.stat = r.data.stat || ''
+      if (diffViewer.value.file !== file || !diffViewer.value.open) return
+      diffViewer.value.content = r.data.content ?? r.data.message ?? ''
+      diffViewer.value.contentLoaded = true
+      diffViewer.value.contentExists = Boolean(r.data.exists)
+      if (diffViewer.value.mode === 'content') diffViewer.value.stat = diffViewer.value.contentExists ? '当前文件' : '文件不可用'
     }
   } catch (e) {
-    diffViewer.value.diff = '加载 diff 失败: ' + (e.message || '')
+    if (diffViewer.value.file === file && diffViewer.value.open) {
+      diffViewer.value.content = '加载文件失败: ' + (e.message || '')
+      diffViewer.value.contentLoaded = true
+      diffViewer.value.contentExists = false
+    }
+  } finally {
+    if (diffViewer.value.file === file && diffViewer.value.open) diffViewer.value.loading = false
   }
 }
 
+const loadDiffViewerDiff = async () => {
+  const file = diffViewer.value.file
+  if (!file) return
+  diffViewer.value.loading = true
+  try {
+    const r = await gitAPI.diffContent(props.workspaceHash, file)
+    if (r.success && r.data) {
+      if (diffViewer.value.file !== file || !diffViewer.value.open) return
+      diffViewer.value.diff = r.data.diff || ''
+      diffViewer.value.diffLoaded = true
+      diffViewer.value.diffStat = r.data.stat || ''
+      if (diffViewer.value.mode === 'diff') diffViewer.value.stat = diffViewer.value.diffStat
+    }
+  } catch (e) {
+    if (diffViewer.value.file === file && diffViewer.value.open) {
+      diffViewer.value.diff = '加载 Git diff 失败: ' + (e.message || '')
+      diffViewer.value.diffLoaded = true
+    }
+  } finally {
+    if (diffViewer.value.file === file && diffViewer.value.open) diffViewer.value.loading = false
+  }
+}
+
+const changeDiffViewerMode = async (mode) => {
+  if (!diffViewer.value.open || diffViewer.value.mode === mode) return
+  diffViewer.value.mode = mode
+  if (mode === 'content') {
+    diffViewer.value.stat = diffViewer.value.contentLoaded ? (diffViewer.value.contentExists ? '当前文件' : '文件不可用') : ''
+    if (!diffViewer.value.contentLoaded) await loadDiffViewerContent()
+  } else {
+    diffViewer.value.stat = diffViewer.value.diffStat
+    if (!diffViewer.value.diffLoaded) await loadDiffViewerDiff()
+  }
+}
+
+const openDiff = async (path) => {
+  diffViewer.value = { open: true, file: path, diff: '', content: '', mode: 'diff', loading: true, stat: '', diffStat: '', contentLoaded: false, contentExists: false, diffLoaded: false }
+  await loadDiffViewerDiff()
+}
+
 const closeDiffViewer = () => {
-  diffViewer.value = { open: false, file: '', diff: '', stat: '' }
+  diffViewer.value = { open: false, file: '', diff: '', content: '', mode: 'content', loading: false, stat: '', diffStat: '', contentLoaded: false, contentExists: false, diffLoaded: false }
 }
 
 // ---- 生命周期 ----

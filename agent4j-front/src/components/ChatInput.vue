@@ -54,6 +54,30 @@
     </Transition>
 
     <div class="input-box" :class="{ focused: inputFocused }">
+      <!-- 已引用文件标签 -->
+      <div v-if="selectedFileContexts.length > 0" class="file-chips-bar">
+        <div class="file-chips-heading">
+          <span class="file-chips-title">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            已引用 {{ selectedFileContexts.length }} 个文件
+          </span>
+          <button class="file-clear-all" type="button" @click="clearSelectedFileContexts">清除</button>
+        </div>
+        <div class="file-chips-list">
+          <span v-for="context in selectedFileContexts" :key="context.key" class="file-chip" :title="context.file">
+            <span class="file-chip-icon">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </span>
+            <span class="file-chip-name">{{ fileName(context.file) }}</span>
+            <span class="file-chip-lines">{{ context.lineCount }} 行</span>
+            <button class="file-chip-remove" type="button" :aria-label="`移除文件 ${context.file}`" title="移除引用"
+                    @click.stop="removeSelectedFileContext(context.key)">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </span>
+        </div>
+      </div>
+
       <!-- 已选技能标签 -->
       <div v-if="selectedSkills.length > 0" class="skill-chips-bar">
         <div class="skill-chips-heading">
@@ -364,6 +388,7 @@ const inputField = ref(null)
 const inputFocused = ref(false)
 const localText = ref(props.inputText)
 const images = ref([]) // 粘贴的图片 base64 Data URI 列表
+const selectedFileContexts = ref([])
 
 // 同步 props 到本地
 watch(() => props.inputText, v => localText.value = v)
@@ -504,14 +529,19 @@ const handleKeydown = (e) => {
 const handleSend = () => {
   if (localText.value.trim() && !props.streaming) {
     let text = localText.value.trim()
+    const contextBlocks = selectedFileContexts.value.map(context =>
+      `\`\`\`折叠块\n引用文件：${context.file}\n选中内容：\n${context.content}\n\`\`\``
+    )
+    if (contextBlocks.length > 0) text = `${contextBlocks.join('\n\n')}\n\n${text}`
     // 有选中技能时，拼接技能指令到消息顶部
     if (selectedSkills.value.length > 0) {
       const skillLines = selectedSkills.value.map(s => `/skill:${s.name}`).join('\n')
       text = `\`\`\`折叠块\n调用技能：\n${skillLines}\n\`\`\`\n\n${text}`
     }
     emit('send', images.value, text)
-    // 发送后清空图片和技能标签
+    // 发送后清空图片、文件引用和技能标签
     images.value = []
+    selectedFileContexts.value = []
     selectedSkills.value = []
     // 等待父组件清空文本后，重置 textarea 高度
     nextTick(() => autoResize())
@@ -551,6 +581,31 @@ const handlePaste = async (e) => {
  */
 const removeImage = (idx) => {
   images.value.splice(idx, 1)
+}
+
+const fileName = (file) => String(file || '未命名文件').split(/[\\/]/).pop() || '未命名文件'
+
+const addFileContext = ({ file, content }) => {
+  const text = String(content || '').trim()
+  if (!text) return false
+  const path = String(file || '未命名文件')
+  const key = `${path}\u0000${text}`
+  if (selectedFileContexts.value.some(context => context.key === key)) return true
+  selectedFileContexts.value.push({
+    key,
+    file: path,
+    content: text,
+    lineCount: text.split('\n').length
+  })
+  return true
+}
+
+const removeSelectedFileContext = (key) => {
+  selectedFileContexts.value = selectedFileContexts.value.filter(context => context.key !== key)
+}
+
+const clearSelectedFileContexts = () => {
+  selectedFileContexts.value = []
 }
 
 /**
@@ -881,7 +936,7 @@ async function savePetSize(idx) {
 }
 
 // 暴露焦點方法给父组件
-defineExpose({focus: () => inputField.value?.focus(), autoResize, closePickers})
+defineExpose({focus: () => inputField.value?.focus(), addFileContext, autoResize, closePickers})
 </script>
 
 <style scoped>
@@ -1802,6 +1857,107 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize, closePickers})
 }
 
 /* 已选技能标签 */
+.file-chips-bar {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 4px;
+  padding: 7px 2px 8px;
+  border-bottom: 1px solid color-mix(in srgb, #4f7cac 24%, var(--border));
+}
+
+.file-chips-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.file-chips-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--fg-3);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.file-chips-title svg { color: #4f7cac; }
+
+.file-clear-all {
+  border: none;
+  background: transparent;
+  color: var(--fg-4);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 11px;
+  line-height: 1;
+  transition: color var(--t);
+}
+
+.file-clear-all:hover { color: var(--red); }
+
+.file-chips-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.file-chip {
+  display: inline-flex;
+  align-items: center;
+  max-width: 100%;
+  gap: 5px;
+  padding: 3px 4px 3px 5px;
+  border: 1px solid color-mix(in srgb, #4f7cac 38%, var(--border));
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, #4f7cac 10%, var(--bg));
+  color: var(--fg-2);
+  cursor: default;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+
+.file-chip-icon {
+  display: inline-grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  flex-shrink: 0;
+  border-radius: var(--r-sm);
+  background: color-mix(in srgb, #4f7cac 16%, var(--bg));
+  color: #4f7cac;
+}
+
+.file-chip svg { flex-shrink: 0; }
+
+.file-chip-name {
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.file-chip-lines { color: var(--fg-4); font-size: 10px; font-weight: 500; white-space: nowrap; }
+
+.file-chip-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-4);
+  cursor: pointer;
+  transition: all var(--t);
+}
+
+.file-chip-remove:hover { background: var(--red); color: #fff; }
+
 .skill-chips-bar {
   display: flex;
   flex-direction: column;

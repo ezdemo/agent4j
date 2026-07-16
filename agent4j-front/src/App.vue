@@ -109,6 +109,7 @@
       :session-name="currentSession"
       :sessions="sessions"
       @close="rightPanelOpen = false"
+      @add-to-session="addFileSelectionToSession"
     />
 
       <!-- 系统提示词 Modal -->
@@ -621,6 +622,11 @@ function onElementSend(payload) {
   md += '---\n'
   md += payload.message
   chatRef.value?.sendCommand?.(md)
+}
+
+function addFileSelectionToSession(selection) {
+  if (!selection?.content?.trim()) return
+  chatRef.value?.appendFileSelection?.(selection)
 }
 
 const chatRef = ref(null)

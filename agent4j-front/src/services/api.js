@@ -705,6 +705,12 @@ export const gitAPI = {
     return api.get('/git/file-content', { params })
   },
 
+  // 获取工作区当前文件原文，用于代码预览 - GET /api/git/working-file-content
+  workingFileContent: (workspaceHash, path) => {
+    const params = { workspaceHash, path }
+    return api.get('/git/working-file-content', { params })
+  },
+
   // Git 提交 - POST /api/git/commit?workspaceHash=xxx  body: { message, files, authorName, authorEmail }
   commit: (workspaceHash, message, files, authorName, authorEmail) => {
     const params = workspaceHash ? { workspaceHash } : {}
@@ -886,6 +892,14 @@ export const lspAPI = {
     updateServer: (originalName, server) => api.post('/lsp/servers/update', { originalName, server }),
     removeServer: (name) => api.post('/lsp/servers/remove', { name }),
     toggleServer: (name, enabled) => api.post('/lsp/servers/toggle', { name, enabled }),
+}
+
+// 工作区文件 API
+export const filesAPI = {
+  // 获取指定目录的直接子项 - GET /api/files/tree?workspaceHash=xxx&path=src
+  list: (workspaceHash, path = '') => {
+    return api.get('/files/tree', { params: { workspaceHash, path } })
+  }
 }
 
 // 定时任务 API

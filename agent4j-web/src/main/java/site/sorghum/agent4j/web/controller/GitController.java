@@ -79,6 +79,15 @@ public class GitController {
         return ApiResponse.ok(gitService.getFileContent(workspaceHash, path, ref));
     }
 
+    @ApiOperation(value = "获取工作区当前文件内容", notes = "用于前端代码预览，读取当前工作区文件而非 Git 提交版本")
+    @Get
+    @Mapping("/working-file-content")
+    public ApiResponse<WorkingFileContentDTO> workingFileContent(
+            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @ApiParam(value = "文件路径（相对于工作区根目录）") @Param("path") String path) throws Exception {
+        return ApiResponse.ok(gitService.getWorkingFileContent(workspaceHash, path));
+    }
+
     @ApiOperation(value = "获取 Git 提交历史记录",
             notes = "返回 Git 仓库最近 N 条提交记录，默认 50 条")
     @Get
