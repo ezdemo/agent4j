@@ -41,7 +41,7 @@
     <template v-else-if="msg.role === 'assistant' && msg.blocks && msg.blocks.length > 0">
       <div class="msg-body assistant-body">
         <div class="msg-blocks">
-          <BlockRenderer :blocks="msg.blocks || []" @send-choice="(val, block) => $emit('sendChoice', val, block)" @open-file="(filePath) => $emit('openFile', filePath)" />
+          <BlockRenderer :blocks="msg.blocks || []" @send-choice="(val, block) => $emit('sendChoice', val, block)" @open-file="(filePath) => $emit('openFile', filePath)" @open-diff="change => $emit('openDiff', change)" />
         </div>
         <div class="msg-footer">
           <span class="msg-time-group">
@@ -109,7 +109,7 @@ const props = defineProps({
   branchDisabled: {type: Boolean, default: false}
 })
 
-const emit = defineEmits(['previewImage', 'rollbackSnapshot', 'copyMessage', 'branchSession', 'sendChoice', 'openFile'])
+const emit = defineEmits(['previewImage', 'rollbackSnapshot', 'copyMessage', 'branchSession', 'sendChoice', 'openFile', 'openDiff'])
 
 const isElectron = platform.isElectron
 

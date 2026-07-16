@@ -23,23 +23,43 @@
 
     <!-- 本轮 AI 实际写入的文件（仅在回复结束后追加） -->
     <div v-else-if="block.type === 'file_changes' && block.changes?.length" class="block-file-changes">
-      <div class="file-changes-head">
+      <div class="file-changes-head" :class="{ clickable: block.changes.length === 1 }"
+           :role="block.changes.length === 1 ? 'button' : undefined"
+           :tabindex="block.changes.length === 1 ? 0 : undefined"
+           @click="block.changes.length === 1 && $emit('openDiff', block.changes[0])"
+           @keydown.enter="block.changes.length === 1 && $emit('openDiff', block.changes[0])"
+           @keydown.space.prevent="block.changes.length === 1 && $emit('openDiff', block.changes[0])">
         <span class="file-changes-icon" aria-hidden="true">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-            <polyline points="14 2 14 8 20 8"/>
-            <path d="M8 15h8M8 18h5"/>
+            <rect x="3" y="3" width="18" height="18" rx="3"/>
+            <path d="M12 8v8M8 12h8"/>
           </svg>
         </span>
-        <span class="file-changes-title">已编辑 {{ block.changes.length }} 个文件</span>
+        <span class="file-changes-summary">
+          <strong class="file-changes-title">{{ getFileChangeTitle(block) }}</strong>
+          <span class="file-changes-total">
+            <b v-if="getFileChangeTotals(block).additions" class="file-change-add">+{{ getFileChangeTotals(block).additions }}</b>
+            <b v-if="getFileChangeTotals(block).deletions" class="file-change-del">-{{ getFileChangeTotals(block).deletions }}</b>
+          </span>
+        </span>
       </div>
-      <button v-for="change in block.changes" :key="change.path" type="button" class="file-change-row"
-              :title="change.path" @click="openFilePath(change.path)">
+      <template v-if="block.changes.length > 1">
+      <button v-for="change in getVisibleFileChanges(block)" :key="change.path" type="button" class="file-change-row"
+              :title="change.path" @click="$emit('openDiff', change)">
         <span class="file-change-path">{{ change.path }}</span>
         <span class="file-change-stats">
           <b v-if="change.additions" class="file-change-add">+{{ change.additions }}</b>
           <b v-if="change.deletions" class="file-change-del">-{{ change.deletions }}</b>
         </span>
+      </button>
+      </template>
+      <button v-if="block.changes.length > FILE_CHANGE_COLLAPSE_LIMIT" type="button" class="file-changes-expand"
+              @click="block.showAll = !block.showAll">
+        {{ block.showAll ? '收起文件' : `再显示 ${block.changes.length - FILE_CHANGE_COLLAPSE_LIMIT} 个文件` }}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             :style="{ transform: block.showAll ? 'rotate(180deg)' : 'rotate(0deg)' }">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
       </button>
     </div>
 
@@ -411,10 +431,26 @@ const props = defineProps({
   blocks: {type: Array, required: true}
 })
 
-const emit = defineEmits(['sendChoice', 'openFile'])
+const emit = defineEmits(['sendChoice', 'openFile', 'openDiff'])
 
 // 清单工具列表（需要在 processedBlocks 之前定义）
 const CHECKLIST_TOOLS = ['checklist_start', 'checklist_step', 'checklist_status']
+const FILE_CHANGE_COLLAPSE_LIMIT = 3
+
+const getVisibleFileChanges = (block) => block.showAll
+    ? block.changes
+    : block.changes.slice(0, FILE_CHANGE_COLLAPSE_LIMIT)
+
+const getFileChangeTotals = (block) => block.changes.reduce((totals, change) => ({
+  additions: totals.additions + Number(change.additions || 0),
+  deletions: totals.deletions + Number(change.deletions || 0)
+}), {additions: 0, deletions: 0})
+
+const getFileChangeTitle = (block) => {
+  if (block.changes.length !== 1) return `已编辑 ${block.changes.length} 个文件`
+  const path = block.changes[0].path || '文件'
+  return `已编辑 ${path.replace(/\\/g, '/').split('/').pop()}`
+}
 
 // ── 工具分组折叠状态 ──
 
@@ -1146,34 +1182,46 @@ watchEffect(() => {
 /* 本轮文件变更 */
 .block-file-changes {
   overflow: hidden;
-  margin: 8px 0 4px;
+  margin: 10px 0 4px;
   border: 1px solid var(--glass-border);
   border-radius: var(--r);
   background: var(--glass-bg);
-  box-shadow: 0 4px 16px color-mix(in srgb, #000 7%, transparent);
 }
 
 .file-changes-head {
   display: flex;
   align-items: center;
-  gap: 9px;
-  padding: 10px 12px 7px;
+  gap: 12px;
+  min-height: 76px;
+  padding: 12px 16px;
 }
+
+.file-changes-head.clickable { cursor: pointer; }
+.file-changes-head.clickable:hover { background: var(--bg-2); }
+.file-changes-head.clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
 
 .file-changes-icon {
   display: grid;
-  width: 30px;
-  height: 30px;
+  width: 42px;
+  height: 42px;
   place-items: center;
   border-radius: var(--r);
   background: var(--bg-3);
   color: var(--fg-2);
 }
 
+.file-changes-summary { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
+
 .file-changes-title {
   color: var(--fg);
-  font-size: 14px;
+  font-size: 15px;
   font-weight: 600;
+}
+
+.file-changes-total, .file-change-stats {
+  display: inline-flex;
+  gap: 7px;
+  font: 600 12px var(--mono);
 }
 
 .file-change-row {
@@ -1181,7 +1229,7 @@ watchEffect(() => {
   align-items: center;
   width: 100%;
   gap: 12px;
-  padding: 8px 12px 10px 51px;
+  padding: 11px 16px;
   border: 0;
   border-top: 1px solid var(--border);
   background: transparent;
@@ -1202,15 +1250,25 @@ watchEffect(() => {
   font: 500 12px var(--mono);
 }
 
-.file-change-stats {
-  display: inline-flex;
-  gap: 7px;
-  margin-left: auto;
-  font: 600 12px var(--mono);
-}
+.file-change-stats { margin-left: auto; }
 
 .file-change-add { color: var(--green); }
 .file-change-del { color: var(--red); }
+
+.file-changes-expand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-2);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.file-changes-expand svg { transition: transform var(--t); }
+.file-changes-expand:hover { color: var(--accent); }
 
 /* 工具分组展开内容 */
 .tool-group-detail {

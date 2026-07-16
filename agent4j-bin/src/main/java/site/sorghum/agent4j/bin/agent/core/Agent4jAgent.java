@@ -9,6 +9,7 @@ import site.sorghum.agent4j.bin.agent.context.ContextTokenEstimate;
 import site.sorghum.agent4j.bin.agent.context.ConversationContext;
 import site.sorghum.agent4j.bin.agent.listener.AgentLoopListener;
 import site.sorghum.agent4j.bin.agent.model.ChatMessage;
+import site.sorghum.agent4j.bin.agent.model.FileChange;
 import site.sorghum.agent4j.bin.agent.model.UserMessage;
 import site.sorghum.agent4j.bin.agent.prompt.DEFAULT_PROMPT;
 import site.sorghum.agent4j.bin.command.ChatCommand;
@@ -427,6 +428,20 @@ public class Agent4jAgent {
         if (loop != null) {
             loop.setSessionId(sessionId);
         }
+    }
+
+    /** Returns every persisted file-change list produced in the current user turn. */
+    public List<List<FileChange>> getCurrentTurnFileChanges() {
+        List<List<FileChange>> result = new java.util.ArrayList<>();
+        List<ChatMessage> history = ctx.getHistory();
+        for (int i = history.size() - 1; i >= 0; i--) {
+            ChatMessage message = history.get(i);
+            if (message.isUser()) break;
+            if (message.isAssistant() && message.getFileChanges() != null && !message.getFileChanges().isEmpty()) {
+                result.add(0, List.copyOf(message.getFileChanges()));
+            }
+        }
+        return result;
     }
 
     /**

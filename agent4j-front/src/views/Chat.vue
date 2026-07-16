@@ -83,6 +83,7 @@
           @branch-session="branchSession"
           @send-choice="sendChoice"
           @open-file="openFile"
+          @open-diff="openStoredDiff"
       />
 
 
@@ -444,6 +445,14 @@ const openDiff = async (filePath) => {
     diffViewer.value.diff = '加载 diff 失败: ' + (e.message || '')
   }
 }
+const openStoredDiff = (change) => {
+  diffViewer.value = {
+    open: true,
+    file: change?.path || '',
+    diff: change?.diff || '此历史记录没有保存差异快照。',
+    stat: `+${change?.additions || 0} -${change?.deletions || 0}`
+  }
+}
 const closeDiffViewer = () => {
   diffViewer.value = { open: false, file: '', diff: '', stat: '' }
 }
@@ -803,6 +812,36 @@ const openFile = async (filePath) => {
  *   收到有内容的 SSE 事件时才创建助手气泡
  * - /skill: 命令：显示用户气泡 + 助手气泡（正常流程）
  */
+const mergeFileChanges = (blocks, changes) => {
+  if (!Array.isArray(changes) || changes.length === 0) return
+  let summary = blocks.find(block => block.type === 'file_changes')
+  if (!summary) {
+    summary = {type: 'file_changes', changes: []}
+    blocks.push(summary)
+  }
+  const byPath = new Map(summary.changes.map(change => [change.path, {...change}]))
+  for (const change of changes) {
+    if (!change?.path) continue
+    const existing = byPath.get(change.path)
+    byPath.set(change.path, existing ? {
+      ...existing,
+      additions: Number(existing.additions || 0) + Number(change.additions || 0),
+      deletions: Number(existing.deletions || 0) + Number(change.deletions || 0),
+      created: Boolean(existing.created || change.created),
+      diff: [existing.diff, change.diff].filter(Boolean).join('\n')
+    } : {...change})
+  }
+  summary.changes = [...byPath.values()]
+}
+
+const moveFileChangesToEnd = (blocks) => {
+  const changes = blocks.filter(block => block.type === 'file_changes')
+  if (changes.length === 0) return
+  const summary = changes[0]
+  const rest = blocks.filter(block => block.type !== 'file_changes')
+  blocks.splice(0, blocks.length, ...rest, summary)
+}
+
 const sendMessage = async (images = [], overrideText = null) => {
   const text = overrideText || inputText.value.trim()
   if ((!text || streaming.value) && images.length === 0) return
@@ -1010,7 +1049,8 @@ const sendMessage = async (images = [], overrideText = null) => {
             }
           } else if (data.type === 'file_changes') {
             const changes = Array.isArray(data.changes) ? data.changes : []
-            if (changes.length > 0) msg.blocks.push({type: 'file_changes', changes})
+            mergeFileChanges(msg.blocks, changes)
+            moveFileChangesToEnd(msg.blocks)
           } else if (data.type === 'error') {
             msg.blocks.push({type: 'content', content: '错误: ' + (data.error || data.content || '未知')})
           } else if (data.type === 'usage') {
@@ -1395,7 +1435,14 @@ const loadHistory = async (sessionName, force = false) => {
             })
           }
           if (m.content) lastAssistantItem.blocks.push({type: 'content', content: m.content})
+          const fileChanges = m.file_changes || m.fileChanges
+          if (Array.isArray(fileChanges) && fileChanges.length > 0) {
+            mergeFileChanges(lastAssistantItem.blocks, fileChanges)
+          }
         }
+      }
+      for (const item of merged) {
+        if (item.role === 'assistant') moveFileChangesToEnd(item.blocks)
       }
       store.setSessionMessages(targetSession, merged)
       await scroll(true)

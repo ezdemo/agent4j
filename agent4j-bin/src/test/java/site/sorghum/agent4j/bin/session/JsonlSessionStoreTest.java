@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import site.sorghum.agent4j.bin.agent.model.ChatMessage;
+import site.sorghum.agent4j.bin.agent.model.FileChange;
 import site.sorghum.agent4j.bin.agent.model.ToolCallEntry;
 
 import java.io.IOException;
@@ -191,6 +192,23 @@ class JsonlSessionStoreTest {
         String json = JsonlSessionStore.serializeMessage(msg);
         assertTrue(json.contains("edit_file"));
         assertTrue(json.contains("tc_1"));
+    }
+
+    @Test
+    void fileChangesSurviveSessionRoundTrip() throws IOException {
+        ChatMessage message = ChatMessage.assistant("已完成", null, null);
+        message.setFileChanges(List.of(new FileChange("src/App.java", 12, 3, false, "@@ -1 +1 @@\n-old\n+new\n")));
+        store.append(message);
+        store.flush();
+
+        ChatMessage loaded = store.load().get(0);
+
+        assertNotNull(loaded.getFileChanges());
+        assertEquals(1, loaded.getFileChanges().size());
+        assertEquals("src/App.java", loaded.getFileChanges().get(0).path());
+        assertEquals(12, loaded.getFileChanges().get(0).additions());
+        assertEquals(3, loaded.getFileChanges().get(0).deletions());
+        assertTrue(loaded.getFileChanges().get(0).diff().contains("+new"));
     }
 
     @Test

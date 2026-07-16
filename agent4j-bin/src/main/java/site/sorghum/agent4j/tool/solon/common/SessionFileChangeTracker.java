@@ -1,5 +1,6 @@
 package site.sorghum.agent4j.tool.solon.common;
 
+import site.sorghum.agent4j.bin.agent.model.FileChange;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -48,9 +49,10 @@ public final class SessionFileChangeTracker {
 
         List<FileChange> result = new ArrayList<>();
         changes.forEach((path, snapshot) -> {
-            LineStats stats = LineStats.of(snapshot.before(), snapshot.after());
+            DiffSnapshot diff = DiffSnapshot.of(path, snapshot.before(), snapshot.after());
+            LineStats stats = diff.stats();
             if (stats.additions() > 0 || stats.deletions() > 0) {
-                result.add(new FileChange(path, stats.additions(), stats.deletions(), snapshot.created()));
+                result.add(new FileChange(path, stats.additions(), stats.deletions(), snapshot.created(), diff.unified()));
             }
         });
         result.sort(Comparator.comparing(FileChange::path));
@@ -60,9 +62,6 @@ public final class SessionFileChangeTracker {
     private static String scope(Path workspace, String sessionId) {
         String root = workspace == null ? "" : workspace.toAbsolutePath().normalize().toString();
         return root + "::" + (sessionId == null ? "default" : sessionId);
-    }
-
-    public record FileChange(String path, int additions, int deletions, boolean created) {
     }
 
     private record ChangeSnapshot(String before, String after, boolean created) {
@@ -110,6 +109,36 @@ public final class SessionFileChangeTracker {
             String[] raw = content.split("\\R", -1);
             int length = content.endsWith("\n") || content.endsWith("\r") ? raw.length - 1 : raw.length;
             return Arrays.copyOf(raw, length);
+        }
+    }
+
+    private record DiffSnapshot(LineStats stats, String unified) {
+        private static DiffSnapshot of(String path, String before, String after) {
+            String[] oldLines = LineStats.lines(before);
+            String[] newLines = LineStats.lines(after);
+            StringBuilder out = new StringBuilder("--- a/").append(path).append('\n')
+                    .append("+++ b/").append(path).append('\n')
+                    .append("@@ -1,").append(oldLines.length).append(" +1,").append(newLines.length).append(" @@\n");
+            if ((long) oldLines.length * newLines.length > 4_000_000L) {
+                for (String line : oldLines) out.append('-').append(line).append('\n');
+                for (String line : newLines) out.append('+').append(line).append('\n');
+                return new DiffSnapshot(new LineStats(newLines.length, oldLines.length), out.toString());
+            }
+            int[][] lcs = new int[oldLines.length + 1][newLines.length + 1];
+            for (int i = oldLines.length - 1; i >= 0; i--) for (int j = newLines.length - 1; j >= 0; j--) {
+                lcs[i][j] = oldLines[i].equals(newLines[j]) ? lcs[i + 1][j + 1] + 1 : Math.max(lcs[i + 1][j], lcs[i][j + 1]);
+            }
+            int additions = 0, deletions = 0, i = 0, j = 0;
+            while (i < oldLines.length || j < newLines.length) {
+                if (i < oldLines.length && j < newLines.length && oldLines[i].equals(newLines[j])) {
+                    out.append(' ').append(oldLines[i++]).append('\n'); j++;
+                } else if (j < newLines.length && (i == oldLines.length || lcs[i][j + 1] >= lcs[i + 1][j])) {
+                    out.append('+').append(newLines[j++]).append('\n'); additions++;
+                } else {
+                    out.append('-').append(oldLines[i++]).append('\n'); deletions++;
+                }
+            }
+            return new DiffSnapshot(new LineStats(additions, deletions), out.toString());
         }
     }
 }
