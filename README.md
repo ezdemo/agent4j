@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js"/>
   <img src="https://img.shields.io/badge/Electron-42.4-47848F?logo=electron"/>
   <img src="https://img.shields.io/badge/license-MIT-green"/>
-  <img src="https://img.shields.io/badge/version-26.6.29-lightgrey"/>
+  <img src="https://img.shields.io/badge/version-26.7.16-lightgrey"/>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-📋-brightgreen"/></a>
 </p>
 
@@ -134,22 +134,27 @@ agent4j web 0
 
 - **隔离执行**：每个子代理有独立上下文和推理循环
 - **继承工具**：复制父代理的工具集，排除递归 spawn
-- **独立通道**：子代理输出通过独立事件流推送
+- **内嵌展示**：子代理执行过程在聊天流中直接展开
 - **用量统计**：按模型统计 token 消耗
 - **预设角色**：`explore`、`implement`、`test`、`review`、`plan`；探索、审查和方案角色只能使用只读工具
+- **风暴断路器**：检测重复调用，自动取消超时子代理
 
 ### 👤 人工审批（HITL）
 
+- 三态审批模式：`free`（自由）/ `approval`（审批）/ `auto`（自动放行）
 - 执行写操作前等你批准或拒绝
+- 白名单工具（`finish` / `ask_choice` 等）自动放行
 - `/agree` / `/deny` 快速决策
 - `todo_write` 维护任务清单
+- 子代理中的写操作同样触发审批
 
 ### 💬 会话
 
 - 多会话创建、切换、搜索、删除
 - JSONL 格式持久化，工作区隔离
 - 自动生成会话标题，记录每次 token 用量
-- 消息快照系统（基于 Git 的检查点与撤回）
+- 会话分支功能：从任意消息节点分支新对话
+- 消息快照系统：基于 Git 的检查点，支持无快照的消息撤回
 
 ### 🌐 三种界面
 
@@ -172,10 +177,14 @@ agent4j web 0
 
 > 📋 完整更新历史请查看 [CHANGELOG.md](CHANGELOG.md)
 
-- **桌面宠物精灵**：精灵图动画、拖拽移动、多宠物切换
-- **技能选择与权限切换**：输入框内搜索多选技能，自由/审批模式一键切换
-- **HITL 免审批工具**：`finish` / `ask_choice` 等控制流工具直接放行
-- **模型适配**：HttpModelClient 新增 `thinking` 字段，兼容更多推理模型
+- **清单系统**：工作流重构为清单，步骤视图 + 悬浮浮层，进度一目了然
+- **子代理系统重设计**：`sub_agent` 预设五种角色，内嵌展示 + 风暴断路器 + 超时取消
+- **HITL 三态审批**：自由/审批/自动放行三种模式，纯交互工具直接放行
+- **文件变更追踪**：每轮编辑自动展示变更摘要，支持一键撤销
+- **会话分支**：从任意消息节点分支新对话，无快照也能安全撤回
+- **ACP 协议**：集成 Agent-to-Agent 通信协议
+- **工具管理**：可视化启用/禁用任意工具，动态加载插件
+- **上下文指示器**：实时展示系统提示词/历史/工具等各部分 token 占比
 
 ---
 
@@ -314,6 +323,7 @@ agent4j/
 | `remember` / `recall_memory` / `forget`                                     | 持久记忆       |
 | `vision_recognize`                                                          | 图片识别       |
 | `submit_plan` / `revise_plan` / `mark_step_complete`                        | 计划管理       |
+| `checklist_start` / `checklist_status` / `checklist_step`                  | 清单管理       |
 | `ask_choice` / `todo_write`                                                 | 用户交互       |
 | `run_background` / `stop_job` / `wait_for_job` / `job_output` / `list_jobs` | 后台作业       |
 
@@ -360,6 +370,7 @@ agent4j/
 - [x] OpenAPI 集成
 - [x] Git 面板
 - [x] 多模态
+- [x] ACP 协议
 - [ ] 本地知识库
 - [ ] 团队协作
 
