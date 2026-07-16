@@ -27,6 +27,7 @@ import site.sorghum.agent4j.bin.model.ModelClient;
 import site.sorghum.agent4j.bin.model.UserMessageSanitizer;
 import site.sorghum.agent4j.bin.session.SessionService;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
+import site.sorghum.agent4j.tool.solon.common.SessionFileChangeTracker;
 import site.sorghum.agent4j.tool.*;
 import site.sorghum.agent4j.tool.interact.FinishTool;
 
@@ -1084,6 +1085,7 @@ public class AgentLoop implements AgentLoopController {
                     SubAgentTool.setCurrentOutput(capturedOutput);
                 }
                 currentToolControl.set(control);
+                SessionFileChangeTracker.bind(registry.getWorkspace(), getSessionId());
                 try {
                     ONode tc = tcArray.get(idx);
                     ToolCall toolCall = getToolCall(tc);
@@ -1136,6 +1138,7 @@ public class AgentLoop implements AgentLoopController {
                         return toolResult(toolCall.getId(), result);
                     }
                 } finally {
+                    SessionFileChangeTracker.clearBinding();
                     currentToolControl.remove();
                     ToolContext.clearCurrentController();
                     SubAgentTool.clearCurrentOutput();

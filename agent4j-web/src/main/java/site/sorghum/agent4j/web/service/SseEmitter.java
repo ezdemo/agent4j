@@ -2,6 +2,7 @@ package site.sorghum.agent4j.web.service;
 
 import org.noear.snack4.ONode;
 import org.noear.solon.core.handle.Context;
+import site.sorghum.agent4j.tool.solon.common.SessionFileChangeTracker;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -154,6 +155,21 @@ public class SseEmitter {
         node.set("name", name);
         node.set("result", result != null ? result : "");
         send("tool_result", node.toJson());
+    }
+
+    /** Sends the final write/edit summary after an AI turn has completed. */
+    public void sendFileChanges(List<SessionFileChangeTracker.FileChange> changes) {
+        if (changes == null || changes.isEmpty()) return;
+        ONode root = ONode.ofJson("{}").asObject();
+        ONode items = root.getOrNew("changes").asArray();
+        for (SessionFileChangeTracker.FileChange change : changes) {
+            ONode item = items.addNew().asObject();
+            item.set("path", change.path());
+            item.set("additions", change.additions());
+            item.set("deletions", change.deletions());
+            item.set("created", change.created());
+        }
+        send("file_changes", root.toJson());
     }
 
     public void sendUsage(int promptTokens, int completionTokens, int totalTokens,

@@ -21,6 +21,28 @@
     <!-- 内容 -->
     <div v-else-if="block.type === 'content' && block.content" class="block-content" v-html="fmt(block.content)"></div>
 
+    <!-- 本轮 AI 实际写入的文件（仅在回复结束后追加） -->
+    <div v-else-if="block.type === 'file_changes' && block.changes?.length" class="block-file-changes">
+      <div class="file-changes-head">
+        <span class="file-changes-icon" aria-hidden="true">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <path d="M8 15h8M8 18h5"/>
+          </svg>
+        </span>
+        <span class="file-changes-title">已编辑 {{ block.changes.length }} 个文件</span>
+      </div>
+      <button v-for="change in block.changes" :key="change.path" type="button" class="file-change-row"
+              :title="change.path" @click="openFilePath(change.path)">
+        <span class="file-change-path">{{ change.path }}</span>
+        <span class="file-change-stats">
+          <b v-if="change.additions" class="file-change-add">+{{ change.additions }}</b>
+          <b v-if="change.deletions" class="file-change-del">-{{ change.deletions }}</b>
+        </span>
+      </button>
+    </div>
+
     <!-- 工具调用分组（连续多个工具合并，样式与普通工具栏一致） -->
     <div v-else-if="block.type === 'tool_group'" class="block-tool">
       <div class="tool-head" @click="toggleToolGroup(block._groupId)">
@@ -639,9 +661,11 @@ const getGlobPathFull = (block) => {
 // 触发打开文件事件
 const openFile = (block) => {
   const filePath = getFilePath(block)
-  if (filePath) {
-    emit('openFile', filePath)
-  }
+  openFilePath(filePath)
+}
+
+const openFilePath = (filePath) => {
+  if (filePath) emit('openFile', filePath)
 }
 
 // 获取 ask_choice 的问题文字
@@ -1118,6 +1142,75 @@ watchEffect(() => {
   opacity: 1 !important;
   background: var(--bg);
 }
+
+/* 本轮文件变更 */
+.block-file-changes {
+  overflow: hidden;
+  margin: 8px 0 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  background: var(--glass-bg);
+  box-shadow: 0 4px 16px color-mix(in srgb, #000 7%, transparent);
+}
+
+.file-changes-head {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 10px 12px 7px;
+}
+
+.file-changes-icon {
+  display: grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  border-radius: var(--r);
+  background: var(--bg-3);
+  color: var(--fg-2);
+}
+
+.file-changes-title {
+  color: var(--fg);
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.file-change-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+  padding: 8px 12px 10px 51px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg-2);
+  cursor: pointer;
+  text-align: left;
+}
+
+.file-change-row:hover {
+  background: var(--bg-2);
+}
+
+.file-change-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 12px var(--mono);
+}
+
+.file-change-stats {
+  display: inline-flex;
+  gap: 7px;
+  margin-left: auto;
+  font: 600 12px var(--mono);
+}
+
+.file-change-add { color: var(--green); }
+.file-change-del { color: var(--red); }
 
 /* 工具分组展开内容 */
 .tool-group-detail {

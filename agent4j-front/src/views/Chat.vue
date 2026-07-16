@@ -853,7 +853,7 @@ const sendMessage = async (images = [], overrideText = null) => {
             if (!data.type || data.type === 'done') return
             const hasContent = (data.type === 'content' && data.content?.trim()) ||
                 (data.type === 'reasoning' && data.content?.trim()) ||
-                data.type === 'tool_call' || data.type === 'tool_result' || data.type === 'error'
+                data.type === 'tool_call' || data.type === 'tool_result' || data.type === 'file_changes' || data.type === 'error'
             if (!hasContent) return
             // 有实际内容了，插入助手气泡
             silentAssistantId = Date.now()
@@ -1008,6 +1008,9 @@ const sendMessage = async (images = [], overrideText = null) => {
                 }
               }
             }
+          } else if (data.type === 'file_changes') {
+            const changes = Array.isArray(data.changes) ? data.changes : []
+            if (changes.length > 0) msg.blocks.push({type: 'file_changes', changes})
           } else if (data.type === 'error') {
             msg.blocks.push({type: 'content', content: '错误: ' + (data.error || data.content || '未知')})
           } else if (data.type === 'usage') {
