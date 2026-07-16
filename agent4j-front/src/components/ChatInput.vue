@@ -30,6 +30,29 @@
       </div>
     </Transition>
 
+    <Transition name="workflow-float">
+      <section v-if="clData" class="workflow-float" aria-label="当前工作流"
+               @mouseenter="workflowHover = true" @mouseleave="workflowHover = false"
+               @focusin="workflowHover = true" @focusout="workflowHover = false">
+        <button type="button" class="workflow-trigger" :aria-expanded="workflowHover">
+          <span class="workflow-trigger-dot" :class="clData.status?.toLowerCase()"></span>
+          第 {{ clData.currentStepIndex || 0 }}/{{ clData.totalSteps || 0 }} 步
+        </button>
+        <Transition name="workflow-detail">
+          <div v-if="workflowHover" class="workflow-detail">
+            <div class="workflow-detail-heading">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 11l3 3L22 4"/>
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+              工作流进度
+            </div>
+            <ChecklistSteps :data="clData" />
+          </div>
+        </Transition>
+      </section>
+    </Transition>
+
     <div class="input-box" :class="{ focused: inputFocused }">
       <!-- 已选技能标签 -->
       <div v-if="selectedSkills.length > 0" class="skill-chips-bar">
@@ -61,28 +84,6 @@
       </div>
 
       <div class="input-row">
-        <!-- 清单 TODO 按钮 -->
-        <div class="cl-todo-wrap" @mouseenter="onClEnter" @mouseleave="onClLeave">
-          <button class="todo-btn" :class="{ has: !!clData, active: !!clData }" title="清单进度">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-              <polyline points="9 14 11 16 15 10"/>
-            </svg>
-          </button>
-          <!-- 悬浮弹出 -->
-          <Transition name="cl-popup">
-            <div v-if="clHover" class="cl-popup">
-              <div v-if="clData" class="cl-popup-body">
-                <ChecklistSteps :data="clData" />
-              </div>
-              <div v-else class="cl-popup-empty">
-                <span>暂无清单</span>
-                <span class="cl-popup-hint">AI 调用 checklist_start 后自动创建</span>
-              </div>
-            </div>
-          </Transition>
-        </div>
-
         <textarea ref="inputField" v-model="localText" @keydown="handleKeydown"
                   placeholder="输入消息... (Enter 发送, Tab 补全, / 命令，粘贴图片)" rows="1" @blur="handleBlur"
                   @focus="inputFocused=true"
@@ -653,8 +654,8 @@ const clearSelectedSkills = () => {
 
 // ============= 清单 TODO =============
 const clData = ref(null)
-const clHover = ref(false)
-let clLoadTimer = null
+const workflowHover = ref(false)
+let clRefreshTimer = null
 
 const loadChecklist = async () => {
   if (!props.workspaceHash || !props.sessionName) {
@@ -674,17 +675,33 @@ const loadChecklist = async () => {
   }
 }
 
+const stopChecklistPolling = () => {
+  if (clRefreshTimer) clearInterval(clRefreshTimer)
+  clRefreshTimer = null
+}
+
+const startChecklistPolling = () => {
+  stopChecklistPolling()
+  if (!props.streaming) return
+  clRefreshTimer = setInterval(loadChecklist, 3000)
+}
+
 watch([() => props.workspaceHash, () => props.sessionName], () => {
+  clData.value = null
+  workflowHover.value = false
   loadChecklist()
+  startChecklistPolling()
 }, { immediate: true })
 
-const onClEnter = () => {
-  clHover.value = true
-  loadChecklist()
-}
-const onClLeave = () => {
-  clHover.value = false
-}
+watch(() => props.streaming, (streaming, wasStreaming) => {
+  if (streaming) {
+    loadChecklist()
+    startChecklistPolling()
+  } else {
+    stopChecklistPolling()
+    if (wasStreaming) loadChecklist()
+  }
+})
 
 // ============= 权限切换 =============
 const showPermissionPicker = ref(false)
@@ -809,7 +826,10 @@ onMounted(() => {
   loadCommands();
   document.addEventListener('click', handleOutside)
 })
-onBeforeUnmount(() => document.removeEventListener('click', handleOutside))
+onBeforeUnmount(() => {
+  stopChecklistPolling()
+  document.removeEventListener('click', handleOutside)
+})
 
 // ── 桌面宠物精灵图 ──
 const petSpritesheetUrl = ref('')
@@ -2370,7 +2390,7 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize, closePickers})
     gap: 4px;
   }
 
-  .btn-icon-sm, .send-btn, .continue-btn, .todo-btn {
+  .btn-icon-sm, .send-btn, .continue-btn {
     width: 32px;
     height: 32px;
   }
@@ -2397,8 +2417,10 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize, closePickers})
     min-width: 120px;
   }
 
-  .todo-tooltip {
-    width: 240px;
+  .workflow-detail {
+    left: calc(50% - 4px);
+    width: min(380px, calc(100vw - 16px));
+    max-height: min(44vh, 360px);
   }
 
   .slash-popup {
@@ -2425,65 +2447,145 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize, closePickers})
   pointer-events: auto;
 }
 
-/* ============= 清单 TODO ============= */
-.cl-todo-wrap {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.cl-todo-wrap .todo-btn {
-  width: 28px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--r);
-  color: var(--fg-4);
-  transition: all var(--t);
-  border: none;
-  background: transparent;
-  cursor: pointer;
-  flex-shrink: 0;
-}
-.cl-todo-wrap .todo-btn:hover { background: var(--bg-3); color: var(--accent); }
-.cl-todo-wrap .todo-btn.active { color: var(--accent); }
-
-.cl-popup {
+/* ============= 工作流浮层 ============= */
+.workflow-float {
   position: absolute;
-  bottom: calc(100% + 6px);
-  left: 0;
-  min-width: 280px;
-  max-width: 360px;
-  background: var(--glass-bg);
+  bottom: calc(100% + 4px);
+  left: 50%;
+  z-index: 11;
+  transform: translateX(-50%);
+}
+
+.workflow-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 5px 11px;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 58%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--glass-bg) 68%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 5px 16px color-mix(in srgb, #000000 10%, transparent);
+  color: var(--fg-3);
+  font: 600 12px var(--sans);
+  white-space: nowrap;
+  cursor: default;
+  transition: background var(--t), border-color var(--t), box-shadow var(--t);
+}
+
+.workflow-float:hover .workflow-trigger,
+.workflow-trigger:focus-visible {
+  border-color: var(--glass-border);
+  background: color-mix(in srgb, var(--glass-bg) 92%, var(--accent-bg));
+}
+
+.workflow-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.workflow-trigger-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fg-4);
+}
+
+.workflow-trigger-dot.active {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.workflow-trigger-dot.completed {
+  background: var(--green, #2e7d32);
+}
+
+.workflow-trigger-dot.failed {
+  background: var(--red, #c62828);
+}
+
+.workflow-detail {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(48vh, 400px);
+  overflow: auto;
+  padding: 10px 12px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--glass-border));
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--glass-bg) 94%, var(--accent-bg));
   backdrop-filter: blur(var(--blur-sm));
   -webkit-backdrop-filter: blur(var(--blur-sm));
-  border: 1px solid var(--glass-border);
-  border-radius: var(--r-lg);
-  box-shadow: var(--glass-shadow);
-  z-index: 100;
-  padding: 10px;
+  box-shadow: var(--glass-shadow), 0 14px 34px color-mix(in srgb, var(--accent) 12%, transparent);
+  transform: translateX(-50%);
 }
 
-.cl-popup-empty {
+.workflow-detail-heading {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  font-size: 12px;
+  align-items: center;
+  margin-bottom: 8px;
   color: var(--fg-3);
-}
-.cl-popup-hint {
-  font-size: 10px;
-  color: var(--fg-4);
+  font-size: 12px;
 }
 
-.cl-popup-enter-active,
-.cl-popup-leave-active {
-  transition: opacity 0.15s, transform 0.15s;
+.workflow-detail-heading svg {
+  margin-right: 6px;
+  flex-shrink: 0;
+  color: var(--accent);
 }
-.cl-popup-enter-from,
-.cl-popup-leave-to {
+
+.workflow-detail-heading {
+  color: var(--fg-2);
+  font-weight: 600;
+}
+
+.workflow-detail :deep(.cl) {
+  font-size: 14px;
+}
+
+.workflow-detail :deep(.cl-title),
+.workflow-detail :deep(.cl-desc) {
+  font-size: 14px;
+}
+
+.workflow-detail :deep(.cl-title),
+.workflow-detail :deep(.cl-row.current .cl-desc) {
+  font-weight: 600;
+}
+
+.workflow-detail :deep(.cl-badge),
+.workflow-detail :deep(.cl-progress),
+.workflow-detail :deep(.cl-result),
+.workflow-detail :deep(.cl-err) {
+  font-size: 12px;
+}
+
+.workflow-detail :deep(.cl-tag) {
+  font-size: 11px;
+}
+
+.workflow-float-enter-active,
+.workflow-float-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.workflow-float-enter-from,
+.workflow-float-leave-to {
   opacity: 0;
-  transform: translateY(4px);
+  transform: translate(-50%, 8px);
+}
+
+.workflow-detail-enter-active,
+.workflow-detail-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.workflow-detail-enter-from,
+.workflow-detail-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 6px);
 }
 </style>
