@@ -1,17 +1,13 @@
 <template>
   <div class="dashboard">
-    <div class="dashboard-header">
-      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-        <path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/>
-      </svg>
-      <span>数据面板</span>
-      <div class="dashboard-header-actions">
+    <div class="dashboard-toolbar">
+      <div class="dashboard-toolbar-actions">
         <select v-model="days" class="days-select" @change="fetchData">
           <option :value="7">近 7 天</option>
           <option :value="14">近 14 天</option>
           <option :value="30">近 30 天</option>
         </select>
-        <button class="btn-icon-sm" @click="fetchData" :disabled="loading" :title="loading ? '刷新中...' : '刷新'">
+        <button class="dashboard-refresh" type="button" @click="fetchData" :disabled="loading" :title="loading ? '刷新中...' : '刷新'">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                :class="{ 'spin': loading }">
             <path d="M21 12a9 9 0 1 1-6.219-8.56"/>
@@ -315,41 +311,61 @@ defineExpose({ refresh: fetchData })
 .dashboard {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 12px;
   color: var(--fg);
   font-size: 13px;
 }
 
-.dashboard-header {
+.dashboard-toolbar {
   display: flex;
   align-items: center;
-  gap: 8px;
-  font-weight: 600;
-  font-size: 15px;
-  color: var(--fg);
+  min-height: 30px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
 }
 
-.dashboard-header svg {
-  color: var(--accent);
-}
-
-.dashboard-header-actions {
+.dashboard-toolbar-actions {
   margin-left: auto;
   display: flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
 }
 
 .days-select {
+  height: 30px;
   font-size: 12px;
-  padding: 4px 8px;
-  border-radius: var(--r);
+  padding: 0 8px;
+  border-radius: var(--r-sm);
   border: 1px solid var(--border);
-  background: var(--bg-2);
-  color: var(--fg);
+  background: var(--bg);
+  color: var(--fg-2);
   outline: none;
   cursor: pointer;
 }
+
+.days-select:hover,
+.days-select:focus { border-color: color-mix(in srgb, var(--accent) 45%, var(--border)); }
+
+.dashboard-refresh {
+  display: inline-grid;
+  width: 30px;
+  height: 30px;
+  place-items: center;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+}
+
+.dashboard-refresh:hover:not(:disabled) {
+  border-color: var(--border);
+  background: var(--bg);
+  color: var(--accent);
+}
+
+.dashboard-refresh:disabled { cursor: wait; opacity: 0.6; }
 
 .spin {
   animation: spin 1s linear infinite;
@@ -388,23 +404,24 @@ defineExpose({ refresh: fetchData })
 .summary-cards {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
-  gap: 10px;
+  gap: 8px;
 }
 
 .summary-card {
+  min-height: 72px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--r);
-  padding: 14px;
+  padding: 12px;
   display: flex;
   align-items: center;
   gap: 12px;
 }
 
 .summary-icon {
-  width: 36px;
-  height: 36px;
-  border-radius: 8px;
+  width: 34px;
+  height: 34px;
+  border-radius: var(--r-sm);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -432,7 +449,7 @@ defineExpose({ refresh: fetchData })
 }
 
 .summary-value {
-  font-size: 18px;
+  font-size: 17px;
   font-weight: 700;
   line-height: 1.2;
   color: var(--fg);
@@ -449,13 +466,13 @@ defineExpose({ refresh: fetchData })
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--r);
-  padding: 16px;
+  padding: 14px;
 }
 
 .section-title {
   font-weight: 600;
   font-size: 13px;
-  margin-bottom: 14px;
+  margin-bottom: 12px;
   display: flex;
   align-items: baseline;
   gap: 8px;
@@ -471,7 +488,7 @@ defineExpose({ refresh: fetchData })
 .chart-container {
   display: flex;
   gap: 8px;
-  height: 160px;
+  height: 150px;
   padding-bottom: 24px;
   position: relative;
 }
@@ -563,7 +580,7 @@ defineExpose({ refresh: fetchData })
 }
 
 .bar.cost-bar {
-  background: linear-gradient(180deg, var(--accent), var(--yellow));
+  background: var(--yellow);
   width: 60%;
   opacity: 0.85;
   transform: translateX(-50%);
@@ -618,7 +635,7 @@ defineExpose({ refresh: fetchData })
   flex-direction: column;
   gap: 1px;
   background: var(--border);
-  border-radius: var(--r);
+  border-radius: var(--r-sm);
   overflow: hidden;
 }
 
