@@ -21,8 +21,8 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import site.sorghum.agent4j.bin.goal.GoalStore;
 import site.sorghum.agent4j.bin.goal.JsonlGoalStore;
-import site.sorghum.agent4j.bin.workflow.WorkflowStore;
-import site.sorghum.agent4j.bin.workflow.JsonlWorkflowStore;
+import site.sorghum.agent4j.bin.checklist.ChecklistStore;
+import site.sorghum.agent4j.bin.checklist.JsonChecklistStore;
 
 /**
  * 工作区管理器 —— 管理多个工作区的生命周期。
@@ -118,16 +118,16 @@ public class WorkspaceManager {
     }
 
     /**
-     * 获取工作区的工作流存储。
+     * 获取工作区的清单存储（Checklist 线性步骤模式）。
      *
      * @throws IllegalStateException 如果工作区未初始化
      */
-    public WorkflowStore getWorkflowStore() {
+    public ChecklistStore getChecklistStore() {
         if (currentWorkspacePath == null) {
             throw new IllegalStateException("工作区未初始化，请先初始化工作区");
         }
         Path workspaceDir = getWorkspaceDir(currentWorkspacePath);
-        return new JsonlWorkflowStore(workspaceDir);
+        return new JsonChecklistStore(workspaceDir);
     }
 
     /**

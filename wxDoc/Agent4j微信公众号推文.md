@@ -148,7 +148,7 @@ agent4j web 0
 | 层 | 选型 |
 |----|------|
 | 语言 | Java 17 |
-| 后端框架 | Solon 4.0.0-M3 + Snack4 + OkHttp |
+| 后端框架 | Solon 4.0.2 + Snack4 + OkHttp |
 | 前端 | Vue 3.4 + Vite 5 + Ant Design Vue 4 |
 | 桌面 | Tauri 2.0 + Rust |
 | 持久化 | JSON Lines |
@@ -182,4 +182,4 @@ agent4j web 0
 
 ---
 
-*本文基于 Agent4j v26.6.11.1 撰写 | MIT 开源 | 作者 Sorghum*
+*本文基于 Agent4j v26.6.29 撰写 | MIT 开源 | 作者 Sorghum*

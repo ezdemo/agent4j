@@ -9,8 +9,11 @@ import org.noear.solon.ai.talents.gateway.openapi.ApiAuthenticator;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
 import org.noear.solon.annotation.Inject;
+import org.noear.solon.core.event.AppLoadEndEvent;
+import org.noear.solon.core.event.AppStopEndEvent;
 import site.sorghum.agent4j.tool.solon.openapi.Agent4JOpenApiSkill;
 import site.sorghum.agent4j.web.model.OpenApiSourceDTO;
+import org.noear.solon.core.event.EventListener;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -30,7 +33,7 @@ import java.util.concurrent.ConcurrentHashMap;
  */
 @Slf4j
 @Component
-public class OpenApiManageService {
+public class OpenApiManageService implements EventListener<AppLoadEndEvent> {
 
     private static final String CONFIG_FILE = "openapi-sources.json";
     private final Map<String, OpenApiSourceDTO> registeredSources = new ConcurrentHashMap<>();
@@ -40,7 +43,6 @@ public class OpenApiManageService {
     /**
      * 初始化：从持久化文件加载已注册的 OpenAPI 源，并注册到 skill。
      */
-    @Init
     public void init() {
         List<OpenApiSourceDTO> sources = loadFromFile();
         for (OpenApiSourceDTO src : sources) {
@@ -201,5 +203,10 @@ public class OpenApiManageService {
             }
             default -> null;
         };
+    }
+
+    @Override
+    public void onEvent(AppLoadEndEvent event) throws Throwable {
+        init();
     }
 }

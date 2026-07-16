@@ -1,7 +1,7 @@
 <template>
-  <div class="settings-page">
+  <div class="settings-page" :class="{ 'market-only': marketOnly }">
     <!-- 左侧导航 -->
-    <nav class="settings-nav">
+    <nav v-if="!marketOnly" class="settings-nav">
       <div class="nav-header">
         <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
           <circle cx="12" cy="12" r="3"/>
@@ -29,12 +29,12 @@
     <!-- 主内容区 -->
     <main class="settings-main">
       <!-- 顶部操作栏 -->
-      <header class="settings-header">
+      <header v-if="!marketOnly" class="settings-header">
         <div class="header-title">
           <h2>{{ currentTab?.label || '设置' }}</h2>
           <p class="header-desc">{{ currentTab?.description }}</p>
         </div>
-        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'about' && activeTab !== 'pet'" class="header-actions">
+        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'about' && activeTab !== 'pet' && activeTab !== 'prompt'" class="header-actions">
           <button v-if="activeTab === 'ai' || activeTab === 'vision'" class="btn btn-secondary" style="padding:6px 12px;" @click="openAutoFillDialog" title="自动填入配置">
             <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
               <polyline points="1 4 1 10 7 10"/>
@@ -98,7 +98,25 @@
           <div class="section-card">
             <div class="card-header">
               <h3>宠物选择</h3>
-              <p>选择一个桌面宠物陪你工作</p>
+              <p class="card-header-row">选择一个桌面宠物陪你工作
+                <span class="pet-top-bar">
+                  <button class="btn btn-ghost" @click="openPetWebsite">
+                    <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                      <polyline points="15 3 21 3 21 9"/>
+                      <line x1="10" x2="21" y1="14" y2="3"/>
+                    </svg>
+                    去网站看看
+                  </button>
+                  <button class="btn btn-ghost" @click="loadPets">
+                    <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <path d="M1 4v6h6M23 20v-6h-6"/>
+                      <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4l-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                    </svg>
+                    刷新
+                  </button>
+                </span>
+              </p>
             </div>
             <div class="card-body">
               <div v-if="petsLoading" class="pets-loading">
@@ -114,7 +132,22 @@
                   </svg>
                 </div>
                 <p>暂无可用的宠物</p>
-                <p class="hint">请将宠物文件夹放入 ~/.codex/pets/ 目录</p>
+                <p class="hint">请将宠物文件夹放入 ~/.petdex/pets/ 目录</p>
+                <!-- 无宠物时显示初始化按钮 -->
+                <div class="pet-init-inline">
+                  <button :disabled="petIniting" class="btn btn-secondary" @click="initPet">
+                    <svg v-if="petIniting" class="animate-spin" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                    </svg>
+                    <svg v-else fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <path d="M12 2C8 2 4 5 4 9c0 3 2 6 4 8l4 5 4-5c2-2 4-5 4-8 0-4-4-7-8-7z"/>
+                      <line x1="12" y1="9" x2="12" y2="15"/>
+                      <line x1="9" y1="12" x2="15" y2="12"/>
+                    </svg>
+                    {{ petIniting ? '初始化中...' : '初始化宠物' }}
+                  </button>
+                  <span class="pet-init-hint">通过 npx petdex 快速安装一个默认宠物</span>
+                </div>
               </div>
               <div v-else class="pets-grid">
                 <div
@@ -150,30 +183,14 @@
                       <polyline points="8 12 11 15 16 9" stroke="white" fill="none"/>
                     </svg>
                   </div>
+                  <!-- 删除按钮 -->
+                  <button class="pet-delete-btn" title="删除此宠物" @click.stop="deletePet(pet.name)">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polyline points="3 6 5 6 21 6"/>
+                      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+                    </svg>
+                  </button>
                 </div>
-              </div>
-              <!-- 初始化按钮 -->
-              <div class="pet-init-bar">
-                <button :disabled="petIniting" class="btn btn-secondary" @click="initPet">
-                  <svg v-if="petIniting" class="animate-spin" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                    <path d="M21 12a9 9 0 11-6.219-8.56"/>
-                  </svg>
-                  <svg v-else fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                    <path d="M12 2C8 2 4 5 4 9c0 3 2 6 4 8l4 5 4-5c2-2 4-5 4-8 0-4-4-7-8-7z"/>
-                    <line x1="12" y1="9" x2="12" y2="15"/>
-                    <line x1="9" y1="12" x2="15" y2="12"/>
-                  </svg>
-                  {{ petIniting ? '初始化中...' : '初始化宠物' }}
-                </button>
-                <button class="btn btn-ghost" @click="openPetWebsite">
-                  <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                    <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                    <polyline points="15 3 21 3 21 9"/>
-                    <line x1="10" x2="21" y1="14" y2="3"/>
-                  </svg>
-                  去网站看看
-                </button>
-                <span class="pet-init-hint">通过 npx petdex 快速安装一个默认宠物</span>
               </div>
             </div>
           </div>
@@ -267,6 +284,7 @@
                   <div class="input-with-toggle">
                     <input
                         v-model="settings.ai.apiKey"
+                        autocomplete="new-password"
                         :type="showApiKey ? 'text' : 'password'"
                         class="form-input"
                         placeholder="sk-..."
@@ -317,19 +335,40 @@
                   <label class="setting-label">推理强度</label>
                   <p class="setting-hint">AI 推理的详细程度</p>
                 </div>
-                <div class="setting-control">
-                  <div class="select-wrapper">
-                    <select v-model="settings.ai.reasoningEffort" class="form-select">
-                      <option value="none">无 - 不推理</option>
-                      <option value="low">低 - 快速响应</option>
-                      <option value="medium">中 - 平衡模式</option>
-                      <option value="high">高 - 深度思考</option>
-                      <option value="max">最大 - 极致推理</option>
-                    </select>
-                    <svg class="select-arrow" fill="none" height="12" stroke="currentColor" stroke-width="2"
-                         viewBox="0 0 24 24" width="12">
-                      <polyline points="6 9 12 15 18 9"/>
-                    </svg>
+                <div class="setting-control reasoning-effort-control">
+                  <div class="reasoning-slider" :style="{ '--effort-progress': `${reasoningEffortProgress}%` }">
+                    <div class="reasoning-slider-summary">
+                      <span class="reasoning-slider-value">{{ selectedReasoningEffort.label }}</span>
+                      <span>{{ selectedReasoningEffort.description }}</span>
+                    </div>
+                    <div class="reasoning-slider-track">
+                      <input
+                          :value="reasoningEffortIndex"
+                          aria-label="推理强度"
+                          class="reasoning-slider-input"
+                          max="4"
+                          min="0"
+                          step="1"
+                          type="range"
+                          @input="setReasoningEffort($event.target.value)"
+                      />
+                      <div aria-hidden="true" class="reasoning-slider-ticks">
+                        <span v-for="(_, index) in reasoningEffortLevels" :key="index"
+                              :class="{ active: index <= reasoningEffortIndex }"></span>
+                      </div>
+                    </div>
+                    <div class="reasoning-slider-levels">
+                      <button
+                          v-for="(level, index) in reasoningEffortLevels"
+                          :key="level.value"
+                          :aria-pressed="index === reasoningEffortIndex"
+                          :class="{ active: index === reasoningEffortIndex }"
+                          type="button"
+                          @click="setReasoningEffort(index)"
+                      >
+                        {{ level.shortLabel }}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -469,6 +508,13 @@
                 <h3>视觉模型配置</h3>
                 <p>配置图片识别服务的 API 连接与模型参数</p>
               </div>
+              <button class="btn btn-secondary" @click="copyVisionFromAi" title="从 AI 模型配置复制 API 地址和密钥">
+                <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                  <rect height="13" rx="2" ry="2" width="13" x="9" y="9"/>
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                </svg>
+                从 AI 模型复制
+              </button>
             </div>
             <div class="card-body">
               <div class="setting-row">
@@ -495,6 +541,7 @@
                   <div class="input-with-toggle">
                     <input
                         v-model="settings.vision.apiKey"
+                        autocomplete="new-password"
                         :type="showVisionApiKey ? 'text' : 'password'"
                         class="form-input"
                         placeholder="sk-..."
@@ -595,175 +642,35 @@
                 </div>
                 <div class="setting-control">
                   <div class="radio-group">
-                    <label :class="{ active: settings.workspace.mode === true }" class="radio-option">
-                      <input v-model="settings.workspace.mode" :value="true" type="radio"/>
-                      <span class="radio-label">
-                        <span class="radio-title">手动模式</span>
-                        <span class="radio-desc">写入操作需审批</span>
-                      </span>
-                    </label>
-                    <label :class="{ active: settings.workspace.mode === false }" class="radio-option">
-                      <input v-model="settings.workspace.mode" :value="false" type="radio"/>
+                    <label :class="{ active: settings.workspace.mode === 'free' }" class="radio-option">
+                      <input v-model="settings.workspace.mode" :value="'free'" type="radio"/>
                       <span class="radio-label">
                         <span class="radio-title">自由模式</span>
-                        <span class="radio-desc">直接执行写入</span>
+                        <span class="radio-desc">所有工具直接执行，无需审批</span>
+                      </span>
+                    </label>
+                    <label :class="{ active: settings.workspace.mode === 'approval' }" class="radio-option">
+                      <input v-model="settings.workspace.mode" :value="'approval'" type="radio"/>
+                      <span class="radio-label">
+                        <span class="radio-title">审批模式</span>
+                        <span class="radio-desc">非只读工具执行前需用户审批</span>
+                      </span>
+                    </label>
+                    <label :class="{ active: settings.workspace.mode === 'auto' }" class="radio-option">
+                      <input v-model="settings.workspace.mode" :value="'auto'" type="radio"/>
+                      <span class="radio-label">
+                        <span class="radio-title">自动模式</span>
+                        <span class="radio-desc">自动批准所有工具调用</span>
                       </span>
                     </label>
                   </div>
                 </div>
               </div>
+
             </div>
           </div>
         </section>
 
-        <!-- 安全设置 -->
-        <section v-if="activeTab === 'security'" class="settings-section">
-          <div class="section-card">
-            <div class="card-header">
-              <h3>安全防护</h3>
-              <p>配置安全策略和防护机制</p>
-            </div>
-            <div class="card-body">
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="setting-label">风暴断路器</label>
-                  <p class="setting-hint">防止工具调用死循环（滑动窗口去重）</p>
-                </div>
-                <div class="setting-control">
-                  <label class="toggle-switch disabled">
-                    <input v-model="settings.security.stormBreaker" disabled type="checkbox"/>
-                    <span class="toggle-slider"></span>
-                  </label>
-                  <span class="setting-status">已启用</span>
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="setting-label">路径穿越防护</label>
-                  <p class="setting-hint">阻止访问工作区外的文件</p>
-                </div>
-                <div class="setting-control">
-                  <label class="toggle-switch disabled">
-                    <input v-model="settings.security.pathTraversal" disabled type="checkbox"/>
-                    <span class="toggle-slider"></span>
-                  </label>
-                  <span class="setting-status">已启用</span>
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="setting-label">命令白名单</label>
-                  <p class="setting-hint">只允许执行白名单中的命令</p>
-                </div>
-                <div class="setting-control">
-                  <label class="toggle-switch disabled">
-                    <input v-model="settings.security.commandWhitelist" disabled type="checkbox"/>
-                    <span class="toggle-slider"></span>
-                  </label>
-                  <span class="setting-status">已启用</span>
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="setting-label">审计日志</label>
-                  <p class="setting-hint">记录所有工具调用操作</p>
-                </div>
-                <div class="setting-control">
-                  <label class="toggle-switch disabled">
-                    <input v-model="settings.security.auditLog" disabled type="checkbox"/>
-                    <span class="toggle-slider"></span>
-                  </label>
-                  <span class="setting-status">已启用</span>
-                </div>
-              </div>
-            </div>
-          </div>
-
-          <!-- 禁用工具 -->
-          <div class="section-card" style="margin-top:16px;">
-            <div class="card-header">
-              <h3>禁用工具</h3>
-              <p>禁用的工具将被 Agent 忽略，每行一个工具名称</p>
-            </div>
-            <div class="card-body">
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="setting-label">已禁用的工具</label>
-                  <p class="setting-hint">留空表示不禁用任何工具</p>
-                </div>
-                <div class="setting-control">
-                  <div class="input-group" style="align-items:stretch;">
-                    <textarea
-                      v-model="settings.security.disabledToolsText"
-                      class="form-textarea"
-                      placeholder="tool_write&#10;tool_delete&#10;bash"
-                      rows="4"
-                      style="flex:1;"
-                    ></textarea>
-                    <button
-                      :disabled="loadingTools"
-                      class="btn btn-secondary"
-                      style="padding:6px;"
-                      @click="fetchAndFillTools"
-                      title="从已有工具中获取"
-                    >
-                      <svg v-if="loadingTools" class="animate-spin" fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
-                        <path d="M21 12a9 9 0 11-6.219-8.56"/>
-                      </svg>
-                      <svg v-else fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
-                        <polyline points="1 4 1 10 7 10"/>
-                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
-                      </svg>
-                      从已有工具获取
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <!-- 工具有多选弹窗 -->
-              <Teleport to="body">
-                <div v-if="showToolPicker" class="remote-models-mask" @click.self="showToolPicker = false">
-                  <div class="remote-models-dialog">
-                    <div class="remote-models-head">
-                      <span>选择要禁用的工具</span>
-                      <button class="btn-icon-xs" @click="showToolPicker = false">×</button>
-                    </div>
-                    <div class="remote-models-body">
-                      <div class="remote-models-search">
-                        <input v-model="toolSearchQuery" class="form-input" placeholder="搜索工具..." type="text" />
-                      </div>
-                      <div v-if="allTools.length === 0" class="remote-models-empty">暂无可用工具</div>
-                      <div v-else class="remote-models-list">
-                        <label
-                          v-for="tool in filteredTools"
-                          :key="tool.name || tool"
-                          class="remote-model-item"
-                        >
-                          <input
-                            :checked="selectedDisabledTools.has(tool.name || tool)"
-                            type="checkbox"
-                            @change="toggleDisabledTool(tool.name || tool)"
-                          />
-                          <span class="remote-model-name">{{ tool.name || tool }}</span>
-                          <span v-if="tool.description" class="remote-model-desc">{{ tool.description }}</span>
-                        </label>
-                      </div>
-                    </div>
-                    <div class="remote-models-foot">
-                      <button class="btn" @click="showToolPicker = false">取消</button>
-                      <button class="btn btn-primary" @click="confirmDisabledTools">确认禁用 ({{ selectedDisabledTools.size }})</button>
-                    </div>
-                  </div>
-                </div>
-              </Teleport>
-            </div>
-          </div>
-        </section>
-
-        <!-- OpenAPI 设置 -->
         <section v-if="activeTab === 'openapi'" class="settings-section">
           <div class="section-card">
             <div class="card-header">
@@ -1287,7 +1194,7 @@ X-Custom-Header=value"
                     <line x1="12" x2="12" y1="9" y2="13"/>
                     <line x1="12" x2="12.01" y1="17" y2="17"/>
                   </svg>
-                  <p style="margin:0;font-size:13px;color:var(--yellow-8, #854d0e);">LSP 已被完全禁用，所有语言服务器将不会启动。在「安全 → 禁用工具」中移除 "lsp" 即可恢复。</p>
+                  <p style="margin:0;font-size:13px;color:var(--yellow-8, #854d0e);">LSP 已被完全禁用，所有语言服务器将不会启动。在左下角「工具」弹窗或工具箱中启用 "lsp" 即可恢复。</p>
                 </div>
                 <div v-if="lspLoading" class="mcp-state-box">
                   <svg class="animate-spin" fill="none" height="24" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="24">
@@ -1499,6 +1406,64 @@ X-Custom-Header=value"
           </div>
         </section>
 
+        <!-- ==================== 系统提示词 ==================== -->
+        <section v-if="activeTab === 'prompt'" class="settings-section">
+          <div class="section-card" style="display:flex;flex-direction:column;height:100%">
+            <div class="card-header">
+              <h3>系统提示词</h3>
+              <p>编辑 ~/.agent4j/agent4j.md — 保存后自动重新初始化 Agent，新会话将生效</p>
+            </div>
+            <div class="card-body" style="flex:1;display:flex;flex-direction:column;padding:0;overflow:hidden">
+              <div v-if="promptLoading" class="state-box" style="flex:1">
+                <svg class="animate-spin" fill="none" height="24" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="24">
+                  <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                </svg>
+                <p>加载中...</p>
+              </div>
+              <div v-else style="flex:1;display:flex;flex-direction:column;padding:12px;gap:8px;overflow:hidden">
+                <div style="flex:1;position:relative;overflow:hidden;border:1px solid var(--border);border-radius:var(--r)">
+                  <textarea
+                    v-model="promptContent"
+                    class="prompt-editor"
+                    placeholder="在此输入系统提示词内容（Markdown 格式）…"
+                    spellcheck="false"
+                  ></textarea>
+                </div>
+                <div class="prompt-toolbar">
+                  <span class="prompt-info">
+                    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <circle cx="12" cy="12" r="10"/>
+                      <line x1="12" y1="16" x2="12" y2="12"/>
+                      <line x1="12" y1="8" x2="12.01" y2="8"/>
+                    </svg>
+                    {{ promptContent.length }} 字符
+                  </span>
+                  <div style="display:flex;gap:8px">
+                    <button class="btn" @click="loadAgent4jMd" :disabled="promptSaving">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="1 4 1 10 7 10"/>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
+                      </svg>
+                      刷新
+                    </button>
+                    <button class="btn btn-primary" :disabled="promptSaving" @click="saveAgent4jMd">
+                      <svg v-if="promptSaving" class="animate-spin" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 12a9 9 0 11-6.219-8.56"/>
+                      </svg>
+                      <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
+                        <polyline points="17 21 17 13 7 13 7 21"/>
+                        <polyline points="7 3 7 8 15 8"/>
+                      </svg>
+                      {{ promptSaving ? '保存中...' : '保存' }}
+                    </button>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
         <!-- ==================== 关于 ==================== -->
         <section v-if="activeTab === 'about'" class="settings-section">
           <div class="section-card">
@@ -1698,7 +1663,7 @@ X-Custom-Header=value"
           </div>
           <div class="auto-fill-field">
             <label class="auto-fill-label">API 密钥</label>
-            <input v-model="autoFillApiKey" class="form-input" placeholder="sk-..." type="password" />
+            <input v-model="autoFillApiKey" class="form-input" placeholder="sk-..." type="password" autocomplete="new-password" />
           </div>
         </div>
         <div class="auto-fill-foot">
@@ -1757,7 +1722,6 @@ import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
 import {
   agentAPI,
-  chatAPI,
   configAPI,
   DEFAULT_API_BASE,
   lspAPI,
@@ -1765,8 +1729,7 @@ import {
   openApiAPI,
   petAPI,
   skillMarketAPI,
-  systemAPI,
-  toolsAPI
+  systemAPI
 } from '../services/api'
 import {md} from '../utils/highlight'
 import platform from '../services/platform'
@@ -1774,6 +1737,10 @@ import VersionInfoPanel from '../components/VersionInfoPanel.vue'
 import PetSprite from '../components/PetSprite.vue'
 
 const store = useAppStore()
+const props = defineProps({
+  initialTab: {type: String, default: 'general'},
+  marketOnly: {type: Boolean, default: false}
+})
 
 // 主题直接绑定 store
 const settings = reactive({
@@ -1786,7 +1753,7 @@ const settings = reactive({
   server: {apiBaseUrl: '', autoConnect: true},
   ai: {baseUrl: '', apiKey: '', model: '', reasoningEffort: 'max', availableModelsText: '', prices: {}},
   vision: {baseUrl: '', apiKey: '', model: ''},
-  workspace: {dir: '', mode: false},
+  workspace: {dir: '', mode: 'free'},
   security: {
     stormBreaker: true,
     pathTraversal: true,
@@ -1796,7 +1763,27 @@ const settings = reactive({
   }
 })
 
-const activeTab = ref('general')
+const reasoningEffortLevels = [
+  {value: 'none', label: '无推理', shortLabel: '无', description: '直接响应'},
+  {value: 'low', label: '低强度', shortLabel: '低', description: '快速响应'},
+  {value: 'medium', label: '平衡', shortLabel: '中', description: '速度与深度兼顾'},
+  {value: 'high', label: '高强度', shortLabel: '高', description: '更充分地思考'},
+  {value: 'max', label: '极致推理', shortLabel: '最大', description: '优先获得最完整的推理'}
+]
+
+const reasoningEffortIndex = computed(() => {
+  const index = reasoningEffortLevels.findIndex(level => level.value === settings.ai.reasoningEffort)
+  return index === -1 ? reasoningEffortLevels.length - 1 : index
+})
+const selectedReasoningEffort = computed(() => reasoningEffortLevels[reasoningEffortIndex.value])
+const reasoningEffortProgress = computed(() => (
+  reasoningEffortIndex.value / (reasoningEffortLevels.length - 1)
+) * 100)
+const setReasoningEffort = (index) => {
+  settings.ai.reasoningEffort = reasoningEffortLevels[Number(index)]?.value || 'max'
+}
+
+const activeTab = ref(props.marketOnly ? 'skill-market' : props.initialTab)
 const showApiKey = ref(false)
 const showVisionApiKey = ref(false)
 const loading = ref(false)
@@ -1819,18 +1806,10 @@ const remoteModelList = ref([])
 const selectedRemoteModels = ref(new Set())
 const remoteSearchQuery = ref('')
 
-// 禁用工具状态
-const loadingTools = ref(false)
-const showToolPicker = ref(false)
-const allTools = ref([])
-const selectedDisabledTools = ref(new Set())
-const toolSearchQuery = ref('')
-
-const filteredTools = computed(() => {
-  const q = toolSearchQuery.value.trim().toLowerCase()
-  if (!q) return allTools.value
-  return allTools.value.filter(t => (t.name || t).toLowerCase().includes(q))
-})
+// 系统提示词编辑
+const promptContent = ref('')
+const promptLoading = ref(false)
+const promptSaving = ref(false)
 
 // 宠物设置状态
 const petsList = ref([])
@@ -1893,18 +1872,42 @@ async function selectPet(name) {
   }
 }
 
+// 删除宠物
+async function deletePet(name) {
+  Modal.confirm({
+    title: '删除宠物',
+    content: `确定要删除宠物「${name}」吗？此操作不可恢复。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        const res = await petAPI.deletePet(name)
+        if (res.success) {
+          if (activePetName.value === name) {
+            activePetName.value = ''
+            store.activePetName = ''
+          }
+          message.success('宠物已删除: ' + name)
+          await loadPets()
+        } else {
+          message.error(res.error || '删除宠物失败')
+        }
+      } catch (err) {
+        message.error('删除宠物失败: ' + (err.message || ''))
+      }
+    }
+  })
+}
+
+// 初始化宠物：转发给父组件（App.vue）跳到聊天界面执行
 async function initPet() {
   petIniting.value = true
   try {
-    const res = await chatAPI.sendMessage('调用 npx petdex@latest install boba 初始化一个宠物')
-    if (res.success) {
-      message.success('宠物初始化成功，正在刷新列表...')
-      await loadPets()
-    } else {
-      message.error(res.error || '初始化失败')
-    }
-  } catch (err) {
-    message.error('初始化失败: ' + (err.message || ''))
+    emit('init-pet')
+  } catch (e) {
+    console.warn('初始化宠物失败:', e)
+    message.error('初始化失败: ' + (e.message || ''))
   } finally {
     petIniting.value = false
   }
@@ -1959,7 +1962,7 @@ const showUpdateModal = ref(false)
 const electronVersion = ref('')
 const autoUpdating = ref(false)
 
-const emit = defineEmits(['auto-update'])
+const emit = defineEmits(['auto-update', 'init-pet'])
 
 // 桌面端版本信息（由 handleCheckVersion 一并更新）
 const desktopInfo = ref({
@@ -2125,7 +2128,7 @@ async function installSkill(slug, displayName) {
     if (res.success) {
       message.success(`技能「${displayName || slug}」安装成功！`)
       // 立即更新本地的已安装集合
-      installedSkills.add(slug)
+      installedSkills.value.add(slug)
       // 重新从后端拉取已安装列表，确保同步
       await loadInstalledSkills()
     } else {
@@ -2145,7 +2148,7 @@ async function uninstallSkill(slug, displayName) {
     const res = await skillMarketAPI.uninstall(slug)
     if (res.success) {
       message.success(`技能「${displayName || slug}」已卸载`)
-      installedSkills.delete(slug)
+      installedSkills.value.delete(slug)
       await loadInstalledSkills()
     } else {
       message.error(res.error || '卸载失败')
@@ -2157,13 +2160,16 @@ async function uninstallSkill(slug, displayName) {
   }
 }
 
-// 获取已安装的技能列表
-let installedSkills = new Set()
+// 获取已安装的技能列表。市场 slug 可能与 SKILL.md 的 name 不同，因此两个标识都要保留。
+const installedSkills = ref(new Set())
 async function loadInstalledSkills() {
   try {
     const res = await agentAPI.getSkills()
     if (res.success && res.data) {
-      installedSkills = new Set(res.data.map(s => s.name))
+      installedSkills.value = new Set(res.data.flatMap(skill => [
+        skill.name,
+        skill.directoryName
+      ].filter(Boolean)))
     }
   } catch (err) {
     console.warn('加载已安装技能失败:', err)
@@ -2171,7 +2177,7 @@ async function loadInstalledSkills() {
 }
 
 function isSkillInstalled(slug) {
-  return installedSkills.has(slug)
+  return installedSkills.value.has(slug)
 }
 
 // 标签页配置
@@ -2227,11 +2233,15 @@ const tabs = computed(() => [
     </svg>`
   },
   {
-    id: 'security',
-    label: '安全',
-    description: '安全策略和防护机制',
+    id: 'prompt',
+    label: '系统提示词',
+    description: '编辑 ~/.agent4j/agent4j.md 系统提示词文件',
     icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+      <polyline points="14 2 14 8 20 8"/>
+      <line x1="16" y1="13" x2="8" y2="13"/>
+      <line x1="16" y1="17" x2="8" y2="17"/>
+      <polyline points="10 9 9 9 8 9"/>
     </svg>`
   },
   {
@@ -2262,14 +2272,6 @@ const tabs = computed(() => [
     label: 'LSP 服务器',
     description: '配置语言服务器用于代码智能分析',
     icon: `<svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`
-  },
-  {
-    id: 'skill-market',
-    label: '技能市场',
-    description: '浏览、搜索和安装社区技能',
-    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/>
-    </svg>`
   },
   // Electron 桌面端专属设置（已合并到关于页面的 VersionInfoPanel 中）
   {
@@ -2309,10 +2311,8 @@ async function openDesktopDownload(url) {
 
 // 主题选项
 const themes = [
-  {value: 'light', label: '浅色'},
-  {value: 'dark', label: '深色'},
-  {value: 'retro', label: '浅绿'},
-  {value: 'retro-yellow', label: '复古黄'}
+  {value: 'gray', label: '灰色'},
+  {value: 'dark', label: '深色'}
 ]
 
 // 计算属性
@@ -2343,6 +2343,13 @@ watch(activeTab, async (tab) => {
   if (tab === 'pet') {
     loadPets()
   }
+  if (tab === 'prompt') {
+    loadAgent4jMd()
+  }
+}, {immediate: true})
+
+watch(() => props.initialTab, (tab) => {
+  activeTab.value = tab || 'general'
 })
 
 // 加载设置
@@ -2373,7 +2380,7 @@ const loadSettings = async () => {
       }
 
       settings.workspace.dir = config.workspaceDir || config.workspace || '.'
-      settings.workspace.mode = config.hitl === true
+      settings.workspace.mode = config.hitl === true ? 'approval' : (config.hitl || 'free')
 
       // 加载模型价格
       if (config.price && typeof config.price === 'object') {
@@ -2429,7 +2436,7 @@ const loadSettings = async () => {
     settings.ai.model = 'deepseek-v4-flash'
     settings.ai.reasoningEffort = 'max'
     settings.workspace.dir = '.'
-    settings.workspace.mode = false
+    settings.workspace.mode = 'free'
     availableModels.value = [
       {name: 'deepseek-v4-flash', active: true},
       {name: 'gpt-4', active: false},
@@ -2475,12 +2482,10 @@ const saveSettings = async () => {
 
     // 准备配置更新
     const configToUpdate = {
-      baseUrl: settings.ai.baseUrl,
-      apiKey: settings.ai.apiKey,
       model: settings.ai.model,
       reasoningEffort: settings.ai.reasoningEffort,
       availableModels: settings.ai.availableModelsText.split('\n').map(s => s.trim()).filter(s => s),
-      hitl: settings.workspace.mode === true,
+      hitl: settings.workspace.mode,
       security: {...settings.security},
       price: settings.ai.prices,
       disabledTools: settings.security.disabledToolsText.split('\n').map(s => s.trim()).filter(s => s),
@@ -2488,6 +2493,14 @@ const saveSettings = async () => {
         baseUrl: settings.vision.baseUrl,
         model: settings.vision.model
       }
+    }
+
+    // 仅在实际变更时发送连接配置，避免保存其他设置时重建 Agent。
+    if (baseUrlChanged) {
+      configToUpdate.baseUrl = settings.ai.baseUrl
+    }
+    if (apiKeyChanged && settings.ai.apiKey.trim()) {
+      configToUpdate.apiKey = settings.ai.apiKey
     }
     
     // 只有当 vision.apiKey 不为空时才保存（后端返回空字符串，不会误存）
@@ -2815,6 +2828,30 @@ const fetchAndPickVisionModel = async () => {
   }
 }
 
+// 从 AI 模型配置复制到视觉模型配置（通过后端接口，不暴露密钥）
+const copyVisionFromAi = async () => {
+  try {
+    const res = await configAPI.copyVisionFromAi()
+    if (res.success && res.data) {
+      settings.vision.baseUrl = res.data.baseUrl || settings.vision.baseUrl
+      hasChanges.value = true
+      message.success('已从 AI 模型复制配置')
+      // 尝试获取视觉模型列表
+      try {
+        const modelRes = await configAPI.getRemoteVisionModels()
+        if (modelRes.success && modelRes.data && modelRes.data.length > 0) {
+          visionModels.value = modelRes.data
+          settings.vision.model = modelRes.data[0]
+        }
+      } catch {}
+    } else {
+      message.error(res.error || '复制配置失败')
+    }
+  } catch (err) {
+    message.error('复制配置失败: ' + (err.message || err))
+  }
+}
+
 // 保留一键填入 SiliconFlow 默认配置的能力（作为预设之一）
 const fillVisionDefaults = () => {
   settings.vision.baseUrl = 'https://api.siliconflow.cn/v1/chat/completions'
@@ -2897,50 +2934,6 @@ const fillPricesFromModels = () => {
   settings.ai.prices = newPrices
   hasChanges.value = true
   message.success(`已从模型列表生成 ${models.length} 个价格条目`)
-}
-
-// ==================== 禁用工具操作 ====================
-
-// 从已有工具中获取并打开选择弹窗
-const fetchAndFillTools = async () => {
-  loadingTools.value = true
-  try {
-    const res = await toolsAPI.list()
-    if (res.success && res.data) {
-      allTools.value = res.data
-    } else {
-      allTools.value = res.data || []
-    }
-  } catch (err) {
-    console.error('获取工具列表失败:', err)
-    message.error('获取工具列表失败: ' + (err.message || err))
-    allTools.value = []
-  } finally {
-    loadingTools.value = false
-  }
-
-  // 初始化已选状态
-  const currentDisabled = settings.security.disabledToolsText.split('\n').map(s => s.trim()).filter(s => s)
-  selectedDisabledTools.value = new Set(currentDisabled)
-  toolSearchQuery.value = ''
-  showToolPicker.value = true
-}
-
-const toggleDisabledTool = (toolName) => {
-  const set = selectedDisabledTools.value
-  if (set.has(toolName)) {
-    set.delete(toolName)
-  } else {
-    set.add(toolName)
-  }
-  // 触发响应式更新
-  selectedDisabledTools.value = new Set(set)
-}
-
-const confirmDisabledTools = () => {
-  settings.security.disabledToolsText = Array.from(selectedDisabledTools.value).join('\n')
-  hasChanges.value = true
-  showToolPicker.value = false
 }
 
 const openapiLoading = ref(false)
@@ -3689,6 +3682,45 @@ onMounted(() => {
   loadSettings()
   loadOpenApiData()
 })
+
+// 加载系统提示词
+const loadAgent4jMd = async () => {
+  promptLoading.value = true
+  try {
+    const res = await configAPI.getAgent4jMd()
+    if (res.success) {
+      promptContent.value = res.data || ''
+    } else {
+      message.error(res.error || '加载失败')
+    }
+  } catch (err) {
+    console.error('加载 agent4j.md 失败:', err)
+    message.error('加载失败: ' + (err.message || ''))
+  } finally {
+    promptLoading.value = false
+  }
+}
+
+// 保存系统提示词
+const saveAgent4jMd = async () => {
+  promptSaving.value = true
+  try {
+    const res = await configAPI.updateAgent4jMd(promptContent.value)
+    if (res.success) {
+      message.success(res.data || '已保存')
+    } else {
+      message.error(res.error || '保存失败')
+    }
+  } catch (err) {
+    console.error('保存 agent4j.md 失败:', err)
+    message.error('保存失败: ' + (err.message || ''))
+  } finally {
+    promptSaving.value = false
+  }
+}
+
+// Tab 切换时加载系统提示词 — 追加到已有 watch(activeTab) 中
+// 注意：该逻辑在已有 watch(activeTab) 内，无需重复
 </script>
 
 <style scoped>
@@ -3699,6 +3731,37 @@ onMounted(() => {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--sans);
+}
+
+.settings-page.market-only {
+  width: 100%;
+  height: 100%;
+}
+
+.market-only .settings-main {
+  min-width: 0;
+}
+
+.market-only .settings-content {
+  padding: 28px clamp(20px, 5vw, 72px);
+}
+
+.market-only .settings-section,
+.market-only .section-card {
+  width: 100%;
+  max-width: none;
+}
+
+.market-only .skill-list {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 1150px) {
+  .market-only .skill-list {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
 }
 
 /* 左侧导航 */
@@ -4380,6 +4443,145 @@ onMounted(() => {
   pointer-events: none;
 }
 
+/* 推理强度滑条 */
+.reasoning-effort-control {
+  min-width: 280px;
+}
+
+.reasoning-slider {
+  width: 100%;
+  padding: 10px 12px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
+  border-radius: var(--r);
+  background: linear-gradient(135deg, var(--bg), color-mix(in srgb, var(--accent) 7%, var(--bg)));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 12%, transparent), 0 6px 18px color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.reasoning-slider-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 10px;
+  color: var(--fg-3);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.reasoning-slider-value {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.reasoning-slider-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 22px;
+}
+
+.reasoning-slider-input {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 6px;
+  margin: 0;
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent) 0 var(--effort-progress), var(--bg-3) var(--effort-progress) 100%);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, #000000 18%, transparent);
+}
+
+.reasoning-slider-input:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-bg), inset 0 1px 2px color-mix(in srgb, #000000 18%, transparent);
+}
+
+.reasoning-slider-input::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  appearance: none;
+  border: 3px solid var(--bg);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 70%, transparent);
+  transition: transform var(--t), box-shadow var(--t);
+}
+
+.reasoning-slider-input:hover::-webkit-slider-thumb,
+.reasoning-slider-input:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 18px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+.reasoning-slider-input::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border: 3px solid var(--bg);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.reasoning-slider-ticks {
+  position: absolute;
+  top: 50%;
+  left: 7px;
+  right: 7px;
+  z-index: 3;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.reasoning-slider-ticks span {
+  width: 4px;
+  height: 4px;
+  border: 1px solid var(--bg);
+  border-radius: 50%;
+  background: var(--fg-4);
+  transition: background var(--t), transform var(--t);
+}
+
+.reasoning-slider-ticks span.active {
+  background: var(--bg);
+  transform: scale(1.18);
+}
+
+.reasoning-slider-levels {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  margin-top: 5px;
+}
+
+.reasoning-slider-levels button {
+  min-width: 0;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-4);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 10px;
+  line-height: 1.2;
+  transition: color var(--t), text-shadow var(--t), transform var(--t);
+}
+
+.reasoning-slider-levels button:hover {
+  color: var(--fg-2);
+  transform: translateY(-1px);
+}
+
+.reasoning-slider-levels button.active {
+  color: var(--accent);
+  font-weight: 700;
+  text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
 /* 主题选择 */
 .theme-grid {
   display: grid;
@@ -4417,20 +4619,12 @@ onMounted(() => {
   flex-shrink: 0;
 }
 
-.theme-preview.light {
-  background: linear-gradient(135deg, #ffffff 50%, #f3f4f6 50%);
+.theme-preview.gray {
+  background: linear-gradient(135deg, #fafafa 50%, #d4d4d8 50%);
 }
 
 .theme-preview.dark {
   background: linear-gradient(135deg, #0c0c0c 50%, #1f1f1f 50%);
-}
-
-.theme-preview.retro {
-  background: linear-gradient(135deg, #4CAF50 50%, #E8F5E9 50%);
-}
-
-.theme-preview.retro-yellow {
-  background: linear-gradient(135deg, #1a1a0a 50%, #2a2a1a 50%);
 }
 
 .theme-name {
@@ -4760,7 +4954,7 @@ onMounted(() => {
   }
 
   .theme-grid {
-    grid-template-columns: repeat(4, 1fr);
+    grid-template-columns: repeat(2, 1fr);
   }
 
   .input-group {
@@ -5986,16 +6180,86 @@ onMounted(() => {
   right: 8px;
 }
 
-/* 初始化按钮栏 */
-.pet-init-bar {
+.pet-delete-btn {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: var(--r);
+  background: rgba(0,0,0,0.5);
+  color: #fff;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity var(--t);
+  z-index: 2;
+}
+.pet-card:hover .pet-delete-btn {
+  opacity: 1;
+}
+.pet-delete-btn:hover {
+  background: var(--danger);
+}
+
+/* 顶部操作栏 — 与描述同行 */
+.card-header-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.pet-top-bar {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 无宠物时的初始化区域 */
+.pet-init-inline {
   margin-top: 20px;
-  padding-top: 16px;
-  border-top: 1px solid var(--border);
   display: flex;
   align-items: center;
   gap: 12px;
+  justify-content: center;
 }
-.pet-init-hint {
+.pet-init-inline .pet-init-hint {
+  font-size: 12px;
+  color: var(--fg-3);
+}
+
+/* ======== 系统提示词编辑器 ======== */
+.prompt-editor {
+  width: 100%;
+  height: 100%;
+  border: none;
+  outline: none;
+  resize: none;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: 'Cascadia Code', 'Fira Code', 'JetBrains Mono', 'Consolas', monospace;
+  font-size: 13px;
+  line-height: 1.6;
+  padding: 16px;
+  tab-size: 2;
+}
+.prompt-editor::placeholder {
+  color: var(--fg-3);
+}
+.prompt-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 8px 4px;
+}
+.prompt-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
   font-size: 12px;
   color: var(--fg-3);
 }

@@ -5,7 +5,7 @@ import site.sorghum.agent4j.bin.agent.listener.AgentLoopListener;
 
 /**
  * 子代理事件监听器 —— 将子代理的推理和工具调用输出到 stderr。
- * 替代 TaskTool 中的匿名 AgentLoopListener。
+ * 替代 SubAgentTool 中的匿名 AgentLoopListener。
  *
  * @author Sorghum
  */

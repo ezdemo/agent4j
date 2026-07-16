@@ -331,7 +331,7 @@ export function useTerminal() {
     addOutput('  Enter         - 发送消息', 'info')
     addOutput('  Shift+Enter   - 换行', 'info')
     addOutput('  Ctrl+K        - 聚焦搜索', 'info')
-    addOutput('  Ctrl+N        - 新建对话', 'info')
+    addOutput('  Ctrl+Alt+N    - 新建对话', 'info')
     addOutput('  Ctrl+B        - 切换侧边栏', 'info')
     addOutput('  Escape        - 关闭弹窗', 'info')
     addEmptyLine()

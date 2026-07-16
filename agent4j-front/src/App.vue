@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="app" :data-theme="theme">
     <!-- 启动画面 (仅桌面环境) -->
     <SplashScreen
@@ -26,7 +26,7 @@
       :version="appVersion"
       :hasNewVersion="hasNewVersion || desktopHasNewVersion"
       @toggleSide="sideOpen = !sideOpen"
-      @openSettings="showSettings = true"
+      @openSettings="openSettings"
       @toggleGit="toggleRightPanel()"
       @toggleElement="toggleElementPanel()"
       @viewPrompt="viewSystemPrompt"
@@ -44,31 +44,40 @@
       :workspaces="workspaces"
       :workspaceSessions="workspaceSessions"
       :initialDataLoaded="initialDataLoaded"
-      @show-workspace-picker="showWorkspacePicker = true"
+      @new-chat="createNewChat"
+      @open-global-search="openGlobalSearch"
       @refresh-sessions="refreshSessionList"
       @new-project-chat="newProjectChat"
       @refresh-project="refreshProjectSessions"
-      @clear-project="clearProjectSessions"
+      @manage-project="openProjectSessionDialog"
       @select-session="onSidebarSelectSession"
       @refresh-session-chat="refreshSessionChat"
       @delete-session="onSidebarDeleteSession"
       @toggle-theme="toggleTheme"
+      @show-skill-market="mainView = 'skills'"
       @show-tools="showTools = true"
       @show-dashboard="showDashboard = true"
-      @show-settings="showSettings = true"
+      @show-settings="openSettings"
+      @reorder="handleReorderWorkspaces"
     />
 
     <!-- 主区域 -->
     <main class="main">
+      <SettingsView v-if="mainView === 'skills'" market-only />
       <ChatView 
+        v-else
         ref="chatRef" 
         hide-header 
         :workspace-hash="currentSessionWorkspace"
         :session-name="currentSession"
+        :workspaces="workspaces"
         :version="appVersion"
-        :connected="!showSetup"
         style="flex:1;min-height:0"
-        @session-updated="loadSessions"
+        @session-updated="onSessionUpdated"
+        @session-branched="onSessionBranched"
+        @start-task="startTaskFromWelcome"
+        @switch-workspace="switchWelcomeWorkspace"
+        @manage-workspaces="showWorkspacePicker = true"
       />
     </main>
 
@@ -128,6 +137,42 @@
 
     </div><!-- .app-body -->
 
+    <Teleport to="body">
+      <div v-if="showGlobalSearch" class="global-search-mask" @mousedown.self="closeGlobalSearch">
+        <section class="global-search-panel" role="dialog" aria-modal="true" aria-label="搜索会话">
+          <div class="global-search-input-wrap">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="6"/><path d="m16 16 4 4"/></svg>
+            <input
+              ref="globalSearchInput"
+              v-model="globalSearchQuery"
+              type="search"
+              placeholder="搜索会话..."
+              @keydown="handleGlobalSearchKeydown"
+            />
+            <kbd>Esc</kbd>
+          </div>
+          <div class="global-search-results" role="listbox">
+            <button
+              v-for="(item, index) in globalSearchResults"
+              :key="`${item.workspaceHash}:${item.sessionName}`"
+              class="global-search-result"
+              :class="{ active: index === globalSearchActiveIndex }"
+              type="button"
+              role="option"
+              :aria-selected="index === globalSearchActiveIndex"
+              @mouseenter="globalSearchActiveIndex = index"
+              @click="selectGlobalSearchResult(item)"
+            >
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 5h12l4 4v10a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V7a2 2 0 0 1 2-2z"/><path d="M6 13h12M6 17h8"/></svg>
+              <span class="global-search-result-main">{{ item.title }}</span>
+              <span class="global-search-result-workspace">{{ item.workspaceName }}</span>
+            </button>
+            <div v-if="globalSearchResults.length === 0" class="global-search-empty">未找到会话</div>
+          </div>
+        </section>
+      </div>
+    </Teleport>
+
     <!-- 工作区选择弹窗 -->
     <WorkspacePickerModal
       v-model:show="showWorkspacePicker"
@@ -136,8 +181,25 @@
       :is-desktop-env="isDesktopEnv"
       @switch-workspace="handleSwitchWorkspace"
       @add-workspace="handleAddWorkspace"
-      @delete-workspace="handleDeleteWorkspace"
+      @reorder="handleReorderWorkspaces"
     />
+
+    <ActionConfirmDialog
+        :model-value="projectSessionDialog.visible"
+        title="管理项目会话"
+        :message="`“${projectSessionDialog.name}”的会话可单独清空，或连同项目记录一起删除。`"
+        :actions="projectSessionActions"
+        :pending="projectSessionDialog.pending"
+        @update:model-value="value => { if (!value) closeProjectSessionDialog() }"
+        @action="handleProjectSessionAction"
+    >
+      <template #icon>
+        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/>
+          <path d="M22 21H7"/><path d="m5 11 9 9"/>
+        </svg>
+      </template>
+    </ActionConfirmDialog>
 
     <!-- 工具弹窗 -->
     <Teleport to="body">
@@ -161,12 +223,48 @@
               <button class="btn-icon-sm" @click="showTools = false">×</button>
             </div>
           </div>
-          <div class="modal-body">
-            <div v-for="t in tools" :key="t.name" class="tool-row">
-              <code>{{ t.name }}</code>
-              <span>{{ t.description }}</span>
+          <div class="modal-body tool-modal-body">
+            <!-- 筛选栏 -->
+            <div class="tool-filter-bar">
+              <button
+                v-for="f in toolFilters"
+                :key="f.value"
+                class="tool-filter-btn"
+                :class="{ active: toolFilter === f.value }"
+                @click="toolFilter = f.value"
+              >{{ f.label }}</button>
             </div>
-            <div v-if="!tools.length" class="modal-empty">加载中...</div>
+            <div v-if="filteredTools.length === 0" class="modal-empty">暂无工具</div>
+            <div v-for="t in filteredTools" :key="t.name" class="tool-row" :class="{ disabled: !t.enabled }">
+              <div class="tool-row-info" @click="toggleTool(t)">
+                <code>{{ t.name }}</code>
+                <span class="tool-row-desc" :title="t.description">{{ t.description }}</span>
+              </div>
+              <div class="tool-row-actions">
+                <span v-if="!t.enabled" class="tool-status-badge disabled">已禁用</span>
+                <span v-if="t.autoApproved" class="tool-status-badge auto-approved">自动放行</span>
+                <button
+                  class="tool-toggle-btn"
+                  :class="{ enabled: t.enabled }"
+                  :disabled="refreshingTools"
+                  @click.stop="toggleTool(t)"
+                  :title="t.enabled ? '禁用' : '启用'">
+                  <div class="toggle-track">
+                    <div class="toggle-thumb"></div>
+                  </div>
+                </button>
+                <button
+                  class="tool-toggle-btn auto-toggle"
+                  :class="{ enabled: t.autoApproved }"
+                  :disabled="refreshingTools"
+                  @click.stop="toggleAutoTool(t)"
+                  title="自动放行">
+                  <div class="toggle-track auto-track">
+                    <div class="toggle-thumb"></div>
+                  </div>
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -204,7 +302,7 @@
             <button class="btn-icon-sm" @click="showSettings = false">×</button>
           </div>
           <div class="modal-body">
-            <SettingsView @auto-update="handleAutoUpdate" />
+            <SettingsView :initial-tab="settingsInitialTab" @auto-update="handleAutoUpdate" @init-pet="handleInitPet" />
           </div>
         </div>
       </div>
@@ -346,6 +444,7 @@ import RightPanel from './components/RightPanel.vue'
 import VersionInfoPanel from './components/VersionInfoPanel.vue'
 import ElementPanel from './components/ElementPanel.vue'
 import WorkspacePickerModal from './components/WorkspacePickerModal.vue'
+import ActionConfirmDialog from './components/ActionConfirmDialog.vue'
 import ChatView from './views/Chat.vue'
 import SettingsView from './views/Settings.vue'
 import DashboardPanel from './components/Dashboard.vue'
@@ -358,6 +457,11 @@ const { confirm } = useConfirm()
 // 主题：统一从 Pinia store 读写，确保设置页和主页一致
 const theme = computed({ get: () => store.settings.theme, set: (v) => { store.settings.theme = v } })
 const sideOpen = ref(true)
+const mainView = ref('chat')
+const SIDEBAR_AUTO_COLLAPSE_WIDTH = 1024
+const collapseSidebarForNarrowViewport = () => {
+  if (window.innerWidth < SIDEBAR_AUTO_COLLAPSE_WIDTH) sideOpen.value = false
+}
 const sessions = ref([])
 const currentSession = ref('')
 const status = ref({})
@@ -366,6 +470,20 @@ const tools = ref([])
 const config = ref({})
 const showTools = ref(false)
 const refreshingTools = ref(false)
+const toolFilter = ref('all')
+const toolFilters = [
+  { label: '全部', value: 'all' },
+  { label: '已启用', value: 'enabled' },
+  { label: '已禁用', value: 'disabled' },
+  { label: '自动放行', value: 'autoApproved' },
+]
+const filteredTools = computed(() => {
+  if (toolFilter.value === 'all') return tools.value
+  if (toolFilter.value === 'enabled') return tools.value.filter(t => t.enabled)
+  if (toolFilter.value === 'disabled') return tools.value.filter(t => !t.enabled)
+  if (toolFilter.value === 'autoApproved') return tools.value.filter(t => t.autoApproved)
+  return tools.value
+})
 const isDesktopEnv = ref(false)
 const showSetup = ref(true)  // SplashScreen (桌面) 或 SetupScreen (Web) 成功后设为 false
 
@@ -381,8 +499,17 @@ async function detectEnvironment() {
 }
 const showConfig = ref(false)
 const showSettings = ref(false)
+const settingsInitialTab = ref('general')
 const showDashboard = ref(false)
 const rightPanelOpen = ref(false)
+const openSettings = () => {
+  settingsInitialTab.value = 'general'
+  showSettings.value = true
+}
+const createNewChat = async () => {
+  mainView.value = 'chat'
+  await newChat()
+}
 const rightPanelTab = ref('git')
 const elementPanelOpen = ref(false)
 const elementPanelWidth = ref(360)
@@ -444,6 +571,8 @@ function onElementResizeEnd() {
 
 // 加载保存的元素面板宽度
 onMounted(() => {
+  collapseSidebarForNarrowViewport()
+  window.addEventListener('resize', collapseSidebarForNarrowViewport)
   try {
     const saved = localStorage.getItem('agent4j-element-panel-width')
     if (saved) {
@@ -544,10 +673,34 @@ const copyPrompt = () => {
 
 // 工作区相关
 const showWorkspacePicker = ref(false)
+const pendingStarterPrompt = ref('')
 const workspaces = ref([])
 
 // 按工作区 hash 分组的会话
 const workspaceSessions = ref({})
+const showGlobalSearch = ref(false)
+const globalSearchQuery = ref('')
+const globalSearchInput = ref(null)
+const globalSearchActiveIndex = ref(0)
+
+const globalSearchResults = computed(() => {
+  const query = globalSearchQuery.value.trim().toLowerCase()
+  const items = workspaces.value.flatMap(workspace =>
+    (workspaceSessions.value[workspace.hash] || []).map(session => ({
+      workspaceHash: workspace.hash,
+      workspaceName: workspace.name,
+      sessionName: session.name,
+      title: session.title || formatName(session.name),
+      mtime: session.mtime || 0
+    }))
+  )
+
+  return items
+    .filter(item => !query || [item.title, item.sessionName, item.workspaceName]
+      .some(value => value?.toLowerCase().includes(query)))
+    .sort((a, b) => b.mtime - a.mtime)
+    .slice(0, 50)
+})
 
 const currentSessionTitle = computed(() => {
   if (!currentSession.value) return '新对话'
@@ -574,10 +727,10 @@ const fmtTokens = n => !n ? '0' : n >= 1000 ? (n / 1000).toFixed(1) + 'k' : Stri
 
 const formatName = n => {
   const m = n.match(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/)
-  return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}` : n.replace(/[-_]+/g, ' ').slice(0, 24)
+  return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}${n.slice(m.index + m[0].length)}` : n.replace(/[-_]+/g, ' ').slice(0, 24)
 }
 
-const themeOrder = ['light', 'dark', 'retro', 'retro-yellow']
+const themeOrder = ['gray', 'dark']
 const toggleTheme = () => {
   const idx = themeOrder.indexOf(store.settings.theme)
   store.settings.theme = themeOrder[(idx + 1) % themeOrder.length]
@@ -653,9 +806,48 @@ const loadData = async () => {
     }
   } catch {}
   await loadWorkspaces()
+  await initializeWorkspaceContext()
   await loadSessions()
   initialDataLoaded.value = true
 }
+
+const openGlobalSearch = async () => {
+  globalSearchQuery.value = ''
+  globalSearchActiveIndex.value = 0
+  showGlobalSearch.value = true
+  await nextTick()
+  globalSearchInput.value?.focus()
+}
+
+const closeGlobalSearch = () => {
+  showGlobalSearch.value = false
+  globalSearchQuery.value = ''
+}
+
+const selectGlobalSearchResult = (item) => {
+  closeGlobalSearch()
+  onSidebarSelectSession(item)
+}
+
+const handleGlobalSearchKeydown = (event) => {
+  const resultCount = globalSearchResults.value.length
+  if (event.key === 'Escape') {
+    closeGlobalSearch()
+  } else if (event.key === 'ArrowDown' && resultCount > 0) {
+    event.preventDefault()
+    globalSearchActiveIndex.value = Math.min(globalSearchActiveIndex.value + 1, resultCount - 1)
+  } else if (event.key === 'ArrowUp' && resultCount > 0) {
+    event.preventDefault()
+    globalSearchActiveIndex.value = Math.max(globalSearchActiveIndex.value - 1, 0)
+  } else if (event.key === 'Enter' && resultCount > 0) {
+    event.preventDefault()
+    selectGlobalSearchResult(globalSearchResults.value[globalSearchActiveIndex.value])
+  }
+}
+
+watch(globalSearchQuery, () => {
+  globalSearchActiveIndex.value = 0
+})
 
 // 刷新工具列表（不干扰其他数据）
 const refreshTools = async () => {
@@ -664,6 +856,30 @@ const refreshTools = async () => {
     const r = await toolsAPI.list()
     if (r.success) tools.value = r.data || []
   } catch {}
+  refreshingTools.value = false
+}
+
+// 切换工具启用/禁用状态
+const toggleTool = async (tool) => {
+  refreshingTools.value = true
+  try {
+    await toolsAPI.toggle(tool.name)
+    tool.enabled = !tool.enabled
+  } catch (err) {
+    console.error('切换工具状态失败:', err)
+  }
+  refreshingTools.value = false
+}
+
+// 切换工具自动放行状态
+const toggleAutoTool = async (tool) => {
+  refreshingTools.value = true
+  try {
+    await toolsAPI.autoToggle(tool.name)
+    tool.autoApproved = !tool.autoApproved
+  } catch (err) {
+    console.error('切换自动放行状态失败:', err)
+  }
   refreshingTools.value = false
 }
 
@@ -699,13 +915,72 @@ const loadSessions = async () => {
   } catch {}
 }
 
+const onSessionUpdated = (sessionName, optimistic = false) => {
+  if (!optimistic || !sessionName || !currentSessionWorkspace.value) {
+    return loadSessions()
+  }
+
+  const workspaceHash = currentSessionWorkspace.value
+  const existing = workspaceSessions.value[workspaceHash] || []
+  if (existing.some(session => session.name === sessionName)) return
+
+  const addedSession = {
+    name: sessionName,
+    title: null,
+    messageCount: 1,
+    active: sessionName === currentSession.value,
+    mtime: Date.now()
+  }
+  const updated = [addedSession, ...existing]
+  workspaceSessions.value = {...workspaceSessions.value, [workspaceHash]: updated}
+  if (workspaceHash === currentSessionWorkspace.value) {
+    sessions.value = updated
+  }
+}
+
+// 分支会话：切换到新会话并刷新列表
+const onSessionBranched = async (newSessionName) => {
+  currentSession.value = newSessionName
+  await nextTick()
+  await Promise.all([
+    loadSessions(),
+    chatRef.value?.loadSession(newSessionName, currentSessionWorkspace.value)
+  ])
+  message.success("已分支到新会话")
+}
+
 // 加载工作区列表
 const loadWorkspaces = async () => {
   try {
     const r = await configAPI.listWorkspaces()
-    if (r.success) workspaces.value = r.data || []
+    if (r.success) workspaces.value = await applyWorkspaceOrder(r.data || [])
   } catch (e) {
     console.error('加载工作区列表失败:', e)
+  }
+}
+
+// 从服务端恢复工作区排序
+async function applyWorkspaceOrder(list) {
+  if (!list || list.length === 0) return list
+  try {
+    const r = await configAPI.getWorkspaceOrder()
+    if (r.success && r.data && r.data.length) {
+      const map = new Map(list.map(w => [w.hash, w]))
+      const ordered = r.data.filter(h => map.has(h)).map(h => map.get(h))
+      const rest = list.filter(w => !r.data.includes(w.hash))
+      return [...ordered, ...rest]
+    }
+  } catch {}
+  return list
+}
+
+// 拖拽排序后保存到服务端
+async function handleReorderWorkspaces(newList) {
+  workspaces.value = newList
+  try {
+    await configAPI.saveWorkspaceOrder(newList.map(w => w.hash))
+  } catch (e) {
+    console.error('保存工作区排序失败:', e)
   }
 }
 
@@ -715,6 +990,14 @@ const switchWorkspaceContext = async (hash) => {
   if (!ws) return
   await configAPI.switchWorkspace(ws.path)
   workspace.value = ws.path
+}
+
+const initializeWorkspaceContext = async () => {
+  if (currentSessionWorkspace.value || workspaces.value.length === 0) return
+  const activeWorkspace = workspaces.value.find(item => item.path === workspace.value)
+  const targetWorkspace = activeWorkspace || workspaces.value[0]
+  await switchWorkspaceContext(targetWorkspace.hash)
+  currentSessionWorkspace.value = targetWorkspace.hash
 }
 
 // 切换工作区（用户主动操作，切换后新建会话）
@@ -730,6 +1013,7 @@ const handleSwitchWorkspace = async (hash) => {
       await loadSessions()
       currentSessionWorkspace.value = hash
       await newChat(true)
+      await applyPendingStarterPrompt()
       message.success('已切换工作区')
     } else {
       message.error(r.message || '切换工作区失败')
@@ -754,6 +1038,7 @@ const handleAddWorkspace = async (path) => {
       const newWs = workspaces.value.find(w => w.path === r.data.workspace)
       if (newWs) currentSessionWorkspace.value = newWs.hash
       await newChat(true)
+      await applyPendingStarterPrompt()
       message.success('已添加工作区')
     } else {
       message.error(r.message || '添加工作区失败')
@@ -764,20 +1049,26 @@ const handleAddWorkspace = async (path) => {
 }
 
 // 删除工作区
-const handleDeleteWorkspace = async (hash) => {
-  const ok = await confirm({ message: '确定要删除此工作区吗？' })
-  if (!ok) return
-  
+const deleteWorkspace = async (hash) => {
   try {
     const r = await configAPI.deleteWorkspace(hash)
     if (r.success) {
+      if (currentSessionWorkspace.value === hash) {
+        currentSession.value = ''
+        currentSessionWorkspace.value = null
+        chatRef.value?.resetLocalMessages()
+      }
       await loadWorkspaces()
+      await loadSessions()
       message.success('工作区已删除')
+      return true
     } else {
       message.error(r.message || '删除工作区失败')
+      return false
     }
   } catch (e) {
     message.error('删除工作区失败: ' + e.message)
+    return false
   }
 }
 
@@ -811,6 +1102,8 @@ const newProjectChat = async (wsHash) => {
       await switchWorkspaceContext(wsHash)
       currentSession.value = r.data.sessionName
       currentSessionWorkspace.value = wsHash
+      mainView.value = 'chat'
+      await nextTick()
       chatRef.value?.resetLocalMessages()
       await loadSessions()
       message.success('已新建对话')
@@ -847,10 +1140,6 @@ const refreshProjectSessions = async (wsHash) => {
 const clearProjectSessions = async (wsHash) => {
   const hash = wsHash || currentSessionWorkspace.value
   if (!hash) return
-  const ws = workspaces.value.find(w => w.hash === hash)
-  const name = ws ? ws.name : hash
-  const ok = await confirm({ message: `确定要清空「${name}」的所有会话吗？此操作不可恢复。` })
-  if (!ok) return
   try {
     await sessionsAPI.clearAll(hash)
     await loadSessions()
@@ -859,13 +1148,66 @@ const clearProjectSessions = async (wsHash) => {
       chatRef.value?.resetLocalMessages()
     }
     message.success('会话已清空')
+    return true
   } catch (e) {
     message.error('清空会话失败: ' + e.message)
+    return false
+  }
+}
+
+const projectSessionDialog = ref({visible: false, workspaceHash: null, name: '', pending: false})
+const projectSessionActions = [
+  {key: 'cancel', label: '取消'},
+  {key: 'clear', label: '清空会话列表', variant: 'accent'},
+  {key: 'delete', label: '删除项目', variant: 'danger'}
+]
+
+const openProjectSessionDialog = (workspaceHash) => {
+  const workspace = workspaces.value.find(w => w.hash === workspaceHash)
+  projectSessionDialog.value = {
+    visible: true,
+    workspaceHash,
+    name: workspace?.name || workspaceHash,
+    pending: false
+  }
+}
+
+const closeProjectSessionDialog = () => {
+  if (projectSessionDialog.value.pending) return
+  projectSessionDialog.value.visible = false
+}
+
+const confirmClearProjectSessions = async () => {
+  const {workspaceHash} = projectSessionDialog.value
+  if (!workspaceHash) return
+  projectSessionDialog.value.pending = true
+  const cleared = await clearProjectSessions(workspaceHash)
+  projectSessionDialog.value.pending = false
+  if (cleared) projectSessionDialog.value.visible = false
+}
+
+const confirmDeleteWorkspace = async () => {
+  const {workspaceHash} = projectSessionDialog.value
+  if (!workspaceHash) return
+  projectSessionDialog.value.pending = true
+  const deleted = await deleteWorkspace(workspaceHash)
+  projectSessionDialog.value.pending = false
+  if (deleted) projectSessionDialog.value.visible = false
+}
+
+const handleProjectSessionAction = (action) => {
+  if (action === 'cancel') {
+    closeProjectSessionDialog()
+  } else if (action === 'clear') {
+    confirmClearProjectSessions()
+  } else if (action === 'delete') {
+    confirmDeleteWorkspace()
   }
 }
 
 // Sidebar 事件：选择会话
 const onSidebarSelectSession = ({ workspaceHash, sessionName }) => {
+  mainView.value = 'chat'
   loadProjectSession(workspaceHash, sessionName)
 }
 
@@ -895,6 +1237,47 @@ const newChat = async (skipReload = false) => {
     console.error('新建会话失败:', e)
     message.error('新建对话失败: ' + e.message)
   }
+}
+
+const startTaskFromWelcome = async (request) => {
+  const prompt = typeof request === 'string' ? request : request?.prompt || ''
+  const workspaceHash = typeof request === 'string' ? null : request?.workspaceHash
+
+  if (!workspaceHash) {
+    pendingStarterPrompt.value = prompt
+    showWorkspacePicker.value = true
+    return
+  }
+
+  try {
+    await switchWorkspaceContext(workspaceHash)
+    currentSessionWorkspace.value = workspaceHash
+    await newChat(true)
+    await nextTick()
+    await chatRef.value?.startWelcomePrompt(prompt)
+  } catch (e) {
+    console.error('从欢迎页创建会话失败:', e)
+    message.error('创建新会话失败: ' + (e.message || '未知错误'))
+  }
+}
+
+const switchWelcomeWorkspace = async (workspaceHash) => {
+  if (!workspaceHash || workspaceHash === currentSessionWorkspace.value) return
+  try {
+    await switchWorkspaceContext(workspaceHash)
+    currentSessionWorkspace.value = workspaceHash
+  } catch (e) {
+    console.error('从欢迎页切换工作区失败:', e)
+    message.error('切换工作区失败: ' + (e.message || '未知错误'))
+  }
+}
+
+const applyPendingStarterPrompt = async () => {
+  const prompt = pendingStarterPrompt.value
+  pendingStarterPrompt.value = ''
+  if (!prompt) return
+  await nextTick()
+  chatRef.value?.setDraft(prompt)
 }
 
 const loadSession = name => {
@@ -992,6 +1375,7 @@ onMounted(async () => {
 
 onBeforeUnmount(() => {
   stopHeartbeat()
+  window.removeEventListener('resize', collapseSidebarForNarrowViewport)
   window.removeEventListener('agent4j:open-in-element', onOpenInElement)
 })
 
@@ -1187,62 +1571,93 @@ function copyText(text) {
   }
 }
 
-// 自动更新：选择工作区 → 创建新会话 → 发送更新命令
+// 公共流程：选择工作区 → 创建新会话 → 关闭弹窗 → 等待一帧 → 发送命令
+// 用于"自动更新"、"初始化宠物"等需要跳到聊天界面跑命令的场景
+const runInFreshSession = async (cmd, opts = {}) => {
+  const {
+    successMessage = '已新建会话',
+    closeSettings = true,
+    closeUpdateModal = false
+  } = opts
+
+  // 1. 获取工作区列表
+  const wsRes = await configAPI.listWorkspaces()
+  let wsHash = null
+  if (wsRes.success && wsRes.data && wsRes.data.length > 0) {
+    // 优先使用当前工作区，否则选择第一个
+    const currentWs = wsRes.data.find(w => w.hash === currentSessionWorkspace.value)
+    if (currentWs) {
+      wsHash = currentWs.hash
+    } else {
+      wsHash = wsRes.data[0].hash
+    }
+  } else {
+    message.error('没有可用的工作区，请先打开一个项目')
+    return false
+  }
+
+  // 2. 切换工作区上下文
+  const ws = wsRes.data.find(w => w.hash === wsHash)
+  if (ws) {
+    await configAPI.switchWorkspace(ws.path)
+    workspaces.value = await applyWorkspaceOrder(wsRes.data)
+  }
+
+  // 3. 创建新会话
+  const params = { workspaceHash: wsHash }
+  const r = await sessionsAPI.createNew(params)
+  if (r.success && r.data?.sessionName) {
+    currentSession.value = r.data.sessionName
+    if (r.data.workspaceHash) currentSessionWorkspace.value = r.data.workspaceHash
+    chatRef.value?.resetLocalMessages()
+    await loadSessions()
+    await loadWorkspaces()
+    message.success(successMessage)
+  } else {
+    message.error('新建会话失败')
+    return false
+  }
+
+  // 4. 关闭弹窗
+  if (closeSettings) showSettings.value = false
+  if (closeUpdateModal) showUpdateModal.value = false
+
+  // 5. 稍等一帧让 UI 刷新，然后发送命令
+  await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 300)))
+  await chatRef.value?.sendCommand(cmd)
+  return true
+}
+
+// 自动更新：复用 runInFreshSession 跳到聊天界面发送更新命令
 const handleAutoUpdate = async () => {
   autoUpdating.value = true
   try {
-    // 1. 获取工作区列表
-    const wsRes = await configAPI.listWorkspaces()
-    let wsHash = null
-    if (wsRes.success && wsRes.data && wsRes.data.length > 0) {
-      // 优先使用当前工作区，否则选择第一个
-      const currentWs = wsRes.data.find(w => w.hash === currentSessionWorkspace.value)
-      if (currentWs) {
-        wsHash = currentWs.hash
-      } else {
-        wsHash = wsRes.data[0].hash
-      }
-    } else {
-      message.error('没有可用的工作区，请先打开一个项目')
-      return
-    }
-
-    // 2. 切换工作区上下文
-    const ws = wsRes.data.find(w => w.hash === wsHash)
-    if (ws) {
-      await configAPI.switchWorkspace(ws.path)
-      workspaces.value = wsRes.data
-    }
-
-    // 3. 创建新会话
-    const params = { workspaceHash: wsHash }
-    const r = await sessionsAPI.createNew(params)
-    if (r.success && r.data?.sessionName) {
-      currentSession.value = r.data.sessionName
-      if (r.data.workspaceHash) currentSessionWorkspace.value = r.data.workspaceHash
-      chatRef.value?.resetLocalMessages()
-      await loadSessions()
-      await loadWorkspaces()
-      message.success('已新建更新会话')
-    } else {
-      message.error('新建会话失败')
-      return
-    }
-
-    // 4. 关闭设置和更新弹窗
-    showSettings.value = false
-    showUpdateModal.value = false
-
-    // 5. 稍等一帧让 UI 刷新，然后发送更新命令
-    await new Promise(resolve => requestAnimationFrame(() => setTimeout(resolve, 300)))
-
     const updateCommand = "请帮我执行 Agent4j 自动更新。根据当前操作系统平台，选择并运行对应的更新脚本：\n\n- Windows 系统：在 PowerShell 中运行 `irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex`\n- macOS / Linux 系统：在终端中运行 `curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash`\n\n请先判断当前系统平台，然后执行对应的脚本。执行完成后请报告结果。"
-    await chatRef.value?.sendCommand(updateCommand)
+    await runInFreshSession(updateCommand, {
+      successMessage: '已新建更新会话',
+      closeSettings: true,
+      closeUpdateModal: true
+    })
   } catch (e) {
     console.error('自动更新失败:', e)
     message.error('自动更新失败: ' + (e.message || '未知错误'))
   } finally {
     autoUpdating.value = false
+  }
+}
+
+// 初始化宠物：复用 runInFreshSession 跳到聊天界面发送 npx petdex install 命令
+const handleInitPet = async () => {
+  try {
+    const initCommand = '调用 npx petdex@latest install boba 初始化一个宠物'
+    await runInFreshSession(initCommand, {
+      successMessage: '已新建宠物初始化会话',
+      closeSettings: true,
+      closeUpdateModal: false
+    })
+  } catch (e) {
+    console.error('初始化宠物失败:', e)
+    message.error('初始化宠物失败: ' + (e.message || '未知错误'))
   }
 }
 
@@ -1261,10 +1676,35 @@ watch(showSettings, (newVal) => {
   flex-direction: column;
   height: 100vh;
   overflow: hidden;
+  user-select: none;
+  -webkit-user-select: none;
   border-radius: 10px;
   border: 1px solid var(--border-2);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
   background: var(--bg);
+}
+
+.app input,
+.app textarea,
+.app [contenteditable="true"] {
+  user-select: text;
+  -webkit-user-select: text;
+}
+
+:global(body > [class*="modal"]),
+:global(body > [class*="dialog"]) {
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+:global(body > [class*="modal"] input),
+:global(body > [class*="modal"] textarea),
+:global(body > [class*="modal"] [contenteditable="true"]),
+:global(body > [class*="dialog"] input),
+:global(body > [class*="dialog"] textarea),
+:global(body > [class*="dialog"] [contenteditable="true"]) {
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 [data-theme="dark"] .app {
@@ -1291,6 +1731,111 @@ watch(showSettings, (newVal) => {
   min-width: 0;
   background: var(--bg);
   position: relative;
+}
+
+.global-search-mask {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  padding: min(16vh, 140px) 16px 24px;
+  background: rgba(18, 18, 20, 0.1);
+}
+
+.global-search-panel {
+  width: min(680px, 100%);
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.18);
+}
+
+.global-search-input-wrap {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-4);
+}
+
+.global-search-input-wrap input {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 15px;
+}
+
+.global-search-input-wrap input::placeholder { color: var(--fg-4); }
+
+.global-search-input-wrap kbd {
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--fg-4);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+
+.global-search-results {
+  max-height: min(55vh, 440px);
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.global-search-result {
+  display: grid;
+  grid-template-columns: 20px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  min-height: 42px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+  text-align: left;
+}
+
+.global-search-result:hover,
+.global-search-result.active {
+  background: var(--bg-3);
+  color: var(--fg);
+}
+
+.global-search-result-main,
+.global-search-result-workspace {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.global-search-result-main {
+  color: var(--fg);
+  font-size: 14px;
+}
+
+.global-search-result-workspace {
+  max-width: 180px;
+  color: var(--fg-4);
+  font-size: 12px;
+}
+
+.global-search-empty {
+  padding: 28px 12px;
+  color: var(--fg-4);
+  font-size: 13px;
+  text-align: center;
 }
 
 /* Git 面板滑动动画 */
@@ -1403,20 +1948,157 @@ watch(showSettings, (newVal) => {
 
 .tool-row {
   display: flex;
-  align-items: baseline;
+  align-items: center;
+  justify-content: space-between;
   gap: 12px;
-  padding: 8px 0;
+  padding: 10px 0;
   border-bottom: 1px solid var(--border);
   font-size: 13px;
+  transition: opacity var(--transition-fast);
 }
 .tool-row:last-child { border-bottom: none; }
-.tool-row code {
+.tool-row.disabled {
+  opacity: 0.55;
+}
+.tool-row.disabled code {
+  text-decoration: line-through;
+}
+
+.tool-row-info {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  flex: 1;
+  min-width: 0;
+  cursor: default;
+}
+.tool-row-info code {
   font-weight: 600;
   color: var(--accent);
   flex-shrink: 0;
   min-width: 100px;
 }
-.tool-row span { color: var(--fg-3); }
+.tool-row-desc {
+  color: var(--fg-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tool-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.tool-status-badge {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--danger-bg);
+  color: var(--danger);
+  white-space: nowrap;
+}
+
+/* 切换开关 */
+.tool-toggle-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  display: flex;
+  align-items: center;
+}
+.tool-toggle-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+.tool-toggle-btn .toggle-track {
+  width: 34px;
+  height: 18px;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 9px;
+  position: relative;
+  transition: all var(--transition-fast);
+}
+.tool-toggle-btn.enabled .toggle-track {
+  background: var(--success);
+  border-color: var(--success);
+}
+.tool-toggle-btn .toggle-thumb {
+  width: 14px;
+  height: 14px;
+  background: white;
+  border-radius: 50%;
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  transition: all var(--transition-fast);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+}
+.tool-toggle-btn.enabled .toggle-thumb {
+  left: 18px;
+}
+
+/* 自动放行开关 */
+.tool-toggle-btn.auto-toggle .toggle-track.auto-track {
+  width: 28px;
+  height: 16px;
+}
+.tool-toggle-btn.auto-toggle.enabled .toggle-track.auto-track {
+  background: var(--brand-primary);
+  border-color: var(--brand-primary);
+}
+.tool-toggle-btn.auto-toggle .toggle-thumb {
+  width: 12px;
+  height: 12px;
+  top: 2px;
+  left: 2px;
+}
+.tool-toggle-btn.auto-toggle.enabled .toggle-thumb {
+  left: 14px;
+}
+.tool-status-badge.auto-approved {
+  background: var(--accent-soft, #e8f4fd);
+  color: var(--brand-primary, #3b82f6);
+}
+
+/* 工具弹窗 body 限制高度 */
+.tool-modal-body {
+  max-height: 60vh;
+  overflow-y: auto;
+}
+
+/* 筛选栏 */
+.tool-filter-bar {
+  display: flex;
+  gap: 6px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border);
+  margin-bottom: 4px;
+}
+.tool-filter-btn {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-size: 12px;
+  color: var(--fg-muted);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+.tool-filter-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.tool-filter-btn.active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  font-weight: 600;
+}
 
 .config-row {
   display: flex;

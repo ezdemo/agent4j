@@ -88,6 +88,18 @@ public interface AgentOutput {
      */
     void onChoice(List<ChoiceOption> options);
 
+    /**
+     * 选项列表（带标题和描述）。
+     * <p>默认实现委托给 {@link #onChoice(List)}，子类可覆盖以传递更多上下文。</p>
+     *
+     * @param options     选项列表
+     * @param title       标题（如 "read、write"）
+     * @param description 描述（如工具参数详情）
+     */
+    default void onChoice(List<ChoiceOption> options, String title, String description) {
+        onChoice(options);
+    }
+
     // ==================== 交互式询问 ====================
 
     /**

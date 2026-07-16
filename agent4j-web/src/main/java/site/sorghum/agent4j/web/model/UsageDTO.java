@@ -1,5 +1,7 @@
 package site.sorghum.agent4j.web.model;
 
+import site.sorghum.agent4j.bin.agent.context.ContextTokenEstimate;
+
 /**
  * Token 用量统计。
  */
@@ -17,6 +19,7 @@ public record UsageDTO(
         double cacheCost,
         double outputCost,
         double totalCost,
-        String currency
+        String currency,
+        ContextTokenEstimate contextEstimate
 ) {
 }

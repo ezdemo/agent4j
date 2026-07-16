@@ -18,6 +18,9 @@ solon.logging.appender:
 solon.mime:
   json: "application/json"
 
+agent4j:
+  acp: ${ACP_ENABLE:false}
+
 knife4j.enable: true
 knife4j.basic.enable: true
 knife4j.basic.username: admin

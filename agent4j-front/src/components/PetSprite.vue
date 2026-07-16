@@ -7,7 +7,7 @@
 </template>
 
 <script setup>
-import { ref, computed, onMounted, onBeforeUnmount, watch } from 'vue'
+import {computed, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 
 const ATLAS = { width: 1536, height: 1872, cellWidth: 192, cellHeight: 208 }
 
@@ -33,6 +33,7 @@ const SIZE_LEVELS = [
   { label: '小', scale: 0.4 },
   { label: '中', scale: 0.55 },
   { label: '大', scale: 0.75 },
+  { label: '超大', scale: 1.0 },
 ]
 
 const DRAG_THRESHOLD = 4
@@ -56,6 +57,7 @@ let animStart = 0
 
 // ── 拖动 ──
 const dragging = ref(false)
+const dragDirection = ref(null)
 const offsetX = ref(props.initialX)
 const offsetY = ref(props.initialY)
 let dragStartX = 0, dragStartY = 0
@@ -84,6 +86,7 @@ function scheduleIdleAction() {
 
 // state prop → 动画 ID 映射
 const animId = computed(() => {
+  if (dragging.value && dragDirection.value) return `running-${dragDirection.value}`
   // 空闲自播放优先
   if (props.state === 'idle' && randomAnim.value) return randomAnim.value
   const s = props.state
@@ -136,6 +139,7 @@ let saveTimer = null
 
 function onPointerDown(e) {
   dragging.value = true
+  dragDirection.value = null
   hasDragged = false
   dragStartX = e.clientX
   dragStartY = e.clientY
@@ -151,6 +155,7 @@ function onPointerMove(e) {
   const dy = e.clientY - dragStartY
   if (!hasDragged && Math.abs(dx) + Math.abs(dy) > DRAG_THRESHOLD) hasDragged = true
   if (hasDragged) {
+    if (dx !== 0) dragDirection.value = dx < 0 ? 'left' : 'right'
     offsetX.value = startOffsetX + dx
     offsetY.value = startOffsetY + dy
   }
@@ -158,6 +163,7 @@ function onPointerMove(e) {
 
 function onPointerUp() {
   dragging.value = false
+  dragDirection.value = null
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
   if (hasDragged) {
@@ -250,7 +256,6 @@ watch(() => props.spritesheetUrl, (url) => {
 }
 .pet-sprite.pet-hidden { opacity: 0; }
 .pet-sprite.pet-dragging { cursor: grabbing; opacity: 0.85; }
-.pet-sprite:hover { filter: brightness(1.1); }
 .pet-sprite-frame {
   background-repeat: no-repeat;
   image-rendering: pixelated;

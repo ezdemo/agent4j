@@ -5,9 +5,11 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.dami2.Dami;
 import org.noear.dami2.bus.EventListener;
+import site.sorghum.agent4j.bin.agent.context.ContextTokenEstimate;
 import site.sorghum.agent4j.bin.agent.context.ConversationContext;
 import site.sorghum.agent4j.bin.agent.listener.AgentLoopListener;
 import site.sorghum.agent4j.bin.agent.model.ChatMessage;
+import site.sorghum.agent4j.bin.agent.model.FileChange;
 import site.sorghum.agent4j.bin.agent.model.UserMessage;
 import site.sorghum.agent4j.bin.agent.prompt.DEFAULT_PROMPT;
 import site.sorghum.agent4j.bin.command.ChatCommand;
@@ -104,7 +106,8 @@ public class Agent4jAgent {
                 b.workspace, b.apiUrl, b.apiKey,
                 b.disabledTools, b.blockedPaths, prompt);
         this.ctx = new ConversationContext(initResult.promptPrefix);
-        this.loop = initSessionAndLoop(client, initResult.toolRegistry, b.hitl);
+        Agent4jConfig loopConfig = b.agent4jConfig != null ? b.agent4jConfig : Agent4jConfig.getInstance();
+        this.loop = initSessionAndLoop(client, initResult.toolRegistry, b.hitl, loopConfig);
 
         //  —— 每个 Agent 自监听自更新（保存引用以便 dispose 时注销）
         this.configListener = event -> {
@@ -115,7 +118,9 @@ public class Agent4jAgent {
                 switch (e.key()) {
                     case "model" -> setModel((String) e.value());
                     case "reasoningEffort" -> setReasoningEffort((String) e.value());
-                    case "hitl" -> setHitlMode((Boolean) e.value());
+                    case "hitl" -> setHitlMode(String.valueOf(e.value()));
+                    case "terminateOnNoToolCall" -> setTerminateOnNoToolCall(Boolean.parseBoolean(String.valueOf(e.value())));
+                    case "disabledTools" -> refreshTools();
                     default -> log.warn("[bus] 未知配置键: {}", e.key());
                 }
             } catch (Exception ex) {
@@ -142,10 +147,11 @@ public class Agent4jAgent {
      *
      * @param client   模型客户端（HttpModelClient 或共享实例）
      * @param registry 工具注册表
-     * @param hitl     是否启用人工审批
+     * @param hitl     HITL 模式（free / approval / auto）
      * @return 构造完成的 AgentLoop 实例
      */
-    private AgentLoop initSessionAndLoop(ModelClient client, ToolRegistry registry, boolean hitl) {
+    private AgentLoop initSessionAndLoop(ModelClient client, ToolRegistry registry, String hitl,
+                                         Agent4jConfig config) {
         try {
             final String workspacePath = this.workspace != null
                     ? this.workspace.toAbsolutePath().toString()
@@ -159,7 +165,7 @@ public class Agent4jAgent {
             throw new RuntimeException("[session] Agent4j 会话初始化失败，无法继续运行", e);
         }
 
-        final AgentLoop agentLoop = new AgentLoop(client, registry, ctx, hitl,Agent4jConfig.getInstance());
+        final AgentLoop agentLoop = new AgentLoop(client, registry, ctx, hitl, config);
         agentLoop.setSessionService(this.sessionService);
         return agentLoop;
     }
@@ -365,6 +371,16 @@ public class Agent4jAgent {
         return loop != null ? loop.getMaxContextTokens() : DEFAULT_FALLBACK_MAX_TOKENS;
     }
 
+    /** 获取最近一次请求的离线上下文构成。 */
+    public ContextTokenEstimate getLastContextEstimate() {
+        return loop != null ? loop.getLastContextEstimate() : null;
+    }
+
+    /** 根据已加载的会话历史重算离线上下文构成。 */
+    public ContextTokenEstimate estimateCurrentContext() {
+        return loop != null ? loop.estimateCurrentContext() : null;
+    }
+
     /**
      * /retry 撤回最后一条消息并重试
      */
@@ -414,6 +430,20 @@ public class Agent4jAgent {
         }
     }
 
+    /** Returns every persisted file-change list produced in the current user turn. */
+    public List<List<FileChange>> getCurrentTurnFileChanges() {
+        List<List<FileChange>> result = new java.util.ArrayList<>();
+        List<ChatMessage> history = ctx.getHistory();
+        for (int i = history.size() - 1; i >= 0; i--) {
+            ChatMessage message = history.get(i);
+            if (message.isUser()) break;
+            if (message.isAssistant() && message.getFileChanges() != null && !message.getFileChanges().isEmpty()) {
+                result.add(0, List.copyOf(message.getFileChanges()));
+            }
+        }
+        return result;
+    }
+
     /**
      * 获取 SessionStore（用于列表/切换）
      */
@@ -429,8 +459,18 @@ public class Agent4jAgent {
     }
 
     // ========== HITL (Human-In-The-Loop) ==========
+
     /**
-     * 获取 HITL 模式状态
+     * 获取当前 HITL 模式名称。
+     *
+     * @return "free" / "approval" / "auto"
+     */
+    public String getHitlMode() {
+        return loop.getHitlMode();
+    }
+
+    /**
+     * 获取 HITL 是否处于启用状态（审批模式或自动模式均视为启用）。
      */
     public boolean isHitlMode() {
         return loop.isHitlMode();
@@ -438,9 +478,11 @@ public class Agent4jAgent {
 
     /**
      * 直接设置 HITL 模式（用于配置热更新）
+     *
+     * @param mode "free" / "approval" / "auto"，向后兼容 "true"/"false"
      */
-    public void setHitlMode(boolean on) {
-        loop.setHitlMode(on);
+    public void setHitlMode(String mode) {
+        loop.setHitlMode(mode);
     }
 
     /**
@@ -457,6 +499,19 @@ public class Agent4jAgent {
      */
     public void setReasoningEffort(String reasoningEffort) {
         loop.setReasoningEffort(reasoningEffort);
+    }
+
+    /** 运行时更新无工具调用时的结束策略。 */
+    public void setTerminateOnNoToolCall(boolean enabled) {
+        loop.setTerminateOnNoToolCall(enabled);
+    }
+
+    /**
+     * 刷新工具列表（工具启用/禁用状态变更后调用）。
+     */
+    public void refreshTools() {
+        loop.refreshTools();
+        log.info("[agent] 工具列表已刷新");
     }
 
     /**
@@ -561,7 +616,7 @@ public class Agent4jAgent {
         Path workspace = null;
         Set<String> disabledTools;
         List<String> blockedPaths;
-        boolean hitl;
+        String hitl = "free";
         /**
          * 命令注册表（Solon 自动收集的 ChatCommand Bean）
          */
@@ -657,7 +712,7 @@ public class Agent4jAgent {
             return this;
         }
 
-        public Builder hitl(boolean v) {
+        public Builder hitl(String v) {
             this.hitl = v;
             return this;
         }

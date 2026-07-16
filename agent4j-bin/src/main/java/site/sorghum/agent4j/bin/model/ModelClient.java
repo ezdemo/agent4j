@@ -57,6 +57,23 @@ public interface ModelClient {
     }
 
     /**
+     * 清除上一轮遗留的流式中断状态。
+     * <p>
+     * 每个新的用户回合开始前调用。默认空实现，未维护中断状态的客户端无需处理。
+     * </p>
+     */
+    default void resetStreamAbort() {
+    }
+
+    /**
+     * 创建一个可独立流式调用和中断的客户端实例。
+     * 不支持复制的实现可返回自身，但并发调用方应优先覆盖此方法。
+     */
+    default ModelClient fork() {
+        return this;
+    }
+
+    /**
      * 模型最大上下文窗口 token 数。
      * 用于折叠阈值计算：当 prompt_tokens 达到此值的 80% 时触发自动折叠。
      * 默认 128K，子类可按模型名返回更准确的值。

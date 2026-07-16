@@ -237,14 +237,4 @@ public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
         return this.getTools();
     }
 
-    @Override
-    public String getSystemPrompt() {
-        return """
-                从共享工作区读取 KV 或文档条目。优先尝试 KV 读取，其次尝试文档读取，
-                均未命中时返回 NOT_FOUND 错误并附带相似 key 提示。
-                参数: key(必填, 条目路径), scope(可选, 作用域过滤)。
-                key 为空时返回错误。
-                只读。
-                """;
-    }
 }

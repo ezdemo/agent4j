@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import site.sorghum.agent4j.bin.agent.model.ChatMessage;
+import site.sorghum.agent4j.bin.agent.model.FileChange;
 import site.sorghum.agent4j.bin.agent.model.ToolCallEntry;
 import site.sorghum.agent4j.bin.agent.model.UserMessage;
 import site.sorghum.agent4j.bin.agent.prompt.PromptPrefix;
@@ -68,6 +69,9 @@ public class ConversationContext {
         if (msg != null && msg.getSnapshotId() != null) {
             chatMsg.setSnapshotId(msg.getSnapshotId());
         }
+        if (msg != null && msg.getRollbackId() != null) {
+            chatMsg.setRollbackId(msg.getRollbackId());
+        }
         history.add(chatMsg);
         persist(chatMsg);
     }
@@ -108,6 +112,11 @@ public class ConversationContext {
      * @param reasoningContent 推理内容（可为 null）
      */
     public void addAssistant(String content, List<ToolCallEntry> toolCalls, String reasoningContent) {
+        addAssistant(content, toolCalls, reasoningContent, List.of());
+    }
+
+    public void addAssistant(String content, List<ToolCallEntry> toolCalls, String reasoningContent,
+                             List<FileChange> fileChanges) {
         // 防御：assistant 消息必须至少包含 content、tool_calls 或 reasoning_content 之一
         boolean hasContent = content != null && !content.isEmpty();
         boolean hasToolCalls = toolCalls != null && !toolCalls.isEmpty();
@@ -120,8 +129,23 @@ public class ConversationContext {
             content = null;
         }
         ChatMessage msg = ChatMessage.assistant(content, toolCalls, reasoningContent);
+        if (fileChanges != null && !fileChanges.isEmpty()) {
+            msg.setFileChanges(new ArrayList<>(fileChanges));
+        }
         history.add(msg);
         persist(msg);
+    }
+
+    public void setLatestAssistantFileChanges(List<FileChange> fileChanges) {
+        if (fileChanges == null || fileChanges.isEmpty()) return;
+        for (int i = history.size() - 1; i >= 0; i--) {
+            ChatMessage message = history.get(i);
+            if (message.isAssistant()) {
+                message.setFileChanges(new ArrayList<>(fileChanges));
+                rewriteStore();
+                return;
+            }
+        }
     }
 
     public void addToolResult(String toolCallId, String result) {

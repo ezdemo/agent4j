@@ -53,22 +53,34 @@ public class SnapshotController {
     }
 
     @ApiOperation(value = "撤回到快照",
-            notes = "恢复工作区到指定消息的快照状态，撤回该消息及之后所有 AI 修改，同时截断会话历史")
+            notes = "撤回指定消息及之后的会话历史；rollbackCode=true 时同时恢复工作区到快照状态")
     @Post
     @Mapping("/rollback")
     public ApiResponse<SnapshotRollbackDTO> rollback(
             @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
-            @ApiParam(value = "要撤回的消息 ID") @Param("msgId") String msgId,
-            @ApiParam(value = "会话名称") @Param(value = "sessionName", required = false) String sessionName) {
-        if (msgId == null || msgId.trim().isEmpty()) {
-            return ApiResponse.fail("msgId 不能为空");
+            @ApiParam(value = "要撤回的消息 ID") @Param(value = "msgId", required = false) String msgId,
+            @ApiParam(value = "会话名称") @Param(value = "sessionName", required = false) String sessionName,
+            @ApiParam(value = "历史消息时间戳（兼容无撤回 ID 的旧消息）") @Param(value = "rollbackTimestamp", required = false) Long rollbackTimestamp,
+            @ApiParam(value = "是否同时恢复工作区代码，默认 true") @Param(value = "rollbackCode", required = false) Boolean rollbackCode) {
+        if ((msgId == null || msgId.trim().isEmpty()) && rollbackTimestamp == null) {
+            return ApiResponse.fail("msgId 或 rollbackTimestamp 不能为空");
         }
-        SnapshotService.SnapshotRollbackResult result = snapshotService.rollbackToSnapshot(workspaceHash, msgId.trim());
+        String rollbackMsgId = msgId == null ? null : msgId.trim();
+        boolean restoreCode = rollbackCode == null || rollbackCode;
+        if (restoreCode && (rollbackMsgId == null || rollbackMsgId.isEmpty())) {
+            return ApiResponse.fail("撤回代码需要有效的快照 ID");
+        }
+        SnapshotService.SnapshotRollbackResult result = restoreCode
+                ? snapshotService.rollbackToSnapshot(workspaceHash, rollbackMsgId)
+                : new SnapshotService.SnapshotRollbackResult(rollbackMsgId, null, null, true, "会话消息已撤回，工作区代码未修改");
+
         // 撤回成功后，截断会话历史（删除该消息及之后的所有消息）
         if (result.isSuccess()) {
             String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
-            String rollbackText = agentService.truncateHistoryBySnapshotId(workspacePath, sessionName, msgId.trim());
-            result.setMessage(result.getMessage());
+            String rollbackText = agentService.truncateHistoryBySnapshotId(workspacePath, sessionName, rollbackMsgId, rollbackTimestamp);
+            if (!restoreCode && rollbackMsgId != null && !rollbackMsgId.isEmpty()) {
+                snapshotService.discardSnapshotsAfter(workspaceHash, rollbackMsgId);
+            }
             if (rollbackText != null) {
                 // 将被删除的用户消息文本返回给前端，用于回填输入框
                 result.setRollbackUserText(rollbackText);

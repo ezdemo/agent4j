@@ -23,12 +23,12 @@ import java.util.Collection;
  */
 @Component
 public class FinishTool extends AbsToolProvider implements SolonToTools {
-    public static final String TIPS = "[系统提示] 如果有足够信息，请调用 `finish` 提交结果；否则请继续调用工具。";
+    public static final String TIPS = "[系统提示]；如果询问用户下一步动作，请调用`ask_choice`工具， 如果有足够信息，请调用 `finish` 提交结果，否则请继续推理。";
 
     @ToolMapping(description = """
                 对话结束信号 —— 当你认为对话可以结束，准备给出最终回答时调用此工具。
                 调用后推理循环将退出，content 将作为你的最终回答返回给用户。
-                注意：纯文本回复不会退出循环，必须通过此工具显式宣告对话结束。
+                调用此工具可显式结束对话；若 terminateOnNoToolCall 为 true，纯文本回复也会结束对话。
                 即使没有显式的任务，只要你觉得回答已经完整，也应当调用此工具来结束对话。
                 """)
     public String finish(@Param(name = "content", description = "AI 的最终回答内容",required = false) String content,
@@ -46,12 +46,5 @@ public class FinishTool extends AbsToolProvider implements SolonToTools {
     @Override
     public Collection<FunctionTool> getSolonTools() {
         return this.getTools();
-    }
-
-    @Override
-    public String getSystemPrompt() {
-        return """
-                AI 认为对话可以结束并准备给出最终回答时调用finish工具退出推理循环
-                """;
     }
 }

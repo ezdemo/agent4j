@@ -19,6 +19,10 @@ import site.sorghum.agent4j.web.model.*;
 import site.sorghum.agent4j.web.service.AgentService;
 import site.sorghum.agent4j.web.service.DashboardService;
 
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
@@ -87,7 +91,8 @@ public class ConfigController {
                 maskedKey,
                 cfg.price(),
                 visionConfig,
-                cfg.activePet()
+                cfg.activePet(),
+                cfg.terminateOnNoToolCall()
         );
         return ApiResponse.ok(data);
     }
@@ -100,9 +105,10 @@ public class ConfigController {
         configService.updateConfig(body);
 
         // baseUrl 或 apiKey 变更 → 销毁重建（因 HttpModelClient 的 apiUrl/apiKey 为 final）
+        boolean agentReinitialized = false;
         if ((body.containsKey("baseUrl") || body.containsKey("apiKey")) && agentService.isReady()) {
             agentService.reinitialize();
-            return ApiResponse.ok("API 地址/密钥已更新，Agent 已重新初始化");
+            agentReinitialized = true;
         }
 
         // model、reasoningEffort、hitl 等运行时配置 → 通过 DamiBus 广播，由监听者处理
@@ -111,12 +117,39 @@ public class ConfigController {
             // baseUrl/apiKey 已在上方处理，跳过
             if ("baseUrl".equals(key) || "apiKey".equals(key)) continue;
             // 只发布已知的运行时配置键
-            if ("model".equals(key) || "reasoningEffort".equals(key) || "hitl".equals(key)) {
+            if ("model".equals(key) || "reasoningEffort".equals(key) || "hitl".equals(key)
+                    || "terminateOnNoToolCall".equals(key) || "disabledTools".equals(key)) {
                 Dami.bus().send("config.changed", new ConfigChangedEvent(key, entry.getValue()));
             }
         }
 
-        return ApiResponse.ok("配置已更新");
+        return ApiResponse.ok(agentReinitialized ? "API 地址/密钥已更新，Agent 已重新初始化" : "配置已更新");
+    }
+
+    @ApiOperation(value = "从 AI 模型复制视觉配置", notes = "将 AI 模型的 baseUrl 和 apiKey 复制到视觉模型配置（后端操作，不暴露密钥）")
+    @Post
+    @Mapping("/config/copy-vision-from-ai")
+    public ApiResponse<Map<String, String>> copyVisionFromAi() {
+        Agent4jConfig cfg = configService.getConfig();
+        String aiBaseUrl = cfg.baseUrl();
+        String aiApiKey = cfg.apiKey();
+        if (aiBaseUrl == null || aiBaseUrl.isEmpty()) {
+            throw new ServiceException("AI 模型 API 地址未配置");
+        }
+        // 构造视觉模型的 baseUrl：将 /chat/completions 替换为 /models 获取列表用的地址
+        String visionBaseUrl = aiBaseUrl.replaceAll("/chat/completions/?$", "").replaceAll("/+$", "") + "/chat/completions";
+        Map<String, Object> update = new LinkedHashMap<>();
+        Map<String, Object> vision = new LinkedHashMap<>();
+        vision.put("baseUrl", visionBaseUrl);
+        if (aiApiKey != null && !aiApiKey.isEmpty()) {
+            vision.put("apiKey", aiApiKey);
+        }
+        update.put("vision", vision);
+        configService.updateConfig(update);
+
+        Map<String, String> result = new LinkedHashMap<>();
+        result.put("baseUrl", visionBaseUrl);
+        return ApiResponse.ok(result);
     }
 
     @ApiOperation(value = "获取可用模型列表", notes = "返回配置中声明的所有可用模型及当前使用的模型")
@@ -322,6 +355,74 @@ public class ConfigController {
             return ApiResponse.ok("工作区已删除");
         }
         throw new ServiceException("删除工作区失败");
+    }
+
+    @ApiOperation(value = "保存工作区排序", notes = "将工作区 hash 数组按顺序保存到配置中")
+    @Put
+    @Mapping("/workspaces/order")
+    public ApiResponse<String> saveWorkspaceOrder(@ApiParam(value = "工作区 hash 有序列表") @Body List<String> order) {
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        if (order == null) throw new ServiceException("排序数据不能为空");
+        configService.updateConfig(Collections.singletonMap("workspaceOrder", order));
+        return ApiResponse.ok("排序已保存");
+    }
+
+    @ApiOperation(value = "获取工作区排序", notes = "返回保存的工作区 hash 排序数组")
+    @Get
+    @Mapping("/workspaces/order")
+    public ApiResponse<List<String>> getWorkspaceOrder() {
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        try {
+            Path configPath = Paths.get(System.getProperty("user.home"), ".agent4j", "config.json");
+            if (Files.exists(configPath)) {
+                String json = new String(Files.readAllBytes(configPath), StandardCharsets.UTF_8);
+                ONode node = ONode.ofJson(json);
+                ONode orderNode = node.get("workspaceOrder");
+                if (orderNode != null && orderNode.isArray()) {
+                    List<String> order = new ArrayList<>();
+                    for (ONode item : orderNode.getArray()) {
+                        String s = item.getString();
+                        if (s != null) order.add(s);
+                    }
+                    return ApiResponse.ok(order);
+                }
+            }
+        } catch (Exception ignored) {
+        }
+        return ApiResponse.ok(new ArrayList<>());
+    }
+
+    // ============ agent4j.md 编辑 ============
+
+    @ApiOperation(value = "获取 agent4j.md 内容", notes = "读取 ~/.agent4j/agent4j.md 文件内容")
+    @Get
+    @Mapping("/agent4j-md")
+    @SneakyThrows
+    public ApiResponse<String> getAgent4jMd() {
+        Path path = Paths.get(System.getProperty("user.home"), ".agent4j", "agent4j.md");
+        if (Files.exists(path)) {
+            String content = new String(Files.readAllBytes(path), StandardCharsets.UTF_8);
+            return ApiResponse.ok(content);
+        }
+        return ApiResponse.ok("");
+    }
+
+    @ApiOperation(value = "更新 agent4j.md 内容", notes = "写入 ~/.agent4j/agent4j.md 文件，保存后自动重新初始化 Agent")
+    @Put
+    @Mapping("/agent4j-md")
+    @SneakyThrows
+    public ApiResponse<String> updateAgent4jMd(@ApiParam(value = "Markdown 内容") @Body String content) {
+        Path dir = Paths.get(System.getProperty("user.home"), ".agent4j");
+        if (!Files.exists(dir)) {
+            Files.createDirectories(dir);
+        }
+        Path path = dir.resolve("agent4j.md");
+        Files.write(path, content.getBytes(StandardCharsets.UTF_8));
+        // 触发 Agent 重新初始化，使新提示词生效（新会话会读取更新后的内容）
+        if (agentService.isReady()) {
+            agentService.reinitialize();
+        }
+        return ApiResponse.ok("agent4j.md 已保存，Agent 已重新初始化，新会话将使用更新后的提示词");
     }
 
     // ============ 数据面板 ============

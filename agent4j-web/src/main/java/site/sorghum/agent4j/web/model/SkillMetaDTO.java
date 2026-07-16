@@ -7,6 +7,7 @@ public record SkillMetaDTO(
         String name,
         String description,
         String scope,
-        String runAs
+        String runAs,
+        String directoryName
 ) {
 }

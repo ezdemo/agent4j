@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div class="chat">
     <!-- 可选头部 -->
     <div v-if="!hideHeader" class="chat-head">
@@ -29,44 +29,43 @@
     </div>
 
     <!-- 消息区 -->
-    <div ref="messagesContainer" class="messages">
-      <!-- 空状态：无会话 -->
-      <div v-if="!props.sessionName" class="empty">
-        <div class="empty-icon">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
-          </svg>
-        </div>
-        <p class="empty-title">未选择会话</p>
-        <p class="empty-desc">请从左侧选择一个已有会话，或点击「新建对话」开始新会话</p>
-      </div>
-
-      <!-- 空状态：有会话但无消息 -->
-      <div v-else-if="messages.length === 0" class="empty">
-        <div class="empty-icon">
-          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-          </svg>
-        </div>
-        <p class="empty-title">开始对话</p>
-        <p class="empty-desc">输入问题或指令，Agent4j 将为您提供帮助</p>
-        <div class="quick-actions">
-          <button class="quick-action" @click="inputText = 'Refactor this component'">
-            <i class="fas fa-pen-ruler"></i> Refactor
-          </button>
-          <button class="quick-action" @click="inputText = 'Write tests for'">
-            <i class="fas fa-vial"></i> Write tests
-          </button>
-          <button class="quick-action" @click="inputText = 'Fix the bug in'">
-            <i class="fas fa-bug"></i> Fix bug
-          </button>
-          <button class="quick-action" @click="inputText = 'Explain how this works'">
-            <i class="fas fa-lightbulb"></i> Explain
-          </button>
-        </div>
-        <div class="empty-suggestions">
-          <button v-for="s in suggestions" :key="s" class="suggestion" @click="inputText = s">{{ s }}</button>
-        </div>
+    <div ref="messagesContainer" class="messages" :class="{ 'messages-welcome': !props.sessionName || messages.length === 0 }">
+      <!-- 空状态：无会话或新建的空会话 -->
+      <div v-if="!props.sessionName || messages.length === 0" class="empty welcome-screen">
+        <section class="welcome-panel">
+          <h1 class="welcome-heading">{{ welcomeGreeting }}</h1>
+          <div class="welcome-composer" :class="{ 'workspace-menu-open': welcomeWorkspaceMenuOpen }">
+            <div class="welcome-workspace-row">
+              <button class="welcome-workspace-button" type="button" @click="toggleWelcomeWorkspace">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>
+                <span>{{ selectedWelcomeWorkspace?.name || '选择项目' }}</span>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+              </button>
+              <div v-if="welcomeWorkspaceMenuOpen" class="welcome-workspace-menu">
+                <div class="welcome-workspace-menu-actions">
+                  <button class="welcome-workspace-manage" type="button" @click="openWelcomeWorkspaceManager">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/><path d="M12 10v6m-3-3h6"/></svg>
+                    项目管理
+                  </button>
+                </div>
+                <div class="welcome-workspace-list">
+                  <button v-for="workspace in workspaces" :key="workspace.hash" type="button"
+                          :class="{ active: workspace.hash === welcomeWorkspaceHash }"
+                          @click="selectWelcomeWorkspace(workspace.hash)">
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>
+                    {{ workspace.name }}
+                  </button>
+                  <span v-if="workspaces.length === 0" class="welcome-workspace-empty">暂无可用项目</span>
+                </div>
+              </div>
+            </div>
+            <ChatInput ref="welcomeInput" welcome-mode v-model:input-text="welcomeText" :usage="usage" :current-model="currentModel" :available-models="availableModels"
+                       :current-reasoning-effort="currentReasoningEffort" :terminate-on-no-tool-call="terminateOnNoToolCall" :current-permission="currentPermission"
+                       :workspace-hash="welcomeWorkspaceHash" :current-skill="currentSkill" @send="sendWelcomeMessage" @switch-model="handleSwitchModel"
+                       @switch-reasoning-effort="handleSwitchReasoningEffort" @switch-terminate-on-no-tool-call="handleSwitchTerminateOnNoToolCall"
+                       @switch-permission="handleSwitchPermission" @switch-skill="handleSwitchSkill" @picker-open="handleWelcomePickerOpen" />
+          </div>
+        </section>
       </div>
 
       <!-- 消息列表 -->
@@ -76,12 +75,19 @@
           :idx="idx"
           :msg="msg"
           :snapshot-rollback-loading="snapshotRollbackLoading"
+          :rollback-disabled="streaming"
+          :branch-disabled="streaming || branchingSession"
           @preview-image="previewImage"
-          @rollback-snapshot="rollbackSnapshot"
+          @rollback-snapshot="openRollbackDialog"
           @copy-message="copyMessage"
+          @branch-session="branchSession"
           @send-choice="sendChoice"
           @open-file="openFile"
+          @open-diff="openStoredDiff"
+          @revert-file-changes="openFileRevertDialog"
       />
+
+
 
       <!-- 加载中：AI 准备中 -->
       <div v-if="waitingForAI" class="msg assistant">
@@ -96,17 +102,7 @@
       </div>
     </div>
 
-    <!-- 工作流状态面板（左侧指示条，仅会话选中时显示） -->
-    <div v-if="props.sessionName" class="workflow-dock">
-      <div class="dock-trigger" @mouseenter="loadWorkflow"></div>
-      <div v-if="workflowData" class="dock-body">
-        <WorkflowDagRenderer :data="workflowData" />
-      </div>
-      <div v-else class="dock-body dock-empty">
-        <span class="dock-empty-text">暂无工作流</span>
-        <button class="dock-empty-btn" @click="inputText = '/workflow create '">去创建</button>
-      </div>
-    </div>
+    <!-- 工作流 TODO 指示器（已迁移至 ChatInput 组件中） -->
 
     <!-- 消息缩略图 dock（右侧 dock 栏，仅用户消息） -->
     <div v-if="userMessages.length > 0" class="msg-thumb-dock">
@@ -131,40 +127,7 @@
       </svg>
     </button>
 
-    <!-- 子代理浮窗入口按钮 -->
-    <button v-if="hasSubAgentOutput" class="sub-float-btn" @click="subAgentModalOpen = true">
-      子代理
-      <span class="badge">{{ subAgentSessions.length }}</span>
-    </button>
 
-    <!-- 子代理 Modal -->
-    <Teleport to="body">
-      <div v-if="subAgentModalOpen" class="sub-modal-overlay" @click.self="subAgentModalOpen = false">
-        <div class="sub-modal">
-          <div class="sub-modal-head">
-            <h3>子代理输出</h3>
-            <button class="sub-modal-close" @click="subAgentModalOpen = false">&times;</button>
-          </div>
-          <div class="sub-modal-body" ref="subModalBody">
-            <template v-if="subAgentSessions.length === 0">
-              <div style="text-align:center;color:var(--fg-3);padding:40px 0;">暂无子代理输出</div>
-            </template>
-            <div class="sub-session">
-              <div class="sub-session-body">
-                <template v-for="(session, si) in subAgentSessions" :key="session.id">
-                  <ChatMessage
-                      :msg="{ role: 'assistant', blocks: session.blocks, id: session.id }"
-                      :idx="si"
-                      :snapshot-rollback-loading="{}"
-                      @copy-message="copyMessage"
-                  />
-                </template>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </Teleport>
 
     <!-- 系统提示词 Modal -->
     <Teleport to="body">
@@ -204,29 +167,20 @@
       @close="closeDiffViewer"
     />
 
-    <!-- 无会话时：禁用输入框占位 -->
-    <div v-if="!props.sessionName" class="no-session-input-bar">
-      <div class="no-session-input-placeholder">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
-          <path d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"/>
-        </svg>
-        <span>请先选择或新建一个会话</span>
-      </div>
-    </div>
-
     <!-- 输入区（独立组件） -->
-    <ChatInput v-else
+    <Transition name="welcome-input-drop">
+    <ChatInput v-if="props.sessionName && messages.length > 0"
         v-model:inputText="inputText"
         :streaming="streaming"
         :usage="usage"
         :currentModel="currentModel"
         :availableModels="availableModels"
         :currentReasoningEffort="currentReasoningEffort"
+        :terminateOnNoToolCall="terminateOnNoToolCall"
         :workspaceHash="props.workspaceHash"
         :sessionName="props.sessionName"
         :hasHistory="hasHistory"
         :version="props.version"
-        :connected="props.connected"
         :currentSkill="currentSkill"
         :currentPermission="currentPermission"
         :petState="petState"
@@ -237,23 +191,48 @@
         @refreshUsage="loadUsage"
         @switchModel="handleSwitchModel"
         @switchReasoningEffort="handleSwitchReasoningEffort"
+        @switchTerminateOnNoToolCall="handleSwitchTerminateOnNoToolCall"
         @refreshModels="loadUsage"
         @continue="continueChat"
         @switchSkill="handleSwitchSkill"
         @switchPermission="handleSwitchPermission"
+    />
+    </Transition>
+
+    <ActionConfirmDialog
+        :model-value="rollbackDialog.visible"
+        title="撤回消息"
+        message="将删除当前消息及其后的会话内容。撤回代码会将工作区恢复到发送此消息前的状态。"
+        :actions="rollbackActions"
+        @update:model-value="value => { if (!value) closeRollbackDialog() }"
+        @action="handleRollbackAction"
+    />
+    <ActionConfirmDialog
+        :model-value="fileRevertDialog.visible"
+        title="撤销本次代码修改"
+        message="将按该回复记录的 diff 反向回打补丁，只撤销本次 AI 修改，不删除会话消息。文件在之后被修改过时会拒绝撤销。"
+        :actions="fileRevertActions"
+        :pending="fileRevertDialog.pending"
+        @update:model-value="value => { if (!value) closeFileRevertDialog() }"
+        @action="handleFileRevertAction"
     />
   </div>
 </template>
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {agentAPI, chatAPI, configAPI, gitAPI, snapshotAPI} from '../services/api'
+import {agentAPI, chatAPI, configAPI, gitAPI, sessionsAPI, snapshotAPI} from '../services/api'
 import {md} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
+import {getAssistantTurnBoundaries} from '../utils/sessionBranch'
 import ChatInput from '../components/ChatInput.vue'
 import ChatMessage from '../components/ChatMessage.vue'
 import DiffViewer from '../components/DiffViewer.vue'
-import WorkflowDagRenderer from '../components/WorkflowDagRenderer.vue'
+import ActionConfirmDialog from '../components/ActionConfirmDialog.vue'
+import PermissionModeSelector from '../components/PermissionModeSelector.vue'
+import ReasoningEffortSelector from '../components/ReasoningEffortSelector.vue'
+import SkillSelector from '../components/SkillSelector.vue'
+
 import {useAppStore} from '../stores/app'
 
 // ============= 模型切换 =============
@@ -275,6 +254,7 @@ const handleSwitchModel = async (modelName) => {
 
 // ============= 推理强度切换 =============
 const currentReasoningEffort = ref('max')
+const terminateOnNoToolCall = ref(true)
 
 const handleSwitchReasoningEffort = async (value) => {
   if (value === currentReasoningEffort.value) return
@@ -288,6 +268,18 @@ const handleSwitchReasoningEffort = async (value) => {
   }
 }
 
+const handleSwitchTerminateOnNoToolCall = async (value) => {
+  if (value === terminateOnNoToolCall.value) return
+  try {
+    const r = await configAPI.updateConfig({terminateOnNoToolCall: value})
+    if (r.success) {
+      terminateOnNoToolCall.value = value
+    }
+  } catch (e) {
+    console.error('更新无工具调用结束策略失败:', e)
+  }
+}
+
 // ============= 技能切换（多选） =============
 const currentSkill = ref([])
 const handleSwitchSkill = (skills) => {
@@ -295,13 +287,13 @@ const handleSwitchSkill = (skills) => {
 }
 
 // ============= 权限切换（hitl） =============
-const currentPermission = ref(false)
-const handleSwitchPermission = async (hitl) => {
-  if (hitl === currentPermission.value) return
+const currentPermission = ref('free')
+const handleSwitchPermission = async (mode) => {
+  if (mode === currentPermission.value) return
   try {
-    const r = await configAPI.updateConfig({hitl})
+    const r = await configAPI.updateConfig({hitl: mode})
     if (r.success) {
-      currentPermission.value = hitl
+      currentPermission.value = mode
     }
   } catch (e) {
     console.error('切换权限模式失败:', e)
@@ -312,19 +304,136 @@ const props = defineProps({
   hideHeader: {type: Boolean, default: false},
   workspaceHash: {type: String, default: null},
   sessionName: {type: String, default: null},
-  version: {type: String, default: ''},
-  connected: {type: Boolean, default: true}
+  workspaces: {type: Array, default: () => []},
+  version: {type: String, default: ''}
 })
 
-const emit = defineEmits(['sessionUpdated'])
+const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask', 'switchWorkspace', 'manageWorkspaces'])
 const store = useAppStore()
 
 const messagesContainer = ref(null)
 const inputText = ref('')
+const welcomeInput = ref(null)
+const welcomeText = ref('')
+const welcomeWorkspaceHash = ref('')
+const welcomeWorkspaceMenuOpen = ref(false)
+const welcomeModelMenuOpen = ref(false)
+const welcomePermissionSelector = ref(null)
+const welcomeEffortSelector = ref(null)
+const welcomeSkillSelector = ref(null)
+
+const welcomeGreeting = computed(() => {
+  const hour = new Date().getHours()
+  const period = hour < 5 ? '凌晨好' : hour < 8 ? '早晨好' : hour < 12 ? '上午好' : hour < 14 ? '中午好' : hour < 18 ? '下午好' : hour < 22 ? '晚间好' : '深夜好'
+  const prompts = [
+    '有什么想让我帮忙的吗？',
+    '想先从哪件事开始？',
+    '今天准备推进什么？',
+    '有什么问题需要一起解决？',
+    '把接下来的任务交给我吧。',
+    '需要我帮你梳理一下思路吗？',
+    '想先查看项目的哪个部分？',
+    '有什么任务需要我协助完成？',
+    '准备好开始下一项工作了吗？',
+    '现在最想解决的问题是什么？'
+  ]
+  return `${period}，${prompts[Math.floor(Math.random() * prompts.length)]}`
+})
+
+const selectedWelcomeWorkspace = computed(() =>
+  props.workspaces.find(workspace => workspace.hash === welcomeWorkspaceHash.value)
+)
+
+
+watch(() => props.workspaceHash, (hash) => {
+  if (hash) welcomeWorkspaceHash.value = hash
+}, {immediate: true})
+
+watch(() => props.workspaces, (workspaces) => {
+  if (!workspaces.some(workspace => workspace.hash === welcomeWorkspaceHash.value)) {
+    welcomeWorkspaceHash.value = workspaces[0]?.hash || ''
+  }
+}, {immediate: true})
+
+
+const selectWelcomeWorkspace = (workspaceHash) => {
+  welcomeWorkspaceMenuOpen.value = false
+  emit('switchWorkspace', workspaceHash)
+}
+
+const openWelcomeWorkspaceManager = () => {
+  welcomeWorkspaceMenuOpen.value = false
+  emit('manageWorkspaces')
+}
+
+const closeWelcomeMenus = (except = '') => {
+  if (except !== 'workspace') welcomeWorkspaceMenuOpen.value = false
+  if (except !== 'model') welcomeModelMenuOpen.value = false
+  if (except !== 'permission') welcomePermissionSelector.value?.close()
+  if (except !== 'effort') welcomeEffortSelector.value?.close()
+  if (except !== 'skill') welcomeSkillSelector.value?.close()
+}
+
+const toggleWelcomeWorkspace = () => {
+  const nextOpen = !welcomeWorkspaceMenuOpen.value
+  closeWelcomeMenus('workspace')
+  if (nextOpen) welcomeInput.value?.closePickers()
+  welcomeWorkspaceMenuOpen.value = nextOpen
+}
+
+const handleWelcomePickerOpen = () => {
+  closeWelcomeMenus()
+}
+
+const toggleWelcomeModel = () => {
+  const nextOpen = !welcomeModelMenuOpen.value
+  closeWelcomeMenus('model')
+  welcomeModelMenuOpen.value = nextOpen
+}
+
+const handleWelcomeOutsideClick = (event) => {
+  const target = event.target
+  if (target.closest('.welcome-workspace-row, .welcome-model-selector, .permission-selector, .reasoning-selector, .skill-selector')) return
+  closeWelcomeMenus()
+}
+
+const selectWelcomeModel = async (modelName) => {
+  welcomeModelMenuOpen.value = false
+  await handleSwitchModel(modelName)
+}
+
+
+const sendWelcomeMessage = async (images, messageText) => {
+  const prompt = messageText?.trim()
+  if (!prompt) return
+
+  if (props.sessionName) {
+    welcomeText.value = ''
+    await sendMessage(images, prompt)
+    return
+  }
+
+  if (!welcomeWorkspaceHash.value) return
+  welcomeText.value = ''
+  emit('startTask', {prompt, workspaceHash: welcomeWorkspaceHash.value})
+}
 
 // 快照检查点：msgId -> snapshotId 映射（用于消息关联和撤回按钮显示）
 const snapshotMap = ref(new Map())
 const snapshotRollbackLoading = ref(new Map()) // msgId -> 是否正在撤回
+const rollbackDialog = ref({visible: false, msgId: null, canRollbackCode: false})
+const fileRevertDialog = ref({visible: false, pending: false, changes: []})
+const fileRevertActions = [{key: 'cancel', label: '取消'}, {key: 'revert', label: '撤销代码', variant: 'danger'}]
+const rollbackActions = computed(() => {
+  const actions = [
+    {key: 'cancel', label: '取消'},
+    {key: 'message', label: '只撤回消息', variant: 'accent'}
+  ]
+  if (rollbackDialog.value.canRollbackCode) {
+    actions.push({key: 'code', label: '撤回消息和代码', variant: 'danger'})
+  }
+  return actions
+})
 
 // 图片预览
 const imagePreviewUrl = ref('')
@@ -348,12 +457,21 @@ const openDiff = async (filePath) => {
     diffViewer.value.diff = '加载 diff 失败: ' + (e.message || '')
   }
 }
+const openStoredDiff = (change) => {
+  diffViewer.value = {
+    open: true,
+    file: change?.path || '',
+    diff: change?.diff || '此历史记录没有保存差异快照。',
+    stat: `+${change?.additions || 0} -${change?.deletions || 0}`
+  }
+}
 const closeDiffViewer = () => {
   diffViewer.value = { open: false, file: '', diff: '', stat: '' }
 }
 
 const messages = computed(() => store.getSessionMessages(props.sessionName))
 const streaming = computed(() => store.getSessionStreaming(props.sessionName))
+const branchingSession = ref(false)
 const hasHistory = computed(() => messages.value.length > 0)
 const planMode = ref(false)
 
@@ -366,41 +484,14 @@ const usage = ref({
   maxContextTokens: 128000,
   lastPromptTokens: 0
 })
+let usageRequestId = 0
 const currentModel = ref('')
 const availableModels = ref([])
 
-// ==================== 工作流状态 ====================
-const workflowData = ref(null)
-const workflowLoading = ref(false)
-const workflowCollapsed = ref(false)
-
-const loadWorkflow = async () => {
-  if (!props.workspaceHash || !props.sessionName) {
-    workflowData.value = null
-    return
-  }
-  workflowLoading.value = true
-  try {
-    const { sessionsAPI } = await import('../services/api')
-    const res = await sessionsAPI.getWorkflow(props.sessionName, props.workspaceHash)
-    if (res.success && res.data) {
-      workflowData.value = res.data
-    } else {
-      workflowData.value = null
-    }
-  } catch (e) {
-    workflowData.value = null
-  } finally {
-    workflowLoading.value = false
-  }
-}
-
-// 监听会话变化，加载工作流
-watch([() => props.workspaceHash, () => props.sessionName], () => {
-  loadWorkflow()
-}, { immediate: true })
+// ==================== 工作流 TODO（已迁移至 ChatInput 组件中）====================
 
 const loadUsage = async (override) => {
+  const requestId = ++usageRequestId
   try {
     const params = {}
     const wsHash = override?.workspaceHash ?? props.workspaceHash
@@ -409,62 +500,33 @@ const loadUsage = async (override) => {
     if (sessName) params.sessionName = sessName
 
     const [usageRes, modelsRes, configRes] = await Promise.allSettled([
-      configAPI.getUsage(params),
+      wsHash ? configAPI.getUsage(params) : Promise.resolve(null),
       configAPI.getModels(),
       configAPI.getConfig()
     ])
-    if (usageRes.status === 'fulfilled' && usageRes.value.success) {
+    // 会话切换可能在请求返回前再次发生，过期响应不得覆盖当前会话的用量。
+    if (requestId !== usageRequestId) return
+    if (usageRes.status === 'fulfilled' && usageRes.value?.success) {
       usage.value = {...usage.value, ...usageRes.value.data}
     }
+    const configuredModel = configRes.status === 'fulfilled' && configRes.value.success
+      ? configRes.value.data?.model || ''
+      : ''
     if (modelsRes.status === 'fulfilled' && modelsRes.value.success) {
-      currentModel.value = modelsRes.value.data?.current || ''
+      currentModel.value = modelsRes.value.data?.current
+        || modelsRes.value.data?.models?.find(model => model.active)?.name
+        || configuredModel
+        || currentModel.value
       availableModels.value = modelsRes.value.data?.models || []
     }
     if (configRes.status === 'fulfilled' && configRes.value.success) {
+      if (!currentModel.value) currentModel.value = configuredModel
       currentReasoningEffort.value = configRes.value.data?.reasoningEffort || 'max'
-      currentPermission.value = !!configRes.value.data?.hitl
+      terminateOnNoToolCall.value = configRes.value.data?.terminateOnNoToolCall !== false
+      currentPermission.value = configRes.value.data?.hitl || 'free'
     }
   } catch {
   }
-}
-
-// ==================== 子代理 Modal 状态 ====================
-// 收集子代理的 sub_xxx 事件，在独立 Modal 中渲染，不占用主消息流
-const subAgentBlocks = ref([])        // 当前正在进行的子代理的 blocks
-const subAgentSessions = ref([])      // 已完成的子代理会话列表
-const subAgentModalOpen = ref(false)
-const subAgentModalTask = ref('')
-const subAgentSessionId = ref(0)      // 自增 ID
-const hasSubAgentOutput = computed(() => subAgentSessions.value.length > 0)
-const subModalBody = ref(null)        // 子代理 Modal 容器 ref，用于自动滚底
-
-// 子代理 Modal 内容变化时始终滚动到底部
-const scrollSubModalToBottom = async () => {
-  await nextTick()
-  await nextTick() // 两层 nextTick 确保 Vue 渲染完成
-  const el = subModalBody.value
-  if (el) el.scrollTop = el.scrollHeight
-}
-
-watch([subAgentSessions, subAgentBlocks], async () => {
-  if (subAgentModalOpen.value) {
-    await scrollSubModalToBottom()
-  }
-})
-
-// 打开 Modal 时滚动到底部（显示最新内容）
-watch(subAgentModalOpen, async (open) => {
-  if (open) {
-    await scrollSubModalToBottom()
-  }
-})
-
-// 切换会话/清空时重置子代理状态
-const resetSubAgentState = () => {
-  subAgentBlocks.value = []
-  subAgentSessions.value = []
-  subAgentSessionId.value = 0
-  subAgentModalOpen.value = false
 }
 
 // 日志通知列表（逐条堆叠，每条6秒后自动移除）
@@ -487,14 +549,12 @@ const formatTime = (t) => {
 // 监听 workspace 和 session 变化，重新加载 usage
 watch([() => props.workspaceHash, () => props.sessionName], ([ws, sess]) => {
   if (ws || sess) {
-    if (sess) {
-      loadUsage()
-    }
+    loadUsage()
   }
 })
 
 onMounted(() => {
-  if (props.sessionName) loadUsage()
+  loadUsage()
   // 监听复制成功事件
   window.addEventListener('copy-success', (e) => {
     addLog({level: 'INFO', text: '✅ ' + (e.detail || '已复制'), time: Date.now()})
@@ -624,6 +684,35 @@ const copyMessage = (msg) => {
   })
 }
 
+// 分支到新会话：复制当前消息及之前的消息到新会话
+const branchSession = async (msg, msgIdx) => {
+  if (!props.sessionName || !props.workspaceHash || streaming.value || branchingSession.value) return
+  branchingSession.value = true
+  try {
+    let count = msg.sourceMessageCount
+    if (!count) {
+      const history = await agentAPI.getHistory(props.workspaceHash, props.sessionName)
+      const assistantOrdinal = messages.value.slice(0, msgIdx + 1)
+          .filter(item => item.role === 'assistant').length - 1
+      count = history.success ? getAssistantTurnBoundaries(history.data || [])[assistantOrdinal] : null
+    }
+    if (!Number.isInteger(count) || count <= 0) {
+      throw new Error('无法确定完整的助手消息边界')
+    }
+    const r = await sessionsAPI.branchSession(props.sessionName, props.workspaceHash, count)
+    if (r.success && r.data?.sessionName) {
+      window.dispatchEvent(new CustomEvent('copy-success', {detail: '已分支到新会话'}))
+      emit('sessionBranched', r.data.sessionName)
+    } else {
+      window.dispatchEvent(new CustomEvent('copy-success', {detail: r.error || '分支失败'}))
+    }
+  } catch (err) {
+    window.dispatchEvent(new CustomEvent('copy-success', {detail: '分支失败: ' + (err.message || err)}))
+  } finally {
+    branchingSession.value = false
+  }
+}
+
 // 输入框事件已迁移到 ChatInput 组件
 
 const showScrollBtn = ref(false)
@@ -679,7 +768,31 @@ const onScroll = () => {
 }
 
 /** 用户点击选项按钮 → 直接发送 value 作为消息，清理旧工具卡片 */
-const sendChoice = (value, block) => {
+// HITL 审批 question 格式化：将工具名转为 `tool` 形式的展示文本
+const formatHitlQuestion = (title) => {
+  return '将执行 ' + title.split('、').map(n => '`' + n + '`').join('、')
+}
+
+const sendChoice = async (value, block) => {
+  // 子代理 HITL 审批：调用 REST API 而非发送聊天消息
+  if (block?.subId != null) {
+    // 解析 action：/agree → approve, /deny → deny
+    const action = value === '/agree' ? 'approve' : 'deny'
+    try {
+      await fetch('/api/chat/sub-hitl/' + block.subId, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action })
+      })
+      // 标记已选择
+      block.resolved = true
+      block.selectedTitle = action === 'approve' ? '同意执行' : '拒绝执行'
+    } catch (e) {
+      console.error('子代理 HITL 审批请求失败:', e)
+    }
+    return
+  }
+  // 主代理 HITL 审批：发送聊天消息
   // 标记已选择
   if (block) {
     block.resolved = true
@@ -711,6 +824,36 @@ const openFile = async (filePath) => {
  *   收到有内容的 SSE 事件时才创建助手气泡
  * - /skill: 命令：显示用户气泡 + 助手气泡（正常流程）
  */
+const mergeFileChanges = (blocks, changes) => {
+  if (!Array.isArray(changes) || changes.length === 0) return
+  let summary = blocks.find(block => block.type === 'file_changes')
+  if (!summary) {
+    summary = {type: 'file_changes', changes: []}
+    blocks.push(summary)
+  }
+  const byPath = new Map(summary.changes.map(change => [change.path, {...change}]))
+  for (const change of changes) {
+    if (!change?.path) continue
+    const existing = byPath.get(change.path)
+    byPath.set(change.path, existing ? {
+      ...existing,
+      additions: Number(existing.additions || 0) + Number(change.additions || 0),
+      deletions: Number(existing.deletions || 0) + Number(change.deletions || 0),
+      created: Boolean(existing.created || change.created),
+      diff: [existing.diff, change.diff].filter(Boolean).join('\n')
+    } : {...change})
+  }
+  summary.changes = [...byPath.values()]
+}
+
+const moveFileChangesToEnd = (blocks) => {
+  const changes = blocks.filter(block => block.type === 'file_changes')
+  if (changes.length === 0) return
+  const summary = changes[0]
+  const rest = blocks.filter(block => block.type !== 'file_changes')
+  blocks.splice(0, blocks.length, ...rest, summary)
+}
+
 const sendMessage = async (images = [], overrideText = null) => {
   const text = overrideText || inputText.value.trim()
   if ((!text || streaming.value) && images.length === 0) return
@@ -721,14 +864,14 @@ const sendMessage = async (images = [], overrideText = null) => {
   // 静默命令不显示用户气泡（系统命令、模式切换、HITL 审批等）
   const isSilent = SILENT_CMDS.has(firstWord)
 
-  // 每条新消息开始时重置子代理状态
-  resetSubAgentState()
 
   // 静默命令不显示用户气泡
   if (!isSilent) {
-    const userMsg = {id: Date.now(), role: 'user', content: text, time: now(), snapshotId: null}
+    const userMsg = {id: Date.now(), role: 'user', content: text, time: now(), snapshotId: null, rollbackId: null}
     if (images.length > 0) userMsg.images = images
     store.addSessionMessage(sessionName, userMsg)
+    // Empty sessions are intentionally hidden. Show the session as soon as it has a user message.
+    emit('sessionUpdated', sessionName, true)
   }
   userScrolledAway = false
   inputText.value = ''
@@ -761,7 +904,7 @@ const sendMessage = async (images = [], overrideText = null) => {
             if (!data.type || data.type === 'done') return
             const hasContent = (data.type === 'content' && data.content?.trim()) ||
                 (data.type === 'reasoning' && data.content?.trim()) ||
-                data.type === 'tool_call' || data.type === 'tool_result' || data.type === 'error'
+                data.type === 'tool_call' || data.type === 'tool_result' || data.type === 'file_changes' || data.type === 'error'
             if (!hasContent) return
             // 有实际内容了，插入助手气泡
             silentAssistantId = Date.now()
@@ -771,73 +914,100 @@ const sendMessage = async (images = [], overrideText = null) => {
 
           const msg = getMsg()
           if (!msg) return
-          // ===== 子代理事件（独立通道，不占用主消息流） =====
-          if (data.type === 'sub_content') {
-            const lb = subAgentBlocks.value[subAgentBlocks.value.length - 1]
-            if (lb?.type === 'content') lb.content += (data.content || '')
-            else subAgentBlocks.value.push({type: 'content', content: data.content || ''})
-          } else if (data.type === 'sub_reasoning') {
-            const lb = subAgentBlocks.value[subAgentBlocks.value.length - 1]
-            if (lb?.type === 'reasoning') lb.content += (data.content || '')
-            else subAgentBlocks.value.push({type: 'reasoning', content: data.content || '', showContent: false})
-          } else if (data.type === 'sub_tool_call') {
-            let name = data.name || '', args = data.args || data.arguments || ''
-            if (typeof args === 'string') try {
-              args = JSON.parse(args)
-            } catch {
+
+          // 按 subId 查找或创建子代理容器块（用于并行子代理事件路由）
+          const findSubAgentBlock = (subId) => {
+            for (let i = msg.blocks.length - 1; i >= 0; i--) {
+              if (msg.blocks[i].type === 'sub_agent' && msg.blocks[i].subId === subId) {
+                return msg.blocks[i]
+              }
             }
-            subAgentBlocks.value.push({
-              type: 'tool_call',
-              name: name || 'unknown',
-              status: '执行中',
-              args,
-              result: '',
-              expanded: true
-            })
+            const container = { type: 'sub_agent', subId, blocks: [], status: '运行中', taskName: '子代理', expanded: true }
+            msg.blocks.push(container)
+            return container
+          }
+
+          // ===== 子代理事件：注入 sub_agent 容器块，内部渲染 =====
+          if (data.type === 'sub_content' || data.type === 'sub_reasoning' ||
+              data.type === 'sub_tool_call' || data.type === 'sub_error') {
+            const container = findSubAgentBlock(data.subId)
+            // 向容器内添加内容
+            if (data.type === 'sub_content') {
+              const lb = container.blocks[container.blocks.length - 1]
+              const content = data.token || data.content || ''
+              if (lb?.type === 'content') lb.content += content
+              else container.blocks.push({type: 'content', content: content})
+            } else if (data.type === 'sub_reasoning') {
+              const lb = container.blocks[container.blocks.length - 1]
+              const reasoningContent = data.token || data.content || ''
+              if (lb?.type === 'reasoning') lb.content += reasoningContent
+              else container.blocks.push({type: 'reasoning', content: reasoningContent, showContent: false})
+            } else if (data.type === 'sub_tool_call') {
+              let name = data.name || '', args = data.args || data.arguments || ''
+              if (typeof args === 'string') try {
+                args = JSON.parse(args)
+              } catch {
+              }
+              container.blocks.push({
+                type: 'tool_call',
+                name: name || 'unknown',
+                status: '执行中',
+                args,
+                result: '',
+                expanded: true
+              })
+            } else if (data.type === 'sub_error') {
+              const errText = data.error || data.content || '未知错误'
+              container.blocks.push({type: 'content', content: '❌ ' + errText})
+            }
           } else if (data.type === 'sub_tool_result') {
+            const c = findSubAgentBlock(data.subId)
             let result = data.result || data.content || ''
             const rn = typeof result === 'string' ? result : JSON.stringify(result, null, 2)
             let targetName = data.name || ''
-            // 优先按 name 匹配（异步执行时完成顺序与调用顺序可能不同）
             let matched = false
             if (targetName) {
-              for (let i = subAgentBlocks.value.length - 1; i >= 0; i--) {
-                if (subAgentBlocks.value[i].type === 'tool_call' && subAgentBlocks.value[i].name === targetName && !subAgentBlocks.value[i].result) {
-                  subAgentBlocks.value[i].result = rn;
-                  subAgentBlocks.value[i].status = '成功';
-                  subAgentBlocks.value[i].expanded = false;
-                  matched = true
-                  break
+              for (let j = c.blocks.length - 1; j >= 0; j--) {
+                if (c.blocks[j].type === 'tool_call' && c.blocks[j].name === targetName && !c.blocks[j].result) {
+                  c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].expanded = false
+                  matched = true; break
                 }
               }
             }
             if (!matched) {
-              for (let i = subAgentBlocks.value.length - 1; i >= 0; i--) {
-                if (subAgentBlocks.value[i].type === 'tool_call' && !subAgentBlocks.value[i].result) {
-                  subAgentBlocks.value[i].result = rn;
-                  subAgentBlocks.value[i].status = '成功';
-                  subAgentBlocks.value[i].expanded = false;
+              for (let j = c.blocks.length - 1; j >= 0; j--) {
+                if (c.blocks[j].type === 'tool_call' && !c.blocks[j].result) {
+                  c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].expanded = false
                   break
                 }
               }
             }
           } else if (data.type === 'sub_complete') {
-            // 子代理完成 → 将当前 blocks 归档为一个会话
-            if (subAgentBlocks.value.length > 0) {
-              subAgentSessionId.value++
-              const taskName = data?.task || data?.content?.task || '子代理'
-              subAgentSessions.value.push({
-                id: subAgentSessionId.value,
-                taskName: typeof taskName === 'string' ? taskName : '子代理',
-                blocks: [...subAgentBlocks.value]
-              })
-              subAgentBlocks.value = []
+            const c = findSubAgentBlock(data.subId)
+            c.status = '已完成'
+            c.taskName = data?.task || c.taskName || '子代理'
+            c.expanded = false
+          } else if (data.type === 'sub_choice') {
+            // 子代理 HITL 审批 → 作为顶级 choice 块渲染在主消息流中
+            let options = data.options || []
+            if (typeof options === 'string') {
+              try { options = JSON.parse(options) } catch {}
             }
-          } else if (data.type === 'sub_error') {
-            const errText = data.error || data.content || '未知错误'
-            subAgentBlocks.value.push({type: 'content', content: '❌ ' + errText})
-          } else if (data.type === 'sub_usage' || data.type === 'sub_choice' || data.type === 'sub_log') {
-            // 子代理用量/选择/日志暂不处理
+            const title = data.title || ''
+            const desc = data.description || ''
+            const question = title
+                ? '子代理 ' + formatHitlQuestion(title)
+                : '子代理工具调用需要审批'
+            msg.blocks.push({
+              type: 'choice',
+              subId: data.subId,
+              options: options,
+              question,
+              description: desc,
+              resolved: false
+            })
+          } else if (data.type === 'sub_usage' || data.type === 'sub_log') {
+            // 暂不处理
             // ===== 普通主代理事件 =====
           } else if (data.type === 'reasoning') {
             const lb = msg.blocks[msg.blocks.length - 1]
@@ -889,6 +1059,10 @@ const sendMessage = async (images = [], overrideText = null) => {
                 }
               }
             }
+          } else if (data.type === 'file_changes') {
+            const changes = Array.isArray(data.changes) ? data.changes : []
+            mergeFileChanges(msg.blocks, changes)
+            moveFileChangesToEnd(msg.blocks)
           } else if (data.type === 'error') {
             msg.blocks.push({type: 'content', content: '错误: ' + (data.error || data.content || '未知')})
           } else if (data.type === 'usage') {
@@ -897,7 +1071,7 @@ const sendMessage = async (images = [], overrideText = null) => {
               usage.value = {...usage.value, ...data}
             }
           } else if (data.type === 'choice') {
-            // 选项按钮（如 HITL 审批）
+            // 选项按钮（如 HITL 审批、ask_choice）
             let options = data.options || []
             if (typeof options === 'string') {
               try {
@@ -906,10 +1080,14 @@ const sendMessage = async (images = [], overrideText = null) => {
               }
             }
             if (Array.isArray(options) && options.length > 0) {
-              // 尝试从同消息的 ask_choice tool_call 中获取 question 和 summary
-              let question = data.question || ''
+              // HITL 审批：使用后端传入的 title/description
+              let question = data.title
+                ? formatHitlQuestion(data.title)
+                : (data.question || '')
+              const description = data.description || ''
               let toolOptions = null
-              if (msg.blocks) {
+              // 尝试从同消息的 ask_choice tool_call 中获取 question 和 summary（向后兼容）
+              if (!question && msg.blocks) {
                 for (let i = msg.blocks.length - 1; i >= 0; i--) {
                   const b = msg.blocks[i]
                   if (b.type === 'tool_call' && b.name === 'ask_choice') {
@@ -931,7 +1109,7 @@ const sendMessage = async (images = [], overrideText = null) => {
                   return opt
                 })
               }
-              msg.blocks.push({type: 'choice', options, question})
+              msg.blocks.push({type: 'choice', options, question, description})
             }
           } else if (data.type === 'log') {
             // 系统日志（如 [compact] 折叠结果）→ 仅展示 INFO 及以上级别
@@ -940,15 +1118,18 @@ const sendMessage = async (images = [], overrideText = null) => {
             const text = data.message || data.content || ''
             addLog({level, text, time: Date.now()})
           } else if (data.type === 'snapshot') {
-            // 快照检查点事件：记录快照 ID，关联到当前用户消息，用于后续撤回
+            // 每条用户消息都会收到撤回定位 ID；只有实际创建快照时才可撤回代码。
             if (data.msgId) {
-              store.addSnapshot(sessionName, data.msgId, data.msgId)
-              snapshotMap.value.set(data.msgId, data.msgId)
-              // 将快照 ID 关联到最后一条用户消息
+              if (data.hasCodeSnapshot) {
+                store.addSnapshot(sessionName, data.msgId, data.msgId)
+                snapshotMap.value.set(data.msgId, data.msgId)
+              }
+              // 将撤回定位 ID 关联到最后一条尚未关联的用户消息
               const msgs = store.getSessionMessages(sessionName)
               for (let i = msgs.length - 1; i >= 0; i--) {
-                if (msgs[i].role === 'user' && !msgs[i].snapshotId) {
-                  msgs[i].snapshotId = data.msgId
+                if (msgs[i].role === 'user' && !msgs[i].rollbackId) {
+                  msgs[i].rollbackId = data.msgId
+                  if (data.hasCodeSnapshot) msgs[i].snapshotId = data.msgId
                   break
                 }
               }
@@ -973,6 +1154,7 @@ const sendMessage = async (images = [], overrideText = null) => {
           store.setSessionStreaming(sessionName, false)
           const msg = getMsg()
           if (msg && !msg.blocks.length) msg.blocks.push({type: 'content', content: '连接错误'})
+          emit('sessionUpdated')
         },
         // 传递工作区、会话和图片信息
         {
@@ -984,6 +1166,7 @@ const sendMessage = async (images = [], overrideText = null) => {
     store.setSessionController(sessionName, streamResult)
   } catch {
     store.setSessionStreaming(sessionName, false)
+    emit('sessionUpdated')
   }
   await scroll()
 }
@@ -999,15 +1182,73 @@ const abortChat = async () => {
   store.setSessionStreaming(props.sessionName, false)
 }
 
-/** 撤回快照：回滚到 AI 修改前的状态，并截断会话消息 + 回填输入框 */
-const rollbackSnapshot = async (msgId) => {
-  if (!msgId) return
-  const loadingKey = msgId
+const openRollbackDialog = (msgId, canRollbackCode, rollbackTimestamp) => {
+  const rollbackKey = msgId || rollbackTimestamp
+  if (streaming.value || !rollbackKey || snapshotRollbackLoading.value.get(rollbackKey)) return
+  rollbackDialog.value = {visible: true, msgId, rollbackTimestamp, canRollbackCode}
+}
+
+const openFileRevertDialog = (changes) => {
+  if (streaming.value || !Array.isArray(changes) || changes.length === 0) return
+  fileRevertDialog.value = {visible: true, pending: false, changes}
+}
+
+const closeFileRevertDialog = () => {
+  if (fileRevertDialog.value.pending) return
+  fileRevertDialog.value = {visible: false, pending: false, changes: []}
+}
+
+const handleFileRevertAction = async (action) => {
+  if (action === 'cancel') {
+    closeFileRevertDialog()
+    return
+  }
+  const changes = fileRevertDialog.value.changes
+  if (!changes.length || fileRevertDialog.value.pending) return
+  fileRevertDialog.value.pending = true
+  try {
+    const res = await sessionsAPI.revertFileChanges(props.workspaceHash, changes)
+    if (res.success) {
+      addLog({level: 'INFO', text: `✅ ${res.data?.message || '已撤销本次 AI 的文件修改'}`, time: Date.now()})
+      fileRevertDialog.value = {visible: false, pending: false, changes: []}
+      await refreshHistory()
+      emit('sessionUpdated')
+    }
+  } catch {
+    // The API interceptor already displays the failure notification.
+  } finally {
+    if (fileRevertDialog.value.visible) fileRevertDialog.value.pending = false
+  }
+}
+
+const closeRollbackDialog = () => {
+  rollbackDialog.value = {visible: false, msgId: null, rollbackTimestamp: null, canRollbackCode: false}
+}
+
+const confirmRollback = (rollbackCode) => {
+  const msgId = rollbackDialog.value.msgId
+  const rollbackTimestamp = rollbackDialog.value.rollbackTimestamp
+  closeRollbackDialog()
+  rollbackSnapshot(msgId, rollbackCode, rollbackTimestamp)
+}
+
+const handleRollbackAction = (action) => {
+  if (action === 'cancel') {
+    closeRollbackDialog()
+    return
+  }
+  confirmRollback(action === 'code')
+}
+
+/** 撤回会话消息，并按选择决定是否恢复 AI 修改的代码。 */
+const rollbackSnapshot = async (msgId, rollbackCode, rollbackTimestamp) => {
+  const loadingKey = msgId || rollbackTimestamp
+  if (streaming.value || !loadingKey) return
   if (snapshotRollbackLoading.value.get(loadingKey)) return // 防止重复点击
   snapshotRollbackLoading.value.set(loadingKey, true)
 
   try {
-    const res = await snapshotAPI.rollback(props.workspaceHash, msgId, props.sessionName)
+    const res = await snapshotAPI.rollback(props.workspaceHash, msgId, props.sessionName, rollbackCode, rollbackTimestamp)
     if (res.success) {
       addLog({level: 'INFO', text: `✅ ${res.data?.message || '工作区已恢复'}`, time: Date.now()})
       // 截断该消息之后的所有快照记录
@@ -1021,7 +1262,8 @@ const rollbackSnapshot = async (msgId) => {
       // 优先使用后端返回的 rollbackUserText（从 JSONL 持久化数据中取得）
       let rollbackContent = res.data?.rollbackUserText || ''
       for (let i = 0; i < msgs.length; i++) {
-        if (msgs[i].snapshotId === msgId) {
+        if ((msgId && (msgs[i].rollbackId === msgId || msgs[i].snapshotId === msgId))
+            || (!msgId && msgs[i].rollbackTimestamp === rollbackTimestamp)) {
           targetIdx = i
           // 如果后端没返回文本，从前端消息中取
           if (!rollbackContent) rollbackContent = msgs[i].content || ''
@@ -1052,7 +1294,6 @@ const rollbackSnapshot = async (msgId) => {
 
 const clearChat = async () => {
   store.clearSessionMessages(props.sessionName)
-  resetSubAgentState()
   // 发送 /new 给后端清空会话
   store.setSessionStreaming(props.sessionName, true)
   try {
@@ -1071,7 +1312,6 @@ const clearChat = async () => {
 // 暴露给父组件的清空方法（/new 属于 SILENT_CMDS，不显示气泡）
 const clearMessages = () => {
   store.clearSessionMessages(props.sessionName)
-  resetSubAgentState()
   store.setSessionStreaming(props.sessionName, true)
   try {
     chatAPI.sendMessageStream('/new', () => {
@@ -1096,7 +1336,6 @@ const continueChat = async () => {
 // 仅清空本地消息，不请求后端（配合 REST API 创建新会话时使用）
 const resetLocalMessages = () => {
   store.clearSessionMessages(props.sessionName)
-  resetSubAgentState()
 }
 
 const exportChat = () => {
@@ -1173,6 +1412,8 @@ const loadHistory = async (sessionName, force = false) => {
     const r = await agentAPI.getHistory(props.workspaceHash, targetSession)
     if (r.success && r.data) {
       const raw = r.data, tr = {}
+      const assistantBoundaries = getAssistantTurnBoundaries(raw)
+      let assistantTurn = 0
       for (const m of raw) if (m.role === 'tool' && m.tool_call_id) tr[m.tool_call_id] = m.content || ''
       const merged = []
       let lastAssistantItem = null
@@ -1203,13 +1444,16 @@ const loadHistory = async (sessionName, force = false) => {
           if (m.snapshot_id) {
             item.snapshotId = m.snapshot_id
           }
+          // rollback_id 独立于代码快照；旧会话则以 snapshot_id 兼容。
+          item.rollbackId = m.rollback_id || m.snapshot_id || null
+          item.rollbackTimestamp = m.timestamp || null
           merged.push(item)
           lastAssistantItem = null // 重置
         } else {
           // assistant消息：合并连续的assistant消息
           if (!lastAssistantItem) {
             // 创建新的assistant item
-            lastAssistantItem = {id: Date.now() + idCounter++, role: 'assistant', time: formatTimestamp(m.timestamp), blocks: []}
+            lastAssistantItem = {id: Date.now() + idCounter++, role: 'assistant', time: formatTimestamp(m.timestamp), blocks: [], sourceMessageCount: assistantBoundaries[assistantTurn++]}
             merged.push(lastAssistantItem)
           } else {
             // 更新时间戳为最新的
@@ -1236,7 +1480,14 @@ const loadHistory = async (sessionName, force = false) => {
             })
           }
           if (m.content) lastAssistantItem.blocks.push({type: 'content', content: m.content})
+          const fileChanges = m.file_changes || m.fileChanges
+          if (Array.isArray(fileChanges) && fileChanges.length > 0) {
+            mergeFileChanges(lastAssistantItem.blocks, fileChanges)
+          }
         }
+      }
+      for (const item of merged) {
+        if (item.role === 'assistant') moveFileChangesToEnd(item.blocks)
       }
       store.setSessionMessages(targetSession, merged)
       await scroll(true)
@@ -1261,7 +1512,6 @@ const refreshHistory = async (name) => {
 
 const loadSession = async (name, workspaceHash) => {
   try {
-    resetSubAgentState()
     const {sessionsAPI} = await import('../services/api')
     await sessionsAPI.switchSession(name, workspaceHash)
     const existing = store.getSessionMessages(name)
@@ -1282,12 +1532,25 @@ const sendCommand = async cmd => {
   await sendMessage()
 }
 
+const startWelcomePrompt = async (prompt) => {
+  inputText.value = prompt || ''
+  await nextTick()
+  await sendMessage()
+}
+
 // 加载历史消息（仅在明确选了 session 时）
 onMounted(() => {
+  document.addEventListener('click', handleWelcomeOutsideClick)
   if (props.sessionName) loadHistory()
 })
 
-defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, exportChat, refreshHistory})
+onBeforeUnmount(() => document.removeEventListener('click', handleWelcomeOutsideClick))
+
+const setDraft = (text) => {
+  inputText.value = text || ''
+}
+
+defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, startWelcomePrompt, exportChat, refreshHistory, setDraft})
 </script>
 
 <style scoped>
@@ -1345,7 +1608,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 48px 100px;
+  padding: 16px 72px 100px;
   position: relative;
 }
 
@@ -1462,7 +1725,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 }
 
 .msg.assistant .msg-body {
-  max-width: 85%;
+  max-width: 78%;
 }
 
 .assistant-body {
@@ -1648,137 +1911,6 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
 }
 
 
-/* ==================== 子代理 Modal ==================== */
-.sub-modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.sub-modal {
-  width: min(90vw, 860px);
-  height: min(85vh, 700px);
-  background: var(--glass-bg);
-  backdrop-filter: blur(var(--blur));
-  -webkit-backdrop-filter: blur(var(--blur));
-  border: 1px solid var(--glass-border);
-  border-radius: 12px;
-  box-shadow: var(--glass-shadow);
-  display: flex;
-  flex-direction: column;
-  overflow: hidden;
-}
-
-.sub-modal-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.sub-modal-head h3 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-
-.sub-modal-close {
-  background: none;
-  border: none;
-  color: var(--fg-3);
-  cursor: pointer;
-  font-size: 18px;
-  padding: 4px 8px;
-  border-radius: 4px;
-}
-
-.sub-modal-close:hover {
-  background: var(--bg-2);
-  color: var(--fg);
-}
-
-.sub-modal-body {
-  flex: 1;
-  overflow-y: auto;
-  padding: 16px;
-}
-
-/* 子代理会话卡片 */
-.sub-session {
-  margin-bottom: 16px;
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  overflow: hidden;
-  padding: 12px;
-}
-
-.sub-session-head {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  font-size: 13px;
-  font-weight: 600;
-  background: var(--bg-2);
-  border-bottom: 1px solid var(--border);
-  color: var(--fg-2);
-}
-
-.sub-session-body {
-  padding: 0;
-}
-
-.sub-session-task {
-  padding: 6px 12px 2px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--accent);
-}
-
-/* 浮动入口按钮 */
-.sub-float-btn {
-  position: fixed;
-  right: 24px;
-  bottom: 170px;
-  z-index: 100;
-  padding: 8px 14px;
-  border-radius: 20px;
-  background: var(--accent);
-  color: #fff;
-  border: none;
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.25);
-  cursor: pointer;
-  font-size: 13px;
-  font-weight: 600;
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 0.2s ease;
-}
-
-.sub-float-btn:hover {
-  transform: scale(1.05);
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.35);
-}
-
-.sub-float-btn .badge {
-  background: rgba(255, 255, 255, 0.25);
-  border-radius: 10px;
-  padding: 0 6px;
-  font-size: 11px;
-  min-width: 18px;
-  text-align: center;
-}
-
 /* ===== 系统提示词弹窗 ===== */
 .prompt-modal-overlay {
   position: fixed;
@@ -1947,113 +2079,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   user-select: none;
 }
 
-/* ===== 工作流指示条（左侧边缘侧滑） ===== */
-.workflow-dock {
-  position: absolute;
-  left: 0;
-  top: 30%;
-  bottom: 30%;
-  z-index: 60;
-  width: min(85vw, 780px);
-  overflow: hidden;
-  pointer-events: none;
-}
-
-.dock-trigger {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 10px;
-  pointer-events: auto;
-  cursor: default;
-  z-index: 2;
-}
-
-.dock-trigger::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 7px;
-  border-radius: 0 4px 4px 0;
-  background: var(--accent);
-  opacity: 0.5;
-  transition: opacity 0.25s ease;
-}
-
-.workflow-dock:has(.dock-trigger:hover) .dock-trigger::before,
-.workflow-dock:has(.dock-body:hover) .dock-trigger::before {
-  opacity: 0;
-}
-
-.dock-body {
-  position: absolute;
-  left: 12px;
-  top: 8px;
-  bottom: 8px;
-  right: 8px;
-  padding: 12px 16px;
-  overflow-y: auto;
-  pointer-events: auto;
-  background: var(--bg);
-  border: 1px solid var(--border);
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.1);
-  border-radius: var(--r-lg);
-  transform: translateX(calc(-100% - 12px));
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1),
-              opacity 0.25s ease;
-  opacity: 0;
-}
-
-.workflow-dock:has(.dock-trigger:hover) .dock-body,
-.workflow-dock:has(.dock-body:hover) .dock-body {
-  transform: translateX(0);
-  opacity: 1;
-}
-
-.dock-body :deep(.workflow-dag) {
-  border: none;
-  padding: 0;
-  background: transparent;
-}
-
-.dock-body :deep(.workflow-header) {
-  margin-bottom: 6px;
-  padding-bottom: 6px;
-}
-
-/* 空状态 */
-.dock-empty {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  text-align: center;
-}
-
-.dock-empty-text {
-  font-size: 12px;
-  color: var(--fg-3);
-}
-
-.dock-empty-btn {
-  font-size: 11px;
-  color: var(--accent);
-  background: none;
-  border: 1px solid var(--accent);
-  border-radius: 4px;
-  padding: 3px 12px;
-  cursor: pointer;
-  transition: background 0.2s, color 0.2s;
-}
-
-.dock-empty-btn:hover {
-  background: var(--accent);
-  color: #fff;
-}
+/* ===== 工作流 TODO（已迁移至 ChatInput 组件中） ===== */
 
 /* ===== 消息缩略图 dock（右侧 dock 栏） ===== */
 .msg-thumb-dock {
@@ -2145,12 +2171,88 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
   margin-left: 2px;
 }
 
+.empty-welcome {
+  color: var(--fg);
+  padding: 40px 24px 96px;
+}
+
+.empty-welcome-mark {
+  display: grid;
+  place-items: center;
+  width: 58px;
+  height: 58px;
+  margin-bottom: 26px;
+  color: var(--fg-4);
+}
+
+.empty-welcome-title {
+  margin: 0 0 42px;
+  color: var(--fg);
+  font-size: 30px;
+  font-weight: 500;
+  letter-spacing: 0;
+}
+
+.welcome-actions {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(180px, 1fr));
+  gap: 16px;
+  width: min(100%, 980px);
+}
+
+.welcome-action {
+  min-height: 142px;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 18px 20px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color var(--t), background var(--t), box-shadow var(--t), transform var(--t);
+}
+
+.welcome-action:hover {
+  background: var(--bg-2);
+  border-color: var(--border-2);
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+.welcome-action svg { margin-bottom: auto; }
+.welcome-action span { font-size: 16px; font-weight: 600; }
+.welcome-action small { color: var(--fg-3); font-size: 12px; line-height: 1.45; }
+.welcome-action.explore svg { color: var(--blue); }
+.welcome-action.build svg { color: #7c3aed; }
+.welcome-action.review svg { color: var(--green); }
+.welcome-action.fix svg { color: var(--red); }
+
 /* ===== 移动端适配 ===== */
+@media (max-width: 1100px) {
+  .welcome-actions {
+    grid-template-columns: repeat(2, minmax(180px, 1fr));
+    max-width: 620px;
+  }
+}
+
 @media (max-width: 640px) {
   .messages { padding: 12px 8px 100px; }
   .msg-body { max-width: 95%; }
   .empty-title { font-size: 14px; }
   .empty-desc { font-size: 12px; }
+  .empty-welcome { padding: 28px 16px 72px; }
+  .empty-welcome-mark { margin-bottom: 16px; }
+  .empty-welcome-title { margin-bottom: 24px; font-size: 24px; }
+  .welcome-actions { grid-template-columns: 1fr 1fr; gap: 10px; }
+  .welcome-action { min-height: 118px; padding: 14px; }
+  .welcome-action span { font-size: 14px; }
+  .welcome-action small { font-size: 11px; }
   .suggestion { font-size: 11px; padding: 3px 8px; }
   .scroll-bottom-btn { right: 12px; bottom: 100px; width: 32px; height: 32px; }
   .ai-preparing { padding: 6px 10px; }
@@ -2161,4 +2263,385 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, expor
     .chat-head-title { font-size: 13px; }
 }
 
+.messages.messages-welcome { padding: 0; }
+
+.welcome-input-drop-enter-active {
+  transition: opacity 220ms ease-out, transform 420ms cubic-bezier(0.22, 0.8, 0.24, 1);
+}
+
+.welcome-input-drop-enter-from {
+  opacity: 0.35;
+  transform: translateY(-180px);
+}
+
+</style>
+
+<style scoped>
+.welcome-screen {
+  position: relative;
+  min-height: 100%;
+  padding: 40px 24px 132px;
+  overflow: hidden;
+  isolation: isolate;
+}
+
+.welcome-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: min(100%, 800px);
+  margin: auto;
+  transform: translateY(34px);
+}
+
+.welcome-heading {
+  margin: 0 0 54px;
+  color: #29292d;
+  font-size: 36px;
+  font-weight: 500;
+  line-height: 1.25;
+  letter-spacing: 0;
+  text-align: center;
+}
+
+.welcome-composer {
+  position: relative;
+  z-index: 20;
+  width: 100%;
+  padding: 0 8px 18px;
+  border-radius: 10px;
+  background: #f2f2f3;
+  box-shadow: 0 3px 8px rgba(26, 26, 30, 0.06), 0 16px 34px rgba(26, 26, 30, 0.1);
+}
+
+.welcome-composer.workspace-menu-open {
+  z-index: 80;
+}
+
+.welcome-workspace-row {
+  position: relative;
+  z-index: 0;
+  display: flex;
+  align-items: center;
+  min-height: 50px;
+}
+
+.workspace-menu-open .welcome-workspace-row {
+  z-index: 60;
+}
+
+.welcome-workspace-button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  padding: 8px 14px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 15px;
+  cursor: pointer;
+}
+
+.welcome-workspace-button:hover,
+.welcome-workspace-button:focus-visible {
+  background: #e7e7e9;
+  outline: none;
+}
+
+.welcome-workspace-button span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.welcome-workspace-button > svg:first-child { color: var(--fg-3); }
+.welcome-workspace-button > svg:last-child { color: var(--fg-4); }
+
+.welcome-workspace-menu,
+.welcome-model-menu {
+  position: absolute;
+  z-index: 20;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  box-shadow: var(--shadow-lg);
+}
+
+.welcome-workspace-menu {
+  top: calc(100% - 3px);
+  left: 8px;
+  width: min(300px, calc(100vw - 64px));
+  height: 248px;
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+}
+
+.welcome-workspace-menu-actions {
+  flex-shrink: 0;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+
+.welcome-workspace-manage {
+  font-weight: 600;
+}
+
+.welcome-workspace-list {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.welcome-workspace-menu button,
+.welcome-model-menu button {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.welcome-workspace-menu button:hover,
+.welcome-workspace-menu button.active,
+.welcome-model-menu button:hover,
+.welcome-model-menu button.active {
+  background: var(--bg-3);
+  color: var(--fg);
+}
+
+.welcome-workspace-empty {
+  display: block;
+  padding: 10px;
+  color: var(--fg-4);
+  font-size: 12px;
+}
+
+.welcome-composer textarea {
+  display: block;
+  width: 100%;
+  min-height: 96px;
+  padding: 16px;
+  border: 1px solid #dedee1;
+  border-bottom: 0;
+  border-radius: 10px 10px 0 0;
+  outline: none;
+  resize: none;
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+.welcome-composer textarea::placeholder { color: #aaaaaf; }
+.welcome-composer textarea:focus { border-color: var(--accent); }
+.welcome-composer:focus-within .welcome-composer-footer { border-color: var(--accent); }
+
+.welcome-composer-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 54px;
+  padding: 8px 10px 8px 15px;
+  border: 1px solid #dedee1;
+  border-top: 0;
+  border-radius: 0 0 10px 10px;
+  background: var(--bg);
+}
+
+.welcome-composer-options,
+.welcome-composer-actions,
+.welcome-option {
+  display: flex;
+  align-items: center;
+}
+
+.welcome-composer-options { gap: 16px; }
+.welcome-option {
+  gap: 6px;
+  color: var(--fg-2);
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.welcome-option:first-child { color: var(--fg-3); }
+.welcome-composer-actions { gap: 10px; }
+
+.welcome-model-selector { position: relative; }
+.welcome-model-button {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  max-width: 210px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-2);
+  font: 13px var(--mono);
+  cursor: pointer;
+}
+
+.welcome-model-button:hover { background: var(--bg-3); }
+.welcome-model-button:disabled { cursor: default; opacity: 0.7; }
+.welcome-model-button:disabled:hover { background: transparent; }
+.welcome-model-button span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.welcome-model-button svg { flex: 0 0 auto; color: var(--fg-4); }
+
+.welcome-model-menu {
+  right: 0;
+  bottom: calc(100% + 8px);
+  min-width: 190px;
+  padding: 4px;
+}
+
+.welcome-model-menu button { font-family: var(--mono); }
+
+.welcome-control { position: relative; }
+.welcome-control-button {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 6px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.welcome-control-button:hover { background: var(--bg-3); }
+.welcome-control-button svg { color: var(--fg-4); }
+
+.welcome-control-menu,
+.welcome-effort-menu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 30;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--bg);
+  box-shadow: var(--shadow-lg);
+}
+
+.welcome-control-menu {
+  min-width: 128px;
+  padding: 4px;
+}
+
+.welcome-control-menu button {
+  width: 100%;
+  min-height: 32px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.welcome-control-menu button:hover,
+.welcome-control-menu button.active {
+  background: var(--bg-3);
+  color: var(--accent);
+}
+
+.welcome-effort-menu {
+  width: min(270px, calc(100vw - 28px));
+  padding: 12px;
+}
+
+.welcome-effort-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: var(--fg-3);
+  font-size: 11px;
+}
+
+.welcome-effort-summary strong { color: var(--accent); font-size: 13px; }
+.welcome-effort-range { width: 100%; accent-color: var(--accent); cursor: pointer; }
+.welcome-effort-labels {
+  display: flex;
+  justify-content: space-between;
+  margin-top: 3px;
+  color: var(--fg-4);
+  font-size: 10px;
+}
+
+.welcome-send-button {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border: 0;
+  border-radius: 7px;
+  background: #707177;
+  color: #fff;
+  cursor: pointer;
+  transition: background var(--t), transform var(--t);
+}
+
+.welcome-send-button:hover:not(:disabled) {
+  background: #4e4f54;
+  transform: translateY(-1px);
+}
+
+.welcome-send-button:disabled { cursor: not-allowed; opacity: 0.42; }
+
+[data-theme="dark"] .welcome-heading { color: var(--fg); }
+[data-theme="dark"] .welcome-composer { background: #202020; }
+[data-theme="dark"] .welcome-workspace-button:hover,
+[data-theme="dark"] .welcome-workspace-button:focus-visible { background: #2b2b2b; }
+[data-theme="dark"] .welcome-composer textarea,
+[data-theme="dark"] .welcome-composer-footer {
+  border-color: #303030;
+  background: #171717;
+}
+
+@media (max-width: 768px) {
+  .welcome-screen { padding: 24px 8px 84px; }
+  .welcome-panel { transform: translateY(16px); }
+  .welcome-heading { margin-bottom: 28px; font-size: 28px; }
+  .welcome-composer-options { gap: 10px; }
+  .welcome-model-button { max-width: 130px; }
+}
+
+@media (max-width: 520px) {
+  .welcome-heading { font-size: 24px; }
+  .welcome-composer-footer { align-items: flex-end; gap: 10px; }
+  .welcome-composer-options { flex-direction: column; align-items: flex-start; gap: 4px; }
+  .welcome-model-button { max-width: 94px; }
+  .welcome-control-button { padding-inline: 4px; }
+  .welcome-composer-actions { gap: 4px; }
+}
 </style>

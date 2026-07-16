@@ -70,4 +70,4 @@ venv/
 .vercel/"_script_*.bat"  
 "_script_*"
 
-.codegraph
+/.codegraph/
