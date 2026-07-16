@@ -30,9 +30,9 @@
            @keydown.enter="block.changes.length === 1 && $emit('openDiff', block.changes[0])"
            @keydown.space.prevent="block.changes.length === 1 && $emit('openDiff', block.changes[0])">
         <span class="file-changes-icon" aria-hidden="true">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <rect x="3" y="3" width="18" height="18" rx="3"/>
-            <path d="M12 8v8M8 12h8"/>
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <path d="M12 7v6M9 10h6M9 16h6"/>
           </svg>
         </span>
         <span class="file-changes-summary">
