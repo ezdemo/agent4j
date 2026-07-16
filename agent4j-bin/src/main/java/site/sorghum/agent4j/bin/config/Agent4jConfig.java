@@ -29,6 +29,35 @@ public class Agent4jConfig {
 
     private Agent4jConfig(ONode root) {
         this.root = root;
+        migrateRenamedTool(root, "task", "sub_agent");
+    }
+
+    /** 将历史工具名迁移到当前名称，保留用户原有的启用或禁用语义。 */
+    private static void migrateRenamedTool(ONode config, String previousName, String currentName) {
+        if (config == null || !config.isObject()) return;
+        for (String key : new String[]{"autoWhitelist", "disabledTools"}) {
+            ONode tools = config.get(key);
+            if (tools == null || !tools.isArray()) continue;
+
+            LinkedHashSet<String> migrated = new LinkedHashSet<>();
+            boolean changed = false;
+            for (ONode item : tools.getArray()) {
+                String toolName = item.getString();
+                if (previousName.equals(toolName)) {
+                    toolName = currentName;
+                    changed = true;
+                }
+                if (toolName != null && !toolName.isEmpty()) {
+                    migrated.add(toolName);
+                }
+            }
+            if (changed) {
+                tools.clear();
+                for (String toolName : migrated) {
+                    tools.add(toolName);
+                }
+            }
+        }
     }
 
     /**
@@ -65,11 +94,21 @@ public class Agent4jConfig {
                   "editMode": "auto",
                   "reasoningEffort": "high",
                   "lang": "ZH",
-                  "hitl": false,
+                  "hitl": "free",
+                  "autoWhitelist": [
+                    "resolve-library-id", "query-docs", "skillrefresh", "skilllist",
+                    "read", "glob", "write", "ls", "grep", "edit", "finish",
+                    "java_source", "checklist_step", "workspace_read", "webfetch",
+                    "codesearch", "ask_choice", "workspace_list", "workspace_write",
+                    "call_api", "checklist_start", "sub_agent", "checklist_status",
+                    "vision_recognize", "skillread", "codegraph_explore"
+                  ],
                   "maxContextChars": 200000,
                   "keepTailChars": 80000,
-                  "toolTimeoutSec": 360,
-                  "maxSelfCorrectionAttempts": 5,
+                   "toolTimeoutSec": 360,
+                   "subAgentTimeoutSec": 3600,
+                   "terminateOnNoToolCall": true,
+                   "maxSelfCorrectionAttempts": 5,
                   "maxStreamErrorRetries": 10,
                   "flushIntervalSec": 30,
                   "foldHeadCharsLimit": 60000,
@@ -237,14 +276,53 @@ public class Agent4jConfig {
     }
 
     /**
-     * 获取 HITL（Human-In-The-Loop）模式默认状态。
-     * true = 启动时默认开启 HITL，执行非只读工具前需用户审批。
-     * false = 默认关闭。未配置时默认 false。
+     * 获取 HITL（Human-In-The-Loop）模式。
+     * <ul>
+     *   <li>{@code "free"} — 自由模式，所有工具直接执行，无需审批</li>
+     *   <li>{@code "approval"} — 审批模式，非只读工具执行前需用户审批</li>
+     *   <li>{@code "auto"} — 自动模式，自动批准所有工具调用</li>
+     * </ul>
+     * <p>向后兼容旧的 boolean 配置：{@code true → "approval"}，{@code false → "free"}。</p>
+     * 未配置时默认 {@code "free"}。
      */
-    public boolean hitl() {
+    public String hitl() {
         ONode n = root.select("$.hitl");
-        if (n == null || n.isNull()) return false;
-        return n.getBoolean();
+        if (n == null || n.isNull()) return "free";
+        // 向后兼容：旧版 config.json 中 hitl 为 boolean 值
+        if (n.isBoolean()) {
+            return n.getBoolean() ? "approval" : "free";
+        }
+        String val = n.getString();
+        return val != null ? val : "free";
+    }
+
+    /**
+     * 获取 HITL 自动模式的工具白名单。
+     * <p>
+     * 仅在 hitl 模式为 {@code "auto"} 时生效。
+     * 工具名称匹配白名单中的任一规则时自动放行，否则需走审批流程。
+     * 支持 glob 通配符：{@code *} 匹配任意字符序列。
+     * </p>
+     * <ul>
+     *   <li>{@code "*"} — 匹配所有工具（等同于旧版 auto 行为）</li>
+     *   <li>{@code "read_*"} — 匹配以 "read_" 开头的工具</li>
+     *   <li>{@code "finish"} — 精确匹配 "finish" 工具</li>
+     * </ul>
+     * <p>未配置或为空时返回空列表，auto 模式下所有非免审工具需走审批。</p>
+     */
+    public List<String> autoWhitelist() {
+        ONode arr = root.select("$.autoWhitelist");
+        List<String> result = new ArrayList<>();
+        if (arr != null && arr.isArray()) {
+            for (ONode item : arr.getArray()) {
+                String val = item.getString();
+                if (val != null && !val.isEmpty()) {
+                    result.add(val);
+                }
+            }
+        }
+        // 未配置或为空时返回空列表，auto 模式下等同于全部需审批
+        return result;
     }
 
     /**
@@ -361,6 +439,24 @@ public class Agent4jConfig {
     public int toolTimeoutSec() {
         ONode n = root.select("$.toolTimeoutSec");
         return n != null && !n.isNull() ? n.getInt() : 360;
+    }
+
+    /**
+     * 获取子代理完整执行超时（秒）。子代理包含多轮模型请求和工具调用，
+     * 因此不使用普通工具的短超时。
+     */
+    public int subAgentTimeoutSec() {
+        ONode n = root.select("$.subAgentTimeoutSec");
+        return n != null && !n.isNull() ? n.getInt() : 3600;
+    }
+
+    /**
+     * 无工具调用时是否将模型文本作为最终回答。
+     * false 时追加 FinishTool.TIPS 并要求模型继续调用 finish（连续三次无工具调用后兜底结束）。
+     */
+    public boolean terminateOnNoToolCall() {
+        ONode n = root.select("$.terminateOnNoToolCall");
+        return n == null || n.isNull() || n.getBoolean();
     }
 
     /**
@@ -556,6 +652,7 @@ public class Agent4jConfig {
     public void save() throws IOException {
         // 保存前补充默认配置中缺失的字段
         mergeDefaults(root, defaultConfigNode());
+        migrateRenamedTool(root, "task", "sub_agent");
         Path configPath = getConfigPath();
         String json = JsonWriter.write(root, Options.of(Feature.Write_PrettyFormat));
         Files.writeString(configPath, json);

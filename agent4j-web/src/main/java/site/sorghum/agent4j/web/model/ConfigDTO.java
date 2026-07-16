@@ -15,13 +15,14 @@ public record ConfigDTO(
         String editMode,
         String reasoningEffort,
         String lang,
-        boolean hitl,
+        String hitl,
         Set<String> disabledTools,
         List<String> blockedPaths,
         String apiKey,
         Map<String, Map<String, Double>> price,
         VisionConfig vision,
-        String activePet
+        String activePet,
+        boolean terminateOnNoToolCall
 ) {
     /**
      * 视觉模型配置。

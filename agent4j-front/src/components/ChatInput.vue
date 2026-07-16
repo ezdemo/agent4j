@@ -1,5 +1,5 @@
 <template>
-  <div class="input-area">
+  <div class="input-area" :class="{ 'welcome-mode': welcomeMode }">
     <!-- 斜杠命令弹窗 -->
     <Transition name="slash-popup">
       <div v-if="slashPopupOpen" class="slash-popup">
@@ -30,16 +30,57 @@
       </div>
     </Transition>
 
+    <Transition name="workflow-float">
+      <section v-if="clData" class="workflow-float" aria-label="当前工作流"
+               @mouseenter="workflowHover = true" @mouseleave="workflowHover = false"
+               @focusin="workflowHover = true" @focusout="workflowHover = false">
+        <button type="button" class="workflow-trigger" :aria-expanded="workflowHover">
+          <span class="workflow-trigger-dot" :class="clData.status?.toLowerCase()"></span>
+          第 {{ clData.currentStepIndex || 0 }}/{{ clData.totalSteps || 0 }} 步
+        </button>
+        <Transition name="workflow-detail">
+          <div v-if="workflowHover" class="workflow-detail">
+            <div class="workflow-detail-heading">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M9 11l3 3L22 4"/>
+              <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>
+            </svg>
+              工作流进度
+            </div>
+            <ChecklistSteps :data="clData" />
+          </div>
+        </Transition>
+      </section>
+    </Transition>
+
     <div class="input-box" :class="{ focused: inputFocused }">
       <!-- 已选技能标签 -->
       <div v-if="selectedSkills.length > 0" class="skill-chips-bar">
-        <span v-for="s in selectedSkills" :key="s.name" class="skill-chip">
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
-          </svg>
-          {{ s.name }}
-          <button class="skill-chip-remove" @click.stop="removeSkill(s)">&times;</button>
-        </span>
+        <div class="skill-chips-heading">
+          <span class="skill-chips-title">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+            </svg>
+            已选 {{ selectedSkills.length }} 个技能
+          </span>
+          <button class="skill-clear-all" type="button" @click="clearSelectedSkills">清除</button>
+        </div>
+        <div class="skill-chips-list">
+          <span v-for="s in selectedSkills" :key="s.name" class="skill-chip">
+            <span class="skill-chip-icon">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+              </svg>
+            </span>
+            <span class="skill-chip-name" :title="s.name">{{ s.name }}</span>
+            <button class="skill-chip-remove" type="button" :aria-label="`移除技能 ${s.name}`" :title="`移除 ${s.name}`"
+                    @click.stop="removeSkill(s)">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"/>
+              </svg>
+            </button>
+          </span>
+        </div>
       </div>
 
       <div class="input-row">
@@ -86,53 +127,64 @@
       <!-- Token 用量 & 模型选择 -->
       <div class="usage-bar">
         <div class="usage-stats">
-        <!-- 连接状态 -->
-        <span class="usage-item status-connected" :class="{ offline: !connected }">
-          <span class="status-dot-sm" :class="{ online: connected }"></span>
-          {{ connected ? '已连接' : '连接中...' }}
-        </span>
-        <span class="usage-sep">|</span>
-        <span class="usage-item hide-mobile" :title="'输入: '+fmt(usage.promptTokens)">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3"
-                                                                                                         x2="12"
-                                                                                                         y2="15"/>
-          </svg>
-          输入 {{ fmt(usage.promptTokens) }}
-        </span>
-          <span class="usage-item hide-mobile" :title="'输出: '+fmt(usage.completionTokens)">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12"
-                                                                                                            y1="15"
-                                                                                                            x2="12"
-                                                                                                            y2="3"/>
-          </svg>
-          输出 {{ fmt(usage.completionTokens) }}
-        </span>
-          <span class="usage-item hide-mobile"
-                :title="'缓存命中: '+fmt(usage.cacheHit)+' / 未命中: '+fmt(usage.cacheMiss)">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/>
-          </svg>
-          缓存 {{ cacheRate }}%
-        </span>
-          <span class="usage-item usage-cost-item" v-if="usage.hasPrice">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/>
-          </svg>
-          ¥{{ (usage.totalCost || 0).toFixed(2) }}
-        </span>
-          <span class="usage-sep">|</span>
-          <span class="usage-context-wrap"
-                :title="'上下文: '+fmt(usage.lastPromptTokens||usage.promptTokens)+' / '+fmt(usage.maxContextTokens)">
-          上下文
-          <span class="usage-progress">
-            <span class="usage-progress-bar" :style="{ width: Math.min(ctxPct,100)+'%' }"
-                  :class="{ high: ctxPct>=80, medium: ctxPct>=50 && ctxPct<80 }"></span>
+        <div class="usage-context-control"
+             @mouseenter="refreshContextComposition"
+             @mouseleave="showContextComposition = false">
+          <!-- 会话总 token -->
+          <span class="usage-item usage-total">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
+            </svg>
+            {{ fmt(usage.totalTokens || 0) }}
           </span>
-          <span class="usage-value" :class="{ high: ctxPct>=80, medium: ctxPct>=50 && ctxPct<80 }">{{ ctxPct }}%</span>
-        </span>
-          <button class="usage-refresh" @click="$emit('refreshUsage')" title="刷新用量">
+          <span class="usage-sep">|</span>
+            <span class="usage-context-circle"
+                  :title="'上下文: '+fmt(usage.lastPromptTokens||usage.promptTokens)+' / '+fmt(usage.maxContextTokens)">
+              <svg viewBox="0 0 32 32" class="context-ring">
+                <circle cx="16" cy="16" r="13" fill="none" stroke="var(--border)" stroke-width="4" />
+                <circle cx="16" cy="16" r="13" fill="none" stroke="var(--fg-3)"
+                        stroke-width="4" stroke-linecap="round"
+                        :stroke-dasharray="81.68" :stroke-dashoffset="81.68 * (1 - Math.min(ctxPct,100)/100)"
+                        transform="rotate(-90 16 16)" />
+              </svg>
+            </span>
+            <div v-if="showContextComposition && contextEstimate" class="usage-composition-popover">
+              <div class="usage-composition-head">
+                <span>上下文构成</span>
+                <span>{{ fmt(contextTotalTokens) }} / {{ fmt(maxContextTokens) }}</span>
+              </div>
+              <div class="usage-composition-metrics">
+                <div>
+                  <span>输入</span>
+                  <strong>{{ fmt(usage.promptTokens) }}</strong>
+                </div>
+                <div>
+                  <span>输出</span>
+                  <strong>{{ fmt(usage.completionTokens) }}</strong>
+                </div>
+                <div>
+                  <span>缓存</span>
+                  <strong>{{ cacheRate }}%</strong>
+                </div>
+                <div>
+                  <span>费用</span>
+                  <strong>¥{{ Number(usage.totalCost || 0).toFixed(2) }}</strong>
+                </div>
+              </div>
+              <div class="usage-composition-bar">
+                <span v-for="item in compositionItems" :key="item.key" :class="item.key"
+                      :style="{ width: item.percent + '%' }"></span>
+              </div>
+              <div class="usage-composition-list">
+                <div v-for="item in compositionItems" :key="item.key" class="usage-composition-row">
+                  <span class="usage-composition-dot" :class="item.key"></span>
+                  <span>{{ item.label }}</span>
+                  <span>{{ item.percent.toFixed(1) }}%</span>
+                </div>
+              </div>
+            </div>
+        </div>
+        <button class="usage-refresh" @click="$emit('refreshUsage')" title="刷新用量">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M23 4v6h-6"/>
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -154,6 +206,7 @@
                 <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
               </svg>
               <input ref="skillSearchInput" v-model="skillSearchQuery" type="text" placeholder="搜索技能..." class="skill-search-input" @keydown.esc="showSkillPicker = false"/>
+              <span v-if="selectedSkills.length" class="skill-selection-count">{{ selectedSkills.length }}</span>
             </div>
             <div class="skill-panel-list">
               <div v-if="skillLoading" class="skill-panel-empty">
@@ -176,8 +229,8 @@
         <!-- 权限切换 -->
         <div class="permission-hitl-selector">
           <div class="reasoning-effort-selector">
-            <button class="effort-btn" @click="togglePermissionPicker" :title="currentPermission ? '审批模式' : '自由模式'">
-              {{ currentPermission ? '审批' : '自由' }}
+            <button class="effort-btn" @click="togglePermissionPicker" :title="'当前权限模式: '+currentPermission">
+              {{ permissionLabel }}
               <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <polyline points="6 9 12 15 18 9"/>
               </svg>
@@ -197,24 +250,51 @@
           </div>
         </div>
         <div class="reasoning-effort-selector">
-          <button class="effort-btn" @click="toggleEffortPicker" :title="'当前推理强度: '+currentReasoningEffort">
-            {{ effortLabel }}
+          <button class="effort-btn" @click="toggleEffortPicker" :title="`当前推理强度: ${selectedReasoningEffort.label}`">
+            <span class="effort-current-label">{{ selectedReasoningEffort.label }}</span>
             <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="6 9 12 15 18 9"/>
             </svg>
           </button>
-          <div class="effort-dropdown" v-if="showEffortPicker">
-            <div class="effort-dropdown-title">推理强度</div>
-            <div class="effort-dropdown-list">
-              <div v-for="opt in effortOptions" :key="opt.value" class="effort-option"
-                   :class="{ active: opt.value === currentReasoningEffort }" @click="pickEffort(opt.value)">
-                <span class="effort-option-name">{{ opt.label }}</span>
-                <svg v-if="opt.value === currentReasoningEffort" width="14" height="14" viewBox="0 0 24 24" fill="none"
-                     stroke="currentColor" stroke-width="2">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
+          <div v-if="showEffortPicker" class="chat-reasoning-popover"
+               :style="{ '--effort-progress': `${reasoningEffortProgress}%` }">
+            <div class="chat-reasoning-summary">
+              <span class="chat-reasoning-value">{{ selectedReasoningEffort.label }}</span>
+              <span>{{ selectedReasoningEffort.description }}</span>
+            </div>
+            <div class="chat-reasoning-track">
+              <input
+                  :value="reasoningEffortIndex"
+                  aria-label="推理强度"
+                  class="chat-reasoning-input"
+                  max="4"
+                  min="0"
+                  step="1"
+                  type="range"
+                  @input="updateReasoningEffort($event.target.value)"
+                  @change="commitReasoningEffort($event.target.value)"
+              />
+              <div aria-hidden="true" class="chat-reasoning-ticks">
+                <span v-for="(_, index) in effortOptions" :key="index"
+                      :class="{ active: index <= reasoningEffortIndex }"></span>
               </div>
             </div>
+            <div class="chat-reasoning-levels">
+              <button v-for="(option, index) in effortOptions" :key="option.value"
+                      :aria-pressed="index === reasoningEffortIndex" :class="{ active: index === reasoningEffortIndex }"
+                      type="button" @click="selectReasoningEffort(index)">
+                {{ option.label }}
+              </button>
+            </div>
+            <label class="chat-reasoning-end-toggle">
+              <span>无工具调用时结束</span>
+              <input
+                  :checked="props.terminateOnNoToolCall"
+                  type="checkbox"
+                  @change="emit('switchTerminateOnNoToolCall', $event.target.checked)"
+              />
+              <span class="chat-reasoning-toggle-slider"></span>
+            </label>
           </div>
         </div>
         <div class="model-selector" v-if="currentModel">
@@ -243,7 +323,7 @@
     </div>
 
     <!-- 桌面宠物精灵 -->
-    <PetSprite v-if="petSpritesheetUrl" class="pet-float"
+    <PetSprite v-if="petSpritesheetUrl && !welcomeMode" class="pet-float"
                :spritesheet-url="petSpritesheetUrl"
                :state="petState"
                :initial-x="petPosition.x" :initial-y="petPosition.y"
@@ -258,6 +338,7 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useAppStore} from '../stores/app'
 import {agentAPI, petAPI} from '../services/api'
 import PetSprite from './PetSprite.vue'
+import ChecklistSteps from './ChecklistSteps.vue'
 
 const props = defineProps({
   inputText: {type: String, default: ''},
@@ -269,14 +350,15 @@ const props = defineProps({
   sessionName: {type: String, default: null},
   hasHistory: {type: Boolean, default: false},
   currentReasoningEffort: {type: String, default: 'max'},
-  connected: {type: Boolean, default: true},
+  terminateOnNoToolCall: {type: Boolean, default: true},
   version: {type: String, default: ''},
   currentSkill: {type: Object, default: null},
-  currentPermission: {type: Boolean, default: false},
-  petState: {type: String, default: 'idle'}
+  currentPermission: {type: String, default: 'free'},
+  petState: {type: String, default: 'idle'},
+  welcomeMode: {type: Boolean, default: false}
 })
 
-const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchSkill', 'switchPermission'])
+const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission', 'pickerOpen'])
 
 const inputField = ref(null)
 const inputFocused = ref(false)
@@ -425,7 +507,7 @@ const handleSend = () => {
     // 有选中技能时，拼接技能指令到消息顶部
     if (selectedSkills.value.length > 0) {
       const skillLines = selectedSkills.value.map(s => `/skill:${s.name}`).join('\n')
-      text = `调用技能：\n${skillLines}\n\n${text}`
+      text = `\`\`\`折叠块\n调用技能：\n${skillLines}\n\`\`\`\n\n${text}`
     }
     emit('send', images.value, text)
     // 发送后清空图片和技能标签
@@ -494,8 +576,11 @@ const autoResize = () => {
 // ============= 模型切换 =============
 const showModelPicker = ref(false)
 const toggleModelPicker = () => {
-  showModelPicker.value = !showModelPicker.value
-  if (showModelPicker.value) {
+  const nextOpen = !showModelPicker.value
+  if (nextOpen) closePickers('model')
+  showModelPicker.value = nextOpen
+  if (nextOpen) {
+    emit('pickerOpen', 'model')
     emit('refreshModels')
   }
 }
@@ -528,8 +613,11 @@ const filteredSkills = computed(() => {
 const isSkillSelected = (skill) => selectedSkills.value.some(s => s.name === skill.name)
 
 const toggleSkillPicker = async () => {
-  showSkillPicker.value = !showSkillPicker.value
-  if (showSkillPicker.value && availableSkills.value.length === 0 && !skillLoading.value) {
+  const nextOpen = !showSkillPicker.value
+  if (nextOpen) closePickers('skill')
+  showSkillPicker.value = nextOpen
+  if (nextOpen) emit('pickerOpen', 'skill')
+  if (nextOpen && availableSkills.value.length === 0 && !skillLoading.value) {
     skillLoading.value = true
     try {
       const r = await agentAPI.getSkills()
@@ -537,7 +625,7 @@ const toggleSkillPicker = async () => {
     } catch {}
     skillLoading.value = false
   }
-  if (showSkillPicker.value) {
+  if (nextOpen) {
     skillSearchQuery.value = ''
     nextTick(() => skillSearchInput.value?.focus())
   }
@@ -558,16 +646,79 @@ const removeSkill = (skill) => {
   emit('switchSkill', [...selectedSkills.value])
 }
 
+const clearSelectedSkills = () => {
+  if (selectedSkills.value.length === 0) return
+  selectedSkills.value = []
+  emit('switchSkill', [])
+}
 
+// ============= 清单 TODO =============
+const clData = ref(null)
+const workflowHover = ref(false)
+let clRefreshTimer = null
+
+const loadChecklist = async () => {
+  if (!props.workspaceHash || !props.sessionName) {
+    clData.value = null
+    return
+  }
+  try {
+    const { sessionsAPI } = await import('../services/api')
+    const res = await sessionsAPI.getChecklist(props.sessionName, props.workspaceHash)
+    if (res.success && res.data) {
+      clData.value = res.data
+    } else {
+      clData.value = null
+    }
+  } catch {
+    clData.value = null
+  }
+}
+
+const stopChecklistPolling = () => {
+  if (clRefreshTimer) clearInterval(clRefreshTimer)
+  clRefreshTimer = null
+}
+
+const startChecklistPolling = () => {
+  stopChecklistPolling()
+  if (!props.streaming) return
+  clRefreshTimer = setInterval(loadChecklist, 3000)
+}
+
+watch([() => props.workspaceHash, () => props.sessionName], () => {
+  clData.value = null
+  workflowHover.value = false
+  loadChecklist()
+  startChecklistPolling()
+}, { immediate: true })
+
+watch(() => props.streaming, (streaming, wasStreaming) => {
+  if (streaming) {
+    loadChecklist()
+    startChecklistPolling()
+  } else {
+    stopChecklistPolling()
+    if (wasStreaming) loadChecklist()
+  }
+})
 
 // ============= 权限切换 =============
 const showPermissionPicker = ref(false)
 const permissionOptions = [
-  {value: false, label: '自由模式'},
-  {value: true, label: '审批模式'}
+  {value: 'free', label: '自由模式'},
+  {value: 'approval', label: '审批模式'},
+  {value: 'auto', label: '自动模式'}
 ]
+const permissionLabel = computed(() => {
+  const found = permissionOptions.find(o => o.value === props.currentPermission)
+  return found ? found.label : props.currentPermission
+})
 const togglePermissionPicker = () => {
-  showPermissionPicker.value = !showPermissionPicker.value
+  const nextOpen = !showPermissionPicker.value
+  if (nextOpen) closePickers('permission')
+  showPermissionPicker.value = nextOpen
+  if (nextOpen) emit('pickerOpen', 'permission')
 }
 const pickPermission = (level) => {
   emit('switchPermission', level)
@@ -584,27 +735,47 @@ const handleOutside = (e) => {
 
 // ============= 推理强度切换 =============
 const showEffortPicker = ref(false)
-const effortOptions = [
-  {value: 'none', label: '无'},
-  {value: 'low', label: '低'},
-  {value: 'medium', label: '中'},
-  {value: 'high', label: '高'},
-  {value: 'max', label: '最大'}
-]
-const effortLabel = computed(() => {
-  const found = effortOptions.find(o => o.value === props.currentReasoningEffort)
-  return found ? found.label : props.currentReasoningEffort
-})
-const toggleEffortPicker = () => {
-  showEffortPicker.value = !showEffortPicker.value
+const closePickers = (except = '') => {
+  if (except !== 'model') showModelPicker.value = false
+  if (except !== 'skill') showSkillPicker.value = false
+  if (except !== 'permission') showPermissionPicker.value = false
+  if (except !== 'effort') showEffortPicker.value = false
+  showContextComposition.value = false
 }
-const pickEffort = async (value) => {
-  if (value === props.currentReasoningEffort) {
-    showEffortPicker.value = false;
-    return
-  }
-  emit('switchReasoningEffort', value)
+const effortOptions = [
+  {value: 'none', label: '无', description: '直接响应'},
+  {value: 'low', label: '低', description: '快速响应'},
+  {value: 'medium', label: '中', description: '速度与深度兼顾'},
+  {value: 'high', label: '高', description: '更充分地思考'},
+  {value: 'max', label: '最大', description: '优先获得最完整的推理'}
+]
+const reasoningEffortIndex = ref(4)
+const selectedReasoningEffort = computed(() => effortOptions[reasoningEffortIndex.value])
+const reasoningEffortProgress = computed(() => (
+  reasoningEffortIndex.value / (effortOptions.length - 1)
+) * 100)
+watch(() => props.currentReasoningEffort, (value) => {
+  const index = effortOptions.findIndex(option => option.value === value)
+  reasoningEffortIndex.value = index === -1 ? effortOptions.length - 1 : index
+}, {immediate: true})
+const updateReasoningEffort = (index) => {
+  const nextIndex = Number(index)
+  const next = effortOptions[nextIndex]
+  if (!next) return
+  reasoningEffortIndex.value = nextIndex
+}
+const commitReasoningEffort = (index) => {
+  updateReasoningEffort(index)
+  const next = effortOptions[reasoningEffortIndex.value]
+  if (next.value !== props.currentReasoningEffort) emit('switchReasoningEffort', next.value)
   showEffortPicker.value = false
+}
+const selectReasoningEffort = (index) => commitReasoningEffort(index)
+const toggleEffortPicker = () => {
+  const nextOpen = !showEffortPicker.value
+  if (nextOpen) closePickers('effort')
+  showEffortPicker.value = nextOpen
+  if (nextOpen) emit('pickerOpen', 'effort')
 }
 
 // ============= Usage =============
@@ -626,12 +797,39 @@ const ctxPct = computed(() => {
   // 小于 5% 时至少展示 5%，让填充条肉眼可见
   return Math.max(5, Math.min(pct, 100))
 })
+const contextEstimate = computed(() => props.usage.contextEstimate || null)
+const contextTotalTokens = computed(() => Number(props.usage.lastPromptTokens) || 0)
+const maxContextTokens = computed(() => Number(props.usage.maxContextTokens) || 128000)
+const showContextComposition = ref(false)
+const refreshContextComposition = () => {
+  showContextComposition.value = true
+  emit('refreshUsage')
+}
+const compositionItems = computed(() => {
+  const estimate = contextEstimate.value
+  if (!estimate || estimate.totalTokens <= 0) return []
+  const total = estimate.totalTokens
+  const items = [
+    { key: 'system', label: '系统提示', value: estimate.systemTokens || 0 },
+    { key: 'tools', label: '工具定义', value: estimate.toolDefinitionTokens || 0 },
+    { key: 'user', label: '用户消息', value: estimate.userTokens || 0 },
+    { key: 'assistant', label: '助手历史', value: estimate.assistantTokens || 0 },
+    { key: 'result', label: '工具结果', value: estimate.toolResultTokens || 0 }
+  ]
+  return items.filter(item => item.value > 0).map(item => ({
+    ...item,
+    percent: total > 0 ? Math.min(100, item.value / total * 100) : 0
+  }))
+})
 
 onMounted(() => {
   loadCommands();
   document.addEventListener('click', handleOutside)
 })
-onBeforeUnmount(() => document.removeEventListener('click', handleOutside))
+onBeforeUnmount(() => {
+  stopChecklistPolling()
+  document.removeEventListener('click', handleOutside)
+})
 
 // ── 桌面宠物精灵图 ──
 const petSpritesheetUrl = ref('')
@@ -683,7 +881,7 @@ async function savePetSize(idx) {
 }
 
 // 暴露焦點方法给父组件
-defineExpose({focus: () => inputField.value?.focus(), autoResize})
+defineExpose({focus: () => inputField.value?.focus(), autoResize, closePickers})
 </script>
 
 <style scoped>
@@ -1264,6 +1462,7 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   color: var(--fg-3);
   border-top: 1px solid var(--glass-border);
   margin-top: 4px;
+  position: relative;
 }
 
 .usage-stats {
@@ -1290,46 +1489,32 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   font-size: 14px;
 }
 
-.usage-context-wrap {
-  display: flex;
+.usage-context-control {
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 12px;
+  flex-shrink: 0;
+}
+
+.usage-context-circle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   cursor: pointer;
 }
 
+.context-ring {
+  width: 14px;
+  height: 14px;
+}
+
 .usage-progress {
-  display: inline-block;
-  width: 80px;
-  height: 5px;
-  background: var(--bg-3);
-  border-radius: 3px;
-  overflow: hidden;
-  box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.1);
-  vertical-align: middle;
-}
-
-.usage-progress-bar {
-  display: block;
-  height: 100%;
-  min-width: 2px;
-  background: var(--accent);
-  opacity: 0.65;
-  border-radius: 3px;
-  transition: width 0.5s ease;
-}
-
-.usage-progress-bar.medium {
-  background: var(--yellow);
-}
-
-.usage-progress-bar.high {
-  background: var(--red);
+  display: none;
 }
 
 .usage-value {
-  font-weight: 500;
-  color: var(--fg-2);
-  font-family: var(--mono);
+  display: none;
 }
 
 .usage-value.high {
@@ -1359,41 +1544,105 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   color: var(--fg-2);
 }
 
-.usage-cost-item {
-  color: var(--yellow);
-  font-weight: 500;
-  font-family: var(--mono);
-}
-
-.usage-cost-item svg {
-  color: var(--yellow);
-}
-
-/* 连接状态 */
-.status-connected {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
+.usage-composition-popover {
+  position: absolute;
+  z-index: 30;
+  bottom: calc(100% + 6px);
+  left: 50%;
+  transform: translateX(-50%);
+  width: 300px;
+  max-width: calc(100vw - 24px);
+  padding: 10px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  background: var(--bg);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.16);
   font-size: 11px;
 }
 
-.status-connected.offline {
-  color: var(--yellow);
+.usage-composition-head,
+.usage-composition-row {
+  display: flex;
+  align-items: center;
 }
 
-.status-dot-sm {
-  width: 6px;
-  height: 6px;
+.usage-composition-head {
+  justify-content: space-between;
+  color: var(--fg-2);
+  font-weight: 600;
+}
+
+.usage-composition-head span:last-child,
+.usage-composition-row span:last-child {
+  margin-left: auto;
+  color: var(--fg-4);
+  font-family: var(--mono);
+}
+
+.usage-composition-metrics {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 6px;
+  margin-top: 9px;
+}
+
+.usage-composition-metrics div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 5px 6px;
+  border-radius: var(--r-sm);
+  background: var(--bg-2);
+}
+
+.usage-composition-metrics span {
+  color: var(--fg-4);
+}
+
+.usage-composition-metrics strong {
+  color: var(--fg-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.usage-composition-bar {
+  display: flex;
+  height: 7px;
+  overflow: hidden;
+  border-radius: 3px;
+  background: var(--bg-3);
+  margin: 8px 0;
+}
+
+.usage-composition-bar span { min-width: 0; }
+.usage-composition-bar .system, .usage-composition-dot.system { background: #566274; }
+.usage-composition-bar .tools, .usage-composition-dot.tools { background: #8b6048; }
+.usage-composition-bar .user, .usage-composition-dot.user { background: var(--green); }
+.usage-composition-bar .assistant, .usage-composition-dot.assistant { background: var(--yellow); }
+.usage-composition-bar .result, .usage-composition-dot.result { background: var(--red); }
+
+.usage-composition-list { display: grid; gap: 5px; }
+
+.usage-composition-row {
+  gap: 6px;
+  color: var(--fg-3);
+}
+
+.usage-composition-dot {
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
-  background: var(--fg-4);
   flex-shrink: 0;
 }
 
-.status-dot-sm.online {
-  background: var(--green, #10b981);
-  box-shadow: 0 0 0 2px rgba(16, 185, 129, 0.2);
+@media (max-width: 640px) {
+  .usage-composition-popover {
+    left: 0;
+    transform: none;
+  }
 }
-
 
 .model-actions {
   display: flex;
@@ -1418,10 +1667,10 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   width: 340px;
   max-height: 420px;
   background: var(--bg);
-  border: 1px solid var(--border);
+  border: 1px solid color-mix(in srgb, var(--accent) 30%, var(--border));
   border-radius: var(--r);
   box-shadow: var(--shadow);
-  z-index: 100;
+  z-index: 200;
   display: flex;
   flex-direction: column;
   overflow: hidden;
@@ -1455,6 +1704,20 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   color: var(--fg-4);
 }
 
+.skill-selection-count {
+  display: inline-grid;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 4px;
+  place-items: center;
+  border-radius: 999px;
+  background: var(--accent);
+  color: var(--bg);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+}
+
 .skill-panel-list {
   flex: 1;
   overflow-y: auto;
@@ -1474,96 +1737,175 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
 
 .skill-panel-item {
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  width: 100%;
+  min-height: 54px;
   gap: 10px;
   padding: 8px 10px;
+  box-sizing: border-box;
   border-radius: var(--r-sm);
   cursor: pointer;
-  transition: background var(--t);
+  border: 1px solid transparent;
+  text-align: left;
+  transition: background var(--t), border-color var(--t), transform var(--t);
 }
 
 .skill-panel-item:hover {
   background: var(--bg-2);
+  transform: translateX(1px);
 }
 
 .skill-panel-item.active {
-  background: var(--accent-bg);
+  border-color: color-mix(in srgb, var(--accent) 45%, transparent);
+  background: color-mix(in srgb, var(--accent) 13%, var(--bg));
+  box-shadow: inset 3px 0 var(--accent);
 }
 
 .skill-item-info {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
   flex: 1;
   min-width: 0;
+  text-align: left;
 }
 
 .skill-item-name {
+  display: block;
   font-size: 13px;
   font-weight: 600;
   color: var(--fg);
+  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .skill-item-desc {
+  display: block;
   font-size: 11px;
   color: var(--fg-4);
   margin-top: 1px;
+  line-height: 1.35;
+  text-align: left;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
 .skill-item-check {
-  color: var(--accent);
+  padding: 3px;
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--bg);
   flex-shrink: 0;
 }
 
 /* 已选技能标签 */
 .skill-chips-bar {
   display: flex;
-  flex-wrap: wrap;
+  flex-direction: column;
   gap: 6px;
-  padding: 6px 8px 0;
+  margin-bottom: 4px;
+  padding: 7px 2px 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 18%, var(--border));
+}
+
+.skill-chips-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+}
+
+.skill-chips-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: var(--fg-3);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.skill-chips-title svg {
+  color: var(--accent);
+}
+
+.skill-clear-all {
+  border: none;
+  background: transparent;
+  color: var(--fg-4);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 11px;
+  line-height: 1;
+  transition: color var(--t);
+}
+
+.skill-clear-all:hover {
+  color: var(--red);
+}
+
+.skill-chips-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
 }
 
 .skill-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 2px 6px 2px 8px;
-  background: var(--accent-bg);
-  color: var(--accent);
-  border: 1px solid var(--accent);
-  border-radius: 12px;
+  max-width: 100%;
+  gap: 5px;
+  padding: 3px 4px 3px 5px;
+  background: color-mix(in srgb, var(--accent) 11%, var(--bg));
+  color: var(--fg-2);
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
+  border-radius: var(--r-sm);
   font-size: 11px;
-  font-weight: 500;
+  font-weight: 600;
   line-height: 1.4;
   cursor: default;
+}
+
+.skill-chip-icon {
+  display: inline-grid;
+  width: 17px;
+  height: 17px;
+  place-items: center;
+  border-radius: var(--r-sm);
+  background: var(--accent-bg);
+  color: var(--accent);
+  flex-shrink: 0;
 }
 
 .skill-chip svg {
   flex-shrink: 0;
 }
 
+.skill-chip-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .skill-chip-remove {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 14px;
-  height: 14px;
+  width: 18px;
+  height: 18px;
   border: none;
-  background: none;
-  color: var(--accent);
-  font-size: 12px;
+  background: transparent;
+  color: var(--fg-4);
   padding: 0;
   cursor: pointer;
-  border-radius: 50%;
+  border-radius: var(--r-sm);
   transition: all var(--t);
-  line-height: 1;
 }
 
 .skill-chip-remove:hover {
-  background: var(--accent);
+  background: var(--red);
   color: #fff;
 }
 
@@ -1658,6 +2000,12 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   flex-shrink: 0;
 }
 
+.effort-current-label {
+  display: inline-grid;
+  width: 2em;
+  place-items: center;
+}
+
 .effort-dropdown {
   position: absolute;
   bottom: 100%;
@@ -1710,6 +2058,215 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
 
 .effort-option svg {
   color: var(--accent);
+}
+
+.chat-reasoning-popover {
+  position: absolute;
+  right: 0;
+  bottom: 100%;
+  z-index: 100;
+  width: min(290px, calc(100vw - 28px));
+  margin-bottom: 8px;
+  padding: 12px;
+  border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
+  border-radius: var(--r);
+  background: linear-gradient(135deg, var(--bg), color-mix(in srgb, var(--accent) 7%, var(--bg)));
+  box-shadow: inset 0 1px 0 color-mix(in srgb, #ffffff 12%, transparent), var(--shadow), 0 12px 28px color-mix(in srgb, var(--accent) 13%, transparent);
+}
+
+.chat-reasoning-summary {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  margin-bottom: 11px;
+  color: var(--fg-3);
+  font-size: 11px;
+  line-height: 1.2;
+}
+
+.chat-reasoning-value {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.chat-reasoning-track {
+  position: relative;
+  display: flex;
+  align-items: center;
+  height: 22px;
+}
+
+.chat-reasoning-input {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  height: 6px;
+  margin: 0;
+  appearance: none;
+  outline: none;
+  cursor: pointer;
+  border-radius: 999px;
+  background: linear-gradient(90deg, var(--accent) 0 var(--effort-progress), var(--bg-3) var(--effort-progress) 100%);
+  box-shadow: inset 0 1px 2px color-mix(in srgb, #000000 18%, transparent);
+}
+
+.chat-reasoning-input:focus-visible {
+  box-shadow: 0 0 0 3px var(--accent-bg), inset 0 1px 2px color-mix(in srgb, #000000 18%, transparent);
+}
+
+.chat-reasoning-input::-webkit-slider-thumb {
+  width: 18px;
+  height: 18px;
+  appearance: none;
+  border: 3px solid var(--bg);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 70%, transparent);
+  transition: transform var(--t), box-shadow var(--t);
+}
+
+.chat-reasoning-input:hover::-webkit-slider-thumb,
+.chat-reasoning-input:focus-visible::-webkit-slider-thumb {
+  transform: scale(1.15);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 45%, transparent), 0 0 18px color-mix(in srgb, var(--accent) 80%, transparent);
+}
+
+.chat-reasoning-input::-moz-range-thumb {
+  width: 13px;
+  height: 13px;
+  border: 3px solid var(--bg);
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 55%, transparent), 0 0 14px color-mix(in srgb, var(--accent) 70%, transparent);
+}
+
+.chat-reasoning-ticks {
+  position: absolute;
+  top: 50%;
+  left: 7px;
+  right: 7px;
+  z-index: 3;
+  display: flex;
+  justify-content: space-between;
+  pointer-events: none;
+  transform: translateY(-50%);
+}
+
+.chat-reasoning-ticks span {
+  width: 4px;
+  height: 4px;
+  border: 1px solid var(--bg);
+  border-radius: 50%;
+  background: var(--fg-4);
+  transition: background var(--t), transform var(--t);
+}
+
+.chat-reasoning-ticks span.active {
+  background: var(--bg);
+  transform: scale(1.18);
+}
+
+.chat-reasoning-levels {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  margin-top: 6px;
+}
+
+.chat-reasoning-levels button {
+  min-width: 0;
+  padding: 3px 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-4);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 10px;
+  line-height: 1.2;
+  transition: color var(--t), text-shadow var(--t), transform var(--t);
+}
+
+.chat-reasoning-levels button:hover {
+  color: var(--fg-2);
+  transform: translateY(-1px);
+}
+
+.chat-reasoning-levels button.active {
+  color: var(--accent);
+  font-weight: 700;
+  text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.input-area.welcome-mode {
+  position: relative;
+  padding: 0;
+  z-index: 30;
+  overflow: visible;
+}
+
+.input-area.welcome-mode .input-box {
+  width: 100%;
+  overflow: visible;
+}
+
+.input-area.welcome-mode .skill-selector {
+  z-index: 120;
+}
+
+.chat-reasoning-end-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+  padding-top: 9px;
+  border-top: 1px solid var(--border);
+  color: var(--fg-2);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.chat-reasoning-end-toggle input {
+  position: absolute;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.chat-reasoning-toggle-slider {
+  position: relative;
+  width: 32px;
+  height: 18px;
+  border-radius: 999px;
+  background: var(--bg-3);
+  transition: background var(--t);
+}
+
+.chat-reasoning-toggle-slider::before {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--fg-4);
+  content: '';
+  transition: transform var(--t), background var(--t);
+}
+
+.chat-reasoning-end-toggle input:checked + .chat-reasoning-toggle-slider {
+  background: var(--accent);
+}
+
+.chat-reasoning-end-toggle input:checked + .chat-reasoning-toggle-slider::before {
+  transform: translateX(14px);
+  background: var(--bg);
+}
+
+.chat-reasoning-end-toggle input:focus-visible + .chat-reasoning-toggle-slider {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 .model-selector {
@@ -1833,7 +2390,7 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
     gap: 4px;
   }
 
-  .btn-icon-sm, .send-btn, .continue-btn, .todo-btn {
+  .btn-icon-sm, .send-btn, .continue-btn {
     width: 32px;
     height: 32px;
   }
@@ -1860,8 +2417,10 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
     min-width: 120px;
   }
 
-  .todo-tooltip {
-    width: 240px;
+  .workflow-detail {
+    left: calc(50% - 4px);
+    width: min(380px, calc(100vw - 16px));
+    max-height: min(44vh, 360px);
   }
 
   .slash-popup {
@@ -1886,5 +2445,147 @@ defineExpose({focus: () => inputField.value?.focus(), autoResize})
   right: 16px;
   z-index: 5;
   pointer-events: auto;
+}
+
+/* ============= 工作流浮层 ============= */
+.workflow-float {
+  position: absolute;
+  bottom: calc(100% + 4px);
+  left: 50%;
+  z-index: 11;
+  transform: translateX(-50%);
+}
+
+.workflow-trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 5px 11px;
+  border: 1px solid color-mix(in srgb, var(--glass-border) 58%, transparent);
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--glass-bg) 68%, transparent);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 5px 16px color-mix(in srgb, #000000 10%, transparent);
+  color: var(--fg-3);
+  font: 600 12px var(--sans);
+  white-space: nowrap;
+  cursor: default;
+  transition: background var(--t), border-color var(--t), box-shadow var(--t);
+}
+
+.workflow-float:hover .workflow-trigger,
+.workflow-trigger:focus-visible {
+  border-color: var(--glass-border);
+  background: color-mix(in srgb, var(--glass-bg) 92%, var(--accent-bg));
+}
+
+.workflow-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.workflow-trigger-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--fg-4);
+}
+
+.workflow-trigger-dot.active {
+  background: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-bg);
+}
+
+.workflow-trigger-dot.completed {
+  background: var(--green, #2e7d32);
+}
+
+.workflow-trigger-dot.failed {
+  background: var(--red, #c62828);
+}
+
+.workflow-detail {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  width: min(380px, calc(100vw - 32px));
+  max-height: min(48vh, 400px);
+  overflow: auto;
+  padding: 10px 12px 8px;
+  border: 1px solid color-mix(in srgb, var(--accent) 32%, var(--glass-border));
+  border-radius: var(--r-lg);
+  background: color-mix(in srgb, var(--glass-bg) 94%, var(--accent-bg));
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+  box-shadow: var(--glass-shadow), 0 14px 34px color-mix(in srgb, var(--accent) 12%, transparent);
+  transform: translateX(-50%);
+}
+
+.workflow-detail-heading {
+  display: flex;
+  align-items: center;
+  margin-bottom: 8px;
+  color: var(--fg-3);
+  font-size: 12px;
+}
+
+.workflow-detail-heading svg {
+  margin-right: 6px;
+  flex-shrink: 0;
+  color: var(--accent);
+}
+
+.workflow-detail-heading {
+  color: var(--fg-2);
+  font-weight: 600;
+}
+
+.workflow-detail :deep(.cl) {
+  font-size: 14px;
+}
+
+.workflow-detail :deep(.cl-title),
+.workflow-detail :deep(.cl-desc) {
+  font-size: 14px;
+}
+
+.workflow-detail :deep(.cl-title),
+.workflow-detail :deep(.cl-row.current .cl-desc) {
+  font-weight: 600;
+}
+
+.workflow-detail :deep(.cl-badge),
+.workflow-detail :deep(.cl-progress),
+.workflow-detail :deep(.cl-result),
+.workflow-detail :deep(.cl-err) {
+  font-size: 12px;
+}
+
+.workflow-detail :deep(.cl-tag) {
+  font-size: 11px;
+}
+
+.workflow-float-enter-active,
+.workflow-float-leave-active {
+  transition: opacity 0.18s ease, transform 0.18s ease;
+}
+
+.workflow-float-enter-from,
+.workflow-float-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 8px);
+}
+
+.workflow-detail-enter-active,
+.workflow-detail-leave-active {
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+
+.workflow-detail-enter-from,
+.workflow-detail-leave-to {
+  opacity: 0;
+  transform: translate(-50%, 6px);
 }
 </style>

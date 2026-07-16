@@ -80,6 +80,7 @@ public class AgentController {
         }
         try {
             Agent4JSkillProvider skillProvider = Agent4JSkillProvider.getOrCreate("~");
+            skillProvider.getPoolManager().refresh();
             Collection<SkillDir> skills = skillProvider.getPoolManager().getSkills();
 
             List<SkillMetaDTO> result = skills.stream()
@@ -87,7 +88,8 @@ public class AgentController {
                             s.getName(),
                             s.getDescription(),
                             s.getAliasPath(),
-                            ""
+                            "",
+                            s.getRealPath().getFileName().toString()
                     ))
                     .collect(Collectors.toList());
 

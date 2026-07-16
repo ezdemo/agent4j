@@ -1,5 +1,9 @@
 package site.sorghum.agent4j.tool;
 
+import site.sorghum.agent4j.bin.config.Agent4jConfig;
+import site.sorghum.agent4j.bin.model.ModelClient;
+import site.sorghum.agent4j.bin.session.SessionService;
+
 /**
  * AgentLoop 控制接口 —— 工具通过此接口影响推理循环的控制流。
  * <p>
@@ -66,7 +70,7 @@ public interface AgentLoopController {
 
     /**
      * 检查用户是否已请求中断/停止。
-     * <p>工具（尤其是长时间运行的工具如 task/multi_task/bash）应该定期检查此标志，
+     * <p>工具（尤其是长时间运行的工具如 sub_agent/bash）应该定期检查此标志，
      * 如果返回 true 应尽快停止执行并返回。</p>
      *
      * @return true 表示用户已请求停止
@@ -79,4 +83,60 @@ public interface AgentLoopController {
      * 获取工具注册类
      */
     <T>T getToolRegistry();
+
+    /**
+     * 获取会话管理服务（可为 null，表示无会话持久化）。
+     * <p>子代理通过此接口向父会话上报 token 用量。</p>
+     */
+    default SessionService getSessionService() {
+        return null;
+    }
+
+    /** 获取当前循环使用的模型客户端，供子代理创建隔离副本。 */
+    default ModelClient getModelClient() {
+        return null;
+    }
+
+    /** 获取当前循环配置，供子代理继承超时等运行参数。 */
+    default Agent4jConfig getAgentConfig() {
+        return null;
+    }
+
+    /**
+     * 无工具调用时是否直接结束本轮对话。
+     * 默认从静态配置读取；AgentLoop 可覆盖此方法以支持运行时热更新。
+     */
+    default boolean terminateOnNoToolCall() {
+        Agent4jConfig config = getAgentConfig();
+        return config == null || config.terminateOnNoToolCall();
+    }
+
+    /** 注册当前工具的显式取消动作。 */
+    default void registerToolCancellation(Runnable cancellation) {
+    }
+
+    /** 清除当前工具的显式取消动作。 */
+    default void clearToolCancellation() {
+    }
+
+    /**
+     * 获取当前 HITL 模式状态。
+     * <p>保留该布尔接口用于兼容只区分开启/关闭的调用方。</p>
+     *
+     * @return true 表示 HITL 审批或自动模式已开启
+     */
+    default boolean isHitlMode() {
+        return false;
+    }
+
+    /**
+     * 获取当前 HITL 的完整模式，供子代理精确继承父代理设置。
+     * <p>旧控制器若只实现了 {@link #isHitlMode()}，默认映射为
+     * {@code approval/free}，保持二态行为兼容。</p>
+     *
+     * @return {@code free}、{@code approval} 或 {@code auto}
+     */
+    default String getHitlMode() {
+        return isHitlMode() ? "approval" : "free";
+    }
 }

@@ -57,7 +57,7 @@ public class GoalPatrolPrompt {
             - "goal:{sessionId}:patrol:log" — 最近操作日志
             
             ## 重要限制
-            - 不可创建子代理（没有 task/multi_task 工具）
+            - 不可创建子代理（没有 sub_agent 工具）
             - 每次 bash 调用有超时限制，sleep 60 是安全的
             - 如果发现自己进入死循环（同一步骤重试多次无进展），写入告警并等待用户
             """.formatted(workspaceHash, sessionId, sessionId);

@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
 import org.noear.solon.annotation.Inject;
+import site.sorghum.agent4j.bin.agent.context.ContextTokenEstimate;
 import site.sorghum.agent4j.bin.agent.context.ConversationContext;
 import site.sorghum.agent4j.bin.agent.core.Agent4jAgent;
 import site.sorghum.agent4j.bin.agent.model.ChatMessage;
@@ -13,12 +14,14 @@ import site.sorghum.agent4j.bin.command.ChatCommandRegistry;
 import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import site.sorghum.agent4j.bin.config.ConfigService;
 import site.sorghum.agent4j.bin.model.HttpModelClient;
+import site.sorghum.agent4j.bin.model.ModelPriceProvider;
 import site.sorghum.agent4j.bin.session.JsonlSessionStore;
 import site.sorghum.agent4j.bin.session.SessionStore;
 import site.sorghum.agent4j.bin.tool.ToolRegistry;
 import site.sorghum.agent4j.bin.tool.ToolSystemInitializer;
 import site.sorghum.agent4j.bin.workspace.WorkspaceManager;
 import site.sorghum.agent4j.tool.AgentOutput;
+import site.sorghum.agent4j.tool.solon.common.SessionFileChangeTracker;
 import site.sorghum.agent4j.web.common.ServiceException;
 import site.sorghum.agent4j.web.common.UsageCostCalculator;
 import site.sorghum.agent4j.web.model.*;
@@ -369,7 +372,7 @@ public class AgentService {
             String apiKey = cfg.apiKey();
             String model = cfg.model();
             String reasoningEffort = cfg.reasoningEffort();
-            boolean hitl = cfg.hitl();
+            String hitl = cfg.hitl();
 
             Agent4jAgent.Builder builder = Agent4jAgent.builder()
                     .config(cfg)
@@ -431,7 +434,7 @@ public class AgentService {
         int cacheSize = sessionCache.size();
 
         int historySize = 0;
-        boolean hitlMode = false;
+        String hitlMode = "free";
         String sessionName = null;
         long promptTokens = 0;
         long completionTokens = 0;
@@ -441,7 +444,7 @@ public class AgentService {
         Agent4jAgent agent = sessionCache.get(defaultKey);
         if (agent != null) {
             historySize = agent.historySize();
-            hitlMode = agent.isHitlMode();
+            hitlMode = agent.getHitlMode();
             SessionStore store = agent.getSessionStore();
             if (store != null) {
                 sessionName = store.currentName();
@@ -479,6 +482,7 @@ public class AgentService {
         SessionStore store = agent.getSessionStore();
         if (store != null) {
             try {
+                store.flush();
                 return store.load();
             } catch (IOException e) {
                 log.warn("[web] 加载会话历史失败: {}", e.getMessage());
@@ -500,19 +504,19 @@ public class AgentService {
     }
 
     /**
-     * 截断会话历史：删除包含指定 snapshotId 的用户消息及之后的所有消息，
+     * 截断会话历史：删除包含指定撤回定位 ID 的用户消息及之后的所有消息，
      * 同时重写 JSONL 文件使持久化数据同步。
      *
      * @param workspacePath 工作区路径
      * @param sessionName   会话名称
-     * @param snapshotId    要截断的快照 ID
+     * @param rollbackId    要截断的消息撤回定位 ID
      * @return 截断后被删除的用户消息文本（用于回填输入框），null 表示未找到
      */
-    public String truncateHistoryBySnapshotId(String workspacePath, String sessionName, String snapshotId) {
+    public String truncateHistoryBySnapshotId(String workspacePath, String sessionName, String rollbackId, Long rollbackTimestamp) {
         if (sessionName == null || sessionName.isEmpty()) {
             sessionName = getCurrentSessionName(workspacePath);
         }
-        if (sessionName == null || snapshotId == null) return null;
+        if (sessionName == null || (rollbackId == null && rollbackTimestamp == null)) return null;
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         Agent4jAgent agent = getOrCreateAgent(sessionKey);
         ConversationContext ctx = agent.getCtx();
@@ -522,7 +526,10 @@ public class AgentService {
         String rollbackText = null;
         for (int i = 0; i < history.size(); i++) {
             ChatMessage msg = history.get(i);
-            if ("user".equals(msg.getRole()) && snapshotId.equals(msg.getSnapshotId())) {
+            boolean matchesRollbackId = rollbackId != null
+                    && (rollbackId.equals(msg.getRollbackId()) || rollbackId.equals(msg.getSnapshotId()));
+            boolean matchesTimestamp = rollbackTimestamp != null && rollbackTimestamp.equals(msg.getTimestamp());
+            if ("user".equals(msg.getRole()) && (matchesRollbackId || matchesTimestamp)) {
                 targetIdx = i;
                 rollbackText = msg.getContent();
                 break;
@@ -546,7 +553,9 @@ public class AgentService {
 
         // 设置当前会话名称到 ThreadLocal，供工具执行时获取
         String effectiveSessionName = sessionName != null ? sessionName : "default";
+        SessionFileChangeTracker.beginTurn(Paths.get(workspacePath), effectiveSessionName);
         CURRENT_SESSION_NAME.set(effectiveSessionName);
+        HttpModelClient.CURRENT_LOG_SESSION.set(effectiveSessionName);
 
         try {
             Agent4jAgent agent = getOrCreateAgent(sessionKey);
@@ -559,6 +568,7 @@ public class AgentService {
         } finally {
             // 清理 ThreadLocal
             CURRENT_SESSION_NAME.remove();
+            HttpModelClient.CURRENT_LOG_SESSION.remove();
             // 刷入会话数据
             Agent4jAgent agent = sessionCache.get(sessionKey);
             if (agent != null) {
@@ -579,7 +589,9 @@ public class AgentService {
 
         // 设置当前会话名称到 ThreadLocal，供工具执行时获取
         String effectiveSessionName = sessionName != null ? sessionName : "default";
+        SessionFileChangeTracker.beginTurn(Paths.get(workspacePath), effectiveSessionName);
         CURRENT_SESSION_NAME.set(effectiveSessionName);
+        HttpModelClient.CURRENT_LOG_SESSION.set(effectiveSessionName);
 
         try {
             Agent4jAgent agent = getOrCreateAgent(sessionKey);
@@ -593,6 +605,7 @@ public class AgentService {
             // HITL 待审批时跳过：interceptForHITL/interceptForSandboxHITL 已通过
             // output.onContentDelta() 发送过 HITL 消息，此处不应重复发送
             if (reply != null && !reply.isEmpty() && agent.noPendingHITL()) {
+                agent.getCurrentTurnFileChanges().forEach(emitter::sendFileChanges);
                 emitter.sendComplete(reply);
             }
         } catch (Exception e) {
@@ -605,6 +618,7 @@ public class AgentService {
         } finally {
             // 清理 ThreadLocal
             CURRENT_SESSION_NAME.remove();
+            HttpModelClient.CURRENT_LOG_SESSION.remove();
             // 恢复 Agent 输出
             Agent4jAgent agent = sessionCache.get(sessionKey);
             if (agent != null) {
@@ -675,9 +689,20 @@ public class AgentService {
         }
         List<SessionInfoDTO> sessions = new ArrayList<>();
         for (SessionStore.SessionInfo sessionInfo : store.list()) {
+            String title = store.getTitle(sessionInfo.name());
+            if (title == null) {
+                int replicaSuffix = sessionInfo.name().lastIndexOf("[复刻]");
+                if (replicaSuffix > 0) {
+                    String sourceTitle = store.getTitle(sessionInfo.name().substring(0, replicaSuffix));
+                    if (sourceTitle != null && !sourceTitle.isBlank()) {
+                        title = sourceTitle + sessionInfo.name().substring(replicaSuffix);
+                        store.updateTitle(sessionInfo.name(), title);
+                    }
+                }
+            }
             sessions.add(new SessionInfoDTO(
                     sessionInfo.name(),
-                    store.getTitle(sessionInfo.name()),
+                    title,
                     sessionInfo.messageCount(),
                     sessionInfo.name().equals(activeSession),
                     sessionInfo.mtime()
@@ -702,6 +727,61 @@ public class AgentService {
         String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
         sessionCache.setCurrentName(resolvedPath, sessionName);
         return true;
+    }
+
+    /**
+     * 从指定会话分支：复制原始历史的完整前缀到新会话，并切换过去。
+     *
+     * @param workspacePath 工作区路径
+     * @param sourceSession  源会话名称
+     * @param messageCount   原始历史的排他结束位置
+     * @return 新会话名称
+     */
+    public String branchSession(String workspacePath, String sourceSession, int messageCount) throws Exception {
+        if (!isReady()) throw new ServiceException("Agent 未初始化");
+        String sessionKey = generateSessionKey(workspacePath, sourceSession);
+        Agent4jAgent agent = getOrCreateAgent(sessionKey);
+        SessionStore store = agent.getSessionStore();
+        if (store == null) throw new ServiceException("会话存储不可用");
+
+        // 加载源会话消息
+        store.flush();
+        List<ChatMessage> sourceMessages = store.load(sourceSession);
+        List<ChatMessage> branchMessages = copyBranchMessages(sourceMessages, messageCount);
+        String sourceTitle = store.getTitle(sourceSession);
+
+        // Use an independent store so the source agent remains bound to its session.
+        WorkspaceManager workspaceManager = new WorkspaceManager();
+        Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
+        JsonlSessionStore branchStore = new JsonlSessionStore(sessionsDir);
+        try {
+            String newName = "agent4j-" + System.currentTimeMillis();
+            if (!branchStore.bindTo(newName)) throw new ServiceException("无法创建新会话");
+            branchStore.rewrite(branchMessages);
+            branchStore.updateTitle(newName, branchTitle(sourceTitle, sourceSession));
+            branchStore.flush();
+
+            // 切换到新会话
+            switchSession(workspacePath, newName);
+            return newName;
+        } finally {
+            branchStore.shutdown();
+        }
+    }
+
+    static List<ChatMessage> copyBranchMessages(List<ChatMessage> sourceMessages, int messageCount) {
+        if (sourceMessages == null || sourceMessages.isEmpty()) {
+            throw new ServiceException("源会话没有消息");
+        }
+        if (messageCount < 1 || messageCount > sourceMessages.size()) {
+            throw new ServiceException("messageCount 超出源会话消息范围");
+        }
+        return new ArrayList<>(sourceMessages.subList(0, messageCount));
+    }
+
+    static String branchTitle(String sourceTitle, String sourceSession) {
+        String title = sourceTitle == null || sourceTitle.isBlank() ? sourceSession : sourceTitle;
+        return title + "[复刻]";
     }
 
     /**
@@ -738,6 +818,15 @@ public class AgentService {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         Agent4jAgent agent = sessionCache.get(sessionKey);
 
+        // 历史会话可能尚未进入 Agent 缓存。按会话名加载 JSONL 后，仍可离线重算上下文构成。
+        if (agent == null && sessionName != null && !sessionName.isBlank()) {
+            try {
+                agent = getOrCreateAgent(sessionKey);
+            } catch (RuntimeException e) {
+                log.warn("[usage] 加载历史会话 '{}' 失败: {}", sessionName, e.getMessage());
+            }
+        }
+
         long promptTokens = 0;
         long completionTokens = 0;
         long cacheHit = 0;
@@ -771,16 +860,30 @@ public class AgentService {
 
             if (agent == null) {
                 log.warn("[usage] Agent 为 null，无法获取模型用量");
-                return new UsageDTO(0, 0, 0, 0, 0, maxContextTokens, 0, null, false, 0, 0, 0, 0, null);
+                return new UsageDTO(0, 0, 0, 0, 0, maxContextTokens, 0, null, false, 0, 0, 0, 0, null, null);
             }
             Map<String, long[]> mu = agent.getModelUsage();
 
             if (mu != null && !mu.isEmpty()) {
+                // 全局价格提供者（与 UsageCostCalculator.calc() 行为对齐：config 优先，provider 兜底）
+                ModelPriceProvider priceProvider = ModelMetaPriceProvider.getInstance();
+
                 // 按模型分别计算费用
                 for (Map.Entry<String, long[]> entry : mu.entrySet()) {
                     String modelName = entry.getKey();
                     long[] usage = entry.getValue();
+
+                    // 1) 优先从用户配置中取价
                     Map<String, Double> modelPrice = prices.get(modelName);
+
+                    // 2) 配置中没有时回退到 ModelPriceProvider（与 DashboardService / UsageCostCalculator 保持一致）
+                    if ((modelPrice == null || modelPrice.isEmpty()) && priceProvider != null) {
+                        modelPrice = priceProvider.getModelPrice(modelName);
+                        if (modelPrice == null || modelPrice.isEmpty()) {
+                            log.debug("[usage] 模型 '{}' 既无 config.price() 配置，也无 ModelPriceProvider 元数据，跳过计价", modelName);
+                        }
+                    }
+
                     if (modelPrice != null && !modelPrice.isEmpty()) {
                         hasPrice = true;
                         double inputRate = modelPrice.getOrDefault("input", 0.0);
@@ -813,13 +916,17 @@ public class AgentService {
             // 价格计算失败不影响主逻辑
         }
 
+        ContextTokenEstimate contextEstimate = agent != null ? agent.getLastContextEstimate() : null;
+        if (contextEstimate == null && agent != null) {
+            contextEstimate = agent.estimateCurrentContext();
+        }
         return new UsageDTO(
                 promptTokens, completionTokens, cacheHit, cacheMiss,
                 lastPromptTokens, maxContextTokens,
                 promptTokens + completionTokens,
                 currentModel, hasPrice,
                 inputCost, cacheCost, outputCost, totalCost,
-                currency
+                currency, contextEstimate
         );
     }
 
@@ -1155,6 +1262,7 @@ public class AgentService {
 
         String effectiveSessionName = sessionName != null ? sessionName : "default";
         CURRENT_SESSION_NAME.set(effectiveSessionName);
+        HttpModelClient.CURRENT_LOG_SESSION.set(effectiveSessionName);
 
         try {
             Agent4jAgent agent = getOrCreateAgent(sessionKey);

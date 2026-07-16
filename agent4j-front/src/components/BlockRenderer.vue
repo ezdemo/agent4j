@@ -1,5 +1,5 @@
 <template>
-  <template v-if="processedBlocks.length > 0" v-for="(block, bi) in processedBlocks" :key="bi">
+  <template v-if="processedBlocks.length > 0" v-for="(block, bi) in processedBlocks" :key="getBlockKey(block, bi)">
     <!-- 思考 -->
     <div v-if="block.type === 'reasoning'" class="block-reasoning">
       <div class="reasoning-head" @click="block.showContent = !block.showContent">
@@ -20,6 +20,54 @@
 
     <!-- 内容 -->
     <div v-else-if="block.type === 'content' && block.content" class="block-content" v-html="fmt(block.content)"></div>
+
+    <!-- 本轮 AI 实际写入的文件（仅在回复结束后追加） -->
+    <div v-else-if="block.type === 'file_changes' && block.changes?.length" class="block-file-changes">
+      <div class="file-changes-head" :class="{ clickable: block.changes.length === 1 }"
+           :role="block.changes.length === 1 ? 'button' : undefined"
+           :tabindex="block.changes.length === 1 ? 0 : undefined"
+           @click="block.changes.length === 1 && $emit('openDiff', block.changes[0])"
+           @keydown.enter="block.changes.length === 1 && $emit('openDiff', block.changes[0])"
+           @keydown.space.prevent="block.changes.length === 1 && $emit('openDiff', block.changes[0])">
+        <span class="file-changes-icon" aria-hidden="true">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <rect x="3" y="3" width="18" height="18" rx="2"/>
+            <path d="M12 7v6M9 10h6M9 16h6"/>
+          </svg>
+        </span>
+        <span class="file-changes-summary">
+          <strong class="file-changes-title">{{ getFileChangeTitle(block) }}</strong>
+          <span class="file-changes-total">
+            <b v-if="getFileChangeTotals(block).additions" class="file-change-add">+{{ getFileChangeTotals(block).additions }}</b>
+            <b v-if="getFileChangeTotals(block).deletions" class="file-change-del">-{{ getFileChangeTotals(block).deletions }}</b>
+          </span>
+        </span>
+        <button type="button" class="file-changes-undo" @click.stop="$emit('revertFileChanges', block.changes)">
+          撤销
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M9 14 4 9l5-5"/><path d="M4 9h7a5 5 0 0 1 0 10h-1"/>
+          </svg>
+        </button>
+      </div>
+      <template v-if="block.changes.length > 1">
+      <button v-for="change in getVisibleFileChanges(block)" :key="change.path" type="button" class="file-change-row"
+              :title="change.path" @click="$emit('openDiff', change)">
+        <span class="file-change-path">{{ change.path }}</span>
+        <span class="file-change-stats">
+          <b v-if="change.additions" class="file-change-add">+{{ change.additions }}</b>
+          <b v-if="change.deletions" class="file-change-del">-{{ change.deletions }}</b>
+        </span>
+      </button>
+      </template>
+      <button v-if="block.changes.length > FILE_CHANGE_COLLAPSE_LIMIT" type="button" class="file-changes-expand"
+              @click="block.showAll = !block.showAll">
+        {{ block.showAll ? '收起文件' : `再显示 ${block.changes.length - FILE_CHANGE_COLLAPSE_LIMIT} 个文件` }}
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+             :style="{ transform: block.showAll ? 'rotate(180deg)' : 'rotate(0deg)' }">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      </button>
+    </div>
 
     <!-- 工具调用分组（连续多个工具合并，样式与普通工具栏一致） -->
     <div v-else-if="block.type === 'tool_group'" class="block-tool">
@@ -112,26 +160,26 @@
           <!-- 内层思考 -->
           <div v-if="ib.type === 'reasoning'" class="tool-group-item-block">
             <div class="block-reasoning">
-              <div class="reasoning-head" @click="togglePathItem(ib._itemId)">
+              <div class="reasoning-head" @click="togglePathItem(block._groupId, ibi)">
                 <span class="default-icon" v-html="THINKING_ICON"></span>
                 <span>思考</span>
                 <span class="default-icon"
                       v-html="CHEVRON_DOWN_ICON"
                       :style="{
-                        transform: pathItemExpanded[ib._itemId] ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transform: pathItemExpanded[getPathItemKey(block._groupId, ibi)] ? 'rotate(180deg)' : 'rotate(0deg)',
                         display: 'inline-block',
                         transition: 'transform 0.25s ease',
                         lineHeight: 0
                       }">
                 </span>
               </div>
-              <div v-if="pathItemExpanded[ib._itemId]" class="reasoning-text" v-html="fmt(ib.content)"></div>
+              <div v-if="pathItemExpanded[getPathItemKey(block._groupId, ibi)]" class="reasoning-text" v-html="fmt(ib.content)"></div>
             </div>
           </div>
           <!-- 内层工具 -->
           <div v-else-if="ib.type === 'tool_call'" class="tool-group-item-block">
             <div class="block-tool">
-              <div class="tool-head" @click="togglePathItem(ib._itemId)">
+              <div class="tool-head" @click="togglePathItem(block._groupId, ibi)">
                 <span class="tool-icon default-icon" :class="ib.status">
                   <span v-if="ib.status === '执行中'" v-html="SPINNER_ICON"></span>
                   <span v-else-if="ib.status === '成功'" v-html="CHECK_ICON_SM"></span>
@@ -155,16 +203,23 @@
                 <span class="default-icon"
                       v-html="CHEVRON_DOWN_ICON"
                       :style="{
-                        transform: pathItemExpanded[ib._itemId] ? 'rotate(180deg)' : 'rotate(0deg)',
+                        transform: pathItemExpanded[getPathItemKey(block._groupId, ibi)] ? 'rotate(180deg)' : 'rotate(0deg)',
                         display: 'inline-block',
                         transition: 'transform 0.25s ease',
                         lineHeight: 0
                       }">
                 </span>
               </div>
-              <div v-if="pathItemExpanded[ib._itemId]" class="tool-detail">
-                <pre v-if="ib.args"><code>{{ fmtArgs(ib.args) }}</code></pre>
-                <pre v-if="ib.result"><code>{{ ib.result }}</code></pre>
+              <div v-if="pathItemExpanded[getPathItemKey(block._groupId, ibi)]" class="tool-detail">
+                <!-- 清单工具：用 ChecklistSteps 渲染 -->
+                <div v-if="isChecklistTool(ib)" class="checklist-tool-detail">
+                  <ChecklistSteps :data="getChecklistData(ib)" />
+                </div>
+                <!-- 其他工具：正常显示 -->
+                <template v-else>
+                  <pre v-if="ib.args"><code>{{ fmtArgs(ib.args) }}</code></pre>
+                  <pre v-if="ib.result"><code>{{ ib.result }}</code></pre>
+                </template>
               </div>
             </div>
           </div>
@@ -190,9 +245,9 @@
           <span class="tool-status" :class="block.status">{{ block.status }}</span>
         </div>
       </div>
-      <!-- 工作流工具：workflow_create_dag 和 workflow_visualize -->
-      <div v-else-if="isWorkflowTool(block) && block.result" class="block-workflow">
-        <div class="workflow-tool-head" @click="block.expanded = !block.expanded">
+      <!-- 清单工具 -->
+      <div v-else-if="isChecklistTool(block) && block.result" class="block-checklist">
+        <div class="checklist-tool-head" @click="block.expanded = !block.expanded">
           <span class="tool-icon default-icon" :class="block.status">
             <span v-if="block.status === '执行中'" v-html="SPINNER_ICON"></span>
             <span v-else-if="block.status === '成功'" v-html="CHECK_ICON_SM"></span>
@@ -200,7 +255,7 @@
           </span>
           <code class="tool-name">{{ block.name }}</code>
           <span class="tool-status" :class="block.status">{{ block.status }}</span>
-          <span class="workflow-tool-title">{{ getWorkflowTitle(block) }}</span>
+          <span class="checklist-tool-title">{{ getChecklistTitle(block) }}</span>
           <span class="default-icon"
                 v-html="CHEVRON_DOWN_ICON"
                 :style="{
@@ -211,12 +266,12 @@
                 }">
           </span>
         </div>
-        <div v-if="block.expanded" class="workflow-tool-detail">
-          <WorkflowDagRenderer :data="getWorkflowData(block)" />
+        <div v-if="block.expanded" class="checklist-tool-detail">
+          <ChecklistSteps :data="getChecklistData(block)" />
         </div>
       </div>
-      <!-- 工作流工具执行中 -->
-      <div v-else-if="isWorkflowTool(block) && block.status" class="block-tool">
+      <!-- 清单工具执行中 -->
+      <div v-else-if="isChecklistTool(block) && block.status" class="block-tool">
         <div class="tool-head">
           <span class="tool-icon default-icon" :class="block.status" v-html="SPINNER_ICON"></span>
           <code class="tool-name">{{ block.name }}</code>
@@ -263,6 +318,75 @@
       </div>
     </template>
 
+    <!-- 子代理块（工具调用风格折叠块） -->
+    <div v-else-if="block.type === 'sub_agent'" class="block-tool">
+      <div class="tool-head" @click="toggleSubAgent(block)">
+        <span class="tool-icon default-icon 成功">
+          <span v-html="CHECK_ICON_SM"></span>
+        </span>
+        <code class="tool-name">子代理</code>
+        <span class="tool-status 成功">{{ block.status }}</span>
+        <span class="tool-param">{{ block.blocks?.length || 0 }} 步</span>
+        <span class="default-icon"
+              v-html="CHEVRON_DOWN_ICON"
+              :style="{
+                transform: isSubAgentExpanded(block) ? 'rotate(180deg)' : 'rotate(0deg)',
+                display: 'inline-block',
+                transition: 'transform 0.25s ease',
+                lineHeight: 0
+              }">
+        </span>
+      </div>
+      <div v-if="isSubAgentExpanded(block)" class="tool-group-detail">
+        <div v-for="(sb, sbi) in block.blocks" :key="sbi" class="tool-group-item-block">
+          <!-- 子代理内层工具 -->
+          <div v-if="sb.type === 'tool_call'" class="block-tool">
+            <div class="tool-head" @click="sb.expanded = !sb.expanded">
+              <span class="tool-icon default-icon" :class="sb.status">
+                <span v-if="sb.status === '执行中'" v-html="SPINNER_ICON"></span>
+                <span v-else-if="sb.status === '成功'" v-html="CHECK_ICON_SM"></span>
+                <span v-else v-html="CIRCLE_ICON"></span>
+              </span>
+              <code class="tool-name">{{ sb.name }}</code>
+              <span class="tool-status" :class="sb.status">{{ sb.status }}</span>
+              <span class="default-icon"
+                    v-html="CHEVRON_DOWN_ICON"
+                    :style="{
+                      transform: sb.expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                      display: 'inline-block',
+                      transition: 'transform 0.25s ease',
+                      lineHeight: 0
+                    }">
+              </span>
+            </div>
+            <div v-if="sb.expanded" class="tool-detail">
+              <pre v-if="sb.args"><code>{{ fmtArgs(sb.args) }}</code></pre>
+              <pre v-if="sb.result"><code>{{ sb.result }}</code></pre>
+            </div>
+          </div>
+          <!-- 子代理内层 reasoning -->
+          <div v-else-if="sb.type === 'reasoning'" class="block-reasoning">
+            <div class="reasoning-head" @click="sb.showContent = !sb.showContent">
+              <span class="default-icon" v-html="THINKING_ICON"></span>
+              <span>思考</span>
+              <span class="default-icon"
+                    v-html="CHEVRON_DOWN_ICON"
+                    :style="{
+                      transform: sb.showContent ? 'rotate(180deg)' : 'rotate(0deg)',
+                      display: 'inline-block',
+                      transition: 'transform 0.25s ease',
+                      lineHeight: 0
+                    }">
+              </span>
+            </div>
+            <div v-if="sb.showContent" class="reasoning-text" v-html="fmt(sb.content)"></div>
+          </div>
+          <!-- 子代理内层 content -->
+          <div v-else-if="sb.type === 'content' && sb.content" class="block-content" v-html="fmt(sb.content)"></div>
+        </div>
+      </div>
+    </div>
+
     <!-- 选项按钮（choice） -->
     <div v-else-if="block.type === 'choice'" class="block-choice">
       <!-- 未选择：显示问题 + 选项卡片 -->
@@ -273,8 +397,10 @@
                 cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01"
                                                                                               y2="17"/></svg>
           </span>
+          <span class="choice-badge">HITL 审批</span>
           <span class="choice-q-text">{{ block.question }}</span>
         </div>
+        <pre v-if="block.description" class="choice-desc"><code>{{ block.description }}</code></pre>
         <div class="choice-buttons">
           <button
               v-for="opt in (block.options || [])"
@@ -304,21 +430,64 @@ import {md} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
 import {CHECK_ICON_SM, CHEVRON_DOWN_ICON, CIRCLE_ICON, SPINNER_ICON, THINKING_ICON} from '../utils/icons'
 import {LRUCache} from '../utils/cache'
-import {ref, computed} from 'vue'
-import WorkflowDagRenderer from './WorkflowDagRenderer.vue'
+import {computed, ref, watchEffect} from 'vue'
+import ChecklistSteps from './ChecklistSteps.vue'
 
 const props = defineProps({
   blocks: {type: Array, required: true}
 })
 
-const emit = defineEmits(['sendChoice', 'openFile'])
+const emit = defineEmits(['sendChoice', 'openFile', 'openDiff', 'revertFileChanges'])
 
-// 工作流工具列表（需要在 processedBlocks 之前定义）
-const WORKFLOW_TOOLS = ['workflow_create_dag', 'workflow_visualize']
+// 清单工具列表（需要在 processedBlocks 之前定义）
+const CHECKLIST_TOOLS = ['checklist_start', 'checklist_step', 'checklist_status']
+const FILE_CHANGE_COLLAPSE_LIMIT = 3
+
+const getVisibleFileChanges = (block) => block.showAll
+    ? block.changes
+    : block.changes.slice(0, FILE_CHANGE_COLLAPSE_LIMIT)
+
+const getFileChangeTotals = (block) => block.changes.reduce((totals, change) => ({
+  additions: totals.additions + Number(change.additions || 0),
+  deletions: totals.deletions + Number(change.deletions || 0)
+}), {additions: 0, deletions: 0})
+
+const getFileChangeTitle = (block) => {
+  if (block.changes.length !== 1) return `已编辑 ${block.changes.length} 个文件`
+  const path = block.changes[0].path || '文件'
+  return `已编辑 ${path.replace(/\\/g, '/').split('/').pop()}`
+}
 
 // ── 工具分组折叠状态 ──
 
 const toolGroupsExpanded = ref({})
+
+// Stream events may replace a sub-agent block while it is still running. Keep
+// the user's explicit expansion choice separate from those transient objects.
+const subAgentExpanded = ref({})
+
+const getSubAgentKey = block => `sub-agent-${block.subId || block._id || ''}`
+
+const isSubAgentExpanded = block => {
+  const key = getSubAgentKey(block)
+  return Object.hasOwn(subAgentExpanded.value, key)
+      ? subAgentExpanded.value[key]
+      : Boolean(block.expanded)
+}
+
+const toggleSubAgent = block => {
+  const key = getSubAgentKey(block)
+  subAgentExpanded.value = {
+    ...subAgentExpanded.value,
+    [key]: !isSubAgentExpanded(block)
+  }
+}
+
+const getBlockKey = (block, index) => {
+  if (block.type === 'sub_agent') return getSubAgentKey(block)
+  if (block.type === 'path_group' || block.type === 'tool_group') return block._groupId
+  return block._id || `${block.type}-${index}`
+}
 
 const toggleToolGroup = (groupId) => {
   toolGroupsExpanded.value = {...toolGroupsExpanded.value, [groupId]: !toolGroupsExpanded.value[groupId]}
@@ -334,7 +503,10 @@ const togglePathGroup = (groupId) => {
 // ── 路径组内层块折叠状态（key = groupId-index） ──
 const pathItemExpanded = ref({})
 
-const togglePathItem = (key) => {
+const getPathItemKey = (groupId, index) => `${groupId}-${index}`
+
+const togglePathItem = (groupId, index) => {
+  const key = getPathItemKey(groupId, index)
   pathItemExpanded.value = {...pathItemExpanded.value, [key]: !pathItemExpanded.value[key]}
 }
 
@@ -361,8 +533,8 @@ const processedBlocks = computed(() => {
       }
       // 不管几个都合并为 path_group（单个 reasoning 也要折叠）
       const gid = `pg-${i}`
-      // 给每个内层块分配唯一 ID 用于展开状态跟踪
-      group.forEach((item, idx) => { item._itemId = `${gid}-${idx}` })
+      // 工作流工具在 path_group 中自动展开
+      // (已移到 watchEffect 中处理，避免 computed 内修改 reactive 状态)
       const toolCount = group.filter(x => x.type === 'tool_call').length
       const thinkCount = group.filter(x => x.type === 'reasoning').length
       const pathNames = group.map(x => x.type === 'reasoning' ? 'think' : x.name).join(' → ')
@@ -531,9 +703,11 @@ const getGlobPathFull = (block) => {
 // 触发打开文件事件
 const openFile = (block) => {
   const filePath = getFilePath(block)
-  if (filePath) {
-    emit('openFile', filePath)
-  }
+  openFilePath(filePath)
+}
+
+const openFilePath = (filePath) => {
+  if (filePath) emit('openFile', filePath)
 }
 
 // 获取 ask_choice 的问题文字
@@ -547,25 +721,25 @@ const getChoiceQuestion = (block) => {
   return q.length > 40 ? q.slice(0, 37) + '...' + suffix : q + suffix
 }
 
-// 工作流工具相关方法
-const isWorkflowTool = (block) => {
-  return WORKFLOW_TOOLS.includes(block.name)
+// 清单工具相关方法
+const isChecklistTool = (block) => {
+  return CHECKLIST_TOOLS.includes(block.name)
 }
 
-// 工作流工具默认展开
-const initWorkflowToolExpanded = (block) => {
-  if (isWorkflowTool(block) && block.expanded === undefined) {
+// 清单工具默认展开
+const initChecklistToolExpanded = (block) => {
+  if (isChecklistTool(block) && block.expanded === undefined) {
     block.expanded = true
   }
 }
 
-const getWorkflowTitle = (block) => {
+const getChecklistTitle = (block) => {
   try {
-    if (block.name === 'workflow_create_dag') {
-      const args = parseArgs(block)
-      return args?.title || ''
+    if (block.name === 'checklist_start') {
+      const result = parseResult(block)
+      return result?.title || ''
     }
-    if (block.name === 'workflow_visualize') {
+    if (block.name === 'checklist_status' || block.name === 'checklist_step') {
       const result = parseResult(block)
       return result?.title || ''
     }
@@ -575,16 +749,10 @@ const getWorkflowTitle = (block) => {
   return ''
 }
 
-const getWorkflowData = (block) => {
+const getChecklistData = (block) => {
   try {
-    if (block.name === 'workflow_create_dag') {
-      const result = parseResult(block)
-      return result || {}
-    }
-    if (block.name === 'workflow_visualize') {
-      const result = parseResult(block)
-      return result || {}
-    }
+    const result = parseResult(block)
+    if (result) return result
   } catch (e) {
     // ignore
   }
@@ -599,6 +767,27 @@ const parseResult = (block) => {
     return null
   }
 }
+
+// ── 副作用：从 computed 中移出，用 watchEffect 处理自动展开 ──
+
+watchEffect(() => {
+  const blocks = processedBlocks.value
+  if (!blocks) return
+  for (const block of blocks) {
+    if (block.type === 'path_group' && block._blocks) {
+      block._blocks.forEach((item, idx) => {
+        const key = getPathItemKey(block._groupId, idx)
+        if (item.type === 'tool_call' && isChecklistTool(item) && !pathItemExpanded.value[key]) {
+          pathItemExpanded.value = {...pathItemExpanded.value, [key]: true}
+        }
+      })
+    }
+    // 独立工具块：工作流工具自动展开
+    if (block.type === 'tool_call' && isChecklistTool(block) && block.expanded === undefined) {
+      block.expanded = true
+    }
+  }
+})
 </script>
 
 <style scoped>
@@ -996,6 +1185,113 @@ const parseResult = (block) => {
   background: var(--bg);
 }
 
+/* 本轮文件变更 */
+.block-file-changes {
+  overflow: hidden;
+  margin: 10px 0 4px;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  background: var(--glass-bg);
+}
+
+.file-changes-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 76px;
+  padding: 12px 16px;
+}
+
+.file-changes-head.clickable { cursor: pointer; }
+.file-changes-head.clickable:hover { background: var(--bg-2); }
+.file-changes-head.clickable:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.file-changes-icon {
+  display: grid;
+  width: 42px;
+  height: 42px;
+  place-items: center;
+  border-radius: var(--r);
+  background: var(--bg-3);
+  color: var(--fg-2);
+}
+
+.file-changes-summary { display: flex; flex: 1; min-width: 0; flex-direction: column; gap: 3px; }
+
+.file-changes-title {
+  color: var(--fg);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.file-changes-total, .file-change-stats {
+  display: inline-flex;
+  gap: 7px;
+  font: 600 12px var(--mono);
+}
+
+.file-changes-undo {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  padding: 4px 8px;
+  border: 0;
+  border-radius: var(--r-sm);
+  background: transparent;
+  color: var(--fg-2);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.file-changes-undo:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); color: var(--accent); }
+
+.file-change-row {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 12px;
+  padding: 11px 16px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  background: transparent;
+  color: var(--fg-2);
+  cursor: pointer;
+  text-align: left;
+}
+
+.file-change-row:hover {
+  background: var(--bg-2);
+}
+
+.file-change-path {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: 500 12px var(--mono);
+}
+
+.file-change-stats { margin-left: auto; }
+
+.file-change-add { color: var(--green); }
+.file-change-del { color: var(--red); }
+
+.file-changes-expand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 16px 12px;
+  border: 0;
+  background: transparent;
+  color: var(--fg-2);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.file-changes-expand svg { transition: transform var(--t); }
+.file-changes-expand:hover { color: var(--accent); }
+
 /* 工具分组展开内容 */
 .tool-group-detail {
   border-top: 1px solid var(--glass-border);
@@ -1108,8 +1404,8 @@ const parseResult = (block) => {
   overflow: auto;
 }
 
-/* 工作流工具 */
-.block-workflow {
+/* 清单工具 */
+.block-checklist {
   background: var(--bg-2, #f9fafb);
   border: 1px solid var(--border, #e5e7eb);
   border-radius: 6px;
@@ -1117,7 +1413,7 @@ const parseResult = (block) => {
   margin-bottom: 4px;
 }
 
-.workflow-tool-head {
+.checklist-tool-head {
   display: flex;
   align-items: center;
   gap: 6px;
@@ -1125,17 +1421,17 @@ const parseResult = (block) => {
   cursor: pointer;
 }
 
-.workflow-tool-head:hover {
+.checklist-tool-head:hover {
   background: var(--bg-3, #f3f4f6);
 }
 
-.workflow-tool-title {
+.checklist-tool-title {
   font-size: 12px;
   color: var(--fg-2, #6b7280);
   margin-left: 4px;
 }
 
-.workflow-tool-detail {
+.checklist-tool-detail {
   padding: 8px;
   border-top: 1px solid var(--border, #e5e7eb);
 }
@@ -1221,6 +1517,37 @@ const parseResult = (block) => {
 .choice-q-text {
   flex: 1;
   font-weight: 500;
+}
+
+/* 选项描述 — 工具参数详情等（代码块风格） */
+.choice-desc {
+  margin: 0 12px 8px;
+  padding: 6px 10px;
+  background: var(--color-code-bg, #f6f8fa);
+  border-radius: 6px;
+  font-size: 0.82em;
+  line-height: 1.45;
+  overflow-x: auto;
+}
+.choice-desc code {
+  background: none;
+  padding: 0;
+  font-family: var(--font-mono, 'SF Mono', 'Fira Code', 'Consolas', monospace);
+  color: var(--color-text-primary, #1a1a2e);
+}
+
+/* HITL 审批小徽章 */
+.choice-badge {
+  display: inline-block;
+  padding: 1px 8px;
+  margin-right: 6px;
+  background: #f0a02020;
+  border: 1px solid #f0a02040;
+  border-radius: 4px;
+  font-size: 0.78em;
+  font-weight: 600;
+  color: #b8780a;
+  vertical-align: middle;
 }
 
 /* 选项列表 — 横向 wrap */

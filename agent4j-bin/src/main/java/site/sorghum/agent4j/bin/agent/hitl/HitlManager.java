@@ -1,7 +1,6 @@
 package site.sorghum.agent4j.bin.agent.hitl;
 
 import lombok.Getter;
-import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import site.sorghum.agent4j.bin.agent.model.HitlState;
@@ -9,6 +8,7 @@ import site.sorghum.agent4j.bin.agent.model.ToolCallEntry;
 import site.sorghum.agent4j.tool.AgentOutput;
 import site.sorghum.agent4j.tool.ChoiceOption;
 
+import site.sorghum.agent4j.bin.config.Agent4jConfig;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -23,17 +23,34 @@ import java.util.List;
  * </ul>
  * </p>
  *
+ * <h3>HITL 模式</h3>
+ * <ul>
+ *   <li>{@link #MODE_FREE free} — 自由模式，所有工具直接执行，无需审批</li>
+ *   <li>{@link #MODE_APPROVAL approval} — 审批模式，非只读工具执行前需用户审批</li>
+ *   <li>{@link #MODE_AUTO auto} — 自动模式，基于白名单自动过滤（匹配白名单的工具自动放行，否则需审批）</li>
+ * </ul>
+ *
  * @author Sorghum
  */
 @Slf4j
 public class HitlManager {
 
+    // ==================== HITL 模式常量 ====================
+
+    /** 自由模式：所有工具直接执行，无需审批 */
+    public static final String MODE_FREE = "free";
+    /** 审批模式：非只读工具执行前需用户审批 */
+    public static final String MODE_APPROVAL = "approval";
+    /** 自动模式：基于白名单自动过滤（匹配白名单的工具自动放行，否则需审批） */
+    public static final String MODE_AUTO = "auto";
+
+    /** 所有模式的列表（用于 toggle 循环） */
+    private static final String[] MODES = {MODE_FREE, MODE_APPROVAL, MODE_AUTO};
+
     // ==================== 普通 HITL 状态 ====================
 
-    /** HITL 模式开关（true = 执行非只读工具前需用户审批） */
-    @Setter
-    @Getter
-    private volatile boolean hitlMode;
+    /** HITL 模式（free / approval / auto） */
+    private volatile String hitlMode = MODE_FREE;
 
     /** HITL 当前审批状态 */
     private volatile HitlState hitlState = HitlState.NONE;
@@ -66,18 +83,65 @@ public class HitlManager {
     private volatile String pendingSandboxHITDetails;
 
     public HitlManager() {
-        this(false);
+        this(MODE_FREE);
     }
 
-    public HitlManager(boolean hitlDefault) {
-        this.hitlMode = hitlDefault;
+    /**
+     * @param hitlMode HITL 模式，接受 "free" / "approval" / "auto"，向后兼容 "true" / "false"
+     */
+    public HitlManager(String hitlMode) {
+        this.hitlMode = normalizeMode(hitlMode);
+    }
+
+    /**
+     * 将字符串规范化为有效的 HITL 模式（向后兼容 boolean 值）。
+     */
+    private static String normalizeMode(String mode) {
+        if (mode == null) return MODE_FREE;
+        return switch (mode.toLowerCase()) {
+            case "approval", "approve", "true" -> MODE_APPROVAL;
+            case "auto" -> MODE_AUTO;
+            default -> MODE_FREE; // false, free, unknown
+        };
     }
 
     // ==================== 基础状态控制 ====================
 
-    /** 切换 HITL 模式 */
+    /**
+     * 切换 HITL 模式：free → approval → auto → free …
+     */
     public synchronized void toggleHitl() {
-        hitlMode = !hitlMode;
+        for (int i = 0; i < MODES.length; i++) {
+            if (MODES[i].equals(hitlMode)) {
+                hitlMode = MODES[(i + 1) % MODES.length];
+                return;
+            }
+        }
+        hitlMode = MODE_FREE; // 兜底
+    }
+
+    /**
+     * 获取当前 HITL 模式名称。
+     */
+    public String getHitlMode() {
+        return hitlMode;
+    }
+
+    /**
+     * 设置 HITL 模式。
+     *
+     * @param mode "free" / "approval" / "auto"，向后兼容 "true"/"false"
+     */
+    public void setHitlMode(String mode) {
+        this.hitlMode = normalizeMode(mode);
+    }
+
+    /**
+     * 是否启用 HITL 机制（审批模式或自动模式均视为启用）。
+     * 自由模式下返回 false。
+     */
+    public boolean isHitlMode() {
+        return MODE_APPROVAL.equals(hitlMode) || MODE_AUTO.equals(hitlMode);
     }
 
     /** 批准待执行的工具调用 */
@@ -136,14 +200,19 @@ public class HitlManager {
     }
 
     /**
-     * HITL 拦截：暂存工具调用，通过 {@code output} 向用户发送审批提示。
+     * HITL 拦截：根据当前模式决定是否暂存工具调用等待用户审批。
+     * <ul>
+     *   <li>自由模式 ({@link #MODE_FREE})：直接放行，返回 {@code null}</li>
+     *   <li>自动模式 ({@link #MODE_AUTO})：白名单匹配时自动放行，不匹配时降级为审批</li>
+     *   <li>审批模式 ({@link #MODE_APPROVAL})：暂存并等待用户审批</li>
+     * </ul>
      * <p>如果本轮工具调用全部为免审批工具（finish/ask_choice），直接放行返回 {@code null}。</p>
      *
      * @param toolCalls       工具调用 ONode 数组
      * @param content         assistant 消息的 content
      * @param reasoningContent assistant 消息的 reasoning_content
      * @param output          输出接口（用于发送审批提示）
-     * @return 审批提示文本，全部免审批时返回 {@code null}
+     * @return 审批提示文本，直接放行时返回 {@code null}
      */
     public String interceptForHITL(ONode toolCalls, String content, String reasoningContent,
                                    AgentOutput output) {
@@ -155,14 +224,72 @@ public class HitlManager {
             return null;
         }
 
-        // 暂存状态
+        // ---- 根据模式决定行为 ----
+        if (MODE_FREE.equals(hitlMode)) {
+            // 自由模式：不拦截，直接放行
+            return null;
+        }
+
+        if (MODE_AUTO.equals(hitlMode)) {
+            // 自动模式：基于白名单过滤
+            List<String> whitelist = Agent4jConfig.getInstance().autoWhitelist();
+            boolean allMatched = tcList.stream().allMatch(tc -> matchesWhitelist(tc.name(), whitelist));
+
+            if (allMatched) {
+                return null;
+            }
+
+            // 白名单不匹配：降级为审批流程
+            List<String> rejected = tcList.stream()
+                    .filter(tc -> !matchesWhitelist(tc.name(), whitelist))
+                    .map(ToolCallEntry::name).toList();
+            log.debug("[hitl] 自动模式：白名单不匹配，需审批: {}", rejected);
+            // 继续走下方审批逻辑
+        }
+
+        // ---- 审批模式：暂存状态，等待用户审批 ----
         this.pendingHITLToolCalls = toolCalls;
         this.pendingHITLContent = content;
         this.pendingHITLReasoning = reasoningContent;
         this.pendingHITTcList = tcList;
         this.hitlState = HitlState.PENDING;
 
-        // 构建审批提示
+        // 构建 title（工具名）和 description（工具参数）
+        StringBuilder titleSb = new StringBuilder();
+        StringBuilder descSb = new StringBuilder();
+        for (int i = 0; i < tcList.size(); i++) {
+            ToolCallEntry tc = tcList.get(i);
+            if (i > 0) {
+                titleSb.append("、");
+                descSb.append("\n");
+            }
+            titleSb.append(tc.name());
+            Object argsObj = tc.arguments();
+            String args = argsObj != null ? argsObj.toString() : null;
+            if (args != null && !args.isEmpty() && !"{}".equals(args)) {
+                String display = args.length() > 200 ? args.substring(0, 200) + "..." : args;
+                descSb.append(tc.name()).append(" ").append(display);
+            }
+        }
+        String title = titleSb.toString();
+        String description = !descSb.isEmpty() ? descSb.toString() : null;
+
+        // 发送审批选项（工具信息通过 title/description 传递，不再发 HITL 文本）
+        try {
+            output.onChoice(Arrays.asList(
+                    new ChoiceOption("/agree", "同意执行"),
+                    new ChoiceOption("/deny", "拒绝执行")
+            ), title, description);
+        } catch (Exception e) {
+            log.debug("[hitl] output.onChoice异常(SSE可能已断开): {}", e.getMessage());
+        }
+        try {
+            output.onContentComplete();
+        } catch (Exception e) {
+            log.debug("[hitl] output.onContentComplete异常(SSE可能已断开): {}", e.getMessage());
+        }
+
+        // 构建返回值文本（供 AgentLoop 日志/降级使用，不再通过 SSE 发送）
         StringBuilder sb = new StringBuilder();
         sb.append("⏸️  **HITL 模式：以下工具调用需要审批**\n\n");
         for (ToolCallEntry tc : tcList) {
@@ -177,27 +304,7 @@ public class HitlManager {
             sb.append("\n");
         }
         sb.append("\n请选择：");
-
-        String message = sb.toString();
-        try {
-            output.onContentDelta(message);
-        } catch (Exception e) {
-            log.debug("[hitl] output.onContentDelta异常(SSE可能已断开): {}", e.getMessage());
-        }
-        try {
-            output.onChoice(Arrays.asList(
-                    new ChoiceOption("/agree", "同意执行"),
-                    new ChoiceOption("/deny", "拒绝执行")
-            ));
-        } catch (Exception e) {
-            log.debug("[hitl] output.onChoice异常(SSE可能已断开): {}", e.getMessage());
-        }
-        try {
-            output.onContentComplete();
-        } catch (Exception e) {
-            log.debug("[hitl] output.onContentComplete异常(SSE可能已断开): {}", e.getMessage());
-        }
-        return message;
+        return sb.toString();
     }
 
     // ==================== 沙箱越界 HITL 拦截 ====================
@@ -217,15 +324,10 @@ public class HitlManager {
                 "> " + details + "\n\n" +
                 "请选择：";
         try {
-            output.onContentDelta(message);
-        } catch (Exception e) {
-            log.debug("[sandbox-hitl] output.onContentDelta异常(SSE可能已断开): {}", e.getMessage());
-        }
-        try {
             output.onChoice(Arrays.asList(
                     new ChoiceOption("/agree", "同意执行"),
                     new ChoiceOption("/deny", "拒绝执行")
-            ));
+            ), "沙箱越界", details);
         } catch (Exception e) {
             log.debug("[sandbox-hitl] output.onChoice异常: {}", e.getMessage());
         }
@@ -285,6 +387,62 @@ public class HitlManager {
         this.pendingSandboxHITToolCalls = toolCalls;
         this.pendingSandboxHITDetails = details;
         this.hitlState = HitlState.PENDING;
+    }
+
+    // ==================== 白名单匹配 ====================
+
+    /**
+     * 判断工具名称是否匹配白名单中的任一规则。
+     * <p>
+     * 支持 glob 通配符 {@code *}，匹配任意字符序列（包括空串）。
+     * 例如：
+     * <ul>
+     *   <li>{@code "*"} 匹配所有工具</li>
+     *   <li>{@code "read_*"} 匹配以 "read_" 开头的工具</li>
+     *   <li>{@code "workspace_*"} 匹配以 "workspace_" 开头的工具</li>
+     *   <li>{@code "finish"} 精确匹配 "finish"</li>
+     * </ul>
+     *
+     * @param toolName  工具名称
+     * @param whitelist 白名单规则列表
+     * @return 匹配任一规则返回 true
+     */
+    static boolean matchesWhitelist(String toolName, List<String> whitelist) {
+        if (toolName == null || whitelist == null || whitelist.isEmpty()) return false;
+        for (String pattern : whitelist) {
+            if (globMatch(pattern, toolName)) return true;
+        }
+        return false;
+    }
+
+    /**
+     * 简单 glob 匹配 —— 仅支持 {@code *} 通配符。
+     * {@code *} 匹配任意字符序列（包括空串），其余字符逐字匹配。
+     */
+    private static boolean globMatch(String pattern, String text) {
+        if (pattern == null || text == null) return false;
+        if ("*".equals(pattern)) return true;
+
+        int pIdx = 0, tIdx = 0;
+        int starIdx = -1, matchIdx = -1;
+
+        while (tIdx < text.length()) {
+            if (pIdx < pattern.length() && (pattern.charAt(pIdx) == text.charAt(tIdx) || pattern.charAt(pIdx) == '?')) {
+                pIdx++;
+                tIdx++;
+            } else if (pIdx < pattern.length() && pattern.charAt(pIdx) == '*') {
+                starIdx = pIdx++;
+                matchIdx = tIdx;
+            } else if (starIdx >= 0) {
+                pIdx = starIdx + 1;
+                matchIdx++;
+                tIdx = matchIdx;
+            } else {
+                return false;
+            }
+        }
+        while (pIdx < pattern.length() && pattern.charAt(pIdx) == '*') pIdx++;
+        return pIdx == pattern.length();
     }
 
     // ==================== 内部方法 ====================

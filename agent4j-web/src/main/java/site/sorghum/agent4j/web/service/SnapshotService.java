@@ -251,7 +251,7 @@ public class SnapshotService {
         }
 
         // 7. 移除该消息之后的所有快照（撤回后，后续快照失效）
-        truncateSnapshotsAfter(workspaceHash, msgId);
+        discardSnapshotsAfter(workspaceHash, msgId);
 
         log.info("[snapshot] 撤回成功: msgId={}, 恢复到 treeHash={}", msgId, treeHash);
         return new SnapshotRollbackResult(msgId, commitHash, treeHash, true, "工作区已恢复到消息 " + msgId + " 之前的状态");
@@ -354,7 +354,7 @@ public class SnapshotService {
     /**
      * 截断指定消息之后的所有快照（撤回后，后续快照失效）。
      */
-    private void truncateSnapshotsAfter(String workspaceHash, String msgId) {
+    public void discardSnapshotsAfter(String workspaceHash, String msgId) {
         String workspacePath = resolveWorkspace(workspaceHash);
         File workspaceDir = new File(workspacePath);
 

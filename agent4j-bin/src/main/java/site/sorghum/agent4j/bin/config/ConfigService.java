@@ -86,6 +86,49 @@ public class ConfigService {
         setDisabledTools(current);
     }
 
+    // ==================== 自动放行工具白名单 ====================
+
+    /**
+     * 获取自动放行工具白名单。
+     */
+    public static List<String> getAutoWhitelist() {
+        return config.autoWhitelist();
+    }
+
+    /**
+     * 全量替换自动放行白名单并持久化。
+     */
+    public static synchronized void setAutoWhitelist(Collection<String> toolNames) {
+        try {
+            config.updateAndSave(Map.of("autoWhitelist",
+                    toolNames != null ? new ArrayList<>(toolNames) : Collections.emptyList()));
+            ConfigService.config = Agent4jConfig.load();
+            log.info("[config] 已更新自动放行白名单，共 {} 个工具", toolNames != null ? toolNames.size() : 0);
+        } catch (IOException e) {
+            log.error("[config] 更新自动放行白名单失败", e);
+        }
+    }
+
+    /**
+     * 向自动放行白名单中添加工具（合并）并持久化。
+     */
+    public static synchronized void addAutoWhitelist(Collection<String> toolNames) {
+        if (toolNames == null || toolNames.isEmpty()) return;
+        Set<String> current = new LinkedHashSet<>(config.autoWhitelist());
+        current.addAll(toolNames);
+        setAutoWhitelist(current);
+    }
+
+    /**
+     * 从自动放行白名单中移除工具并持久化。
+     */
+    public static synchronized void removeAutoWhitelist(Collection<String> toolNames) {
+        if (toolNames == null || toolNames.isEmpty()) return;
+        Set<String> current = new LinkedHashSet<>(config.autoWhitelist());
+        current.removeAll(toolNames);
+        setAutoWhitelist(current);
+    }
+
     // ==================== 通用配置更新 ====================
 
     /**

@@ -1,4 +1,5 @@
-﻿import axios from 'axios'
+import axios from 'axios'
+import {message} from 'ant-design-vue'
 
 /** 默认兜底值，运行时优先读 public/config.json */
 export const DEFAULT_API_BASE = 'http://localhost:4567'
@@ -67,71 +68,70 @@ api.interceptors.response.use(
       const duration = Date.now() - parseInt(requestTime)
       console.debug(`API请求完成: ${response.config.url} (${duration}ms)`)
     }
-    
-    return response.data
+
+    const data = response.data
+    // 后端业务错误（HTTP 200 但 success=false）
+    if (data && data.success === false) {
+      const errMsg = data.error || data.message || '操作失败'
+      message.error(errMsg)
+      return Promise.reject({ code: response.status, message: errMsg, data })
+    }
+
+    return data
   },
   (error) => {
     console.error('API Error:', error)
-    
-    // 处理特定错误状态码
+
     if (error.response) {
       const { status, data } = error.response
-      
+      const errorMsg = data?.error || data?.message || error.message || '未知错误'
+
       switch (status) {
         case 401:
-          // 未授权，清除令牌并跳转到登录页
           localStorage.removeItem('agent4j-token')
           window.location.href = '/login'
           break
-          
         case 403:
-          console.error('权限不足:', data?.message || '未知错误')
+          message.error('权限不足: ' + errorMsg)
           break
-          
         case 404:
-          console.error('资源不存在:', error.config.url)
+          message.error('资源不存在: ' + (error.config?.url || ''))
           break
-          
         case 429:
-          console.error('请求过于频繁，请稍后重试')
+          message.warning('请求过于频繁，请稍后重试')
           break
-          
-        case 500:
-          console.error('服务器内部错误:', data?.message || '未知错误')
-          break
-          
-        case 502:
-        case 503:
-        case 504:
-          console.error('服务暂时不可用，请稍后重试')
-          break
+        default:
+          if (status >= 500) {
+            message.error('服务器错误: ' + errorMsg)
+          } else {
+            message.error(errorMsg)
+          }
       }
-      
-      // 返回结构化错误信息
+
       return Promise.reject({
         code: status,
-        message: data?.message || error.message,
+        message: errorMsg,
         data: data
       })
     }
-    
-    // 网络错误
+
     if (error.code === 'ECONNABORTED') {
-      console.error('请求超时')
+      message.error('请求超时，请检查网络连接')
       return Promise.reject({
         code: 'TIMEOUT',
         message: '请求超时，请检查网络连接'
       })
     }
-    
+
     if (!window.navigator.onLine) {
-      console.error('网络连接已断开')
+      message.error('网络连接已断开')
       return Promise.reject({
         code: 'OFFLINE',
         message: '网络连接已断开'
       })
     }
-    
+
+    message.error('请求失败: ' + (error.message || '未知错误'))
     return Promise.reject(error)
   }
 )
@@ -293,6 +293,8 @@ export const agentAPI = {
 }
 
 // 会话 API
+const sessionPathName = (name) => encodeURIComponent(name)
+
 export const sessionsAPI = {
   // 列出所有会话 - GET /api/sessions?workspaceHash=xxx
   list: (workspaceHash) => {
@@ -309,17 +311,27 @@ export const sessionsAPI = {
   createNew: (params) => {
     return api.post('/sessions/new', null, { params: params || {} })
   },
+
+  // 按助手消息持久化的 diff 反向回打补丁，不影响会话历史
+  revertFileChanges: (workspaceHash, changes) => {
+    return api.post('/sessions/file-changes/revert', { workspaceHash, changes })
+  },
+  // 分支会话 - POST /api/sessions/{name}/branch?workspaceHash=xxx&messageCount=N
+  branchSession: (name, workspaceHash, messageCount) => {
+    const params = { workspaceHash, messageCount }
+    return api.post(`/sessions/${sessionPathName(name)}/branch`, null, { params })
+  },
   
   // 切换会话 - POST /api/sessions/{name}?workspaceHash=xxx
   switchSession: (name, workspaceHash) => {
     const params = workspaceHash ? { workspaceHash } : {}
-    return api.post(`/sessions/${name}`, null, { params })
+    return api.post(`/sessions/${sessionPathName(name)}`, null, { params })
   },
   
   // 删除会话 - DELETE /api/sessions/{name}?workspaceHash=xxx
   deleteSession: (name, workspaceHash) => {
     const params = workspaceHash ? { workspaceHash } : {}
-    return api.delete(`/sessions/${name}`, { params })
+    return api.delete(`/sessions/${sessionPathName(name)}`, { params })
   },
 
   // 清空所有会话 - DELETE /api/sessions?workspaceHash=xxx
@@ -330,17 +342,17 @@ export const sessionsAPI = {
   
   // 获取会话详情 - GET /api/sessions/{name}
   getDetails: (name) => {
-    return api.get(`/sessions/${name}`)
+    return api.get(`/sessions/${sessionPathName(name)}`)
   },
   
   // 重命名会话 - PUT /api/sessions/{name}
   renameSession: (name, newName) => {
-    return api.put(`/sessions/${name}`, { name: newName })
+    return api.put(`/sessions/${sessionPathName(name)}`, { name: newName })
   },
   
   // 导出会话 - GET /api/sessions/{name}/export
   exportSession: (name) => {
-    return api.get(`/sessions/${name}/export`, { responseType: 'blob' })
+    return api.get(`/sessions/${sessionPathName(name)}/export`, { responseType: 'blob' })
   },
   
   // 导入会话 - POST /api/sessions/import
@@ -352,16 +364,17 @@ export const sessionsAPI = {
     })
   },
   
-  // 获取会话工作流 - GET /api/sessions/{name}/workflow?workspaceHash=xxx
-  getWorkflow: (name, workspaceHash) => {
+  // 获取会话清单 - GET /api/sessions/{name}/checklist?workspaceHash=xxx
+  getChecklist: (name, workspaceHash) => {
     const params = workspaceHash ? { workspaceHash } : {}
-    return api.get(`/sessions/${name}/workflow`, { params })
-  }
+    return api.get(`/sessions/${sessionPathName(name)}/checklist`, { params })
+  },
+
 }
 
 // 工具 API
 export const toolsAPI = {
-  // 列出所有已注册工具 - GET /api/tools
+  // 列出所有已注册工具（含已禁用的）- GET /api/tools
   list: () => {
     return api.get('/tools')
   },
@@ -371,9 +384,19 @@ export const toolsAPI = {
     return api.get(`/tools/${name}`)
   },
   
+  // 切换工具启用/禁用状态 - POST /api/tools/{name}/toggle
+  toggle: (name) => {
+    return api.post(`/tools/${name}/toggle`)
+  },
+  
   // 直接执行工具 - POST /api/tools/{name}/execute
   execute: (name, args) => {
     return api.post(`/tools/${name}/execute`, { arguments: args })
+  },
+  
+  // 切换工具自动放行状态 - POST /api/tools/{name}/auto-toggle
+  autoToggle: (name) => {
+    return api.post(`/tools/${name}/auto-toggle`)
   },
   
   // 搜索工具 - GET /api/tools/search
@@ -412,6 +435,11 @@ export const configAPI = {
   // 从远程 API 获取视觉模型列表 - GET /api/remote-vision-models
   getRemoteVisionModels: () => {
     return api.get('/remote-vision-models')
+  },
+
+  // 从 AI 模型复制视觉配置 - POST /api/config/copy-vision-from-ai
+  copyVisionFromAi: () => {
+    return api.post('/config/copy-vision-from-ai')
   },
   
   // 获取Token用量统计 - GET /api/usage?workspaceHash=xxx&sessionName=xxx
@@ -454,6 +482,28 @@ export const configAPI = {
   // 删除工作区 - DELETE /api/workspaces/{hash}
   deleteWorkspace: (hash) => {
     return api.delete(`/workspaces/${hash}`)
+  },
+
+  // 保存工作区排序 - PUT /api/workspaces/order
+  saveWorkspaceOrder: (order) => {
+    return api.put('/workspaces/order', order)
+  },
+
+  // 获取工作区排序 - GET /api/workspaces/order
+  getWorkspaceOrder: () => {
+    return api.get('/workspaces/order')
+  },
+
+  // 获取 agent4j.md 内容 - GET /api/agent4j-md
+  getAgent4jMd: () => {
+    return api.get('/agent4j-md')
+  },
+
+  // 更新 agent4j.md 内容 - PUT /api/agent4j-md
+  updateAgent4jMd: (content) => {
+    return api.put('/agent4j-md', content, {
+      headers: { 'Content-Type': 'text/plain' }
+    })
   }
 }
 
@@ -717,12 +767,14 @@ export const snapshotAPI = {
     return api.post('/snapshots/checkpoint', null, { params })
   },
 
-    // 撤回到快照 - POST /api/snapshots/rollback?workspaceHash=xxx&msgId=xxx&sessionName=xxx
-    rollback: (workspaceHash, msgId, sessionName) => {
-    const params = {}
-    if (workspaceHash) params.workspaceHash = workspaceHash
-    params.msgId = msgId
+    // 撤回消息，可选恢复工作区代码 - POST /api/snapshots/rollback?workspaceHash=xxx&msgId=xxx&sessionName=xxx&rollbackCode=true
+    rollback: (workspaceHash, msgId, sessionName, rollbackCode = true, rollbackTimestamp = null) => {
+      const params = {}
+      if (workspaceHash) params.workspaceHash = workspaceHash
+    if (msgId) params.msgId = msgId
         if (sessionName) params.sessionName = sessionName
+        params.rollbackCode = rollbackCode
+        if (rollbackTimestamp) params.rollbackTimestamp = rollbackTimestamp
     return api.post('/snapshots/rollback', null, { params })
   },
 
@@ -895,6 +947,8 @@ export const petAPI = {
   getPetInfo: (name) => api.get(`/pets/${name}`),
   /** 获取指定宠物的 spritesheet URL */
   getPetSpritesheetUrl: (name) => `/api/pets/${name}/spritesheet`,
+  /** 删除指定宠物（清空文件夹） */
+  deletePet: (name) => api.delete(`/pets/${name}`),
   /** 获取当前活跃宠物信息 */
   getActive: () => api.get('/pets/active'),
   /** 设置活跃宠物 */

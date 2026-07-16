@@ -28,6 +28,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 @Slf4j
 public class HttpModelClient implements ModelClient {
 
+    /**
+     * 当前请求对应的会话名称，供日志记录使用。
+     * 由上层（如 AgentService）在调用 chat/chatStream 前设置，调用后清理。
+     */
+    public static final ThreadLocal<String> CURRENT_LOG_SESSION = new ThreadLocal<>();
+
     private static final MediaType MEDIA_TYPE_JSON = MediaType.parse("application/json; charset=utf-8");
 
     /**
@@ -302,6 +308,16 @@ public class HttpModelClient implements ModelClient {
         }
     }
 
+    @Override
+    public void resetStreamAbort() {
+        abortRequested.set(false);
+    }
+
+    @Override
+    public ModelClient fork() {
+        return new HttpModelClient(apiUrl, apiKey, model, reasoningEffort);
+    }
+
     /**
      * 模型最大上下文窗口 token 数。
      * 优先级：环境变量 AGENT4J_MAX_CONTEXT_TOKENS > 模型名后缀 [大小] > 模型名推断 > 默认 256K。
@@ -382,6 +398,9 @@ public class HttpModelClient implements ModelClient {
                 if (status >= 400) {
                     throw new IOException("API error " + status + ": " + responseText);
                 }
+
+                // ★ 记录请求日志
+                writeApiLog(jsonBody);
 
                 ONode resp = ONode.ofJson(responseText);
                 ONode choices = resp.get(FIELD_CHOICES);
@@ -467,6 +486,9 @@ public class HttpModelClient implements ModelClient {
                         new InputStreamReader(body.byteStream(), StandardCharsets.UTF_8))) {
                     SseParseResult parseResult = processSseStream(reader, callback);
 
+                    // ★ 记录请求日志
+                    writeApiLog(jsonBody);
+
                     // ★ SSE流错误重试逻辑
                     if (parseResult.sseErrorData != null) {
                         try {
@@ -523,7 +545,9 @@ public class HttpModelClient implements ModelClient {
     private static class SseParseResult {
         String sseErrorData;
         ONode toolCallsAccum;
-        /** 每个请求 ID 上次报告的 usage 值，用于计算差量（某些平台会在同一流中多次发送 usage） */
+        /**
+         * 每个请求 ID 上次报告的 usage 值，用于计算差量（某些平台会在同一流中多次发送 usage）
+         */
         final Map<String, int[]> lastUsage = new HashMap<>();
     }
 
@@ -539,13 +563,13 @@ public class HttpModelClient implements ModelClient {
         String line;
         while ((line = reader.readLine()) != null) {
             if (abortRequested.compareAndSet(true, false)) {
-                log.debug("流式请求被 ReasonBreaker 中断");
+                log.info("流式请求被 ReasonBreaker 中断");
                 break;
             }
             if (!line.startsWith("data: ")) continue;
             String data = line.substring(6).trim();
             if ("[DONE]".equals(data)) {
-                log.debug("收到SSE流结束标记");
+                log.info("收到SSE流结束标记");
                 break;
             }
             if (data.trim().startsWith("{\"error\":")) {
@@ -580,7 +604,7 @@ public class HttpModelClient implements ModelClient {
         if (delta == null || delta.isNull()) return;
 
         // reasoning content
-        ONode rd = delta.get(FIELD_REASONING_CONTENT) == null ? delta.get(FIELD_REASONING_CONTENT_V2) : delta.get(FIELD_REASONING_CONTENT);
+        ONode rd = delta.get(FIELD_REASONING_CONTENT).isNull() ? delta.get(FIELD_REASONING_CONTENT_V2) : delta.get(FIELD_REASONING_CONTENT);
         // 回设
         delta.set(FIELD_REASONING_CONTENT, rd);
         if (rd != null && rd.isString()) {
@@ -747,7 +771,7 @@ public class HttpModelClient implements ModelClient {
      * 对 tool 消息做防御性检查（缺少 tool_call_id 时跳过）。
      */
     private ONode buildBody(List<ChatMessage> messages,
-                             ONode tools) {
+                            ONode tools) {
         ONode body = new ONode(ONode.ofJson("{}").options()).asObject();
         // 剥离模型名称中的上下文大小后缀，例如 "mimo-v2.5[512k]" → "mimo-v2.5"
         body.set(FIELD_MODEL, ModelContextUtils.stripContextSizeSuffix(model));
@@ -755,7 +779,14 @@ public class HttpModelClient implements ModelClient {
             body.set("reasoning_effort", reasoningEffort);
             body.set("chat_template_kwargs", ONode.ofJson("{}").set("enable_thinking", true));
             body.set("enable_thinking", true);
-            body.set("thinking",ONode.ofJson("{}").set("type","enabled"));
+            if (model.contains("minimax")) {
+                body.set("reasoning_split", true);
+                body.set("stream_options",ONode.ofJson("{}").set("include_usage", true));
+            }
+            if (model.toLowerCase().contains("glm")){
+                body.remove("enable_thinking");
+                body.remove("chat_template_kwargs");
+            }
         }
 
         ONode msgs = body.getOrNew(FIELD_MESSAGES).asArray();
@@ -836,6 +867,9 @@ public class HttpModelClient implements ModelClient {
             }
             if (m.getReasoningContent() != null) msg.set(FIELD_REASONING_CONTENT, m.getReasoningContent());
             if (m.getToolCallId() != null) msg.set("tool_call_id", m.getToolCallId());
+            if (msg.get(FIELD_CONTENT).isNull() ) {
+                msg.set(FIELD_CONTENT, "");
+            }
             if (!skip) {
                 msgs.add(msg);
             }
@@ -846,5 +880,68 @@ public class HttpModelClient implements ModelClient {
         }
 
         return body;
+    }
+
+    // ==================== API 请求/响应日志 ====================
+
+    private static final java.nio.file.Path API_LOG_DIR =
+            java.nio.file.Paths.get(System.getProperty("user.home"), ".agent4j", "logs", "http");
+
+    private static final java.time.format.DateTimeFormatter API_TS_FMT =
+            java.time.format.DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss.SSS")
+                    .withZone(java.time.ZoneId.systemDefault());
+
+    /**
+     * 写入一次 AI API 调用的请求日志到 ~/.agent4j/logs/http/{sessionName}.log。
+     * 只保留最近 2 次请求记录，旧记录自动丢弃。
+     */
+    private void writeApiLog(String requestBody) {
+        String sessionName = CURRENT_LOG_SESSION.get();
+        if (sessionName == null || sessionName.isEmpty()) {
+            sessionName = "unknown";
+        }
+        try {
+            java.nio.file.Files.createDirectories(API_LOG_DIR);
+            java.nio.file.Path logFile = API_LOG_DIR.resolve(sanitizeFileName(sessionName) + ".log");
+
+            StringBuilder newEntry = new StringBuilder();
+            newEntry.append("================================================================================\n");
+            newEntry.append(">>> AI API Call : ").append(API_TS_FMT.format(java.time.Instant.now())).append('\n');
+            newEntry.append(">>> URL         : ").append(apiUrl).append('\n');
+            newEntry.append(">>> Request     :\n");
+            newEntry.append(requestBody).append('\n');
+            newEntry.append("<<< END\n");
+            newEntry.append('\n');
+
+            // 只保留最近 2 条：取已有日志的最后 1 条 + 当前新条目
+            String existing = "";
+            if (java.nio.file.Files.exists(logFile)) {
+                existing = java.nio.file.Files.readString(logFile);
+            }
+            String[] parts = existing.split("(?m)^={60,}$");
+            // parts[0] 是分隔符前的空串，跳过；取最后 1 条旧记录
+            StringBuilder keep = new StringBuilder();
+            if (parts.length > 0) {
+                for (int i = Math.max(0, parts.length - 1); i < parts.length; i++) {
+                    String p = parts[i].trim();
+                    if (!p.isEmpty()) {
+                        keep.append("================================================================================\n");
+                        keep.append(p).append('\n');
+                    }
+                }
+            }
+            keep.append(newEntry);
+
+            java.nio.file.Files.writeString(logFile, keep.toString(),
+                    java.nio.charset.StandardCharsets.UTF_8,
+                    java.nio.file.StandardOpenOption.CREATE,
+                    java.nio.file.StandardOpenOption.TRUNCATE_EXISTING);
+        } catch (Exception e) {
+            log.warn("[api-log] 写入 AI 调用日志失败: {}", e.getMessage());
+        }
+    }
+
+    private static String sanitizeFileName(String name) {
+        return name.replaceAll("[\\\\/:*?\"<>|]", "_");
     }
 }

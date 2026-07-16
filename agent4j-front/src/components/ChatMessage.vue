@@ -3,7 +3,19 @@
     <!-- 用户消息 -->
     <template v-if="msg.role === 'user'">
       <div class="msg-body user-body">
-        <div class="msg-text">{{ userDisplayText }}</div>
+        <div v-if="userCollapsedBlock" class="user-auto-message">
+          <button class="user-auto-message-trigger" type="button" :aria-expanded="userAutoMessageExpanded"
+                  @click="userAutoMessageExpanded = !userAutoMessageExpanded">
+            <span class="user-auto-message-title">折叠块</span>
+            <svg class="user-auto-message-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="6 9 12 15 18 9"/>
+            </svg>
+          </button>
+          <div v-if="userAutoMessageExpanded" class="user-auto-message-detail">
+            <div class="user-auto-message-content">{{ userCollapsedBlock }}</div>
+          </div>
+        </div>
+        <div v-if="userDisplayText" class="msg-text">{{ userDisplayText }}</div>
         <button v-if="isUserLong" class="user-expand-btn" @click="userExpanded = !userExpanded">
           {{ userExpanded ? '收起' : '展开全部' }}
         </button>
@@ -12,12 +24,15 @@
         </div>
         <div class="msg-footer">
           <span class="msg-time">{{ msg.time }}</span>
-          <button v-if="msg.snapshotId" class="rollback-btn"
-                  :class="{ loading: snapshotRollbackLoading.get(msg.snapshotId) }"
-                  @click="$emit('rollbackSnapshot', msg.snapshotId)"
-                  title="撤回 AI 修改，恢复到发送前状态"
+          <span class="msg-actions">
+          <button class="rollback-btn"
+                  :class="{ loading: snapshotRollbackLoading.get(rollbackKey) }"
+                  :disabled="rollbackDisabled"
+                  @click="$emit('rollbackSnapshot', rollbackId, Boolean(msg.snapshotId), msg.rollbackTimestamp)"
+                  :title="rollbackDisabled ? 'AI 输出中，无法撤回' : '撤回此消息及其后的会话内容'"
                   v-html="ROLLBACK_ICON"></button>
           <button class="copy-msg-btn" @click="$emit('copyMessage', msg)" title="复制消息" v-html="COPY_ICON"></button>
+          </span>
         </div>
       </div>
     </template>
@@ -26,7 +41,7 @@
     <template v-else-if="msg.role === 'assistant' && msg.blocks && msg.blocks.length > 0">
       <div class="msg-body assistant-body">
         <div class="msg-blocks">
-          <BlockRenderer :blocks="msg.blocks || []" @send-choice="(val, block) => $emit('sendChoice', val, block)" @open-file="(filePath) => $emit('openFile', filePath)" />
+          <BlockRenderer :blocks="msg.blocks || []" @send-choice="(val, block) => $emit('sendChoice', val, block)" @open-file="(filePath) => $emit('openFile', filePath)" @open-diff="change => $emit('openDiff', change)" @revert-file-changes="changes => $emit('revertFileChanges', changes)" />
         </div>
         <div class="msg-footer">
           <span class="msg-time-group">
@@ -36,7 +51,10 @@
               <span v-if="fileStats.created > 0" class="msg-file-stat clickable" @mouseenter="showFileListDelayed('created', $event)" @mouseleave="hideFileListDelayed">新增 {{ fileStats.created }} 文件</span>
             </template>
           </span>
+          <span class="msg-actions">
           <button class="copy-msg-btn" @click="$emit('copyMessage', msg)" title="复制消息" v-html="COPY_ICON"></button>
+          <button class="copy-msg-btn" :disabled="branchDisabled" @click="$emit('branchSession', msg, idx)" title="继续到新会话" v-html="BRANCH_ICON"></button>
+          </span>
         </div>
       </div>
     </template>
@@ -78,30 +96,43 @@
 </template>
 
 <script setup>
-import {COPY_ICON, ROLLBACK_ICON} from '../utils/icons'
+import {BRANCH_ICON, COPY_ICON, ROLLBACK_ICON} from '../utils/icons'
 import BlockRenderer from './BlockRenderer.vue'
-import {onMounted, onBeforeUnmount, reactive, ref, computed} from 'vue'
+import {computed, onBeforeUnmount, onMounted, reactive, ref} from 'vue'
 import platform from '../services/platform'
 
 const props = defineProps({
   msg: {type: Object, required: true},
   idx: {type: Number, default: 0},
-  snapshotRollbackLoading: {type: Object, required: true}
+  snapshotRollbackLoading: {type: Object, required: true},
+  rollbackDisabled: {type: Boolean, default: false},
+  branchDisabled: {type: Boolean, default: false}
 })
 
-const emit = defineEmits(['previewImage', 'rollbackSnapshot', 'copyMessage', 'sendChoice', 'openFile'])
+const emit = defineEmits(['previewImage', 'rollbackSnapshot', 'copyMessage', 'branchSession', 'sendChoice', 'openFile', 'openDiff', 'revertFileChanges'])
 
 const isElectron = platform.isElectron
 
 // 用户消息截断
 const USER_MAX_LEN = 300
 const userExpanded = ref(false)
-const isUserLong = computed(() => (props.msg.content || '').length > USER_MAX_LEN)
+const COLLAPSIBLE_USER_BLOCK = /^```折叠块[ \t]*\r?\n([\s\S]*?)\r?\n```(?:\r?\n)*/
+const userCollapsedBlock = computed(() => {
+  const match = (props.msg.content || '').match(COLLAPSIBLE_USER_BLOCK)
+  return match ? match[1] : ''
+})
+const userBodyText = computed(() => (
+  (props.msg.content || '').replace(COLLAPSIBLE_USER_BLOCK, '')
+))
+const isUserLong = computed(() => userBodyText.value.length > USER_MAX_LEN)
 const userDisplayText = computed(() => {
-  const c = props.msg.content || ''
+  const c = userBodyText.value
   if (userExpanded.value || c.length <= USER_MAX_LEN) return c
   return c.slice(0, USER_MAX_LEN) + '...'
 })
+const userAutoMessageExpanded = ref(false)
+const rollbackId = computed(() => props.msg.rollbackId || props.msg.snapshotId)
+const rollbackKey = computed(() => rollbackId.value || props.msg.rollbackTimestamp)
 
 // 助手消息文件统计（edit=修改, write=新增，按 file_path 去重）
 const fileStats = computed(() => {
@@ -276,8 +307,15 @@ onBeforeUnmount(() => {
   justify-content: flex-end;
 }
 
+.msg.user .msg-body {
+  box-sizing: border-box;
+  width: min(480px, 85vw);
+}
+
 .msg-body {
   max-width: 85%;
+  user-select: text;
+  -webkit-user-select: text;
 }
 
 .user-body {
@@ -296,21 +334,14 @@ onBeforeUnmount(() => {
   color: #fff;
 }
 
-.user-body .msg-time {
-  font-size: 10px;
-  opacity: 0.7;
-  margin-top: 4px;
-  text-align: left;
-}
-
 .assistant-body {
   background: var(--glass-bg-2);
   backdrop-filter: blur(var(--blur-sm));
   -webkit-backdrop-filter: blur(var(--blur-sm));
   border: 1px solid var(--glass-border);
   border-radius: var(--r-lg);
-  padding: 8px 12px;
-  box-shadow: var(--glass-shadow);
+  padding: 9px 13px;
+  box-shadow: 0 7px 18px rgba(22, 28, 36, 0.06);
 }
 
 .msg-blocks {
@@ -324,14 +355,89 @@ onBeforeUnmount(() => {
   color: #fff;
 }
 
+.user-body .msg-time,
 .assistant-body .msg-time {
   font-size: 12px;
   color: var(--fg-3);
+  opacity: 1;
+  margin-top: 0;
+  font-variant-numeric: tabular-nums;
 }
 
 .msg-text {
   font-size: 14px;
   line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.user-auto-message {
+  display: block;
+  margin: 0 0 6px;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r);
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur-sm));
+  -webkit-backdrop-filter: blur(var(--blur-sm));
+}
+
+.user-auto-message-trigger {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: none;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+  font-family: var(--sans);
+  font-size: 12px;
+  font-weight: 500;
+  text-align: left;
+  user-select: none;
+}
+
+.user-auto-message-trigger svg {
+  flex-shrink: 0;
+}
+
+.user-auto-message-trigger:hover,
+.user-auto-message-trigger:focus-visible {
+  background: var(--bg-2);
+  outline: none;
+}
+
+.user-auto-message-title {
+  color: var(--fg-2);
+  font-size: 12px;
+  font-weight: 500;
+}
+
+.user-auto-message-chevron {
+  margin-left: auto;
+  flex-shrink: 0;
+  transition: transform var(--t);
+  color: var(--fg-4);
+}
+
+.user-auto-message-trigger[aria-expanded="true"] .user-auto-message-chevron {
+  transform: rotate(180deg);
+}
+
+.user-auto-message-detail {
+  padding: 10px 10px 8px;
+  border-top: 1px solid var(--border);
+}
+
+.user-auto-message-content {
+  margin: 0;
+  color: var(--fg-2);
+  font-family: var(--mono);
+  font-size: 11px;
+  line-height: 1.5;
   white-space: pre-wrap;
   word-break: break-word;
 }
@@ -382,6 +488,13 @@ onBeforeUnmount(() => {
   gap: 6px;
 }
 
+.msg-actions {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-left: auto;
+}
+
 .msg-file-stat {
   font-size: 12px;
   color: var(--fg-3);
@@ -409,8 +522,8 @@ onBeforeUnmount(() => {
   color: var(--fg-3);
 }
 
+.assistant-body .copy-msg-btn,
 .user-body .copy-msg-btn {
-  color: var(--fg-3);
   opacity: 0.5;
 }
 
@@ -418,26 +531,9 @@ onBeforeUnmount(() => {
   opacity: 0.8;
 }
 
-.assistant-body .copy-msg-btn {
-  opacity: 0.5;
-}
-
-.assistant-body:hover .copy-msg-btn {
-  opacity: 0.8;
-}
-
-.user-body:hover .copy-msg-btn {
-  opacity: 0.8;
-}
-
 .copy-msg-btn:hover {
   opacity: 1 !important;
   background: var(--glass-bg-2);
-}
-
-.user-body .copy-msg-btn:hover {
-  background: var(--bg-3);
-  color: var(--accent);
 }
 
 /* 用户消息展开/收起按钮 */
@@ -460,7 +556,7 @@ onBeforeUnmount(() => {
 
 /* 撤回按钮 */
 .rollback-btn {
-  opacity: 0;
+  opacity: 0.5;
   background: none;
   border: none;
   font-size: 12px;
@@ -470,7 +566,6 @@ onBeforeUnmount(() => {
   transition: opacity 0.2s, background 0.2s;
   line-height: 1;
   color: var(--fg-3);
-  margin-left: auto;
 }
 
 .rollback-btn.loading {
@@ -478,28 +573,18 @@ onBeforeUnmount(() => {
   pointer-events: none;
 }
 
-.user-body .rollback-btn {
-  color: var(--fg-3);
-  opacity: 0.5;
-}
-
-.user-body:hover .rollback-btn {
-  opacity: 0.8;
+.rollback-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.3;
 }
 
 .msg-body:hover .rollback-btn {
-  opacity: 0.6;
+  opacity: 0.8;
 }
 
 .rollback-btn:hover {
-  opacity: 1;
-  background: rgba(231, 76, 60, 0.12);
-  color: var(--accent-5, #e74c3c);
-}
-
-.user-body .rollback-btn:hover {
-  background: var(--accent-bg);
-  color: var(--accent);
+  opacity: 1 !important;
+  background: var(--glass-bg-2);
 }
 
 /* 链接悬停浮层 */

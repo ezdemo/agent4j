@@ -318,14 +318,17 @@ if ($ShowHelp) {
     Write-Host ""
     Write-Host "Usage:" -ForegroundColor Yellow
     Write-Host "  agent4j web [port]    Start the web server"
+    Write-Host "  agent4j acp [wsPort]  Start with ACP protocol support"
     Write-Host ""
     Write-Host "Options:" -ForegroundColor Yellow
     Write-Host "  port    0 = random port, 8097 = default, or any port number"
+    Write-Host "  wsPort  ACP WebSocket port (omit for stdio mode)"
     Write-Host ""
     Write-Host "Examples:" -ForegroundColor Yellow
     Write-Host "  agent4j web           Start on default port (8097)"
     Write-Host "  agent4j web 0         Start on a random available port"
-    Write-Host "  agent4j web 9636      Start on port 9636"
+    Write-Host "  agent4j acp           Start ACP stdio + Web random"
+    Write-Host "  agent4j acp 8765      Start ACP WebSocket:8765 + Web random"
     Write-Host ""
     Write-Host "  agent4j -h            Show this help"
     exit 0
@@ -368,7 +371,7 @@ try {
     }
 } catch { }
 
-# 解析 "web [port]" 子命令
+# 解析 "web [port]" / "acp [wsPort]" 子命令
 $PassThroughArgs = @()
 $i = 0
 while ($i -lt $RestArgs.Count) {
@@ -395,6 +398,21 @@ while ($i -lt $RestArgs.Count) {
                 Write-Host "Random port: $portArg" -ForegroundColor Green
             }
             $PassThroughArgs += "--server.port=$portArg"
+            $i++
+        }
+    } elseif ($RestArgs[$i] -eq 'acp' -and $i -eq 0) {
+        # ACP 模式：Web 随机端口 + ACP (stdio/WebSocket)
+        $PassThroughArgs += "--solon.logging.appender.console.enable=false"
+        # Web UI 始终随机端口
+        $portArg = Get-Random -Minimum 1024 -Maximum 65535
+        $PassThroughArgs += "--server.port=$portArg"
+        # ACP 标志
+        $PassThroughArgs += "--agent4j.acp=true"
+        $i++
+        # 可选参数：ACP WebSocket 端口（不传则 stdio 模式）
+        if ($i -lt $RestArgs.Count -and $RestArgs[$i] -match '^\d+$') {
+            Write-Host "ACP WebSocket port: $($RestArgs[$i])"
+            $PassThroughArgs += "--agent4j.acp.ws.port=$($RestArgs[$i])"
             $i++
         }
     } else {
@@ -448,14 +466,17 @@ echo Agent4j - AI Coding Assistant
 echo.
 echo Usage:
 echo   agent4j web [port]    Start the web server
+echo   agent4j acp [wsPort]  Start with ACP protocol support
 echo.
 echo Options:
 echo   port    0 = random port, 8097 = default, or any port number
+echo   wsPort  ACP WebSocket port (omit for stdio mode)
 echo.
 echo Examples:
 echo   agent4j web           Start on default port (8097)
 echo   agent4j web 0         Start on a random available port
-echo   agent4j web 9636      Start on port 9636
+echo   agent4j acp           Start ACP stdio + Web random
+echo   agent4j acp 8765      Start ACP WebSocket:8765 + Web random
 echo.
 echo   agent4j -h            Show this help
 goto :end
@@ -490,6 +511,14 @@ for %%a in (%*) do (
         if "%%a"=="web" (
             set "PASS_ARGS=!PASS_ARGS! --solon.logging.appender.console.enable=false"
             set "NEXT_IS_PORT=1"
+        ) else if "%%a"=="acp" (
+            rem ACP 模式：Web 随机端口 + ACP(stdio/WebSocket)
+            rem Web UI 随机端口
+            set /a PORT=!RANDOM! + 30000
+            set "PASS_ARGS=!PASS_ARGS! --solon.logging.appender.console.enable=false"
+            set "PASS_ARGS=!PASS_ARGS! --server.port=!PORT!"
+            set "PASS_ARGS=!PASS_ARGS! --agent4j.acp=true"
+            set "NEXT_IS_ACP_PORT=1"
         ) else (
             set "PASS_ARGS=!PASS_ARGS! %%a"
         )
@@ -504,6 +533,10 @@ for %%a in (%*) do (
                 set "PASS_ARGS=!PASS_ARGS! --server.port=%%a"
             )
             set "NEXT_IS_PORT="
+        ) else if defined NEXT_IS_ACP_PORT (
+            echo ACP WebSocket port: %%a
+            set "PASS_ARGS=!PASS_ARGS! --agent4j.acp.ws.port=%%a"
+            set "NEXT_IS_ACP_PORT="
         ) else (
             set "PASS_ARGS=!PASS_ARGS! %%a"
         )
@@ -548,15 +581,18 @@ if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$1" = "help" ]; 
     echo ""
     echo -e "\033[0;33mUsage:\033[0m"
     echo "  agent4j web [port]    Start the web server"
+    echo "  agent4j acp [wsPort]  Start with ACP protocol support"
     echo ""
     echo -e "\033[0;33mOptions:\033[0m"
-    echo "  port    0 = random port, 8097 = default, or any port number"
+    echo "  wsPort  ACP WebSocket port (omit for stdio mode)"
     echo ""
     echo -e "\033[0;33mExamples:\033[0m"
     echo "  agent4j web           Start on default port (8097)"
     echo "  agent4j web 0         Start on a random available port"
-    echo "  agent4j web 9636      Start on port 9636"
+    echo "  agent4j acp           Start ACP stdio + Web random"
+    echo "  agent4j acp 8765      Start ACP WebSocket:8765 + Web random"
     echo ""
+    echo "  agent4j -h            Show this help"
     echo "  agent4j -h            Show this help"
     exit 0
 fi
@@ -586,6 +622,23 @@ while [ $# -gt 0 ]; do
                 else
                     PASSTHROUGH_ARGS+=("--server.port=$1")
                 fi
+                shift
+            fi
+            ;;
+        acp)
+            # ACP 模式：Web 随机端口 + ACP (stdio/WebSocket)
+            PASSTHROUGH_ARGS+=("--solon.logging.appender.console.enable=false")
+            # Web UI 始终随机端口
+            PORT=$(( RANDOM % 55536 + 10000 ))
+            echo "Web random port: $PORT"
+            PASSTHROUGH_ARGS+=("--server.port=$PORT")
+            # ACP 标志
+            PASSTHROUGH_ARGS+=("--agent4j.acp=true")
+            shift
+            # 可选参数：ACP WebSocket 端口（不传则 stdio 模式）
+            if [ $# -gt 0 ] && echo "$1" | grep -qE '^[0-9]+$'; then
+                echo "ACP WebSocket port: $1"
+                PASSTHROUGH_ARGS+=("--agent4j.acp.ws.port=$1")
                 shift
             fi
             ;;

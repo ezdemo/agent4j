@@ -22,6 +22,9 @@ public class ToolRegistry {
 
     private final LinkedHashMap<String, FunctionTool> functionToolMap = new LinkedHashMap<>();
 
+    /** 所有扫描到的工具（包括禁用的），用于前端展示 */
+    private final LinkedHashMap<String, FunctionTool> allScannedTools = new LinkedHashMap<>();
+
     /** 缓存的 OpenAI tools 格式（refresh 时失效） */
     private ONode cachedOpenAiTools = null;
 
@@ -37,6 +40,13 @@ public class ToolRegistry {
      */
     @Getter
     private Set<String> forceDenyTools = Collections.emptySet();
+
+    /**
+     * 强制允许的工具名称集合。非 null 时只有集合内的工具可被注册和调用。
+     * 用于探索、审查等只读子代理，避免仅靠提示词约束写操作。
+     */
+    @Getter
+    private Set<String> forceAllowTools = null;
 
     // ==================== 动态刷新上下文 ====================
     @Getter
@@ -74,6 +84,25 @@ public class ToolRegistry {
      */
     public void setForceDenyTools(Set<String> denyTools) {
         this.forceDenyTools = denyTools != null ? new HashSet<>(denyTools) : Collections.emptySet();
+        applyForceToolFilters();
+    }
+
+    /**
+     * 设置强制允许的工具名称集合。传 null 表示不限制；空集合表示不允许任何工具。
+     */
+    public void setForceAllowTools(Set<String> allowTools) {
+        this.forceAllowTools = allowTools != null ? new HashSet<>(allowTools) : null;
+        applyForceToolFilters();
+    }
+
+    private void applyForceToolFilters() {
+        functionToolMap.entrySet().removeIf(entry -> !isForceAllowed(entry.getKey())
+                || forceDenyTools.contains(entry.getKey()));
+        cachedOpenAiTools = null;
+    }
+
+    private boolean isForceAllowed(String toolName) {
+        return forceAllowTools == null || forceAllowTools.contains(toolName);
     }
 
 
@@ -98,21 +127,32 @@ public class ToolRegistry {
     public void refresh() {
         Set<String> disabled = getCurrentDisabledTools();
         functionToolMap.clear();
+        allScannedTools.clear();
         cachedOpenAiTools = null; // 失效缓存
 
         // 使用 ToolScanUtil 统一扫描（Solon IoC + Skill 文件系统）
         List<FunctionTool> functionToolsList = ToolScanUtil.scanTools(workspace);
 
         for (FunctionTool tool : functionToolsList) {
-            if (disabled.contains(tool.name())) {
-                continue; // 跳过禁用工具
-            }
-            if (forceDenyTools.contains(tool.name())) {
-                continue; // 跳过强制禁止工具
-            }
+            register(tool, disabled);
+        }
+    }
 
+    /**
+     * Registers a function tool and applies the same enablement rules used by refresh().
+     */
+    public void register(FunctionTool tool) {
+        register(tool, getCurrentDisabledTools());
+    }
+
+    private void register(FunctionTool tool, Set<String> disabled) {
+        Objects.requireNonNull(tool, "tool");
+        allScannedTools.put(tool.name(), tool);
+        if (!disabled.contains(tool.name()) && !forceDenyTools.contains(tool.name())
+                && isForceAllowed(tool.name())) {
             functionToolMap.put(tool.name(), tool);
         }
+        cachedOpenAiTools = null;
     }
 
 
@@ -142,6 +182,10 @@ public class ToolRegistry {
                 ? Collections.emptySet()
                 : new HashSet<>(this.disabledToolsSnapshot);
         copy.useSnapshot = this.useSnapshot;
+        copy.forceDenyTools = this.forceDenyTools.isEmpty()
+                ? Collections.emptySet()
+                : new HashSet<>(this.forceDenyTools);
+        copy.forceAllowTools = this.forceAllowTools == null ? null : new HashSet<>(this.forceAllowTools);
         // 复制刷新上下文
         copy.workspace = this.workspace;
         copy.apiUrl = this.apiUrl;
@@ -153,14 +197,36 @@ public class ToolRegistry {
         for (FunctionTool def : this.functionToolMap.values()) {
             copy.functionToolMap.put(def.name(), def);
         }
+        for (FunctionTool def : this.allScannedTools.values()) {
+            copy.allScannedTools.put(def.name(), def);
+        }
         return copy;
     }
 
     /**
-     * 返回所有工具的不可变视图。
+     * 返回所有已启用工具的不可变视图。
      */
     public Map<String, FunctionTool> all() {
         return Collections.unmodifiableMap(functionToolMap);
+    }
+
+    /**
+     * 返回所有扫描到的工具（包括已禁用的）的不可变视图。
+     */
+    public Map<String, FunctionTool> allScanned() {
+        return Collections.unmodifiableMap(allScannedTools);
+    }
+
+    /**
+     * 判断指定工具当前是否已启用。
+     *
+     * @param toolName 工具名称
+     * @return true 表示已启用，false 表示已禁用
+     */
+    public boolean isEnabled(String toolName) {
+        Set<String> disabled = getCurrentDisabledTools();
+        return !disabled.contains(toolName) && !forceDenyTools.contains(toolName)
+                && isForceAllowed(toolName);
     }
 
     /**

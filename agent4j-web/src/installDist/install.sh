@@ -329,15 +329,19 @@ if [ $# -eq 0 ] || [ "$1" = "-h" ] || [ "$1" = "--help" ] || [ "$1" = "help" ]; 
     echo ""
     echo "Usage:"
     echo "  agent4j web [port]    Start the web server"
+    echo "  agent4j acp [wsPort]  Start with ACP protocol support"
     echo ""
     echo "Options:"
     echo "  port    0 = random port, 8097 = default, or any port number"
+    echo "  wsPort  ACP WebSocket port (omit for stdio mode)"
     echo ""
     echo "Examples:"
     echo "  agent4j web           Start on default port (8097)"
     echo "  agent4j web 0         Start on a random available port"
-    echo "  agent4j web 9636      Start on port 9636"
+    echo "  agent4j acp           Start ACP stdio + Web random"
+    echo "  agent4j acp 8765      Start ACP WebSocket:8765 + Web random"
     echo ""
+    echo "  agent4j -h            Show this help"
     echo "  agent4j -h            Show this help"
     exit 0
 fi
@@ -352,7 +356,7 @@ if [ -n "$JAVA_VER" ] && [ "$JAVA_VER" -ge 21 ]; then
     JAVA_OPTS="$JAVA_OPTS --enable-native-access=ALL-UNNAMED"
 fi
 
-# 解析 "web [port]" 子命令
+# 解析子命令
 PASSTHROUGH_ARGS=()
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -367,6 +371,23 @@ while [ $# -gt 0 ]; do
                 else
                     PASSTHROUGH_ARGS+=("--server.port=$1")
                 fi
+                shift
+            fi
+            ;;
+        acp)
+            # ACP 模式：Web 随机端口 + ACP (stdio/WebSocket)
+            PASSTHROUGH_ARGS+=("--solon.logging.appender.console.enable=false")
+            # Web UI 始终随机端口
+            PORT=$(( RANDOM % 55536 + 10000 ))
+            echo "Web random port: $PORT"
+            PASSTHROUGH_ARGS+=("--server.port=$PORT")
+            # ACP 标志
+            PASSTHROUGH_ARGS+=("--agent4j.acp=true")
+            shift
+            # 可选参数：ACP WebSocket 端口（不传则 stdio 模式）
+            if [ $# -gt 0 ] && echo "$1" | grep -qE '^[0-9]+$'; then
+                echo "ACP WebSocket port: $1"
+                PASSTHROUGH_ARGS+=("--agent4j.acp.ws.port=$1")
                 shift
             fi
             ;;

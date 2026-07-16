@@ -84,6 +84,13 @@ public class SseAgentOutput implements AgentOutput {
     }
 
     @Override
+    public void onChoice(List<ChoiceOption> options, String title, String description) {
+        if (options != null && !options.isEmpty()) {
+            emitter.sendChoice(title, description, new ArrayList<>(options));
+        }
+    }
+
+    @Override
     public void sendEvent(String type, String data) {
         if (type != null && data != null) {
             emitter.send(type, data);

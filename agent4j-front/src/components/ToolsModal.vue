@@ -23,7 +23,7 @@
         <div class="modal-body">
           <div v-for="t in tools" :key="t.name" class="tool-row">
             <code>{{ t.name }}</code>
-            <span>{{ t.description }}</span>
+            <span :title="t.description">{{ t.description }}</span>
           </div>
           <div v-if="!tools.length" class="modal-empty">加载中...</div>
         </div>

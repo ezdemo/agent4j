@@ -5,6 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import org.noear.solon.annotation.*;
 import org.noear.solon.core.handle.Context;
+import site.sorghum.agent4j.bin.agent.hitl.SubAgentHITLBroker;
 import site.sorghum.agent4j.bin.agent.model.UserMessage;
 import site.sorghum.agent4j.web.common.WebErrorMessages;
 import site.sorghum.agent4j.web.model.ApiResponse;
@@ -14,6 +15,7 @@ import site.sorghum.agent4j.web.service.AgentService;
 import site.sorghum.agent4j.web.service.SnapshotService;
 import site.sorghum.agent4j.web.service.SseEmitter;
 
+import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -54,6 +56,28 @@ public class ChatController {
         return ApiResponse.ok("已发送中断请求");
     }
 
+    /**
+     * 子代理 HITL 审批端点 —— 前端用户点击审批按钮后调用。
+     * <p>释放对应 subId 的 CountDownLatch，使阻塞在 SubAgent.run() 中的子代理恢复执行。</p>
+     */
+    @Post
+    @Mapping("/sub-hitl/{subId}")
+    public ApiResponse<Map<String, Object>> approveSubHitl(@Path int subId, @Body String body) {
+        String action = "";
+        try {
+            var node = org.noear.snack4.ONode.ofJson(body);
+            action = node.get("action").getString();
+        } catch (Exception e) {
+            return ApiResponse.fail("无法解析请求体: " + e.getMessage());
+        }
+        if (!"approve".equals(action) && !"deny".equals(action)) {
+            return ApiResponse.fail("action 必须为 'approve' 或 'deny'");
+        }
+        SubAgentHITLBroker.resolve(subId, "approve".equals(action));
+        log.info("[sub-hitl] 子代理审批: subId={}, action={}", subId, action);
+        return ApiResponse.ok(Map.of("subId", subId, "action", action));
+    }
+
     @ApiOperation(value = "SSE 流式聊天", notes = "通过 Server-Sent Events 流式返回聊天回复，支持实时推送内容片段")
     @ApiImplicitParams({
             @ApiImplicitParam(name = "message", value = "用户消息", required = true),
@@ -82,9 +106,10 @@ public class ChatController {
                 // ★ 创建快照检查点：在 AI 执行修改前保存当前工作区状态
                 String msgId = UUID.randomUUID().toString().substring(0, 8);
                 boolean snapshotCreated = createCheckpointIfNeeded(request.getWorkspaceHash(), msgId, emitter);
-                // 只有快照实际创建成功时，才通过 SSE 通知前端
+                // 每条用户消息都有会话撤回点；代码快照是否可用由事件字段标识。
+                userMsg.setRollbackId(msgId);
+                emitter.sendSnapshot(msgId, snapshotCreated);
                 if (snapshotCreated) {
-                    emitter.sendSnapshot(msgId);
                     // 将快照 ID 传递给 UserMessage，以便 JSONL 持久化
                     userMsg.setSnapshotId(msgId);
                 }

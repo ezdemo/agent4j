@@ -2,6 +2,7 @@ package site.sorghum.agent4j.web.service;
 
 import org.noear.snack4.ONode;
 import org.noear.solon.core.handle.Context;
+import site.sorghum.agent4j.bin.agent.model.FileChange;
 
 import java.io.IOException;
 import java.io.OutputStream;
@@ -112,7 +113,20 @@ public class SseEmitter {
     }
 
     public void sendChoice(List<?> options) {
+        sendChoice(null, null, options);
+    }
+
+    /**
+     * 发送 choice 事件（带标题和描述）。
+     */
+    public void sendChoice(String title, String description, List<?> options) {
         ONode root = ONode.ofJson("{}").asObject();
+        if (title != null && !title.isEmpty()) {
+            root.set("title", title);
+        }
+        if (description != null && !description.isEmpty()) {
+            root.set("description", description);
+        }
         ONode arr = root.getOrNew("options").asArray();
         for (Object opt : options) {
             ONode item = arr.addNew();
@@ -143,6 +157,22 @@ public class SseEmitter {
         send("tool_result", node.toJson());
     }
 
+    /** Sends the final write/edit summary after an AI turn has completed. */
+    public void sendFileChanges(List<FileChange> changes) {
+        if (changes == null || changes.isEmpty()) return;
+        ONode root = ONode.ofJson("{}").asObject();
+        ONode items = root.getOrNew("changes").asArray();
+        for (FileChange change : changes) {
+            ONode item = items.addNew().asObject();
+            item.set("path", change.path());
+            item.set("additions", change.additions());
+            item.set("deletions", change.deletions());
+            item.set("created", change.created());
+            item.set("diff", change.diff());
+        }
+        send("file_changes", root.toJson());
+    }
+
     public void sendUsage(int promptTokens, int completionTokens, int totalTokens,
                           int cacheHit, int cacheMiss) {
         ONode node = ONode.ofJson("{}").asObject();
@@ -156,11 +186,12 @@ public class SseEmitter {
     }
 
     /**
-     * 发送快照事件 —— 通知前端当前消息的快照 ID（可用于撤回）。
+     * 发送消息撤回点事件，并标记是否同时创建了代码快照。
      */
-    public void sendSnapshot(String msgId) {
+    public void sendSnapshot(String msgId, boolean hasCodeSnapshot) {
         ONode node = ONode.ofJson("{}").asObject();
         node.set("msgId", msgId);
+        node.set("hasCodeSnapshot", hasCodeSnapshot);
         send("snapshot", node.toJson());
     }
 

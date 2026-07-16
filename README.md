@@ -12,19 +12,39 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Java-17-blue?logo=openjdk"/>
-  <img src="https://img.shields.io/badge/Solon-4.0.0--M3-important?logo=java"/>
+  <img src="https://img.shields.io/badge/Solon-4.0.2-important?logo=java"/>
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js"/>
-  <img src="https://img.shields.io/badge/Electron-32.0-47848F?logo=electron"/>
+  <img src="https://img.shields.io/badge/Electron-42.4-47848F?logo=electron"/>
   <img src="https://img.shields.io/badge/license-MIT-green"/>
-  <img src="https://img.shields.io/badge/version-26.6.29-lightgrey"/>
+  <img src="https://img.shields.io/badge/version-26.7.16-lightgrey"/>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-📋-brightgreen"/></a>
 </p>
 
 ---
 
-## 🚀 快速开始
+## 📖 这是什么？
 
-> 📋 [更新日志](CHANGELOG.md) — 查看各版本变更记录
+**Agent4j** 是一个纯 Java 17 的 AI 编码代理。和 Claude Code、Codex、OpenCode、Reasonix 一样——你给它一个任务，它能自己读代码、写代码、跑命令、调 API，一步步把事情干完。
+
+核心是一个 **推理循环（Reasoning Loop）**：
+
+```
+用户说 → LLM 想 → 调工具 → 看结果 → LLM 再想 → 再调工具 → …… → 干完
+```
+
+| 对标产品            | 实现语言          |
+|-----------------|---------------|
+| **Claude Code** | TypeScript    |
+| **Codex**       | TypeScript    |
+| **OpenCode**    | Go            |
+| **Reasonix**    | Rust          |
+| **Agent4j**     | **Java 17** ✅ |
+
+如果你在用 Java 技术栈，又想有一个 AI 编码代理来帮忙写代码、改代码、跑构建、查日志——Agent4j 是你的选择。
+
+---
+
+## 🚀 快速开始
 
 ### 一键安装
 
@@ -60,29 +80,6 @@ agent4j web 0
 
 ---
 
-## 📖 这是什么？
-
-**Agent4j** 是一个纯 Java 17 的 AI 编码代理。和 Claude Code、Codex、OpenCode、Reasonix 一样——你给它一个任务，它能自己读代码、写代码、跑命令、调
-API，一步步把事情干完。
-
-核心是一个 **推理循环（Reasoning Loop）**：
-
-```
-用户说 → LLM 想 → 调工具 → 看结果 → LLM 再想 → 再调工具 → …… → 干完
-```
-
-| 对标产品            | 实现语言          |
-|-----------------|---------------|
-| **Claude Code** | TypeScript    |
-| **Codex**       | TypeScript    |
-| **OpenCode**    | Go            |
-| **Reasonix**    | Rust          |
-| **Agent4j**     | **Java 17** ✅ |
-
-如果你在用 Java 技术栈，又想有一个 AI 编码代理来帮忙写代码、改代码、跑构建、查日志——Agent4j 是你的选择。
-
----
-
 ## 📸 界面预览
 
 ### 主界面
@@ -98,41 +95,6 @@ API，一步步把事情干完。
   &nbsp;&nbsp;
   <img src="img/data_dashboard_2.png" width="45%" alt="数据面板 2"/>
 </p>
-
----
-
-## 🆕 最新更新（v26.6.29）
-
-### 🐾 桌面宠物精灵
-- 新增桌面宠物精灵组件 (PetSprite)，支持精灵图动画与拖拽移动
-- 多宠物选择与切换，设置页面管理和切换不同宠物
-- 宠物初始化与快捷安装提示，首次使用引导安装
-
-### 🛠️ 技能选择与权限切换
-- 聊天输入框内可搜索并多选技能，自动拼接到消息中
-- 自由模式/审批模式一键切换，无需进入设置
-
-### 🔒 HITL 免审批工具
-- `finish` / `ask_choice` 等纯交互控制流工具直接放行，无需用户确认
-
-### 🧠 模型适配
-- HttpModelClient 添加 `thinking` 字段，兼容更多推理模型配置
-
-> 📋 完整变更记录请查看 [CHANGELOG.md](CHANGELOG.md)
-
----
-
-## ⚡ 前缀缓存命中率
-
-Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）** 能力——系统提示词、工具定义、项目文档等每次都在 prompt
-开头的重复内容，直接命中 KV cache：
-
-| 模型                                                | 缓存命中率     | 效果               |
-|---------------------------------------------------|-----------|------------------|
-| **DeepSeek**（deepseek-v4-flash / deepseek-v4-pro） | **≥ 97%** | 输入 token 费用降至 3% |
-| **小米 Mimo**（mimo-v2.5 / mimo-v2.5-pro）            | **≥ 98%** | 输入 token 费用降至 2% |
-
-实际编码会话中，消息列表头部的大量系统指令和工具描述每次都一样，前缀缓存命中后这部分 token 几乎免费。
 
 ---
 
@@ -153,7 +115,7 @@ Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）** �
 
 - **声明式工具**：继承 `AgentTool` 基类，定义名称、参数、执行逻辑即可
 - **自动注册**：Solon `@Component` 自动发现
-- **MCP 支持**：接入 Model Context Protocol 服务器
+- **MCP 支持**：接入 Model Context Protocol 协议
 
 <p align="center">
   <img src="img/mcp_setting.png" width="60%" alt="MCP 设置"/>
@@ -172,22 +134,27 @@ Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）** �
 
 - **隔离执行**：每个子代理有独立上下文和推理循环
 - **继承工具**：复制父代理的工具集，排除递归 spawn
-- **独立通道**：子代理输出通过独立事件流推送
+- **内嵌展示**：子代理执行过程在聊天流中直接展开
 - **用量统计**：按模型统计 token 消耗
+- **预设角色**：`explore`、`implement`、`test`、`review`、`plan`；探索、审查和方案角色只能使用只读工具
+- **风暴断路器**：检测重复调用，自动取消超时子代理
 
 ### 👤 人工审批（HITL）
 
+- 三态审批模式：`free`（自由）/ `approval`（审批）/ `auto`（自动放行）
 - 执行写操作前等你批准或拒绝
+- 白名单工具（`finish` / `ask_choice` 等）自动放行
 - `/agree` / `/deny` 快速决策
 - `todo_write` 维护任务清单
+- 子代理中的写操作同样触发审批
 
 ### 💬 会话
 
 - 多会话创建、切换、搜索、删除
 - JSONL 格式持久化，工作区隔离
-- 自动生成会话标题
-- 记录每次的 token 用量
-- 消息快照系统（基于 Git 的检查点与撤回）
+- 自动生成会话标题，记录每次 token 用量
+- 会话分支功能：从任意消息节点分支新对话
+- 消息快照系统：基于 Git 的检查点，支持无快照的消息撤回
 
 ### 🌐 三种界面
 
@@ -200,13 +167,37 @@ Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）** �
 ### 🎨 前端
 
 - 深色、浅色、复古绿、复古黄四套主题
-- SSE 流式打字机效果
-- 工具调用可视化
-- Git 面板
-- 工作区管理
-- 毛玻璃视觉效果
-- 代码语法高亮（Shiki/Shikiji）
-- 消息时间戳与流式加载动画
+- SSE 流式打字机效果，工具调用可视化
+- Git 面板、工作区管理、代码语法高亮（Shiki/Shikiji）
+- 毛玻璃视觉效果、消息时间戳与流式加载动画
+
+---
+
+## 🆕 近期亮点
+
+> 📋 完整更新历史请查看 [CHANGELOG.md](CHANGELOG.md)
+
+- **清单系统**：工作流重构为清单，步骤视图 + 悬浮浮层，进度一目了然
+- **子代理系统重设计**：`sub_agent` 预设五种角色，内嵌展示 + 风暴断路器 + 超时取消
+- **HITL 三态审批**：自由/审批/自动放行三种模式，纯交互工具直接放行
+- **文件变更追踪**：每轮编辑自动展示变更摘要，支持一键撤销
+- **会话分支**：从任意消息节点分支新对话，无快照也能安全撤回
+- **ACP 协议**：集成 Agent-to-Agent 通信协议
+- **工具管理**：可视化启用/禁用任意工具，动态加载插件
+- **上下文指示器**：实时展示系统提示词/历史/工具等各部分 token 占比
+
+---
+
+## ⚡ 前缀缓存
+
+Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）**能力——系统提示词、工具定义、项目文档等每次都在 prompt 开头的重复内容，直接命中 KV cache：
+
+| 模型                                                | 缓存命中率     | 效果               |
+|---------------------------------------------------|-----------|------------------|
+| **DeepSeek**（deepseek-v4-flash / deepseek-v4-pro） | **≥ 97%** | 输入 token 费用降至 3% |
+| **小米 Mimo**（mimo-v2.5 / mimo-v2.5-pro）            | **≥ 98%** | 输入 token 费用降至 2% |
+
+实际编码会话中，消息列表头部的大量系统指令和工具描述每次都一样，前缀缓存命中后这部分 token 几乎免费。
 
 ---
 
@@ -286,6 +277,8 @@ agent4j/
 | `maxContextChars` | int      | `200000`                    | 上下文上限                            |
 | `keepTailChars`   | int      | `80000`                     | 保留尾部预算                           |
 | `toolTimeoutSec`  | int      | `360`                       | 工具超时                             |
+| `subAgentTimeoutSec` | int   | `3600`                      | 子代理完整执行超时                       |
+| `terminateOnNoToolCall` | boolean | `true`                   | 无工具调用时结束；`false` 时追加 `FinishTool.TIPS` 强制继续 |
 | `disabledTools`   | string[] | `[]`                        | 禁用工具                             |
 | `blockedPaths`    | string[] | `[]`                        | 路径拦截                             |
 
@@ -321,15 +314,16 @@ agent4j/
 | `glob` / `grep` / `ls`                                                      | 搜索文件与内容    |
 | `bash`                                                                      | 跑命令        |
 | `bash_start` / `bash_wait` / `bash_stdin` / `bash_stop`                     | 交互式命令会话    |
-| `task` / `multi_task`                                                       | 派生子代理      |
-| `workspace_read` / `workspace_write` / `workspace_list` | 工作区操作      |
+| `sub_agent`                                                                 | 派生预设角色子代理 |
+| `workspace_read` / `workspace_write` / `workspace_list`                     | 工作区操作      |
 | `webfetch`                                                                  | 抓网页        |
 | `codesearch`                                                                | 搜索代码       |
-| `java_source`                                                               | Java源码查找   |
+| `java_source`                                                               | Java 源码查找   |
 | `call_api`                                                                  | 调 REST API |
 | `remember` / `recall_memory` / `forget`                                     | 持久记忆       |
-| `vision_recognize`                                                           | 图片识别       |
+| `vision_recognize`                                                          | 图片识别       |
 | `submit_plan` / `revise_plan` / `mark_step_complete`                        | 计划管理       |
+| `checklist_start` / `checklist_status` / `checklist_step`                  | 清单管理       |
 | `ask_choice` / `todo_write`                                                 | 用户交互       |
 | `run_background` / `stop_job` / `wait_for_job` / `job_output` / `list_jobs` | 后台作业       |
 
@@ -340,7 +334,7 @@ agent4j/
 | 层       | 技术                                  |
 |---------|-------------------------------------|
 | **语言**  | Java 17                             |
-| **后端**  | Solon 4.0.0-M3 + Snack4 + OkHttp    |
+| **后端**  | Solon 4.0.2 + Snack4 + OkHttp        |
 | **前端**  | Vue 3.4 + Vite 5 + Ant Design Vue 4 |
 | **桌面**  | Electron + Node.js                    |
 | **持久化** | JSON Lines                          |
@@ -350,14 +344,14 @@ agent4j/
 
 ## 📊 性能
 
-| 指标               | 数据            |
-|------------------|---------------|
-| DeepSeek 前缀缓存命中率 | **≥ 97%**     |
-| 小米 Mimo 前缀缓存命中率  | **≥ 98%**     |
-| 输入成本压缩           | **至原始 2%~3%** |
-| 最大上下文字符          | 200,000       |
-| 会话并发             | 50（LRU）       |
-| 工具超时             | 360 秒可配       |
+| 指标            | 数据      |
+|---------------|---------|
+| 最大上下文字符      | 200,000 |
+| 会话并发         | 50（LRU） |
+| 工具超时         | 360 秒可配 |
+| 子代理超时        | 3600 秒  |
+
+> ⚡ 前缀缓存：DeepSeek **≥ 97%** / 小米 Mimo **≥ 98%**，输入成本降至原始的 **2%~3%**。[详情](#-前缀缓存)
 
 ---
 
@@ -376,6 +370,7 @@ agent4j/
 - [x] OpenAPI 集成
 - [x] Git 面板
 - [x] 多模态
+- [x] ACP 协议
 - [ ] 本地知识库
 - [ ] 团队协作
 
@@ -384,10 +379,3 @@ agent4j/
 ## 📄 许可证
 
 MIT License © 2026 Sorghum
-
----
-
-<p align="center">
-  <strong>Agent4j</strong> — 纯 Java 的 AI 编码代理<br>
-  像 Claude Code 一样干活，用 Java 写
-</p>

@@ -73,10 +73,8 @@ const scheduleRef = ref(null)
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  background: var(--glass-bg-2);
-  backdrop-filter: blur(var(--blur));
-  -webkit-backdrop-filter: blur(var(--blur));
-  border-left: 1px solid var(--glass-border);
+  background: #f7f7f8;
+  border-left: 1px solid #dcdee2;
   overflow: hidden;
   transition: width 0.2s, opacity 0.2s;
 }
@@ -92,44 +90,48 @@ const scheduleRef = ref(null)
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0 4px 0 0;
-  border-bottom: 1px solid var(--glass-border);
-  min-height: 36px;
+  padding: 0 8px;
+  border-bottom: 1px solid #dcdee2;
+  min-height: 46px;
+  background: #f1f1f3;
   flex-shrink: 0;
 }
 .rp-head-actions {
   display: flex;
   align-items: center;
-  gap: 2px;
+  gap: 3px;
 }
 .rp-tabs {
   display: flex;
-  gap: 0;
+  gap: 4px;
   flex: 1;
 }
 .rp-tab {
-  flex: 1;
+  flex: 0 0 auto;
   display: flex;
   align-items: center;
   justify-content: center;
-  gap: 5px;
-  padding: 8px 0;
-  font-size: 12px;
-  font-weight: 500;
+  gap: 6px;
+  min-width: 78px;
+  height: 32px;
+  padding: 0 10px;
+  font-size: 13px;
+  font-weight: 600;
   color: var(--fg-3);
-  background: none;
+  background: transparent;
   border: none;
-  border-bottom: 2px solid transparent;
+  border-radius: 5px;
   cursor: pointer;
   transition: all 0.15s;
 }
 .rp-tab:hover {
   color: var(--fg);
-  background: var(--accent-bg);
+  background: #e7e8eb;
 }
 .rp-tab.active {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  color: var(--fg);
+  background: #dfe1e5;
+  box-shadow: inset 0 0 0 1px #d5d7dc;
 }
 .rp-tab svg {
   color: inherit;
@@ -175,6 +177,22 @@ const scheduleRef = ref(null)
 }
 .rp-page :deep(.sch-head) {
   display: none;
+}
+
+[data-theme="dark"] .rp-panel {
+  background: #19191b;
+  border-color: #303033;
+}
+
+[data-theme="dark"] .rp-head {
+  background: #202023;
+  border-color: #303033;
+}
+
+[data-theme="dark"] .rp-tab:hover,
+[data-theme="dark"] .rp-tab.active {
+  background: #2b2b2e;
+  box-shadow: inset 0 0 0 1px #38383b;
 }
 
 /* 响应式 */

@@ -11,5 +11,6 @@ import java.util.List;
  */
 public record ToolExecutionResult(List<ToolCallEntry> tcList,
                                   List<ChatMessage> toolResults,
+                                  List<FileChange> fileChanges,
                                   boolean anySuppressed) {
 }

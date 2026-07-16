@@ -20,7 +20,7 @@ export const useAppStore = defineStore('app', () => {
   // 设置状态
   const settings = ref({
     language: 'zh-CN',
-    theme: 'light',
+    theme: 'gray',
     fontSize: 14,
     animations: true,
     server: {
@@ -195,7 +195,7 @@ export const useAppStore = defineStore('app', () => {
   const resetSettings = () => {
     settings.value = {
       language: 'zh-CN',
-      theme: 'light',
+      theme: 'gray',
       fontSize: 14,
       animations: true,
       server: {
@@ -421,6 +421,11 @@ export const useAppStore = defineStore('app', () => {
     const savedTheme = localStorage.getItem('agent4j-theme')
     if (savedTheme) {
       settings.value.theme = savedTheme
+    }
+
+    const legacyThemes = {light: 'gray', retro: 'gray', 'retro-yellow': 'gray', yellow: 'gray'}
+    if (legacyThemes[settings.value.theme]) {
+      settings.value.theme = legacyThemes[settings.value.theme]
     }
     
     document.documentElement.setAttribute('data-theme', settings.value.theme)

@@ -2,6 +2,7 @@ package site.sorghum.agent4j.bin.tool;
 
 import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.ai.chat.tool.FunctionTool;
+import site.sorghum.agent4j.bin.agent.prompt.EnvInfoUtil;
 import site.sorghum.agent4j.bin.agent.prompt.PromptPrefix;
 
 import java.io.IOException;
@@ -84,6 +85,9 @@ public class ToolSystemInitializer {
         systemPrompt  = systemPrompt + "\n\n" + ToolScanUtil.getSkillToolDescription(workspace);
         // 5. 追加工具规范到 system prompt
         systemPrompt = systemPrompt + "\n\n";
+
+        // 6. 注入环境信息（工作目录、平台、Shell、OS 版本、当前日期）——随工作区而变
+        systemPrompt = systemPrompt + "\n\n---\n\n" + EnvInfoUtil.buildEnvInfo(workspace);
 
         // 7. 项目文档后置到最底部 —— 最大化前缀缓存命中。
         //    稳定的 system prompt（身份/规则/工具定义/Plan Mode/Skill 索引）保持在头部，

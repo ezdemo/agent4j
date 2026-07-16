@@ -1,21 +1,52 @@
 <template>
-  <aside class="sidebar" :class="{ collapsed: !sideOpen }">
-    <div class="sidebar-header">
-      <button class="new-task-btn" @click="$emit('show-workspace-picker')">+ 新建会话</button>
-
+  <aside ref="sidebarRoot" class="sidebar" :class="{ collapsed: !sideOpen }">
+    <div class="sidebar-shortcuts">
+      <button class="shortcut-row shortcut-row-primary" @click="$emit('new-chat')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="12" cy="12" r="9"/>
+          <path d="M12 8v8M8 12h8"/>
+        </svg>
+        <span>新建任务</span>
+        <kbd>Ctrl+Alt+N</kbd>
+      </button>
+      <button class="shortcut-row" @click="$emit('open-global-search')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <circle cx="11" cy="11" r="6"/>
+          <path d="m16 16 4 4"/>
+        </svg>
+        <span>搜索</span>
+        <kbd>Ctrl+K</kbd>
+      </button>
+      <button class="shortcut-row" @click="$emit('show-skill-market')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+          <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+        </svg>
+        <span>技能</span>
+      </button>
     </div>
 
-    <div class="sidebar-search">
-      <div class="search-wrapper">
-        <i class="fas fa-search"></i>
-        <input class="search-input" v-model="searchQuery" placeholder="搜索会话..." />
+    <div class="project-toolbar">
+      <div class="project-tabs" aria-label="项目视图">
+        <div class="project-tab">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M3 7.5A2.5 2.5 0 0 1 5.5 5H10l2 2h6.5A2.5 2.5 0 0 1 21 9.5v8A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/>
+          </svg>
+          项目
+        </div>
       </div>
-    </div>
-
-    <!-- 工作区选择器 -->
-    <div class="sidebar-section-title">
-      <span>项目</span>
       <div class="sidebar-section-actions">
+        <button
+          class="btn-icon-sm"
+          title="定位当前会话"
+          :disabled="!currentSession"
+          @click="syncActiveSessionIntoView"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="8.5"/>
+            <circle cx="12" cy="12" r="2"/>
+            <path d="M12 3v3M12 18v3M3 12h3M18 12h3"/>
+          </svg>
+        </button>
         <button
           class="btn-icon-sm"
           :title="allProjectsExpanded ? '折叠所有项目会话' : '展开所有项目会话'"
@@ -34,27 +65,32 @@
             <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
           </svg>
         </button>
-        <button class="btn-icon-sm" title="添加项目" @click="$emit('show-workspace-picker')">
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-        </button>
       </div>
     </div>
 
     <div class="project-list">
-      <div v-for="p in projectsData" :key="p.workspace.hash" class="project-item">
-        <div class="project-header" :class="{ active: p.workspace.hash === currentSessionWorkspace }" @click="toggleProject(p.workspace.hash)">
-          <svg class="project-chevron" :class="{ open: expandedWorkspaces.has(p.workspace.hash) }" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <polyline points="9 18 15 12 9 6"/>
+      <div v-for="(p, idx) in projectsData" :key="p.workspace.hash" class="project-item"
+            :class="{ 'drag-over': dragOverIndex === idx }"
+            draggable="true"
+            @dragstart="onDragStart($event, idx)"
+            @dragover.prevent="onDragOver($event, idx)"
+            @dragleave="onDragLeave"
+            @drop.prevent="onDrop($event, idx)"
+        @dragend="onDragEnd"
+      >
+        <div class="project-header" :class="{ active: p.workspace.hash === currentSessionWorkspace && !(currentSession && currentSessionWorkspace === p.workspace.hash) }" @click="toggleProject(p.workspace.hash)">
+          <svg v-if="expandedWorkspaces.has(p.workspace.hash)" width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="project-icon" aria-label="展开的项目">
+            <path d="M3.5 8.5A2.5 2.5 0 0 1 6 6h4.2l1.9 2h5.4A2.5 2.5 0 0 1 20 10.5v6A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/>
+            <path d="M3.5 10.5h17"/>
           </svg>
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" class="project-icon">
-            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          <svg v-else width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" class="project-icon" aria-label="折叠的项目">
+            <path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h4.2l1.9 2h5.4A2.5 2.5 0 0 1 20 9.5v7A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/>
           </svg>
           <div class="project-info">
             <div class="project-name">{{ p.workspace.name }}</div>
             <div class="project-meta-row">
               <span class="project-path">{{ truncatePath(p.workspace.path) }}</span>
-              <span class="project-sep">·</span>
-              <span class="project-time">{{ relativeTime(p.workspace.lastAccessedAt) }}</span>
+              
             </div>
           </div>
           <button class="btn-icon-sm project-new" title="新建会话" @click.stop="$emit('new-project-chat', p.workspace.hash)">
@@ -66,10 +102,11 @@
               <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
             </svg>
           </button>
-          <button class="btn-icon-sm project-clear" title="清空该项目所有会话" @click.stop="$emit('clear-project', p.workspace.hash)" :disabled="p.sessions.length === 0">
+          <button class="btn-icon-sm project-clear" title="管理项目会话" @click.stop="$emit('manage-project', p.workspace.hash)">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="3 6 5 6 21 6"/>
-              <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/>
+              <path d="m7 21-4.3-4.3c-1-1-1-2.5 0-3.4l9.6-9.6c1-1 2.5-1 3.4 0l5.6 5.6c1 1 1 2.5 0 3.4L13 21"/>
+              <path d="M22 21H7"/>
+              <path d="m5 11 9 9"/>
             </svg>
           </button>
         </div>
@@ -79,13 +116,12 @@
             v-for="s in p.sessions"
             :key="s.name"
             class="session-item"
+            :data-session-key="`${p.workspace.hash}:${s.name}`"
             :class="{ active: s.name === currentSession && currentSessionWorkspace === p.workspace.hash }"
             @click="$emit('select-session', { workspaceHash: p.workspace.hash, sessionName: s.name })"
           >
-            <span class="session-dot" :class="{ on: s.name === currentSession && currentSessionWorkspace === p.workspace.hash }"></span>
             <div class="session-info">
               <div class="session-name">{{ s.title || formatName(s.name) }}</div>
-              <div class="session-meta">{{ s.messageCount || 0 }}条 · {{ relativeTime(s.mtime) }}</div>
             </div>
             <div class="session-item-actions">
               <button class="btn-icon-sm session-refresh" title="刷新" @click.stop="$emit('refresh-session-chat', s.name)">
@@ -113,39 +149,36 @@
     </div>
 
     <div class="sidebar-foot">
-      <button class="foot-btn" @click="$emit('show-tools')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
-        工具
+      <div class="sidebar-foot-actions">
+      <button class="foot-icon" title="工具列表" @click="$emit('show-tools')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
       </button>
-      <button class="foot-btn" @click="$emit('show-dashboard')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
-        数据
+      <button class="foot-icon" title="数据面板" @click="$emit('show-dashboard')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
       </button>
-      <button class="foot-btn" @click="$emit('toggle-theme')">
-        <!-- 浅色：月亮图标 -->
-        <svg v-if="theme === 'light'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      <button class="foot-icon" title="切换主题" @click="$emit('toggle-theme')">
+        <!-- 灰色：月亮图标 -->
+        <svg v-if="theme === 'gray'" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
         <!-- 深色：太阳图标 -->
-        <svg v-else-if="theme === 'dark'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
-        <!-- 浅绿：Material Design 风格图标 -->
-        <svg v-else-if="theme === 'retro'" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
-        <!-- 复古黄：书本图标 -->
-        <svg v-else width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
-        {{ { light: '浅色', dark: '深色', retro: '浅绿', 'retro-yellow': '复古黄' }[theme] }}
+        <svg v-else-if="theme === 'dark'" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/></svg>
+        <!-- 黄色：书本图标 -->
+        <svg v-else width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
       </button>
-      <button class="foot-btn" @click="$emit('show-settings')">
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
-        设置
+      <button class="foot-icon" title="设置" @click="$emit('show-settings')">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
       </button>
+      </div>
     </div>
   </aside>
+
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 
 const props = defineProps({
   sideOpen: { type: Boolean, default: true },
-  theme: { type: String, default: 'light' },
+  theme: { type: String, default: 'gray' },
   currentSession: { type: String, default: '' },
   currentSessionWorkspace: { type: String, default: null },
   workspaces: { type: Array, default: () => [] },
@@ -153,49 +186,88 @@ const props = defineProps({
   initialDataLoaded: { type: Boolean, default: false }
 })
 
-defineEmits([
+const emit = defineEmits([
   'update:sideOpen',
-  'show-workspace-picker',
+  'new-chat',
+  'open-global-search',
   'refresh-sessions',
   'new-project-chat',
   'refresh-project',
-  'clear-project',
+  'manage-project',
   'select-session',
   'refresh-session-chat',
   'delete-session',
   'toggle-theme',
+  'show-skill-market',
   'show-tools',
   'show-dashboard',
-  'show-settings'
+  'show-settings',
+  'reorder'
 ])
 
-// 本地搜索状态
-const searchQuery = ref('')
+const dragIndex = ref(null)
+const dragOverIndex = ref(null)
+const sidebarRoot = ref(null)
 
 // 本地展开/折叠状态
 const expandedWorkspaces = ref(new Set())
 const allProjectsExpanded = ref(true)
 
-// 根据 props + searchQuery 计算项目列表
+const handleShortcut = (event) => {
+  if (!event.ctrlKey && !event.metaKey) return
+  if (event.key.toLowerCase() === 'k') {
+    event.preventDefault()
+    emit('open-global-search')
+  }
+  if (event.altKey && event.key.toLowerCase() === 'n') {
+    event.preventDefault()
+    emit('new-chat')
+  }
+}
+
+onMounted(() => window.addEventListener('keydown', handleShortcut))
+onBeforeUnmount(() => window.removeEventListener('keydown', handleShortcut))
+
+// 根据 props 计算项目列表
 const projectsData = computed(() => {
   if (!props.workspaces.length) return []
-  if (!searchQuery.value) {
-    return props.workspaces.map(w => ({
-      workspace: w,
-      sessions: props.workspaceSessions[w.hash] || []
-    }))
-  }
-  const q = searchQuery.value.toLowerCase()
-  return props.workspaces
-    .map(w => ({
-      workspace: w,
-      sessions: (props.workspaceSessions[w.hash] || [])
-        .filter(s => (s.title || s.name || '').toLowerCase().includes(q))
-    }))
-    .filter(p => p.workspace.name.toLowerCase().includes(q) || p.sessions.length > 0)
+  return props.workspaces.map(w => ({
+    workspace: w,
+    sessions: props.workspaceSessions[w.hash] || []
+  }))
 })
 
 
+
+function onDragStart(e, index) {
+  dragIndex.value = index
+  e.dataTransfer.effectAllowed = 'move'
+  e.dataTransfer.setData('text/plain', String(index))
+}
+
+function onDragOver(e, index) {
+  dragOverIndex.value = index
+}
+
+function onDragLeave() {
+  dragOverIndex.value = null
+}
+
+function onDrop(e, index) {
+  const from = dragIndex.value
+  if (from === null || from === index) return
+  const list = [...props.workspaces]
+  const [item] = list.splice(from, 1)
+  list.splice(index, 0, item)
+  emit('reorder', list)
+  dragIndex.value = null
+  dragOverIndex.value = null
+}
+
+function onDragEnd() {
+  dragIndex.value = null
+  dragOverIndex.value = null
+}
 
 // 展开/折叠单个项目
 const toggleProject = (hash) => {
@@ -218,6 +290,28 @@ const toggleAllProjects = () => {
   expandedWorkspaces.value = s
 }
 
+const syncActiveSessionIntoView = async () => {
+  const workspaceHash = props.currentSessionWorkspace
+  const sessionName = props.currentSession
+  if (!workspaceHash || !sessionName) return
+
+  if (!expandedWorkspaces.value.has(workspaceHash)) {
+    expandedWorkspaces.value = new Set(expandedWorkspaces.value).add(workspaceHash)
+  }
+
+  await nextTick()
+  requestAnimationFrame(() => {
+    const activeSession = sidebarRoot.value?.querySelector('.session-item.active')
+    activeSession?.scrollIntoView({behavior: 'smooth', block: 'nearest'})
+  })
+}
+
+watch(
+  () => [props.currentSessionWorkspace, props.currentSession, props.workspaceSessions],
+  syncActiveSessionIntoView,
+  {immediate: true}
+)
+
 // 工具函数
 const truncatePath = (p) => {
   if (!p) return ''
@@ -225,35 +319,16 @@ const truncatePath = (p) => {
   return p.slice(0, 36) + '...'
 }
 
-const relativeTime = (t) => {
-  if (!t) return ''
-  const d = Date.now() - (typeof t === 'number' ? t : Date.parse(t))
-  if (!Number.isFinite(d)) return ''
-  const min = d / 6e4
-  if (min < 1) return '刚刚'
-  if (min < 60) return Math.floor(min) + 'm'
-  const hour = min / 60
-  if (hour < 24) return Math.floor(hour) + 'h'
-  const day = hour / 24
-  if (day < 7) return Math.floor(day) + 'd'
-  if (day < 30) return Math.floor(day / 7) + 'w'
-  if (day < 365) return Math.floor(day / 30) + 'mo'
-  return Math.floor(day / 365) + 'y'
-}
+
 
 const formatName = (n) => {
   const m = n.match(/(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})/)
-  return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}` : n.replace(/[-_]+/g, ' ').slice(0, 24)
+  return m ? `${m[2]}/${m[3]} ${m[4]}:${m[5]}${n.slice(m.index + m[0].length)}` : n.replace(/[-_]+/g, ' ').slice(0, 24)
 }
 </script>
 
 <style scoped>
-.sidebar {
-  width: 272px;
-  flex-shrink: 0;
-  display: flex;
-  flex-direction: column;
-  background: var(--glass-bg-2);
+.sidebar { width: 272px; flex-shrink: 0; display: flex; flex-direction: column; overflow-x: hidden; background: var(--glass-bg-2);
   backdrop-filter: blur(var(--blur));
   -webkit-backdrop-filter: blur(var(--blur));
   border-right: 1px solid var(--glass-border);
@@ -404,12 +479,14 @@ const formatName = (n) => {
   gap: 2px;
 }
 
-.project-list {
-  flex: 1;
-  overflow-y: auto;
-  padding: 4px 0;
-}
+.project-list { flex: 1; overflow-x: hidden; overflow-y: auto; padding: 4px 0; }
 
+.project-item.drag-over {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+.project-item.dragging {
+  opacity: 0.4;
+}
 .project-item + .project-item {
   border-top: 1px solid var(--border);
 }
@@ -427,7 +504,6 @@ const formatName = (n) => {
   background: var(--bg-3);
 }
 .project-header.active {
-  border-left: 2px solid var(--accent);
   background: transparent;
 }
 .project-header.active .project-name {
@@ -480,13 +556,9 @@ const formatName = (n) => {
   min-width: 0;
 }
 
-.project-sep {
-  flex-shrink: 0;
-}
 
-.project-time {
-  flex-shrink: 0;
-}
+
+
 
 .project-count {
   font-size: 11px;
@@ -575,11 +647,7 @@ const formatName = (n) => {
   overflow: hidden;
   text-overflow: ellipsis;
 }
-.session-meta {
-  font-size: 11px;
-  color: var(--fg-4);
-  margin-top: 1px;
-}
+.session-meta { font-size: 11px; color: var(--fg-4); margin-top: 1px; }
 
 .session-item-actions {
   display: flex;
@@ -638,4 +706,295 @@ const formatName = (n) => {
   }
   .sidebar:not(.collapsed) { left: 0; }
 }
+
+
 </style>
+
+<style scoped>
+.sidebar {
+  width: 260px;
+  background: #f7f7f8;
+  border-right: 1px solid #dcdde1;
+  box-shadow: none;
+}
+
+.sidebar-shortcuts {
+  display: grid;
+  gap: 4px;
+  padding: 12px 10px;
+  border-bottom: 1px solid #dedfe3;
+  background: #fafafb;
+}
+
+.shortcut-row {
+  display: grid;
+  grid-template-columns: 22px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 8px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-2);
+  font: inherit;
+  font-size: 14px;
+  text-align: left;
+  cursor: pointer;
+  transition: background var(--t), color var(--t);
+}
+
+.shortcut-row:hover,
+.shortcut-row:focus-visible {
+  background: #eeeeF1;
+  color: var(--fg);
+  outline: none;
+}
+
+.shortcut-row svg { color: var(--fg-3); }
+.shortcut-row kbd {
+  color: var(--fg-4);
+  font: 12px var(--sans);
+}
+
+.shortcut-row-primary {
+  background: #e5e6e9;
+  box-shadow: inset 0 0 0 1px #d9dade;
+  color: #202127;
+  font-weight: 600;
+}
+
+.shortcut-row-primary svg,
+.shortcut-row-primary kbd {
+  color: #50525b;
+}
+
+.shortcut-row-primary:hover,
+.shortcut-row-primary:focus-visible {
+  background: #dcdee2;
+  color: #17181c;
+}
+
+.sidebar-search {
+  padding: 10px 12px 4px;
+}
+
+.search-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg-4);
+}
+
+.search-wrapper i { display: none; }
+.search-wrapper > svg { flex: 0 0 auto; }
+.search-input {
+  height: 34px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+
+.search-input:focus {
+  background: transparent;
+  border: 0;
+}
+
+.project-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 42px;
+  padding: 0 12px;
+  border-bottom: 1px solid #dedfe3;
+  background: #f2f2f4;
+}
+
+.project-tabs,
+.sidebar-section-actions,
+.sidebar-foot-actions {
+  display: flex;
+  align-items: center;
+}
+
+.project-tabs { gap: 3px; }
+.project-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 27px;
+  padding: 0 5px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-3);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: default;
+}
+
+.sidebar-section-actions { gap: 1px; }
+.sidebar .btn-icon-sm {
+  display: inline-grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-4);
+  cursor: pointer;
+  transition: background var(--t), color var(--t);
+}
+
+.foot-icon {
+  display: inline-grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-4);
+  cursor: pointer;
+  transition: background var(--t), color var(--t);
+}
+
+.sidebar .btn-icon-sm:hover,
+.foot-icon:hover {
+  background: var(--bg);
+  color: var(--fg-2);
+}
+
+.project-list {
+  padding: 8px;
+  background: #f7f7f8;
+}
+
+.project-item + .project-item { border-top: 0; }
+.project-item + .project-item { margin-top: 5px; }
+.project-header {
+  gap: 7px;
+  min-height: 38px;
+  padding: 6px 7px 6px 9px;
+  border-radius: 5px;
+}
+
+.project-header:hover { background: #eceef1; }
+.project-header.active {
+  background: #e7e8eb;
+  box-shadow: inset 0 0 0 1px #dddee2;
+}
+
+.project-header.active .project-name { color: var(--fg); }
+.project-chevron { display: none; }
+.project-icon { color: #6b6f7c; }
+.project-name { font-size: 13px; font-weight: 600; }
+.project-meta-row { display: none; }
+
+.project-new,
+.project-refresh,
+.project-clear {
+  width: 24px !important;
+  height: 24px !important;
+}
+
+.project-sessions {
+  margin: 1px 0 4px 18px;
+  padding: 2px 0 2px 5px;
+  border-left: 1px solid #dedfe3;
+}
+.project-empty {
+  padding: 7px 8px;
+  color: var(--fg-4);
+  font-size: 13px;
+}
+
+.project-sessions .session-item {
+  padding: 6px 7px;
+  border-radius: 5px;
+}
+
+.session-item { gap: 7px; }
+.session-item:hover { background: #eceef1; }
+.session-item.active {
+  background: #e2e3e7;
+  box-shadow: inset 0 0 0 1px #d9dade;
+}
+.session-name { font-size: 13px; }
+.session-item.active .session-name { font-weight: 600; }
+.sidebar-empty { padding: 28px 16px; }
+
+.sidebar-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 58px;
+  padding: 9px 12px;
+  border-top: 1px solid #dedfe3;
+  background: #f2f2f4;
+}
+
+.sidebar-foot-actions {
+  display: flex;
+  flex: 1;
+  justify-content: space-evenly;
+  align-items: center;
+}
+
+[data-theme="dark"] .sidebar,
+[data-theme="dark"] .project-list,
+[data-theme="dark"] .sidebar-foot {
+  background: #171717;
+  border-color: #2c2c2c;
+}
+
+[data-theme="dark"] .sidebar-shortcuts,
+[data-theme="dark"] .project-toolbar {
+  border-color: #2c2c2c;
+  background: #1d1d1f;
+}
+
+[data-theme="dark"] .project-header:hover,
+[data-theme="dark"] .project-header.active,
+[data-theme="dark"] .session-item:hover,
+[data-theme="dark"] .session-item.active {
+  background: #242424;
+}
+
+[data-theme="dark"] .shortcut-row-primary {
+  background: #2a2a2d;
+  box-shadow: inset 0 0 0 1px #38383b;
+  color: #f1f1f2;
+}
+
+[data-theme="dark"] .shortcut-row-primary svg,
+[data-theme="dark"] .shortcut-row-primary kbd {
+  color: #bdbec3;
+}
+
+[data-theme="dark"] .project-sessions {
+  border-color: #353536;
+}
+
+@media (max-width: 768px) {
+  .sidebar { left: -260px; }
+}
+</style>
+
+
+
+
+
+
+
+
+
+
+
