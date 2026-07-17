@@ -7,7 +7,7 @@
     <parent>
         <groupId>site.sorghum.agent</groupId>
         <artifactId>loopra</artifactId>
-        <version>26.7.16</version>
+        <version>26.7.17</version>
     </parent>
 
     <artifactId>loopra-web</artifactId>
