@@ -38,6 +38,22 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
 
+  elementWebView: {
+    load: (url) => ipcRenderer.invoke('element-webview-load', url),
+    show: (bounds) => ipcRenderer.invoke('element-webview-show', bounds),
+    hide: () => ipcRenderer.invoke('element-webview-hide')
+  },
+
+  elementInspectorWindow: {
+    open: (url) => ipcRenderer.invoke('open-element-inspector-window', url),
+    send: (payload) => ipcRenderer.send('element-inspector-send', payload),
+    onDraft: (callback) => {
+      const subscription = (event, payload) => callback(payload)
+      ipcRenderer.on('element-inspector-draft', subscription)
+      return () => ipcRenderer.removeListener('element-inspector-draft', subscription)
+    }
+  },
+
   // 元素检测（跨域 iframe 穿透）
   inspector: {
     inject: () => ipcRenderer.invoke('inspector-inject'),

@@ -106,6 +106,28 @@
       </div>
 
       <!-- 已选技能标签 -->
+      <div v-if="selectedElementContexts.length > 0" class="file-chips-bar element-chips-bar">
+        <div class="file-chips-heading">
+          <span class="file-chips-title">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            元素检查 {{ selectedElementContexts.length }} 项
+          </span>
+          <button class="file-clear-all" type="button" @click="clearSelectedElementContexts">清除</button>
+        </div>
+        <div class="file-chips-list">
+          <span v-for="context in selectedElementContexts" :key="context.key" class="file-chip element-chip" :title="context.selector">
+            <span class="file-chip-icon">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+            </span>
+            <span class="file-chip-name">{{ context.label }}</span>
+            <button class="file-chip-remove" type="button" :aria-label="`移除元素 ${context.label}`" title="移除元素上下文"
+                    @click.stop="removeSelectedElementContext(context.key)">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </span>
+        </div>
+      </div>
+
       <div v-if="selectedSkills.length > 0" class="skill-chips-bar">
         <div class="skill-chips-heading">
           <span class="skill-chips-title">
@@ -417,6 +439,7 @@ const inputFocused = ref(false)
 const localText = ref(props.inputText)
 const images = ref([]) // 粘贴的图片 base64 Data URI 列表
 const selectedFileContexts = ref([])
+const selectedElementContexts = ref([])
 const fileDropActive = ref(false)
 
 // 同步 props 到本地
@@ -674,6 +697,20 @@ const handleSend = () => {
       const skillLines = selectedSkills.value.map(s => `/skill:${s.name}`).join('\n')
       collapsedParts.push(`调用技能：\n${skillLines}`)
     }
+    if (selectedElementContexts.value.length > 0) {
+      const elementLines = selectedElementContexts.value.map((context) => {
+        const details = [
+          `- ${context.label}`,
+          context.selector ? `  选择器: ${context.selector}` : '',
+          context.file ? `  文件: ${context.file}` : '',
+          context.path.length ? `  组件路径: ${context.path.join(' > ')}` : '',
+          context.attrs.length ? `  属性: ${context.attrs.map((attr) => `${attr.key}="${attr.val}"`).join(' ')}` : '',
+          context.text ? `  文本: ${context.text}` : ''
+        ].filter(Boolean)
+        return details.join('\n')
+      }).join('\n')
+      collapsedParts.push(`元素检查：\n${elementLines}`)
+    }
     if (collapsedParts.length > 0) {
       text = `\`\`\`折叠块\n${collapsedParts.join('\n\n')}\n\`\`\`\n\n${text}`
     }
@@ -681,6 +718,7 @@ const handleSend = () => {
     // 发送后清空图片、文件引用和技能标签
     images.value = []
     selectedFileContexts.value = []
+    selectedElementContexts.value = []
     selectedSkills.value = []
     // 等待父组件清空文本后，重置 textarea 高度
     nextTick(() => autoResize())
@@ -736,6 +774,35 @@ const removeSelectedFileContext = (key) => {
 
 const clearSelectedFileContexts = () => {
   selectedFileContexts.value = []
+}
+
+const addElementContext = (context) => {
+  const component = context?.component || context || {}
+  const name = String(component.name || component.tag || '未命名元素')
+  const tag = String(component.tag || '')
+  const selector = String(component.selector || '')
+  const key = selector || `${name}:${tag}:${component.file || ''}`
+  if (selectedElementContexts.value.some((item) => item.key === key)) return true
+  selectedElementContexts.value.push({
+    key,
+    label: tag ? `${name} <${tag}>` : name,
+    selector,
+    file: String(component.file || ''),
+    text: String(component.text || ''),
+    path: Array.isArray(component.path) ? component.path.map((item) => String(item)) : [],
+    attrs: Array.isArray(component.attrs)
+      ? component.attrs.map((attr) => ({ key: String(attr?.key || ''), val: String(attr?.val || '') }))
+      : []
+  })
+  return true
+}
+
+const removeSelectedElementContext = (key) => {
+  selectedElementContexts.value = selectedElementContexts.value.filter((context) => context.key !== key)
+}
+
+const clearSelectedElementContexts = () => {
+  selectedElementContexts.value = []
 }
 
 const hasAgentFilePath = (event) => Array.from(event.dataTransfer?.types || []).includes('application/x-loopra-file-path')
@@ -1092,7 +1159,7 @@ async function savePetSize(idx) {
 }
 
 // 暴露焦點方法给父组件
-defineExpose({focus: () => inputField.value?.focus(), addFileContext, autoResize, closePickers})
+defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElementContext, autoResize, closePickers})
 </script>
 
 <style scoped>
@@ -2136,6 +2203,11 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, autoResize
 }
 
 .file-chips-title svg { color: #4f7cac; }
+
+.element-chips-bar { border-bottom-color: color-mix(in srgb, #168f9f 24%, var(--border)); }
+.element-chips-bar .file-chips-title svg { color: #168f9f; }
+.element-chip { border-color: color-mix(in srgb, #168f9f 38%, var(--border)); background: color-mix(in srgb, #168f9f 10%, var(--bg)); }
+.element-chip .file-chip-icon { background: color-mix(in srgb, #168f9f 16%, var(--bg)); color: #168f9f; }
 
 .file-clear-all {
   border: none;

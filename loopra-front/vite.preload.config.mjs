@@ -5,8 +5,11 @@ import {builtinModules} from 'node:module'
 export default defineConfig({
   build: {
     lib: {
-      entry: 'electron/preload.cjs',
-      fileName: () => '[name].cjs',
+      entry: {
+        preload: 'electron/preload.cjs',
+        'element-preload': 'electron/element-preload.cjs'
+      },
+      fileName: (format, entryName) => `${entryName}.cjs`,
       formats: ['cjs'],
     },
     rollupOptions: {

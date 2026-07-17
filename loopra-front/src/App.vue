@@ -1,5 +1,9 @@
 <template>
-  <div class="app" :data-theme="theme">
+  <div v-if="isElementInspectorWindow" class="element-inspector-window" :data-theme="theme">
+    <ElementPanel ref="elemPanelRef" :visible="true" @send="forwardElementInspection" />
+  </div>
+
+  <div v-else class="app" :data-theme="theme">
     <!-- 启动画面 (仅桌面环境) -->
     <SplashScreen
       v-if="showSetup && isDesktopEnv"
@@ -81,26 +85,6 @@
         @manage-workspaces="showWorkspacePicker = true"
       />
     </main>
-
-    <!-- 元素面板（保活：用 v-show） -->
-    <div
-      v-show="elementPanelOpen"
-      class="element-panel-wrapper"
-      :class="{ dragging: isElementDragging }"
-      :style="{ width: elementPanelWidth + 'px' }"
-    >
-      <!-- 拖拽手柄 -->
-      <div
-        class="element-resize-handle"
-        @mousedown.prevent="onElementResizeStart"
-        title="拖拽调整宽度"
-      ></div>
-      <div class="element-panel-header">
-        <span>元素检查</span>
-        <button class="btn-icon-sm" @click="elementPanelOpen = false">×</button>
-      </div>
-      <ElementPanel ref="elemPanelRef" @send="onElementSend" />
-    </div>
 
     <!-- 右侧面板 -->
     <RightPanel
@@ -472,6 +456,8 @@ import SettingsView from './views/Settings.vue'
 import DashboardPanel from './components/Dashboard.vue'
 import {platform} from '@/services/platform'
 
+const isElementInspectorWindow = new URLSearchParams(window.location.search).get('elementInspector') === '1'
+
 const store = useAppStore()
 const router = useRouter()
 const { confirm } = useConfirm()
@@ -539,16 +525,20 @@ const elementPanelWidth = ref(360)
 const isElementDragging = ref(false)
 const initialDataLoaded = ref(false)
 const elemPanelRef = ref(null)
+let unlistenInspectorLoadUrl = null
+let unlistenInspectorDraft = null
 
 // 从 AI 消息中的链接点击「在元素界面打开」
 function onOpenInElement(e) {
   const url = e.detail?.url
   if (!url) return
-  elementPanelOpen.value = true
-  // 等 DOM 更新后再导航
-  nextTick(() => {
-    elemPanelRef.value?.loadUrl?.(url)
-  })
+  if (platform.isElectron) {
+    window.electronAPI.elementInspectorWindow.open(url)
+  }
+}
+
+function onElementInspectorDraft(payload) {
+  onElementSend(payload?.detail ?? payload)
 }
 
 // 切换右侧面板（直接 toggle，不关心当前 tab）
@@ -558,7 +548,7 @@ function toggleRightPanel() {
 
 // 切换元素面板
 function toggleElementPanel() {
-  elementPanelOpen.value = !elementPanelOpen.value
+  if (platform.isElectron) window.electronAPI.elementInspectorWindow.open()
 }
 
 // 元素面板拖拽调整宽度
@@ -608,23 +598,42 @@ onMounted(() => {
 })
 
 // 元素面板发送消息 → 直接发给当前会话的 AI
-function onElementSend(payload) {
-  const comp = payload.component
-  // 组装完整元素信息为 Markdown
-  let md = '---\n'
-  md += '**组件路径:** ' + (comp.path ? comp.path.join(' > ') : comp.name) + '\n'
-  md += '**文件路径:** ' + (comp.file || '-') + '\n'
-  md += '**标签:** `' + (comp.tag || '-') + '`\n'
-  md += '**文本:** ' + (comp.text || '-') + '\n'
-  md += '**CSS 选择器:** `' + (comp.selector || '-') + '`\n'
-  if (comp.attrs && comp.attrs.length) {
-    md += '**属性:** '
-    md += comp.attrs.map(a => '`' + a.key + '="' + a.val + '"`').join(' ')
-    md += '\n'
+async function onElementSend(payload) {
+  await nextTick()
+  if (!chatRef.value?.appendElementInspection || !chatRef.value?.setDraft) return false
+  const attached = await chatRef.value.appendElementInspection(payload)
+  if (!attached) return false
+  await chatRef.value.setDraft(payload.message || '')
+  return true
+}
+
+async function forwardElementInspection(payload) {
+  try {
+    const component = payload?.component || {}
+    const safePayload = {
+      message: String(payload?.message || ''),
+      component: {
+        name: String(component.name || ''),
+        tag: String(component.tag || ''),
+        text: String(component.text || ''),
+        selector: String(component.selector || ''),
+        file: String(component.file || ''),
+        path: Array.isArray(component.path) ? component.path.map((item) => String(item)) : [],
+        attrs: Array.isArray(component.attrs)
+          ? component.attrs.map((attr) => ({ key: String(attr?.key || ''), val: String(attr?.val || '') }))
+          : []
+      }
+    }
+    window.electronAPI.elementInspectorWindow.send(safePayload)
+    message.success('已发送到主窗口')
+  } catch (error) {
+    console.error('[ElementInspector] Failed to send selection:', error)
+    message.error('发送失败：' + (error.message || '主窗口输入框未就绪'))
   }
-  md += '---\n'
-  md += payload.message
-  chatRef.value?.sendCommand?.(md)
+}
+
+if (!isElementInspectorWindow && window.electronAPI?.elementInspectorWindow) {
+  unlistenInspectorDraft = window.electronAPI.elementInspectorWindow.onDraft(onElementInspectorDraft)
 }
 
 function addFileSelectionToSession(selection) {
@@ -1384,6 +1393,12 @@ const clearChat = async () => {
 }
 
 onMounted(async () => {
+  if (isElementInspectorWindow) {
+    unlistenInspectorLoadUrl = window.electronAPI.events.listen('element-inspector-load-url', (url) => {
+      nextTick(() => elemPanelRef.value?.loadUrl?.(url))
+    })
+    return
+  }
   // 先检测环境，再决定显示哪个启动屏
   await detectEnvironment()
   // 清空过期的 localStorage 端口（桌面端每次启动端口都不同）
@@ -1402,6 +1417,8 @@ onMounted(async () => {
 })
 
 onBeforeUnmount(() => {
+  unlistenInspectorLoadUrl?.()
+  unlistenInspectorDraft?.()
   stopHeartbeat()
   window.removeEventListener('resize', collapseSidebarForNarrowViewport)
   window.removeEventListener('loopra:open-in-element', onOpenInElement)
@@ -1709,6 +1726,12 @@ watch(showSettings, (newVal) => {
   border-radius: 10px;
   border: 1px solid var(--border-2);
   box-shadow: 0 4px 24px rgba(0, 0, 0, 0.12);
+  background: var(--bg);
+}
+
+.element-inspector-window {
+  height: 100vh;
+  overflow: hidden;
   background: var(--bg);
 }
 
