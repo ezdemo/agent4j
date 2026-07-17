@@ -30,7 +30,6 @@ import site.sorghum.loopra.bin.workspace.WorkspaceManager;
 import site.sorghum.loopra.tool.AgentOutput;
 
 import java.io.IOException;
-import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
@@ -166,6 +165,7 @@ public class LoopraAgent {
         }
 
         final AgentLoop agentLoop = new AgentLoop(client, registry, ctx, hitl, config);
+        agentLoop.setWorkspace(this.workspace);
         agentLoop.setSessionService(this.sessionService);
         return agentLoop;
     }
@@ -603,14 +603,14 @@ public class LoopraAgent {
 
     public static class Builder {
         /**
-         * 硬编码的默认系统提示词（在 ~/.loopra/loopra.md 不存在时使用）
+         * 硬编码的默认系统提示词（作为 system prompt 基底，不再从文件加载）
          */
         public static final String DEFAULT_SYSTEM_PROMPT = DEFAULT_PROMPT.PROMPT;
         String apiUrl;
         String apiKey;
         String model = "deepseek-v4-flash";
         /**
-         * 默认系统提示词。如果 ~/.loopra/loopra.md 存在则从中读取，否则用此硬编码默认值。
+         * 系统提示词，默认使用硬编码的 DEFAULT_SYSTEM_PROMPT。
          */
         String systemPrompt = DEFAULT_SYSTEM_PROMPT;
         Path workspace = null;
@@ -629,59 +629,6 @@ public class LoopraAgent {
          * 共享配置
          */
         LoopraConfig loopraConfig;
-        /**
-         * 首次运行时自动安装默认系统提示词到 ~/.loopra/loopra.md。
-         * <p>
-         * 从 classpath 读取打包的 default-loopra.md，写入用户目录。
-         * 如果目标文件已存在则跳过，不覆盖用户自定义内容。
-         * </p>
-         */
-        public static void installDefaultPromptIfNeeded() {
-            Path homeDir = Paths.get(System.getProperty("user.home"), ".loopra");
-            Path target = homeDir.resolve("loopra.md");
-            if (Files.exists(target)) {
-                return; // 用户已有自定义提示词，不覆盖
-            }
-            // 从 classpath 读取打包的默认提示词
-            try (var is = LoopraAgent.class.getClassLoader().getResourceAsStream("default-loopra.md")) {
-                if (is == null) {
-                    log.warn("[prompt] classpath 中未找到 default-loopra.md，跳过自动安装");
-                    return;
-                }
-                String content = new String(is.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
-                if (content.trim().isEmpty()) {
-                    return;
-                }
-                Files.createDirectories(homeDir);
-                Files.writeString(target, content.trim());
-                log.info("[prompt] 已安装默认系统提示词到 ~/.loopra/loopra.md（{} 字符）", content.trim().length());
-            } catch (IOException e) {
-                log.error("[prompt] 安装默认系统提示词失败: {}", e.getMessage());
-            }
-        }
-
-        /**
-         * 加载用户级默认系统提示词。
-         * 优先级：~/.loopra/loopra.md > 硬编码默认值
-         */
-        private static String loadDefaultSystemPrompt() {
-            // 先确保默认提示词文件已安装
-            installDefaultPromptIfNeeded();
-            // 如果 ~/.loopra/loopra.md 存在，以其内容作为默认系统提示词
-            Path homePrompt = Paths.get(System.getProperty("user.home"), ".loopra", "loopra.md");
-            if (Files.exists(homePrompt)) {
-                try {
-                    String content = Files.readString(homePrompt);
-                    if (!content.trim().isEmpty()) {
-                        log.info("[prompt] 从 ~/.loopra/loopra.md 加载默认系统提示词（{} 字符）", content.length());
-                        return content.trim();
-                    }
-                } catch (IOException e) {
-                    log.error("[prompt] 读取 ~/.loopra/loopra.md 失败: {}", e.getMessage());
-                }
-            }
-            return DEFAULT_SYSTEM_PROMPT;
-        }
 
         public Builder loopraConfig(LoopraConfig loopraConfig){
             this.loopraConfig = loopraConfig;

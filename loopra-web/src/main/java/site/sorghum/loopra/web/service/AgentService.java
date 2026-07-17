@@ -27,6 +27,7 @@ import site.sorghum.loopra.web.common.UsageCostCalculator;
 import site.sorghum.loopra.web.model.*;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.format.DateTimeFormatter;
@@ -173,26 +174,30 @@ public class AgentService {
     private volatile ToolRegistry sharedToolRegistry;
 
     /**
-     * 加载用户级默认系统提示词。
-     * 优先级：~/.loopra/loopra.md > 硬编码默认值
+     * 加载默认系统提示词。
+     * <p>
+     * 基底固定为硬编码 {@code DEFAULT_SYSTEM_PROMPT}（含核心身份规则与记忆引导）；
+     * 若用户级 {@code ~/.loopra/loopra.md} 存在且非空，则拼接在其后，保证两者都有。
+     * 顺序：稳定的硬编码部分在前（利于 KV 前缀缓存），用户自定义部分在后。
+     * </p>
      */
     private static String loadDefaultSystemPrompt() {
-        // 先确保默认提示词文件已安装（首运行自动从 classpath 复制）
-        LoopraAgent.Builder.installDefaultPromptIfNeeded();
-        // 如果 ~/.loopra/loopra.md 存在，以其内容作为默认系统提示词
+        String base = LoopraAgent.Builder.DEFAULT_SYSTEM_PROMPT;
         Path homePrompt = Paths.get(System.getProperty("user.home"), ".loopra", "loopra.md");
-        if (java.nio.file.Files.exists(homePrompt)) {
-            try {
-                String content = java.nio.file.Files.readString(homePrompt);
-                if (!content.trim().isEmpty()) {
-                    log.info("[prompt] 从 ~/.loopra/loopra.md 加载默认系统提示词（" + content.length() + " 字符）");
-                    return content.trim();
-                }
-            } catch (IOException e) {
-                log.error("[prompt] 读取 ~/.loopra/loopra.md 失败: {}", e.getMessage());
-            }
+        if (!Files.exists(homePrompt)) {
+            return base;
         }
-        return LoopraAgent.Builder.DEFAULT_SYSTEM_PROMPT;
+        try {
+            String content = Files.readString(homePrompt);
+            if (content.trim().isEmpty()) {
+                return base;
+            }
+            log.info("[prompt] 拼接用户级 ~/.loopra/loopra.md（{} 字符）", content.length());
+            return base + "\n\n" + content.trim();
+        } catch (IOException e) {
+            log.error("[prompt] 读取 ~/.loopra/loopra.md 失败: {}", e.getMessage());
+            return base;
+        }
     }
 
     // ==================== 配置 getter（统一从 ConfigService 读取） ====================
@@ -976,7 +981,7 @@ public class AgentService {
             if (resolvedPath == null) return;
             WorkspaceManager wm = new WorkspaceManager();
             Path sessionsDir = wm.getSessionsDir(resolvedPath);
-            if (sessionsDir == null || !java.nio.file.Files.exists(sessionsDir)) return;
+            if (sessionsDir == null || !Files.exists(sessionsDir)) return;
             SessionStore store = new JsonlSessionStore(sessionsDir);
             boolean ok = store.delete(sessionName);
             if (ok) {
@@ -1000,7 +1005,7 @@ public class AgentService {
         if (resolvedPath == null) return;
         WorkspaceManager wm = new WorkspaceManager();
         Path sessionsDir = wm.getSessionsDir(resolvedPath);
-        if (sessionsDir == null || !java.nio.file.Files.exists(sessionsDir)) return;
+        if (sessionsDir == null || !Files.exists(sessionsDir)) return;
         SessionStore store = new JsonlSessionStore(sessionsDir);
         store.clearAll();
         log.info("[web] 已清空所有会话");

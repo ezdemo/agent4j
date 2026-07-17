@@ -1,5 +1,5 @@
 <template>
-  <div class="input-area" :class="{ 'welcome-mode': welcomeMode }">
+  <div class="input-area" :class="{ 'welcome-mode': welcomeMode, 'right-panel-open': rightPanelOpen }">
     <!-- @ 文件引用弹窗 -->
     <Transition name="slash-popup">
       <div v-if="fileMentionOpen" class="file-mention-popup">
@@ -406,6 +406,7 @@ const props = defineProps({
   currentSkill: {type: Object, default: null},
   currentPermission: {type: String, default: 'free'},
   petState: {type: String, default: 'idle'},
+  rightPanelOpen: {type: Boolean, default: false},
   welcomeMode: {type: Boolean, default: false}
 })
 
@@ -2851,6 +2852,18 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, autoResize
   right: 16px;
   z-index: 5;
   pointer-events: auto;
+  transition: right 0.2s ease;
+}
+
+/* 抵消右侧面板占用的 320px，保持宠物相对窗口的位置不变。 */
+.input-area.right-panel-open :deep(.pet-float) {
+  right: -304px;
+}
+
+@media (max-width: 768px) {
+  .input-area.right-panel-open :deep(.pet-float) {
+    right: 16px;
+  }
 }
 
 /* ============= 工作流浮层 ============= */

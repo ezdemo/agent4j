@@ -185,6 +185,7 @@
         :terminateOnNoToolCall="terminateOnNoToolCall"
         :workspaceHash="props.workspaceHash"
         :sessionName="props.sessionName"
+        :rightPanelOpen="props.rightPanelOpen"
         :hasHistory="hasHistory"
         :version="props.version"
         :currentSkill="currentSkill"
@@ -307,6 +308,7 @@ const props = defineProps({
   hideHeader: {type: Boolean, default: false},
   workspaceHash: {type: String, default: null},
   sessionName: {type: String, default: null},
+  rightPanelOpen: {type: Boolean, default: false},
   workspaces: {type: Array, default: () => []},
   version: {type: String, default: ''}
 })

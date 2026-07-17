@@ -70,6 +70,7 @@
         hide-header 
         :workspace-hash="currentSessionWorkspace"
         :session-name="currentSession"
+        :right-panel-open="rightPanelOpen"
         :workspaces="workspaces"
         :version="appVersion"
         style="flex:1;min-height:0"

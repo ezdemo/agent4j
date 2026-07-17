@@ -2,10 +2,12 @@ package site.sorghum.loopra.bin.agent.context;
 
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
+import site.sorghum.loopra.bin.agent.memory.ProjectMemoryStore;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.model.ModelClient;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -38,19 +40,31 @@ public class ContextFolding {
             List<ChatMessage> messages,
             int maxChars, int keepChars,
             ModelClient client) throws IOException {
+        return fold(messages, maxChars, keepChars, client, null);
+    }
+
+    /**
+     * 对消息列表执行折叠，并将提炼出的长期记忆沉淀到工作区记忆文件。
+     *
+     * @param workspace 工作区根目录（可为 null，null 时跳过记忆沉淀）
+     */
+    public static List<ChatMessage> fold(
+            List<ChatMessage> messages,
+            int maxChars, int keepChars,
+            ModelClient client, Path workspace) throws IOException {
         // 快速检查阈值，未超时直接返回原列表避免转换开销
         int total = estimateChars(messages);
         if (total <= maxChars) return messages;
         // 转换为 Map 进行内部处理
         List<Map<String, Object>> mapMessages = toMapList(messages);
-        List<Map<String, Object>> result = foldInternal(mapMessages, maxChars, keepChars, client);
+        List<Map<String, Object>> result = foldInternal(mapMessages, maxChars, keepChars, client, workspace);
         return fromMapList(result);
     }
 
     private static List<Map<String, Object>> foldInternal(
             List<Map<String, Object>> messages,
             int maxChars, int keepChars,
-            ModelClient client) throws IOException {
+            ModelClient client, Path workspace) throws IOException {
 
         int total = estimateCharsMap(messages);
         if (total <= maxChars) return messages;
@@ -80,7 +94,11 @@ public class ContextFolding {
         int dropped = head.size();
         if (dropped == 0) return messages;
 
-        String summary = summarize(head, client);
+        SummarizeResult sr = summarize(head, client);
+        String summary = sr.summary();
+        if (workspace != null && sr.memoryFacts() != null && !sr.memoryFacts().isBlank()) {
+            ProjectMemoryStore.append(workspace, sr.memoryFacts());
+        }
         if (summary == null || summary.trim().isEmpty()) {
             log.warn("[fold] 摘要失败，跳过折叠");
             return messages;
@@ -176,16 +194,30 @@ public class ContextFolding {
      * @param client API 客户端
      * @return 摘要文本，失败时返回 null
      */
-    private static String summarize(List<Map<String, Object>> head, ModelClient client) throws IOException {
+    private static SummarizeResult summarize(List<Map<String, Object>> head, ModelClient client) throws IOException {
         String sp = """
-                你是一个编码助手的对话历史摘要器。\
-                输出一段简洁的中文段落，包含以下内容：
+                你是一个编码助手的对话历史摘要器。请阅读即将被折叠的较早对话，输出两部分：
+
+                第一部分【会话摘要】：一段简洁的中文段落，包含：
                 - 用户的整体目标
                 - 已完成的决策和结论
                 - 已检查或修改的文件
                 - 仍相关的工具结果
                 - 未完成的待办
-                不要逐轮记录，不要 markdown 标题，纯中文段落。""";
+                不要逐轮记录，不要 markdown 标题，纯中文段落。
+
+                第二部分【长期记忆】：仅记录值得跨会话长期保留的项目级事实，例如：
+                - 架构决策与设计约定（如"AgentLoop 不持有 workspace 字段"）
+                - 踩坑教训（如"改 X 后必须同步跑 Y 测试"）
+                - 用户偏好（如"偏好中文回复"）
+                - 高频复用的项目事实（如"数据库表名、API 路径前缀"）
+                用中文项目符号列表，每条以"- "开头。只记录确定且可复用的事实；
+                没有值得长期保留的内容时输出"无"。
+
+                严格按以下格式输出（两部分用分隔行隔开）：
+                <摘要>...</摘要>
+                <<<MEMORY>>>
+                <记忆>...</记忆>""";
 
         // 先截断到字符限制
         List<Map<String, Object>> trimmed = truncateForSummary(head);
@@ -197,16 +229,63 @@ public class ContextFolding {
         for (Map<String, Object> m : trimmed) {
             msgs.add(ChatMessage.fromMap(m));
         }
-        msgs.add(ChatMessage.ofUser("请用一段中文总结上面的对话。这段摘要将替代原始对话以释放上下文。"));
+        msgs.add(ChatMessage.ofUser("请按格式总结上面的对话，产出会话摘要与长期记忆两部分。"));
 
         ONode resp = client.chat(msgs, null);
         String content = resp.get("content").getString();
-        if (content != null && !content.isEmpty()) return content;
+        String raw = (content != null && !content.isEmpty()) ? content
+                : resp.get("reasoning_content").getString();
+        return parseSummarize(raw);
+    }
 
-        String reasoning = resp.get("reasoning_content").getString();
-        if (reasoning != null && !reasoning.isEmpty()) return reasoning;
+    /**
+     * 解析 LLM 产出的双段摘要。格式：
+     * <摘要>...</摘要> <<<MEMORY>>> <记忆>...</记忆>
+     * 解析失败时降级：整段作为会话摘要、记忆为 null（不沉淀）。
+     */
+    private static SummarizeResult parseSummarize(String raw) {
+        if (raw == null || raw.isBlank()) return new SummarizeResult(null, null);
+        String summary;
+        String memory;
+        // 优先用 <<<MEMORY>>> 分隔
+        int sep = raw.indexOf("<<<MEMORY>>>");
+        if (sep >= 0) {
+            String left = raw.substring(0, sep).trim();
+            String right = raw.substring(sep + "<<<MEMORY>>>".length()).trim();
+            summary = stripTag(left, "摘要");
+            memory = stripTag(right, "记忆");
+            if (memory != null) {
+                memory = memory.trim();
+                if (memory.isEmpty() || "无".equals(memory) || "无。".equals(memory)) {
+                    memory = null;
+                }
+            }
+        } else {
+            // 格式不符：整段当摘要，不沉淀
+            summary = stripTag(raw.trim(), "摘要");
+            memory = null;
+        }
+        if (summary != null && summary.isBlank()) summary = null;
+        return new SummarizeResult(summary, memory);
+    }
 
-        return null;
+    /**
+     * 去除可能的 XML 风格包裹标签 &lt;x&gt;...&lt;/x&gt;；无标签时返回原文。
+     */
+    private static String stripTag(String text, String tag) {
+        if (text == null) return null;
+        String open = "<" + tag + ">";
+        String close = "</" + tag + ">";
+        int s = text.indexOf(open);
+        int e = text.indexOf(close);
+        if (s >= 0 && e > s) {
+            return text.substring(s + open.length(), e).trim();
+        }
+        return text.trim();
+    }
+
+    /** summarize 的双段产物：会话摘要（放回历史）+ 长期记忆要点（沉淀到记忆文件）。 */
+    private record SummarizeResult(String summary, String memoryFacts) {
     }
 
     /**
@@ -289,15 +368,27 @@ public class ContextFolding {
             List<ChatMessage> messages,
             int keepCount,
             ModelClient client) throws IOException {
+        return foldKeepLast(messages, keepCount, client, null);
+    }
+
+    /**
+     * 基于条数的折叠，并沉淀长期记忆到工作区记忆文件。
+     *
+     * @param workspace 工作区根目录（可为 null，null 时跳过记忆沉淀）
+     */
+    public static List<ChatMessage> foldKeepLast(
+            List<ChatMessage> messages,
+            int keepCount,
+            ModelClient client, Path workspace) throws IOException {
         List<Map<String, Object>> mapMessages = toMapList(messages);
-        List<Map<String, Object>> result = foldKeepLastInternal(mapMessages, keepCount, client);
+        List<Map<String, Object>> result = foldKeepLastInternal(mapMessages, keepCount, client, workspace);
         return fromMapList(result);
     }
 
     private static List<Map<String, Object>> foldKeepLastInternal(
             List<Map<String, Object>> messages,
             int keepCount,
-            ModelClient client) throws IOException {
+            ModelClient client, Path workspace) throws IOException {
 
         if (messages.isEmpty()) return new ArrayList<>();
         if (messages.size() < 2) return new ArrayList<>(messages); // 只有 system prompt
@@ -345,7 +436,11 @@ public class ContextFolding {
         headWithSystem.add(messages.get(0)); // system prompt
         headWithSystem.addAll(head);
 
-        String summary = summarize(headWithSystem, client);
+        SummarizeResult sr = summarize(headWithSystem, client);
+        String summary = sr.summary();
+        if (workspace != null && sr.memoryFacts() != null && !sr.memoryFacts().isBlank()) {
+            ProjectMemoryStore.append(workspace, sr.memoryFacts());
+        }
         if (summary == null || summary.trim().isEmpty()) {
             log.warn("[foldKeepLast] 摘要失败，跳过折叠");
             return new ArrayList<>(history);
