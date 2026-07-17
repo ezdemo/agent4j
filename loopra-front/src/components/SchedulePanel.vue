@@ -627,6 +627,13 @@ textarea.sch-input { resize: vertical; min-height: 36px; }
   color: var(--accent);
 }
 
+[data-theme="dark"] .sch-type-tabs button.active,
+[data-theme="dark"] .sch-filter-chip.active {
+  background: #53677f;
+  border-color: #647b96;
+  color: #f8f9fb;
+}
+
 /* btn-icon-xs（复用设计） */
 .btn-icon-xs {
   background: none;

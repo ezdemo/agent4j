@@ -196,19 +196,19 @@ const scheduleRef = ref(null)
 }
 
 [data-theme="dark"] .rp-panel {
-  background: #19191b;
-  border-color: #303033;
+  background: #222327;
+  border-color: #3b3c43;
 }
 
 [data-theme="dark"] .rp-head {
-  background: #202023;
-  border-color: #303033;
+  background: #2a2b2f;
+  border-color: #3b3c43;
 }
 
 [data-theme="dark"] .rp-tab:hover,
 [data-theme="dark"] .rp-tab.active {
-  background: #2b2b2e;
-  box-shadow: inset 0 0 0 1px #38383b;
+  background: #36373d;
+  box-shadow: inset 0 0 0 1px #4a4d55;
 }
 
 /* 响应式 */

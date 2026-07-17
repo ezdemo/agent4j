@@ -9,6 +9,7 @@ import githubCss from 'highlight.js/styles/github.css?inline'
 // 主题 → CSS 映射：亮背景用 github.css，暗背景用 github-dark.css
 const themeStyles = {
   light: githubCss,
+  gray: githubCss,
   'retro-yellow': githubCss,
   dark: githubDarkCss,
   retro: githubCss,  // 浅绿 是亮色背景
@@ -31,5 +32,7 @@ export function applyHljsTheme(theme) {
 }
 
 // 页面加载时立即应用（在 JS 模块解析阶段就已确定初始主题）
-const initialTheme = document.documentElement.getAttribute('data-theme') || 'light'
+const initialTheme = localStorage.getItem('loopra-theme')
+  || document.documentElement.getAttribute('data-theme')
+  || 'light'
 applyHljsTheme(initialTheme)
