@@ -951,26 +951,37 @@ const formatName = (n) => {
 [data-theme="dark"] .sidebar,
 [data-theme="dark"] .project-list,
 [data-theme="dark"] .sidebar-foot {
-  background: #171717;
-  border-color: #2c2c2c;
+  background: #202124;
+  border-color: #3b3c43;
 }
 
 [data-theme="dark"] .sidebar-shortcuts,
 [data-theme="dark"] .project-toolbar {
-  border-color: #2c2c2c;
-  background: #1d1d1f;
+  border-color: #3b3c43;
+  background: #27282d;
+}
+
+[data-theme="dark"] .shortcut-row:hover,
+[data-theme="dark"] .shortcut-row:focus-visible {
+  background: #36373d;
+  color: #f1f1f3;
+}
+
+[data-theme="dark"] .shortcut-row svg,
+[data-theme="dark"] .shortcut-row kbd {
+  color: #b6bac3;
 }
 
 [data-theme="dark"] .project-header:hover,
 [data-theme="dark"] .project-header.active,
 [data-theme="dark"] .session-item:hover,
 [data-theme="dark"] .session-item.active {
-  background: #242424;
+  background: #303137;
 }
 
 [data-theme="dark"] .shortcut-row-primary {
-  background: #2a2a2d;
-  box-shadow: inset 0 0 0 1px #38383b;
+  background: #36373d;
+  box-shadow: inset 0 0 0 1px #4a4d55;
   color: #f1f1f2;
 }
 
@@ -979,8 +990,14 @@ const formatName = (n) => {
   color: #bdbec3;
 }
 
+[data-theme="dark"] .shortcut-row-primary:hover,
+[data-theme="dark"] .shortcut-row-primary:focus-visible {
+  background: #484a52;
+  color: #f8f8fa;
+}
+
 [data-theme="dark"] .project-sessions {
-  border-color: #353536;
+  border-color: #42444b;
 }
 
 @media (max-width: 768px) {

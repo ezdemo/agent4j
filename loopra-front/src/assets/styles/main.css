@@ -141,29 +141,29 @@
 }
 
 [data-theme="dark"] {
-  --bg: #0c0c0c;
-  --bg-2: #171717;
-  --bg-3: #1f1f1f;
-  --fg: #e5e5e5;
-  --fg-2: #a3a3a3;
-  --fg-3: #737373;
-  --fg-4: #525252;
+  --bg: #18181b;
+  --bg-2: #202124;
+  --bg-3: #2a2b2f;
+  --fg: #f1f1f3;
+  --fg-2: #c3c6cc;
+  --fg-3: #9499a3;
+  --fg-4: #686d78;
   --text: var(--fg);
   --text-secondary: var(--fg-2);
   --text-muted: var(--fg-4);
-  --text-faint: #7a7a83;
-  --bg-subtle: #121212;
-  --bg-muted: #1a1a1a;
-  --bg-hover: #222222;
-  --bg-active: #2a2a2a;
-  --border: #262626;
-  --border-2: #333333;
-  --accent: #a1a1aa;
-  --accent-bg: #27272a;
-  --blue-bg: #27272a;
-  --green-bg: #052e16;
-  --yellow-bg: #422006;
-  --red-bg: #450a0a;
+  --text-faint: #828793;
+  --bg-subtle: #1b1c20;
+  --bg-muted: #232429;
+  --bg-hover: #2d2e34;
+  --bg-active: #383940;
+  --border: #36373d;
+  --border-2: #4a4d55;
+  --accent: #d1d4da;
+  --accent-bg: #303137;
+  --blue-bg: #303137;
+  --green-bg: #133625;
+  --yellow-bg: #4a3413;
+  --red-bg: #4a1d22;
   --bg-primary: var(--bg);
   --bg-secondary: var(--bg-2);
   --bg-tertiary: var(--bg-3);
@@ -175,17 +175,17 @@
   --success-bg: var(--green-bg);
   --warning-bg: var(--yellow-bg);
   --danger-bg: var(--red-bg);
-  --glass-bg: rgba(23,23,23,0.88);
-  --glass-bg-2: rgba(31,31,31,0.92);
-  --glass-border: rgba(255,255,255,0.08);
-  --glass-shadow: 0 1px 3px rgba(0,0,0,0.25), 0 8px 32px rgba(0,0,0,0.35);
+  --glass-bg: rgba(32,33,36,0.9);
+  --glass-bg-2: rgba(42,43,47,0.94);
+  --glass-border: rgba(255,255,255,0.12);
+  --glass-shadow: 0 1px 3px rgba(0,0,0,0.22), 0 8px 32px rgba(0,0,0,0.3);
 }
 [data-theme="dark"] .new-task-btn {
-  background: #333;
-  color: #e5e5e5;
+  background: #3a3c43;
+  color: #f1f1f3;
 }
 [data-theme="dark"] .new-task-btn:hover {
-  background: #404040;
+  background: #474951;
 }
 
 /* 全局 */
@@ -205,8 +205,8 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--gray-300); border-radius: 3px; }
 ::-webkit-scrollbar-thumb:hover { background: var(--gray-400); }
-[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #333; }
-[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #444; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb { background: #42444b; }
+[data-theme="dark"] ::-webkit-scrollbar-thumb:hover { background: #565962; }
 
 /* 浅绿 — 基于 Material Design 3 规范 */
 [data-theme="retro"] {
@@ -343,6 +343,7 @@ body {
 
 
 ::selection { background: var(--accent); color: #fff; }
+[data-theme="dark"] ::selection { background: #53677f; color: #f8f9fb; }
 a { color: var(--accent); text-decoration: none; }
 a:hover { text-decoration: underline; }
 
