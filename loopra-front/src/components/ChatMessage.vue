@@ -6,7 +6,7 @@
         <div v-if="userCollapsedBlock" class="user-auto-message">
           <button class="user-auto-message-trigger" type="button" :aria-expanded="userAutoMessageExpanded"
                   @click="userAutoMessageExpanded = !userAutoMessageExpanded">
-            <span class="user-auto-message-title">折叠块</span>
+            <span class="user-auto-message-title">附加上下文</span>
             <svg class="user-auto-message-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <polyline points="6 9 12 15 18 9"/>
             </svg>
@@ -630,6 +630,77 @@ onBeforeUnmount(() => {
 
 .link-popover-btn svg {
   flex-shrink: 0;
+}
+/* Keep automatically attached files and skills visually aligned with tool-call rows. */
+.user-auto-message {
+  display: block;
+  width: 100%;
+  padding: 0;
+  margin: 0 0 10px;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+
+.user-auto-message-trigger {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box !important;
+  height: 36px !important;
+  min-height: 36px !important;
+  max-height: 36px;
+  padding: 0 16px !important;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: #fafafa;
+  color: #4b5563;
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1 !important;
+  letter-spacing: 0;
+  text-align: left;
+  cursor: pointer;
+}
+
+.user-auto-message-trigger:hover {
+  border-color: #d7dce3;
+  background: #f6f7f8;
+  color: #374151;
+}
+
+.user-auto-message-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.user-auto-message-title::before {
+  content: "✓";
+  color: #9aa5b5;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.user-auto-message-trigger svg {
+  width: 14px;
+  height: 14px;
+  margin-left: auto;
+  color: #98a2b3;
+}
+
+.user-auto-message-content {
+  margin-top: -1px;
+  padding: 10px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 0 0 6px 6px;
+  background: #fafafa;
+  color: #667085;
+  font-size: 12px;
+  line-height: 1.55;
+  white-space: pre-wrap;
 }
 </style>
 

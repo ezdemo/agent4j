@@ -18,7 +18,7 @@ describe('ChatMessage branching', () => {
     })
 
     expect(wrapper.find('.user-auto-message').exists()).toBe(true)
-    expect(wrapper.find('.user-auto-message-trigger').text()).toContain('折叠块')
+    expect(wrapper.find('.user-auto-message-trigger').text()).toContain('附加上下文')
     expect(wrapper.find('.user-auto-message-detail').exists()).toBe(false)
     await wrapper.find('.user-auto-message-trigger').trigger('click')
     expect(wrapper.find('.user-auto-message-detail').text()).toContain('/skill:hv-analysis')
