@@ -434,7 +434,8 @@ import {computed, ref, watchEffect} from 'vue'
 import ChecklistSteps from './ChecklistSteps.vue'
 
 const props = defineProps({
-  blocks: {type: Array, required: true}
+  blocks: {type: Array, required: true},
+  streaming: {type: Boolean, default: false}
 })
 
 const emit = defineEmits(['sendChoice', 'openFile', 'openDiff', 'revertFileChanges'])
@@ -510,6 +511,13 @@ const togglePathItem = (groupId, index) => {
   pathItemExpanded.value = {...pathItemExpanded.value, [key]: !pathItemExpanded.value[key]}
 }
 
+const isTerminalResponseBlock = (block) => {
+  if (!block) return false
+  if (block.type === 'content') return Boolean(block.content?.trim())
+  if (block.type === 'choice') return true
+  return block.type === 'tool_call' && (block.name === 'finish' || block.name === 'ask_choice')
+}
+
 /** 将连续 reasoning + tool_call(非 finish) 合并为 path_group */
 const processedBlocks = computed(() => {
   const src = props.blocks
@@ -541,7 +549,12 @@ const processedBlocks = computed(() => {
       // Unique tool names for inline display (Cowork style)
       const uniqueToolNames = [...new Set(group.filter(x => x.type === 'tool_call').map(x => x.name))].join(' › ')
       const allDone = group.filter(x => x.type === 'tool_call').every(t => t.status === '成功')
-      const running = group.filter(x => x.type === 'tool_call').some(t => t.status === '执行中')
+      const toolRunning = group.filter(x => x.type === 'tool_call').some(t => t.status === '执行中')
+      // A successful tool result only finishes a step. Until a response, finish, or
+      // user-choice boundary arrives, the trailing group is still part of the active run.
+      const awaitingTerminalResponse = props.streaming
+          && !group.some(isTerminalResponseBlock)
+          && !src.slice(j).some(isTerminalResponseBlock)
       out.push({
         type: 'path_group',
         _groupId: gid,
@@ -551,7 +564,7 @@ const processedBlocks = computed(() => {
         _pathNames: pathNames,
         _uniqueToolNames: uniqueToolNames,
         _allDone: toolCount === 0 ? true : allDone,
-        _running: running
+        _running: toolRunning || awaitingTerminalResponse
       })
       i = j
     } else {

@@ -39,3 +39,39 @@ describe('BlockRenderer sub-agent streaming', () => {
     expect(wrapper.text()).toContain('后续消息')
   })
 })
+
+describe('BlockRenderer active response state', () => {
+  const completedToolPath = [
+    {type: 'reasoning', content: '正在检查文件', showContent: false},
+    {type: 'tool_call', name: 'read', status: '成功', args: {}, result: 'ok'}
+  ]
+
+  it('keeps the trailing tool path running until a terminal response arrives', () => {
+    const wrapper = mount(BlockRenderer, {
+      props: {blocks: [...completedToolPath, {type: 'content', content: ''}], streaming: true}
+    })
+
+    expect(wrapper.find('.tool-icon .animate-spin').exists()).toBe(true)
+  })
+
+  it('treats non-empty content, finish, and ask_choice as terminal responses', async () => {
+    const wrapper = mount(BlockRenderer, {
+      props: {
+        blocks: [...completedToolPath, {type: 'content', content: '已完成'}],
+        streaming: true
+      }
+    })
+
+    expect(wrapper.find('.tool-icon .animate-spin').exists()).toBe(false)
+
+    await wrapper.setProps({
+      blocks: [...completedToolPath, {type: 'tool_call', name: 'finish', status: '成功', result: '已完成'}]
+    })
+    expect(wrapper.find('.tool-icon .animate-spin').exists()).toBe(false)
+
+    await wrapper.setProps({
+      blocks: [...completedToolPath, {type: 'tool_call', name: 'ask_choice', status: '成功', result: '请选择'}]
+    })
+    expect(wrapper.find('.tool-icon .animate-spin').exists()).toBe(false)
+  })
+})

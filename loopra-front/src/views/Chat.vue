@@ -71,9 +71,10 @@
       <!-- 消息列表 -->
       <ChatMessage
           v-for="(msg, idx) in messages"
-          :key="msg.id"
-          :idx="idx"
+           :key="msg.id"
+           :idx="idx"
           :msg="msg"
+          :streaming="idx === activeAssistantMessageIndex"
           :snapshot-rollback-loading="snapshotRollbackLoading"
           :rollback-disabled="streaming"
           :branch-disabled="streaming || branchingSession"
@@ -513,20 +514,21 @@ const openDiff = async (filePath) => {
   await loadDiffViewerContent()
 }
 const openStoredDiff = (change) => {
+  // AI 消息底部的文件变更列表：点击默认展示 Git Diff（diff 已随 change 内联保存，无需等待）
   diffViewer.value = {
     open: true,
     file: change?.path || '',
     diff: change?.diff || '此历史记录没有保存差异快照。',
     content: '',
-    mode: 'content',
-    loading: true,
+    mode: 'diff',
+    loading: false,
     stat: `+${change?.additions || 0} -${change?.deletions || 0}`,
     diffStat: `+${change?.additions || 0} -${change?.deletions || 0}`,
     contentLoaded: false,
     contentExists: false,
     diffLoaded: true
   }
-  loadDiffViewerContent()
+  // 当前文件内容懒加载：切到「当前文件」标签时由 changeDiffViewerMode 触发，避免打开 diff 时白等 content
 }
 const closeDiffViewer = () => {
   diffViewer.value = { open: false, file: '', diff: '', content: '', mode: 'content', loading: false, stat: '', diffStat: '', contentLoaded: false, contentExists: false, diffLoaded: false }
@@ -534,6 +536,13 @@ const closeDiffViewer = () => {
 
 const messages = computed(() => store.getSessionMessages(props.sessionName))
 const streaming = computed(() => store.getSessionStreaming(props.sessionName))
+const activeAssistantMessageIndex = computed(() => {
+  if (!streaming.value) return -1
+  for (let i = messages.value.length - 1; i >= 0; i--) {
+    if (messages.value[i].role === 'assistant') return i
+  }
+  return -1
+})
 const branchingSession = ref(false)
 const hasHistory = computed(() => messages.value.length > 0)
 const planMode = ref(false)

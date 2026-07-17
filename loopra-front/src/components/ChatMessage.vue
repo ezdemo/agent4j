@@ -41,7 +41,7 @@
     <template v-else-if="msg.role === 'assistant' && msg.blocks && msg.blocks.length > 0">
       <div class="msg-body assistant-body">
         <div class="msg-blocks">
-          <BlockRenderer :blocks="msg.blocks || []" @send-choice="(val, block) => $emit('sendChoice', val, block)" @open-file="(filePath) => $emit('openFile', filePath)" @open-diff="change => $emit('openDiff', change)" @revert-file-changes="changes => $emit('revertFileChanges', changes)" />
+          <BlockRenderer :blocks="msg.blocks || []" :streaming="streaming" @send-choice="(val, block) => $emit('sendChoice', val, block)" @open-file="(filePath) => $emit('openFile', filePath)" @open-diff="change => $emit('openDiff', change)" @revert-file-changes="changes => $emit('revertFileChanges', changes)" />
         </div>
         <div class="msg-footer">
           <span class="msg-time-group">
@@ -106,7 +106,8 @@ const props = defineProps({
   idx: {type: Number, default: 0},
   snapshotRollbackLoading: {type: Object, required: true},
   rollbackDisabled: {type: Boolean, default: false},
-  branchDisabled: {type: Boolean, default: false}
+  branchDisabled: {type: Boolean, default: false},
+  streaming: {type: Boolean, default: false}
 })
 
 const emit = defineEmits(['previewImage', 'rollbackSnapshot', 'copyMessage', 'branchSession', 'sendChoice', 'openFile', 'openDiff', 'revertFileChanges'])
