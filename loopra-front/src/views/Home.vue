@@ -5,7 +5,7 @@
       <div class="welcome-content">
         <div class="logo-container">
           <div class="logo-icon">
-            <img src="../assets/logo.png" alt="Loopra Logo" class="logo-img" />
+            <img src="../assets/logo.svg" alt="Loopra Logo" class="logo-img" />
           </div>
           <div class="logo-glow"></div>
         </div>

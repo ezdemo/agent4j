@@ -5,7 +5,7 @@
     <div class="splash-content">
       <!-- Logo -->
       <div class="logo-container">
-        <img src="@/assets/logo.png" alt="Loopra" class="logo" />
+        <img src="@/assets/logo.svg" alt="Loopra" class="logo" />
       </div>
 
       <h1 class="title">Loopra</h1>

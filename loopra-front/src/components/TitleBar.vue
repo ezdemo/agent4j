@@ -10,7 +10,7 @@
       </button>
 
       <div class="tb-brand">
-        <img src="../assets/logo.png" alt="Loopra Logo" class="titlebar-logo-img" />
+        <img src="../assets/logo.svg" alt="Loopra Logo" class="titlebar-logo-img" />
         <span class="tb-brand-name">Loopra</span>
         <span class="tb-version" :class="{ 'has-update': hasNewVersion }" @click.stop="$emit('showUpdate')" :title="hasNewVersion ? '有新版本可用，点击查看' : ''">
           <template v-if="version && version !== '未知版本'">v{{ version }}</template>
