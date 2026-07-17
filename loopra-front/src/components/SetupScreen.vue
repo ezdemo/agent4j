@@ -6,7 +6,9 @@
     <div class="setup-content">
       <!-- Logo & 标题 -->
       <div class="logo-section">
-        <div class="logo-placeholder">A</div>
+        <div class="logo-mark">
+          <img src="@/assets/logo.svg" alt="Loopra Logo" />
+        </div>
         <h1 class="title">Loopra</h1>
         <p class="subtitle">智能 AI 代码助手</p>
       </div>
@@ -253,18 +255,19 @@ onMounted(() => {
   margin-bottom: 32px;
 }
 
-.logo-placeholder {
+.logo-mark {
   width: 72px;
   height: 72px;
   margin: 0 auto 16px;
-  background: var(--accent);
-  border-radius: 18px;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 32px;
-  font-weight: 700;
-  color: #fff;
+}
+
+.logo-mark img {
+  display: block;
+  width: 72px;
+  height: 72px;
 }
 
 .title {
