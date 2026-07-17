@@ -5,6 +5,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
+import site.sorghum.loopra.bin.workspace.WorkspaceManager;
 
 import java.io.IOException;
 import java.util.*;
@@ -28,7 +29,25 @@ public class ConfigService {
 
     @Init
     public void init() {
-        ConfigService.config = LoopraConfig.load();
+        ConfigService.config = loadAndInitializeWorkspace();
+    }
+
+    /**
+     * 加载配置并注册当前工作区，使工作区可被项目列表发现。
+     */
+    private static LoopraConfig loadAndInitializeWorkspace() {
+        LoopraConfig loadedConfig = LoopraConfig.load();
+        if (loadedConfig.workspaceDir() == null) {
+            return loadedConfig;
+        }
+
+        String workspacePath = loadedConfig.workspaceDir().toAbsolutePath().normalize().toString();
+        try {
+            WorkspaceManager.getOrCreate(workspacePath);
+        } catch (Exception e) {
+            log.warn("[workspace] 注册当前工作区失败: {}", e.getMessage());
+        }
+        return loadedConfig;
     }
 
     // ==================== 读取 ====================
@@ -45,7 +64,7 @@ public class ConfigService {
      * 重新从磁盘加载配置。
      */
     public static synchronized void reload() {
-        ConfigService.config = LoopraConfig.load();
+        ConfigService.config = loadAndInitializeWorkspace();
         log.debug("[config] 已重新加载配置");
     }
 
@@ -58,7 +77,7 @@ public class ConfigService {
         try {
             config.updateAndSave(Map.of("disabledTools",
                     toolNames != null ? new ArrayList<>(toolNames) : Collections.emptyList()));
-            ConfigService.config = LoopraConfig.load();
+            ConfigService.config = loadAndInitializeWorkspace();
             log.info("[config] 已更新禁用工具列表，共 {} 个工具", toolNames != null ? toolNames.size() : 0);
         } catch (IOException e) {
             log.error("[config] 更新禁用工具列表失败", e);
@@ -101,7 +120,7 @@ public class ConfigService {
         try {
             config.updateAndSave(Map.of("autoWhitelist",
                     toolNames != null ? new ArrayList<>(toolNames) : Collections.emptyList()));
-            ConfigService.config = LoopraConfig.load();
+            ConfigService.config = loadAndInitializeWorkspace();
             log.info("[config] 已更新自动放行白名单，共 {} 个工具", toolNames != null ? toolNames.size() : 0);
         } catch (IOException e) {
             log.error("[config] 更新自动放行白名单失败", e);
@@ -157,7 +176,7 @@ public class ConfigService {
     public static synchronized void updateConfig(Map<String, Object> updates) {
         try {
             config.updateAndSave(updates);
-            ConfigService.config = LoopraConfig.load();
+            ConfigService.config = loadAndInitializeWorkspace();
             log.debug("[config] 已更新配置项: {}", updates.keySet());
         } catch (IOException e) {
             log.error("[config] 更新配置失败", e);
@@ -172,7 +191,7 @@ public class ConfigService {
     public static synchronized void removeConfigKey(String key) {
         try {
             config.removeAndSave(key);
-            ConfigService.config = LoopraConfig.load();
+            ConfigService.config = loadAndInitializeWorkspace();
             log.debug("[config] 已移除配置项: {}", key);
         } catch (IOException e) {
             log.error("[config] 移除配置项失败: {}", key, e);

@@ -1,14 +1,84 @@
 package site.sorghum.loopra.bin.config;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.noear.snack4.ONode;
 
 import java.lang.reflect.Constructor;
+import java.nio.file.Files;
+import java.nio.file.Path;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LoopraConfigTest {
+
+    @TempDir
+    Path tempDir;
+
+    @Test
+    void createsDefaultConfigWithoutStoppingStartup() throws Exception {
+        String originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+        try {
+            LoopraConfig config = LoopraConfig.load();
+
+            assertTrue(Files.exists(tempDir.resolve(".loopra/config.json")));
+            assertEquals("sk-your-api-key", config.apiKey());
+            assertEquals(tempDir.resolve(".loopra/defaultWorkSpace").toAbsolutePath().normalize(),
+                    config.workspaceDir());
+        } finally {
+            System.setProperty("user.home", originalUserHome);
+        }
+    }
+
+    @Test
+    void assignsDefaultWorkspaceWhenExistingConfigOmitsWorkspace() throws Exception {
+        Path configDir = tempDir.resolve(".loopra");
+        Files.createDirectories(configDir);
+        Files.writeString(configDir.resolve("config.json"), "{}");
+
+        String originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+        try {
+            LoopraConfig config = LoopraConfig.load();
+            Path expectedWorkspace = configDir.resolve("defaultWorkSpace").toAbsolutePath().normalize();
+
+            assertEquals(expectedWorkspace, config.workspaceDir());
+            assertTrue(Files.isDirectory(expectedWorkspace));
+            assertEquals(expectedWorkspace.toString(), ONode.ofJson(Files.readString(configDir.resolve("config.json")))
+                    .select("$.workspaceDir").getString());
+        } finally {
+            System.setProperty("user.home", originalUserHome);
+        }
+    }
+
+    @Test
+    void migratesLegacyAgent4jDataExceptJreAndBin() throws Exception {
+        Path legacyDir = tempDir.resolve(".agent4j");
+        Files.createDirectories(legacyDir.resolve("sessions"));
+        Files.createDirectories(legacyDir.resolve("jre"));
+        Files.createDirectories(legacyDir.resolve("bin"));
+        Files.writeString(legacyDir.resolve("config.json"), "{\"apiKey\":\"legacy-key\"}");
+        Files.writeString(legacyDir.resolve("sessions/session.jsonl"), "legacy session");
+        Files.writeString(legacyDir.resolve("jre/excluded.txt"), "excluded");
+        Files.writeString(legacyDir.resolve("bin/excluded.txt"), "excluded");
+
+        String originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+        try {
+            LoopraConfig config = LoopraConfig.load();
+            Path configDir = tempDir.resolve(".loopra");
+
+            assertEquals("legacy-key", config.apiKey());
+            assertEquals("legacy session", Files.readString(configDir.resolve("sessions/session.jsonl")));
+            assertFalse(Files.exists(configDir.resolve("jre")));
+            assertFalse(Files.exists(configDir.resolve("bin")));
+        } finally {
+            System.setProperty("user.home", originalUserHome);
+        }
+    }
 
     @Test
     void terminatesOnNoToolCallByDefault() throws Exception {

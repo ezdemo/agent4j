@@ -12,6 +12,7 @@ import java.nio.file.Path;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * 会话管理服务 —— 编排会话生命周期。
@@ -24,6 +25,9 @@ import java.util.Map;
  */
 @Slf4j
 public class SessionService {
+
+    private static final Pattern LEADING_COLLAPSIBLE_USER_BLOCK = Pattern.compile(
+            "^```折叠块[ \\t]*\\r?\\n[\\s\\S]*?\\r?\\n```(?:\\r?\\n)*");
 
     private final ConversationContext ctx;
     /**
@@ -215,8 +219,15 @@ public class SessionService {
         if (userMessage == null || userMessage.isEmpty()) {
             return "新会话";
         }
+        String messageWithoutCollapsedBlock = LEADING_COLLAPSIBLE_USER_BLOCK
+                .matcher(userMessage)
+                .replaceFirst("")
+                .trim();
+        if (messageWithoutCollapsedBlock.isEmpty()) {
+            return "新会话";
+        }
         // 移除换行符，截取前30个字符
-        String title = userMessage.replaceAll("\\s+", " ").trim();
+        String title = messageWithoutCollapsedBlock.replaceAll("\\s+", " ").trim();
         if (title.length() > 30) {
             title = title.substring(0, 30) + "...";
         }

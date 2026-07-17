@@ -8,9 +8,13 @@ import org.noear.snack4.Options;
 import org.noear.snack4.json.JsonWriter;
 
 import java.io.IOException;
+import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -168,26 +172,95 @@ public class LoopraConfig {
     }
 
     /**
+     * 为未配置工作区的用户初始化默认工作区。
+     * 默认工作区与配置文件同级，避免使用应用启动目录或用户主目录作为工作区。
+     *
+     * @return 是否已写入默认工作区配置
+     */
+    private static boolean initializeDefaultWorkspace(ONode root, Path configDir) throws IOException {
+        String workspaceDir = root.select("$.workspaceDir").getString();
+        if (workspaceDir != null && !workspaceDir.trim().isEmpty() && !".".equals(workspaceDir.trim())) {
+            return false;
+        }
+
+        Path defaultWorkspace = configDir.resolve("defaultWorkSpace").toAbsolutePath().normalize();
+        Files.createDirectories(defaultWorkspace);
+        root.set("workspaceDir", defaultWorkspace.toString());
+        log.info("[config] 未配置工作区，已使用默认工作区: {}", defaultWorkspace);
+        return true;
+    }
+
+    /**
+     * 首次启动时迁移旧版 {@code ~/.agent4j} 数据。
+     * 仅在目标目录不存在或为空时执行，避免覆盖现有 Loopra 数据。
+     */
+    private static void migrateLegacyDataIfNeeded(Path configDir) throws IOException {
+        Path legacyDir = Paths.get(System.getProperty("user.home"), ".agent4j");
+        if (!isDirectoryEmpty(configDir) || !Files.isDirectory(legacyDir) || isDirectoryEmpty(legacyDir)) {
+            return;
+        }
+
+        Files.createDirectories(configDir);
+        Files.walkFileTree(legacyDir, new SimpleFileVisitor<>() {
+            @Override
+            public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attributes) throws IOException {
+                Path relativePath = legacyDir.relativize(dir);
+                if (relativePath.getNameCount() == 1
+                        && ("jre".equals(relativePath.toString()) || "bin".equals(relativePath.toString()))) {
+                    return FileVisitResult.SKIP_SUBTREE;
+                }
+                Files.createDirectories(configDir.resolve(relativePath));
+                return FileVisitResult.CONTINUE;
+            }
+
+            @Override
+            public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
+                Path target = configDir.resolve(legacyDir.relativize(file));
+                Files.copy(file, target, StandardCopyOption.COPY_ATTRIBUTES);
+                return FileVisitResult.CONTINUE;
+            }
+        });
+        log.info("[config] 已从旧目录迁移数据: {} -> {}（已跳过 jre 和 bin）", legacyDir, configDir);
+    }
+
+    private static boolean isDirectoryEmpty(Path directory) throws IOException {
+        if (!Files.exists(directory)) {
+            return true;
+        }
+        if (!Files.isDirectory(directory)) {
+            return false;
+        }
+        try (var entries = Files.list(directory)) {
+            return entries.findAny().isEmpty();
+        }
+    }
+
+    /**
      * 从默认路径加载：{@code ~/.loopra/config.json}，首次启动自动创建
      */
     @SneakyThrows
     public static LoopraConfig load(){
         Path configDir = Paths.get(System.getProperty("user.home"), ".loopra");
+        migrateLegacyDataIfNeeded(configDir);
         Path configPath = configDir.resolve("config.json");
         if (!Files.exists(configPath)) {
             Files.createDirectories(configDir);
             String defaultConfig = defaultConfigJson();
             Files.writeString(configPath, defaultConfig);
             log.info("[config] 已创建默认配置文件: {}", configPath);
-            log.info("[config] 请编辑 {} 填入 apiKey 后重启", configPath);
-            System.exit(1);
+            log.warn("[config] 尚未配置 apiKey，可编辑 {} 或在 Web 设置页配置", configPath);
         }
         try {
             String json = String.join("\n", Files.readAllLines(configPath));
             ONode root = ONode.ofJson(json);
             // 加载后用默认配置补充缺失字段（适配旧版本 config.json）
             mergeDefaults(root, defaultConfigNode());
-            return new LoopraConfig(root);
+            boolean defaultWorkspaceInitialized = initializeDefaultWorkspace(root, configDir);
+            LoopraConfig config = new LoopraConfig(root);
+            if (defaultWorkspaceInitialized) {
+                config.save();
+            }
+            return config;
         } catch (Exception e) {
             throw new IllegalStateException("读取配置文件失败: " + configPath, e);
         }
