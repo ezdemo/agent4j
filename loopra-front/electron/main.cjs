@@ -1,4 +1,4 @@
-const { app, BrowserWindow, ipcMain, Menu, shell } = require('electron')
+const { app, BrowserWindow, WebContentsView, ipcMain, Menu, shell } = require('electron')
 const path = require('path')
 const { spawn, execFile, execSync } = require('child_process')
 const { promisify } = require('util')
@@ -52,6 +52,8 @@ let mainWindow = null
 let loopraWebProcess = null
 let currentPort = 0
 const loopraWebWindows = new Map()
+let elementWebView = null
+let elementInspectorWindow = null
 const execFileAsync = promisify(execFile)
 
 function parsePort(commandLine) {
@@ -303,10 +305,17 @@ function createWindow() {
     mainWindow.setWindowButtonVisibility(false)
   }
 
-  mainWindow.on('closed', () => { mainWindow = null })
+  mainWindow.on('closed', () => {
+    if (elementInspectorWindow && !elementInspectorWindow.isDestroyed()) elementInspectorWindow.close()
+    if (elementWebView && !elementWebView.webContents.isDestroyed()) elementWebView.webContents.close()
+    elementWebView = null
+    mainWindow = null
+  })
 }
 
 app.whenReady().then(() => {
+  // The renderer provides its own toolbar; do not expose Electron's default menu bar.
+  Menu.setApplicationMenu(null)
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -506,7 +515,136 @@ ipcMain.handle('window-maximize', () => {
 })
 ipcMain.handle('window-close', () => { if (mainWindow) mainWindow.close() })
 ipcMain.handle('window-is-maximized', () => mainWindow ? mainWindow.isMaximized() : false)
-// ==================== Element Inspector (跨域穿透) ====================
+// ==================== Element Inspector ====================
+
+function openElementInspectorWindow(initialUrl = '') {
+  if (elementInspectorWindow && !elementInspectorWindow.isDestroyed()) {
+    elementInspectorWindow.show()
+    elementInspectorWindow.focus()
+    if (initialUrl) elementInspectorWindow.webContents.send('element-inspector-load-url', initialUrl)
+    return elementInspectorWindow
+  }
+
+  elementInspectorWindow = new BrowserWindow({
+    width: 1180,
+    height: 720,
+    minWidth: 840,
+    minHeight: 540,
+    title: 'Loopra 元素检查',
+    parent: mainWindow || undefined,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false
+    }
+  })
+  elementInspectorWindow.on('closed', () => {
+    if (elementWebView && !elementWebView.webContents.isDestroyed()) elementWebView.webContents.close()
+    elementWebView = null
+    elementInspectorWindow = null
+  })
+  elementInspectorWindow.webContents.once('did-finish-load', () => {
+    if (initialUrl) elementInspectorWindow?.webContents.send('element-inspector-load-url', initialUrl)
+  })
+  if (isDev) {
+    elementInspectorWindow.loadURL('http://localhost:3000/?elementInspector=1')
+  } else {
+    elementInspectorWindow.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { elementInspector: '1' } })
+  }
+  return elementInspectorWindow
+}
+
+ipcMain.handle('open-element-inspector-window', (event, rawUrl) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized inspector request')
+  const url = rawUrl ? validateInspectableUrl(rawUrl) : ''
+  openElementInspectorWindow(url)
+  return { success: true }
+})
+
+ipcMain.on('element-inspector-send', (event, payload) => {
+  if (event.sender !== elementInspectorWindow?.webContents || !payload || typeof payload !== 'object') return
+  if (!mainWindow || mainWindow.isDestroyed()) return
+  if (mainWindow?.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow?.focus()
+  mainWindow.webContents.send('element-inspector-draft', payload)
+})
+
+function getOrCreateElementWebView() {
+  if (elementWebView && !elementWebView.webContents.isDestroyed()) return elementWebView
+
+  elementWebView = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, 'element-preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  })
+  elementWebView.setVisible(false)
+  elementWebView.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  elementWebView.webContents.on('did-finish-load', () => {
+    elementInspectorWindow?.webContents.send('element-webview-loaded', { url: elementWebView.webContents.getURL() })
+  })
+  elementWebView.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (isMainFrame) elementInspectorWindow?.webContents.send('element-webview-failed', { errorCode, errorDescription, url: validatedURL })
+  })
+  elementWebView.webContents.on('destroyed', () => { elementWebView = null })
+  return elementWebView
+}
+
+function normalizeElementViewBounds(rawBounds) {
+  if (!elementInspectorWindow || !rawBounds || typeof rawBounds !== 'object') throw new Error('Invalid native view bounds')
+  const contentBounds = elementInspectorWindow.getContentBounds()
+  const values = ['x', 'y', 'width', 'height'].map((key) => Math.round(Number(rawBounds[key])))
+  if (!values.every(Number.isFinite) || values[2] < 1 || values[3] < 1) throw new Error('Invalid native view bounds')
+  const x = Math.max(0, Math.min(values[0], contentBounds.width - 1))
+  const y = Math.max(0, Math.min(values[1], contentBounds.height - 1))
+  return {
+    x,
+    y,
+    width: Math.max(1, Math.min(values[2], contentBounds.width - x)),
+    height: Math.max(1, Math.min(values[3], contentBounds.height - y))
+  }
+}
+
+function validateInspectableUrl(rawUrl) {
+  const url = new URL(String(rawUrl || ''))
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Only HTTP(S) URLs are supported')
+  return url.href
+}
+
+ipcMain.handle('element-webview-load', async (event, rawUrl) => {
+  if (event.sender !== elementInspectorWindow?.webContents) throw new Error('Unauthorized native view request')
+  const view = getOrCreateElementWebView()
+  const url = validateInspectableUrl(rawUrl)
+  await view.webContents.loadURL(url)
+  return { success: true, url }
+})
+
+ipcMain.handle('element-webview-show', (event, rawBounds) => {
+  if (event.sender !== elementInspectorWindow?.webContents) throw new Error('Unauthorized native view request')
+  const view = getOrCreateElementWebView()
+  elementInspectorWindow.contentView.addChildView(view)
+  view.setBounds(normalizeElementViewBounds(rawBounds))
+  view.setVisible(true)
+  return { success: true }
+})
+
+ipcMain.handle('element-webview-hide', (event) => {
+  if (event.sender !== elementInspectorWindow?.webContents) throw new Error('Unauthorized native view request')
+  elementWebView?.setVisible(false)
+  return { success: true }
+})
+
+ipcMain.on('element-inspected', (event, payload) => {
+  if (event.sender !== elementWebView?.webContents || !payload || typeof payload !== 'object') return
+  elementInspectorWindow?.webContents.send('element-inspected', payload)
+})
 
 /** 在主窗口的 child frame 中寻找 ElementPanel 的 iframe */
 function findIframeFrame(frame) {
@@ -529,11 +667,12 @@ function findIframeFrame(frame) {
  * 注入元素检测脚本到 iframe
  * 利用 Electron 主进程权限，跨域 iframe 也能执行 JS
  */
-ipcMain.handle('inspector-inject', async () => {
-  if (!mainWindow) return { success: false, reason: 'no_window' }
+ipcMain.handle('inspector-inject', async (event) => {
+  if (event.sender !== elementInspectorWindow?.webContents) throw new Error('Unauthorized inspector request')
+  if (!elementInspectorWindow) return { success: false, reason: 'no_window' }
 
-  const iframeFrame = findIframeFrame(mainWindow.webContents.mainFrame)
-  if (!iframeFrame) return { success: false, reason: 'no_iframe' }
+  const inspectorTarget = elementWebView?.webContents || findIframeFrame(elementInspectorWindow.webContents.mainFrame)
+  if (!inspectorTarget) return { success: false, reason: 'no_preview' }
 
   const code = `
 (function(){
@@ -549,6 +688,14 @@ ipcMain.handle('inspector-inject', async () => {
   style.id = '__loopra_elem_style';
   style.textContent = '*.__loopra-highlight{outline:2px dashed #2563eb !important;outline-offset:2px !important;background:rgba(37,99,235,0.08) !important;cursor:crosshair !important}';
   document.head.appendChild(style);
+
+  function report(payload){
+    if(window.loopraElementInspector && typeof window.loopraElementInspector.report === 'function'){
+      window.loopraElementInspector.report(payload);
+    }else if(window.parent){
+      window.parent.postMessage(payload, '*');
+    }
+  }
 
   // ---- 工具函数：安全序列化值（postMessage 要求可结构化克隆） ----
   function safeProp(v){
@@ -659,7 +806,7 @@ ipcMain.handle('inspector-inject', async () => {
       if(text.length>60) text=text.substring(0,60)+'\u2026';
       var path=buildCompPath(el, vueInfo);
 
-      window.parent.postMessage({
+      report({
         type:'loopra-element-click',
         tag:el.tagName?el.tagName.toLowerCase():'?',
         text:text,
@@ -669,10 +816,10 @@ ipcMain.handle('inspector-inject', async () => {
         vueComponent:vueInfo,
         path:path,
         children:vueInfo?vueInfo.children:[]
-      }, '*');
+      });
     }catch(pe){
       try{
-        window.parent.postMessage({
+        report({
           type:'loopra-element-click',
           tag:el.tagName?el.tagName.toLowerCase():'?',
           text:(el.textContent||'').trim().substring(0,60),
@@ -682,7 +829,7 @@ ipcMain.handle('inspector-inject', async () => {
           vueComponent:{name:'\u6dfb\u52a0\u7ec4\u4ef6',props:{},file:'',children:[]},
           path:[],
           children:[]
-        }, '*');
+        });
       }catch(e2){}
     }
   }
@@ -716,7 +863,7 @@ ipcMain.handle('inspector-inject', async () => {
 `
 
   try {
-    await iframeFrame.executeJavaScript(code)
+    await inspectorTarget.executeJavaScript(code)
     return { success: true }
   } catch (e) {
     return { success: false, reason: e.message }
@@ -724,14 +871,15 @@ ipcMain.handle('inspector-inject', async () => {
 })
 
 /** 移除 iframe 中的检测脚本 */
-ipcMain.handle('inspector-remove', async () => {
-  if (!mainWindow) return { success: false, reason: 'no_window' }
+ipcMain.handle('inspector-remove', async (event) => {
+  if (event.sender !== elementInspectorWindow?.webContents) throw new Error('Unauthorized inspector request')
+  if (!elementInspectorWindow) return { success: false, reason: 'no_window' }
 
-  const iframeFrame = findIframeFrame(mainWindow.webContents.mainFrame)
-  if (!iframeFrame) return { success: false, reason: 'no_iframe' }
+  const inspectorTarget = elementWebView?.webContents || findIframeFrame(elementInspectorWindow.webContents.mainFrame)
+  if (!inspectorTarget) return { success: false, reason: 'no_preview' }
 
   try {
-    await iframeFrame.executeJavaScript(`
+    await inspectorTarget.executeJavaScript(`
       (function(){
         // 精确移除事件监听器
         if(window.__loopraHandlers){

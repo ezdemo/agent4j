@@ -42,10 +42,11 @@
       <span>点击页面中的任意元素以查看其 Vue 组件</span>
     </div>
 
-    <!-- iframe 容器 -->
+    <!-- 页面预览容器 -->
     <div class="elem-frame-wrap" :class="{ 'design-active': designMode }">
+      <div v-if="currentSrc && useNativeElementView" ref="nativeViewHostRef" class="elem-native-view-host"></div>
       <iframe
-        v-if="currentSrc"
+        v-else-if="currentSrc"
         ref="frameRef"
         :src="currentSrc"
         class="elem-frame"
@@ -63,7 +64,7 @@
         <span class="hint">页面将在右侧面板中显示</span>
       </div>
       <!-- 跨域提示 -->
-      <div v-if="crossOrigin" class="elem-cross-overlay">
+      <div v-if="crossOrigin && !useNativeElementView" class="elem-cross-overlay">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
           <circle cx="12" cy="12" r="10"/>
           <line x1="15" y1="9" x2="9" y2="15"/>
@@ -144,7 +145,8 @@ import {nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 const props = defineProps({
   workspaceHash: { type: String, default: null },
   sessionName: { type: String, default: '' },
-  sessions: { type: Array, default: () => [] }
+  sessions: { type: Array, default: () => [] },
+  visible: { type: Boolean, default: false }
 })
 
 const emit = defineEmits(['send'])
@@ -156,8 +158,14 @@ const designMode = ref(false)
 const selectedComponent = ref(null)
 const crossOrigin = ref(false)
 const frameRef = ref(null)
+const nativeViewHostRef = ref(null)
 const userMessage = ref('')
 const msgInputRef = ref(null)
+const useNativeElementView = Boolean(window.electronAPI?.elementWebView)
+let nativeResizeObserver = null
+let nativeBoundsFrame = 0
+let removeNativeInspectionListener = null
+let removeNativeFailureListener = null
 
 // 规范化 URL
 function normalizeUrl(input) {
@@ -176,6 +184,38 @@ function normalizeUrl(input) {
 
 let loadedTimer = null
 
+function scheduleNativeViewBounds() {
+  if (!useNativeElementView) return
+  cancelAnimationFrame(nativeBoundsFrame)
+  nativeBoundsFrame = requestAnimationFrame(syncNativeViewBounds)
+}
+
+async function syncNativeViewBounds() {
+  const host = nativeViewHostRef.value
+  if (!host || !currentSrc.value || selectedComponent.value) {
+    await window.electronAPI.elementWebView.hide()
+    return
+  }
+  const rect = host.getBoundingClientRect()
+  if (rect.width < 1 || rect.height < 1) {
+    await window.electronAPI.elementWebView.hide()
+    return
+  }
+  await window.electronAPI.elementWebView.show({
+    x: rect.x,
+    y: rect.y,
+    width: rect.width,
+    height: rect.height
+  })
+}
+
+function observeNativeViewHost() {
+  if (!useNativeElementView) return
+  nativeResizeObserver?.disconnect()
+  if (nativeViewHostRef.value) nativeResizeObserver?.observe(nativeViewHostRef.value)
+  scheduleNativeViewBounds()
+}
+
 // 暴露给父组件的方法：外部导航到指定 URL
 function loadUrl(newUrl) {
   url.value = newUrl
@@ -184,7 +224,7 @@ function loadUrl(newUrl) {
 
 defineExpose({ loadUrl })
 
-function navigate() {
+async function navigate() {
   const normalized = normalizeUrl(url.value)
   if (!normalized) return
   currentSrc.value = normalized
@@ -192,6 +232,19 @@ function navigate() {
   crossOrigin.value = false
   selectedComponent.value = null
   designMode.value = false
+  if (useNativeElementView) {
+    clearTimeout(loadedTimer)
+    try {
+      await window.electronAPI.elementWebView.load(normalized)
+      loaded.value = true
+      await nextTick()
+      observeNativeViewHost()
+    } catch (error) {
+      console.warn('[ElementPanel] 原生视图加载失败:', error)
+      loaded.value = true
+    }
+    return
+  }
   // 兜底：3秒后无论 iframe 是否触发 load，都启用按钮
   clearTimeout(loadedTimer)
   if (!loaded.value) {
@@ -218,6 +271,14 @@ async function toggleDesignMode() {
 // Electron 模式：通过 IPC 由主进程注入，突破跨域限制
 // 普通模式：直接访问 contentDocument（仅同源有效）
 async function injectInspector() {
+  if (useNativeElementView) {
+    const result = await window.electronAPI.inspector.inject()
+    if (result.success) return
+    console.warn('[ElementPanel] 原生视图注入失败:', result.reason)
+    designMode.value = false
+    return
+  }
+
   const frame = frameRef.value
   if (!frame) {
     console.warn('[ElementPanel] iframe 未就绪，无法注入')
@@ -279,6 +340,15 @@ async function injectInspector() {
 }
 
 async function removeInspector() {
+  if (useNativeElementView) {
+    try {
+      await window.electronAPI.inspector.remove()
+    } catch (error) {
+      console.warn('[ElementPanel] 原生视图移除检测失败:', error)
+    }
+    return
+  }
+
   const frame = frameRef.value
   if (!frame) return
 
@@ -583,11 +653,16 @@ function onKeydown(e) {
 /**
  * 接收 Electron 模式下从 iframe 通过 postMessage 传来的元素点击信息
  */
-function onFrameMessage(e) {
-  if (!e.data || e.data.type !== 'loopra-element-click') return
+function selectInspectedElement(data) {
+  if (!data || data.type !== 'loopra-element-click') return
   if (!designMode.value) return  // 非设计模式下忽略
-  const data = e.data
   console.log('[ElementPanel] 收到元素点击数据:', data.tag)
+
+  if (useNativeElementView) {
+    cancelAnimationFrame(nativeBoundsFrame)
+    nativeBoundsFrame = 0
+    window.electronAPI.elementWebView.hide()
+  }
 
   selectedComponent.value = {
     name: data.vueComponent?.name || '原生元素（无 Vue 组件包裹）',
@@ -601,13 +676,46 @@ function onFrameMessage(e) {
   }
 }
 
+function onFrameMessage(e) {
+  selectInspectedElement(e.data)
+}
+
 onMounted(() => {
   document.addEventListener('keydown', onKeydown)
   window.addEventListener('message', onFrameMessage)
+  if (useNativeElementView) {
+    nativeResizeObserver = new ResizeObserver(scheduleNativeViewBounds)
+    removeNativeInspectionListener = window.electronAPI.events.listen('element-inspected', selectInspectedElement)
+    removeNativeFailureListener = window.electronAPI.events.listen('element-webview-failed', () => { loaded.value = true })
+  }
+})
+
+watch(currentSrc, async () => {
+  if (!useNativeElementView) return
+  await nextTick()
+  observeNativeViewHost()
+})
+
+watch(() => props.visible, async (visible) => {
+  if (!useNativeElementView) return
+  if (!visible) {
+    await window.electronAPI.elementWebView.hide()
+    return
+  }
+  await nextTick()
+  scheduleNativeViewBounds()
 })
 
 // 弹窗打开时自动聚焦输入框
 watch(selectedComponent, (val) => {
+  if (useNativeElementView) {
+    if (val) {
+      cancelAnimationFrame(nativeBoundsFrame)
+      nativeBoundsFrame = 0
+      window.electronAPI.elementWebView.hide()
+    }
+    else scheduleNativeViewBounds()
+  }
   if (val) {
     nextTick(() => {
       msgInputRef.value?.focus()
@@ -619,6 +727,11 @@ onBeforeUnmount(() => {
   removeInspector()
   document.removeEventListener('keydown', onKeydown)
   window.removeEventListener('message', onFrameMessage)
+  removeNativeInspectionListener?.()
+  removeNativeFailureListener?.()
+  nativeResizeObserver?.disconnect()
+  cancelAnimationFrame(nativeBoundsFrame)
+  if (useNativeElementView) window.electronAPI.elementWebView.hide()
   clearTimeout(loadedTimer)
 })
 </script>
@@ -918,6 +1031,11 @@ onBeforeUnmount(() => {
   cursor: crosshair;
 }
 
+.elem-native-view-host {
+  position: absolute;
+  inset: 0;
+}
+
 .elem-frame {
   width: 100%;
   height: 100%;
@@ -1006,11 +1124,11 @@ onBeforeUnmount(() => {
 }
 
 .elem-modal {
-  width: 480px;
-  max-width: 90vw;
-  max-height: 75vh;
-  display: flex;
-  flex-direction: column;
+  width: min(760px, 92vw);
+  max-height: 62vh;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 300px;
+  grid-template-rows: auto minmax(0, 1fr);
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: 12px;
@@ -1031,6 +1149,7 @@ onBeforeUnmount(() => {
 }
 
 .elem-modal-head {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -1075,7 +1194,6 @@ onBeforeUnmount(() => {
 }
 
 .elem-modal-body {
-  flex: 1;
   overflow-y: auto;
   padding: 12px 16px;
 }
@@ -1111,7 +1229,7 @@ onBeforeUnmount(() => {
 .elem-modal-foot {
   display: flex;
   padding: 10px 16px;
-  border-top: 1px solid var(--border);
+  border-left: 1px solid var(--border);
   flex-shrink: 0;
 }
 
@@ -1137,6 +1255,20 @@ onBeforeUnmount(() => {
   min-height: 32px;
   max-height: 120px;
   line-height: 1.5;
+}
+
+@media (max-width: 680px) {
+  .elem-modal {
+    width: min(480px, 92vw);
+    max-height: 75vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  .elem-modal-foot {
+    border-top: 1px solid var(--border);
+    border-left: none;
+  }
 }
 
 .elem-modal-input:focus {

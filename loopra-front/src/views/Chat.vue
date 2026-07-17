@@ -72,6 +72,18 @@
       <ChatMessage
           v-for="(msg, idx) in messages"
            :key="msg.id"
+          v-memo="[
+            msg.id,
+            msg.content,
+            msg.blocks?.length,
+            msg.rollbackId,
+            msg.snapshotId,
+            msg.rollbackTimestamp,
+            idx === activeAssistantMessageIndex ? streamRenderVersion : 0,
+            streaming,
+            branchingSession,
+            snapshotRollbackLoading.get(msg.rollbackId || msg.snapshotId || msg.rollbackTimestamp)
+          ]"
            :idx="idx"
           :msg="msg"
           :streaming="idx === activeAssistantMessageIndex"
@@ -538,6 +550,8 @@ const closeDiffViewer = () => {
 
 const messages = computed(() => store.getSessionMessages(props.sessionName))
 const streaming = computed(() => store.getSessionStreaming(props.sessionName))
+// Only the active streaming message needs to repatch for every server event.
+const streamRenderVersion = ref(0)
 const activeAssistantMessageIndex = computed(() => {
   if (!streaming.value) return -1
   for (let i = messages.value.length - 1; i >= 0; i--) {
@@ -971,8 +985,7 @@ const sendMessage = async (images = [], overrideText = null) => {
   let silentBubbleCreated = false
 
   try {
-    const streamResult = chatAPI.sendMessageStream(text,
-        data => {
+    const processStreamEvent = (data) => {
           // 静默命令：首次收到有内容的数据时才创建助手气泡（只创建一次）
           if (isSilent && !silentBubbleCreated) {
             if (!data.type || data.type === 'done') return
@@ -1209,9 +1222,35 @@ const sendMessage = async (images = [], overrideText = null) => {
               }
             }
           }
-          scroll()
-        },
+    }
+
+    const pendingStreamEvents = []
+    let streamFrameId = 0
+    const flushStreamEvents = () => {
+      if (streamFrameId) {
+        cancelAnimationFrame(streamFrameId)
+        streamFrameId = 0
+      }
+      if (pendingStreamEvents.length === 0) return
+
+      const events = pendingStreamEvents.splice(0)
+      for (const event of events) processStreamEvent(event)
+      streamRenderVersion.value++
+      scroll()
+    }
+    const enqueueStreamEvent = (data) => {
+      pendingStreamEvents.push(data)
+      if (streamFrameId) return
+      streamFrameId = requestAnimationFrame(() => {
+        streamFrameId = 0
+        flushStreamEvents()
+      })
+    }
+
+    const streamResult = chatAPI.sendMessageStream(text,
+        enqueueStreamEvent,
         () => {
+          flushStreamEvents()
           store.setSessionStreaming(sessionName, false)
           // 流结束后清理空的助手气泡
           const msgs = store.getSessionMessages(sessionName)
@@ -1225,6 +1264,7 @@ const sendMessage = async (images = [], overrideText = null) => {
           emit('sessionUpdated')
         },
         () => {
+          flushStreamEvents()
           store.setSessionStreaming(sessionName, false)
           const msg = getMsg()
           if (msg && !msg.blocks.length) msg.blocks.push({type: 'content', content: '连接错误'})
@@ -1623,6 +1663,15 @@ const appendFileSelection = async ({ file }) => {
   return true
 }
 
+const appendElementInspection = async (inspection) => {
+  const useSessionInput = Boolean(props.sessionName && messages.value.length > 0)
+  const targetInput = useSessionInput ? chatInput.value : welcomeInput.value
+  if (!targetInput?.addElementContext?.(inspection)) return false
+  await nextTick()
+  targetInput.focus?.()
+  return true
+}
+
 // 加载历史消息（仅在明确选了 session 时）
 onMounted(() => {
   document.addEventListener('click', handleWelcomeOutsideClick)
@@ -1631,11 +1680,20 @@ onMounted(() => {
 
 onBeforeUnmount(() => document.removeEventListener('click', handleWelcomeOutsideClick))
 
-const setDraft = (text) => {
-  inputText.value = text || ''
+const setDraft = async (text) => {
+  const draft = text || ''
+  if (!props.sessionName || messages.value.length === 0) {
+    welcomeText.value = draft
+    await nextTick()
+    welcomeInput.value?.focus?.()
+    return
+  }
+  inputText.value = draft
+  await nextTick()
+  chatInput.value?.focus?.()
 }
 
-defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, startWelcomePrompt, appendFileSelection, exportChat, refreshHistory, setDraft})
+defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, startWelcomePrompt, appendFileSelection, appendElementInspection, exportChat, refreshHistory, setDraft})
 </script>
 
 <style scoped>
@@ -1695,6 +1753,12 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   overflow-y: auto;
   padding: 16px 72px 100px;
   position: relative;
+}
+
+/* Keep long histories in the DOM for search and scroll anchors, but skip offscreen paint/layout. */
+.messages > :deep(.msg) {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 320px;
 }
 
 
