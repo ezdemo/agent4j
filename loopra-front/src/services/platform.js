@@ -95,6 +95,18 @@ const webImplementation = {
       console.log('Web environment: stop service not implemented')
     },
 
+    async listProcesses() {
+      return { processes: [] }
+    },
+
+    async openProcess() {
+      return { success: false }
+    },
+
+    async terminateProcess() {
+      return { success: false }
+    },
+
     async getCurrentPort() {
       // web 环境下端口概念不适用，返回 0
       // 前端通过 getBaseUrl() 获取完整地址
@@ -205,6 +217,15 @@ const electronImplementation = {
     },
     async stop() {
       return await window.electronAPI.loopraWebService.stop()
+    },
+    async listProcesses() {
+      return await window.electronAPI.loopraWebService.listProcesses()
+    },
+    async openProcess(pid) {
+      return await window.electronAPI.loopraWebService.openProcess(pid)
+    },
+    async terminateProcess(pid) {
+      return await window.electronAPI.loopraWebService.terminateProcess(pid)
     },
     async getCurrentPort() {
       return await window.electronAPI.loopraWebService.getCurrentPort()

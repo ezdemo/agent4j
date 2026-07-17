@@ -10,6 +10,9 @@ contextBridge.exposeInMainWorld('electronAPI', {
     install: (resourceDir) => ipcRenderer.invoke('install_loopra_web', resourceDir),
     start: () => ipcRenderer.invoke('start_loopra_web'),
     stop: () => ipcRenderer.invoke('stop_loopra_web'),
+    listProcesses: () => ipcRenderer.invoke('list_loopra_java_processes'),
+    openProcess: (pid) => ipcRenderer.invoke('open_loopra_java_process', pid),
+    terminateProcess: (pid) => ipcRenderer.invoke('terminate_loopra_java_process', pid),
     getCurrentPort: () => ipcRenderer.invoke('get_loopra_web_port'),
     installOnline: () => ipcRenderer.invoke('install_loopra_web_online')
   },

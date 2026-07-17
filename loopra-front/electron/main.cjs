@@ -1,6 +1,7 @@
 const { app, BrowserWindow, ipcMain, Menu, shell } = require('electron')
 const path = require('path')
-const { spawn, execSync } = require('child_process')
+const { spawn, execFile, execSync } = require('child_process')
+const { promisify } = require('util')
 const fs = require('fs')
 const net = require('net')
 
@@ -50,6 +51,97 @@ const isWin = process.platform === 'win32'
 let mainWindow = null
 let loopraWebProcess = null
 let currentPort = 0
+const loopraWebWindows = new Map()
+const execFileAsync = promisify(execFile)
+
+function parsePort(commandLine) {
+  const match = String(commandLine || '').match(/--server\.port=(\d+)/i)
+  return match ? Number(match[1]) : 0
+}
+
+function parseElapsedSeconds(value) {
+  const match = String(value || '').trim().match(/(?:(\d+)-)?(?:(\d+):)?(\d+):(\d+)/)
+  if (!match) return 0
+  return Number(match[1] || 0) * 86400 + Number(match[2] || 0) * 3600 + Number(match[3]) * 60 + Number(match[4])
+}
+
+function openLoopraWebWindow(port) {
+  const existing = loopraWebWindows.get(port)
+  if (existing && !existing.isDestroyed()) {
+    if (existing.isMinimized()) existing.restore()
+    existing.focus()
+    return
+  }
+
+  const serviceWindow = new BrowserWindow({
+    width: 1280,
+    height: 860,
+    minWidth: 900,
+    minHeight: 640,
+    title: `Loopra 服务 (${port})`,
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  })
+  loopraWebWindows.set(port, serviceWindow)
+  serviceWindow.on('closed', () => loopraWebWindows.delete(port))
+  serviceWindow.loadURL(`http://127.0.0.1:${port}/index.html`)
+}
+
+async function listLoopraJavaProcesses() {
+  if (isWin) {
+    const script = [
+      '$OutputEncoding = [Console]::OutputEncoding = [Text.UTF8Encoding]::new()',
+      "$items = Get-CimInstance Win32_Process | Where-Object { ($_.Name -eq 'java.exe' -or $_.Name -eq 'javaw.exe') -and $_.CommandLine -match '(?i)loopra-web\\.jar' } | ForEach-Object {",
+      '  $native = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue',
+      '  [PSCustomObject]@{',
+      '    pid = [int]$_.ProcessId',
+      '    parentPid = [int]$_.ParentProcessId',
+      '    name = [string]$_.Name',
+      '    commandLine = [string]$_.CommandLine',
+      '    executablePath = [string]$_.ExecutablePath',
+      "    startedAt = if ($native) { $native.StartTime.ToUniversalTime().ToString('o') } else { $null }",
+      '    memoryBytes = if ($native) { [long]$native.WorkingSet64 } else { [long]0 }',
+      '  }',
+      '}',
+      'if ($items) { @($items) | ConvertTo-Json -Compress } else { Write-Output "[]" }'
+    ].join('\n')
+    const { stdout } = await execFileAsync('powershell', [
+      '-NoProfile', '-NonInteractive', '-ExecutionPolicy', 'Bypass', '-Command', script
+    ], { windowsHide: true, maxBuffer: 1024 * 1024 })
+    const items = JSON.parse(stdout.trim() || '[]')
+    const managedPid = loopraWebProcess?.pid || 0
+    return (Array.isArray(items) ? items : [items]).map((item) => ({
+      ...item,
+      port: parsePort(item.commandLine),
+      managed: item.parentPid === managedPid
+    }))
+  }
+
+  const { stdout } = await execFileAsync('ps', ['-axo', 'pid=,ppid=,rss=,etime=,comm=,args='], {
+    maxBuffer: 1024 * 1024
+  })
+  const managedPid = loopraWebProcess?.pid || 0
+  return stdout.split('\n').flatMap((line) => {
+    const match = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(.+)$/)
+    if (!match) return []
+    const [, pid, parentPid, rssKb, elapsed, name, commandLine] = match
+    if (!/java/i.test(name) || !/loopra-web\.jar/i.test(commandLine)) return []
+    return [{
+      pid: Number(pid),
+      parentPid: Number(parentPid),
+      name,
+      commandLine,
+      executablePath: name,
+      memoryBytes: Number(rssKb) * 1024,
+      uptimeSeconds: parseElapsedSeconds(elapsed),
+      port: parsePort(commandLine),
+      managed: Number(parentPid) === managedPid || Number(pid) === managedPid
+    }]
+  })
+}
 
 // 获取随机可用端口
 async function getRandomPort() {
@@ -243,6 +335,52 @@ ipcMain.handle('get_loopra_web_status', async () => ({
   running: loopraWebProcess !== null,
   install_dir: path.join(app.getPath('home'), '.loopra')
 }))
+
+ipcMain.handle('list_loopra_java_processes', async () => {
+  try {
+    return { processes: await listLoopraJavaProcesses() }
+  } catch (error) {
+    console.error('Failed to list Loopra Java processes:', error)
+    return { processes: [], error: error.message }
+  }
+})
+
+ipcMain.handle('terminate_loopra_java_process', async (event, rawPid) => {
+  const pid = Number(rawPid)
+  if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error('Invalid process id')
+
+  const processes = await listLoopraJavaProcesses()
+  if (!processes.some((item) => item.pid === pid)) {
+    throw new Error('Loopra backend process no longer exists')
+  }
+
+  if (isWin) {
+    await execFileAsync('taskkill', ['/pid', String(pid), '/t', '/f'], { windowsHide: true })
+  } else {
+    process.kill(pid, 'SIGTERM')
+  }
+
+  if (loopraWebProcess && (loopraWebProcess.pid === pid || processes.find((item) => item.pid === pid)?.managed)) {
+    loopraWebProcess = null
+    currentPort = 0
+  }
+  return { success: true }
+})
+
+ipcMain.handle('open_loopra_java_process', async (event, rawPid) => {
+  const pid = Number(rawPid)
+  if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error('Invalid process id')
+
+  const processes = await listLoopraJavaProcesses()
+  const processInfo = processes.find((item) => item.pid === pid)
+  if (!processInfo) throw new Error('Loopra backend process no longer exists')
+  if (!Number.isInteger(processInfo.port) || processInfo.port < 1 || processInfo.port > 65535) {
+    throw new Error('No HTTP port was found for this Loopra backend process')
+  }
+
+  openLoopraWebWindow(processInfo.port)
+  return { success: true, port: processInfo.port }
+})
 
 ipcMain.handle('get_resource_dir', async () => {
   if (app.isPackaged) return path.join(process.resourcesPath, 'resources')
