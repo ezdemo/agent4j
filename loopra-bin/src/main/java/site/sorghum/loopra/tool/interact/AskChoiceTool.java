@@ -53,6 +53,14 @@ public class AskChoiceTool extends AbsToolProvider implements SolonToTools {
 
     /**
      * 将 options 统一转换为 List&lt;Map&lt;String, Object&gt;&gt; 格式。
+     * <p>支持的入参形态：
+     * <ul>
+     *   <li>{@code {"title":"...", "value":"...", "summary":"..."}} —— 标准 map，原样保留</li>
+     *   <li>{@code {"label":"...", "value":"..."}} —— 兼容 label，自动映射为 title</li>
+     *   <li>纯字符串 —— 包装为 {@code {"title": item}}</li>
+     *   <li>其他对象 —— {@code String.valueOf} 后包装为 title</li>
+     * </ul>
+     * </p>
      */
     @SuppressWarnings("unchecked")
     private List<Map<String, Object>> normalizeOptions(List<?> raw) {
@@ -60,7 +68,13 @@ public class AskChoiceTool extends AbsToolProvider implements SolonToTools {
         List<Map<String, Object>> result = new ArrayList<>();
         for (Object item : raw) {
             if (item instanceof Map) {
-                result.add((Map<String, Object>) item);
+                Map<String, Object> src = (Map<String, Object>) item;
+                // 复制一份，避免修改入参；并做 key 归一化以兼容 { "label": ..., "value": ... } 格式
+                Map<String, Object> opt = new java.util.LinkedHashMap<>(src);
+                if (!opt.containsKey("title") && opt.containsKey("label")) {
+                    opt.put("title", opt.get("label"));
+                }
+                result.add(opt);
             } else if (item instanceof String) {
                 Map<String, Object> opt = new java.util.HashMap<>();
                 opt.put("title", item);
