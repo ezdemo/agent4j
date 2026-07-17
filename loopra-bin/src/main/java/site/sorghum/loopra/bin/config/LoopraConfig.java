@@ -192,21 +192,29 @@ public class LoopraConfig {
 
     /**
      * 首次启动时迁移旧版 {@code ~/.agent4j} 数据。
-     * 仅在目标目录不存在或为空时执行，避免覆盖现有 Loopra 数据。
+     * 命令行安装器会预先创建 {@code ~/.loopra} 并放入运行文件，
+     * 因此迁移只使用标记文件判断是否已经执行。除 jre、bin 外，
+     * 旧目录中的所有文件都会复制到新目录，并覆盖同名文件。
      */
     private static void migrateLegacyDataIfNeeded(Path configDir) throws IOException {
         Path legacyDir = Paths.get(System.getProperty("user.home"), ".agent4j");
-        if (!isDirectoryEmpty(configDir) || !Files.isDirectory(legacyDir) || isDirectoryEmpty(legacyDir)) {
+        Path migrationMarker = configDir.resolve(".agent4j-migration-complete");
+        if (Files.exists(migrationMarker)
+                || !Files.isDirectory(legacyDir)
+                || isDirectoryEmpty(legacyDir)) {
             return;
         }
 
         Files.createDirectories(configDir);
+        int[] copiedFiles = {0};
         Files.walkFileTree(legacyDir, new SimpleFileVisitor<>() {
             @Override
             public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attributes) throws IOException {
                 Path relativePath = legacyDir.relativize(dir);
-                if (relativePath.getNameCount() == 1
-                        && ("jre".equals(relativePath.toString()) || "bin".equals(relativePath.toString()))) {
+                String topLevelName = relativePath.getNameCount() == 1
+                        ? relativePath.toString().toLowerCase(Locale.ROOT)
+                        : "";
+                if (topLevelName.startsWith("jre") || "bin".equals(topLevelName)) {
                     return FileVisitResult.SKIP_SUBTREE;
                 }
                 Files.createDirectories(configDir.resolve(relativePath));
@@ -215,12 +223,16 @@ public class LoopraConfig {
 
             @Override
             public FileVisitResult visitFile(Path file, BasicFileAttributes attributes) throws IOException {
-                Path target = configDir.resolve(legacyDir.relativize(file));
-                Files.copy(file, target, StandardCopyOption.COPY_ATTRIBUTES);
+                Path relativePath = legacyDir.relativize(file);
+                Path target = configDir.resolve(relativePath);
+                Files.copy(file, target, StandardCopyOption.COPY_ATTRIBUTES, StandardCopyOption.REPLACE_EXISTING);
+                copiedFiles[0]++;
                 return FileVisitResult.CONTINUE;
             }
         });
-        log.info("[config] 已从旧目录迁移数据: {} -> {}（已跳过 jre 和 bin）", legacyDir, configDir);
+        Files.writeString(migrationMarker, "migrated from " + legacyDir);
+        log.info("[config] 已从旧目录全量迁移数据: {} -> {}（覆盖复制 {} 个文件，已跳过 jre* 和 bin）",
+                legacyDir, configDir, copiedFiles[0]);
     }
 
     private static boolean isDirectoryEmpty(Path directory) throws IOException {

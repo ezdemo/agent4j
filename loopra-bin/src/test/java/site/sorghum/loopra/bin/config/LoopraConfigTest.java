@@ -59,10 +59,12 @@ class LoopraConfigTest {
         Path legacyDir = tempDir.resolve(".agent4j");
         Files.createDirectories(legacyDir.resolve("sessions"));
         Files.createDirectories(legacyDir.resolve("jre"));
+        Files.createDirectories(legacyDir.resolve("jre25/bin"));
         Files.createDirectories(legacyDir.resolve("bin"));
         Files.writeString(legacyDir.resolve("config.json"), "{\"apiKey\":\"legacy-key\"}");
         Files.writeString(legacyDir.resolve("sessions/session.jsonl"), "legacy session");
         Files.writeString(legacyDir.resolve("jre/excluded.txt"), "excluded");
+        Files.writeString(legacyDir.resolve("jre25/bin/extnet.dll"), "excluded runtime");
         Files.writeString(legacyDir.resolve("bin/excluded.txt"), "excluded");
 
         String originalUserHome = System.getProperty("user.home");
@@ -74,7 +76,71 @@ class LoopraConfigTest {
             assertEquals("legacy-key", config.apiKey());
             assertEquals("legacy session", Files.readString(configDir.resolve("sessions/session.jsonl")));
             assertFalse(Files.exists(configDir.resolve("jre")));
+            assertFalse(Files.exists(configDir.resolve("jre25")));
             assertFalse(Files.exists(configDir.resolve("bin")));
+            assertTrue(Files.exists(configDir.resolve(".agent4j-migration-complete")));
+        } finally {
+            System.setProperty("user.home", originalUserHome);
+        }
+    }
+
+    @Test
+    void migratesLegacyDataWhenInstallerAlreadyCreatedLoopraDirectory() throws Exception {
+        Path legacyDir = tempDir.resolve(".agent4j");
+        Files.createDirectories(legacyDir.resolve("sessions"));
+        Files.writeString(legacyDir.resolve("config.json"), "{\"apiKey\":\"legacy-key\"}");
+        Files.writeString(legacyDir.resolve("sessions/legacy.jsonl"), "legacy session");
+
+        Path configDir = tempDir.resolve(".loopra");
+        Files.createDirectories(configDir.resolve("bin"));
+        Files.createDirectories(configDir.resolve("jre"));
+        Files.writeString(configDir.resolve("bin/loopra.cmd"), "installed command");
+        Files.writeString(configDir.resolve("jre/runtime.txt"), "installed runtime");
+        Files.writeString(configDir.resolve("config.json"), "{\"apiKey\":\"sk-your-api-key\"}");
+
+        String originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+        try {
+            LoopraConfig config = LoopraConfig.load();
+
+            assertEquals("legacy-key", config.apiKey());
+            assertEquals("legacy session", Files.readString(configDir.resolve("sessions/legacy.jsonl")));
+            assertEquals("installed command", Files.readString(configDir.resolve("bin/loopra.cmd")));
+            assertEquals("installed runtime", Files.readString(configDir.resolve("jre/runtime.txt")));
+            assertTrue(Files.exists(configDir.resolve(".agent4j-migration-complete")));
+        } finally {
+            System.setProperty("user.home", originalUserHome);
+        }
+    }
+
+    @Test
+    void overwritesExistingLoopraDataOnFirstLegacyMigration() throws Exception {
+        Path legacyDir = tempDir.resolve(".agent4j");
+        Files.createDirectories(legacyDir.resolve("sessions"));
+        Files.writeString(legacyDir.resolve("config.json"), "{\"apiKey\":\"legacy-key\"}");
+        Files.writeString(legacyDir.resolve("sessions/existing.jsonl"), "legacy existing session");
+        Files.writeString(legacyDir.resolve("sessions/missing.jsonl"), "legacy missing session");
+
+        Path configDir = tempDir.resolve(".loopra");
+        Files.createDirectories(configDir.resolve("sessions"));
+        Files.writeString(configDir.resolve("config.json"), "{\"apiKey\":\"current-key\"}");
+        Files.writeString(configDir.resolve("sessions/existing.jsonl"), "current session");
+
+        String originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+        try {
+            LoopraConfig config = LoopraConfig.load();
+
+            assertEquals("legacy-key", config.apiKey());
+            assertEquals("legacy existing session", Files.readString(configDir.resolve("sessions/existing.jsonl")));
+            assertEquals("legacy missing session", Files.readString(configDir.resolve("sessions/missing.jsonl")));
+            assertTrue(Files.exists(configDir.resolve(".agent4j-migration-complete")));
+
+            Files.writeString(configDir.resolve("sessions/existing.jsonl"), "changed after migration");
+            Files.writeString(legacyDir.resolve("sessions/existing.jsonl"), "changed legacy session");
+            LoopraConfig.load();
+
+            assertEquals("changed after migration", Files.readString(configDir.resolve("sessions/existing.jsonl")));
         } finally {
             System.setProperty("user.home", originalUserHome);
         }
