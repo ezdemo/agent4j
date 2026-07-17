@@ -5,9 +5,7 @@ import org.noear.solon.ai.chat.tool.FunctionTool;
 import site.sorghum.loopra.bin.agent.prompt.EnvInfoUtil;
 import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
 
-import java.io.IOException;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
@@ -97,7 +95,10 @@ public class ToolSystemInitializer {
             systemPrompt = systemPrompt + "\n\n---\n\n" + projectMd;
         }
 
-        // 8. 构建 PromptPrefix（缓存优先）
+        // 8. 项目记忆不在此注入 —— 由 memory 工具按需检索，避免每轮占用上下文。
+        //    DEFAULT_SYSTEM_PROMPT 中引导 AI 首次接入项目时主动调用 memory 工具检索已有记忆。
+
+        // 9. 构建 PromptPrefix（缓存优先）
         PromptPrefix prefix = new PromptPrefix(systemPrompt, registry.toOpenAiTools());
 
         log.info("[init] 工具系统初始化完成 — 工具数: {}", agentTools.size());
@@ -105,22 +106,10 @@ public class ToolSystemInitializer {
     }
 
     /**
-     * 加载默认系统提示词。
-     * 优先级：~/.loopra/loopra.md > 传入的默认值
+     * 加载默认系统提示词。固定返回传入的 fallback（即硬编码 DEFAULT_SYSTEM_PROMPT），
+     * 不再从 ~/.loopra/loopra.md 读取。
      */
     private static String loadDefaultSystemPrompt(String fallback) {
-        Path homePrompt = Paths.get(System.getProperty("user.home"), ".loopra", "loopra.md");
-        if (java.nio.file.Files.exists(homePrompt)) {
-            try {
-                String content = java.nio.file.Files.readString(homePrompt);
-                if (!content.trim().isEmpty()) {
-                    log.info("[prompt] 从 ~/.loopra/loopra.md 加载默认系统提示词（{} 字符）", content.length());
-                    return content.trim();
-                }
-            } catch (IOException e) {
-                log.error("[prompt] 读取 ~/.loopra/loopra.md 失败: {}", e.getMessage());
-            }
-        }
         return fallback;
     }
 

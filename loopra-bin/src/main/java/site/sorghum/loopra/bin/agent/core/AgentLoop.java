@@ -35,6 +35,7 @@ import site.sorghum.loopra.tool.interact.FinishTool;
 import site.sorghum.loopra.tool.solon.common.SessionFileChangeTracker;
 
 import java.io.IOException;
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -126,6 +127,11 @@ public class AgentLoop implements AgentLoopController {
 
     /** 外部中断条件（父代理中断或子代理显式取消）。 */
     private volatile BooleanSupplier externalAbortCheck = null;
+
+    /** 工作区根目录 —— compact 折叠时用于沉淀长期记忆到 .loopra/loopra-memory.md。 null 则跳过沉淀。 */
+    @Setter
+    @Getter
+    private volatile Path workspace;
 
     /** 当前正在执行的工具 Future 数组（用于 abort 时取消） */
     private volatile CompletableFuture<ChatMessage>[] activeToolFutures = null;
@@ -236,7 +242,7 @@ public class AgentLoop implements AgentLoopController {
     /** 手动触发上下文折叠（/compact 命令） */
     public void compactNow() throws IOException {
         List<ChatMessage> messages = ctx.buildMessages();
-        List<ChatMessage> folded = ContextFolding.foldKeepLast(messages, 20, client);
+        List<ChatMessage> folded = ContextFolding.foldKeepLast(messages, 20, client, workspace);
         if (folded.size() < ctx.size()) {
             ctx.compact(folded);
             output.onLog(LogLevel.INFO, "[compact] " + ctx.size() + " 条消息（保留近20条，较早消息已摘要）");
@@ -811,7 +817,7 @@ public class AgentLoop implements AgentLoopController {
             } catch (Exception e) {
                 log.warn("[fold] output.onLog异常: {}", e.getMessage());
             }
-            messages = ContextFolding.fold(messages, maxTotalChars(), keepTailChars(), client);
+            messages = ContextFolding.fold(messages, maxTotalChars(), keepTailChars(), client, workspace);
             if (messages.size() < ctx.size()) {
                 ctx.compact(messages);
                 foldedThisStep = true;
