@@ -1,7 +1,7 @@
 # Loopra — 纯 Java 的 AI 编码代理
 
 <p align="center">
-  <img src="icon.png" width="120" alt="Loopra Logo"/>
+  <img src="logo.svg" width="120" alt="Loopra Logo"/>
 </p>
 
 <p align="center">
