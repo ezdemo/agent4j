@@ -1406,6 +1406,7 @@ onMounted(async () => {
     unlistenInspectorLoadUrl = window.electronAPI.events.listen('element-inspector-load-url', (url) => {
       nextTick(() => elemPanelRef.value?.loadUrl?.(url))
     })
+    window.electronAPI.elementInspectorWindow.ready()
     return
   }
   if (isAiBrowserWindow) return

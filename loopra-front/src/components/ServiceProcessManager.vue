@@ -1,5 +1,5 @@
 <template>
-  <div ref="rootRef" class="service-manager">
+  <div ref="rootRef" class="service-manager" :class="{ 'opens-up': placement === 'top' }">
     <button
       class="tb-service-btn"
       :class="{ active: open }"
@@ -87,6 +87,10 @@ import {
   ReloadOutlined
 } from '@ant-design/icons-vue'
 import {platform} from '@/services/platform'
+
+defineProps({
+  placement: { type: String, default: 'bottom' }
+})
 
 const rootRef = ref(null)
 const open = ref(false)
@@ -247,6 +251,11 @@ onBeforeUnmount(close)
   border: 1px solid var(--border);
   border-radius: 7px;
   box-shadow: var(--shadow-lg);
+}
+
+.service-manager.opens-up .service-popover {
+  top: auto;
+  bottom: 38px;
 }
 
 .service-header {

@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, ipcMain, Menu, shell } = require('electron')
+const { app, BrowserWindow, WebContentsView, dialog, ipcMain, Menu, shell } = require('electron')
 const http = require('http')
 const path = require('path')
 const { spawn, execFile, execSync } = require('child_process')
@@ -56,6 +56,8 @@ let currentPort = 0
 const loopraWebWindows = new Map()
 let elementWebView = null
 let elementInspectorWindow = null
+let elementInspectorReady = false
+let elementInspectorPendingUrl = ''
 let aiBrowserWindow = null
 let aiBrowserActiveTabId = null
 let aiBrowserNextTabId = 1
@@ -540,6 +542,14 @@ ipcMain.handle('window-maximize', () => {
 })
 ipcMain.handle('window-close', () => { if (mainWindow) mainWindow.close() })
 ipcMain.handle('window-is-maximized', () => mainWindow ? mainWindow.isMaximized() : false)
+ipcMain.handle('pick_loopra_workspace_folder', async (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized folder picker request')
+  const result = await dialog.showOpenDialog(mainWindow, {
+    title: '选择项目文件夹',
+    properties: ['openDirectory', 'createDirectory']
+  })
+  return result.canceled ? '' : (result.filePaths[0] || '')
+})
 
 // ==================== Desktop Chat Tabs ====================
 
@@ -563,7 +573,7 @@ ipcMain.handle('desktop-chat-tab-create', async (event, rawTab) => {
   }
 })
 
-ipcMain.handle('desktop-chat-tab-show', (event, tabId, rawBounds) => {
+ipcMain.handle('desktop-chat-tab-show', async (event, tabId, rawBounds) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
   const tab = desktopChatTabs.get(String(tabId || ''))
   if (!tab) throw new Error('Desktop chat tab no longer exists')
@@ -571,16 +581,19 @@ ipcMain.handle('desktop-chat-tab-show', (event, tabId, rawBounds) => {
     mainWindow.contentView.addChildView(tab.view)
     tab.attached = true
   }
-  hideDesktopChatViews()
+  await hideDesktopChatViews(tab.id, true)
   tab.view.setBounds(normalizeDesktopChatBounds(rawBounds))
+  const needsReveal = !tab.visible
   tab.view.setVisible(true)
+  tab.visible = true
+  if (needsReveal) tab.view.webContents.send('desktop-chat-tab-shown')
   desktopChatActiveTabId = tab.id
   return { success: true }
 })
 
-ipcMain.handle('desktop-chat-tab-hide', (event) => {
+ipcMain.handle('desktop-chat-tab-hide', async (event) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
-  hideDesktopChatViews()
+  await hideDesktopChatViews(null, true)
   return { success: true }
 })
 
@@ -589,6 +602,7 @@ ipcMain.handle('desktop-chat-tab-close', (event, tabId) => {
   const tab = desktopChatTabs.get(String(tabId || ''))
   if (!tab) return { success: true }
   tab.view.setVisible(false)
+  tab.visible = false
   if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close()
   desktopChatTabs.delete(tab.id)
   if (desktopChatActiveTabId === tab.id) desktopChatActiveTabId = null
@@ -632,13 +646,24 @@ function normalizeAiBrowserUrl(rawUrl, allowBlank = false) {
   return url.href
 }
 
-function hideDesktopChatViews() {
-  for (const tab of desktopChatTabs.values()) tab.view.setVisible(false)
+async function hideDesktopChatViews(exceptTabId = null, animate = false) {
+  const targets = [...desktopChatTabs.values()].filter((tab) => tab.id !== exceptTabId && tab.visible)
+  if (animate && targets.length) {
+    for (const tab of targets) {
+      if (!tab.view.webContents.isDestroyed()) tab.view.webContents.send('desktop-chat-tab-before-hide')
+    }
+    await new Promise((resolve) => setTimeout(resolve, 110))
+  }
+  for (const tab of targets) {
+    tab.view.setVisible(false)
+    tab.visible = false
+  }
 }
 
 function destroyDesktopChatTabs() {
   for (const tab of desktopChatTabs.values()) {
     tab.view.setVisible(false)
+    tab.visible = false
     if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close()
   }
   desktopChatTabs.clear()
@@ -672,7 +697,7 @@ async function getOrCreateDesktopChatTab(tabId, sessionName, workspaceHash, them
     }
   })
   view.setBackgroundColor(theme === 'dark' ? '#141518' : '#ffffff')
-  const tab = { id: tabId, sessionName, workspaceHash, view, attached: false }
+  const tab = { id: tabId, sessionName, workspaceHash, view, attached: false, visible: false }
   desktopChatTabs.set(tabId, tab)
   view.setVisible(false)
   view.webContents.setWindowOpenHandler(({ url }) => {
@@ -1526,9 +1551,15 @@ function openElementInspectorWindow(initialUrl = '') {
   if (elementInspectorWindow && !elementInspectorWindow.isDestroyed()) {
     elementInspectorWindow.show()
     elementInspectorWindow.focus()
-    if (initialUrl) elementInspectorWindow.webContents.send('element-inspector-load-url', initialUrl)
+    if (initialUrl) {
+      if (elementInspectorReady) elementInspectorWindow.webContents.send('element-inspector-load-url', initialUrl)
+      else elementInspectorPendingUrl = initialUrl
+    }
     return elementInspectorWindow
   }
+
+  elementInspectorReady = false
+  elementInspectorPendingUrl = initialUrl
 
   elementInspectorWindow = new BrowserWindow({
     width: 1180,
@@ -1536,7 +1567,6 @@ function openElementInspectorWindow(initialUrl = '') {
     minWidth: 840,
     minHeight: 540,
     title: 'Loopra 元素检查',
-    parent: mainWindow || undefined,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -1548,9 +1578,8 @@ function openElementInspectorWindow(initialUrl = '') {
     if (elementWebView && !elementWebView.webContents.isDestroyed()) elementWebView.webContents.close()
     elementWebView = null
     elementInspectorWindow = null
-  })
-  elementInspectorWindow.webContents.once('did-finish-load', () => {
-    if (initialUrl) elementInspectorWindow?.webContents.send('element-inspector-load-url', initialUrl)
+    elementInspectorReady = false
+    elementInspectorPendingUrl = ''
   })
   if (isDev) {
     elementInspectorWindow.loadURL('http://localhost:3000/?elementInspector=1')
@@ -1561,10 +1590,20 @@ function openElementInspectorWindow(initialUrl = '') {
 }
 
 ipcMain.handle('open-element-inspector-window', (event, rawUrl) => {
-  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized inspector request')
+  const isMainWindow = event.sender === mainWindow?.webContents
+  const isDesktopChatTab = [...desktopChatTabs.values()].some((tab) => tab.view.webContents === event.sender)
+  if (!isMainWindow && !isDesktopChatTab) throw new Error('Unauthorized inspector request')
   const url = rawUrl ? validateInspectableUrl(rawUrl) : ''
   openElementInspectorWindow(url)
   return { success: true }
+})
+
+ipcMain.on('element-inspector-ready', (event) => {
+  if (event.sender !== elementInspectorWindow?.webContents) return
+  elementInspectorReady = true
+  if (!elementInspectorPendingUrl) return
+  event.sender.send('element-inspector-load-url', elementInspectorPendingUrl)
+  elementInspectorPendingUrl = ''
 })
 
 ipcMain.on('element-inspector-send', (event, payload) => {
@@ -1573,6 +1612,11 @@ ipcMain.on('element-inspector-send', (event, payload) => {
   if (mainWindow?.isMinimized()) mainWindow.restore()
   mainWindow.show()
   mainWindow?.focus()
+  const activeDesktopTab = desktopChatTabs.get(desktopChatActiveTabId)
+  if (activeDesktopTab && !activeDesktopTab.view.webContents.isDestroyed()) {
+    activeDesktopTab.view.webContents.send('desktop-chat-tab-element-inspection', payload)
+    return
+  }
   mainWindow.webContents.send('element-inspector-draft', payload)
 })
 
