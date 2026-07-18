@@ -132,6 +132,7 @@
 <script setup>
 import {nextTick, onMounted, ref} from 'vue'
 import {platform} from '@/services/platform'
+import {systemAPI} from '@/services/api'
 // 动态获取当前平台的 loopraWebService
 const { loopraWebService } = platform.implementation
 
@@ -313,6 +314,7 @@ async function startService() {
     const ready = await pollHealthCheck(port, 20, 1500)
 
     if (ready) {
+      await registerBrowserBridge()
       phase.value = 'ready'
       startupMessage.value = '服务已就绪！'
       await sleep(600)
@@ -326,6 +328,18 @@ async function startService() {
     phase.value = 'error'
     errorMessage.value = e.message || '服务启动失败'
     emit('error', e)
+  }
+}
+
+async function registerBrowserBridge() {
+  if (!window.electronAPI?.aiBrowserWindow?.getBridgeAddress) return
+  try {
+    const address = await window.electronAPI.aiBrowserWindow.getBridgeAddress()
+    await systemAPI.setBrowserBridge(address)
+    console.log('[Splash] AI browser bridge registered:', address)
+  } catch (error) {
+    // 浏览器功能不可用不应阻止主服务启动；工具调用会给出明确错误。
+    console.warn('[Splash] Failed to register AI browser bridge:', error)
   }
 }
 

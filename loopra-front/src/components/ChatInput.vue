@@ -1923,8 +1923,8 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   position: absolute;
   z-index: 30;
   bottom: calc(100% + 6px);
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  transform: none;
   width: 300px;
   max-width: calc(100vw - 24px);
   padding: 10px;

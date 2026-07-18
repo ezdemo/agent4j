@@ -580,6 +580,11 @@ export const systemAPI = {
     return api.get('/system/version')
   },
 
+  // Electron 启动后登记本机 AI 浏览器桥接地址 - POST /api/system/browser-bridge
+  setBrowserBridge: (address) => {
+    return api.post('/system/browser-bridge', { address })
+  },
+
   // 获取当前版本（新版） - GET /api/version/
   getCurrentVersion: () => {
     return api.get('/version/')

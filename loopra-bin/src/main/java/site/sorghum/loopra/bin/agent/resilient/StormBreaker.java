@@ -7,7 +7,7 @@ import site.sorghum.loopra.bin.config.LoopraConfig;
 import java.util.LinkedList;
 
 /**
- * Sliding-window circuit breaker for repeated tool calls.
+ * Circuit breaker for consecutive repeated tool calls.
  */
 @Slf4j
 public class StormBreaker {
@@ -49,24 +49,18 @@ public class StormBreaker {
             return SuppressResult.ALLOWED;
         }
 
-        int count = 0;
-        for (Entry entry : recent) {
-            if (entry.fingerprint.equals(fingerprint)) {
-                count++;
+        int consecutiveCount = 0;
+        for (int i = recent.size() - 1; i >= 0; i--) {
+            if (!recent.get(i).fingerprint.equals(fingerprint)) {
+                break;
             }
+            consecutiveCount++;
         }
 
-        if (count >= threshold - 1) {
+        if (consecutiveCount >= threshold - 1) {
             return new SuppressResult(true,
-                    "风暴断路器: " + name + " 被相同参数调用了 " + (count + 1)
-                            + " 次——已抑制。请勿使用相同参数重试。"
-                            + "如果意图仍然有效，请换用不同参数或改用其他工具。");
-        }
-
-        // A mutating operation changes workspace state, so older reads no
-        // longer describe the same state and should not count as a storm.
-        if (!readOnly) {
-            recent.removeIf(Entry::readOnly);
+                    "风暴断路器: " + name + " 连续以相同参数调用了 " + (consecutiveCount + 1)
+                            + " 次——已抑制。请勿连续使用相同参数重试。");
         }
 
         recent.addLast(new Entry(fingerprint, readOnly));

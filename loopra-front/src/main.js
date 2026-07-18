@@ -2,6 +2,8 @@ import {createApp} from 'vue'
 import {createPinia} from 'pinia'
 import 'ant-design-vue/dist/reset.css'
 import App from './App.vue'
+import DesktopShell from './DesktopShell.vue'
+import DesktopChatTab from './DesktopChatTab.vue'
 import router from './router'
 import './utils/hljsTheme' // 高亮主题（在 main.css 前加载，避免闪烁）
 import './assets/styles/main.css'
@@ -13,7 +15,11 @@ const initApp = async () => {
   await initConfig()
 
   // 创建应用实例
-  const app = createApp(App)
+  const page = new URLSearchParams(window.location.search)
+  const RootComponent = page.get('desktopShell') === '1'
+    ? DesktopShell
+    : (page.get('desktopChatTab') === '1' ? DesktopChatTab : App)
+  const app = createApp(RootComponent)
 
   // 添加 Pinia 状态管理
   const pinia = createPinia()

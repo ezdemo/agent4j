@@ -38,7 +38,7 @@ export default defineConfig({
   server: {
     port: 3000,
     host: '0.0.0.0',
-    open: true,
+    open: false,
       cors: true,
       // 开发环境下将 /api 请求代理到后端，避免跨域
       proxy: {

@@ -54,6 +54,32 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
 
+  aiBrowserWindow: {
+    open: () => ipcRenderer.invoke('open-ai-browser-window'),
+    getBridgeAddress: () => ipcRenderer.invoke('get-ai-browser-bridge-address')
+  },
+
+  aiBrowser: {
+    newTab: (url) => ipcRenderer.invoke('ai-browser-new-tab', url),
+    navigate: (tabId, url) => ipcRenderer.invoke('ai-browser-navigate', tabId, url),
+    history: (tabId, action) => ipcRenderer.invoke('ai-browser-history', tabId, action),
+    activateTab: (tabId) => ipcRenderer.invoke('ai-browser-activate-tab', tabId),
+    closeTab: (tabId) => ipcRenderer.invoke('ai-browser-close-tab', tabId),
+    getState: () => ipcRenderer.invoke('ai-browser-get-state'),
+    showView: (tabId, bounds) => ipcRenderer.invoke('ai-browser-view-show', tabId, bounds),
+    hideView: () => ipcRenderer.invoke('ai-browser-view-hide')
+  },
+
+  desktopChatTabs: {
+    create: (tab) => ipcRenderer.invoke('desktop-chat-tab-create', tab),
+    show: (tabId, bounds) => ipcRenderer.invoke('desktop-chat-tab-show', tabId, bounds),
+    hide: () => ipcRenderer.invoke('desktop-chat-tab-hide'),
+    close: (tabId) => ipcRenderer.invoke('desktop-chat-tab-close', tabId),
+    toggleRightPanel: (tabId) => ipcRenderer.invoke('desktop-chat-tab-toggle-right-panel', tabId),
+    setTheme: (theme) => ipcRenderer.invoke('desktop-chat-tab-set-theme', theme),
+    reportTitle: (payload) => ipcRenderer.send('desktop-chat-tab-report-title', payload)
+  },
+
   // 元素检测（跨域 iframe 穿透）
   inspector: {
     inject: () => ipcRenderer.invoke('inspector-inject'),

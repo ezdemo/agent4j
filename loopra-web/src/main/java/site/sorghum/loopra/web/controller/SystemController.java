@@ -2,10 +2,10 @@ package site.sorghum.loopra.web.controller;
 
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
-import org.noear.solon.annotation.Controller;
-import org.noear.solon.annotation.Get;
-import org.noear.solon.annotation.Mapping;
+import org.noear.solon.annotation.*;
+import site.sorghum.loopra.bin.browser.AiBrowserBridgeService;
 import site.sorghum.loopra.web.model.ApiResponse;
+import site.sorghum.loopra.web.model.BrowserBridgeRequest;
 import site.sorghum.loopra.web.model.SystemHealthDTO;
 import site.sorghum.loopra.web.model.SystemVersionDTO;
 
@@ -18,6 +18,9 @@ import site.sorghum.loopra.web.model.SystemVersionDTO;
 @Controller
 @Mapping("/api/system")
 public class SystemController {
+
+    @Inject
+    private AiBrowserBridgeService browserBridgeService;
 
     /**
      * 健康检查 — 不需要版本注入，直接返回固定状态。
@@ -40,6 +43,18 @@ public class SystemController {
         String version = readVersion();
         String name = org.noear.solon.Solon.cfg().get("solon.app.name");
         return ApiResponse.ok(new SystemVersionDTO(version, "", name));
+    }
+
+    @ApiOperation(value = "登记本机 AI 浏览器桥接地址", notes = "仅 Electron 桌面端在启动服务后调用；地址仅保存在当前服务进程中")
+    @Post
+    @Mapping("/browser-bridge")
+    public ApiResponse<String> registerBrowserBridge(@Body BrowserBridgeRequest request) {
+        try {
+            String address = browserBridgeService.setAddress(request == null ? null : request.getAddress());
+            return ApiResponse.ok(address);
+        } catch (IllegalArgumentException e) {
+            return ApiResponse.fail(e.getMessage());
+        }
     }
 
     /**

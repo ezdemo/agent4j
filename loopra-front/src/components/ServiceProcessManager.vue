@@ -77,7 +77,7 @@
 </template>
 
 <script setup>
-import {computed, onBeforeUnmount, onMounted, ref} from 'vue'
+import {computed, onBeforeUnmount, ref} from 'vue'
 import {
   ApiOutlined,
   CloudServerOutlined,
@@ -157,6 +157,8 @@ async function toggle() {
     close()
     return
   }
+  processes.value = []
+  error.value = ''
   open.value = true
   document.addEventListener('pointerdown', handleOutsideClick)
   document.addEventListener('keydown', handleKeydown)
@@ -187,7 +189,6 @@ async function openProcess(processItem) {
   }
 }
 
-onMounted(refresh)
 onBeforeUnmount(close)
 </script>
 

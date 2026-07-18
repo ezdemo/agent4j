@@ -39,6 +39,17 @@ class StormBreakerTest {
     }
 
     @Test
+    void differentToolCallResetsTheConsecutiveCounter() {
+        String args = "{\"path\":\"a.java\",\"value\":1}";
+
+        assertFalse(breaker.inspect("edit", args, false).suppressed());
+        assertFalse(breaker.inspect("edit", args, false).suppressed());
+        assertFalse(breaker.inspect("read", "{\"path\":\"a.java\"}", true).suppressed());
+        assertFalse(breaker.inspect("edit", args, false).suppressed());
+        assertFalse(breaker.inspect("edit", args, false).suppressed());
+    }
+
+    @Test
     void mutatingCallInvalidatesOlderReadHistory() {
         String args = "{\"path\":\"a.java\"}";
         breaker.inspect("read", args, true);

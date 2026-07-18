@@ -1,4 +1,5 @@
 const { app, BrowserWindow, WebContentsView, ipcMain, Menu, shell } = require('electron')
+const http = require('http')
 const path = require('path')
 const { spawn, execFile, execSync } = require('child_process')
 const { promisify } = require('util')
@@ -47,6 +48,7 @@ if (handleSquirrelEvent()) {
 
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 const isWin = process.platform === 'win32'
+const shouldOpenDevTools = process.env.LOOPRA_OPEN_DEVTOOLS === '1'
 
 let mainWindow = null
 let loopraWebProcess = null
@@ -54,6 +56,19 @@ let currentPort = 0
 const loopraWebWindows = new Map()
 let elementWebView = null
 let elementInspectorWindow = null
+let aiBrowserWindow = null
+let aiBrowserActiveTabId = null
+let aiBrowserNextTabId = 1
+let aiBrowserBridge = null
+let aiBrowserBridgeReady = null
+let aiBrowserBridgeAddress = ''
+let aiBrowserActivity = { state: 'idle', message: '等待 AI 操作', timestamp: Date.now() }
+const aiBrowserTabs = new Map()
+const desktopChatTabs = new Map()
+let desktopChatActiveTabId = null
+const AI_BROWSER_BRIDGE_PREFERRED_PORT = Number(process.env.LOOPRA_BROWSER_BRIDGE_PORT || 0)
+const AI_BROWSER_TAB_CLEANUP_THRESHOLD = 16
+const AI_BROWSER_MAX_TABS = 20
 const execFileAsync = promisify(execFile)
 
 function parsePort(commandLine) {
@@ -84,7 +99,8 @@ function openLoopraWebWindow(port) {
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: true
+      sandbox: true,
+      backgroundThrottling: false
     }
   })
   loopraWebWindows.set(port, serviceWindow)
@@ -118,7 +134,7 @@ async function listLoopraJavaProcesses() {
     return (Array.isArray(items) ? items : [items]).map((item) => ({
       ...item,
       port: parsePort(item.commandLine),
-      managed: item.parentPid === managedPid
+      managed: item.parentPid === managedPid || parsePort(item.commandLine) === currentPort
     }))
   }
 
@@ -140,7 +156,7 @@ async function listLoopraJavaProcesses() {
       memoryBytes: Number(rssKb) * 1024,
       uptimeSeconds: parseElapsedSeconds(elapsed),
       port: parsePort(commandLine),
-      managed: Number(parentPid) === managedPid || Number(pid) === managedPid
+      managed: Number(parentPid) === managedPid || Number(pid) === managedPid || parsePort(commandLine) === currentPort
     }]
   })
 }
@@ -282,12 +298,12 @@ function createWindow() {
 
   // 开发模式：加载 Vite dev server；生产模式：加载打包后的 renderer
   if (isDev) {
-    mainWindow.loadURL('http://localhost:3000')
+    mainWindow.loadURL('http://localhost:3000/?desktopShell=1')
   } else {
-    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'))
+    mainWindow.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { desktopShell: '1' } })
   }
 
-  if (isDev) mainWindow.webContents.openDevTools()
+  if (shouldOpenDevTools) mainWindow.webContents.openDevTools()
 
   mainWindow.webContents.on('context-menu', (event, params) => {
     const menu = Menu.buildFromTemplate([
@@ -307,7 +323,9 @@ function createWindow() {
 
   mainWindow.on('closed', () => {
     if (elementInspectorWindow && !elementInspectorWindow.isDestroyed()) elementInspectorWindow.close()
+    if (aiBrowserWindow && !aiBrowserWindow.isDestroyed()) aiBrowserWindow.close()
     if (elementWebView && !elementWebView.webContents.isDestroyed()) elementWebView.webContents.close()
+    destroyDesktopChatTabs()
     elementWebView = null
     mainWindow = null
   })
@@ -316,6 +334,7 @@ function createWindow() {
 app.whenReady().then(() => {
   // The renderer provides its own toolbar; do not expose Electron's default menu bar.
   Menu.setApplicationMenu(null)
+  startAiBrowserBridge().catch((error) => console.error('[ai-browser] failed to start bridge:', error.message))
   createWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -329,6 +348,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   cleanupLoopraWeb()
+  stopAiBrowserBridge()
 })
 
 // ==================== IPC ====================
@@ -400,7 +420,10 @@ ipcMain.handle('check_install_needed', async () => ({ needed: false }))
 ipcMain.handle('install_loopra_web', async () => ({ success: true, steps: ['electron_mock_install'] }))
 
 ipcMain.handle('start_loopra_web', async () => {
-  if (loopraWebProcess) return currentPort
+  if (loopraWebProcess) {
+    await closeOtherLoopraJavaProcesses(currentPort)
+    return currentPort
+  }
 
   const port = await getDefaultPort()
 
@@ -408,6 +431,7 @@ ipcMain.handle('start_loopra_web', async () => {
   if (await healthCheck(port)) {
     console.log(`Loopra Web already running on port ${port}`)
     currentPort = port
+    await closeOtherLoopraJavaProcesses(currentPort)
     return port
   }
 
@@ -415,6 +439,7 @@ ipcMain.handle('start_loopra_web', async () => {
   try {
     startLoopraWeb(port)
     currentPort = port
+    await closeOtherLoopraJavaProcesses(currentPort)
     return port
   } catch (error) {
     throw new Error(`Failed to start loopra web: ${error.message}`)
@@ -515,6 +540,986 @@ ipcMain.handle('window-maximize', () => {
 })
 ipcMain.handle('window-close', () => { if (mainWindow) mainWindow.close() })
 ipcMain.handle('window-is-maximized', () => mainWindow ? mainWindow.isMaximized() : false)
+
+// ==================== Desktop Chat Tabs ====================
+
+ipcMain.handle('desktop-chat-tab-create', async (event, rawTab) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
+  const tabId = String(rawTab?.id || '').trim()
+  const sessionName = String(rawTab?.sessionName || '').trim()
+  const workspaceHash = String(rawTab?.workspaceHash || '').trim()
+  const theme = rawTab?.theme === 'dark' ? 'dark' : 'gray'
+  if (!tabId || !sessionName || tabId.length > 240 || sessionName.length > 240 || workspaceHash.length > 240) {
+    throw new Error('Invalid desktop chat tab')
+  }
+  try {
+    await getOrCreateDesktopChatTab(tabId, sessionName, workspaceHash, theme)
+    return { success: true, tabId }
+  } catch (error) {
+    const tab = desktopChatTabs.get(tabId)
+    if (tab && !tab.view.webContents.isDestroyed()) tab.view.webContents.close()
+    desktopChatTabs.delete(tabId)
+    throw error
+  }
+})
+
+ipcMain.handle('desktop-chat-tab-show', (event, tabId, rawBounds) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
+  const tab = desktopChatTabs.get(String(tabId || ''))
+  if (!tab) throw new Error('Desktop chat tab no longer exists')
+  if (!tab.attached) {
+    mainWindow.contentView.addChildView(tab.view)
+    tab.attached = true
+  }
+  hideDesktopChatViews()
+  tab.view.setBounds(normalizeDesktopChatBounds(rawBounds))
+  tab.view.setVisible(true)
+  desktopChatActiveTabId = tab.id
+  return { success: true }
+})
+
+ipcMain.handle('desktop-chat-tab-hide', (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
+  hideDesktopChatViews()
+  return { success: true }
+})
+
+ipcMain.handle('desktop-chat-tab-close', (event, tabId) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
+  const tab = desktopChatTabs.get(String(tabId || ''))
+  if (!tab) return { success: true }
+  tab.view.setVisible(false)
+  if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close()
+  desktopChatTabs.delete(tab.id)
+  if (desktopChatActiveTabId === tab.id) desktopChatActiveTabId = null
+  return { success: true }
+})
+
+ipcMain.handle('desktop-chat-tab-toggle-right-panel', (event, tabId) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
+  const tab = desktopChatTabs.get(String(tabId || ''))
+  if (!tab || tab.view.webContents.isDestroyed()) throw new Error('Desktop chat tab no longer exists')
+  tab.view.webContents.send('desktop-chat-tab-toggle-right-panel')
+  return { success: true }
+})
+
+ipcMain.handle('desktop-chat-tab-set-theme', (event, rawTheme) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
+  const theme = rawTheme === 'dark' ? 'dark' : 'gray'
+  for (const tab of desktopChatTabs.values()) {
+    if (!tab.view.webContents.isDestroyed()) tab.view.webContents.send('desktop-chat-tab-theme', theme)
+  }
+  return { success: true }
+})
+
+ipcMain.on('desktop-chat-tab-report-title', (event, payload) => {
+  const tab = [...desktopChatTabs.values()].find((item) => item.view.webContents === event.sender)
+  const title = String(payload?.title || '').trim()
+  if (!tab || !title || title.length > 120 || !mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.webContents.send('desktop-chat-tab-title', { tabId: tab.id, title })
+})
+
+// ==================== AI Browser ====================
+
+function normalizeAiBrowserUrl(rawUrl, allowBlank = false) {
+  const value = String(rawUrl || '').trim()
+  if (!value && allowBlank) return 'about:blank'
+  const withScheme = /^[a-z][a-z0-9+.-]*:/i.test(value)
+    ? value
+    : (value.startsWith('localhost') || value.startsWith('127.0.0.1') ? `http://${value}` : `https://${value}`)
+  const url = new URL(withScheme)
+  if (!['http:', 'https:'].includes(url.protocol)) throw new Error('Only HTTP(S) URLs are supported')
+  return url.href
+}
+
+function hideDesktopChatViews() {
+  for (const tab of desktopChatTabs.values()) tab.view.setVisible(false)
+}
+
+function destroyDesktopChatTabs() {
+  for (const tab of desktopChatTabs.values()) {
+    tab.view.setVisible(false)
+    if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close()
+  }
+  desktopChatTabs.clear()
+  desktopChatActiveTabId = null
+}
+
+function normalizeDesktopChatBounds(rawBounds) {
+  if (!mainWindow || !rawBounds || typeof rawBounds !== 'object') throw new Error('Invalid desktop chat view bounds')
+  const contentBounds = mainWindow.getContentBounds()
+  const values = ['x', 'y', 'width', 'height'].map((key) => Math.round(Number(rawBounds[key])))
+  if (!values.every(Number.isFinite)) throw new Error('Invalid desktop chat view bounds')
+  const x = Math.max(0, Math.min(values[0], contentBounds.width - 1))
+  const y = Math.max(0, Math.min(values[1], contentBounds.height - 1))
+  return { x, y, width: Math.max(1, Math.min(values[2], contentBounds.width - x)), height: Math.max(1, Math.min(values[3], contentBounds.height - y)) }
+}
+
+async function getOrCreateDesktopChatTab(tabId, sessionName, workspaceHash, theme = 'gray') {
+  const existing = desktopChatTabs.get(tabId)
+  if (existing) {
+    if (!existing.view.webContents.isDestroyed()) existing.view.webContents.send('desktop-chat-tab-theme', theme)
+    return existing
+  }
+  if (!mainWindow || mainWindow.isDestroyed()) throw new Error('Main window is not available')
+  const view = new WebContentsView({
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      backgroundThrottling: false
+    }
+  })
+  view.setBackgroundColor(theme === 'dark' ? '#141518' : '#ffffff')
+  const tab = { id: tabId, sessionName, workspaceHash, view, attached: false }
+  desktopChatTabs.set(tabId, tab)
+  view.setVisible(false)
+  view.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url)
+    return { action: 'deny' }
+  })
+  view.webContents.on('destroyed', () => {
+    desktopChatTabs.delete(tabId)
+    if (desktopChatActiveTabId === tabId) desktopChatActiveTabId = null
+  })
+  const query = new URLSearchParams({ desktopChatTab: '1', sessionName, workspaceHash: workspaceHash || '', theme }).toString()
+  if (isDev) await view.webContents.loadURL(`http://localhost:3000/?${query}`)
+  else await view.webContents.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { desktopChatTab: '1', sessionName, workspaceHash: workspaceHash || '', theme } })
+  return tab
+}
+
+async function stopLoopraJavaProcess(pid) {
+  if (isWin) {
+    await execFileAsync('taskkill', ['/pid', String(pid), '/t', '/f'], { windowsHide: true })
+  } else {
+    process.kill(pid, 'SIGTERM')
+  }
+}
+
+async function closeOtherLoopraJavaProcesses(keepPort) {
+  if (!Number.isSafeInteger(keepPort) || keepPort <= 0) return
+  try {
+    const processes = await listLoopraJavaProcesses()
+    for (const processInfo of processes.filter((item) => item.port !== keepPort)) {
+      try {
+        await stopLoopraJavaProcess(processInfo.pid)
+        console.log(`Closed stale loopra-web process ${processInfo.pid} on port ${processInfo.port || 'unknown'}`)
+      } catch (error) {
+        console.warn(`Failed to close stale loopra-web process ${processInfo.pid}: ${error.message}`)
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to clean up stale loopra-web processes:', error.message)
+  }
+}
+
+function aiBrowserTabSummary(tab) {
+  const contents = tab.view.webContents
+  return {
+    id: tab.id,
+    url: contents.isDestroyed() ? tab.url : (contents.getURL() || tab.url),
+    title: tab.title || '新标签页',
+    loading: tab.loading,
+    canGoBack: !contents.isDestroyed() && contents.canGoBack(),
+    canGoForward: !contents.isDestroyed() && contents.canGoForward()
+  }
+}
+
+function sendAiBrowserState() {
+  if (!aiBrowserWindow || aiBrowserWindow.isDestroyed()) return
+  aiBrowserWindow.webContents.send('ai-browser-state', {
+    activeTabId: aiBrowserActiveTabId,
+    tabs: [...aiBrowserTabs.values()].map(aiBrowserTabSummary)
+  })
+}
+
+function sendAiBrowserActivity(state, message, details = {}) {
+  aiBrowserActivity = { state, message, timestamp: Date.now(), ...details }
+  if (!aiBrowserWindow || aiBrowserWindow.isDestroyed()) return
+  aiBrowserWindow.webContents.send('ai-browser-activity', aiBrowserActivity)
+}
+
+function hideAiBrowserViews() {
+  for (const tab of aiBrowserTabs.values()) tab.view.setVisible(false)
+}
+
+function closeAiBrowserTab(tabId) {
+  const tab = aiBrowserTabs.get(tabId)
+  if (!tab) return false
+  tab.view.setVisible(false)
+  if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close()
+  aiBrowserTabs.delete(tabId)
+  if (aiBrowserActiveTabId === tabId) aiBrowserActiveTabId = aiBrowserTabs.keys().next().value || null
+  return true
+}
+
+function destroyAiBrowserTabs() {
+  for (const id of [...aiBrowserTabs.keys()]) closeAiBrowserTab(id)
+  aiBrowserActiveTabId = null
+}
+
+function getAiBrowserTab(tabId) {
+  const tab = aiBrowserTabs.get(String(tabId || ''))
+  if (!tab) throw new Error(`Unknown browser tab: ${tabId}`)
+  return tab
+}
+
+async function createAiBrowserTab(rawUrl = 'about:blank') {
+  if (aiBrowserTabs.size >= AI_BROWSER_MAX_TABS) {
+    throw new Error(`BROWSER_TAB_LIMIT: 已达到 ${AI_BROWSER_MAX_TABS} 个标签页硬上限。请先调用 browser_tabs，关闭不再需要的非活动标签页，再创建新标签页。`)
+  }
+  const url = normalizeAiBrowserUrl(rawUrl, true)
+  const id = `tab-${aiBrowserNextTabId++}`
+  const view = new WebContentsView({
+    webPreferences: {
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: true
+    }
+  })
+  const tab = { id, url, title: '新标签页', loading: false, lastLoadError: null, snapshotVersion: 0, snapshotId: null, view, attached: false }
+  aiBrowserTabs.set(id, tab)
+  view.setVisible(false)
+  view.webContents.setWindowOpenHandler(({ url: targetUrl }) => {
+    createAiBrowserTab(targetUrl)
+      .then((newTab) => activateAiBrowserTab(newTab.id))
+      .catch((error) => sendAiBrowserActivity('failed', `无法打开新标签页：${error.message}`))
+    return { action: 'deny' }
+  })
+  view.webContents.on('page-title-updated', (event, title) => {
+    event.preventDefault()
+    tab.title = String(title || '').trim().slice(0, 160) || '新标签页'
+    sendAiBrowserState()
+  })
+  view.webContents.on('did-start-loading', () => {
+    tab.loading = true
+    sendAiBrowserState()
+  })
+  view.webContents.on('did-start-navigation', (event, targetUrl, isInPlace, isMainFrame) => {
+    if (!isMainFrame || isInPlace) return
+    tab.loading = true
+    tab.lastLoadError = null
+    tab.url = targetUrl || tab.url
+    sendAiBrowserState()
+  })
+  view.webContents.on('did-finish-load', () => {
+    tab.loading = false
+    tab.lastLoadError = null
+    tab.url = view.webContents.getURL() || tab.url
+    sendAiBrowserState()
+  })
+  view.webContents.on('did-fail-load', (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+    if (!isMainFrame || errorCode === -3) return
+    tab.loading = false
+    tab.lastLoadError = { errorCode, errorDescription, url: validatedURL || tab.url }
+    sendAiBrowserState()
+  })
+  view.webContents.on('did-stop-loading', () => {
+    tab.loading = false
+    tab.url = view.webContents.getURL() || tab.url
+    sendAiBrowserState()
+  })
+  view.webContents.on('did-navigate', (event, targetUrl) => {
+    tab.url = targetUrl
+    sendAiBrowserState()
+  })
+  view.webContents.on('did-navigate-in-page', (event, targetUrl) => {
+    tab.url = targetUrl
+    sendAiBrowserState()
+  })
+  view.webContents.on('destroyed', () => {
+    aiBrowserTabs.delete(id)
+    if (aiBrowserActiveTabId === id) aiBrowserActiveTabId = aiBrowserTabs.keys().next().value || null
+    sendAiBrowserState()
+  })
+  aiBrowserActiveTabId = id
+  sendAiBrowserState()
+  if (url !== 'about:blank') {
+    try {
+      await view.webContents.loadURL(url)
+    } catch (error) {
+      tab.loading = false
+      tab.title = '页面加载失败'
+      sendAiBrowserState()
+      throw error
+    }
+  }
+  return aiBrowserTabSummary(tab)
+}
+
+function activateAiBrowserTab(tabId) {
+  getAiBrowserTab(tabId)
+  aiBrowserActiveTabId = tabId
+  hideAiBrowserViews()
+  sendAiBrowserState()
+  return { activeTabId: aiBrowserActiveTabId }
+}
+
+function openAiBrowserWindow() {
+  if (aiBrowserWindow && !aiBrowserWindow.isDestroyed()) {
+    aiBrowserWindow.show()
+    aiBrowserWindow.focus()
+    return aiBrowserWindow
+  }
+  aiBrowserWindow = new BrowserWindow({
+    width: 1280,
+    height: 820,
+    minWidth: 860,
+    minHeight: 560,
+    title: 'Loopra AI 浏览器',
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false
+    }
+  })
+  aiBrowserWindow.on('closed', () => {
+    destroyAiBrowserTabs()
+    aiBrowserWindow = null
+  })
+  aiBrowserWindow.webContents.on('did-finish-load', async () => {
+    if (!aiBrowserTabs.size) {
+      try {
+        await createAiBrowserTab('about:blank')
+      } catch (error) {
+        sendAiBrowserActivity('failed', `创建浏览器标签失败：${error.message}`)
+      }
+    }
+    sendAiBrowserState()
+    aiBrowserWindow?.webContents.send('ai-browser-activity', aiBrowserActivity)
+  })
+  if (isDev) {
+    aiBrowserWindow.loadURL('http://localhost:3000/?aiBrowser=1')
+  } else {
+    aiBrowserWindow.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { aiBrowser: '1' } })
+  }
+  return aiBrowserWindow
+}
+
+async function aiBrowserNewTab(rawUrl) {
+  if (!aiBrowserWindow || aiBrowserWindow.isDestroyed()) openAiBrowserWindow()
+  const tab = await createAiBrowserTab(rawUrl || 'about:blank')
+  const tabCount = aiBrowserTabs.size
+  const cleanupRecommended = tabCount > AI_BROWSER_TAB_CLEANUP_THRESHOLD
+  return {
+    tab,
+    activeTabId: aiBrowserActiveTabId,
+    tabCount,
+    cleanupRecommended,
+    warning: cleanupRecommended
+      ? `当前已有 ${tabCount} 个标签页。请在完成当前步骤后调用 browser_tabs，并关闭不再需要的非活动标签页；达到 ${AI_BROWSER_MAX_TABS} 个后将无法新建。`
+      : undefined
+  }
+}
+
+async function aiBrowserNavigate(tabId, rawUrl) {
+  const tab = getAiBrowserTab(tabId)
+  const url = normalizeAiBrowserUrl(rawUrl)
+  tab.loading = true
+  sendAiBrowserState()
+  await tab.view.webContents.loadURL(url)
+  tab.url = tab.view.webContents.getURL() || url
+  return aiBrowserTabSummary(tab)
+}
+
+function aiBrowserHistory(tabId, action) {
+  const tab = getAiBrowserTab(tabId)
+  const contents = tab.view.webContents
+  if (action === 'back' && contents.canGoBack()) contents.goBack()
+  else if (action === 'forward' && contents.canGoForward()) contents.goForward()
+  else if (action === 'reload') contents.reload()
+  return aiBrowserTabSummary(tab)
+}
+
+function normalizeAiBrowserBounds(rawBounds) {
+  if (!aiBrowserWindow || !rawBounds || typeof rawBounds !== 'object') throw new Error('Invalid native view bounds')
+  const contentBounds = aiBrowserWindow.getContentBounds()
+  const values = ['x', 'y', 'width', 'height'].map((key) => Math.round(Number(rawBounds[key])))
+  if (!values.every(Number.isFinite) || values[2] < 1 || values[3] < 1) throw new Error('Invalid native view bounds')
+  const x = Math.max(0, Math.min(values[0], contentBounds.width - 1))
+  const y = Math.max(0, Math.min(values[1], contentBounds.height - 1))
+  return { x, y, width: Math.max(1, Math.min(values[2], contentBounds.width - x)), height: Math.max(1, Math.min(values[3], contentBounds.height - y)) }
+}
+
+function waitForAiBrowserPageLoad(tab, timeoutMs = 30_000) {
+  const contents = tab.view.webContents
+  if (contents.isDestroyed()) return Promise.reject(new Error('Browser tab was closed while loading'))
+  if (tab.lastLoadError) {
+    return Promise.reject(new Error(`Page load failed: ${tab.lastLoadError.errorDescription} (${tab.lastLoadError.errorCode})`))
+  }
+  if (!tab.loading && !contents.isLoadingMainFrame()) return Promise.resolve()
+
+  return new Promise((resolve, reject) => {
+    const cleanup = () => {
+      clearTimeout(timeout)
+      contents.removeListener('did-finish-load', handleFinish)
+      contents.removeListener('did-fail-load', handleFailure)
+      contents.removeListener('destroyed', handleDestroyed)
+    }
+    const handleFinish = () => {
+      cleanup()
+      resolve()
+    }
+    const handleFailure = (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (!isMainFrame || errorCode === -3) return
+      cleanup()
+      reject(new Error(`Page load failed: ${errorDescription} (${errorCode})`))
+    }
+    const handleDestroyed = () => {
+      cleanup()
+      reject(new Error('Browser tab was closed while loading'))
+    }
+    const timeout = setTimeout(() => {
+      cleanup()
+      reject(new Error(`Page load timed out after ${Math.round(timeoutMs / 1000)} seconds`))
+    }, timeoutMs)
+    contents.once('did-finish-load', handleFinish)
+    contents.on('did-fail-load', handleFailure)
+    contents.once('destroyed', handleDestroyed)
+  })
+}
+
+async function aiBrowserSnapshot(tabId) {
+  const tab = getAiBrowserTab(tabId)
+  if (tab.loading || tab.view.webContents.isLoadingMainFrame()) {
+    sendAiBrowserActivity('running', 'AI 正在等待页面加载完成', { method: 'screenshot', tabId: tab.id })
+  }
+  await waitForAiBrowserPageLoad(tab)
+  await tab.view.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      const afterPaint = () => requestAnimationFrame(() => requestAnimationFrame(resolve));
+      if (document.readyState === 'complete') afterPaint();
+      else window.addEventListener('load', afterPaint, { once: true });
+    })
+  `, true)
+  await tab.view.webContents.executeJavaScript(`
+    new Promise((resolve) => {
+      let settled = false;
+      const finish = () => {
+        if (settled) return;
+        settled = true;
+        observer.disconnect();
+        clearTimeout(maxWait);
+        clearTimeout(quietWait);
+        resolve();
+      };
+      const observer = new MutationObserver(() => {
+        clearTimeout(quietWait);
+        quietWait = setTimeout(finish, 250);
+      });
+      let quietWait = setTimeout(finish, 250);
+      const maxWait = setTimeout(finish, 1500);
+      observer.observe(document.documentElement, { childList: true, subtree: true, characterData: true });
+    })
+  `, true)
+  const snapshot = await tab.view.webContents.executeJavaScript(`
+    (() => {
+      const MAX_NODES = 180;
+      const MAX_DEPTH = 7;
+      const MAX_ELEMENTS = 120;
+      let count = 0;
+      let targetIndex = 0;
+      const targetIds = new WeakMap();
+      const clean = (value, max = 240) => String(value || '').replace(/\\s+/g, ' ').trim().slice(0, max);
+      const styleCache = new WeakMap();
+      const hiddenCache = new WeakMap();
+      const styleOf = (el) => {
+        let style = styleCache.get(el);
+        if (!style) {
+          style = getComputedStyle(el);
+          styleCache.set(el, style);
+        }
+        return style;
+      };
+      const parentOf = (el) => el.parentElement || el.getRootNode?.().host || null;
+      const hidden = (el) => {
+        if (hiddenCache.has(el)) return hiddenCache.get(el);
+        let result = false;
+        for (let node = el; node; node = parentOf(node)) {
+          const style = styleOf(node);
+          if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0' || node.getAttribute('aria-hidden') === 'true') {
+            result = true;
+            break;
+          }
+        }
+        hiddenCache.set(el, result);
+        return result;
+      };
+      const ignored = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'META', 'LINK', 'HEAD', 'SVG', 'PATH']);
+      const structuralInteractive = (el) => el.matches('a[href],button,input,textarea,select,summary,[role="button"],[role="link"],[role="checkbox"],[role="radio"],[role="switch"],[role="tab"],[role="menuitem"],[role="option"],[role="combobox"],[role="textbox"],[role="slider"],[role="treeitem"],[contenteditable="true"],[onclick],[aria-expanded],[aria-haspopup],[tabindex]:not([tabindex="-1"])');
+      const interactive = (el) => structuralInteractive(el) || styleOf(el).cursor === 'pointer';
+      const collectElements = (root, result = []) => {
+        for (const el of root.querySelectorAll('*')) {
+          result.push(el);
+          if (el.shadowRoot) collectElements(el.shadowRoot, result);
+        }
+        return result;
+      };
+      const allElements = collectElements(document);
+      const labelledBy = (el) => clean(String(el.getAttribute('aria-labelledby') || '').split(/\\s+/)
+        .map((id) => document.getElementById(id)?.innerText || '')
+        .join(' '), 180);
+      const labelText = (el) => clean([
+        el.getAttribute('aria-label'),
+        labelledBy(el),
+        ...(el.labels ? Array.from(el.labels).map((label) => label.innerText) : []),
+        el.closest('label')?.innerText,
+        el.getAttribute('placeholder'),
+        el.getAttribute('title'),
+        el.getAttribute('alt')
+      ].find(Boolean), 180);
+      const attrs = (el) => {
+        const out = {};
+        for (const name of ['aria-label', 'aria-expanded', 'aria-haspopup', 'aria-invalid', 'placeholder', 'title', 'alt', 'role', 'type', 'href']) {
+          const value = clean(el.getAttribute(name), 180);
+          if (value) out[name] = value;
+        }
+        if (el instanceof HTMLInputElement && el.type !== 'password' && el.value) out.value = clean(el.value, 120);
+        return out;
+      };
+      const textOf = (el, max = 180) => clean(labelText(el) || el.innerText || el.getAttribute('alt') || el.getAttribute('title'), max);
+      const directText = (el) => clean(Array.from(el.childNodes)
+        .filter((node) => node.nodeType === Node.TEXT_NODE)
+        .map((node) => node.textContent)
+        .join(' '), 180);
+      const actionsFor = (el) => el.matches('input,textarea,[contenteditable="true"]')
+        ? ['fill', 'press', 'scroll']
+        : (el.matches('select') ? ['select', 'scroll'] : ['click', 'scroll']);
+      const stateFor = (el) => {
+        const state = {};
+        const name = labelText(el);
+        if (name) state.name = name;
+        for (const name of ['aria-expanded', 'aria-checked', 'aria-selected', 'aria-disabled', 'aria-invalid', 'aria-required']) {
+          const value = el.getAttribute(name);
+          if (value != null) state[name.slice(5)] = value;
+        }
+        if ('disabled' in el) state.disabled = Boolean(el.disabled);
+        if ('required' in el && el.required) state.required = true;
+        if (el instanceof HTMLInputElement) {
+          state.inputType = el.type;
+          if (el.type === 'checkbox' || el.type === 'radio') state.checked = el.checked;
+          if (el.type === 'password') state.sensitive = true;
+          else if (el.value) state.value = clean(el.value, 120);
+        } else if (el instanceof HTMLTextAreaElement && el.value) {
+          state.value = clean(el.value, 120);
+        } else if (el instanceof HTMLSelectElement) {
+          state.value = clean(el.value, 120);
+          state.selectedText = clean(el.selectedOptions[0]?.text, 120);
+          state.options = Array.from(el.options).slice(0, 30).map((option) => ({ value: clean(option.value, 120), text: clean(option.text, 120), selected: option.selected }));
+        }
+        return state;
+      };
+      const closestActionTarget = (el) => {
+        for (let node = el; node && node !== document.body; node = parentOf(node)) {
+          if (!ignored.has(node.tagName) && !hidden(node) && interactive(node)) return node;
+        }
+        return null;
+      };
+      const overlayRole = (el) => /^(dialog|alertdialog|listbox|menu|tree|grid)$/.test(el.getAttribute('role') || '') || el.matches('dialog[open],[aria-modal="true"],[popover]:not([popover="manual"])');
+      const overlayOf = (el) => {
+        for (let node = el; node && node !== document.body; node = parentOf(node)) if (overlayRole(node)) return node;
+        return null;
+      };
+      const visibleInViewport = (rect) => rect.bottom > 0 && rect.right > 0 && rect.top < window.innerHeight && rect.left < window.innerWidth;
+      const occluded = (el, rect) => {
+        if (!visibleInViewport(rect)) return false;
+        const x = Math.max(0, Math.min(window.innerWidth - 1, rect.left + Math.min(rect.width / 2, 12)));
+        const y = Math.max(0, Math.min(window.innerHeight - 1, rect.top + Math.min(rect.height / 2, 12)));
+        const hit = document.elementFromPoint(x, y);
+        return Boolean(hit && hit !== el && !el.contains(hit) && !hit.contains(el));
+      };
+      const targetIdFor = (el) => {
+        let id = targetIds.get(el);
+        if (!id) {
+          id = 'e' + (++targetIndex);
+          targetIds.set(el, id);
+          el.setAttribute('data-loopra-ai-id', id);
+        }
+        return id;
+      };
+      // IDs are a snapshot-scoped contract. Remove stale IDs before assigning the next set.
+      allElements.filter((el) => el.hasAttribute('data-loopra-ai-id')).forEach((el) => el.removeAttribute('data-loopra-ai-id'));
+      const depthOf = (el) => {
+        let depth = 0;
+        for (let node = parentOf(el); node; node = parentOf(node)) depth++;
+        return depth;
+      };
+      const candidateByTarget = new Map();
+      for (const source of allElements) {
+        if (ignored.has(source.tagName) || hidden(source) || (!interactive(source) && source.children.length > 0)) continue;
+        const target = closestActionTarget(source);
+        if (!target) continue;
+        const rect = target.getBoundingClientRect();
+        const text = textOf(source) || textOf(target);
+        if (rect.width < 2 || rect.height < 2 || (!text && !target.matches('input,textarea,select'))) continue;
+        const candidate = { el: target, rect, text, overlay: overlayOf(target) };
+        const existing = candidateByTarget.get(target);
+        if (!existing || (text.length && text.length < existing.text.length)) candidateByTarget.set(target, candidate);
+      }
+      const candidateElements = [...candidateByTarget.values()]
+        .sort((a, b) => {
+          const aOverlay = Boolean(a.overlay);
+          const bOverlay = Boolean(b.overlay);
+          if (aOverlay !== bOverlay) return aOverlay ? -1 : 1;
+          const aVisible = visibleInViewport(a.rect);
+          const bVisible = visibleInViewport(b.rect);
+          if (aVisible !== bVisible) return aVisible ? -1 : 1;
+          const aDepth = depthOf(a.el);
+          const bDepth = depthOf(b.el);
+          if (aDepth !== bDepth) return bDepth - aDepth;
+          return a.rect.top - b.rect.top || a.rect.left - b.rect.left;
+        });
+      const selectedTargets = [];
+      for (const item of candidateElements) {
+        if (selectedTargets.length >= MAX_ELEMENTS) break;
+        // The list is leaf-first. Keep the specific child control and skip its broader wrapper.
+        if (selectedTargets.some((existing) => existing.text === item.text && item.el.contains(existing.el))) continue;
+        selectedTargets.push(item);
+      }
+      const elements = selectedTargets.map(({ el, rect, text, overlay }) => ({
+        id: targetIdFor(el),
+        tag: el.tagName.toLowerCase(),
+        text,
+        attrs: attrs(el),
+        state: stateFor(el),
+        actions: actionsFor(el),
+        context: overlay ? 'overlay' : (el.closest('main,[role="main"]') ? 'main' : 'page'),
+        inViewport: visibleInViewport(rect),
+        occluded: occluded(el, rect),
+        rect: {
+          x: Math.round(rect.left), y: Math.round(rect.top),
+          width: Math.round(rect.width), height: Math.round(rect.height)
+        }
+      }));
+      const build = (el, depth) => {
+        if (!el || count >= MAX_NODES || depth > MAX_DEPTH || ignored.has(el.tagName) || hidden(el)) return null;
+        const children = [];
+        for (const child of el.children) {
+          const item = build(child, depth + 1);
+          if (item) children.push(item);
+          if (count >= MAX_NODES) break;
+        }
+        const id = targetIds.get(el);
+        const text = children.length ? directText(el) : textOf(el, 240);
+        const semantic = /^(H[1-6]|P|LI|MAIN|ARTICLE|SECTION|NAV|IMG|LABEL|TABLE|TR|TD|TH)$/.test(el.tagName);
+        const meaningful = Boolean(id) || children.length > 0 || semantic;
+        if (!meaningful || (!text && !id && children.length === 0)) return null;
+        if (!id && !semantic && !text && children.length === 1) return children[0];
+        const node = { tag: el.tagName.toLowerCase() };
+        if (text) node.text = text;
+        const nodeAttrs = attrs(el);
+        if (Object.keys(nodeAttrs).length) node.attrs = nodeAttrs;
+        if (id) {
+          node.id = id;
+          node.actions = actionsFor(el);
+        }
+        if (children.length) node.children = children;
+        count++;
+        return node;
+      };
+      const body = build(document.body, 0);
+      const overlays = allElements.filter((el) => !hidden(el) && overlayRole(el)).slice(0, 8).map((el) => {
+        const rect = el.getBoundingClientRect();
+        return { role: el.getAttribute('role') || el.tagName.toLowerCase(), text: textOf(el, 220), inViewport: visibleInViewport(rect) };
+      });
+      const notices = allElements.filter((el) => !hidden(el) && (el.getAttribute('role') === 'alert' || el.hasAttribute('aria-live')))
+        .slice(0, 8).map((el) => ({ text: textOf(el, 220), level: el.getAttribute('aria-live') || 'alert' })).filter((notice) => notice.text);
+      const sensitiveInputs = allElements.filter((el) => {
+        if (!(el instanceof HTMLInputElement)) return false;
+        const hint = [el.type, el.name, el.id, el.autocomplete, el.getAttribute('aria-label') || ''].join(' ').toLowerCase();
+        return el.type === 'password' || /(captcha|verification|verify|otp|one-time|passcode|password)/.test(hint);
+      });
+      return {
+        title: clean(document.title, 160),
+        url: location.href,
+        truncated: count >= MAX_NODES,
+        nodeCount: count,
+        viewport: { width: window.innerWidth, height: window.innerHeight, scrollX: Math.round(window.scrollX), scrollY: Math.round(window.scrollY), documentWidth: Math.round(document.documentElement.scrollWidth), documentHeight: Math.round(document.documentElement.scrollHeight) },
+        overlays,
+        notices,
+        userActionRequired: sensitiveInputs.length ? { recommended: true, reason: '检测到登录或验证相关输入框，请调用 browser_request_user_action 让用户手动完成。' } : undefined,
+        elements,
+        html: body || { tag: 'body', text: clean(document.body && document.body.innerText, 240) }
+      };
+    })()
+  `, true)
+  tab.snapshotId = `${tab.id}-s${++tab.snapshotVersion}`
+  return { tabId: tab.id, snapshotId: tab.snapshotId, ...snapshot }
+}
+
+async function aiBrowserAct(tabId, targetId, action, value, snapshotId) {
+  const tab = getAiBrowserTab(tabId)
+  const normalizedTargetId = String(targetId || '').trim().toLowerCase()
+  const normalizedAction = String(action || '').trim().toLowerCase()
+  if (!/^e\d+$/.test(normalizedTargetId)) throw new Error(`Invalid browser target id: ${targetId || '(empty)'}`)
+  if (snapshotId && snapshotId !== tab.snapshotId) throw new Error('Snapshot is stale. Call browser_screenshot again.')
+  if (!['click', 'fill', 'select', 'press', 'scroll'].includes(normalizedAction)) throw new Error('Unsupported browser action')
+  const result = await tab.view.webContents.executeJavaScript(`
+    (() => {
+      const id = ${JSON.stringify(normalizedTargetId)};
+      const action = ${JSON.stringify(normalizedAction)};
+      const value = ${JSON.stringify(value == null ? '' : String(value))};
+      const el = document.querySelector('[data-loopra-ai-id="' + id + '"]');
+      if (!el) throw new Error('Target no longer exists. Call browser_screenshot again.');
+      let style = document.getElementById('__loopra_ai_action_style');
+      if (!style) {
+        style = document.createElement('style');
+        style.id = '__loopra_ai_action_style';
+        style.textContent = '[data-loopra-ai-active="true"]{outline:3px solid #0d9488!important;outline-offset:3px!important;box-shadow:0 0 0 6px rgba(13,148,136,.18)!important}#__loopra_ai_action_badge{position:fixed;z-index:2147483647;padding:5px 9px;border-radius:5px;background:#0f766e;color:#fff;font:600 12px system-ui;pointer-events:none;box-shadow:0 4px 14px rgba(0,0,0,.25)}';
+        document.documentElement.appendChild(style);
+      }
+      document.querySelectorAll('[data-loopra-ai-active="true"]').forEach((node) => node.removeAttribute('data-loopra-ai-active'));
+      document.getElementById('__loopra_ai_action_badge')?.remove();
+      el.setAttribute('data-loopra-ai-active', 'true');
+      const rect = el.getBoundingClientRect();
+      const badge = document.createElement('div');
+      badge.id = '__loopra_ai_action_badge';
+      badge.textContent = ({ click: 'AI 点击', fill: 'AI 输入', select: 'AI 选择', press: 'AI 按键', scroll: 'AI 定位' })[action] || 'AI 操作';
+      badge.style.left = Math.max(8, Math.min(window.innerWidth - 90, rect.left)) + 'px';
+      badge.style.top = Math.max(8, rect.top - 32) + 'px';
+      document.documentElement.appendChild(badge);
+      setTimeout(() => {
+        el.removeAttribute('data-loopra-ai-active');
+        badge.remove();
+      }, 1600);
+      el.scrollIntoView({ block: 'center', inline: 'nearest' });
+      if (action === 'scroll') return { action, targetId: id };
+      if (action === 'click') { el.click(); return { action, targetId: id }; }
+      if (action === 'fill') {
+        if (!(el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el.isContentEditable)) throw new Error('Target cannot accept text');
+        el.focus();
+        if (el.isContentEditable) el.textContent = value;
+        else {
+          const setter = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(el), 'value').set;
+          setter.call(el, value);
+        }
+        el.dispatchEvent(new InputEvent('input', { bubbles: true, inputType: 'insertText', data: value }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        return { action, targetId: id };
+      }
+      if (action === 'select') {
+        if (!(el instanceof HTMLSelectElement)) throw new Error('Target is not a select element');
+        el.value = value;
+        if (el.value !== value) throw new Error('Option not found');
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+        el.dispatchEvent(new Event('change', { bubbles: true }));
+        return { action, targetId: id };
+      }
+      el.focus();
+      el.dispatchEvent(new KeyboardEvent('keydown', { key: value || 'Enter', bubbles: true }));
+      el.dispatchEvent(new KeyboardEvent('keyup', { key: value || 'Enter', bubbles: true }));
+      return { action, targetId: id };
+    })()
+  `, true)
+  return result
+}
+
+function readBridgeBody(request) {
+  return new Promise((resolve, reject) => {
+    let body = ''
+    request.setEncoding('utf8')
+    request.on('data', (chunk) => {
+      body += chunk
+      if (body.length > 128 * 1024) reject(new Error('Request body too large'))
+    })
+    request.on('end', () => {
+      try { resolve(body ? JSON.parse(body) : {}) } catch { reject(new Error('Invalid JSON body')) }
+    })
+    request.on('error', reject)
+  })
+}
+
+function writeBridgeResponse(response, status, payload) {
+  response.writeHead(status, { 'content-type': 'application/json; charset=utf-8', 'cache-control': 'no-store' })
+  response.end(JSON.stringify(payload))
+}
+
+function startAiBrowserBridge() {
+  if (aiBrowserBridgeReady) return aiBrowserBridgeReady
+  aiBrowserBridgeReady = new Promise((resolve, reject) => {
+    aiBrowserBridge = http.createServer(async (request, response) => {
+    if (request.socket.remoteAddress && !['127.0.0.1', '::1', '::ffff:127.0.0.1'].includes(request.socket.remoteAddress)) {
+      writeBridgeResponse(response, 403, { success: false, error: 'Local requests only' })
+      return
+    }
+    if (request.method === 'GET' && request.url === '/health') {
+      writeBridgeResponse(response, 200, { success: true, data: { service: 'loopra-ai-browser' } })
+      return
+    }
+    if (request.method !== 'POST' || !request.url?.startsWith('/browser/')) {
+      writeBridgeResponse(response, 404, { success: false, error: 'Not found' })
+      return
+    }
+    try {
+      const payload = await readBridgeBody(request)
+      const method = request.url.slice('/browser/'.length).split('?')[0]
+      const targetTabId = String(payload.tabId || aiBrowserActiveTabId || '')
+      const actionLabels = { click: '点击元素', fill: '输入内容', select: '选择选项', press: '发送按键', scroll: '定位元素' }
+      const runningMessages = {
+        'new-tab': 'AI 正在打开新标签页',
+        tabs: 'AI 正在查看标签页',
+        navigate: 'AI 正在跳转页面',
+        screenshot: 'AI 正在读取页面结构',
+        act: `AI 正在${actionLabels[payload.action] || '操作页面'}`,
+        'request-user-action': 'AI 正在请求你手动完成浏览器操作',
+        'close-tab': 'AI 正在关闭标签页'
+      }
+      if (targetTabId && ['navigate', 'screenshot', 'act', 'request-user-action', 'close-tab'].includes(method) && aiBrowserTabs.has(targetTabId)) {
+        activateAiBrowserTab(targetTabId)
+      }
+      if (method === 'request-user-action') {
+        const browserWindow = openAiBrowserWindow()
+        if (browserWindow.isMinimized()) browserWindow.restore()
+        browserWindow.show()
+        browserWindow.focus()
+      }
+      sendAiBrowserActivity('running', runningMessages[method] || 'AI 正在操作浏览器', {
+        method,
+        tabId: targetTabId || null,
+        targetId: payload.targetId || null,
+        action: payload.action || null
+      })
+      let data
+      if (method === 'new-tab') data = await aiBrowserNewTab(payload.url)
+      else if (method === 'tabs') data = { activeTabId: aiBrowserActiveTabId, tabs: [...aiBrowserTabs.values()].map(aiBrowserTabSummary) }
+      else if (method === 'navigate') data = await aiBrowserNavigate(payload.tabId, payload.url)
+      else if (method === 'screenshot') data = await aiBrowserSnapshot(payload.tabId || aiBrowserActiveTabId)
+      else if (method === 'act') data = await aiBrowserAct(payload.tabId || aiBrowserActiveTabId, payload.targetId, payload.action, payload.value, payload.snapshotId)
+      else if (method === 'request-user-action') {
+        data = { activeTabId: aiBrowserActiveTabId }
+      }
+      else if (method === 'close-tab') {
+        const closed = closeAiBrowserTab(String(payload.tabId || aiBrowserActiveTabId || ''))
+        sendAiBrowserState()
+        data = { closed, activeTabId: aiBrowserActiveTabId }
+      } else throw new Error('Unknown browser method')
+      const completedMessages = {
+        'new-tab': 'AI 已打开新标签页',
+        tabs: 'AI 已读取标签页列表',
+        navigate: 'AI 已完成页面跳转',
+        screenshot: 'AI 已读取页面结构',
+        act: `AI 已完成${actionLabels[payload.action] || '页面操作'}`,
+        'close-tab': 'AI 已关闭标签页'
+      }
+      const isUserTakeover = method === 'request-user-action'
+      sendAiBrowserActivity(isUserTakeover ? 'waiting' : 'completed', isUserTakeover
+        ? `等待你手动完成：${String(payload.message || '请在浏览器中完成操作').slice(0, 180)}`
+        : (completedMessages[method] || 'AI 操作已完成'), {
+        method,
+        tabId: targetTabId || aiBrowserActiveTabId,
+        targetId: payload.targetId || null,
+        action: payload.action || null
+      })
+      writeBridgeResponse(response, 200, { success: true, data })
+    } catch (error) {
+      sendAiBrowserActivity('failed', `AI 操作失败：${error.message || '未知错误'}`)
+      writeBridgeResponse(response, 400, { success: false, error: error.message || 'Browser request failed' })
+    }
+    })
+
+    const listen = (port) => {
+      const handleStartError = (error) => {
+        if (error.code === 'EADDRINUSE' && port !== 0) {
+          console.warn(`[ai-browser] port ${port} is busy; falling back to a dynamic port`)
+          listen(0)
+          return
+        }
+        aiBrowserBridge = null
+        aiBrowserBridgeReady = null
+        aiBrowserBridgeAddress = ''
+        reject(error)
+      }
+      aiBrowserBridge.once('error', handleStartError)
+      aiBrowserBridge.listen(port, '127.0.0.1', () => {
+        aiBrowserBridge.removeListener('error', handleStartError)
+        const address = aiBrowserBridge.address()
+        aiBrowserBridgeAddress = `http://127.0.0.1:${address.port}`
+        aiBrowserBridge.on('error', (error) => console.error('[ai-browser] local bridge failed:', error.message))
+        console.log(`[ai-browser] local bridge listening on ${aiBrowserBridgeAddress}`)
+        resolve(aiBrowserBridgeAddress)
+      })
+    }
+
+    listen(Number.isInteger(AI_BROWSER_BRIDGE_PREFERRED_PORT) && AI_BROWSER_BRIDGE_PREFERRED_PORT > 0
+      ? AI_BROWSER_BRIDGE_PREFERRED_PORT
+      : 0)
+  })
+  return aiBrowserBridgeReady
+}
+
+function stopAiBrowserBridge() {
+  if (aiBrowserBridge) aiBrowserBridge.close()
+  aiBrowserBridge = null
+  aiBrowserBridgeReady = null
+  aiBrowserBridgeAddress = ''
+}
+
+ipcMain.handle('open-ai-browser-window', (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized browser request')
+  openAiBrowserWindow()
+  return { success: true }
+})
+
+ipcMain.handle('get-ai-browser-bridge-address', async (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized browser request')
+  await startAiBrowserBridge()
+  if (!aiBrowserBridgeAddress) throw new Error('AI browser bridge is not listening')
+  return aiBrowserBridgeAddress
+})
+
+ipcMain.handle('ai-browser-new-tab', async (event, rawUrl) => {
+  if (event.sender !== aiBrowserWindow?.webContents) throw new Error('Unauthorized browser request')
+  return aiBrowserNewTab(rawUrl)
+})
+
+ipcMain.handle('ai-browser-navigate', async (event, tabId, rawUrl) => {
+  if (event.sender !== aiBrowserWindow?.webContents) throw new Error('Unauthorized browser request')
+  return aiBrowserNavigate(tabId, rawUrl)
+})
+
+ipcMain.handle('ai-browser-history', (event, tabId, action) => {
+  if (event.sender !== aiBrowserWindow?.webContents) throw new Error('Unauthorized browser request')
+  return aiBrowserHistory(tabId, action)
+})
+
+ipcMain.handle('ai-browser-activate-tab', (event, tabId) => {
+  if (event.sender !== aiBrowserWindow?.webContents) throw new Error('Unauthorized browser request')
+  return activateAiBrowserTab(tabId)
+})
+
+ipcMain.handle('ai-browser-close-tab', (event, tabId) => {
+  if (event.sender !== aiBrowserWindow?.webContents) throw new Error('Unauthorized browser request')
+  const closed = closeAiBrowserTab(tabId)
+  sendAiBrowserState()
+  return { closed, activeTabId: aiBrowserActiveTabId }
+})
+
+ipcMain.handle('ai-browser-get-state', (event) => {
+  if (event.sender !== aiBrowserWindow?.webContents) throw new Error('Unauthorized browser request')
+  return { activeTabId: aiBrowserActiveTabId, tabs: [...aiBrowserTabs.values()].map(aiBrowserTabSummary) }
+})
+
+ipcMain.handle('ai-browser-view-show', (event, tabId, rawBounds) => {
+  if (event.sender !== aiBrowserWindow?.webContents) throw new Error('Unauthorized browser request')
+  const tab = getAiBrowserTab(tabId)
+  if (!tab.attached) {
+    aiBrowserWindow.contentView.addChildView(tab.view)
+    tab.attached = true
+  }
+  hideAiBrowserViews()
+  tab.view.setBounds(normalizeAiBrowserBounds(rawBounds))
+  tab.view.setVisible(true)
+  return { success: true }
+})
+
+ipcMain.handle('ai-browser-view-hide', (event) => {
+  if (event.sender !== aiBrowserWindow?.webContents) throw new Error('Unauthorized browser request')
+  hideAiBrowserViews()
+  return { success: true }
+})
+
 // ==================== Element Inspector ====================
 
 function openElementInspectorWindow(initialUrl = '') {
