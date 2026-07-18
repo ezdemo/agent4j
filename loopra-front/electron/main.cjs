@@ -72,6 +72,9 @@ const AI_BROWSER_BRIDGE_PREFERRED_PORT = Number(process.env.LOOPRA_BROWSER_BRIDG
 const AI_BROWSER_TAB_CLEANUP_THRESHOLD = 16
 const AI_BROWSER_MAX_TABS = 20
 const execFileAsync = promisify(execFile)
+const appIconPath = path.join(__dirname, 'favicon.png')
+
+if (isWin) app.setAppUserModelId('com.loopra.desktop')
 
 function parsePort(commandLine) {
   const match = String(commandLine || '').match(/--server\.port=(\d+)/i)
@@ -98,6 +101,7 @@ function openLoopraWebWindow(port) {
     minWidth: 900,
     minHeight: 640,
     title: `Loopra 服务 (${port})`,
+    icon: appIconPath,
     webPreferences: {
       contextIsolation: true,
       nodeIntegration: false,
@@ -290,6 +294,7 @@ function createWindow() {
     minWidth: 800, minHeight: 600,
     frame: false,
     titleBarStyle: 'hidden',
+    icon: appIconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -893,6 +898,7 @@ function openAiBrowserWindow() {
     minWidth: 860,
     minHeight: 560,
     title: 'Loopra AI 浏览器',
+    icon: appIconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -1567,6 +1573,7 @@ function openElementInspectorWindow(initialUrl = '') {
     minWidth: 840,
     minHeight: 540,
     title: 'Loopra 元素检查',
+    icon: appIconPath,
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
