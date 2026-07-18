@@ -480,6 +480,8 @@ public class AgentLoop implements AgentLoopController {
                 - 派发子任务前，主代理应将需要共享的背景写入 `workspace_write`，并在任务中告知子代理准确的 key。子代理先用 `workspace_read` 获取所需上下文，完成后将重要发现、修改摘要和验证结果写回约定 key；主代理用 `workspace_read` 汇总。仅在不知道 key 时使用 `workspace_list` 按前缀查找。
                 - 使用稳定、可归属的 key，例如 `tasks/<task-id>/context`、`tasks/<task-id>/findings`、`tasks/<task-id>/result`。写入结果应包含结论、证据位置和未解决事项，避免只写“已完成”之类不可复用的信息。
                 - 只有需要用户在互斥方案之间作出选择，且该选择会实质改变实现或外部影响时，才使用 `ask_choice`；能通过现有上下文或合理工程判断解决的问题不要打断用户。
+                - 浏览器遇到登录、验证码、人机验证、二维码、短信/邮箱确认或安全风控时，严禁尝试绕过、猜测验证答案或索取敏感凭据。必须调用 `browser_request_user_action` 请求用户在可见浏览器中手动完成；用户确认后重新截图再继续。
+                - 浏览器超过 16 个标签页时仍可新建，但会返回清理提醒；应在当前步骤完成后用 `browser_tabs` 查看并关闭不再需要的非活动标签。达到 20 个硬上限时，必须清理后才能创建新标签。优先用 `browser_navigate` 复用当前标签，避免反复重试。
                 - 工作流和目标工具只用于需要跨回合追踪、人工审批或失败恢复的任务；普通的短任务无需创建工作流。
                 %s
                 """.formatted(terminateOnNoToolCall()
@@ -1138,7 +1140,7 @@ public class AgentLoop implements AgentLoopController {
                     }
 
                     String argumentsJson = toolCall.getArgumentsStr();
-                    if (!toolMetaFlag(fc, "stormExempt")) {
+                    if (!isBrowserTool(toolCall.getName()) && !toolMetaFlag(fc, "stormExempt")) {
                         boolean readOnly = toolMetaFlag(fc, "readOnly");
                         StormBreaker.SuppressResult suppression =
                                 stormBreaker.inspect(toolCall.getName(), argumentsJson, readOnly);
@@ -1195,6 +1197,11 @@ public class AgentLoop implements AgentLoopController {
             return flag;
         }
         return value != null && Boolean.parseBoolean(value.toString());
+    }
+
+    /** Browser actions may legitimately repeat while a page renders or changes state. */
+    private static boolean isBrowserTool(String toolName) {
+        return toolName != null && toolName.startsWith("browser_");
     }
 
     private static String rejectedToolResult(String message, String reason) {

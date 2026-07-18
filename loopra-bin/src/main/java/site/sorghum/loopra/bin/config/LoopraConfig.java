@@ -8,12 +8,7 @@ import org.noear.snack4.Options;
 import org.noear.snack4.json.JsonWriter;
 
 import java.io.IOException;
-import java.nio.file.FileVisitResult;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.nio.file.SimpleFileVisitor;
-import java.nio.file.StandardCopyOption;
+import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -104,7 +99,7 @@ public class LoopraConfig {
                     "resolve-library-id", "query-docs", "skillrefresh", "skilllist",
                     "read", "glob", "write", "ls", "grep", "edit", "finish",
                     "java_source", "checklist_step", "workspace_read", "webfetch",
-                    "codesearch", "ask_choice", "workspace_list", "workspace_write",
+                    "codesearch", "ask_choice", "browser_request_user_action", "workspace_list", "workspace_write",
                     "call_api", "checklist_start", "sub_agent", "checklist_status",
                     "vision_recognize", "skillread", "codegraph_explore",
                     "goal_create", "goal_status", "goal_update_step", "goal_complete", "goal_block", "goal_resume"

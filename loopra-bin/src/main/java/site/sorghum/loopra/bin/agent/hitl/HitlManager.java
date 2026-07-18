@@ -189,7 +189,7 @@ public class HitlManager {
      * 这些工具不修改文件系统，仅用于对话控制和用户交互，
      * 在 HITL 模式下直接放行，无需用户审批。
      */
-    private static final java.util.Set<String> HITL_EXEMPT_TOOLS = java.util.Set.of("finish", "ask_choice");
+    private static final java.util.Set<String> HITL_EXEMPT_TOOLS = java.util.Set.of("finish", "ask_choice", "browser_request_user_action");
 
     /**
      * 判断工具调用列表是否全部为免审批工具。

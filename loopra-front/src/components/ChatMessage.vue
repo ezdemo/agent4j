@@ -654,10 +654,10 @@ onBeforeUnmount(() => {
   min-height: 36px !important;
   max-height: 36px;
   padding: 0 16px !important;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
   border-radius: 6px;
-  background: #fafafa;
-  color: #4b5563;
+  background: var(--bg-2);
+  color: var(--fg-2);
   font-size: 13px;
   font-weight: 600;
   line-height: 1 !important;
@@ -667,9 +667,9 @@ onBeforeUnmount(() => {
 }
 
 .user-auto-message-trigger:hover {
-  border-color: #d7dce3;
-  background: #f6f7f8;
-  color: #374151;
+  border-color: var(--border-2);
+  background: var(--bg-3);
+  color: var(--fg);
 }
 
 .user-auto-message-title {
@@ -680,7 +680,7 @@ onBeforeUnmount(() => {
 
 .user-auto-message-title::before {
   content: "✓";
-  color: #9aa5b5;
+  color: var(--fg-4);
   font-size: 14px;
   font-weight: 500;
 }
@@ -689,16 +689,16 @@ onBeforeUnmount(() => {
   width: 14px;
   height: 14px;
   margin-left: auto;
-  color: #98a2b3;
+  color: var(--fg-4);
 }
 
 .user-auto-message-content {
   margin-top: -1px;
   padding: 10px 16px;
-  border: 1px solid #e5e7eb;
+  border: 1px solid var(--border);
   border-radius: 0 0 6px 6px;
-  background: #fafafa;
-  color: #667085;
+  background: var(--bg-2);
+  color: var(--fg-3);
   font-size: 12px;
   line-height: 1.55;
   white-space: pre-wrap;

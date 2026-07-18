@@ -55,7 +55,8 @@ public class SubAgent {
             "goal_complete",
             "goal_block",
             "goal_resume",
-            "ask_choice"           // 用户交互（主代理专用）
+            "ask_choice",          // 用户交互（主代理专用）
+            "browser_request_user_action" // 浏览器人工接管（主代理专用）
     )));
 
     private final ModelClient client;
