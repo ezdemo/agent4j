@@ -1,5 +1,5 @@
 <template>
-  <main class="desktop-chat-tab" :data-theme="theme">
+  <main class="desktop-chat-tab" :class="{ 'is-entering': isEntering, 'is-leaving': isLeaving }" :data-theme="theme">
     <ChatView
       ref="chatRef"
       class="desktop-chat-view"
@@ -42,9 +42,14 @@ const sessions = ref([])
 const chatRef = ref(null)
 const rightPanelOpen = ref(false)
 const rightPanelTab = ref('git')
+const isEntering = ref(false)
+const isLeaving = ref(false)
 const tabId = `${workspaceHash.value || ''}:${sessionName}`
 let stopRightPanelListener = null
 let stopThemeListener = null
+let stopShownListener = null
+let stopBeforeHideListener = null
+let stopElementInspectionListener = null
 
 onMounted(async () => {
   try {
@@ -61,6 +66,16 @@ onMounted(async () => {
     pageTheme.value = nextTheme === 'dark' ? 'dark' : 'gray'
     document.documentElement.setAttribute('data-theme', pageTheme.value)
   })
+  stopShownListener = window.electronAPI?.events?.listen('desktop-chat-tab-shown', () => {
+    isLeaving.value = false
+    isEntering.value = false
+    requestAnimationFrame(() => { isEntering.value = true })
+  })
+  stopBeforeHideListener = window.electronAPI?.events?.listen('desktop-chat-tab-before-hide', () => {
+    isEntering.value = false
+    isLeaving.value = true
+  })
+  stopElementInspectionListener = window.electronAPI?.events?.listen('desktop-chat-tab-element-inspection', addElementInspectionToSession)
   document.documentElement.setAttribute('data-theme', pageTheme.value)
   try {
     await sessionsAPI.switchSession(sessionName, workspaceHash.value)
@@ -116,9 +131,18 @@ async function addFileToSession(payload) {
   await chatRef.value?.appendFileSelection(payload)
 }
 
+async function addElementInspectionToSession(payload) {
+  await nextTick()
+  const attached = await chatRef.value?.appendElementInspection?.(payload)
+  if (attached) await chatRef.value?.setDraft?.(payload?.message || '')
+}
+
 onBeforeUnmount(() => {
   stopRightPanelListener?.()
   stopThemeListener?.()
+  stopShownListener?.()
+  stopBeforeHideListener?.()
+  stopElementInspectionListener?.()
 })
 </script>
 
@@ -130,6 +154,11 @@ onBeforeUnmount(() => {
   overflow: hidden;
   background: var(--bg);
 }
+
+.desktop-chat-tab.is-entering { animation: desktop-chat-tab-fade-in 160ms ease-out; }
+.desktop-chat-tab.is-leaving { animation: desktop-chat-tab-fade-out 110ms ease-in forwards; }
+@keyframes desktop-chat-tab-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes desktop-chat-tab-fade-out { from { opacity: 1; } to { opacity: 0; } }
 
 .desktop-chat-view {
   flex: 1;

@@ -4,9 +4,6 @@
 
     <header class="desktop-titlebar">
       <div class="desktop-left-controls">
-        <button class="icon-button" type="button" title="菜单">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 6h16M4 12h16M4 18h16" /></svg>
-        </button>
         <button class="icon-button active" type="button" title="会话首页" @click="showHome">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M17.5 14v7M14 17.5h7"/></svg>
         </button>
@@ -37,6 +34,9 @@
       </nav>
 
       <div class="desktop-window-controls">
+        <button v-if="activeTabId" class="window-button" type="button" title="元素检查" @click="openElementInspector">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
+        </button>
         <button v-if="activeTabId" class="window-button" type="button" title="切换右侧栏" @click="toggleRightPanel">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/><path d="M7 8h4M7 12h4M7 16h4"/></svg>
         </button>
@@ -55,10 +55,17 @@
         v-else-if="!starting && !activeTabId && !showSettings"
         :workspaces="workspaces"
         :active-workspace-hash="activeWorkspaceHash"
+        :theme="theme"
+        :refresh-key="homeRefreshKey"
         @select-workspace="selectWorkspace"
         @new-session="createTab"
         @open-session="openSession"
         @open-settings="showSettings = true"
+        @toggle-theme="toggleTheme"
+        @add-workspace="addWorkspaceFromFolder"
+        @delete-session="confirmDeleteSession"
+        @clear-workspace="confirmClearWorkspace"
+        @delete-workspace="confirmDeleteWorkspace"
       />
       <SettingsView v-else-if="!starting && showSettings" class="desktop-settings" />
     </main>
@@ -67,7 +74,7 @@
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, ref, watch} from 'vue'
-import {message} from 'ant-design-vue'
+import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from './stores/app'
 import {configAPI, sessionsAPI} from './services/api'
 import {platform} from './services/platform'
@@ -82,6 +89,7 @@ const creating = ref(false)
 const startupError = ref('')
 const workspaces = ref([])
 const activeWorkspaceHash = ref('')
+const homeRefreshKey = ref(0)
 const showSettings = ref(false)
 const tabs = ref([])
 const activeTabId = ref('')
@@ -222,10 +230,42 @@ async function selectWorkspace(workspaceHash) {
   activeWorkspaceHash.value = workspaceHash
 }
 
+async function addWorkspaceFromFolder() {
+  try {
+    const path = await window.electronAPI?.loopraWebService?.pickFolder?.()
+    if (!path) return
+    const response = await configAPI.switchWorkspace(path)
+    if (!response.success) throw new Error(response.message || '添加项目失败')
+    const workspacesResult = await configAPI.listWorkspaces()
+    if (!workspacesResult.success) throw new Error(workspacesResult.message || '刷新项目列表失败')
+    workspaces.value = workspacesResult.data || []
+    const selectedPath = response.data?.workspace || path
+    const workspace = workspaces.value.find((item) => item.path === selectedPath)
+    if (!workspace) throw new Error('项目添加成功，但未找到项目记录')
+    activeWorkspaceHash.value = workspace.hash
+    homeRefreshKey.value++
+    message.success('项目已添加')
+  } catch (error) {
+    message.error('添加项目失败：' + (error.message || '未知错误'))
+  }
+}
+
 async function showHome() {
   showSettings.value = false
   activeTabId.value = ''
   await renderActiveTab()
+}
+
+function toggleTheme() {
+  store.settings.theme = theme.value === 'dark' ? 'gray' : 'dark'
+}
+
+async function openElementInspector() {
+  try {
+    await window.electronAPI?.elementInspectorWindow?.open()
+  } catch (error) {
+    message.error('打开元素检查失败：' + (error.message || '未知错误'))
+  }
 }
 
 async function toggleRightPanel() {
@@ -261,6 +301,91 @@ async function closeTab(id) {
   await renderActiveTab()
 }
 
+async function closeWorkspaceTabs(workspaceHash) {
+  const removedTabs = tabs.value.filter((tab) => tab.workspaceHash === workspaceHash)
+  if (!removedTabs.length) return
+  await Promise.all(removedTabs.map(async (tab) => {
+    try {
+      await nativeTabs()?.close(tab.id)
+    } catch (error) {
+      console.warn('[desktop-shell] failed to close tab:', error)
+    }
+  }))
+  const removedIds = new Set(removedTabs.map((tab) => tab.id))
+  tabs.value = tabs.value.filter((tab) => !removedIds.has(tab.id))
+  if (removedIds.has(activeTabId.value)) activeTabId.value = tabs.value[0]?.id || ''
+  await renderActiveTab()
+}
+
+function confirmDeleteSession(session) {
+  const title = session?.title || session?.name || '此会话'
+  Modal.confirm({
+    title: '删除会话？',
+    content: `“${title}”将被永久删除，无法恢复。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        const response = await sessionsAPI.deleteSession(session.name, session.workspaceHash)
+        if (!response.success) throw new Error(response.message || '删除会话失败')
+        await closeTab(tabId(session.workspaceHash, session.name))
+        homeRefreshKey.value++
+        message.success('会话已删除')
+      } catch (error) {
+        message.error('删除会话失败：' + (error.message || '未知错误'))
+      }
+    }
+  })
+}
+
+function confirmClearWorkspace(workspace) {
+  Modal.confirm({
+    title: '清空项目会话？',
+    content: `“${workspace.name}”中的全部会话将被永久删除，无法恢复。`,
+    okText: '清空',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        const response = await sessionsAPI.clearAll(workspace.hash)
+        if (!response.success) throw new Error(response.message || '清空会话失败')
+        await closeWorkspaceTabs(workspace.hash)
+        homeRefreshKey.value++
+        message.success('项目会话已清空')
+      } catch (error) {
+        message.error('清空会话失败：' + (error.message || '未知错误'))
+      }
+    }
+  })
+}
+
+function confirmDeleteWorkspace(workspace) {
+  Modal.confirm({
+    title: '删除项目？',
+    content: `“${workspace.name}”将从项目列表移除；项目文件不会被删除。`,
+    okText: '删除项目',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        const response = await configAPI.deleteWorkspace(workspace.hash)
+        if (!response.success) throw new Error(response.message || '删除项目失败')
+        await closeWorkspaceTabs(workspace.hash)
+        workspaces.value = workspaces.value.filter((item) => item.hash !== workspace.hash)
+        if (activeWorkspaceHash.value === workspace.hash) {
+          activeWorkspaceHash.value = ''
+          if (workspaces.value[0]) await selectWorkspace(workspaces.value[0].hash)
+        }
+        homeRefreshKey.value++
+        message.success('项目已删除')
+      } catch (error) {
+        message.error('删除项目失败：' + (error.message || '未知错误'))
+      }
+    }
+  })
+}
+
 async function onReady() {
   starting.value = false
   await nextTick()
@@ -288,7 +413,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .desktop-shell { width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; background: var(--bg, #fff); color: var(--fg, #202124); }
 .desktop-titlebar { height: 44px; min-height: 44px; display: flex; align-items: center; border-bottom: 1px solid var(--border, #e8e8e8); background: var(--bg, #fff); -webkit-app-region: drag; user-select: none; }
-.desktop-left-controls { display: flex; align-items: center; gap: 6px; padding: 0 14px 0 32px; flex: 0 0 auto; }
+.desktop-left-controls { display: flex; align-items: center; padding: 0 14px 0 32px; flex: 0 0 auto; }
 .icon-button, .desktop-tab, .desktop-tab-add, .window-button { -webkit-app-region: no-drag; border: 0; background: transparent; color: var(--fg-2, #5f6368); }
 .icon-button { width: 28px; height: 28px; padding: 5px; border-radius: 5px; }
 .icon-button svg, .desktop-tab svg, .desktop-tab-add svg { width: 18px; height: 18px; }

@@ -204,7 +204,8 @@ function showLinkPopover(el) {
   const href = el.getAttribute('href')
   if (!href) return
   const rect = el.getBoundingClientRect()
-  linkPopover.url = href
+  linkPopover.url = normalizeActionUrl(href)
+  if (!linkPopover.url) return
   // 居中对齐，超出视口时修正
   const centerX = rect.left + rect.width / 2
   linkPopover.x = Math.max(80, Math.min(centerX, window.innerWidth - 80))
@@ -263,11 +264,30 @@ async function openInBrowser() {
   }
 }
 
-function openInElement() {
+async function openInElement() {
   const url = linkPopover.url
   linkPopover.visible = false
   if (!url) return
+  if (window.electronAPI?.elementInspectorWindow?.open) {
+    try {
+      await window.electronAPI.elementInspectorWindow.open(url)
+      return
+    } catch (error) {
+      console.error('[chat-message] failed to open element inspector:', error)
+    }
+  }
   window.dispatchEvent(new CustomEvent('loopra:open-in-element', { detail: { url } }))
+}
+
+function normalizeActionUrl(rawUrl) {
+  const match = String(rawUrl || '').trim().match(/^https?:\/\/[^\s,，。；;！？!?"'`<>()[\]{}]+/i)
+  if (!match) return ''
+  try {
+    const url = new URL(match[0])
+    return ['http:', 'https:'].includes(url.protocol) ? url.href : ''
+  } catch {
+    return ''
+  }
 }
 
 onMounted(() => {

@@ -13,6 +13,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     listProcesses: () => ipcRenderer.invoke('list_loopra_java_processes'),
     openProcess: (pid) => ipcRenderer.invoke('open_loopra_java_process', pid),
     terminateProcess: (pid) => ipcRenderer.invoke('terminate_loopra_java_process', pid),
+    pickFolder: () => ipcRenderer.invoke('pick_loopra_workspace_folder'),
     getCurrentPort: () => ipcRenderer.invoke('get_loopra_web_port'),
     installOnline: () => ipcRenderer.invoke('install_loopra_web_online')
   },
@@ -46,6 +47,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   elementInspectorWindow: {
     open: (url) => ipcRenderer.invoke('open-element-inspector-window', url),
+    ready: () => ipcRenderer.send('element-inspector-ready'),
     send: (payload) => ipcRenderer.send('element-inspector-send', payload),
     onDraft: (callback) => {
       const subscription = (event, payload) => callback(payload)
