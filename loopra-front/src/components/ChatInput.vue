@@ -158,7 +158,7 @@
 
       <div class="input-row">
         <textarea ref="inputField" v-model="localText" @keydown="handleKeydown"
-                  placeholder="输入消息... (Enter 发送, Tab 补全, / 命令，粘贴图片)" rows="1" @blur="handleBlur"
+                  :placeholder="welcomeMode ? '输入消息... (Enter 发送, Tab 补全, / 命令，粘贴图片)' : '输入消息，/ 使用命令，@ 引用上下文...'" rows="1" @blur="handleBlur"
                   @focus="inputFocused=true"
                   @input="handleInput" @paste="handlePaste"></textarea>
 
@@ -370,26 +370,35 @@
             </label>
           </div>
         </div>
-        <div class="model-selector" v-if="currentModel">
-          <button class="model-btn" @click="toggleModelPicker" :title="'当前模型: '+currentModel">
-            {{ currentModel }}
-            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
-          <div class="model-dropdown" v-if="showModelPicker">
-            <div class="model-dropdown-title">切换模型</div>
-            <div class="model-dropdown-list">
-              <div v-for="m in availableModels" :key="m.name" class="model-option"
-                   :class="{ active: m.active }" @click="pickModel(m.name)">
-                <span class="model-option-name">{{ m.name }}</span>
-                <svg v-if="m.active" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-                     stroke-width="2">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
+          <div class="model-selector" v-if="currentModel">
+            <button class="model-btn" @click="toggleModelPicker" :title="'当前模型: '+currentModelLabel">
+              <span class="model-btn-label">{{ currentModel }}</span>
+              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            <div class="model-dropdown" v-if="showModelPicker">
+              <div class="model-search">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
+                <input ref="modelSearchInput" v-model="modelSearchQuery" type="search" placeholder="搜索模型" />
+              </div>
+              <div class="model-dropdown-list">
+                <button v-for="m in filteredModels" :key="`${m.channelId || 'default'}:${m.name}`" type="button" class="model-option"
+                        :class="{ active: m.active }" @click="pickModel(m)">
+                  <span class="model-option-name"><small v-if="m.channelName">{{ m.channelName }}</small>{{ m.name }}</span>
+                  <svg v-if="m.active" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polyline points="20 6 9 17 4 12"/>
+                  </svg>
+                </button>
+                <div v-if="filteredModels.length === 0" class="model-empty">未找到匹配模型</div>
+              </div>
+              <div class="model-manage">
+                <button type="button" @click="manageModels">
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h7M15 7h5M4 17h5M13 17h7M11 4v6M11 14v6"/><circle cx="11" cy="7" r="2"/><circle cx="13" cy="17" r="2"/></svg>
+                  管理模型
+                </button>
               </div>
             </div>
-          </div>
         </div>
         </div>
       </div>
@@ -432,7 +441,7 @@ const props = defineProps({
   welcomeMode: {type: Boolean, default: false}
 })
 
-const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission', 'pickerOpen'])
+const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission', 'pickerOpen', 'manageModels'])
 
 const inputField = ref(null)
 const inputFocused = ref(false)
@@ -852,22 +861,41 @@ const autoResize = () => {
 
 // ============= 模型切换 =============
 const showModelPicker = ref(false)
+const modelSearchQuery = ref('')
+const modelSearchInput = ref(null)
+const filteredModels = computed(() => {
+  const keyword = modelSearchQuery.value.trim().toLowerCase()
+  return props.availableModels.filter((model) => !keyword || String(model.name || '').toLowerCase().includes(keyword))
+})
+const currentModelLabel = computed(() => {
+  const current = props.availableModels.find((model) => model.active)
+  return current?.channelName ? `${current.channelName} / ${current.name}` : props.currentModel
+})
 const toggleModelPicker = () => {
   const nextOpen = !showModelPicker.value
   if (nextOpen) closePickers('model')
   showModelPicker.value = nextOpen
   if (nextOpen) {
+    modelSearchQuery.value = ''
     emit('pickerOpen', 'model')
     emit('refreshModels')
+    nextTick(() => modelSearchInput.value?.focus())
   }
 }
-const pickModel = async (name) => {
-  if (name === props.currentModel) {
+const pickModel = async (model) => {
+  const name = typeof model === 'string' ? model : model?.name
+  const channelId = typeof model === 'object' ? model?.channelId : null
+  if (!name) return
+  if (name === props.currentModel && (!channelId || props.availableModels.find((item) => item.active)?.channelId === channelId)) {
     showModelPicker.value = false;
     return
   }
-  emit('switchModel', name)
+  emit('switchModel', name, channelId)
   showModelPicker.value = false
+}
+const manageModels = () => {
+  showModelPicker.value = false
+  emit('manageModels')
 }
 
 // ============= 技能选择（多选） =============
@@ -1218,6 +1246,87 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 
 .input-box textarea::placeholder {
   color: var(--fg-4);
+}
+
+/* Unified conversation composer for both the web and desktop shells. */
+.input-area:not(.welcome-mode) {
+  padding: 14px clamp(16px, 5vw, 72px) 16px;
+}
+
+.input-area:not(.welcome-mode) .input-box {
+  min-height: 98px;
+  padding: 14px 16px 9px;
+  border-color: var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  box-shadow: 0 3px 12px rgba(20, 24, 32, 0.08);
+}
+
+.input-area:not(.welcome-mode) .input-box.focused {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent), 0 3px 12px rgba(20, 24, 32, 0.08);
+}
+
+.input-area:not(.welcome-mode) .input-row {
+  min-height: 48px;
+  align-items: stretch;
+}
+
+.input-area:not(.welcome-mode) .input-box textarea {
+  min-height: 44px;
+  max-height: 150px;
+  padding: 1px 2px;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.input-area:not(.welcome-mode) .input-actions {
+  align-self: flex-end;
+  padding-bottom: 1px;
+}
+
+.input-area:not(.welcome-mode) .send-btn,
+.input-area:not(.welcome-mode) .continue-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
+.input-area:not(.welcome-mode) .send-btn svg,
+.input-area:not(.welcome-mode) .continue-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.input-area:not(.welcome-mode) .usage-bar {
+  min-height: 30px;
+  margin-top: 6px;
+  padding: 5px 0 0;
+  border-top-color: var(--border);
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 0;
+}
+
+.input-area:not(.welcome-mode) .usage-stats {
+  margin-left: 0;
+  opacity: 1;
+}
+
+.input-area:not(.welcome-mode) .model-actions {
+  flex-direction: row;
+  gap: 8px;
+}
+
+.input-area:not(.welcome-mode) .effort-btn,
+.input-area:not(.welcome-mode) .model-btn {
+  padding: 4px 7px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+[data-theme="dark"] .input-area:not(.welcome-mode) .input-box {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
 }
 
 /* 图片预览 */
@@ -1921,7 +2030,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 
 .usage-composition-popover {
   position: absolute;
-  z-index: 30;
+  z-index: 500;
   bottom: calc(100% + 6px);
   left: 0;
   transform: none;
@@ -2694,6 +2803,108 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   z-index: 120;
 }
 
+/* Welcome keeps its project selector, but uses the same composer surface as an active conversation. */
+.input-area.welcome-mode .input-box {
+  min-height: 98px;
+  padding: 14px 16px 9px;
+  border-color: var(--border);
+  border-radius: 14px;
+  background: var(--bg);
+  box-shadow: 0 3px 12px rgba(20, 24, 32, 0.08);
+}
+
+.input-area.welcome-mode .input-box.focused {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 14%, transparent), 0 3px 12px rgba(20, 24, 32, 0.08);
+}
+
+.input-area.welcome-mode .input-row {
+  min-height: 48px;
+  align-items: stretch;
+}
+
+.input-area.welcome-mode .input-box textarea {
+  min-height: 44px;
+  max-height: 150px;
+  padding: 1px 2px;
+  font-size: 16px;
+  line-height: 1.55;
+}
+
+.input-area.welcome-mode .input-actions {
+  align-self: flex-end;
+  padding-bottom: 1px;
+}
+
+.input-area.welcome-mode .send-btn,
+.input-area.welcome-mode .continue-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 10px;
+}
+
+.input-area.welcome-mode .send-btn svg,
+.input-area.welcome-mode .continue-btn svg {
+  width: 18px;
+  height: 18px;
+}
+
+.input-area.welcome-mode .usage-bar {
+  min-height: 30px;
+  margin-top: 6px;
+  padding: 5px 0 0;
+  border-top-color: var(--border);
+  flex-direction: row;
+  justify-content: space-between;
+  gap: 0;
+}
+
+.input-area.welcome-mode .usage-stats {
+  margin-left: 0;
+  opacity: 1;
+}
+
+.input-area.welcome-mode .model-actions {
+  flex-direction: row;
+  gap: 8px;
+}
+
+.input-area.welcome-mode .effort-btn,
+.input-area.welcome-mode .model-btn {
+  padding: 4px 7px;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+[data-theme="dark"] .input-area.welcome-mode .input-box {
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+}
+
+/* Keep compact controls visually consistent. */
+.effort-btn,
+.model-btn,
+.model-btn-label {
+  font-family: inherit !important;
+  font-size: 13px !important;
+  font-weight: 400 !important;
+  font-variant-numeric: proportional-nums;
+  letter-spacing: 0;
+}
+
+.model-btn {
+  display: inline-flex;
+  align-items: center;
+}
+
+.model-btn-label {
+  white-space: nowrap;
+}
+
+.model-btn > svg {
+  flex: 0 0 auto;
+  margin-left: 4px;
+}
+
 .chat-reasoning-end-toggle {
   display: flex;
   align-items: center;
@@ -2780,7 +2991,8 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   bottom: 100%;
   right: 0;
   margin-bottom: 4px;
-  min-width: 200px;
+  width: min(360px, calc(100vw - 24px));
+  min-width: 280px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--r);
@@ -2789,30 +3001,25 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   overflow: hidden;
 }
 
-.model-dropdown-title {
-  padding: 8px 12px;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--fg-4);
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
+.model-search { height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 18px; border-bottom: 1px solid var(--border); color: var(--fg-4); }.model-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--fg); font: inherit; font-size: 15px; }.model-search input::placeholder { color: var(--fg-4); }
 
 .model-dropdown-list {
-  max-height: 200px;
+  max-height: 360px;
   overflow-y: auto;
 }
 
 .model-option {
+  width: 100%;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 8px 12px;
-  font-size: 13px;
-  font-family: var(--mono);
-  color: var(--fg-2);
+  padding: 9px 24px;
+  border: 0;
+  background: transparent;
+  font-size: 14px;
+  font-family: inherit;
+  text-align: left;
+  color: var(--fg);
   cursor: pointer;
   transition: all var(--t);
 }
@@ -2821,14 +3028,16 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   background: var(--bg-2);
 }
 
-.model-option.active {
+.model-option-name { min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.model-option-name small { color: var(--fg-4); font-size: 11px; font-weight: 400; }.model-option.active {
   color: var(--accent);
-  font-weight: 500;
+  font-weight: 600;
 }
 
 .model-option svg {
   color: var(--accent);
 }
+
+.model-empty { padding: 20px 24px; color: var(--fg-4); font-size: 13px; text-align: center; }.model-manage { border-top: 1px solid var(--border); }.model-manage button { width: 100%; height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 20px; border: 0; background: transparent; color: var(--fg-2); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }.model-manage button:hover { background: var(--bg-2); color: var(--fg); }
 
 .loading-dot {
   width: 8px;
@@ -2922,7 +3131,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   position: absolute;
   bottom: 60px;
   right: 16px;
-  z-index: 5;
+  z-index: 1;
   pointer-events: auto;
   transition: right 0.2s ease;
 }

@@ -638,6 +638,12 @@ ipcMain.on('desktop-chat-tab-report-title', (event, payload) => {
   mainWindow.webContents.send('desktop-chat-tab-title', { tabId: tab.id, title })
 })
 
+ipcMain.on('desktop-chat-tab-open-model-channels', (event) => {
+  const tab = [...desktopChatTabs.values()].find((item) => item.view.webContents === event.sender)
+  if (!tab || !mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.webContents.send('desktop-shell-open-model-channels')
+})
+
 // ==================== AI Browser ====================
 
 function normalizeAiBrowserUrl(rawUrl, allowBlank = false) {

@@ -911,6 +911,13 @@ public class AgentLoop implements AgentLoopController {
             }
 
             @Override
+            public void onRetry(String reason, int retryAttempt, int maxAttempts, int delaySeconds) {
+                String message = "AI 接口暂时不可用（" + reason + "），将在 " + delaySeconds
+                        + " 秒后重试（" + retryAttempt + "/" + maxAttempts + "）";
+                safeOutput("modelRetry", () -> output.onLog(LogLevel.WARN, message));
+            }
+
+            @Override
             public void onDone() {
                 streamLatch.countDown();
             }

@@ -52,7 +52,7 @@
         <button type="button" @click="initializeWorkspace">重试</button>
       </div>
       <DesktopHome
-        v-else-if="!starting && !activeTabId && !showSettings"
+      v-else-if="!starting && !activeTabId && !showSettings && !showModelChannels"
         :workspaces="workspaces"
         :active-workspace-hash="activeWorkspaceHash"
         :theme="theme"
@@ -60,13 +60,14 @@
         @select-workspace="selectWorkspace"
         @new-session="createTab"
         @open-session="openSession"
-        @open-settings="showSettings = true"
+        @open-settings="openSettings"
         @toggle-theme="toggleTheme"
         @add-workspace="addWorkspaceFromFolder"
         @delete-session="confirmDeleteSession"
         @clear-workspace="confirmClearWorkspace"
         @delete-workspace="confirmDeleteWorkspace"
       />
+      <ModelChannels v-else-if="!starting && showModelChannels" class="desktop-settings" @back="showModelChannels = false" />
       <SettingsView v-else-if="!starting && showSettings" class="desktop-settings" />
     </main>
   </div>
@@ -81,6 +82,7 @@ import {platform} from './services/platform'
 import SplashScreen from './components/SplashScreen.vue'
 import DesktopHome from './DesktopHome.vue'
 import SettingsView from './views/Settings.vue'
+import ModelChannels from './ModelChannels.vue'
 
 const store = useAppStore()
 const theme = computed(() => store.settings.theme)
@@ -91,6 +93,7 @@ const workspaces = ref([])
 const activeWorkspaceHash = ref('')
 const homeRefreshKey = ref(0)
 const showSettings = ref(false)
+const showModelChannels = ref(false)
 const tabs = ref([])
 const activeTabId = ref('')
 const host = ref(null)
@@ -109,6 +112,7 @@ const stopTitleListener = window.electronAPI?.events?.listen('desktop-chat-tab-t
   if (!tabId || !title) return
   tabs.value = tabs.value.map((tab) => tab.id === tabId ? { ...tab, title } : tab)
 })
+const stopOpenSettingsListener = window.electronAPI?.events?.listen('desktop-shell-open-model-channels', () => { void openModelChannels() })
 
 async function renderActiveTab() {
   const current = tabs.value.find((tab) => tab.id === activeTabId.value)
@@ -252,6 +256,21 @@ async function addWorkspaceFromFolder() {
 
 async function showHome() {
   showSettings.value = false
+  showModelChannels.value = false
+  activeTabId.value = ''
+  await renderActiveTab()
+}
+
+async function openSettings() {
+  showModelChannels.value = false
+  showSettings.value = true
+  activeTabId.value = ''
+  await renderActiveTab()
+}
+
+async function openModelChannels() {
+  showSettings.value = false
+  showModelChannels.value = true
   activeTabId.value = ''
   await renderActiveTab()
 }
@@ -406,6 +425,7 @@ async function closeWindow() { await platform.implementation.window.close() }
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   stopTitleListener?.()
+  stopOpenSettingsListener?.()
   void nativeTabs()?.hide()
 })
 </script>
@@ -438,7 +458,7 @@ onBeforeUnmount(() => {
 .close-mark::before, .close-mark::after { content: ''; position: absolute; top: 6px; left: 0; width: 14px; border-top: 1.5px solid currentColor; transform: rotate(45deg); }
 .close-mark::after { transform: rotate(-45deg); }
 .desktop-view-host { flex: 1; min-width: 0; min-height: 0; background: var(--bg, #fff); }
-.desktop-settings { height: 100%; overflow: auto; }
+.desktop-settings { height: 100%; min-height: 0; overflow: hidden; }
 .desktop-empty { height: 100%; display: grid; place-items: center; color: var(--fg-4, #9ca3af); font-size: 14px; }
 .desktop-error { align-content: center; gap: 12px; }
 .desktop-error button { justify-self: center; border: 1px solid var(--border, #e5e7eb); border-radius: 5px; background: var(--bg, #fff); color: var(--fg, #202124); padding: 6px 14px; cursor: pointer; }

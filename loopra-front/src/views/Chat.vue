@@ -63,7 +63,7 @@
                        :current-reasoning-effort="currentReasoningEffort" :terminate-on-no-tool-call="terminateOnNoToolCall" :current-permission="currentPermission"
                        :workspace-hash="welcomeWorkspaceHash" :current-skill="currentSkill" @send="sendWelcomeMessage" @switch-model="handleSwitchModel"
                        @switch-reasoning-effort="handleSwitchReasoningEffort" @switch-terminate-on-no-tool-call="handleSwitchTerminateOnNoToolCall"
-                       @switch-permission="handleSwitchPermission" @switch-skill="handleSwitchSkill" @picker-open="handleWelcomePickerOpen" />
+                       @switch-permission="handleSwitchPermission" @switch-skill="handleSwitchSkill" @picker-open="handleWelcomePickerOpen" @refresh-models="loadUsage" @manage-models="$emit('manageModels')" />
           </div>
         </section>
       </div>
@@ -215,6 +215,7 @@
         @continue="continueChat"
         @switchSkill="handleSwitchSkill"
         @switchPermission="handleSwitchPermission"
+        @manageModels="$emit('manageModels')"
     />
     </Transition>
 
@@ -252,14 +253,17 @@ import ActionConfirmDialog from '../components/ActionConfirmDialog.vue'
 import {useAppStore} from '../stores/app'
 
 // ============= 模型切换 =============
-const handleSwitchModel = async (modelName) => {
-  if (modelName === currentModel.value) return
+const handleSwitchModel = async (modelName, channelId) => {
+  const currentChannelId = availableModels.value.find((model) => model.active)?.channelId
+  if (modelName === currentModel.value && (!channelId || channelId === currentChannelId)) return
   try {
-    const r = await configAPI.updateConfig({model: modelName})
+    const payload = {model: modelName}
+    if (channelId) payload.modelChannelId = channelId
+    const r = await configAPI.updateConfig(payload)
     if (r.success) {
       currentModel.value = modelName
       availableModels.value.forEach(m => {
-        m.active = m.name === modelName
+        m.active = m.name === modelName && (!channelId || m.channelId === channelId)
       })
       loadUsage()
     }
@@ -325,7 +329,7 @@ const props = defineProps({
   version: {type: String, default: ''}
 })
 
-const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask', 'switchWorkspace', 'manageWorkspaces'])
+const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask', 'switchWorkspace', 'manageWorkspaces', 'manageModels'])
 const store = useAppStore()
 
 const messagesContainer = ref(null)
@@ -1751,7 +1755,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 .messages {
   flex: 1;
   overflow-y: auto;
-  padding: 16px 72px 100px;
+  padding: 16px 72px 146px;
   position: relative;
 }
 
@@ -2457,10 +2461,8 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   position: relative;
   z-index: 20;
   width: 100%;
-  padding: 0 8px 18px;
-  border-radius: 10px;
-  background: #f2f2f3;
-  box-shadow: 0 3px 8px rgba(26, 26, 30, 0.06), 0 16px 34px rgba(26, 26, 30, 0.1);
+  padding: 0;
+  background: transparent;
 }
 
 .welcome-composer.workspace-menu-open {
@@ -2472,7 +2474,8 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   z-index: 0;
   display: flex;
   align-items: center;
-  min-height: 50px;
+  min-height: 44px;
+  padding: 0 6px;
 }
 
 .workspace-menu-open .welcome-workspace-row {

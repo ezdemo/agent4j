@@ -91,6 +91,16 @@ public class LoopraConfig {
                   "baseUrl": "https://api.deepseek.com/v1",
                   "apiKey": "sk-your-api-key",
                   "model": "deepseek-v4-flash",
+                  "modelChannelId": "default",
+                  "modelChannels": [
+                    {
+                      "id": "default",
+                      "name": "默认渠道",
+                      "baseUrl": "https://api.deepseek.com/v1",
+                      "apiKey": "sk-your-api-key",
+                      "models": ["deepseek-v4-flash", "deepseek-v4-pro", "mimo-v2.5", "mimo-v2.5-pro"]
+                    }
+                  ],
                   "editMode": "auto",
                   "reasoningEffort": "high",
                   "lang": "ZH",
@@ -260,11 +270,13 @@ public class LoopraConfig {
         try {
             String json = String.join("\n", Files.readAllLines(configPath));
             ONode root = ONode.ofJson(json);
+            // 在补默认值前转写旧单渠道配置，避免把默认渠道覆盖用户的旧密钥和地址。
+            boolean modelChannelsMigrated = migrateLegacyModelChannels(root);
             // 加载后用默认配置补充缺失字段（适配旧版本 config.json）
             mergeDefaults(root, defaultConfigNode());
             boolean defaultWorkspaceInitialized = initializeDefaultWorkspace(root, configDir);
             LoopraConfig config = new LoopraConfig(root);
-            if (defaultWorkspaceInitialized) {
+            if (defaultWorkspaceInitialized || modelChannelsMigrated) {
                 config.save();
             }
             return config;
@@ -285,7 +297,10 @@ public class LoopraConfig {
      * 如 "https://api.deepseek.com/v1"。
      */
     public String baseUrl() {
-        return root.select("$.baseUrl").getString();
+        ModelChannel channel = activeModelChannel();
+        return channel != null && !channel.baseUrl().isBlank()
+                ? channel.baseUrl()
+                : root.select("$.baseUrl").getString();
     }
 
     /**
@@ -302,7 +317,10 @@ public class LoopraConfig {
      * 获取 API Key。
      */
     public String apiKey() {
-        return root.select("$.apiKey").getString();
+        ModelChannel channel = activeModelChannel();
+        return channel != null && !channel.apiKey().isBlank()
+                ? channel.apiKey()
+                : root.select("$.apiKey").getString();
     }
 
     /**
@@ -312,6 +330,69 @@ public class LoopraConfig {
     public String model() {
         String m = root.select("$.model").getString();
         return m != null ? m : "deepseek-v4-flash";
+    }
+
+    /** 当前选中模型所属的渠道 ID。 */
+    public String modelChannelId() {
+        ModelChannel channel = activeModelChannel();
+        return channel != null ? channel.id() : "default";
+    }
+
+    /** 多渠道模型配置。每个渠道独立持有 API 地址、密钥和模型数组。 */
+    public List<ModelChannel> modelChannels() {
+        ONode channelsNode = root.select("$.modelChannels");
+        List<ModelChannel> channels = new ArrayList<>();
+        if (channelsNode == null || !channelsNode.isArray()) return channels;
+        for (ONode item : channelsNode.getArray()) {
+            String id = trim(item.get("id").getString());
+            String name = trim(item.get("name").getString());
+            String baseUrl = trim(item.get("baseUrl").getString());
+            String apiKey = trim(item.get("apiKey").getString());
+            if (id.isEmpty()) id = "channel-" + (channels.size() + 1);
+            if (name.isEmpty()) name = "渠道 " + (channels.size() + 1);
+            List<String> models = new ArrayList<>();
+            ONode modelsNode = item.get("models");
+            if (modelsNode != null && modelsNode.isArray()) {
+                for (ONode modelNode : modelsNode.getArray()) {
+                    String value = trim(modelNode.getString());
+                    if (!value.isEmpty()) models.add(value);
+                }
+            }
+            channels.add(new ModelChannel(id, name, baseUrl, apiKey, models));
+        }
+        return channels;
+    }
+
+    /** 按 ID 查询渠道。 */
+    public ModelChannel modelChannel(String channelId) {
+        if (channelId == null || channelId.isBlank()) return null;
+        return modelChannels().stream().filter(channel -> channel.id().equals(channelId)).findFirst().orElse(null);
+    }
+
+    /** 当前渠道优先使用 modelChannelId；旧配置缺失时按当前模型归属兜底。 */
+    public ModelChannel activeModelChannel() {
+        List<ModelChannel> channels = modelChannels();
+        if (channels.isEmpty()) return null;
+        String selectedId = trim(root.select("$.modelChannelId").getString());
+        for (ModelChannel channel : channels) {
+            if (channel.id().equals(selectedId)) return channel;
+        }
+        String selectedModel = model();
+        for (ModelChannel channel : channels) {
+            if (channel.models().contains(selectedModel)) return channel;
+        }
+        return channels.get(0);
+    }
+
+    /** 配置文件中的单个模型渠道。 */
+    public record ModelChannel(String id, String name, String baseUrl, String apiKey, List<String> models) {
+        public ModelChannel {
+            id = id == null ? "" : id;
+            name = name == null ? "" : name;
+            baseUrl = baseUrl == null ? "" : baseUrl;
+            apiKey = apiKey == null ? "" : apiKey;
+            models = models == null ? List.of() : List.copyOf(models);
+        }
     }
 
     /**
@@ -646,17 +727,15 @@ public class LoopraConfig {
      * 从 config.json 的 availableModels 数组读取。
      */
     public List<String> availableModels() {
+        LinkedHashSet<String> result = new LinkedHashSet<>();
+        for (ModelChannel channel : modelChannels()) result.addAll(channel.models());
+        if (!result.isEmpty()) return new ArrayList<>(result);
         ONode arr = root.select("$.availableModels");
-        List<String> result = new ArrayList<>();
-        if (arr != null && arr.isArray()) {
-            for (ONode item : arr.getArray()) {
-                String val = item.getString();
-                if (val != null && !val.isEmpty()) {
-                    result.add(val);
-                }
-            }
+        if (arr != null && arr.isArray()) for (ONode item : arr.getArray()) {
+            String value = trim(item.getString());
+            if (!value.isEmpty()) result.add(value);
         }
-        return result;
+        return new ArrayList<>(result);
     }
 
     /**
@@ -675,7 +754,9 @@ public class LoopraConfig {
             if (value instanceof String str && str.isEmpty()) continue;
 
             // 更新到 ONode
-            if (value instanceof List<?> list) {
+            if ("modelChannels".equals(key) && value instanceof List<?> list) {
+                root.set(key, modelChannelsNode(mergeModelChannelUpdates(list)));
+            } else if (value instanceof List<?> list) {
                 ONode arr = root.getOrNew(key).asArray();
                 arr.clear();
                 for (Object item : list) {
@@ -709,11 +790,113 @@ public class LoopraConfig {
                 }
             } else {
                 root.set(key, value);
+                syncLegacyModelChannelField(key, value);
             }
         }
 
         // 保存到文件
         save();
+    }
+
+    private static boolean migrateLegacyModelChannels(ONode config) {
+        ONode channels = config.select("$.modelChannels");
+        if (channels != null && channels.isArray() && !channels.getArray().isEmpty()) return false;
+        String baseUrl = trim(config.select("$.baseUrl").getString());
+        String apiKey = trim(config.select("$.apiKey").getString());
+        String model = trim(config.select("$.model").getString());
+        List<String> models = new ArrayList<>();
+        ONode legacyModels = config.select("$.availableModels");
+        if (legacyModels != null && legacyModels.isArray()) for (ONode item : legacyModels.getArray()) {
+            String value = trim(item.getString());
+            if (!value.isEmpty()) models.add(value);
+        }
+        if (!model.isEmpty() && !models.contains(model)) models.add(0, model);
+        if (models.isEmpty()) models.add("deepseek-v4-flash");
+        Map<String, Object> channel = new LinkedHashMap<>();
+        channel.put("id", "default");
+        channel.put("name", "默认渠道");
+        channel.put("baseUrl", baseUrl);
+        channel.put("apiKey", apiKey);
+        channel.put("models", models);
+        config.set("modelChannels", modelChannelsNode(List.of(channel)));
+        config.set("modelChannelId", "default");
+        return true;
+    }
+
+    private static String trim(String value) {
+        return value == null ? "" : value.trim();
+    }
+
+    private List<Map<String, Object>> mergeModelChannelUpdates(List<?> submittedChannels) {
+        Map<String, ModelChannel> existing = modelChannels().stream()
+                .collect(Collectors.toMap(ModelChannel::id, channel -> channel, (left, right) -> left, LinkedHashMap::new));
+        List<Map<String, Object>> result = new ArrayList<>();
+        int index = 0;
+        for (Object raw : submittedChannels) {
+            if (!(raw instanceof Map<?, ?> input)) continue;
+            index++;
+            String id = trim(Objects.toString(input.get("id"), ""));
+            if (id.isEmpty()) id = "channel-" + index;
+            ModelChannel previous = existing.get(id);
+            String name = trim(Objects.toString(input.get("name"), ""));
+            String baseUrl = trim(Objects.toString(input.get("baseUrl"), ""));
+            String apiKey = trim(Objects.toString(input.get("apiKey"), ""));
+            if ((apiKey.isEmpty() || apiKey.contains("****")) && previous != null) apiKey = previous.apiKey();
+            List<String> models = new ArrayList<>();
+            Object rawModels = input.get("models");
+            if (rawModels instanceof Collection<?> collection) for (Object item : collection) {
+                String model = trim(Objects.toString(item, ""));
+                if (!model.isEmpty()) models.add(model);
+            }
+            Map<String, Object> channel = new LinkedHashMap<>();
+            channel.put("id", id);
+            channel.put("name", name.isEmpty() ? "渠道 " + index : name);
+            channel.put("baseUrl", baseUrl.isEmpty() && previous != null ? previous.baseUrl() : baseUrl);
+            channel.put("apiKey", apiKey);
+            channel.put("models", new ArrayList<>(new LinkedHashSet<>(models)));
+            result.add(channel);
+        }
+        return result;
+    }
+
+    private void syncLegacyModelChannelField(String key, Object value) {
+        if (!("baseUrl".equals(key) || "apiKey".equals(key) || "availableModels".equals(key))) return;
+        ONode channels = root.select("$.modelChannels");
+        if (channels == null || !channels.isArray()) return;
+        String activeId = modelChannelId();
+        for (ONode channel : channels.getArray()) {
+            if (!activeId.equals(channel.get("id").getString())) continue;
+            if ("availableModels".equals(key) && value instanceof List<?> models) {
+                channel.set("models", stringArrayNode(models));
+            } else {
+                channel.set(key, value == null ? "" : value.toString());
+            }
+            return;
+        }
+    }
+
+    private static ONode modelChannelsNode(List<? extends Map<String, Object>> channels) {
+        ONode array = ONode.ofJson("[]");
+        for (Map<String, Object> channel : channels) {
+            ONode node = ONode.ofJson("{}");
+            node.set("id", Objects.toString(channel.get("id"), ""));
+            node.set("name", Objects.toString(channel.get("name"), ""));
+            node.set("baseUrl", Objects.toString(channel.get("baseUrl"), ""));
+            node.set("apiKey", Objects.toString(channel.get("apiKey"), ""));
+            Object models = channel.get("models");
+            node.set("models", models instanceof Collection<?> list ? stringArrayNode(list) : ONode.ofJson("[]"));
+            array.add(node);
+        }
+        return array;
+    }
+
+    private static ONode stringArrayNode(Collection<?> values) {
+        ONode array = ONode.ofJson("[]");
+        for (Object value : values) {
+            String text = trim(Objects.toString(value, ""));
+            if (!text.isEmpty()) array.add(text);
+        }
+        return array;
     }
 
     /**

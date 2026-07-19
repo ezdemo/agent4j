@@ -7,6 +7,7 @@ import java.util.List;
  */
 public record ModelListDTO(
         String current,
+        String currentChannelId,
         List<ModelInfoDTO> models
 ) {
 }
