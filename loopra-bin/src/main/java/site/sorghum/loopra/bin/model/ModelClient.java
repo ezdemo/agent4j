@@ -118,6 +118,17 @@ public interface ModelClient {
         }
 
         /**
+         * 模型接口暂时不可用，即将自动重试。
+         *
+         * @param reason       本次失败原因
+         * @param retryAttempt 即将进行的重试序号（从 1 开始）
+         * @param maxAttempts  最大重试次数
+         * @param delaySeconds 重试前等待秒数
+         */
+        default void onRetry(String reason, int retryAttempt, int maxAttempts, int delaySeconds) {
+        }
+
+        /**
          * 流结束
          */
         default void onDone() {

@@ -428,8 +428,13 @@ export const configAPI = {
   },
 
   // 从远程 API 获取模型列表 - GET /api/remote-models
-  getRemoteModels: () => {
-    return api.get('/remote-models')
+  getRemoteModels: (channelId) => {
+    return api.get('/remote-models', { params: channelId ? { channelId } : {} })
+  },
+
+  // 使用尚未保存的渠道地址/密钥探测远端模型列表 - POST /api/remote-models
+  probeRemoteModels: (channel) => {
+    return api.post('/remote-models', channel)
   },
 
   // 从远程 API 获取视觉模型列表 - GET /api/remote-vision-models

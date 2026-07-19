@@ -22,8 +22,19 @@ public record ConfigDTO(
         Map<String, Map<String, Double>> price,
         VisionConfig vision,
         String activePet,
-        boolean terminateOnNoToolCall
+        boolean terminateOnNoToolCall,
+        List<ModelChannelConfig> modelChannels,
+        String modelChannelId
 ) {
+    /** 不包含真实 API Key 的渠道配置。 */
+    public record ModelChannelConfig(
+            String id,
+            String name,
+            String baseUrl,
+            String apiKey,
+            List<String> models
+    ) {
+    }
     /**
      * 视觉模型配置。
      */

@@ -10,6 +10,7 @@
       :workspaces="workspaces"
       @switch-workspace="switchWorkspace"
       @session-updated="refreshTabTitle"
+      @manage-models="requestModelSettings"
     />
     <RightPanel
       :open="rightPanelOpen"
@@ -135,6 +136,10 @@ async function addElementInspectionToSession(payload) {
   await nextTick()
   const attached = await chatRef.value?.appendElementInspection?.(payload)
   if (attached) await chatRef.value?.setDraft?.(payload?.message || '')
+}
+
+function requestModelSettings() {
+  window.electronAPI?.desktopChatTabs?.openModelChannels()
 }
 
 onBeforeUnmount(() => {

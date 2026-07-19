@@ -71,11 +71,13 @@
     <!-- 主区域 -->
     <main class="main">
       <SettingsView v-if="mainView === 'skills'" market-only />
+      <ModelChannels v-else-if="mainView === 'model-channels'" @back="mainView = 'chat'" />
       <ChatView 
         v-else
         ref="chatRef" 
         hide-header 
         :workspace-hash="currentSessionWorkspace"
+        @manage-models="mainView = 'model-channels'"
         :session-name="currentSession"
         :right-panel-open="rightPanelOpen"
         :workspaces="workspaces"
@@ -456,6 +458,7 @@ import WorkspacePickerModal from './components/WorkspacePickerModal.vue'
 import ActionConfirmDialog from './components/ActionConfirmDialog.vue'
 import ChatView from './views/Chat.vue'
 import SettingsView from './views/Settings.vue'
+import ModelChannels from './ModelChannels.vue'
 import DashboardPanel from './components/Dashboard.vue'
 import AIBrowser from './components/AIBrowser.vue'
 import {platform} from '@/services/platform'

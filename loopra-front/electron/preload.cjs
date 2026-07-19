@@ -79,6 +79,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     close: (tabId) => ipcRenderer.invoke('desktop-chat-tab-close', tabId),
     toggleRightPanel: (tabId) => ipcRenderer.invoke('desktop-chat-tab-toggle-right-panel', tabId),
     setTheme: (theme) => ipcRenderer.invoke('desktop-chat-tab-set-theme', theme),
+    openModelChannels: () => ipcRenderer.send('desktop-chat-tab-open-model-channels'),
     reportTitle: (payload) => ipcRenderer.send('desktop-chat-tab-report-title', payload)
   },
 

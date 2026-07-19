@@ -92,7 +92,11 @@ public class ConfigController {
                 cfg.price(),
                 visionConfig,
                 cfg.activePet(),
-                cfg.terminateOnNoToolCall()
+                cfg.terminateOnNoToolCall(),
+                cfg.modelChannels().stream().map(channel -> new ConfigDTO.ModelChannelConfig(
+                        channel.id(), channel.name(), channel.baseUrl(), maskApiKey(channel.apiKey()), channel.models()
+                )).collect(Collectors.toList()),
+                cfg.modelChannelId()
         );
         return ApiResponse.ok(data);
     }
@@ -104,9 +108,10 @@ public class ConfigController {
     public ApiResponse<String> updateConfig(@ApiParam(value = "配置项 Map") @Body Map<String, Object> body) {
         configService.updateConfig(body);
 
-        // baseUrl 或 apiKey 变更 → 销毁重建（因 HttpModelClient 的 apiUrl/apiKey 为 final）
+        // 渠道/API 变更 → 销毁重建（因 HttpModelClient 的 apiUrl/apiKey 为 final）
         boolean agentReinitialized = false;
-        if ((body.containsKey("baseUrl") || body.containsKey("apiKey")) && agentService.isReady()) {
+        if ((body.containsKey("baseUrl") || body.containsKey("apiKey")
+                || body.containsKey("modelChannels") || body.containsKey("modelChannelId")) && agentService.isReady()) {
             agentService.reinitialize();
             agentReinitialized = true;
         }
@@ -115,7 +120,8 @@ public class ConfigController {
         for (Map.Entry<String, Object> entry : body.entrySet()) {
             String key = entry.getKey();
             // baseUrl/apiKey 已在上方处理，跳过
-            if ("baseUrl".equals(key) || "apiKey".equals(key)) continue;
+            if ("baseUrl".equals(key) || "apiKey".equals(key)
+                    || "modelChannels".equals(key) || "modelChannelId".equals(key)) continue;
             // 只发布已知的运行时配置键
             if ("model".equals(key) || "reasoningEffort".equals(key) || "hitl".equals(key)
                     || "terminateOnNoToolCall".equals(key) || "disabledTools".equals(key)) {
@@ -123,7 +129,7 @@ public class ConfigController {
             }
         }
 
-        return ApiResponse.ok(agentReinitialized ? "API 地址/密钥已更新，Agent 已重新初始化" : "配置已更新");
+        return ApiResponse.ok(agentReinitialized ? "模型渠道已更新，Agent 已重新初始化" : "配置已更新");
     }
 
     @ApiOperation(value = "从 AI 模型复制视觉配置", notes = "将 AI 模型的 baseUrl 和 apiKey 复制到视觉模型配置（后端操作，不暴露密钥）")
@@ -159,27 +165,46 @@ public class ConfigController {
     public ApiResponse<ModelListDTO> getModels() {
         LoopraConfig cfg = configService.getConfig();
         String currentModel = cfg.model();
-        List<String> available = cfg.availableModels();
-
-        Set<String> modelSet = new LinkedHashSet<>();
-        modelSet.add(currentModel);
-        modelSet.addAll(available);
-
-        List<ModelInfoDTO> models = modelSet.stream()
-                .map(m -> new ModelInfoDTO(m, m.equals(currentModel)))
-                .collect(Collectors.toList());
-
-        return ApiResponse.ok(new ModelListDTO(currentModel, models));
+        String currentChannelId = cfg.modelChannelId();
+        List<ModelInfoDTO> models = new ArrayList<>();
+        for (LoopraConfig.ModelChannel channel : cfg.modelChannels()) {
+            LinkedHashSet<String> names = new LinkedHashSet<>(channel.models());
+            if (channel.id().equals(currentChannelId)) names.add(currentModel);
+            for (String name : names) {
+                models.add(new ModelInfoDTO(name,
+                        name.equals(currentModel) && channel.id().equals(currentChannelId),
+                        channel.id(), channel.name()));
+            }
+        }
+        return ApiResponse.ok(new ModelListDTO(currentModel, currentChannelId, models));
     }
 
     @ApiOperation(value = "从远程 API 获取模型列表", notes = "调用配置的 API 地址 + /models，携带 API Key 获取远程模型列表")
     @SneakyThrows
     @Get
     @Mapping("/remote-models")
-    public ApiResponse<List<String>> getRemoteModels() {
+    public ApiResponse<List<String>> getRemoteModels(@Param(value = "channelId", required = false) String channelId) {
         LoopraConfig cfg = configService.getConfig();
-        String baseUrl = cfg.baseUrl();
-        String apiKey = cfg.apiKey();
+        LoopraConfig.ModelChannel channel = channelId == null || channelId.isBlank()
+                ? cfg.activeModelChannel() : cfg.modelChannel(channelId);
+        if (channel == null) return ApiResponse.fail("模型渠道不存在");
+        return fetchRemoteModels(channel.baseUrl(), channel.apiKey());
+    }
+
+    @ApiOperation(value = "使用临时渠道配置获取模型列表", notes = "仅探测当前提交的 API 地址和密钥，不写入配置文件")
+    @Post
+    @Mapping("/remote-models")
+    public ApiResponse<List<String>> probeRemoteModels(@Body Map<String, Object> body) {
+        Map<String, Object> request = body == null ? Map.of() : body;
+        LoopraConfig.ModelChannel savedChannel = configService.getConfig().modelChannel(stringValue(request, "channelId"));
+        String baseUrl = stringValue(request, "baseUrl");
+        String apiKey = stringValue(request, "apiKey");
+        if (baseUrl.isBlank() && savedChannel != null) baseUrl = savedChannel.baseUrl();
+        if (apiKey.isBlank() && savedChannel != null) apiKey = savedChannel.apiKey();
+        return fetchRemoteModels(baseUrl, apiKey);
+    }
+
+    private ApiResponse<List<String>> fetchRemoteModels(String baseUrl, String apiKey) {
 
         if (baseUrl == null || baseUrl.isEmpty()) {
             return ApiResponse.fail("API 地址未配置");
@@ -229,6 +254,18 @@ public class ConfigController {
         } catch (Exception e) {
             return ApiResponse.fail("获取远程模型列表失败: " + e.getMessage());
         }
+    }
+
+    private String stringValue(Map<String, Object> body, String key) {
+        Object value = body.get(key);
+        return value == null ? "" : value.toString().trim();
+    }
+
+    private String maskApiKey(String apiKey) {
+        if (apiKey != null && apiKey.length() > MASK_MIN_LENGTH) {
+            return apiKey.substring(0, MASK_KEEP_LENGTH) + "****" + apiKey.substring(apiKey.length() - MASK_KEEP_LENGTH);
+        }
+        return apiKey == null || apiKey.isBlank() ? "" : "****";
     }
 
     @ApiOperation(value = "从远程 API 获取视觉模型列表", notes = "调用视觉模型配置的 API 地址 + /models，携带 API Key 获取远程视觉模型列表")

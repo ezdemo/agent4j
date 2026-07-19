@@ -5,6 +5,8 @@ package site.sorghum.loopra.web.model;
  */
 public record ModelInfoDTO(
         String name,
-        boolean active
+        boolean active,
+        String channelId,
+        String channelName
 ) {
 }

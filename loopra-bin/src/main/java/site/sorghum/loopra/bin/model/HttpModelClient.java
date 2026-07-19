@@ -40,7 +40,7 @@ public class HttpModelClient implements ModelClient {
      * 重试间隔（秒），共 10 次：3,3,5,5,8,10,12,16,22,36 — 总计约 120 秒（2 分钟）。
      * 指数退避策略，应对 API 临时故障。
      */
-    private static final int[] RETRY_DELAYS = {3, 3, 5, 5, 8, 10, 12, 16, 22, 36};
+    private static final int[] DEFAULT_RETRY_DELAYS = {3, 3, 5, 5, 8, 10, 12, 16, 22, 36};
 
     // ==================== OpenAI API JSON 字段名常量 ====================
 
@@ -79,6 +79,7 @@ public class HttpModelClient implements ModelClient {
 
     private final String apiUrl;
     private final String apiKey;
+    private final int[] retryDelays;
     /**
      * reasoning_effort 取值: low / medium / high / max
      */
@@ -110,10 +111,15 @@ public class HttpModelClient implements ModelClient {
     }
 
     public HttpModelClient(String apiUrl, String apiKey, String model, String reasoningEffort) {
+        this(apiUrl, apiKey, model, reasoningEffort, DEFAULT_RETRY_DELAYS);
+    }
+
+    HttpModelClient(String apiUrl, String apiKey, String model, String reasoningEffort, int[] retryDelays) {
         this.apiUrl = apiUrl;
         this.apiKey = apiKey;
         this.model = model;
         this.reasoningEffort = reasoningEffort;
+        this.retryDelays = retryDelays.clone();
         this.client = new OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
                 .readTimeout(10, TimeUnit.MINUTES)
@@ -160,14 +166,16 @@ public class HttpModelClient implements ModelClient {
          * 是否为流式调用（流式调用需要检查 SSE 连接状态）
          */
         private final boolean streamMode;
+        private final StreamCallback callback;
 
         RetryContext(String tag) {
-            this(tag, false);
+            this(tag, false, null);
         }
 
-        RetryContext(String tag, boolean streamMode) {
+        RetryContext(String tag, boolean streamMode, StreamCallback callback) {
             this.tag = tag;
             this.streamMode = streamMode;
+            this.callback = callback;
         }
 
         /**
@@ -187,11 +195,12 @@ public class HttpModelClient implements ModelClient {
                 log.debug("[{}] {} 可重试，但 SSE 连接已断开，跳过重试", tag, reason);
                 throw new IOException("SSE connection closed");
             }
-            if (attempt >= RETRY_DELAYS.length) {
+            if (attempt >= retryDelays.length) {
                 throw new IOException("[" + tag + "] 重试耗尽: " + reason);
             }
-            int delay = RETRY_DELAYS[attempt];
+            int delay = retryDelays[attempt];
             log.warn("[retry][{}] {}，第{}次重试，等待{}s...", tag, reason, attempt + 1, delay);
+            notifyRetry(reason, attempt, delay);
             doSleep(delay);
             checkAbort();
         }
@@ -213,13 +222,21 @@ public class HttpModelClient implements ModelClient {
                 log.debug("[{}] IO异常，但 SSE 连接已断开，跳过重试", tag);
                 throw new IOException("SSE connection closed", e);
             }
-            if (attempt >= RETRY_DELAYS.length) {
+            if (attempt >= retryDelays.length) {
                 throw e;
             }
-            int delay = RETRY_DELAYS[attempt];
+            int delay = retryDelays[attempt];
             log.warn("[retry][{}] {}，第{}次重试，等待{}s...", tag, e.getMessage(), attempt + 1, delay);
+            notifyRetry(e.getMessage(), attempt, delay);
             doSleep(delay);
             checkAbort();
+        }
+
+        private void notifyRetry(String reason, int attempt, int delay) {
+            if (callback != null) {
+                safeCallback("onRetry", () -> callback.onRetry(
+                        reason, attempt + 1, retryDelays.length, delay));
+            }
         }
 
         /**
@@ -441,8 +458,8 @@ public class HttpModelClient implements ModelClient {
             return;
         }
 
-        RetryContext retry = new RetryContext("流式", true);
-        for (int attempt = 0; attempt <= RETRY_DELAYS.length; attempt++) {
+        RetryContext retry = new RetryContext("流式", true, callback);
+        for (int attempt = 0; attempt <= retryDelays.length; attempt++) {
             Request request = new Request.Builder()
                     .url(apiUrl)
                     .post(RequestBody.create(jsonBody, MEDIA_TYPE_JSON))

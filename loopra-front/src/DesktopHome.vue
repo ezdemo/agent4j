@@ -10,7 +10,7 @@
         <div class="desktop-home-heading">
           <span>项目</span>
           <button class="desktop-add-project" type="button" title="添加项目" aria-label="添加项目" @click="emit('add-workspace')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2.5h6.5A2.5 2.5 0 0 1 21 9v7.5a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5Z"/><path d="M16 11v6M13 14h6"/></svg>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7l-2-3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/><path d="M12 10v6M9 13h6"/></svg>
           </button>
         </div>
         <div class="desktop-project-list">
@@ -226,7 +226,7 @@ onBeforeUnmount(() => {
 .desktop-projects, .desktop-sessions { min-height: 0; display: flex; flex-direction: column; }
 .desktop-home-heading { height: 28px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; color: var(--fg, #202124); font-size: 14px; font-weight: 650; flex: 0 0 auto; }
 .desktop-home-heading button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--fg-2, #5f6368); font: inherit; font-size: 13px; cursor: pointer; padding: 4px; border-radius: 4px; }.desktop-home-heading button:hover { background: var(--bg-3, #f3f4f6); color: var(--fg, #202124); }.desktop-home-heading button svg { width: 15px; height: 15px; }
-.desktop-home-heading .desktop-add-project { width: 28px; height: 28px; justify-content: center; padding: 4px; }.desktop-home-heading .desktop-add-project svg { width: 18px; height: 18px; }
+.desktop-home-heading .desktop-add-project { width: 28px; height: 28px; justify-content: center; padding: 4px; box-sizing: border-box; flex: 0 0 28px; }.desktop-home-heading .desktop-add-project svg { width: 18px; height: 18px; }
 .desktop-project-list, .desktop-session-timeline { min-height: 0; overflow: auto; scrollbar-width: none; }.desktop-project-list { display: grid; gap: 2px; flex: 1; align-content: start; }.desktop-session-timeline { padding-right: 4px; }.desktop-session-list { display: grid; gap: 2px; }.desktop-session-group + .desktop-session-group { margin-top: 18px; }.desktop-session-group h3 { height: 24px; display: flex; align-items: center; margin: 0 0 4px; color: var(--fg-3, #727987); font-size: 13px; font-weight: 500; }
 .desktop-project-list::-webkit-scrollbar, .desktop-session-timeline::-webkit-scrollbar { width: 0; height: 0; }
 .desktop-project-list:hover, .desktop-session-timeline:hover { scrollbar-width: thin; }
