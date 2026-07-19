@@ -1428,6 +1428,20 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   background: var(--blue-dark);
 }
 
+[data-theme="dark"] .send-btn.active {
+  background: #d4d4d8;
+  color: #18181b;
+}
+
+[data-theme="dark"] .send-btn.active:hover {
+  background: #f4f4f5;
+}
+
+[data-theme="dark"] .send-btn:disabled {
+  color: #686d78;
+  opacity: 1;
+}
+
 .send-btn:disabled {
   cursor: not-allowed;
   opacity: 0.5;
