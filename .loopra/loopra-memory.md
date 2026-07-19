@@ -8,3 +8,7 @@
 ## [2026-07-17 20:45] 会话折叠沉淀
 
 技能文件放在 ~/.loopra/skills/ 下（不是 ~/.codex/skills/）。安装 browser-harness 后需用 `browser-harness skill > ~/.loopra/skills/browser-harness/SKILL.md` 注册技能。
+
+## [2026-07-19 22:44] 会话折叠沉淀
+
+模型渠道配置已演进为 modelChannels[].models 对象条目：name、contextTokens、imageInput、可选 price；旧字符串列表与根级 price 保持读取兼容。图片输入和上下文大小运行时仅读取当前渠道的模型配置，不再依赖模型元数据。

@@ -7,10 +7,10 @@ import org.noear.snack4.ONode;
 import java.lang.reflect.Constructor;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
+import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class LoopraConfigTest {
 
@@ -170,6 +170,88 @@ class LoopraConfigTest {
         assertTrue(config.disabledTools().contains("goal_update_step"));
         assertFalse(config.disabledTools().contains("task"));
         assertFalse(config.disabledTools().contains("goal_mark_step"));
+    }
+
+    @Test
+    void migratesLegacyChannelModelStringsToConfiguredEntries() throws Exception {
+        Path configDir = tempDir.resolve(".loopra");
+        Files.createDirectories(configDir);
+        Files.writeString(configDir.resolve("config.json"), """
+                {"model":"legacy-model","modelChannelId":"main","modelChannels":[{
+                  "id":"main","name":"Main","baseUrl":"https://example.test","apiKey":"secret-key",
+                  "models":["legacy-model"]
+                }]}
+                """);
+
+        String originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+        try {
+            LoopraConfig config = LoopraConfig.load();
+
+            LoopraConfig.ModelChannel channel = config.modelChannel("main");
+            assertEquals(List.of("legacy-model"), channel.models());
+            assertEquals(-1, channel.modelEntry("legacy-model").contextTokens());
+            assertFalse(channel.modelEntry("legacy-model").imageInput());
+
+            ONode saved = ONode.ofJson(Files.readString(configDir.resolve("config.json")));
+            assertTrue(saved.select("$.modelChannels[0].models[0]").isObject());
+            assertEquals("legacy-model", saved.select("$.modelChannels[0].models[0].name").getString());
+            assertEquals(-1, saved.select("$.modelChannels[0].models[0].contextTokens").getInt());
+            assertFalse(saved.select("$.modelChannels[0].models[0].imageInput").getBoolean());
+        } finally {
+            System.setProperty("user.home", originalUserHome);
+        }
+    }
+
+    @Test
+    void savesObjectModelsAndRetainsMaskedChannelApiKey() throws Exception {
+        Path configDir = tempDir.resolve(".loopra");
+        Files.createDirectories(configDir);
+        Files.writeString(configDir.resolve("config.json"), """
+                {"model":"vision-model","modelChannelId":"main","apiKey":"root-secret","modelChannels":[{
+                  "id":"main","name":"Main","baseUrl":"https://example.test","apiKey":"secret-key",
+                  "models":[{"name":"old","contextTokens":-1,"imageInput":false}]
+                }]}
+                """);
+
+        String originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+        try {
+            LoopraConfig config = LoopraConfig.load();
+            config.updateAndSave(Map.of(
+                    "apiKey", "root****cret",
+                    "modelChannels", List.of(Map.of(
+                            "id", "main", "name", "Main", "baseUrl", "https://example.test", "apiKey", "secr****-key",
+                            "models", List.of(Map.of("name", "vision-model", "contextTokens", 128000,
+                                    "imageInput", true, "price", Map.of("input", 1.5, "cache", 0.2, "output", 3)))
+                    ))
+            ));
+
+            LoopraConfig saved = LoopraConfig.load();
+            LoopraConfig.ModelEntry entry = saved.activeModelEntry();
+            assertEquals("secret-key", saved.apiKey());
+            assertEquals("secret-key", saved.modelChannel("main").apiKey());
+            assertEquals(128000, entry.contextTokens());
+            assertTrue(entry.imageInput());
+            assertEquals(1.5, entry.price().get("input"));
+            assertEquals(1.5, saved.price().get("vision-model").get("input"));
+
+            ONode root = ONode.ofJson(Files.readString(configDir.resolve("config.json")));
+            assertEquals("root-secret", root.select("$.apiKey").getString());
+            assertTrue(root.select("$.modelChannels[0].models[0]").isObject());
+        } finally {
+            System.setProperty("user.home", originalUserHome);
+        }
+    }
+
+    @Test
+    void keepsLegacyRootPriceWhenChannelEntryHasNoPrice() throws Exception {
+        LoopraConfig config = config("""
+                {"model":"configured-model","modelChannelId":"main","price":{"configured-model":{"input":1.25}},
+                 "modelChannels":[{"id":"main","models":[{"name":"configured-model","contextTokens":-1,"imageInput":false}]}]}
+                """);
+
+        assertEquals(1.25, config.price().get("configured-model").get("input"));
     }
 
     private static LoopraConfig config(String json) throws Exception {
