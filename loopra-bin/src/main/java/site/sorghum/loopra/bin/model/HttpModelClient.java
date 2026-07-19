@@ -618,7 +618,9 @@ public class HttpModelClient implements ModelClient {
 
         // delta 处理
         ONode delta = chunk.select("$.choices[0].delta");
-        if (delta == null || delta.isNull()) return;
+        if (delta == null || delta.isNull()) {
+            return;
+        }
 
         // reasoning content
         ONode rd = delta.get(FIELD_REASONING_CONTENT).isNull() ? delta.get(FIELD_REASONING_CONTENT_V2) : delta.get(FIELD_REASONING_CONTENT);

@@ -508,12 +508,12 @@
                 <h3>视觉模型配置</h3>
                 <p>配置图片识别服务的 API 连接与模型参数</p>
               </div>
-              <button class="btn btn-secondary" @click="copyVisionFromAi" title="从 AI 模型配置复制 API 地址和密钥">
+              <button class="btn btn-secondary" @click="copyVisionFromAi" title="从当前模型渠道复制 API 地址和密钥">
                 <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
                   <rect height="13" rx="2" ry="2" width="13" x="9" y="9"/>
                   <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
                 </svg>
-                从 AI 模型复制
+                从当前渠道复制
               </button>
             </div>
             <div class="card-body">
@@ -1783,7 +1783,7 @@ const setReasoningEffort = (index) => {
   settings.ai.reasoningEffort = reasoningEffortLevels[Number(index)]?.value || 'max'
 }
 
-const activeTab = ref(props.marketOnly ? 'skill-market' : props.initialTab)
+const activeTab = ref(props.marketOnly ? 'skill-market' : (props.initialTab === 'ai' ? 'general' : props.initialTab))
 const showApiKey = ref(false)
 const showVisionApiKey = ref(false)
 const loading = ref(false)
@@ -2207,15 +2207,6 @@ const tabs = computed(() => [
     </svg>`
   },
   {
-    id: 'ai',
-    label: 'AI 模型',
-    description: 'LLM API 和模型参数配置',
-    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M12 2a2 2 0 0 1 2 2c0 .74-.4 1.39-1 1.73V7h1a7 7 0 0 1 7 7h1a2 2 0 0 1 0 4h-1.17A7 7 0 0 1 14 22h-4a7 7 0 0 1-6.83-4H2a2 2 0 0 1 0-4h1a7 7 0 0 1 7-7h1V5.73c-.6-.34-1-.99-1-1.73a2 2 0 0 1 2-2z"/>
-      <circle cx="12" cy="14" r="3"/>
-    </svg>`
-  },
-  {
     id: 'vision',
     label: '图片识别',
     description: '视觉模型配置，用于图片内容识别',
@@ -2349,7 +2340,7 @@ watch(activeTab, async (tab) => {
 }, {immediate: true})
 
 watch(() => props.initialTab, (tab) => {
-  activeTab.value = tab || 'general'
+  activeTab.value = tab === 'ai' ? 'general' : (tab || 'general')
 })
 
 // 加载设置
@@ -2451,28 +2442,6 @@ const loadSettings = async () => {
 
 // 保存设置
 const saveSettings = async () => {
-  // 检测 baseUrl 或 apiKey 是否变更（变更会触发 Agent 重建，当前会话将丢失）
-  // 注意：出于安全考虑，保存成功后会清空 localStorage 中的明文密钥
-  // 因此当 localStorage 为空且用户输入了非空 apiKey 时，视为「已变更」
-  const lastSavedApiKey = getLastSavedApiKey()
-  const baseUrlChanged = settings.ai.baseUrl !== originalBaseUrl.value
-  const apiKeyChanged = settings.ai.apiKey !== lastSavedApiKey && (lastSavedApiKey !== '' || settings.ai.apiKey.trim() !== '')
-
-  if (baseUrlChanged || apiKeyChanged) {
-    // 弹出确认对话框
-    const confirm = await new Promise((resolve) => {
-      Modal.confirm({
-        title: '更改 API 地址或密钥将重置 Agent',
-        content: '修改 API 地址或密钥后，系统将重新初始化 Agent，当前活跃的会话将被保存并关闭。\n\n要继续保存吗？',
-        okText: '确认保存',
-        cancelText: '取消',
-        onOk: () => resolve(true),
-        onCancel: () => resolve(false)
-      })
-    })
-    if (!confirm) return
-  }
-
   loading.value = true
   try {
     // 同步更新 localStorage 中的实际连接地址
@@ -2482,12 +2451,8 @@ const saveSettings = async () => {
 
     // 准备配置更新
     const configToUpdate = {
-      model: settings.ai.model,
-      reasoningEffort: settings.ai.reasoningEffort,
-      availableModels: settings.ai.availableModelsText.split('\n').map(s => s.trim()).filter(s => s),
       hitl: settings.workspace.mode,
       security: {...settings.security},
-      price: settings.ai.prices,
       disabledTools: settings.security.disabledToolsText.split('\n').map(s => s.trim()).filter(s => s),
       vision: {
         baseUrl: settings.vision.baseUrl,
@@ -2495,14 +2460,6 @@ const saveSettings = async () => {
       }
     }
 
-    // 仅在实际变更时发送连接配置，避免保存其他设置时重建 Agent。
-    if (baseUrlChanged) {
-      configToUpdate.baseUrl = settings.ai.baseUrl
-    }
-    if (apiKeyChanged && settings.ai.apiKey.trim()) {
-      configToUpdate.apiKey = settings.ai.apiKey
-    }
-    
     // 只有当 vision.apiKey 不为空时才保存（后端返回空字符串，不会误存）
     if (settings.vision.apiKey) {
       configToUpdate.vision.apiKey = settings.vision.apiKey
@@ -2511,14 +2468,6 @@ const saveSettings = async () => {
     const response = await configAPI.updateConfig(configToUpdate)
 
     if (response.success) {
-      // 记录本次保存的值，用于下次对比
-      originalBaseUrl.value = settings.ai.baseUrl
-      // 安全起见：保存成功后清空本地存储的明文 apiKey，避免 localStorage 泄露
-      // 对比逻辑改为与空值比对，下次进入设置页时若输入框非空则视为「已变更」
-      setLastSavedApiKey('')
-      // 同时清空输入框中的密钥，防止页面残留
-      settings.ai.apiKey = ''
-
       // 切换工作目录
       if (settings.workspace.dir && settings.workspace.dir.trim()) {
         try {
@@ -2828,14 +2777,14 @@ const fetchAndPickVisionModel = async () => {
   }
 }
 
-// 从 AI 模型配置复制到视觉模型配置（通过后端接口，不暴露密钥）
+// 从当前模型渠道复制到视觉模型配置（通过后端接口，不暴露密钥）
 const copyVisionFromAi = async () => {
   try {
     const res = await configAPI.copyVisionFromAi()
     if (res.success && res.data) {
       settings.vision.baseUrl = res.data.baseUrl || settings.vision.baseUrl
       hasChanges.value = true
-      message.success('已从 AI 模型复制配置')
+      message.success('已从当前模型渠道复制配置')
       // 尝试获取视觉模型列表
       try {
         const modelRes = await configAPI.getRemoteVisionModels()
@@ -3727,7 +3676,12 @@ const saveLoopraMd = async () => {
 /* 基础布局 */
 .settings-page {
   display: flex;
-  height: 600px;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
+  box-sizing: border-box;
   background: var(--bg);
   color: var(--fg);
   font-family: var(--sans);
@@ -3767,6 +3721,7 @@ const saveLoopraMd = async () => {
 /* 左侧导航 */
 .settings-nav {
   width: 220px;
+  min-height: 0;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -3789,6 +3744,8 @@ const saveLoopraMd = async () => {
 
 .nav-items {
   flex: 1;
+  min-height: 0;
+  overflow-y: auto;
   padding: 8px 12px;
   display: flex;
   flex-direction: column;
@@ -3861,6 +3818,7 @@ const saveLoopraMd = async () => {
   display: flex;
   flex-direction: column;
   min-width: 0;
+  min-height: 0;
   overflow: hidden;
 }
 
@@ -3895,13 +3853,17 @@ const saveLoopraMd = async () => {
 /* 设置内容区 */
 .settings-content {
   flex: 1;
-  overflow-y: auto;
-  padding: 24px;
+  min-width: 0;
   min-height: 0;
+  overflow: auto;
+  box-sizing: border-box;
+  padding: 24px;
 }
 
 .settings-section {
-  max-width: 800px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
 }
 
 /* OpenAPI 样式 */
