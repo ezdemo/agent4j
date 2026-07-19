@@ -451,7 +451,8 @@ onBeforeUnmount(() => {
 .desktop-tabs::-webkit-scrollbar { display: none; }
 .desktop-tab { display: inline-flex; align-items: center; gap: 7px; width: clamp(156px, 16vw, 230px); height: 30px; padding: 0 10px; border-radius: 6px; cursor: pointer; flex: 0 0 auto; text-align: left; }
 .desktop-tab:hover { background: var(--bg-3, #f3f4f6); color: var(--fg, #202124); }
-.desktop-tab.active { background: var(--bg-2, #f6f6f6); color: var(--fg, #202124); }
+.desktop-tab.active { background: var(--bg-3, #f1f2f4); color: var(--fg, #202124); }
+.desktop-tab.active > span:not(.desktop-tab-close) { font-weight: 500; }
 .desktop-tab > span:not(.desktop-tab-close) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; font-size: 14px; font-weight: 400; }
 .desktop-tab-close { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 4px; flex: 0 0 auto; }
 .desktop-tab-close svg { width: 14px; height: 14px; }
