@@ -4,7 +4,14 @@
 
     <header class="desktop-titlebar">
       <div class="desktop-left-controls">
-        <button class="icon-button active" type="button" title="会话首页" @click="showHome">
+        <button
+          class="icon-button"
+          :class="{ active: isHomeActive }"
+          type="button"
+          title="会话首页"
+          :aria-pressed="isHomeActive"
+          @click="showHome"
+        >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M17.5 14v7M14 17.5h7"/></svg>
         </button>
       </div>
@@ -67,7 +74,7 @@
         @clear-workspace="confirmClearWorkspace"
         @delete-workspace="confirmDeleteWorkspace"
       />
-      <ModelChannels v-else-if="!starting && showModelChannels" class="desktop-settings" @back="showModelChannels = false" />
+      <ModelChannels v-else-if="!starting && showModelChannels" class="desktop-settings" :show-back="false" />
       <SettingsView v-else-if="!starting && showSettings" class="desktop-settings" />
     </main>
   </div>
@@ -96,6 +103,8 @@ const showSettings = ref(false)
 const showModelChannels = ref(false)
 const tabs = ref([])
 const activeTabId = ref('')
+const isHomeActive = computed(() => !starting.value && !startupError.value
+  && !activeTabId.value && !showSettings.value && !showModelChannels.value)
 const host = ref(null)
 let resizeObserver = null
 let renderVersion = 0
