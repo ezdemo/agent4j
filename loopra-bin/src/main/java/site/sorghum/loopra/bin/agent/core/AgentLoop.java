@@ -149,6 +149,13 @@ public class AgentLoop implements AgentLoopController {
     @Getter
     private volatile String sessionId;
 
+    /**
+     * 是否在工具批次结束时提取文件变更。
+     * 子代理与父代理共用同一会话范围时关闭此开关，防止子循环提前取走父轮次的变更记录。
+     */
+    @Setter
+    private volatile boolean drainFileChanges = true;
+
     /** 主循环是否正在执行中（防止巡检线程与主循环冲突） */
     private final AtomicBoolean running = new AtomicBoolean(false);
 
@@ -1017,8 +1024,10 @@ public class AgentLoop implements AgentLoopController {
                     "[hitl] 沙箱越界触发强制审批: " + hitlEx.getDetails()));
         }
 
-        return new ToolExecutionResult(parsed.tcList(), toolResults,
-                SessionFileChangeTracker.drain(registry.getWorkspace(), getSessionId()),
+        List<FileChange> fileChanges = drainFileChanges
+                ? SessionFileChangeTracker.drain(registry.getWorkspace(), getSessionId())
+                : List.of();
+        return new ToolExecutionResult(parsed.tcList(), toolResults, fileChanges,
                 dispatch.anySuppressed().get());
     }
 

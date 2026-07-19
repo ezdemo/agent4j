@@ -1,6 +1,7 @@
 package site.sorghum.loopra.bin.agent.core;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.tool.FunctionToolDesc;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
@@ -10,9 +11,11 @@ import site.sorghum.loopra.bin.model.HttpModelClient;
 import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.tool.ToolContext;
+import site.sorghum.loopra.tool.solon.common.SessionFileChangeTracker;
 
 import java.io.IOException;
 import java.lang.reflect.Constructor;
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Set;
@@ -23,6 +26,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import static org.junit.jupiter.api.Assertions.*;
 
 class AgentLoopToolTimeoutTest {
+    @TempDir
+    Path workspace;
 
     @Test
     void subAgentUsesDedicatedTimeoutInsteadOfRegularToolTimeout() throws Exception {
@@ -107,6 +112,30 @@ class AgentLoopToolTimeoutTest {
 
         assertEquals("⏹️ 子代理已取消", result);
         assertFalse(client.started.await(100, TimeUnit.MILLISECONDS));
+    }
+
+    @Test
+    void parentLoopDrainsFileChangesRecordedBySubAgentLoop() throws Exception {
+        ToolRegistry registry = new ToolRegistry().setDisabledTools(Set.of());
+        registry.setRefreshContext(workspace, null, null, List.of());
+        registry.register(tool("write", args -> {
+            SessionFileChangeTracker.record("src/Child.java", "before\n", "after\n", false);
+            return "written";
+        }));
+        registry.register(tool("read", args -> "read"));
+        AgentLoop subLoop = loop(registry, 5, 5);
+        AgentLoop parentLoop = loop(registry, 5, 5);
+        subLoop.setSessionId("session-a");
+        subLoop.setDrainFileChanges(false);
+        parentLoop.setSessionId("session-a");
+        SessionFileChangeTracker.beginTurn(workspace, "session-a");
+
+        assertTrue(subLoop.executeToolCalls(toolCalls("write")).fileChanges().isEmpty());
+        List<site.sorghum.loopra.bin.agent.model.FileChange> changes =
+                parentLoop.executeToolCalls(toolCalls("read")).fileChanges();
+
+        assertEquals(1, changes.size());
+        assertEquals("src/Child.java", changes.get(0).path());
     }
 
     private static AgentLoop loop(ToolRegistry registry, int toolTimeoutSec,
