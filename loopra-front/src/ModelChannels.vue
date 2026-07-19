@@ -350,6 +350,9 @@ onMounted(load)
 .model-channels-back svg, .model-channel-delete svg, .model-config-delete svg { width: 17px; height: 17px; }
 .model-channels-save { height: 32px; margin-left: auto; padding: 0 14px; border: 0; border-radius: 5px; background: var(--accent); color: #fff; font: inherit; font-size: 13px; cursor: pointer; }
 .model-channels-save:disabled { opacity: .55; cursor: default; }
+.model-channels[data-theme="dark"] .model-channels-save:not(:disabled) { background: #d4d4d8; color: #18181b; }
+.model-channels[data-theme="dark"] .model-channels-save:not(:disabled):hover { background: #f4f4f5; }
+.model-channels[data-theme="dark"] .model-channels-save:disabled { background: #303034; color: #9499a3; opacity: 1; }
 .model-channels-body { box-sizing: border-box; width: 100%; min-width: 0; min-height: 0; flex: 1; margin: 0; padding: 28px max(24px, calc((100% - 840px) / 2)) 48px; overflow-x: hidden; overflow-y: auto; }
 .model-channels-empty { height: 100%; display: grid; place-items: center; color: var(--fg-4); font-size: 13px; }
 .model-channel { min-width: 0; margin-bottom: 14px; overflow: hidden; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); }
