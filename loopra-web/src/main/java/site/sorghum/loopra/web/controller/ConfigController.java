@@ -94,7 +94,10 @@ public class ConfigController {
                 cfg.activePet(),
                 cfg.terminateOnNoToolCall(),
                 cfg.modelChannels().stream().map(channel -> new ConfigDTO.ModelChannelConfig(
-                        channel.id(), channel.name(), channel.baseUrl(), maskApiKey(channel.apiKey()), channel.models()
+                        channel.id(), channel.name(), channel.baseUrl(), maskApiKey(channel.apiKey()),
+                        channel.modelEntries().stream().map(entry -> new ConfigDTO.ModelConfig(
+                                entry.name(), entry.contextTokens(), entry.imageInput(), entry.price()
+                        )).collect(Collectors.toList())
                 )).collect(Collectors.toList()),
                 cfg.modelChannelId()
         );

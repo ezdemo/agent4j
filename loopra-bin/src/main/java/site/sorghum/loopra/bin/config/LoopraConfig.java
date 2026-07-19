@@ -98,7 +98,12 @@ public class LoopraConfig {
                       "name": "默认渠道",
                       "baseUrl": "https://api.deepseek.com/v1",
                       "apiKey": "sk-your-api-key",
-                      "models": ["deepseek-v4-flash", "deepseek-v4-pro", "mimo-v2.5", "mimo-v2.5-pro"]
+                      "models": [
+                        { "name": "deepseek-v4-flash", "contextTokens": -1, "imageInput": false },
+                        { "name": "deepseek-v4-pro", "contextTokens": -1, "imageInput": false },
+                        { "name": "mimo-v2.5", "contextTokens": -1, "imageInput": false },
+                        { "name": "mimo-v2.5-pro", "contextTokens": -1, "imageInput": false }
+                      ]
                     }
                   ],
                   "editMode": "auto",
@@ -338,7 +343,7 @@ public class LoopraConfig {
         return channel != null ? channel.id() : "default";
     }
 
-    /** 多渠道模型配置。每个渠道独立持有 API 地址、密钥和模型数组。 */
+    /** 多渠道模型配置。每个渠道独立持有 API 地址、密钥和模型条目。 */
     public List<ModelChannel> modelChannels() {
         ONode channelsNode = root.select("$.modelChannels");
         List<ModelChannel> channels = new ArrayList<>();
@@ -350,15 +355,7 @@ public class LoopraConfig {
             String apiKey = trim(item.get("apiKey").getString());
             if (id.isEmpty()) id = "channel-" + (channels.size() + 1);
             if (name.isEmpty()) name = "渠道 " + (channels.size() + 1);
-            List<String> models = new ArrayList<>();
-            ONode modelsNode = item.get("models");
-            if (modelsNode != null && modelsNode.isArray()) {
-                for (ONode modelNode : modelsNode.getArray()) {
-                    String value = trim(modelNode.getString());
-                    if (!value.isEmpty()) models.add(value);
-                }
-            }
-            channels.add(new ModelChannel(id, name, baseUrl, apiKey, models));
+            channels.add(new ModelChannel(id, name, baseUrl, apiKey, modelEntries(item.get("models"))));
         }
         return channels;
     }
@@ -367,6 +364,18 @@ public class LoopraConfig {
     public ModelChannel modelChannel(String channelId) {
         if (channelId == null || channelId.isBlank()) return null;
         return modelChannels().stream().filter(channel -> channel.id().equals(channelId)).findFirst().orElse(null);
+    }
+
+    /** 按渠道和名称查询模型条目。 */
+    public ModelEntry modelEntry(String channelId, String modelName) {
+        ModelChannel channel = modelChannel(channelId);
+        return channel == null ? null : channel.modelEntry(modelName);
+    }
+
+    /** 查询当前渠道中当前选中模型的条目。 */
+    public ModelEntry activeModelEntry() {
+        ModelChannel channel = activeModelChannel();
+        return channel == null ? null : channel.modelEntry(model());
     }
 
     /** 当前渠道优先使用 modelChannelId；旧配置缺失时按当前模型归属兜底。 */
@@ -384,15 +393,51 @@ public class LoopraConfig {
         return channels.get(0);
     }
 
-    /** 配置文件中的单个模型渠道。 */
-    public record ModelChannel(String id, String name, String baseUrl, String apiKey, List<String> models) {
+    /** 配置文件中的单个模型渠道。models() 保持名称列表以兼容已有调用。 */
+    public record ModelChannel(String id, String name, String baseUrl, String apiKey, List<ModelEntry> modelEntries) {
         public ModelChannel {
             id = id == null ? "" : id;
             name = name == null ? "" : name;
             baseUrl = baseUrl == null ? "" : baseUrl;
             apiKey = apiKey == null ? "" : apiKey;
-            models = models == null ? List.of() : List.copyOf(models);
+            modelEntries = modelEntries == null ? List.of() : List.copyOf(modelEntries);
         }
+
+        public List<String> models() {
+            return modelEntries.stream().map(ModelEntry::name).toList();
+        }
+
+        public ModelEntry modelEntry(String modelName) {
+            if (modelName == null || modelName.isBlank()) return null;
+            return modelEntries.stream().filter(entry -> entry.name().equals(modelName)).findFirst().orElse(null);
+        }
+    }
+
+    /** 配置文件中的单个模型条目。价格单位为每百万 token 的人民币金额。 */
+    public record ModelEntry(String name, int contextTokens, boolean imageInput, Map<String, Double> price) {
+        public ModelEntry {
+            name = trim(name);
+            contextTokens = contextTokens > 0 ? contextTokens : -1;
+            price = price == null ? Map.of() : Map.copyOf(price);
+        }
+    }
+
+    private static List<ModelEntry> modelEntries(ONode modelsNode) {
+        List<ModelEntry> entries = new ArrayList<>();
+        if (modelsNode == null || !modelsNode.isArray()) return entries;
+        for (ONode modelNode : modelsNode.getArray()) {
+            if (modelNode.isObject()) {
+                String name = trim(modelNode.get("name").getString());
+                if (!name.isEmpty()) {
+                    entries.add(new ModelEntry(name, modelNode.get("contextTokens").getInt(),
+                            modelNode.get("imageInput").getBoolean(), priceMap(modelNode.get("price"))));
+                }
+            } else {
+                String name = trim(modelNode.getString());
+                if (!name.isEmpty()) entries.add(new ModelEntry(name, -1, false, Map.of()));
+            }
+        }
+        return entries;
     }
 
     /**
@@ -555,27 +600,35 @@ public class LoopraConfig {
     public Map<String, Map<String, Double>> price() {
         Map<String, Map<String, Double>> result = new LinkedHashMap<>();
         ONode priceNode = root.select("$.price");
-        if (priceNode == null || priceNode.isNull() || !priceNode.isObject()) {
-            return result;
-        }
-        for (Map.Entry<String, ONode> entry : priceNode.getObject().entrySet()) {
-            String modelName = entry.getKey();
-            ONode val = entry.getValue();
-            Map<String, Double> rates = new LinkedHashMap<>();
-            for (String field : new String[]{"input", "cache", "output"}) {
-                ONode fn = val.get(field);
-                if (fn != null && !fn.isNull()) {
-                    try {
-                        rates.put(field, Double.parseDouble(fn.getString()));
-                    } catch (NumberFormatException ignored) {
-                    }
-                }
+        if (priceNode != null && priceNode.isObject()) {
+            for (Map.Entry<String, ONode> entry : priceNode.getObject().entrySet()) {
+                Map<String, Double> rates = priceMap(entry.getValue());
+                if (!rates.isEmpty()) result.put(entry.getKey(), rates);
             }
-            if (!rates.isEmpty()) {
-                result.put(modelName, rates);
+        }
+        // 渠道内价格优先于旧根 price；仅当前渠道生效，避免同名模型跨渠道串价。
+        ModelChannel activeChannel = activeModelChannel();
+        if (activeChannel != null) {
+            for (ModelEntry entry : activeChannel.modelEntries()) {
+                if (!entry.price().isEmpty()) result.put(entry.name(), entry.price());
             }
         }
         return result;
+    }
+
+    private static Map<String, Double> priceMap(ONode node) {
+        Map<String, Double> rates = new LinkedHashMap<>();
+        if (node == null || node.isNull() || !node.isObject()) return rates;
+        for (String field : new String[]{"input", "cache", "output"}) {
+            ONode value = node.get(field);
+            if (value != null && !value.isNull()) {
+                try {
+                    rates.put(field, Double.parseDouble(value.getString()));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+        }
+        return rates;
     }
 
     // ==================== 可调优参数（原硬编码常量） ====================
@@ -749,9 +802,9 @@ public class LoopraConfig {
             String key = entry.getKey();
             Object value = entry.getValue();
 
-            // 跳过空值
+            // 跳过空值；前端回传脱敏密钥时保留现有真实值。
             if (value == null) continue;
-            if (value instanceof String str && str.isEmpty()) continue;
+            if (value instanceof String str && (str.isEmpty() || ("apiKey".equals(key) && str.contains("****")))) continue;
 
             // 更新到 ONode
             if ("modelChannels".equals(key) && value instanceof List<?> list) {
@@ -800,18 +853,49 @@ public class LoopraConfig {
 
     private static boolean migrateLegacyModelChannels(ONode config) {
         ONode channels = config.select("$.modelChannels");
-        if (channels != null && channels.isArray() && !channels.getArray().isEmpty()) return false;
+        if (channels != null && channels.isArray() && !channels.getArray().isEmpty()) {
+            boolean requiresNormalization = false;
+            for (ONode channel : channels.getArray()) {
+                ONode models = channel.get("models");
+                if (models != null && models.isArray()) {
+                    for (ONode model : models.getArray()) {
+                        if (!model.isObject() || model.get("name") == null
+                                || model.get("contextTokens") == null || model.get("imageInput") == null) {
+                            requiresNormalization = true;
+                            break;
+                        }
+                    }
+                }
+                if (requiresNormalization) break;
+            }
+            if (!requiresNormalization) return false;
+
+            List<Map<String, Object>> normalized = new ArrayList<>();
+            for (ONode channel : channels.getArray()) {
+                Map<String, Object> value = new LinkedHashMap<>();
+                value.put("id", trim(channel.get("id").getString()));
+                value.put("name", trim(channel.get("name").getString()));
+                value.put("baseUrl", trim(channel.get("baseUrl").getString()));
+                value.put("apiKey", trim(channel.get("apiKey").getString()));
+                value.put("models", modelEntries(channel.get("models")));
+                normalized.add(value);
+            }
+            config.set("modelChannels", modelChannelsNode(normalized));
+            return true;
+        }
         String baseUrl = trim(config.select("$.baseUrl").getString());
         String apiKey = trim(config.select("$.apiKey").getString());
         String model = trim(config.select("$.model").getString());
-        List<String> models = new ArrayList<>();
+        List<ModelEntry> models = new ArrayList<>();
         ONode legacyModels = config.select("$.availableModels");
         if (legacyModels != null && legacyModels.isArray()) for (ONode item : legacyModels.getArray()) {
             String value = trim(item.getString());
-            if (!value.isEmpty()) models.add(value);
+            if (!value.isEmpty()) models.add(new ModelEntry(value, -1, false, Map.of()));
         }
-        if (!model.isEmpty() && !models.contains(model)) models.add(0, model);
-        if (models.isEmpty()) models.add("deepseek-v4-flash");
+        if (!model.isEmpty() && models.stream().noneMatch(entry -> entry.name().equals(model))) {
+            models.add(0, new ModelEntry(model, -1, false, Map.of()));
+        }
+        if (models.isEmpty()) models.add(new ModelEntry("deepseek-v4-flash", -1, false, Map.of()));
         Map<String, Object> channel = new LinkedHashMap<>();
         channel.put("id", "default");
         channel.put("name", "默认渠道");
@@ -842,18 +926,13 @@ public class LoopraConfig {
             String baseUrl = trim(Objects.toString(input.get("baseUrl"), ""));
             String apiKey = trim(Objects.toString(input.get("apiKey"), ""));
             if ((apiKey.isEmpty() || apiKey.contains("****")) && previous != null) apiKey = previous.apiKey();
-            List<String> models = new ArrayList<>();
-            Object rawModels = input.get("models");
-            if (rawModels instanceof Collection<?> collection) for (Object item : collection) {
-                String model = trim(Objects.toString(item, ""));
-                if (!model.isEmpty()) models.add(model);
-            }
+            List<ModelEntry> models = modelEntries(input.get("models"));
             Map<String, Object> channel = new LinkedHashMap<>();
             channel.put("id", id);
             channel.put("name", name.isEmpty() ? "渠道 " + index : name);
             channel.put("baseUrl", baseUrl.isEmpty() && previous != null ? previous.baseUrl() : baseUrl);
             channel.put("apiKey", apiKey);
-            channel.put("models", new ArrayList<>(new LinkedHashSet<>(models)));
+            channel.put("models", models);
             result.add(channel);
         }
         return result;
@@ -867,7 +946,7 @@ public class LoopraConfig {
         for (ONode channel : channels.getArray()) {
             if (!activeId.equals(channel.get("id").getString())) continue;
             if ("availableModels".equals(key) && value instanceof List<?> models) {
-                channel.set("models", stringArrayNode(models));
+                channel.set("models", modelEntriesNode(modelEntries(models)));
             } else {
                 channel.set(key, value == null ? "" : value.toString());
             }
@@ -883,20 +962,75 @@ public class LoopraConfig {
             node.set("name", Objects.toString(channel.get("name"), ""));
             node.set("baseUrl", Objects.toString(channel.get("baseUrl"), ""));
             node.set("apiKey", Objects.toString(channel.get("apiKey"), ""));
-            Object models = channel.get("models");
-            node.set("models", models instanceof Collection<?> list ? stringArrayNode(list) : ONode.ofJson("[]"));
+            node.set("models", modelEntriesNode(modelEntries(channel.get("models"))));
             array.add(node);
         }
         return array;
     }
 
-    private static ONode stringArrayNode(Collection<?> values) {
+    private static ONode modelEntriesNode(Collection<ModelEntry> entries) {
         ONode array = ONode.ofJson("[]");
-        for (Object value : values) {
-            String text = trim(Objects.toString(value, ""));
-            if (!text.isEmpty()) array.add(text);
+        for (ModelEntry entry : entries) {
+            if (entry.name().isEmpty()) continue;
+            ONode node = ONode.ofJson("{}");
+            node.set("name", entry.name());
+            node.set("contextTokens", entry.contextTokens());
+            node.set("imageInput", entry.imageInput());
+            if (!entry.price().isEmpty()) {
+                ONode price = node.getOrNew("price").asObject();
+                entry.price().forEach(price::set);
+            }
+            array.add(node);
         }
         return array;
+    }
+
+    private static List<ModelEntry> modelEntries(Object rawModels) {
+        List<ModelEntry> entries = new ArrayList<>();
+        if (!(rawModels instanceof Collection<?> models)) return entries;
+        for (Object raw : models) {
+            if (raw instanceof ModelEntry entry) {
+                entries.add(entry);
+            } else if (raw instanceof Map<?, ?> value) {
+                String name = trim(Objects.toString(value.get("name"), ""));
+                if (!name.isEmpty()) {
+                    entries.add(new ModelEntry(name, integerValue(value.get("contextTokens")),
+                            booleanValue(value.get("imageInput")), priceMap(value.get("price"))));
+                }
+            } else {
+                String name = trim(Objects.toString(raw, ""));
+                if (!name.isEmpty()) entries.add(new ModelEntry(name, -1, false, Map.of()));
+            }
+        }
+        return entries.stream().collect(Collectors.toMap(ModelEntry::name, entry -> entry,
+                (left, right) -> right, LinkedHashMap::new)).values().stream().toList();
+    }
+
+    private static int integerValue(Object value) {
+        if (value instanceof Number number) return number.intValue();
+        try {
+            return Integer.parseInt(Objects.toString(value, ""));
+        } catch (NumberFormatException ignored) {
+            return -1;
+        }
+    }
+
+    private static boolean booleanValue(Object value) {
+        return value instanceof Boolean bool ? bool : Boolean.parseBoolean(Objects.toString(value, "false"));
+    }
+
+    private static Map<String, Double> priceMap(Object value) {
+        if (!(value instanceof Map<?, ?> input)) return Map.of();
+        Map<String, Double> result = new LinkedHashMap<>();
+        for (String field : new String[]{"input", "cache", "output"}) {
+            Object raw = input.get(field);
+            if (raw == null) continue;
+            try {
+                result.put(field, raw instanceof Number number ? number.doubleValue() : Double.parseDouble(raw.toString()));
+            } catch (NumberFormatException ignored) {
+            }
+        }
+        return result;
     }
 
     /**

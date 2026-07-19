@@ -16,7 +16,7 @@
         </button>
       </div>
 
-      <nav class="desktop-tabs" aria-label="会话标签">
+      <nav ref="tabsNav" class="desktop-tabs" aria-label="会话标签" @wheel="scrollTabs">
         <div
           v-for="tab in tabs"
           :key="tab.id"
@@ -27,6 +27,7 @@
           tabindex="0"
           :title="tab.title"
           @click="activateTab(tab.id)"
+          @auxclick="closeTabWithMiddleClick($event, tab.id)"
           @keydown.enter="activateTab(tab.id)"
           @keydown.space.prevent="activateTab(tab.id)"
         >
@@ -59,7 +60,7 @@
         <button type="button" @click="initializeWorkspace">重试</button>
       </div>
       <DesktopHome
-      v-else-if="!starting && !activeTabId && !showSettings && !showModelChannels"
+      v-else-if="!starting && !activeTabId && !showSkills && !showSettings && !showModelChannels"
         :workspaces="workspaces"
         :active-workspace-hash="activeWorkspaceHash"
         :theme="theme"
@@ -67,6 +68,7 @@
         @select-workspace="selectWorkspace"
         @new-session="createTab"
         @open-session="openSession"
+        @open-skills="openSkills"
         @open-settings="openSettings"
         @toggle-theme="toggleTheme"
         @add-workspace="addWorkspaceFromFolder"
@@ -74,6 +76,7 @@
         @clear-workspace="confirmClearWorkspace"
         @delete-workspace="confirmDeleteWorkspace"
       />
+      <SettingsView v-else-if="!starting && showSkills" class="desktop-settings" market-only />
       <ModelChannels v-else-if="!starting && showModelChannels" class="desktop-settings" :show-back="false" />
       <SettingsView v-else-if="!starting && showSettings" class="desktop-settings" />
     </main>
@@ -99,12 +102,14 @@ const startupError = ref('')
 const workspaces = ref([])
 const activeWorkspaceHash = ref('')
 const homeRefreshKey = ref(0)
+const showSkills = ref(false)
 const showSettings = ref(false)
 const showModelChannels = ref(false)
 const tabs = ref([])
 const activeTabId = ref('')
 const isHomeActive = computed(() => !starting.value && !startupError.value
-  && !activeTabId.value && !showSettings.value && !showModelChannels.value)
+  && !activeTabId.value && !showSkills.value && !showSettings.value && !showModelChannels.value)
+const tabsNav = ref(null)
 const host = ref(null)
 let resizeObserver = null
 let renderVersion = 0
@@ -116,6 +121,16 @@ const tabTitle = (sessionName) => {
 }
 
 const nativeTabs = () => window.electronAPI?.desktopChatTabs
+
+function scrollTabs(event) {
+  const nav = tabsNav.value
+  if (!nav || nav.scrollWidth <= nav.clientWidth) return
+  const delta = Math.abs(event.deltaX) > Math.abs(event.deltaY) ? event.deltaX : event.deltaY
+  if (!delta) return
+  event.preventDefault()
+  nav.scrollLeft += delta
+}
+
 watch(theme, (value) => { void nativeTabs()?.setTheme(value) })
 const stopTitleListener = window.electronAPI?.events?.listen('desktop-chat-tab-title', ({ tabId, title }) => {
   if (!tabId || !title) return
@@ -165,6 +180,7 @@ async function createTab() {
     const sessionName = response.data.sessionName
     const workspaceHash = response.data.workspaceHash || ''
     const id = tabId(workspaceHash, sessionName)
+    hideStandaloneViews()
     tabs.value = [...tabs.value, { id, sessionName, workspaceHash, title: tabTitle(sessionName) }]
     activeTabId.value = id
     startupError.value = ''
@@ -183,6 +199,7 @@ async function openSession({ workspaceHash, sessionName, title }) {
     message.error('会话信息不完整，无法打开')
     return
   }
+  hideStandaloneViews()
   const id = tabId(workspaceHash, sessionName)
   if (!tabs.value.some((tab) => tab.id === id)) {
     tabs.value = [...tabs.value, { id, sessionName, workspaceHash, title: title || tabTitle(sessionName) }]
@@ -264,24 +281,36 @@ async function addWorkspaceFromFolder() {
 }
 
 async function showHome() {
-  showSettings.value = false
-  showModelChannels.value = false
+  hideStandaloneViews()
+  activeTabId.value = ''
+  await renderActiveTab()
+}
+
+async function openSkills() {
+  hideStandaloneViews()
+  showSkills.value = true
   activeTabId.value = ''
   await renderActiveTab()
 }
 
 async function openSettings() {
-  showModelChannels.value = false
+  hideStandaloneViews()
   showSettings.value = true
   activeTabId.value = ''
   await renderActiveTab()
 }
 
 async function openModelChannels() {
-  showSettings.value = false
+  hideStandaloneViews()
   showModelChannels.value = true
   activeTabId.value = ''
   await renderActiveTab()
+}
+
+function hideStandaloneViews() {
+  showSkills.value = false
+  showSettings.value = false
+  showModelChannels.value = false
 }
 
 function toggleTheme() {
@@ -310,6 +339,7 @@ async function activateTab(id) {
   const tab = tabs.value.find((item) => item.id === id)
   if (!tab) return
   try {
+    hideStandaloneViews()
     await selectWorkspace(tab.workspaceHash)
     activeTabId.value = id
     await renderActiveTab()
@@ -327,6 +357,12 @@ async function closeTab(id) {
   tabs.value = remaining
   if (wasActive) activeTabId.value = remaining[Math.min(index, remaining.length - 1)]?.id || ''
   await renderActiveTab()
+}
+
+function closeTabWithMiddleClick(event, id) {
+  if (event.button !== 1) return
+  event.preventDefault()
+  void closeTab(id)
 }
 
 async function closeWorkspaceTabs(workspaceHash) {

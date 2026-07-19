@@ -32,7 +32,16 @@ public record ConfigDTO(
             String name,
             String baseUrl,
             String apiKey,
-            List<String> models
+            List<ModelConfig> models
+    ) {
+    }
+
+    /** 渠道内单个模型的运行时能力和可选价格配置。 */
+    public record ModelConfig(
+            String name,
+            int contextTokens,
+            boolean imageInput,
+            Map<String, Double> price
     ) {
     }
     /**

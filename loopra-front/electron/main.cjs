@@ -586,19 +586,17 @@ ipcMain.handle('desktop-chat-tab-show', async (event, tabId, rawBounds) => {
     mainWindow.contentView.addChildView(tab.view)
     tab.attached = true
   }
-  await hideDesktopChatViews(tab.id, true)
   tab.view.setBounds(normalizeDesktopChatBounds(rawBounds))
-  const needsReveal = !tab.visible
   tab.view.setVisible(true)
   tab.visible = true
-  if (needsReveal) tab.view.webContents.send('desktop-chat-tab-shown')
+  hideDesktopChatViews(tab.id)
   desktopChatActiveTabId = tab.id
   return { success: true }
 })
 
 ipcMain.handle('desktop-chat-tab-hide', async (event) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
-  await hideDesktopChatViews(null, true)
+  hideDesktopChatViews()
   return { success: true }
 })
 
@@ -657,14 +655,8 @@ function normalizeAiBrowserUrl(rawUrl, allowBlank = false) {
   return url.href
 }
 
-async function hideDesktopChatViews(exceptTabId = null, animate = false) {
+function hideDesktopChatViews(exceptTabId = null) {
   const targets = [...desktopChatTabs.values()].filter((tab) => tab.id !== exceptTabId && tab.visible)
-  if (animate && targets.length) {
-    for (const tab of targets) {
-      if (!tab.view.webContents.isDestroyed()) tab.view.webContents.send('desktop-chat-tab-before-hide')
-    }
-    await new Promise((resolve) => setTimeout(resolve, 110))
-  }
   for (const tab of targets) {
     tab.view.setVisible(false)
     tab.visible = false
