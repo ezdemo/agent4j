@@ -256,10 +256,13 @@ public class SubAgent {
             subLoop.setOutput(wrapped);
         }
 
-        // 继承父级 sessionId 和 sessionService（用于 tools 中正确的会话上下文和用量上报）
+        // 继承父级 sessionId 和 sessionService（用于 tools 中正确的会话上下文和用量上报）。
+        // 文件变更必须由父循环统一 drain 并持久化；否则子循环会提前消费同一会话范围的记录，
+        // 使主消息无法展示“已编辑 X 个文件”。
         if (sessionId != null) {
             subLoop.setSessionId(sessionId);
         }
+        subLoop.setDrainFileChanges(false);
         if (sessionService != null) {
             subLoop.setSessionService(sessionService);
         }
