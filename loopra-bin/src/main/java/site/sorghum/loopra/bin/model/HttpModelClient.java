@@ -15,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import site.sorghum.loopra.bin.config.UserIdProvider;
 
 /**
  * OpenAI 兼容 API 的 HTTP 客户端 —— {@link ModelClient} 的 OkHttp 实现。
@@ -126,6 +127,34 @@ public class HttpModelClient implements ModelClient {
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .retryOnConnectionFailure(false) // 由我们自己的重试逻辑控制
                 .build();
+    }
+
+    /**
+     * 向 OkHttp Request.Builder 添加会话标识请求头。
+     * <p>
+     * 如果当前线程的 {@link #CURRENT_LOG_SESSION} 已设置，
+     * 则添加以下请求头，值均为当前会话 ID：
+     * <ul>
+     *   <li>{@code x-session-affinity}</li>
+     *   <li>{@code X-Claude-Code-Session-Id}</li>
+     *   <li>{@code user_id}</li>
+     *   <li>{@code specific_channel_id}</li>
+     *   <li>{@code Session_id}</li>
+     * </ul>
+     * </p>
+     */
+    private static void addSessionHeaders(Request.Builder builder) {
+        String sessionId = CURRENT_LOG_SESSION.get();
+        String userId = UserIdProvider.getUserId();
+        if (sessionId != null && !sessionId.isEmpty()) {
+            builder.addHeader("x-session-affinity", sessionId);
+            builder.addHeader("X-Claude-Code-Session-Id", sessionId);
+            builder.addHeader("specific_channel_id", sessionId);
+            builder.addHeader("Session_id", sessionId);
+        }
+        if (userId != null && !userId.isEmpty()) {
+            builder.addHeader("user_id", userId);
+        }
     }
 
     /**
@@ -391,13 +420,14 @@ public class HttpModelClient implements ModelClient {
 
         RetryContext retry = new RetryContext("非流式");
         for (int attempt = 0; ; attempt++) {
-            Request request = new Request.Builder()
+            Request.Builder requestBuilder = new Request.Builder()
                     .url(apiUrl)
                     .post(RequestBody.create(jsonBody, MEDIA_TYPE_JSON))
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Authorization", "Bearer " + apiKey)
-                    .addHeader("User-Agent", "opencode/1.14.21 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13")
-                    .build();
+                    .addHeader("User-Agent", "opencode/1.14.21 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13");
+            addSessionHeaders(requestBuilder);
+            Request request = requestBuilder.build();
 
             try (Response response = client.newCall(request).execute()) {
                 int status = response.code();
@@ -409,7 +439,7 @@ public class HttpModelClient implements ModelClient {
                 log.debug("收到API响应（完整响应）: {}", responseText);
 
                 if (retryable(status)) {
-                    retry.waitOrThrow("HTTP " + status, attempt);
+                    retry.waitOrThrow("HTTP " + status + ": " + responseText, attempt);
                     continue;
                 }
 
@@ -461,13 +491,14 @@ public class HttpModelClient implements ModelClient {
 
         RetryContext retry = new RetryContext("流式", true, callback);
         for (int attempt = 0; attempt <= retryDelays.length; attempt++) {
-            Request request = new Request.Builder()
+            Request.Builder requestBuilder = new Request.Builder()
                     .url(apiUrl)
                     .post(RequestBody.create(jsonBody, MEDIA_TYPE_JSON))
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Authorization", "Bearer " + apiKey)
-                    .addHeader("User-Agent", "opencode/1.14.21 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13")
-                    .build();
+                    .addHeader("User-Agent", "opencode/1.14.21 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13");
+            addSessionHeaders(requestBuilder);
+            Request request = requestBuilder.build();
 
             Call call = client.newCall(request);
             activeCall = call;
@@ -479,7 +510,9 @@ public class HttpModelClient implements ModelClient {
                 int status = response.code();
                 if (retryable(status)) {
                     try {
-                        retry.waitOrThrow("HTTP " + status, attempt);
+                        ResponseBody errorBody = response.body();
+                        String err = errorBody != null ? errorBody.string() : "unknown error";
+                        retry.waitOrThrow("HTTP " + status + ": " + err, attempt);
                     } catch (IOException e) {
                         // 用户中断或重试耗尽
                         safeCallback("onDone", callback::onDone);
@@ -507,6 +540,11 @@ public class HttpModelClient implements ModelClient {
 
                     // ★ 记录请求日志
                     writeApiLog(jsonBody);
+                    if (log.isTraceEnabled()) {
+                        String sessionHeader = request.header("Session_id");
+                        String userIdHeader = request.header("user_id");
+                        log.trace("[ai-trace] request headers: Session_id={}, user_id={}", sessionHeader, userIdHeader);
+                    }
 
                     // ★ SSE流错误重试逻辑
                     if (parseResult.sseErrorData != null) {
@@ -592,9 +630,6 @@ public class HttpModelClient implements ModelClient {
                 break;
             }
             if (!line.startsWith("data: ")) {
-                if (!line.isBlank()){
-                    log.error("忽略SSE流非数据行: {}", line);
-                }
                 continue;
             }
             String data = line.substring(6).trim();
@@ -880,7 +915,6 @@ public class HttpModelClient implements ModelClient {
                 body.remove("chat_template_kwargs");
             }
         }
-        body.set("cache_control",ONode.ofJson("{}").set("type", "ephemeral"));
 
         ONode msgs = body.getOrNew(FIELD_MESSAGES).asArray();
         for (ChatMessage m : messages) {
@@ -970,6 +1004,12 @@ public class HttpModelClient implements ModelClient {
 
         if (tools != null && !tools.isEmpty()) {
             body.set(FIELD_TOOLS, tools);
+        }
+
+        // 在 body 中注入 user_id（全局用户标识，用于缓存与身份识别）
+        String userId = UserIdProvider.getUserId();
+        if (userId != null && !userId.isEmpty()) {
+            body.set("user_id", userId);
         }
 
         return body;

@@ -10,6 +10,7 @@
       :workspaces="workspaces"
       @switch-workspace="switchWorkspace"
       @session-updated="refreshTabTitle"
+      @manage-workspaces="requestHome"
       @manage-models="requestModelSettings"
     />
     <RightPanel
@@ -123,6 +124,10 @@ async function addElementInspectionToSession(payload) {
   await nextTick()
   const attached = await chatRef.value?.appendElementInspection?.(payload)
   if (attached) await chatRef.value?.setDraft?.(payload?.message || '')
+}
+
+function requestHome() {
+  window.electronAPI?.desktopChatTabs?.openHome()
 }
 
 function requestModelSettings() {
