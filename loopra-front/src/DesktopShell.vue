@@ -31,6 +31,7 @@
           @keydown.enter="activateTab(tab.id)"
           @keydown.space.prevent="activateTab(tab.id)"
         >
+          <span v-if="workspaceNameOf(tab.workspaceHash)" class="desktop-tab-monogram" :class="badgeTone(workspaceNameOf(tab.workspaceHash))">{{ initial(workspaceNameOf(tab.workspaceHash)) }}</span>
           <span>{{ tab.title }}</span>
           <button class="desktop-tab-close" type="button" :aria-label="`关闭 ${tab.title}`" @click.stop="closeTab(tab.id)">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
@@ -121,6 +122,19 @@ const tabTitle = (sessionName) => {
 }
 
 const nativeTabs = () => window.electronAPI?.desktopChatTabs
+
+// 项目图标：首字符 + 色调（与 TitleBar/DesktopHome 保持一致）
+const initial = (name) => String(name || 'L').trim().charAt(0).toUpperCase() || 'L'
+const badgeTone = (name) => {
+  let hash = 0
+  for (const char of String(name || '')) hash = ((hash * 31) + char.charCodeAt(0)) >>> 0
+  return `tone-${hash % 8}`
+}
+const workspaceNameOf = (workspaceHash) => {
+  if (!workspaceHash) return ''
+  const ws = workspaces.value.find((item) => item.hash === workspaceHash)
+  return ws ? ws.name : ''
+}
 
 function scrollTabs(event) {
   const nav = tabsNav.value
@@ -488,11 +502,20 @@ onBeforeUnmount(() => {
 .desktop-tab { display: inline-flex; align-items: center; gap: 7px; width: clamp(156px, 16vw, 230px); height: 30px; padding: 0 10px; border-radius: 6px; cursor: pointer; flex: 0 0 auto; text-align: left; }
 .desktop-tab:hover { background: var(--bg-3, #f3f4f6); color: var(--fg, #202124); }
 .desktop-tab.active { background: var(--bg-3, #f1f2f4); color: var(--fg, #202124); }
-.desktop-tab.active > span:not(.desktop-tab-close) { font-weight: 500; }
-.desktop-tab > span:not(.desktop-tab-close) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; font-size: 14px; font-weight: 400; }
+.desktop-tab.active > span:not(.desktop-tab-close):not(.desktop-tab-monogram) { font-weight: 500; }
+.desktop-tab > span:not(.desktop-tab-close):not(.desktop-tab-monogram) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; font-size: 14px; font-weight: 400; }
 .desktop-tab-close { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 4px; flex: 0 0 auto; }
 .desktop-tab-close svg { width: 14px; height: 14px; }
 .desktop-tab-close:hover { background: rgba(0, 0, 0, 0.08); }
+.desktop-tab-monogram { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 4px; color: #fff; font-size: 10px; font-weight: 700; line-height: 1; text-shadow: 0 1px rgba(0, 0, 0, 0.25); box-shadow: inset 0 1px rgba(255, 255, 255, 0.25), 0 1px 1px rgba(0, 0, 0, 0.16); }
+.desktop-tab-monogram.tone-0 { background: linear-gradient(135deg, #8b95a3, #5e6878); }
+.desktop-tab-monogram.tone-1 { background: linear-gradient(135deg, #3dd0e8, #18b4d0); }
+.desktop-tab-monogram.tone-2 { background: linear-gradient(135deg, #ffa86b, #ff7a3d); }
+.desktop-tab-monogram.tone-3 { background: linear-gradient(135deg, #9aacf5, #6d80e8); }
+.desktop-tab-monogram.tone-4 { background: linear-gradient(135deg, #6dd49d, #3eb878); }
+.desktop-tab-monogram.tone-5 { background: linear-gradient(135deg, #f87fb5, #e85a9c); }
+.desktop-tab-monogram.tone-6 { background: linear-gradient(135deg, #fcd34d, #f5b800); }
+.desktop-tab-monogram.tone-7 { background: linear-gradient(135deg, #4dd9a6, #20c084); }
 .desktop-tab-add { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 5px; flex: 0 0 auto; cursor: pointer; }
 .desktop-window-controls { height: 100%; display: flex; align-items: center; padding-right: 14px; flex: 0 0 auto; -webkit-app-region: no-drag; }
 .window-button { width: 44px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 5px; }

@@ -24,6 +24,7 @@
     <!-- 自定义标题栏 -->
     <TitleBar
       :session="currentSessionTitle"
+      :workspaceName="currentSessionWorkspaceName"
       :sideOn="sideOpen"
       :hasMessages="true"
       :hasSession="!!currentSession"
@@ -761,6 +762,13 @@ const workspaceName = computed(() => {
   if (!workspace.value) return '选择工作区'
   const parts = workspace.value.split(/[\\/]/)
   return parts[parts.length - 1] || workspace.value
+})
+
+// 当前会话所属工作区的名称（用于顶栏项目图标）
+const currentSessionWorkspaceName = computed(() => {
+  if (!currentSessionWorkspace.value) return ''
+  const ws = workspaces.value.find(w => w.hash === currentSessionWorkspace.value)
+  return ws ? ws.name : ''
 })
 
 // 当前会话所属的工作区 hash
