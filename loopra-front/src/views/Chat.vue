@@ -165,9 +165,11 @@
 
     <!-- 图片预览弹窗 -->
     <Teleport to="body">
-      <div v-if="imagePreviewOpen" class="image-preview-overlay" @click="imagePreviewOpen = false">
-        <img :src="imagePreviewUrl" class="image-preview-full" @click.stop/>
-        <button class="image-preview-close" @click="imagePreviewOpen = false">&times;</button>
+      <div v-if="imagePreviewOpen" class="image-preview-overlay" role="dialog" aria-modal="true" aria-label="图片预览" @click.self="closeImagePreview">
+        <img :src="imagePreviewUrl" alt="图片预览" class="image-preview-full"/>
+        <button type="button" class="image-preview-close" aria-label="关闭图片预览" title="关闭" @click="closeImagePreview">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
       </div>
     </Teleport>
 
@@ -464,6 +466,13 @@ const previewImage = (url) => {
   imagePreviewUrl.value = url
   imagePreviewOpen.value = true
 }
+const closeImagePreview = () => {
+  imagePreviewOpen.value = false
+  imagePreviewUrl.value = ''
+}
+const handleImagePreviewKeydown = (event) => {
+  if (event.key === 'Escape' && imagePreviewOpen.value) closeImagePreview()
+}
 
 // Diff 查看器
 const diffViewer = ref({ open: false, file: '', diff: '', content: '', mode: 'content', loading: false, stat: '', diffStat: '', contentLoaded: false, contentExists: false, diffLoaded: false })
@@ -647,6 +656,7 @@ watch([() => props.workspaceHash, () => props.sessionName], ([ws, sess]) => {
 
 onMounted(() => {
   loadUsage()
+  window.addEventListener('keydown', handleImagePreviewKeydown)
   // 监听复制成功事件
   window.addEventListener('copy-success', (e) => {
     addLog({level: 'INFO', text: '✅ ' + (e.detail || '已复制'), time: Date.now()})
@@ -660,6 +670,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  window.removeEventListener('keydown', handleImagePreviewKeydown)
   window.removeEventListener('copy-success', () => {
   })
   const el = messagesContainer.value
@@ -2210,6 +2221,54 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   gap: 8px;
   padding: 10px 16px;
   border-top: 1px solid var(--border);
+}
+
+/* 图片预览 */
+.image-preview-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 40px;
+  background: rgba(0, 0, 0, 0.72);
+}
+
+.image-preview-full {
+  display: block;
+  max-width: min(92vw, 1440px);
+  max-height: calc(100vh - 80px);
+  object-fit: contain;
+  border-radius: 4px;
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
+}
+
+.image-preview-close {
+  position: fixed;
+  top: 16px;
+  right: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 0;
+  border: 1px solid rgba(255, 255, 255, 0.35);
+  border-radius: 4px;
+  background: rgba(0, 0, 0, 0.35);
+  color: #fff;
+  cursor: pointer;
+}
+
+.image-preview-close:hover,
+.image-preview-close:focus-visible {
+  border-color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+}
+
+.image-preview-close:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
 }
 
 /* ===== 无会话时禁用输入条 ===== */
