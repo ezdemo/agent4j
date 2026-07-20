@@ -372,8 +372,8 @@ watch(() => props.workspaceHash, (hash) => {
 }, {immediate: true})
 
 watch(() => props.workspaces, (workspaces) => {
-  if (!workspaces.some(workspace => workspace.hash === welcomeWorkspaceHash.value)) {
-    welcomeWorkspaceHash.value = workspaces[0]?.hash || ''
+  if (workspaces.length && !workspaces.some(workspace => workspace.hash === welcomeWorkspaceHash.value)) {
+    welcomeWorkspaceHash.value = workspaces[0].hash
   }
 }, {immediate: true})
 

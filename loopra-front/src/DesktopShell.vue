@@ -256,6 +256,7 @@ async function initializeWorkspaceContext() {
   if (!switchResult.success) {
     throw new Error(switchResult.message || '切换默认工作区失败')
   }
+  activeWorkspaceHash.value = selectedWorkspace.hash
 }
 
 async function initializeWorkspace() {
