@@ -18,6 +18,11 @@
       <div v-if="!channels.length" class="model-channels-empty">暂无模型渠道</div>
       <article v-for="(channel, index) in channels" :key="channel.id" class="model-channel" :class="{ active: channel.id === activeChannelId }">
         <header class="model-channel-header">
+          <button class="model-channel-toggle" type="button" :aria-expanded="channel.expanded" @click="toggleChannel(channel)">
+            <svg class="model-collapse-icon" :class="{ expanded: channel.expanded }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+            <span class="model-channel-title">{{ channel.name || `渠道 ${index + 1}` }}</span>
+            <span class="model-channel-count">{{ channel.models.length }} 个模型</span>
+          </button>
           <label class="model-channel-current">
             <input v-model="activeChannelId" :value="channel.id" type="radio" name="active-channel" @change="ensureCurrentModel(channel)" />
             <span>当前渠道</span>
@@ -26,7 +31,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
           </button>
         </header>
-        <div class="model-channel-fields">
+        <div v-if="channel.expanded" class="model-channel-fields">
           <label>
             <span>渠道名称</span>
             <input v-model.trim="channel.name" type="text" placeholder="例如 OpenAI" />
@@ -57,8 +62,12 @@
             </header>
 
             <div v-if="!channel.models.length" class="model-list-empty">尚未添加模型</div>
-            <article v-for="(model, modelIndex) in channel.models" :key="model.id" class="model-config-row">
-              <div class="model-config-main">
+            <article v-for="(model, modelIndex) in channel.models" :key="model.id" class="model-config-row" :class="{ expanded: model.expanded }">
+              <header class="model-config-header">
+                <button class="model-config-toggle" type="button" :aria-expanded="model.expanded" @click="toggleModel(model)">
+                  <svg class="model-collapse-icon" :class="{ expanded: model.expanded }" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+                  <span>{{ model.name || `模型 ${modelIndex + 1}` }}</span>
+                </button>
                 <label class="model-config-current" title="设为当前模型">
                   <input
                     :name="`current-model-${channel.id}`"
@@ -68,33 +77,37 @@
                   />
                   <span class="sr-only">设为当前模型</span>
                 </label>
-                <label>
-                  <span>名称</span>
-                  <input v-model.trim="model.name" type="text" placeholder="例如 gpt-4o" @change="ensureCurrentModel(channel)" />
-                </label>
-                <label>
-                  <span>上下文（tokens）</span>
-                  <input v-model="model.contextTokens" type="number" min="1" step="1" placeholder="可空" />
-                </label>
-                <label class="model-config-switch">
-                  <input v-model="model.imageInput" type="checkbox" />
-                  <span>支持图片输入</span>
-                </label>
                 <button class="model-config-delete" type="button" title="删除模型" :aria-label="`删除模型 ${model.name || modelIndex + 1}`" @click="removeModel(channel, modelIndex)">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
                 </button>
-              </div>
-              <div class="model-config-price">
-                <label class="model-config-switch">
-                  <input v-model="model.priceEnabled" type="checkbox" />
-                  <span>配置价格（元 / 百万 tokens）</span>
-                </label>
-                <template v-if="model.priceEnabled">
-                  <label v-for="field in priceFields" :key="field">
-                    <span>{{ priceFieldLabels[field] }}</span>
-                    <input v-model="model.price[field]" type="number" min="0" step="0.001" :aria-label="`${model.name || '模型'} ${priceFieldLabels[field]}价格`" />
+              </header>
+              <div v-if="model.expanded" class="model-config-fields">
+                <div class="model-config-main">
+                  <label>
+                    <span>名称</span>
+                    <input v-model.trim="model.name" type="text" placeholder="例如 gpt-4o" @change="ensureCurrentModel(channel)" />
                   </label>
-                </template>
+                  <label>
+                    <span>上下文（tokens）</span>
+                    <input v-model="model.contextTokens" type="number" min="1" step="1" placeholder="可空" />
+                  </label>
+                  <label class="model-config-switch">
+                    <input v-model="model.imageInput" type="checkbox" />
+                    <span>支持图片输入</span>
+                  </label>
+                </div>
+                <div class="model-config-price">
+                  <label class="model-config-switch">
+                    <input v-model="model.priceEnabled" type="checkbox" />
+                    <span>配置价格（元 / 百万 tokens）</span>
+                  </label>
+                  <template v-if="model.priceEnabled">
+                    <label v-for="field in priceFields" :key="field">
+                      <span>{{ priceFieldLabels[field] }}</span>
+                      <input v-model="model.price[field]" type="number" min="0" step="0.001" :aria-label="`${model.name || '模型'} ${priceFieldLabels[field]}价格`" />
+                    </label>
+                  </template>
+                </div>
               </div>
             </article>
             <button class="model-config-add" type="button" @click="addModel(channel)">
@@ -150,6 +163,7 @@ function normalizeContextLength(value) {
 function newModel(name = '') {
   return {
     id: makeId('model'),
+    expanded: false,
     name,
     contextTokens: null,
     imageInput: false,
@@ -178,6 +192,7 @@ function normalizeChannel(channel, index) {
   const models = Array.isArray(channel.models) ? channel.models.map(normalizeModel) : []
   return {
     id: channel.id || makeId(),
+    expanded: false,
     name: channel.name || `渠道 ${index + 1}`,
     baseUrl: channel.baseUrl || '',
     apiKey: '',
@@ -201,8 +216,17 @@ function selectCurrentModel(channel, model) {
   currentModel.value = model.name
 }
 
+function toggleChannel(channel) {
+  channel.expanded = !channel.expanded
+}
+
+function toggleModel(model) {
+  model.expanded = !model.expanded
+}
+
 function addModel(channel) {
   const model = newModel()
+  model.expanded = true
   channel.models.push(model)
 }
 
@@ -213,6 +237,7 @@ function removeModel(channel, index) {
 
 function addChannel() {
   const channel = normalizeChannel({}, channels.value.length)
+  channel.expanded = true
   channels.value.push(channel)
   activeChannelId.value = channel.id
   currentModel.value = ''
@@ -348,6 +373,8 @@ onMounted(load)
 .model-channels-back, .model-channel-delete, .model-config-delete { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 5px; background: transparent; color: var(--fg-3); cursor: pointer; }
 .model-channels-back:hover { background: var(--bg-3); color: var(--fg); }
 .model-channels-back svg, .model-channel-delete svg, .model-config-delete svg { width: 17px; height: 17px; }
+.model-collapse-icon { width: 16px; height: 16px; flex: 0 0 auto; transition: transform .15s ease; }
+.model-collapse-icon.expanded { transform: rotate(90deg); }
 .model-channels-save { height: 32px; margin-left: auto; padding: 0 14px; border: 0; border-radius: 5px; background: var(--accent); color: #fff; font: inherit; font-size: 13px; cursor: pointer; }
 .model-channels-save:disabled { opacity: .55; cursor: default; }
 .model-channels[data-theme="dark"] .model-channels-save:not(:disabled) { background: #d4d4d8; color: #18181b; }
@@ -357,12 +384,17 @@ onMounted(load)
 .model-channels-empty { height: 100%; display: grid; place-items: center; color: var(--fg-4); font-size: 13px; }
 .model-channel { min-width: 0; margin-bottom: 14px; overflow: hidden; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); }
 .model-channel.active { border-color: color-mix(in srgb, var(--accent) 52%, var(--border)); }
-.model-channel-header { height: 42px; display: flex; align-items: center; padding: 0 10px 0 14px; border-bottom: 1px solid var(--border); background: var(--bg-2); }
-.model-channel-current { display: inline-flex; align-items: center; gap: 7px; color: var(--fg-2); font-size: 12px; cursor: pointer; }
+.model-channel-header { height: 42px; display: flex; align-items: center; gap: 8px; padding: 0 10px 0 8px; background: var(--bg-2); }
+.model-channel-toggle, .model-config-toggle { min-width: 0; display: inline-flex; align-items: center; gap: 7px; border: 0; background: transparent; color: var(--fg-2); font: inherit; cursor: pointer; text-align: left; }
+.model-channel-toggle { flex: 1; height: 100%; padding: 0 6px; }
+.model-channel-toggle:hover, .model-config-toggle:hover { color: var(--fg); }
+.model-channel-title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 13px; font-weight: 500; }
+.model-channel-count { flex: 0 0 auto; color: var(--fg-4); font-size: 12px; }
+.model-channel-current { display: inline-flex; align-items: center; gap: 7px; color: var(--fg-2); font-size: 12px; cursor: pointer; white-space: nowrap; }
 .model-channel-current input, .model-config-current input, .model-config-switch input { accent-color: var(--accent); }
-.model-channel-delete { margin-left: auto; color: var(--fg-4); }
+.model-channel-delete { color: var(--fg-4); }
 .model-channel-delete:hover, .model-config-delete:hover { color: #c2413b; background: rgba(220, 38, 38, .09); }
-.model-channel-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 16px; }
+.model-channel-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 16px; border-top: 1px solid var(--border); }
 .model-channel-fields > label, .model-config-row label { min-width: 0; display: grid; gap: 5px; color: var(--fg-3); font-size: 12px; }
 .model-channel-fields input, .model-config-row input { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 5px; outline: none; background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; }
 .model-channel-fields > label input, .model-config-row input[type="text"], .model-config-row input[type="number"] { height: 32px; padding: 0 8px; }
@@ -376,12 +408,15 @@ onMounted(load)
 .model-channel-spin { animation: model-channel-spin .8s linear infinite; }
 @keyframes model-channel-spin { to { transform: rotate(360deg); } }
 .model-list-empty { padding: 10px; border: 1px dashed var(--border); border-radius: 5px; color: var(--fg-4); font-size: 12px; text-align: center; }
-.model-config-row { display: grid; gap: 7px; padding: 9px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-2); }
-.model-config-main { display: grid; grid-template-columns: auto minmax(150px, 1.4fr) minmax(120px, .9fr) auto auto; align-items: end; gap: 8px; }
-.model-config-current { display: flex !important; align-items: center; justify-content: center; height: 32px; cursor: pointer; }
+.model-config-row { overflow: hidden; border: 1px solid var(--border); border-radius: 6px; background: var(--bg-2); }
+.model-config-header { height: 38px; display: flex; align-items: center; gap: 7px; padding: 0 5px 0 7px; }
+.model-config-toggle { flex: 1; height: 100%; overflow: hidden; font-size: 13px; }
+.model-config-toggle span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-config-current { display: flex !important; align-items: center; justify-content: center; width: 30px; height: 30px; cursor: pointer; }
 .model-config-current input, .model-config-switch input { width: auto; height: auto; margin: 0; box-shadow: none; }
+.model-config-fields { display: grid; gap: 7px; padding: 9px; border-top: 1px solid var(--border); }
+.model-config-main { display: grid; grid-template-columns: minmax(150px, 1.4fr) minmax(120px, .9fr) auto; align-items: end; gap: 8px; }
 .model-config-switch { display: inline-flex !important; grid-template-columns: auto 1fr; align-items: center; gap: 6px !important; min-height: 32px; color: var(--fg-2) !important; cursor: pointer; white-space: nowrap; }
-.model-config-delete { align-self: end; }
 .model-config-price { display: flex; align-items: end; gap: 8px; padding-top: 7px; border-top: 1px dashed var(--border); }
 .model-config-price > label:not(.model-config-switch) { width: 100px; }
 .model-config-price .model-config-switch { margin-right: auto; }
@@ -391,5 +426,5 @@ onMounted(load)
 .model-config-add:hover, .model-channel-add:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
 .model-channel-add svg { width: 16px; height: 16px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-@media (max-width: 700px) { .model-channels-header { padding: 0 14px; } .model-channels-header p { display: none; } .model-channels-body { width: 100%; padding: 14px 14px 32px; } .model-channel-fields { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px; } .model-channel-models { grid-column: auto; } .model-config-main { grid-template-columns: auto minmax(0, 1fr) auto; } .model-config-main > label:nth-of-type(3) { grid-column: 2; } .model-config-main .model-config-switch { grid-column: 2; } .model-config-delete { grid-column: 3; grid-row: 1; } .model-config-price { flex-wrap: wrap; } .model-config-price .model-config-switch { width: 100%; } }
+@media (max-width: 700px) { .model-channels-header { padding: 0 14px; } .model-channels-header p { display: none; } .model-channels-body { width: 100%; padding: 14px 14px 32px; } .model-channel-current span { display: none; } .model-channel-fields { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px; } .model-channel-models { grid-column: auto; } .model-config-main { grid-template-columns: minmax(0, 1fr) auto; } .model-config-main .model-config-switch { grid-column: 1 / -1; } .model-config-price { flex-wrap: wrap; } .model-config-price .model-config-switch { width: 100%; } }
 </style>
