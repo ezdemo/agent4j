@@ -741,100 +741,121 @@ onBeforeUnmount(() => {
   display: flex;
   flex-direction: column;
   height: 100%;
-  font-size: 12px;
+  min-height: 0;
   color: var(--fg);
+  background: var(--bg);
+  font-size: 13px;
 }
 
-/* ── 工具栏 ── */
+/* ── 控制栏 ── */
 .elem-toolbar {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  padding: 6px 8px;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  background: var(--bg);
   border-bottom: 1px solid var(--glass-border);
 }
 
 .elem-url-bar {
   display: flex;
-  gap: 4px;
+  flex: 1;
+  min-width: 0;
+  gap: 8px;
   align-items: center;
 }
 
 .elem-url-input {
   flex: 1;
-  height: 28px;
-  padding: 0 8px;
-  font-size: 12px;
+  min-width: 0;
+  height: 34px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 13px;
   border: 1px solid var(--border);
   border-radius: var(--r);
-  background: var(--bg);
+  background: var(--bg-2);
   color: var(--fg);
   outline: none;
-  transition: border-color 0.15s;
+  transition: border-color var(--t), background var(--t), box-shadow var(--t);
+}
+
+.elem-url-input::placeholder {
+  color: var(--fg-4);
 }
 
 .elem-url-input:focus {
   border-color: var(--accent);
+  background: var(--bg);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 12%, transparent);
 }
 
 .elem-go-btn {
-  width: 28px;
-  height: 28px;
+  width: 34px;
+  height: 34px;
   display: flex;
+  flex: 0 0 auto;
   align-items: center;
   justify-content: center;
-  border: 1px solid var(--border);
+  border: 0;
   border-radius: var(--r);
   background: var(--accent);
   color: #fff;
   cursor: pointer;
-  transition: all 0.15s;
+  transition: background var(--t), transform var(--t);
 }
 
 .elem-go-btn:hover:not(:disabled) {
   background: var(--accent-dark, #1d4ed8);
 }
 
+.elem-go-btn:active:not(:disabled) {
+  transform: scale(0.96);
+}
+
 .elem-go-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
 .elem-design-toggle {
   display: flex;
+  flex: 0 0 auto;
 }
 
 .design-btn {
   display: flex;
   align-items: center;
-  gap: 5px;
-  height: 26px;
-  padding: 0 10px;
-  font-size: 11px;
+  justify-content: center;
+  gap: 6px;
+  height: 34px;
+  padding: 0 12px;
+  font: inherit;
+  font-size: 12px;
   font-weight: 500;
   border: 1px solid var(--border);
   border-radius: var(--r);
-  background: var(--bg);
-  color: var(--fg-3);
+  background: var(--bg-2);
+  color: var(--fg-2);
   cursor: pointer;
-  transition: all 0.15s;
-  width: 100%;
-  justify-content: center;
+  transition: background var(--t), border-color var(--t), color var(--t);
+  white-space: nowrap;
 }
 
 .design-btn:hover:not(:disabled) {
   background: var(--bg-3);
+  border-color: var(--fg-4);
   color: var(--fg);
 }
 
 .design-btn.active {
-  background: #2563eb;
-  color: #fff;
-  border-color: #2563eb;
+  background: var(--accent-bg);
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 45%, var(--border));
 }
 
 .design-btn:disabled {
-  opacity: 0.4;
+  opacity: 0.45;
   cursor: not-allowed;
 }
 
@@ -1007,24 +1028,25 @@ onBeforeUnmount(() => {
   color: var(--fg-2);
 }
 
-/* ── 提示 ── */
+/* ── 设计模式提示 ── */
 .elem-hint {
   display: flex;
   align-items: center;
-  gap: 6px;
-  padding: 6px 8px;
-  font-size: 11px;
-  color: var(--fg-3);
-  background: rgba(37, 99, 235, 0.06);
-  border-bottom: 1px solid var(--glass-border);
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-bottom: 1px solid color-mix(in srgb, var(--accent) 18%, var(--glass-border));
 }
 
 /* ── iframe 容器 ── */
 .elem-frame-wrap {
   flex: 1;
+  min-height: 0;
   position: relative;
   overflow: hidden;
-  background: #fff;
+  background: var(--bg-2);
 }
 
 .elem-frame-wrap.design-active {
@@ -1048,21 +1070,35 @@ onBeforeUnmount(() => {
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  align-self: center;
   height: 100%;
-  gap: 8px;
+  gap: 10px;
   color: var(--fg-4);
   text-align: center;
-  padding: 20px;
+  padding: 24px;
+}
+
+.elem-placeholder svg {
+  width: 44px;
+  height: 44px;
+  padding: 12px;
+  color: var(--accent);
+  background: var(--accent-bg);
+  border-radius: 12px;
+  box-sizing: content-box;
 }
 
 .elem-placeholder p {
-  margin: 0;
-  font-size: 13px;
-  color: var(--fg-3);
+  margin: 4px 0 0;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--fg-2);
 }
 
 .hint {
-  font-size: 11px;
+  max-width: 260px;
+  font-size: 12px;
+  line-height: 1.6;
   color: var(--fg-4);
 }
 
@@ -1093,10 +1129,11 @@ onBeforeUnmount(() => {
 /* ── 底部状态 ── */
 .elem-status {
   display: flex;
+  flex: 0 0 28px;
   align-items: center;
-  padding: 4px 8px;
+  padding: 0 12px;
+  background: var(--bg);
   border-top: 1px solid var(--glass-border);
-  min-height: 24px;
 }
 
 .elem-status-text {
@@ -1107,6 +1144,20 @@ onBeforeUnmount(() => {
 .elem-status-text.inspecting {
   color: var(--accent);
   font-weight: 500;
+}
+
+@media (max-width: 520px) {
+  .elem-toolbar {
+    flex-wrap: wrap;
+  }
+
+  .elem-design-toggle {
+    width: 100%;
+  }
+
+  .design-btn {
+    width: 100%;
+  }
 }
 
 /* ── 弹窗遮罩 ── */
