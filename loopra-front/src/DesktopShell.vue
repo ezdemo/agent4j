@@ -61,7 +61,7 @@
         <button type="button" @click="initializeWorkspace">重试</button>
       </div>
       <DesktopHome
-      v-else-if="!starting && !activeTabId && !showSkills && !showSettings && !showModelChannels"
+      v-else-if="!starting && !activeTabId && !showSkills && !showSettings && !showModelChannels && !showDashboard"
         :workspaces="workspaces"
         :active-workspace-hash="activeWorkspaceHash"
         :theme="theme"
@@ -70,6 +70,7 @@
         @new-session="createTab"
         @open-session="openSession"
         @open-skills="openSkills"
+        @open-dashboard="openDashboard"
         @open-settings="openSettings"
         @toggle-theme="toggleTheme"
         @add-workspace="addWorkspaceFromFolder"
@@ -79,6 +80,15 @@
       />
       <SettingsView v-else-if="!starting && showSkills" class="desktop-settings" market-only />
       <ModelChannels v-else-if="!starting && showModelChannels" class="desktop-settings" :show-back="false" />
+      <section v-else-if="!starting && showDashboard" class="desktop-dashboard">
+        <header class="desktop-dashboard-header">
+          <div>
+            <h1>数据面板</h1>
+            <p>查看模型调用的 Token、费用和请求统计</p>
+          </div>
+        </header>
+        <DashboardPanel class="desktop-dashboard-content" />
+      </section>
       <SettingsView v-else-if="!starting && showSettings" class="desktop-settings" />
     </main>
   </div>
@@ -94,6 +104,7 @@ import SplashScreen from './components/SplashScreen.vue'
 import DesktopHome from './DesktopHome.vue'
 import SettingsView from './views/Settings.vue'
 import ModelChannels from './ModelChannels.vue'
+import DashboardPanel from './components/Dashboard.vue'
 
 const store = useAppStore()
 const theme = computed(() => store.settings.theme)
@@ -106,10 +117,11 @@ const homeRefreshKey = ref(0)
 const showSkills = ref(false)
 const showSettings = ref(false)
 const showModelChannels = ref(false)
+const showDashboard = ref(false)
 const tabs = ref([])
 const activeTabId = ref('')
 const isHomeActive = computed(() => !starting.value && !startupError.value
-  && !activeTabId.value && !showSkills.value && !showSettings.value && !showModelChannels.value)
+  && !activeTabId.value && !showSkills.value && !showSettings.value && !showModelChannels.value && !showDashboard.value)
 const tabsNav = ref(null)
 const host = ref(null)
 let resizeObserver = null
@@ -331,10 +343,18 @@ async function openModelChannels() {
   await renderActiveTab()
 }
 
+async function openDashboard() {
+  hideStandaloneViews()
+  showDashboard.value = true
+  activeTabId.value = ''
+  await renderActiveTab()
+}
+
 function hideStandaloneViews() {
   showSkills.value = false
   showSettings.value = false
   showModelChannels.value = false
+  showDashboard.value = false
 }
 
 function toggleTheme() {
@@ -538,6 +558,11 @@ onBeforeUnmount(() => {
 .close-mark::after { transform: rotate(-45deg); }
 .desktop-view-host { flex: 1; min-width: 0; min-height: 0; background: var(--bg, #fff); }
 .desktop-settings { height: 100%; min-height: 0; overflow: hidden; }
+.desktop-dashboard { height: 100%; min-height: 0; overflow: auto; }
+.desktop-dashboard-header { height: 64px; display: flex; align-items: center; padding: 0 28px; border-bottom: 1px solid var(--border, #e8e8e8); }
+.desktop-dashboard-header h1 { margin: 0; font-size: 16px; font-weight: 600; }
+.desktop-dashboard-header p { margin: 3px 0 0; color: var(--fg-4, #9ca3af); font-size: 12px; }
+.desktop-dashboard-content { box-sizing: border-box; width: min(100%, 960px); margin: 0 auto; padding: 28px 24px 48px; }
 .desktop-empty { height: 100%; display: grid; place-items: center; color: var(--fg-4, #9ca3af); font-size: 14px; }
 .desktop-error { align-content: center; gap: 12px; }
 .desktop-error button { justify-self: center; border: 1px solid var(--border, #e5e7eb); border-radius: 5px; background: var(--bg, #fff); color: var(--fg, #202124); padding: 6px 14px; cursor: pointer; }

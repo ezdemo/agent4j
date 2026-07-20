@@ -3,6 +3,7 @@
     <div class="dashboard-toolbar">
       <div class="dashboard-toolbar-actions">
         <select v-model="days" class="days-select" @change="fetchData">
+          <option :value="1">今天</option>
           <option :value="7">近 7 天</option>
           <option :value="14">近 14 天</option>
           <option :value="30">近 30 天</option>
