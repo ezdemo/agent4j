@@ -167,6 +167,9 @@ public class AgentService {
      */
     private final SessionAgentCache sessionCache = new SessionAgentCache();
 
+    /** 会话当前使用的模型和渠道，用于避免不同会话间互相覆盖。 */
+    private final ConcurrentHashMap<String, ModelTarget> sessionModelTargets = new ConcurrentHashMap<>();
+
     /**
      * 共享的 ToolRegistry（所有会话复用）
      */
@@ -262,6 +265,7 @@ public class AgentService {
 
         // 2. 清空所有缓存
         sessionCache.clear();
+        sessionModelTargets.clear();
 
         // 3. 重新加载配置并构建共享组件
         try {
@@ -349,9 +353,34 @@ public class AgentService {
      * @return Agent 实例
      */
     private LoopraAgent getOrCreateAgent(String sessionKey) {
+        LoopraAgent existing = sessionCache.get(sessionKey);
+        if (existing != null) return existing;
+        return getOrCreateAgent(sessionKey, defaultModelTarget());
+    }
+
+    /**
+     * 获取会话 Agent，并确保它连接到本次请求指定的模型渠道。
+     * 同一会话的调用方已持有会话锁，因此渠道切换不会与流式响应并发发生。
+     */
+    private LoopraAgent getOrCreateAgent(String sessionKey, ModelTarget target) {
         // 更新访问顺序并检查缓存
         LoopraAgent agent = sessionCache.get(sessionKey);
         if (agent != null) {
+            ModelTarget currentTarget = sessionModelTargets.get(sessionKey);
+            if (target.equals(currentTarget)) return agent;
+            if (currentTarget != null && currentTarget.channelId().equals(target.channelId())) {
+                agent.setModel(target.model());
+                sessionModelTargets.put(sessionKey, target);
+                return agent;
+            }
+
+            // 渠道切换需要替换 HttpModelClient；先落盘，再从同一会话历史恢复新 Agent。
+            agent.flushSession();
+            agent.dispose();
+            agent = createAgent(sessionKey, target);
+            sessionCache.put(sessionKey, agent);
+            sessionModelTargets.put(sessionKey, target);
+            log.info("[web] 会话模型渠道已切换: {}, {}/{}", sessionKey, target.channelId(), target.model());
             return agent;
         }
 
@@ -360,54 +389,70 @@ public class AgentService {
             // 双重检查
             agent = sessionCache.get(sessionKey);
             if (agent != null) {
-                return agent;
+                return getOrCreateAgent(sessionKey, target);
             }
-
-            // 解析会话标识
-            String[] parts = sessionKey.split("::", 2);
-            String workspacePath = parts[0];
-            String sessionName = parts.length > 1 ? parts[1] : "default";
 
             // LRU 淘汰
             sessionCache.evictIfNeeded();
-
-            // 构建轻量级 Agent（每个 Agent 拥有独立的 ModelClient）
-            LoopraConfig cfg = ConfigService.getConfig();
-            String apiUrl = cfg.chatApiUrl();
-            String apiKey = cfg.apiKey();
-            String model = cfg.model();
-            String reasoningEffort = cfg.reasoningEffort();
-            String hitl = cfg.hitl();
-
-            LoopraAgent.Builder builder = LoopraAgent.builder()
-                    .config(cfg)
-                    .apiUrl(apiUrl)
-                    .apiKey(apiKey)
-                    .model(model)
-                    .workspace(Paths.get(workspacePath))
-                    .commandRegistry(commandRegistry)
-                    .hitl(hitl)
-                    .loopraConfig(cfg)
-                    .modelClient(new HttpModelClient(apiUrl, apiKey, model, reasoningEffort));
-
-            agent = builder.buildLightweight();
-
-            // 切换到指定会话（含 default，以恢复 usage / title）
-            agent.bindSession(sessionName);
-
-            // 注册 token 用量追踪
-            agent.setListener(new WebUsageListener(agent));
-
-            // 默认使用 NOOP 输出（API 调用时由 SseEmitter 接管）
-            agent.setOutput(AgentOutput.NOOP);
+            agent = createAgent(sessionKey, target);
 
             // 缓存 Agent
             sessionCache.put(sessionKey, agent);
+            sessionModelTargets.put(sessionKey, target);
 
             log.info("[web] 创建新 Agent: {}", sessionKey);
             return agent;
         }
     }
+
+    private LoopraAgent createAgent(String sessionKey, ModelTarget target) {
+        String[] parts = sessionKey.split("::", 2);
+        String workspacePath = parts[0];
+        String sessionName = parts.length > 1 ? parts[1] : "default";
+        LoopraConfig cfg = ConfigService.getConfig();
+        LoopraConfig.ModelChannel channel = cfg.modelChannel(target.channelId());
+        if (channel == null) throw new ServiceException("模型渠道不存在: " + target.channelId());
+
+        String apiUrl = channel.baseUrl();
+        String apiKey = channel.apiKey();
+        String reasoningEffort = cfg.reasoningEffort();
+        String hitl = cfg.hitl();
+        LoopraAgent.Builder builder = LoopraAgent.builder()
+                .config(cfg)
+                .apiUrl(apiUrl)
+                .apiKey(apiKey)
+                .model(target.model())
+                .workspace(Paths.get(workspacePath))
+                .commandRegistry(commandRegistry)
+                .hitl(hitl)
+                .loopraConfig(cfg)
+                .modelClient(new HttpModelClient(apiUrl, apiKey, target.model(), reasoningEffort));
+        LoopraAgent agent = builder.buildLightweight();
+        agent.bindSession(sessionName);
+        agent.setListener(new WebUsageListener(agent));
+        agent.setOutput(AgentOutput.NOOP);
+        return agent;
+    }
+
+    private ModelTarget defaultModelTarget() {
+        LoopraConfig cfg = ConfigService.getConfig();
+        LoopraConfig.ModelChannel channel = cfg.activeModelChannel();
+        return new ModelTarget(cfg.model(), channel != null ? channel.id() : "default");
+    }
+
+    private ModelTarget resolveModelTarget(String requestedModel, String requestedChannelId) {
+        LoopraConfig cfg = ConfigService.getConfig();
+        ModelTarget fallback = defaultModelTarget();
+        String channelId = requestedChannelId == null || requestedChannelId.isBlank()
+                ? fallback.channelId() : requestedChannelId.trim();
+        if (cfg.modelChannel(channelId) == null) {
+            throw new ServiceException("模型渠道不存在: " + channelId);
+        }
+        String model = requestedModel == null || requestedModel.isBlank() ? fallback.model() : requestedModel.trim();
+        return new ModelTarget(model, channelId);
+    }
+
+    private record ModelTarget(String model, String channelId) {}
 
     /**
      * 获取会话级锁。
@@ -508,6 +553,13 @@ public class AgentService {
         }
     }
 
+    /** 中断指定工作区和会话的当前生成，不影响其他并行会话。 */
+    public void abortChat(String workspacePath, String sessionName) {
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        LoopraAgent agent = sessionCache.get(sessionKey);
+        if (agent != null) agent.abort();
+    }
+
     /**
      * 截断会话历史：删除包含指定撤回定位 ID 的用户消息及之后的所有消息，
      * 同时重写 JSONL 文件使持久化数据同步。
@@ -587,7 +639,8 @@ public class AgentService {
     /**
      * 流式聊天（多模态）—— 使用 {@link UserMessage} 统一表示文本+图片。
      */
-    public void chatStream(UserMessage userMessage, String workspacePath, String sessionName, SseEmitter emitter) {
+    public void chatStream(UserMessage userMessage, String workspacePath, String sessionName, SseEmitter emitter,
+                           String requestedModel, String requestedChannelId) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         ReentrantLock lock = getSessionLock(sessionKey);
         lock.lock();
@@ -599,7 +652,7 @@ public class AgentService {
         HttpModelClient.CURRENT_LOG_SESSION.set(effectiveSessionName);
 
         try {
-            LoopraAgent agent = getOrCreateAgent(sessionKey);
+            LoopraAgent agent = getOrCreateAgent(sessionKey, resolveModelTarget(requestedModel, requestedChannelId));
 
             // 设置 AgentOutput：将所有事件桥接到 SSE
             agent.setOutput(new SseAgentOutput(emitter));

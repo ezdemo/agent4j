@@ -211,7 +211,10 @@
         :currentSkill="currentSkill"
         :currentPermission="currentPermission"
         :petState="petState"
+        :queued-messages="queuedMessages"
         @send="(imgs, text) => sendMessage(imgs, text)"
+        @remove-queued="removeQueuedMessage"
+        @guide-queued="guideQueuedMessage"
         @abort="abortChat"
         @clear="clearChat"
         @export="exportChat"
@@ -264,6 +267,16 @@ import {useAppStore} from '../stores/app'
 const handleSwitchModel = async (modelName, channelId) => {
   const currentChannelId = availableModels.value.find((model) => model.active)?.channelId
   if (modelName === currentModel.value && (!channelId || channelId === currentChannelId)) return
+  if (props.sessionName) {
+    const selection = {model: modelName, channelId: channelId || currentChannelId || ''}
+    sessionModelSelections.value = {...sessionModelSelections.value, [conversationKey()]: selection}
+    currentModel.value = modelName
+    availableModels.value = availableModels.value.map(model => ({
+      ...model,
+      active: model.name === selection.model && (model.channelId || '') === selection.channelId
+    }))
+    return
+  }
   try {
     const payload = {model: modelName}
     if (channelId) payload.modelChannelId = channelId
@@ -572,6 +585,72 @@ const closeDiffViewer = () => {
 
 const messages = computed(() => store.getSessionMessages(props.sessionName))
 const streaming = computed(() => store.getSessionStreaming(props.sessionName))
+const queuedMessagesBySession = ref({})
+const SESSION_MODEL_STORAGE_KEY = 'loopra.session-model-selections'
+const loadSessionModelSelections = () => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(SESSION_MODEL_STORAGE_KEY) || '{}')
+    return stored && typeof stored === 'object' ? stored : {}
+  } catch {
+    return {}
+  }
+}
+const sessionModelSelections = ref(loadSessionModelSelections())
+const conversationKey = (workspaceHash = props.workspaceHash, sessionName = props.sessionName) => `${workspaceHash || ''}::${sessionName || ''}`
+const queuedMessages = computed(() => queuedMessagesBySession.value[conversationKey()] || [])
+
+watch(sessionModelSelections, selections => {
+  localStorage.setItem(SESSION_MODEL_STORAGE_KEY, JSON.stringify(selections))
+}, {deep: true})
+
+const getSessionModelSelection = (sessionName = props.sessionName, workspaceHash = props.workspaceHash) => {
+  const selected = sessionModelSelections.value[conversationKey(workspaceHash, sessionName)]
+  if (selected) return selected
+  const active = availableModels.value.find(model => model.active)
+  return {model: currentModel.value, channelId: active?.channelId || ''}
+}
+
+const addQueuedMessage = (sessionName, workspaceHash, images, text, modelSelection) => {
+  if (!sessionName) return
+  const key = conversationKey(workspaceHash, sessionName)
+  const queue = queuedMessagesBySession.value[key] || []
+  queuedMessagesBySession.value = {
+    ...queuedMessagesBySession.value,
+    [key]: [...queue, {id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, workspaceHash, images, text, modelSelection}]
+  }
+}
+
+const takeQueuedMessage = (sessionName, workspaceHash, id) => {
+  const key = conversationKey(workspaceHash, sessionName)
+  const queue = queuedMessagesBySession.value[key] || []
+  const item = queue.find(message => message.id === id)
+  if (!item) return null
+  queuedMessagesBySession.value = {
+    ...queuedMessagesBySession.value,
+    [key]: queue.filter(message => message.id !== id)
+  }
+  return item
+}
+
+const removeQueuedMessage = (id) => {
+  takeQueuedMessage(props.sessionName, props.workspaceHash, id)
+}
+
+const sendNextQueuedMessage = async (sessionName, workspaceHash) => {
+  if (!sessionName || store.getSessionStreaming(sessionName)) return
+  const queue = queuedMessagesBySession.value[conversationKey(workspaceHash, sessionName)] || []
+  const next = queue[0]
+  if (!next) return
+  takeQueuedMessage(sessionName, workspaceHash, next.id)
+  await sendMessage(next.images, next.text, next.modelSelection, sessionName, workspaceHash)
+}
+
+const guideQueuedMessage = async (id) => {
+  const queued = takeQueuedMessage(props.sessionName, props.workspaceHash, id)
+  if (!queued) return
+  if (streaming.value) await abortChat()
+  await sendMessage(queued.images, queued.text, queued.modelSelection, props.sessionName, queued.workspaceHash)
+}
 
 const ESTIMATED_MESSAGE_HEIGHT = 320
 const VIRTUAL_OVERSCAN = 1200
@@ -718,11 +797,20 @@ const loadUsage = async (override) => {
       ? configRes.value.data?.model || ''
       : ''
     if (modelsRes.status === 'fulfilled' && modelsRes.value.success) {
-      currentModel.value = modelsRes.value.data?.current
+      const defaultModel = modelsRes.value.data?.current
         || modelsRes.value.data?.models?.find(model => model.active)?.name
         || configuredModel
         || currentModel.value
-      availableModels.value = modelsRes.value.data?.models || []
+      const defaultChannelId = modelsRes.value.data?.currentChannelId
+        || modelsRes.value.data?.models?.find(model => model.active)?.channelId
+        || ''
+      const selection = sessionModelSelections.value[conversationKey()]
+        || {model: defaultModel, channelId: defaultChannelId}
+      currentModel.value = selection.model
+      availableModels.value = (modelsRes.value.data?.models || []).map(model => ({
+        ...model,
+        active: model.name === selection.model && (model.channelId || '') === selection.channelId
+      }))
     }
     if (configRes.status === 'fulfilled' && configRes.value.success) {
       if (!currentModel.value) currentModel.value = configuredModel
@@ -1094,11 +1182,18 @@ const moveFileChangesToEnd = (blocks) => {
   blocks.splice(0, blocks.length, ...rest, summary)
 }
 
-const sendMessage = async (images = [], overrideText = null) => {
+const sendMessage = async (images = [], overrideText = null, modelSelection = null,
+                           targetSessionName = props.sessionName, targetWorkspaceHash = props.workspaceHash) => {
   const text = overrideText || inputText.value.trim()
-  if ((!text || streaming.value) && images.length === 0) return
-  const sessionName = props.sessionName
+  if (!text && images.length === 0) return
+  const sessionName = targetSessionName
   if (!sessionName) return
+  const selectedModel = modelSelection || getSessionModelSelection(sessionName, targetWorkspaceHash)
+  if (store.getSessionStreaming(sessionName)) {
+    addQueuedMessage(sessionName, targetWorkspaceHash, images, text, selectedModel)
+    inputText.value = ''
+    return
+  }
 
   const firstWord = text.split(/\s+/)[0].toLowerCase()
   // 静默命令不显示用户气泡（系统命令、模式切换、HITL 审批等）
@@ -1414,6 +1509,7 @@ const sendMessage = async (images = [], overrideText = null) => {
           loadUsage()
           // 通知父组件刷新会话列表（标题可能已更新）
           emit('sessionUpdated')
+          nextTick(() => sendNextQueuedMessage(sessionName, targetWorkspaceHash))
         },
         () => {
           flushStreamEvents()
@@ -1421,31 +1517,35 @@ const sendMessage = async (images = [], overrideText = null) => {
           const msg = getMsg()
           if (msg && !msg.blocks.length) msg.blocks.push({type: 'content', content: '连接错误'})
           emit('sessionUpdated')
+          nextTick(() => sendNextQueuedMessage(sessionName, targetWorkspaceHash))
         },
         // 传递工作区、会话和图片信息
         {
-          workspaceHash: props.workspaceHash,
+          workspaceHash: targetWorkspaceHash,
           sessionName,
-          images
+          images,
+          model: selectedModel.model,
+          modelChannelId: selectedModel.channelId
         }
     )
     store.setSessionController(sessionName, streamResult)
   } catch {
     store.setSessionStreaming(sessionName, false)
     emit('sessionUpdated')
+    nextTick(() => sendNextQueuedMessage(sessionName, targetWorkspaceHash))
   }
   await scroll()
 }
 
-const abortChat = async () => {
-  const ctrl = store.getSessionController(props.sessionName)
+const abortChat = async (targetSessionName = props.sessionName, targetWorkspaceHash = props.workspaceHash) => {
+  const ctrl = store.getSessionController(targetSessionName)
   if (ctrl) ctrl.abort()
   // 同时通知后端中断
   try {
-    await chatAPI.abort()
+    await chatAPI.abort({workspaceHash: targetWorkspaceHash, sessionName: targetSessionName})
   } catch {
   }
-  store.setSessionStreaming(props.sessionName, false)
+  store.setSessionStreaming(targetSessionName, false)
 }
 
 const openRollbackDialog = (msgId, canRollbackCode, rollbackTimestamp) => {

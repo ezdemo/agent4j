@@ -53,8 +53,12 @@ public class ChatController {
     @ApiOperation(value = "中断当前聊天", notes = "发送中断信号给正在进行的聊天会话")
     @Post
     @Mapping("/abort")
-    public ApiResponse<String> abort() {
-        agentService.abortCurrentChat();
+    public ApiResponse<String> abort(@Body ChatRequest request) {
+        if (request != null && (request.getWorkspaceHash() != null || request.getSessionName() != null)) {
+            agentService.abortChat(agentService.resolveWorkspacePath(request.getWorkspaceHash()), request.getSessionName());
+        } else {
+            agentService.abortCurrentChat();
+        }
         return ApiResponse.ok("已发送中断请求");
     }
 
@@ -116,7 +120,8 @@ public class ChatController {
                     userMsg.setSnapshotId(msgId);
                 }
 
-                agentService.chatStream(userMsg, resolvedPath, sessionName, emitter);
+                agentService.chatStream(userMsg, resolvedPath, sessionName, emitter,
+                        request.getModel(), request.getModelChannelId());
             } catch (Exception e) {
                 try {
                     emitter.sendError(e.getMessage());

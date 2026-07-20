@@ -7,6 +7,9 @@
       if (new URLSearchParams(window.location.search).get('theme') === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark')
       }
+      if (new URLSearchParams(window.location.search).get('desktopPet') === '1') {
+        document.documentElement.classList.add('desktop-pet-window')
+      }
     </script>
     <meta name="description" content="Loopra - AI 代码助手" />
     <title>Loopra</title>
@@ -27,6 +30,8 @@
       [data-theme="dark"] #app-loader { background: #0c0c0c; }
       [data-theme="retro"] #app-loader { background: #FAFAFA; }
       [data-theme="retro-yellow"] #app-loader { background: #f5e6c8; }
+      .desktop-pet-window #app-loader { display: none; }
+      .desktop-pet-window body { background: transparent; }
 
       .loader-icon {
         width: 40px; height: 40px;

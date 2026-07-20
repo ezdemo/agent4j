@@ -108,6 +108,13 @@
                     </svg>
                     去网站看看
                   </button>
+                  <button v-if="isElectron" class="btn btn-ghost" :disabled="!activePetName" @click="toggleDesktopPet">
+                    <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <rect x="3" y="3" width="18" height="14" rx="2"/>
+                      <path d="M8 21h8M12 17v4"/>
+                    </svg>
+                    {{ desktopPetVisible ? '隐藏桌面宠物' : '显示到桌面' }}
+                  </button>
                   <button class="btn btn-ghost" @click="loadPets">
                     <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
                       <path d="M1 4v6h6M23 20v-6h-6"/>
@@ -1818,6 +1825,8 @@ const petsError = ref('')
 const activePetName = ref('')
 const activePetAnim = ref('idle')
 const petIniting = ref(false)
+const desktopPetVisible = ref(false)
+const isElectron = Boolean(window.electronAPI?.desktopPet)
 
 // 宠物动画列表（循环切换）
 const PET_ANIM_NAMES = ['idle', 'waving', 'jumping', 'running-right', 'running-left', 'waiting', 'review']
@@ -1848,6 +1857,7 @@ async function loadPets() {
       activePetName.value = activeRes.data.name
       store.activePetName = activeRes.data.name
     }
+    if (isElectron) desktopPetVisible.value = await window.electronAPI.desktopPet.isVisible()
   } catch (err) {
     console.error('加载宠物设置失败:', err)
     petsError.value = err.message || '无法连接服务器'
@@ -1863,6 +1873,7 @@ async function selectPet(name) {
     if (res.success) {
       activePetName.value = name
       store.activePetName = name
+      if (desktopPetVisible.value) await window.electronAPI.desktopPet.refresh()
       message.success('已切换到宠物: ' + name)
     } else {
       message.error(res.error || '切换宠物失败')
@@ -1870,6 +1881,17 @@ async function selectPet(name) {
   } catch (err) {
     message.error('切换宠物失败: ' + (err.message || ''))
   }
+}
+
+async function toggleDesktopPet() {
+  if (!isElectron || !activePetName.value) return
+  if (desktopPetVisible.value) {
+    await window.electronAPI.desktopPet.close()
+    desktopPetVisible.value = false
+    return
+  }
+  await window.electronAPI.desktopPet.open()
+  desktopPetVisible.value = true
 }
 
 // 删除宠物
@@ -1887,6 +1909,10 @@ async function deletePet(name) {
           if (activePetName.value === name) {
             activePetName.value = ''
             store.activePetName = ''
+            if (desktopPetVisible.value) {
+              await window.electronAPI.desktopPet.close()
+              desktopPetVisible.value = false
+            }
           }
           message.success('宠物已删除: ' + name)
           await loadPets()

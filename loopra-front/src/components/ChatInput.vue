@@ -79,6 +79,22 @@
       </section>
     </Transition>
 
+    <section v-if="queuedMessages.length > 0" class="composer-queue" aria-label="排队消息">
+      <div v-for="item in queuedMessages" :key="item.id" class="composer-queue-item">
+        <svg class="composer-queue-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+          <path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>
+        </svg>
+        <span class="composer-queue-text" :title="item.text">{{ item.text }}</span>
+        <button type="button" class="composer-queue-guide" title="停止当前生成并立即发送" @click="$emit('guideQueued', item.id)">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+          <span>引导</span>
+        </button>
+        <button type="button" class="composer-queue-remove" title="移出队列" aria-label="移出队列" @click="$emit('removeQueued', item.id)">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/></svg>
+        </button>
+      </div>
+    </section>
+
     <div class="input-box" :class="{ focused: inputFocused, 'file-drop-active': fileDropActive }"
          @dragenter.prevent="handleFileDragEnter" @dragover.prevent="handleFileDragOver"
          @dragleave="handleFileDragLeave" @drop.prevent="handleFileDrop">
@@ -177,23 +193,22 @@
                  class="animate-spin">
               <path d="M21 12a9 9 0 11-6.219-8.56"/>
             </svg>
-            <span class="stop-text">停止</span>
           </button>
-          <template v-else>
+          <template v-if="!streaming">
             <button :disabled="!hasHistory" class="continue-btn" title="让 AI 继续生成" @click="$emit('continue')">
               <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
                 <polyline points="5 4 15 12 5 20"/>
                 <line x1="19" x2="19" y1="5" y2="19"/>
               </svg>
             </button>
-            <button :class="{ active: localText.trim() && !streaming }" :disabled="!localText.trim() || streaming"
-                    class="send-btn" @click="handleSend">
-              <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
-                <line x1="22" x2="11" y1="2" y2="13"/>
-                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
-              </svg>
-            </button>
           </template>
+          <button :class="{ active: localText.trim() }" :disabled="!localText.trim()"
+                  class="send-btn" :title="streaming ? '加入队列' : '发送消息'" @click="handleSend">
+            <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
+              <line x1="22" x2="11" y1="2" y2="13"/>
+              <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+            </svg>
+          </button>
         </div>
       </div>
 
@@ -447,10 +462,11 @@ const props = defineProps({
   currentPermission: {type: String, default: 'free'},
   petState: {type: String, default: 'idle'},
   rightPanelOpen: {type: Boolean, default: false},
-  welcomeMode: {type: Boolean, default: false}
+  welcomeMode: {type: Boolean, default: false},
+  queuedMessages: {type: Array, default: () => []}
 })
 
-const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission', 'pickerOpen', 'manageModels'])
+const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission', 'pickerOpen', 'manageModels', 'removeQueued', 'guideQueued'])
 
 const inputField = ref(null)
 const inputFocused = ref(false)
@@ -704,7 +720,7 @@ const handleKeydown = (e) => {
 }
 
 const handleSend = () => {
-  if (localText.value.trim() && !props.streaming) {
+  if (localText.value.trim()) {
     let text = localText.value.trim()
     const collapsedParts = []
     if (selectedFileContexts.value.length > 0) {
@@ -1303,6 +1319,74 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   padding: 14px clamp(16px, 5vw, 72px) 16px;
 }
 
+.composer-queue {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 0 2px 8px;
+}
+
+.composer-queue-item {
+  display: flex;
+  align-items: center;
+  min-height: 38px;
+  gap: 8px;
+  padding: 7px 8px 7px 10px;
+  color: var(--fg-2);
+  background: color-mix(in srgb, var(--bg-2) 88%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+}
+
+.composer-queue-icon {
+  flex: 0 0 auto;
+  color: var(--fg-4);
+}
+
+.composer-queue-text {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  font-size: 14px;
+  line-height: 20px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-queue-guide,
+.composer-queue-remove {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+}
+
+.composer-queue-guide {
+  gap: 3px;
+  padding: 3px 6px;
+  font-size: 13px;
+  line-height: 20px;
+}
+
+.composer-queue-guide:hover {
+  color: var(--accent);
+}
+
+.composer-queue-remove {
+  width: 28px;
+  height: 28px;
+  border-radius: 5px;
+}
+
+.composer-queue-remove:hover {
+  color: var(--red);
+  background: color-mix(in srgb, var(--red) 10%, transparent);
+}
+
 .input-area:not(.welcome-mode) .input-box {
   min-height: 98px;
   padding: 14px 16px 9px;
@@ -1520,16 +1604,17 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 
 .stop-btn {
+  width: 38px;
+  height: 38px;
   display: flex;
   align-items: center;
   gap: 4px;
-  padding: 4px 8px;
+  justify-content: center;
+  padding: 0;
   background: var(--red);
   color: #fff;
   border: none;
-  border-radius: var(--r);
-  font-size: 12px;
-  font-weight: 500;
+  border-radius: 10px;
   cursor: pointer;
   transition: all var(--t);
   animation: pulse-red 1.5s infinite;
@@ -1540,11 +1625,9 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 
 .stop-btn svg {
+  width: 18px;
+  height: 18px;
   animation: spin 1s linear infinite;
-}
-
-.stop-text {
-  margin-left: 2px;
 }
 
 @keyframes spin {
@@ -3181,7 +3264,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
     gap: 4px;
   }
 
-  .btn-icon-sm, .send-btn, .continue-btn {
+  .btn-icon-sm, .send-btn, .continue-btn, .stop-btn {
     width: 32px;
     height: 32px;
   }
