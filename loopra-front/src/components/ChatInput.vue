@@ -3082,6 +3082,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   display: flex;
   align-items: center;
   justify-content: space-between;
+  position: relative;
   min-height: 44px;
   padding: 7px 14px;
   border: 0;
@@ -3122,9 +3123,18 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 .model-option-name { min-width: 0; display: flex; flex-direction: column; gap: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-option-name small { color: var(--fg-4); font-size: 10px; font-weight: 400; }
 .model-option.active {
+  background: var(--accent-bg);
   color: var(--accent);
   font-weight: 600;
 }
+.model-option.active::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: var(--accent);
+  content: '';
+}
+.model-option.active .model-option-name small { color: var(--accent); opacity: 0.72; }
 
 .model-option svg {
   color: var(--accent);

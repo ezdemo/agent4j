@@ -4,6 +4,29 @@
       <div ref="viewer" class="diff-viewer diff-viewer-sbs" @mousedown="hideSelectionAction">
         <div class="diff-viewer-head">
           <span class="diff-viewer-file">{{ file }}</span>
+          <div v-if="mode === 'diff' && hunkCount > 0" class="diff-hunk-navigation" aria-label="差异块导航">
+            <button
+              type="button"
+              class="btn-icon-sm"
+              :disabled="activeHunkIndex <= 0"
+              title="上一个差异块"
+              aria-label="上一个差异块"
+              @click="navigateHunk(-1)"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+            </button>
+            <span class="diff-hunk-position">{{ activeHunkIndex + 1 }}/{{ hunkCount }}</span>
+            <button
+              type="button"
+              class="btn-icon-sm"
+              :disabled="activeHunkIndex >= hunkCount - 1"
+              title="下一个差异块"
+              aria-label="下一个差异块"
+              @click="navigateHunk(1)"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m9 18 6-6-6-6"/></svg>
+            </button>
+          </div>
           <div class="diff-view-tabs" role="tablist" aria-label="文件视图">
             <button type="button" role="tab" :aria-selected="mode === 'content'" :class="{ active: mode === 'content' }"
                     @click="$emit('changeMode', 'content')">原文件</button>
@@ -14,7 +37,7 @@
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
           </button>
         </div>
-        <div class="diff-sbs-body" @mouseup="showSelectionAction" @scroll="hideSelectionAction">
+        <div ref="diffBody" class="diff-sbs-body" @mouseup="showSelectionAction" @scroll="handleBodyScroll">
           <!-- 当前文件代码预览 -->
           <template v-if="mode === 'content' && !loading">
             <div v-for="(line, i) in contentLines" :key="i" class="file-content-row">
@@ -30,7 +53,7 @@
               <span class="diff-sbs-label diff-sbs-label-new">新版本</span>
             </div>
             <!-- 行 -->
-            <div v-for="(pair, i) in diffPairs" :key="i" class="diff-sbs-row" :class="'diff-sbs-' + pair.type">
+            <div v-for="(pair, i) in diffPairs" :key="i" class="diff-sbs-row" :class="'diff-sbs-' + pair.type" :data-hunk-index="pair.hunkIndex" :data-change="pair.type !== 'context'">
               <div class="diff-sbs-cell diff-sbs-cell-left">
                 <span class="diff-sbs-ln">{{ pair.leftLineNum ?? '' }}</span>
                 <span class="diff-sbs-code" v-html="pair.leftHtml"></span>
@@ -72,7 +95,7 @@
 </template>
 
 <script setup>
-import {computed, ref} from 'vue'
+import {computed, nextTick, ref, watch} from 'vue'
 import {detectLanguage, highlightCode} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
 
@@ -88,6 +111,8 @@ const props = defineProps({
 
 const emit = defineEmits(['close', 'changeMode', 'addToSession'])
 const viewer = ref(null)
+const diffBody = ref(null)
+const activeHunkIndex = ref(-1)
 const selectionAction = ref({ visible: false, left: 0, top: 0, text: '' })
 
 function showSelectionAction() {
@@ -122,6 +147,22 @@ function hideSelectionAction() {
   selectionAction.value.visible = false
 }
 
+function handleBodyScroll() {
+  hideSelectionAction()
+
+  const body = diffBody.value
+  if (!body || hunkCount.value === 0) return
+  const headerHeight = body.querySelector('.diff-sbs-header')?.offsetHeight || 0
+  const currentTop = body.getBoundingClientRect().top + headerHeight + 8
+  let index = -1
+
+  for (const row of body.querySelectorAll('[data-change="true"]')) {
+    if (row.getBoundingClientRect().top > currentTop) break
+    index = Number(row.dataset.hunkIndex)
+  }
+  activeHunkIndex.value = index
+}
+
 // ---- Diff 左右对比 (Side-by-Side) ----
 const diffPairs = computed(() => {
   if (!props.diff) return []
@@ -134,6 +175,33 @@ const diffPairs = computed(() => {
   }
   return pairs
 })
+
+const hunkCount = computed(() => {
+  const indices = new Set(diffPairs.value.map(pair => pair.hunkIndex))
+  return indices.size
+})
+
+watch(() => [props.open, props.diff, props.file], () => {
+  activeHunkIndex.value = -1
+  nextTick(() => {
+    if (props.open && diffBody.value) diffBody.value.scrollTop = 0
+  })
+})
+
+function navigateHunk(direction) {
+  const nextIndex = activeHunkIndex.value + direction
+  if (nextIndex < 0 || nextIndex >= hunkCount.value) return
+
+  activeHunkIndex.value = nextIndex
+  nextTick(() => {
+    const body = diffBody.value
+    const row = body?.querySelector(`[data-hunk-index="${nextIndex}"][data-change="true"]`) || body?.querySelector(`[data-hunk-index="${nextIndex}"]`)
+    if (!body || !row) return
+    const headerHeight = body.querySelector('.diff-sbs-header')?.offsetHeight || 0
+    const top = body.scrollTop + row.getBoundingClientRect().top - body.getBoundingClientRect().top - headerHeight - 8
+    body.scrollTo({ top: Math.max(0, top), behavior: 'smooth' })
+  })
+}
 
 // ---- 无 hunk 时，把 diff 当原文展示 ----
 const rawFileLines = computed(() => {
@@ -154,6 +222,7 @@ function parseSideBySide(diffText) {
   const result = []
 
   let i = 0
+  let hunkIndex = -1
   // 跳过元信息行，直到第一个 hunk 头
   while (i < lines.length && !lines[i].startsWith('@@')) {
     i++
@@ -165,6 +234,7 @@ function parseSideBySide(diffText) {
       // @@ -oldStart[,oldCount] +newStart[,newCount] @@
       const m = line.match(/@@\s+-(\d+)(?:,(\d+))?\s+\+(\d+)(?:,(\d+))?\s+@@/)
       if (!m) continue
+      hunkIndex++
       let oldNum = parseInt(m[1])
       let newNum = parseInt(m[3])
       const oldCount = m[2] !== undefined ? parseInt(m[2]) : 1
@@ -177,7 +247,8 @@ function parseSideBySide(diffText) {
           right: '（空文件）',
           leftLineNum: null,
           rightLineNum: null,
-          type: 'empty'
+          type: 'empty',
+          hunkIndex
         })
         continue
       }
@@ -195,7 +266,8 @@ function parseSideBySide(diffText) {
             right: a.content,
             leftLineNum: r.lineNum,
             rightLineNum: a.lineNum,
-            type: 'replace'
+            type: 'replace',
+            hunkIndex
           })
         }
         // 纯删除（左栏）
@@ -206,7 +278,8 @@ function parseSideBySide(diffText) {
             right: '',
             leftLineNum: r.lineNum,
             rightLineNum: null,
-            type: 'remove'
+            type: 'remove',
+            hunkIndex
           })
         }
         // 纯新增（右栏）
@@ -217,7 +290,8 @@ function parseSideBySide(diffText) {
             right: a.content,
             leftLineNum: null,
             rightLineNum: a.lineNum,
-            type: 'add'
+            type: 'add',
+            hunkIndex
           })
         }
       }
@@ -237,7 +311,8 @@ function parseSideBySide(diffText) {
             right: content,
             leftLineNum: oldNum++,
             rightLineNum: newNum++,
-            type: 'context'
+            type: 'context',
+            hunkIndex
           })
         }
         j++
@@ -276,6 +351,9 @@ function parseSideBySide(diffText) {
   background: var(--bg-2);
 }
 .diff-viewer-file { font-size: 12px; font-family: var(--mono); color: var(--fg); font-weight: 600; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.diff-hunk-navigation { display: inline-flex; align-items: center; flex-shrink: 0; gap: 4px; }
+.diff-hunk-navigation .btn-icon-sm { width: 24px; height: 24px; }
+.diff-hunk-position { min-width: 30px; color: var(--fg-4); font: 600 10px var(--mono); text-align: center; }
 .diff-view-tabs { display: inline-flex; flex-shrink: 0; gap: 2px; padding: 2px; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--bg); }
 .diff-view-tabs button { min-height: 24px; padding: 2px 8px; border: 0; border-radius: 3px; background: transparent; color: var(--fg-3); font-family: var(--sans); font-size: 11px; font-weight: 600; cursor: pointer; }
 .diff-view-tabs button:hover { color: var(--fg); background: var(--bg-3); }
@@ -294,7 +372,8 @@ function parseSideBySide(diffText) {
   transition: all var(--transition-fast);
   flex-shrink: 0;
 }
-.btn-icon-sm:hover { color: var(--fg); border-color: var(--border-focus); }
+.btn-icon-sm:hover:not(:disabled) { color: var(--fg); border-color: var(--border-focus); }
+.btn-icon-sm:disabled { opacity: 0.45; cursor: not-allowed; }
 .diff-selection-action {
   position: fixed;
   z-index: 3;
