@@ -103,9 +103,21 @@ const COPY_ICON = '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" s
 
 const renderer = new Renderer()
 
+const escapeAttribute = value => String(value)
+  .replace(/&/g, '&amp;')
+  .replace(/"/g, '&quot;')
+  .replace(/</g, '&lt;')
+  .replace(/>/g, '&gt;')
+
+const isLocalFilePath = href => /^(?:[A-Za-z]:\/)?(?:[\w@.-]+\/)+[\w@.-]+\.[\w-]+(?::\d+)?$/i.test(String(href).replace(/\\/g, '/'))
+
 // 为所有链接添加 ai-link 类，便于前端拦截处理
 renderer.link = (href, title, text) => {
   if (!href) return text
+  if (isLocalFilePath(href)) {
+    return '<a class="ai-link ai-file-link" href="#" data-file-path="' + escapeAttribute(href) + '" title="打开文件预览">' + text + '</a>'
+  }
+
   let out = '<a class="ai-link" href="' + href + '" target="_blank" rel="noopener"'
   if (title) {
     out += ' title="' + title + '"'

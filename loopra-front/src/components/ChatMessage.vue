@@ -106,6 +106,7 @@ import platform from '../services/platform'
 const props = defineProps({
   msg: {type: Object, required: true},
   idx: {type: Number, default: 0},
+  workspacePath: {type: String, default: ''},
   snapshotRollbackLoading: {type: Object, required: true},
   rollbackDisabled: {type: Boolean, default: false},
   branchDisabled: {type: Boolean, default: false},
@@ -203,6 +204,7 @@ let hideTimer = null
 
 function showLinkPopover(el) {
   clearTimeout(hideTimer)
+  if (el.dataset.filePath) return
   const href = el.getAttribute('href')
   if (!href) return
   const rect = el.getBoundingClientRect()
@@ -248,6 +250,14 @@ function onMsgClick(e) {
   if (!link) return
   e.preventDefault()
   e.stopPropagation()
+
+  const filePath = link.dataset.filePath || getWorkspaceFilePath(link.getAttribute('href'))
+  if (filePath) {
+    linkPopover.visible = false
+    emit('openFile', filePath)
+    return
+  }
+
   // 浏览器环境直接打开
   if (!isElectron) {
     window.open(link.getAttribute('href'), '_blank')
@@ -290,6 +300,25 @@ function normalizeActionUrl(rawUrl) {
   } catch {
     return ''
   }
+}
+
+function getWorkspaceFilePath(rawUrl) {
+  const workspacePath = props.workspacePath.replace(/\\/g, '/').replace(/\/+$/, '')
+  let path = decodeURIComponent(String(rawUrl || '').trim()).replace(/\\/g, '/')
+  path = path.replace(/^\/(?:[A-Za-z]:\/)/, match => match.slice(1))
+  path = path.replace(/:(\d+)$/, '')
+  if (!workspacePath || !path) return ''
+
+  const normalizedPath = path.replace(/\/{2,}/g, '/')
+  const normalizedWorkspace = workspacePath.replace(/\/{2,}/g, '/')
+  if (normalizedPath === normalizedWorkspace) return ''
+  if (normalizedPath.startsWith(normalizedWorkspace + '/')) {
+    return normalizedPath.slice(normalizedWorkspace.length + 1)
+  }
+  if (/^(?:\.\/)?[\w@.-]+(?:\/[\w@.-]+)+\.[\w-]+$/i.test(normalizedPath)) {
+    return normalizedPath.replace(/^\.\//, '')
+  }
+  return ''
 }
 
 onMounted(() => {
