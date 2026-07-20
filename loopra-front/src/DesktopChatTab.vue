@@ -48,6 +48,7 @@ const tabId = `${workspaceHash.value || ''}:${sessionName}`
 let stopRightPanelListener = null
 let stopThemeListener = null
 let stopElementInspectionListener = null
+let stopRefreshHistoryListener = null
 
 onMounted(async () => {
   try {
@@ -65,6 +66,7 @@ onMounted(async () => {
     document.documentElement.setAttribute('data-theme', pageTheme.value)
   })
   stopElementInspectionListener = window.electronAPI?.events?.listen('desktop-chat-tab-element-inspection', addElementInspectionToSession)
+  stopRefreshHistoryListener = window.electronAPI?.events?.listen('desktop-chat-tab-refresh-history', () => chatRef.value?.refreshHistory())
   document.documentElement.setAttribute('data-theme', pageTheme.value)
   try {
     await sessionsAPI.switchSession(sessionName, workspaceHash.value)
@@ -138,6 +140,7 @@ onBeforeUnmount(() => {
   stopRightPanelListener?.()
   stopThemeListener?.()
   stopElementInspectionListener?.()
+  stopRefreshHistoryListener?.()
 })
 
 // 工作区变化时自动上报，确保标签栏图标实时更新
