@@ -150,6 +150,10 @@ const stopTitleListener = window.electronAPI?.events?.listen('desktop-chat-tab-t
   if (!tabId || !title) return
   tabs.value = tabs.value.map((tab) => tab.id === tabId ? { ...tab, title } : tab)
 })
+const stopWorkspaceListener = window.electronAPI?.events?.listen('desktop-chat-tab-workspace', ({ tabId, workspaceHash }) => {
+  if (!tabId || !workspaceHash) return
+  tabs.value = tabs.value.map((tab) => tab.id === tabId ? { ...tab, workspaceHash } : tab)
+})
 const stopOpenSettingsListener = window.electronAPI?.events?.listen('desktop-shell-open-model-channels', () => { void openModelChannels() })
 
 async function renderActiveTab() {
@@ -183,16 +187,17 @@ async function renderActiveTab() {
 
 async function createTab() {
   if (creating.value || starting.value) return
-  if (!activeWorkspaceHash.value) {
+  const targetHash = activeWorkspaceHash.value || (workspaces.value[0] && workspaces.value[0].hash)
+  if (!targetHash) {
     startupError.value = '未找到可用工作区，请先在网页版添加工作区。'
     return
   }
   creating.value = true
   try {
-    const response = await sessionsAPI.createNew({ workspaceHash: activeWorkspaceHash.value })
+    const response = await sessionsAPI.createNew({ workspaceHash: targetHash })
     if (!response.success || !response.data?.sessionName) throw new Error(response.message || '创建会话失败')
     const sessionName = response.data.sessionName
-    const workspaceHash = response.data.workspaceHash || ''
+    const workspaceHash = response.data.workspaceHash || targetHash
     const id = tabId(workspaceHash, sessionName)
     hideStandaloneViews()
     tabs.value = [...tabs.value, { id, sessionName, workspaceHash, title: tabTitle(sessionName) }]
@@ -251,7 +256,6 @@ async function initializeWorkspaceContext() {
   if (!switchResult.success) {
     throw new Error(switchResult.message || '切换默认工作区失败')
   }
-  activeWorkspaceHash.value = selectedWorkspace.hash
 }
 
 async function initializeWorkspace() {
@@ -266,6 +270,11 @@ async function initializeWorkspace() {
 }
 
 async function selectWorkspace(workspaceHash) {
+  if (!workspaceHash) {
+    // 取消选中，展示所有会话
+    activeWorkspaceHash.value = ''
+    return
+  }
   const workspace = workspaces.value.find((item) => item.hash === workspaceHash)
   if (!workspace) throw new Error('工作区不存在')
   if (workspaceHash === activeWorkspaceHash.value) return

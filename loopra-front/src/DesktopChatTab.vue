@@ -26,7 +26,7 @@
 
 <script setup>
 import {message} from 'ant-design-vue'
-import {computed, nextTick, onBeforeUnmount, onMounted, ref} from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useAppStore} from './stores/app'
 import {configAPI, sessionsAPI} from './services/api'
 import ChatView from './views/Chat.vue'
@@ -134,6 +134,11 @@ onBeforeUnmount(() => {
   stopThemeListener?.()
   stopElementInspectionListener?.()
 })
+
+// 工作区变化时自动上报，确保标签栏图标实时更新
+watch(workspaceHash, (hash) => {
+  if (hash) window.electronAPI?.desktopChatTabs?.reportWorkspace({ tabId, workspaceHash: hash })
+}, { immediate: true })
 </script>
 
 <style scoped>

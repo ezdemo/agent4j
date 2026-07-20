@@ -80,7 +80,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     toggleRightPanel: (tabId) => ipcRenderer.invoke('desktop-chat-tab-toggle-right-panel', tabId),
     setTheme: (theme) => ipcRenderer.invoke('desktop-chat-tab-set-theme', theme),
     openModelChannels: () => ipcRenderer.send('desktop-chat-tab-open-model-channels'),
-    reportTitle: (payload) => ipcRenderer.send('desktop-chat-tab-report-title', payload)
+    reportTitle: (payload) => ipcRenderer.send('desktop-chat-tab-report-title', payload),
+    reportWorkspace: (payload) => ipcRenderer.send('desktop-chat-tab-report-workspace', payload)
   },
 
   // 元素检测（跨域 iframe 穿透）
