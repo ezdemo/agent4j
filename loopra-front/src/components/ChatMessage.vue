@@ -20,7 +20,9 @@
           {{ userExpanded ? '收起' : '展开全部' }}
         </button>
         <div v-if="msg.images && msg.images.length > 0" class="user-images">
-          <img v-for="(img, i) in msg.images" :key="i" :src="img" class="user-image" @click="$emit('previewImage', img)"/>
+          <button v-for="(img, i) in msg.images" :key="i" type="button" class="user-image-button" :aria-label="`预览图片 ${i + 1}`" @click="$emit('previewImage', img)">
+            <img :src="img" :alt="`图片 ${i + 1}`" class="user-image"/>
+          </button>
         </div>
         <div class="msg-footer">
           <span class="msg-time">{{ msg.time }}</span>
@@ -471,19 +473,34 @@ onBeforeUnmount(() => {
   margin-top: 8px;
 }
 
+.user-image-button {
+  display: block;
+  padding: 0;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  cursor: zoom-in;
+}
+
 .user-image {
+  display: block;
   width: 80px;
   height: 80px;
   object-fit: cover;
-  border-radius: 6px;
   border: 1px solid var(--border);
-  cursor: pointer;
+  border-radius: 6px;
   transition: transform 0.15s, box-shadow 0.15s;
 }
 
-.user-image:hover {
+.user-image-button:hover .user-image,
+.user-image-button:focus-visible .user-image {
   transform: scale(1.05);
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.user-image-button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 
 /* 消息底部栏 */
