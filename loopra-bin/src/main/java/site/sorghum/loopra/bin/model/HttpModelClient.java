@@ -396,6 +396,7 @@ public class HttpModelClient implements ModelClient {
                     .post(RequestBody.create(jsonBody, MEDIA_TYPE_JSON))
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Authorization", "Bearer " + apiKey)
+                    .addHeader("User-Agent", "opencode/1.14.21 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13")
                     .build();
 
             try (Response response = client.newCall(request).execute()) {
@@ -465,6 +466,7 @@ public class HttpModelClient implements ModelClient {
                     .post(RequestBody.create(jsonBody, MEDIA_TYPE_JSON))
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Authorization", "Bearer " + apiKey)
+                    .addHeader("User-Agent", "opencode/1.14.21 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13")
                     .build();
 
             Call call = client.newCall(request);
@@ -566,6 +568,12 @@ public class HttpModelClient implements ModelClient {
          * 每个请求 ID 上次报告的 usage 值，用于计算差量（某些平台会在同一流中多次发送 usage）
          */
         final Map<String, int[]> lastUsage = new HashMap<>();
+        /**
+         * 是否处于 &lt;think&gt; 标签内容块内。
+         * 某些模型（如 DeepSeek-R1）将思考内容放在 content 字段中
+         * 用 &lt;think&gt;...&lt;/think&gt; 包裹，需识别并路由到 reasoning delta。
+         */
+        boolean inThinkContent = false;
     }
 
     /**
@@ -583,7 +591,12 @@ public class HttpModelClient implements ModelClient {
                 log.info("流式请求被 ReasonBreaker 中断");
                 break;
             }
-            if (!line.startsWith("data: ")) continue;
+            if (!line.startsWith("data: ")) {
+                if (!line.isBlank()){
+                    log.error("忽略SSE流非数据行: {}", line);
+                }
+                continue;
+            }
             String data = line.substring(6).trim();
             if ("[DONE]".equals(data)) {
                 log.info("收到SSE流结束标记");
@@ -634,13 +647,13 @@ public class HttpModelClient implements ModelClient {
             }
         }
 
-        // content
+        // content（含 think 标签检测）
         ONode cd = delta.get(FIELD_CONTENT);
         if (cd != null && cd.isString()) {
             String tok = cd.getString();
             if (tok != null && !tok.isEmpty()) {
                 log.debug("收到content: {}", tok);
-                safeCallback("onContentDelta", () -> callback.onContentDelta(tok));
+                processContentToken(tok, callback, result);
             }
         }
 
@@ -653,8 +666,68 @@ public class HttpModelClient implements ModelClient {
     }
 
     /**
-     * 从 usage ONode 解析出 [prompt, completion, cacheHit, cacheMiss, total]。
+     * 处理 content token，检测 {@code <think>} / {@code </think>} 标签。
+     * <p>
+     * 某些模型（如 DeepSeek-R1）将推理内容直接放在 content 字段中，
+     * 用 XML 标签包裹：{@code <think>推理过程</think>实际回复}。
+     * 本方法使用状态机将标签内的内容路由到 {@link StreamCallback#onReasoningDelta}，
+     * 标签外的内容路由到 {@link StreamCallback#onContentDelta}。
+     * </p>
+     * <p>
+     * 兼容以下复杂情况：
+     * <ul>
+     *   <li>单个 token 同时包含开标签和闭标签</li>
+     *   <li>标签跨多个 token 分布</li>
+     *   <li>标签大小写不敏感（{@code <THINK>} / {@code <think>}）</li>
+     * </ul>
+     * 注意：本方法假定 {@code <think>} 和 {@code </think>} 不会被 tokenizer
+     * 拆散到两个 token 中（现代 BPE tokenizer 均不会拆分 XML 标签）。
+     * </p>
      */
+    private void processContentToken(String token, StreamCallback callback, SseParseResult result) {
+        String lower = token.toLowerCase();
+
+        if (result.inThinkContent) {
+            // 当前在 think 块内，查找 </think>
+            int endIdx = lower.indexOf("</think>");
+            if (endIdx >= 0) {
+                // 闭标签之前的内容 -> reasoning
+                if (endIdx > 0) {
+                    String reasoning = token.substring(0, endIdx);
+                    safeCallback("onReasoningDelta", () -> callback.onReasoningDelta(reasoning));
+                }
+                result.inThinkContent = false;
+                // 闭标签之后的内容 -> 递归处理（可能含下一个 <think>）
+                String after = token.substring(endIdx + 8); // "</think>".length() == 8
+                if (!after.isEmpty()) {
+                    processContentToken(after, callback, result);
+                }
+            } else {
+                // 整个 token 都是推理内容
+                safeCallback("onReasoningDelta", () -> callback.onReasoningDelta(token));
+            }
+        } else {
+            // 当前不在 think 块内，查找 <think>
+            int startIdx = lower.indexOf("<think>");
+            if (startIdx >= 0) {
+                // 开标签之前的内容 -> 正常 content
+                if (startIdx > 0) {
+                    String before = token.substring(0, startIdx);
+                    safeCallback("onContentDelta", () -> callback.onContentDelta(before));
+                }
+                result.inThinkContent = true;
+                // 开标签之后的内容 -> 递归处理（可能含 </think> 或更多内容）
+                String after = token.substring(startIdx + 7); // "<think>".length() == 7
+                if (!after.isEmpty()) {
+                    processContentToken(after, callback, result);
+                }
+            } else {
+                // 正常 content
+                safeCallback("onContentDelta", () -> callback.onContentDelta(token));
+            }
+        }
+    }
+
     private int[] parseUsage(ONode usage) {
         int pt = usage.get(FIELD_PROMPT_TOKENS).isNull() ? 0 : usage.get(FIELD_PROMPT_TOKENS).getInt();
         int ct = usage.get(FIELD_COMPLETION_TOKENS).isNull() ? 0 : usage.get(FIELD_COMPLETION_TOKENS).getInt();
@@ -807,6 +880,7 @@ public class HttpModelClient implements ModelClient {
                 body.remove("chat_template_kwargs");
             }
         }
+        body.set("cache_control",ONode.ofJson("{}").set("type", "ephemeral"));
 
         ONode msgs = body.getOrNew(FIELD_MESSAGES).asArray();
         for (ChatMessage m : messages) {

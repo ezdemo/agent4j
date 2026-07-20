@@ -228,6 +228,7 @@ public class ConfigController {
                 .url(modelsUrl)
                 .header("Authorization", "Bearer " + apiKey)
                 .header("Content-Type", "application/json")
+                .header("User-Agent", "opencode/1.14.21 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13")
                 .get()
                 .build();
 
@@ -302,6 +303,7 @@ public class ConfigController {
                 .url(modelsUrl)
                 .header("Authorization", "Bearer " + visionApiKey)
                 .header("Content-Type", "application/json")
+                .header("User-Agent", "opencode/1.14.21 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13")
                 .get()
                 .build();
 
