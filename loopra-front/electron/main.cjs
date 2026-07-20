@@ -646,6 +646,13 @@ ipcMain.on('desktop-chat-tab-report-title', (event, payload) => {
   mainWindow.webContents.send('desktop-chat-tab-title', { tabId: tab.id, title })
 })
 
+ipcMain.on('desktop-chat-tab-report-workspace', (event, payload) => {
+  const tab = [...desktopChatTabs.values()].find((item) => item.view.webContents === event.sender)
+  const workspaceHash = String(payload?.workspaceHash || '')
+  if (!tab || !workspaceHash || !mainWindow || mainWindow.isDestroyed()) return
+  mainWindow.webContents.send('desktop-chat-tab-workspace', { tabId: tab.id, workspaceHash })
+})
+
 ipcMain.on('desktop-chat-tab-open-model-channels', (event) => {
   const tab = [...desktopChatTabs.values()].find((item) => item.view.webContents === event.sender)
   if (!tab || !mainWindow || mainWindow.isDestroyed()) return

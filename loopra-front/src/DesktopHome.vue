@@ -20,7 +20,7 @@
             class="desktop-project"
             :class="{ active: workspace.hash === activeWorkspaceHash }"
             type="button"
-            @click="emit('select-workspace', workspace.hash)"
+            @click="workspace.hash === activeWorkspaceHash ? emit('select-workspace', '') : emit('select-workspace', workspace.hash)"
             @contextmenu.prevent.stop="openContextMenu($event, 'workspace', workspace)"
         >
             <span class="desktop-monogram" :class="badgeTone(workspace.name)">{{ initial(workspace.name) }}</span>
@@ -55,7 +55,7 @@
 
       <div class="desktop-sessions">
         <div class="desktop-home-heading">
-          <span>{{ activeWorkspace?.name || '会话' }}</span>
+          <span>{{ activeWorkspace?.name || '全部会话' }}</span>
           <button type="button" @click="emit('new-session')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4Z"/></svg>
             新建会话
@@ -67,7 +67,7 @@
             <h3>{{ group.label }}</h3>
             <div class="desktop-session-list">
               <button v-for="session in group.sessions" :key="session.name" class="desktop-session" type="button" @click="openSession(session)" @contextmenu.prevent.stop="openContextMenu($event, 'session', session)">
-                <span class="desktop-monogram desktop-session-monogram">L</span>
+                <span class="desktop-monogram desktop-session-monogram" :class="badgeTone(workspaceNameOf(session.workspaceHash))">{{ initial(workspaceNameOf(session.workspaceHash)) }}</span>
                 <span>{{ session.title || session.name }}</span>
               </button>
             </div>
@@ -155,6 +155,12 @@ function badgeTone(name) {
   return `tone-${hash % 8}`
 }
 
+function workspaceNameOf(workspaceHash) {
+  if (!workspaceHash) return ''
+  const ws = props.workspaces.find((item) => item.hash === workspaceHash)
+  return ws ? ws.name : ''
+}
+
 function sessionTime(session) {
   const value = session?.mtime
   if (typeof value === 'number') return value
@@ -196,11 +202,26 @@ function chooseContextAction(action) {
 }
 
 async function loadSessions() {
-  if (!props.activeWorkspaceHash) { sessions.value = []; return }
   loading.value = true
   try {
-    const response = await sessionsAPI.list(props.activeWorkspaceHash)
-    sessions.value = response.success ? (response.data || []).map((session) => ({ ...session, workspaceHash: props.activeWorkspaceHash })) : []
+    if (props.activeWorkspaceHash) {
+      const response = await sessionsAPI.list(props.activeWorkspaceHash)
+      sessions.value = response.success ? (response.data || []).map((session) => ({ ...session, workspaceHash: props.activeWorkspaceHash })) : []
+    } else {
+      // 未选中项目时加载所有工作区的会话
+      const all = []
+      await Promise.all(props.workspaces.map(async (ws) => {
+        try {
+          const response = await sessionsAPI.list(ws.hash)
+          if (response.success && response.data) {
+            for (const session of response.data) all.push({ ...session, workspaceHash: ws.hash })
+          }
+        } catch (error) {
+          console.error('[desktop-home] failed to load sessions for workspace:', ws.hash, error)
+        }
+      }))
+      sessions.value = all
+    }
   } catch (error) {
     console.error('[desktop-home] failed to load sessions:', error)
     sessions.value = []
@@ -209,7 +230,7 @@ async function loadSessions() {
   }
 }
 
-watch(() => [props.activeWorkspaceHash, props.refreshKey], loadSessions, { immediate: true })
+watch(() => [props.activeWorkspaceHash, props.refreshKey, props.workspaces], loadSessions, { immediate: true })
 function onWindowKeydown(event) {
   if (event.key === 'Escape') closeContextMenu()
 }
