@@ -432,6 +432,16 @@ ipcMain.handle('start_loopra_web', async () => {
     return currentPort
   }
 
+  // 优先探测固定端口 4567：若已有健康服务则直接复用，不再启动新进程
+  const preferredPort = 4567
+  if (await healthCheck(preferredPort)) {
+    console.log(`Loopra Web already running on port ${preferredPort}, reusing`)
+    currentPort = preferredPort
+    await closeOtherLoopraJavaProcesses(currentPort)
+    return preferredPort
+  }
+
+  // 4567 无可用服务，回退到随机端口启动新进程
   const port = await getDefaultPort()
 
   // 先检查服务是否已在运行
