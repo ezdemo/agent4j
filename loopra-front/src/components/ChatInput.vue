@@ -383,14 +383,23 @@
                 <input ref="modelSearchInput" v-model="modelSearchQuery" type="search" placeholder="搜索模型" />
               </div>
               <div ref="modelDropdownList" class="model-dropdown-list">
-                <button v-for="m in filteredModels" :key="`${m.channelId || 'default'}:${m.name}`" type="button" class="model-option"
-                        :class="{ active: m.active }" @click="pickModel(m)">
-                  <span class="model-option-name"><small v-if="m.channelName">{{ m.channelName }}</small>{{ m.name }}</span>
-                  <svg v-if="m.active" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                </button>
-                <div v-if="filteredModels.length === 0" class="model-empty">未找到匹配模型</div>
+                <section v-for="group in modelGroups" :key="group.key" class="model-channel-group">
+                  <button type="button" class="model-channel-toggle" :aria-expanded="!isModelChannelCollapsed(group)" @click="toggleModelChannel(group)">
+                    <svg :class="{ collapsed: isModelChannelCollapsed(group) }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                    <span class="model-channel-name">{{ group.name }}</span>
+                    <span class="model-channel-count">{{ group.models.length }}</span>
+                  </button>
+                  <template v-if="!isModelChannelCollapsed(group)">
+                    <button v-for="m in group.models" :key="`${m.channelId || 'default'}:${m.name}`" type="button" class="model-option"
+                            :class="{ active: m.active }" @click="pickModel(m)">
+                      <span class="model-option-name"><small>{{ m.channelName || '默认渠道' }}</small>{{ m.name }}</span>
+                      <svg v-if="m.active" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="20 6 9 17 4 12"/>
+                      </svg>
+                    </button>
+                  </template>
+                </section>
+                <div v-if="modelGroups.length === 0" class="model-empty">未找到匹配模型</div>
               </div>
               <div class="model-manage">
                 <button type="button" @click="manageModels">
@@ -864,14 +873,41 @@ const showModelPicker = ref(false)
 const modelSearchQuery = ref('')
 const modelSearchInput = ref(null)
 const modelDropdownList = ref(null)
+const collapsedModelChannels = ref({})
 const filteredModels = computed(() => {
   const keyword = modelSearchQuery.value.trim().toLowerCase()
-  return props.availableModels.filter((model) => !keyword || String(model.name || '').toLowerCase().includes(keyword))
+  return props.availableModels.filter((model) => !keyword ||
+    String(model.name || '').toLowerCase().includes(keyword) ||
+    String(model.channelName || '').toLowerCase().includes(keyword))
+})
+const modelGroups = computed(() => {
+  const groups = new Map()
+  filteredModels.value.forEach((model) => {
+    const key = model.channelId || 'default'
+    if (!groups.has(key)) groups.set(key, {key, name: model.channelName || '默认渠道', models: []})
+    groups.get(key).models.push(model)
+  })
+  return [...groups.values()]
 })
 const currentModelLabel = computed(() => {
   const current = props.availableModels.find((model) => model.active)
   return current?.channelName ? `${current.channelName} / ${current.name}` : props.currentModel
 })
+const activeModelChannelKey = computed(() => {
+  const activeModel = props.availableModels.find((model) => model.active)
+  return activeModel?.channelId || 'default'
+})
+const isModelChannelCollapsed = (group) => {
+  if (modelSearchQuery.value) return false
+  const collapsed = collapsedModelChannels.value[group.key]
+  return collapsed === undefined ? group.key !== activeModelChannelKey.value : collapsed
+}
+const expandActiveModelChannel = () => {
+  collapsedModelChannels.value[activeModelChannelKey.value] = false
+}
+const toggleModelChannel = (group) => {
+  collapsedModelChannels.value[group.key] = !isModelChannelCollapsed(group)
+}
 const scrollToActiveModel = () => {
   modelDropdownList.value?.querySelector('.model-option.active')?.scrollIntoView({block: 'nearest'})
 }
@@ -881,6 +917,7 @@ const toggleModelPicker = () => {
   showModelPicker.value = nextOpen
   if (nextOpen) {
     modelSearchQuery.value = ''
+    expandActiveModelChannel()
     emit('pickerOpen', 'model')
     emit('refreshModels')
     nextTick(() => {
@@ -890,7 +927,10 @@ const toggleModelPicker = () => {
   }
 }
 watch([showModelPicker, filteredModels], ([isOpen]) => {
-  if (isOpen && !modelSearchQuery.value) nextTick(scrollToActiveModel)
+  if (isOpen && !modelSearchQuery.value) {
+    expandActiveModelChannel()
+    nextTick(scrollToActiveModel)
+  }
 })
 const pickModel = async (model) => {
   const name = typeof model === 'string' ? model : model?.name
@@ -3016,8 +3056,8 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   right: 0;
   display: flex;
   flex-direction: column;
-  width: min(260px, calc(100vw - 24px));
-  height: 300px;
+  width: min(300px, calc(100vw - 24px));
+  height: 340px;
   margin-bottom: 4px;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -3027,12 +3067,14 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   overflow: hidden;
 }
 
-.model-search { flex: 0 0 40px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--border); color: var(--fg-4); }.model-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--fg); font: inherit; font-size: 13px; }.model-search input::placeholder { color: var(--fg-4); }
+.model-search { flex: 0 0 44px; display: flex; align-items: center; gap: 9px; padding: 0 14px; border-bottom: 1px solid var(--border); color: var(--fg-4); }.model-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--fg); font: inherit; font-size: 14px; }.model-search input::placeholder { color: var(--fg-4); }
 
 .model-dropdown-list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+  scrollbar-gutter: stable;
+  background: var(--bg-2);
 }
 
 .model-option {
@@ -3040,9 +3082,10 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 7px 12px;
+  min-height: 44px;
+  padding: 7px 14px;
   border: 0;
-  background: transparent;
+  background: var(--bg);
   font-size: 13px;
   font-family: inherit;
   text-align: left;
@@ -3055,7 +3098,30 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   background: var(--bg-2);
 }
 
-.model-option-name { min-width: 0; display: flex; flex-direction: column; gap: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.model-option-name small { color: var(--fg-4); font-size: 10px; font-weight: 400; }.model-option.active {
+.model-channel-group + .model-channel-group { border-top: 1px solid var(--border); }
+.model-channel-toggle {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+  gap: 8px;
+  padding: 7px 14px;
+  border: 0;
+  background: var(--bg-2);
+  color: var(--fg-3);
+  font: inherit;
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.model-channel-toggle:hover { color: var(--fg); background: var(--bg-3); }
+.model-channel-toggle svg { flex: 0 0 auto; transition: transform var(--t); }
+.model-channel-toggle svg.collapsed { transform: rotate(-90deg); }
+.model-channel-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-channel-count { margin-left: auto; color: var(--fg-4); font-size: 11px; }
+.model-option-name { min-width: 0; display: flex; flex-direction: column; gap: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.model-option-name small { color: var(--fg-4); font-size: 10px; font-weight: 400; }
+.model-option.active {
   color: var(--accent);
   font-weight: 600;
 }
@@ -3064,7 +3130,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   color: var(--accent);
 }
 
-.model-empty { padding: 16px 12px; color: var(--fg-4); font-size: 12px; text-align: center; }.model-manage { flex: 0 0 40px; border-top: 1px solid var(--border); }.model-manage button { width: 100%; height: 100%; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 0; background: transparent; color: var(--fg-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }.model-manage button:hover { background: var(--bg-2); color: var(--fg); }
+.model-empty { padding: 18px 14px; color: var(--fg-4); font-size: 13px; text-align: center; }.model-manage { flex: 0 0 44px; border-top: 1px solid var(--border); }.model-manage button { width: 100%; height: 100%; display: flex; align-items: center; gap: 9px; padding: 0 14px; border: 0; background: transparent; color: var(--fg-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }.model-manage button:hover { background: var(--bg-2); color: var(--fg); }
 
 .loading-dot {
   width: 8px;
