@@ -149,8 +149,11 @@ export const chatAPI = {
   },
   
   // 中断当前聊天 - POST /api/chat/abort
-  abort: () => {
-    return api.post('/chat/abort')
+  abort: (options = {}) => {
+    const body = {}
+    if (options.workspaceHash) body.workspaceHash = options.workspaceHash
+    if (options.sessionName) body.sessionName = options.sessionName
+    return api.post('/chat/abort', body)
   },
 
     // SSE流式聊天 - POST /api/chat/stream
@@ -163,6 +166,8 @@ export const chatAPI = {
         // 添加工作区和会话信息
         if (options.workspaceHash) requestBody.workspaceHash = options.workspaceHash
         if (options.sessionName) requestBody.sessionName = options.sessionName
+        if (options.model) requestBody.model = options.model
+        if (options.modelChannelId) requestBody.modelChannelId = options.modelChannelId
           // 添加图片（base64 Data URI 列表）
           if (options.images && options.images.length > 0) {
               requestBody.images = options.images

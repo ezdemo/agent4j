@@ -61,6 +61,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getBridgeAddress: () => ipcRenderer.invoke('get-ai-browser-bridge-address')
   },
 
+  desktopPet: {
+    open: () => ipcRenderer.invoke('desktop-pet-open'),
+    close: () => ipcRenderer.invoke('desktop-pet-close'),
+    isVisible: () => ipcRenderer.invoke('desktop-pet-is-visible'),
+    moveBy: (delta) => ipcRenderer.invoke('desktop-pet-move-by', delta),
+    refresh: () => ipcRenderer.invoke('desktop-pet-refresh'),
+    onRefresh: (callback) => {
+      const listener = () => callback()
+      ipcRenderer.on('desktop-pet-refresh', listener)
+      return () => ipcRenderer.removeListener('desktop-pet-refresh', listener)
+    }
+  },
+
   aiBrowser: {
     newTab: (url) => ipcRenderer.invoke('ai-browser-new-tab', url),
     navigate: (tabId, url) => ipcRenderer.invoke('ai-browser-navigate', tabId, url),

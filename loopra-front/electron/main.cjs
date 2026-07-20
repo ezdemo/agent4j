@@ -65,6 +65,7 @@ let aiBrowserBridge = null
 let aiBrowserBridgeReady = null
 let aiBrowserBridgeAddress = ''
 let aiBrowserActivity = { state: 'idle', message: '等待 AI 操作', timestamp: Date.now() }
+let desktopPetWindow = null
 const aiBrowserTabs = new Map()
 const desktopChatTabs = new Map()
 let desktopChatActiveTabId = null
@@ -331,11 +332,54 @@ function createWindow() {
   mainWindow.on('closed', () => {
     if (elementInspectorWindow && !elementInspectorWindow.isDestroyed()) elementInspectorWindow.close()
     if (aiBrowserWindow && !aiBrowserWindow.isDestroyed()) aiBrowserWindow.close()
+    if (desktopPetWindow && !desktopPetWindow.isDestroyed()) desktopPetWindow.close()
     if (elementWebView && !elementWebView.webContents.isDestroyed()) elementWebView.webContents.close()
     destroyDesktopChatTabs()
     elementWebView = null
     mainWindow = null
   })
+}
+
+function openDesktopPetWindow() {
+  if (desktopPetWindow && !desktopPetWindow.isDestroyed()) {
+    desktopPetWindow.showInactive()
+    return desktopPetWindow
+  }
+
+  desktopPetWindow = new BrowserWindow({
+    width: 240,
+    height: 240,
+    x: Math.max(0, (mainWindow?.getBounds().x || 0) + (mainWindow?.getBounds().width || 800) - 260),
+    y: Math.max(0, (mainWindow?.getBounds().y || 0) + (mainWindow?.getBounds().height || 600) - 300),
+    frame: false,
+    transparent: true,
+    resizable: false,
+    movable: false,
+    skipTaskbar: true,
+    alwaysOnTop: true,
+    hasShadow: false,
+    focusable: true,
+    show: false,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      backgroundThrottling: false
+    }
+  })
+  desktopPetWindow.setAlwaysOnTop(true, 'floating')
+  desktopPetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  desktopPetWindow.on('closed', () => { desktopPetWindow = null })
+  desktopPetWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
+  desktopPetWindow.once('ready-to-show', () => desktopPetWindow?.showInactive())
+
+  if (isDev) {
+    desktopPetWindow.loadURL('http://localhost:3000/?desktopPet=1')
+  } else {
+    desktopPetWindow.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { desktopPet: '1' } })
+  }
+  return desktopPetWindow
 }
 
 app.whenReady().then(() => {
@@ -557,6 +601,34 @@ ipcMain.handle('window-maximize', () => {
 })
 ipcMain.handle('window-close', () => { if (mainWindow) mainWindow.close() })
 ipcMain.handle('window-is-maximized', () => mainWindow ? mainWindow.isMaximized() : false)
+ipcMain.handle('desktop-pet-open', (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop pet request')
+  openDesktopPetWindow()
+  return true
+})
+ipcMain.handle('desktop-pet-close', (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop pet request')
+  if (desktopPetWindow && !desktopPetWindow.isDestroyed()) desktopPetWindow.close()
+  return false
+})
+ipcMain.handle('desktop-pet-is-visible', (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop pet request')
+  return Boolean(desktopPetWindow && !desktopPetWindow.isDestroyed() && desktopPetWindow.isVisible())
+})
+ipcMain.handle('desktop-pet-refresh', (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop pet request')
+  if (desktopPetWindow && !desktopPetWindow.isDestroyed()) desktopPetWindow.webContents.send('desktop-pet-refresh')
+})
+ipcMain.handle('desktop-pet-move-by', (event, delta) => {
+  if (event.sender !== desktopPetWindow?.webContents) throw new Error('Unauthorized desktop pet move')
+  const dx = Number(delta?.x)
+  const dy = Number(delta?.y)
+  if (!Number.isFinite(dx) || !Number.isFinite(dy) || Math.abs(dx) > 2000 || Math.abs(dy) > 2000) {
+    throw new Error('Invalid desktop pet move')
+  }
+  const bounds = desktopPetWindow.getBounds()
+  desktopPetWindow.setPosition(Math.round(bounds.x + dx), Math.round(bounds.y + dy))
+})
 ipcMain.handle('pick_loopra_workspace_folder', async (event) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized folder picker request')
   const result = await dialog.showOpenDialog(mainWindow, {
