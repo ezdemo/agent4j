@@ -68,38 +68,43 @@
         </section>
       </div>
 
-      <!-- 消息列表 -->
-      <ChatMessage
-          v-for="(msg, idx) in messages"
-           :key="msg.id"
-          v-memo="[
-            msg.id,
-            msg.content,
-            msg.blocks?.length,
-            msg.rollbackId,
-            msg.snapshotId,
-            msg.rollbackTimestamp,
-            idx === activeAssistantMessageIndex ? streamRenderVersion : 0,
-            streaming,
-            branchingSession,
-            snapshotRollbackLoading.get(msg.rollbackId || msg.snapshotId || msg.rollbackTimestamp)
-          ]"
-           :idx="idx"
-           :msg="msg"
-           :workspace-path="activeWorkspacePath"
-           :streaming="idx === activeAssistantMessageIndex"
-          :snapshot-rollback-loading="snapshotRollbackLoading"
-          :rollback-disabled="streaming"
-          :branch-disabled="streaming || branchingSession"
-          @preview-image="previewImage"
-          @rollback-snapshot="openRollbackDialog"
-          @copy-message="copyMessage"
-          @branch-session="branchSession"
-          @send-choice="sendChoice"
-          @open-file="openFile"
-          @open-diff="openStoredDiff"
-          @revert-file-changes="openFileRevertDialog"
-      />
+      <!-- 消息列表：仅挂载可视区域附近的消息，保留上下占位以维持滚动位置。 -->
+      <div v-if="virtualWindow.topHeight" class="virtual-spacer" :style="{ height: virtualWindow.topHeight + 'px' }"></div>
+      <div v-for="item in virtualWindow.items" :key="item.msg.id"
+           :ref="el => observeMessage(item.msg.id, el)"
+           class="virtual-message-item"
+           :class="{ 'message-role-transition': item.idx > 0 && messages[item.idx - 1]?.role !== item.msg.role }">
+        <ChatMessage
+            v-memo="[
+              item.msg.id,
+              item.msg.content,
+              item.msg.blocks?.length,
+              item.msg.rollbackId,
+              item.msg.snapshotId,
+              item.msg.rollbackTimestamp,
+              item.idx === activeAssistantMessageIndex ? streamRenderVersion : 0,
+              streaming,
+              branchingSession,
+              snapshotRollbackLoading.get(item.msg.rollbackId || item.msg.snapshotId || item.msg.rollbackTimestamp)
+            ]"
+            :idx="item.idx"
+            :msg="item.msg"
+            :workspace-path="activeWorkspacePath"
+            :streaming="item.idx === activeAssistantMessageIndex"
+            :snapshot-rollback-loading="snapshotRollbackLoading"
+            :rollback-disabled="streaming"
+            :branch-disabled="streaming || branchingSession"
+            @preview-image="previewImage"
+            @rollback-snapshot="openRollbackDialog"
+            @copy-message="copyMessage"
+            @branch-session="branchSession"
+            @send-choice="sendChoice"
+            @open-file="openFile"
+            @open-diff="openStoredDiff"
+            @revert-file-changes="openFileRevertDialog"
+        />
+      </div>
+      <div v-if="virtualWindow.bottomHeight" class="virtual-spacer" :style="{ height: virtualWindow.bottomHeight + 'px' }"></div>
 
 
 
@@ -243,7 +248,7 @@
 </template>
 
 <script setup>
-import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
 import {agentAPI, chatAPI, configAPI, gitAPI, sessionsAPI, snapshotAPI} from '../services/api'
 import {md} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
@@ -567,6 +572,101 @@ const closeDiffViewer = () => {
 
 const messages = computed(() => store.getSessionMessages(props.sessionName))
 const streaming = computed(() => store.getSessionStreaming(props.sessionName))
+
+const ESTIMATED_MESSAGE_HEIGHT = 320
+const VIRTUAL_OVERSCAN = 1200
+const VIRTUALIZATION_THRESHOLD = 60
+const messageKey = message => String(message.id)
+const messageHeights = reactive(new Map())
+const virtualScrollTop = ref(0)
+const virtualViewportHeight = ref(0)
+const virtualWindow = computed(() => {
+  const total = messages.value.length
+  const offsets = new Array(total + 1).fill(0)
+  for (let index = 0; index < total; index++) {
+    offsets[index + 1] = offsets[index] + (messageHeights.get(messageKey(messages.value[index])) || ESTIMATED_MESSAGE_HEIGHT)
+  }
+
+  if (total <= VIRTUALIZATION_THRESHOLD) {
+    return {
+      items: messages.value.map((msg, idx) => ({msg, idx})),
+      topHeight: 0,
+      bottomHeight: 0,
+      offsets
+    }
+  }
+
+  const startOffset = Math.max(0, virtualScrollTop.value - VIRTUAL_OVERSCAN)
+  const endOffset = virtualScrollTop.value + virtualViewportHeight.value + VIRTUAL_OVERSCAN
+  let start = 0
+  while (start < total && offsets[start + 1] < startOffset) start++
+  let end = start
+  while (end < total && offsets[end] < endOffset) end++
+  return {
+    items: messages.value.slice(start, end).map((msg, offset) => ({msg, idx: start + offset})),
+    topHeight: offsets[start],
+    bottomHeight: offsets[total] - offsets[end],
+    offsets
+  }
+})
+
+let messageResizeObserver = null
+let pendingScrollAdjustment = 0
+let scrollAdjustmentFrame = 0
+const observedMessageElements = new Map()
+const observeMessage = (id, element) => {
+  const key = String(id)
+  const previous = observedMessageElements.get(key)
+  if (!element) {
+    if (previous) messageResizeObserver?.unobserve(previous)
+    observedMessageElements.delete(key)
+    return
+  }
+  if (previous && previous !== element) messageResizeObserver?.unobserve(previous)
+  element.dataset.virtualMessageId = key
+  observedMessageElements.set(key, element)
+  messageResizeObserver?.observe(element)
+}
+
+const updateVirtualViewport = () => {
+  const el = messagesContainer.value
+  if (!el) return
+  virtualScrollTop.value = el.scrollTop
+  virtualViewportHeight.value = el.clientHeight
+}
+
+const firstVisibleMessageIndex = offsets => {
+  let index = 0
+  while (index < messages.value.length && offsets[index + 1] <= virtualScrollTop.value) index++
+  return index
+}
+
+const compensateScroll = adjustment => {
+  if (!adjustment) return
+  pendingScrollAdjustment += adjustment
+  if (scrollAdjustmentFrame) return
+  scrollAdjustmentFrame = requestAnimationFrame(() => {
+    const el = messagesContainer.value
+    if (el) el.scrollTop += pendingScrollAdjustment
+    pendingScrollAdjustment = 0
+    scrollAdjustmentFrame = 0
+    updateVirtualViewport()
+  })
+}
+
+watch(() => messages.value.map(messageKey), ids => {
+  const activeIds = new Set(ids)
+  for (const id of messageHeights.keys()) {
+    if (!activeIds.has(id)) messageHeights.delete(id)
+  }
+  nextTick(updateVirtualViewport)
+})
+
+watch(() => props.sessionName, () => {
+  messageHeights.clear()
+  virtualScrollTop.value = 0
+})
+
 // Only the active streaming message needs to repatch for every server event.
 const streamRenderVersion = ref(0)
 const activeAssistantMessageIndex = computed(() => {
@@ -661,20 +761,51 @@ watch([() => props.workspaceHash, () => props.sessionName], ([ws, sess]) => {
 onMounted(() => {
   loadUsage()
   window.addEventListener('keydown', handleImagePreviewKeydown)
+  window.addEventListener('resize', updateVirtualViewport)
   // 监听复制成功事件
   window.addEventListener('copy-success', (e) => {
     addLog({level: 'INFO', text: '✅ ' + (e.detail || '已复制'), time: Date.now()})
   })
+  messageResizeObserver = new ResizeObserver(entries => {
+    const offsets = virtualWindow.value.offsets
+    const firstVisible = firstVisibleMessageIndex(offsets)
+    let adjustment = 0
+    for (const entry of entries) {
+      const id = entry.target.dataset.virtualMessageId
+      const height = Math.ceil(entry.borderBoxSize?.[0]?.blockSize || entry.contentRect.height)
+      const index = messages.value.findIndex(message => String(message.id) === id)
+      const previousHeight = messageHeights.get(id) || ESTIMATED_MESSAGE_HEIGHT
+      if (id && index >= 0 && height > 0 && previousHeight !== height) {
+        if (index < firstVisible) adjustment += height - previousHeight
+        messageHeights.set(id, height)
+      }
+    }
+    compensateScroll(adjustment)
+    nextTick(updateVirtualViewport)
+  })
+  for (const element of observedMessageElements.values()) {
+    messageResizeObserver.observe(element)
+  }
   // 监听消息容器滚动 + 初始检查
   const el = messagesContainer.value
   if (el) {
     el.addEventListener('scroll', onScroll)
-    requestAnimationFrame(() => onScroll())
+    requestAnimationFrame(() => {
+      updateVirtualViewport()
+      onScroll()
+    })
   }
 })
 
 onBeforeUnmount(() => {
   window.removeEventListener('keydown', handleImagePreviewKeydown)
+  window.removeEventListener('resize', updateVirtualViewport)
+  messageResizeObserver?.disconnect()
+  messageResizeObserver = null
+  if (scrollAdjustmentFrame) cancelAnimationFrame(scrollAdjustmentFrame)
+  scrollAdjustmentFrame = 0
+  pendingScrollAdjustment = 0
+  observedMessageElements.clear()
   window.removeEventListener('copy-success', () => {
   })
   const el = messagesContainer.value
@@ -737,9 +868,10 @@ const truncateText = (text, max) => {
 
 /** 点击缩略图跳转到对应消息 */
 const jumpToMessage = (globalIdx) => {
-  const el = messagesContainer.value?.querySelector(`[data-msg-idx="${globalIdx}"]`)
-  if (el) {
-    el.scrollIntoView({behavior: 'smooth', block: 'start'})
+  const el = messagesContainer.value
+  const offset = virtualWindow.value.offsets[globalIdx]
+  if (el && Number.isFinite(offset)) {
+    el.scrollTo({top: offset, behavior: 'smooth'})
   }
 }
 
@@ -865,6 +997,7 @@ const updateScrollBtn = () => {
 const onScroll = () => {
   const el = messagesContainer.value
   if (!el) return
+  updateVirtualViewport()
   const nearBottom = isNearBottom()
   showScrollBtn.value = !nearBottom
   if (!nearBottom) {
@@ -1773,14 +1906,22 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 .messages {
   flex: 1;
   overflow-y: auto;
+  overflow-anchor: none;
   padding: 16px 72px 146px;
   position: relative;
 }
 
-/* Keep long histories in the DOM for search and scroll anchors, but skip offscreen paint/layout. */
-.messages > :deep(.msg) {
-  content-visibility: auto;
-  contain-intrinsic-size: auto 320px;
+.virtual-message-item {
+  display: flow-root;
+  padding-bottom: 8px;
+}
+
+.virtual-message-item.message-role-transition {
+  padding-top: 12px;
+}
+
+.virtual-message-item > :deep(.msg) {
+  margin: 0;
 }
 
 
