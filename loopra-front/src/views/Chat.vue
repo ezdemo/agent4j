@@ -1907,8 +1907,28 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   flex: 1;
   overflow-y: auto;
   overflow-anchor: none;
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
   padding: 16px 72px 146px;
   position: relative;
+}
+
+.messages::-webkit-scrollbar {
+  width: 3px;
+}
+
+.messages::-webkit-scrollbar-thumb {
+  background: transparent;
+  border-radius: 3px;
+}
+
+.messages:hover {
+  scrollbar-color: var(--fg-4) transparent;
+}
+
+.messages:hover::-webkit-scrollbar-thumb {
+  background: var(--fg-4);
 }
 
 .virtual-message-item {
@@ -2454,7 +2474,9 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 .thumb-dock-inner {
   display: flex;
   flex-direction: column;
-  gap: 3px;
+  gap: 4px;
+  box-sizing: border-box;
+  max-height: min(360px, calc(100vh - 240px));
   padding: 8px 4px;
   background: var(--glass-bg);
   backdrop-filter: blur(var(--blur-sm));
@@ -2465,8 +2487,8 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   pointer-events: auto;
   opacity: 0.35;
   transition: opacity 0.25s ease, box-shadow 0.25s ease;
-  max-height: 70vh;
   overflow-y: auto;
+  overscroll-behavior: contain;
   min-width: 10px;
 }
 
@@ -2475,20 +2497,21 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   box-shadow: 0 4px 20px rgba(0,0,0,0.12);
 }
 
-.thumb-dock-inner::-webkit-scrollbar {
-  width: 2px;
+.thumb-dock-inner {
+  scrollbar-width: none;
 }
 
-.thumb-dock-inner::-webkit-scrollbar-thumb {
-  background: var(--fg-4);
-  border-radius: 1px;
+.thumb-dock-inner::-webkit-scrollbar {
+  display: none;
 }
 
 .thumb-item {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 4px 6px;
+  min-height: 22px;
+  box-sizing: border-box;
+  padding: 3px 6px;
   border-radius: var(--r-sm);
   cursor: pointer;
   transition: all 0.2s ease;
