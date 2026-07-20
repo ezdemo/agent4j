@@ -382,7 +382,7 @@
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
                 <input ref="modelSearchInput" v-model="modelSearchQuery" type="search" placeholder="搜索模型" />
               </div>
-              <div class="model-dropdown-list">
+              <div ref="modelDropdownList" class="model-dropdown-list">
                 <button v-for="m in filteredModels" :key="`${m.channelId || 'default'}:${m.name}`" type="button" class="model-option"
                         :class="{ active: m.active }" @click="pickModel(m)">
                   <span class="model-option-name"><small v-if="m.channelName">{{ m.channelName }}</small>{{ m.name }}</span>
@@ -863,6 +863,7 @@ const autoResize = () => {
 const showModelPicker = ref(false)
 const modelSearchQuery = ref('')
 const modelSearchInput = ref(null)
+const modelDropdownList = ref(null)
 const filteredModels = computed(() => {
   const keyword = modelSearchQuery.value.trim().toLowerCase()
   return props.availableModels.filter((model) => !keyword || String(model.name || '').toLowerCase().includes(keyword))
@@ -871,6 +872,9 @@ const currentModelLabel = computed(() => {
   const current = props.availableModels.find((model) => model.active)
   return current?.channelName ? `${current.channelName} / ${current.name}` : props.currentModel
 })
+const scrollToActiveModel = () => {
+  modelDropdownList.value?.querySelector('.model-option.active')?.scrollIntoView({block: 'nearest'})
+}
 const toggleModelPicker = () => {
   const nextOpen = !showModelPicker.value
   if (nextOpen) closePickers('model')
@@ -879,9 +883,15 @@ const toggleModelPicker = () => {
     modelSearchQuery.value = ''
     emit('pickerOpen', 'model')
     emit('refreshModels')
-    nextTick(() => modelSearchInput.value?.focus())
+    nextTick(() => {
+      modelSearchInput.value?.focus()
+      scrollToActiveModel()
+    })
   }
 }
+watch([showModelPicker, filteredModels], ([isOpen]) => {
+  if (isOpen && !modelSearchQuery.value) nextTick(scrollToActiveModel)
+})
 const pickModel = async (model) => {
   const name = typeof model === 'string' ? model : model?.name
   const channelId = typeof model === 'object' ? model?.channelId : null
@@ -3006,8 +3016,8 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   right: 0;
   display: flex;
   flex-direction: column;
-  width: min(320px, calc(100vw - 24px));
-  height: 420px;
+  width: min(260px, calc(100vw - 24px));
+  height: 300px;
   margin-bottom: 4px;
   background: var(--bg);
   border: 1px solid var(--border);
@@ -3017,7 +3027,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   overflow: hidden;
 }
 
-.model-search { flex: 0 0 48px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--border); color: var(--fg-4); }.model-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--fg); font: inherit; font-size: 15px; }.model-search input::placeholder { color: var(--fg-4); }
+.model-search { flex: 0 0 40px; display: flex; align-items: center; gap: 8px; padding: 0 12px; border-bottom: 1px solid var(--border); color: var(--fg-4); }.model-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--fg); font: inherit; font-size: 13px; }.model-search input::placeholder { color: var(--fg-4); }
 
 .model-dropdown-list {
   flex: 1;
@@ -3030,10 +3040,10 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 9px 24px;
+  padding: 7px 12px;
   border: 0;
   background: transparent;
-  font-size: 14px;
+  font-size: 13px;
   font-family: inherit;
   text-align: left;
   color: var(--fg);
@@ -3045,7 +3055,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   background: var(--bg-2);
 }
 
-.model-option-name { min-width: 0; display: flex; flex-direction: column; gap: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.model-option-name small { color: var(--fg-4); font-size: 11px; font-weight: 400; }.model-option.active {
+.model-option-name { min-width: 0; display: flex; flex-direction: column; gap: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.model-option-name small { color: var(--fg-4); font-size: 10px; font-weight: 400; }.model-option.active {
   color: var(--accent);
   font-weight: 600;
 }
@@ -3054,7 +3064,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   color: var(--accent);
 }
 
-.model-empty { padding: 20px 24px; color: var(--fg-4); font-size: 13px; text-align: center; }.model-manage { flex: 0 0 48px; border-top: 1px solid var(--border); }.model-manage button { width: 100%; height: 100%; display: flex; align-items: center; gap: 12px; padding: 0 18px; border: 0; background: transparent; color: var(--fg-2); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }.model-manage button:hover { background: var(--bg-2); color: var(--fg); }
+.model-empty { padding: 16px 12px; color: var(--fg-4); font-size: 12px; text-align: center; }.model-manage { flex: 0 0 40px; border-top: 1px solid var(--border); }.model-manage button { width: 100%; height: 100%; display: flex; align-items: center; gap: 8px; padding: 0 12px; border: 0; background: transparent; color: var(--fg-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }.model-manage button:hover { background: var(--bg-2); color: var(--fg); }
 
 .loading-dot {
   width: 8px;
