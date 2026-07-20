@@ -118,6 +118,7 @@ public class ModelMetaService {
         Request request = new Request.Builder()
                 .url(MODEL_META_API_URL)
                 .header("Accept", "application/json")
+                .header("User-Agent", "opencode/1.14.21 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13")
                 .get()
                 .build();
 
