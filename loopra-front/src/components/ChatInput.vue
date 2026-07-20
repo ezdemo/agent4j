@@ -3004,9 +3004,11 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   position: absolute;
   bottom: 100%;
   right: 0;
+  display: flex;
+  flex-direction: column;
+  width: min(320px, calc(100vw - 24px));
+  height: 420px;
   margin-bottom: 4px;
-  width: min(360px, calc(100vw - 24px));
-  min-width: 280px;
   background: var(--bg);
   border: 1px solid var(--border);
   border-radius: var(--r);
@@ -3015,10 +3017,11 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   overflow: hidden;
 }
 
-.model-search { height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 18px; border-bottom: 1px solid var(--border); color: var(--fg-4); }.model-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--fg); font: inherit; font-size: 15px; }.model-search input::placeholder { color: var(--fg-4); }
+.model-search { flex: 0 0 48px; display: flex; align-items: center; gap: 10px; padding: 0 16px; border-bottom: 1px solid var(--border); color: var(--fg-4); }.model-search input { min-width: 0; flex: 1; border: 0; outline: 0; background: transparent; color: var(--fg); font: inherit; font-size: 15px; }.model-search input::placeholder { color: var(--fg-4); }
 
 .model-dropdown-list {
-  max-height: 360px;
+  flex: 1;
+  min-height: 0;
   overflow-y: auto;
 }
 
@@ -3051,7 +3054,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   color: var(--accent);
 }
 
-.model-empty { padding: 20px 24px; color: var(--fg-4); font-size: 13px; text-align: center; }.model-manage { border-top: 1px solid var(--border); }.model-manage button { width: 100%; height: 52px; display: flex; align-items: center; gap: 12px; padding: 0 20px; border: 0; background: transparent; color: var(--fg-2); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }.model-manage button:hover { background: var(--bg-2); color: var(--fg); }
+.model-empty { padding: 20px 24px; color: var(--fg-4); font-size: 13px; text-align: center; }.model-manage { flex: 0 0 48px; border-top: 1px solid var(--border); }.model-manage button { width: 100%; height: 100%; display: flex; align-items: center; gap: 12px; padding: 0 18px; border: 0; background: transparent; color: var(--fg-2); font: inherit; font-size: 14px; text-align: left; cursor: pointer; }.model-manage button:hover { background: var(--bg-2); color: var(--fg); }
 
 .loading-dot {
   width: 8px;
