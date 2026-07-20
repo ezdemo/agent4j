@@ -51,4 +51,32 @@ class SessionFileChangeTrackerTest {
         assertEquals(1, changes.get(0).deletions());
         assertTrue(changes.get(0).diff().contains("\\ No newline at end of file"));
     }
+
+    @Test
+    void reportsOnlyChangedLinesForLargeFilesWithScatteredEdits() {
+        String before = largeFile(null, null);
+        String after = largeFile(500, 1600);
+        SessionFileChangeTracker.beginTurn(workspace, "session-a");
+        SessionFileChangeTracker.bind(workspace, "session-a");
+        try {
+            SessionFileChangeTracker.record("src/Large.java", before, after, false);
+        } finally {
+            SessionFileChangeTracker.clearBinding();
+        }
+
+        List<FileChange> changes = SessionFileChangeTracker.drain(workspace, "session-a");
+
+        assertEquals(1, changes.size());
+        assertEquals(2, changes.get(0).additions());
+        assertEquals(2, changes.get(0).deletions());
+    }
+
+    private static String largeFile(Integer firstChange, Integer secondChange) {
+        StringBuilder content = new StringBuilder();
+        for (int index = 0; index < 2100; index++) {
+            boolean changed = Integer.valueOf(index).equals(firstChange) || Integer.valueOf(index).equals(secondChange);
+            content.append(changed ? "changed-" : "line-").append(index).append('\n');
+        }
+        return content.toString();
+    }
 }
