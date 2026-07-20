@@ -33,9 +33,14 @@
         >
           <span v-if="workspaceNameOf(tab.workspaceHash)" class="desktop-tab-monogram" :class="badgeTone(workspaceNameOf(tab.workspaceHash))">{{ initial(workspaceNameOf(tab.workspaceHash)) }}</span>
           <span>{{ tab.title }}</span>
-          <button class="desktop-tab-close" type="button" :aria-label="`关闭 ${tab.title}`" @click.stop="closeTab(tab.id)">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
-          </button>
+          <div class="desktop-tab-actions">
+            <button class="desktop-tab-reload" type="button" :aria-label="`刷新 ${tab.title}`" title="刷新会话" @click.stop="reloadTab(tab.id)">
+              <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+            </button>
+            <button class="desktop-tab-close" type="button" :aria-label="`关闭 ${tab.title}`" @click.stop="closeTab(tab.id)">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
+            </button>
+          </div>
         </div>
         <button class="desktop-tab-add" type="button" title="新建会话" aria-label="新建会话" @click="createTab">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" /></svg>
@@ -66,6 +71,7 @@
         :active-workspace-hash="activeWorkspaceHash"
         :theme="theme"
         :refresh-key="homeRefreshKey"
+        :refreshing="refreshingHome"
         @select-workspace="selectWorkspace"
         @new-session="createTab"
         @open-session="openSession"
@@ -74,6 +80,7 @@
         @open-settings="openSettings"
         @toggle-theme="toggleTheme"
         @add-workspace="addWorkspaceFromFolder"
+        @refresh="refreshHome"
         @delete-session="confirmDeleteSession"
         @clear-workspace="confirmClearWorkspace"
         @delete-workspace="confirmDeleteWorkspace"
@@ -114,6 +121,7 @@ const startupError = ref('')
 const workspaces = ref([])
 const activeWorkspaceHash = ref('')
 const homeRefreshKey = ref(0)
+const refreshingHome = ref(false)
 const showSkills = ref(false)
 const showSettings = ref(false)
 const showModelChannels = ref(false)
@@ -283,6 +291,24 @@ async function initializeWorkspace() {
   }
 }
 
+async function refreshHome() {
+  if (refreshingHome.value) return
+  refreshingHome.value = true
+  try {
+    const response = await configAPI.listWorkspaces()
+    if (!response.success) throw new Error(response.message || '刷新项目列表失败')
+    workspaces.value = response.data || []
+    if (activeWorkspaceHash.value && !workspaces.value.some((workspace) => workspace.hash === activeWorkspaceHash.value)) {
+      activeWorkspaceHash.value = ''
+    }
+    homeRefreshKey.value++
+  } catch (error) {
+    message.error('刷新失败：' + (error.message || '未知错误'))
+  } finally {
+    refreshingHome.value = false
+  }
+}
+
 async function selectWorkspace(workspaceHash) {
   if (!workspaceHash) {
     // 取消选中，展示所有会话
@@ -402,6 +428,14 @@ async function closeTab(id) {
   tabs.value = remaining
   if (wasActive) activeTabId.value = remaining[Math.min(index, remaining.length - 1)]?.id || ''
   await renderActiveTab()
+}
+
+async function reloadTab(id) {
+  try {
+    await nativeTabs()?.reload(id)
+  } catch (error) {
+    message.error('刷新会话失败：' + (error.message || '未知错误'))
+  }
 }
 
 function closeTabWithMiddleClick(event, id) {
@@ -535,11 +569,15 @@ onBeforeUnmount(() => {
 .desktop-tab { display: inline-flex; align-items: center; gap: 7px; width: clamp(156px, 16vw, 230px); height: 30px; padding: 0 10px; border-radius: 6px; cursor: pointer; flex: 0 0 auto; text-align: left; }
 .desktop-tab:hover { background: var(--bg-3, #f3f4f6); color: var(--fg, #202124); }
 .desktop-tab.active { background: var(--bg-3, #f1f2f4); color: var(--fg, #202124); }
-.desktop-tab.active > span:not(.desktop-tab-close):not(.desktop-tab-monogram) { font-weight: 500; }
-.desktop-tab > span:not(.desktop-tab-close):not(.desktop-tab-monogram) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; font-size: 14px; font-weight: 400; }
-.desktop-tab-close { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border-radius: 4px; flex: 0 0 auto; }
+.desktop-tab.active > span:not(.desktop-tab-monogram) { font-weight: 500; }
+.desktop-tab > span:not(.desktop-tab-monogram) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; font-size: 14px; font-weight: 400; }
+.desktop-tab-actions { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
+.desktop-tab-reload, .desktop-tab-close { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border: 0; border-radius: 4px; background: transparent; color: inherit; cursor: pointer; }
+.desktop-tab-reload { display: none; }
+.desktop-tab:hover .desktop-tab-reload, .desktop-tab:focus-within .desktop-tab-reload { display: inline-flex; }
+.desktop-tab-reload svg { width: 12px; height: 12px; }
 .desktop-tab-close svg { width: 14px; height: 14px; }
-.desktop-tab-close:hover { background: rgba(0, 0, 0, 0.08); }
+.desktop-tab-reload:hover, .desktop-tab-close:hover { background: rgba(0, 0, 0, 0.08); }
 .desktop-tab-monogram { width: 16px; height: 16px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 4px; color: #fff; font-size: 10px; font-weight: 700; line-height: 1; text-shadow: 0 1px rgba(0, 0, 0, 0.25); box-shadow: inset 0 1px rgba(255, 255, 255, 0.25), 0 1px 1px rgba(0, 0, 0, 0.16); }
 .desktop-tab-monogram.tone-0 { background: linear-gradient(135deg, #8b95a3, #5e6878); }
 .desktop-tab-monogram.tone-1 { background: linear-gradient(135deg, #3dd0e8, #18b4d0); }

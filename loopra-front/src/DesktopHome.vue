@@ -9,9 +9,14 @@
       <aside class="desktop-projects">
         <div class="desktop-home-heading">
           <span>项目</span>
-          <button class="desktop-add-project" type="button" title="添加项目" aria-label="添加项目" @click="emit('add-workspace')">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
-          </button>
+          <div class="desktop-heading-actions">
+            <button class="desktop-refresh-projects" type="button" title="刷新项目和会话列表" aria-label="刷新项目和会话列表" :disabled="refreshing" @click="emit('refresh')">
+              <ReloadOutlined :class="{ spinning: refreshing }" />
+            </button>
+            <button class="desktop-add-project" type="button" title="添加项目" aria-label="添加项目" @click="emit('add-workspace')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+            </button>
+          </div>
         </div>
         <div class="desktop-project-list">
           <button
@@ -115,6 +120,7 @@
 
 <script setup>
 import {computed, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
+import {ReloadOutlined} from '@ant-design/icons-vue'
 import {sessionsAPI} from './services/api'
 import ServiceProcessManager from './components/ServiceProcessManager.vue'
 
@@ -122,9 +128,10 @@ const props = defineProps({
   workspaces: { type: Array, default: () => [] },
   activeWorkspaceHash: { type: String, default: '' },
   theme: { type: String, default: 'gray' },
-  refreshKey: { type: Number, default: 0 }
+  refreshKey: { type: Number, default: 0 },
+  refreshing: { type: Boolean, default: false }
 })
-const emit = defineEmits(['select-workspace', 'new-session', 'open-session', 'open-skills', 'open-dashboard', 'open-settings', 'toggle-theme', 'add-workspace', 'delete-session', 'clear-workspace', 'delete-workspace'])
+const emit = defineEmits(['select-workspace', 'new-session', 'open-session', 'open-skills', 'open-dashboard', 'open-settings', 'toggle-theme', 'add-workspace', 'refresh', 'delete-session', 'clear-workspace', 'delete-workspace'])
 
 const query = ref('')
 const sessions = ref([])
@@ -261,7 +268,7 @@ onBeforeUnmount(() => {
 .desktop-projects, .desktop-sessions { min-height: 0; display: flex; flex-direction: column; }
 .desktop-home-heading { height: 28px; display: flex; align-items: center; justify-content: space-between; margin-bottom: 6px; color: var(--fg, #202124); font-size: 14px; font-weight: 650; flex: 0 0 auto; }
 .desktop-home-heading button { display: inline-flex; align-items: center; gap: 5px; border: 0; background: transparent; color: var(--fg-2, #5f6368); font: inherit; font-size: 13px; cursor: pointer; padding: 4px; border-radius: 4px; }.desktop-home-heading button:hover { background: var(--bg-3, #f3f4f6); color: var(--fg, #202124); }.desktop-home-heading button svg { width: 15px; height: 15px; }
-.desktop-home-heading .desktop-add-project { width: 24px; height: 24px; justify-content: center; padding: 3px; box-sizing: border-box; flex: 0 0 24px; color: var(--fg-3, #727987); }.desktop-home-heading .desktop-add-project svg { width: 16px; height: 16px; }
+.desktop-heading-actions { display: flex; align-items: center; gap: 4px; }.desktop-home-heading .desktop-refresh-projects, .desktop-home-heading .desktop-add-project { width: 24px; height: 24px; justify-content: center; padding: 3px; box-sizing: border-box; flex: 0 0 24px; color: var(--fg-3, #727987); }.desktop-home-heading .desktop-refresh-projects:disabled { cursor: wait; opacity: 0.65; }.desktop-home-heading .desktop-refresh-projects :deep(svg) { width: 12px; height: 12px; }.desktop-home-heading .desktop-add-project svg { width: 16px; height: 16px; }.spinning { animation: desktop-spin 0.8s linear infinite; } @keyframes desktop-spin { to { transform: rotate(360deg); } }
 .desktop-project-list, .desktop-session-timeline { min-height: 0; overflow: auto; scrollbar-width: none; }.desktop-project-list { display: grid; gap: 2px; flex: 1; align-content: start; }.desktop-session-timeline { padding-right: 4px; }.desktop-session-list { display: grid; gap: 2px; }.desktop-session-group + .desktop-session-group { margin-top: 18px; }.desktop-session-group h3 { height: 24px; display: flex; align-items: center; margin: 0 0 4px; color: var(--fg-3, #727987); font-size: 13px; font-weight: 500; }
 .desktop-project-list::-webkit-scrollbar, .desktop-session-timeline::-webkit-scrollbar { width: 0; height: 0; }
 .desktop-project-list:hover, .desktop-session-timeline:hover { scrollbar-width: thin; }

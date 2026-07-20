@@ -1522,7 +1522,7 @@ const loadHistory = async (sessionName, force = false) => {
   // 如果 force=true 强制从后端刷新，跳过缓存
   const existing = store.getSessionMessages(targetSession)
   if (!force && existing.length > 0) {
-    await scroll(true)
+    if (targetSession === props.sessionName) await scroll(true)
     return
   }
   
@@ -1608,20 +1608,23 @@ const loadHistory = async (sessionName, force = false) => {
         if (item.role === 'assistant') moveFileChangesToEnd(item.blocks)
       }
       store.setSessionMessages(targetSession, merged)
-      await scroll(true)
+      if (targetSession === props.sessionName) await scroll(true)
     }
   } catch {
   }
 }
 
 // 强制从后端刷新指定会话的历史（跳过缓存）
-// 不传 name 则刷新当前会话，并滚动到底部
+// 刷新当前展示的会话后跳至底部，后台会话不影响当前视图。
 const refreshHistory = async (name) => {
   const target = name || props.sessionName
   if (!target) return
   try {
     await loadHistory(target, true)
-    if (!name) await scroll(true)
+    if (target === props.sessionName) {
+      userScrolledAway = false
+      await scroll(true)
+    }
     addLog({level: 'INFO', text: '聊天记录已刷新', time: Date.now()})
   } catch (e) {
     addLog({level: 'ERROR', text: '刷新失败: ' + (e.message || '未知错误'), time: Date.now()})
