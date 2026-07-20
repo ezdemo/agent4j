@@ -371,14 +371,14 @@ public class GitService {
      * 读取工作区当前文件内容，用于前端代码预览，不依赖 Git 状态或提交历史。
      */
     public WorkingFileContentDTO getWorkingFileContent(String workspaceHash, String path) throws Exception {
-        String workspacePath = resolveWorkspace(workspaceHash);
-        path = validatePath(path);
         if (path == null || path.isBlank()) {
             throw new ServiceException("Invalid path");
         }
 
-        java.nio.file.Path workspace = java.nio.file.Paths.get(workspacePath).toAbsolutePath().normalize();
-        java.nio.file.Path file = workspace.resolve(path).normalize();
+        java.nio.file.Path workspace = java.nio.file.Paths.get(resolveWorkspace(workspaceHash)).toAbsolutePath().normalize();
+        String filePath = path.trim().replaceFirst(":\\d+$", "");
+        java.nio.file.Path requested = java.nio.file.Paths.get(filePath);
+        java.nio.file.Path file = (requested.isAbsolute() ? requested : workspace.resolve(requested)).normalize();
         if (!file.startsWith(workspace)) {
             throw new ServiceException("Invalid path");
         }

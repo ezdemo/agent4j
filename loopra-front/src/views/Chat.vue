@@ -85,8 +85,9 @@
             snapshotRollbackLoading.get(msg.rollbackId || msg.snapshotId || msg.rollbackTimestamp)
           ]"
            :idx="idx"
-          :msg="msg"
-          :streaming="idx === activeAssistantMessageIndex"
+           :msg="msg"
+           :workspace-path="activeWorkspacePath"
+           :streaming="idx === activeAssistantMessageIndex"
           :snapshot-rollback-loading="snapshotRollbackLoading"
           :rollback-disabled="streaming"
           :branch-disabled="streaming || branchingSession"
@@ -366,6 +367,9 @@ const welcomeGreeting = computed(() => {
 
 const selectedWelcomeWorkspace = computed(() =>
   props.workspaces.find(workspace => workspace.hash === welcomeWorkspaceHash.value)
+)
+const activeWorkspacePath = computed(() =>
+  props.workspaces.find(workspace => workspace.hash === props.workspaceHash)?.path || ''
 )
 
 

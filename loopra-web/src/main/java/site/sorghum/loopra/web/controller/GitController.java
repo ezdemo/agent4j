@@ -84,7 +84,7 @@ public class GitController {
     @Mapping("/working-file-content")
     public ApiResponse<WorkingFileContentDTO> workingFileContent(
             @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
-            @ApiParam(value = "文件路径（相对于工作区根目录）") @Param("path") String path) throws Exception {
+            @ApiParam(value = "文件路径（工作区相对路径或工作区内绝对路径）") @Param("path") String path) throws Exception {
         return ApiResponse.ok(gitService.getWorkingFileContent(workspaceHash, path));
     }
 
