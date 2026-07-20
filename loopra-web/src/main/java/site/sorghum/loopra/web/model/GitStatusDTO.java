@@ -14,6 +14,7 @@ public record GitStatusDTO(
         String workspacePath,
         List<GitFileChangeDTO> changed,
         List<GitFileChangeDTO> untracked,
-        String model
+        String model,
+        String modelChannelId
 ) {
 }

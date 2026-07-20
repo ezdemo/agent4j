@@ -16,7 +16,15 @@ import java.util.concurrent.atomic.AtomicInteger;
  * <p>
  * 在 reasoning 文本上滑动一个固定大小的窗口（{@value #WINDOW_SIZE} 字符），
  * 统计每个窗口内容的出现次数。当任一窗口在文本中出现
- * {@value #MIN_REPEATS} 次及以上时，判定为循环。
+ * {@value #MIN_REPEATS} 次及以上，且相邻两次重复位置间隔不小于
+ * {@value #MIN_GAP} 字符时，判定为循环。
+ * </p>
+ *
+ * <h3>最小间隔约束</h3>
+ * <p>
+ * 两次重复窗口的起始位置至少相距 {@value #MIN_GAP} 字符才计为有效重复。
+ * 这过滤了模型在相邻段落中反复斟酌同一句话的正常思考节奏——
+ * 真正的死循环是远处再次出现完全相同的内容，不是相邻重复。
  * </p>
  *
  * <h3>性能</h3>
@@ -31,19 +39,26 @@ import java.util.concurrent.atomic.AtomicInteger;
 public class ReasonBreaker {
 
     /**
-     * 滑动窗口大小（字符数）
+     * 滑动窗口大小（字符数）。
+     * <p>调大到 450：原 200 字符仅相当于一两句话，模型在正常推理中反复使用
+     * 相同引导语（"让我再分析一下"、"接下来需要检查" 等）极易误触发。
+     * 真正的死循环通常是数百字符的整段重复，450 字符能覆盖整段思考块。
      */
-    public static final int WINDOW_SIZE = 200;
+    public static final int WINDOW_SIZE = 450;
 
     /**
-     * 同一窗口出现多少次视为循环
+     * 同一窗口出现多少次视为循环。
+     * <p>调大到 4：原 3 次阈值过于敏感，正常思考中反复斟酌同一句话的节奏
+     * 也会被算成 3 次重复。4 次能更好地与正常思考节奏区分。
      */
-    public static final int MIN_REPEATS = 3;
+    public static final int MIN_REPEATS = 4;
 
     /**
-     * 推理内容至少多长才开始检测
+     * 推理内容至少多长才开始检测。
+     * <p>调大到 2500：原 1000 字符在深度推理场景下太短，正常长推理前段也
+     * 容易触发。2500 字符能确保只在真正进入深度推理后才介入。
      */
-    public static final int MIN_REASONING_LENGTH = 1000;
+    public static final int MIN_REASONING_LENGTH = 2500;
 
     /**
      * 最多分析多长的推理内容（性能上限，超出取尾部）
@@ -51,9 +66,18 @@ public class ReasonBreaker {
     public static final int MAX_ANALYZE_LENGTH = 20_000;
 
     /**
-     * 每回合最多触发次数（防止 ReasonBreaker 自身形成无限循环）
+     * 每回合最多触发次数（防止 ReasonBreaker 自身形成无限循环）。
+     * <p>注意：triggerCount 不再由 analyze 自增，改由 AgentLoop 在真正硬终止时
+     * 调用 {@link #recordTrigger()} 自增，使软警告不消耗配额。
      */
     public static final int MAX_TRIGGERS_PER_TURN = 3;
+
+    /**
+     * 最小间隔约束：两次重复窗口的起始位置至少相距 WINDOW_SIZE*2 字符才计为有效重复。
+     * <p>过滤模型在相邻段落中反复斟酌同一句话的正常思考节奏——
+     * 真正的死循环是远处再次出现完全相同的内容，不是相邻重复。
+     */
+    public static final int MIN_GAP = WINDOW_SIZE * 2;
 
     /**
      * 本回合已触发次数（volatile 保证跨线程可见性）
@@ -79,7 +103,7 @@ public class ReasonBreaker {
     }
 
     /**
-     * 复用的哈希计数器（每回合 reset 时清空，避免每次 analyze 重新分配）
+     * 复用的哈希计数器（每次 analyze 清空重扫）
      */
     private final Map<Long, Integer> hashCounts = new HashMap<>();
 
@@ -87,6 +111,11 @@ public class ReasonBreaker {
      * 记录每个哈希值首次出现的位置（用于 regionMatches 验证）
      */
     private final Map<Long, Integer> hashFirstPos = new HashMap<>();
+
+    /**
+     * 记录每个哈希值最近一次被计为有效重复的位置（用于最小间隔约束）
+     */
+    private final Map<Long, Integer> hashLastPos = new HashMap<>();
 
     /**
      * 检测窗口是否全由同一字符构成（如 "AAAA..."），此类窗口跳过不计数。
@@ -103,7 +132,8 @@ public class ReasonBreaker {
 
     /**
      * 分析推理内容是否包含循环重复。
-     * 使用 Rabin-Karp 滚动哈希避免大量 substring 分配。
+     * <p>使用 Rabin-Karp 滚动哈希避免大量 substring 分配。
+     * 每次调用全量扫描尾部文本，清空计数器重新统计。
      *
      * @param reasoningContent 模型的推理/思考文本（可为 null）
      * @return 检测结果，{@link LoopResult#looping} 为 true 表示检测到循环
@@ -125,12 +155,18 @@ public class ReasonBreaker {
             text = text.substring(text.length() - MAX_ANALYZE_LENGTH);
         }
 
-        // 滑动窗口统计（Rabin-Karp 滚动哈希，避免 substring 分配）
+        int end = text.length() - WINDOW_SIZE;
+        if (end < 0) {
+            return LoopResult.NO_LOOP;
+        }
+
+        // 全量扫描：清空重扫
         hashCounts.clear();
         hashFirstPos.clear();
+        hashLastPos.clear();
+
         int maxCount = 0;
         int maxCountFirstPos = 0;
-        int end = text.length() - WINDOW_SIZE;
 
         // 计算首个窗口的哈希值
         long hash = 0;
@@ -139,10 +175,10 @@ public class ReasonBreaker {
         }
 
         // 检测首个窗口是否全 uniform
-        boolean firstUniform = isUniform(text, 0, WINDOW_SIZE);
-        if (!firstUniform) {
+        if (!isUniform(text, 0, WINDOW_SIZE)) {
             hashCounts.put(hash, 1);
             hashFirstPos.put(hash, 0);
+            hashLastPos.put(hash, 0);
             maxCount = 1;
             maxCountFirstPos = 0;
         }
@@ -161,37 +197,66 @@ public class ReasonBreaker {
 
             Integer count = hashCounts.get(hash);
             if (count == null) {
+                // 首次出现该窗口
                 hashCounts.put(hash, 1);
                 hashFirstPos.put(hash, i);
+                hashLastPos.put(hash, i);
+                if (1 > maxCount) {
+                    maxCount = 1;
+                    maxCountFirstPos = i;
+                }
             } else {
                 // 哈希碰撞验证：用 regionMatches 确认内容确实相同
                 int firstPos = hashFirstPos.get(hash);
                 if (!text.regionMatches(firstPos, text, i, WINDOW_SIZE)) {
-                    // 哈希碰撞，跳过
+                    // 哈希碰撞，跳过（不更新 lastPos）
                     continue;
                 }
+                // 最小间隔约束：与最近一次有效重复位置的距离
+                int lastPos = hashLastPos.getOrDefault(hash, firstPos);
+                if (i - lastPos < MIN_GAP) {
+                    // 间隔不足，不计为有效重复，但更新最近位置（跟踪模型当前位置）
+                    hashLastPos.put(hash, i);
+                    continue;
+                }
+                // 有效重复：计数 +1
                 int newCount = count + 1;
                 hashCounts.put(hash, newCount);
+                hashLastPos.put(hash, i);
                 if (newCount > maxCount) {
                     maxCount = newCount;
                     maxCountFirstPos = firstPos;
                     if (maxCount >= MIN_REPEATS) {
-                        break;
+                        return buildLoopResult(text, maxCountFirstPos, maxCount);
                     }
                 }
             }
         }
 
         if (maxCount >= MIN_REPEATS) {
-            triggerCount.incrementAndGet();
-            // 截取摘要（取重复片段的前 80 字符）
-            int snippetEnd = Math.min(maxCountFirstPos + 80, text.length());
-            String snippet = text.substring(maxCountFirstPos, snippetEnd);
-            if (snippetEnd - maxCountFirstPos >= 80) snippet += "...";
-            return new LoopResult(true, snippet, maxCount);
+            return buildLoopResult(text, maxCountFirstPos, maxCount);
         }
 
         return LoopResult.NO_LOOP;
+    }
+
+    /**
+     * 构造命中循环的结果（截取摘要），不自增 triggerCount。
+     * triggerCount 由 AgentLoop 在硬终止时调用 {@link #recordTrigger()} 自增。
+     */
+    private LoopResult buildLoopResult(String text, int firstPos, int count) {
+        int snippetEnd = Math.min(firstPos + 80, text.length());
+        String snippet = text.substring(firstPos, snippetEnd);
+        if (snippetEnd - firstPos >= 80) snippet += "...";
+        return new LoopResult(true, snippet, count);
+    }
+
+    /**
+     * 记录一次硬终止触发（由 AgentLoop 在真正 abort 流时调用）。
+     * 与 {@link #analyze} 解耦，使软警告不消耗触发配额。
+     */
+    public void recordTrigger() {
+        triggerCount.incrementAndGet();
     }
 
     /**
@@ -201,6 +266,7 @@ public class ReasonBreaker {
         triggerCount.set(0);
         hashCounts.clear();
         hashFirstPos.clear();
+        hashLastPos.clear();
     }
 
     /**

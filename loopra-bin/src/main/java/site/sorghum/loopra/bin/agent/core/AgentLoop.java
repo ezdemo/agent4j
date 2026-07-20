@@ -868,6 +868,8 @@ public class AgentLoop implements AgentLoopController {
         final AtomicBoolean loopAborted = new AtomicBoolean(false);
         final String[] loopSnapshot = {null};
         final int[] lastCheckLen = {0};
+        // 连续命中计数：连续两次 analyze 命中才硬终止，单次命中只发软警告
+        final int[] consecutiveHits = {0};
         // 捕获外部中断源引用，避免回调内重复 volatile 读
         final Runnable capturedExtAbort = externalAbortSource;
 
@@ -879,17 +881,30 @@ public class AgentLoop implements AgentLoopController {
                 if (loopAborted.get() || userAbortRequested || Thread.currentThread().isInterrupted()) return;
                 reasoningBuf.append(token);
                 safeOutputDebug("reasoningDelta", () -> output.onReasoningDelta(token));
-                // 流式增量检测：每 500 字符检查一次思考循环
+                // 流式增量检测：每 1000 字符检查一次思考循环
                 int newLen = reasoningBuf.length();
-                if (newLen - lastCheckLen[0] >= 500) {
+                if (newLen - lastCheckLen[0] >= 1000) {
                     lastCheckLen[0] = newLen;
                     ReasonBreaker.LoopResult lr = reasonBreaker.analyze(reasoningBuf.toString());
                     if (lr.looping) {
-                        loopSnapshot[0] = reasoningBuf.toString();
-                        loopAborted.set(true);
-                        safeOutput("ReasonBreaker", () -> output.onLog(LogLevel.WARN, "[ReasonBreaker] " + lr.toWarning()));
-                        client.abortStream();
-                        streamLatch.countDown();
+                        consecutiveHits[0]++;
+                        if (consecutiveHits[0] == 1) {
+                            // 首次命中：软警告，不中断流，给模型自己跳出的机会
+                            safeOutput("ReasonBreaker", () -> output.onLog(LogLevel.WARN,
+                                    "[ReasonBreaker] 疑似思考循环（软警告）—— " + lr.toWarning()));
+                        } else {
+                            // 连续两次命中：硬终止
+                            loopSnapshot[0] = reasoningBuf.toString();
+                            loopAborted.set(true);
+                            reasonBreaker.recordTrigger();
+                            safeOutput("ReasonBreaker", () -> output.onLog(LogLevel.WARN,
+                                    "[ReasonBreaker] 连续两次检测到思考循环，终止本轮推理。" + lr.toWarning()));
+                            client.abortStream();
+                            streamLatch.countDown();
+                        }
+                    } else {
+                        // 未命中：重置连续计数（模型已跳出循环）
+                        consecutiveHits[0] = 0;
                     }
                 }
             }

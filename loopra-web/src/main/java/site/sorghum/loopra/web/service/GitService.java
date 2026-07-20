@@ -6,6 +6,8 @@ import org.noear.solon.ai.chat.ChatModel;
 import org.noear.solon.ai.chat.ChatResponse;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
+import site.sorghum.loopra.bin.config.ConfigService;
+import site.sorghum.loopra.bin.config.LoopraConfig;
 import site.sorghum.loopra.bin.model.ModelContextUtils;
 import site.sorghum.loopra.web.common.ServiceException;
 import site.sorghum.loopra.web.common.entity.ProcessResult;
@@ -34,6 +36,9 @@ public class GitService {
 
     @Inject
     private AgentService agentService;
+
+    @Inject
+    private ConfigService configService;
 
     // ==================== 常量 ====================
 
@@ -114,18 +119,18 @@ public class GitService {
             ProcessResult checkGit = runGit(workspaceDir, "git", "--version");
             if (checkGit.exitCode != 0) {
                 return new GitStatusDTO(false, false, null,
-                        workspaceDir.getAbsolutePath(), List.of(), List.of(), null);
+                        workspaceDir.getAbsolutePath(), List.of(), List.of(), null, null);
             }
         } catch (Exception e) {
             return new GitStatusDTO(false, false, null,
-                    workspaceDir.getAbsolutePath(), List.of(), List.of(), null);
+                    workspaceDir.getAbsolutePath(), List.of(), List.of(), null, null);
         }
 
         // 2. 检测是否是 git 仓库
         ProcessResult checkRepo = runGit(workspaceDir, "git", "rev-parse", "--is-inside-work-tree");
         if (checkRepo.exitCode != 0) {
             return new GitStatusDTO(true, false, null,
-                    workspaceDir.getAbsolutePath(), List.of(), List.of(), null);
+                    workspaceDir.getAbsolutePath(), List.of(), List.of(), null, null);
         }
 
         // 3. 获取分支名
@@ -139,12 +144,13 @@ public class GitService {
         List<GitFileChangeDTO> untracked = new ArrayList<>();
         parsePorcelainStatus(statusResult.stdout, changed, untracked);
 
-        // 5. 获取配置的模型
+        // 5. 获取配置的模型与渠道
         Map<String, String> config = getGitConfig(workspaceHash);
         String model = config.get("model");
+        String modelChannelId = config.get("modelChannelId");
 
         return new GitStatusDTO(true, true, branch,
-                workspaceDir.getAbsolutePath(), changed, untracked, model);
+                workspaceDir.getAbsolutePath(), changed, untracked, model, modelChannelId);
     }
 
     /**
@@ -548,6 +554,10 @@ public class GitService {
                     if (modelNode != null && modelNode.isString() && !modelNode.getString().trim().isEmpty()) {
                         result.put("model", modelNode.getString().trim());
                     }
+                    ONode channelNode = node.get("modelChannelId");
+                    if (channelNode != null && channelNode.isString() && !channelNode.getString().trim().isEmpty()) {
+                        result.put("modelChannelId", channelNode.getString().trim());
+                    }
                 }
             } catch (Exception e) {
                 log.debug("[git] 读取 git-author.json 失败: {}", e.getMessage());
@@ -580,6 +590,13 @@ public class GitService {
         if (!result.containsKey("model") || result.get("model") == null || result.get("model").isEmpty()) {
             result.put("model", agentService.getSharedModel());
         }
+        // 4.1) 模型渠道字段：如果未配置，回退到当前激活渠道
+        if (!result.containsKey("modelChannelId") || result.get("modelChannelId") == null || result.get("modelChannelId").isEmpty()) {
+            LoopraConfig cfg = ConfigService.getConfig();
+            if (cfg != null) {
+                result.put("modelChannelId", cfg.modelChannelId());
+            }
+        }
 
         return result;
     }
@@ -595,6 +612,7 @@ public class GitService {
         String authorName = readStringField(json, "authorName");
         String authorEmail = readStringField(json, "authorEmail");
         String model = readStringField(json, "model");
+        String modelChannelId = readStringField(json, "modelChannelId");
         if (authorName == null || authorEmail == null) {
             throw new ServiceException("作者名和邮箱不能为空");
         }
@@ -613,6 +631,9 @@ public class GitService {
         if (model != null && !model.trim().isEmpty()) {
             configNode.set("model", model.trim());
         }
+        if (modelChannelId != null && !modelChannelId.trim().isEmpty()) {
+            configNode.set("modelChannelId", modelChannelId.trim());
+        }
         Files.writeString(configFile.toPath(), configNode.toJson(), StandardCharsets.UTF_8);
 
         Map<String, String> result = new LinkedHashMap<>();
@@ -620,6 +641,9 @@ public class GitService {
         result.put("authorEmail", authorEmail);
         if (model != null && !model.trim().isEmpty()) {
             result.put("model", model.trim());
+        }
+        if (modelChannelId != null && !modelChannelId.trim().isEmpty()) {
+            result.put("modelChannelId", modelChannelId.trim());
         }
         return result;
     }
@@ -687,30 +711,49 @@ public class GitService {
         ONode bodyJson = parseJsonBody(body, "generateCommitMessage");
         List<String> files = readStringListField(bodyJson, "files");
         String requestModel = readStringField(bodyJson, "model");
+        String requestChannelId = readStringField(bodyJson, "modelChannelId");
 
-        // 检查 AI 模型配置
+        // 检查 AI 模型配置（默认走当前激活渠道，按请求/工作区配置的渠道覆盖）
         String apiUrl = agentService.getSharedApiUrl();
         String apiKey = agentService.getSharedApiKey();
         String model = agentService.getSharedModel();
+        String channelId = null;
         if (apiUrl == null || apiKey == null || model == null) {
             throw new ServiceException("AI 模型未配置，请先设置 OPENAI_API_KEY 环境变量");
         }
 
-        // 读取工作区配置的模型（优先使用请求参数 > 工作区配置 > 全局配置）
+        // 读取工作区配置的模型与渠道（优先使用请求参数 > 工作区配置 > 全局配置）
+        Map<String, String> workspaceConfig = getGitConfig(workspaceHash);
         if (requestModel != null && !requestModel.trim().isEmpty()) {
             model = requestModel.trim();
-            // 持久化模型配置
-            Map<String, String> currentConfig = getGitConfig(workspaceHash);
+            channelId = requestChannelId;
+            // 持久化模型与渠道配置
             saveGitConfig(workspaceHash, ONode.ofJson("{}")
-                    .set("authorName", currentConfig.get("authorName"))
-                    .set("authorEmail", currentConfig.get("authorEmail"))
+                    .set("authorName", workspaceConfig.get("authorName"))
+                    .set("authorEmail", workspaceConfig.get("authorEmail"))
                     .set("model", model)
+                    .set("modelChannelId", channelId != null ? channelId : "")
                     .toJson());
         } else {
-            Map<String, String> config = getGitConfig(workspaceHash);
-            String configModel = config.get("model");
+            String configModel = workspaceConfig.get("model");
             if (configModel != null && !configModel.trim().isEmpty()) {
                 model = configModel.trim();
+            }
+            channelId = workspaceConfig.get("modelChannelId");
+        }
+
+        // 按指定渠道覆盖 apiUrl/apiKey（实现多渠道真正按渠道调用）
+        if (channelId != null && !channelId.trim().isEmpty()) {
+            LoopraConfig cfg = ConfigService.getConfig();
+            if (cfg != null) {
+                LoopraConfig.ModelChannel channel = cfg.modelChannel(channelId.trim());
+                if (channel != null && !channel.baseUrl().isBlank()) {
+                    String base = channel.baseUrl();
+                    apiUrl = base.endsWith("/") ? base + "chat/completions" : base + "/chat/completions";
+                    if (!channel.apiKey().isBlank()) {
+                        apiKey = channel.apiKey();
+                    }
+                }
             }
         }
 

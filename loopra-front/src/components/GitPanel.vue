@@ -80,12 +80,26 @@
             ></textarea>
             <!-- 作者配置和模型选择 -->
             <div class="commit-author-bar">
-              <!-- 模型选择在左边 -->
-              <select v-model="commitModel" class="author-btn model-select-inline" @change="checkModelWarning">
-                <option v-for="m in availableModels" :key="m.name" :value="m.name">
-                  {{ m.name }}
-                </option>
-              </select>
+              <!-- 模型选择在左边（多渠道 dropdown，仿 ChatInput） -->
+              <div class="git-model-selector">
+                <button class="author-btn model-btn-inline" @click="toggleModelPicker" :title="'当前模型: ' + (currentModelLabel || '未选择')" type="button">
+                  <span class="model-btn-label">{{ currentModelLabel || '选择模型' }}</span>
+                  <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+                <div class="git-model-dropdown" v-if="showModelPicker">
+                  <div class="git-model-search">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="m16 16 4 4"/></svg>
+                    <input ref="modelSearchInput" v-model="modelSearchQuery" type="search" placeholder="搜索模型" @keydown.esc="showModelPicker = false"/>
+                  </div>
+                  <div class="git-model-list">
+                    <button v-for="m in filteredModels" :key="(m.channelId||'default')+':'+m.name" type="button" class="git-model-option" :class="{ active: isModelActive(m) }" @click="pickModel(m)">
+                      <span class="git-model-option-name"><small v-if="m.channelName">{{ m.channelName }}</small>{{ m.name }}</span>
+                      <svg v-if="isModelActive(m)" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                    </button>
+                    <div v-if="filteredModels.length === 0" class="git-model-empty">未找到匹配模型</div>
+                  </div>
+                </div>
+              </div>
               <!-- 提交人按钮在右边 -->
               <button class="author-btn" @click="showAuthorModal = true" title="配置提交作者名和邮箱">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -260,7 +274,7 @@
 </template>
 
 <script setup>
-import {computed, onMounted, ref, watch} from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {gitAPI} from '../services/api'
 import DiffViewer from './DiffViewer.vue'
 
@@ -299,9 +313,47 @@ const generating = ref(false)
 // 提交作者（从 API 加载/保存到 .loopra/git-author.json）
 const authorName = ref('Loopra')
 const authorEmail = ref('loopra@sorghum.site')
-const commitModel = ref('')
+const commitModel = ref({ name: '', channelId: '' })
 const availableModels = ref([])
 const modelWarning = ref('')
+
+// ============= 模型选择（多渠道 dropdown，仿 ChatInput） =============
+const showModelPicker = ref(false)
+const modelSearchQuery = ref('')
+const modelSearchInput = ref(null)
+const filteredModels = computed(() => {
+  const kw = modelSearchQuery.value.trim().toLowerCase()
+  if (!kw) return availableModels.value
+  return availableModels.value.filter(m =>
+    String(m.name || '').toLowerCase().includes(kw) ||
+    String(m.channelName || '').toLowerCase().includes(kw)
+  )
+})
+const currentModelLabel = computed(() => {
+  const m = availableModels.value.find(item =>
+    item.name === commitModel.value.name && (item.channelId || '') === (commitModel.value.channelId || '')
+  )
+  return m ? (m.channelName ? `${m.channelName} / ${m.name}` : m.name) : commitModel.value.name
+})
+const isModelActive = (m) =>
+  m.name === commitModel.value.name && (m.channelId || '') === (commitModel.value.channelId || '')
+const toggleModelPicker = () => {
+  showModelPicker.value = !showModelPicker.value
+  if (showModelPicker.value) {
+    modelSearchQuery.value = ''
+    nextTick(() => modelSearchInput.value?.focus())
+  }
+}
+const pickModel = (m) => {
+  commitModel.value = { name: m.name, channelId: m.channelId || '' }
+  showModelPicker.value = false
+}
+// 点击 dropdown 外部关闭
+const onDocMouseDown = (e) => {
+  if (!showModelPicker.value) return
+  if (e.target.closest && e.target.closest('.git-model-selector')) return
+  showModelPicker.value = false
+}
 
 // 获取可用模型列表
 const loadAvailableModels = async () => {
@@ -319,13 +371,15 @@ const loadAvailableModels = async () => {
 
 // 检查模型警告
 const checkModelWarning = () => {
-  if (!commitModel.value || availableModels.value.length === 0) {
+  if (!commitModel.value.name || availableModels.value.length === 0) {
     modelWarning.value = ''
     return
   }
-  const found = availableModels.value.some(m => m.name === commitModel.value)
+  const found = availableModels.value.some(m =>
+    m.name === commitModel.value.name && (m.channelId || '') === (commitModel.value.channelId || '')
+  )
   if (!found) {
-    modelWarning.value = `警告: "${commitModel.value}" 不在可用模型列表中，请切换模型`
+    modelWarning.value = `警告: "${commitModel.value.name}" 不在可用模型列表中，请切换模型`
   } else {
     modelWarning.value = ''
   }
@@ -337,7 +391,7 @@ const loadAuthorConfig = async () => {
     if (r.success && r.data) {
       if (r.data.authorName) authorName.value = r.data.authorName
       if (r.data.authorEmail) authorEmail.value = r.data.authorEmail
-      if (r.data.model) commitModel.value = r.data.model
+      if (r.data.model) commitModel.value = { name: r.data.model, channelId: r.data.modelChannelId || '' }
     }
   } catch (e) {
     // 静默，默认值兜底
@@ -346,7 +400,7 @@ const loadAuthorConfig = async () => {
 
 const handleSaveAuthorConfig = async () => {
   try {
-    const r = await gitAPI.saveConfig(props.workspaceHash, authorName.value.trim(), authorEmail.value.trim(), commitModel.value.trim())
+    const r = await gitAPI.saveConfig(props.workspaceHash, authorName.value.trim(), authorEmail.value.trim(), commitModel.value.name.trim(), commitModel.value.channelId || '')
     if (r.success) {
       showFeedback('success', '作者配置已保存')
       showAuthorModal.value = false
@@ -368,7 +422,7 @@ const handleFetchGitConfig = async () => {
     if (r.success && r.data) {
       if (r.data.authorName) authorName.value = r.data.authorName
       if (r.data.authorEmail) authorEmail.value = r.data.authorEmail
-      if (r.data.model) commitModel.value = r.data.model
+      if (r.data.model) commitModel.value = { name: r.data.model, channelId: r.data.modelChannelId || '' }
       showFeedback('success', '已从 Git 本地配置获取作者信息')
     } else {
       showFeedback('error', r.error || '获取 Git 配置失败')
@@ -382,9 +436,9 @@ const handleFetchGitConfig = async () => {
 const handleResetAuthor = async () => {
   authorName.value = 'Loopra'
   authorEmail.value = 'loopra@sorghum.site'
-  commitModel.value = '' // 清空，使用默认模型
+  commitModel.value = { name: '', channelId: '' } // 清空，使用默认模型
   try {
-    await gitAPI.saveConfig(props.workspaceHash, 'Loopra', 'loopra@sorghum.site', '')
+    await gitAPI.saveConfig(props.workspaceHash, 'Loopra', 'loopra@sorghum.site', '', '')
     showFeedback('success', '已恢复为默认作者信息')
   } catch (e) {
     showFeedback('error', e.message || '恢复失败')
@@ -448,8 +502,8 @@ const loadStatus = async () => {
       branchName.value = d.branch || ''
       changedFiles.value = d.changed || []
       untrackedFiles.value = d.untracked || []
-      // 从状态中读取配置的模型
-      if (d.model) commitModel.value = d.model
+      // 从状态中读取配置的模型与渠道
+      if (d.model) commitModel.value = { name: d.model, channelId: d.modelChannelId || '' }
     } else {
       // 回退到 diff 接口
       await loadDiffFallback()
@@ -582,7 +636,7 @@ const handleGenerateMessage = async () => {
   generating.value = true
   try {
     const files = Array.from(selectedFiles.value)
-    const r = await gitAPI.generateCommitMessage(props.workspaceHash, files, commitModel.value)
+    const r = await gitAPI.generateCommitMessage(props.workspaceHash, files, commitModel.value.name, commitModel.value.channelId)
     if (r.success && r.data && r.data.message) {
       commitMessage.value = r.data.message
       showFeedback('success', `AI 已生成提交消息（基于 ${files.length} 个文件）`)
@@ -666,9 +720,14 @@ const closeDiffViewer = () => {
 
 // ---- 生命周期 ----
 onMounted(async () => {
+  document.addEventListener('mousedown', onDocMouseDown)
   await loadStatus()
   await loadAuthorConfig()
   await loadAvailableModels()
+})
+
+onBeforeUnmount(() => {
+  document.removeEventListener('mousedown', onDocMouseDown)
 })
 
 watch(() => props.workspaceHash, async () => {
@@ -682,7 +741,7 @@ watch(() => props.workspaceHash, async () => {
 // 监听模型变化，更新警告
 watch(commitModel, () => {
   checkModelWarning()
-})
+}, { deep: true })
 
 defineExpose({ loadStatus })
 </script>
@@ -843,17 +902,79 @@ defineExpose({ loadStatus })
   margin-top: 4px;
   gap: 8px;
 }
-.model-select-inline {
+.git-model-selector {
+  position: relative;
   flex: 1;
   min-width: 0;
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  appearance: none;
-  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' viewBox='0 0 24 24' fill='none' stroke='%23999' stroke-width='2'%3E%3Cpolyline points='9 18 15 12 9 6'/%3E%3C/svg%3E");
-  background-repeat: no-repeat;
-  background-position: right 6px center;
-  padding-right: 20px;
+  display: inline-flex;
 }
+.model-btn-inline {
+  flex: 1;
+  min-width: 0;
+  justify-content: space-between;
+  overflow: hidden;
+}
+.model-btn-inline .model-btn-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-family: var(--mono);
+  font-weight: 600;
+  color: var(--fg-2);
+}
+.git-model-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  width: min(320px, calc(100vw - 24px));
+  min-width: 240px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  z-index: 200;
+  overflow: hidden;
+}
+.git-model-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--border);
+  color: var(--fg-4);
+}
+.git-model-search input {
+  min-width: 0;
+  flex: 1;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--fg);
+  font: inherit;
+  font-size: 13px;
+}
+.git-model-list { max-height: 280px; overflow-y: auto; }
+.git-model-option {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 12px;
+  border: 0;
+  background: transparent;
+  font-size: 12px;
+  font-family: inherit;
+  text-align: left;
+  color: var(--fg);
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.git-model-option:hover { background: var(--bg-2); }
+.git-model-option.active { color: var(--accent); font-weight: 600; }
+.git-model-option.active svg { color: var(--accent); }
+.git-model-option-name { min-width: 0; display: flex; flex-direction: column; gap: 1px; overflow: hidden; }
+.git-model-option-name small { color: var(--fg-4); font-size: 10px; font-weight: 400; }
+.git-model-empty { padding: 16px 12px; color: var(--fg-4); font-size: 12px; text-align: center; }
 .model-warning-bar {
   font-size: 13px;
   color: #e74c3c;
