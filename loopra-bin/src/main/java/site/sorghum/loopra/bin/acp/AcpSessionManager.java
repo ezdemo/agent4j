@@ -234,17 +234,24 @@ public class AcpSessionManager {
         agent.setOutput(output);
         agent.setSessionId(sessionId);
 
-        // 构建用户消息
-        UserMessage userMessage = UserMessage.of(promptText, images);
+        // 设置会话 ID 到 ThreadLocal，供 AI 请求头和日志使用
+        HttpModelClient.CURRENT_LOG_SESSION.set(sessionId);
 
-        // 执行 Agent 推理循环
-        String result = agent.chat(userMessage);
+        try {
+            // 构建用户消息
+            UserMessage userMessage = UserMessage.of(promptText, images);
 
-        // 刷入会话
-        agent.flushSession();
-        agent.saveUsage();
+            // 执行 Agent 推理循环
+            String result = agent.chat(userMessage);
 
-        return result;
+            // 刷入会话
+            agent.flushSession();
+            agent.saveUsage();
+
+            return result;
+        } finally {
+            HttpModelClient.CURRENT_LOG_SESSION.remove();
+        }
     }
 
     /**

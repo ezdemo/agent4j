@@ -166,6 +166,7 @@ const stopWorkspaceListener = window.electronAPI?.events?.listen('desktop-chat-t
   if (!tabId || !workspaceHash) return
   tabs.value = tabs.value.map((tab) => tab.id === tabId ? { ...tab, workspaceHash } : tab)
 })
+const stopOpenHomeListener = window.electronAPI?.events?.listen('desktop-shell-open-home', () => { void showHome() })
 const stopOpenSettingsListener = window.electronAPI?.events?.listen('desktop-shell-open-model-channels', () => { void openModelChannels() })
 
 async function renderActiveTab() {
@@ -514,6 +515,8 @@ async function closeWindow() { await platform.implementation.window.close() }
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
   stopTitleListener?.()
+  stopWorkspaceListener?.()
+  stopOpenHomeListener?.()
   stopOpenSettingsListener?.()
   void nativeTabs()?.hide()
 })
