@@ -21,6 +21,7 @@
       </div>
 
       <div v-if="session" class="tb-breadcrumb">
+        <span v-if="workspaceName" class="tb-monogram" :class="badgeTone(workspaceName)">{{ initial(workspaceName) }}</span>
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
           <polyline points="9 18 15 12 9 6"/>
         </svg>
@@ -105,6 +106,7 @@ import ServiceProcessManager from './ServiceProcessManager.vue'
 
 defineProps({
   session: { type: String, default: '' },
+  workspaceName: { type: String, default: '' },
   sideOn: { type: Boolean, default: true },
   hasMessages: { type: Boolean, default: false },
   hasSession: { type: Boolean, default: false },
@@ -168,6 +170,14 @@ const closeWindow = async () => {
     // 浏览器环境：尝试关闭标签页
     window.close()
   }
+}
+
+// 项目图标：首字符 + 色调
+const initial = (name) => String(name || 'L').trim().charAt(0).toUpperCase() || 'L'
+const badgeTone = (name) => {
+  let hash = 0
+  for (const char of String(name || '')) hash = ((hash * 31) + char.charCodeAt(0)) >>> 0
+  return `tone-${hash % 8}`
 }
 </script>
 
@@ -265,6 +275,29 @@ const closeWindow = async () => {
   flex-shrink: 0;
   opacity: 0.7;
 }
+.tb-monogram {
+  width: 17px;
+  height: 17px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  border-radius: 4px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1;
+  text-shadow: 0 1px rgba(0, 0, 0, 0.25);
+  box-shadow: inset 0 1px rgba(255, 255, 255, 0.25), 0 1px 1px rgba(0, 0, 0, 0.16);
+}
+.tb-monogram.tone-0 { background: linear-gradient(135deg, #8b95a3, #5e6878); }
+.tb-monogram.tone-1 { background: linear-gradient(135deg, #3dd0e8, #18b4d0); }
+.tb-monogram.tone-2 { background: linear-gradient(135deg, #ffa86b, #ff7a3d); }
+.tb-monogram.tone-3 { background: linear-gradient(135deg, #9aacf5, #6d80e8); }
+.tb-monogram.tone-4 { background: linear-gradient(135deg, #6dd49d, #3eb878); }
+.tb-monogram.tone-5 { background: linear-gradient(135deg, #f87fb5, #e85a9c); }
+.tb-monogram.tone-6 { background: linear-gradient(135deg, #fcd34d, #f5b800); }
+.tb-monogram.tone-7 { background: linear-gradient(135deg, #4dd9a6, #20c084); }
 .tb-session {
   font-size: 13px;
   color: var(--fg-2);
