@@ -20,7 +20,7 @@ stages:
         jdkVersion: 17
         mavenVersion: 3.6.3
         commands:
-          - mvn -B -ntp clean verify
+          - mvn -B -ntp -gs .workflow/maven-central-settings.xml -s .workflow/maven-central-settings.xml clean verify
         artifacts:
           - name: DISTRIBUTION
             path:
