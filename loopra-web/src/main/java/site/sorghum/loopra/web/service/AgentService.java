@@ -413,7 +413,7 @@ public class AgentService {
         LoopraConfig.ModelChannel channel = cfg.modelChannel(target.channelId());
         if (channel == null) throw new ServiceException("模型渠道不存在: " + target.channelId());
 
-        String apiUrl = channel.baseUrl();
+        String apiUrl = channel.chatApiUrl();
         String apiKey = channel.apiKey();
         String reasoningEffort = cfg.reasoningEffort();
         String hitl = cfg.hitl();

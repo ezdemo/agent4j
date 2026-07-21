@@ -55,6 +55,16 @@ class LoopraConfigTest {
     }
 
     @Test
+    void buildsCompleteChatApiUrlForModelChannels() {
+        assertEquals("https://api.example.com/v1/chat/completions",
+                new LoopraConfig.ModelChannel("id", "name", "https://api.example.com/v1", "key", List.of()).chatApiUrl());
+        assertEquals("https://api.example.com/v1/chat/completions",
+                new LoopraConfig.ModelChannel("id", "name", "https://api.example.com/v1/", "key", List.of()).chatApiUrl());
+        assertEquals("https://api.example.com/v1/chat/completions",
+                new LoopraConfig.ModelChannel("id", "name", "https://api.example.com/v1/chat/completions", "key", List.of()).chatApiUrl());
+    }
+
+    @Test
     void migratesLegacyAgent4jDataExceptJreAndBin() throws Exception {
         Path legacyDir = tempDir.resolve(".agent4j");
         Files.createDirectories(legacyDir.resolve("sessions"));

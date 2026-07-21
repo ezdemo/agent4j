@@ -624,7 +624,10 @@ public class HttpModelClient implements ModelClient {
     private SseParseResult processSseStream(BufferedReader reader, StreamCallback callback) throws IOException {
         SseParseResult result = new SseParseResult();
         String line;
+        StringBuilder content = new StringBuilder();
+        boolean process = false;
         while ((line = reader.readLine()) != null) {
+            content.append(line).append("\n");
             if (abortRequested.compareAndSet(true, false)) {
                 log.info("流式请求被 ReasonBreaker 中断");
                 break;
@@ -644,8 +647,13 @@ public class HttpModelClient implements ModelClient {
             }
             ONode chunk = ONode.ofJson(data);
             log.debug("收到SSE数据块，大小: {} 字符", data.length());
-
+            process = true;
             processChunk(chunk, callback, result);
+        }
+        if (!process){
+            String msg = "未收到SSE数据块，内容:\n ```" + content + "```";
+            callback.onError(msg);
+            log.warn(msg);
         }
         return result;
     }
