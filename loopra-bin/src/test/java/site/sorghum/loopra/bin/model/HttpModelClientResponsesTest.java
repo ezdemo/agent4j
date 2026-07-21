@@ -16,6 +16,7 @@ import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class HttpModelClientResponsesTest {
@@ -95,6 +96,7 @@ class HttpModelClientResponsesTest {
             assertEquals("call_2", toolCalls.get().select("$[0].id").getString());
             assertEquals("read", toolCalls.get().select("$[0].function.name").getString());
             assertEquals("{\"path\":\"new.txt\"}", toolCalls.get().select("$[0].function.arguments").getString());
+            assertEquals(1, toolCalls.get().size());
             assertEquals("encrypted-new", ONode.ofJson(toolCalls.get()
                     .select("$[0].response_reasoning").getString()).get("encrypted_content").getString());
             assertEquals(List.of(12, 4, 16, 5, 7), toList(usage.get()));
@@ -161,6 +163,50 @@ class HttpModelClientResponsesTest {
         }
     }
 
+    @Test
+    void rejectsToolCallsWhenStreamEndsBeforeCompleted() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/responses", exchange -> {
+            byte[] body = ("data: {\"type\":\"response.output_item.done\",\"output_index\":0,"
+                    + "\"item\":{\"type\":\"function_call\",\"call_id\":\"call_4\","
+                    + "\"name\":\"write\",\"arguments\":\"{\\\"path\\\":\\\"unsafe.txt\\\"}\"}}\n\n")
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            AtomicReference<String> error = new AtomicReference<>();
+            AtomicReference<ONode> toolCalls = new AtomicReference<>();
+            AtomicInteger done = new AtomicInteger();
+            responsesClient(server).chatStream(List.of(ChatMessage.ofUser("hello")), new ONode().asArray(),
+                    new ModelClient.StreamCallback() {
+                        @Override
+                        public void onToolCalls(ONode calls) {
+                            toolCalls.set(calls);
+                        }
+
+                        @Override
+                        public void onError(String value) {
+                            error.set(value);
+                        }
+
+                        @Override
+                        public void onDone() {
+                            done.incrementAndGet();
+                        }
+                    });
+
+            assertEquals("Responses API stream ended before response.completed", error.get());
+            assertNull(toolCalls.get());
+            assertEquals(0, done.get());
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private static HttpModelClient responsesClient(HttpServer server) {
         return new HttpModelClient(
                 "http://127.0.0.1:" + server.getAddress().getPort() + "/responses",
@@ -185,6 +231,8 @@ class HttpModelClientResponsesTest {
                 data: {"type":"response.output_item.done","output_index":1,"item":{"type":"function_call","call_id":"call_2","name":"read","arguments":"{\\\"path\\\":\\\"new.txt\\\"}"}}
 
                 data: {"type":"response.completed","response":{"id":"resp_1","usage":{"input_tokens":12,"input_tokens_details":{"cached_tokens":5},"output_tokens":4,"output_tokens_details":{"reasoning_tokens":2},"total_tokens":16}}}
+
+                data: {"type":"response.output_item.done","output_index":2,"item":{"type":"function_call","call_id":"call_after_done","name":"write","arguments":"{\\\"path\\\":\\\"unsafe.txt\\\"}"}}
 
                 """;
         byte[] bytes = body.getBytes(StandardCharsets.UTF_8);

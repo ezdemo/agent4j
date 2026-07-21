@@ -58,6 +58,41 @@ class HttpModelClientRetryTest {
         }
     }
 
+    @Test
+    void streamDoesNotRetryAfterContentWasEmitted() throws Exception {
+        AtomicInteger requests = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/chat", exchange -> respondWithPartialOutput(exchange, requests));
+        server.start();
+
+        try {
+            HttpModelClient client = new HttpModelClient(
+                    "http://127.0.0.1:" + server.getAddress().getPort() + "/chat",
+                    "test-key", "test-model", "high", new int[]{0});
+            AtomicReference<String> content = new AtomicReference<>("");
+            AtomicReference<String> error = new AtomicReference<>();
+
+            client.chatStream(List.of(ChatMessage.ofUser("hello")), new ONode().asArray(),
+                    new ModelClient.StreamCallback() {
+                        @Override
+                        public void onContentDelta(String token) {
+                            content.updateAndGet(value -> value + token);
+                        }
+
+                        @Override
+                        public void onError(String value) {
+                            error.set(value);
+                        }
+                    });
+
+            assertEquals(1, requests.get());
+            assertEquals("partial", content.get());
+            assertEquals("{\"error\":{\"message\":\"stream failed\"}}", error.get());
+        } finally {
+            server.stop(0);
+        }
+    }
+
     private static void respond(HttpExchange exchange, int requestNumber) throws IOException {
         if (requestNumber == 1) {
             exchange.sendResponseHeaders(503, -1);
@@ -67,6 +102,17 @@ class HttpModelClientRetryTest {
 
         byte[] body = ("data: {\"choices\":[{\"delta\":{\"content\":\"ok\"}}]}\n\n"
                 + "data: [DONE]\n\n").getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+        exchange.sendResponseHeaders(200, body.length);
+        exchange.getResponseBody().write(body);
+        exchange.close();
+    }
+
+    private static void respondWithPartialOutput(HttpExchange exchange, AtomicInteger requests) throws IOException {
+        requests.incrementAndGet();
+        byte[] body = ("data: {\"choices\":[{\"delta\":{\"content\":\"partial\"}}]}\n\n"
+                + "data: {\"error\":{\"message\":\"stream failed\"}}\n\n")
+                .getBytes(StandardCharsets.UTF_8);
         exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
         exchange.sendResponseHeaders(200, body.length);
         exchange.getResponseBody().write(body);

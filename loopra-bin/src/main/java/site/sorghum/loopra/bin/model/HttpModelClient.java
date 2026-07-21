@@ -6,16 +6,15 @@ import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import org.noear.snack4.ONode;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
-import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
+import site.sorghum.loopra.bin.config.UserIdProvider;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
-import java.util.*;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
-import site.sorghum.loopra.bin.config.UserIdProvider;
 
 /**
  * OpenAI 兼容 API 的 HTTP 客户端 —— {@link ModelClient} 的 OkHttp 实现。
@@ -43,51 +42,14 @@ public class HttpModelClient implements ModelClient {
      */
     private static final int[] DEFAULT_RETRY_DELAYS = {3, 3, 5, 5, 8, 10, 12, 16, 22, 36};
 
-    // ==================== OpenAI API JSON 字段名常量 ====================
-
-    private static final String FIELD_CONTENT = "content";
-    private static final String FIELD_REASONING_CONTENT = "reasoning_content";
-    private static final String FIELD_REASONING_CONTENT_V2 = "reasoning";
-    private static final String FIELD_TOOL_CALLS = "tool_calls";
-    private static final String FIELD_CHOICES = "choices";
-    private static final String FIELD_ROLE = "role";
-    private static final String FIELD_FUNCTION = "function";
-    private static final String FIELD_NAME = "name";
-    private static final String FIELD_ARGUMENTS = "arguments";
-    private static final String FIELD_ID = "id";
-    private static final String FIELD_TYPE = "type";
-    private static final String FIELD_MODEL = "model";
-    private static final String FIELD_MESSAGES = "messages";
-    private static final String FIELD_INPUT = "input";
-    private static final String FIELD_OUTPUT = "output";
-    private static final String FIELD_TOOLS = "tools";
-    private static final String FIELD_USAGE = "usage";
-    private static final String FIELD_REASONING_TOKENS = "reasoning_tokens";
-    private static final String FIELD_CACHED_TOKENS = "cached_tokens";
     private static final String FIELD_STREAM = "stream";
-    private static final String FIELD_MESSAGE = "message";
-    private static final String FIELD_INDEX = "index";
-
-    // ==================== Usage 相关字段常量 ====================
-
-    private static final String FIELD_PROMPT_TOKENS = "prompt_tokens";
-    private static final String FIELD_COMPLETION_TOKENS = "completion_tokens";
-    private static final String FIELD_INPUT_TOKENS = "input_tokens";
-    private static final String FIELD_OUTPUT_TOKENS = "output_tokens";
-    private static final String FIELD_TOTAL_TOKENS = "total_tokens";
-    private static final String FIELD_PROMPT_TOKENS_DETAILS = "prompt_tokens_details";
-    private static final String FIELD_COMPLETION_TOKENS_DETAILS = "completion_tokens_details";
-    private static final String FIELD_INPUT_TOKENS_DETAILS = "input_tokens_details";
-    private static final String FIELD_OUTPUT_TOKENS_DETAILS = "output_tokens_details";
-    private static final String FIELD_PROMPT_CACHE_HIT_TOKENS = "prompt_cache_hit_tokens";
-    private static final String FIELD_PROMPT_CACHE_MISS_TOKENS = "prompt_cache_miss_tokens";
 
     // ==================== 核心字段 ====================
 
     private final String apiUrl;
     private final String apiKey;
     private final String modelChannelId;
-    private final String apiProtocol;
+    private final ModelApiProtocol apiProtocol;
     private final int[] retryDelays;
     /**
      * reasoning_effort 取值: low / medium / high / max
@@ -141,7 +103,7 @@ public class HttpModelClient implements ModelClient {
         this.apiUrl = apiUrl;
         this.apiKey = apiKey;
         this.modelChannelId = modelChannelId;
-        this.apiProtocol = "responses".equalsIgnoreCase(apiProtocol) ? "responses" : "chat_completions";
+        this.apiProtocol = ModelApiProtocols.resolve(apiProtocol);
         this.model = model;
         this.reasoningEffort = reasoningEffort;
         this.retryDelays = retryDelays.clone();
@@ -356,11 +318,12 @@ public class HttpModelClient implements ModelClient {
 
     @Override
     public ModelClient fork() {
-        return new HttpModelClient(apiUrl, apiKey, model, reasoningEffort, modelChannelId, apiProtocol);
+        return new HttpModelClient(apiUrl, apiKey, model, reasoningEffort, modelChannelId, apiProtocol.name());
     }
 
-    private boolean isResponsesApi() {
-        return "responses".equals(apiProtocol);
+    private ModelApiProtocol.RequestContext requestContext(List<ChatMessage> messages, ONode tools) {
+        return new ModelApiProtocol.RequestContext(
+                model, reasoningEffort, messages, tools, UserIdProvider.getUserId(), CURRENT_LOG_SESSION.get());
     }
 
     /**
@@ -411,7 +374,7 @@ public class HttpModelClient implements ModelClient {
     @Override
     public ONode chat(List<ChatMessage> messages,
                       ONode tools) throws IOException {
-        ONode body = buildBody(messages, tools);
+        ONode body = apiProtocol.buildRequest(requestContext(messages, tools));
         body.set(FIELD_STREAM, false);
         String jsonBody = body.toJson();
         log.debug("构建请求体: 大小={} 字符, 工具数={}, 消息数={}",
@@ -450,14 +413,7 @@ public class HttpModelClient implements ModelClient {
                 writeApiLog(jsonBody);
 
                 ONode resp = ONode.ofJson(responseText);
-                if (isResponsesApi()) {
-                    return responseToAssistantMessage(resp, responseText);
-                }
-                ONode choices = resp.get(FIELD_CHOICES);
-                if (choices == null || !choices.isArray() || choices.getArray().isEmpty()) {
-                    throw new IOException("No choices in response: " + responseText);
-                }
-                return choices.get(0).get(FIELD_MESSAGE);
+                return apiProtocol.parseResponse(resp, responseText);
 
             } catch (IOException e) {
                 log.error("非流式API调用IO异常: {}", e.getMessage(), e);
@@ -470,9 +426,7 @@ public class HttpModelClient implements ModelClient {
     /**
      * 流式调用 — 通过回调逐 token 推送，5xx / IO 异常自动重试最多 10 次。
      * <p>
-     * 解析 OpenAI SSE 格式：
-     * {@code data: {"choices":[{"delta":{FIELD_CONTENT:"..."}}]}}
-     * 支持 reasoning_content 和 tool_calls。
+     * 通过配置的协议策略解析 SSE 事件。
      * </p>
      */
     @Override
@@ -481,7 +435,7 @@ public class HttpModelClient implements ModelClient {
                            StreamCallback callback) {
         String jsonBody;
         try {
-            ONode body = buildBody(messages, tools);
+            ONode body = apiProtocol.buildRequest(requestContext(messages, tools));
             body.set(FIELD_STREAM, true);
             jsonBody = body.toJson();
             log.debug("构建流式请求体: 大小={} 字符, 工具数={}, 消息数={}",
@@ -493,7 +447,7 @@ public class HttpModelClient implements ModelClient {
 
         RetryContext retry = new RetryContext("流式", callback);
         for (int attempt = 0; attempt <= retryDelays.length; attempt++) {
-            SseParseResult parseResult = new SseParseResult();
+            ModelApiStreamState parseResult = new ModelApiStreamState();
             Request.Builder requestBuilder = new Request.Builder()
                     .url(apiUrl)
                     .post(RequestBody.create(jsonBody, MEDIA_TYPE_JSON))
@@ -547,13 +501,13 @@ public class HttpModelClient implements ModelClient {
                     }
 
                     // ★ SSE流错误重试逻辑
-                    if (parseResult.sseErrorData != null) {
-                        if (!parseResult.retryableSseError || parseResult.emittedOutput) {
-                            safeCallback("onError", () -> callback.onError(parseResult.sseErrorData));
+                    if (parseResult.errorData != null) {
+                        if (!parseResult.retryableError || parseResult.emittedOutput) {
+                            safeCallback("onError", () -> callback.onError(parseResult.errorData));
                             return;
                         }
                         try {
-                            retry.waitOrThrow("SSE流错误: " + parseResult.sseErrorData, attempt);
+                            retry.waitOrThrow("SSE流错误: " + parseResult.errorData, attempt);
                         } catch (IOException e) {
                             finishRetryFailure(e, callback);
                             return;
@@ -561,9 +515,18 @@ public class HttpModelClient implements ModelClient {
                         continue; // 关闭当前response，继续外层for循环重试
                     }
 
-                    if (parseResult.toolCallsAccum != null) {
-                        emitToolCalls(parseResult.toolCallsAccum, parseResult.responseReasoning, callback);
+                    if (parseResult.aborted) {
+                        safeCallback("onDone", callback::onDone);
+                        return;
                     }
+
+                    String completionError = apiProtocol.streamCompletionError(parseResult);
+                    if (completionError != null) {
+                        safeCallback("onError", () -> callback.onError(completionError));
+                        return;
+                    }
+
+                    apiProtocol.completeStream(parseResult, callback);
                     safeCallback("onDone", callback::onDone);
                 }
                 return; // success
@@ -602,34 +565,12 @@ public class HttpModelClient implements ModelClient {
         }
     }
 
-
     private void finishRetryFailure(IOException error, StreamCallback callback) {
         if (error.getMessage() != null && error.getMessage().contains("aborted by user")) {
             safeCallback("onDone", callback::onDone);
         } else {
             safeCallback("onError", () -> callback.onError(error.getMessage()));
         }
-    }
-
-    /**
-     * SSE 流解析结果。
-     */
-    private static class SseParseResult {
-        String sseErrorData;
-        boolean retryableSseError = true;
-        boolean emittedOutput;
-        String responseReasoning;
-        ONode toolCallsAccum;
-        /**
-         * 每个请求 ID 上次报告的 usage 值，用于计算差量（某些平台会在同一流中多次发送 usage）
-         */
-        final Map<String, int[]> lastUsage = new HashMap<>();
-        /**
-         * 是否处于 &lt;think&gt; 标签内容块内。
-         * 某些模型（如 DeepSeek-R1）将思考内容放在 content 字段中
-         * 用 &lt;think&gt;...&lt;/think&gt; 包裹，需识别并路由到 reasoning delta。
-         */
-        boolean inThinkContent = false;
     }
 
     /**
@@ -640,13 +581,14 @@ public class HttpModelClient implements ModelClient {
      * @return 解析结果（包含错误数据和累积的 tool_calls）
      */
     private void processSseStream(BufferedReader reader, StreamCallback callback,
-                                  SseParseResult result) throws IOException {
+                                  ModelApiStreamState result) throws IOException {
         String line;
         StringBuilder content = new StringBuilder();
         boolean process = false;
         while ((line = reader.readLine()) != null) {
             content.append(line).append("\n");
             if (abortRequested.compareAndSet(true, false)) {
+                result.aborted = true;
                 log.info("流式请求被 ReasonBreaker 中断");
                 break;
             }
@@ -660,623 +602,19 @@ public class HttpModelClient implements ModelClient {
             }
             if (data.trim().startsWith("{\"error\":")) {
                 log.warn("收到SSE流错误（可重试）: {}", data);
-                result.sseErrorData = data;
+                result.errorData = data;
                 break;
             }
             ONode chunk = ONode.ofJson(data);
             log.debug("收到SSE数据块，大小: {} 字符", data.length());
             process = true;
-            processChunk(chunk, callback, result);
+            apiProtocol.processStreamChunk(chunk, callback, result);
         }
-        if (!process){
+        if (!process) {
             String msg = "未收到SSE数据块，内容:\n ```" + content + "```";
             callback.onError(msg);
             log.warn(msg);
         }
-    }
-
-    /**
-     * 处理单个 SSE 数据块。
-     *
-     * @param chunk    解析后的 JSON 数据块
-     * @param callback 流式回调
-     * @param result   累积结果（用于 tool_calls）
-     */
-    private void processChunk(ONode chunk, StreamCallback callback, SseParseResult result) {
-        if (isResponsesApi()) {
-            processResponsesChunk(chunk, callback, result);
-            return;
-        }
-
-        // 捕获 usage
-        ONode usage = chunk.get(FIELD_USAGE);
-        if (usage != null && !usage.isNull()) {
-            handleUsage(usage, chunk.get(FIELD_ID).getString(), callback, result.lastUsage);
-        }
-
-        // delta 处理
-        ONode delta = chunk.select("$.choices[0].delta");
-        if (delta == null || delta.isNull()) {
-            return;
-        }
-
-        // reasoning content
-        ONode rd = delta.get(FIELD_REASONING_CONTENT).isNull() ? delta.get(FIELD_REASONING_CONTENT_V2) : delta.get(FIELD_REASONING_CONTENT);
-        // 回设
-        delta.set(FIELD_REASONING_CONTENT, rd);
-        if (rd != null && rd.isString()) {
-            String tok = rd.getString();
-            if (tok != null && !tok.isEmpty()) {
-                log.debug("收到reasoning_content: {}", tok);
-                safeCallback("onReasoningDelta", () -> callback.onReasoningDelta(tok));
-            }
-        }
-
-        // content（含 think 标签检测）
-        ONode cd = delta.get(FIELD_CONTENT);
-        if (cd != null && cd.isString()) {
-            String tok = cd.getString();
-            if (tok != null && !tok.isEmpty()) {
-                log.debug("收到content: {}", tok);
-                processContentToken(tok, callback, result);
-            }
-        }
-
-        // tool_calls 累积
-        ONode tcDelta = delta.get(FIELD_TOOL_CALLS);
-        if (tcDelta != null && tcDelta.isArray()) {
-            log.debug("收到tool_calls数据，数量: {}", tcDelta.getArray().size());
-            accumulateToolCalls(tcDelta, result);
-        }
-    }
-
-    private void processResponsesChunk(ONode chunk, StreamCallback callback, SseParseResult result) {
-        String eventType = chunk.get(FIELD_TYPE).getString();
-        if (eventType == null) return;
-
-        switch (eventType) {
-            case "response.output_text.delta", "response.refusal.delta" -> {
-                String delta = chunk.get("delta").getString();
-                if (delta != null && !delta.isEmpty()) {
-                    result.emittedOutput = true;
-                    processContentToken(delta, callback, result);
-                }
-            }
-            case "response.reasoning_summary_text.delta", "response.reasoning_text.delta" -> {
-                String delta = chunk.get("delta").getString();
-                if (delta != null && !delta.isEmpty()) {
-                    result.emittedOutput = true;
-                    safeCallback("onReasoningDelta", () -> callback.onReasoningDelta(delta));
-                }
-            }
-            case "response.output_item.added" -> accumulateResponseOutputItem(
-                    chunk.get("item"), chunk.get("output_index").getInt(), result, false);
-            case "response.output_item.done" -> accumulateResponseOutputItem(
-                    chunk.get("item"), chunk.get("output_index").getInt(), result, true);
-            case "response.function_call_arguments.delta" -> accumulateResponseFunctionArguments(
-                    chunk.get("output_index").getInt(), chunk.get("delta").getString(), result, false);
-            case "response.function_call_arguments.done" -> accumulateResponseFunctionArguments(
-                    chunk.get("output_index").getInt(), chunk.get(FIELD_ARGUMENTS).getString(), result, true);
-            case "response.completed" -> {
-                ONode response = chunk.get("response");
-                ONode usage = response.get(FIELD_USAGE);
-                if (usage != null && !usage.isNull()) {
-                    handleUsage(usage, response.get(FIELD_ID).getString(), callback, result.lastUsage);
-                }
-            }
-            case "response.failed", "response.incomplete" -> {
-                result.sseErrorData = chunk.toJson();
-                result.retryableSseError = false;
-                log.warn("收到 Responses API 终止错误: {}", result.sseErrorData);
-            }
-            case "error" -> {
-                result.sseErrorData = chunk.toJson();
-                log.warn("收到 Responses API 流错误: {}", result.sseErrorData);
-            }
-            default -> {
-                // Lifecycle events do not contain user-visible deltas.
-            }
-        }
-    }
-
-    private void accumulateResponseOutputItem(ONode item, int index, SseParseResult result,
-                                              boolean replaceArguments) {
-        if (item == null || item.isNull()) return;
-        if ("reasoning".equals(item.get(FIELD_TYPE).getString())) {
-            if (replaceArguments) result.responseReasoning = item.toJson();
-            return;
-        }
-        if (!"function_call".equals(item.get(FIELD_TYPE).getString())) return;
-        ONode call = responseToolCall(index, result);
-        String callId = item.get("call_id").getString();
-        if (callId == null || callId.isEmpty()) callId = item.get(FIELD_ID).getString();
-        if (callId != null && !callId.isEmpty()) call.set(FIELD_ID, callId);
-        String name = item.get(FIELD_NAME).getString();
-        if (name != null && !name.isEmpty()) call.getOrNew(FIELD_FUNCTION).set(FIELD_NAME, name);
-        String arguments = item.get(FIELD_ARGUMENTS).getString();
-        if (arguments != null) accumulateResponseFunctionArguments(index, arguments, result, replaceArguments);
-    }
-
-    private void accumulateResponseFunctionArguments(int index, String arguments, SseParseResult result,
-                                                     boolean replace) {
-        if (arguments == null) return;
-        ONode function = responseToolCall(index, result).getOrNew(FIELD_FUNCTION);
-        String previous = function.get(FIELD_ARGUMENTS).getString();
-        function.set(FIELD_ARGUMENTS, replace ? arguments : (previous == null ? "" : previous) + arguments);
-    }
-
-    private ONode responseToolCall(int index, SseParseResult result) {
-        if (result.toolCallsAccum == null) result.toolCallsAccum = ONode.ofJson("[]").asArray();
-        while (result.toolCallsAccum.size() <= index) {
-            ONode call = result.toolCallsAccum.addNew();
-            call.set(FIELD_TYPE, FIELD_FUNCTION);
-            call.getOrNew(FIELD_FUNCTION).set(FIELD_ARGUMENTS, "");
-        }
-        return result.toolCallsAccum.get(index);
-    }
-
-    /**
-     * 处理 content token，检测 {@code <think>} / {@code </think>} 标签。
-     * <p>
-     * 某些模型（如 DeepSeek-R1）将推理内容直接放在 content 字段中，
-     * 用 XML 标签包裹：{@code <think>推理过程</think>实际回复}。
-     * 本方法使用状态机将标签内的内容路由到 {@link StreamCallback#onReasoningDelta}，
-     * 标签外的内容路由到 {@link StreamCallback#onContentDelta}。
-     * </p>
-     * <p>
-     * 兼容以下复杂情况：
-     * <ul>
-     *   <li>单个 token 同时包含开标签和闭标签</li>
-     *   <li>标签跨多个 token 分布</li>
-     *   <li>标签大小写不敏感（{@code <THINK>} / {@code <think>}）</li>
-     * </ul>
-     * 注意：本方法假定 {@code <think>} 和 {@code </think>} 不会被 tokenizer
-     * 拆散到两个 token 中（现代 BPE tokenizer 均不会拆分 XML 标签）。
-     * </p>
-     */
-    private void processContentToken(String token, StreamCallback callback, SseParseResult result) {
-        String lower = token.toLowerCase();
-
-        if (result.inThinkContent) {
-            // 当前在 think 块内，查找 </think>
-            int endIdx = lower.indexOf("</think>");
-            if (endIdx >= 0) {
-                // 闭标签之前的内容 -> reasoning
-                if (endIdx > 0) {
-                    String reasoning = token.substring(0, endIdx);
-                    safeCallback("onReasoningDelta", () -> callback.onReasoningDelta(reasoning));
-                }
-                result.inThinkContent = false;
-                // 闭标签之后的内容 -> 递归处理（可能含下一个 <think>）
-                String after = token.substring(endIdx + 8); // "</think>".length() == 8
-                if (!after.isEmpty()) {
-                    processContentToken(after, callback, result);
-                }
-            } else {
-                // 整个 token 都是推理内容
-                safeCallback("onReasoningDelta", () -> callback.onReasoningDelta(token));
-            }
-        } else {
-            // 当前不在 think 块内，查找 <think>
-            int startIdx = lower.indexOf("<think>");
-            if (startIdx >= 0) {
-                // 开标签之前的内容 -> 正常 content
-                if (startIdx > 0) {
-                    String before = token.substring(0, startIdx);
-                    safeCallback("onContentDelta", () -> callback.onContentDelta(before));
-                }
-                result.inThinkContent = true;
-                // 开标签之后的内容 -> 递归处理（可能含 </think> 或更多内容）
-                String after = token.substring(startIdx + 7); // "<think>".length() == 7
-                if (!after.isEmpty()) {
-                    processContentToken(after, callback, result);
-                }
-            } else {
-                // 正常 content
-                safeCallback("onContentDelta", () -> callback.onContentDelta(token));
-            }
-        }
-    }
-
-    private int[] parseUsage(ONode usage) {
-        int pt = usage.get(FIELD_PROMPT_TOKENS).isNull()
-                ? usage.get(FIELD_INPUT_TOKENS).getInt() : usage.get(FIELD_PROMPT_TOKENS).getInt();
-        int ct = usage.get(FIELD_COMPLETION_TOKENS).isNull()
-                ? usage.get(FIELD_OUTPUT_TOKENS).getInt() : usage.get(FIELD_COMPLETION_TOKENS).getInt();
-        int tt = usage.get(FIELD_TOTAL_TOKENS).isNull() ? pt + ct : usage.get(FIELD_TOTAL_TOKENS).getInt();
-        int cacheHit = usage.get(FIELD_PROMPT_CACHE_HIT_TOKENS).isNull() ? 0 : usage.get(FIELD_PROMPT_CACHE_HIT_TOKENS).getInt();
-        int cacheMiss = usage.get(FIELD_PROMPT_CACHE_MISS_TOKENS).isNull() ? 0 : usage.get(FIELD_PROMPT_CACHE_MISS_TOKENS).getInt();
-
-        if (cacheHit == 0 && cacheMiss == 0) {
-            ONode ptDetails = usage.get(FIELD_PROMPT_TOKENS_DETAILS);
-            if (ptDetails == null || ptDetails.isNull()) ptDetails = usage.get(FIELD_INPUT_TOKENS_DETAILS);
-            if (ptDetails != null && !ptDetails.isNull()) {
-                cacheHit = ptDetails.get(FIELD_CACHED_TOKENS).isNull() ? 0 : ptDetails.get(FIELD_CACHED_TOKENS).getInt();
-                cacheMiss = Math.max(0, pt - cacheHit);
-            }
-        }
-        return new int[]{pt, ct, cacheHit, cacheMiss, tt};
-    }
-
-    /**
-     * 处理 usage 统计数据。
-     * 同一请求 ID 多次出现时，仅上报与上次的差量，确保最终累计值与最后一次（最准确的）数据一致。
-     */
-    private void handleUsage(ONode usage, String requestId, StreamCallback callback,
-                             Map<String, int[]> lastUsage) {
-        int[] vals = parseUsage(usage);
-
-        // 差量去重：同一 requestId 只上报增量
-        if (requestId != null) {
-            int[] prev = lastUsage.put(requestId, vals);
-            if (prev != null) {
-                int dp = vals[0] - prev[0];
-                int dc = vals[1] - prev[1];
-                int dch = vals[2] - prev[2];
-                int dcm = vals[3] - prev[3];
-                int dtt = vals[4] - prev[4];
-                if (dp == 0 && dc == 0 && dch == 0 && dcm == 0) {
-                    log.debug("usage数据无变化，跳过，requestId={}", requestId);
-                } else {
-                    log.debug("usage增量更新: requestId={}, +prompt={}, +completion={}, +cacheHit={}, +cacheMiss={}",
-                            requestId, dp, dc, dch, dcm);
-                    safeCallback("onUsage", () -> callback.onUsage(dp, dc, dtt, dch, dcm));
-                }
-                return;
-            }
-        }
-
-        // 首次出现，原样上报
-        ONode ctDetails = usage.get(FIELD_COMPLETION_TOKENS_DETAILS);
-        if (ctDetails == null || ctDetails.isNull()) ctDetails = usage.get(FIELD_OUTPUT_TOKENS_DETAILS);
-        if (ctDetails != null && !ctDetails.isNull()) {
-            int reasoningTokens = ctDetails.get(FIELD_REASONING_TOKENS).isNull() ? 0 : ctDetails.get(FIELD_REASONING_TOKENS).getInt();
-            if (reasoningTokens > 0) {
-                log.debug("推理 token 消耗: {}", reasoningTokens);
-            }
-        }
-
-        log.debug("收到usage数据: prompt={}, completion={}, cacheHit={}, cacheMiss={}",
-                vals[0], vals[1], vals[2], vals[3]);
-        safeCallback("onUsage", () -> callback.onUsage(vals[0], vals[1], vals[4], vals[2], vals[3]));
-    }
-
-    /**
-     * 累积 tool_calls delta 数据。
-     */
-    private void accumulateToolCalls(ONode tcDelta, SseParseResult result) {
-        for (ONode tcd : tcDelta.getArray()) {
-            if (result.toolCallsAccum == null) {
-                result.toolCallsAccum = org.noear.snack4.ONode.ofJson("[]").asArray();
-            }
-            int idx = tcd.get(FIELD_INDEX).isNull() ? 0 : tcd.get(FIELD_INDEX).getInt();
-            ONode func = tcd.get(FIELD_FUNCTION);
-            while (result.toolCallsAccum.getArray().size() <= idx) {
-                result.toolCallsAccum.addNew().set(FIELD_TYPE, FIELD_FUNCTION);
-            }
-            ONode existing = result.toolCallsAccum.get(idx);
-            if (func == null || func.isNull()) {
-                continue;
-            }
-
-            if (existing.get(FIELD_ID).isNull()) {
-                existing.set(FIELD_ID, tcd.get(FIELD_ID).getString());
-            }
-            if (existing.select("$.function.name").isNull()) {
-                existing.getOrNew(FIELD_FUNCTION).set(FIELD_NAME, func.get(FIELD_NAME).getString());
-            }
-            if (!func.get(FIELD_ARGUMENTS).isNull()) {
-                String prev = existing.getOrNew(FIELD_FUNCTION).get(FIELD_ARGUMENTS).getString();
-                String add = func.get(FIELD_ARGUMENTS).getString();
-                existing.getOrNew(FIELD_FUNCTION).set(FIELD_ARGUMENTS,
-                        (prev != null ? prev : "") + (add != null ? add : ""));
-            }
-            log.debug("tool_calls索引: {}, 函数名: {}", idx,
-                    func.get(FIELD_NAME).isNull() ? "null" : func.get(FIELD_NAME).getString());
-        }
-    }
-
-    /**
-     * 过滤并发送累积的 tool_calls。
-     *
-     * @param toolCallsAccum 累积的 tool_calls
-     * @param callback       流式回调
-     */
-    private void emitToolCalls(ONode toolCallsAccum, String responseReasoning, StreamCallback callback) {
-        // 过滤掉 name 为 null/empty 的 tool call（SSE 分块缺失导致）
-        List<ONode> valid = new ArrayList<>();
-        for (ONode tc : toolCallsAccum.getArray()) {
-            ONode fn = tc.get(FIELD_FUNCTION);
-            if (fn != null && !fn.isNull()) {
-                ONode nm = fn.get(FIELD_NAME);
-                if (nm != null && nm.isString()
-                        && nm.getString() != null
-                        && !nm.getString().isEmpty()) {
-                    valid.add(tc);
-                }
-            }
-        }
-        if (!valid.isEmpty()) {
-            ONode filtered = org.noear.snack4.ONode.ofJson("[]").asArray();
-            for (ONode v : valid) {
-                ONode copy = filtered.addNew();
-                copy.set(FIELD_ID, v.get(FIELD_ID).isNull() ? "" : v.get(FIELD_ID).getString());
-                copy.set(FIELD_TYPE, FIELD_FUNCTION);
-                if (responseReasoning != null) copy.set("response_reasoning", responseReasoning);
-                ONode copyFn = copy.getOrNew(FIELD_FUNCTION);
-                copyFn.set(FIELD_NAME, v.get(FIELD_FUNCTION).get(FIELD_NAME).getString());
-                copyFn.set(FIELD_ARGUMENTS, v.get(FIELD_FUNCTION).get(FIELD_ARGUMENTS).getString());
-            }
-            log.debug("完成tool_calls累积，共 {} 个有效调用", valid.size());
-            safeCallback("onToolCalls", () -> callback.onToolCalls(filtered));
-        }
-    }
-
-    private ONode responseToAssistantMessage(ONode response, String responseText) throws IOException {
-        ONode output = response.get(FIELD_OUTPUT);
-        if (output == null || !output.isArray()) {
-            throw new IOException("No output in response: " + responseText);
-        }
-
-        ONode message = ONode.ofJson("{}");
-        message.set(FIELD_ROLE, "assistant");
-        StringBuilder content = new StringBuilder();
-        StringBuilder reasoning = new StringBuilder();
-        ONode toolCalls = ONode.ofJson("[]").asArray();
-        for (ONode item : output.getArray()) {
-            String type = item.get(FIELD_TYPE).getString();
-            if ("message".equals(type)) {
-                ONode parts = item.get(FIELD_CONTENT);
-                if (parts != null && parts.isArray()) for (ONode part : parts.getArray()) {
-                    String partType = part.get(FIELD_TYPE).getString();
-                    String text = "refusal".equals(partType)
-                            ? part.get("refusal").getString() : part.get("text").getString();
-                    if (text != null && ("output_text".equals(partType) || "refusal".equals(partType))) {
-                        content.append(text);
-                    }
-                }
-            } else if ("reasoning".equals(type)) {
-                ONode summary = item.get("summary");
-                if (summary != null && summary.isArray()) for (ONode part : summary.getArray()) {
-                    String text = part.get("text").getString();
-                    if (text != null) reasoning.append(text);
-                }
-            } else if ("function_call".equals(type)) {
-                ONode call = toolCalls.addNew();
-                ONode reasoningItem = null;
-                for (ONode candidate : output.getArray()) {
-                    if ("reasoning".equals(candidate.get(FIELD_TYPE).getString())) {
-                        reasoningItem = candidate;
-                        break;
-                    }
-                }
-                if (reasoningItem != null) call.set("response_reasoning", reasoningItem.toJson());
-                String callId = item.get("call_id").getString();
-                if (callId == null || callId.isEmpty()) callId = item.get(FIELD_ID).getString();
-                call.set(FIELD_ID, callId == null ? "" : callId);
-                call.set(FIELD_TYPE, FIELD_FUNCTION);
-                ONode function = call.getOrNew(FIELD_FUNCTION);
-                function.set(FIELD_NAME, item.get(FIELD_NAME).getString());
-                function.set(FIELD_ARGUMENTS, item.get(FIELD_ARGUMENTS).getString());
-            }
-        }
-        message.set(FIELD_CONTENT, content.toString());
-        if (!reasoning.isEmpty()) message.set(FIELD_REASONING_CONTENT, reasoning.toString());
-        if (!toolCalls.isEmpty()) message.set(FIELD_TOOL_CALLS, toolCalls);
-        return message;
-    }
-
-    private ONode buildResponsesBody(List<ChatMessage> messages, ONode tools) {
-        ONode body = ONode.ofJson("{}");
-        body.set(FIELD_MODEL, ModelContextUtils.stripContextSizeSuffix(model));
-        if (reasoningEffort != null && !reasoningEffort.isEmpty() && !"none".equals(reasoningEffort)) {
-            ONode reasoning = body.getOrNew("reasoning");
-            reasoning.set("effort", reasoningEffort);
-            reasoning.set("summary", "auto");
-            body.getOrNew("include").asArray().add("reasoning.encrypted_content");
-        }
-
-        ONode input = body.getOrNew(FIELD_INPUT).asArray();
-        for (ChatMessage message : messages) {
-            if (message.isTool()) {
-                if (message.getToolCallId() == null || message.getToolCallId().isEmpty()) continue;
-                ONode item = input.addNew();
-                item.set(FIELD_TYPE, "function_call_output");
-                item.set("call_id", message.getToolCallId());
-                item.set(FIELD_OUTPUT, message.getContent() == null || message.getContent().isEmpty()
-                        ? "ERROR 工具执行失败或者工具执行结果为空" : message.getContent());
-                continue;
-            }
-
-            if (message.hasToolCalls()) {
-                String responseReasoning = message.getToolCalls().stream()
-                        .map(ToolCallEntry::responseReasoning)
-                        .filter(Objects::nonNull)
-                        .findFirst().orElse(null);
-                if (responseReasoning != null) input.add(ONode.ofJson(responseReasoning));
-            }
-
-            boolean hasContentParts = message.getContentParts() != null && !message.getContentParts().isEmpty();
-            if (message.hasContent() || hasContentParts) {
-                ONode item = input.addNew();
-                item.set(FIELD_ROLE, message.getRole());
-                if (hasContentParts) {
-                    ONode content = item.getOrNew(FIELD_CONTENT).asArray();
-                    for (ChatMessage.ContentPart part : message.getContentParts()) {
-                        ONode partNode = content.addNew();
-                        if ("text".equals(part.getType())) {
-                            partNode.set(FIELD_TYPE, "input_text");
-                            partNode.set("text", part.getText() == null ? "" : part.getText());
-                        } else if ("image_url".equals(part.getType()) && part.getImageUrl() != null) {
-                            partNode.set(FIELD_TYPE, "input_image");
-                            partNode.set("image_url", part.getImageUrl().getUrl());
-                            if (part.getImageUrl().getDetail() != null) {
-                                partNode.set("detail", part.getImageUrl().getDetail());
-                            }
-                        }
-                    }
-                } else {
-                    item.set(FIELD_CONTENT, message.getContent());
-                }
-            }
-
-            if (message.hasToolCalls()) for (ToolCallEntry toolCall : message.getToolCalls()) {
-                ONode item = input.addNew();
-                item.set(FIELD_TYPE, "function_call");
-                item.set("call_id", toolCall.id());
-                item.set(FIELD_NAME, toolCall.name());
-                Object arguments = toolCall.arguments();
-                item.set(FIELD_ARGUMENTS, arguments instanceof String value
-                        ? value : arguments == null ? "{}" : ONode.serialize(arguments));
-            }
-        }
-
-        if (tools != null && !tools.isEmpty()) {
-            ONode responseTools = body.getOrNew(FIELD_TOOLS).asArray();
-            for (ONode tool : tools.getArray()) {
-                ONode function = tool.get(FIELD_FUNCTION);
-                if (function == null || function.isNull()) continue;
-                ONode responseTool = responseTools.addNew();
-                responseTool.set(FIELD_TYPE, FIELD_FUNCTION);
-                responseTool.set(FIELD_NAME, function.get(FIELD_NAME));
-                if (!function.get("description").isNull()) responseTool.set("description", function.get("description"));
-                if (!function.get("parameters").isNull()) responseTool.set("parameters", function.get("parameters"));
-                if (!function.get("strict").isNull()) responseTool.set("strict", function.get("strict"));
-            }
-        }
-
-        String userId = UserIdProvider.getUserId();
-        if (userId != null && !userId.isEmpty()) body.set("user", userId);
-        String sessionId = CURRENT_LOG_SESSION.get();
-        if (sessionId != null && !sessionId.isEmpty()) body.set("prompt_cache_key", sessionId);
-        return body;
-    }
-
-    /**
-     * 构建 API 请求体 JSON。
-     * 包含 model、messages、tools 等字段，
-     * 对 tool 消息做防御性检查（缺少 tool_call_id 时跳过）。
-     */
-    private ONode buildBody(List<ChatMessage> messages,
-                            ONode tools) {
-        if (isResponsesApi()) return buildResponsesBody(messages, tools);
-
-        ONode body = new ONode(ONode.ofJson("{}").options()).asObject();
-        // 剥离模型名称中的上下文大小后缀，例如 "mimo-v2.5[512k]" → "mimo-v2.5"
-        body.set(FIELD_MODEL, ModelContextUtils.stripContextSizeSuffix(model));
-        if (reasoningEffort != null && !reasoningEffort.isEmpty() && !Objects.equals(reasoningEffort, "none")) {
-            body.set("reasoning_effort", reasoningEffort);
-            body.set("chat_template_kwargs", ONode.ofJson("{}").set("enable_thinking", true));
-            body.set("enable_thinking", true);
-            if (model.contains("minimax")) {
-                body.set("reasoning_split", true);
-                body.set("stream_options",ONode.ofJson("{}").set("include_usage", true));
-            }
-            if (model.toLowerCase().contains("glm")){
-                body.remove("enable_thinking");
-                body.remove("chat_template_kwargs");
-            }
-        }
-
-        ONode msgs = body.getOrNew(FIELD_MESSAGES).asArray();
-        for (ChatMessage m : messages) {
-            // 防御：tool 消息必须有 tool_call_id，缺少时跳过该消息
-            if (m.isTool() && (m.getToolCallId() == null || m.getToolCallId().isEmpty())) {
-                log.warn("buildBody: 跳过没有tool_call_id的tool消息");
-                continue;
-            }
-            // 防御：tool 消息必须有 content，缺少时补齐错误
-            if (m.isTool() && (m.getContent() == null || m.getContent().isEmpty())) {
-                m.setContent("ERROR 工具执行失败或者工具执行结果为空");
-            }
-
-            ONode msg = new ONode();
-            msg.set(FIELD_ROLE, m.getRole());
-            boolean skip = false;
-
-            // 防御：assistant 消息必须有 content 或 tool_calls（OpenAI/DeepSeek API 要求）
-            boolean isAssistant = m.isAssistant();
-            boolean isUser = m.isUser();
-            boolean hasTc = m.hasToolCalls();
-            boolean hasContent = m.hasContent();
-            boolean hasContentParts = m.getContentParts() != null && !m.getContentParts().isEmpty();
-            boolean hasReasoning = m.getReasoningContent() != null && !m.getReasoningContent().isEmpty();
-
-            if (isUser && !hasContent && !hasReasoning && !hasTc && !hasContentParts) {
-                continue;
-            }
-            // 多模态 contentParts 序列化为 JSON array
-            if (hasContentParts) {
-                ONode contentArray = msg.getOrNew(FIELD_CONTENT).asArray();
-                for (ChatMessage.ContentPart part : m.getContentParts()) {
-                    ONode partNode = contentArray.addNew();
-                    partNode.set(FIELD_TYPE, part.getType());
-                    if ("text".equals(part.getType())) {
-                        partNode.set("text", part.getText() != null ? part.getText() : "");
-                    } else if ("image_url".equals(part.getType())) {
-                        ChatMessage.ContentPart.ImageUrl iu = part.getImageUrl();
-                        if (iu != null) {
-                            ONode urlNode = partNode.getOrNew("image_url");
-                            urlNode.set("url", iu.getUrl() != null ? iu.getUrl() : "");
-                            if (iu.getDetail() != null) urlNode.set("detail", iu.getDetail());
-                        }
-                    }
-                }
-            } else if (isAssistant && !hasContent && !hasTc && !hasReasoning) {
-                // 既无 content 也无 tool_calls → 强制补空 content 防止 API 400
-                // 这种情况不应出现在正常流程中，但历史消息损坏或 Healer 遗漏时兜底
-                log.warn("buildBody: 检测到空 assistant 消息（无 content 且无 tool_calls），强制删除");
-                msg.set(FIELD_CONTENT, "");
-                skip = true;
-            } else {
-                if (hasContent) msg.set(FIELD_CONTENT, m.getContent());
-            }
-
-            if (hasTc) {
-                ONode tcArray = msg.getOrNew(FIELD_TOOL_CALLS).asArray();
-                for (ToolCallEntry tc : m.getToolCalls()) {
-                    ONode tcNode = tcArray.addNew();
-                    tcNode.set(FIELD_ID, tc.id());
-                    tcNode.set(FIELD_TYPE, FIELD_FUNCTION);
-                    ONode funcNode = tcNode.getOrNew(FIELD_FUNCTION);
-                    funcNode.set(FIELD_NAME, tc.name());
-                    // arguments 可能为 String（API 返回/AgentLoop 构造）或 Map（JSONL 加载后解析），统一转字符串
-                    Object argsObj = tc.arguments();
-                    String argsStr = "{}";
-                    if (argsObj != null) {
-                        if (argsObj instanceof String) {
-                            argsStr = (String) argsObj;
-                        } else {
-                            // Map → JSON 字符串
-                            argsStr = org.noear.snack4.ONode.serialize(argsObj);
-                        }
-                    }
-                    funcNode.set(FIELD_ARGUMENTS, argsStr);
-                }
-            }
-            if (m.getReasoningContent() != null) msg.set(FIELD_REASONING_CONTENT, m.getReasoningContent());
-            if (m.getToolCallId() != null) msg.set("tool_call_id", m.getToolCallId());
-            if (msg.get(FIELD_CONTENT).isNull() ) {
-                msg.set(FIELD_CONTENT, "");
-            }
-            if (!skip) {
-                msgs.add(msg);
-            }
-        }
-
-        if (tools != null && !tools.isEmpty()) {
-            body.set(FIELD_TOOLS, tools);
-        }
-
-        // 在 body 中注入 user_id（全局用户标识，用于缓存与身份识别）
-        String userId = UserIdProvider.getUserId();
-        if (userId != null && !userId.isEmpty()) {
-            body.set("user",userId);
-        }
-        String sessionId = CURRENT_LOG_SESSION.get();
-        if (sessionId != null && !sessionId.isEmpty()) body.set("prompt_cache_key", sessionId);
-
-        return body;
     }
 
     // ==================== API 请求/响应日志 ====================
