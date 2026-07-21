@@ -525,10 +525,17 @@ public class HttpModelClient implements ModelClient {
 
                 int status = response.code();
                 if (retryable(status)) {
+                    String err = "";
+                    ResponseBody errorBody = response.body();
+                    if (errorBody != null) {
+                        try {
+                            err = errorBody.string();
+                        } catch (IOException e) {
+                            log.debug("读取 HTTP {} 错误响应失败: {}", status, e.getMessage());
+                        }
+                    }
+                    String reason = "HTTP " + status + (err.isBlank() ? "" : ": " + err);
                     try {
-                        ResponseBody errorBody = response.body();
-                        String err = errorBody != null ? errorBody.string() : "unknown error";
-                        String reason = "HTTP " + status + (err.isBlank() ? "" : ": " + err);
                         retry.waitOrThrow(reason, attempt);
                     } catch (IOException e) {
                         // 用户中断或重试耗尽
