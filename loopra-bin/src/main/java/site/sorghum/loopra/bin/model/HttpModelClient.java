@@ -80,6 +80,7 @@ public class HttpModelClient implements ModelClient {
 
     private final String apiUrl;
     private final String apiKey;
+    private final String modelChannelId;
     private final int[] retryDelays;
     /**
      * reasoning_effort 取值: low / medium / high / max
@@ -112,12 +113,22 @@ public class HttpModelClient implements ModelClient {
     }
 
     public HttpModelClient(String apiUrl, String apiKey, String model, String reasoningEffort) {
-        this(apiUrl, apiKey, model, reasoningEffort, DEFAULT_RETRY_DELAYS);
+        this(apiUrl, apiKey, model, reasoningEffort, (String) null);
+    }
+
+    public HttpModelClient(String apiUrl, String apiKey, String model, String reasoningEffort, String modelChannelId) {
+        this(apiUrl, apiKey, model, reasoningEffort, modelChannelId, DEFAULT_RETRY_DELAYS);
     }
 
     HttpModelClient(String apiUrl, String apiKey, String model, String reasoningEffort, int[] retryDelays) {
+        this(apiUrl, apiKey, model, reasoningEffort, null, retryDelays);
+    }
+
+    HttpModelClient(String apiUrl, String apiKey, String model, String reasoningEffort, String modelChannelId,
+                    int[] retryDelays) {
         this.apiUrl = apiUrl;
         this.apiKey = apiKey;
+        this.modelChannelId = modelChannelId;
         this.model = model;
         this.reasoningEffort = reasoningEffort;
         this.retryDelays = retryDelays.clone();
@@ -324,6 +335,11 @@ public class HttpModelClient implements ModelClient {
         return model;
     }
 
+    @Override
+    public String getModelChannelId() {
+        return modelChannelId;
+    }
+
     /**
      * 设置模型名称（运行时切换）。
      */
@@ -361,7 +377,7 @@ public class HttpModelClient implements ModelClient {
 
     @Override
     public ModelClient fork() {
-        return new HttpModelClient(apiUrl, apiKey, model, reasoningEffort);
+        return new HttpModelClient(apiUrl, apiKey, model, reasoningEffort, modelChannelId);
     }
 
     /**
@@ -397,7 +413,7 @@ public class HttpModelClient implements ModelClient {
 
         // 从上下文大小提供者获取（次优先级，如 ModelMetaService）
         if (contextSizeProvider != null) {
-            int providerSize = contextSizeProvider.getContextSize(model);
+            int providerSize = contextSizeProvider.getContextSize(modelChannelId, model);
             if (providerSize > 0) {
                 return providerSize;
             }

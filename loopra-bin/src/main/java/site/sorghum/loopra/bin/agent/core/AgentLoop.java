@@ -531,7 +531,7 @@ public class AgentLoop implements AgentLoopController {
 
     private String doRun(UserMessage userMessage) throws IOException {
         // ---- 根据模型多模态支持清洗用户消息 ----
-        userMessage = UserMessageSanitizer.sanitize(userMessage, client.getModel());
+        userMessage = UserMessageSanitizer.sanitize(userMessage, client);
         
         // ---- HITL 恢复：用户已审批 / 拒绝 ----
         if (hitlManager.getState() == HitlState.APPROVED) {

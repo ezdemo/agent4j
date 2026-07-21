@@ -29,12 +29,12 @@
     <!-- 主内容区 -->
     <main class="settings-main">
       <!-- 顶部操作栏 -->
-      <header v-if="!marketOnly" class="settings-header">
+      <header v-if="!marketOnly && activeTab !== 'model-channels'" class="settings-header">
         <div class="header-title">
           <h2>{{ currentTab?.label || '设置' }}</h2>
           <p class="header-desc">{{ currentTab?.description }}</p>
         </div>
-        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'about' && activeTab !== 'pet' && activeTab !== 'prompt'" class="header-actions">
+        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'about' && activeTab !== 'pet' && activeTab !== 'prompt' && activeTab !== 'model-channels'" class="header-actions">
           <button v-if="activeTab === 'ai' || activeTab === 'vision'" class="btn btn-secondary" style="padding:6px 12px;" @click="openAutoFillDialog" title="自动填入配置">
             <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
               <polyline points="1 4 1 10 7 10"/>
@@ -617,6 +617,11 @@
               </div>
             </div>
           </div>
+        </section>
+
+        <!-- 模型渠道设置 -->
+        <section v-if="activeTab === 'model-channels'" class="settings-section">
+          <ModelChannels :showBack="false" />
         </section>
 
         <!-- 工作区设置 -->
@@ -1742,6 +1747,7 @@ import {md} from '../utils/highlight'
 import platform from '../services/platform'
 import VersionInfoPanel from '../components/VersionInfoPanel.vue'
 import PetSprite from '../components/PetSprite.vue'
+import ModelChannels from '../ModelChannels.vue'
 
 const store = useAppStore()
 const props = defineProps({
@@ -1857,7 +1863,10 @@ async function loadPets() {
       activePetName.value = activeRes.data.name
       store.activePetName = activeRes.data.name
     }
-    if (isElectron) desktopPetVisible.value = await window.electronAPI.desktopPet.isVisible()
+    if (isElectron) {
+      desktopPetVisible.value = await window.electronAPI.desktopPet.isVisible()
+      store.desktopPetVisible = desktopPetVisible.value
+    }
   } catch (err) {
     console.error('加载宠物设置失败:', err)
     petsError.value = err.message || '无法连接服务器'
@@ -1888,10 +1897,12 @@ async function toggleDesktopPet() {
   if (desktopPetVisible.value) {
     await window.electronAPI.desktopPet.close()
     desktopPetVisible.value = false
+    store.desktopPetVisible = false
     return
   }
   await window.electronAPI.desktopPet.open()
   desktopPetVisible.value = true
+  store.desktopPetVisible = true
 }
 
 // 删除宠物
@@ -1912,6 +1923,7 @@ async function deletePet(name) {
             if (desktopPetVisible.value) {
               await window.electronAPI.desktopPet.close()
               desktopPetVisible.value = false
+              store.desktopPetVisible = false
             }
           }
           message.success('宠物已删除: ' + name)
@@ -2239,6 +2251,17 @@ const tabs = computed(() => [
     icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
       <circle cx="12" cy="12" r="3"/>
+    </svg>`
+  },
+  {
+    id: 'model-channels',
+    label: '模型渠道',
+    description: '管理 API 地址、密钥和模型配置',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+      <line x1="8" y1="21" x2="16" y2="21"/>
+      <line x1="12" y1="17" x2="12" y2="21"/>
+      <path d="M7 8h2m4 0h4M7 12h10"/>
     </svg>`
   },
   {

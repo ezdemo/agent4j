@@ -39,6 +39,13 @@ public class UserMessageSanitizer {
      * @return 清洗后的用户消息，如果无需清洗则返回原消息
      */
     public static UserMessage sanitize(UserMessage userMessage, String modelName) {
+        return sanitize(userMessage, modelName, null);
+    }
+
+    /**
+     * 根据指定渠道内模型的能力清洗消息。
+     */
+    public static UserMessage sanitize(UserMessage userMessage, String modelName, String channelId) {
         if (userMessage == null || userMessage.isPlainText()) {
             return userMessage;
         }
@@ -50,7 +57,7 @@ public class UserMessageSanitizer {
         }
 
         // 获取模型的多模态支持信息
-        ModalitySupport modalitySupport = modalityProvider.getModalitySupport(modelName);
+        ModalitySupport modalitySupport = modalityProvider.getModalitySupport(channelId, modelName);
         if (modalitySupport == null) {
             log.debug("[sanitizer] 无法获取模型 '{}' 的多模态支持信息，跳过消息清洗", modelName);
             return userMessage;
@@ -98,6 +105,14 @@ public class UserMessageSanitizer {
     }
 
     /**
+     * 使用实际发送请求的客户端确定模型和渠道，避免会话模型与全局配置串用。
+     */
+    public static UserMessage sanitize(UserMessage userMessage, ModelClient modelClient) {
+        if (modelClient == null) return userMessage;
+        return sanitize(userMessage, modelClient.getModel(), modelClient.getModelChannelId());
+    }
+
+    /**
      * 调用 VisionService 识别图片列表。
      *
      * @param images 图片 URL 列表
@@ -142,7 +157,7 @@ public class UserMessageSanitizer {
 
         List<UserMessage> sanitized = new ArrayList<>(userMessages.size());
         for (UserMessage msg : userMessages) {
-            sanitized.add(sanitize(msg, modelClient.getModel()));
+            sanitized.add(sanitize(msg, modelClient));
         }
         return sanitized;
     }

@@ -426,7 +426,7 @@ public class AgentService {
                 .commandRegistry(commandRegistry)
                 .hitl(hitl)
                 .loopraConfig(cfg)
-                .modelClient(new HttpModelClient(apiUrl, apiKey, target.model(), reasoningEffort));
+                .modelClient(new HttpModelClient(apiUrl, apiKey, target.model(), reasoningEffort, target.channelId()));
         LoopraAgent agent = builder.buildLightweight();
         agent.bindSession(sessionName);
         agent.setListener(new WebUsageListener(agent));

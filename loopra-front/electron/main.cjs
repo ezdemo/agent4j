@@ -370,6 +370,7 @@ function openDesktopPetWindow() {
   })
   desktopPetWindow.setAlwaysOnTop(true, 'floating')
   desktopPetWindow.setVisibleOnAllWorkspaces(true, { visibleOnFullScreen: true })
+  desktopPetWindow.setIgnoreMouseEvents(true, { forward: true })
   desktopPetWindow.on('closed', () => { desktopPetWindow = null })
   desktopPetWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   desktopPetWindow.once('ready-to-show', () => desktopPetWindow?.showInactive())
@@ -628,6 +629,10 @@ ipcMain.handle('desktop-pet-move-by', (event, delta) => {
   }
   const bounds = desktopPetWindow.getBounds()
   desktopPetWindow.setPosition(Math.round(bounds.x + dx), Math.round(bounds.y + dy))
+})
+ipcMain.on('desktop-pet-set-interactive', (event, interactive) => {
+  if (event.sender !== desktopPetWindow?.webContents || !desktopPetWindow || desktopPetWindow.isDestroyed()) return
+  desktopPetWindow.setIgnoreMouseEvents(!interactive, { forward: true })
 })
 ipcMain.handle('pick_loopra_workspace_folder', async (event) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized folder picker request')

@@ -22,12 +22,19 @@ public interface ModelModalityProvider {
      * @return 多模态支持信息，如果无法确定则返回 {@link ModalitySupport#TEXT_ONLY}
      */
     default ModalitySupport getModalitySupport(String modelName) {
+        return getModalitySupport(null, modelName);
+    }
+
+    /**
+     * 获取指定渠道中模型的多模态支持信息。
+     */
+    default ModalitySupport getModalitySupport(String channelId, String modelName) {
         return cacheService.getOrStore(
-                "ModelModalityProvider:getModalitySupport:" + modelName,
+                "ModelModalityProvider:getModalitySupport:" + channelId + ":" + modelName,
                 ModalitySupport.class,
                 5 * 60,
                 () -> {
-                    ModalitySupport result = _getModalitySupport(modelName);
+                    ModalitySupport result = _getModalitySupport(channelId, modelName);
                     return result != null ? result : ModalitySupport.TEXT_ONLY;
                 }
         );
@@ -40,4 +47,11 @@ public interface ModelModalityProvider {
      * @return 多模态支持信息，如果无法确定则返回 null
      */
     ModalitySupport _getModalitySupport(String modelName);
+
+    /**
+     * 渠道感知的内部查询。旧实现可仅覆盖单参数版本。
+     */
+    default ModalitySupport _getModalitySupport(String channelId, String modelName) {
+        return _getModalitySupport(modelName);
+    }
 }

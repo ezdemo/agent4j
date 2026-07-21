@@ -6,7 +6,9 @@
       :spritesheet-url="spritesheetUrl"
       state="idle"
       :initial-size-index="sizeIndex"
-      @position-change="moveWindow"
+      external-drag
+      @drag-move="moveWindow"
+      @interactive-change="setInteractive"
       @size-change="saveSize"
     />
   </main>
@@ -46,10 +48,12 @@ async function loadPet() {
   }
 }
 
-async function moveWindow(delta) {
-  await window.electronAPI?.desktopPet?.moveBy(delta)
-  // PetSprite uses local offsets while dragging; remount at the native window's new origin.
-  spriteKey.value++
+function moveWindow(delta) {
+  window.electronAPI?.desktopPet?.moveBy(delta)
+}
+
+function setInteractive(interactive) {
+  window.electronAPI?.desktopPet?.setInteractive(interactive)
 }
 
 async function saveSize(nextSizeIndex) {
@@ -61,12 +65,14 @@ async function saveSize(nextSizeIndex) {
 }
 
 onMounted(() => {
+  window.electronAPI?.desktopPet?.setInteractive(false)
   loadPet()
   refreshTimer = setInterval(loadPet, 4000)
   removeRefreshListener = window.electronAPI?.desktopPet?.onRefresh(loadPet)
 })
 
 onBeforeUnmount(() => {
+  window.electronAPI?.desktopPet?.setInteractive(true)
   if (refreshTimer) clearInterval(refreshTimer)
   removeRefreshListener?.()
 })

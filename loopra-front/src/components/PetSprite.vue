@@ -1,6 +1,7 @@
 <template>
   <div class="pet-sprite" :class="{ 'pet-hidden': !loaded, 'pet-dragging': dragging }"
        :style="wrapStyle"
+       @pointerenter="setInteractive(true)" @pointerleave="setInteractive(false)"
        @pointerdown="onPointerDown" @click.prevent="onClick">
     <div class="pet-sprite-frame" :style="spriteStyle" />
   </div>
@@ -44,9 +45,10 @@ const props = defineProps({
   initialX: { type: Number, default: 0 },
   initialY: { type: Number, default: 0 },
   initialSizeIndex: { type: Number, default: 1 },
+  externalDrag: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['position-change', 'size-change'])
+const emit = defineEmits(['position-change', 'drag-move', 'interactive-change', 'size-change'])
 
 const elapsedMs = ref(0)
 const loaded = ref(false)
@@ -61,6 +63,8 @@ const dragDirection = ref(null)
 const offsetX = ref(props.initialX)
 const offsetY = ref(props.initialY)
 let dragStartX = 0, dragStartY = 0
+let dragStartScreenX = 0, dragStartScreenY = 0
+let lastScreenX = 0, lastScreenY = 0
 let hasDragged = false
 let startOffsetX = 0, startOffsetY = 0
 
@@ -137,12 +141,19 @@ const spriteStyle = computed(() => {
 // ── 拖动 ──
 let saveTimer = null
 
+function setInteractive(interactive) {
+  if (props.externalDrag && (!dragging.value || interactive)) emit('interactive-change', interactive)
+}
+
 function onPointerDown(e) {
+  setInteractive(true)
   dragging.value = true
   dragDirection.value = null
   hasDragged = false
   dragStartX = e.clientX
   dragStartY = e.clientY
+  dragStartScreenX = lastScreenX = e.screenX
+  dragStartScreenY = lastScreenY = e.screenY
   startOffsetX = offsetX.value
   startOffsetY = offsetY.value
   e.target.setPointerCapture?.(e.pointerId)
@@ -153,20 +164,34 @@ function onPointerDown(e) {
 function onPointerMove(e) {
   const dx = e.clientX - dragStartX
   const dy = e.clientY - dragStartY
-  if (!hasDragged && Math.abs(dx) + Math.abs(dy) > DRAG_THRESHOLD) hasDragged = true
+  const screenDx = e.screenX - dragStartScreenX
+  const screenDy = e.screenY - dragStartScreenY
+  if (!hasDragged && Math.abs(screenDx) + Math.abs(screenDy) > DRAG_THRESHOLD) hasDragged = true
   if (hasDragged) {
-    if (dx !== 0) dragDirection.value = dx < 0 ? 'left' : 'right'
+    if (screenDx !== 0) dragDirection.value = screenDx < 0 ? 'left' : 'right'
+    if (props.externalDrag) {
+      const moveX = e.screenX - lastScreenX
+      const moveY = e.screenY - lastScreenY
+      lastScreenX = e.screenX
+      lastScreenY = e.screenY
+      if (moveX || moveY) emit('drag-move', { x: moveX, y: moveY })
+      return
+    }
     offsetX.value = startOffsetX + dx
     offsetY.value = startOffsetY + dy
   }
 }
 
-function onPointerUp() {
+function onPointerUp(e) {
   dragging.value = false
   dragDirection.value = null
+  if (props.externalDrag) {
+    const target = document.elementFromPoint(e.clientX, e.clientY)
+    if (!target?.closest('.pet-sprite')) setInteractive(false)
+  }
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
-  if (hasDragged) {
+  if (hasDragged && !props.externalDrag) {
     clearTimeout(saveTimer)
     saveTimer = setTimeout(() => {
       emit('position-change', { x: offsetX.value, y: offsetY.value })
