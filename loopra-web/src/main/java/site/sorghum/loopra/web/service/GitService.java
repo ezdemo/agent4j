@@ -13,13 +13,16 @@ import site.sorghum.loopra.web.common.ServiceException;
 import site.sorghum.loopra.web.common.entity.ProcessResult;
 import site.sorghum.loopra.web.model.*;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.InputStreamReader;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.nio.file.InvalidPathException;
+import java.nio.file.LinkOption;
+import java.nio.file.Path;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
+import java.util.concurrent.*;
 
 /**
  * Git 操作服务 —— 封装所有 Git 命令执行逻辑、工作区解析和数据处理。
@@ -52,6 +55,16 @@ public class GitService {
     private static final int RECENT_COMMIT_LOG_COUNT = 3;
     /** Git 命令超时秒数 */
     private static final int GIT_COMMAND_TIMEOUT_SEC = 10;
+    /** 单个 Git 输出流在内存中保留的最大字符数 */
+    private static final int MAX_GIT_OUTPUT_CHARS = 10 * 1024 * 1024;
+    /** 命令结束后等待输出流消费完成的最大秒数 */
+    private static final int GIT_OUTPUT_DRAIN_TIMEOUT_SEC = 1;
+    /** Git 子进程的标准输出与错误输出必须并发消费，避免管道缓冲区写满。 */
+    private static final ExecutorService GIT_IO_EXECUTOR = Executors.newCachedThreadPool(runnable -> {
+        Thread thread = new Thread(runnable, "loopra-git-io");
+        thread.setDaemon(true);
+        return thread;
+    });
     /** 默认 Git 提交作者名 */
     private static final String DEFAULT_AUTHOR_NAME = "Loopra";
     /** 默认 Git 提交作者邮箱 */
@@ -204,7 +217,7 @@ public class GitService {
         File workspaceDir = new File(resolveWorkspace(workspaceHash));
 
         // 安全校验：防止路径穿越
-        path = validatePath(path);
+        path = validatePath(workspaceDir, path);
 
         boolean hasPath = path != null && !path.isEmpty();
 
@@ -240,7 +253,7 @@ public class GitService {
             ProcessResult statusResult = runGit(workspaceDir, statusCmd.toArray(new String[0]));
             if (statusResult.exitCode == 0 && statusResult.stdout.trim().startsWith("??")) {
                 // 文件未跟踪，读取文件内容生成 diff
-                File file = new File(workspaceDir, path);
+                File file = resolveWorkspaceFile(workspaceDir, path).toFile();
                 if (file.exists() && file.isFile()) {
                     try {
                         List<String> lines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
@@ -303,7 +316,7 @@ public class GitService {
             List<String> statusCmd2 = new ArrayList<>(Arrays.asList("git", "status", "--porcelain", "--", path));
             ProcessResult statusResult2 = runGit(workspaceDir, statusCmd2.toArray(new String[0]));
             if (statusResult2.exitCode == 0 && statusResult2.stdout.trim().startsWith("??")) {
-                File file = new File(workspaceDir, path);
+                File file = resolveWorkspaceFile(workspaceDir, path).toFile();
                 if (file.exists() && file.isFile()) {
                     try {
                         List<String> lines = Files.readAllLines(file.toPath(), StandardCharsets.UTF_8);
@@ -328,7 +341,7 @@ public class GitService {
             return new GitDiffContentDTO("", "");
         }
 
-        File file = new File(workspaceDir, path);
+        File file = resolveWorkspaceFile(workspaceDir, path).toFile();
         if (!file.exists() || !file.isFile()) {
             // 文件不存在，返回空内容
             return new GitDiffContentDTO("", "");
@@ -352,8 +365,8 @@ public class GitService {
     public GitFileContentDTO getFileContent(String workspaceHash, String path, String ref) throws Exception {
         File workspaceDir = new File(resolveWorkspace(workspaceHash));
 
-        path = validatePath(path);
-        if (path == null) {
+        path = validatePath(workspaceDir, path);
+        if (path == null || path.isEmpty()) {
             throw new ServiceException("Invalid path");
         }
         if (ref == null || ref.isEmpty()) ref = "HEAD";
@@ -493,6 +506,7 @@ public class GitService {
 
         // git add：有指定文件时精确暂存，否则只提交已暂存的文件
         if (files != null && !files.isEmpty()) {
+            files = validatePaths(workspaceDir, files);
             // 先清空暂存区，避免之前已暂存的非选中文件被一起提交
             runGit(workspaceDir, "git", "reset", "HEAD", "--");
 
@@ -658,7 +672,7 @@ public class GitService {
             throw new ServiceException("Not a git repository");
         }
 
-        String path = extractPath(body);
+        String path = validatePath(workspaceDir, extractPath(body));
         if (path == null) {
             throw new ServiceException("Path is required");
         }
@@ -712,6 +726,10 @@ public class GitService {
         List<String> files = readStringListField(bodyJson, "files");
         String requestModel = readStringField(bodyJson, "model");
         String requestChannelId = readStringField(bodyJson, "modelChannelId");
+
+        if (files != null && !files.isEmpty()) {
+            files = validatePaths(workspaceDir, files);
+        }
 
         // 检查 AI 模型配置（默认走当前激活渠道，按请求/工作区配置的渠道覆盖）
         String apiUrl = agentService.getSharedApiUrl();
@@ -856,17 +874,63 @@ public class GitService {
     // ==================== 路径安全校验 ====================
 
     /**
-     * 安全校验文件路径，防止路径穿越攻击。
-     * <p>null 输入返回 null（调用方自行判断是否允许空路径），
-     * 包含 ".." 或以 "/" 开头则抛出 ServiceException。</p>
+     * 将请求路径规范化为工作区内的 Git 路径，并拒绝绝对路径、路径穿越和符号链接逃逸。
+     * 空路径仅供查询整个仓库的接口使用。
      */
-    private String validatePath(String path) {
+    private String validatePath(File workspaceDir, String path) {
         if (path == null) return null;
         String trimmed = path.trim();
-        if (trimmed.contains("..") || trimmed.startsWith("/")) {
+        if (trimmed.isEmpty()) return "";
+
+        Path file = resolveWorkspaceFile(workspaceDir, trimmed);
+        return workspacePath(workspaceDir).relativize(file).toString().replace(File.separatorChar, '/');
+    }
+
+    private List<String> validatePaths(File workspaceDir, List<String> paths) {
+        List<String> validated = new ArrayList<>(paths.size());
+        for (String path : paths) {
+            String value = validatePath(workspaceDir, path);
+            if (value == null || value.isEmpty()) {
+                throw new ServiceException("Invalid path");
+            }
+            validated.add(value);
+        }
+        return validated;
+    }
+
+    private Path resolveWorkspaceFile(File workspaceDir, String path) {
+        try {
+            Path workspace = workspacePath(workspaceDir);
+            Path requested = Path.of(path);
+            if (requested.isAbsolute()) {
+                throw new ServiceException("Invalid path");
+            }
+
+            Path file = workspace.resolve(requested).normalize();
+            if (!file.startsWith(workspace)) {
+                throw new ServiceException("Invalid path");
+            }
+
+            // 对不存在的目标，验证最近的已有父目录，避免通过工作区内的链接目录逃逸。
+            Path existing = file;
+            while (existing != null && !Files.exists(existing, LinkOption.NOFOLLOW_LINKS)) {
+                existing = existing.getParent();
+            }
+            if (existing == null || !existing.toRealPath().startsWith(workspace)) {
+                throw new ServiceException("Invalid path");
+            }
+            return file;
+        } catch (InvalidPathException | IOException e) {
             throw new ServiceException("Invalid path");
         }
-        return trimmed;
+    }
+
+    private Path workspacePath(File workspaceDir) {
+        try {
+            return workspaceDir.toPath().toRealPath();
+        } catch (IOException e) {
+            throw new ServiceException("工作区不可访问");
+        }
     }
 
     // ==================== AI 辅助工具方法 ====================
@@ -962,7 +1026,7 @@ public class GitService {
      */
     private String extractPath(String body) {
         ONode json = parseJsonBody(body, "extractPath");
-        return validatePath(readStringField(json, "path"));
+        return readStringField(json, "path");
     }
 
     /**
@@ -991,35 +1055,55 @@ public class GitService {
         pb.environment().put("GIT_TERMINAL_PROMPT", "0");
 
         Process proc = pb.start();
-        String stdout = readStream(proc.getInputStream());
-        String stderr = readStream(proc.getErrorStream());
+        Future<String> stdout = GIT_IO_EXECUTOR.submit(() -> readStream(proc.getInputStream()));
+        Future<String> stderr = GIT_IO_EXECUTOR.submit(() -> readStream(proc.getErrorStream()));
+        try {
+            boolean finished = proc.waitFor(GIT_COMMAND_TIMEOUT_SEC, TimeUnit.SECONDS);
+            if (!finished) {
+                proc.destroyForcibly();
+                proc.waitFor();
+                return processResult(-1, "", "Command timed out after " + GIT_COMMAND_TIMEOUT_SEC + " seconds");
+            }
 
-        boolean finished = proc.waitFor(GIT_COMMAND_TIMEOUT_SEC, TimeUnit.SECONDS);
-        if (!finished) {
-            proc.destroyForcibly();
-            ProcessResult result = new ProcessResult();
-            result.exitCode = -1;
-            result.stdout = "";
-            result.stderr = "Command timed out after " + GIT_COMMAND_TIMEOUT_SEC + " seconds";
-            return result;
+            return processResult(proc.exitValue(), awaitOutput(stdout), awaitOutput(stderr));
+        } finally {
+            if (proc.isAlive()) {
+                proc.destroyForcibly();
+            }
+            stdout.cancel(true);
+            stderr.cancel(true);
         }
+    }
 
+    private ProcessResult processResult(int exitCode, String stdout, String stderr) {
         ProcessResult result = new ProcessResult();
-        result.exitCode = proc.exitValue();
+        result.exitCode = exitCode;
         result.stdout = stdout;
         result.stderr = stderr;
         return result;
     }
 
-    private String readStream(java.io.InputStream is) throws Exception {
-        StringBuilder sb = new StringBuilder();
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                sb.append(line).append("\n");
+    private String awaitOutput(Future<String> output) throws Exception {
+        return output.get(GIT_OUTPUT_DRAIN_TIMEOUT_SEC, TimeUnit.SECONDS);
+    }
+
+    private String readStream(InputStream input) throws IOException {
+        StringBuilder output = new StringBuilder();
+        try (input) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = input.read(buffer)) != -1) {
+                String chunk = new String(buffer, 0, read, StandardCharsets.UTF_8);
+                int remaining = MAX_GIT_OUTPUT_CHARS - output.length();
+                if (remaining > 0) {
+                    output.append(chunk, 0, Math.min(remaining, chunk.length()));
+                }
             }
         }
-        return sb.toString();
+        if (output.length() >= MAX_GIT_OUTPUT_CHARS) {
+            output.append("\n... (Git output truncated)");
+        }
+        return output.toString();
     }
 
 

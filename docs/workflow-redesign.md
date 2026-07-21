@@ -408,9 +408,6 @@ Phase 2: 前端改造
          - BlockRenderer.vue 替换工具名识别 + 组件引用
          - api.js 更新端点 URL
 
-Phase 3: TUI 同步
-         - loopra-tui 中找 workflow 相关卡片渲染，同步改为 Step 列表渲染
-
 Phase 4: 旧代码清理
          - 删除 WorkflowNode.java / WorkflowEdge.java / NodeType.java / EdgeType.java / NodeStatus.java
          - 删除 WorkflowEngine.java（旧版）
