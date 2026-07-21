@@ -251,7 +251,6 @@ loopra/
 │   ├── electron-builder.json  # 打包配置
 │   └── vite.config.js
 │
-├── loopra-tui/               # TUI 终端界面
 ├── intro/                     # 官网
 ├── docs/superpowers/          # 文档
 ├── pom.xml                    # Maven 父 POM
