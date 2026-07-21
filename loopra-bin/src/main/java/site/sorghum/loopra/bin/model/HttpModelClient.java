@@ -148,15 +148,15 @@ public class HttpModelClient implements ModelClient {
         String userId = UserIdProvider.getUserId();
         if (sessionId != null && !sessionId.isEmpty()) {
             builder.addHeader("x-session-affinity", sessionId);
-            builder.addHeader("channel_affinity", sessionId);
-            if (!model.contains("deepseek")) {
+            if (model.contains("gpt") || model.contains("codex")) {
                 builder.addHeader("X-Claude-Code-Session-Id", sessionId);
                 builder.addHeader("specific_channel_id", sessionId);
                 builder.addHeader("Session_id", sessionId);
+                builder.addHeader("channel_affinity", sessionId);
             }
         }
         if (userId != null && !userId.isEmpty()) {
-            if (!model.contains("deepseek")) {
+            if (model.contains("gpt") || model.contains("codex")) {
                 builder.addHeader("user_id", userId);
             }
         }
@@ -996,7 +996,6 @@ public class HttpModelClient implements ModelClient {
         // 在 body 中注入 user_id（全局用户标识，用于缓存与身份识别）
         String userId = UserIdProvider.getUserId();
         if (userId != null && !userId.isEmpty()) {
-            body.set("user_id", userId);
             body.set("user",userId);
         }
 
