@@ -65,14 +65,15 @@ public class AcpSessionManager {
             log.warn("[acp] 配置为空，无法创建 ModelClient");
             return;
         }
-        String apiUrl = config.chatApiUrl();
+        String apiUrl = config.apiUrl();
         String apiKey = config.apiKey();
         if (apiUrl == null || apiKey == null || apiKey.isEmpty()) {
             log.warn("[acp] API 配置不完整，ModelClient 暂不可用");
             return;
         }
         String model = config.model();
-        this.sharedModelClient = new HttpModelClient(apiUrl, apiKey, model);
+        this.sharedModelClient = new HttpModelClient(apiUrl, apiKey, model, config.reasoningEffort(),
+                config.modelChannelId(), config.apiProtocol());
         log.info("[acp] 共享 ModelClient 初始化完成: model={}, apiUrl={}", model, apiUrl);
     }
 

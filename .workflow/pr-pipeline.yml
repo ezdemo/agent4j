@@ -20,4 +20,5 @@ stages:
         jdkVersion: 17
         mavenVersion: 3.6.3
         commands:
+          - bash .release/ci-sync-web-assets.sh
           - mvn -B -ntp -DskipTests -gs .workflow/maven-central-settings.xml -s .workflow/maven-central-settings.xml clean verify

@@ -22,4 +22,21 @@ stages:
         jdkVersion: 17
         mavenVersion: 3.6.3
         commands:
+          - bash .release/ci-sync-web-assets.sh
           - mvn -B -ntp -DskipTests -gs .workflow/maven-central-settings.xml -s .workflow/maven-central-settings.xml clean verify
+        artifacts:
+          - name: DISTRIBUTION
+            path:
+              - ./loopra-web/target/loopra-web-dist.tar.gz
+  - stage:
+    name: publish
+    displayName: Publish Artifact
+    strategy: fast
+    trigger: auto
+    steps:
+      - step: publish@general_artifacts
+        name: publish_distribution
+        displayName: Upload Distribution
+        dependArtifact: DISTRIBUTION
+        artifactRepository: default
+        artifactName: loopra-web-dist

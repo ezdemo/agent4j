@@ -32,6 +32,7 @@ public record ConfigDTO(
             String name,
             String baseUrl,
             String apiKey,
+            String apiProtocol,
             List<ModelConfig> models
     ) {
     }

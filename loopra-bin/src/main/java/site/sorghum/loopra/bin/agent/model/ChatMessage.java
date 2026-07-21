@@ -183,6 +183,7 @@ public class ChatMessage {
                     String tcId = String.valueOf(tc.getOrDefault("id", "unknown"));
                     String tcName;
                     Object tcArgsObj;
+                    Object responseReasoning = tc.get("response_reasoning");
                     Object funcObj = tc.get("function");
                     if (funcObj instanceof Map) {
                         @SuppressWarnings("unchecked")
@@ -201,7 +202,8 @@ public class ChatMessage {
                             log.debug("工具调用参数 JSON 解析失败，保留原始字符串: {}", e.getMessage());
                         }
                     }
-                    msg.toolCalls.add(new ToolCallEntry(tcId, tcName, tcArgsObj));
+                    msg.toolCalls.add(new ToolCallEntry(tcId, tcName, tcArgsObj,
+                            responseReasoning == null ? null : responseReasoning.toString()));
                 }
             }
         }

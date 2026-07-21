@@ -182,6 +182,7 @@ public class JsonlSessionStore implements SessionStore {
                 org.noear.snack4.ONode tcn = tcArr.addNew();
                 tcn.set("id", tc.id() != null ? tc.id() : "unknown");
                 tcn.set("type", "function");
+                if (tc.responseReasoning() != null) tcn.set("response_reasoning", tc.responseReasoning());
                 org.noear.snack4.ONode func = tcn.getOrNew("function");
                 func.set("name", tc.name() != null ? tc.name() : "unknown");
                 Object tcArgs = tc.arguments();

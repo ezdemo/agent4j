@@ -55,13 +55,19 @@ class LoopraConfigTest {
     }
 
     @Test
-    void buildsCompleteChatApiUrlForModelChannels() {
+    void buildsProtocolApiUrlForModelChannels() {
         assertEquals("https://api.example.com/v1/chat/completions",
-                new LoopraConfig.ModelChannel("id", "name", "https://api.example.com/v1", "key", List.of()).chatApiUrl());
+                new LoopraConfig.ModelChannel("id", "name", "https://api.example.com/v1", "key", List.of()).apiUrl());
+        assertEquals("https://api.example.com/v1/responses",
+                new LoopraConfig.ModelChannel("id", "name", "https://api.example.com/v1/", "key", "responses", List.of()).apiUrl());
+        assertEquals("https://api.example.com/v1/responses",
+                new LoopraConfig.ModelChannel("id", "name", "https://api.example.com/v1/chat/completions", "key", "responses", List.of()).apiUrl());
         assertEquals("https://api.example.com/v1/chat/completions",
-                new LoopraConfig.ModelChannel("id", "name", "https://api.example.com/v1/", "key", List.of()).chatApiUrl());
-        assertEquals("https://api.example.com/v1/chat/completions",
-                new LoopraConfig.ModelChannel("id", "name", "https://api.example.com/v1/chat/completions", "key", List.of()).chatApiUrl());
+                new LoopraConfig.ModelChannel("id", "name", "https://api.example.com/v1/responses", "key", List.of()).apiUrl());
+        assertEquals("https://api.example.com/v1/responses?api-version=2025-04-01-preview",
+                new LoopraConfig.ModelChannel("id", "name",
+                        "https://api.example.com/v1/chat/completions?api-version=2025-04-01-preview",
+                        "key", "responses", List.of()).apiUrl());
     }
 
     @Test
@@ -199,15 +205,39 @@ class LoopraConfigTest {
             LoopraConfig config = LoopraConfig.load();
 
             LoopraConfig.ModelChannel channel = config.modelChannel("main");
+            assertEquals("chat_completions", channel.apiProtocol());
             assertEquals(List.of("legacy-model"), channel.models());
             assertEquals(-1, channel.modelEntry("legacy-model").contextTokens());
             assertFalse(channel.modelEntry("legacy-model").imageInput());
 
             ONode saved = ONode.ofJson(Files.readString(configDir.resolve("config.json")));
+            assertEquals("chat_completions", saved.select("$.modelChannels[0].apiProtocol").getString());
             assertTrue(saved.select("$.modelChannels[0].models[0]").isObject());
             assertEquals("legacy-model", saved.select("$.modelChannels[0].models[0].name").getString());
             assertEquals(-1, saved.select("$.modelChannels[0].models[0].contextTokens").getInt());
             assertFalse(saved.select("$.modelChannels[0].models[0].imageInput").getBoolean());
+        } finally {
+            System.setProperty("user.home", originalUserHome);
+        }
+    }
+
+    @Test
+    void preservesRootResponsesProtocolWhenMigratingLegacyConfig() throws Exception {
+        Path configDir = tempDir.resolve(".loopra");
+        Files.createDirectories(configDir);
+        Files.writeString(configDir.resolve("config.json"), """
+                {"baseUrl":"https://example.test/v1","apiKey":"secret-key","apiProtocol":"responses",
+                 "model":"gpt-5","availableModels":["gpt-5"]}
+                """);
+
+        String originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+        try {
+            LoopraConfig config = LoopraConfig.load();
+
+            assertEquals("responses", config.apiProtocol());
+            assertEquals("https://example.test/v1/responses", config.apiUrl());
+            assertEquals("responses", config.activeModelChannel().apiProtocol());
         } finally {
             System.setProperty("user.home", originalUserHome);
         }
@@ -232,6 +262,7 @@ class LoopraConfigTest {
                     "apiKey", "root****cret",
                     "modelChannels", List.of(Map.of(
                             "id", "main", "name", "Main", "baseUrl", "https://example.test", "apiKey", "secr****-key",
+                            "apiProtocol", "responses",
                             "models", List.of(Map.of("name", "vision-model", "contextTokens", 128000,
                                     "imageInput", true, "price", Map.of("input", 1.5, "cache", 0.2, "output", 3)))
                     ))
@@ -241,6 +272,7 @@ class LoopraConfigTest {
             LoopraConfig.ModelEntry entry = saved.activeModelEntry();
             assertEquals("secret-key", saved.apiKey());
             assertEquals("secret-key", saved.modelChannel("main").apiKey());
+            assertEquals("responses", saved.modelChannel("main").apiProtocol());
             assertEquals(128000, entry.contextTokens());
             assertTrue(entry.imageInput());
             assertEquals(1.5, entry.price().get("input"));

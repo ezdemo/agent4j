@@ -98,6 +98,7 @@ public class LoopraConfig {
                       "name": "默认渠道",
                       "baseUrl": "https://api.deepseek.com/v1",
                       "apiKey": "sk-your-api-key",
+                      "apiProtocol": "chat_completions",
                       "models": [
                         { "name": "deepseek-v4-flash", "contextTokens": -1, "imageInput": false },
                         { "name": "deepseek-v4-pro", "contextTokens": -1, "imageInput": false },
@@ -298,7 +299,7 @@ public class LoopraConfig {
     }
 
     /**
-     * 获取 API 基础地址，不含 /chat/completions 后缀。
+     * 获取 API 基础地址，不含具体接口后缀。
      * 如 "https://api.deepseek.com/v1"。
      */
     public String baseUrl() {
@@ -308,19 +309,44 @@ public class LoopraConfig {
                 : root.select("$.baseUrl").getString();
     }
 
-    /**
-     * 获取完整的 Chat Completions API URL。
-     * 在 baseUrl 后追加 /chat/completions。
-     */
-    public String chatApiUrl() {
-        return toChatApiUrl(baseUrl());
+    /** 当前渠道使用的 API 协议。 */
+    public String apiProtocol() {
+        ModelChannel channel = activeModelChannel();
+        return channel != null ? channel.apiProtocol()
+                : normalizeApiProtocol(root.select("$.apiProtocol").getString());
     }
-
-    private static String toChatApiUrl(String baseUrl) {
+    
+    /** 获取当前渠道可直接调用的完整 API URL。 */
+    public String apiUrl() {
+        return toApiUrl(baseUrl(), apiProtocol());
+    }
+        
+    /** 保留给旧调用方的 Chat Completions URL 构造方法。 */
+    public String chatApiUrl() {
+        return toApiUrl(baseUrl(), "chat_completions");
+    }
+    
+    private static String toApiUrl(String baseUrl, String apiProtocol) {
         if (baseUrl == null) return null;
-        String normalized = baseUrl.replaceAll("/+$", "");
-        if (normalized.isEmpty() || normalized.endsWith("/chat/completions")) return normalized;
-        return normalized + "/chat/completions";
+        String normalized = baseUrl.trim();
+        int queryIndex = normalized.indexOf('?');
+        int fragmentIndex = normalized.indexOf('#');
+        int suffixIndex = queryIndex < 0 ? fragmentIndex
+                : fragmentIndex < 0 ? queryIndex : Math.min(queryIndex, fragmentIndex);
+        String suffix = suffixIndex < 0 ? "" : normalized.substring(suffixIndex);
+        String endpoint = suffixIndex < 0 ? normalized : normalized.substring(0, suffixIndex);
+        endpoint = endpoint.replaceAll("/+$", "")
+                .replaceFirst("/(?:chat/completions|responses?)$", "");
+        if (endpoint.isEmpty()) return endpoint + suffix;
+        return endpoint + ("responses".equals(normalizeApiProtocol(apiProtocol))
+                ? "/responses" : "/chat/completions") + suffix;
+    }
+    
+    private static String normalizeApiProtocol(String apiProtocol) {
+        if (apiProtocol == null) return "chat_completions";
+        String normalized = apiProtocol.trim().toLowerCase(Locale.ROOT);
+        return "response".equals(normalized) || "responses".equals(normalized)
+                ? "responses" : "chat_completions";
     }
 
     /**
@@ -358,9 +384,10 @@ public class LoopraConfig {
             String name = trim(item.get("name").getString());
             String baseUrl = trim(item.get("baseUrl").getString());
             String apiKey = trim(item.get("apiKey").getString());
+            String apiProtocol = normalizeApiProtocol(item.get("apiProtocol").getString());
             if (id.isEmpty()) id = "channel-" + (channels.size() + 1);
             if (name.isEmpty()) name = "渠道 " + (channels.size() + 1);
-            channels.add(new ModelChannel(id, name, baseUrl, apiKey, modelEntries(item.get("models"))));
+            channels.add(new ModelChannel(id, name, baseUrl, apiKey, apiProtocol, modelEntries(item.get("models"))));
         }
         return channels;
     }
@@ -399,22 +426,33 @@ public class LoopraConfig {
     }
 
     /** 配置文件中的单个模型渠道。models() 保持名称列表以兼容已有调用。 */
-    public record ModelChannel(String id, String name, String baseUrl, String apiKey, List<ModelEntry> modelEntries) {
+    public record ModelChannel(String id, String name, String baseUrl, String apiKey, String apiProtocol,
+                               List<ModelEntry> modelEntries) {
+        public ModelChannel(String id, String name, String baseUrl, String apiKey, List<ModelEntry> modelEntries) {
+            this(id, name, baseUrl, apiKey, "chat_completions", modelEntries);
+        }
+            
         public ModelChannel {
             id = id == null ? "" : id;
             name = name == null ? "" : name;
             baseUrl = baseUrl == null ? "" : baseUrl;
             apiKey = apiKey == null ? "" : apiKey;
+            apiProtocol = normalizeApiProtocol(apiProtocol);
             modelEntries = modelEntries == null ? List.of() : List.copyOf(modelEntries);
         }
-
+        
         public List<String> models() {
             return modelEntries.stream().map(ModelEntry::name).toList();
         }
-
-        /** 返回该渠道可直接用于发送聊天请求的完整地址。 */
+        
+        /** 返回该渠道可直接调用的完整地址。 */
+        public String apiUrl() {
+            return toApiUrl(baseUrl, apiProtocol);
+        }
+        
+        /** 返回该渠道的 Chat Completions 地址。 */
         public String chatApiUrl() {
-            return toChatApiUrl(baseUrl);
+            return toApiUrl(baseUrl, "chat_completions");
         }
 
         public ModelEntry modelEntry(String modelName) {
@@ -866,6 +904,9 @@ public class LoopraConfig {
         if (channels != null && channels.isArray() && !channels.getArray().isEmpty()) {
             boolean requiresNormalization = false;
             for (ONode channel : channels.getArray()) {
+                if (channel.get("apiProtocol").isNull()) {
+                    requiresNormalization = true;
+                }
                 ONode models = channel.get("models");
                 if (models != null && models.isArray()) {
                     for (ONode model : models.getArray()) {
@@ -887,6 +928,7 @@ public class LoopraConfig {
                 value.put("name", trim(channel.get("name").getString()));
                 value.put("baseUrl", trim(channel.get("baseUrl").getString()));
                 value.put("apiKey", trim(channel.get("apiKey").getString()));
+                value.put("apiProtocol", normalizeApiProtocol(channel.get("apiProtocol").getString()));
                 value.put("models", modelEntries(channel.get("models")));
                 normalized.add(value);
             }
@@ -911,6 +953,7 @@ public class LoopraConfig {
         channel.put("name", "默认渠道");
         channel.put("baseUrl", baseUrl);
         channel.put("apiKey", apiKey);
+        channel.put("apiProtocol", normalizeApiProtocol(config.select("$.apiProtocol").getString()));
         channel.put("models", models);
         config.set("modelChannels", modelChannelsNode(List.of(channel)));
         config.set("modelChannelId", "default");
@@ -935,6 +978,9 @@ public class LoopraConfig {
             String name = trim(Objects.toString(input.get("name"), ""));
             String baseUrl = trim(Objects.toString(input.get("baseUrl"), ""));
             String apiKey = trim(Objects.toString(input.get("apiKey"), ""));
+            String apiProtocol = input.containsKey("apiProtocol")
+                    ? normalizeApiProtocol(Objects.toString(input.get("apiProtocol"), ""))
+                    : previous != null ? previous.apiProtocol() : "chat_completions";
             if ((apiKey.isEmpty() || apiKey.contains("****")) && previous != null) apiKey = previous.apiKey();
             List<ModelEntry> models = modelEntries(input.get("models"));
             Map<String, Object> channel = new LinkedHashMap<>();
@@ -942,6 +988,7 @@ public class LoopraConfig {
             channel.put("name", name.isEmpty() ? "渠道 " + index : name);
             channel.put("baseUrl", baseUrl.isEmpty() && previous != null ? previous.baseUrl() : baseUrl);
             channel.put("apiKey", apiKey);
+            channel.put("apiProtocol", apiProtocol);
             channel.put("models", models);
             result.add(channel);
         }
@@ -972,6 +1019,7 @@ public class LoopraConfig {
             node.set("name", Objects.toString(channel.get("name"), ""));
             node.set("baseUrl", Objects.toString(channel.get("baseUrl"), ""));
             node.set("apiKey", Objects.toString(channel.get("apiKey"), ""));
+            node.set("apiProtocol", normalizeApiProtocol(Objects.toString(channel.get("apiProtocol"), "")));
             node.set("models", modelEntriesNode(modelEntries(channel.get("models"))));
             array.add(node);
         }

@@ -131,7 +131,7 @@ public class MessageHealer {
                             }catch (Exception e){
                                 changed = true;
                                 tcListModified = true;
-                                cleaned.add(new ToolCallEntry(tc.id(), tcName, "{}"));
+                                cleaned.add(new ToolCallEntry(tc.id(), tcName, "{}", tc.responseReasoning()));
                                 continue;
                             }
                         }
@@ -144,7 +144,7 @@ public class MessageHealer {
                             do {
                                 newId = tcId + "_dedup_" + (dedupIdx++);
                             } while (!seenTcIds.add(newId));
-                            cleaned.add(new ToolCallEntry(newId, tcName, tc.arguments()));
+                            cleaned.add(new ToolCallEntry(newId, tcName, tc.arguments(), tc.responseReasoning()));
                             changed = true;
                             tcListModified = true;
                         } else {

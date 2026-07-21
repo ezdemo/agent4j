@@ -10,12 +10,17 @@ import java.util.Map;
  * {@code arguments} 内部为 JSON 字符串，反序列化为 JSON 对象输出。
  * </p>
  *
- * @param id        工具调用 ID（由 API 返回或自动生成）
- * @param name      工具名称
- * @param arguments 工具参数（内部 String，序列化时由 Snack4 自动输出为 JSON 对象）
+ * @param id                工具调用 ID（由 API 返回或自动生成）
+ * @param name              工具名称
+ * @param arguments         工具参数（内部 String，序列化时由 Snack4 自动输出为 JSON 对象）
+ * @param responseReasoning Responses API 推理 item 的原始 JSON；其他协议为 null
  * @author Sorghum
  */
-public record ToolCallEntry(String id, String name, Object arguments) {
+public record ToolCallEntry(String id, String name, Object arguments, String responseReasoning) {
+
+    public ToolCallEntry(String id, String name, Object arguments) {
+        this(id, name, arguments, null);
+    }
 
     /**
      * 转换为 Map（兼容旧的 JSON 序列化路径）。
@@ -25,6 +30,7 @@ public record ToolCallEntry(String id, String name, Object arguments) {
         m.put("id", id);
         m.put("name", name);
         m.put("arguments", arguments);
+        if (responseReasoning != null) m.put("response_reasoning", responseReasoning);
         return m;
     }
 }

@@ -24,10 +24,12 @@ public class AppConfig {
     public ModelClient modelClient() throws IOException {
         LoopraConfig config = LoopraConfig.load();
         return new HttpModelClient(
-                config.chatApiUrl(),
+                config.apiUrl(),
                 config.apiKey(),
                 config.model(),
-                config.reasoningEffort()
+                config.reasoningEffort(),
+                config.modelChannelId(),
+                config.apiProtocol()
         );
     }
 
