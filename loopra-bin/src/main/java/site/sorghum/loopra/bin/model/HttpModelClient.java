@@ -496,18 +496,8 @@ public class HttpModelClient implements ModelClient {
 
                 int status = response.code();
                 if (retryable(status)) {
-                    String err = "";
-                    ResponseBody errorBody = response.body();
-                    if (errorBody != null) {
-                        try {
-                            err = errorBody.string();
-                        } catch (IOException e) {
-                            log.debug("读取 HTTP {} 错误响应失败: {}", status, e.getMessage());
-                        }
-                    }
-                    String reason = "HTTP " + status + (err.isBlank() ? "" : ": " + err);
                     try {
-                        retry.waitOrThrow(reason, attempt);
+                        retry.waitOrThrow("HTTP " + status, attempt);
                     } catch (IOException e) {
                         // 用户中断或重试耗尽
                         safeCallback("onDone", callback::onDone);
