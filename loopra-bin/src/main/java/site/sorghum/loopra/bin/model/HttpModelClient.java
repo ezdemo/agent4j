@@ -142,29 +142,18 @@ public class HttpModelClient implements ModelClient {
 
     /**
      * 向 OkHttp Request.Builder 添加会话标识请求头。
-     * <p>
-     * 如果当前线程的 {@link #CURRENT_LOG_SESSION} 已设置，
-     * 则添加以下请求头，值均为当前会话 ID：
-     * <ul>
-     *   <li>{@code x-session-affinity}</li>
-     *   <li>{@code X-Claude-Code-Session-Id}</li>
-     *   <li>{@code user_id}</li>
-     *   <li>{@code specific_channel_id}</li>
-     *   <li>{@code Session_id}</li>
-     * </ul>
-     * </p>
      */
-    private static void addSessionHeaders(Request.Builder builder) {
-        String sessionId = CURRENT_LOG_SESSION.get();
+    private static void addSessionHeaders(Request.Builder builder, String model) {
         String userId = UserIdProvider.getUserId();
-        if (sessionId != null && !sessionId.isEmpty()) {
-            builder.addHeader("x-session-affinity", sessionId);
-            builder.addHeader("X-Claude-Code-Session-Id", sessionId);
-            builder.addHeader("specific_channel_id", sessionId);
-            builder.addHeader("Session_id", sessionId);
-        }
         if (userId != null && !userId.isEmpty()) {
-            builder.addHeader("user_id", userId);
+            builder.addHeader("x-session-affinity", userId);
+            if (!model.contains("deepseek")) {
+                builder.addHeader("X-Claude-Code-Session-Id", userId);
+                builder.addHeader("specific_channel_id", userId);
+                builder.addHeader("Session_id", userId);
+                builder.addHeader("user_id", userId);
+            }
+            builder.addHeader("user", userId);
         }
     }
 
@@ -413,7 +402,7 @@ public class HttpModelClient implements ModelClient {
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Authorization", "Bearer " + apiKey)
                     .addHeader("User-Agent", "opencode/1.14.21 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13");
-            addSessionHeaders(requestBuilder);
+            addSessionHeaders(requestBuilder, ModelContextUtils.stripContextSizeSuffix(model));
             Request request = requestBuilder.build();
 
             try (Response response = client.newCall(request).execute()) {
@@ -484,7 +473,7 @@ public class HttpModelClient implements ModelClient {
                     .addHeader("Content-Type", "application/json")
                     .addHeader("Authorization", "Bearer " + apiKey)
                     .addHeader("User-Agent", "opencode/1.14.21 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13");
-            addSessionHeaders(requestBuilder);
+            addSessionHeaders(requestBuilder, ModelContextUtils.stripContextSizeSuffix(model));
             Request request = requestBuilder.build();
 
             Call call = client.newCall(request);
@@ -497,7 +486,9 @@ public class HttpModelClient implements ModelClient {
                 int status = response.code();
                 if (retryable(status)) {
                     try {
-                        retry.waitOrThrow("HTTP " + status, attempt);
+                        ResponseBody errorBody = response.body();
+                        String err = errorBody != null ? errorBody.string() : "unknown error";
+                        retry.waitOrThrow("HTTP " + status + ": " + err, attempt);
                     } catch (IOException e) {
                         // 用户中断或重试耗尽
                         safeCallback("onDone", callback::onDone);
@@ -1003,6 +994,7 @@ public class HttpModelClient implements ModelClient {
         String userId = UserIdProvider.getUserId();
         if (userId != null && !userId.isEmpty()) {
             body.set("user_id", userId);
+            body.set("user",userId);
         }
 
         return body;
