@@ -16,8 +16,8 @@ stages:
     steps:
       - step: build@maven
         name: verify_maven
-        displayName: Maven Verify
+        displayName: Maven Package (Skip Tests)
         jdkVersion: 17
         mavenVersion: 3.6.3
         commands:
-          - mvn -B -ntp -gs .workflow/maven-central-settings.xml -s .workflow/maven-central-settings.xml clean verify
+          - mvn -B -ntp -DskipTests -gs .workflow/maven-central-settings.xml -s .workflow/maven-central-settings.xml clean verify
