@@ -313,9 +313,14 @@ public class LoopraConfig {
      * 在 baseUrl 后追加 /chat/completions。
      */
     public String chatApiUrl() {
-        String base = baseUrl();
-        if (base == null) return null;
-        return base.endsWith("/") ? base + "chat/completions" : base + "/chat/completions";
+        return toChatApiUrl(baseUrl());
+    }
+
+    private static String toChatApiUrl(String baseUrl) {
+        if (baseUrl == null) return null;
+        String normalized = baseUrl.replaceAll("/+$", "");
+        if (normalized.isEmpty() || normalized.endsWith("/chat/completions")) return normalized;
+        return normalized + "/chat/completions";
     }
 
     /**
@@ -405,6 +410,11 @@ public class LoopraConfig {
 
         public List<String> models() {
             return modelEntries.stream().map(ModelEntry::name).toList();
+        }
+
+        /** 返回该渠道可直接用于发送聊天请求的完整地址。 */
+        public String chatApiUrl() {
+            return toChatApiUrl(baseUrl);
         }
 
         public ModelEntry modelEntry(String modelName) {
