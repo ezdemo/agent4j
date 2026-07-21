@@ -195,6 +195,20 @@ class JsonlSessionStoreTest {
     }
 
     @Test
+    void responsesReasoningSurvivesSessionRoundTrip() throws IOException {
+        ChatMessage message = ChatMessage.assistant("", List.of(new ToolCallEntry(
+                "call_1", "read", "{}",
+                "{\"type\":\"reasoning\",\"encrypted_content\":\"encrypted\"}")), null);
+        store.append(message);
+        store.flush();
+
+        ToolCallEntry loaded = store.load().get(0).getToolCalls().get(0);
+
+        assertEquals("call_1", loaded.id());
+        assertEquals("{\"type\":\"reasoning\",\"encrypted_content\":\"encrypted\"}", loaded.responseReasoning());
+    }
+
+    @Test
     void fileChangesSurviveSessionRoundTrip() throws IOException {
         ChatMessage message = ChatMessage.assistant("已完成", null, null);
         message.setFileChanges(List.of(new FileChange("src/App.java", 12, 3, false, "@@ -1 +1 @@\n-old\n+new\n")));

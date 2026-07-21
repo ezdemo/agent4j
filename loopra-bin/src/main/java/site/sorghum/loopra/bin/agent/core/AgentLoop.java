@@ -796,7 +796,8 @@ public class AgentLoop implements AgentLoopController {
             if (tcName == null || tcName.isEmpty()) continue;
             String tcArgs = func.get("arguments").getString();
             if (tcArgs == null) tcArgs = "{}";
-            tcList.add(new ToolCallEntry(tcId, tcName, tcArgs));
+            String responseReasoning = tc.get("response_reasoning").getString();
+            tcList.add(new ToolCallEntry(tcId, tcName, tcArgs, responseReasoning));
         }
         return tcList;
     }
@@ -1067,8 +1068,9 @@ public class AgentLoop implements AgentLoopController {
             }
             String tcArgs = func.get("arguments").getString();
             if (tcArgs == null) tcArgs = "{}";
+            String responseReasoning = tc.get("response_reasoning").getString();
 
-            tcList.add(new ToolCallEntry(tcId, tcName, tcArgs));
+            tcList.add(new ToolCallEntry(tcId, tcName, tcArgs, responseReasoning));
             filteredTcList.add(tc);
 
             final String finalTcName = tcName;

@@ -207,7 +207,7 @@ public class AgentService {
 
     public String getSharedApiUrl() {
         LoopraConfig cfg = ConfigService.getConfig();
-        return cfg != null ? cfg.chatApiUrl() : null;
+        return cfg != null ? cfg.apiUrl() : null;
     }
 
     public String getSharedApiKey() {
@@ -291,7 +291,7 @@ public class AgentService {
      * @return true 表示初始化成功，false 表示缺少必要的 API Key
      */
     private boolean buildSharedComponents(LoopraConfig config) {
-        String apiUrl = config.chatApiUrl();
+        String apiUrl = config.apiUrl();
         String apiKey = config.apiKey();
 
         if (apiKey == null || apiKey.isEmpty()) {
@@ -413,7 +413,7 @@ public class AgentService {
         LoopraConfig.ModelChannel channel = cfg.modelChannel(target.channelId());
         if (channel == null) throw new ServiceException("模型渠道不存在: " + target.channelId());
 
-        String apiUrl = channel.chatApiUrl();
+        String apiUrl = channel.apiUrl();
         String apiKey = channel.apiKey();
         String reasoningEffort = cfg.reasoningEffort();
         String hitl = cfg.hitl();
@@ -426,7 +426,8 @@ public class AgentService {
                 .commandRegistry(commandRegistry)
                 .hitl(hitl)
                 .loopraConfig(cfg)
-                .modelClient(new HttpModelClient(apiUrl, apiKey, target.model(), reasoningEffort, target.channelId()));
+                .modelClient(new HttpModelClient(apiUrl, apiKey, target.model(), reasoningEffort,
+                        target.channelId(), channel.apiProtocol()));
         LoopraAgent agent = builder.buildLightweight();
         agent.bindSession(sessionName);
         agent.setListener(new WebUsageListener(agent));

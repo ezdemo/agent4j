@@ -460,7 +460,8 @@ public class HitlManager {
             if (tcName == null || tcName.isEmpty()) continue;
             String tcArgs = func.get("arguments").getString();
             if (tcArgs == null) tcArgs = "{}";
-            tcList.add(new ToolCallEntry(tcId, tcName, tcArgs));
+            String responseReasoning = tc.get("response_reasoning").getString();
+            tcList.add(new ToolCallEntry(tcId, tcName, tcArgs, responseReasoning));
         }
         return tcList;
     }

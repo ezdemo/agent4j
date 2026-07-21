@@ -665,7 +665,7 @@ public class LoopraAgent {
         }
 
         public Builder config(LoopraConfig c) {
-            if (c.chatApiUrl() != null) this.apiUrl = c.chatApiUrl();
+            if (c.apiUrl() != null) this.apiUrl = c.apiUrl();
             if (c.apiKey() != null) this.apiKey = c.apiKey();
             this.model = c.model();
             this.workspace = c.workspaceDir();

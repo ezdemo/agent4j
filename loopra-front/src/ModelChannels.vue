@@ -41,6 +41,13 @@
             <input v-model.trim="channel.baseUrl" type="url" placeholder="https://api.openai.com/v1" />
           </label>
           <label>
+            <span>接口类型</span>
+            <select v-model="channel.apiProtocol">
+              <option value="chat_completions">Chat Completions</option>
+              <option value="responses">Responses</option>
+            </select>
+          </label>
+          <label>
             <span>API 密钥</span>
             <input v-model="channel.apiKey" type="password" :placeholder="channel.secretConfigured ? '已保存，留空则不修改' : 'sk-...'" autocomplete="new-password" />
           </label>
@@ -195,6 +202,7 @@ function normalizeChannel(channel, index) {
     expanded: false,
     name: channel.name || `渠道 ${index + 1}`,
     baseUrl: channel.baseUrl || '',
+    apiProtocol: channel.apiProtocol === 'responses' ? 'responses' : 'chat_completions',
     apiKey: '',
     secretConfigured: Boolean(channel.apiKey),
     models
@@ -298,6 +306,7 @@ async function save() {
     id: channel.id,
     name: channel.name.trim(),
     baseUrl: channel.baseUrl.trim(),
+    apiProtocol: channel.apiProtocol,
     apiKey: channel.apiKey.trim(),
     models: namedModels(channel).map(modelPayload)
   }))
@@ -396,9 +405,9 @@ onMounted(load)
 .model-channel-delete:hover, .model-config-delete:hover { color: #c2413b; background: rgba(220, 38, 38, .09); }
 .model-channel-fields { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; padding: 16px; border-top: 1px solid var(--border); }
 .model-channel-fields > label, .model-config-row label { min-width: 0; display: grid; gap: 5px; color: var(--fg-3); font-size: 12px; }
-.model-channel-fields input, .model-config-row input { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 5px; outline: none; background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; }
-.model-channel-fields > label input, .model-config-row input[type="text"], .model-config-row input[type="number"] { height: 32px; padding: 0 8px; }
-.model-channel-fields input:focus, .model-config-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent); }
+.model-channel-fields input, .model-channel-fields select, .model-config-row input { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: 5px; outline: none; background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; }
+.model-channel-fields > label input, .model-channel-fields > label select, .model-config-row input[type="text"], .model-config-row input[type="number"] { height: 32px; padding: 0 8px; }
+.model-channel-fields input:focus, .model-channel-fields select:focus, .model-config-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent); }
 .model-channel-models { grid-column: 1 / -1; min-width: 0; display: grid; gap: 8px; }
 .model-channel-models-label { display: flex; align-items: center; min-height: 18px; color: var(--fg-3); font-size: 12px; }
 .model-channel-sync { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 4px; padding: 2px 5px; background: transparent; color: var(--fg-4); font: inherit; font-size: 12px; cursor: pointer; }
