@@ -144,16 +144,21 @@ public class HttpModelClient implements ModelClient {
      * 向 OkHttp Request.Builder 添加会话标识请求头。
      */
     private static void addSessionHeaders(Request.Builder builder, String model) {
+        String sessionId = CURRENT_LOG_SESSION.get();
         String userId = UserIdProvider.getUserId();
-        if (userId != null && !userId.isEmpty()) {
-            builder.addHeader("x-session-affinity", userId);
+        if (sessionId != null && !sessionId.isEmpty()) {
+            builder.addHeader("x-session-affinity", sessionId);
+            builder.addHeader("channel_affinity", sessionId);
             if (!model.contains("deepseek")) {
-                builder.addHeader("X-Claude-Code-Session-Id", userId);
-                builder.addHeader("specific_channel_id", userId);
-                builder.addHeader("Session_id", userId);
+                builder.addHeader("X-Claude-Code-Session-Id", sessionId);
+                builder.addHeader("specific_channel_id", sessionId);
+                builder.addHeader("Session_id", sessionId);
+            }
+        }
+        if (userId != null && !userId.isEmpty()) {
+            if (!model.contains("deepseek")) {
                 builder.addHeader("user_id", userId);
             }
-            builder.addHeader("user", userId);
         }
     }
 
@@ -486,9 +491,7 @@ public class HttpModelClient implements ModelClient {
                 int status = response.code();
                 if (retryable(status)) {
                     try {
-                        ResponseBody errorBody = response.body();
-                        String err = errorBody != null ? errorBody.string() : "unknown error";
-                        retry.waitOrThrow("HTTP " + status + ": " + err, attempt);
+                        retry.waitOrThrow("HTTP " + status, attempt);
                     } catch (IOException e) {
                         // 用户中断或重试耗尽
                         safeCallback("onDone", callback::onDone);
