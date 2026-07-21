@@ -202,19 +202,14 @@ public class HttpModelClient implements ModelClient {
      */
     private class RetryContext {
         private final String tag;
-        /**
-         * 是否为流式调用（流式调用需要检查 SSE 连接状态）
-         */
-        private final boolean streamMode;
         private final StreamCallback callback;
 
         RetryContext(String tag) {
-            this(tag, false, null);
+            this(tag, null);
         }
 
-        RetryContext(String tag, boolean streamMode, StreamCallback callback) {
+        RetryContext(String tag, StreamCallback callback) {
             this.tag = tag;
-            this.streamMode = streamMode;
             this.callback = callback;
         }
 
@@ -229,11 +224,6 @@ public class HttpModelClient implements ModelClient {
             if (abortRequested.compareAndSet(true, false)) {
                 log.debug("[{}] {} 可重试，但已请求中断，跳过重试", tag, reason);
                 throw new IOException("Request aborted by user");
-            }
-            // 流式模式下检查 SSE 连接是否还活着
-            if (streamMode && !isSseAlive()) {
-                log.debug("[{}] {} 可重试，但 SSE 连接已断开，跳过重试", tag, reason);
-                throw new IOException("SSE connection closed");
             }
             if (attempt >= retryDelays.length) {
                 throw new IOException("[" + tag + "] 重试耗尽: " + reason);
@@ -256,11 +246,6 @@ public class HttpModelClient implements ModelClient {
             if (abortRequested.compareAndSet(true, false)) {
                 log.debug("[{}] IO异常，但已请求中断，跳过重试", tag);
                 throw new IOException("Request aborted by user", e);
-            }
-            // 流式模式下检查 SSE 连接是否还活着
-            if (streamMode && !isSseAlive()) {
-                log.debug("[{}] IO异常，但 SSE 连接已断开，跳过重试", tag);
-                throw new IOException("SSE connection closed", e);
             }
             if (attempt >= retryDelays.length) {
                 throw e;
@@ -300,20 +285,6 @@ public class HttpModelClient implements ModelClient {
                 throw new IOException("Request aborted by user");
             }
         }
-    }
-
-    /**
-     * 检查 SSE 连接是否还活着。
-     * <p>
-     * 通过检查 activeCall 是否被取消来判断 SSE 连接状态。
-     * 如果 activeCall 为 null 或已被取消，说明 SSE 连接已断开。
-     * </p>
-     *
-     * @return true 如果 SSE 连接还活着，false 如果已断开
-     */
-    private boolean isSseAlive() {
-        Call call = activeCall;
-        return call != null && !call.isCanceled();
     }
 
     /**
@@ -505,7 +476,7 @@ public class HttpModelClient implements ModelClient {
             return;
         }
 
-        RetryContext retry = new RetryContext("流式", true, callback);
+        RetryContext retry = new RetryContext("流式", callback);
         for (int attempt = 0; attempt <= retryDelays.length; attempt++) {
             Request.Builder requestBuilder = new Request.Builder()
                     .url(apiUrl)
