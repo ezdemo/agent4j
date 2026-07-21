@@ -528,7 +528,8 @@ public class HttpModelClient implements ModelClient {
                     try {
                         ResponseBody errorBody = response.body();
                         String err = errorBody != null ? errorBody.string() : "unknown error";
-                        retry.waitOrThrow("HTTP " + status + ": " + err, attempt);
+                        String reason = "HTTP " + status + (err.isBlank() ? "" : ": " + err);
+                        retry.waitOrThrow(reason, attempt);
                     } catch (IOException e) {
                         // 用户中断或重试耗尽
                         safeCallback("onDone", callback::onDone);
