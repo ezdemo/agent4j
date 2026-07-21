@@ -29,9 +29,19 @@ public class ModelMetaContextSizeProvider implements ContextSizeProvider {
 
     @Override
     public int _getContextSize(String modelName) {
+        return _getContextSize(null, modelName);
+    }
+
+    @Override
+    public int getContextSize(String channelId, String modelName) {
+        return _getContextSize(channelId, modelName);
+    }
+
+    @Override
+    public int _getContextSize(String channelId, String modelName) {
         LoopraConfig config = ConfigService.getConfig();
         LoopraConfig.ModelEntry entry = config == null ? null
-                : config.modelEntry(config.modelChannelId(), modelName);
+                : config.modelEntry(channelId == null || channelId.isBlank() ? config.modelChannelId() : channelId, modelName);
         return entry == null ? -1 : entry.contextTokens();
     }
 }

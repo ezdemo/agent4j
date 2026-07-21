@@ -23,12 +23,26 @@ public interface ContextSizeProvider {
      * @return 上下文大小（token 数量），如果无法确定则返回 -1
      */
     default int getContextSize(String modelName){
+        return getContextSize(null, modelName);
+    }
+
+    /**
+     * 获取指定渠道中模型的上下文窗口大小。
+     */
+    default int getContextSize(String channelId, String modelName){
         return cacheService.getOrStore(
-                "ContextSizeProvider:getContextSize:" + modelName, Integer.class,
+                "ContextSizeProvider:getContextSize:" + channelId + ":" + modelName, Integer.class,
                 5 * 60,
-                () -> _getContextSize(modelName)
+                () -> _getContextSize(channelId, modelName)
         );
     }
 
     int _getContextSize(String modelName);
+
+    /**
+     * 渠道感知的内部查询。旧实现可仅覆盖单参数版本。
+     */
+    default int _getContextSize(String channelId, String modelName) {
+        return _getContextSize(modelName);
+    }
 }

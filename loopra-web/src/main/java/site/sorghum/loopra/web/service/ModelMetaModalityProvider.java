@@ -33,9 +33,19 @@ public class ModelMetaModalityProvider implements ModelModalityProvider {
 
     @Override
     public ModalitySupport _getModalitySupport(String modelName) {
+        return _getModalitySupport(null, modelName);
+    }
+
+    @Override
+    public ModalitySupport getModalitySupport(String channelId, String modelName) {
+        return _getModalitySupport(channelId, modelName);
+    }
+
+    @Override
+    public ModalitySupport _getModalitySupport(String channelId, String modelName) {
         LoopraConfig config = ConfigService.getConfig();
         LoopraConfig.ModelEntry entry = config == null ? null
-                : config.modelEntry(config.modelChannelId(), modelName);
+                : config.modelEntry(channelId == null || channelId.isBlank() ? config.modelChannelId() : channelId, modelName);
         if (entry != null && entry.imageInput()) {
             return new ModalitySupport(true, false, false, false, false, false, false, true, true);
         }

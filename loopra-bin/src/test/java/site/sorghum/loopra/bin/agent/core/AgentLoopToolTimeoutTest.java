@@ -91,12 +91,13 @@ class AgentLoopToolTimeoutTest {
     @Test
     void httpModelClientForkHasIndependentCallState() {
         HttpModelClient client = new HttpModelClient(
-                "http://localhost/v1/chat/completions", "test-key", "test-model", "high");
+                "http://localhost/v1/chat/completions", "test-key", "test-model", "high", "test-channel");
 
         ModelClient fork = client.fork();
 
         assertNotSame(client, fork);
         assertEquals(client.getModel(), fork.getModel());
+        assertEquals("test-channel", fork.getModelChannelId());
     }
 
     @Test

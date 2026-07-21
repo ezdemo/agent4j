@@ -429,7 +429,7 @@
     </div>
 
     <!-- 桌面宠物精灵 -->
-    <PetSprite v-if="petSpritesheetUrl && !welcomeMode" class="pet-float"
+    <PetSprite v-if="petSpritesheetUrl && !welcomeMode && !appStore.desktopPetVisible" class="pet-float"
                :spritesheet-url="petSpritesheetUrl"
                :state="petState"
                :initial-x="petPosition.x" :initial-y="petPosition.y"
@@ -1193,9 +1193,12 @@ const compositionItems = computed(() => {
   }))
 })
 
-onMounted(() => {
+onMounted(async () => {
   loadCommands();
   document.addEventListener('click', handleOutside)
+  if (window.electronAPI?.desktopPet) {
+    appStore.desktopPetVisible = await window.electronAPI.desktopPet.isVisible()
+  }
 })
 onBeforeUnmount(() => {
   stopChecklistPolling()

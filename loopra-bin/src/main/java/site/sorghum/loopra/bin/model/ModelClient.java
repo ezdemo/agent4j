@@ -37,6 +37,13 @@ public interface ModelClient {
     String getModel();
 
     /**
+     * 获取当前模型所属渠道。非渠道化客户端返回 {@code null}。
+     */
+    default String getModelChannelId() {
+        return null;
+    }
+
+    /**
      * 设置模型名称（运行时切换）。
      */
     void setModel(String model);
