@@ -72,3 +72,15 @@ Responses API 流只有收到 `response.completed` 才可视为成功并发出�
 ## [2026-07-22 16:52] 会话折叠沉淀
 
 风暴检测约定：`bash_wait` 是轮询等待工具，允许使用完全相同参数连续调用，必须绕过 StormBreaker；`bash`、`bash_start`、`bash_stdin`、`bash_stop` 不随之豁免。
+
+## [2026-07-22 21:29] 会话折叠沉淀
+
+工具分类统一由 ToolMetadata 判断：内置工具使用兼容映射，Skill/MCP 扩展工具通过 FunctionTool.meta.readOnly/stormExempt 声明；ToolController、StormBreaker 和只读子代理共用该判断。SubAgentProfile 不再维护独立 READ_ONLY_TOOLS，而是按父注册表动态筛选。
+
+## [2026-07-22 21:35] 会话折叠沉淀
+
+- 工具分类统一由 ToolMetadata 判断：内置工具使用集中兼容映射，Skill/MCP 扩展工具通过 FunctionTool.meta 的 readOnly/stormExempt 声明。
+- ToolController、StormBreaker 和只读子代理必须共用 ToolMetadata，不能各自维护工具分类名单。
+- SubAgentProfile 不维护独立 READ_ONLY_TOOLS；子代理允许工具应从父 ToolRegistry 动态筛选，并由提示词说明和注册表硬过滤共用。
+- workspace_write 只写协作通信存储，不修改项目文件，因此允许只读子代理使用。
+- 子代理前端展示应放在现有工具管理页，通过“工具 / 子代理”视图切换；展示的工具集合必须由后端按当前启用的 ToolRegistry 动态计算，确保与运行时权限一致。

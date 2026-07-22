@@ -64,6 +64,7 @@
       @toggle-theme="toggleTheme"
       @show-skill-market="mainView = 'skills'"
       @show-tools="showTools = true"
+      @show-sub-agents="mainView = 'sub-agents'"
       @show-dashboard="showDashboard = true"
       @show-settings="openSettings"
       @reorder="handleReorderWorkspaces"
@@ -72,6 +73,7 @@
     <!-- 主区域 -->
     <main class="main">
       <SettingsView v-if="mainView === 'skills'" market-only />
+      <SubAgentsView v-else-if="mainView === 'sub-agents'" />
       <ModelChannels v-else-if="mainView === 'model-channels'" @back="mainView = 'chat'" />
       <ChatView 
         v-else
@@ -459,6 +461,7 @@ import WorkspacePickerModal from './components/WorkspacePickerModal.vue'
 import ActionConfirmDialog from './components/ActionConfirmDialog.vue'
 import ChatView from './views/Chat.vue'
 import SettingsView from './views/Settings.vue'
+import SubAgentsView from './views/SubAgents.vue'
 import ModelChannels from './ModelChannels.vue'
 import DashboardPanel from './components/Dashboard.vue'
 import AIBrowser from './components/AIBrowser.vue'

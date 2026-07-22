@@ -43,6 +43,10 @@
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m14.7 6.3 3 3"/><path d="m5 21 5.6-5.6"/><path d="m5.5 15.5-2-2a2.1 2.1 0 0 1 3-3l2 2"/><path d="m18.5 8.5 2 2a2.1 2.1 0 0 1-3 3l-2-2"/><path d="m8 16 8-8"/></svg>
               工具
             </button>
+            <button type="button" @click="emit('open-sub-agents')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><path d="M3.5 19v-1.5A4.5 4.5 0 0 1 8 13h2a4.5 4.5 0 0 1 4.5 4.5V19"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A4 4 0 0 1 21 18v1"/></svg>
+              子代理
+            </button>
             <button type="button" @click="emit('open-dashboard')">
               <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
               数据面板
@@ -135,7 +139,7 @@ const props = defineProps({
   refreshKey: { type: Number, default: 0 },
   refreshing: { type: Boolean, default: false }
 })
-const emit = defineEmits(['select-workspace', 'new-session', 'open-session', 'open-skills', 'open-tools', 'open-dashboard', 'open-settings', 'toggle-theme', 'add-workspace', 'refresh', 'delete-session', 'clear-workspace', 'delete-workspace'])
+const emit = defineEmits(['select-workspace', 'new-session', 'open-session', 'open-skills', 'open-tools', 'open-sub-agents', 'open-dashboard', 'open-settings', 'toggle-theme', 'add-workspace', 'refresh', 'delete-session', 'clear-workspace', 'delete-workspace'])
 
 const query = ref('')
 const sessions = ref([])

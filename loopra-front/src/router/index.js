@@ -39,6 +39,15 @@ const routes = [
     }
   },
   {
+    path: '/sub-agents',
+    name: 'SubAgents',
+    component: () => import('../views/SubAgents.vue'),
+    meta: {
+      title: 'Loopra - 子代理',
+      description: '查看内置子代理及其可用工具'
+    }
+  },
+  {
     path: '/settings',
     name: 'Settings',
     component: () => import('../views/Settings.vue'),

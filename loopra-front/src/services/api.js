@@ -410,6 +410,11 @@ export const toolsAPI = {
     return api.get('/tools/search', { params: { q: query } })
   },
   
+  // 获取子代理及其实时可用工具 - GET /api/sub-agents
+  listSubAgents: () => {
+    return api.get('/sub-agents')
+  },
+
   // 获取工具分类 - GET /api/tools/categories
   getCategories: () => {
     return api.get('/tools/categories')
