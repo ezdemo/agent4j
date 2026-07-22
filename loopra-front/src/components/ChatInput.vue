@@ -409,13 +409,21 @@
                     <span class="model-channel-count">{{ group.models.length }}</span>
                   </button>
                   <template v-if="!isModelChannelCollapsed(group)">
-                    <button v-for="m in group.models" :key="`${m.channelId || 'default'}:${m.name}`" type="button" class="model-option"
-                            :class="{ active: m.active }" @click="pickModel(m)">
-                      <span class="model-option-name"><small>{{ m.channelName || '默认渠道' }}</small>{{ m.name }}</span>
-                      <svg v-if="m.active" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <polyline points="20 6 9 17 4 12"/>
-                      </svg>
-                    </button>
+                    <div v-for="m in group.models" :key="`${m.channelId || 'default'}:${m.name}`" class="model-option"
+                         :class="{ active: m.active }">
+                      <button type="button" class="model-select-button" @click="pickModel(m)">
+                        <span class="model-option-name"><small>{{ m.channelName || '默认渠道' }}</small>{{ m.name }}</span>
+                        <svg v-if="m.active" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                          <polyline points="20 6 9 17 4 12"/>
+                        </svg>
+                      </button>
+                      <button type="button" class="model-default-action" :class="{ 'is-default': isModelDefault(m) }"
+                              :disabled="isModelDefault(m) || settingDefaultModel" :title="isModelDefault(m) ? '当前默认模型' : '设为默认模型'"
+                              :aria-label="`${m.name}${isModelDefault(m) ? '，当前默认模型' : '，设为默认模型'}`" @click.stop="setDefaultModel(m)">
+                        <StarFilled v-if="isModelDefault(m)" />
+                        <StarOutlined v-else />
+                      </button>
+                    </div>
                   </template>
                 </section>
                 <div v-if="modelGroups.length === 0" class="model-empty">未找到匹配模型</div>
@@ -445,6 +453,7 @@
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {StarFilled, StarOutlined} from '@ant-design/icons-vue'
 import {useAppStore} from '../stores/app'
 import {agentAPI, filesAPI, petAPI} from '../services/api'
 import PetSprite from './PetSprite.vue'
@@ -455,6 +464,9 @@ const props = defineProps({
   streaming: {type: Boolean, default: false},
   usage: {type: Object, default: () => ({})},
   currentModel: {type: String, default: ''},
+  defaultModel: {type: String, default: ''},
+  defaultModelChannelId: {type: String, default: ''},
+  settingDefaultModel: {type: Boolean, default: false},
   availableModels: {type: Array, default: () => []},
   workspaceHash: {type: String, default: null},
   sessionName: {type: String, default: null},
@@ -470,7 +482,7 @@ const props = defineProps({
   queuedMessages: {type: Array, default: () => []}
 })
 
-const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission', 'pickerOpen', 'manageModels', 'removeQueued', 'guideQueued'])
+const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'setDefaultModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission', 'pickerOpen', 'manageModels', 'removeQueued', 'guideQueued'])
 
 const inputField = ref(null)
 const inputFocused = ref(false)
@@ -912,10 +924,13 @@ const modelGroups = computed(() => {
   })
   return [...groups.values()]
 })
+const selectedModel = computed(() => props.availableModels.find((model) => model.active))
 const currentModelLabel = computed(() => {
-  const current = props.availableModels.find((model) => model.active)
+  const current = selectedModel.value
   return current?.channelName ? `${current.channelName} / ${current.name}` : props.currentModel
 })
+const isModelDefault = (model) => Boolean(model && model.name === props.defaultModel
+  && (model.channelId || '') === (props.defaultModelChannelId || ''))
 const activeModelChannelKey = computed(() => {
   const activeModel = props.availableModels.find((model) => model.active)
   return activeModel?.channelId || 'default'
@@ -965,6 +980,10 @@ const pickModel = async (model) => {
   }
   emit('switchModel', name, channelId)
   showModelPicker.value = false
+}
+const setDefaultModel = (model) => {
+  if (!model || isModelDefault(model) || props.settingDefaultModel) return
+  emit('setDefaultModel', model.name, model.channelId || '')
 }
 const manageModels = () => {
   showModelPicker.value = false
@@ -3212,28 +3231,10 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   background: var(--bg-2);
 }
 
-.model-option {
-  width: 100%;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  position: relative;
-  min-height: 44px;
-  padding: 7px 14px;
-  border: 0;
-  background: var(--bg);
-  font-size: 13px;
-  font-family: inherit;
-  text-align: left;
-  color: var(--fg);
-  cursor: pointer;
-  transition: all var(--t);
-}
-
-.model-option:hover {
-  background: var(--bg-2);
-}
-
+.model-option { width: 100%; display: flex; align-items: stretch; position: relative; min-height: 44px; background: var(--bg); color: var(--fg); }
+.model-select-button { min-width: 0; flex: 1; display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 7px 14px; border: 0; background: transparent; color: inherit; font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.model-option:hover { background: var(--bg-2); }
+.model-option:hover .model-select-button { background: transparent; }
 .model-channel-group + .model-channel-group { border-top: 1px solid var(--border); }
 .model-channel-toggle {
   display: flex;
@@ -3257,25 +3258,20 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 .model-channel-count { margin-left: auto; color: var(--fg-4); font-size: 11px; }
 .model-option-name { min-width: 0; display: flex; flex-direction: column; gap: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-option-name small { color: var(--fg-4); font-size: 10px; font-weight: 400; }
-.model-option.active {
-  background: var(--accent-bg);
-  color: var(--accent);
-  font-weight: 600;
-}
-.model-option.active::before {
-  position: absolute;
-  inset: 0 auto 0 0;
-  width: 3px;
-  background: var(--accent);
-  content: '';
-}
+.model-option.active { background: var(--accent-bg); color: var(--accent); font-weight: 600; }
+.model-option.active::before { position: absolute; inset: 0 auto 0 0; width: 3px; background: var(--accent); content: ''; }
 .model-option.active .model-option-name small { color: var(--accent); opacity: 0.72; }
+.model-option svg { color: var(--accent); }
+.model-default-action { width: 40px; flex: 0 0 40px; display: grid; place-items: center; padding: 0; border: 0; background: transparent; color: var(--fg-4); cursor: pointer; }
+.model-default-action:hover:not(:disabled) { background: transparent; color: var(--accent); }
+.model-default-action:disabled { cursor: default; }
+.model-default-action.is-default { color: var(--accent); }
+.model-default-action svg { width: 15px; height: 15px; }
 
-.model-option svg {
-  color: var(--accent);
-}
-
-.model-empty { padding: 18px 14px; color: var(--fg-4); font-size: 13px; text-align: center; }.model-manage { flex: 0 0 44px; border-top: 1px solid var(--border); }.model-manage button { width: 100%; height: 100%; display: flex; align-items: center; gap: 9px; padding: 0 14px; border: 0; background: transparent; color: var(--fg-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }.model-manage button:hover { background: var(--bg-2); color: var(--fg); }
+.model-empty { padding: 18px 14px; color: var(--fg-4); font-size: 13px; text-align: center; }
+.model-manage { flex: 0 0 44px; border-top: 1px solid var(--border); }
+.model-manage button { width: 100%; height: 100%; display: flex; align-items: center; gap: 9px; padding: 0 14px; border: 0; background: transparent; color: var(--fg-2); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.model-manage button:hover { background: var(--bg-2); color: var(--fg); }
 
 .loading-dot {
   width: 8px;
