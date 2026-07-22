@@ -52,6 +52,12 @@ public class JsonlSessionStore implements SessionStore {
      * 单次批量写入的最大条数
      */
     private static final int BATCH_SIZE = 50;
+    /** 进程内按会话文件分片的读写锁，保护独立 Store 实例间的并发访问。 */
+    private static final ReentrantLock[] FILE_LOCKS = new ReentrantLock[64];
+
+    static {
+        Arrays.setAll(FILE_LOCKS, ignored -> new ReentrantLock());
+    }
     /**
      * 当前会话目录（支持工作区隔离）
      */
@@ -125,6 +131,11 @@ public class JsonlSessionStore implements SessionStore {
 
     private static String sanitize(String name) {
         return name.replaceAll("[^\\p{L}\\p{N}_\\-\\[\\]]", "_");
+    }
+
+    private static ReentrantLock fileLock(Path file) {
+        int index = Math.floorMod(file.toAbsolutePath().normalize().hashCode(), FILE_LOCKS.length);
+        return FILE_LOCKS[index];
     }
 
     public static String serializeMessage(ChatMessage msg) {
@@ -286,12 +297,18 @@ public class JsonlSessionStore implements SessionStore {
                 currentName = newSessionName();
             }
             ensureWriter();
-            for (ChatMessage msg : messages) {
-                writer.write(serializeMessage(msg));
-                writer.newLine();
-            }
-            if (flushWriter) {
-                writer.flush();
+            ReentrantLock fileIoLock = fileLock(currentFile);
+            fileIoLock.lock();
+            try {
+                for (ChatMessage msg : messages) {
+                    writer.write(serializeMessage(msg));
+                    writer.newLine();
+                }
+                if (flushWriter) {
+                    writer.flush();
+                }
+            } finally {
+                fileIoLock.unlock();
             }
         } catch (IOException e) {
             log.error("[jsonl] 批量写入失败: {}", e.getMessage());
@@ -307,17 +324,23 @@ public class JsonlSessionStore implements SessionStore {
         lock.lock();
         try {
             if (writer != null) {
+                ReentrantLock fileIoLock = fileLock(currentFile);
+                fileIoLock.lock();
                 try {
-                    writer.flush();
-                } catch (IOException e) {
-                    log.warn("[jsonl] flush 关闭前失败: {}", e.getMessage());
+                    try {
+                        writer.flush();
+                    } catch (IOException e) {
+                        log.warn("[jsonl] flush 关闭前失败: {}", e.getMessage());
+                    }
+                    try {
+                        writer.close();
+                    } catch (IOException e) {
+                        log.warn("[jsonl] close 关闭前失败: {}", e.getMessage());
+                    }
+                    writer = null;
+                } finally {
+                    fileIoLock.unlock();
                 }
-                try {
-                    writer.close();
-                } catch (IOException e) {
-                    log.warn("[jsonl] close 关闭前失败: {}", e.getMessage());
-                }
-                writer = null;
             }
         } finally {
             lock.unlock();
@@ -418,8 +441,14 @@ public class JsonlSessionStore implements SessionStore {
                 currentName = newSessionName();
             }
             ensureWriter();
-            writer.write(serializeMessage(message));
-            writer.newLine();
+            ReentrantLock fileIoLock = fileLock(currentFile);
+            fileIoLock.lock();
+            try {
+                writer.write(serializeMessage(message));
+                writer.newLine();
+            } finally {
+                fileIoLock.unlock();
+            }
         } finally {
             lock.unlock();
         }
@@ -436,7 +465,13 @@ public class JsonlSessionStore implements SessionStore {
             buffer.drainTo(pending);
             writeBatch(pending, true);
             if (writer != null) {
-                writer.flush();
+                ReentrantLock fileIoLock = fileLock(currentFile);
+                fileIoLock.lock();
+                try {
+                    writer.flush();
+                } finally {
+                    fileIoLock.unlock();
+                }
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
@@ -449,29 +484,45 @@ public class JsonlSessionStore implements SessionStore {
 
     @Override
     public List<ChatMessage> load() throws IOException {
-        if (currentName == null) return new ArrayList<>();
-        return load(currentName);
+        lock.lock();
+        try {
+            if (currentName == null) return new ArrayList<>();
+            return load(currentName);
+        } finally {
+            lock.unlock();
+        }
     }
 
     @Override
     public List<ChatMessage> load(String name) throws IOException {
-        Path file = sessionPath(name);
-        if (!Files.exists(file)) return new ArrayList<>();
-        List<ChatMessage> messages = new ArrayList<>();
-        for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
-            line = line.trim();
-            if (line.isEmpty() || line.startsWith("//")) continue;
+        lock.lock();
+        try {
+            Path file = sessionPath(name);
+            ReentrantLock fileIoLock = fileLock(file);
+            fileIoLock.lock();
             try {
-                ONode node = ONode.ofJson(line);
-                messages.add(ChatMessage.fromMap(ONodeUtil.toMap(node)));
-            } catch (Exception e) {
-                log.warn("[jsonl] 解析消息行失败: {}", e.getMessage());
+                if (!Files.exists(file)) return new ArrayList<>();
+                List<ChatMessage> messages = new ArrayList<>();
+                for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
+                    line = line.trim();
+                    if (line.isEmpty() || line.startsWith("//")) continue;
+                    try {
+                        ONode node = ONode.ofJson(line);
+                        messages.add(ChatMessage.fromMap(ONodeUtil.toMap(node)));
+                    } catch (Exception e) {
+                        log.warn("[jsonl] 解析消息行失败: {}", e.getMessage());
+                    }
+                }
+                messages = messages.stream().filter(
+                        it -> !(it.isUser() && Objects.equals(FinishTool.TIPS,it.getContent()))
+                ).toList();
+                return messages;
+            } finally {
+                fileIoLock.unlock();
             }
+        } finally {
+            lock.unlock();
         }
-        messages = messages.stream().filter(
-                it -> !(it.isUser() && Objects.equals(FinishTool.TIPS,it.getContent()))
-        ).toList();
-        return messages;
     }
 
     @Override
@@ -480,21 +531,27 @@ public class JsonlSessionStore implements SessionStore {
         lock.lock();
         try {
             // 关闭当前 writer
-            closeWriter();
-            // 写入临时文件，然后替换
             Path file = sessionPath(currentName);
-            Files.createDirectories(file.getParent());
-            Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
-            try (BufferedWriter w = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {
-                for (ChatMessage m : messages) {
-                    w.write(serializeMessage(m));
-                    w.newLine();
+            ReentrantLock fileIoLock = fileLock(file);
+            fileIoLock.lock();
+            try {
+                closeWriter();
+                // 写入临时文件，然后替换
+                Files.createDirectories(file.getParent());
+                Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
+                try (BufferedWriter w = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {
+                    for (ChatMessage m : messages) {
+                        w.write(serializeMessage(m));
+                        w.newLine();
+                    }
+                    w.flush();
                 }
-                w.flush();
+                Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
+                // 重新打开 writer
+                openWriter();
+            } finally {
+                fileIoLock.unlock();
             }
-            Files.move(tmp, file, StandardCopyOption.REPLACE_EXISTING);
-            // 重新打开 writer
-            openWriter();
         } finally {
             lock.unlock();
         }

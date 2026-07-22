@@ -24,7 +24,9 @@ public record ConfigDTO(
         String activePet,
         boolean terminateOnNoToolCall,
         List<ModelChannelConfig> modelChannels,
-        String modelChannelId
+        String modelChannelId,
+        String validationModel,
+        String validationModelChannelId
 ) {
     /** 不包含真实 API Key 的渠道配置。 */
     public record ModelChannelConfig(

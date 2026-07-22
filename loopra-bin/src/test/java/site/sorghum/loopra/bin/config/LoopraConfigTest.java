@@ -296,6 +296,45 @@ class LoopraConfigTest {
         assertEquals(1.25, config.price().get("configured-model").get("input"));
     }
 
+    @Test
+    void resolvesValidationModelAcrossChannels() throws Exception {
+        LoopraConfig config = config("""
+                {"validationModel":"guard-mini","validationModelChannelId":"guard",
+                 "modelChannels":[
+                   {"id":"main","models":[{"name":"main-model"}]},
+                   {"id":"guard","baseUrl":"https://guard.test/v1","apiKey":"guard-key",
+                    "apiProtocol":"responses","models":[{"name":"guard-mini"}]}
+                 ]}
+                """);
+
+        assertEquals("guard-mini", config.validationModel());
+        assertEquals("guard", config.validationModelChannelId());
+        assertEquals("https://guard.test/v1/responses", config.validationModelChannel().apiUrl());
+    }
+
+    @Test
+    void emptyValidationSelectionDisablesPersistedValidator() throws Exception {
+        Path configDir = tempDir.resolve(".loopra");
+        Files.createDirectories(configDir);
+        Files.writeString(configDir.resolve("config.json"), """
+                {"validationModel":"guard-mini","validationModelChannelId":"guard",
+                 "modelChannels":[{"id":"guard","models":[{"name":"guard-mini"}]}]}
+                """);
+
+        String originalUserHome = System.getProperty("user.home");
+        System.setProperty("user.home", tempDir.toString());
+        try {
+            LoopraConfig config = LoopraConfig.load();
+            config.updateAndSave(Map.of("validationModel", "", "validationModelChannelId", ""));
+
+            LoopraConfig saved = LoopraConfig.load();
+            assertEquals("", saved.validationModel());
+            assertEquals("", saved.validationModelChannelId());
+        } finally {
+            System.setProperty("user.home", originalUserHome);
+        }
+    }
+
     private static LoopraConfig config(String json) throws Exception {
         Constructor<LoopraConfig> constructor = LoopraConfig.class.getDeclaredConstructor(ONode.class);
         constructor.setAccessible(true);

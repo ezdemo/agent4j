@@ -92,6 +92,8 @@ public class LoopraConfig {
                   "apiKey": "sk-your-api-key",
                   "model": "deepseek-v4-flash",
                   "modelChannelId": "default",
+                  "validationModel": "",
+                  "validationModelChannelId": "",
                   "modelChannels": [
                     {
                       "id": "default",
@@ -366,6 +368,21 @@ public class LoopraConfig {
     public String model() {
         String m = root.select("$.model").getString();
         return m != null ? m : "deepseek-v4-flash";
+    }
+
+    /** 用于危险工具调用校验的独立模型名称；空值表示不启用。 */
+    public String validationModel() {
+        return trim(root.select("$.validationModel").getString());
+    }
+
+    /** 校验模型所属渠道 ID。 */
+    public String validationModelChannelId() {
+        return trim(root.select("$.validationModelChannelId").getString());
+    }
+
+    /** 查询校验模型所属渠道。 */
+    public ModelChannel validationModelChannel() {
+        return modelChannel(validationModelChannelId());
     }
 
     /** 当前选中模型所属的渠道 ID。 */
@@ -850,9 +867,11 @@ public class LoopraConfig {
             String key = entry.getKey();
             Object value = entry.getValue();
 
-            // 跳过空值；前端回传脱敏密钥时保留现有真实值。
+            // 跳过空值；校验模型字段允许空字符串以关闭功能；前端回传脱敏密钥时保留现有真实值。
             if (value == null) continue;
-            if (value instanceof String str && (str.isEmpty() || ("apiKey".equals(key) && str.contains("****")))) continue;
+            if (value instanceof String str
+                    && ((str.isEmpty() && !"validationModel".equals(key) && !"validationModelChannelId".equals(key))
+                    || ("apiKey".equals(key) && str.contains("****")))) continue;
 
             // 更新到 ONode
             if ("modelChannels".equals(key) && value instanceof List<?> list) {

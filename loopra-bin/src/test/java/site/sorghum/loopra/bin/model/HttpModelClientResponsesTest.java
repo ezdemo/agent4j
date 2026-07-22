@@ -1,5 +1,6 @@
 package site.sorghum.loopra.bin.model;
 
+import com.sun.net.httpserver.Headers;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
@@ -102,6 +103,44 @@ class HttpModelClientResponsesTest {
             assertEquals(List.of(12, 4, 16, 5, 7), toList(usage.get()));
             assertEquals(1, done.get());
         } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void explicitSessionAffinityOverridesThreadLocalForBodyAndHeaders() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        AtomicReference<Headers> requestHeaders = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/chat", exchange -> {
+            requestBody.set(new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8));
+            requestHeaders.set(exchange.getRequestHeaders());
+            byte[] response = "{\"choices\":[{\"message\":{\"role\":\"assistant\",\"content\":\"ok\"}}]}"
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, response.length);
+            exchange.getResponseBody().write(response);
+            exchange.close();
+        });
+        server.start();
+
+        String affinity = "parent-session:sub-agent:unique";
+        HttpModelClient.CURRENT_LOG_SESSION.set("parent-session");
+        try {
+            HttpModelClient client = new HttpModelClient(
+                    "http://127.0.0.1:" + server.getAddress().getPort() + "/chat",
+                    "test-key", "gpt-test", "high");
+            client.setSessionAffinity(affinity);
+            client.chat(List.of(ChatMessage.ofUser("hello")), new ONode().asArray());
+
+            assertEquals(affinity, ONode.ofJson(requestBody.get()).get("prompt_cache_key").getString());
+            assertEquals(affinity, requestHeaders.get().getFirst("x-session-affinity"));
+            assertEquals(affinity, requestHeaders.get().getFirst("X-Session-ID"));
+            assertEquals(affinity, requestHeaders.get().getFirst("X-Claude-Code-Session-Id"));
+            assertEquals(affinity, requestHeaders.get().getFirst("specific_channel_id"));
+            assertEquals(affinity, requestHeaders.get().getFirst("Session_id"));
+            assertEquals(affinity, requestHeaders.get().getFirst("channel_affinity"));
+        } finally {
+            HttpModelClient.CURRENT_LOG_SESSION.remove();
             server.stop(0);
         }
     }

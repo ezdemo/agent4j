@@ -7,6 +7,9 @@
       if (new URLSearchParams(window.location.search).get('theme') === 'dark') {
         document.documentElement.setAttribute('data-theme', 'dark')
       }
+      if (new URLSearchParams(window.location.search).get('desktopPet') === '1') {
+        document.documentElement.classList.add('desktop-pet-window')
+      }
     </script>
     <meta name="description" content="Loopra - AI 代码助手" />
     <title>Loopra</title>
@@ -27,6 +30,8 @@
       [data-theme="dark"] #app-loader { background: #0c0c0c; }
       [data-theme="retro"] #app-loader { background: #FAFAFA; }
       [data-theme="retro-yellow"] #app-loader { background: #f5e6c8; }
+      .desktop-pet-window #app-loader { display: none; }
+      .desktop-pet-window body { background: transparent; }
 
       .loader-icon {
         width: 40px; height: 40px;
@@ -67,16 +72,13 @@
       [data-theme="dark"] ::-webkit-scrollbar-thumb { background: #333; }
 
     </style>
-    <script type="module" crossorigin src="./assets/js/index-DwlXaM1v.js"></script>
-    <link rel="modulepreload" crossorigin href="./assets/js/_plugin-vue_export-helper-Cc5LVZJU.js">
-    <link rel="modulepreload" crossorigin href="./assets/js/vue-BlnhL-UQ.js">
-    <link rel="modulepreload" crossorigin href="./assets/js/runtime-dom.esm-bundler-BUXwSL8A.js">
+    <script type="module" crossorigin src="./assets/js/index-D6U-FNLu.js"></script>
     <link rel="modulepreload" crossorigin href="./assets/js/rolldown-runtime-B0RWAxp0.js">
-    <link rel="modulepreload" crossorigin href="./assets/js/vendor--F8cGFqX.js">
-    <link rel="modulepreload" crossorigin href="./assets/js/api-CCFtfsjl.js">
-    <link rel="modulepreload" crossorigin href="./assets/js/PetSprite-DaIlYZwP.js">
-    <link rel="stylesheet" crossorigin href="./assets/css/PetSprite-CNnE7Cae.css">
-    <link rel="stylesheet" crossorigin href="./assets/css/index-Da6CKMBx.css">
+    <link rel="modulepreload" crossorigin href="./assets/js/vue-OhatDzzZ.js">
+    <link rel="modulepreload" crossorigin href="./assets/js/runtime-dom.esm-bundler-VGOsYao8.js">
+    <link rel="modulepreload" crossorigin href="./assets/js/vendor-C8YzzFP1.js">
+    <link rel="modulepreload" crossorigin href="./assets/js/api-B03IIACX.js">
+    <link rel="stylesheet" crossorigin href="./assets/css/index-wlBBCwnA.css">
   </head>
   <body>
     <div id="app-loader">

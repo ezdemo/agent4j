@@ -89,6 +89,16 @@ public class AgentLoop implements AgentLoopController {
         return config != null ? config.maxSelfCorrectionAttempts() : DEFAULT_MAX_SELF_CORRECTION;
     }
 
+    /** 仅包含不会修改项目、外部系统或宿主环境的查询/控制工具。 */
+    private static final Set<String> VALIDATION_EXEMPT_TOOLS = Set.of(
+            "finish", "ask_choice", "browser_request_user_action",
+            "read", "glob", "ls", "grep", "codesearch", "java_source", "codegraph_explore",
+            "resolve-library-id", "query-docs", "skillrefresh", "skilllist", "skillread",
+            "workspace_read", "workspace_list", "checklist_start", "checklist_step", "checklist_status",
+            "goal_create", "goal_status", "goal_update_step", "goal_complete", "goal_block", "goal_resume",
+            "browser_tabs", "browser_screenshot"
+    );
+
     // ==================== 核心字段 ====================
 
     private final ModelClient client;
@@ -99,7 +109,11 @@ public class AgentLoop implements AgentLoopController {
     private final ConversationContext ctx;
     private final ReasonBreaker reasonBreaker = new ReasonBreaker();
     private final StormBreaker stormBreaker;
+    private final ToolCallValidator toolCallValidator;
     private final GoalService goalService = new GoalService();
+    /** 子代理可冻结这两部分，确保其整个生命周期内模型请求前缀完全一致。 */
+    private volatile ONode frozenTools;
+    private volatile String frozenToolInstructions;
     @Getter
     private final HitlManager hitlManager;
 
@@ -171,6 +185,11 @@ public class AgentLoop implements AgentLoopController {
 
     public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx,
                      String hitlMode, LoopraConfig config) {
+        this(client, registry, ctx, hitlMode, config, null);
+    }
+
+    AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx,
+              String hitlMode, LoopraConfig config, ToolCallValidator toolCallValidator) {
         this.client = client;
         this.registry = registry;
         this.ctx = ctx;
@@ -178,6 +197,8 @@ public class AgentLoop implements AgentLoopController {
         this.terminateOnNoToolCall = config == null || config.terminateOnNoToolCall();
         this.hitlManager = new HitlManager(hitlMode);
         this.stormBreaker = StormBreaker.fromConfig(config);
+        this.toolCallValidator = toolCallValidator != null ? toolCallValidator
+                : ToolCallValidator.fromConfig(config, registry == null ? null : registry.getWorkspace());
     }
 
     // ==================== 公共控制 API ====================
@@ -441,8 +462,23 @@ public class AgentLoop implements AgentLoopController {
     }
 
     public ONode refreshTools() {
+        ONode fixed = frozenTools;
+        if (fixed != null) {
+            return fixed;
+        }
         registry.refresh();
         return registry.toOpenAiTools();
+    }
+
+    /** 固定后续请求的 system 附加指令和工具定义；必须在首轮模型调用前执行。 */
+    public void freezePromptPrefix() {
+        frozenToolInstructions = buildToolInstructions();
+        frozenTools = ONode.ofJson(registry.toOpenAiTools().toJson());
+    }
+
+    private String currentToolInstructions() {
+        String fixed = frozenToolInstructions;
+        return fixed != null ? fixed : buildToolInstructions();
     }
 
     /**
@@ -459,7 +495,7 @@ public class AgentLoop implements AgentLoopController {
     public ContextTokenEstimate estimateCurrentContext() {
         ONode tools = refreshTools();
         ContextTokenEstimate estimate = ContextTokenEstimator.estimate(
-                ctx.buildMessages(), tools, buildToolInstructions());
+                ctx.buildMessages(), tools, currentToolInstructions());
         lastContextEstimate = estimate;
         return estimate;
     }
@@ -809,7 +845,7 @@ public class AgentLoop implements AgentLoopController {
         MessageHealer.HealResult healResult = MessageHealer.heal(messages);
         messages = healResult.messages();
 
-        String instr = buildToolInstructions();
+        String instr = currentToolInstructions();
         ContextTokenEstimate beforeFold = ContextTokenEstimator.estimate(messages, tools, instr);
 
         // 预检：token 数接近上下文窗口 80% 时折叠
@@ -1173,13 +1209,26 @@ public class AgentLoop implements AgentLoopController {
                     }
 
                     String argumentsJson = toolCall.getArgumentsStr();
+                    boolean readOnly = toolMetaFlag(fc, "readOnly");
                     if (!isBrowserTool(toolCall.getName()) && !toolMetaFlag(fc, "stormExempt")) {
-                        boolean readOnly = toolMetaFlag(fc, "readOnly");
                         StormBreaker.SuppressResult suppression =
                                 stormBreaker.inspect(toolCall.getName(), argumentsJson, readOnly);
                         if (suppression.suppressed()) {
                             anySuppressed.set(true);
                             String result = rejectedToolResult(suppression.reason(), "storm");
+                            safeListener("toolResult", () -> listener.onToolResult(toolCall.getName(), result));
+                            safeOutputDebug("toolResult", () -> output.onToolResult(toolCall.getName(), result));
+                            return toolResult(toolCall.getId(), result);
+                        }
+                    }
+
+                    if (requiresToolValidation(toolCall.getName(), readOnly)) {
+                        ToolCallValidator.Decision decision = toolCallValidator.validate(
+                                toolCall.getName(), ONode.ofBean(toolCall.getArguments()).toJson());
+                        if (!decision.allowed()) {
+                            String result = rejectedToolResult(decision.reason(), "validation");
+                            safeOutput("toolValidator", () -> output.onLog(LogLevel.WARN,
+                                    "[tool-validator] 已拒绝执行 " + toolCall.getName() + ": " + decision.reason()));
                             safeListener("toolResult", () -> listener.onToolResult(toolCall.getName(), result));
                             safeOutputDebug("toolResult", () -> output.onToolResult(toolCall.getName(), result));
                             return toolResult(toolCall.getId(), result);
@@ -1221,6 +1270,10 @@ public class AgentLoop implements AgentLoopController {
             });
         }
         return new DispatchResult(futures, controls, anySuppressed, hitlRef);
+    }
+
+    private boolean requiresToolValidation(String toolName, boolean readOnly) {
+        return toolCallValidator.enabled() && !readOnly && !VALIDATION_EXEMPT_TOOLS.contains(toolName);
     }
 
     private static boolean toolMetaFlag(FunctionTool tool, String key) {

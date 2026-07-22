@@ -57,6 +57,13 @@ public interface ModelClient {
     }
 
     /**
+     * 为当前客户端固定请求级会话亲和标识。
+     * <p>实现类应将其用于 prompt cache key 和所有会话亲和请求头；传 null 时回退到上层上下文。</p>
+     */
+    default void setSessionAffinity(String sessionAffinity) {
+    }
+
+    /**
      * 中断当前正在进行的流式调用（如果存在）。
      * 默认空实现——不支持中断的客户端可忽略。
      */

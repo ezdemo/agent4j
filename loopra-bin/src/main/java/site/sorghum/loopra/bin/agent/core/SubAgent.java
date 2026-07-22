@@ -67,6 +67,8 @@ public class SubAgent {
      * 子代理的主循环会同时检查自身中断标志和父级的 isAbortRequested()。
      */
     private final AgentLoopController parentController;
+    /** 每个子代理实例独有，用于构造不与其他子代理冲突的缓存会话标识。 */
+    private final String cacheSessionNonce = UUID.randomUUID().toString();
     /**
      * 父代理的 AgentOutput 引用 —— 用于将子代理的流式输出实时推送给用户。
      * 通过 {@link #setOutput(AgentOutput)} 由 SubAgentTool 注入。
@@ -124,6 +126,7 @@ public class SubAgent {
     public SubAgent(ModelClient client, ToolRegistry parentRegistry, String systemPrompt,
                     AgentLoopController parentController) {
         this.client = Objects.requireNonNull(client, "client must not be null");
+        this.client.setSessionAffinity("sub-agent:" + cacheSessionNonce);
         // 创建独立注册表，通过 forceDenyTools 硬性过滤（禁止递归 spawn 等）
         this.registry = Objects.requireNonNull(parentRegistry, "parentRegistry must not be null").copy();
         this.registry.setForceDenyTools(SUB_AGENT_DENY);
@@ -152,6 +155,9 @@ public class SubAgent {
      */
     public void setSessionId(String sessionId) {
         this.sessionId = sessionId;
+        if (sessionId != null && !sessionId.isBlank()) {
+            client.setSessionAffinity(sessionId + ":sub-agent:" + cacheSessionNonce);
+        }
     }
 
     /**
@@ -266,6 +272,7 @@ public class SubAgent {
         if (sessionService != null) {
             subLoop.setSessionService(sessionService);
         }
+        subLoop.freezePromptPrefix();
 
         // 创建用量捕获监听器：拦截 onUsage 记录到 SubAgent 字段，同时委托给外部 listener
         AgentLoopListener capturingListener = new AgentLoopListener() {
