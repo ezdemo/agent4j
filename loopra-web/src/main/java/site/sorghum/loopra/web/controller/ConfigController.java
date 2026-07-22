@@ -119,14 +119,14 @@ public class ConfigController {
             agentReinitialized = true;
         }
 
-        // model、reasoningEffort、hitl 等运行时配置 → 通过 DamiBus 广播，由监听者处理
+        // model、hitl 等运行时配置 → 通过 DamiBus 广播，由监听者处理
         for (Map.Entry<String, Object> entry : body.entrySet()) {
             String key = entry.getKey();
             // baseUrl/apiKey 已在上方处理，跳过
             if ("baseUrl".equals(key) || "apiKey".equals(key)
                     || "modelChannels".equals(key) || "modelChannelId".equals(key)) continue;
             // 只发布已知的运行时配置键
-            if ("model".equals(key) || "reasoningEffort".equals(key) || "hitl".equals(key)
+            if ("model".equals(key) || "hitl".equals(key)
                     || "terminateOnNoToolCall".equals(key) || "disabledTools".equals(key)) {
                 Dami.bus().send("config.changed", new ConfigChangedEvent(key, entry.getValue()));
             }

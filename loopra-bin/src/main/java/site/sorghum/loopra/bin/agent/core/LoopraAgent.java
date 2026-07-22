@@ -116,7 +116,6 @@ public class LoopraAgent {
             try {
                 switch (e.key()) {
                     case "model" -> setModel((String) e.value());
-                    case "reasoningEffort" -> setReasoningEffort((String) e.value());
                     case "hitl" -> setHitlMode(String.valueOf(e.value()));
                     case "terminateOnNoToolCall" -> setTerminateOnNoToolCall(Boolean.parseBoolean(String.valueOf(e.value())));
                     case "disabledTools" -> refreshTools();
@@ -495,7 +494,7 @@ public class LoopraAgent {
 
     /**
      * 运行时切换推理强度（热更新）。
-     * 取值: low / medium / high / max
+     * 值由模型提供者定义，前端请求会将其传入对应会话。
      */
     public void setReasoningEffort(String reasoningEffort) {
         loop.setReasoningEffort(reasoningEffort);

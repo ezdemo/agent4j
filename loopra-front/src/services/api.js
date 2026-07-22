@@ -168,6 +168,7 @@ export const chatAPI = {
         if (options.sessionName) requestBody.sessionName = options.sessionName
         if (options.model) requestBody.model = options.model
         if (options.modelChannelId) requestBody.modelChannelId = options.modelChannelId
+        if (options.reasoningEffort) requestBody.reasoningEffort = options.reasoningEffort
           // 添加图片（base64 Data URI 列表）
           if (options.images && options.images.length > 0) {
               requestBody.images = options.images
