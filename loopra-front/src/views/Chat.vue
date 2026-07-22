@@ -59,9 +59,9 @@
                 </div>
               </div>
             </div>
-            <ChatInput ref="welcomeInput" welcome-mode v-model:input-text="welcomeText" :usage="usage" :current-model="currentModel" :available-models="availableModels"
+            <ChatInput ref="welcomeInput" welcome-mode v-model:input-text="welcomeText" :usage="usage" :current-model="currentModel" :default-model="defaultModel" :default-model-channel-id="defaultModelChannelId" :setting-default-model="settingDefaultModel" :available-models="availableModels"
                        :current-reasoning-effort="currentReasoningEffort" :terminate-on-no-tool-call="terminateOnNoToolCall" :current-permission="currentPermission"
-                       :workspace-hash="welcomeWorkspaceHash" :current-skill="currentSkill" @send="sendWelcomeMessage" @switch-model="handleSwitchModel"
+                       :workspace-hash="welcomeWorkspaceHash" :current-skill="currentSkill" @send="sendWelcomeMessage" @switch-model="handleSwitchModel" @set-default-model="handleSetDefaultModel"
                        @switch-reasoning-effort="handleSwitchReasoningEffort" @switch-terminate-on-no-tool-call="handleSwitchTerminateOnNoToolCall"
                        @switch-permission="handleSwitchPermission" @switch-skill="handleSwitchSkill" @picker-open="handleWelcomePickerOpen" @refresh-models="loadUsage" @manage-models="$emit('manageModels')" />
           </div>
@@ -200,6 +200,9 @@
         :streaming="streaming"
         :usage="usage"
         :currentModel="currentModel"
+        :default-model="defaultModel"
+        :default-model-channel-id="defaultModelChannelId"
+        :setting-default-model="settingDefaultModel"
         :availableModels="availableModels"
         :currentReasoningEffort="currentReasoningEffort"
         :terminateOnNoToolCall="terminateOnNoToolCall"
@@ -220,6 +223,7 @@
         @export="exportChat"
         @refreshUsage="loadUsage"
         @switchModel="handleSwitchModel"
+        @set-default-model="handleSetDefaultModel"
         @switchReasoningEffort="handleSwitchReasoningEffort"
         @switchTerminateOnNoToolCall="handleSwitchTerminateOnNoToolCall"
         @refreshModels="loadUsage"
@@ -252,6 +256,7 @@
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
+import {message} from 'ant-design-vue'
 import {agentAPI, chatAPI, configAPI, gitAPI, sessionsAPI, snapshotAPI} from '../services/api'
 import {md} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
@@ -283,6 +288,8 @@ const handleSwitchModel = async (modelName, channelId) => {
     const r = await configAPI.updateConfig(payload)
     if (r.success) {
       currentModel.value = modelName
+      defaultModel.value = modelName
+      defaultModelChannelId.value = channelId || currentChannelId || ''
       availableModels.value.forEach(m => {
         m.active = m.name === modelName && (!channelId || m.channelId === channelId)
       })
@@ -290,6 +297,27 @@ const handleSwitchModel = async (modelName, channelId) => {
     }
   } catch (e) {
     console.error('切换模型失败:', e)
+  }
+}
+
+const handleSetDefaultModel = async (modelName, channelId) => {
+  if (!modelName || settingDefaultModel.value) return
+  if (modelName === defaultModel.value && (channelId || '') === defaultModelChannelId.value) return
+  settingDefaultModel.value = true
+  try {
+    const payload = {model: modelName}
+    if (channelId) payload.modelChannelId = channelId
+    const response = await configAPI.updateConfig(payload)
+    if (response.success) {
+      defaultModel.value = modelName
+      defaultModelChannelId.value = channelId || defaultModelChannelId.value
+      message.success('默认模型已更新')
+      await loadUsage()
+    }
+  } catch (error) {
+    console.error('设定默认模型失败:', error)
+  } finally {
+    settingDefaultModel.value = false
   }
 }
 
@@ -786,6 +814,9 @@ const usage = ref({
 })
 let usageRequestId = 0
 const currentModel = ref('')
+const defaultModel = ref('')
+const defaultModelChannelId = ref('')
+const settingDefaultModel = ref(false)
 const availableModels = ref([])
 
 // ==================== 工作流 TODO（已迁移至 ChatInput 组件中）====================
@@ -829,6 +860,8 @@ const loadUsage = async (override) => {
       }))
     }
     if (configRes.status === 'fulfilled' && configRes.value.success) {
+      defaultModel.value = configuredModel
+      defaultModelChannelId.value = configRes.value.data?.modelChannelId || ''
       if (!currentModel.value) currentModel.value = configuredModel
       currentReasoningEffort.value = sessionReasoningEfforts.value[conversationKey()]
         || configRes.value.data?.reasoningEffort || 'max'
