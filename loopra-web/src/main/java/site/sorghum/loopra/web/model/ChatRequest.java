@@ -43,6 +43,11 @@ public class ChatRequest {
     private String modelChannelId;
 
     /**
+     * 本次对话使用的思考强度。未指定时保留当前会话的设置。
+     */
+    private String reasoningEffort;
+
+    /**
      * 图片列表（可选）。
      * 支持公开 URL 和 Base64 Data URI 两种格式。
      * 与 message 配合生成多模态消息。

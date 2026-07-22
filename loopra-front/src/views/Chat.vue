@@ -297,16 +297,14 @@ const handleSwitchModel = async (modelName, channelId) => {
 const currentReasoningEffort = ref('max')
 const terminateOnNoToolCall = ref(true)
 
-const handleSwitchReasoningEffort = async (value) => {
-  if (value === currentReasoningEffort.value) return
-  try {
-    const r = await configAPI.updateConfig({reasoningEffort: value})
-    if (r.success) {
-      currentReasoningEffort.value = value
-    }
-  } catch (e) {
-    console.error('切换推理强度失败:', e)
+const handleSwitchReasoningEffort = (value) => {
+  const reasoningEffort = String(value || '').trim()
+  if (!reasoningEffort || reasoningEffort === currentReasoningEffort.value) return
+  sessionReasoningEfforts.value = {
+    ...sessionReasoningEfforts.value,
+    [conversationKey()]: reasoningEffort
   }
+  currentReasoningEffort.value = reasoningEffort
 }
 
 const handleSwitchTerminateOnNoToolCall = async (value) => {
@@ -587,6 +585,7 @@ const messages = computed(() => store.getSessionMessages(props.sessionName))
 const streaming = computed(() => store.getSessionStreaming(props.sessionName))
 const queuedMessagesBySession = ref({})
 const SESSION_MODEL_STORAGE_KEY = 'loopra.session-model-selections'
+const SESSION_REASONING_EFFORT_STORAGE_KEY = 'loopra.session-reasoning-efforts'
 const loadSessionModelSelections = () => {
   try {
     const stored = JSON.parse(localStorage.getItem(SESSION_MODEL_STORAGE_KEY) || '{}')
@@ -595,12 +594,25 @@ const loadSessionModelSelections = () => {
     return {}
   }
 }
+const loadSessionReasoningEfforts = () => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(SESSION_REASONING_EFFORT_STORAGE_KEY) || '{}')
+    return stored && typeof stored === 'object' ? stored : {}
+  } catch {
+    return {}
+  }
+}
 const sessionModelSelections = ref(loadSessionModelSelections())
+const sessionReasoningEfforts = ref(loadSessionReasoningEfforts())
 const conversationKey = (workspaceHash = props.workspaceHash, sessionName = props.sessionName) => `${workspaceHash || ''}::${sessionName || ''}`
 const queuedMessages = computed(() => queuedMessagesBySession.value[conversationKey()] || [])
 
 watch(sessionModelSelections, selections => {
   localStorage.setItem(SESSION_MODEL_STORAGE_KEY, JSON.stringify(selections))
+}, {deep: true})
+
+watch(sessionReasoningEfforts, efforts => {
+  localStorage.setItem(SESSION_REASONING_EFFORT_STORAGE_KEY, JSON.stringify(efforts))
 }, {deep: true})
 
 const getSessionModelSelection = (sessionName = props.sessionName, workspaceHash = props.workspaceHash) => {
@@ -610,13 +622,17 @@ const getSessionModelSelection = (sessionName = props.sessionName, workspaceHash
   return {model: currentModel.value, channelId: active?.channelId || ''}
 }
 
-const addQueuedMessage = (sessionName, workspaceHash, images, text, modelSelection) => {
+const getSessionReasoningEffort = (sessionName = props.sessionName, workspaceHash = props.workspaceHash) => (
+  sessionReasoningEfforts.value[conversationKey(workspaceHash, sessionName)] || currentReasoningEffort.value
+)
+
+const addQueuedMessage = (sessionName, workspaceHash, images, text, modelSelection, reasoningEffort) => {
   if (!sessionName) return
   const key = conversationKey(workspaceHash, sessionName)
   const queue = queuedMessagesBySession.value[key] || []
   queuedMessagesBySession.value = {
     ...queuedMessagesBySession.value,
-    [key]: [...queue, {id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, workspaceHash, images, text, modelSelection}]
+    [key]: [...queue, {id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, workspaceHash, images, text, modelSelection, reasoningEffort}]
   }
 }
 
@@ -642,14 +658,14 @@ const sendNextQueuedMessage = async (sessionName, workspaceHash) => {
   const next = queue[0]
   if (!next) return
   takeQueuedMessage(sessionName, workspaceHash, next.id)
-  await sendMessage(next.images, next.text, next.modelSelection, sessionName, workspaceHash)
+  await sendMessage(next.images, next.text, next.modelSelection, sessionName, workspaceHash, next.reasoningEffort)
 }
 
 const guideQueuedMessage = async (id) => {
   const queued = takeQueuedMessage(props.sessionName, props.workspaceHash, id)
   if (!queued) return
   if (streaming.value) await abortChat()
-  await sendMessage(queued.images, queued.text, queued.modelSelection, props.sessionName, queued.workspaceHash)
+  await sendMessage(queued.images, queued.text, queued.modelSelection, props.sessionName, queued.workspaceHash, queued.reasoningEffort)
 }
 
 const ESTIMATED_MESSAGE_HEIGHT = 320
@@ -814,7 +830,8 @@ const loadUsage = async (override) => {
     }
     if (configRes.status === 'fulfilled' && configRes.value.success) {
       if (!currentModel.value) currentModel.value = configuredModel
-      currentReasoningEffort.value = configRes.value.data?.reasoningEffort || 'max'
+      currentReasoningEffort.value = sessionReasoningEfforts.value[conversationKey()]
+        || configRes.value.data?.reasoningEffort || 'max'
       terminateOnNoToolCall.value = configRes.value.data?.terminateOnNoToolCall !== false
       currentPermission.value = configRes.value.data?.hitl || 'free'
     }
@@ -1183,14 +1200,16 @@ const moveFileChangesToEnd = (blocks) => {
 }
 
 const sendMessage = async (images = [], overrideText = null, modelSelection = null,
-                           targetSessionName = props.sessionName, targetWorkspaceHash = props.workspaceHash) => {
+                            targetSessionName = props.sessionName, targetWorkspaceHash = props.workspaceHash,
+                            reasoningEffort = getSessionReasoningEffort(targetSessionName, targetWorkspaceHash)) => {
   const text = overrideText || inputText.value.trim()
   if (!text && images.length === 0) return
   const sessionName = targetSessionName
   if (!sessionName) return
   const selectedModel = modelSelection || getSessionModelSelection(sessionName, targetWorkspaceHash)
+  const selectedReasoningEffort = reasoningEffort || getSessionReasoningEffort(sessionName, targetWorkspaceHash)
   if (store.getSessionStreaming(sessionName)) {
-    addQueuedMessage(sessionName, targetWorkspaceHash, images, text, selectedModel)
+    addQueuedMessage(sessionName, targetWorkspaceHash, images, text, selectedModel, selectedReasoningEffort)
     inputText.value = ''
     return
   }
@@ -1525,7 +1544,8 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
           sessionName,
           images,
           model: selectedModel.model,
-          modelChannelId: selectedModel.channelId
+          modelChannelId: selectedModel.channelId,
+          reasoningEffort: selectedReasoningEffort
         }
     )
     store.setSessionController(sessionName, streamResult)
@@ -1627,12 +1647,14 @@ const rollbackSnapshot = async (msgId, rollbackCode, rollbackTimestamp) => {
       let targetIdx = -1
       // 优先使用后端返回的 rollbackUserText（从 JSONL 持久化数据中取得）
       let rollbackContent = res.data?.rollbackUserText || ''
+      let rollbackImages = []
       for (let i = 0; i < msgs.length; i++) {
         if ((msgId && (msgs[i].rollbackId === msgId || msgs[i].snapshotId === msgId))
             || (!msgId && msgs[i].rollbackTimestamp === rollbackTimestamp)) {
           targetIdx = i
           // 如果后端没返回文本，从前端消息中取
           if (!rollbackContent) rollbackContent = msgs[i].content || ''
+          rollbackImages = msgs[i].images || []
           break
         }
       }
@@ -1640,10 +1662,16 @@ const rollbackSnapshot = async (msgId, rollbackCode, rollbackTimestamp) => {
         // 截断：保留目标消息之前的所有消息，删除目标消息及之后的所有消息
         const kept = msgs.slice(0, targetIdx)
         store.setSessionMessages(props.sessionName, kept)
-        // 回填输入框
-        if (rollbackContent) {
+        const useWelcomeInput = kept.length === 0
+        if (useWelcomeInput) {
+          welcomeText.value = rollbackContent
+        } else {
           inputText.value = rollbackContent
         }
+        await nextTick()
+        const targetInput = useWelcomeInput ? welcomeInput.value : chatInput.value
+        targetInput?.restoreImages?.(rollbackImages)
+        targetInput?.focus?.()
       }
 
       // 通知父组件刷新会话列表和 Git 状态

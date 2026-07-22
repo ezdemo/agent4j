@@ -121,7 +121,7 @@ public class ChatController {
                 }
 
                 agentService.chatStream(userMsg, resolvedPath, sessionName, emitter,
-                        request.getModel(), request.getModelChannelId());
+                        request.getModel(), request.getModelChannelId(), request.getReasoningEffort());
             } catch (Exception e) {
                 try {
                     emitter.sendError(e.getMessage());

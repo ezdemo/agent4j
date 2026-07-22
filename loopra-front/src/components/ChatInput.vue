@@ -374,6 +374,10 @@
                 {{ option.label }}
               </button>
             </div>
+            <label class="chat-reasoning-custom">
+              <span>自定义</span>
+              <input v-model="customReasoningEffort" aria-label="自定义推理强度" placeholder="例如 xhigh" @blur="commitCustomReasoningEffort" @keydown.enter.prevent="commitCustomReasoningEffort" />
+            </label>
             <label class="chat-reasoning-end-toggle">
               <span>无工具调用时结束</span>
               <input
@@ -787,9 +791,12 @@ const handlePaste = async (e) => {
   }
 }
 
-/**
- * 移除已粘贴的图片
- */
+const restoreImages = (nextImages) => {
+  images.value = Array.isArray(nextImages)
+    ? nextImages.filter((image) => typeof image === 'string' && image).slice(0, 10)
+    : []
+}
+
 const removeImage = (idx) => {
   images.value.splice(idx, 1)
 }
@@ -1121,13 +1128,22 @@ const effortOptions = [
   {value: 'max', label: '最大', description: '优先获得最完整的推理'}
 ]
 const reasoningEffortIndex = ref(4)
-const selectedReasoningEffort = computed(() => effortOptions[reasoningEffortIndex.value])
+const customReasoningEffort = ref('')
+const selectedReasoningEffort = computed(() => {
+  const option = effortOptions[reasoningEffortIndex.value]
+  return customReasoningEffort.value ? {
+    value: customReasoningEffort.value,
+    label: '自定义',
+    description: customReasoningEffort.value
+  } : option
+})
 const reasoningEffortProgress = computed(() => (
   reasoningEffortIndex.value / (effortOptions.length - 1)
 ) * 100)
 watch(() => props.currentReasoningEffort, (value) => {
   const index = effortOptions.findIndex(option => option.value === value)
   reasoningEffortIndex.value = index === -1 ? effortOptions.length - 1 : index
+  customReasoningEffort.value = index === -1 ? value || '' : ''
 }, {immediate: true})
 const updateReasoningEffort = (index) => {
   const nextIndex = Number(index)
@@ -1137,8 +1153,15 @@ const updateReasoningEffort = (index) => {
 }
 const commitReasoningEffort = (index) => {
   updateReasoningEffort(index)
+  customReasoningEffort.value = ''
   const next = effortOptions[reasoningEffortIndex.value]
   if (next.value !== props.currentReasoningEffort) emit('switchReasoningEffort', next.value)
+  showEffortPicker.value = false
+}
+const commitCustomReasoningEffort = () => {
+  const value = customReasoningEffort.value.trim()
+  if (!value) return
+  if (value !== props.currentReasoningEffort) emit('switchReasoningEffort', value)
   showEffortPicker.value = false
 }
 const selectReasoningEffort = (index) => commitReasoningEffort(index)
@@ -1256,7 +1279,7 @@ async function savePetSize(idx) {
 }
 
 // 暴露焦點方法给父组件
-defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElementContext, autoResize, closePickers})
+defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElementContext, restoreImages, autoResize, closePickers})
 </script>
 
 <style scoped>
@@ -2935,6 +2958,32 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   color: var(--accent);
   font-weight: 700;
   text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.chat-reasoning-custom {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 10px;
+  color: var(--fg-3);
+  font-size: 11px;
+}
+
+.chat-reasoning-custom input {
+  min-width: 0;
+  flex: 1;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--fg);
+  font: inherit;
+}
+
+.chat-reasoning-custom input:focus {
+  border-color: var(--accent);
+  outline: none;
 }
 
 .input-area.welcome-mode {

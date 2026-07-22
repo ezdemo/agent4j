@@ -21,11 +21,16 @@
           v-for="tab in tabs"
           :key="tab.id"
           class="desktop-tab"
-          :class="{ active: tab.id === activeTabId }"
+          :class="{ active: tab.id === activeTabId, dragging: tab.id === draggedTabId, 'drag-over': tab.id === dragOverTabId }"
+          draggable="true"
           role="tab"
           :aria-selected="tab.id === activeTabId"
           tabindex="0"
           :title="tab.title"
+          @dragstart="startTabReorder($event, tab.id)"
+          @dragover="dragOverTab($event, tab.id)"
+          @drop="dropTab($event, tab.id)"
+          @dragend="endTabReorder"
           @click="activateTab(tab.id)"
           @auxclick="closeTabWithMiddleClick($event, tab.id)"
           @keydown.enter="activateTab(tab.id)"
@@ -131,6 +136,8 @@ const activeTabId = ref('')
 const isHomeActive = computed(() => !starting.value && !startupError.value
   && !activeTabId.value && !showSkills.value && !showSettings.value && !showModelChannels.value && !showDashboard.value)
 const tabsNav = ref(null)
+const draggedTabId = ref('')
+const dragOverTabId = ref('')
 const host = ref(null)
 let resizeObserver = null
 let renderVersion = 0
@@ -163,6 +170,43 @@ function scrollTabs(event) {
   if (!delta) return
   event.preventDefault()
   nav.scrollLeft += delta
+}
+
+function startTabReorder(event, tabId) {
+  if (event.target.closest('button')) {
+    event.preventDefault()
+    return
+  }
+  draggedTabId.value = tabId
+  event.dataTransfer.effectAllowed = 'move'
+  event.dataTransfer.setData('text/plain', tabId)
+}
+
+function dragOverTab(event, tabId) {
+  if (!draggedTabId.value || tabId === draggedTabId.value) return
+  event.preventDefault()
+  event.dataTransfer.dropEffect = 'move'
+  dragOverTabId.value = tabId
+}
+
+function dropTab(event, targetTabId) {
+  event.preventDefault()
+  const sourceTabId = draggedTabId.value
+  endTabReorder()
+  if (!sourceTabId || sourceTabId === targetTabId) return
+  const sourceIndex = tabs.value.findIndex((tab) => tab.id === sourceTabId)
+  const targetIndex = tabs.value.findIndex((tab) => tab.id === targetTabId)
+  if (sourceIndex < 0 || targetIndex < 0) return
+  const reorderedTabs = [...tabs.value]
+  const sourceTab = reorderedTabs[sourceIndex]
+  reorderedTabs[sourceIndex] = reorderedTabs[targetIndex]
+  reorderedTabs[targetIndex] = sourceTab
+  tabs.value = reorderedTabs
+}
+
+function endTabReorder() {
+  draggedTabId.value = ''
+  dragOverTabId.value = ''
 }
 
 watch(theme, (value) => { void nativeTabs()?.setTheme(value) })
@@ -565,6 +609,8 @@ onBeforeUnmount(() => {
 .icon-button svg, .desktop-tab svg, .desktop-tab-add svg { width: 18px; height: 18px; }
 .icon-button:hover, .icon-button.active, .desktop-tab-add:hover, .window-button:hover { background: var(--bg-3, #f3f4f6); color: var(--fg, #202124); }
 .desktop-tabs { height: 100%; display: flex; align-items: center; gap: 4px; min-width: 80px; flex: 1; overflow-x: auto; padding: 0 18px; scrollbar-width: none; }
+.desktop-tab.dragging { opacity: 0.55; }
+.desktop-tab.drag-over { background: var(--bg-3, #f3f4f6); box-shadow: inset 0 0 0 1px var(--border, #d6dae1); }
 .desktop-tabs::-webkit-scrollbar { display: none; }
 .desktop-tab { display: inline-flex; align-items: center; gap: 7px; width: clamp(156px, 16vw, 230px); height: 30px; padding: 0 10px; border-radius: 6px; cursor: pointer; flex: 0 0 auto; text-align: left; }
 .desktop-tab:hover { background: var(--bg-3, #f3f4f6); color: var(--fg, #202124); }

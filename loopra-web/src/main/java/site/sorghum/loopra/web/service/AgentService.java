@@ -641,7 +641,7 @@ public class AgentService {
      * 流式聊天（多模态）—— 使用 {@link UserMessage} 统一表示文本+图片。
      */
     public void chatStream(UserMessage userMessage, String workspacePath, String sessionName, SseEmitter emitter,
-                           String requestedModel, String requestedChannelId) {
+                           String requestedModel, String requestedChannelId, String requestedReasoningEffort) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         ReentrantLock lock = getSessionLock(sessionKey);
         lock.lock();
@@ -654,6 +654,9 @@ public class AgentService {
 
         try {
             LoopraAgent agent = getOrCreateAgent(sessionKey, resolveModelTarget(requestedModel, requestedChannelId));
+            if (requestedReasoningEffort != null && !requestedReasoningEffort.isBlank()) {
+                agent.setReasoningEffort(requestedReasoningEffort.trim());
+            }
 
             // 设置 AgentOutput：将所有事件桥接到 SSE
             agent.setOutput(new SseAgentOutput(emitter));
