@@ -14,7 +14,6 @@ class ToolControllerTest {
     void toolMetadataIsExposedWithoutMarkingEveryToolStormExempt() {
         FunctionToolDesc regular = tool("write");
         FunctionToolDesc readOnly = tool("read");
-        readOnly.metaPut("readOnly", true);
         readOnly.metaPut("stormExempt", true);
 
         ToolInfoDTO regularInfo = toToolInfoDTO(regular);

@@ -17,6 +17,7 @@ import site.sorghum.loopra.tool.solon.SolonToTools;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.Set;
 
 /**
  * SubAgent 工具 —— 创建具有预设角色的隔离子代理。
@@ -66,9 +67,9 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
 
     @ToolMapping(name = "sub_agent", description = """
                  派生一个带预设角色的隔离子代理，完成后将结果返回给主代理。
-                 可用角色: explore（只读探索）, implement（实现）, test（测试）, review（只读审查）, plan（只读方案）。
+                 可用角色: explore（只读项目探索）, implement（实现）, test（测试）, review（只读项目审查）, plan（只读项目方案）。
                  参数: profile(必填), task(必填), instructions(可选)。
-                 注意：explore/review/plan 只能使用只读工具；子代理不可再创建子代理。
+                 注意：explore/review/plan 只能使用只读项目工具；`workspace_write` 仅用于主代理与子代理之间的协作通信；子代理不可再创建子代理。
                 """)
     public String subAgent(@Param(name = "profile", description = "子代理角色: explore / implement / test / review / plan") String profile,
                            @Param(name = "task", description = "需要子代理完成的具体任务") String task,
@@ -91,6 +92,7 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
 
             ToolRegistry registry = ctx.getLoopController().getToolRegistry();
             AgentLoopController parentController = ctx.getLoopController();
+            Set<String> allowedTools = selectedProfile.allowedTools(registry.all().values());
 
             StringBuilder systemPromptBuilder = new StringBuilder(
                     selectedProfile.buildSystemPrompt(task, instructions));
@@ -102,8 +104,7 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
             systemPromptBuilder.append("\n\n## 可用工具规范\n\n");
             for (FunctionTool def : registry.all().values()) {
                 if (!SubAgent.SUB_AGENT_DENY.contains(def.name())
-                        && (selectedProfile.allowedTools() == null
-                        || selectedProfile.allowedTools().contains(def.name()))) {
+                        && (allowedTools == null || allowedTools.contains(def.name()))) {
                     String spec = def.descriptionAndMeta();
                     if (spec != null && !spec.isEmpty()) {
                         systemPromptBuilder.append(spec).append("\n\n---\n\n");
@@ -121,7 +122,7 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
             ModelClient parentClient = parentController != null ? parentController.getModelClient() : null;
             ModelClient sourceClient = parentClient != null ? parentClient : modelClient;
             SubAgent sub = new SubAgent(sourceClient.fork(), registry, systemPrompt, parentController);
-            sub.setAllowedTools(selectedProfile.allowedTools());
+            sub.setAllowedTools(allowedTools);
 
             if (parentController != null) {
                 parentController.registerToolCancellation(sub::abort);

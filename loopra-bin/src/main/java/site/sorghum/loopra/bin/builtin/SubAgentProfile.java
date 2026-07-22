@@ -1,5 +1,10 @@
 package site.sorghum.loopra.bin.builtin;
 
+import org.noear.solon.ai.chat.tool.FunctionTool;
+import site.sorghum.loopra.bin.tool.ToolMetadata;
+
+import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.Locale;
 import java.util.Set;
 
@@ -8,7 +13,7 @@ import java.util.Set;
  */
 public enum SubAgentProfile {
     EXPLORE("explore", true, """
-            你是探索子代理。只调查，不修改任何文件，也不执行会改变工作区状态的命令。
+            你是探索子代理。只调查项目内容，不修改项目文件、配置或其他项目工作区内容；可使用 `workspace_write` 写入主代理与子代理之间的协作通信记录。
             先定位相关文件和调用链，再基于实际读取到的内容给出结论。
             最终按“发现 / 证据（文件与位置）/ 建议”汇报；不确定之处必须明确说明。
             """),
@@ -22,20 +27,14 @@ public enum SubAgentProfile {
             最终按“覆盖场景 / 测试结果 / 发现的问题”汇报。
             """),
     REVIEW("review", true, """
-            你是代码审查子代理。只读审查，不修改文件。
+            你是代码审查子代理。只读审查项目内容，不修改项目文件、配置或其他项目工作区内容；可使用 `workspace_write` 写入协作通信记录。
             优先寻找真实的缺陷、回归、并发/安全问题和测试缺口，不复述无关代码。
             最终按严重性排序列出问题，每项附文件与位置、影响及可行修复方向；没有问题时明确说明残余风险。
             """),
     PLAN("plan", true, """
-            你是方案子代理。只调查和设计，不修改文件。
+            你是方案子代理。只调查和设计，不修改项目文件、配置或其他项目工作区内容；可使用 `workspace_write` 写入协作通信记录。
             先理解现有实现与约束，再给出可执行的分步方案，说明涉及模块、兼容性、验证方法和需要决策的取舍。
             """);
-
-    private static final Set<String> READ_ONLY_TOOLS = Set.of(
-            "read", "glob", "grep", "ls",
-            "workspace_read", "workspace_list", "workspace_write",
-            "java_source", "codesearch", "codegraph_explore", "webfetch",
-            "vision_recognize", "finish");
 
     private final String id;
     private final boolean readOnly;
@@ -51,8 +50,27 @@ public enum SubAgentProfile {
         return id;
     }
 
-    public Set<String> allowedTools() {
-        return readOnly ? READ_ONLY_TOOLS : null;
+    public boolean readOnly() {
+        return readOnly;
+    }
+
+    public String instructions() {
+        return instructions;
+    }
+
+    public Set<String> allowedTools(Collection<FunctionTool> tools) {
+        if (!readOnly) {
+            return null;
+        }
+        Set<String> allowed = new LinkedHashSet<>();
+        if (tools != null) {
+            for (FunctionTool tool : tools) {
+                if (ToolMetadata.isReadOnly(tool)) {
+                    allowed.add(tool.name());
+                }
+            }
+        }
+        return allowed;
     }
 
     public String buildSystemPrompt(String task, String extraInstructions) {
