@@ -3,10 +3,13 @@ package site.sorghum.loopra.bin.agent.core;
 import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.tool.FunctionToolDesc;
+import site.sorghum.loopra.bin.agent.context.ConversationContext;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
-import site.sorghum.loopra.bin.agent.model.ToolExecutionResult;
+import site.sorghum.loopra.bin.agent.model.UserMessage;
+import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
 import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
+import site.sorghum.loopra.tool.AgentOutput;
 
 import java.nio.file.Paths;
 import java.util.List;
@@ -18,105 +21,156 @@ import static org.junit.jupiter.api.Assertions.*;
 class ToolCallValidatorTest {
 
     @Test
-    void dangerousDecisionRejectsToolBeforeExecution() {
+    void aiApprovalExecutesWithoutOpeningManualHitl() throws Exception {
+        AtomicInteger validations = new AtomicInteger();
         AtomicInteger executions = new AtomicInteger();
-        ToolRegistry registry = registryWith(tool("bash", args -> {
-            executions.incrementAndGet();
-            return "executed";
-        }));
-        ToolCallValidator validator = ToolCallValidator.forClient(
-                reply("{\"allow\":false,\"reason\":\"destructive command\"}"), Paths.get("."));
-        AgentLoop loop = new AgentLoop(null, registry, null, "free", null, validator);
+        AgentLoop loop = loop("approval", toolCallingModel(toolCalls("bash", "{\"command\":\"mvn test\"}")),
+                registryWith(tool("bash", args -> {
+                    executions.incrementAndGet();
+                    return "executed";
+                })), ToolCallValidator.forClient(reply(validations,
+                        "```json\n{\"allow\":true,\"requiresHuman\":false,\"reason\":\"local test\"}\n```"), Paths.get(".")));
 
-        ToolExecutionResult result = loop.executeToolCalls(toolCalls("bash", "{\"command\":\"rm -rf /\"}"));
+        String result = loop.run(UserMessage.of("run tests"));
 
-        assertEquals(0, executions.get());
-        assertTrue(result.toolResults().get(0).getContent().contains("\"rejectedReason\":\"validation\""));
-        assertTrue(result.toolResults().get(0).getContent().contains("destructive command"));
+        assertEquals("done", result);
+        assertEquals(1, validations.get());
+        assertEquals(1, executions.get());
+        assertFalse(loop.getHitlManager().hasPendingHITL());
     }
 
     @Test
-    void safeDecisionAllowsToolExecution() {
+    void aiDenialBehavesLikeHumanDenial() throws Exception {
+        AtomicInteger validations = new AtomicInteger();
         AtomicInteger executions = new AtomicInteger();
-        ToolRegistry registry = registryWith(tool("bash", args -> {
-            executions.incrementAndGet();
-            return "executed";
-        }));
-        ToolCallValidator validator = ToolCallValidator.forClient(
-                reply("```json\n{\"allow\":true,\"reason\":\"local test\"}\n```"), Paths.get("."));
-        AgentLoop loop = new AgentLoop(null, registry, null, "free", null, validator);
+        AgentLoop loop = loop("approval", toolCallingModel(toolCalls("bash", "{\"command\":\"rm -rf /\"}")),
+                registryWith(tool("bash", args -> {
+                    executions.incrementAndGet();
+                    return "executed";
+                })), ToolCallValidator.forClient(reply(validations,
+                        "{\"allow\":false,\"requiresHuman\":false,\"reason\":\"destructive command\"}"), Paths.get(".")));
 
-        ToolExecutionResult result = loop.executeToolCalls(toolCalls("bash", "{\"command\":\"mvn test\"}"));
+        String result = loop.run(UserMessage.of("delete files"));
 
+        assertEquals(1, validations.get());
+        assertEquals(0, executions.get());
+        assertTrue(result.contains("未通过 AI 审批"));
+        assertTrue(result.contains("destructive command"));
+        assertFalse(loop.getHitlManager().hasPendingHITL());
+    }
+
+    @Test
+    void freeModeDoesNotInvokeAiApproval() throws Exception {
+        AtomicInteger validations = new AtomicInteger();
+        AtomicInteger executions = new AtomicInteger();
+        AgentLoop loop = loop("free", toolCallingModel(toolCalls("bash", "{}")),
+                registryWith(tool("bash", args -> {
+                    executions.incrementAndGet();
+                    return "executed";
+                })), ToolCallValidator.forClient(reply(validations,
+                        "{\"allow\":false,\"requiresHuman\":false,\"reason\":\"should not be used\"}"), Paths.get(".")));
+
+        String result = loop.run(UserMessage.of("run"));
+
+        assertEquals("done", result);
+        assertEquals(0, validations.get());
         assertEquals(1, executions.get());
-        assertEquals("executed", result.toolResults().get(0).getContent());
+    }
+
+    @Test
+    void sandboxEscapeIsDeferredToMandatoryHumanApproval() throws Exception {
+        AtomicInteger validations = new AtomicInteger();
+        AtomicInteger executions = new AtomicInteger();
+        AgentLoop loop = loop("approval", toolCallingModel(toolCalls("write", "{\"path\":\"../secret\"}")),
+                registryWith(tool("write", args -> {
+                    executions.incrementAndGet();
+                    return "executed";
+                })), ToolCallValidator.forClient(reply(validations,
+                        "{\"allow\":false,\"requiresHuman\":true,\"reason\":\"outside workspace\"}"), Paths.get(".")));
+
+        String result = loop.run(UserMessage.of("write outside workspace"));
+
+        assertEquals(1, validations.get());
+        assertEquals(0, executions.get());
+        assertTrue(result.contains("outside workspace"));
+        assertTrue(loop.getHitlManager().hasPendingHITL());
+        assertTrue(loop.getHitlManager().hasSandboxPending());
+    }
+
+    @Test
+    void missingValidationModelKeepsManualHitl() throws Exception {
+        AtomicInteger executions = new AtomicInteger();
+        AgentLoop loop = loop("approval", toolCallingModel(toolCalls("bash", "{}")),
+                registryWith(tool("bash", args -> {
+                    executions.incrementAndGet();
+                    return "executed";
+                })), ToolCallValidator.fromConfig(null, Paths.get(".")));
+
+        String result = loop.run(UserMessage.of("run"));
+
+        assertTrue(result.contains("HITL"));
+        assertTrue(loop.getHitlManager().hasPendingHITL());
+        assertEquals(0, executions.get());
     }
 
     @Test
     void malformedValidatorResponseFailsClosed() {
-        AtomicInteger executions = new AtomicInteger();
-        ToolRegistry registry = registryWith(tool("bash", args -> {
-            executions.incrementAndGet();
-            return "executed";
-        }));
-        AgentLoop loop = new AgentLoop(null, registry, null, "free", null,
+        AgentLoop loop = loop("approval", null, registryWith(tool("bash", args -> "executed")),
                 ToolCallValidator.forClient(reply("probably safe"), Paths.get(".")));
 
-        ToolExecutionResult result = loop.executeToolCalls(toolCalls("bash", "{}"));
+        ToolCallValidator.Decision decision = loop.validateHITLToolCalls(toolCalls("bash", "{}"));
 
-        assertEquals(0, executions.get());
-        assertTrue(result.toolResults().get(0).getContent().contains("无法解析校验模型结果"));
+        assertFalse(decision.allowed());
+        assertTrue(decision.reason().contains("无法解析校验模型结果"));
     }
 
     @Test
     void nonBooleanAllowValueFailsClosed() {
-        AtomicInteger executions = new AtomicInteger();
-        ToolRegistry registry = registryWith(tool("bash", args -> {
-            executions.incrementAndGet();
-            return "executed";
-        }));
-        AgentLoop loop = new AgentLoop(null, registry, null, "free", null,
-                ToolCallValidator.forClient(reply("{\"allow\":\"true\",\"reason\":\"wrong type\"}"), Paths.get(".")));
+        AgentLoop loop = loop("approval", null, registryWith(tool("bash", args -> "executed")),
+                ToolCallValidator.forClient(reply("{\"allow\":\"true\",\"requiresHuman\":false,\"reason\":\"wrong type\"}"), Paths.get(".")));
 
-        ToolExecutionResult result = loop.executeToolCalls(toolCalls("bash", "{}"));
+        ToolCallValidator.Decision decision = loop.validateHITLToolCalls(toolCalls("bash", "{}"));
 
-        assertEquals(0, executions.get());
-        assertTrue(result.toolResults().get(0).getContent().contains("allow 字段不是布尔值"));
+        assertFalse(decision.allowed());
+        assertTrue(decision.reason().contains("allow 字段不是布尔值"));
     }
 
-    @Test
-    void writeToolIsNotExemptFromValidation() {
-        AtomicInteger executions = new AtomicInteger();
-        ToolRegistry registry = registryWith(tool("write", args -> {
-            executions.incrementAndGet();
-            return "executed";
-        }));
-        AgentLoop loop = new AgentLoop(null, registry, null, "free", null,
-                ToolCallValidator.forClient(reply("{\"allow\":false,\"reason\":\"unsafe write\"}"), Paths.get(".")));
-
-        ToolExecutionResult result = loop.executeToolCalls(toolCalls("write", "{\"path\":\"outside\"}"));
-
-        assertEquals(0, executions.get());
-        assertTrue(result.toolResults().get(0).getContent().contains("unsafe write"));
+    private static AgentLoop loop(String hitlMode, ModelClient mainClient, ToolRegistry registry,
+                                  ToolCallValidator validator) {
+        ConversationContext context = new ConversationContext(
+                new PromptPrefix("test", new ONode().asArray()));
+        AgentLoop loop = new AgentLoop(mainClient, registry, context, hitlMode, null, validator);
+        loop.setOutput(AgentOutput.NOOP);
+        return loop;
     }
 
-    @Test
-    void readOnlyToolDoesNotCallValidator() {
-        AtomicInteger validations = new AtomicInteger();
-        AtomicInteger executions = new AtomicInteger();
-        FunctionToolDesc tool = tool("read", args -> {
-            executions.incrementAndGet();
-            return "content";
-        });
-        tool.metaPut("readOnly", true);
-        ToolCallValidator validator = ToolCallValidator.forClient(reply(validations,
-                "{\"allow\":false,\"reason\":\"should not be used\"}"), Paths.get("."));
-        AgentLoop loop = new AgentLoop(null, registryWith(tool), null, "free", null, validator);
+    private static ModelClient toolCallingModel(ONode toolCalls) {
+        AtomicInteger streams = new AtomicInteger();
+        return new ModelClient() {
+            @Override
+            public ONode chat(List<ChatMessage> messages, ONode tools) {
+                return null;
+            }
 
-        loop.executeToolCalls(toolCalls("read", "{}"));
+            @Override
+            public void chatStream(List<ChatMessage> messages, ONode tools, StreamCallback callback) {
+                if (streams.getAndIncrement() == 0) {
+                    callback.onToolCalls(toolCalls);
+                } else {
+                    callback.onContentDelta("done");
+                }
+                callback.onDone();
+            }
 
-        assertEquals(0, validations.get());
-        assertEquals(1, executions.get());
+            @Override
+            public String getModel() {
+                return "main";
+            }
+
+            @Override
+            public void setModel(String model) {
+            }
+        };
     }
 
     private static ModelClient reply(String content) {
@@ -149,7 +203,13 @@ class ToolCallValidatorTest {
     }
 
     private static ToolRegistry registryWith(FunctionToolDesc tool) {
-        ToolRegistry registry = new ToolRegistry().setDisabledTools(Set.of());
+        ToolRegistry registry = new ToolRegistry() {
+            @Override
+            public void refresh() {
+                // Unit tests register tools directly and do not boot the Solon container.
+            }
+        };
+        registry.setDisabledTools(Set.of());
         registry.setRefreshContext(Paths.get(".").toAbsolutePath(), null, null, List.of());
         registry.register(tool);
         return registry;

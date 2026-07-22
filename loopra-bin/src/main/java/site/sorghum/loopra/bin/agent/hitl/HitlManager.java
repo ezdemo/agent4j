@@ -200,6 +200,29 @@ public class HitlManager {
     }
 
     /**
+     * 判断本轮工具调用是否原本需要进入人工审批。
+     * 校验模型启用时复用此判定，让 AI 只替代人工审批环节。
+     */
+    public boolean requiresHITL(ONode toolCalls) {
+        List<String> whitelist = MODE_AUTO.equals(hitlMode)
+                ? LoopraConfig.getInstance().autoWhitelist()
+                : List.of();
+        return requiresHITL(toolCalls, whitelist);
+    }
+
+    boolean requiresHITL(ONode toolCalls, List<String> autoWhitelist) {
+        return requiresHITL(parseToolCalls(toolCalls), autoWhitelist);
+    }
+
+    private boolean requiresHITL(List<ToolCallEntry> tcList, List<String> autoWhitelist) {
+        if (allToolsExempt(tcList) || MODE_FREE.equals(hitlMode)) return false;
+        if (MODE_AUTO.equals(hitlMode)) {
+            return tcList.stream().anyMatch(tc -> !matchesWhitelist(tc.name(), autoWhitelist));
+        }
+        return true;
+    }
+
+    /**
      * HITL 拦截：根据当前模式决定是否暂存工具调用等待用户审批。
      * <ul>
      *   <li>自由模式 ({@link #MODE_FREE})：直接放行，返回 {@code null}</li>
@@ -218,33 +241,18 @@ public class HitlManager {
                                    AgentOutput output) {
         List<ToolCallEntry> tcList = parseToolCalls(toolCalls);
 
-        // 免审批工具直接放行
-        if (allToolsExempt(tcList)) {
-            log.debug("[hitl] 工具全部免审批，直接放行: {}", tcList.stream().map(ToolCallEntry::name).toList());
-            return null;
-        }
-
-        // ---- 根据模式决定行为 ----
-        if (MODE_FREE.equals(hitlMode)) {
-            // 自由模式：不拦截，直接放行
+        List<String> whitelist = MODE_AUTO.equals(hitlMode)
+                ? LoopraConfig.getInstance().autoWhitelist()
+                : List.of();
+        if (!requiresHITL(tcList, whitelist)) {
             return null;
         }
 
         if (MODE_AUTO.equals(hitlMode)) {
-            // 自动模式：基于白名单过滤
-            List<String> whitelist = LoopraConfig.getInstance().autoWhitelist();
-            boolean allMatched = tcList.stream().allMatch(tc -> matchesWhitelist(tc.name(), whitelist));
-
-            if (allMatched) {
-                return null;
-            }
-
-            // 白名单不匹配：降级为审批流程
             List<String> rejected = tcList.stream()
                     .filter(tc -> !matchesWhitelist(tc.name(), whitelist))
                     .map(ToolCallEntry::name).toList();
             log.debug("[hitl] 自动模式：白名单不匹配，需审批: {}", rejected);
-            // 继续走下方审批逻辑
         }
 
         // ---- 审批模式：暂存状态，等待用户审批 ----

@@ -18,7 +18,7 @@
       <section class="model-validator">
         <label>
           <span>命令校验模型</span>
-          <select v-model="validationModelKey" title="危险工具执行前使用此模型进行安全校验">
+          <select v-model="validationModelKey" title="替代人工 HITL 对待审批工具调用作出决定">
             <option value="">不启用</option>
             <optgroup v-for="channel in channels" :key="channel.id" :label="channel.name">
               <option v-for="model in namedModels(channel)" :key="model.id" :value="modelKey(channel.id, model.name)">
