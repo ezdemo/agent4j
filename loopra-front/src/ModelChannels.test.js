@@ -1,0 +1,100 @@
+/* @vitest-environment jsdom */
+
+import {flushPromises, shallowMount} from '@vue/test-utils'
+import {describe, expect, it, vi} from 'vitest'
+
+vi.mock('./stores/app', () => ({
+  useAppStore: () => ({settings: {theme: 'gray'}})
+}))
+
+vi.mock('ant-design-vue', () => ({
+  message: {error: vi.fn(), success: vi.fn(), warning: vi.fn()}
+}))
+
+vi.mock('./services/api', () => ({
+  configAPI: {
+    getConfig: vi.fn().mockResolvedValue({
+      success: true,
+      data: {
+        model: 'main-large',
+        modelChannelId: 'main',
+        validationModel: 'guard-mini',
+        validationModelChannelId: 'guard',
+        modelChannels: [
+          {
+            id: 'main',
+            name: 'Main',
+            baseUrl: 'https://main.test/v1',
+            apiKey: '****',
+            models: [{name: 'main-large'}]
+          },
+          {
+            id: 'guard',
+            name: 'Guard',
+            baseUrl: 'https://guard.test/v1',
+            apiKey: '****',
+            models: [{name: 'guard-mini'}]
+          }
+        ]
+      }
+    }),
+    updateConfig: vi.fn().mockResolvedValue({success: true}),
+    probeRemoteModels: vi.fn()
+  }
+}))
+
+import ModelChannels from './ModelChannels.vue'
+import {configAPI} from './services/api'
+
+describe('ModelChannels validation model', () => {
+  it('loads and saves a model selected from another channel', async () => {
+    const wrapper = shallowMount(ModelChannels)
+    await flushPromises()
+
+    const select = wrapper.find('.model-validator select')
+    expect(select.element.value).toBe(JSON.stringify(['guard', 'guard-mini']))
+
+    await wrapper.find('.model-channels-save').trigger('click')
+    await flushPromises()
+
+    expect(configAPI.updateConfig).toHaveBeenCalledWith(expect.objectContaining({
+      validationModel: 'guard-mini',
+      validationModelChannelId: 'guard'
+    }))
+    wrapper.unmount()
+  })
+
+  it('keeps validation enabled when the selected model is renamed', async () => {
+    const wrapper = shallowMount(ModelChannels)
+    await flushPromises()
+
+    await wrapper.findAll('.model-channel-toggle')[1].trigger('click')
+    await wrapper.findAll('.model-config-toggle')[0].trigger('click')
+    const modelName = wrapper.find('.model-config-main input[type="text"]')
+    await modelName.setValue('guard-mini-v2')
+    await modelName.trigger('change')
+    await wrapper.find('.model-channels-save').trigger('click')
+    await flushPromises()
+
+    expect(configAPI.updateConfig).toHaveBeenLastCalledWith(expect.objectContaining({
+      validationModel: 'guard-mini-v2',
+      validationModelChannelId: 'guard'
+    }))
+    wrapper.unmount()
+  })
+
+  it('persists empty values when validation is disabled', async () => {
+    const wrapper = shallowMount(ModelChannels)
+    await flushPromises()
+
+    await wrapper.find('.model-validator select').setValue('')
+    await wrapper.find('.model-channels-save').trigger('click')
+    await flushPromises()
+
+    expect(configAPI.updateConfig).toHaveBeenLastCalledWith(expect.objectContaining({
+      validationModel: '',
+      validationModelChannelId: ''
+    }))
+    wrapper.unmount()
+  })
+})

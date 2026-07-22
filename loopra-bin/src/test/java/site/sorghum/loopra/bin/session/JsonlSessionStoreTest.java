@@ -8,8 +8,16 @@ import site.sorghum.loopra.bin.agent.model.FileChange;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
 
 import java.io.IOException;
+import java.lang.reflect.Method;
+import java.nio.file.Path;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
+import java.util.concurrent.locks.ReentrantLock;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -61,6 +69,33 @@ class JsonlSessionStoreTest {
         assertEquals(1, loaded.size());
         assertEquals("user", loaded.get(0).getRole());
         assertEquals("hello", loaded.get(0).getContent());
+    }
+
+    @Test
+    void loadFromAnotherStoreWaitsForOngoingWrite() throws Exception {
+        store.append(ChatMessage.ofUser("complete message"));
+        store.flush();
+
+        Path sessionsDir = Paths.get(System.getProperty("user.home"), ".loopra", "sessions");
+        Path sessionFile = sessionsDir.resolve(store.currentName() + ".jsonl");
+        Method fileLockMethod = JsonlSessionStore.class.getDeclaredMethod("fileLock", Path.class);
+        fileLockMethod.setAccessible(true);
+        ReentrantLock writeLock = (ReentrantLock) fileLockMethod.invoke(null, sessionFile);
+        JsonlSessionStore readerStore = new JsonlSessionStore(sessionsDir);
+        ExecutorService reader = Executors.newSingleThreadExecutor();
+        writeLock.lock();
+        try {
+            Future<List<ChatMessage>> loading = reader.submit(() -> readerStore.load(store.currentName()));
+            Thread.sleep(50);
+            assertFalse(loading.isDone(), "load must not read while another Store writes the same session");
+
+            writeLock.unlock();
+            assertEquals(1, loading.get(1, TimeUnit.SECONDS).size());
+        } finally {
+            if (writeLock.isHeldByCurrentThread()) writeLock.unlock();
+            reader.shutdownNow();
+            readerStore.shutdown();
+        }
     }
 
     @Test

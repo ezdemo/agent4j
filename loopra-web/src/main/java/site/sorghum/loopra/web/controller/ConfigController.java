@@ -99,7 +99,9 @@ public class ConfigController {
                                 entry.name(), entry.contextTokens(), entry.imageInput(), entry.price()
                         )).collect(Collectors.toList())
                 )).collect(Collectors.toList()),
-                cfg.modelChannelId()
+                cfg.modelChannelId(),
+                cfg.validationModel(),
+                cfg.validationModelChannelId()
         );
         return ApiResponse.ok(data);
     }
@@ -114,7 +116,9 @@ public class ConfigController {
         // 渠道/API 变更 → 销毁重建（因 HttpModelClient 的 apiUrl/apiKey 为 final）
         boolean agentReinitialized = false;
         if ((body.containsKey("baseUrl") || body.containsKey("apiKey")
-                || body.containsKey("modelChannels") || body.containsKey("modelChannelId")) && agentService.isReady()) {
+                || body.containsKey("modelChannels") || body.containsKey("modelChannelId")
+                || body.containsKey("validationModel") || body.containsKey("validationModelChannelId"))
+                && agentService.isReady()) {
             agentService.reinitialize();
             agentReinitialized = true;
         }
@@ -124,7 +128,8 @@ public class ConfigController {
             String key = entry.getKey();
             // baseUrl/apiKey 已在上方处理，跳过
             if ("baseUrl".equals(key) || "apiKey".equals(key)
-                    || "modelChannels".equals(key) || "modelChannelId".equals(key)) continue;
+                    || "modelChannels".equals(key) || "modelChannelId".equals(key)
+                    || "validationModel".equals(key) || "validationModelChannelId".equals(key)) continue;
             // 只发布已知的运行时配置键
             if ("model".equals(key) || "hitl".equals(key)
                     || "terminateOnNoToolCall".equals(key) || "disabledTools".equals(key)) {

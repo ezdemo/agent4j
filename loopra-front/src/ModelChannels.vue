@@ -15,6 +15,19 @@
 
     <div v-if="loading" class="model-channels-empty">正在加载模型渠道...</div>
     <div v-else class="model-channels-body">
+      <section class="model-validator">
+        <label>
+          <span>命令校验模型</span>
+          <select v-model="validationModelKey" title="危险工具执行前使用此模型进行安全校验">
+            <option value="">不启用</option>
+            <optgroup v-for="channel in channels" :key="channel.id" :label="channel.name">
+              <option v-for="model in namedModels(channel)" :key="model.id" :value="modelKey(channel.id, model.name)">
+                {{ model.name }}
+              </option>
+            </optgroup>
+          </select>
+        </label>
+      </section>
       <div v-if="!channels.length" class="model-channels-empty">暂无模型渠道</div>
       <article v-for="(channel, index) in channels" :key="channel.id" class="model-channel" :class="{ active: channel.id === activeChannelId }">
         <header class="model-channel-header">
@@ -92,7 +105,7 @@
                 <div class="model-config-main">
                   <label>
                     <span>名称</span>
-                    <input v-model.trim="model.name" type="text" placeholder="例如 gpt-4o" @change="ensureCurrentModel(channel)" />
+                    <input v-model.trim="model.name" type="text" placeholder="例如 gpt-4o" @change="handleModelNameChange(channel, model)" />
                   </label>
                   <label>
                     <span>上下文（tokens）</span>
@@ -148,9 +161,35 @@ const theme = computed(() => store.settings.theme)
 const channels = ref([])
 const activeChannelId = ref('')
 const currentModel = ref('')
+const validationModel = ref('')
+const validationModelChannelId = ref('')
+const validationModelKey = computed({
+  get: () => validationModel.value && validationModelChannelId.value
+    ? modelKey(validationModelChannelId.value, validationModel.value)
+    : '',
+  set: (value) => {
+    if (!value) {
+      validationModel.value = ''
+      validationModelChannelId.value = ''
+      return
+    }
+    try {
+      const [channelId, model] = JSON.parse(value)
+      validationModelChannelId.value = channelId || ''
+      validationModel.value = model || ''
+    } catch {
+      validationModel.value = ''
+      validationModelChannelId.value = ''
+    }
+  }
+})
 const loading = ref(true)
 const saving = ref(false)
 const syncingChannelId = ref('')
+
+function modelKey(channelId, model) {
+  return JSON.stringify([channelId, model])
+}
 
 function makeId(prefix = 'channel') {
   return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`
@@ -172,6 +211,7 @@ function newModel(name = '') {
     id: makeId('model'),
     expanded: false,
     name,
+    originalName: name,
     contextTokens: null,
     imageInput: false,
     priceEnabled: false,
@@ -219,6 +259,26 @@ function ensureCurrentModel(channel) {
   if (!names.includes(currentModel.value)) currentModel.value = names[0] || ''
 }
 
+function ensureValidationModel() {
+  const channel = channels.value.find((item) => item.id === validationModelChannelId.value)
+  if (!channel || !namedModels(channel).some((model) => model.name === validationModel.value)) {
+    validationModel.value = ''
+    validationModelChannelId.value = ''
+  }
+}
+
+function handleModelNameChange(channel, model) {
+  if (channel.id === validationModelChannelId.value && model.originalName === validationModel.value) {
+    validationModel.value = model.name
+  }
+  if (channel.id === activeChannelId.value && model.originalName === currentModel.value) {
+    currentModel.value = model.name
+  }
+  model.originalName = model.name
+  ensureCurrentModel(channel)
+  ensureValidationModel()
+}
+
 function selectCurrentModel(channel, model) {
   activeChannelId.value = channel.id
   currentModel.value = model.name
@@ -239,8 +299,14 @@ function addModel(channel) {
 }
 
 function removeModel(channel, index) {
+  const model = channel.models[index]
+  if (channel.id === validationModelChannelId.value && model?.name === validationModel.value) {
+    message.warning('请先取消或更换命令校验模型')
+    return
+  }
   const [removed] = channel.models.splice(index, 1)
   if (channel.id === activeChannelId.value && removed?.name === currentModel.value) ensureCurrentModel(channel)
+  ensureValidationModel()
 }
 
 function addChannel() {
@@ -252,12 +318,18 @@ function addChannel() {
 }
 
 function removeChannel(index) {
+  const channel = channels.value[index]
+  if (channel?.id === validationModelChannelId.value) {
+    message.warning('请先取消或更换命令校验模型')
+    return
+  }
   const [removed] = channels.value.splice(index, 1)
   if (removed?.id === activeChannelId.value) {
     const next = channels.value[0]
     activeChannelId.value = next?.id || ''
     ensureCurrentModel(next || {models: []})
   }
+  ensureValidationModel()
 }
 
 function canSyncRemoteModels(channel) {
@@ -288,7 +360,10 @@ async function load() {
     channels.value = (config.modelChannels || []).map(normalizeChannel)
     activeChannelId.value = config.modelChannelId || channels.value[0]?.id || ''
     currentModel.value = config.model || ''
+    validationModel.value = config.validationModel || ''
+    validationModelChannelId.value = config.validationModelChannelId || ''
     if (!channels.value.length) addChannel()
+    ensureValidationModel()
     const active = channels.value.find((channel) => channel.id === activeChannelId.value) || channels.value[0]
     if (active) {
       activeChannelId.value = active.id
@@ -317,12 +392,15 @@ async function save() {
   }
   const modelNames = active.models.map((model) => model.name)
   const model = modelNames.includes(currentModel.value) ? currentModel.value : modelNames[0]
+  ensureValidationModel()
   saving.value = true
   try {
     const response = await configAPI.updateConfig({
       modelChannels: payloadChannels,
       modelChannelId: active.id,
-      model
+      model,
+      validationModel: validationModel.value,
+      validationModelChannelId: validationModelChannelId.value
     })
     if (!response.success) throw new Error(response.message || '保存模型配置失败')
     for (const channel of channels.value) {
@@ -390,6 +468,10 @@ onMounted(load)
 .model-channels[data-theme="dark"] .model-channels-save:not(:disabled):hover { background: #f4f4f5; }
 .model-channels[data-theme="dark"] .model-channels-save:disabled { background: #303034; color: #9499a3; opacity: 1; }
 .model-channels-body { box-sizing: border-box; width: 100%; min-width: 0; min-height: 0; flex: 1; margin: 0; padding: 28px max(24px, calc((100% - 840px) / 2)) 48px; overflow-x: hidden; overflow-y: auto; }
+.model-validator { margin-bottom: 14px; padding: 14px 16px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-2); }
+.model-validator label { display: grid; grid-template-columns: minmax(130px, auto) minmax(220px, 1fr); align-items: center; gap: 16px; color: var(--fg-2); font-size: 13px; }
+.model-validator select { width: 100%; height: 32px; padding: 0 8px; border: 1px solid var(--border); border-radius: 5px; outline: none; background: var(--bg); color: var(--fg); font: inherit; font-size: 13px; }
+.model-validator select:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent); }
 .model-channels-empty { height: 100%; display: grid; place-items: center; color: var(--fg-4); font-size: 13px; }
 .model-channel { min-width: 0; margin-bottom: 14px; overflow: hidden; border: 1px solid var(--border); border-radius: 7px; background: var(--bg); }
 .model-channel.active { border-color: color-mix(in srgb, var(--accent) 52%, var(--border)); }
@@ -435,5 +517,5 @@ onMounted(load)
 .model-config-add:hover, .model-channel-add:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-bg); }
 .model-channel-add svg { width: 16px; height: 16px; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-@media (max-width: 700px) { .model-channels-header { padding: 0 14px; } .model-channels-header p { display: none; } .model-channels-body { width: 100%; padding: 14px 14px 32px; } .model-channel-current span { display: none; } .model-channel-fields { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px; } .model-channel-models { grid-column: auto; } .model-config-main { grid-template-columns: minmax(0, 1fr) auto; } .model-config-main .model-config-switch { grid-column: 1 / -1; } .model-config-price { flex-wrap: wrap; } .model-config-price .model-config-switch { width: 100%; } }
+@media (max-width: 700px) { .model-channels-header { padding: 0 14px; } .model-channels-header p { display: none; } .model-channels-body { width: 100%; padding: 14px 14px 32px; } .model-validator label { grid-template-columns: minmax(0, 1fr); gap: 7px; } .model-channel-current span { display: none; } .model-channel-fields { grid-template-columns: minmax(0, 1fr); gap: 12px; padding: 14px; } .model-channel-models { grid-column: auto; } .model-config-main { grid-template-columns: minmax(0, 1fr) auto; } .model-config-main .model-config-switch { grid-column: 1 / -1; } .model-config-price { flex-wrap: wrap; } .model-config-price .model-config-switch { width: 100%; } }
 </style>

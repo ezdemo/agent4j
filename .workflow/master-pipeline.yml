@@ -15,15 +15,16 @@ stages:
     trigger: auto
     steps:
       - step: build@maven
-        name: build_maven
-        displayName: Maven Package (Skip Tests)
+        name: build_web_distribution
+        displayName: Build Frontend + Package Web Distribution
         jdkVersion: 17
         mavenVersion: 3.6.3
         commands:
           - bash .release/ci-sync-web-assets.sh
           - mvn -B -ntp -DskipTests -gs .workflow/maven-central-settings.xml -s .workflow/maven-central-settings.xml clean verify
+          - test -f ./loopra-web/target/loopra-web-dist.tar.gz
         artifacts:
-          - name: DISTRIBUTION
+          - name: LOOPRA_WEB_DIST
             path:
               - ./loopra-web/target/loopra-web-dist.tar.gz
   - stage:
@@ -33,9 +34,9 @@ stages:
     trigger: auto
     steps:
       - step: publish@general_artifacts
-        name: publish_distribution
-        displayName: Upload Distribution
-        dependArtifact: DISTRIBUTION
+        name: upload_web_distribution
+        displayName: Upload Web Distribution
+        dependArtifact: LOOPRA_WEB_DIST
         artifactRepository: default
         artifactName: loopra-web-dist
   - stage:
@@ -45,8 +46,8 @@ stages:
     trigger: manual
     steps:
       - step: publish@release_artifacts
-        name: release_distribution
-        displayName: Create Release
+        name: release_web_distribution
+        displayName: Release Web Distribution
         dependArtifact: loopra-web-dist
         artifactRepository: release
         version: '1.0.0.0'

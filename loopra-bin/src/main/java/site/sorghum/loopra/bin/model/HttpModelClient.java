@@ -56,6 +56,8 @@ public class HttpModelClient implements ModelClient {
      */
     private String reasoningEffort;
     private volatile String model;
+    /** 显式请求会话亲和标识；子代理使用独立且固定的值，避免依赖线程局部上下文。 */
+    private volatile String sessionAffinity;
     /**
      * 流式中断标志（ReasonBreaker 触发时设置）
      */
@@ -94,12 +96,25 @@ public class HttpModelClient implements ModelClient {
         this(apiUrl, apiKey, model, reasoningEffort, modelChannelId, apiProtocol, DEFAULT_RETRY_DELAYS);
     }
 
+    /** 创建用于工具安全校验的短超时、零重试客户端。 */
+    public static HttpModelClient forValidation(String apiUrl, String apiKey, String model,
+                                                String modelChannelId, String apiProtocol) {
+        return new HttpModelClient(apiUrl, apiKey, model, "none", modelChannelId, apiProtocol,
+                new int[0], 30, TimeUnit.SECONDS);
+    }
+
     HttpModelClient(String apiUrl, String apiKey, String model, String reasoningEffort, int[] retryDelays) {
         this(apiUrl, apiKey, model, reasoningEffort, null, "chat_completions", retryDelays);
     }
 
     HttpModelClient(String apiUrl, String apiKey, String model, String reasoningEffort, String modelChannelId,
                     String apiProtocol, int[] retryDelays) {
+        this(apiUrl, apiKey, model, reasoningEffort, modelChannelId, apiProtocol,
+                retryDelays, 10, TimeUnit.MINUTES);
+    }
+
+    private HttpModelClient(String apiUrl, String apiKey, String model, String reasoningEffort, String modelChannelId,
+                            String apiProtocol, int[] retryDelays, long readTimeout, TimeUnit readTimeoutUnit) {
         this.apiUrl = apiUrl;
         this.apiKey = apiKey;
         this.modelChannelId = modelChannelId;
@@ -109,7 +124,7 @@ public class HttpModelClient implements ModelClient {
         this.retryDelays = retryDelays.clone();
         this.client = new OkHttpClient.Builder()
                 .connectTimeout(30, TimeUnit.SECONDS)
-                .readTimeout(10, TimeUnit.MINUTES)
+                .readTimeout(readTimeout, readTimeoutUnit)
                 .writeTimeout(30, TimeUnit.SECONDS)
                 .retryOnConnectionFailure(false) // 由我们自己的重试逻辑控制
                 .build();
@@ -118,8 +133,8 @@ public class HttpModelClient implements ModelClient {
     /**
      * 向 OkHttp Request.Builder 添加会话标识请求头。
      */
-    private static void addSessionHeaders(Request.Builder builder, String model) {
-        String sessionId = CURRENT_LOG_SESSION.get();
+    private void addSessionHeaders(Request.Builder builder, String model) {
+        String sessionId = resolveSessionAffinity();
         String userId = UserIdProvider.getUserId();
         if (sessionId != null && !sessionId.isEmpty()) {
             builder.addHeader("x-session-affinity", sessionId);
@@ -317,13 +332,26 @@ public class HttpModelClient implements ModelClient {
     }
 
     @Override
+    public void setSessionAffinity(String sessionAffinity) {
+        this.sessionAffinity = sessionAffinity;
+    }
+
+    private String resolveSessionAffinity() {
+        String explicit = sessionAffinity;
+        return explicit != null && !explicit.isEmpty() ? explicit : CURRENT_LOG_SESSION.get();
+    }
+
+    @Override
     public ModelClient fork() {
-        return new HttpModelClient(apiUrl, apiKey, model, reasoningEffort, modelChannelId, apiProtocol.name());
+        HttpModelClient fork = new HttpModelClient(
+                apiUrl, apiKey, model, reasoningEffort, modelChannelId, apiProtocol.name());
+        fork.setSessionAffinity(sessionAffinity);
+        return fork;
     }
 
     private ModelApiProtocol.RequestContext requestContext(List<ChatMessage> messages, ONode tools) {
         return new ModelApiProtocol.RequestContext(
-                model, reasoningEffort, messages, tools, UserIdProvider.getUserId(), CURRENT_LOG_SESSION.get());
+                model, reasoningEffort, messages, tools, UserIdProvider.getUserId(), resolveSessionAffinity());
     }
 
     /**
