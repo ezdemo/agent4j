@@ -32,7 +32,8 @@ public enum SubAgentProfile {
             """);
 
     private static final Set<String> READ_ONLY_TOOLS = Set.of(
-            "read", "glob", "grep", "ls", "workspace_read", "workspace_list",
+            "read", "glob", "grep", "ls",
+            "workspace_read", "workspace_list", "workspace_write",
             "java_source", "codesearch", "codegraph_explore", "webfetch",
             "vision_recognize", "finish");
 

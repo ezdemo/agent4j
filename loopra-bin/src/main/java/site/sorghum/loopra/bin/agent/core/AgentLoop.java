@@ -1217,7 +1217,7 @@ public class AgentLoop implements AgentLoopController {
                     }
 
                     String argumentsJson = toolCall.getArgumentsStr();
-                    if (!isBrowserTool(toolCall.getName()) && !toolMetaFlag(fc, "stormExempt")) {
+                    if (!isBuiltInStormExemptTool(toolCall.getName()) && !toolMetaFlag(fc, "stormExempt")) {
                         boolean readOnly = toolMetaFlag(fc, "readOnly");
                         StormBreaker.SuppressResult suppression =
                                 stormBreaker.inspect(toolCall.getName(), argumentsJson, readOnly);
@@ -1230,12 +1230,14 @@ public class AgentLoop implements AgentLoopController {
                         }
                     }
 
-                    //收集拦截器
+                    // 收集工具调用上下文；终端工具通过 __cwd 获取实际执行目录。
                     ToolContext.setCurrentController(AgentLoop.this);
+                    String workspacePath = registry.getWorkspace().toAbsolutePath().normalize().toString();
                     HashMap<String, Object> extraMap = new HashMap<>();
+                    extraMap.put("__cwd", workspacePath);
                     extraMap.put("ctx", new ToolContext(
                             new HashMap<>(),
-                            registry.getWorkspace().toAbsolutePath().toString(),
+                            workspacePath,
                             this.getSessionId()
                     ));
 
@@ -1298,9 +1300,10 @@ public class AgentLoop implements AgentLoopController {
         return value != null && Boolean.parseBoolean(value.toString());
     }
 
-    /** Browser actions may legitimately repeat while a page renders or changes state. */
-    private static boolean isBrowserTool(String toolName) {
-        return toolName != null && toolName.startsWith("browser_");
+    /** Polling tools may legitimately repeat with identical arguments while waiting for state changes. */
+    private static boolean isBuiltInStormExemptTool(String toolName) {
+        return toolName != null
+                && (toolName.startsWith("browser_") || "bash_wait".equals(toolName));
     }
 
     private static String rejectedToolResult(String message, String reason) {

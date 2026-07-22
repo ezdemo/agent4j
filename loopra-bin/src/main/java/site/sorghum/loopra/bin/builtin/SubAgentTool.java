@@ -94,6 +94,11 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
 
             StringBuilder systemPromptBuilder = new StringBuilder(
                     selectedProfile.buildSystemPrompt(task, instructions));
+            if (registry.getWorkspace() != null) {
+                systemPromptBuilder.append("\n\n## 运行环境\n\n工作目录: `")
+                        .append(registry.getWorkspace().toAbsolutePath().normalize())
+                        .append('`');
+            }
             systemPromptBuilder.append("\n\n## 可用工具规范\n\n");
             for (FunctionTool def : registry.all().values()) {
                 if (!SubAgent.SUB_AGENT_DENY.contains(def.name())

@@ -10,12 +10,15 @@ import site.sorghum.loopra.bin.agent.model.ToolExecutionResult;
 import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.tool.HitlRequiredException;
+import site.sorghum.loopra.tool.ToolContext;
 
+import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -65,6 +68,23 @@ class AgentLoopToolSignalTest {
     }
 
     @Test
+    void copiedRegistryPreservesWorkspaceForToolCwd() {
+        Path workspace = Paths.get(".").toAbsolutePath().normalize();
+        AtomicReference<Map<String, Object>> capturedArgs = new AtomicReference<>();
+        ToolRegistry parentRegistry = registryWith(tool("workspace", args -> {
+            capturedArgs.set(args);
+            return "ok";
+        }));
+        AgentLoop childLoop = new AgentLoop(null, parentRegistry.copy(), null);
+
+        childLoop.executeToolCalls(toolCalls("workspace", "{}"));
+
+        assertEquals(workspace.toString(), capturedArgs.get().get("__cwd"));
+        ToolContext context = (ToolContext) capturedArgs.get().get("ctx");
+        assertEquals(workspace, context.getRootDir().toAbsolutePath().normalize());
+    }
+
+    @Test
     void repeatedToolCallSetsSuppressionSignalAndSkipsExecution() {
         AtomicInteger executions = new AtomicInteger();
         ToolRegistry registry = registryWith(tool("edit", args -> {
@@ -101,6 +121,21 @@ class AgentLoopToolSignalTest {
 
         HitlManager.PendingSandboxState pending = loop.getHitlManager().drainSandboxHITL();
         assertEquals("outside workspace", pending.details());
+    }
+
+    @Test
+    void bashWaitIsNeverSuppressed() {
+        AtomicInteger executions = new AtomicInteger();
+        AgentLoop loop = new AgentLoop(null, registryWith(tool("bash_wait", args -> {
+            executions.incrementAndGet();
+            return "waiting";
+        })), null);
+        ONode calls = toolCalls("bash_wait", "{\"session_id\":\"session-1\",\"yield_time_ms\":1000}");
+
+        assertFalse(loop.executeToolCalls(calls).anySuppressed());
+        assertFalse(loop.executeToolCalls(calls).anySuppressed());
+        assertFalse(loop.executeToolCalls(calls).anySuppressed());
+        assertEquals(3, executions.get());
     }
 
     @Test
