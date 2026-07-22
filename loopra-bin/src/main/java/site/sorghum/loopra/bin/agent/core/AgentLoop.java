@@ -89,16 +89,6 @@ public class AgentLoop implements AgentLoopController {
         return config != null ? config.maxSelfCorrectionAttempts() : DEFAULT_MAX_SELF_CORRECTION;
     }
 
-    /** 仅包含不会修改项目、外部系统或宿主环境的查询/控制工具。 */
-    private static final Set<String> VALIDATION_EXEMPT_TOOLS = Set.of(
-            "finish", "ask_choice", "browser_request_user_action",
-            "read", "glob", "ls", "grep", "codesearch", "java_source", "codegraph_explore",
-            "resolve-library-id", "query-docs", "skillrefresh", "skilllist", "skillread",
-            "workspace_read", "workspace_list", "checklist_start", "checklist_step", "checklist_status",
-            "goal_create", "goal_status", "goal_update_step", "goal_complete", "goal_block", "goal_resume",
-            "browser_tabs", "browser_screenshot"
-    );
-
     // ==================== 核心字段 ====================
 
     private final ModelClient client;
@@ -695,13 +685,31 @@ public class AgentLoop implements AgentLoopController {
 
             noToolCallStreak = 0;
 
-            // ---- HITL 拦截（finish/ask_choice 等免审批工具直接放行） ----
-            if (hitlManager.isHitlMode()) {
-                String hitlPrompt = hitlManager.interceptForHITL(toolCalls, sr.content(), sr.reasoningContent(), output);
-                if (hitlPrompt != null) {
-                    return hitlPrompt;
+            // ---- HITL 拦截（配置校验模型时由 AI 代替原本的人工审批） ----
+            if (hitlManager.isHitlMode() && hitlManager.requiresHITL(toolCalls)) {
+                if (toolCallValidator.enabled()) {
+                    ToolCallValidator.Decision decision = validateHITLToolCalls(toolCalls);
+                    if (decision.requiresHuman()) {
+                        hitlManager.setSandboxPending(toolCalls, decision.reason());
+                        hitlManager.storeSandboxContent(sr.content(), sr.reasoningContent());
+                        return hitlManager.interceptForSandboxHITL(output);
+                    }
+                    if (!decision.allowed()) {
+                        String denyMsg = "工具调用未通过 AI 审批: " + decision.reason();
+                        safeOutput("toolValidator", () -> output.onLog(LogLevel.WARN,
+                                "[tool-validator] " + denyMsg));
+                        ctx.addAssistant(denyMsg, null, null);
+                        return denyMsg;
+                    }
+                    safeOutput("toolValidator", () -> output.onLog(LogLevel.INFO,
+                            "[tool-validator] AI 审批通过，继续执行工具调用"));
+                } else {
+                    String hitlPrompt = hitlManager.interceptForHITL(
+                            toolCalls, sr.content(), sr.reasoningContent(), output);
+                    if (hitlPrompt != null) {
+                        return hitlPrompt;
+                    }
                 }
-                // 免审批工具：跳过拦截，继续执行
             }
 
             // ---- 6. 并行执行工具调用 ----
@@ -1209,26 +1217,13 @@ public class AgentLoop implements AgentLoopController {
                     }
 
                     String argumentsJson = toolCall.getArgumentsStr();
-                    boolean readOnly = toolMetaFlag(fc, "readOnly");
                     if (!isBrowserTool(toolCall.getName()) && !toolMetaFlag(fc, "stormExempt")) {
+                        boolean readOnly = toolMetaFlag(fc, "readOnly");
                         StormBreaker.SuppressResult suppression =
                                 stormBreaker.inspect(toolCall.getName(), argumentsJson, readOnly);
                         if (suppression.suppressed()) {
                             anySuppressed.set(true);
                             String result = rejectedToolResult(suppression.reason(), "storm");
-                            safeListener("toolResult", () -> listener.onToolResult(toolCall.getName(), result));
-                            safeOutputDebug("toolResult", () -> output.onToolResult(toolCall.getName(), result));
-                            return toolResult(toolCall.getId(), result);
-                        }
-                    }
-
-                    if (requiresToolValidation(toolCall.getName(), readOnly)) {
-                        ToolCallValidator.Decision decision = toolCallValidator.validate(
-                                toolCall.getName(), ONode.ofBean(toolCall.getArguments()).toJson());
-                        if (!decision.allowed()) {
-                            String result = rejectedToolResult(decision.reason(), "validation");
-                            safeOutput("toolValidator", () -> output.onLog(LogLevel.WARN,
-                                    "[tool-validator] 已拒绝执行 " + toolCall.getName() + ": " + decision.reason()));
                             safeListener("toolResult", () -> listener.onToolResult(toolCall.getName(), result));
                             safeOutputDebug("toolResult", () -> output.onToolResult(toolCall.getName(), result));
                             return toolResult(toolCall.getId(), result);
@@ -1272,8 +1267,26 @@ public class AgentLoop implements AgentLoopController {
         return new DispatchResult(futures, controls, anySuppressed, hitlRef);
     }
 
-    private boolean requiresToolValidation(String toolName, boolean readOnly) {
-        return toolCallValidator.enabled() && !readOnly && !VALIDATION_EXEMPT_TOOLS.contains(toolName);
+    ToolCallValidator.Decision validateHITLToolCalls(ONode toolCalls) {
+        if (toolCalls == null || !toolCalls.isArray()) {
+            return ToolCallValidator.Decision.deny("工具调用格式无效");
+        }
+        for (ONode node : toolCalls.getArray()) {
+            ToolCall toolCall = getToolCall(node);
+            if (toolCall.getName() == null || toolCall.getName().isBlank()) {
+                return ToolCallValidator.Decision.deny("工具名称为空");
+            }
+            ToolCallValidator.Decision decision = toolCallValidator.validate(
+                    toolCall.getName(), ONode.ofBean(toolCall.getArguments()).toJson());
+            if (decision.requiresHuman()) {
+                return ToolCallValidator.Decision.requireHuman(
+                        toolCall.getName() + ": " + decision.reason());
+            }
+            if (!decision.allowed()) {
+                return ToolCallValidator.Decision.deny(toolCall.getName() + ": " + decision.reason());
+            }
+        }
+        return ToolCallValidator.Decision.allow();
     }
 
     private static boolean toolMetaFlag(FunctionTool tool, String key) {

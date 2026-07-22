@@ -44,3 +44,12 @@ Responses API 流只有收到 `response.completed` 才可视为成功并发出�
 ## [2026-07-22 15:26] 会话折叠沉淀
 
 子代理模型缓存约定：每个 SubAgent 使用固定且唯一的 `父会话ID:sub-agent:UUID` session affinity，同时驱动 prompt_cache_key 与全部会话亲和请求头；子代理首轮前冻结 system 附加指令和结构化 tools，生命周期内不得改变前缀。
+
+## [2026-07-22 16:12] 会话折叠沉淀
+
+- 命令校验模型配置使用 `validationModel` 与 `validationModelChannelId` 跨渠道定位模型。
+- AI 校验模型的目标语义是替代普通人工 HITL 审批：只在原本需要人工审批时调用，AI 允许等同人工同意，AI 拒绝等同人工拒绝，不再弹人工审批。
+- `free` 模式不调用 AI 审批；`approval` 模式的待审批调用由 AI 决定；`auto` 模式白名单命中直接执行，未命中调用由 AI 决定。
+- 未配置校验模型时必须保留原有人工 HITL；沙箱越界审批继续由人工处理，不交给 AI 自动放行。
+- 同一批工具调用由 AI 逐个校验，任一调用不通过则整批视为审批拒绝。
+- `AgentLoop` 当前相关文件为 `loopra-bin/src/main/java/site/sorghum/loopra/bin/agent/core/AgentLoop.java`，HITL 判定与状态管理位于 `loopra-bin/src/main/java/site/sorghum/loopra/bin/agent/hitl/HitlManager.java`。
