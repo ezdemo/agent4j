@@ -8,6 +8,7 @@ import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.*;
 import site.sorghum.loopra.bin.config.ConfigChangedEvent;
 import site.sorghum.loopra.bin.config.ConfigService;
+import site.sorghum.loopra.bin.tool.ToolMetadata;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.web.common.ServiceException;
 import site.sorghum.loopra.web.common.WebErrorMessages;
@@ -26,9 +27,11 @@ public class ToolController {
     @Inject
     private AgentService agentService;
 
-    private static ToolInfoDTO toToolInfoDTO(FunctionTool def, boolean enabled, boolean autoApproved) {
+    static ToolInfoDTO toToolInfoDTO(FunctionTool def, boolean enabled, boolean autoApproved) {
         List<ToolParamInfoDTO> params = new ArrayList<>();
-        return new ToolInfoDTO(def.name(), def.description(), false, true, enabled, autoApproved, params);
+        return new ToolInfoDTO(def.name(), def.description(),
+                ToolMetadata.isReadOnly(def), ToolMetadata.isStormExempt(def),
+                enabled, autoApproved, params);
     }
 
     @ApiOperation(value = "列出所有工具", notes = "返回所有已注册的 Agent 工具列表（含已禁用的），含启用状态")

@@ -29,6 +29,7 @@ import site.sorghum.loopra.bin.goal.GoalService;
 import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.model.UserMessageSanitizer;
 import site.sorghum.loopra.bin.session.SessionService;
+import site.sorghum.loopra.bin.tool.ToolMetadata;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.tool.*;
 import site.sorghum.loopra.tool.interact.FinishTool;
@@ -1217,8 +1218,8 @@ public class AgentLoop implements AgentLoopController {
                     }
 
                     String argumentsJson = toolCall.getArgumentsStr();
-                    if (!isBuiltInStormExemptTool(toolCall.getName()) && !toolMetaFlag(fc, "stormExempt")) {
-                        boolean readOnly = toolMetaFlag(fc, "readOnly");
+                    if (!ToolMetadata.isStormExempt(fc)) {
+                        boolean readOnly = ToolMetadata.isReadOnly(fc);
                         StormBreaker.SuppressResult suppression =
                                 stormBreaker.inspect(toolCall.getName(), argumentsJson, readOnly);
                         if (suppression.suppressed()) {
@@ -1289,21 +1290,6 @@ public class AgentLoop implements AgentLoopController {
             }
         }
         return ToolCallValidator.Decision.allow();
-    }
-
-    private static boolean toolMetaFlag(FunctionTool tool, String key) {
-        Map<String, Object> meta = tool.meta();
-        Object value = meta != null ? meta.get(key) : null;
-        if (value instanceof Boolean flag) {
-            return flag;
-        }
-        return value != null && Boolean.parseBoolean(value.toString());
-    }
-
-    /** Polling tools may legitimately repeat with identical arguments while waiting for state changes. */
-    private static boolean isBuiltInStormExemptTool(String toolName) {
-        return toolName != null
-                && (toolName.startsWith("browser_") || "bash_wait".equals(toolName));
     }
 
     private static String rejectedToolResult(String message, String reason) {

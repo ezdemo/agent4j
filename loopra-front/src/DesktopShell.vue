@@ -71,7 +71,7 @@
         <button type="button" @click="initializeWorkspace">重试</button>
       </div>
       <DesktopHome
-      v-else-if="!starting && !activeTabId && !showSkills && !showSettings && !showModelChannels && !showDashboard"
+        v-else-if="!starting && !activeTabId && !showSkills && !showTools && !showSettings && !showModelChannels && !showDashboard"
         :workspaces="workspaces"
         :active-workspace-hash="activeWorkspaceHash"
         :theme="theme"
@@ -81,6 +81,7 @@
         @new-session="createTab"
         @open-session="openSession"
         @open-skills="openSkills"
+        @open-tools="openTools"
         @open-dashboard="openDashboard"
         @open-settings="openSettings"
         @toggle-theme="toggleTheme"
@@ -91,6 +92,7 @@
         @delete-workspace="confirmDeleteWorkspace"
       />
       <SettingsView v-else-if="!starting && showSkills" class="desktop-settings" market-only />
+      <ToolsView v-else-if="!starting && showTools" class="desktop-tools" />
       <ModelChannels v-else-if="!starting && showModelChannels" class="desktop-settings" :show-back="false" />
       <section v-else-if="!starting && showDashboard" class="desktop-dashboard">
         <header class="desktop-dashboard-header">
@@ -115,6 +117,7 @@ import {platform} from './services/platform'
 import SplashScreen from './components/SplashScreen.vue'
 import DesktopHome from './DesktopHome.vue'
 import SettingsView from './views/Settings.vue'
+import ToolsView from './views/Tools.vue'
 import ModelChannels from './ModelChannels.vue'
 import DashboardPanel from './components/Dashboard.vue'
 
@@ -128,13 +131,14 @@ const activeWorkspaceHash = ref('')
 const homeRefreshKey = ref(0)
 const refreshingHome = ref(false)
 const showSkills = ref(false)
+const showTools = ref(false)
 const showSettings = ref(false)
 const showModelChannels = ref(false)
 const showDashboard = ref(false)
 const tabs = ref([])
 const activeTabId = ref('')
 const isHomeActive = computed(() => !starting.value && !startupError.value
-  && !activeTabId.value && !showSkills.value && !showSettings.value && !showModelChannels.value && !showDashboard.value)
+  && !activeTabId.value && !showSkills.value && !showTools.value && !showSettings.value && !showModelChannels.value && !showDashboard.value)
 const tabsNav = ref(null)
 const draggedTabId = ref('')
 const dragOverTabId = ref('')
@@ -400,6 +404,13 @@ async function openSkills() {
   await renderActiveTab()
 }
 
+async function openTools() {
+  hideStandaloneViews()
+  showTools.value = true
+  activeTabId.value = ''
+  await renderActiveTab()
+}
+
 async function openSettings() {
   hideStandaloneViews()
   showSettings.value = true
@@ -423,6 +434,7 @@ async function openDashboard() {
 
 function hideStandaloneViews() {
   showSkills.value = false
+  showTools.value = false
   showSettings.value = false
   showModelChannels.value = false
   showDashboard.value = false
@@ -645,6 +657,7 @@ onBeforeUnmount(() => {
 .close-mark::after { transform: rotate(-45deg); }
 .desktop-view-host { flex: 1; min-width: 0; min-height: 0; background: var(--bg, #fff); }
 .desktop-settings { height: 100%; min-height: 0; overflow: hidden; }
+.desktop-tools { box-sizing: border-box; height: 100%; min-height: 0; overflow: auto; }
 .desktop-dashboard { height: 100%; min-height: 0; overflow: auto; }
 .desktop-dashboard-header { height: 64px; display: flex; align-items: center; padding: 0 28px; border-bottom: 1px solid var(--border, #e8e8e8); }
 .desktop-dashboard-header h1 { margin: 0; font-size: 16px; font-weight: 600; }

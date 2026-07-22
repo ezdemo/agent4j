@@ -340,9 +340,9 @@ const filteredTools = computed(() => {
         break
       case 'disabled':
         result = result.filter(t => !t.enabled)
+        break
       case 'autoApproved':
         result = result.filter(t => t.autoApproved)
-        break
         break
     }
   }
@@ -367,8 +367,8 @@ const loadTools = async () => {
       tools.value = response.data.map(tool => ({
         name: tool.name,
         description: tool.description,
-        readonly: tool.readonly || false,
-        write: !tool.readonly || false,
+        readonly: tool.readOnly || false,
+        write: !tool.readOnly,
         stormExempt: tool.stormExempt || false,
         enabled: tool.enabled !== undefined ? tool.enabled : true,
         autoApproved: tool.autoApproved || false,
