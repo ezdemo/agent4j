@@ -53,3 +53,22 @@ Responses API 流只有收到 `response.completed` 才可视为成功并发出�
 - 未配置校验模型时必须保留原有人工 HITL；沙箱越界审批继续由人工处理，不交给 AI 自动放行。
 - 同一批工具调用由 AI 逐个校验，任一调用不通过则整批视为审批拒绝。
 - `AgentLoop` 当前相关文件为 `loopra-bin/src/main/java/site/sorghum/loopra/bin/agent/core/AgentLoop.java`，HITL 判定与状态管理位于 `loopra-bin/src/main/java/site/sorghum/loopra/bin/agent/hitl/HitlManager.java`。
+
+## [2026-07-22 16:46] 会话折叠沉淀
+
+- `AgentLoop` 当前通过 `ToolRequest` 向工具调用注入键名为 `ctx` 的 `ToolContext`，其中包含 `rootDir` 和 `sessionId`。
+- Solon AI 3.10.1 的 `ToolRequest` 仅合并模型参数与 toolsContext，不会把 `ToolContext.rootDir` 自动转换为 `__cwd`。
+- `SessionTerminalTalent.write/edit` 使用隐藏参数 `__cwd` 解析和跟踪文件路径；修改该调用链时必须验证会话工作区隔离。
+- Solon CLI 的 `ProcessExecutor` 直接使用传入的 `rootPath` 作为子进程工作目录，并在该目录创建临时脚本。
+
+## [2026-07-22 16:47] 会话折叠沉淀
+
+工具执行目录约定：AgentLoop 分发每次工具调用时，必须将 ToolRegistry.workspace 的规范化绝对路径同时注入隐藏参数 `__cwd` 和 `ToolContext.rootDir`；子代理通过复制 ToolRegistry 继承同一 workspace，并在系统提示中显示该目录。终端工具实际以 `__cwd` 为执行目录。
+
+## [2026-07-22 16:50] 会话折叠沉淀
+
+子代理工具约定：所有内置 profile（包括只读的 explore/review/plan）默认允许共享协作工作区的 `workspace_read`、`workspace_list`、`workspace_write`；`workspace_write` 仅写共享通信存储，不视为修改项目文件。只读角色仍不得调用 `write`、`edit`、`bash` 等项目变更工具。
+
+## [2026-07-22 16:52] 会话折叠沉淀
+
+风暴检测约定：`bash_wait` 是轮询等待工具，允许使用完全相同参数连续调用，必须绕过 StormBreaker；`bash`、`bash_start`、`bash_stdin`、`bash_stop` 不随之豁免。

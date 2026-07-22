@@ -18,6 +18,9 @@ class SubAgentProfileTest {
         for (SubAgentProfile profile : new SubAgentProfile[]{
                 SubAgentProfile.EXPLORE, SubAgentProfile.REVIEW, SubAgentProfile.PLAN}) {
             assertTrue(profile.allowedTools().contains("read"));
+            assertTrue(profile.allowedTools().contains("workspace_read"));
+            assertTrue(profile.allowedTools().contains("workspace_list"));
+            assertTrue(profile.allowedTools().contains("workspace_write"));
             assertTrue(profile.allowedTools().contains("finish"));
             assertFalse(profile.allowedTools().contains("edit"));
             assertFalse(profile.allowedTools().contains("bash"));
