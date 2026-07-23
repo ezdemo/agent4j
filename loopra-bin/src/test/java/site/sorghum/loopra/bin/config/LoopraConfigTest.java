@@ -25,7 +25,7 @@ class LoopraConfigTest {
             LoopraConfig config = LoopraConfig.load();
 
             assertTrue(Files.exists(tempDir.resolve(".loopra/config.json")));
-            assertEquals("sk-your-api-key", config.apiKey());
+            assertEquals("", config.apiKey());
             assertEquals(tempDir.resolve(".loopra/defaultWorkSpace").toAbsolutePath().normalize(),
                     config.workspaceDir());
         } finally {
@@ -112,7 +112,7 @@ class LoopraConfigTest {
         Files.createDirectories(configDir.resolve("jre"));
         Files.writeString(configDir.resolve("bin/loopra.cmd"), "installed command");
         Files.writeString(configDir.resolve("jre/runtime.txt"), "installed runtime");
-        Files.writeString(configDir.resolve("config.json"), "{\"apiKey\":\"sk-your-api-key\"}");
+        Files.writeString(configDir.resolve("config.json"), "{\"apiKey\":\"\"}");
 
         String originalUserHome = System.getProperty("user.home");
         System.setProperty("user.home", tempDir.toString());

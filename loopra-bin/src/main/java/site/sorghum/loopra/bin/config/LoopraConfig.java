@@ -89,7 +89,7 @@ public class LoopraConfig {
         return """
                 {
                   "baseUrl": "https://api.deepseek.com/v1",
-                  "apiKey": "sk-your-api-key",
+                  "apiKey": "",
                   "model": "deepseek-v4-flash",
                   "modelChannelId": "default",
                   "validationModel": "",
@@ -99,7 +99,7 @@ public class LoopraConfig {
                       "id": "default",
                       "name": "默认渠道",
                       "baseUrl": "https://api.deepseek.com/v1",
-                      "apiKey": "sk-your-api-key",
+                      "apiKey": "",
                       "apiProtocol": "chat_completions",
                       "models": [
                         { "name": "deepseek-v4-flash", "contextTokens": -1, "imageInput": false },

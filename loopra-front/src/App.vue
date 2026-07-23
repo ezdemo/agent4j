@@ -74,7 +74,7 @@
     <main class="main">
       <SettingsView v-if="mainView === 'skills'" market-only />
       <SubAgentsView v-else-if="mainView === 'sub-agents'" />
-      <ModelChannels v-else-if="mainView === 'model-channels'" @back="mainView = 'chat'" />
+      <ModelChannels v-else-if="mainView === 'model-channels'" @back="mainView = 'chat'" @saved="reloadAfterModelChannelsSaved" />
       <ChatView 
         v-else
         ref="chatRef" 
@@ -478,6 +478,7 @@ import ModelChannels from './ModelChannels.vue'
 import DashboardPanel from './components/Dashboard.vue'
 import AIBrowser from './components/AIBrowser.vue'
 import {platform} from '@/services/platform'
+import {hasConfiguredModelChannel} from '@/utils/modelChannels'
 
 const isElementInspectorWindow = new URLSearchParams(window.location.search).get('elementInspector') === '1'
 const isAiBrowserWindow = new URLSearchParams(window.location.search).get('aiBrowser') === '1'
@@ -831,24 +832,24 @@ const stopHeartbeat = () => {
 }
 
 // 连接设置页回调：后端连接成功
-const onConnected = () => {
+const onConnected = async () => {
   showSetup.value = false
-  loadData()
+  if (await loadData()) openModelChannelsWhenUnconfigured()
   startHeartbeat()
 }
 
 // 用户关闭设置页（仅 Web 环境走到这里）
-const onSetupClose = () => {
+const onSetupClose = async () => {
   showSetup.value = false
-  loadData()
+  if (await loadData()) openModelChannelsWhenUnconfigured()
   startHeartbeat()
 }
 
 // 服务就绪回调（SplashScreen 安装/启动完成后调用）
-const onSplashReady = () => {
+const onSplashReady = async () => {
   console.log('Loopra Web service is ready')
   showSetup.value = false
-  loadData()
+  if (await loadData()) openModelChannelsWhenUnconfigured()
   startHeartbeat()
 }
 
@@ -859,6 +860,7 @@ const onSplashError = (error) => {
 
 // 加载数据
 const loadData = async () => {
+  let configLoaded = false
   try {
     const [s, t, cf] = await Promise.allSettled([
       agentAPI.getStatus(), toolsAPI.list(), configAPI.getConfig()
@@ -871,6 +873,7 @@ const loadData = async () => {
     }
     if (t.status === 'fulfilled' && t.value.success) tools.value = t.value.data || []
     if (cf.status === 'fulfilled' && cf.value.success) {
+      configLoaded = true
       config.value = cf.value.data || {}
       if (cf.value.data?.workspace && !workspace.value) {
         workspace.value = cf.value.data.workspace
@@ -881,6 +884,15 @@ const loadData = async () => {
   await initializeWorkspaceContext()
   await loadSessions()
   initialDataLoaded.value = true
+  return configLoaded
+}
+
+function openModelChannelsWhenUnconfigured() {
+  if (!hasConfiguredModelChannel(config.value)) mainView.value = 'model-channels'
+}
+
+function reloadAfterModelChannelsSaved() {
+  window.location.reload()
 }
 
 const openGlobalSearch = async () => {

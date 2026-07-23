@@ -95,7 +95,7 @@
       <SettingsView v-else-if="!starting && showSkills" class="desktop-settings" market-only />
       <ToolsView v-else-if="!starting && showTools" class="desktop-tools" />
       <SubAgentsView v-else-if="!starting && showSubAgents" class="desktop-sub-agents" />
-      <ModelChannels v-else-if="!starting && showModelChannels" class="desktop-settings" :show-back="false" />
+      <ModelChannels v-else-if="!starting && showModelChannels" class="desktop-settings" :show-back="false" @saved="reloadAfterModelChannelsSaved" />
       <section v-else-if="!starting && showDashboard" class="desktop-dashboard">
         <header class="desktop-dashboard-header">
           <div>
@@ -123,6 +123,7 @@ import ToolsView from './views/Tools.vue'
 import SubAgentsView from './views/SubAgents.vue'
 import ModelChannels from './ModelChannels.vue'
 import DashboardPanel from './components/Dashboard.vue'
+import {hasConfiguredModelChannel} from './utils/modelChannels'
 
 const store = useAppStore()
 const theme = computed(() => store.settings.theme)
@@ -602,7 +603,25 @@ async function onReady() {
   await nextTick()
   resizeObserver = new ResizeObserver(() => { void renderActiveTab() })
   if (host.value) resizeObserver.observe(host.value)
+  if (await redirectToModelChannelsWhenUnconfigured()) return
   await initializeWorkspace()
+}
+
+async function redirectToModelChannelsWhenUnconfigured() {
+  try {
+    const response = await configAPI.getConfig()
+    if (response.success && !hasConfiguredModelChannel(response.data)) {
+      await openModelChannels()
+      return true
+    }
+  } catch (error) {
+    console.warn('[desktop-shell] failed to load model channels:', error)
+  }
+  return false
+}
+
+function reloadAfterModelChannelsSaved() {
+  window.location.reload()
 }
 
 function onStartError(error) {
