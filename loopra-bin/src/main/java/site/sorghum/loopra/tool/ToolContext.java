@@ -144,6 +144,6 @@ public class ToolContext {
 
     @ONodeAttr(ignore = true)
     public Path getRootDir() {
-        return Paths.get(rootDir);
+        return rootDir == null || rootDir.isBlank() ? null : Paths.get(rootDir);
     }
 }

@@ -92,3 +92,11 @@ Responses API 流只有收到 `response.completed` 才可视为成功并发出�
 - explore、review、plan 的系统提示明确允许使用 workspace_write 写入协作通信记录，因此 workspace_write 的只读 metadata 和注册结果必须与该约定保持一致。
 - SharedWorkspace 相关单元测试当前通过，但尚缺少真实父代理与子代理之间的 workspace 读写集成测试。
 - 用户偏好使用中文交流。
+
+## [2026-07-23 15:36] 会话折叠沉淀
+
+workspace_* 实测父/子代理双向共享同一 SharedWorkspace；若工具桥接层把未提供的可选字符串转为空串，WorkspaceWriteTool 必须避免空 value 抢占非空 content，并让空 type 回退 text/plain。
+
+## [2026-07-23 16:40] 会话折叠沉淀
+
+SharedWorkspace 已按 ToolContext.rootDir 分区持久化到 <项目根>/.loopra/workspace/workspace.json；内存缓存按规范化绝对路径复用，写入采用临时文件+原子替换，项目间互不串数据。无 rootDir 的直接调用保留兼容性内存模式。
