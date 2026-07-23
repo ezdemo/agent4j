@@ -253,7 +253,7 @@ LLM: workflow_step(action="done")
 
 ### 6.6 ⚠️ 遗漏：AgentLoop 系统提示词中的工具文档
 
-`agent4j-bin/.../agent/core/AgentLoop.java` 的 system prompt 中（约第393-419行）硬编码了旧工具的说明文档：
+`loopra-bin/.../agent/core/AgentLoop.java` 的 system prompt 中（约第393-419行）硬编码了旧工具的说明文档：
 
 ```
 ### workflow_create_dag — 创建工作流 DAG  ← ❌ 删除
@@ -283,7 +283,7 @@ LLM: workflow_step(action="done")
 
 ### 6.7 ⚠️ 遗漏：SessionController REST 端点
 
-`agent4j-web/.../controller/SessionController.java` 中（约第136-156行）：
+`loopra-web/.../controller/SessionController.java` 中（约第136-156行）：
 - 端点：`GET /sessions/{name}/workflow`
 - 返回：`WorkflowVisualizationDTO`（含 NodeDTO、EdgeDTO、PathNodeDTO）
 - 当前实现：从 `WorkflowStore` 加载旧 `Workflow` 模型，通过 `convertToVisualizationDTO()` 转换
@@ -298,7 +298,7 @@ LLM: workflow_step(action="done")
 
 ### 6.8 ⚠️ 遗漏：WorkflowVisualizationDTO → WorkflowStatusDTO
 
-`agent4j-web/.../model/WorkflowVisualizationDTO.java`（77行，3个内部类）：
+`loopra-web/.../model/WorkflowVisualizationDTO.java`（77行，3个内部类）：
 
 ```
 当前：                   改造后：
@@ -319,13 +319,13 @@ WorkflowVisualizationDTO  WorkflowStatusDTO
 
 ### 6.9 ⚠️ 遗漏：WorkspaceManager 存储适配
 
-`agent4j-bin/.../workspace/WorkspaceManager.java`（第125-130行）：
+`loopra-bin/.../workspace/WorkspaceManager.java`（第125-130行）：
 - `getWorkflowStore()` 只返回 `JsonlWorkflowStore`（旧 DAG 持久化）
 - 需要新增 `SimpleWorkflow` 的存储方式（KV 模式即可，无需 JSONL）
 
 ### 6.10 ⚠️ 遗漏：测试文件 WorkflowTest.java
 
-`agent4j-bin/src/test/.../workflow/WorkflowTest.java`（775行）：
+`loopra-bin/src/test/.../workflow/WorkflowTest.java`（775行）：
 - 14 个测试方法覆盖了旧 DAG 模型（节点状态、前驱后继、序列化、分支条件等）
 - **需要全部重写**为 Step 列表模型的测试（约 200 行即可）
 
@@ -407,9 +407,6 @@ Phase 2: 前端改造
          - Chat.vue 替换组件引用 + 更新 API 调用
          - BlockRenderer.vue 替换工具名识别 + 组件引用
          - api.js 更新端点 URL
-
-Phase 3: TUI 同步
-         - agent4j-tui 中找 workflow 相关卡片渲染，同步改为 Step 列表渲染
 
 Phase 4: 旧代码清理
          - 删除 WorkflowNode.java / WorkflowEdge.java / NodeType.java / EdgeType.java / NodeStatus.java

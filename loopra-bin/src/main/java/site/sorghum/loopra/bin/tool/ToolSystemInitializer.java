@@ -1,0 +1,156 @@
+package site.sorghum.loopra.bin.tool;
+
+import lombok.extern.slf4j.Slf4j;
+import org.noear.solon.ai.chat.tool.FunctionTool;
+import site.sorghum.loopra.bin.agent.prompt.EnvInfoUtil;
+import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
+
+import java.nio.file.Path;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * 工具系统初始化器 —— 抽取 LoopraAgent 与 AgentService 中的重复代码。
+ * <p>
+ * 负责：注册 AgentTool → ToolRegistry、收集 toolSpecs、加载项目文档、
+ * 初始化 SkillStoreV2、构建 system prompt、创建 PromptPrefix。
+ * </p>
+ *
+ * @author Sorghum
+ */
+@Slf4j
+public class ToolSystemInitializer {
+    /**
+     * Plan Mode 说明（永久存在于 system prompt 中，不随模式切换动态注入）
+     */
+    private static final String PLAN_MODE_DESCRIPTION = """
+            ## Plan Mode（计划模式）
+            
+            用户可以使用 /plan 命令进入计划模式。在计划模式下：
+            - 仅只读工具可用（read_file / glob / grep / tree / get_file_info / web_search 等）
+            - 写入/修改工具被禁用（edit_file / multi_edit / write_file / run_command 等）
+            - 先用只读工具探索代码库，了解现状后再用 submit_plan 提交执行计划供审查
+            - 用户输入 /execute 退出计划模式后，所有工具恢复正常
+            """;
+
+    /**
+     * 执行完整的工具系统初始化。
+     *
+     * @param workspace           工作区根目录
+     * @param apiUrl              LLM API URL
+     * @param apiKey              LLM API Key
+     * @param disabledTools       禁用的工具名称集合（可为 null）
+     * @param blockedPaths        屏蔽的目录列表（可为 null）
+     * @param defaultSystemPrompt 默认系统提示词（当 ~/.loopra/loopra.md 不存在时使用）
+     * @return 初始化后的 Result，包含 ToolRegistry / PromptPrefix / SkillStoreV2 / systemPrompt
+     */
+    public static Result initialize(Path workspace, String apiUrl, String apiKey,
+                                    Set<String> disabledTools, List<String> blockedPaths,
+                                    String defaultSystemPrompt) {
+        final Set<String> effectiveDisabledTools = disabledTools != null ? disabledTools : Collections.emptySet();
+        final List<String> effectiveBlockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
+
+        // 1. 创建 ToolRegistry 并设置禁用工具
+        final ToolRegistry registry = new ToolRegistry();
+        registry.setDisabledTools(effectiveDisabledTools);
+        // 保存刷新上下文，供后续动态刷新工具列表使用
+        registry.setRefreshContext(workspace, apiUrl, apiKey, effectiveBlockedPaths);
+        if (!effectiveDisabledTools.isEmpty()) {
+            log.info("[config] 已禁用工具: {}", String.join(", ", effectiveDisabledTools));
+        }
+        if (!effectiveBlockedPaths.isEmpty()) {
+            log.info("[config] 已屏蔽目录: {}", String.join(", ", effectiveBlockedPaths));
+        }
+
+        // 2. 使用 ToolScanUtil 统一扫描工具（Solon IoC + Skill 文件系统）
+        List<FunctionTool> agentTools = ToolScanUtil.scanTools(workspace);
+
+        // 3. 收集工具规范文本 & 注册工具
+        StringBuilder toolSpecsBuilder = new StringBuilder();
+        toolSpecsBuilder.append("\n\n## 可用工具规范\n\n");
+
+        for (FunctionTool tool : agentTools) {
+            String toolSpec = tool.descriptionAndMeta();
+            if (toolSpec != null && !toolSpec.isEmpty()) {
+                toolSpecsBuilder.append(toolSpec).append("\n\n---\n\n");
+            }
+        }
+
+        // 4. 加载基准系统提示词（编码代理身份规则）
+        String systemPrompt = loadDefaultSystemPrompt(defaultSystemPrompt);
+        // 4.1 加载solon skill 基准提示词
+        systemPrompt  = systemPrompt + "\n\n" + ToolScanUtil.getSkillToolDescription(workspace);
+        // 5. 追加工具规范到 system prompt
+        systemPrompt = systemPrompt + "\n\n";
+
+        // 6. 注入环境信息（工作目录、平台、Shell、OS 版本、当前日期）——随工作区而变
+        systemPrompt = systemPrompt + "\n\n---\n\n" + EnvInfoUtil.buildEnvInfo(workspace);
+
+        // 7. 项目文档后置到最底部 —— 最大化前缀缓存命中。
+        //    稳定的 system prompt（身份/规则/工具定义/Plan Mode/Skill 索引）保持在头部，
+        //    项目特定的 loopra.md/CLAUDE.md 放在末尾，换项目时只需 discard 尾部缓存。
+        String projectMd = loadProjectMd(workspace);
+        if (!projectMd.isEmpty()) {
+            systemPrompt = systemPrompt + "\n\n---\n\n" + projectMd;
+        }
+
+        // 8. 项目记忆不在此注入 —— 由 memory 工具按需检索，避免每轮占用上下文。
+        //    DEFAULT_SYSTEM_PROMPT 中引导 AI 首次接入项目时主动调用 memory 工具检索已有记忆。
+
+        // 9. 构建 PromptPrefix（缓存优先）
+        PromptPrefix prefix = new PromptPrefix(systemPrompt, registry.toOpenAiTools());
+
+        log.info("[init] 工具系统初始化完成 — 工具数: {}", agentTools.size());
+        return new Result(registry, prefix, systemPrompt);
+    }
+
+    /**
+     * 加载默认系统提示词。固定返回传入的 fallback（即硬编码 DEFAULT_SYSTEM_PROMPT），
+     * 不再从 ~/.loopra/loopra.md 读取。
+     */
+    private static String loadDefaultSystemPrompt(String fallback) {
+        return fallback;
+    }
+
+    /**
+     * 加载工作区根目录下的 loopra.md 和 CLAUDE.md。
+     */
+    public static String loadProjectMd(Path workspace) {
+        if (workspace == null) return "";
+        StringBuilder sb = new StringBuilder();
+        for (String name : new String[]{"loopra.md", "CLAUDE.md"}) {
+            sb.append("""
+                    按需加载: 项目文档（%s）
+                    """.formatted(name));
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 初始化结果，包含所有已初始化的组件。
+     */
+    public static class Result {
+        public final ToolRegistry toolRegistry;
+        public final PromptPrefix promptPrefix;
+        /**
+         * 完整系统提示词（含项目文档 + base + 工具定义 + Plan Mode + Skill 索引）
+         */
+        public final String systemPrompt;
+        /**
+         * 后缀部分（工具定义 + Plan Mode + Skill 索引），不依赖于具体工作区的项目文档
+         */
+        public final String suffix;
+
+        Result(ToolRegistry toolRegistry, PromptPrefix promptPrefix,
+               String systemPrompt) {
+            this.toolRegistry = toolRegistry;
+            this.promptPrefix = promptPrefix;
+            this.systemPrompt = systemPrompt;
+            // 从完整提示词中提取后缀：去掉项目文档和 base prompt 部分
+            // 工具定义以 "\n\n## 可用工具规范" 开头
+            int suffixStart = systemPrompt.indexOf("\n\n## 可用工具规范");
+            this.suffix = suffixStart >= 0 ? systemPrompt.substring(suffixStart) : "";
+        }
+    }
+}

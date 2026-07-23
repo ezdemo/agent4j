@@ -1,11 +1,11 @@
-﻿param(
+param(
     [switch]$SkipBuild
 )
 
 $ErrorActionPreference = "Stop"
 
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  Agent4j 打包脚本 (PowerShell)" -ForegroundColor Cyan
+Write-Host "  Loopra 打包脚本 (PowerShell)" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 
@@ -16,9 +16,9 @@ if (Test-Path (Join-Path $ScriptDir "..\pom.xml")) {
 } else {
     $RootDir = (Get-Location).Path
 }
-$FrontDir   = Join-Path $RootDir "agent4j-front"
+$FrontDir   = Join-Path $RootDir "loopra-front"
 $DistDir    = Join-Path $FrontDir "dist\renderer"
-$StaticDir  = Join-Path $RootDir "agent4j-web\src\main\resources\static"
+$StaticDir  = Join-Path $RootDir "loopra-web\src\main\resources\static"
 
 Write-Host "Root: $RootDir" -ForegroundColor DarkGray
 

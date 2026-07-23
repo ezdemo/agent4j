@@ -1,13 +1,13 @@
 #
-# Agent4j Web Installer for Windows
-# Usage: irm https://gitee.com/ezdemo/agent4j/releases/download/v26.6.8/setup.ps1 | iex
+# Loopra Web Installer for Windows
+# Usage: irm https://gitee.com/ezdemo/loopra/releases/download/v26.6.8/setup.ps1 | iex
 #
 
 $ErrorActionPreference = "Stop"
 
-$VERSION = "v26.7.16"
-$PACKAGE_URL = "https://gitee.com/ezdemo/agent4j/releases/download/$VERSION/agent4j-web-dist.tar.gz"
-$TEMP_DIR = Join-Path $env:TEMP "agent4j-install"
+$VERSION = "v26.7.23"
+$PACKAGE_URL = "https://gitee.com/ezdemo/loopra/releases/download/$VERSION/loopra-web-dist.tar.gz"
+$TEMP_DIR = Join-Path $env:TEMP "loopra-install"
 
 function Write-Info {
     param([string]$Message)
@@ -28,7 +28,7 @@ if (Test-Path $TEMP_DIR) {
 New-Item -ItemType Directory -Path $TEMP_DIR | Out-Null
 
 try {
-    Write-Info "Downloading Agent4j Web $VERSION..."
+    Write-Info "Downloading Loopra Web $VERSION..."
 
     $packageFile = Join-Path $TEMP_DIR "package.tar.gz"
     Invoke-WebRequest -Uri $PACKAGE_URL -OutFile $packageFile -UseBasicParsing
@@ -55,7 +55,7 @@ try {
     Write-Host "Install path: $installPath" -ForegroundColor Gray
     
     # Set environment variable to tell install.ps1 not to wait
-    $env:AGENT4J_SETUP = "1"
+    $env:LOOPRA_SETUP = "1"
     
     # Execute the installer script
     & $installPath
@@ -73,9 +73,9 @@ try {
     Write-Info "Installation complete!"
     Write-Host ""
     Write-Host "You can now run: " -NoNewline
-    Write-Host "agent4j web" -ForegroundColor Cyan -NoNewline
+    Write-Host "loopra web" -ForegroundColor Cyan -NoNewline
     Write-Host " or " -NoNewline
-    Write-Host "agent4j web 0" -ForegroundColor Cyan
+    Write-Host "loopra web 0" -ForegroundColor Cyan
     Write-Host ""
 
 } catch {

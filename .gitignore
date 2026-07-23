@@ -71,3 +71,4 @@ venv/
 "_script_*"
 
 /.codegraph/
+/.loopra/workspace/
