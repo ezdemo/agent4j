@@ -1,7 +1,7 @@
-# Agent4j — 纯 Java 的 AI 编码代理
+# Loopra — 纯 Java 的 AI 编码代理
 
 <p align="center">
-  <img src="icon.png" width="120" alt="Agent4j Logo"/>
+  <img src="img/logo.png" width="120" alt="Loopra Logo"/>
 </p>
 
 <p align="center">
@@ -16,7 +16,7 @@
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js"/>
   <img src="https://img.shields.io/badge/Electron-42.4-47848F?logo=electron"/>
   <img src="https://img.shields.io/badge/license-MIT-green"/>
-  <img src="https://img.shields.io/badge/version-26.7.16-lightgrey"/>
+  <img src="https://img.shields.io/badge/version-26.7.23-lightgrey"/>
   <a href="CHANGELOG.md"><img src="https://img.shields.io/badge/changelog-📋-brightgreen"/></a>
 </p>
 
@@ -24,7 +24,7 @@
 
 ## 📖 这是什么？
 
-**Agent4j** 是一个纯 Java 17 的 AI 编码代理。和 Claude Code、Codex、OpenCode、Reasonix 一样——你给它一个任务，它能自己读代码、写代码、跑命令、调 API，一步步把事情干完。
+**Loopra** 是一个纯 Java 17 的 AI 编码代理。和 Claude Code、Codex、OpenCode、Reasonix 一样——你给它一个任务，它能自己读代码、写代码、跑命令、调 API，一步步把事情干完。
 
 核心是一个 **推理循环（Reasoning Loop）**：
 
@@ -38,9 +38,9 @@
 | **Codex**       | TypeScript    |
 | **OpenCode**    | Go            |
 | **Reasonix**    | Rust          |
-| **Agent4j**     | **Java 17** ✅ |
+| **Loopra**     | **Java 17** ✅ |
 
-如果你在用 Java 技术栈，又想有一个 AI 编码代理来帮忙写代码、改代码、跑构建、查日志——Agent4j 是你的选择。
+如果你在用 Java 技术栈，又想有一个 AI 编码代理来帮忙写代码、改代码、跑构建、查日志——Loopra 是你的选择。
 
 ---
 
@@ -51,23 +51,23 @@
 **Windows**（PowerShell）：
 
 ```powershell
-irm https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.ps1 | iex
+irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex
 ```
 
 **macOS / Linux**：
 
 ```bash
-curl -fsSL https://raw.giteeusercontent.com/ezdemo/agent4j/raw/main/.release/setup.sh | bash
+curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash
 ```
 
 ### 直接运行
 
 ```bash
 # 启动 Web 服务（随机端口，首次自动生成配置）
-agent4j web 0
+loopra web 0
 ```
 
-首次启动会自动创建 `~/.agent4j/config.json`，填入 API Key 和模型后重启：
+首次启动会自动创建 `~/.loopra/config.json`，填入 API Key 和模型后重启：
 
 ```json
 {
@@ -85,7 +85,7 @@ agent4j web 0
 ### 主界面
 
 <p align="center">
-  <img src="img/main_app.png" width="90%" alt="Agent4j 主界面"/>
+  <img src="img/main_app.png" width="90%" alt="Loopra 主界面"/>
 </p>
 
 ### 数据面板
@@ -113,8 +113,9 @@ agent4j web 0
 
 ### 🛠️ 工具系统
 
-- **声明式工具**：继承 `AgentTool` 基类，定义名称、参数、执行逻辑即可
+- **声明式工具**：基于 Solon `@ToolMapping` 定义名称、参数和执行逻辑
 - **自动注册**：Solon `@Component` 自动发现
+- **工具管理**：可视化启用/禁用工具，并自定义只读/写入执行权限分类
 - **MCP 支持**：接入 Model Context Protocol 协议
 
 <p align="center">
@@ -123,12 +124,13 @@ agent4j web 0
 
 - **OpenAPI 集成**：任意 OpenAPI 规范自动转成工具
 - **技能市场**：在线装/卸社区技能
+- **AI 浏览器**：在桌面端浏览器中打开标签页、读取结构化页面快照并执行受控交互；登录与验证由用户接管
 
 <p align="center">
   <img src="img/skill_setting.png" width="60%" alt="技能设置"/>
 </p>
 
-- **Plan Mode**：只读模式，安全规划
+- **计划模式**：`/plan` 限制为只读操作，`/execute` 恢复全部工具
 
 ### 🔄 子代理
 
@@ -139,13 +141,24 @@ agent4j web 0
 - **预设角色**：`explore`、`implement`、`test`、`review`、`plan`；探索、审查和方案角色只能使用只读工具
 - **风暴断路器**：检测重复调用，自动取消超时子代理
 
+### 🧠 项目记忆与共享工作区
+
+- **项目级长期记忆**：`memory` 工具将架构决策、约定和踩坑经验持久化在 `.loopra/loopra-memory.md`，供后续会话按需检索
+- **共享工作区**：`workspace_read` / `workspace_write` / `workspace_list` 按项目持久化到 `.loopra/workspace/`，用于父子代理间的结构化协作
+
+### 🎯 Goal
+
+- **会话级目标**：`/goal create <目标>` 创建可恢复的复杂任务目标
+- **可验证进度**：步骤更新必须记录执行证据，全部步骤完成后才能关闭 Goal
+- **结束保护**：存在未关闭 Goal 时，Agent 不会直接 `finish`；阻塞时明确记录原因，恢复后继续
+
 ### 👤 人工审批（HITL）
 
-- 三态审批模式：`free`（自由）/ `approval`（审批）/ `auto`（自动放行）
+- 三态审批模式：`free`（自由）/ `approval`（审批）/ `auto`（按白名单自动放行）
 - 执行写操作前等你批准或拒绝
+- 可配置独立校验模型，在审批前评估危险工具调用；工作区越界始终要求人工确认
 - 白名单工具（`finish` / `ask_choice` 等）自动放行
 - `/agree` / `/deny` 快速决策
-- `todo_write` 维护任务清单
 - 子代理中的写操作同样触发审批
 
 ### 💬 会话
@@ -177,20 +190,20 @@ agent4j web 0
 
 > 📋 完整更新历史请查看 [CHANGELOG.md](CHANGELOG.md)
 
-- **清单系统**：工作流重构为清单，步骤视图 + 悬浮浮层，进度一目了然
-- **子代理系统重设计**：`sub_agent` 预设五种角色，内嵌展示 + 风暴断路器 + 超时取消
-- **HITL 三态审批**：自由/审批/自动放行三种模式，纯交互工具直接放行
-- **文件变更追踪**：每轮编辑自动展示变更摘要，支持一键撤销
-- **会话分支**：从任意消息节点分支新对话，无快照也能安全撤回
-- **ACP 协议**：集成 Agent-to-Agent 通信协议
-- **工具管理**：可视化启用/禁用任意工具，动态加载插件
-- **上下文指示器**：实时展示系统提示词/历史/工具等各部分 token 占比
+- **模型渠道与 Responses API**：渠道级配置 API、协议和模型能力，兼容 OpenAI Responses API
+- **AI 校验模型**：为高风险工具调用增加可配置的自动安全校验，工作区越界仍由用户确认
+- **项目记忆与共享工作区**：跨会话沉淀项目事实，父子代理按项目协作并持久化结构化结果
+- **AI 浏览器**：桌面端可见浏览器支持安全的页面快照、标签页管理和用户接管验证
+- **子代理管理**：`sub_agent` 预设五种角色，支持独立管理页、缓存亲和和超时取消
+- **聊天性能**：消息虚拟滚动、文件路径预览和差异块导航提升长会话浏览效率
+- **工具管理**：可视化启用/禁用任意工具，并定义自定义工具的只读/写入分类
+- **桌面体验**：多聊天标签、元素检查、服务进程管理和改进的模型选择器
 
 ---
 
 ## ⚡ 前缀缓存
 
-Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）**能力——系统提示词、工具定义、项目文档等每次都在 prompt 开头的重复内容，直接命中 KV cache：
+Loopra 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）**能力——系统提示词、工具定义、项目文档等每次都在 prompt 开头的重复内容，直接命中 KV cache：
 
 | 模型                                                | 缓存命中率     | 效果               |
 |---------------------------------------------------|-----------|------------------|
@@ -204,16 +217,16 @@ Agent4j 充分利用 DeepSeek 和 Mimo 的**前缀缓存（Prefix Caching）**�
 ## 🏗️ 项目结构
 
 ```
-agent4j/
-├── agent4j-bin/               # 核心引擎（含工具抽象层）
+loopra/
+├── loopra-bin/               # 核心引擎（含工具抽象层）
 │   ├── agent/                 # 推理循环
 │   │   ├── AgentLoop.java      # 推理循环
-│   │   ├── Agent4jAgent.java   # Agent 工厂
+│   │   ├── LoopraAgent.java   # Agent 工厂
 │   │   ├── SubAgent.java       # 子代理
 │   │   ├── context/            # 对话上下文 / 上下文折叠
 │   │   ├── model/              # LLM 客户端
 │   │   └── hitl/               # 人工审批
-│   ├── tool/                  # 工具系统（原 agent4j-tool 已合并）
+│   ├── tool/                  # 工具系统（原 loopra-tool 已合并）
 │   │   ├── AgentTool.java      # 工具基类
 │   │   ├── ToolContext.java     # 执行上下文
 │   │   ├── builtin/            # 内置工具
@@ -224,14 +237,14 @@ agent4j/
 │   ├── workspace/             # 共享工作区
 │   ├── workflow/              # 工作流引擎
 │   ├── command/               # 聊天命令
-│   └── config/                # ~/.agent4j/config.json
+│   └── config/                # ~/.loopra/config.json
 │
-├── agent4j-web/               # Web 后端
+├── loopra-web/               # Web 后端
 │   ├── controller/            # REST 接口
 │   ├── service/               # Agent 管理 / SSE 推送
 │   └── market/                # 技能市场
 │
-├── agent4j-front/             # Vue 3 前端 + Electron 桌面端
+├── loopra-front/             # Vue 3 前端 + Electron 桌面端
 │   ├── src/
 │   │   ├── components/
 │   │   ├── views/
@@ -245,7 +258,6 @@ agent4j/
 │   ├── electron-builder.json  # 打包配置
 │   └── vite.config.js
 │
-├── agent4j-tui/               # TUI 终端界面
 ├── intro/                     # 官网
 ├── docs/superpowers/          # 文档
 ├── pom.xml                    # Maven 父 POM
@@ -256,7 +268,7 @@ agent4j/
 
 ## ⚙️ 配置
 
-配置文件 `~/.agent4j/config.json`：
+配置文件 `~/.loopra/config.json`：
 
 <p align="center">
   <img src="img/base_setting.png" width="60%" alt="基础设置"/>
@@ -266,13 +278,15 @@ agent4j/
 
 | 字段                | 类型       | 默认值                         | 说明                               |
 |-------------------|----------|-----------------------------|----------------------------------|
-| `baseUrl`         | string   | `http://localhost:11434/v1` | API 地址                           |
-| `apiKey`          | string   | —                           | API 密钥                           |
-| `model`           | string   | `deepseek-v4-flash`         | 模型名                              |
+| `modelChannels`   | array    | 默认渠道                        | 渠道级 API 地址、密钥、协议和模型能力配置           |
+| `modelChannelId`  | string   | `default`                   | 当前模型所属的渠道 ID                      |
+| `model`           | string   | `deepseek-v4-flash`         | 当前模型名                              |
+| `validationModel` | string   | `""`                        | 可选的危险工具调用校验模型                      |
+| `validationModelChannelId` | string | `""`                   | 校验模型所属渠道 ID                         |
 | `workspaceDir`    | string   | `""`                        | 工作区目录                            |
 | `reasoningEffort` | string   | `high`                      | 推理强度：`low`/`medium`/`high`/`max` |
 | `lang`            | string   | `ZH`                        | 语言                               |
-| `hitl`            | bool     | `false`                     | 人工审批默认开关                         |
+| `hitl`            | string   | `free`                      | `free` / `approval` / `auto` 审批模式 |
 | `editMode`        | string   | `auto`                      | `auto`（需确认）/ `yolo`（直接干）         |
 | `maxContextChars` | int      | `200000`                    | 上下文上限                            |
 | `keepTailChars`   | int      | `80000`                     | 保留尾部预算                           |
@@ -298,6 +312,7 @@ agent4j/
 | `/sessions` | 列出会话     |
 | `/load N`   | 加载会话     |
 | `/init`     | 分析项目生成文档 |
+| `/goal`     | 管理当前会话目标 |
 | `/hitl`     | 切换审批模式   |
 | `/agree`    | 批准       |
 | `/deny`     | 拒绝       |
@@ -315,17 +330,15 @@ agent4j/
 | `bash`                                                                      | 跑命令        |
 | `bash_start` / `bash_wait` / `bash_stdin` / `bash_stop`                     | 交互式命令会话    |
 | `sub_agent`                                                                 | 派生预设角色子代理 |
-| `workspace_read` / `workspace_write` / `workspace_list`                     | 工作区操作      |
-| `webfetch`                                                                  | 抓网页        |
-| `codesearch`                                                                | 搜索代码       |
-| `java_source`                                                               | Java 源码查找   |
-| `call_api`                                                                  | 调 REST API |
-| `remember` / `recall_memory` / `forget`                                     | 持久记忆       |
-| `vision_recognize`                                                          | 图片识别       |
-| `submit_plan` / `revise_plan` / `mark_step_complete`                        | 计划管理       |
-| `checklist_start` / `checklist_status` / `checklist_step`                  | 清单管理       |
-| `ask_choice` / `todo_write`                                                 | 用户交互       |
-| `run_background` / `stop_job` / `wait_for_job` / `job_output` / `list_jobs` | 后台作业       |
+| `workspace_read` / `workspace_write` / `workspace_list`                     | 按项目持久化的共享工作区 |
+| `memory`                                                                    | 跨会话项目记忆   |
+| `goal_create` / `goal_status` / `goal_update_step` / `goal_complete`       | 可恢复的会话目标  |
+| `checklist_start` / `checklist_status` / `checklist_step`                  | 有序工作清单    |
+| `browser_new_tab` / `browser_tabs` / `browser_navigate` / `browser_screenshot` / `browser_act` / `browser_close_tab` | 桌面 AI 浏览器 |
+| `browser_request_user_action`                                               | 请求用户接管登录或验证 |
+| `webfetch` / `codesearch` / `java_source`                                   | 网页与代码检索   |
+| `call_api` / `vision_recognize`                                             | REST API 与图片识别 |
+| `ask_choice` / `finish`                                                     | 用户交互与对话结束 |
 
 ---
 

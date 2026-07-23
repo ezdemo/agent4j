@@ -1,14 +1,14 @@
 #!/bin/bash
 #
-# Agent4j Web Installer
-# Usage: curl -fsSL https://gitee.com/ezdemo/agent4j/releases/download/v26.6.8/setup.sh | bash
+# Loopra Web Installer
+# Usage: curl -fsSL https://gitee.com/ezdemo/loopra/releases/download/v26.6.8/setup.sh | bash
 #
 
 set -e
 
-VERSION="v26.7.16"
-PACKAGE_URL="https://gitee.com/ezdemo/agent4j/releases/download/${VERSION}/agent4j-web-dist.tar.gz"
-TEMP_DIR="/tmp/agent4j-install"
+VERSION="v26.7.23"
+PACKAGE_URL="https://gitee.com/ezdemo/loopra/releases/download/${VERSION}/loopra-web-dist.tar.gz"
+TEMP_DIR="/tmp/loopra-install"
 
 # Colors
 RED='\033[0;31m'
@@ -38,7 +38,7 @@ trap cleanup EXIT
 # Create temp directory
 mkdir -p "$TEMP_DIR"
 
-info "Downloading Agent4j Web ${VERSION}..."
+info "Downloading Loopra Web ${VERSION}..."
 
 # Download package
 if command -v curl &> /dev/null; then
@@ -76,7 +76,7 @@ fi
 info "Running installer..."
 
 # Set environment variable to tell install.sh not to wait
-export AGENT4J_SETUP=1
+export LOOPRA_SETUP=1
 
 # Run installer
 bash "$INSTALL_SCRIPT"
@@ -86,7 +86,7 @@ USER_SHELL=$(basename "$SHELL" 2>/dev/null || echo "bash")
 
 # Check if symlink was created (by install.sh)
 SYMLINK_EXISTS=false
-if [ -L "/usr/local/bin/agent4j" ]; then
+if [ -L "/usr/local/bin/loopra" ]; then
     SYMLINK_EXISTS=true
 fi
 
@@ -95,12 +95,12 @@ info "Installation complete!"
 echo ""
 
 if [ "$SYMLINK_EXISTS" = true ]; then
-    echo -e "You can now run: ${CYAN}agent4j web${NC} or ${CYAN}agent4j web 0${NC}"
+    echo -e "You can now run: ${CYAN}loopra web${NC} or ${CYAN}loopra web 0${NC}"
 else
-    echo -e "To use agent4j immediately, run:"
+    echo -e "To use loopra immediately, run:"
     echo -e "  ${CYAN}source ~/.${USER_SHELL}rc${NC}"
     echo ""
-    echo -e "Then run: ${CYAN}agent4j web${NC} or ${CYAN}agent4j web 0${NC}"
+    echo -e "Then run: ${CYAN}loopra web${NC} or ${CYAN}loopra web 0${NC}"
 fi
 
 echo ""
