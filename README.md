@@ -1,8 +1,12 @@
-# Loopra
+<h1 align="center">Loopra</h1>
+
+<p align="center">
+  <img src="img/logo.png" alt="Loopra logo" width="160"/>
+</p>
 
 <p align="center">
   <strong>纯 Java 的 AI 编码代理</strong><br/>
-  面向代码库的推理循环、工具调用、会话协作与桌面工作台。
+  面向本地代码库的推理循环、工具调用、会话协作与桌面工作台。
 </p>
 
 <p align="center">
@@ -14,21 +18,35 @@
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/>
 </p>
 
-> 完整发布记录见 [CHANGELOG.md](CHANGELOG.md)。
+<p align="center">
+  <a href="#快速开始">快速开始</a> ·
+  <a href="#核心能力">核心能力</a> ·
+  <a href="#配置参考">配置参考</a> ·
+  <a href="#从源码开发">从源码开发</a>
+</p>
+
+> 当前版本：`26.7.23`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 概览
 
-Loopra 是一个基于 Java 17 的自主编码代理。它将用户任务、模型推理和受控工具调用串联为持续循环：读取项目上下文，执行搜索、编辑、构建或 API 调用，消费结果并继续，直到任务完成或需要用户决策。
+Loopra 将用户任务、模型推理与受控工具调用组织成持续执行循环：它读取项目上下文，搜索、编辑或构建代码，消费执行结果后继续推理，直至完成任务或需要用户决策。
 
-它提供 Web 和 Electron Desktop 工作台，适合在本地代码库中完成开发、排障、测试、文档整理和多步骤协作任务。
+提供 Web 与 Electron Desktop 工作台，适合在本地代码库中完成开发、排障、测试、文档整理和多步骤协作。
 
 ```text
 任务 -> 模型推理 -> 工具调用 -> 结果反馈 -> 模型推理 -> ... -> 完成
 ```
 
+| 面向的工作 | Loopra 提供的能力 |
+|---|---|
+| 处理代码库任务 | 工作区内文件读写、代码检索、命令执行与 API 调用 |
+| 保持任务连续性 | JSONL 会话、上下文折叠、Goal、Checklist 与项目记忆 |
+| 安全地协作 | 工具权限分类、HITL 审批、路径边界与独立校验模型 |
+| 使用合适的界面 | Web 管理界面与包含本地进程、文件、Git、浏览器的 Desktop 工作台 |
+
 ## 快速开始
 
-### 安装
+### 1. 安装
 
 Windows PowerShell：
 
@@ -42,17 +60,19 @@ macOS / Linux：
 curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash
 ```
 
-安装完成后启动 Web 服务。`0` 表示由服务选择可用端口：
+### 2. 启动服务
+
+使用 `0` 让服务自动选择可用端口：
 
 ```bash
 loopra web 0
 ```
 
-首次启动会在 `~/.loopra/config.json` 创建默认配置。可通过 Web 设置页维护，也可以直接编辑该文件；配置 API Key 后重启服务。
+控制台会输出本地访问地址。首次启动会在 `~/.loopra/config.json` 创建默认配置。
 
-### 最小配置
+### 3. 配置模型渠道
 
-模型渠道是当前配置的核心。每个渠道独立维护 API 地址、密钥、协议和模型能力；`apiProtocol` 支持 `chat_completions` 与 `responses`。
+在 Web 设置页维护模型渠道，或直接编辑 `~/.loopra/config.json`。配置 API Key 后重启服务。每个渠道独立维护 API 地址、密钥、协议与模型能力；`apiProtocol` 支持 `chat_completions` 和 `responses`。
 
 ```json
 {
@@ -78,45 +98,45 @@ loopra web 0
 }
 ```
 
-`models` 仍兼容旧版字符串数组。每个模型条目可选配置 `contextTokens`、`imageInput` 和 `price`；未配置时由系统使用默认或可用的模型元数据。
+`models` 兼容旧版字符串数组。每个模型条目还可配置 `contextTokens`、`imageInput` 和 `price`；未配置时由系统使用默认或可用的模型元数据。
 
 ## 核心能力
 
 | 能力 | 说明 |
 |---|---|
-| 推理循环 | 流式输出推理、工具调用和结果；处理多轮任务直到完成。 |
-| 上下文管理 | 会话 JSONL 持久化、自动摘要折叠、消息自愈和 token 用量统计。 |
-| 模型渠道 | 支持多渠道、Chat Completions API、OpenAI Responses API、推理强度和模型能力配置。 |
-| 工具系统 | Solon `@ToolMapping` 声明式注册，支持内置工具、MCP、OpenAPI、技能和 REST API。 |
-| 文件与命令 | 在工作区范围内读取、搜索、编辑文件，执行一次性或交互式命令。 |
-| 子代理 | `explore`、`implement`、`test`、`review`、`plan` 五种预设角色，具备隔离上下文、权限约束和超时控制。 |
-| 协作状态 | Checklist、会话级 Goal、项目记忆和共享工作区为长任务与父子代理协作提供持久状态。 |
-| 安全控制 | 三态 HITL、工具白名单、路径边界保护，以及可选的独立校验模型。 |
-| 桌面工作台 | Electron 桌面端提供多聊天标签、Git/文件面板、元素检查、服务进程管理和 AI 浏览器。 |
+| 自主推理循环 | 流式输出推理、工具调用和结果，持续处理多轮任务。 |
+| 上下文管理 | JSONL 会话持久化、自动摘要折叠、消息自愈和 token 用量统计。 |
+| 多模型渠道 | 支持多渠道、Chat Completions API、OpenAI Responses API、推理强度和模型能力配置。 |
+| 可扩展工具系统 | 通过 Solon `@ToolMapping` 声明式注册，支持内置工具、MCP、OpenAPI、技能和 REST API。 |
+| 代码库操作 | 在工作区边界内读取、搜索、编辑文件，运行一次性或交互式命令。 |
+| 子代理协作 | 内置 `explore`、`implement`、`test`、`review`、`plan` 五种角色，支持隔离上下文、权限约束和超时控制。 |
+| 持久协作状态 | Checklist、会话级 Goal、项目记忆和共享工作区支持长任务及父子代理协作。 |
+| 审批与边界 | 三态 HITL、工具白名单、路径边界保护，以及可选的独立校验模型。 |
+| 桌面工作台 | Electron Desktop 提供多聊天标签、Git/文件面板、元素检查、服务进程管理和 AI 浏览器。 |
 
 ### 工具与扩展
 
-工具由 Solon 自动发现，可在工具管理界面启用、禁用，并为自定义工具指定只读或写入分类。内置能力覆盖以下场景：
+工具由 Solon 自动发现，可在工具管理界面启用、禁用，并为自定义工具指定只读或写入分类。
 
-- 文件操作与代码检索：`read`、`write`、`edit`、`glob`、`grep`、`ls`、`java_source`、`codesearch`
-- 命令和网络：`bash`、交互式命令会话、`webfetch`、`call_api`
-- 任务协作：`sub_agent`、`checklist_*`、`goal_*`、`workspace_*`
-- 项目状态：`memory` 将跨会话事实保存到 `.loopra/loopra-memory.md`；共享工作区保存到 `.loopra/workspace/`
-- 多模态与浏览器：`vision_recognize`，以及桌面端可见 AI 浏览器的 `browser_*` 工具
+| 分类 | 覆盖场景 |
+|---|---|
+| 文件与代码检索 | `read`、`write`、`edit`、`glob`、`grep`、`ls`、`java_source`、`codesearch` |
+| 命令与网络 | `bash`、交互式命令会话、`webfetch`、`call_api` |
+| 任务协作 | `sub_agent`、`checklist_*`、`goal_*`、`workspace_*` |
+| 项目状态 | `memory` 将跨会话事实保存到 `.loopra/loopra-memory.md`；共享工作区保存到 `.loopra/workspace/` |
+| 多模态与浏览器 | `vision_recognize`，以及桌面端可见 AI 浏览器的 `browser_*` 工具 |
 
-MCP、OpenAPI 和技能可以为 Agent 注入额外工具。浏览器工具只操作可见的 Desktop 浏览器：遇到登录、验证码或安全验证时，Agent 会请求用户接管，不会代填或读取敏感凭据。
+MCP、OpenAPI 和技能可为 Agent 注入额外工具。浏览器工具只操作可见的 Desktop 浏览器；遇到登录、验证码或安全验证时，Agent 会请求用户接管，不会代填或读取敏感凭据。
 
-### 子代理、记忆与共享工作区
+### 子代理与长期协作
 
-子代理由 `sub_agent` 派生。`explore`、`review` 和 `plan` 只读，`implement` 与 `test` 可执行经过授权的写操作。子代理拥有独立推理上下文，并可通过共享工作区传递结构化结果。
+子代理通过 `sub_agent` 派生。`explore`、`review` 和 `plan` 为只读角色；`implement` 与 `test` 可执行经过授权的写操作。每个子代理拥有独立推理上下文，并可经由共享工作区传递结构化结果。
 
-项目长期记忆仅保存稳定、可复用的项目事实，例如架构约定、已知限制和用户偏好。记忆不会自动塞入每轮提示词，而是由 Agent 在首次进入项目或需要时主动检索，避免无关上下文持续膨胀。
+项目记忆只保存稳定、可复用的项目事实，例如架构约定、已知限制和用户偏好。复杂任务可使用会话级 Goal 记录步骤、证据、阻塞原因与验证结果；Checklist 用于展示有序执行进度。
 
-对于复杂任务，可使用会话级 Goal 记录步骤、证据、阻塞原因和最终验证；Checklist 适合展示有序执行进度。
+### 审批与访问边界
 
-### 审批与边界
-
-`hitl` 提供三种模式：
+`hitl` 支持三种执行模式：
 
 | 模式 | 行为 |
 |---|---|
@@ -124,11 +144,11 @@ MCP、OpenAPI 和技能可以为 Agent 注入额外工具。浏览器工具只�
 | `approval` | 非只读工具执行前等待用户批准。 |
 | `auto` | 白名单工具自动放行，其余调用等待批准。 |
 
-可以配置 `validationModel` 与 `validationModelChannelId`，让独立模型在人工审批前评估高风险工具调用。无论当前模式或校验结果如何，工作区边界外的访问仍保留人工确认。
+可配置 `validationModel` 与 `validationModelChannelId`，让独立模型在人工审批前评估高风险工具调用。无论当前模式或校验结果如何，访问工作区边界外的路径仍需要人工确认。
 
 ## 配置参考
 
-主要配置位于 `~/.loopra/config.json`：
+主要配置文件为 `~/.loopra/config.json`：
 
 | 字段 | 类型 | 默认值 | 说明 |
 |---|---|---|---|
@@ -158,7 +178,7 @@ MCP、OpenAPI 和技能可以为 Agent 注入额外工具。浏览器工具只�
 
 ### 聊天命令
 
-以下命令可在聊天输入框中使用：
+在聊天输入框中使用以下命令：
 
 | 命令 | 用途 |
 |---|---|
@@ -204,19 +224,22 @@ mvn test
 
 # 仅验证 Web 模块及其依赖模块
 mvn -pl loopra-web -am test
-
-# 前端开发、测试和构建
-cd loopra-front
-pnpm install
-pnpm dev
-pnpm test -- --run
-pnpm build
 ```
 
-Desktop 开发模式：
+### 前端与 Desktop
 
 ```bash
 cd loopra-front
+pnpm install
+
+# 启动前端开发服务
+pnpm dev
+
+# 运行前端测试并构建
+pnpm test -- --run
+pnpm build
+
+# 启动 Electron 开发模式
 pnpm dev:electron
 ```
 
