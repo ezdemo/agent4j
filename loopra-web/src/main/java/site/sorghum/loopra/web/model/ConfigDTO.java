@@ -24,6 +24,7 @@ public record ConfigDTO(
         String activePet,
         boolean terminateOnNoToolCall,
         List<ModelChannelConfig> modelChannels,
+        boolean modelChannelsConfigured,
         String modelChannelId,
         String validationModel,
         String validationModelChannelId
