@@ -200,6 +200,19 @@ class SharedWorkspaceTest {
     }
 
     @Test
+    void refusesToOverwriteUnreadableWorkspaceData() throws Exception {
+        Path project = tempDir.resolve("corrupt-project");
+        Path storeFile = project.resolve(".loopra/workspace/workspace.json");
+        Files.createDirectories(storeFile.getParent());
+        String corrupted = "{not valid json";
+        Files.writeString(storeFile, corrupted);
+
+        assertThrows(IllegalStateException.class,
+                () -> new SharedWorkspace(100).writeKV(project, "key", "value", "tester"));
+        assertEquals(corrupted, Files.readString(storeFile));
+    }
+
+    @Test
     void reportsPersistenceFailureInsteadOfClaimingSuccess() throws Exception {
         Path fileRoot = tempDir.resolve("not-a-directory");
         Files.writeString(fileRoot, "not a directory");

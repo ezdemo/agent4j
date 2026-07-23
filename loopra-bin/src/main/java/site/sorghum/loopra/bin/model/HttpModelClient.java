@@ -208,10 +208,10 @@ public class HttpModelClient implements ModelClient {
         void waitOrThrow(String reason, int attempt) throws IOException {
             if (abortRequested.compareAndSet(true, false)) {
                 log.debug("[{}] {} 可重试，但已请求中断，跳过重试", tag, reason);
-                throw new IllegalStateException("Request aborted by user");
+                throw new IOException("Request aborted by user");
             }
             if (attempt >= retryDelays.length) {
-                throw new IllegalStateException("[" + tag + "] 重试耗尽: " + reason);
+                throw new IOException("[" + tag + "] 重试耗尽: " + reason);
             }
             int delay = retryDelays[attempt];
             log.warn("[retry][{}] {}，第{}次重试，等待{}s...", tag, reason, attempt + 1, delay);

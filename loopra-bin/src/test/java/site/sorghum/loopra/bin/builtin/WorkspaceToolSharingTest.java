@@ -22,11 +22,12 @@ class WorkspaceToolSharingTest {
 
     @Test
     void parentAndSubAgentToolsShareEntriesInBothDirections() {
-        SharedWorkspace workspace = new SharedWorkspace();
-        WorkspaceWriteTool parentWriter = new WorkspaceWriteTool(workspace);
-        WorkspaceReadTool parentReader = new WorkspaceReadTool(workspace);
-        WorkspaceWriteTool subWriter = new WorkspaceWriteTool(workspace);
-        WorkspaceReadTool subReader = new WorkspaceReadTool(workspace);
+        SharedWorkspace parentWorkspace = new SharedWorkspace();
+        SharedWorkspace subAgentWorkspace = new SharedWorkspace();
+        WorkspaceWriteTool parentWriter = new WorkspaceWriteTool(parentWorkspace);
+        WorkspaceReadTool parentReader = new WorkspaceReadTool(parentWorkspace);
+        WorkspaceWriteTool subWriter = new WorkspaceWriteTool(subAgentWorkspace);
+        WorkspaceReadTool subReader = new WorkspaceReadTool(subAgentWorkspace);
         ToolContext parentContext = new ToolContext(Map.of(), tempDir.toString(), "parent-session");
         ToolContext subContext = new ToolContext(Map.of(), tempDir.toString(), "parent-session");
 
