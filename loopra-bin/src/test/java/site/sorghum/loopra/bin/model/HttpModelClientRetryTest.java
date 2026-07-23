@@ -14,6 +14,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 class HttpModelClientRetryTest {
 
@@ -53,6 +54,27 @@ class HttpModelClientRetryTest {
             assertEquals(1, retryCount.get());
             assertEquals("HTTP 503", retryReason.get());
             assertEquals("ok", content.get());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void nonStreamingRetryExhaustionRemainsIOException() throws Exception {
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/chat", exchange -> {
+            exchange.sendResponseHeaders(503, -1);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            HttpModelClient client = new HttpModelClient(
+                    "http://127.0.0.1:" + server.getAddress().getPort() + "/chat",
+                    "test-key", "test-model", "high", new int[0]);
+
+            assertThrows(IOException.class,
+                    () -> client.chat(List.of(ChatMessage.ofUser("hello")), new ONode().asArray()));
         } finally {
             server.stop(0);
         }

@@ -35,8 +35,8 @@ public class SharedWorkspace {
     private final int maxEntries;
     /** 没有项目根目录的兼容性内存存储。 */
     private final Store transientStore;
-    /** 已加载的项目工作区存储，按规范化根目录索引。 */
-    private final ConcurrentHashMap<Path, Store> persistentStores = new ConcurrentHashMap<>();
+    /** 已加载的项目工作区存储，按规范化根目录索引，并由所有工具实例共享。 */
+    private static final ConcurrentHashMap<Path, Store> PERSISTENT_STORES = new ConcurrentHashMap<>();
 
     public SharedWorkspace() {
         this(1000);
@@ -288,7 +288,7 @@ public class SharedWorkspace {
         if (root == null) {
             return transientStore;
         }
-        return persistentStores.computeIfAbsent(root, this::load);
+        return PERSISTENT_STORES.computeIfAbsent(root, this::load);
     }
 
     private Path normalizeRoot(Path workspaceRoot) {
@@ -310,6 +310,7 @@ public class SharedWorkspace {
             }
             log.debug("Loaded shared workspace: {}", file);
         } catch (Exception e) {
+            store.loadError = e.getMessage();
             log.warn("[workspace] Failed to load shared workspace {}: {}", file, e.getMessage());
         }
         return store;
@@ -320,6 +321,10 @@ public class SharedWorkspace {
             return true;
         }
         Path file = storeFile(workspaceRoot);
+        if (store.loadError != null) {
+            log.warn("[workspace] Refusing to overwrite unreadable shared workspace {}: {}", file, store.loadError);
+            return false;
+        }
         try {
             Files.createDirectories(file.getParent());
             Path temporary = Files.createTempFile(file.getParent(), STORE_FILE, ".tmp");
@@ -527,5 +532,6 @@ public class SharedWorkspace {
         private final ConcurrentHashMap<String, KVBucket> kvStore = new ConcurrentHashMap<>();
         private final ConcurrentHashMap<String, DocumentBucket> docStore = new ConcurrentHashMap<>();
         private final ReadWriteLock lock = new ReentrantReadWriteLock();
+        private String loadError;
     }
 }
