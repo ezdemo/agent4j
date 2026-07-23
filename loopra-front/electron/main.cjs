@@ -145,25 +145,29 @@ async function listLoopraJavaProcesses() {
     }))
   }
 
-  const { stdout } = await execFileAsync('ps', ['-axo', 'pid=,ppid=,rss=,etime=,comm=,args='], {
+  // macOS 的 ps 默认会截断长命令行，导致 JVM 参数中的 loopra-web.jar 无法被识别。
+  // 使用 -ww 保留完整 command 列，并避免依赖各平台不同的 comm/args 列布局。
+  const { stdout } = await execFileAsync('ps', ['-axww', '-o', 'pid=,ppid=,rss=,etime=,command='], {
     maxBuffer: 1024 * 1024
   })
   const managedPid = loopraWebProcess?.pid || 0
   return stdout.split('\n').flatMap((line) => {
-    const match = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(.+)$/)
+    const match = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/)
     if (!match) return []
-    const [, pid, parentPid, rssKb, elapsed, name, commandLine] = match
-    if (!/java/i.test(name) || !/loopra-web\.jar/i.test(commandLine)) return []
+    const [, pid, parentPid, rssKb, elapsed, commandLine] = match
+    const executablePath = commandLine.trim().split(/\s+/, 1)[0]
+    if (!/(?:^|\/)(?:java|javaw)(?:\s|$)/i.test(commandLine) || !/loopra-web\.jar/i.test(commandLine)) return []
+    const port = parsePort(commandLine)
     return [{
       pid: Number(pid),
       parentPid: Number(parentPid),
-      name,
+      name: path.basename(executablePath),
       commandLine,
-      executablePath: name,
+      executablePath,
       memoryBytes: Number(rssKb) * 1024,
       uptimeSeconds: parseElapsedSeconds(elapsed),
-      port: parsePort(commandLine),
-      managed: Number(parentPid) === managedPid || Number(pid) === managedPid || parsePort(commandLine) === currentPort
+      port,
+      managed: Number(parentPid) === managedPid || Number(pid) === managedPid || port === currentPort
     }]
   })
 }
@@ -224,12 +228,16 @@ function killProcessTree(child) {
   }
 }
 
-// 启动 loopra web <port>
-function startLoopraWeb(port) {
+function getLoopraBinPath() {
   const home = app.getPath('home')
   const binDir = path.join(home, '.loopra', 'bin')
   const binName = isWin ? 'loopra.ps1' : 'loopra'
-  const binPath = path.join(binDir, binName)
+  return { binDir, binPath: path.join(binDir, binName) }
+}
+
+// 启动 loopra web <port>
+function startLoopraWeb(port) {
+  const { binDir, binPath } = getLoopraBinPath()
 
   if (!fs.existsSync(binPath)) {
     throw new Error(`loopra not found: ${binPath}`)
@@ -412,7 +420,7 @@ ipcMain.handle('get_electron_version', async () => {
 })
 
 ipcMain.handle('get_loopra_web_status', async () => ({
-  installed: true,
+  installed: fs.existsSync(getLoopraBinPath().binPath),
   running: loopraWebProcess !== null,
   install_dir: path.join(app.getPath('home'), '.loopra')
 }))
@@ -468,7 +476,10 @@ ipcMain.handle('get_resource_dir', async () => {
   return path.join(__dirname, '../resources')
 })
 
-ipcMain.handle('check_install_needed', async () => ({ needed: false }))
+ipcMain.handle('check_install_needed', async () => {
+  const installed = fs.existsSync(getLoopraBinPath().binPath)
+  return { needed: !installed, reason: installed ? '' : 'not_installed' }
+})
 ipcMain.handle('install_loopra_web', async () => ({ success: true, steps: ['electron_mock_install'] }))
 
 ipcMain.handle('start_loopra_web', async () => {

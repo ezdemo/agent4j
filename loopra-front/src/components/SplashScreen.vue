@@ -41,14 +41,19 @@
             </svg>
           </div>
           <p class="info-text" v-if="installReason === 'not_installed'">
-            首次运行，需要安装 Loopra Web 服务
+            首次运行，需要安装 Loopra 命令行服务
           </p>
           <p class="info-text" v-else-if="installReason === 'version_mismatch'">
             检测到新版本，需要更新安装
           </p>
           <p class="info-text" v-else>
-            需要重新安装 Loopra Web 服务
+            需要重新安装 Loopra 命令行服务
           </p>
+
+          <div class="install-command">
+            <span>将执行以下安装命令：</span>
+            <code>{{ installCommand }}</code>
+          </div>
 
           <div class="java-check" v-if="javaInfo">
             <span class="java-badge">✓</span>
@@ -130,7 +135,7 @@
 </template>
 
 <script setup>
-import {nextTick, onMounted, ref} from 'vue'
+import {computed, nextTick, onMounted, ref} from 'vue'
 import {platform} from '@/services/platform'
 import {systemAPI} from '@/services/api'
 // 动态获取当前平台的 loopraWebService
@@ -152,6 +157,10 @@ const installProgress = ref(0)
 
 // 是否在桌面环境（Electron）中
 const isDesktop = ref(false)
+
+const installCommand = computed(() => window.electronAPI?.platform === 'win32'
+  ? 'irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex'
+  : 'curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash')
 
 // 在线安装日志
 const installLogs = ref([])
@@ -226,50 +235,7 @@ async function checkInstall() {
 }
 
 async function startInstall() {
-  phase.value = 'installing'
-  installProgress.value = 0
-
-  // 初始化步骤
-  installSteps.value = [
-    { label: '检查 Java 环境', status: 'pending' },
-    { label: '解压安装包', status: 'pending' },
-    { label: '复制文件并完成安装', status: 'pending' },
-  ]
-
-  try {
-    // ===== 步骤1：Java 环境（由 loopra 启动脚本内部处理） =====
-    installSteps.value[0].status = 'active'
-    installSteps.value[0].detail = '由启动脚本自动管理'
-    installSteps.value[0].status = 'done'
-    installProgress.value = 33
-    await sleep(200)
-
-    // ===== 步骤2：解压安装包 =====
-    installSteps.value[1].status = 'active'
-    await loopraWebService.step2Extract(resourceDir.value)
-    installSteps.value[1].status = 'done'
-    installProgress.value = 66
-    await sleep(200)
-
-    // ===== 步骤3：复制文件 =====
-    installSteps.value[2].status = 'active'
-    await loopraWebService.step3CopyFiles(resourceDir.value)
-    installSteps.value[2].status = 'done'
-    installProgress.value = 100
-    await sleep(200)
-
-    // 安装完成，启动服务
-    await startService()
-  } catch (e) {
-    console.error('[Splash] Install failed:', e)
-    // 标记当前步骤为错误
-    const activeIdx = installSteps.value.findIndex(s => s.status === 'active' || s.status === 'pending')
-    if (activeIdx >= 0) {
-      installSteps.value[activeIdx].status = 'error'
-    }
-    phase.value = 'error'
-    errorMessage.value = `安装失败: ${e.message || e}`
-  }
+  await onlineInstall()
 }
 
 
@@ -325,6 +291,12 @@ async function startService() {
 
     throw new Error(`服务启动超时，端口 ${port} 未响应健康检查`)
   } catch (e) {
+    if (/loopra not found:/i.test(e.message || '')) {
+      installReason.value = 'not_installed'
+      javaInfo.value = '准备安装'
+      phase.value = 'confirm'
+      return
+    }
     phase.value = 'error'
     errorMessage.value = e.message || '服务启动失败'
     emit('error', e)
@@ -593,6 +565,26 @@ defineExpose({
   color: var(--fg-3);
   line-height: 1.5;
   margin: 0;
+}
+
+.install-command {
+  width: 100%;
+  text-align: left;
+  color: var(--fg-4);
+  font-size: 12px;
+}
+
+.install-command code {
+  display: block;
+  margin-top: 8px;
+  padding: 10px 12px;
+  overflow-x: auto;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-2);
+  color: var(--fg-2);
+  line-height: 1.5;
+  white-space: nowrap;
 }
 
 .java-check {
