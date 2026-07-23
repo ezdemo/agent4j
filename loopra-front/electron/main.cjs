@@ -145,25 +145,29 @@ async function listLoopraJavaProcesses() {
     }))
   }
 
-  const { stdout } = await execFileAsync('ps', ['-axo', 'pid=,ppid=,rss=,etime=,comm=,args='], {
+  // macOS 的 ps 默认会截断长命令行，导致 JVM 参数中的 loopra-web.jar 无法被识别。
+  // 使用 -ww 保留完整 command 列，并避免依赖各平台不同的 comm/args 列布局。
+  const { stdout } = await execFileAsync('ps', ['-axww', '-o', 'pid=,ppid=,rss=,etime=,command='], {
     maxBuffer: 1024 * 1024
   })
   const managedPid = loopraWebProcess?.pid || 0
   return stdout.split('\n').flatMap((line) => {
-    const match = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(\S+)\s+(.+)$/)
+    const match = line.trim().match(/^(\d+)\s+(\d+)\s+(\d+)\s+(\S+)\s+(.+)$/)
     if (!match) return []
-    const [, pid, parentPid, rssKb, elapsed, name, commandLine] = match
-    if (!/java/i.test(name) || !/loopra-web\.jar/i.test(commandLine)) return []
+    const [, pid, parentPid, rssKb, elapsed, commandLine] = match
+    const executablePath = commandLine.trim().split(/\s+/, 1)[0]
+    if (!/(?:^|\/)(?:java|javaw)(?:\s|$)/i.test(commandLine) || !/loopra-web\.jar/i.test(commandLine)) return []
+    const port = parsePort(commandLine)
     return [{
       pid: Number(pid),
       parentPid: Number(parentPid),
-      name,
+      name: path.basename(executablePath),
       commandLine,
-      executablePath: name,
+      executablePath,
       memoryBytes: Number(rssKb) * 1024,
       uptimeSeconds: parseElapsedSeconds(elapsed),
-      port: parsePort(commandLine),
-      managed: Number(parentPid) === managedPid || Number(pid) === managedPid || parsePort(commandLine) === currentPort
+      port,
+      managed: Number(parentPid) === managedPid || Number(pid) === managedPid || port === currentPort
     }]
   })
 }
