@@ -599,6 +599,23 @@ public class LoopraConfig {
     }
 
     /**
+     * 获取用户设置的工具只读分类覆盖。
+     * key 为工具名，value=true 表示只读，false 表示写入；未出现的工具沿用自身元数据或内置默认值。
+     */
+    public Map<String, Boolean> toolReadOnlyOverrides() {
+        ONode object = root.select("$.toolReadOnlyOverrides");
+        Map<String, Boolean> result = new LinkedHashMap<>();
+        if (object != null && object.isObject()) {
+            for (Map.Entry<String, ONode> entry : object.getObject().entrySet()) {
+                if (entry.getValue().isBoolean()) {
+                    result.put(entry.getKey(), entry.getValue().getBoolean());
+                }
+            }
+        }
+        return result;
+    }
+
+    /**
      * 获取被禁用的工具列表。
      * 从 config.json 的 disabledTools 数组读取，同时支持 LOOPRA_DISABLED_TOOLS 环境变量（逗号分隔）。
      * 这些工具不会出现在 LLM 的工具列表中，也无法被调用。

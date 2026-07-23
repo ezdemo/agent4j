@@ -118,7 +118,7 @@ public class LoopraAgent {
                     case "model" -> setModel((String) e.value());
                     case "hitl" -> setHitlMode(String.valueOf(e.value()));
                     case "terminateOnNoToolCall" -> setTerminateOnNoToolCall(Boolean.parseBoolean(String.valueOf(e.value())));
-                    case "disabledTools" -> refreshTools();
+                    case "disabledTools", "toolReadOnlyOverrides" -> refreshTools();
                     default -> log.warn("[bus] 未知配置键: {}", e.key());
                 }
             } catch (Exception ex) {

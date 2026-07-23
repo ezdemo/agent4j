@@ -104,6 +104,32 @@ public class ConfigService {
         setDisabledTools(current);
     }
 
+    // ==================== 工具只读分类覆盖 ====================
+
+    public static Map<String, Boolean> getToolReadOnlyOverrides() {
+        return config.toolReadOnlyOverrides();
+    }
+
+    /**
+     * 设置单个工具的只读分类覆盖。readOnly 为 null 时恢复工具默认分类。
+     */
+    public static synchronized void setToolReadOnlyOverride(String toolName, Boolean readOnly) {
+        if (toolName == null || toolName.isBlank()) return;
+        Map<String, Boolean> current = new LinkedHashMap<>(config.toolReadOnlyOverrides());
+        if (readOnly == null) {
+            current.remove(toolName);
+        } else {
+            current.put(toolName, readOnly);
+        }
+        try {
+            config.updateAndSave(Map.of("toolReadOnlyOverrides", current));
+            ConfigService.config = loadAndInitializeWorkspace();
+            log.info("[config] 已更新工具只读分类: tool={}, readOnly={}", toolName, readOnly);
+        } catch (IOException e) {
+            log.error("[config] 更新工具只读分类失败: tool={}", toolName, e);
+        }
+    }
+
     // ==================== 自动放行工具白名单 ====================
 
     /**

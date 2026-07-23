@@ -84,3 +84,11 @@ Responses API 流只有收到 `response.completed` 才可视为成功并发出�
 - SubAgentProfile 不维护独立 READ_ONLY_TOOLS；子代理允许工具应从父 ToolRegistry 动态筛选，并由提示词说明和注册表硬过滤共用。
 - workspace_write 只写协作通信存储，不修改项目文件，因此允许只读子代理使用。
 - 子代理前端展示应放在现有工具管理页，通过“工具 / 子代理”视图切换；展示的工具集合必须由后端按当前启用的 ToolRegistry 动态计算，确保与运行时权限一致。
+
+## [2026-07-23 15:03] 会话折叠沉淀
+
+- ToolContext 通过 ThreadLocal 保存当前 AgentLoopController，工具执行前设置、执行结束后应清理；构造时会复制传入的参数 Map，并保存 rootDir 和 sessionId。
+- SubAgentProfile 的 explore、review、plan 角色属于只读角色，其 allowedTools 仅放行 ToolMetadata.isReadOnly 返回 true 的工具。
+- explore、review、plan 的系统提示明确允许使用 workspace_write 写入协作通信记录，因此 workspace_write 的只读 metadata 和注册结果必须与该约定保持一致。
+- SharedWorkspace 相关单元测试当前通过，但尚缺少真实父代理与子代理之间的 workspace 读写集成测试。
+- 用户偏好使用中文交流。
