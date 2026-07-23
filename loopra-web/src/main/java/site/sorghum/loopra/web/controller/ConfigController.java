@@ -99,6 +99,7 @@ public class ConfigController {
                                 entry.name(), entry.contextTokens(), entry.imageInput(), entry.price()
                         )).collect(Collectors.toList())
                 )).collect(Collectors.toList()),
+                cfg.modelChannels().stream().anyMatch(channel -> !channel.apiKey().isBlank()),
                 cfg.modelChannelId(),
                 cfg.validationModel(),
                 cfg.validationModelChannelId()
@@ -113,12 +114,12 @@ public class ConfigController {
     public ApiResponse<String> updateConfig(@ApiParam(value = "配置项 Map") @Body Map<String, Object> body) {
         configService.updateConfig(body);
 
-        // 渠道/API 变更 → 销毁重建（因 HttpModelClient 的 apiUrl/apiKey 为 final）
+        // 渠道/API 变更 → 销毁重建（因 HttpModelClient 的 apiUrl/apiKey 为 final）。
+        // 首次保存模型渠道时 Agent 尚未就绪，仍需初始化。
         boolean agentReinitialized = false;
-        if ((body.containsKey("baseUrl") || body.containsKey("apiKey")
+        if (body.containsKey("baseUrl") || body.containsKey("apiKey")
                 || body.containsKey("modelChannels") || body.containsKey("modelChannelId")
-                || body.containsKey("validationModel") || body.containsKey("validationModelChannelId"))
-                && agentService.isReady()) {
+                || body.containsKey("validationModel") || body.containsKey("validationModelChannelId")) {
             agentService.reinitialize();
             agentReinitialized = true;
         }
