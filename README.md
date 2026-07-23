@@ -46,6 +46,10 @@ Loopra 将用户任务、模型推理与受控工具调用组织成持续执行�
 
 ## 快速开始
 
+> 建议手动运行下面命令再安装桌面端
+
+桌面端下载地址：[Releases](https://gitcode.com/Sorghum/loopra/releases/latest)
+
 ### 1. 安装
 
 Windows PowerShell：
