@@ -2,11 +2,15 @@ package site.sorghum.loopra.bin.workspace;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.Optional;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -17,6 +21,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class SharedWorkspaceTest {
 
     private SharedWorkspace workspace;
+
+    @TempDir
+    Path tempDir;
 
     @BeforeEach
     void setUp() {
@@ -157,6 +164,48 @@ class SharedWorkspaceTest {
             assertTrue(smallWorkspace.readKV("key-" + i).isPresent(),
                     "较新的 key-" + i + " 应存在");
         }
+    }
+
+    @Test
+    void persistsEntriesAcrossWorkspaceInstances() {
+        Path project = tempDir.resolve("project");
+        SharedWorkspace first = new SharedWorkspace(100);
+        first.writeKV(project, "task/context", "parent-data", "parent-session");
+        first.writeDoc(project, "task/result", "sub-agent-data", "text/markdown", "parent-session");
+
+        Path storeFile = project.resolve(".loopra/workspace/workspace.json");
+        assertTrue(Files.isRegularFile(storeFile));
+
+        SharedWorkspace restarted = new SharedWorkspace(100);
+        assertEquals("parent-data", restarted.readKV(project, "task/context").orElseThrow());
+        DocumentBucket document = restarted.readDoc(project, "task/result").orElseThrow();
+        assertEquals("sub-agent-data", document.getContent());
+        assertEquals("text/markdown", document.getMimeType());
+        assertEquals("parent-session", document.getCreator());
+
+        restarted.delete(project, "task/context");
+        assertTrue(new SharedWorkspace(100).readKV(project, "task/context").isEmpty());
+    }
+
+    @Test
+    void isolatesPersistentEntriesByProjectDirectory() {
+        Path firstProject = tempDir.resolve("first-project");
+        Path secondProject = tempDir.resolve("second-project");
+        workspace.writeKV(firstProject, "shared-key", "first", "tester");
+        workspace.writeKV(secondProject, "shared-key", "second", "tester");
+
+        SharedWorkspace restarted = new SharedWorkspace(100);
+        assertEquals("first", restarted.readKV(firstProject, "shared-key").orElseThrow());
+        assertEquals("second", restarted.readKV(secondProject, "shared-key").orElseThrow());
+    }
+
+    @Test
+    void reportsPersistenceFailureInsteadOfClaimingSuccess() throws Exception {
+        Path fileRoot = tempDir.resolve("not-a-directory");
+        Files.writeString(fileRoot, "not a directory");
+
+        assertThrows(IllegalStateException.class,
+                () -> workspace.writeKV(fileRoot, "key", "value", "tester"));
     }
 
     // ==================== testReadNonExistent ====================

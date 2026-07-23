@@ -10,6 +10,7 @@ import site.sorghum.loopra.bin.workspace.SharedWorkspace;
 import site.sorghum.loopra.tool.ToolContext;
 import site.sorghum.loopra.tool.solon.SolonToTools;
 
+import java.nio.file.Path;
 import java.util.Collection;
 import java.util.List;
 import java.util.Set;
@@ -46,7 +47,7 @@ public class WorkspaceListTool extends AbsToolProvider implements SolonToTools {
     }
 
     @ToolMapping(name = "workspace_list", description = """
-                列出共享工作区中的条目键。支持按前缀过滤，返回所有匹配的 KV 和文档条目的 key 列表。
+                列出当前项目持久化在 `.loopra/workspace/` 的共享工作区条目键。支持按前缀过滤，返回所有匹配的 KV 和文档条目的 key 列表。
                 参数: prefix(可选, key 前缀过滤), scope(可选, 作用域预留)。
                 prefix 为空时列出所有条目。
                 """)
@@ -59,9 +60,10 @@ public class WorkspaceListTool extends AbsToolProvider implements SolonToTools {
         }
 
         // 2. 调用 workspace.listKeys(prefix)
+        Path workspaceRoot = ctx == null ? null : ctx.getRootDir();
         Set<String> keys;
         try {
-            keys = workspace.listKeys(prefix);
+            keys = workspace.listKeys(workspaceRoot, prefix);
         } catch (Exception e) {
             return "LIST_FAILED: Failed to list workspace keys with prefix '" + prefix + "': " + e.getMessage();
         }

@@ -1,332 +1,531 @@
 package site.sorghum.loopra.bin.workspace;
 
 import lombok.extern.slf4j.Slf4j;
+import org.noear.snack4.ONode;
 import org.noear.solon.annotation.Component;
 
-import java.util.*;
+import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.AtomicMoveNotSupportedException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
+import java.nio.file.StandardOpenOption;
+import java.util.LinkedHashSet;
+import java.util.Map;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * 共享工作区核心存储 —— 线程安全，支持 KV 和文档两种存储模式。
- * <p>
- * 使用 {@link ConcurrentHashMap} 保证单操作线程安全，{@link ReadWriteLock} 保障批量操作一致性。
- * </p>
- *
- * @author Sorghum
+ * 共享工作区核心存储。运行时按项目工作目录隔离，并持久化到
+ * {@code <workspace>/.loopra/workspace/workspace.json}。
  */
 @Slf4j
 @Component
 public class SharedWorkspace {
+    private static final String LOOPRA_DIR = ".loopra";
+    private static final String STORE_DIR = "workspace";
+    private static final String STORE_FILE = "workspace.json";
 
-    /** KV 存储 */
-    private final ConcurrentHashMap<String, KVBucket> kvStore = new ConcurrentHashMap<>();
-
-    /** 文档存储 */
-    private final ConcurrentHashMap<String, DocumentBucket> docStore = new ConcurrentHashMap<>();
-
-    /** 读写锁 —— 批量操作一致性 */
-    private final ReadWriteLock rwLock = new ReentrantReadWriteLock();
-
-    /** 最大条目数（单个存储类型），默认 1000 */
+    /** 最大条目数（单个存储类型），默认 1000。 */
     private final int maxEntries;
+    /** 没有项目根目录的兼容性内存存储。 */
+    private final Store transientStore;
+    /** 已加载的项目工作区存储，按规范化根目录索引。 */
+    private final ConcurrentHashMap<Path, Store> persistentStores = new ConcurrentHashMap<>();
 
     public SharedWorkspace() {
         this(1000);
     }
 
-    /**
-     * @param maxEntries 单个存储（KV / 文档）的最大条目数
-     */
     public SharedWorkspace(int maxEntries) {
         this.maxEntries = maxEntries;
+        this.transientStore = new Store();
     }
 
-    // ==================== KV 操作 ====================
-
-    /**
-     * 写入 KV 条目。
-     * <ul>
-     *   <li>如果 key 已存在：更新 value、updatedAt、version++</li>
-     *   <li>如果 key 不存在：新建 KVBucket，版本从 1 开始</li>
-     *   <li>写入前检查容量，超限则淘汰最旧条目</li>
-     * </ul>
-     *
-     * @param key     键
-     * @param value   值
-     * @param creator 创建者
-     */
     public void writeKV(String key, String value, String creator) {
+        writeKV(null, key, value, creator);
+    }
+
+    public void writeKV(Path workspaceRoot, String key, String value, String creator) {
         Objects.requireNonNull(key, "key must not be null");
         Objects.requireNonNull(value, "value must not be null");
         Objects.requireNonNull(creator, "creator must not be null");
 
-        rwLock.writeLock().lock();
+        Path root = normalizeRoot(workspaceRoot);
+        Store store = storeFor(root);
+        store.lock.writeLock().lock();
+        StoreSnapshot snapshot = snapshot(store);
         try {
-            // 容量检查：超限则淘汰最旧条目
-            if (kvStore.size() >= maxEntries) {
-                evictOne();
+            if (store.kvStore.size() >= maxEntries && !store.kvStore.containsKey(key)) {
+                evictOne(store);
             }
 
-            KVBucket existing = kvStore.get(key);
+            KVBucket existing = store.kvStore.get(key);
             if (existing != null) {
-                // 更新已有条目
                 existing.setValue(value);
                 existing.setUpdatedAt(System.currentTimeMillis());
                 existing.setVersion(existing.getVersion() + 1);
                 log.debug("Updated KV entry: key={}, version={}", key, existing.getVersion());
             } else {
-                // 新建条目
                 long now = System.currentTimeMillis();
-                KVBucket bucket = KVBucket.builder()
+                store.kvStore.put(key, KVBucket.builder()
                         .value(value)
                         .creator(creator)
                         .createdAt(now)
                         .updatedAt(now)
                         .version(1)
-                        .build();
-                kvStore.put(key, bucket);
+                        .build());
                 log.debug("Created KV entry: key={}, version=1", key);
             }
+            if (!persist(root, store)) {
+                restore(store, snapshot);
+                throw new IllegalStateException("Failed to persist shared workspace: " + storeFile(root));
+            }
         } finally {
-            rwLock.writeLock().unlock();
+            store.lock.writeLock().unlock();
         }
     }
 
-    /**
-     * 读取 KV 条目的值。
-     * 如果条目已过期则自动删除并返回 {@link Optional#empty()}。
-     *
-     * @param key 键
-     * @return 值（可能为空）
-     */
     public Optional<String> readKV(String key) {
-        Objects.requireNonNull(key, "key must not be null");
-
-        KVBucket bucket = kvStore.get(key);
-        if (bucket == null) {
-            return Optional.empty();
-        }
-        if (bucket.isExpired()) {
-            kvStore.remove(key);
-            log.debug("Removed expired KV entry: key={}", key);
-            return Optional.empty();
-        }
-        return Optional.of(bucket.getValue());
+        return readKV(null, key);
     }
 
-    /**
-     * 读取完整的 KV 桶信息。
-     * 如果条目已过期则自动删除并返回 {@link Optional#empty()}。
-     *
-     * @param key 键
-     * @return KVBucket（可能为空）
-     */
+    public Optional<String> readKV(Path workspaceRoot, String key) {
+        return getKVBucket(workspaceRoot, key).map(KVBucket::getValue);
+    }
+
     public Optional<KVBucket> getKVBucket(String key) {
-        Objects.requireNonNull(key, "key must not be null");
-
-        KVBucket bucket = kvStore.get(key);
-        if (bucket == null) {
-            return Optional.empty();
-        }
-        if (bucket.isExpired()) {
-            kvStore.remove(key);
-            log.debug("Removed expired KV entry: key={}", key);
-            return Optional.empty();
-        }
-        return Optional.of(bucket);
+        return getKVBucket(null, key);
     }
 
-    // ==================== 文档操作 ====================
+    public Optional<KVBucket> getKVBucket(Path workspaceRoot, String key) {
+        Objects.requireNonNull(key, "key must not be null");
+        Path root = normalizeRoot(workspaceRoot);
+        Store store = storeFor(root);
+        store.lock.writeLock().lock();
+        try {
+            KVBucket bucket = store.kvStore.get(key);
+            if (bucket == null) {
+                return Optional.empty();
+            }
+            if (bucket.isExpired()) {
+                store.kvStore.remove(key);
+                persist(root, store);
+                log.debug("Removed expired KV entry: key={}", key);
+                return Optional.empty();
+            }
+            return Optional.of(bucket);
+        } finally {
+            store.lock.writeLock().unlock();
+        }
+    }
 
-    /**
-     * 写入文档条目。
-     * <ul>
-     *   <li>如果 key 已存在：更新 content、mimeType、updatedAt、version++</li>
-     *   <li>如果 key 不存在：新建 DocumentBucket，版本从 1 开始</li>
-     *   <li>写入前检查容量，超限则淘汰最旧文档</li>
-     * </ul>
-     *
-     * @param key      键
-     * @param content  文档内容
-     * @param mimeType MIME 类型
-     * @param creator  创建者
-     */
     public void writeDoc(String key, String content, String mimeType, String creator) {
+        writeDoc(null, key, content, mimeType, creator);
+    }
+
+    public void writeDoc(Path workspaceRoot, String key, String content, String mimeType, String creator) {
         Objects.requireNonNull(key, "key must not be null");
         Objects.requireNonNull(content, "content must not be null");
         Objects.requireNonNull(mimeType, "mimeType must not be null");
         Objects.requireNonNull(creator, "creator must not be null");
 
-        rwLock.writeLock().lock();
+        Path root = normalizeRoot(workspaceRoot);
+        Store store = storeFor(root);
+        store.lock.writeLock().lock();
+        StoreSnapshot snapshot = snapshot(store);
         try {
-            // 容量检查：超限则淘汰最旧文档
-            if (docStore.size() >= maxEntries) {
-                evictOneDoc();
+            if (store.docStore.size() >= maxEntries && !store.docStore.containsKey(key)) {
+                evictOneDoc(store);
             }
 
-            DocumentBucket existing = docStore.get(key);
+            DocumentBucket existing = store.docStore.get(key);
             if (existing != null) {
-                // 更新已有文档
                 existing.setContent(content);
                 existing.setMimeType(mimeType);
                 existing.setUpdatedAt(System.currentTimeMillis());
                 existing.setVersion(existing.getVersion() + 1);
                 log.debug("Updated document entry: key={}, version={}", key, existing.getVersion());
             } else {
-                // 新建文档
                 long now = System.currentTimeMillis();
-                DocumentBucket bucket = DocumentBucket.builder()
+                store.docStore.put(key, DocumentBucket.builder()
                         .content(content)
                         .mimeType(mimeType)
                         .creator(creator)
                         .createdAt(now)
                         .updatedAt(now)
                         .version(1)
-                        .build();
-                docStore.put(key, bucket);
+                        .build());
                 log.debug("Created document entry: key={}, version=1", key);
             }
+            if (!persist(root, store)) {
+                restore(store, snapshot);
+                throw new IllegalStateException("Failed to persist shared workspace: " + storeFile(root));
+            }
         } finally {
-            rwLock.writeLock().unlock();
+            store.lock.writeLock().unlock();
         }
     }
 
-    /**
-     * 读取文档条目。
-     * 如果文档已过期则自动删除并返回 {@link Optional#empty()}。
-     *
-     * @param key 键
-     * @return DocumentBucket（可能为空）
-     */
     public Optional<DocumentBucket> readDoc(String key) {
+        return readDoc(null, key);
+    }
+
+    public Optional<DocumentBucket> readDoc(Path workspaceRoot, String key) {
         Objects.requireNonNull(key, "key must not be null");
-
-        DocumentBucket bucket = docStore.get(key);
-        if (bucket == null) {
-            return Optional.empty();
-        }
-        if (bucket.isExpired()) {
-            docStore.remove(key);
-            log.debug("Removed expired document entry: key={}", key);
-            return Optional.empty();
-        }
-        return Optional.of(bucket);
-    }
-
-    // ==================== 通用操作 ====================
-
-    /**
-     * 删除指定 key 的条目（同时检查 KV 和文档存储）。
-     *
-     * @param key 键
-     */
-    public void delete(String key) {
-        Objects.requireNonNull(key, "key must not be null");
-
-        boolean removed = false;
-        KVBucket kvRemoved = kvStore.remove(key);
-        if (kvRemoved != null) {
-            removed = true;
-            log.debug("Deleted KV entry: key={}", key);
-        }
-        DocumentBucket docRemoved = docStore.remove(key);
-        if (docRemoved != null) {
-            removed = true;
-            log.debug("Deleted document entry: key={}", key);
-        }
-        if (removed) {
-            log.debug("Deleted entry: key={}", key);
-        }
-    }
-
-    /**
-     * 返回匹配指定前缀的所有 key（KV + 文档合并去重）。
-     * 使用 {@link LinkedHashSet} 保持顺序。
-     *
-     * @param prefix key 前缀
-     * @return 匹配的 key 集合
-     */
-    public Set<String> listKeys(String prefix) {
-        Objects.requireNonNull(prefix, "prefix must not be null");
-
-        Set<String> keys = new LinkedHashSet<>();
-        for (String key : kvStore.keySet()) {
-            if (key.startsWith(prefix)) {
-                keys.add(key);
-            }
-        }
-        for (String key : docStore.keySet()) {
-            if (key.startsWith(prefix)) {
-                keys.add(key);
-            }
-        }
-        return keys;
-    }
-
-    /**
-     * 清空所有数据（使用 writeLock 保证排他）。
-     */
-    public void clear() {
-        rwLock.writeLock().lock();
+        Path root = normalizeRoot(workspaceRoot);
+        Store store = storeFor(root);
+        store.lock.writeLock().lock();
         try {
-            kvStore.clear();
-            docStore.clear();
+            DocumentBucket bucket = store.docStore.get(key);
+            if (bucket == null) {
+                return Optional.empty();
+            }
+            if (bucket.isExpired()) {
+                store.docStore.remove(key);
+                persist(root, store);
+                log.debug("Removed expired document entry: key={}", key);
+                return Optional.empty();
+            }
+            return Optional.of(bucket);
+        } finally {
+            store.lock.writeLock().unlock();
+        }
+    }
+
+    public void delete(String key) {
+        delete(null, key);
+    }
+
+    public void delete(Path workspaceRoot, String key) {
+        Objects.requireNonNull(key, "key must not be null");
+        Path root = normalizeRoot(workspaceRoot);
+        Store store = storeFor(root);
+        store.lock.writeLock().lock();
+        StoreSnapshot snapshot = snapshot(store);
+        try {
+            boolean removed = store.kvStore.remove(key) != null;
+            removed |= store.docStore.remove(key) != null;
+            if (removed) {
+                if (!persist(root, store)) {
+                    restore(store, snapshot);
+                    throw new IllegalStateException("Failed to persist shared workspace: " + storeFile(root));
+                }
+                log.debug("Deleted entry: key={}", key);
+            }
+        } finally {
+            store.lock.writeLock().unlock();
+        }
+    }
+
+    public Set<String> listKeys(String prefix) {
+        return listKeys(null, prefix);
+    }
+
+    public Set<String> listKeys(Path workspaceRoot, String prefix) {
+        Objects.requireNonNull(prefix, "prefix must not be null");
+        Path root = normalizeRoot(workspaceRoot);
+        Store store = storeFor(root);
+        store.lock.writeLock().lock();
+        try {
+            boolean expiredRemoved = purgeExpired(store);
+            if (expiredRemoved) {
+                persist(root, store);
+            }
+            Set<String> keys = new LinkedHashSet<>();
+            for (String key : store.kvStore.keySet()) {
+                if (key.startsWith(prefix)) {
+                    keys.add(key);
+                }
+            }
+            for (String key : store.docStore.keySet()) {
+                if (key.startsWith(prefix)) {
+                    keys.add(key);
+                }
+            }
+            return keys;
+        } finally {
+            store.lock.writeLock().unlock();
+        }
+    }
+
+    public void clear() {
+        clear(null);
+    }
+
+    public void clear(Path workspaceRoot) {
+        Path root = normalizeRoot(workspaceRoot);
+        Store store = storeFor(root);
+        store.lock.writeLock().lock();
+        StoreSnapshot snapshot = snapshot(store);
+        try {
+            store.kvStore.clear();
+            store.docStore.clear();
+            if (!persist(root, store)) {
+                restore(store, snapshot);
+                throw new IllegalStateException("Failed to persist shared workspace: " + storeFile(root));
+            }
             log.debug("Cleared all workspace data");
         } finally {
-            rwLock.writeLock().unlock();
+            store.lock.writeLock().unlock();
         }
     }
 
-    /**
-     * 返回总条目数（KV + 文档）。
-     *
-     * @return 总条目数
-     */
     public int size() {
-        return kvStore.size() + docStore.size();
+        return size(null);
     }
 
-    // ==================== 淘汰策略 ====================
+    public int size(Path workspaceRoot) {
+        return listKeys(workspaceRoot, "").size();
+    }
 
-    /**
-     * 淘汰 KV 存储中最旧的条目（按 createdAt 升序，相同时间戳时按 key 字典序）。
-     * 使用迭代器遍历替代 stream，确保 ConcurrentHashMap 下的确定性淘汰。
-     */
-    private void evictOne() {
+    private Store storeFor(Path root) {
+        if (root == null) {
+            return transientStore;
+        }
+        return persistentStores.computeIfAbsent(root, this::load);
+    }
+
+    private Path normalizeRoot(Path workspaceRoot) {
+        return workspaceRoot == null ? null : workspaceRoot.toAbsolutePath().normalize();
+    }
+
+    private Store load(Path workspaceRoot) {
+        Store store = new Store();
+        Path file = storeFile(workspaceRoot);
+        if (!Files.exists(file)) {
+            return store;
+        }
+        try {
+            ONode root = ONode.ofJson(Files.readString(file, StandardCharsets.UTF_8));
+            readKvEntries(root.get("kv"), store);
+            readDocumentEntries(root.get("documents"), store);
+            if (purgeExpired(store)) {
+                persist(workspaceRoot, store);
+            }
+            log.debug("Loaded shared workspace: {}", file);
+        } catch (Exception e) {
+            log.warn("[workspace] Failed to load shared workspace {}: {}", file, e.getMessage());
+        }
+        return store;
+    }
+
+    private boolean persist(Path workspaceRoot, Store store) {
+        if (workspaceRoot == null) {
+            return true;
+        }
+        Path file = storeFile(workspaceRoot);
+        try {
+            Files.createDirectories(file.getParent());
+            Path temporary = Files.createTempFile(file.getParent(), STORE_FILE, ".tmp");
+            try {
+                Files.writeString(temporary, serialize(store).toJson(), StandardCharsets.UTF_8,
+                        StandardOpenOption.TRUNCATE_EXISTING);
+                try {
+                    Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING, StandardCopyOption.ATOMIC_MOVE);
+                } catch (AtomicMoveNotSupportedException ignored) {
+                    Files.move(temporary, file, StandardCopyOption.REPLACE_EXISTING);
+                }
+            } finally {
+                Files.deleteIfExists(temporary);
+            }
+        } catch (IOException e) {
+            log.warn("[workspace] Failed to persist shared workspace {}: {}", file, e.getMessage());
+            return false;
+        }
+        return true;
+    }
+
+    private Path storeFile(Path workspaceRoot) {
+        return workspaceRoot.resolve(LOOPRA_DIR).resolve(STORE_DIR).resolve(STORE_FILE);
+    }
+
+    private ONode serialize(Store store) {
+        ONode root = ONode.ofJson("{}");
+        root.set("version", 1);
+        ONode kv = root.getOrNew("kv").asArray();
+        store.kvStore.forEach((key, bucket) -> kv.add(serializeKv(key, bucket)));
+        ONode documents = root.getOrNew("documents").asArray();
+        store.docStore.forEach((key, bucket) -> documents.add(serializeDocument(key, bucket)));
+        return root;
+    }
+
+    private ONode serializeKv(String key, KVBucket bucket) {
+        ONode node = ONode.ofJson("{}");
+        node.set("key", key);
+        node.set("value", bucket.getValue());
+        node.set("creator", bucket.getCreator());
+        node.set("createdAt", bucket.getCreatedAt());
+        node.set("updatedAt", bucket.getUpdatedAt());
+        node.set("version", bucket.getVersion());
+        node.set("ttlMs", bucket.getTtlMs());
+        node.set("metadata", ONode.ofBean(bucket.getMetadata()));
+        return node;
+    }
+
+    private ONode serializeDocument(String key, DocumentBucket bucket) {
+        ONode node = ONode.ofJson("{}");
+        node.set("key", key);
+        node.set("content", bucket.getContent());
+        node.set("mimeType", bucket.getMimeType());
+        node.set("creator", bucket.getCreator());
+        node.set("createdAt", bucket.getCreatedAt());
+        node.set("updatedAt", bucket.getUpdatedAt());
+        node.set("version", bucket.getVersion());
+        node.set("ttlMs", bucket.getTtlMs());
+        node.set("metadata", ONode.ofBean(bucket.getMetadata()));
+        return node;
+    }
+
+    private void readKvEntries(ONode entries, Store store) {
+        if (!entries.isArray()) {
+            return;
+        }
+        for (ONode entry : entries.getArray()) {
+            String key = entry.get("key").getString();
+            if (key == null) {
+                continue;
+            }
+            store.kvStore.put(key, KVBucket.builder()
+                    .value(entry.get("value").getString())
+                    .creator(entry.get("creator").getString())
+                    .createdAt(entry.get("createdAt").getLong())
+                    .updatedAt(entry.get("updatedAt").getLong())
+                    .version(entry.get("version").getInt())
+                    .ttlMs(entry.get("ttlMs").getLong())
+                    .metadata(metadata(entry.get("metadata")))
+                    .build());
+        }
+    }
+
+    private void readDocumentEntries(ONode entries, Store store) {
+        if (!entries.isArray()) {
+            return;
+        }
+        for (ONode entry : entries.getArray()) {
+            String key = entry.get("key").getString();
+            if (key == null) {
+                continue;
+            }
+            store.docStore.put(key, DocumentBucket.builder()
+                    .content(entry.get("content").getString())
+                    .mimeType(entry.get("mimeType").getString())
+                    .creator(entry.get("creator").getString())
+                    .createdAt(entry.get("createdAt").getLong())
+                    .updatedAt(entry.get("updatedAt").getLong())
+                    .version(entry.get("version").getInt())
+                    .ttlMs(entry.get("ttlMs").getLong())
+                    .metadata(metadata(entry.get("metadata")))
+                    .build());
+        }
+    }
+
+    private Map<String, String> metadata(ONode node) {
+        Map<String, String> result = new ConcurrentHashMap<>();
+        if (!node.isObject()) {
+            return result;
+        }
+        Map<?, ?> raw = node.toBean(Map.class);
+        if (raw != null) {
+            raw.forEach((key, value) -> {
+                if (key != null && value != null) {
+                    result.put(key.toString(), value.toString());
+                }
+            });
+        }
+        return result;
+    }
+
+    private boolean purgeExpired(Store store) {
+        boolean removed = store.kvStore.entrySet().removeIf(entry -> entry.getValue().isExpired());
+        return store.docStore.entrySet().removeIf(entry -> entry.getValue().isExpired()) || removed;
+    }
+
+    private StoreSnapshot snapshot(Store store) {
+        Map<String, KVBucket> kv = new ConcurrentHashMap<>();
+        store.kvStore.forEach((key, bucket) -> kv.put(key, copy(bucket)));
+        Map<String, DocumentBucket> documents = new ConcurrentHashMap<>();
+        store.docStore.forEach((key, bucket) -> documents.put(key, copy(bucket)));
+        return new StoreSnapshot(kv, documents);
+    }
+
+    private void restore(Store store, StoreSnapshot snapshot) {
+        store.kvStore.clear();
+        store.kvStore.putAll(snapshot.kvStore());
+        store.docStore.clear();
+        store.docStore.putAll(snapshot.docStore());
+    }
+
+    private KVBucket copy(KVBucket bucket) {
+        return KVBucket.builder()
+                .value(bucket.getValue())
+                .creator(bucket.getCreator())
+                .createdAt(bucket.getCreatedAt())
+                .updatedAt(bucket.getUpdatedAt())
+                .version(bucket.getVersion())
+                .ttlMs(bucket.getTtlMs())
+                .metadata(new ConcurrentHashMap<>(bucket.getMetadata()))
+                .build();
+    }
+
+    private DocumentBucket copy(DocumentBucket bucket) {
+        return DocumentBucket.builder()
+                .content(bucket.getContent())
+                .mimeType(bucket.getMimeType())
+                .creator(bucket.getCreator())
+                .createdAt(bucket.getCreatedAt())
+                .updatedAt(bucket.getUpdatedAt())
+                .version(bucket.getVersion())
+                .ttlMs(bucket.getTtlMs())
+                .metadata(new ConcurrentHashMap<>(bucket.getMetadata()))
+                .build();
+    }
+
+    private record StoreSnapshot(Map<String, KVBucket> kvStore, Map<String, DocumentBucket> docStore) {
+    }
+
+    private void evictOne(Store store) {
         String oldestKey = null;
         long oldestTime = Long.MAX_VALUE;
-        for (Map.Entry<String, KVBucket> entry : kvStore.entrySet()) {
+        for (Map.Entry<String, KVBucket> entry : store.kvStore.entrySet()) {
             long createdAt = entry.getValue().getCreatedAt();
-            if (createdAt < oldestTime || (createdAt == oldestTime && oldestKey != null && entry.getKey().compareTo(oldestKey) < 0)) {
+            if (createdAt < oldestTime || (createdAt == oldestTime && oldestKey != null
+                    && entry.getKey().compareTo(oldestKey) < 0)) {
                 oldestTime = createdAt;
                 oldestKey = entry.getKey();
             }
         }
         if (oldestKey != null) {
-            kvStore.remove(oldestKey);
+            store.kvStore.remove(oldestKey);
             log.info("Evicted oldest KV entry: key={}, createdAt={}", oldestKey, oldestTime);
         }
     }
 
-    /**
-     * 淘汰文档存储中最旧的条目（按 createdAt 升序，相同时间戳时按 key 字典序）。
-     * 使用迭代器遍历替代 stream，确保 ConcurrentHashMap 下的确定性淘汰。
-     */
-    private void evictOneDoc() {
+    private void evictOneDoc(Store store) {
         String oldestKey = null;
         long oldestTime = Long.MAX_VALUE;
-        for (Map.Entry<String, DocumentBucket> entry : docStore.entrySet()) {
+        for (Map.Entry<String, DocumentBucket> entry : store.docStore.entrySet()) {
             long createdAt = entry.getValue().getCreatedAt();
-            if (createdAt < oldestTime || (createdAt == oldestTime && oldestKey != null && entry.getKey().compareTo(oldestKey) < 0)) {
+            if (createdAt < oldestTime || (createdAt == oldestTime && oldestKey != null
+                    && entry.getKey().compareTo(oldestKey) < 0)) {
                 oldestTime = createdAt;
                 oldestKey = entry.getKey();
             }
         }
         if (oldestKey != null) {
-            docStore.remove(oldestKey);
+            store.docStore.remove(oldestKey);
             log.info("Evicted oldest document entry: key={}, createdAt={}", oldestKey, oldestTime);
         }
+    }
+
+    private static final class Store {
+        private final ConcurrentHashMap<String, KVBucket> kvStore = new ConcurrentHashMap<>();
+        private final ConcurrentHashMap<String, DocumentBucket> docStore = new ConcurrentHashMap<>();
+        private final ReadWriteLock lock = new ReentrantReadWriteLock();
     }
 }

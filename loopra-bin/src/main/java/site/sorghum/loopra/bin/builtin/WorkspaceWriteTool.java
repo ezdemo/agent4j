@@ -10,6 +10,7 @@ import site.sorghum.loopra.bin.workspace.SharedWorkspace;
 import site.sorghum.loopra.tool.ToolContext;
 import site.sorghum.loopra.tool.solon.SolonToTools;
 
+import java.nio.file.Path;
 import java.util.Collection;
 
 /**
@@ -47,7 +48,7 @@ public class WorkspaceWriteTool extends AbsToolProvider implements SolonToTools 
     }
 
     @ToolMapping(name = "workspace_write", description = """
-                向共享工作区写入 KV 或文档条目。KV 模式存储键值对，文档模式存储富文本内容。
+                向当前项目的共享工作区写入 KV 或文档条目，数据持久化到 `.loopra/workspace/`。KV 模式存储键值对，文档模式存储富文本内容。
                 参数: key(必填, 条目路径), value(可选, KV 模式值), content(可选, 文档模式内容),
                       type(可选, 文档 MIME 类型, 默认 text/plain), scope(可选, 作用域预留)。
                 key 为空时返回错误；value 和 content 都为空时返回错误。
@@ -64,25 +65,29 @@ public class WorkspaceWriteTool extends AbsToolProvider implements SolonToTools 
         }
 
         // 2. 获取 creator（优先使用 sessionId，兜底用 "agent"）
-        String creator = ctx.getSessionId();
+        String creator = ctx == null ? null : ctx.getSessionId();
         if (creator == null || creator.isBlank()) {
             creator = "agent";
         }
+        Path workspaceRoot = ctx == null ? null : ctx.getRootDir();
 
-        // 3. 确定模式并写入
-        if (value != null) {
+        // 3. 确定模式并写入。部分工具桥接层会把未提供的可选字符串转换为空串，
+        // 因此只有另一种载荷缺失时，空字符串才表示显式的空内容。
+        boolean hasValue = value != null && (!value.isEmpty() || content == null);
+        boolean hasContent = content != null && (!content.isEmpty() || value == null);
+        if (hasValue) {
             // KV 模式
             try {
-                workspace.writeKV(key, value, creator);
+                workspace.writeKV(workspaceRoot, key, value, creator);
                 return "Successfully wrote KV entry: " + key;
             } catch (Exception e) {
                 return "WRITE_FAILED: Failed to write KV entry '" + key + "': " + e.getMessage();
             }
-        } else if (content != null) {
+        } else if (hasContent) {
             // 文档模式
-            String mimeType = (type != null) ? type : "text/plain";
+            String mimeType = (type == null || type.isBlank()) ? "text/plain" : type;
             try {
-                workspace.writeDoc(key, content, mimeType, creator);
+                workspace.writeDoc(workspaceRoot, key, content, mimeType, creator);
                 return "Successfully wrote document entry: " + key + " (type: " + mimeType + ")";
             } catch (Exception e) {
                 return "WRITE_FAILED: Failed to write document entry '" + key

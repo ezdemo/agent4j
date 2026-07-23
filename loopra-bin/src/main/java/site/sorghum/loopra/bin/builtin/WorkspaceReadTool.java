@@ -12,6 +12,7 @@ import site.sorghum.loopra.bin.workspace.SharedWorkspace;
 import site.sorghum.loopra.tool.ToolContext;
 import site.sorghum.loopra.tool.solon.SolonToTools;
 
+import java.nio.file.Path;
 import java.util.*;
 
 /**
@@ -49,7 +50,7 @@ public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
     }
 
     @ToolMapping(name = "workspace_read", description = """
-                从共享工作区读取 KV 或文档条目。优先尝试 KV 读取，其次尝试文档读取，
+                从当前项目持久化在 `.loopra/workspace/` 的共享工作区读取 KV 或文档条目。优先尝试 KV 读取，其次尝试文档读取，
                 均未命中时返回 NOT_FOUND 错误并附带相似 key 提示。
                 参数: key(必填, 条目路径), scope(可选, 作用域过滤)。
                 key 为空时返回错误。
@@ -63,8 +64,11 @@ public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
             return "PARAM_MISSING: Missing required parameter 'key'";
         }
 
-        // 2. 优先尝试 KV 读取
-        Optional<KVBucket> kvBucket = workspace.getKVBucket(key);
+        // 2. 根据当前 Agent 工作目录选择持久化分区
+        Path workspaceRoot = ctx == null ? null : ctx.getRootDir();
+
+        // 3. 优先尝试 KV 读取
+        Optional<KVBucket> kvBucket = workspace.getKVBucket(workspaceRoot, key);
         if (kvBucket.isPresent()) {
             KVBucket bucket = kvBucket.get();
             Map<String, Object> data = new LinkedHashMap<>();
@@ -84,8 +88,8 @@ public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
             return "KV entry found for key: " + key + "\nValue: " + bucket.getValue();
         }
 
-        // 3. 再尝试文档读取
-        Optional<DocumentBucket> docBucket = workspace.readDoc(key);
+        // 4. 再尝试文档读取
+        Optional<DocumentBucket> docBucket = workspace.readDoc(workspaceRoot, key);
         if (docBucket.isPresent()) {
             DocumentBucket bucket = docBucket.get();
             Map<String, Object> data = new LinkedHashMap<>();
@@ -108,8 +112,8 @@ public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
                     + "\nContent: " + bucket.getContent();
         }
 
-        // 4. 都找不到，返回 NOT_FOUND 并附带相似 key 提示
-        String suggestion = buildNotFoundSuggestion(key);
+        // 5. 都找不到，返回 NOT_FOUND 并附带相似 key 提示
+        String suggestion = buildNotFoundSuggestion(key, workspaceRoot);
         return "NOT_FOUND: No entry found for key: '" + key + "'.\n" + suggestion;
     }
 
@@ -123,9 +127,9 @@ public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
      * @param key 用户查询的 key
      * @return 提示文本，包含相似 key 列表（如有）
      */
-    private String buildNotFoundSuggestion(String key) {
+    private String buildNotFoundSuggestion(String key, Path workspaceRoot) {
         // 收集所有相似 key
-        Set<String> similarKeys = findSimilarKeys(key);
+        Set<String> similarKeys = findSimilarKeys(key, workspaceRoot);
         if (similarKeys.isEmpty()) {
             return """
                     No similar keys found in workspace. Use workspace_write to create entries, 
@@ -162,8 +166,8 @@ public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
      * @param key 目标 key
      * @return 匹配的 key 集合（不包含目标 key 本身）
      */
-    private Set<String> findSimilarKeys(String key) {
-        Set<String> allKeys = workspace.listKeys("");
+    private Set<String> findSimilarKeys(String key, Path workspaceRoot) {
+        Set<String> allKeys = workspace.listKeys(workspaceRoot, "");
 
         if (allKeys.isEmpty()) {
             return Collections.emptySet();
@@ -184,7 +188,7 @@ public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
         // 尝试用完整 key 的不同长度前缀来匹配
         for (int len = Math.min(key.length(), 10); len >= 2; len--) {
             String prefix = key.substring(0, len);
-            Set<String> matched = workspace.listKeys(prefix);
+            Set<String> matched = workspace.listKeys(workspaceRoot, prefix);
             matched.remove(key);
             prefixed.addAll(matched);
             if (prefixed.size() >= 10) {

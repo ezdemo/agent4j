@@ -1,6 +1,7 @@
 package site.sorghum.loopra.bin.model;
 
 import lombok.extern.slf4j.Slf4j;
+import org.noear.snack4.Feature;
 import org.noear.snack4.ONode;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
@@ -84,8 +85,12 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
                     item.set("call_id", toolCall.id());
                     item.set(NAME, toolCall.name());
                     Object arguments = toolCall.arguments();
-                    item.set(ARGUMENTS, arguments instanceof String value
-                            ? value : arguments == null ? "{}" : ONode.serialize(arguments));
+                    boolean isString = arguments instanceof String;
+                    if (isString) {
+                        item.set(ARGUMENTS, arguments);
+                    } else {
+                        item.set(ARGUMENTS, ONode.serialize(arguments));
+                    }
                 }
             }
         }
