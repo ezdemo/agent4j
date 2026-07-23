@@ -224,12 +224,16 @@ function killProcessTree(child) {
   }
 }
 
-// 启动 loopra web <port>
-function startLoopraWeb(port) {
+function getLoopraBinPath() {
   const home = app.getPath('home')
   const binDir = path.join(home, '.loopra', 'bin')
   const binName = isWin ? 'loopra.ps1' : 'loopra'
-  const binPath = path.join(binDir, binName)
+  return { binDir, binPath: path.join(binDir, binName) }
+}
+
+// 启动 loopra web <port>
+function startLoopraWeb(port) {
+  const { binDir, binPath } = getLoopraBinPath()
 
   if (!fs.existsSync(binPath)) {
     throw new Error(`loopra not found: ${binPath}`)
@@ -412,7 +416,7 @@ ipcMain.handle('get_electron_version', async () => {
 })
 
 ipcMain.handle('get_loopra_web_status', async () => ({
-  installed: true,
+  installed: fs.existsSync(getLoopraBinPath().binPath),
   running: loopraWebProcess !== null,
   install_dir: path.join(app.getPath('home'), '.loopra')
 }))
@@ -468,7 +472,10 @@ ipcMain.handle('get_resource_dir', async () => {
   return path.join(__dirname, '../resources')
 })
 
-ipcMain.handle('check_install_needed', async () => ({ needed: false }))
+ipcMain.handle('check_install_needed', async () => {
+  const installed = fs.existsSync(getLoopraBinPath().binPath)
+  return { needed: !installed, reason: installed ? '' : 'not_installed' }
+})
 ipcMain.handle('install_loopra_web', async () => ({ success: true, steps: ['electron_mock_install'] }))
 
 ipcMain.handle('start_loopra_web', async () => {
