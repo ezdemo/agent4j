@@ -182,6 +182,7 @@
                 <div class="tool-badges">
                   <span v-if="tool.readonly" class="badge readonly">只读</span>
                   <span v-if="tool.write" class="badge write">写入</span>
+                  <span v-if="tool.readOnlyOverride !== null" class="badge override">自定义</span>
                   <span v-if="tool.stormExempt" class="badge exempt">豁免</span>
                 </div>
               </div>
@@ -227,6 +228,23 @@
           <div class="tool-description">{{ tool.description }}</div>
           
           <div v-if="expandedTools.includes(tool.name)" class="tool-expanded">
+            <div class="tool-section classification-setting">
+              <div class="section-title">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10Z"/>
+                </svg>
+                <span>权限分类</span>
+              </div>
+              <div class="classification-control" @click.stop>
+                <span>执行权限</span>
+                <div class="segmented-control" role="group" aria-label="工具执行权限">
+                  <button type="button" :class="{ active: tool.readOnlyOverride === null }" :disabled="togglingTool === tool.name" @click="setReadOnlyMode(tool, null)">默认</button>
+                  <button type="button" :class="{ active: tool.readOnlyOverride === true }" :disabled="togglingTool === tool.name" @click="setReadOnlyMode(tool, true)">只读</button>
+                  <button type="button" :class="{ active: tool.readOnlyOverride === false }" :disabled="togglingTool === tool.name" @click="setReadOnlyMode(tool, false)">写入</button>
+                </div>
+              </div>
+            </div>
+
             <!-- 参数 -->
             <div v-if="tool.params?.length" class="tool-section">
               <div class="section-title">
@@ -368,6 +386,7 @@ const loadTools = async () => {
         name: tool.name,
         description: tool.description,
         readonly: tool.readOnly || false,
+        readOnlyOverride: tool.readOnlyOverride === true ? true : (tool.readOnlyOverride === false ? false : null),
         write: !tool.readOnly,
         stormExempt: tool.stormExempt || false,
         enabled: tool.enabled !== undefined ? tool.enabled : true,
@@ -389,7 +408,7 @@ const loadTools = async () => {
     error.value = '加载工具列表失败: ' + err.message
     
     // 使用默认工具列表作为后备
-    tools.value = getDefaultTools()
+    tools.value = getDefaultTools().map(tool => ({ ...tool, readOnlyOverride: null }))
   } finally {
     loading.value = false
     refreshing.value = false
@@ -513,6 +532,20 @@ const toggleAutoTool = async (tool) => {
     await loadTools()
   } catch (err) {
     console.error('切换自动放行状态失败:', err)
+  } finally {
+    togglingTool.value = ''
+  }
+}
+
+// 设置工具只读分类；null 表示恢复默认
+const setReadOnlyMode = async (tool, readOnly) => {
+  if (tool.readOnlyOverride === readOnly) return
+  togglingTool.value = tool.name
+  try {
+    await toolsAPI.setReadOnly(tool.name, readOnly)
+    await loadTools()
+  } catch (err) {
+    console.error('设置工具权限分类失败:', err)
   } finally {
     togglingTool.value = ''
   }
@@ -955,6 +988,11 @@ onMounted(() => {
   color: var(--warning);
 }
 
+.badge.override {
+  background: var(--bg-tertiary);
+  color: var(--fg-secondary);
+}
+
 .badge.exempt {
   background: var(--info-bg);
   color: var(--info);
@@ -1004,6 +1042,51 @@ onMounted(() => {
 
 .section-title svg {
   color: var(--brand-primary);
+}
+
+.classification-control {
+  min-height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  color: var(--fg-secondary);
+  font-size: var(--text-sm);
+}
+
+.segmented-control {
+  display: inline-grid;
+  grid-template-columns: repeat(3, 64px);
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-tertiary);
+}
+
+.segmented-control button {
+  height: 28px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-secondary);
+  font-size: var(--text-xs);
+  cursor: pointer;
+}
+
+.segmented-control button:hover:not(:disabled) {
+  color: var(--fg);
+}
+
+.segmented-control button.active {
+  background: var(--surface);
+  color: var(--fg);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.12);
+}
+
+.segmented-control button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 /* 参数列表 */

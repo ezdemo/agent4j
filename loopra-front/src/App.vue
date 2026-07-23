@@ -240,6 +240,7 @@
               <div class="tool-list-head" aria-hidden="true">
                 <span>工具</span>
                 <span>说明</span>
+                <span>权限</span>
                 <span>自动放行</span>
                 <span>启用</span>
               </div>
@@ -249,6 +250,17 @@
                   <span v-if="!t.enabled" class="tool-disabled-state">已禁用</span>
                 </button>
                 <span class="tool-row-desc" :title="t.description">{{ t.description }}</span>
+                <select
+                  class="tool-permission-select"
+                  :value="readOnlyMode(t)"
+                  :disabled="refreshingTools"
+                  :title="`执行权限：${t.readOnly ? '只读' : '写入'}`"
+                  @change="setReadOnlyMode(t, $event.target.value)"
+                >
+                  <option value="default">默认</option>
+                  <option value="readonly">只读</option>
+                  <option value="write">写入</option>
+                </select>
                 <div class="tool-row-actions">
                   <button
                     class="tool-toggle-btn auto-toggle"
@@ -917,6 +929,22 @@ const refreshTools = async () => {
     if (r.success) tools.value = r.data || []
   } catch {}
   refreshingTools.value = false
+}
+
+const readOnlyMode = (tool) => tool.readOnlyOverride === true
+  ? 'readonly'
+  : (tool.readOnlyOverride === false ? 'write' : 'default')
+
+const setReadOnlyMode = async (tool, mode) => {
+  const readOnly = mode === 'readonly' ? true : (mode === 'write' ? false : null)
+  refreshingTools.value = true
+  try {
+    await toolsAPI.setReadOnly(tool.name, readOnly)
+    await refreshTools()
+  } catch (err) {
+    console.error('设置工具权限分类失败:', err)
+    refreshingTools.value = false
+  }
 }
 
 // 切换工具启用/禁用状态
@@ -2116,7 +2144,7 @@ watch(showSettings, (newVal) => {
 
 .tool-row {
   display: grid;
-  grid-template-columns: minmax(154px, 0.7fr) minmax(260px, 1.7fr) 74px 52px;
+  grid-template-columns: minmax(154px, 0.7fr) minmax(220px, 1.7fr) 88px 74px 52px;
   align-items: center;
   column-gap: 14px;
   min-height: 50px;
@@ -2167,6 +2195,28 @@ watch(showSettings, (newVal) => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tool-permission-select {
+  width: 82px;
+  height: 28px;
+  justify-self: center;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  outline: none;
+  background: var(--bg);
+  color: var(--fg-2);
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.tool-permission-select:focus {
+  border-color: var(--accent);
+}
+
+.tool-permission-select:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .tool-row-actions {
@@ -2283,7 +2333,7 @@ watch(showSettings, (newVal) => {
 
 .tool-list-head {
   display: grid;
-  grid-template-columns: minmax(154px, 0.7fr) minmax(260px, 1.7fr) 74px 52px;
+  grid-template-columns: minmax(154px, 0.7fr) minmax(220px, 1.7fr) 88px 74px 52px;
   column-gap: 14px;
   align-items: center;
   min-height: 34px;
@@ -2300,7 +2350,7 @@ watch(showSettings, (newVal) => {
 @media (max-width: 700px) {
   .modal-tools { width: min(96vw, 620px); }
   .tool-row,
-  .tool-list-head { grid-template-columns: minmax(120px, 0.8fr) minmax(120px, 1.2fr) 62px 48px; column-gap: 8px; }
+  .tool-list-head { grid-template-columns: minmax(105px, 0.8fr) minmax(110px, 1.2fr) 76px 62px 48px; column-gap: 7px; }
   .tool-row { padding: 0 8px; }
   .tool-list-head { padding: 0 8px; }
   .tool-filter-bar { width: 100%; overflow-x: auto; }

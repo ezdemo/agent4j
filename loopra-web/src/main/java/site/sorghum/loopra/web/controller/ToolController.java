@@ -30,7 +30,7 @@ public class ToolController {
     static ToolInfoDTO toToolInfoDTO(FunctionTool def, boolean enabled, boolean autoApproved) {
         List<ToolParamInfoDTO> params = new ArrayList<>();
         return new ToolInfoDTO(def.name(), def.description(),
-                ToolMetadata.isReadOnly(def), ToolMetadata.isStormExempt(def),
+                ToolMetadata.isReadOnly(def), ToolMetadata.readOnlyOverride(def), ToolMetadata.isStormExempt(def),
                 enabled, autoApproved, params);
     }
 
@@ -102,6 +102,27 @@ public class ToolController {
         return ApiResponse.ok(currentlyAutoApproved ? "已移除自动放行: " + name : "已添加自动放行: " + name);
     }
 
+    @ApiOperation(value = "设置工具只读分类", notes = "设置为只读或写入；readOnly 为 null 时恢复工具默认分类")
+    @Post
+    @Mapping("/{name}/read-only")
+    public ApiResponse<String> setReadOnly(
+            @ApiParam(value = "工具名称") @Path("name") String name,
+            @Body ToolReadOnlyRequest request) {
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        ToolRegistry registry = agentService.getSharedToolRegistry();
+        registry.refresh();
+        Map<String, FunctionTool> allTools = registry.allScanned();
+        if (allTools == null || !allTools.containsKey(name)) {
+            throw new ServiceException("工具不存在: " + name);
+        }
+        Boolean readOnly = request != null ? request.readOnly : null;
+        ConfigService.setToolReadOnlyOverride(name, readOnly);
+        registry.refresh();
+        Dami.bus().send("config.changed", new ConfigChangedEvent("toolReadOnlyOverrides", name));
+        String classification = readOnly == null ? "默认" : (readOnly ? "只读" : "写入");
+        return ApiResponse.ok("已将工具分类设置为" + classification + ": " + name);
+    }
+
     @ApiOperation(value = "获取工具详情", notes = "根据工具名称获取详细的参数定义和描述")
     @Get
     @Mapping("/{name}")
@@ -113,5 +134,8 @@ public class ToolController {
         boolean enabled = registry.isEnabled(name);
         boolean autoApproved = ConfigService.getAutoWhitelist().contains(name);
         return ApiResponse.ok(toToolInfoDTO(tool, enabled, autoApproved));
+    }
+    public static class ToolReadOnlyRequest {
+        public Boolean readOnly;
     }
 }

@@ -395,6 +395,11 @@ export const toolsAPI = {
     return api.post(`/tools/${name}/toggle`)
   },
   
+  // 设置工具只读分类；null 恢复默认 - POST /api/tools/{name}/read-only
+  setReadOnly: (name, readOnly) => {
+    return api.post(`/tools/${name}/read-only`, { readOnly })
+  },
+
   // 直接执行工具 - POST /api/tools/{name}/execute
   execute: (name, args) => {
     return api.post(`/tools/${name}/execute`, { arguments: args })

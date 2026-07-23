@@ -28,6 +28,24 @@ class ToolMetadataTest {
         assertFalse(ToolMetadata.isReadOnly(write));
     }
 
+    @Test
+    void runtimeOverrideTakesPrecedenceAndCanBeRemoved() {
+        FunctionToolDesc builtInRead = tool("read");
+        ToolMetadata.applyReadOnlyOverride(builtInRead, false);
+        assertFalse(ToolMetadata.isReadOnly(builtInRead));
+        assertFalse(ToolMetadata.readOnlyOverride(builtInRead));
+
+        ToolMetadata.applyReadOnlyOverride(builtInRead, null);
+        assertTrue(ToolMetadata.isReadOnly(builtInRead));
+
+        FunctionToolDesc declaredWrite = tool("custom_write");
+        declaredWrite.metaPut("readOnly", false);
+        ToolMetadata.applyReadOnlyOverride(declaredWrite, true);
+        assertTrue(ToolMetadata.isReadOnly(declaredWrite));
+        ToolMetadata.applyReadOnlyOverride(declaredWrite, null);
+        assertFalse(ToolMetadata.isReadOnly(declaredWrite));
+    }
+
     private static FunctionToolDesc tool(String name) {
         return new FunctionToolDesc(name)
                 .description(name)

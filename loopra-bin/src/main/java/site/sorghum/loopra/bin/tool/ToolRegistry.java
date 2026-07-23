@@ -126,6 +126,7 @@ public class ToolRegistry {
      */
     public void refresh() {
         Set<String> disabled = getCurrentDisabledTools();
+        Map<String, Boolean> readOnlyOverrides = ConfigService.getToolReadOnlyOverrides();
         functionToolMap.clear();
         allScannedTools.clear();
         cachedOpenAiTools = null; // 失效缓存
@@ -134,6 +135,7 @@ public class ToolRegistry {
         List<FunctionTool> functionToolsList = ToolScanUtil.scanTools(workspace);
 
         for (FunctionTool tool : functionToolsList) {
+            ToolMetadata.applyReadOnlyOverride(tool, readOnlyOverrides.get(tool.name()));
             register(tool, disabled);
         }
     }

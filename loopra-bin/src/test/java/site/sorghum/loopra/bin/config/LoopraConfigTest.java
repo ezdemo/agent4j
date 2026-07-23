@@ -189,6 +189,15 @@ class LoopraConfigTest {
     }
 
     @Test
+    void readsToolReadOnlyOverrides() throws Exception {
+        LoopraConfig config = config("""
+                {"toolReadOnlyOverrides":{"bash":true,"read":false,"ignored":"yes"}}
+                """);
+
+        assertEquals(Map.of("bash", true, "read", false), config.toolReadOnlyOverrides());
+    }
+
+    @Test
     void migratesLegacyChannelModelStringsToConfiguredEntries() throws Exception {
         Path configDir = tempDir.resolve(".loopra");
         Files.createDirectories(configDir);

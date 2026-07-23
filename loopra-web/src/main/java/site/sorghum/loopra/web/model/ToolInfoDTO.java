@@ -6,6 +6,7 @@ public record ToolInfoDTO(
         String name,
         String description,
         boolean readOnly,
+        Boolean readOnlyOverride,
         boolean stormExempt,
         boolean enabled,
         boolean autoApproved,
