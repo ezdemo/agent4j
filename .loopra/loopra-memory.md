@@ -35,3 +35,11 @@ OpenAI 兼容模型的上下文超限标准错误码是 `context_length_exceeded
 - 修改 shell 安装脚本后需要先统一或处理 CRLF 换行，再运行 `bash -n`，否则会出现函数定义附近的语法错误。
 - 当前桌面安装流程是首次运行在线下载运行时，并非完全离线打包 JRE/JAR。
 - 用户偏好使用中文回复。
+
+## [2026-07-24 13:20] 会话折叠沉淀
+
+- Loopra 桌面端的运行时文件安装目录为 `~/.loopra-gui`。
+- Loopra 的用户配置目录仍为 `~/.loopra`，不能随安装目录迁移。
+- 桌面端进程管理只应识别命令行包含 `~/.loopra-gui` 的 Java 运行时，不应接管命令行服务使用的 `loopra-web.jar`。
+- 修改 Electron 主进程后应至少运行 `node --check loopra-front/electron/main.cjs` 和 `pnpm --dir loopra-front build:main`。
+- 安装与卸载脚本同时维护 Shell 和 PowerShell 版本，修改后需要分别进行语法解析检查。

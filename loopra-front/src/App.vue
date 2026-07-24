@@ -1761,7 +1761,9 @@ const runInFreshSession = async (cmd, opts = {}) => {
 const handleAutoUpdate = async () => {
   autoUpdating.value = true
   try {
-    const updateCommand = "请帮我执行 Loopra 自动更新。根据当前操作系统平台，选择并运行对应的更新脚本：\n\n- Windows 系统：在 PowerShell 中运行 `irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex`\n- macOS / Linux 系统：在终端中运行 `curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash`\n\n请先判断当前系统平台，然后执行对应的脚本。执行完成后请报告结果。"
+    const updateCommand = platform.isElectron
+      ? "请帮我执行 Loopra 桌面端自动更新。请使用当前操作系统对应的桌面运行时更新脚本：\n\n- Windows 系统：在 PowerShell 中运行 `irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-gui.ps1 | iex`\n- macOS / Linux 系统：在终端中运行 `curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-gui.sh | bash`\n\n桌面运行时必须安装到 ~/.loopra-gui，配置继续使用 ~/.loopra。执行完成后请报告结果。"
+      : "请帮我执行 Loopra 自动更新。根据当前操作系统平台，选择并运行对应的更新脚本：\n\n- Windows 系统：在 PowerShell 中运行 `irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex`\n- macOS / Linux 系统：在终端中运行 `curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash`\n\n请先判断当前系统平台，然后执行对应的脚本。执行完成后请报告结果。"
     await runInFreshSession(updateCommand, {
       successMessage: '已新建更新会话',
       closeSettings: true,
