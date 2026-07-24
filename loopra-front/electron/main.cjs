@@ -241,6 +241,7 @@ function getLoopraPaths() {
     binDir,
     binPath: path.join(binDir, binName),
     jarPath: path.join(binDir, 'loopra-web.jar'),
+    versionPath: path.join(binDir, 'version.txt'),
     javaPath: isWin
       ? path.join(runtimeDir, 'jre25', 'bin', 'java.exe')
       : path.join(runtimeDir, 'jre25', 'bin', 'java'),
@@ -251,6 +252,15 @@ function getLoopraPaths() {
 function getLoopraBinPath() {
   const { binDir, binPath } = getLoopraPaths()
   return { binDir, binPath }
+}
+
+function readLoopraGuiVersion() {
+  const { versionPath } = getLoopraPaths()
+  try {
+    return fs.readFileSync(versionPath, 'utf8').trim().replace(/^v/i, '')
+  } catch {
+    return ''
+  }
 }
 
 function isLoopraGuiInstalled() {
@@ -511,8 +521,17 @@ ipcMain.handle('get_resource_dir', async () => {
 })
 
 ipcMain.handle('check_install_needed', async () => {
-  const installed = isLoopraGuiInstalled()
-  return { needed: !installed, reason: installed ? '' : 'not_installed' }
+  if (!isLoopraGuiInstalled()) {
+    return { needed: true, reason: 'not_installed' }
+  }
+
+  const runtimeVersion = readLoopraGuiVersion()
+  const desktopVersion = app.getVersion().replace(/^v/i, '')
+  if (runtimeVersion !== desktopVersion) {
+    return { needed: true, reason: 'version_mismatch', runtimeVersion, desktopVersion }
+  }
+
+  return { needed: false, reason: '', runtimeVersion, desktopVersion }
 })
 ipcMain.handle('install_loopra_web', async () => ({
   success: false,
