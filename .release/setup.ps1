@@ -9,6 +9,11 @@ $VERSION = "v26.7.23"
 $PACKAGE_URL = "https://gitee.com/ezdemo/loopra/releases/download/$VERSION/loopra-web-dist.tar.gz"
 $TEMP_DIR = Join-Path $env:TEMP "loopra-install"
 
+# Desktop installs use an isolated runtime by default; CLI installs remain ~/.loopra.
+if ($env:LOOPRA_GUI_INSTALL -eq "1" -and -not $env:LOOPRA_INSTALL_DIR) {
+    $env:LOOPRA_INSTALL_DIR = Join-Path $env:USERPROFILE ".loopra-gui"
+}
+
 function Write-Info {
     param([string]$Message)
     Write-Host "[INFO] " -ForegroundColor Green -NoNewline
