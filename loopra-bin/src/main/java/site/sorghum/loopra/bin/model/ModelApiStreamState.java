@@ -11,6 +11,8 @@ import java.util.Map;
 final class ModelApiStreamState {
     String errorData;
     boolean retryableError = true;
+    /** 上下文超限：可恢复，但必须由上层折叠历史后重试。 */
+    boolean contextLengthExceeded;
     boolean emittedOutput;
     boolean aborted;
     boolean completed;

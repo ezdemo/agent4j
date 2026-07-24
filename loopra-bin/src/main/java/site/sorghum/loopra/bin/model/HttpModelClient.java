@@ -506,7 +506,8 @@ public class HttpModelClient implements ModelClient {
                 if (status >= 400) {
                     ResponseBody errorBody = response.body();
                     String err = errorBody != null ? errorBody.string() : "unknown error";
-                    safeCallback("onError", () -> callback.onError("API error " + status + ": " + err));
+                    safeCallback("onError", () -> callback.onError(
+                            ModelApiError.annotate("API error " + status + ": " + err)));
                     return;
                 }
 
@@ -530,12 +531,22 @@ public class HttpModelClient implements ModelClient {
 
                     // ★ SSE流错误重试逻辑
                     if (parseResult.errorData != null) {
+                        String errorData = ModelApiError.annotate(parseResult.errorData);
+                        boolean contextLengthExceeded = parseResult.contextLengthExceeded
+                                || ModelApiError.isContextLengthExceeded(parseResult.errorData);
+
+                        // 上下文超限不能用原始请求重试，交给 AgentLoop 折叠历史后重新请求。
+                        if (contextLengthExceeded) {
+                            safeCallback("onError", () -> callback.onError(errorData));
+                            return;
+                        }
+
                         if (!parseResult.retryableError || parseResult.emittedOutput) {
-                            safeCallback("onError", () -> callback.onError(parseResult.errorData));
+                            safeCallback("onError", () -> callback.onError(errorData));
                             return;
                         }
                         try {
-                            retry.waitOrThrow("SSE流错误: " + parseResult.errorData, attempt);
+                            retry.waitOrThrow("SSE流错误: " + errorData, attempt);
                         } catch (IOException e) {
                             finishRetryFailure(e, callback);
                             return;
@@ -631,6 +642,9 @@ public class HttpModelClient implements ModelClient {
             if (data.trim().startsWith("{\"error\":")) {
                 log.warn("收到SSE流错误（可重试）: {}", data);
                 result.errorData = data;
+                result.contextLengthExceeded = ModelApiError.isContextLengthExceeded(data);
+                result.retryableError = true;
+                process = true;
                 break;
             }
             ONode chunk = ONode.ofJson(data);
