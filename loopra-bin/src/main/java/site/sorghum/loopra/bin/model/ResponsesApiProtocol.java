@@ -46,12 +46,18 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
                 continue;
             }
 
-            if (message.hasToolCalls()) {
-                String responseReasoning = message.getToolCalls().stream()
+            String responseReasoning = message.getResponseReasoning();
+            if (responseReasoning == null && message.hasToolCalls()) {
+                responseReasoning = message.getToolCalls().stream()
                         .map(ToolCallEntry::responseReasoning)
                         .filter(Objects::nonNull)
                         .findFirst().orElse(null);
-                if (responseReasoning != null) input.add(ONode.ofJson(responseReasoning));
+            }
+            if (responseReasoning != null) {
+                ONode reasoningItem = ONode.ofJson(responseReasoning);
+                // `status` is output-only and rejected when the item is replayed through input.
+                reasoningItem.remove("status");
+                input.add(reasoningItem);
             }
 
             boolean hasParts = message.getContentParts() != null && !message.getContentParts().isEmpty();
@@ -161,7 +167,6 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
                 }
             } else if ("function_call".equals(type)) {
                 ONode call = toolCalls.addNew();
-                if (reasoningItem != null) call.set("response_reasoning", reasoningItem.toJson());
                 String callId = item.get("call_id").getString();
                 if (callId == null || callId.isEmpty()) callId = item.get(ID).getString();
                 call.set(ID, callId == null ? "" : callId);
@@ -172,6 +177,7 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
             }
         }
         message.set(CONTENT, content.toString());
+        if (reasoningItem != null) message.set("response_reasoning", reasoningItem.toJson());
         if (!reasoning.isEmpty()) message.set(REASONING_CONTENT, reasoning.toString());
         if (!toolCalls.isEmpty()) message.set("tool_calls", toolCalls);
         return message;
@@ -218,6 +224,7 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
                 state.errorData = chunk.toJson();
                 String errorCode = chunk.select("$.response.error.code").getString();
                 state.contextLengthExceeded = ModelApiError.isContextLengthExceeded(state.errorData);
+                state.invalidRequestError = ModelApiError.isInvalidRequestError(state.errorData);
                 state.retryableError = state.contextLengthExceeded
                         || Objects.equals(errorCode, "rate_limit_exceeded")
                         || Objects.equals(errorCode, "upstream_error");
@@ -226,6 +233,7 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
             case "error" -> {
                 state.errorData = chunk.toJson();
                 state.contextLengthExceeded = ModelApiError.isContextLengthExceeded(state.errorData);
+                state.invalidRequestError = ModelApiError.isInvalidRequestError(state.errorData);
                 state.retryableError = true;
                 log.warn("收到 Responses API 流错误: {}", state.errorData);
             }
