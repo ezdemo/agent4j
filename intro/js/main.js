@@ -1,234 +1,106 @@
-/* ============================================================
-   Loopra — Official Website | v2.0
-   Interactive Functions
-   ============================================================ */
+const menuButton = document.querySelector(".menu-button");
+const mobileNav = document.querySelector(".mobile-nav");
+const copyButton = document.querySelector(".copy-button");
+const sourceMenu = document.querySelector(".source-menu");
+const sourceMenuTrigger = document.querySelector(".source-menu-trigger");
+const sourceOptions = document.querySelector(".source-options");
+const downloadMenu = document.querySelector(".download-menu");
+const downloadMenuTrigger = document.querySelector(".download-menu-trigger");
+const downloadOptions = document.querySelector(".download-options");
+const webInstallTrigger = document.querySelector(".web-install-trigger");
+const webInstallOptions = document.querySelector(".web-install-options");
+const installCommand = document.querySelector(".install-command");
+const installCommandLabel = document.querySelector(".install-command-label");
+const installCommandText = document.querySelector(".install-command-text");
+const installCopyButton = document.querySelector(".install-copy-button");
 
-(function () {
-    'use strict';
+const closeSourceMenu = () => {
+  sourceMenuTrigger?.setAttribute("aria-expanded", "false");
+  sourceOptions?.setAttribute("hidden", "");
+};
 
-    // ---------- Nav scroll effect ----------
-    const nav = document.querySelector('.nav');
-    let lastScroll = 0;
+const closeDownloadMenu = () => {
+  downloadMenuTrigger?.setAttribute("aria-expanded", "false");
+  downloadOptions?.setAttribute("hidden", "");
+  webInstallTrigger?.setAttribute("aria-expanded", "false");
+  webInstallOptions?.setAttribute("hidden", "");
+  installCommand?.setAttribute("hidden", "");
+};
 
-    window.addEventListener('scroll', () => {
-        const scrollY = window.scrollY;
-        nav.classList.toggle('scrolled', scrollY > 40);
-        lastScroll = scrollY;
-    }, {passive: true});
+const copyText = async (text, button, defaultLabel) => {
+  try {
+    await navigator.clipboard.writeText(text);
+    button.textContent = "已复制";
+  } catch {
+    button.textContent = "复制失败";
+  }
 
-    // ---------- Mobile nav toggle ----------
-    const navToggle = document.querySelector('.nav-toggle');
-    const navLinks = document.querySelector('.nav-links');
+  window.setTimeout(() => {
+    button.textContent = defaultLabel;
+  }, 1600);
+};
 
-    if (navToggle) {
-        navToggle.addEventListener('click', () => {
-            navLinks.classList.toggle('open');
-        });
+menuButton?.addEventListener("click", () => {
+  const isOpen = mobileNav.classList.toggle("open");
+  menuButton.setAttribute("aria-expanded", String(isOpen));
+});
 
-        // Close nav on link click
-        document.querySelectorAll('.nav-links a').forEach(link => {
-            link.addEventListener('click', () => {
-                navLinks.classList.remove('open');
-            });
-        });
-    }
+document.querySelectorAll(".mobile-nav a").forEach((link) => {
+  link.addEventListener("click", () => {
+    mobileNav.classList.remove("open");
+    menuButton?.setAttribute("aria-expanded", "false");
+  });
+});
 
-    // ---------- IntersectionObserver for reveal animations ----------
-    const observer = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                entry.target.classList.add('visible');
-            }
-        });
-    }, {
-        threshold: 0.1,
-        rootMargin: '0px 0px -40px 0px'
-    });
+sourceMenuTrigger?.addEventListener("click", () => {
+  const isOpen = sourceMenuTrigger.getAttribute("aria-expanded") === "true";
+  closeDownloadMenu();
+  sourceMenuTrigger.setAttribute("aria-expanded", String(!isOpen));
+  sourceOptions.toggleAttribute("hidden", isOpen);
+});
 
-    document.querySelectorAll('.reveal').forEach(el => observer.observe(el));
+downloadMenuTrigger?.addEventListener("click", () => {
+  const isOpen = downloadMenuTrigger.getAttribute("aria-expanded") === "true";
+  closeSourceMenu();
+  downloadMenuTrigger.setAttribute("aria-expanded", String(!isOpen));
+  downloadOptions.toggleAttribute("hidden", isOpen);
+});
 
-    // ---------- Copy code blocks ----------
-    function copyCode(btn, codeId) {
-        const codeEl = document.getElementById(codeId);
-        if (!codeEl) return;
+webInstallTrigger?.addEventListener("click", () => {
+  const isOpen = webInstallTrigger.getAttribute("aria-expanded") === "true";
+  webInstallTrigger.setAttribute("aria-expanded", String(!isOpen));
+  webInstallOptions.toggleAttribute("hidden", isOpen);
+  installCommand?.setAttribute("hidden", "");
+});
 
-        const code = codeEl.innerText;
-        navigator.clipboard.writeText(code).then(() => {
-            btn.textContent = '已复制 ✓';
-            btn.classList.add('copied');
-            setTimeout(() => {
-                btn.textContent = '复制';
-                btn.classList.remove('copied');
-            }, 2000);
-        }).catch(() => {
-            // Fallback
-            const textarea = document.createElement('textarea');
-            textarea.value = code;
-            document.body.appendChild(textarea);
-            textarea.select();
-            document.execCommand('copy');
-            document.body.removeChild(textarea);
-            btn.textContent = '已复制 ✓';
-            btn.classList.add('copied');
-            setTimeout(() => {
-                btn.textContent = '复制';
-                btn.classList.remove('copied');
-            }, 2000);
-        });
-    }
+document.querySelectorAll(".install-option").forEach((option) => {
+  option.addEventListener("click", () => {
+    installCommandLabel.textContent = option.dataset.platform;
+    installCommandText.textContent = option.dataset.command;
+    installCommand.removeAttribute("hidden");
+  });
+});
 
-    // Expose copyCode globally
-    window.copyCode = copyCode;
+installCopyButton?.addEventListener("click", () => {
+  copyText(installCommandText.textContent, installCopyButton, "复制命令");
+});
 
-    // ---------- Smooth scroll for anchor links ----------
-    document.querySelectorAll('a[href^="#"]').forEach(link => {
-        link.addEventListener('click', (e) => {
-            const targetId = link.getAttribute('href');
-            if (targetId === '#') return;
+copyButton?.addEventListener("click", () => {
+  copyText(copyButton.dataset.copy, copyButton, "复制 Windows 命令");
+});
 
-            const target = document.querySelector(targetId);
-            if (target) {
-                e.preventDefault();
-                const navHeight = nav ? nav.offsetHeight : 70;
-                const targetPos = target.getBoundingClientRect().top + window.scrollY - navHeight;
+document.addEventListener("click", (event) => {
+  if (sourceMenu && !sourceMenu.contains(event.target)) {
+    closeSourceMenu();
+  }
+  if (downloadMenu && !downloadMenu.contains(event.target)) {
+    closeDownloadMenu();
+  }
+});
 
-                window.scrollTo({
-                    top: targetPos,
-                    behavior: 'smooth'
-                });
-            }
-        });
-    });
-
-    // ---------- Terminal cursor blinking ----------
-    // Already handled by CSS
-
-    // ---------- Stat counter animation ----------
-    function animateCounters() {
-        document.querySelectorAll('.stat-value[data-target]').forEach(el => {
-            const target = parseInt(el.dataset.target);
-            const duration = 1500;
-            const start = performance.now();
-
-            function update(currentTime) {
-                const elapsed = currentTime - start;
-                const progress = Math.min(elapsed / duration, 1);
-                const eased = 1 - Math.pow(1 - progress, 3);
-                const current = Math.floor(eased * target);
-
-                if (el.dataset.suffix) {
-                    el.textContent = current + el.dataset.suffix;
-                } else {
-                    el.textContent = current + '%';
-                }
-
-                if (progress < 1) {
-                    requestAnimationFrame(update);
-                }
-            }
-
-            requestAnimationFrame(update);
-        });
-    }
-
-    // Trigger counter animation when section is visible
-    const counterObserver = new IntersectionObserver((entries) => {
-        entries.forEach(entry => {
-            if (entry.isIntersecting) {
-                animateCounters();
-                counterObserver.unobserve(entry.target);
-            }
-        });
-    }, {threshold: 0.3});
-
-    document.querySelectorAll('.cache-stats').forEach(el => {
-        counterObserver.observe(el);
-    });
-
-    // ---------- Scroll progress indicator ----------
-    const scrollProgress = document.createElement('div');
-    scrollProgress.style.cssText = `
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 0;
-    height: 2px;
-    background: linear-gradient(90deg, var(--neon), var(--amber));
-    z-index: 101;
-    transition: width 0.1s linear;
-  `;
-    document.body.appendChild(scrollProgress);
-
-    window.addEventListener('scroll', () => {
-        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-        const scrollPercent = (window.scrollY / docHeight) * 100;
-        scrollProgress.style.width = scrollPercent + '%';
-    }, {passive: true});
-
-    // ---------- Dynamic year in footer ----------
-    document.querySelectorAll('[data-year]').forEach(el => {
-        el.textContent = new Date().getFullYear();
-    });
-
-    // ---------- Particle effect on hero (optional) ----------
-    // Simple starfield effect
-    const hero = document.querySelector('.hero');
-    if (hero && window.innerWidth > 768) {
-        const canvas = document.createElement('canvas');
-        canvas.style.cssText = `
-      position: absolute;
-      top: 0;
-      left: 0;
-      width: 100%;
-      height: 100%;
-      pointer-events: none;
-      z-index: 0;
-    `;
-        canvas.width = hero.offsetWidth;
-        canvas.height = hero.offsetHeight;
-        hero.appendChild(canvas);
-
-        const ctx = canvas.getContext('2d');
-        const stars = Array.from({length: 80}, () => ({
-            x: Math.random() * canvas.width,
-            y: Math.random() * canvas.height,
-            size: Math.random() * 2 + 0.5,
-            alpha: Math.random() * 0.5 + 0.2,
-            speed: Math.random() * 0.02 + 0.005
-        }));
-
-        function drawStars() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-            stars.forEach(star => {
-                ctx.beginPath();
-                ctx.arc(star.x, star.y, star.size, 0, Math.PI * 2);
-                ctx.fillStyle = `rgba(0, 230, 118, ${star.alpha})`;
-                ctx.fill();
-
-                star.y -= star.speed;
-                if (star.y < -10) {
-                    star.y = canvas.height + 10;
-                    star.x = Math.random() * canvas.width;
-                }
-            });
-
-            requestAnimationFrame(drawStars);
-        }
-
-        drawStars();
-
-        // Resize handler
-        window.addEventListener('resize', () => {
-            canvas.width = hero.offsetWidth;
-            canvas.height = hero.offsetHeight;
-        });
-    }
-
-    // ---------- Console welcome ----------
-    console.log('%c Loopra %c 纯 Java 的 AI 编码代理 ',
-        'background:#00e676;color:#000;padding:4px 8px;border-radius:4px 0 0 4px;font-weight:bold;font-size:14px;font-family:monospace;',
-        'background:#141c24;color:#e8edf2;padding:4px 8px;border-radius:0 4px 4px 0;font-size:14px;font-family:monospace;'
-    );
-    console.log('https://github.com/ezdemo/loopra');
-})();
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape") {
+    closeSourceMenu();
+    closeDownloadMenu();
+  }
+});
