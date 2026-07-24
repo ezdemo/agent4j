@@ -216,11 +216,17 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
             }
             case "response.failed", "response.incomplete" -> {
                 state.errorData = chunk.toJson();
-                state.retryableError = false;
+                String errorCode = chunk.select("$.response.error.code").getString();
+                state.contextLengthExceeded = ModelApiError.isContextLengthExceeded(state.errorData);
+                state.retryableError = state.contextLengthExceeded
+                        || Objects.equals(errorCode, "rate_limit_exceeded")
+                        || Objects.equals(errorCode, "upstream_error");
                 log.warn("收到 Responses API 终止错误: {}", state.errorData);
             }
             case "error" -> {
                 state.errorData = chunk.toJson();
+                state.contextLengthExceeded = ModelApiError.isContextLengthExceeded(state.errorData);
+                state.retryableError = true;
                 log.warn("收到 Responses API 流错误: {}", state.errorData);
             }
             default -> {

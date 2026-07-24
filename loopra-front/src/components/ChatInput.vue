@@ -404,7 +404,7 @@
               <div ref="modelDropdownList" class="model-dropdown-list">
                 <section v-for="group in modelGroups" :key="group.key" class="model-channel-group">
                   <button type="button" class="model-channel-toggle" :aria-expanded="!isModelChannelCollapsed(group)" @click="toggleModelChannel(group)">
-                    <svg :class="{ collapsed: isModelChannelCollapsed(group) }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                    <svg :class="{ expanded: !isModelChannelCollapsed(group) }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                     <span class="model-channel-name">{{ group.name }}</span>
                     <span class="model-channel-count">{{ group.models.length }}</span>
                   </button>
@@ -3253,7 +3253,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 .model-channel-toggle:hover { color: var(--fg); background: var(--bg-3); }
 .model-channel-toggle svg { flex: 0 0 auto; transition: transform var(--t); }
-.model-channel-toggle svg.collapsed { transform: rotate(-90deg); }
+.model-channel-toggle svg.expanded { transform: rotate(180deg); }
 .model-channel-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-channel-count { margin-left: auto; color: var(--fg-4); font-size: 11px; }
 .model-option-name { min-width: 0; display: flex; flex-direction: column; gap: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

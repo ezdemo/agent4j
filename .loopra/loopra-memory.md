@@ -16,3 +16,13 @@
 ## [2026-07-19 22:57] 会话折叠沉淀
 
 子代理与父代理共用会话文件变更 tracker scope。子循环必须设置 drainFileChanges=false，避免提前 drain 记录；父 AgentLoop 在包含 sub_agent 的工具批次完成后统一 drain，才能把子代理编辑持久化为主消息“已编辑 X 个文件”并支持撤销。
+
+## [2026-07-24 10:08] 会话折叠沉淀
+
+OpenAI 兼容模型的上下文超限标准错误码是 `context_length_exceeded`（通常 HTTP 400，类型为 `invalid_request_error`）；Loopra 已统一识别该码、`input_too_long`/常见超限文本，并在流式或 HTTP 错误首次命中时自动折叠历史后重试一次。
+
+## [2026-07-24 10:49] 会话折叠沉淀
+
+- `context_length_exceeded` 不应进入通用重试流程；AgentLoop 应先折叠历史上下文，再重新发起一次请求。
+- Responses API 的 SSE 错误需要只向上层回调一次，避免 `response.failed` 或 `error` 事件造成重复错误回调。
+- 在未初始化全局 `ConfigService` 的 AgentLoop 单元测试中，应调用 `freezePromptPrefix()`，避免运行时 `ToolRegistry.refresh` 访问空配置。

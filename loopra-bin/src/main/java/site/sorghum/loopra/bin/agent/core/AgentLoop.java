@@ -26,6 +26,7 @@ import site.sorghum.loopra.bin.config.LoopraConfig;
 import site.sorghum.loopra.bin.goal.Goal;
 import site.sorghum.loopra.bin.goal.GoalRuntime;
 import site.sorghum.loopra.bin.goal.GoalService;
+import site.sorghum.loopra.bin.model.ModelApiError;
 import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.model.UserMessageSanitizer;
 import site.sorghum.loopra.bin.session.SessionService;
@@ -69,6 +70,8 @@ public class AgentLoop implements AgentLoopController {
     private static final int DEFAULT_MAX_SELF_CORRECTION = 5;
     /** 流式响应等待超时秒数（防止 HTTP 流永不结束导致线程挂起） */
     private static final int DEFAULT_STREAM_LATCH_TIMEOUT_SEC = 300;
+    /** 服务端确认上下文超限时最多执行两次折叠恢复。 */
+    private static final int MAX_CONTEXT_RECOVERIES = 2;
 
     private int maxTotalChars() {
         return config != null ? config.maxContextChars() : DEFAULT_MAX_CONTEXT_CHARS;
@@ -606,6 +609,7 @@ public class AgentLoop implements AgentLoopController {
     private String mainLoop() throws IOException {
         int noToolCallStreak = 0;
         int selfCorrectionAttempts = 0;
+        int contextRecoveryAttempts = 0;
         for (int step = 0; ; step++) {
             // ---- 0. 同步外部中断源（子代理检查父级 abort 状态）----
             Runnable extSource = externalAbortSource;
@@ -647,9 +651,26 @@ public class AgentLoop implements AgentLoopController {
 
             // ---- 3. 流式错误恢复 ----
             if (sr.error()) {
-                throw new IOException("[stream] API error during streaming");
+                if (ModelApiError.isContextLengthExceeded(sr.errorMessage())) {
+                    boolean recovered = false;
+                    while (contextRecoveryAttempts < MAX_CONTEXT_RECOVERIES) {
+                        contextRecoveryAttempts++;
+                        if (compactAfterContextOverflow(contextRecoveryAttempts)) {
+                            recovered = true;
+                            break;
+                        }
+                    }
+                    if (recovered) {
+                        continue;
+                    }
+                    safeOutput("streamError", () -> output.onError("[stream error] " + sr.errorMessage()));
+                }
+                String detail = sr.errorMessage() != null ? ": " + sr.errorMessage() : "";
+                throw new IOException("[stream] API error during streaming" + detail);
             }
 
+            // 当前请求成功后，下一次 step 重新拥有完整的上下文恢复预算。
+            contextRecoveryAttempts = 0;
             safeOutputDebug("contentComplete", output::onContentComplete);
 
             // ---- 推理断路器 ----
@@ -847,6 +868,36 @@ public class AgentLoop implements AgentLoopController {
         return tcList;
     }
 
+    /**
+     * 服务端确认上下文超限时执行一次兜底折叠，避免估算误差导致请求持续失败。
+     * 第一次保留较多尾部历史，第二次进一步压缩。
+     */
+    private boolean compactAfterContextOverflow(int recoveryAttempt) {
+        int keepCount = recoveryAttempt == 1 ? 20 : 8;
+        try {
+            List<ChatMessage> before = ctx.getHistory();
+            List<ChatMessage> folded = ContextFolding.foldKeepLast(
+                    ctx.buildMessages(), keepCount, client, workspace);
+            boolean reduced = folded.size() < before.size()
+                    || ContextFolding.estimateChars(folded) < ContextFolding.estimateChars(before);
+            if (!reduced) {
+                safeOutput("contextOverflow", () -> output.onLog(LogLevel.WARN,
+                        "[context] 服务端确认上下文超限，但当前历史无法进一步折叠"));
+                return false;
+            }
+            ctx.compact(folded);
+            lastPromptTokens = 0;
+            lastContextEstimate = null;
+            safeOutput("contextOverflow", () -> output.onLog(LogLevel.WARN,
+                    "[context] 服务端确认上下文超限，已折叠历史并重试本轮请求（保留近"
+                            + keepCount + "条）"));
+            return true;
+        } catch (IOException e) {
+            log.warn("[context] 上下文超限后的兜底折叠失败: {}", e.getMessage());
+            return false;
+        }
+    }
+
     // ==================== 步骤 1: 消息准备 ====================
 
     private PreparedMessages prepareMessages(int step, ONode tools) throws IOException {
@@ -914,6 +965,7 @@ public class AgentLoop implements AgentLoopController {
         final AtomicBoolean loopAborted = new AtomicBoolean(false);
         final String[] loopSnapshot = {null};
         final int[] lastCheckLen = {0};
+        final String[] streamErrorMessage = {null};
         // 连续命中计数：连续两次 analyze 命中才硬终止，单次命中只发软警告
         final int[] consecutiveHits = {0};
         // 捕获外部中断源引用，避免回调内重复 volatile 读
@@ -993,7 +1045,10 @@ public class AgentLoop implements AgentLoopController {
             @Override
             public void onError(String err) {
                 streamError.set(true);
-                safeOutput("streamError", () -> output.onError("[stream error] " + err));
+                streamErrorMessage[0] = err;
+                if (!ModelApiError.isContextLengthExceeded(err)) {
+                    safeOutput("streamError", () -> output.onError("[stream error] " + err));
+                }
                 streamLatch.countDown();
             }
         });
@@ -1020,7 +1075,7 @@ public class AgentLoop implements AgentLoopController {
             return new StreamResult(content, reasoningContent, streamedTcs.get(), false);
         }
         if (streamError.get()) {
-            return new StreamResult(null, null, null, true);
+            return new StreamResult(null, null, null, true, streamErrorMessage[0]);
         }
         if (loopAborted.get()) {
             String reasoning = loopSnapshot[0] != null ? loopSnapshot[0]

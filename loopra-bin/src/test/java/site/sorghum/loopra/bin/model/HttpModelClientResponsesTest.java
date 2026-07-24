@@ -203,6 +203,68 @@ class HttpModelClientResponsesTest {
     }
 
     @Test
+    void treatsContextLengthExceededAsTerminalAndDoesNotRetry() throws Exception {
+        AtomicInteger requests = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/responses", exchange -> {
+            requests.incrementAndGet();
+            byte[] body = "data: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"code\":\"context_length_exceeded\",\"message\":\"Your input exceeds the context window of this model.\"}}\n\n"
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            AtomicReference<String> error = new AtomicReference<>();
+            responsesClientWithRetries(server).chatStream(List.of(ChatMessage.ofUser("hello")),
+                    new ONode().asArray(), new ModelClient.StreamCallback() {
+                        @Override
+                        public void onError(String value) {
+                            error.set(value);
+                        }
+                    });
+
+            assertEquals(1, requests.get());
+            assertTrue(error.get().startsWith("[context_length_exceeded]"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void routesResponseFailedContextOverflowToCallerWithoutTransportRetry() throws Exception {
+        AtomicInteger requests = new AtomicInteger();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/responses", exchange -> {
+            requests.incrementAndGet();
+            byte[] body = "data: {\"type\":\"response.failed\",\"response\":{\"error\":{\"code\":\"context_length_exceeded\"}}}\n\n"
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(200, body.length);
+            exchange.getResponseBody().write(body);
+            exchange.close();
+        });
+        server.start();
+
+        try {
+            AtomicReference<String> error = new AtomicReference<>();
+            responsesClientWithRetries(server).chatStream(List.of(ChatMessage.ofUser("hello")),
+                    new ONode().asArray(), new ModelClient.StreamCallback() {
+                        @Override
+                        public void onError(String value) {
+                            error.set(value);
+                        }
+                    });
+
+            assertEquals(1, requests.get());
+            assertTrue(error.get().startsWith("[context_length_exceeded]"));
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void rejectsToolCallsWhenStreamEndsBeforeCompleted() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/responses", exchange -> {
@@ -250,6 +312,12 @@ class HttpModelClientResponsesTest {
         return new HttpModelClient(
                 "http://127.0.0.1:" + server.getAddress().getPort() + "/responses",
                 "test-key", "test-model", "high", "test-channel", "responses");
+    }
+
+    private static HttpModelClient responsesClientWithRetries(HttpServer server) {
+        return new HttpModelClient(
+                "http://127.0.0.1:" + server.getAddress().getPort() + "/responses",
+                "test-key", "test-model", "high", "test-channel", "responses", new int[]{0, 0});
     }
 
     private static void respondStream(HttpExchange exchange, AtomicReference<String> requestBody) throws IOException {
