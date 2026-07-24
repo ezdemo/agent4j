@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Solon-4.0.3-important?logo=java" alt="Solon 4.0.3"/>
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js" alt="Vue 3"/>
   <img src="https://img.shields.io/badge/Electron-42.4-47848F?logo=electron" alt="Electron"/>
-  <img src="https://img.shields.io/badge/version-26.7.23-lightgrey" alt="Version 26.7.23"/>
+  <img src="https://img.shields.io/badge/version-26.7.24.1-lightgrey" alt="Version 26.7.24.1"/>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/>
 </p>
 
@@ -25,7 +25,7 @@
   <a href="#从源码开发">从源码开发</a>
 </p>
 
-> 当前版本：`26.7.23`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+> 当前版本：`26.7.24.1`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 概览
 
@@ -48,7 +48,7 @@ Loopra 将用户任务、模型推理与受控工具调用组织成持续执行�
 
 > 建议手动运行下面命令再安装桌面端
 
-桌面端下载地址：[Releases](https://gitcode.com/Sorghum/loopra/releases/latest)
+桌面端下载地址：[Releases](https://gitcode.com/Sorghum/loopra/releases/latest)。Desktop 首次启动会安装独立运行时到 `~/.loopra-gui`；CLI 仍安装在 `~/.loopra`，两者共用配置目录但不会复用或终止对方的服务进程。
 
 ### 1. 安装
 

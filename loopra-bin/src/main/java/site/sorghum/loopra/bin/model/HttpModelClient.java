@@ -626,15 +626,16 @@ public class HttpModelClient implements ModelClient {
         boolean process = false;
         while ((line = reader.readLine()) != null) {
             content.append(line).append("\n");
+            line = line.trim();
             if (abortRequested.compareAndSet(true, false)) {
                 result.aborted = true;
                 log.info("流式请求被 ReasonBreaker 中断");
                 break;
             }
-            if (!line.startsWith("data: ")) {
+            if (!line.startsWith("data:")) {
                 continue;
             }
-            String data = line.substring(6).trim();
+            String data = line.substring(5).trim();
             if ("[DONE]".equals(data)) {
                 log.info("收到SSE流结束标记");
                 break;
