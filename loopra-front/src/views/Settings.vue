@@ -35,7 +35,7 @@
           <p class="header-desc">{{ currentTab?.description }}</p>
         </div>
         <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'about' && activeTab !== 'pet' && activeTab !== 'prompt' && activeTab !== 'model-channels'" class="header-actions">
-          <button v-if="activeTab === 'ai' || activeTab === 'vision'" class="btn btn-secondary" style="padding:6px 12px;" @click="openAutoFillDialog" title="自动填入配置">
+          <button v-if="activeTab === 'ai'" class="btn btn-secondary" style="padding:6px 12px;" @click="openAutoFillDialog" title="自动填入配置">
             <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
               <polyline points="1 4 1 10 7 10"/>
               <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"/>
@@ -501,118 +501,6 @@
                     </svg>
                     从模型列表生成
                   </button>
-                </div>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <!-- 图片识别设置 -->
-        <section v-if="activeTab === 'vision'" class="settings-section">
-          <div class="section-card">
-            <div class="card-header">
-              <div>
-                <h3>视觉模型配置</h3>
-                <p>配置图片识别服务的 API 连接与模型参数</p>
-              </div>
-              <button class="btn btn-secondary" @click="copyVisionFromAi" title="从当前模型渠道复制 API 地址和密钥">
-                <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                  <rect height="13" rx="2" ry="2" width="13" x="9" y="9"/>
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
-                </svg>
-                从当前渠道复制
-              </button>
-            </div>
-            <div class="card-body">
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="setting-label">API 地址</label>
-                  <p class="setting-hint">视觉模型 API 的完整 URL（OpenAI 兼容）</p>
-                </div>
-                <div class="setting-control">
-                  <input
-                      v-model="settings.vision.baseUrl"
-                      class="form-input"
-                      placeholder="https://api.siliconflow.cn/v1/chat/completions"
-                      type="text"
-                  />
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="setting-label">API 密钥</label>
-                  <p class="setting-hint">用于身份验证的密钥</p>
-                </div>
-                <div class="setting-control">
-                  <div class="input-with-toggle">
-                    <input
-                        v-model="settings.vision.apiKey"
-                        autocomplete="new-password"
-                        :type="showVisionApiKey ? 'text' : 'password'"
-                        class="form-input"
-                        placeholder="sk-..."
-                    />
-                    <button
-                        :title="showVisionApiKey ? '隐藏' : '显示'"
-                        class="toggle-visibility"
-                        @click="showVisionApiKey = !showVisionApiKey"
-                    >
-                      <svg v-if="showVisionApiKey" fill="none" height="14" stroke="currentColor" stroke-width="2"
-                           viewBox="0 0 24 24" width="14">
-                        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-                        <circle cx="12" cy="12" r="3"/>
-                      </svg>
-                      <svg v-else fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24"
-                           width="14">
-                        <path
-                            d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24"/>
-                        <line x1="1" x2="23" y1="1" y2="23"/>
-                      </svg>
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="setting-label">模型</label>
-                  <p class="setting-hint">视觉模型名称（需支持图片输入）</p>
-                </div>
-                <div class="setting-control">
-                  <div class="input-group">
-                    <input
-                        v-model="settings.vision.model"
-                        class="form-input"
-                        placeholder="如 Qwen/Qwen3.5-4B"
-                        type="text"
-                    />
-                    <button
-                        class="btn btn-secondary"
-                        @click="fetchAndPickVisionModel"
-                        title="从远端获取可用视觉模型列表"
-                    >
-                      <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-                        <polyline points="23 4 23 10 17 10"/>
-                        <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-                      </svg>
-                      填入
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div class="setting-row">
-                <div class="setting-info">
-                  <label class="setting-label">说明</label>
-                </div>
-                <div class="setting-control">
-                  <div class="setting-hint-block">
-                    <p>• 视觉模型用于图片内容识别，需支持多模态输入</p>
-                    <p>• API 地址和密钥可与主模型不同，支持独立配置</p>
-                    <p>• 配置后可通过 <code>vision_recognize</code> 工具调用</p>
-                    <p>• SiliconFlow 不定时提供免费模型，<a href="https://siliconflow.cn/models" target="_blank" style="color:var(--accent);text-decoration:underline;">前往查看</a></p>
-                  </div>
                 </div>
               </div>
             </div>
@@ -1643,12 +1531,12 @@ X-Custom-Header=value"
     </div>
   </Teleport>
 
-  <!-- 自动填入配置弹窗（AI模型/视觉模型共用） -->
+  <!-- 自动填入配置弹窗 -->
   <Teleport to="body">
     <div v-if="showAutoFillDialog" class="auto-fill-mask" @click.self="showAutoFillDialog = false">
       <div class="auto-fill-dialog">
         <div class="auto-fill-head">
-          <span>{{ activeTab === 'vision' ? '视觉模型' : 'AI模型' }}自动填入</span>
+          <span>AI模型自动填入</span>
           <button class="btn-icon-xs" @click="showAutoFillDialog = false">×</button>
         </div>
         <div class="auto-fill-body">
@@ -1729,7 +1617,7 @@ X-Custom-Header=value"
 </template>
 
 <script setup>
-import {computed, h, onMounted, reactive, ref, watch} from 'vue'
+import {computed, onMounted, reactive, ref, watch} from 'vue'
 import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
 import {
@@ -1765,7 +1653,6 @@ const settings = reactive({
   },
   server: {apiBaseUrl: '', autoConnect: true},
   ai: {baseUrl: '', apiKey: '', model: '', reasoningEffort: 'max', availableModelsText: '', prices: {}},
-  vision: {baseUrl: '', apiKey: '', model: ''},
   workspace: {dir: '', mode: 'free'},
   security: {
     stormBreaker: true,
@@ -1798,11 +1685,8 @@ const setReasoningEffort = (index) => {
 
 const activeTab = ref(props.marketOnly ? 'skill-market' : (props.initialTab === 'ai' ? 'general' : props.initialTab))
 const showApiKey = ref(false)
-const showVisionApiKey = ref(false)
 const loading = ref(false)
 const availableModels = ref([])
-const visionModels = ref([])
-const visionModelsLoading = ref(false)
 const checkingConnection = ref(false)
 const connectionOk = ref(false)
 const connectionChecked = ref(false)
@@ -2245,15 +2129,6 @@ const tabs = computed(() => [
     </svg>`
   },
   {
-    id: 'vision',
-    label: '图片识别',
-    description: '视觉模型配置，用于图片内容识别',
-    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-      <circle cx="12" cy="12" r="3"/>
-    </svg>`
-  },
-  {
     id: 'model-channels',
     label: '模型渠道',
     description: '管理 API 地址、密钥和模型配置',
@@ -2443,23 +2318,6 @@ const loadSettings = async () => {
       store.activePetName = config.activePet || ''
       }
 
-      // 加载视觉模型配置
-      if (config.vision) {
-        settings.vision.baseUrl = config.vision.baseUrl || ''
-        settings.vision.apiKey = config.vision.apiKey || ''
-        settings.vision.model = config.vision.model || ''
-      }
-
-      // 自动获取远端视觉模型列表（静默，不弹错误）
-      // apiKey 已存储在后端，前端只检查 baseUrl 是否已配置
-      if (settings.vision.baseUrl) {
-        try {
-          const visionRes = await configAPI.getRemoteVisionModels()
-          if (visionRes.success && visionRes.data && visionRes.data.length > 0) {
-            visionModels.value = visionRes.data
-          }
-        } catch { /* 忽略 */ }
-      }
     } else {
       message.error(configResponse.error || '加载配置失败')
     }
@@ -2502,16 +2360,7 @@ const saveSettings = async () => {
     const configToUpdate = {
       hitl: settings.workspace.mode,
       security: {...settings.security},
-      disabledTools: settings.security.disabledToolsText.split('\n').map(s => s.trim()).filter(s => s),
-      vision: {
-        baseUrl: settings.vision.baseUrl,
-        model: settings.vision.model
-      }
-    }
-
-    // 只有当 vision.apiKey 不为空时才保存（后端返回空字符串，不会误存）
-    if (settings.vision.apiKey) {
-      configToUpdate.vision.apiKey = settings.vision.apiKey
+      disabledTools: settings.security.disabledToolsText.split('\n').map(s => s.trim()).filter(s => s)
     }
 
     const response = await configAPI.updateConfig(configToUpdate)
@@ -2683,15 +2532,10 @@ const doAutoFill = async ({ url, key, configPayload, fetchModels, onModelsSucces
   }
 }
 
-// 打开自动填入弹窗时，根据当前 tab 填入对应的配置
+// 打开自动填入弹窗。
 const openAutoFillDialog = () => {
-  if (activeTab.value === 'vision') {
-    autoFillUrl.value = settings.vision.baseUrl || ''
-    autoFillApiKey.value = settings.vision.apiKey || ''
-  } else {
-    autoFillUrl.value = settings.ai.baseUrl || ''
-    autoFillApiKey.value = settings.ai.apiKey || ''
-  }
+  autoFillUrl.value = settings.ai.baseUrl || ''
+  autoFillApiKey.value = settings.ai.apiKey || ''
   autoFillPreset.value = ''
   showAutoFillDialog.value = true
 }
@@ -2705,156 +2549,34 @@ const confirmAutoFill = async () => {
     return
   }
 
-  // AI 模型配置变更会重置 Agent，需要确认
-  if (activeTab.value === 'ai') {
-    const confirm = await new Promise((resolve) => {
-      Modal.confirm({
+  const confirm = await new Promise((resolve) => {
+    Modal.confirm({
         title: '更改 API 地址或密钥将重置 Agent',
         content: '修改 API 地址或密钥后，系统将重新初始化 Agent，当前活跃的会话将被保存并关闭。\n\n要继续自动填入吗？',
         okText: '确认填入',
         cancelText: '取消',
         onOk: () => resolve(true),
-        onCancel: () => resolve(false)
-      })
+      onCancel: () => resolve(false)
     })
-    if (!confirm) return
+  })
+  if (!confirm) return
 
-    settings.ai.baseUrl = url
-    settings.ai.apiKey = key
+  settings.ai.baseUrl = url
+  settings.ai.apiKey = key
 
-    await doAutoFill({
-      url,
-      key,
-      configPayload: { baseUrl: url, apiKey: key },
-      fetchModels: () => configAPI.getRemoteModels(),
-      onModelsSuccess: (data) => {
-        settings.ai.availableModelsText = data.join('\n')
-        settings.ai.model = data[0]
-      },
-      onModelsFail: () => {}
-    })
-  } else {
-    // 视觉模型配置
-    settings.vision.baseUrl = url
-    settings.vision.apiKey = key
-
-    await doAutoFill({
-      url,
-      key,
-      configPayload: { vision: { baseUrl: url, apiKey: key } },
-      fetchModels: () => configAPI.getRemoteVisionModels(),
-      onModelsSuccess: (data) => {
-        visionModels.value = data
-        settings.vision.model = data[0]
-      },
-      onModelsFail: () => { visionModels.value = [] }
-    })
-  }
+  await doAutoFill({
+    url,
+    key,
+    configPayload: { baseUrl: url, apiKey: key },
+    fetchModels: () => configAPI.getRemoteModels(),
+    onModelsSuccess: (data) => {
+      settings.ai.availableModelsText = data.join('\n')
+      settings.ai.model = data[0]
+    },
+    onModelsFail: () => {}
+  })
 
   showAutoFillDialog.value = false
-}
-
-// ==================== 视觉模型相关 ====================
-
-// 获取可用视觉模型列表
-const fetchVisionModels = async () => {
-  visionModelsLoading.value = true
-  try {
-    const res = await configAPI.getRemoteVisionModels()
-    if (res.success && res.data && res.data.length > 0) {
-      visionModels.value = res.data
-      // 如果当前没有选中模型，则默认选中第一个
-      if (!settings.vision.model && res.data.length > 0) {
-        settings.vision.model = res.data[0]
-      }
-      message.success(`获取到 ${res.data.length} 个视觉模型`)
-    } else {
-      visionModels.value = []
-      message.warning(res.error || '未获取到可用的视觉模型，请检查 API 地址和密钥')
-    }
-  } catch (err) {
-    visionModels.value = []
-    message.error('获取视觉模型列表失败: ' + (err.message || err))
-  } finally {
-    visionModelsLoading.value = false
-  }
-}
-
-// 获取并选择视觉模型（点击"填入"按钮）
-const fetchAndPickVisionModel = async () => {
-  visionModelsLoading.value = true
-  try {
-    const res = await configAPI.getRemoteVisionModels()
-    if (res.success && res.data && res.data.length > 0) {
-      visionModels.value = res.data
-      if (res.data.length === 1) {
-        // 只有一个模型，直接填入
-        settings.vision.model = res.data[0]
-        message.success(`已填入模型: ${res.data[0]}`)
-      } else {
-        // 多个模型，弹出选择对话框
-        let selectedModel = res.data[0]
-        const confirmed = await new Promise((resolve) => {
-          const modal = Modal.confirm({
-            title: '选择视觉模型',
-            content: () => h('div', [
-              h('p', { style: 'margin-bottom:8px' }, `发现 ${res.data.length} 个可用模型：`),
-              h('select', {
-                style: 'width:100%;padding:6px 8px;border:1px solid #d9d9d9;border-radius:4px;font-size:14px',
-                onChange: (e) => { selectedModel = e.target.value },
-                innerHTML: res.data.map(m => `<option value="${m}">${m}</option>`).join('')
-              })
-            ]),
-            okText: '确认填入',
-            cancelText: '取消',
-            onOk: () => resolve(true),
-            onCancel: () => resolve(false)
-          })
-        })
-        if (confirmed && selectedModel) {
-          settings.vision.model = selectedModel
-          message.success(`已填入模型: ${selectedModel}`)
-        }
-      }
-    } else {
-      message.warning(res.error || '未获取到可用的视觉模型，请检查 API 地址和密钥')
-    }
-  } catch (err) {
-    message.error('获取视觉模型列表失败: ' + (err.message || err))
-  } finally {
-    visionModelsLoading.value = false
-  }
-}
-
-// 从当前模型渠道复制到视觉模型配置（通过后端接口，不暴露密钥）
-const copyVisionFromAi = async () => {
-  try {
-    const res = await configAPI.copyVisionFromAi()
-    if (res.success && res.data) {
-      settings.vision.baseUrl = res.data.baseUrl || settings.vision.baseUrl
-      hasChanges.value = true
-      message.success('已从当前模型渠道复制配置')
-      // 尝试获取视觉模型列表
-      try {
-        const modelRes = await configAPI.getRemoteVisionModels()
-        if (modelRes.success && modelRes.data && modelRes.data.length > 0) {
-          visionModels.value = modelRes.data
-          settings.vision.model = modelRes.data[0]
-        }
-      } catch {}
-    } else {
-      message.error(res.error || '复制配置失败')
-    }
-  } catch (err) {
-    message.error('复制配置失败: ' + (err.message || err))
-  }
-}
-
-// 保留一键填入 SiliconFlow 默认配置的能力（作为预设之一）
-const fillVisionDefaults = () => {
-  settings.vision.baseUrl = 'https://api.siliconflow.cn/v1/chat/completions'
-  settings.vision.model = 'Qwen/Qwen3.5-4B'
-  hasChanges.value = true
 }
 
 // ==================== 模型价格操作 ====================

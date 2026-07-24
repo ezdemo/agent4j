@@ -4,7 +4,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import site.sorghum.loopra.bin.agent.model.UserMessage;
-import site.sorghum.loopra.bin.vision.VisionService;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -14,7 +13,7 @@ import java.util.List;
  * <p>
  * 主要职责：
  * <ul>
- *   <li>当模型不支持图片输入时，自动调用 VisionService 识别图片并拼接到文本中</li>
+     *   <li>当模型不支持图片输入时，移除图片</li>
  *   <li>当模型不支持音频输入时，移除用户消息中的音频（预留）</li>
  *   <li>当模型不支持视频输入时，移除用户消息中的视频（预留）</li>
  * </ul>
@@ -27,9 +26,6 @@ import java.util.List;
 public class UserMessageSanitizer {
     @Inject
     public static ModelModalityProvider modalityProvider;
-
-    @Inject
-    public static VisionService visionService;
 
     /**
      * 清洗用户消息，根据模型的多模态支持情况移除不支持的内容。
@@ -63,40 +59,11 @@ public class UserMessageSanitizer {
             return userMessage;
         }
 
-        // 清洗图片：如果模型不支持图片输入，则调用 VisionService 识别图片
+        // 模型不支持图片输入时，移除图片。
         List<String> images = userMessage.getImages();
         if (!images.isEmpty() && !modalitySupport.imageInput()) {
-            log.info("[sanitizer] 模型 '{}' 不支持图片输入，尝试使用 VisionService 识别 {} 张图片", 
-                    modelName, images.size());
-            
-            // 调用 VisionService 识别图片
-            List<String> imageDescriptions = recognizeImages(images);
-            
-            if (!imageDescriptions.isEmpty()) {
-                // 将图片识别结果拼接到用户文本中
-                String originalText = userMessage.getText();
-                StringBuilder combinedText = new StringBuilder();
-                
-                if (originalText != null && !originalText.isEmpty()) {
-                    combinedText.append(originalText);
-                    combinedText.append("\n\n");
-                }
-                
-                combinedText.append("【图片内容】\n");
-                for (int i = 0; i < imageDescriptions.size(); i++) {
-                    if (i > 0) {
-                        combinedText.append("\n");
-                    }
-                    combinedText.append("图片 ").append(i + 1).append(": ").append(imageDescriptions.get(i));
-                }
-                
-                log.info("[sanitizer] 已将 {} 张图片的识别结果拼接到用户消息中", imageDescriptions.size());
-                return UserMessage.of(combinedText.toString());
-            } else {
-                // VisionService 识别失败，回退到移除图片
-                log.warn("[sanitizer] VisionService 识别图片失败，移除图片");
-                return UserMessage.of(userMessage.getText());
-            }
+            log.info("[sanitizer] 模型 '{}' 不支持图片输入，移除 {} 张图片", modelName, images.size());
+            return UserMessage.of(userMessage.getText());
         }
 
         // 未来可以扩展：清洗音频、视频等
@@ -110,37 +77,6 @@ public class UserMessageSanitizer {
     public static UserMessage sanitize(UserMessage userMessage, ModelClient modelClient) {
         if (modelClient == null) return userMessage;
         return sanitize(userMessage, modelClient.getModel(), modelClient.getModelChannelId());
-    }
-
-    /**
-     * 调用 VisionService 识别图片列表。
-     *
-     * @param images 图片 URL 列表
-     * @return 图片识别结果列表
-     */
-    private static List<String> recognizeImages(List<String> images) {
-        List<String> descriptions = new ArrayList<>();
-        
-        if (visionService == null) {
-            log.warn("[sanitizer] VisionService 未注入，无法识别图片");
-            return descriptions;
-        }
-        
-        for (String imageUrl : images) {
-            try {
-                VisionService.VisionResult result = visionService.recognize(imageUrl);
-                if (result.hasContent()) {
-                    descriptions.add(result.getContent());
-                } else {
-                    descriptions.add("无法识别图片内容");
-                }
-            } catch (Exception e) {
-                log.error("[sanitizer] 识别图片失败: {}", e.getMessage());
-                descriptions.add("图片识别失败: " + e.getMessage());
-            }
-        }
-        
-        return descriptions;
     }
 
     /**

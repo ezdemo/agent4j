@@ -128,7 +128,7 @@ loopra web 0
 | 命令与网络 | `bash`、交互式命令会话、`webfetch`、`call_api` |
 | 任务协作 | `sub_agent`、`checklist_*`、`goal_*`、`workspace_*` |
 | 项目状态 | `memory` 将跨会话事实保存到 `.loopra/loopra-memory.md`；共享工作区保存到 `.loopra/workspace/` |
-| 多模态与浏览器 | `vision_recognize`，以及桌面端可见 AI 浏览器的 `browser_*` 工具 |
+| 浏览器 | 桌面端可见 AI 浏览器的 `browser_*` 工具 |
 
 MCP、OpenAPI 和技能可为 Agent 注入额外工具。浏览器工具只操作可见的 Desktop 浏览器；遇到登录、验证码或安全验证时，Agent 会请求用户接管，不会代填或读取敏感凭据。
 
