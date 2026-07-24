@@ -570,33 +570,23 @@ ipcMain.handle('install_loopra_web_online', async () => {
       sendInstallLog('>> 检测到 Windows 系统，使用 PowerShell 安装...')
       const psCmd = [
         '-ExecutionPolicy', 'Bypass', '-NoProfile', '-Command',
-        'irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex'
+        'irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-gui.ps1 | iex'
       ]
       child = spawn('powershell', psCmd, {
         stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true,
-        env: {
-          ...process.env,
-          LOOPRA_INSTALL_DIR: getLoopraPaths().runtimeDir,
-          LOOPRA_GUI_INSTALL: '1'
-        }
+        windowsHide: true
       })
-      sendInstallLog('>> 执行: irm setup.ps1 | iex')
+      sendInstallLog('>> 执行: irm setup-gui.ps1 | iex')
     } else {
       // macOS/Linux: curl ... | bash
       sendInstallLog('>> 检测到 Unix 系统，使用 curl 安装...')
       // 下载脚本并管道给 bash 执行，-fsSL = 静默+显示错误+跟随跳转
       child = spawn('bash', ['-c',
-        'curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash'
+        'curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-gui.sh | bash'
       ], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          LOOPRA_INSTALL_DIR: getLoopraPaths().runtimeDir,
-          LOOPRA_GUI_INSTALL: '1'
-        }
+        stdio: ['ignore', 'pipe', 'pipe']
       })
-      sendInstallLog('>> 执行: curl setup.sh | bash')
+      sendInstallLog('>> 执行: curl setup-gui.sh | bash')
     }
 
     sendInstallLog('>> 安装进程已启动，等待输出...')

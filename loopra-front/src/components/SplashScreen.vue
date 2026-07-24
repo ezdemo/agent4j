@@ -159,7 +159,9 @@ const installProgress = ref(0)
 const isDesktop = ref(false)
 
 const installCommand = computed(() => platform.isElectron
-  ? '桌面运行时：~/.loopra-gui（配置：~/.loopra）'
+  ? (window.electronAPI?.platform === 'win32'
+    ? 'irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-gui.ps1 | iex'
+    : 'curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-gui.sh | bash')
   : (window.electronAPI?.platform === 'win32'
     ? 'irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex'
     : 'curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash'))

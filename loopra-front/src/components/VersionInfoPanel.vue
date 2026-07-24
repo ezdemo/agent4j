@@ -40,13 +40,13 @@
     <div class="update-commands">
       <div class="uc-label">更新命令</div>
       <div class="uc-list">
-        <div class="uc-item" @click="copyText('irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex')" title="点击复制">
+        <div class="uc-item" @click="copyText(updateCommands.windows)" title="点击复制">
           <span class="uc-badge win">PS</span>
-          <code>irm ...setup.ps1 | iex</code>
+          <code>{{ updateCommands.windowsLabel }}</code>
         </div>
-        <div class="uc-item" @click="copyText('curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash')" title="点击复制">
+        <div class="uc-item" @click="copyText(updateCommands.unix)" title="点击复制">
           <span class="uc-badge unix">sh</span>
-          <code>curl ...setup.sh | bash</code>
+          <code>{{ updateCommands.unixLabel }}</code>
         </div>
       </div>
     </div>
@@ -76,6 +76,7 @@
 </template>
 
 <script setup>
+import {computed} from 'vue'
 import {message} from 'ant-design-vue'
 
 const props = defineProps({
@@ -91,6 +92,23 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['check', 'download', 'auto-update'])
+
+const updateCommands = computed(() => {
+  if (props.isElectron) {
+    return {
+      windows: 'irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-gui.ps1 | iex',
+      windowsLabel: 'irm ...setup-gui.ps1 | iex',
+      unix: 'curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-gui.sh | bash',
+      unixLabel: 'curl ...setup-gui.sh | bash'
+    }
+  }
+  return {
+    windows: 'irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex',
+    windowsLabel: 'irm ...setup.ps1 | iex',
+    unix: 'curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash',
+    unixLabel: 'curl ...setup.sh | bash'
+  }
+})
 
 function copyText(text) {
   try {
