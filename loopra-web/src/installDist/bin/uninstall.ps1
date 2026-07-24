@@ -20,8 +20,14 @@ if ($IS_ADMIN) {
     Write-Host "[Info] Running without Administrator privileges" -ForegroundColor Yellow
 }
 
-# 安装目录
-$INSTALL_DIR = Join-Path $env:USERPROFILE ".loopra"
+# 安装目录：优先使用显式目标目录，否则按脚本所在 bin 目录推导
+$SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Definition
+$INSTALL_DIR = if ($env:LOOPRA_INSTALL_DIR) {
+    [System.IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($env:LOOPRA_INSTALL_DIR))
+} else {
+    Split-Path -Parent $SCRIPT_DIR
+}
+$CONFIG_DIR = Join-Path $env:USERPROFILE ".loopra"
 
 # 检查是否已安装
 if (-not (Test-Path $INSTALL_DIR)) {
@@ -33,11 +39,18 @@ if (-not (Test-Path $INSTALL_DIR)) {
 }
 
 Write-Host ""
-Write-Host "This will remove Loopra completely:" -ForegroundColor White
-Write-Host "  - Executables and configuration"
-Write-Host "  - Sessions and memory data"
-Write-Host "  - Skills modules"
-Write-Host "  - PATH configuration"
+if ($INSTALL_DIR -eq $CONFIG_DIR) {
+    Write-Host "This will remove Loopra completely:" -ForegroundColor White
+    Write-Host "  - Executables and configuration"
+    Write-Host "  - Sessions and memory data"
+    Write-Host "  - Skills modules"
+    Write-Host "  - PATH configuration"
+} else {
+    Write-Host "This will remove the Loopra Desktop runtime:" -ForegroundColor White
+    Write-Host "  - Desktop runtime executables and bundled JRE"
+    Write-Host "  - Desktop runtime configuration files"
+    Write-Host "  - CLI installation and ~/.loopra configuration will be preserved"
+}
 Write-Host ""
 
 $CONFIRM = Read-Host "Continue? (Y/N)"
@@ -48,29 +61,33 @@ if ($CONFIRM -ne "Y" -and $CONFIRM -ne "y") {
 }
 
 # ============================================
-#  [1/4] 从 PATH 中移除
+#  [1/4] 从 PATH 中移除（仅命令行安装）
 # ============================================
 Write-Host ""
-Write-Host "[1/4] Removing from PATH..." -ForegroundColor Yellow
+if ($INSTALL_DIR -eq $CONFIG_DIR) {
+    Write-Host "[1/4] Removing from PATH..." -ForegroundColor Yellow
 
-# 从用户 PATH 移除
-$USER_PATH = [Environment]::GetEnvironmentVariable("Path", "User")
-if ($USER_PATH) {
-    $NEW_PATH = ($USER_PATH -split ';' | Where-Object { $_ -notmatch 'loopra' }) -join ';'
-    $NEW_PATH = $NEW_PATH.TrimStart(';').TrimEnd(';')
-    [Environment]::SetEnvironmentVariable("Path", $NEW_PATH, "User")
-    Write-Host "      Cleaned User PATH" -ForegroundColor Gray
-}
-
-# 从系统 PATH 移除（如果是管理员）
-if ($IS_ADMIN) {
-    $MACHINE_PATH = [Environment]::GetEnvironmentVariable("Path", "Machine")
-    if ($MACHINE_PATH) {
-        $NEW_PATH = ($MACHINE_PATH -split ';' | Where-Object { $_ -notmatch 'loopra' }) -join ';'
+    # 从用户 PATH 移除
+    $USER_PATH = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($USER_PATH) {
+        $NEW_PATH = ($USER_PATH -split ';' | Where-Object { $_ -notmatch 'loopra' }) -join ';'
         $NEW_PATH = $NEW_PATH.TrimStart(';').TrimEnd(';')
-        [Environment]::SetEnvironmentVariable("Path", $NEW_PATH, "Machine")
-        Write-Host "      Cleaned System PATH" -ForegroundColor Gray
+        [Environment]::SetEnvironmentVariable("Path", $NEW_PATH, "User")
+        Write-Host "      Cleaned User PATH" -ForegroundColor Gray
     }
+
+    # 从系统 PATH 移除（如果是管理员）
+    if ($IS_ADMIN) {
+        $MACHINE_PATH = [Environment]::GetEnvironmentVariable("Path", "Machine")
+        if ($MACHINE_PATH) {
+            $NEW_PATH = ($MACHINE_PATH -split ';' | Where-Object { $_ -notmatch 'loopra' }) -join ';'
+            $NEW_PATH = $NEW_PATH.TrimStart(';').TrimEnd(';')
+            [Environment]::SetEnvironmentVariable("Path", $NEW_PATH, "Machine")
+            Write-Host "      Cleaned System PATH" -ForegroundColor Gray
+        }
+    }
+} else {
+    Write-Host "[1/4] Skipping PATH cleanup for desktop runtime" -ForegroundColor Gray
 }
 
 # ============================================
@@ -79,9 +96,9 @@ if ($IS_ADMIN) {
 Write-Host ""
 Write-Host "[2/4] Removing command symlinks..." -ForegroundColor Yellow
 
-# 检查 ProgramData 目录
+# 检查 ProgramData 目录（仅命令行安装）
 $PROGRAM_DATA_DIR = "C:\ProgramData\loopra"
-if (Test-Path $PROGRAM_DATA_DIR) {
+if ($INSTALL_DIR -eq $CONFIG_DIR -and (Test-Path $PROGRAM_DATA_DIR)) {
     try {
         Remove-Item -Path $PROGRAM_DATA_DIR -Recurse -Force -ErrorAction Stop
         Write-Host "      Removed $PROGRAM_DATA_DIR" -ForegroundColor Green
@@ -92,38 +109,41 @@ if (Test-Path $PROGRAM_DATA_DIR) {
     Write-Host "      No ProgramData launcher found" -ForegroundColor Gray
 }
 
-# ============================================
-#  [3/4] 询问是否保留配置
-# ============================================
 Write-Host ""
 Write-Host "[3/4] Configuration files..." -ForegroundColor Yellow
+if ($INSTALL_DIR -eq $CONFIG_DIR) {
+    $KEEP_CONFIG = Read-Host "Keep configuration files (config.json, sessions, memory)? (Y/N)"
+    $KEEP_CONFIG_BOOL = ($KEEP_CONFIG -eq "Y" -or $KEEP_CONFIG -eq "y")
 
-$KEEP_CONFIG = Read-Host "Keep configuration files (config.json, sessions, memory)? (Y/N)"
-$KEEP_CONFIG_BOOL = ($KEEP_CONFIG -eq "Y" -or $KEEP_CONFIG -eq "y")
-
-if ($KEEP_CONFIG_BOOL) {
-    Write-Host "      Configuration files will be preserved" -ForegroundColor Gray
+    if ($KEEP_CONFIG_BOOL) {
+        Write-Host "      Configuration files will be preserved" -ForegroundColor Gray
+    } else {
+        Write-Host "      Configuration files will be removed" -ForegroundColor Gray
+    }
 } else {
-    Write-Host "      Configuration files will be removed" -ForegroundColor Gray
+    $KEEP_CONFIG_BOOL = $true
+    Write-Host "      Desktop runtime detected; configuration at $CONFIG_DIR will be preserved" -ForegroundColor Gray
 }
 
-# ============================================
-#  [4/4] 删除安装目录
-# ============================================
+# 删除安装目录
 Write-Host ""
 Write-Host "[4/4] Removing installation directory..." -ForegroundColor Yellow
 
 if (Test-Path $INSTALL_DIR) {
     if ($KEEP_CONFIG_BOOL) {
-        # 只删除 bin 目录
-        $BIN_DIR = Join-Path $INSTALL_DIR "bin"
-        if (Test-Path $BIN_DIR) {
-            Remove-Item -Path $BIN_DIR -Recurse -Force
-            Write-Host "      Removed bin/ directory" -ForegroundColor Green
+        if ($INSTALL_DIR -eq $CONFIG_DIR) {
+            $BIN_DIR = Join-Path $INSTALL_DIR "bin"
+            if (Test-Path $BIN_DIR) {
+                Remove-Item -Path $BIN_DIR -Recurse -Force
+                Write-Host "      Removed bin/ directory" -ForegroundColor Green
+            }
+            Write-Host "      Preserved config.json, sessions/, memory/" -ForegroundColor Gray
+        } else {
+            Remove-Item -Path $INSTALL_DIR -Recurse -Force
+            Write-Host "      Removed runtime: $INSTALL_DIR" -ForegroundColor Green
+            Write-Host "      Preserved configuration at: $CONFIG_DIR" -ForegroundColor Gray
         }
-        Write-Host "      Preserved config.json, sessions/, memory/" -ForegroundColor Gray
     } else {
-        # 删除整个目录
         try {
             Remove-Item -Path $INSTALL_DIR -Recurse -Force -ErrorAction Stop
             Write-Host "      Removed: $INSTALL_DIR" -ForegroundColor Green
@@ -146,8 +166,11 @@ Write-Host "============================================" -ForegroundColor Green
 Write-Host ""
 
 if ($KEEP_CONFIG_BOOL) {
-    Write-Host "  Loopra has been removed." -ForegroundColor White
-    Write-Host "  Configuration files preserved at: $INSTALL_DIR" -ForegroundColor White
+    if ($INSTALL_DIR -eq $CONFIG_DIR) {
+        Write-Host "  Configuration files preserved at: $CONFIG_DIR" -ForegroundColor White
+    } else {
+        Write-Host "  Desktop runtime removed; configuration preserved at: $CONFIG_DIR" -ForegroundColor White
+    }
 } else {
     Write-Host "  Loopra has been fully removed." -ForegroundColor White
 }

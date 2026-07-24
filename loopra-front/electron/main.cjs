@@ -141,7 +141,7 @@ async function listLoopraJavaProcesses() {
     return (Array.isArray(items) ? items : [items]).map((item) => ({
       ...item,
       port: parsePort(item.commandLine),
-      managed: item.parentPid === managedPid || parsePort(item.commandLine) === currentPort
+      managed: isLoopraGuiRuntime(item.commandLine) || item.parentPid === managedPid || parsePort(item.commandLine) === currentPort
     }))
   }
 
@@ -167,7 +167,7 @@ async function listLoopraJavaProcesses() {
       memoryBytes: Number(rssKb) * 1024,
       uptimeSeconds: parseElapsedSeconds(elapsed),
       port,
-      managed: Number(parentPid) === managedPid || Number(pid) === managedPid || port === currentPort
+      managed: isLoopraGuiRuntime(commandLine) || Number(parentPid) === managedPid || Number(pid) === managedPid || port === currentPort
     }]
   })
 }
@@ -228,19 +228,47 @@ function killProcessTree(child) {
   }
 }
 
-function getLoopraBinPath() {
+function getLoopraPaths() {
   const home = app.getPath('home')
-  const binDir = path.join(home, '.loopra', 'bin')
+  const configDir = path.join(home, '.loopra')
+  const runtimeDir = path.join(home, '.loopra-gui')
+  const binDir = path.join(runtimeDir, 'bin')
   const binName = isWin ? 'loopra.ps1' : 'loopra'
-  return { binDir, binPath: path.join(binDir, binName) }
+  return {
+    home,
+    configDir,
+    runtimeDir,
+    binDir,
+    binPath: path.join(binDir, binName),
+    jarPath: path.join(binDir, 'loopra-web.jar'),
+    javaPath: isWin
+      ? path.join(runtimeDir, 'jre25', 'bin', 'java.exe')
+      : path.join(runtimeDir, 'jre25', 'bin', 'java'),
+    javaMacPath: path.join(runtimeDir, 'jre25', 'Contents', 'Home', 'bin', 'java')
+  }
+}
+
+function getLoopraBinPath() {
+  const { binDir, binPath } = getLoopraPaths()
+  return { binDir, binPath }
+}
+
+function isLoopraGuiInstalled() {
+  const { binPath, jarPath, javaPath, javaMacPath } = getLoopraPaths()
+  return [binPath, jarPath].every((filePath) => fs.existsSync(filePath))
+    && (fs.existsSync(javaPath) || fs.existsSync(javaMacPath))
+}
+
+function isLoopraGuiRuntime(commandLine) {
+  return /(?:^|[\\/])\.loopra-gui(?:[\\/])/i.test(String(commandLine || ''))
 }
 
 // 启动 loopra web <port>
 function startLoopraWeb(port) {
   const { binDir, binPath } = getLoopraBinPath()
 
-  if (!fs.existsSync(binPath)) {
-    throw new Error(`loopra not found: ${binPath}`)
+  if (!isLoopraGuiInstalled()) {
+    throw new Error(`loopra desktop runtime not found: ${path.dirname(binDir)}`)
   }
 
   console.log(`Starting: ${binPath} web ${port}`)
@@ -419,15 +447,20 @@ ipcMain.handle('get_electron_version', async () => {
   return app.getVersion()
 })
 
-ipcMain.handle('get_loopra_web_status', async () => ({
-  installed: fs.existsSync(getLoopraBinPath().binPath),
-  running: loopraWebProcess !== null,
-  install_dir: path.join(app.getPath('home'), '.loopra')
-}))
+ipcMain.handle('get_loopra_web_status', async () => {
+  const { runtimeDir } = getLoopraPaths()
+  return {
+    installed: isLoopraGuiInstalled(),
+    running: loopraWebProcess !== null,
+    install_dir: runtimeDir,
+    config_dir: path.join(app.getPath('home'), '.loopra')
+  }
+})
 
 ipcMain.handle('list_loopra_java_processes', async () => {
   try {
-    return { processes: await listLoopraJavaProcesses() }
+    const processes = await listLoopraJavaProcesses()
+    return { processes: processes.filter((item) => isLoopraGuiRuntime(item.commandLine)) }
   } catch (error) {
     console.error('Failed to list Loopra Java processes:', error)
     return { processes: [], error: error.message }
@@ -439,8 +472,9 @@ ipcMain.handle('terminate_loopra_java_process', async (event, rawPid) => {
   if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error('Invalid process id')
 
   const processes = await listLoopraJavaProcesses()
-  if (!processes.some((item) => item.pid === pid)) {
-    throw new Error('Loopra backend process no longer exists')
+  const processInfo = processes.find((item) => item.pid === pid && isLoopraGuiRuntime(item.commandLine))
+  if (!processInfo) {
+    throw new Error('Loopra desktop runtime process no longer exists')
   }
 
   if (isWin) {
@@ -449,7 +483,7 @@ ipcMain.handle('terminate_loopra_java_process', async (event, rawPid) => {
     process.kill(pid, 'SIGTERM')
   }
 
-  if (loopraWebProcess && (loopraWebProcess.pid === pid || processes.find((item) => item.pid === pid)?.managed)) {
+  if (loopraWebProcess && (loopraWebProcess.pid === pid || processInfo.port === currentPort)) {
     loopraWebProcess = null
     currentPort = 0
   }
@@ -461,8 +495,8 @@ ipcMain.handle('open_loopra_java_process', async (event, rawPid) => {
   if (!Number.isSafeInteger(pid) || pid <= 0) throw new Error('Invalid process id')
 
   const processes = await listLoopraJavaProcesses()
-  const processInfo = processes.find((item) => item.pid === pid)
-  if (!processInfo) throw new Error('Loopra backend process no longer exists')
+  const processInfo = processes.find((item) => item.pid === pid && isLoopraGuiRuntime(item.commandLine))
+  if (!processInfo) throw new Error('Loopra desktop runtime process no longer exists')
   if (!Number.isInteger(processInfo.port) || processInfo.port < 1 || processInfo.port > 65535) {
     throw new Error('No HTTP port was found for this Loopra backend process')
   }
@@ -477,10 +511,13 @@ ipcMain.handle('get_resource_dir', async () => {
 })
 
 ipcMain.handle('check_install_needed', async () => {
-  const installed = fs.existsSync(getLoopraBinPath().binPath)
+  const installed = isLoopraGuiInstalled()
   return { needed: !installed, reason: installed ? '' : 'not_installed' }
 })
-ipcMain.handle('install_loopra_web', async () => ({ success: true, steps: ['electron_mock_install'] }))
+ipcMain.handle('install_loopra_web', async () => ({
+  success: false,
+  error: '桌面运行时需要通过在线安装部署到 ~/.loopra-gui'
+}))
 
 ipcMain.handle('start_loopra_web', async () => {
   if (loopraWebProcess) {
@@ -488,25 +525,17 @@ ipcMain.handle('start_loopra_web', async () => {
     return currentPort
   }
 
-  // 优先探测固定端口 4567：若已有健康服务则直接复用，不再启动新进程
-  const preferredPort = 4567
-  if (await healthCheck(preferredPort)) {
-    console.log(`Loopra Web already running on port ${preferredPort}, reusing`)
-    currentPort = preferredPort
+  // 桌面端只复用自己的运行时进程，不接管命令行安装在 ~/.loopra 下的服务。
+  const guiProcesses = await listLoopraJavaProcesses()
+  const existingGui = guiProcesses.find((item) => isLoopraGuiRuntime(item.commandLine) && item.port > 0)
+  if (existingGui && await healthCheck(existingGui.port)) {
+    console.log(`Loopra GUI Web already running on port ${existingGui.port}, reusing`)
+    currentPort = existingGui.port
     await closeOtherLoopraJavaProcesses(currentPort)
-    return preferredPort
+    return existingGui.port
   }
 
-  // 4567 无可用服务，回退到随机端口启动新进程
   const port = await getDefaultPort()
-
-  // 先检查服务是否已在运行
-  if (await healthCheck(port)) {
-    console.log(`Loopra Web already running on port ${port}`)
-    currentPort = port
-    await closeOtherLoopraJavaProcesses(currentPort)
-    return port
-  }
 
   // 未运行，启动
   try {
@@ -531,6 +560,7 @@ ipcMain.handle('install_loopra_web_online', async () => {
   sendInstallLog('='.repeat(50))
   sendInstallLog('  Loopra 在线一键安装')
   sendInstallLog('='.repeat(50))
+  sendInstallLog('>> 桌面运行时将安装到 ~/.loopra-gui，配置继续使用 ~/.loopra')
   sendInstallLog('')
 
   return new Promise((resolve, reject) => {
@@ -544,7 +574,12 @@ ipcMain.handle('install_loopra_web_online', async () => {
       ]
       child = spawn('powershell', psCmd, {
         stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true
+        windowsHide: true,
+        env: {
+          ...process.env,
+          LOOPRA_INSTALL_DIR: getLoopraPaths().runtimeDir,
+          LOOPRA_GUI_INSTALL: '1'
+        }
       })
       sendInstallLog('>> 执行: irm setup.ps1 | iex')
     } else {
@@ -553,7 +588,14 @@ ipcMain.handle('install_loopra_web_online', async () => {
       // 下载脚本并管道给 bash 执行，-fsSL = 静默+显示错误+跟随跳转
       child = spawn('bash', ['-c',
         'curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash'
-      ], { stdio: ['ignore', 'pipe', 'pipe'] })
+      ], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          LOOPRA_INSTALL_DIR: getLoopraPaths().runtimeDir,
+          LOOPRA_GUI_INSTALL: '1'
+        }
+      })
       sendInstallLog('>> 执行: curl setup.sh | bash')
     }
 
@@ -848,7 +890,7 @@ async function closeOtherLoopraJavaProcesses(keepPort) {
   if (!Number.isSafeInteger(keepPort) || keepPort <= 0) return
   try {
     const processes = await listLoopraJavaProcesses()
-    for (const processInfo of processes.filter((item) => item.port !== keepPort)) {
+    for (const processInfo of processes.filter((item) => isLoopraGuiRuntime(item.commandLine) && item.port !== keepPort)) {
       try {
         await stopLoopraJavaProcess(processInfo.pid)
         console.log(`Closed stale loopra-web process ${processInfo.pid} on port ${processInfo.port || 'unknown'}`)
