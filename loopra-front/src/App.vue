@@ -74,13 +74,13 @@
     <main class="main">
       <SettingsView v-if="mainView === 'skills'" market-only />
       <SubAgentsView v-else-if="mainView === 'sub-agents'" />
-      <ModelChannels v-else-if="mainView === 'model-channels'" @back="mainView = 'chat'" @saved="reloadAfterModelChannelsSaved" />
+      <ModelChannels v-else-if="mainView === 'model-channels'" @back="closeModelChannels" @saved="reloadAfterModelChannelsSaved" />
       <ChatView 
         v-else
         ref="chatRef" 
         hide-header 
         :workspace-hash="currentSessionWorkspace"
-        @manage-models="mainView = 'model-channels'"
+        @manage-models="openModelChannels"
         :session-name="currentSession"
         :right-panel-open="rightPanelOpen"
         :workspaces="workspaces"
@@ -492,6 +492,7 @@ const theme = computed({ get: () => store.settings.theme, set: (v) => { store.se
 watch(theme, applyHljsTheme, {immediate: true})
 const sideOpen = ref(true)
 const mainView = ref('chat')
+const modelChannelsRequireReload = ref(false)
 const SIDEBAR_AUTO_COLLAPSE_WIDTH = 1024
 const collapseSidebarForNarrowViewport = () => {
   if (window.innerWidth < SIDEBAR_AUTO_COLLAPSE_WIDTH) sideOpen.value = false
@@ -888,11 +889,29 @@ const loadData = async () => {
 }
 
 function openModelChannelsWhenUnconfigured() {
-  if (!hasConfiguredModelChannel(config.value)) mainView.value = 'model-channels'
+  if (!hasConfiguredModelChannel(config.value)) {
+    modelChannelsRequireReload.value = true
+    mainView.value = 'model-channels'
+  }
+}
+
+function openModelChannels() {
+  modelChannelsRequireReload.value = false
+  mainView.value = 'model-channels'
+}
+
+function closeModelChannels() {
+  modelChannelsRequireReload.value = false
+  mainView.value = 'chat'
 }
 
 function reloadAfterModelChannelsSaved() {
-  window.location.reload()
+  if (modelChannelsRequireReload.value) {
+    window.location.reload()
+    return
+  }
+  config.value = {...config.value, modelChannelsConfigured: true}
+  mainView.value = 'chat'
 }
 
 const openGlobalSearch = async () => {

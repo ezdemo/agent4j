@@ -1,1119 +1,536 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="zh-CN">
-<head>
-    <meta charset="UTF-8"/>
-    <meta content="width=device-width, initial-scale=1.0" name="viewport"/>
-    <title>Loopra — 纯 Java 的 AI 编码代理 | Java AI Agent Framework</title>
-    <meta content="Loopra 是一个纯 Java 17 实现的 AI 编码代理框架。推理循环 · 工具调度 · 流式输出 · 会话持久化 · 子代理隔离 — 将 LLM 与可扩展工具系统结合，通过 CLI / Web / Desktop 三种界面，形成自主工作的编码代理。"
-          name="description"/>
-    <meta content="Loopra, Java AI Agent, Java 编码代理, AI 编码代理, Claude Code Java, Solon框架, AI工具调用, 推理循环"
-          name="keywords"/>
-    <meta content="Sorghum" name="author"/>
-    <meta content="index, follow" name="robots"/>
-
-    <!-- Open Graph -->
-    <meta content="Loopra — 纯 Java 的 AI 编码代理 | Java AI Agent Framework" property="og:title"/>
-    <meta content="纯 Java 17 AI 代理框架：推理循环、工具调用、会话管理、流式输出，CLI / Web / Desktop 三端自主工作的编码代理。"
-          property="og:description"/>
-    <meta content="website" property="og:type"/>
-    <meta content="assets/logo.png" property="og:image"/>
-    <meta content="https://loopra.site" property="og:url"/>
-    <meta content="zh_CN" property="og:locale"/>
-
-    <!-- Twitter Card -->
-    <meta content="summary_large_image" name="twitter:card"/>
-    <meta content="Loopra — 纯 Java 的 AI 编码代理" name="twitter:title"/>
-    <meta content="纯 Java 17 AI 代理框架：推理循环、工具调用、会话管理，CLI/Web/Desktop 三端自主工作。"
-          name="twitter:description"/>
-
-    <meta content="#080c10" name="theme-color"/>
-    <link href="assets/favicon.svg" rel="icon" type="image/svg+xml"/>
-    <link href="assets/favicon.png" rel="icon" type="image/png"/>
-    <link href="https://fonts.googleapis.com" rel="preconnect"/>
-    <link crossorigin href="https://fonts.gstatic.com" rel="preconnect"/>
-    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:ital,wght@0,300;0,400;0,500;0,600;0,700;0,800;1,400&family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;0,9..40,700;0,9..40,800;0,9..40,900;1,9..40,400&family=Orbitron:wght@400;500;600;700;800;900&display=swap"
-          rel="stylesheet"/>
-    <link href="css/styles.css" rel="stylesheet"/>
-
-    <!-- Preload critical assets -->
-    <link as="image" href="assets/logo.png" rel="preload"/>
-
-    <!-- Structured Data -->
-    <script type="application/ld+json">
-        {
-            "@context": "https://schema.org",
-            "@type": "SoftwareApplication",
-            "name": "Loopra",
-            "applicationCategory": "DeveloperApplication",
-            "operatingSystem": "Windows, macOS, Linux",
-            "description": "纯 Java 17 的 AI 编码代理框架，提供推理循环、工具调用、会话管理等功能",
-            "version": "26.6.9.2",
-            "license": "MIT",
-            "programmingLanguage": "Java 17",
-            "author": {
-                "@type": "Person",
-                "name": "Sorghum"
-            }
-        }
-    </script>
-</head>
-<body>
-
-<!-- ==================== NAV ==================== -->
-<nav class="nav" id="nav">
-    <div class="container">
-        <a href="#" class="nav-logo">
-            <img alt="Loopra Logo" height="28" src="assets/logo.png" width="28"/>
-            <span class="bracket">[</span>Loopra<span class="bracket">]</span>
-            <span class="version">v26.6.9.2</span>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="Loopra - 纯 Java 的 AI 编码代理，面向本地代码库的推理循环、工具调用、会话协作与桌面工作台。"
+    />
+    <meta name="theme-color" content="#101215" />
+    <title>Loopra - AI Coding Agent</title>
+    <link rel="icon" href="../img/logo.png" />
+    <link rel="stylesheet" href="css/styles.css" />
+  </head>
+  <body>
+    <header class="site-header">
+      <div class="container header-inner">
+        <a class="brand" href="#top" aria-label="Loopra home">
+          <img src="../img/logo.png" alt="Loopra" />
+          <span>loopra</span>
         </a>
-        <ul class="nav-links">
-            <li><a href="#features">功能</a></li>
-            <li><a href="#capabilities">核心能力</a></li>
-            <li><a href="#quickstart">快速开始</a></li>
-            <li><a href="#techstack">技术栈</a></li>
-            <li><a href="#interfaces">界面</a></li>
-            <li><a href="#config-docs">配置</a></li>
-            <li><a href="#docs">文档</a></li>
-            <li>
-                <a class="btn btn-ghost btn-sm" href="https://github.com/ezdemo/loopra" rel="noopener" target="_blank">
-                    <svg fill="currentColor" height="16" viewBox="0 0 24 24" width="16">
-                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
-                    </svg>
-                    GitHub
-                </a>
-            </li>
-        </ul>
-        <button aria-label="菜单" class="nav-toggle">
-            <span></span>
-            <span></span>
-            <span></span>
+        <nav class="desktop-nav" aria-label="Primary navigation">
+          <a href="#capabilities">能力</a>
+          <a href="#workflow">工作方式</a>
+          <a href="#develop">安装</a>
+          <a
+            href="https://gitee.com/ezdemo/loopra"
+            target="_blank"
+            rel="noreferrer"
+            >Gitee <span aria-hidden="true">&#8599;</span></a
+          >
+          <a
+            href="https://github.com/ezdemo/agent4j"
+            target="_blank"
+            rel="noreferrer"
+            >GitHub <span aria-hidden="true">&#8599;</span></a
+          >
+        </nav>
+        <a class="header-action" href="#start"
+          >开始使用 <span aria-hidden="true">&#8594;</span></a
+        >
+        <button
+          class="menu-button"
+          type="button"
+          aria-expanded="false"
+          aria-controls="mobile-nav"
+          aria-label="打开导航菜单"
+        >
+          <span></span><span></span>
         </button>
-    </div>
-</nav>
+      </div>
+      <nav class="mobile-nav" id="mobile-nav" aria-label="Mobile navigation">
+        <a href="#capabilities">能力</a>
+        <a href="#workflow">工作方式</a>
+        <a href="#develop">安装</a>
+        <a
+          href="https://gitee.com/ezdemo/loopra"
+          target="_blank"
+          rel="noreferrer"
+          >Gitee 源码</a
+        >
+        <a
+          href="https://github.com/ezdemo/agent4j"
+          target="_blank"
+          rel="noreferrer"
+          >GitHub 镜像</a
+        >
+      </nav>
+    </header>
 
-<!-- ==================== HERO ==================== -->
-<section class="hero" id="hero">
-    <div class="container">
-        <div class="hero-content">
-            <div class="hero-left">
-                <div class="hero-badge">
-                    <span class="dot"></span>
-                    纯 Java · AI 编码代理 · MIT
-                </div>
-                <h1>
-                    写代码的<br/>
-                    <span class="accent">AI 代理</span>，<br/>
-                    用 <span class="java-accent">Java</span> 写
-                </h1>
-                <p class="hero-subtitle">
-                    类似 Claude Code / Codex / OpenCode / Reasonix，<br/>
-                    但纯 Java 17 实现。推理循环 · 工具调用 · 流式输出 · 会话管理
-                </p>
-                <div class="hero-comparison">
-                    <span class="highlight">Java 17 ✅</span>
-                    <span>推理循环</span>
-                    <span>工具系统</span>
-                    <span>子代理</span>
-                    <span>MCP 协议</span>
-                    <span>CLI / Web / Desktop</span>
-                </div>
-                <div class="hero-actions">
-                    <a class="btn btn-primary btn-lg" href="#quickstart">
-                        <svg class="icon-svg" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-                            <polyline points="17 6 23 6 23 12"/>
-                        </svg>
-                        快速安装
-                    </a>
-                    <a class="btn btn-outline btn-lg" href="#capabilities">
-                        <svg class="icon-svg" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M12 16v-4"/>
-                            <path d="M12 8h.01"/>
-                        </svg>
-                        了解更多
-                    </a>
-                    <a class="btn btn-ghost btn-lg" href="https://github.com/ezdemo/loopra" rel="noopener"
-                       target="_blank">
-                        <svg class="icon-svg" fill="currentColor" viewBox="0 0 24 24">
-                            <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
-                        </svg>
-                        GitHub
-                    </a>
-                </div>
+    <main id="top">
+      <section class="hero">
+        <div class="container hero-grid">
+          <div class="hero-copy">
+            <div class="eyebrow">
+              <span class="status-dot"></span>Local-first coding agent
             </div>
-            <div class="hero-right">
-                <div class="terminal-card">
-            <div class="terminal-header">
-                <span class="terminal-dot red"></span>
-                <span class="terminal-dot yellow"></span>
-                <span class="terminal-dot green"></span>
-                <span class="terminal-title">loopra@reasoning-loop:~/project — bash</span>
+            <h1>把复杂的代码任务<br />交给一个能持续工作的 Agent。</h1>
+            <p class="hero-text">
+              Loopra 是纯 Java 的 AI
+              编码代理。它读懂本地代码库，调用受控工具完成搜索、编辑、构建与验证，并在需要时把决策留给你。
+            </p>
+            <div class="hero-actions" id="start">
+              <div class="download-menu">
+                <button
+                  class="button button-primary download-menu-trigger"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="download-options"
+                >
+                  下载
+                  <span class="download-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="download-options" id="download-options" hidden>
+                  <div class="download-step download-start">
+                    <a
+                      href="https://gitcode.com/Sorghum/loopra/releases/latest"
+                      target="_blank"
+                      rel="noreferrer"
+                      >桌面端下载 <span>GitCode &#8599;</span></a
+                    >
+                    <button class="web-install-trigger" type="button">
+                      轻量 Web 安装 <span aria-hidden="true">&#8594;</span>
+                    </button>
+                  </div>
+                  <div class="download-step web-install-options" hidden>
+                    <p class="menu-title">选择系统</p>
+                    <button
+                      class="install-option"
+                      type="button"
+                      data-platform="Windows PowerShell"
+                      data-command="irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex"
+                    >
+                      Windows PowerShell
+                    </button>
+                    <button
+                      class="install-option"
+                      type="button"
+                      data-platform="macOS / Linux"
+                      data-command="curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash"
+                    >
+                      macOS / Linux
+                    </button>
+                    <button class="menu-back" type="button">&#8592; 返回</button>
+                  </div>
+                  <div class="download-step install-command" hidden>
+                    <p class="install-command-label"></p>
+                    <code class="install-command-text"></code>
+                    <button class="install-copy-button" type="button">
+                      复制命令
+                    </button>
+                    <button class="menu-back" type="button">&#8592; 更换系统</button>
+                  </div>
+                </div>
+              </div>
+              <div class="source-menu">
+                <button
+                  class="button button-secondary source-menu-trigger"
+                  type="button"
+                  aria-expanded="false"
+                  aria-controls="source-options"
+                >
+                  <span class="source-mark" aria-hidden="true">&#9670;</span>
+                  查看源码
+                  <span class="source-caret" aria-hidden="true">&#9662;</span>
+                </button>
+                <div class="source-options" id="source-options" hidden>
+                  <a
+                    href="https://gitee.com/ezdemo/loopra"
+                    target="_blank"
+                    rel="noreferrer"
+                    >Gitee <span aria-hidden="true">&#8599;</span></a
+                  >
+                  <a
+                    href="https://github.com/ezdemo/agent4j"
+                    target="_blank"
+                    rel="noreferrer"
+                    >GitHub <span aria-hidden="true">&#8599;</span></a
+                  >
+                  <a
+                    href="https://gitcode.com/Sorghum/loopra/releases/latest"
+                    target="_blank"
+                    rel="noreferrer"
+                    >GitCode Desktop <span aria-hidden="true">&#8599;</span></a
+                  >
+                </div>
+              </div>
             </div>
-            <div class="terminal-body">
-                <div class="line"><span class="prompt">❯</span><span class="cmd">loopra web 0</span></div>
-                <div class="line"><span class="comment"># 启动 AI 编码代理 ...</span></div>
-                <div class="line"><span class="prompt">❯</span><span class="cmd">重构 UserService 的数据库查询</span>
-                </div>
-                <div class="line"><span class="output">🤔 让我先了解一下现状...</span></div>
-                <div class="line"><span class="prompt">🔧</span><span class="arrow"> → </span><span class="cmd">grep "SELECT.*FROM.*users" src/</span>
-                </div>
-                <div class="line"><span class="prompt">🔧</span><span class="arrow"> → </span><span class="cmd">write src/main/java/UserService.java</span>
-                </div>
-                <div class="line"><span class="success">✅ 重构完成！涉及 3 个文件、已通过测试。</span><span
-                        class="terminal-cursor"></span></div>
+            <div class="platforms">
+              <span>Windows</span><span>macOS</span><span>Linux</span
+              ><span>Java 17+</span>
             </div>
-                </div>
-            </div>
-        </div>
-    </div>
-</section>
+          </div>
 
-<!-- ==================== STATS BANNER ==================== -->
-<section class="section" style="padding: 40px 0;">
-    <div class="container">
-        <div class="performance-grid reveal" style="grid-template-columns: repeat(4, 1fr);">
-            <div class="perf-card" style="padding: 20px;">
-                <div class="perf-value" data-target="97" style="font-size:1.8rem;">97%</div>
-                <div class="perf-label" style="font-size:0.78rem;">DeepSeek 缓存命中率</div>
+          <div
+            class="app-preview"
+            aria-label="Loopra desktop workspace preview"
+          >
+            <div class="window-chrome">
+              <div class="window-controls"><i></i><i></i><i></i></div>
+              <div class="window-title">Loopra Desktop</div>
+              <div class="window-icons">
+                <span>_</span><span>&#9633;</span><span>&#10005;</span>
+              </div>
             </div>
-            <div class="perf-card" style="padding: 20px;">
-                <div class="perf-value" data-target="98" style="font-size:1.8rem;">98%</div>
-                <div class="perf-label" style="font-size:0.78rem;">Mimo 缓存命中率</div>
-            </div>
-            <div class="perf-card" style="padding: 20px;">
-                <div class="perf-value" style="font-size:1.8rem;color:var(--amber);">Java 17</div>
-                <div class="perf-label" style="font-size:0.78rem;">纯 Java 实现</div>
-            </div>
-            <div class="perf-card" style="padding: 20px;">
-                <div class="perf-value" style="font-size:1.8rem;color:var(--blue);">3 端</div>
-                <div class="perf-label" style="font-size:0.78rem;">CLI / Web / Desktop</div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ==================== COMPARISON ==================== -->
-<section class="section" style="padding-top:20px;">
-    <div class="container">
-        <div class="section-header reveal">
-            <h2>🏆 对比竞品</h2>
-            <p class="subtitle">Loopra 是唯一纯 Java 实现的 AI 编码代理</p>
-        </div>
-        <div class="cache-table-wrap reveal" style="max-width: 800px; margin: 0 auto;">
-            <table class="cache-table">
-                <thead>
-                <tr>
-                    <th>特性</th>
-                    <th>Claude Code</th>
-                    <th>Codex</th>
-                    <th>OpenCode</th>
-                    <th style="color:var(--neon);">Loopra ✅</th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr>
-                    <td>编程语言</td>
-                    <td>TypeScript</td>
-                    <td>TypeScript</td>
-                    <td>Go</td>
-                    <td style="color:var(--neon);font-weight:bold;">Java 17</td>
-                </tr>
-                <tr>
-                    <td>推理循环</td>
-                    <td>✓</td>
-                    <td>✓</td>
-                    <td>✓</td>
-                    <td style="color:var(--neon);">✓</td>
-                </tr>
-                <tr>
-                    <td>工具系统</td>
-                    <td>✓</td>
-                    <td>✓</td>
-                    <td>✓</td>
-                    <td style="color:var(--neon);">✓</td>
-                </tr>
-                <tr>
-                    <td>子代理</td>
-                    <td>✓</td>
-                    <td>✗</td>
-                    <td>✗</td>
-                    <td style="color:var(--neon);">✓</td>
-                </tr>
-                <tr>
-                    <td>MCP 协议</td>
-                    <td>✓</td>
-                    <td>✓</td>
-                    <td>✗</td>
-                    <td style="color:var(--neon);">✓</td>
-                </tr>
-                <tr>
-                    <td>OpenAPI 集成</td>
-                    <td>✓</td>
-                    <td>✗</td>
-                    <td>✗</td>
-                    <td style="color:var(--neon);">✓</td>
-                </tr>
-                <tr>
-                    <td>桌面端</td>
-                    <td>✗ (仅 CLI)</td>
-                    <td>✓ (VS Code)</td>
-                    <td>✗ (仅 CLI)</td>
-                    <td style="color:var(--neon);">✓ Tauri 原生</td>
-                </tr>
-                <tr>
-                    <td>开源</td>
-                    <td>✗</td>
-                    <td>✓</td>
-                    <td>✓</td>
-                    <td style="color:var(--neon);">✓ MIT</td>
-                </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</section>
-
-<!-- ==================== FEATURES ==================== -->
-<section class="section" id="features">
-    <div class="container">
-        <div class="section-header reveal">
-            <h2>六大核心特性</h2>
-            <p class="subtitle">Loopra 将 LLM 与可扩展工具系统结合，形成自主工作的编码代理</p>
-        </div>
-        <div class="features-grid">
-            <div class="feature-card reveal">
-                <div class="icon-wrap">🤖</div>
-                <h3>推理循环</h3>
-                <p>Prompt → LLM → 工具 → 结果 →
-                    LLM，自动迭代直到任务完成。实时流式推送每一步的思考和执行过程，全透明可追踪。</p>
-            </div>
-            <div class="feature-card reveal">
-                <div class="icon-wrap">🛠️</div>
-                <h3>工具系统</h3>
-                <p>声明式 AgentTool 基类 + Solon @Component 自动注册。支持 MCP 协议、OpenAPI 集成、技能市场在线装/卸。16+
-                    内置工具开箱即用。</p>
-            </div>
-            <div class="feature-card reveal">
-                <div class="icon-wrap">🔀</div>
-                <h3>子代理</h3>
-                <p>隔离执行环境，每个子代理有独立上下文和推理循环。并行处理独立任务互不干扰，由主代理统一调度汇总。</p>
-            </div>
-            <div class="feature-card reveal">
-                <div class="icon-wrap">👤</div>
-                <h3>人工审批</h3>
-                <p>HITL 机制：写操作前等待你批准或拒绝。<code>/agree</code> / <code>/deny</code> 快速决策。支持
-                    <code>auto</code>（需确认）和 <code>yolo</code>（直接干）两种模式。</p>
-            </div>
-            <div class="feature-card reveal">
-                <div class="icon-wrap">💬</div>
-                <h3>会话管理</h3>
-                <p>多会话创建、切换、搜索、删除。JSONL 格式持久化，会话自动生成标题，每次操作记录 token 用量，透明可审计。</p>
-        </div>
-            <div class="feature-card reveal">
-                <div class="icon-wrap">⚡</div>
-                <h3>前缀缓存</h3>
-                <p>系统提示词、工具定义等重复内容直接命中 KV cache。DeepSeek ≥97%，Mimo ≥98% 命中率，输入 token 费用降至
-                    2%~3%。</p>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ==================== CAPABILITIES ==================== -->
-<section class="section" id="capabilities">
-    <div class="container">
-        <div class="section-header reveal">
-            <h2>深入核心能力</h2>
-            <p class="subtitle">从推理到工具，从子代理到审批，Loopra 提供企业级 AI 代理所需的一切</p>
-        </div>
-
-        <div class="detail-features">
-            <!-- 1. 推理循环 -->
-            <div class="detail-feature reveal">
-                <div class="detail-text">
-                    <h3><span class="icon-inline">🤖</span> 推理循环 <span class="accent">Reasoning Loop</span></h3>
-                    <p>Loopra 的核心是一个自动迭代的推理循环。用户给出任务后，LLM 思考、调用工具、观察结果、再思考…
-                        直到任务完成。整个过程流式实时推送。</p>
-                    <ul>
-                        <li><strong>自动循环</strong> — Prompt → LLM → 工具 → 结果 → LLM，自动迭代</li>
-                        <li><strong>流式输出</strong> — 实时推送思考过程、工具调用和结果</li>
-                        <li><strong>上下文折叠</strong> — 旧消息自动摘要，不机械截断，保留关键信息</li>
-                        <li><strong>消息自愈</strong> — 自动修复被截断的 JSON 和 tool_calls</li>
-                        <li><strong>风暴断路器</strong> — 检测重复工具调用，防止死循环</li>
-                        <li><strong>推理模型支持</strong> — 原生支持展示思考过程</li>
-                    </ul>
+            <div class="workspace">
+              <aside class="preview-sidebar">
+                <div class="preview-logo">
+                  <img src="../img/logo.png" alt="" /><span>loopra</span>
                 </div>
-                <div class="detail-visual">
-                    <div class="flow-diagram">
-                        <div class="flow-step active">
-                            <span class="step-icon">🎯</span>
-                            <span class="step-label">用户任务</span>
-                        </div>
-                        <span class="flow-arrow">→</span>
-                        <div class="flow-step">
-                            <span class="step-icon">🧠</span>
-                            <span class="step-label">LLM 思考</span>
-                        </div>
-                        <span class="flow-arrow">→</span>
-                        <div class="flow-step">
-                            <span class="step-icon">🔧</span>
-                            <span class="step-label">调用工具</span>
-                        </div>
-                        <span class="flow-arrow">→</span>
-                        <div class="flow-step">
-                            <span class="step-icon">📊</span>
-                            <span class="step-label">观察结果</span>
-                        </div>
-                        <span class="flow-arrow">→</span>
-                        <div class="flow-step active">
-                            <span class="step-icon">✅</span>
-                            <span class="step-label">任务完成</span>
-                        </div>
-            </div>
+                <button class="new-task">+ 新任务</button>
+                <div class="side-label">今天</div>
+                <div class="conversation active">
+                  <span class="conversation-icon">&#10022;</span
+                  ><span>重构认证流程</span>
                 </div>
-            </div>
-
-            <!-- 2. 工具系统 -->
-            <div class="detail-feature reveal">
-                <div class="detail-visual">
-                    <div class="tool-showcase">
-                        <div class="tool-item"><span class="tool-icon">📄</span> read / write / edit</div>
-                        <div class="tool-item"><span class="tool-icon">🔍</span> glob / grep / ls</div>
-                        <div class="tool-item"><span class="tool-icon">💻</span> bash</div>
-                        <div class="tool-item"><span class="tool-icon">📋</span> bash_start / wait / stdin / stop</div>
-                        <div class="tool-item"><span class="tool-icon">🔀</span> task / multi_task</div>
-                        <div class="tool-item"><span class="tool-icon">📂</span> workspace_read / write / list / watch
-                        </div>
-                        <div class="tool-item"><span class="tool-icon">🌐</span> webfetch</div>
-                        <div class="tool-item"><span class="tool-icon">🔎</span> codesearch</div>
-                        <div class="tool-item"><span class="tool-icon">📞</span> call_api</div>
-                        <div class="tool-item"><span class="tool-icon">🧠</span> remember / recall_memory</div>
-                        <div class="tool-item"><span class="tool-icon">📋</span> submit_plan / revise_plan</div>
-                        <div class="tool-item"><span class="tool-icon">💬</span> ask_choice / todo_write</div>
-            </div>
+                <div class="conversation">
+                  <span class="conversation-icon">&#10022;</span
+                  ><span>完善 API 文档</span>
                 </div>
-                <div class="detail-text">
-                    <h3><span class="icon-inline">🛠️</span> 工具系统 <span class="accent">Tool System</span></h3>
-                    <p>Loopra 内置丰富的工具集，并支持无限扩展。继承 <code>AgentTool</code> 基类，定义名称、参数、执行逻辑即可注册新工具。
-                    </p>
-                    <ul>
-                        <li><strong>声明式工具</strong> — 继承 AgentTool 基类，Solon @Component 自动发现</li>
-                        <li><strong>MCP 支持</strong> — 接入 Model Context Protocol 服务器</li>
-                        <li><strong>OpenAPI 集成</strong> — 任意 OpenAPI 规范自动转成工具</li>
-                        <li><strong>技能市场</strong> — 在线装/卸社区技能</li>
-                        <li><strong>Plan Mode</strong> — 只读模式，安全规划后再执行</li>
-                    </ul>
+                <div class="conversation">
+                  <span class="conversation-icon">&#10022;</span
+                  ><span>排查构建失败</span>
                 </div>
-            </div>
-
-            <!-- 3. 子代理 -->
-            <div class="detail-feature reveal">
-                <div class="detail-text">
-                    <h3><span class="icon-inline">🔀</span> 子代理 <span class="accent">Sub-Agent</span></h3>
-                    <p>将复杂任务拆解给多个子代理并行执行。每个子代理拥有独立的推理循环和上下文，互不干扰。</p>
-                    <ul>
-                        <li><strong>隔离执行</strong> — 独立上下文和推理循环，不串扰</li>
-                        <li><strong>继承工具</strong> — 复制父代理工具集，排除递归 spawn</li>
-                        <li><strong>独立通道</strong> — 子代理输出通过独立事件流推送</li>
-                        <li><strong>用量统计</strong> — 按模型统计 token 消耗，透明可见</li>
-                    </ul>
+                <div class="side-label project-label">工作区</div>
+                <div class="project">
+                  <span class="folder-icon">&#9634;</span><span>agent4j</span
+                  ><em>Java</em>
                 </div>
-                <div class="detail-visual">
-                    <div class="flow-diagram" style="flex-direction: column; gap: 8px; padding: 24px;">
-                        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;">
-                            <div class="flow-step active"><span class="step-icon">👤</span><span
-                                    class="step-label">主代理</span></div>
-                            <span class="flow-arrow">→</span>
-                            <div class="flow-step"><span class="step-icon">1️⃣</span><span
-                                    class="step-label">子代理A</span></div>
-                            <span class="flow-arrow">→</span>
-                            <div class="flow-step"><span class="step-icon">🔧</span><span
-                                    class="step-label">文件分析</span></div>
-                        </div>
-                        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;">
-                            <div class="flow-step"><span class="step-icon">2️⃣</span><span
-                                    class="step-label">子代理B</span></div>
-                            <span class="flow-arrow">→</span>
-                            <div class="flow-step"><span class="step-icon">🛠️</span><span
-                                    class="step-label">代码编写</span></div>
-                        </div>
-                        <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap;justify-content:center;">
-                            <div class="flow-step"><span class="step-icon">3️⃣</span><span
-                                    class="step-label">子代理C</span></div>
-                            <span class="flow-arrow">→</span>
-                            <div class="flow-step"><span class="step-icon">🧪</span><span
-                                    class="step-label">运行测试</span></div>
-                        </div>
-            </div>
+                <div class="preview-user">
+                  <span class="user-avatar">S</span><span>Sorghum</span
+                  ><b>&#8942;</b>
                 </div>
-            </div>
-
-            <!-- 4. 人工审批 HITL -->
-            <div class="detail-feature reveal">
-                <div class="detail-visual">
-                    <div class="flow-diagram" style="padding: 32px 24px;">
-                        <div style="display:flex;flex-direction:column;align-items:center;gap:12px;width:100%;">
-                            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;justify-content:center;">
-                                <div class="flow-step"><span class="step-icon">✍️</span><span
-                                        class="step-label">写操作请求</span></div>
-                                <span class="flow-arrow">→</span>
-                                <div class="flow-step active"><span class="step-icon">👤</span><span class="step-label">等待审批</span>
-                                </div>
-                                <span class="flow-arrow">→</span>
-                                <div class="flow-step"><span class="step-icon">✅</span><span
-                                        class="step-label">批准执行</span></div>
-                            </div>
-                            <div style="display:flex;gap:16px;margin-top:8px;">
-                                <span style="padding:6px 16px;border:1px solid var(--neon);border-radius:100px;color:var(--neon);font-family:'JetBrains Mono',monospace;font-size:0.75rem;">/agree ✓</span>
-                                <span style="padding:6px 16px;border:1px solid var(--text-muted);border-radius:100px;color:var(--text-muted);font-family:'JetBrains Mono',monospace;font-size:0.75rem;">/deny ✗</span>
+              </aside>
+              <section class="preview-chat">
+                <div class="tab-strip">
+                  <div class="chat-tab active-tab">
+                    <span class="spark">&#10022;</span> 重构认证流程
+                    <b>&#215;</b>
+                  </div>
+                  <button>+</button>
                 </div>
-                        </div>
+                <div class="chat-header">
+                  <span class="crumb">agent4j</span
+                  ><span class="chat-header-actions"
+                    >&#8635; &nbsp; &#8942;</span
+                  >
+                </div>
+                <div class="messages">
+                  <div class="message user-message">
+                    <span class="message-avatar">S</span>
+                    <div>
+                      <p>
+                        检查当前认证模块，整理重复的 token
+                        校验逻辑，并补充测试。
+                      </p>
                     </div>
-                </div>
-                <div class="detail-text">
-                    <h3><span class="icon-inline">👤</span> 人工审批 <span class="accent">HITL</span></h3>
-                    <p>Loopra 在执行写操作前会等待你批准或拒绝，确保每次修改都在你的控制之下。支持快速命令决策。</p>
-                    <ul>
-                        <li><strong>自动模式</strong> — 写操作前需要确认，安全可靠</li>
-                        <li><strong>YOLO 模式</strong> — 直接执行，无需确认，适合信任场景</li>
-                        <li><strong>快速决策</strong> — <code>/agree</code> 批准 / <code>/deny</code> 拒绝，即时响应</li>
-                        <li><strong>todo_write</strong> — 维护任务清单，跟踪执行进度</li>
-                    </ul>
-                </div>
-            </div>
-
-            <!-- 5. 会话管理 -->
-            <div class="detail-feature reveal">
-                <div class="detail-text">
-                    <h3><span class="icon-inline">💬</span> 会话管理 <span class="accent">Session Management</span></h3>
-                    <p>多会话并行管理，每个会话有独立上下文。JSONL 格式持久化，历史数据可追溯、可审计。</p>
-                    <ul>
-                        <li><strong>多会话</strong> — 创建、切换、搜索、删除，灵活管理</li>
-                        <li><strong>JSONL 持久化</strong> — 结构化日志格式，方便检索和分析</li>
-                        <li><strong>自动标题</strong> — 根据对话内容自动生成会话名称</li>
-                        <li><strong>用量统计</strong> — 每次操作记录 token 消耗，成本透明</li>
-                        <li><strong>工作区隔离</strong> — 不同项目的工作区互相独立</li>
-                    </ul>
-                </div>
-                <div class="detail-visual">
-                    <div class="flow-diagram" style="padding: 24px;">
-                        <div style="display:flex;flex-direction:column;gap:8px;width:100%;">
-                            <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--bg-overlay);border:1px solid var(--border);border-radius:var(--radius);">
-                                <span style="color:var(--neon);font-family:'JetBrains Mono',monospace;font-size:0.8rem;">📁 project-a</span>
-                                <span style="color:var(--text-muted);font-size:0.7rem;margin-left:auto;">3 个会话</span>
-                            </div>
-                            <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--bg-overlay);border:1px solid var(--neon);border-radius:var(--radius);">
-                                <span style="color:var(--neon);font-family:'JetBrains Mono',monospace;font-size:0.8rem;">💬 重构用户模块</span>
-                                <span style="color:var(--text-muted);font-size:0.7rem;margin-left:auto;">active</span>
-                </div>
-                            <div style="display:flex;align-items:center;gap:8px;padding:8px 16px;background:var(--bg-overlay);border:1px solid var(--border);border-radius:var(--radius);">
-                                <span style="font-family:'JetBrains Mono',monospace;font-size:0.8rem;color:var(--text-secondary);">📁 project-b</span>
-                                <span style="color:var(--text-muted);font-size:0.7rem;margin-left:auto;">1 个会话</span>
-                            </div>
+                  </div>
+                  <div class="message assistant-message">
+                    <span class="message-avatar agent-avatar"
+                      ><img src="../img/logo.png" alt=""
+                    /></span>
+                    <div class="agent-content">
+                      <p>
+                        我会先定位认证调用链和现有测试，再给出最小范围的修改。
+                      </p>
+                      <div class="tool-call">
+                        <div>
+                          <span class="tool-icon">&#128269;</span
+                          ><b>搜索代码库</b><em>完成</em>
                         </div>
-            </div>
+                        <code>rg "validateToken|Authentication" src</code>
+                      </div>
+                      <p>发现 3 处重复校验，正在提取为共享拦截器。</p>
+                      <div class="tool-call success">
+                        <div>
+                          <span class="tool-icon">&#10003;</span><b>运行测试</b
+                          ><em>通过</em>
+                        </div>
+                        <code>mvn -pl loopra-web -am test</code>
+                      </div>
+                    </div>
+                  </div>
                 </div>
+                <div class="chat-input">
+                  <span>继续交代任务...</span><kbd>Enter</kbd
+                  ><button aria-label="发送">&#8593;</button>
+                </div>
+              </section>
+              <aside class="preview-panel">
+                <div class="panel-title">任务状态 <span>&#8942;</span></div>
+                <div class="goal-row">
+                  <span class="goal-check">&#10003;</span
+                  ><span>分析认证模块</span>
+                </div>
+                <div class="goal-row">
+                  <span class="goal-check">&#10003;</span
+                  ><span>提取共享校验</span>
+                </div>
+                <div class="goal-row in-progress">
+                  <span class="goal-spinner"></span><span>补充单元测试</span>
+                </div>
+                <div class="goal-row muted">
+                  <span class="goal-empty"></span><span>验证完整构建</span>
+                </div>
+                <div class="panel-divider"></div>
+                <div class="panel-title">工具调用</div>
+                <div class="tool-summary"><span>read</span><b>12</b></div>
+                <div class="tool-summary"><span>grep</span><b>4</b></div>
+                <div class="tool-summary"><span>bash</span><b>2</b></div>
+              </aside>
             </div>
+          </div>
         </div>
-    </div>
-</section>
+      </section>
 
-<!-- ==================== PREFIX CACHE ==================== -->
-<section class="section" id="cache">
-    <div class="container">
-        <div class="section-header reveal">
-            <h2>⚡ 前缀缓存 <span class="accent">优势</span></h2>
-            <p class="subtitle">每次会话开头的重复内容直接命中 KV cache，输入 token 费用降至 2%~3%</p>
+      <section class="signal-band">
+        <div class="container signal-inner">
+          <p>为真实代码库而生</p>
+          <div>
+            <span>JAVA 17</span><span>SOLON</span><span>VUE 3</span
+            ><span>ELECTRON</span><span>MCP</span><span>OPENAPI</span>
+          </div>
         </div>
-        <div class="cache-showcase reveal">
-            <div class="cache-stats">
-                <div class="stat-card">
-                    <div class="stat-value" data-target="97">97%</div>
-                    <div class="stat-label">DeepSeek 前缀缓存命中率</div>
-                    <div class="stat-detail">deepseek-v4-flash / deepseek-v4-pro</div>
-                </div>
-                <div class="stat-card">
-                    <div class="stat-value" data-target="98">98%</div>
-                    <div class="stat-label">小米 Mimo 前缀缓存命中率</div>
-                    <div class="stat-detail">mimo-v2.5 / mimo-v2.5-pro</div>
-                </div>
-            </div>
-            <div class="cache-table-wrap">
-                <table class="cache-table">
-                    <thead>
-                    <tr>
-                        <th>模型</th>
-                        <th>缓存命中率</th>
-                        <th>效果</th>
-                    </tr>
-                    </thead>
-                    <tbody>
-                    <tr>
-                        <td class="model-name">DeepSeek (deepseek-v4-flash)</td>
-                        <td class="rate">≥ 97%</td>
-                        <td class="effect">输入成本降至 3%</td>
-                    </tr>
-                    <tr>
-                        <td class="model-name">DeepSeek (deepseek-v4-pro)</td>
-                        <td class="rate">≥ 97%</td>
-                        <td class="effect">输入成本降至 3%</td>
-                    </tr>
-                    <tr>
-                        <td class="model-name">小米 Mimo (mimo-v2.5)</td>
-                        <td class="rate">≥ 98%</td>
-                        <td class="effect">输入成本降至 2%</td>
-                    </tr>
-                    <tr>
-                        <td class="model-name">小米 Mimo (mimo-v2.5-pro)</td>
-                        <td class="rate">≥ 98%</td>
-                        <td class="effect">输入成本降至 2%</td>
-                    </tr>
-                    </tbody>
-                </table>
-            </div>
-        </div>
-    </div>
-</section>
+      </section>
 
-<!-- ==================== QUICK START ==================== -->
-<section class="section" id="quickstart">
-    <div class="container">
-        <div class="section-header reveal">
-            <h2>🚀 快速开始</h2>
-            <p class="subtitle">一行命令安装，两行配置运行</p>
-        </div>
-        <div class="quickstart-grid reveal">
-            <div class="install-card">
-                <h3>
-                    <span>🪟 Windows</span>
-                    <span class="os-tag">PowerShell</span>
-                </h3>
-                <div class="code-block">
-                    <button class="copy-btn" onclick="copyCode(this, 'win-install')">复制</button>
-                    <code id="win-install">
-                        <span class="comment-line"># 一行命令安装 Loopra</span><br/>
-                        <span class="cmd-line">irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex</span>
-                    </code>
-                </div>
-                <h3 style="margin-top: 24px;">
-                    <span>🍎 macOS / 🐧 Linux</span>
-                    <span class="os-tag">bash</span>
-                </h3>
-                <div class="code-block">
-                    <button class="copy-btn" onclick="copyCode(this, 'unix-install')">复制</button>
-                    <code id="unix-install">
-                        <span class="comment-line"># 一行命令安装</span><br/>
-                        <span class="cmd-line">curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash</span>
-                    </code>
-                </div>
-            </div>
-            <div class="install-card">
-                <h3>
-                    <span>⚙️ 配置</span>
-                    <span class="os-tag">config.json</span>
-                </h3>
-                <p style="color:var(--text-secondary);margin-bottom:16px;font-size:0.9rem;">
-                    首次启动自动生成 <code style="color:var(--neon);">~/.loopra/config.json</code>，填入 API Key 即可：
+      <section class="capabilities section" id="capabilities">
+        <div class="container">
+          <div class="section-heading">
+            <p class="kicker">Core capabilities</p>
+            <h2>不仅能回答，<br />更能把任务推进到结果。</h2>
+            <p>
+              Loopra
+              将模型推理与本地工具调用组织为持续循环，在任务完成、需要审批或遇到阻塞前保持工作上下文。
+            </p>
+          </div>
+          <div class="capability-grid">
+            <article class="capability-card capability-featured">
+              <div class="card-icon search-icon">&#8981;</div>
+              <div>
+                <h3>理解整个工作区</h3>
+                <p>
+                  读取、检索与修改都在项目边界内进行。Agent
+                  先建立上下文，再动手处理真实的调用链和依赖关系。
                 </p>
-                <div class="code-block" style="max-height: 220px; overflow-y: auto;">
-                    <button class="copy-btn" onclick="copyCode(this, 'config-json')">复制</button>
-                    <pre class="config-json" id="config-json" style="margin:0;">{
-  <span class="comment">// API 地址</span>
-  "<span class="key">baseUrl</span>": "<span class="string">https://api.deepseek.com/v1</span>",
-  <span class="comment">// API 密钥</span>
-  "<span class="key">apiKey</span>": "<span class="string">sk-your-api-key</span>",
-  <span class="comment">// 模型名称</span>
-  "<span class="key">model</span>": "<span class="string">deepseek-v4-flash</span>",
-  <span class="comment">// 工作区目录（你的项目路径）</span>
-  "<span class="key">workspaceDir</span>": "<span class="string">/path/to/your/project</span>",
-  <span class="comment">// 推理强度: low | medium | high | max</span>
-  "<span class="key">reasoningEffort</span>": "<span class="string">high</span>"
-}</pre>
-                </div>
-                <div class="code-block" style="margin-top: 12px;">
-                    <button class="copy-btn" onclick="copyCode(this, 'run-cmd')">复制</button>
-                    <code id="run-cmd">
-                        <span class="comment-line"># 启动 Web 服务</span><br/>
-                        <span class="cmd-line">loopra web 0</span>
-                    </code>
-                </div>
-            </div>
+              </div>
+              <div class="file-map">
+                <span class="tree-line"><b>&#9662;</b> src</span
+                ><span class="tree-indent"><b>&#9662;</b> auth</span
+                ><span class="tree-deep active-file"
+                  >&#9670; TokenValidator.java</span
+                ><span class="tree-deep">&#9670; AuthInterceptor.java</span
+                ><span class="tree-indent">&#9670; AuthServiceTest.java</span>
+              </div>
+            </article>
+            <article class="capability-card">
+              <div class="card-icon loop-icon">&#8635;</div>
+              <h3>持续的推理循环</h3>
+              <p>
+                任务、工具结果与下一步决策连接成循环。无需为每次文件读取和命令输出反复补充上下文。
+              </p>
+              <div class="mini-loop">
+                <span>任务</span><b>&#8594;</b><span>推理</span><b>&#8594;</b
+                ><span>执行</span>
+              </div>
+            </article>
+            <article class="capability-card">
+              <div class="card-icon shield-icon">&#9670;</div>
+              <h3>权限始终清晰</h3>
+              <p>
+                只读、审批与自动三种模式，将高风险调用交给人工确认。路径边界与校验模型提供额外保障。
+              </p>
+              <div class="permission-row">
+                <span class="permission-pill allowed">read</span
+                ><span class="permission-pill allowed">grep</span
+                ><span class="permission-pill review">bash · 审批</span>
+              </div>
+            </article>
+            <article class="capability-card">
+              <div class="card-icon collaboration-icon">&#10022;</div>
+              <h3>适合长任务的协作状态</h3>
+              <p>
+                Goal、Checklist、会话折叠与项目记忆，让 Agent
+                在多步骤任务中保留进度、证据和稳定约定。
+              </p>
+              <div class="check-list">
+                <span><b>&#10003;</b> 定位影响范围</span
+                ><span><b>&#10003;</b> 修改与测试</span
+                ><span class="pending"><b></b> 汇总结果</span>
+              </div>
+            </article>
+            <article class="capability-card">
+              <div class="card-icon extension-icon">&#8862;</div>
+              <h3>把工具接进来</h3>
+              <p>
+                通过 Solon 声明工具，也可接入 MCP、OpenAPI、REST API
+                和技能。选择工具而不是重新发明工作流。
+              </p>
+              <div class="extension-tags">
+                <span>MCP</span><span>OpenAPI</span><span>Skills</span>
+              </div>
+            </article>
+          </div>
         </div>
-    </div>
-</section>
+      </section>
 
-<!-- ==================== COMMANDS ==================== -->
-<section class="section" id="commands" style="padding-top: 20px;">
-    <div class="container">
-        <div class="section-header reveal">
-            <h2>🎯 聊天命令</h2>
-            <p class="subtitle">高效控制 AI 代理的快捷命令</p>
+      <section class="workflow section" id="workflow">
+        <div class="container workflow-layout">
+          <div>
+            <p class="kicker">A visible workflow</p>
+            <h2>过程留在界面里，<br />控制权留在你手里。</h2>
+            <p class="workflow-copy">
+              从任务分解到命令执行，Loopra
+              的每一步都有可检查的上下文和结果。需要决策时，Agent
+              会暂停并把明确的问题交还给你。
+            </p>
+            <a class="text-link" href="#develop"
+              >查看本地开发方式 <span aria-hidden="true">&#8594;</span></a
+            >
+          </div>
+          <div class="workflow-steps">
+            <article>
+              <div class="step-number">01</div>
+              <div>
+                <h3>描述目标</h3>
+                <p>用自然语言交代结果，不必先拆成机械步骤。</p>
+              </div>
+            </article>
+            <article>
+              <div class="step-number">02</div>
+              <div>
+                <h3>观察与行动</h3>
+                <p>模型读取代码、调用工具，并根据真实输出调整下一步。</p>
+              </div>
+            </article>
+            <article>
+              <div class="step-number">03</div>
+              <div>
+                <h3>确认与交付</h3>
+                <p>高风险操作等待审批，完成后带着验证结果回到对话。</p>
+              </div>
+            </article>
+          </div>
         </div>
-        <div class="cache-table-wrap reveal" style="max-width: 700px; margin: 0 auto;">
-            <table class="cache-table">
-                <thead>
-                <tr>
-                    <th>命令</th>
-                    <th>功能</th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr>
-                    <td class="model-name"><code>/help</code></td>
-                    <td>帮助信息</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>/new</code></td>
-                    <td>新会话</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>/plan</code></td>
-                    <td>进入计划模式（只读）</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>/execute</code></td>
-                    <td>退出计划模式</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>/compact</code></td>
-                    <td>折叠历史，释放上下文空间</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>/retry</code></td>
-                    <td>撤回重试</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>/rewind N</code></td>
-                    <td>回退到第 N 轮对话</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>/sessions</code></td>
-                    <td>列出所有会话</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>/load N</code></td>
-                    <td>加载第 N 个会话</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>/init</code></td>
-                    <td>分析项目，自动生成文档</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>/hitl</code></td>
-                    <td>切换人工审批模式</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>/agree</code></td>
-                    <td>批准当前写操作</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>/deny</code></td>
-                    <td>拒绝当前写操作</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>/continue</code></td>
-                    <td>继续生成</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>/exit</code></td>
-                    <td>退出</td>
-                </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</section>
+      </section>
 
-<!-- ==================== TECH STACK ==================== -->
-<section class="section" id="techstack">
-    <div class="container">
-        <div class="section-header reveal">
-            <h2>🛠️ 技术栈</h2>
-            <p class="subtitle">纯 Java 17 + Solon 后端 · Vue 3 前端 · Tauri 2.0 桌面端</p>
-        </div>
-        <div class="tech-stack-visual reveal">
-            <!-- Presentation Layer -->
-            <div class="tech-layer">
-                <span class="layer-label">前端</span>
-                <span class="tech-badge blue">Vue 3.4</span>
-                <span class="tech-badge blue">Vite 5</span>
-                <span class="tech-badge blue">Ant Design Vue 4</span>
-                <span class="tech-badge purple">TypeScript</span>
+      <section class="developer section" id="develop">
+        <div class="container developer-layout">
+          <div class="developer-copy">
+            <p class="kicker">Start local</p>
+            <h2>几分钟，启动你的本地工作台。</h2>
+            <p>
+              从 Gitee 获取发布版本并在本机运行。Desktop 安装包由 GitCode
+              发布；源码同时提供 Gitee 主仓库与 GitHub 镜像。
+            </p>
+            <a
+              class="button button-primary"
+              href="https://gitee.com/ezdemo/loopra/releases/latest"
+              target="_blank"
+              rel="noreferrer"
+              >查看 Gitee Releases <span aria-hidden="true">&#8594;</span></a
+            >
+            <div class="source-links" aria-label="Download and source links">
+              <a
+                href="https://gitee.com/ezdemo/loopra"
+                target="_blank"
+                rel="noreferrer"
+                >Gitee 源码 <span>&#8599;</span></a
+              >
+              <a
+                href="https://github.com/ezdemo/agent4j"
+                target="_blank"
+                rel="noreferrer"
+                >GitHub 镜像 <span>&#8599;</span></a
+              >
+              <a
+                href="https://gitcode.com/Sorghum/loopra/releases/latest"
+                target="_blank"
+                rel="noreferrer"
+                >GitCode Desktop <span>&#8599;</span></a
+              >
             </div>
-            <div class="tech-layer-connector">⬇️ ⬇️ ⬇️</div>
+          </div>
+          <div class="terminal" aria-label="Installation commands">
+            <div class="terminal-top">
+              <span><i></i><i></i><i></i></span><b>Install and run</b
+              ><button
+                class="copy-button"
+                type="button"
+                data-copy="irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex"
+                aria-label="复制 Windows 安装命令"
+              >
+                复制 Windows 命令
+              </button>
+            </div>
+            <div class="terminal-body install-body">
+              <p class="terminal-label">Windows PowerShell</p>
+              <p>
+                <span class="prompt">PS&gt;</span> irm
+                https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1
+                | iex
+              </p>
+              <p class="terminal-label terminal-label-spaced">macOS / Linux</p>
+              <p>
+                <span class="prompt">$</span> curl -fsSL
+                https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh
+                | bash
+              </p>
+              <p class="terminal-label terminal-label-spaced">启动服务</p>
+              <p><span class="prompt">$</span> loopra web 0</p>
+              <p class="terminal-result">
+                Serving Loopra at <b>http://localhost:5210</b>
+              </p>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
 
-            <!-- Desktop Layer -->
-            <div class="tech-layer">
-                <span class="layer-label">桌面</span>
-                <span class="tech-badge amber">Tauri 2.0</span>
-                <span class="tech-badge amber">Rust</span>
-            </div>
-            <div class="tech-layer-connector">⬇️ ⬇️</div>
-
-            <!-- API Layer -->
-            <div class="tech-layer">
-                <span class="layer-label">API</span>
-                <span class="tech-badge neon">Solon Web</span>
-                <span class="tech-badge neon">REST API</span>
-                <span class="tech-badge neon">SSE Stream</span>
-                <span class="tech-badge neon">Knife4j</span>
-            </div>
-            <div class="tech-layer-connector">⬇️ ⬇️ ⬇️</div>
-
-            <!-- Engine Layer -->
-            <div class="tech-layer">
-                <span class="layer-label">引擎</span>
-                <span class="tech-badge neon">推理循环</span>
-                <span class="tech-badge neon">工具系统</span>
-                <span class="tech-badge neon">子代理</span>
-                <span class="tech-badge neon">会话管理</span>
-            </div>
-            <div class="tech-layer-connector">⬇️ ⬇️</div>
-
-            <!-- Runtime Layer -->
-            <div class="tech-layer">
-                <span class="layer-label">运行时</span>
-                <span class="tech-badge amber">Java 17</span>
-                <span class="tech-badge neon">Solon 4.0</span>
-                <span class="tech-badge blue">Snack4 JSON</span>
-                <span class="tech-badge">OkHttp</span>
-                <span class="tech-badge">JSON Lines</span>
-            </div>
+    <footer class="site-footer">
+      <div class="container footer-inner">
+        <a class="brand footer-brand" href="#top"
+          ><img src="../img/logo.png" alt="" /><span>loopra</span></a
+        >
+        <p>Pure Java AI coding agent. Built for local workspaces.</p>
+        <div>
+          <a
+            href="https://gitee.com/ezdemo/loopra"
+            target="_blank"
+            rel="noreferrer"
+            >Gitee</a
+          >
+          <a
+            href="https://github.com/ezdemo/agent4j"
+            target="_blank"
+            rel="noreferrer"
+            >GitHub</a
+          >
+          <a
+            href="https://gitcode.com/Sorghum/loopra/releases/latest"
+            target="_blank"
+            rel="noreferrer"
+            >Desktop</a
+          >
+          <a
+            href="https://gitee.com/ezdemo/loopra/blob/main/LICENSE"
+            target="_blank"
+            rel="noreferrer"
+            >MIT License</a
+          >
         </div>
-    </div>
-</section>
-
-<!-- ==================== INTERFACES ==================== -->
-<section class="section" id="interfaces">
-    <div class="container">
-        <div class="section-header reveal">
-            <h2>🌐 三种界面</h2>
-            <p class="subtitle">终端、浏览器、桌面应用 — 同一引擎，三种体验</p>
-        </div>
-        <div class="interfaces-grid reveal">
-            <div class="interface-card">
-                <div class="icon-large">💻</div>
-                <h3>CLI 终端</h3>
-                <p>在终端里直接运行。无需图形界面，SSH 远程也能用，适合资深开发者。</p>
-                <span class="tag">loopra web 0</span>
-            </div>
-            <div class="interface-card">
-                <div class="icon-large">🌍</div>
-                <h3>Web 界面</h3>
-                <p>浏览器打开可视化界面。流式打字机效果、工具调用可视化、Git 面板。</p>
-                <span class="tag">http://localhost:4567</span>
-            </div>
-            <div class="interface-card">
-                <div class="icon-large">🖥️</div>
-                <h3>Desktop 桌面</h3>
-                <p>Tauri 2.0 原生桌面应用。系统原生窗口、托盘图标、全局快捷键。</p>
-                <span class="tag">Tauri 2.0 + Rust</span>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ==================== PERFORMANCE ==================== -->
-<section class="section" id="performance">
-    <div class="container">
-        <div class="section-header reveal">
-            <h2>📊 性能指标</h2>
-            <p class="subtitle">企业级性能，从缓存优化到上下文管理</p>
-        </div>
-        <div class="performance-grid reveal">
-            <div class="perf-card">
-                <div class="perf-value">≥97%</div>
-                <div class="perf-label">DeepSeek 前缀缓存命中率</div>
-            </div>
-            <div class="perf-card">
-                <div class="perf-value">≥98%</div>
-                <div class="perf-label">Mimo 前缀缓存命中率</div>
-            </div>
-            <div class="perf-card">
-                <div class="perf-value">2~3%</div>
-                <div class="perf-label">输入成本压缩比例</div>
-            </div>
-            <div class="perf-card">
-                <div class="perf-value">200K</div>
-                <div class="perf-label">最大上下文字符数</div>
-            </div>
-            <div class="perf-card">
-                <div class="perf-value">50</div>
-                <div class="perf-label">会话并发数 (LRU)</div>
-            </div>
-            <div class="perf-card">
-                <div class="perf-value">360s</div>
-                <div class="perf-label">工具超时可配</div>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ==================== CONFIG DOCS ==================== -->
-<section class="section" id="config-docs" style="padding-top: 20px;">
-    <div class="container">
-        <div class="section-header reveal">
-            <h2>⚙️ 配置参考</h2>
-            <p class="subtitle"><code style="color:var(--neon);">~/.loopra/config.json</code> 完整配置项说明</p>
-        </div>
-        <div class="cache-table-wrap reveal" style="max-width: 900px; margin: 0 auto;">
-            <table class="cache-table">
-                <thead>
-                <tr>
-                    <th>字段</th>
-                    <th>类型</th>
-                    <th>默认值</th>
-                    <th>说明</th>
-                </tr>
-                </thead>
-                <tbody>
-                <tr>
-                    <td class="model-name"><code>baseUrl</code></td>
-                    <td>string</td>
-                    <td><code style="color:var(--text-muted);">http://localhost:11434/v1</code></td>
-                    <td>API 地址</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>apiKey</code></td>
-                    <td>string</td>
-                    <td>—</td>
-                    <td>API 密钥</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>model</code></td>
-                    <td>string</td>
-                    <td><code style="color:var(--text-muted);">deepseek-v4-flash</code></td>
-                    <td>模型名称</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>workspaceDir</code></td>
-                    <td>string</td>
-                    <td><code style="color:var(--text-muted);">""</code></td>
-                    <td>工作区目录</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>reasoningEffort</code></td>
-                    <td>string</td>
-                    <td><code style="color:var(--text-muted);">high</code></td>
-                    <td>推理强度：low/medium/high/max</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>lang</code></td>
-                    <td>string</td>
-                    <td><code style="color:var(--text-muted);">ZH</code></td>
-                    <td>语言</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>hitl</code></td>
-                    <td>bool</td>
-                    <td><code style="color:var(--text-muted);">false</code></td>
-                    <td>人工审批默认开关</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>editMode</code></td>
-                    <td>string</td>
-                    <td><code style="color:var(--text-muted);">auto</code></td>
-                    <td>auto（需确认）/ yolo（直接干）</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>maxContextChars</code></td>
-                    <td>int</td>
-                    <td><code style="color:var(--text-muted);">200000</code></td>
-                    <td>上下文上限（字符数）</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>keepTailChars</code></td>
-                    <td>int</td>
-                    <td><code style="color:var(--text-muted);">80000</code></td>
-                    <td>保留尾部预算</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>toolTimeoutSec</code></td>
-                    <td>int</td>
-                    <td><code style="color:var(--text-muted);">360</code></td>
-                    <td>工具超时（秒）</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>disabledTools</code></td>
-                    <td>string[]</td>
-                    <td><code style="color:var(--text-muted);">[]</code></td>
-                    <td>禁用工具列表</td>
-                </tr>
-                <tr>
-                    <td class="model-name"><code>blockedPaths</code></td>
-                    <td>string[]</td>
-                    <td><code style="color:var(--text-muted);">[]</code></td>
-                    <td>路径拦截列表</td>
-                </tr>
-                </tbody>
-            </table>
-        </div>
-    </div>
-</section>
-
-<!-- ==================== ROADMAP ==================== -->
-<section class="section" id="docs">
-    <div class="container">
-        <div class="section-header reveal">
-            <h2>🗺️ 路线图 & 文档</h2>
-            <p class="subtitle">Loopra 持续进化中 — 已完成 12 项核心能力，3 项开发中</p>
-        </div>
-
-        <!-- Download / Install Links -->
-        <div class="quickstart-grid reveal" style="margin-bottom: 40px;">
-            <div class="install-card" style="text-align: center;">
-                <div style="font-size: 2.5rem; margin-bottom: 12px;">📦</div>
-                <h3 style="margin-bottom: 8px;">直接安装</h3>
-                <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:20px;">一条命令安装，支持 Windows /
-                    macOS / Linux</p>
-                <a class="btn btn-primary" href="#quickstart">
-                    <svg class="icon-svg" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                        <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-                        <polyline points="17 6 23 6 23 12"/>
-                    </svg>
-                    查看安装命令
-                </a>
-            </div>
-            <div class="install-card" style="text-align: center;">
-                <div style="font-size: 2.5rem; margin-bottom: 12px;">📖</div>
-                <h3 style="margin-bottom: 8px;">文档与源码</h3>
-                <p style="color:var(--text-secondary);font-size:0.9rem;margin-bottom:20px;">GitHub
-                    README、更新日志、许可证</p>
-                <a class="btn btn-outline" href="https://github.com/ezdemo/loopra" rel="noopener" target="_blank">
-                    <svg class="icon-svg" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
-                    </svg>
-                    访问 GitHub
-                </a>
-            </div>
-        </div>
-
-        <div class="roadmap-grid reveal">
-            <div class="roadmap-col">
-                <h3>✅ 已完成</h3>
-                <ul class="roadmap-list">
-                    <li><span class="check">✓</span> 推理循环</li>
-                    <li><span class="check">✓</span> 工具调用</li>
-                    <li><span class="check">✓</span> 流式输出</li>
-                    <li><span class="check">✓</span> 会话管理</li>
-                    <li><span class="check">✓</span> 子代理</li>
-                    <li><span class="check">✓</span> 人工审批 (HITL)</li>
-                    <li><span class="check">✓</span> 前缀缓存 (DeepSeek 97%+ / Mimo 98%+)</li>
-                    <li><span class="check">✓</span> MCP 协议</li>
-                    <li><span class="check">✓</span> 技能市场</li>
-                    <li><span class="check">✓</span> Tauri 桌面端</li>
-                    <li><span class="check">✓</span> OpenAPI 集成</li>
-                    <li><span class="check">✓</span> Git 面板</li>
-                </ul>
-        </div>
-            <div class="roadmap-col">
-                <h3>🔜 开发中</h3>
-                <ul class="roadmap-list">
-                    <li><span class="pending">⬜</span> 多模态支持</li>
-                    <li><span class="pending">⬜</span> 本地知识库</li>
-                    <li><span class="pending">⬜</span> 团队协作</li>
-                </ul>
-                <h3 style="margin-top:32px;">📚 文档资源</h3>
-                <ul class="roadmap-list">
-                    <li><span class="check">📖</span> <a href="https://github.com/ezdemo/loopra/blob/main/README.md"
-                                                        rel="noopener" target="_blank">项目 README</a> — 完整使用指南
-                    </li>
-                    <li><span class="check">📋</span> <a href="https://github.com/ezdemo/loopra/blob/main/CHANGELOG.md"
-                                                        rel="noopener" target="_blank">更新日志</a> — 版本变更记录
-                    </li>
-                    <li><span class="check">📄</span> <a href="https://github.com/ezdemo/loopra/blob/main/LICENSE"
-                                                        rel="noopener" target="_blank">MIT 许可证</a> — 开源协议
-                    </li>
-                    <li><span class="check">🐛</span> <a href="https://github.com/ezdemo/loopra/issues" rel="noopener"
-                                                        target="_blank">问题反馈</a> — 提交 Issue
-                    </li>
-                    <li><span class="check">💡</span> <a href="https://github.com/ezdemo/loopra/discussions"
-                                                        rel="noopener" target="_blank">讨论区</a> — 社区交流
-                    </li>
-                </ul>
-            </div>
-        </div>
-    </div>
-</section>
-
-<!-- ==================== CTA ==================== -->
-<section class="cta-section" id="cta">
-    <div class="container reveal">
-        <h2>准备好开始了吗？</h2>
-        <p>一行命令安装，让 AI 帮你写代码、改代码、跑构建、查日志</p>
-        <div class="cta-actions">
-            <a class="btn btn-primary btn-lg" href="#quickstart">
-                <svg class="icon-svg" fill="none" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24">
-                    <polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/>
-                    <polyline points="17 6 23 6 23 12"/>
-                </svg>
-                立即安装
-            </a>
-            <a class="btn btn-ghost btn-lg" href="https://github.com/ezdemo/loopra" rel="noopener" target="_blank">
-                <svg class="icon-svg" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0 0 24 12c0-6.63-5.37-12-12-12z"/>
-                </svg>
-                GitHub
-            </a>
-        </div>
-    </div>
-</section>
-
-<!-- ==================== FOOTER ==================== -->
-<footer class="footer">
-    <div class="container">
-        <div class="footer-grid">
-            <div class="footer-brand">
-                <a class="nav-logo" href="#">
-                    <img alt="Loopra Logo" height="24" src="assets/logo.png" width="24"/>
-                    <span class="bracket">[</span>Loopra<span class="bracket">]</span>
-                </a>
-                <p>纯 Java 17 的 AI 编码代理框架。推理循环 · 工具调用 · 流式输出 · 会话管理 · 子代理隔离 · 三端覆盖。</p>
-            </div>
-            <div class="footer-col">
-                <h5>导航</h5>
-                <ul>
-                    <li><a href="#features">功能特性</a></li>
-                    <li><a href="#capabilities">核心能力</a></li>
-                    <li><a href="#quickstart">快速开始</a></li>
-                    <li><a href="#interfaces">界面展示</a></li>
-                </ul>
-            </div>
-            <div class="footer-col">
-                <h5>资源</h5>
-                <ul>
-                    <li><a href="#quickstart">快速安装</a></li>
-                    <li><a href="#config-docs">配置参考</a></li>
-                    <li><a href="#docs">路线图</a></li>
-                    <li><a href="https://github.com/ezdemo/loopra" rel="noopener" target="_blank">GitHub</a></li>
-                    <li><a href="https://github.com/ezdemo/loopra/blob/main/README.md" rel="noopener" target="_blank">README
-                        文档</a></li>
-                    <li><a href="https://github.com/ezdemo/loopra/blob/main/CHANGELOG.md" rel="noopener"
-                           target="_blank">更新日志</a></li>
-                    <li><a href="https://github.com/ezdemo/loopra/issues" rel="noopener" target="_blank">问题反馈</a>
-                    </li>
-                </ul>
-            </div>
-            <div class="footer-col">
-                <h5>技术栈</h5>
-                <ul>
-                    <li><a href="https://solon.noear.org/" rel="noopener" target="_blank">Solon 框架</a></li>
-                    <li><a href="https://vuejs.org/" rel="noopener" target="_blank">Vue 3</a></li>
-                    <li><a href="https://v2.tauri.app/" rel="noopener" target="_blank">Tauri v2</a></li>
-                    <li><a href="https://openjdk.org/" rel="noopener" target="_blank">Java 17</a></li>
-                </ul>
-            </div>
-        </div>
-        <div class="footer-bottom">
-            <span>© <span data-year="2026">2026</span> Loopra · 作者 <a href="https://github.com/ezdemo"
-                                                                         rel="noopener" target="_blank">Sorghum</a> · MIT 许可证</span>
-            <span>Made with <span class="love">♥</span> in Java</span>
-        </div>
-    </div>
-</footer>
-
-<script src="js/main.js"></script>
-</body>
+      </div>
+    </footer>
+    <script src="js/main.js"></script>
+  </body>
 </html>
