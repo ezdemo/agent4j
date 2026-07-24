@@ -20,13 +20,9 @@ if ($IS_ADMIN) {
     Write-Host "[Info] Running without Administrator privileges" -ForegroundColor Yellow
 }
 
-# 安装目录：优先使用显式目标目录，否则按脚本所在 bin 目录推导
+# 安装目录按脚本所在 bin 目录推导
 $SCRIPT_DIR = Split-Path -Parent $MyInvocation.MyCommand.Definition
-$INSTALL_DIR = if ($env:LOOPRA_INSTALL_DIR) {
-    [System.IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($env:LOOPRA_INSTALL_DIR))
-} else {
-    Split-Path -Parent $SCRIPT_DIR
-}
+$INSTALL_DIR = Split-Path -Parent $SCRIPT_DIR
 $CONFIG_DIR = Join-Path $env:USERPROFILE ".loopra"
 
 # 检查是否已安装
