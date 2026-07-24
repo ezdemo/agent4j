@@ -10,11 +10,6 @@ VERSION="v26.7.23"
 PACKAGE_URL="https://gitee.com/ezdemo/loopra/releases/download/${VERSION}/loopra-web-dist.tar.gz"
 TEMP_DIR="/tmp/loopra-install"
 
-# Desktop installs use an isolated runtime by default; CLI installs remain ~/.loopra.
-if [ "${LOOPRA_GUI_INSTALL:-0}" = "1" ]; then
-    export LOOPRA_INSTALL_DIR="${LOOPRA_INSTALL_DIR:-$HOME/.loopra-gui}"
-fi
-
 # Colors
 RED='\033[0;31m'
 GREEN='\033[0;32m'
