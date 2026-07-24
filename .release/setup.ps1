@@ -54,34 +54,25 @@ try {
     
     Write-Host "Install path: $installPath" -ForegroundColor Gray
     
-    # Set environment variable to tell install.ps1 not to wait
-    $env:LOOPRA_SETUP = "1"
-    
     # Execute the installer script
-    & $installPath
+    & $installPath -Setup
     
     if ($LASTEXITCODE -ne 0 -and $LASTEXITCODE -ne $null) {
         Write-Error "Installer failed with exit code: $LASTEXITCODE"
         throw "Installation failed"
     }
 
-    if ($env:LOOPRA_GUI_INSTALL -ne "1") {
-        # Refresh PATH for current session
-        $env:Path = [Environment]::GetEnvironmentVariable('Path', 'User') + ';' + [Environment]::GetEnvironmentVariable('Path', 'Machine')
-        $env:Path = $env:Path.TrimEnd(';')
-    }
+    # Refresh PATH for current session
+    $env:Path = [Environment]::GetEnvironmentVariable('Path', 'User') + ';' + [Environment]::GetEnvironmentVariable('Path', 'Machine')
+    $env:Path = $env:Path.TrimEnd(';')
 
     Write-Host ""
     Write-Info "Installation complete!"
     Write-Host ""
-    if ($env:LOOPRA_GUI_INSTALL -eq "1") {
-        Write-Host "Desktop runtime installed for the Loopra Desktop app." -ForegroundColor Cyan
-    } else {
-        Write-Host "You can now run: " -NoNewline
-        Write-Host "loopra web" -ForegroundColor Cyan -NoNewline
-        Write-Host " or " -NoNewline
-        Write-Host "loopra web 0" -ForegroundColor Cyan
-    }
+    Write-Host "You can now run: " -NoNewline
+    Write-Host "loopra web" -ForegroundColor Cyan -NoNewline
+    Write-Host " or " -NoNewline
+    Write-Host "loopra web 0" -ForegroundColor Cyan
     Write-Host ""
 
 } catch {

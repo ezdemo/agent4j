@@ -75,35 +75,14 @@ fi
 
 info "Running installer..."
 
-# Set environment variable to tell install.sh not to wait
-export LOOPRA_SETUP=1
-
 # Run installer
-bash "$INSTALL_SCRIPT"
-
-# Detect user's default shell
-USER_SHELL=$(basename "$SHELL" 2>/dev/null || echo "bash")
-
-# Check if symlink was created (by install.sh)
-SYMLINK_EXISTS=false
-if [ -L "/usr/local/bin/loopra" ]; then
-    SYMLINK_EXISTS=true
-fi
+bash "$INSTALL_SCRIPT" --setup
 
 echo ""
 info "Installation complete!"
 echo ""
 
-if [ "$LOOPRA_GUI_INSTALL" = "1" ]; then
-    echo -e "Desktop runtime installed for the Loopra Desktop app."
-elif [ "$SYMLINK_EXISTS" = true ]; then
-    echo -e "You can now run: ${CYAN}loopra web${NC} or ${CYAN}loopra web 0${NC}"
-else
-    echo -e "To use loopra immediately, run:"
-    echo -e "  ${CYAN}source ~/.${USER_SHELL}rc${NC}"
-    echo ""
-    echo -e "Then run: ${CYAN}loopra web${NC} or ${CYAN}loopra web 0${NC}"
-fi
+echo -e "You can now run: ${CYAN}loopra web${NC} or ${CYAN}loopra web 0${NC}"
 
 echo ""
 

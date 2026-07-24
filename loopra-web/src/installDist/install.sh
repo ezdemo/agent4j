@@ -6,6 +6,20 @@
 #  兼容 bash, zsh, sh 等多种 shell
 # =============================================
 
+GUI_INSTALL=false
+SETUP_INSTALL=false
+
+for arg in "$@"; do
+    case "$arg" in
+        --gui) GUI_INSTALL=true ;;
+        --setup) SETUP_INSTALL=true ;;
+        *)
+            echo "[Error] Unknown argument: $arg"
+            exit 2
+            ;;
+    esac
+done
+
 set -e
 
 # Colors
@@ -27,14 +41,15 @@ echo ""
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 
 LOOPRA_CONFIG_DIR="$HOME/.loopra"
-TARGET_DIR="${LOOPRA_INSTALL_DIR:-$LOOPRA_CONFIG_DIR}"
+TARGET_DIR="$LOOPRA_CONFIG_DIR"
+IS_GUI_INSTALL="0"
+if [ "$GUI_INSTALL" = true ]; then
+    TARGET_DIR="$HOME/.loopra-gui"
+    IS_GUI_INSTALL="1"
+fi
 TARGET_BIN_DIR="$TARGET_DIR/bin"
 JRE25_DIR="$TARGET_DIR/jre25"
 JRE25_JAVA="$JRE25_DIR/bin/java"
-IS_GUI_INSTALL="${LOOPRA_GUI_INSTALL:-0}"
-if [ "$TARGET_DIR" != "$LOOPRA_CONFIG_DIR" ]; then
-    IS_GUI_INSTALL="1"
-fi
 
 # 源目录
 SOURCE_BIN_DIR="$SOURCE_DIR/bin"
@@ -559,8 +574,7 @@ if [ "$IS_GUI_INSTALL" != "1" ]; then
 fi
 echo ""
 
-# If not called from setup.sh, wait for user input
-if [ -z "$LOOPRA_SETUP" ]; then
+if [ "$SETUP_INSTALL" = false ]; then
     echo "Press Enter to exit..."
     read -r
 fi
