@@ -21,10 +21,18 @@ $SOURCE_BIN_DIR = Join-Path $SOURCE_DIR "bin"
 $SOURCE_CONFIG = Join-Path $SOURCE_DIR "config.json"
 $SOURCE_AGENTS = Join-Path $SOURCE_DIR "loopra.md"
 
-$TARGET_DIR = Join-Path $env:USERPROFILE ".loopra"
+$CONFIG_DIR = Join-Path $env:USERPROFILE ".loopra"
+$TARGET_DIR = if ($env:LOOPRA_INSTALL_DIR) {
+    [System.IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($env:LOOPRA_INSTALL_DIR))
+} else {
+    $CONFIG_DIR
+}
+$IS_GUI_INSTALL = $env:LOOPRA_GUI_INSTALL -eq "1" -or (
+    [System.IO.Path]::GetFullPath($TARGET_DIR) -ne [System.IO.Path]::GetFullPath($CONFIG_DIR)
+)
 $TARGET_BIN_DIR = Join-Path $TARGET_DIR "bin"
-$TARGET_CONFIG = Join-Path $TARGET_DIR "config.json"
-$TARGET_AGENTS = Join-Path $TARGET_DIR "loopra.md"
+$TARGET_CONFIG = Join-Path $CONFIG_DIR "config.json"
+$TARGET_AGENTS = Join-Path $CONFIG_DIR "loopra.md"
 $JRE25_DIR = Join-Path $TARGET_DIR "jre25"
 
 # =============================================
@@ -55,8 +63,7 @@ function Get-AdoptiumArch {
 }
 
 # =============================================
-# 下载并安装 JRE 25 到 ~/.loopra/jre25/
-# 参考 lib.rs: Adoptium API → 清华镜像
+# 下载并安装 JRE 25 到运行时目录
 # =============================================
 function Install-JRE25 {
     $os = Get-AdoptiumOS
@@ -222,8 +229,9 @@ if (Test-Path $TARGET_AGENTS) {
 Write-Host ""
 Write-Host "[2/5] Preparing target directory: $TARGET_DIR" -ForegroundColor Yellow
 
-if (-not (Test-Path $TARGET_DIR)) { New-Item -ItemType Directory -Path $TARGET_DIR | Out-Null }
-if (-not (Test-Path $TARGET_BIN_DIR)) { New-Item -ItemType Directory -Path $TARGET_BIN_DIR | Out-Null }
+if (-not (Test-Path $TARGET_DIR)) { New-Item -ItemType Directory -Path $TARGET_DIR -Force | Out-Null }
+if (-not (Test-Path $CONFIG_DIR)) { New-Item -ItemType Directory -Path $CONFIG_DIR -Force | Out-Null }
+if (-not (Test-Path $TARGET_BIN_DIR)) { New-Item -ItemType Directory -Path $TARGET_BIN_DIR -Force | Out-Null }
 
 Write-Host "      Created directory structure" -ForegroundColor Gray
 
@@ -656,18 +664,22 @@ Set-Content -Path $LAUNCHER_SH -Value $LAUNCHER_SH_CONTENT -Encoding UTF8 -NoNew
 Write-Host "      Created: loopra (for Git Bash)" -ForegroundColor Gray
 
 # =============================================
-# 配置 PATH 环境变量
+# 配置 PATH 环境变量（桌面运行时不注册命令行 PATH）
 # =============================================
-Write-Host ""
-Write-Host "Configuring PATH..." -ForegroundColor Yellow
+if (-not $IS_GUI_INSTALL) {
+    Write-Host ""
+    Write-Host "Configuring PATH..." -ForegroundColor Yellow
 
-$USER_PATH = [Environment]::GetEnvironmentVariable("Path", "User")
-if ($USER_PATH -like "*$TARGET_BIN_DIR*") {
-    Write-Host "      Already in user PATH" -ForegroundColor Gray
+    $USER_PATH = [Environment]::GetEnvironmentVariable("Path", "User")
+    if ($USER_PATH -like "*$TARGET_BIN_DIR*") {
+        Write-Host "      Already in user PATH" -ForegroundColor Gray
+    } else {
+        $NEW_PATH = if ($USER_PATH) { "$USER_PATH;$TARGET_BIN_DIR" } else { $TARGET_BIN_DIR }
+        [Environment]::SetEnvironmentVariable("Path", $NEW_PATH, "User")
+        Write-Host "      Added to user PATH" -ForegroundColor Green
+    }
 } else {
-    $NEW_PATH = if ($USER_PATH) { "$USER_PATH;$TARGET_BIN_DIR" } else { $TARGET_BIN_DIR }
-    [Environment]::SetEnvironmentVariable("Path", $NEW_PATH, "User")
-    Write-Host "      Added to user PATH" -ForegroundColor Green
+    Write-Host "      Desktop runtime: skipped PATH registration" -ForegroundColor Gray
 }
 
 # =============================================
@@ -679,27 +691,33 @@ Write-Host "   Installation Complete!" -ForegroundColor Green
 Write-Host "============================================" -ForegroundColor Green
 Write-Host ""
 Write-Host "  Install path: $TARGET_DIR" -ForegroundColor White
+Write-Host "  Config path:  $CONFIG_DIR" -ForegroundColor White
 Write-Host "  JRE path:     $JRE25_DIR" -ForegroundColor White
 Write-Host ""
-Write-Host "  Usage:" -ForegroundColor Cyan
-Write-Host "    1. Open a NEW terminal window (PowerShell or Git Bash)"
-Write-Host "    2. Run: 'loopra web'        (default port 8097)"
-Write-Host "       Run: 'loopra web 0'      (random port)"
-Write-Host "       Run: 'loopra web 9636'   (specify port 9636)"
+if ($IS_GUI_INSTALL) {
+    Write-Host "  Desktop runtime is managed by the Loopra Desktop app." -ForegroundColor Cyan
+} else {
+    Write-Host "  Usage:" -ForegroundColor Cyan
+    Write-Host "    1. Open a NEW terminal window (PowerShell or Git Bash)"
+    Write-Host "    2. Run: 'loopra web'        (default port 8097)"
+    Write-Host "       Run: 'loopra web 0'      (random port)"
+    Write-Host "       Run: 'loopra web 9636'   (specify port 9636)"
+}
 Write-Host ""
 Write-Host "  Directory structure:" -ForegroundColor Cyan
-Write-Host "    $env:USERPROFILE\.loopra\"
-Write-Host "    +-- config.json      (configuration, preserved)"
-Write-Host "    +-- loopra.md       (project docs, preserved)"
+Write-Host "    $TARGET_DIR\"
 Write-Host "    +-- jre25/           (bundled JRE 25)"
 Write-Host "    |   +-- bin/java.exe"
 Write-Host "    |   +-- ..."
 Write-Host "    +-- bin/             (executables)"
-Write-Host "    |   +-- loopra-web.jar"
-Write-Host "    |   +-- loopra.ps1       (PowerShell launcher)"
-Write-Host "    |   +-- loopra.bat       (CMD launcher)"
-Write-Host "    |   +-- loopra           (Git Bash launcher)"
-Write-Host "    |   +-- uninstall.ps1     (uninstall script)"
+Write-Host "        +-- loopra-web.jar"
+Write-Host "        +-- loopra.ps1       (PowerShell launcher)"
+Write-Host "        +-- loopra.bat       (CMD launcher)"
+Write-Host "        +-- loopra           (Git Bash launcher)"
+Write-Host "        +-- uninstall.ps1    (uninstall script)"
+Write-Host "    $CONFIG_DIR\"
+Write-Host "    +-- config.json      (configuration, preserved)"
+Write-Host "    +-- loopra.md        (project docs, preserved)"
 Write-Host ""
 Write-Host "  API Endpoint:" -ForegroundColor Cyan
 Write-Host "    http://localhost:8097"
