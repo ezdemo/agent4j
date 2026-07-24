@@ -41,13 +41,13 @@
             </svg>
           </div>
           <p class="info-text" v-if="installReason === 'not_installed'">
-            首次运行，需要安装 Loopra 命令行服务
+            首次运行，需要安装 Loopra 桌面运行时
           </p>
           <p class="info-text" v-else-if="installReason === 'version_mismatch'">
-            检测到新版本，需要更新安装
+            检测到新版本，需要更新桌面运行时
           </p>
           <p class="info-text" v-else>
-            需要重新安装 Loopra 命令行服务
+            需要重新安装 Loopra 桌面运行时
           </p>
 
           <div class="install-command">
@@ -158,9 +158,11 @@ const installProgress = ref(0)
 // 是否在桌面环境（Electron）中
 const isDesktop = ref(false)
 
-const installCommand = computed(() => window.electronAPI?.platform === 'win32'
-  ? 'irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex'
-  : 'curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash')
+const installCommand = computed(() => platform.isElectron
+  ? '桌面运行时：~/.loopra-gui（配置：~/.loopra）'
+  : (window.electronAPI?.platform === 'win32'
+    ? 'irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex'
+    : 'curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash'))
 
 // 在线安装日志
 const installLogs = ref([])
@@ -291,7 +293,7 @@ async function startService() {
 
     throw new Error(`服务启动超时，端口 ${port} 未响应健康检查`)
   } catch (e) {
-    if (/loopra not found:/i.test(e.message || '')) {
+    if (/loopra (?:not found|desktop runtime not found):/i.test(e.message || '')) {
       installReason.value = 'not_installed'
       javaInfo.value = '准备安装'
       phase.value = 'confirm'

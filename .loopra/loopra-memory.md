@@ -16,3 +16,22 @@
 ## [2026-07-19 22:57] 会话折叠沉淀
 
 子代理与父代理共用会话文件变更 tracker scope。子循环必须设置 drainFileChanges=false，避免提前 drain 记录；父 AgentLoop 在包含 sub_agent 的工具批次完成后统一 drain，才能把子代理编辑持久化为主消息“已编辑 X 个文件”并支持撤销。
+
+## [2026-07-24 10:08] 会话折叠沉淀
+
+OpenAI 兼容模型的上下文超限标准错误码是 `context_length_exceeded`（通常 HTTP 400，类型为 `invalid_request_error`）；Loopra 已统一识别该码、`input_too_long`/常见超限文本，并在流式或 HTTP 错误首次命中时自动折叠历史后重试一次。
+
+## [2026-07-24 10:49] 会话折叠沉淀
+
+- `context_length_exceeded` 不应进入通用重试流程；AgentLoop 应先折叠历史上下文，再重新发起一次请求。
+- Responses API 的 SSE 错误需要只向上层回调一次，避免 `response.failed` 或 `error` 事件造成重复错误回调。
+- 在未初始化全局 `ConfigService` 的 AgentLoop 单元测试中，应调用 `freezePromptPrefix()`，避免运行时 `ToolRegistry.refresh` 访问空配置。
+
+## [2026-07-24 12:28] 会话折叠沉淀
+
+- Electron 桌面端运行时应安装到 `~/.loopra-gui`，命令行 Loopra 继续使用 `~/.loopra`，配置目录保持为 `~/.loopra`。
+- 桌面端进程管理必须通过命令行中的 `~/.loopra-gui` 路径识别自己的 Java 服务，不能复用或关闭命令行安装的 Loopra 服务。
+- 安装脚本支持通过 `LOOPRA_INSTALL_DIR` 覆盖默认安装目录；Electron 桌面安装还会传递 `LOOPRA_GUI_INSTALL=1`。
+- 修改 shell 安装脚本后需要先统一或处理 CRLF 换行，再运行 `bash -n`，否则会出现函数定义附近的语法错误。
+- 当前桌面安装流程是首次运行在线下载运行时，并非完全离线打包 JRE/JAR。
+- 用户偏好使用中文回复。

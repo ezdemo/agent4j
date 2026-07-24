@@ -139,6 +139,7 @@ const showTools = ref(false)
 const showSubAgents = ref(false)
 const showSettings = ref(false)
 const showModelChannels = ref(false)
+const modelChannelsRequireReload = ref(false)
 const showDashboard = ref(false)
 const tabs = ref([])
 const activeTabId = ref('')
@@ -430,7 +431,8 @@ async function openSettings() {
   await renderActiveTab()
 }
 
-async function openModelChannels() {
+async function openModelChannels({requireReload = false} = {}) {
+  modelChannelsRequireReload.value = requireReload
   hideStandaloneViews()
   showModelChannels.value = true
   activeTabId.value = ''
@@ -611,7 +613,7 @@ async function redirectToModelChannelsWhenUnconfigured() {
   try {
     const response = await configAPI.getConfig()
     if (response.success && !hasConfiguredModelChannel(response.data)) {
-      await openModelChannels()
+      await openModelChannels({requireReload: true})
       return true
     }
   } catch (error) {
@@ -621,7 +623,11 @@ async function redirectToModelChannelsWhenUnconfigured() {
 }
 
 function reloadAfterModelChannelsSaved() {
-  window.location.reload()
+  if (modelChannelsRequireReload.value) {
+    window.location.reload()
+    return
+  }
+  modelChannelsRequireReload.value = false
 }
 
 function onStartError(error) {
