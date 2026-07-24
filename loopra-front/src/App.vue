@@ -74,7 +74,12 @@
     <main class="main">
       <SettingsView v-if="mainView === 'skills'" market-only />
       <SubAgentsView v-else-if="mainView === 'sub-agents'" />
-      <ModelChannels v-else-if="mainView === 'model-channels'" @back="closeModelChannels" @saved="reloadAfterModelChannelsSaved" />
+      <ModelChannels
+        v-else-if="mainView === 'model-channels'"
+        :setup-required="modelChannelsRequireReload"
+        @back="closeModelChannels"
+        @saved="reloadAfterModelChannelsSaved"
+      />
       <ChatView 
         v-else
         ref="chatRef" 
