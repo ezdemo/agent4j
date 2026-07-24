@@ -3,6 +3,11 @@
 # 支持重复安装，保留已有 config.json
 # 自动下载 JRE 25（无需系统 Java）
 #
+param(
+    [switch]$Gui,
+    [switch]$Setup
+)
+
 $ErrorActionPreference = "Stop"
 
 Write-Host ""
@@ -22,14 +27,8 @@ $SOURCE_CONFIG = Join-Path $SOURCE_DIR "config.json"
 $SOURCE_AGENTS = Join-Path $SOURCE_DIR "loopra.md"
 
 $CONFIG_DIR = Join-Path $env:USERPROFILE ".loopra"
-$TARGET_DIR = if ($env:LOOPRA_INSTALL_DIR) {
-    [System.IO.Path]::GetFullPath([Environment]::ExpandEnvironmentVariables($env:LOOPRA_INSTALL_DIR))
-} else {
-    $CONFIG_DIR
-}
-$IS_GUI_INSTALL = $env:LOOPRA_GUI_INSTALL -eq "1" -or (
-    [System.IO.Path]::GetFullPath($TARGET_DIR) -ne [System.IO.Path]::GetFullPath($CONFIG_DIR)
-)
+$TARGET_DIR = if ($Gui) { Join-Path $env:USERPROFILE ".loopra-gui" } else { $CONFIG_DIR }
+$IS_GUI_INSTALL = $Gui
 $TARGET_BIN_DIR = Join-Path $TARGET_DIR "bin"
 $TARGET_CONFIG = Join-Path $CONFIG_DIR "config.json"
 $TARGET_AGENTS = Join-Path $CONFIG_DIR "loopra.md"
@@ -726,7 +725,7 @@ Write-Host "  [Tip] To use loopra immediately in current terminal:" -ForegroundC
 Write-Host "    PowerShell: `$env:Path = [Environment]::GetEnvironmentVariable('Path','User')"
 Write-Host ""
 
-# If not called from setup.ps1, wait for user input
-if (-not $env:LOOPRA_SETUP) {
+# If not called from a setup script, wait for user input
+if (-not $Setup) {
     Read-Host "Press Enter to exit"
 }

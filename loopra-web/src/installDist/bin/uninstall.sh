@@ -11,7 +11,7 @@ echo "============================================"
 echo ""
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-INSTALL_DIR="${LOOPRA_INSTALL_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+INSTALL_DIR="$(cd "$SCRIPT_DIR/.." && pwd)"
 CONFIG_DIR="$HOME/.loopra"
 
 # 检查是否已安装
