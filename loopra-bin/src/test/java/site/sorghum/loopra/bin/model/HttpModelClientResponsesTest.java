@@ -160,7 +160,8 @@ class HttpModelClientResponsesTest {
             assertEquals("call_3", message.select("$.tool_calls[0].id").getString());
             assertEquals("write", message.select("$.tool_calls[0].function.name").getString());
             assertEquals("encrypted-nonstream", ONode.ofJson(message
-                    .select("$.tool_calls[0].response_reasoning").getString()).get("encrypted_content").getString());
+                    .get("response_reasoning").getString()).get("encrypted_content").getString());
+            assertTrue(message.select("$.tool_calls[0].response_reasoning").isNull());
             assertFalse(message.get("tool_calls").getArray().isEmpty());
         } finally {
             server.stop(0);
@@ -265,6 +266,121 @@ class HttpModelClientResponsesTest {
     }
 
     @Test
+    void retriesInvalidRequestOnceByRollingBackLatestResponsesAssistant() throws Exception {
+        AtomicInteger requests = new AtomicInteger();
+        AtomicReference<String> firstRequest = new AtomicReference<>();
+        AtomicReference<String> retryRequest = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/responses", exchange -> {
+            String request = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
+            int requestNumber = requests.incrementAndGet();
+            if (requestNumber == 1) {
+                firstRequest.set(request);
+                respondSse(exchange, "data: {\"type\":\"response.failed\",\"response\":{\"error\":{\"code\":\"invalid_request_error\"}}}\n\n");
+            } else {
+                retryRequest.set(request);
+                respondSse(exchange, "data: {\"type\":\"response.completed\",\"response\":{}}\n\n");
+            }
+        });
+        server.start();
+
+        try {
+            ChatMessage previousAssistant = ChatMessage.assistant("", List.of(new ToolCallEntry(
+                    "call_1", "read", "{\"path\":\"previous.txt\"}",
+                    "{\"type\":\"reasoning\",\"id\":\"rs_previous\",\"encrypted_content\":\"previous\"}")), null);
+            ChatMessage failedAssistant = ChatMessage.assistant("", List.of(new ToolCallEntry(
+                    "call_2", "write", "{\"path\":\"failed.txt\"}",
+                    "{\"type\":\"reasoning\",\"id\":\"rs_failed\",\"encrypted_content\":\"failed\"}")), null);
+            AtomicReference<String> error = new AtomicReference<>();
+            AtomicInteger done = new AtomicInteger();
+            responsesClientWithoutRetries(server).chatStream(List.of(
+                            ChatMessage.ofUser("hello"), previousAssistant, ChatMessage.tool("call_1", "previous content"),
+                            failedAssistant, ChatMessage.tool("call_2", "failed content")),
+                    new ONode().asArray(), new ModelClient.StreamCallback() {
+                        @Override
+                        public void onError(String value) {
+                            error.set(value);
+                        }
+
+                        @Override
+                        public void onDone() {
+                            done.incrementAndGet();
+                        }
+                    });
+
+            ONode firstInput = ONode.ofJson(firstRequest.get()).get("input");
+            ONode retryInput = ONode.ofJson(retryRequest.get()).get("input");
+            assertEquals("reasoning", firstInput.select("$[1].type").getString());
+            assertEquals("rs_failed", firstInput.select("$[4].id").getString());
+            assertEquals(4, retryInput.size());
+            assertEquals("rs_previous", retryInput.select("$[1].id").getString());
+            assertEquals("function_call", retryInput.select("$[2].type").getString());
+            assertEquals("call_1", retryInput.select("$[3].call_id").getString());
+            assertNull(error.get());
+            assertEquals(1, done.get());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
+    void retriesInvalidRequestFromHttpFailure() throws Exception {
+        assertInvalidRequestRecovery("{\"error\":{\"type\":\"invalid_request_error\",\"code\":\"invalid_request_error\"}}", true);
+    }
+
+    @Test
+    void retriesInvalidRequestFromErrorEvent() throws Exception {
+        assertInvalidRequestRecovery("data: {\"type\":\"error\",\"error\":{\"type\":\"invalid_request_error\",\"code\":\"invalid_request_error\"}}\n\n", false);
+    }
+
+    private static void assertInvalidRequestRecovery(String failureResponse, boolean httpFailure) throws Exception {
+        AtomicInteger requests = new AtomicInteger();
+        AtomicReference<String> retryRequest = new AtomicReference<>();
+        HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
+        server.createContext("/responses", exchange -> {
+            byte[] requestBody = exchange.getRequestBody().readAllBytes();
+            if (requests.incrementAndGet() == 1) {
+                byte[] body = failureResponse.getBytes(StandardCharsets.UTF_8);
+                exchange.getResponseHeaders().set("Content-Type", httpFailure ? "application/json" : "text/event-stream");
+                exchange.sendResponseHeaders(httpFailure ? 400 : 200, body.length);
+                exchange.getResponseBody().write(body);
+                exchange.close();
+            } else {
+                retryRequest.set(new String(requestBody, StandardCharsets.UTF_8));
+                respondSse(exchange, "data: {\"type\":\"response.completed\",\"response\":{}}\n\n");
+            }
+        });
+        server.start();
+
+        try {
+            ChatMessage assistant = ChatMessage.assistant("", List.of(new ToolCallEntry(
+                    "call_1", "read", "{}", "{\"type\":\"reasoning\",\"encrypted_content\":\"encrypted\"}")), null);
+            AtomicReference<String> error = new AtomicReference<>();
+            AtomicInteger done = new AtomicInteger();
+            responsesClientWithoutRetries(server).chatStream(List.of(
+                            ChatMessage.ofUser("hello"), assistant, ChatMessage.tool("call_1", "content")),
+                    new ONode().asArray(), new ModelClient.StreamCallback() {
+                        @Override
+                        public void onError(String value) {
+                            error.set(value);
+                        }
+
+                        @Override
+                        public void onDone() {
+                            done.incrementAndGet();
+                        }
+                    });
+
+            assertEquals(2, requests.get());
+            assertEquals(1, ONode.ofJson(retryRequest.get()).get("input").size());
+            assertNull(error.get());
+            assertEquals(1, done.get());
+        } finally {
+            server.stop(0);
+        }
+    }
+
+    @Test
     void rejectsToolCallsWhenStreamEndsBeforeCompleted() throws Exception {
         HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
         server.createContext("/responses", exchange -> {
@@ -318,6 +434,20 @@ class HttpModelClientResponsesTest {
         return new HttpModelClient(
                 "http://127.0.0.1:" + server.getAddress().getPort() + "/responses",
                 "test-key", "test-model", "high", "test-channel", "responses", new int[]{0, 0});
+    }
+
+    private static HttpModelClient responsesClientWithoutRetries(HttpServer server) {
+        return new HttpModelClient(
+                "http://127.0.0.1:" + server.getAddress().getPort() + "/responses",
+                "test-key", "test-model", "high", "test-channel", "responses", new int[0]);
+    }
+
+    private static void respondSse(HttpExchange exchange, String body) throws IOException {
+        byte[] bytes = body.getBytes(StandardCharsets.UTF_8);
+        exchange.getResponseHeaders().set("Content-Type", "text/event-stream");
+        exchange.sendResponseHeaders(200, bytes.length);
+        exchange.getResponseBody().write(bytes);
+        exchange.close();
     }
 
     private static void respondStream(HttpExchange exchange, AtomicReference<String> requestBody) throws IOException {

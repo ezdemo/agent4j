@@ -50,6 +50,13 @@ public class ChatMessage {
     @ONodeAttr(name = "reasoning_content")
     private String reasoningContent;
 
+    /**
+     * Responses API 本轮推理 item 的原始 JSON。
+     * 该 item 属于 assistant response，而不是单个工具调用。
+     */
+    @ONodeAttr(name = "response_reasoning")
+    private String responseReasoning;
+
     /** Actual write/edit changes associated with this assistant tool-call message. */
     @ONodeAttr(name = "file_changes")
     private List<FileChange> fileChanges;
@@ -145,6 +152,8 @@ public class ChatMessage {
         }
         Object reasoning = m.get("reasoning_content");
         msg.reasoningContent = reasoning != null ? reasoning.toString() : null;
+        Object responseReasoning = m.get("response_reasoning");
+        msg.responseReasoning = responseReasoning != null ? responseReasoning.toString() : null;
         Object fileChanges = m.get("file_changes");
         if (fileChanges instanceof List<?> changeMaps) {
             msg.fileChanges = new ArrayList<>();
@@ -183,7 +192,7 @@ public class ChatMessage {
                     String tcId = String.valueOf(tc.getOrDefault("id", "unknown"));
                     String tcName;
                     Object tcArgsObj;
-                    Object responseReasoning = tc.get("response_reasoning");
+                    Object legacyResponseReasoning = tc.get("response_reasoning");
                     Object funcObj = tc.get("function");
                     if (funcObj instanceof Map) {
                         @SuppressWarnings("unchecked")
@@ -202,8 +211,10 @@ public class ChatMessage {
                             log.debug("工具调用参数 JSON 解析失败，保留原始字符串: {}", e.getMessage());
                         }
                     }
-                    msg.toolCalls.add(new ToolCallEntry(tcId, tcName, tcArgsObj,
-                            responseReasoning == null ? null : responseReasoning.toString()));
+                    if (msg.responseReasoning == null && legacyResponseReasoning != null) {
+                        msg.responseReasoning = legacyResponseReasoning.toString();
+                    }
+                    msg.toolCalls.add(new ToolCallEntry(tcId, tcName, tcArgsObj));
                 }
             }
         }
@@ -213,10 +224,21 @@ public class ChatMessage {
     public static ChatMessage assistant(String content, List<ToolCallEntry> toolCalls, String reasoningContent) {
         ChatMessage msg = new ChatMessage("assistant");
         msg.content = content;
-        msg.toolCalls = toolCalls;
         msg.reasoningContent = reasoningContent;
+        msg.setToolCallsWithLegacyReasoning(toolCalls);
         msg.timestamp = System.currentTimeMillis();
         return msg;
+    }
+
+    private void setToolCallsWithLegacyReasoning(List<ToolCallEntry> entries) {
+        if (entries == null) return;
+        toolCalls = new ArrayList<>(entries.size());
+        for (ToolCallEntry entry : entries) {
+            if (responseReasoning == null && entry.responseReasoning() != null) {
+                responseReasoning = entry.responseReasoning();
+            }
+            toolCalls.add(new ToolCallEntry(entry.id(), entry.name(), entry.arguments()));
+        }
     }
 
     private static int asInt(Object value) {
@@ -265,6 +287,7 @@ public class ChatMessage {
         }
         if (toolCallId != null) m.put("tool_call_id", toolCallId);
         if (reasoningContent != null) m.put("reasoning_content", reasoningContent);
+        if (responseReasoning != null) m.put("response_reasoning", responseReasoning);
         if (fileChanges != null && !fileChanges.isEmpty()) m.put("file_changes", fileChanges);
         if (snapshotId != null) m.put("snapshot_id", snapshotId);
         if (rollbackId != null) m.put("rollback_id", rollbackId);
@@ -327,6 +350,7 @@ public class ChatMessage {
         }
         copy.toolCallId = this.toolCallId;
         copy.reasoningContent = this.reasoningContent;
+        copy.responseReasoning = this.responseReasoning;
         if (this.fileChanges != null) {
             copy.fileChanges = new ArrayList<>(this.fileChanges);
         }

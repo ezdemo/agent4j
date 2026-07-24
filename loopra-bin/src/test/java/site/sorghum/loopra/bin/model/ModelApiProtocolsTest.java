@@ -34,6 +34,24 @@ class ModelApiProtocolsTest {
     }
 
     @Test
+    void responsesRequestOmitsOutputOnlyReasoningStatus() {
+        ChatMessage assistant = ChatMessage.assistant(null, null, null);
+        assistant.setResponseReasoning("""
+                {"type":"reasoning","id":"rs_1","status":"completed", "summary":[],
+                 "encrypted_content":"encrypted"}
+                """);
+        ModelApiProtocol.RequestContext context = new ModelApiProtocol.RequestContext(
+                "test-model", "none", List.of(assistant), new ONode().asArray(), null, null);
+
+        ONode request = ModelApiProtocols.resolve("responses").buildRequest(context);
+
+        assertEquals("reasoning", request.select("$.input[0].type").getString());
+        assertEquals("rs_1", request.select("$.input[0].id").getString());
+        assertEquals("encrypted", request.select("$.input[0].encrypted_content").getString());
+        assertTrue(request.select("$.input[0].status").isNull());
+    }
+
+    @Test
     void chatCompletionsStrategyMapsRequestAndResponse() throws Exception {
         ModelApiProtocol protocol = ModelApiProtocols.resolve("chat_completions");
         ONode tools = ONode.ofJson("""
