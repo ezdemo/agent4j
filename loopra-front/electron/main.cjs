@@ -520,12 +520,22 @@ ipcMain.handle('install_loopra_web', async () => ({
 }))
 
 ipcMain.handle('start_loopra_web', async () => {
+  // 无论服务由 CLI、旧版 GUI 或当前 GUI 启动，优先复用稳定的默认端口。
+  const preferredPort = 4567
+  if (await healthCheck(preferredPort)) {
+    if (loopraWebProcess && currentPort !== preferredPort) cleanupLoopraWeb()
+    console.log(`Loopra Web already running on port ${preferredPort}, reusing`)
+    currentPort = preferredPort
+    await closeOtherLoopraJavaProcesses(currentPort)
+    return preferredPort
+  }
+
   if (loopraWebProcess) {
     await closeOtherLoopraJavaProcesses(currentPort)
     return currentPort
   }
 
-  // 桌面端只复用自己的运行时进程，不接管命令行安装在 ~/.loopra 下的服务。
+  // 桌面端只复用自己的运行时进程，不接管命令行安装在 ~/.loopra 下的非默认端口服务。
   const guiProcesses = await listLoopraJavaProcesses()
   const existingGui = guiProcesses.find((item) => isLoopraGuiRuntime(item.commandLine) && item.port > 0)
   if (existingGui && await healthCheck(existingGui.port)) {
