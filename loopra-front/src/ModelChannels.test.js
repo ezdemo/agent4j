@@ -2,6 +2,8 @@
 
 import {flushPromises, shallowMount} from '@vue/test-utils'
 import {describe, expect, it, vi} from 'vitest'
+import ModelChannels from './ModelChannels.vue'
+import {configAPI} from './services/api'
 
 vi.mock('./stores/app', () => ({
   useAppStore: () => ({settings: {theme: 'gray'}})
@@ -43,10 +45,25 @@ vi.mock('./services/api', () => ({
   }
 }))
 
-import ModelChannels from './ModelChannels.vue'
-import {configAPI} from './services/api'
-
 describe('ModelChannels validation model', () => {
+  it('requires confirmation before dismissing the first-use notice', async () => {
+    const requiredWrapper = shallowMount(ModelChannels, {props: {setupRequired: true}})
+    await flushPromises()
+
+    expect(requiredWrapper.find('.model-channels-setup-notice').text()).toContain('首次使用需要完成模型配置')
+    await requiredWrapper.find('.model-channels-setup-overlay').trigger('click')
+    expect(requiredWrapper.find('.model-channels-setup-notice').exists()).toBe(true)
+
+    await requiredWrapper.find('.model-channels-setup-confirm').trigger('click')
+    expect(requiredWrapper.find('.model-channels-setup-notice').exists()).toBe(false)
+    requiredWrapper.unmount()
+
+    const regularWrapper = shallowMount(ModelChannels)
+    await flushPromises()
+    expect(regularWrapper.find('.model-channels-setup-notice').exists()).toBe(false)
+    regularWrapper.unmount()
+  })
+
   it('loads and saves a model selected from another channel', async () => {
     const wrapper = shallowMount(ModelChannels)
     await flushPromises()
