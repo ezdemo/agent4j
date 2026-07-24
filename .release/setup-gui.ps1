@@ -5,7 +5,7 @@
 
 $ErrorActionPreference = "Stop"
 
-$VERSION = "v26.7.23"
+$VERSION = "v26.7.24.1"
 $PACKAGE_URL = "https://gitee.com/ezdemo/loopra/releases/download/$VERSION/loopra-web-dist.tar.gz"
 $TEMP_DIR = Join-Path $env:TEMP "loopra-gui-install"
 
