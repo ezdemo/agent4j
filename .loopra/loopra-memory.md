@@ -9,9 +9,7 @@
 
 技能文件放在 ~/.loopra/skills/ 下（不是 ~/.codex/skills/）。安装 browser-harness 后需用 `browser-harness skill > ~/.loopra/skills/browser-harness/SKILL.md` 注册技能。
 
-## [2026-07-19 22:44] 会话折叠沉淀
-
-模型渠道配置已演进为 modelChannels[].models 对象条目：name、contextTokens、imageInput、可选 price；旧字符串列表与根级 price 保持读取兼容。图片输入和上下文大小运行时仅读取当前渠道的模型配置，不再依赖模型元数据。
+## [2026-07-20 17:03] 会话折叠沉淀
 
 ## [2026-07-19 22:57] 会话折叠沉淀
 
@@ -27,15 +25,6 @@ OpenAI 兼容模型的上下文超限标准错误码是 `context_length_exceeded
 - Responses API 的 SSE 错误需要只向上层回调一次，避免 `response.failed` 或 `error` 事件造成重复错误回调。
 - 在未初始化全局 `ConfigService` 的 AgentLoop 单元测试中，应调用 `freezePromptPrefix()`，避免运行时 `ToolRegistry.refresh` 访问空配置。
 
-## [2026-07-24 12:28] 会话折叠沉淀
-
-- Electron 桌面端运行时应安装到 `~/.loopra-gui`，命令行 Loopra 继续使用 `~/.loopra`，配置目录保持为 `~/.loopra`。
-- 桌面端进程管理必须通过命令行中的 `~/.loopra-gui` 路径识别自己的 Java 服务，不能复用或关闭命令行安装的 Loopra 服务。
-- 安装脚本支持通过 `LOOPRA_INSTALL_DIR` 覆盖默认安装目录；Electron 桌面安装还会传递 `LOOPRA_GUI_INSTALL=1`。
-- 修改 shell 安装脚本后需要先统一或处理 CRLF 换行，再运行 `bash -n`，否则会出现函数定义附近的语法错误。
-- 当前桌面安装流程是首次运行在线下载运行时，并非完全离线打包 JRE/JAR。
-- 用户偏好使用中文回复。
-
 ## [2026-07-24 13:20] 会话折叠沉淀
 
 - Loopra 桌面端的运行时文件安装目录为 `~/.loopra-gui`。
@@ -43,3 +32,8 @@ OpenAI 兼容模型的上下文超限标准错误码是 `context_length_exceeded
 - 桌面端进程管理只应识别命令行包含 `~/.loopra-gui` 的 Java 运行时，不应接管命令行服务使用的 `loopra-web.jar`。
 - 修改 Electron 主进程后应至少运行 `node --check loopra-front/electron/main.cjs` 和 `pnpm --dir loopra-front build:main`。
 - 安装与卸载脚本同时维护 Shell 和 PowerShell 版本，修改后需要分别进行语法解析检查。
+
+
+## [2026-07-24 13:46] 会话折叠沉淀
+
+安装模式不使用 LOOPRA_* 自定义环境变量：GUI 安装脚本独立下载并调用安装器的显式参数（PowerShell: -Gui -Setup；Shell: --gui --setup）。GUI 运行时固定在 ~/.loopra-gui，配置固定在 ~/.loopra，且不注册 CLI PATH；卸载脚本从自身 bin 目录推导安装路径。Shell 脚本变更后须处理 CRLF 并运行 bash -n；PowerShell 脚本须运行 Parser::ParseFile 语法校验。
