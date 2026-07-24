@@ -46,7 +46,10 @@
           <p class="info-text" v-else-if="installReason === 'version_mismatch'">
             检测到新版本，需要更新桌面运行时
           </p>
-          <p class="info-text" v-else>
+          <p class="version-details" v-if="installReason === 'version_mismatch'">
+            桌面端 {{ desktopVersion }} · 当前运行时 {{ runtimeVersion || '未知' }}
+          </p>
+          <p class="info-text" v-if="installReason !== 'not_installed' && installReason !== 'version_mismatch'">
             需要重新安装 Loopra 桌面运行时
           </p>
 
@@ -67,7 +70,10 @@
                 <polyline points="7 10 12 15 17 10"/>
                 <line x1="12" y1="15" x2="12" y2="3"/>
               </svg>
-              开始安装
+              {{ installReason === 'version_mismatch' ? '更新运行时' : '开始安装' }}
+            </button>
+            <button v-if="installReason === 'version_mismatch'" class="btn btn-secondary btn-lg" @click="skipRuntimeUpdate">
+              暂不更新
             </button>
             <button class="btn btn-secondary btn-lg" @click="closeApp">
               退出
@@ -146,6 +152,8 @@ const emit = defineEmits(['ready', 'error'])
 const visible = ref(true)
 const phase = ref('checking') // checking | confirm | installing | starting | ready | waiting | error
 const installReason = ref('')
+const runtimeVersion = ref('')
+const desktopVersion = ref('')
 const javaInfo = ref('')
 const errorMessage = ref('')
 const startupMessage = ref('')
@@ -228,6 +236,8 @@ async function checkInstall() {
 
     // 需要安装：显示确认页
     installReason.value = result.reason
+    runtimeVersion.value = result.runtimeVersion || ''
+    desktopVersion.value = result.desktopVersion || ''
     javaInfo.value = '准备安装'
 
     phase.value = 'confirm'
@@ -240,6 +250,10 @@ async function checkInstall() {
 
 async function startInstall() {
   await onlineInstall()
+}
+
+async function skipRuntimeUpdate() {
+  await startService()
 }
 
 
@@ -569,6 +583,12 @@ defineExpose({
   color: var(--fg-3);
   line-height: 1.5;
   margin: 0;
+}
+
+.version-details {
+  color: var(--fg-4);
+  font-size: 12px;
+  margin: -8px 0 0;
 }
 
 .install-command {

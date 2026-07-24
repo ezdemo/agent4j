@@ -37,3 +37,7 @@ OpenAI 兼容模型的上下文超限标准错误码是 `context_length_exceeded
 ## [2026-07-24 13:46] 会话折叠沉淀
 
 安装模式不使用 LOOPRA_* 自定义环境变量：GUI 安装脚本独立下载并调用安装器的显式参数（PowerShell: -Gui -Setup；Shell: --gui --setup）。GUI 运行时固定在 ~/.loopra-gui，配置固定在 ~/.loopra，且不注册 CLI PATH；卸载脚本从自身 bin 目录推导安装路径。Shell 脚本变更后须处理 CRLF 并运行 bash -n；PowerShell 脚本须运行 Parser::ParseFile 语法校验。
+
+## [2026-07-24 15:04] 会话折叠沉淀
+
+桌面启动时通过 ~/.loopra-gui/bin/version.txt 与 Electron app.getVersion() 比较；版本不一致在 SplashScreen 提示更新，用户可选择暂不更新后继续启动。缺少 version.txt 亦视为版本不一致。
