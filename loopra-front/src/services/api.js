@@ -453,16 +453,6 @@ export const configAPI = {
     return api.post('/remote-models', channel)
   },
 
-  // 从远程 API 获取视觉模型列表 - GET /api/remote-vision-models
-  getRemoteVisionModels: () => {
-    return api.get('/remote-vision-models')
-  },
-
-  // 从 AI 模型复制视觉配置 - POST /api/config/copy-vision-from-ai
-  copyVisionFromAi: () => {
-    return api.post('/config/copy-vision-from-ai')
-  },
-  
   // 获取Token用量统计 - GET /api/usage?workspaceHash=xxx&sessionName=xxx
   getUsage: (params) => {
     return api.get('/usage', { params })

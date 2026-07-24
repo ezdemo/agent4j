@@ -67,16 +67,6 @@ public class ConfigController {
             maskedKey = "****";
         }
 
-        // 获取视觉模型配置
-        String visionBaseUrl = cfg.visionBaseUrl();
-        String visionModel = cfg.visionModel();
-        
-        ConfigDTO.VisionConfig visionConfig = new ConfigDTO.VisionConfig(
-                visionBaseUrl != null ? visionBaseUrl : "",
-                "",
-                visionModel != null ? visionModel : ""
-        );
-
         ConfigDTO data = new ConfigDTO(
                 cfg.baseUrl(),
                 cfg.model(),
@@ -90,7 +80,6 @@ public class ConfigController {
                 cfg.blockedPaths(),
                 maskedKey,
                 cfg.price(),
-                visionConfig,
                 cfg.activePet(),
                 cfg.terminateOnNoToolCall(),
                 cfg.modelChannels().stream().map(channel -> new ConfigDTO.ModelChannelConfig(
@@ -139,32 +128,6 @@ public class ConfigController {
         }
 
         return ApiResponse.ok(agentReinitialized ? "模型渠道已更新，Agent 已重新初始化" : "配置已更新");
-    }
-
-    @ApiOperation(value = "从 AI 模型复制视觉配置", notes = "将 AI 模型的 baseUrl 和 apiKey 复制到视觉模型配置（后端操作，不暴露密钥）")
-    @Post
-    @Mapping("/config/copy-vision-from-ai")
-    public ApiResponse<Map<String, String>> copyVisionFromAi() {
-        LoopraConfig cfg = configService.getConfig();
-        String aiBaseUrl = cfg.baseUrl();
-        String aiApiKey = cfg.apiKey();
-        if (aiBaseUrl == null || aiBaseUrl.isEmpty()) {
-            throw new ServiceException("AI 模型 API 地址未配置");
-        }
-        // 构造视觉模型的 baseUrl：将 /chat/completions 替换为 /models 获取列表用的地址
-        String visionBaseUrl = aiBaseUrl.replaceAll("/chat/completions/?$", "").replaceAll("/+$", "") + "/chat/completions";
-        Map<String, Object> update = new LinkedHashMap<>();
-        Map<String, Object> vision = new LinkedHashMap<>();
-        vision.put("baseUrl", visionBaseUrl);
-        if (aiApiKey != null && !aiApiKey.isEmpty()) {
-            vision.put("apiKey", aiApiKey);
-        }
-        update.put("vision", vision);
-        configService.updateConfig(update);
-
-        Map<String, String> result = new LinkedHashMap<>();
-        result.put("baseUrl", visionBaseUrl);
-        return ApiResponse.ok(result);
     }
 
     @ApiOperation(value = "获取可用模型列表", notes = "返回配置中声明的所有可用模型及当前使用的模型")
@@ -276,68 +239,6 @@ public class ConfigController {
             return apiKey.substring(0, MASK_KEEP_LENGTH) + "****" + apiKey.substring(apiKey.length() - MASK_KEEP_LENGTH);
         }
         return apiKey == null || apiKey.isBlank() ? "" : "****";
-    }
-
-    @ApiOperation(value = "从远程 API 获取视觉模型列表", notes = "调用视觉模型配置的 API 地址 + /models，携带 API Key 获取远程视觉模型列表")
-    @SneakyThrows
-    @Get
-    @Mapping("/remote-vision-models")
-    public ApiResponse<List<String>> getRemoteVisionModels() {
-        LoopraConfig cfg = configService.getConfig();
-        String visionUrl = cfg.visionBaseUrl();
-        String visionApiKey = cfg.visionApiKey();
-
-        if (visionUrl == null || visionUrl.isEmpty()) {
-            return ApiResponse.fail("视觉模型 API 地址未配置");
-        }
-        if (visionApiKey == null || visionApiKey.isEmpty()) {
-            return ApiResponse.fail("视觉模型 API 密钥未配置");
-        }
-
-        // vision baseUrl 可能已包含 /chat/completions，需要去掉后缀再拼 /models
-        String base = visionUrl
-                .replaceAll("/chat/completions$", "")
-                .replaceAll("/+$", "");
-        String modelsUrl = base + "/models";
-
-        OkHttpClient client = new OkHttpClient.Builder()
-                .connectTimeout(REMOTE_CONNECT_TIMEOUT_SEC, TimeUnit.SECONDS)
-                .readTimeout(REMOTE_READ_TIMEOUT_SEC, TimeUnit.SECONDS)
-                .build();
-
-        Request request = new Request.Builder()
-                .url(modelsUrl)
-                .header("Authorization", "Bearer " + visionApiKey)
-                .header("Content-Type", "application/json")
-                .header("User-Agent", "opencode/1.14.21 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13")
-                .get()
-                .build();
-
-        try (Response response = client.newCall(request).execute()) {
-            if (!response.isSuccessful()) {
-                String body = response.body() != null ? response.body().string() : "";
-                return ApiResponse.fail("远程 API 返回错误 (" + response.code() + "): " + body);
-            }
-
-            String json = response.body() != null ? response.body().string() : "[]";
-            ONode root = ONode.ofJson(json);
-            ONode dataArr = root.select("$.data");
-
-            List<String> modelNames = new ArrayList<>();
-            if (dataArr != null && dataArr.isArray()) {
-                for (ONode item : dataArr.getArray()) {
-                    String id = item.get("id").getString();
-                    if (id != null && !id.isEmpty()) {
-                        modelNames.add(id);
-                    }
-                }
-            }
-
-            Collections.sort(modelNames);
-            return ApiResponse.ok(modelNames);
-        } catch (Exception e) {
-            return ApiResponse.fail("获取远程视觉模型列表失败: " + e.getMessage());
-        }
     }
 
     @ApiOperation(value = "获取 Token 用量统计", notes = "根据工作区和会话查询 Token 用量")

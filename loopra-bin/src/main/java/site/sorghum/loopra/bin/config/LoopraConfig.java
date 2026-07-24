@@ -119,7 +119,7 @@ public class LoopraConfig {
                     "java_source", "checklist_step", "workspace_read", "webfetch",
                     "codesearch", "ask_choice", "browser_request_user_action", "workspace_list", "workspace_write",
                     "call_api", "checklist_start", "sub_agent", "checklist_status",
-                    "vision_recognize", "skillread", "codegraph_explore",
+                    "skillread", "codegraph_explore",
                     "goal_create", "goal_status", "goal_update_step", "goal_complete", "goal_block", "goal_resume"
                   ],
                   "maxContextChars": 200000,
@@ -134,13 +134,8 @@ public class LoopraConfig {
                   "stormWindowSize": 6,
                   "stormThreshold": 3,
                   "toolResultTruncateChars": 16000,
-                  "toolResultKeepChars": 12000,
-                  "vision": {
-                    "baseUrl": "https://api.siliconflow.cn/v1/chat/completions",
-                    "apiKey": "sk-your-vision-api-key",
-                    "model": "Qwen/Qwen3.5-4B"
-                  },
-                  "price": {
+                   "toolResultKeepChars": 12000,
+                   "price": {
                     "mimo-v2.5": { "input": "1", "cache": "0.02", "output": "2" },
                     "mimo-v2.5-pro": { "input": "3", "cache": "0.025", "output": "6" },
                     "deepseek-v4-flash": { "input": "1", "cache": "0.02", "output": "2" },
@@ -819,33 +814,6 @@ public class LoopraConfig {
     public int toolResultKeepChars() {
         ONode n = root.select("$.toolResultKeepChars");
         return n != null && !n.isNull() ? n.getInt() : 12_000;
-    }
-
-    /**
-     * 获取图片识别服务的 API 基础地址。
-     * 从 config.json 的 vision.baseUrl 读取。
-     * 未配置时返回 null。
-     */
-    public String visionBaseUrl() {
-        return root.select("$.vision.baseUrl").getString();
-    }
-
-    /**
-     * 获取图片识别服务的 API Key。
-     * 从 config.json 的 vision.apiKey 读取。
-     * 未配置时返回 null。
-     */
-    public String visionApiKey() {
-        return root.select("$.vision.apiKey").getString();
-    }
-
-    /**
-     * 获取图片识别服务的模型名称。
-     * 从 config.json 的 vision.model 读取。
-     * 未配置时返回 null。
-     */
-    public String visionModel() {
-        return root.select("$.vision.model").getString();
     }
 
     /**

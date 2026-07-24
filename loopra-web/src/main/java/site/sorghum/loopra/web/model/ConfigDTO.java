@@ -20,7 +20,6 @@ public record ConfigDTO(
         List<String> blockedPaths,
         String apiKey,
         Map<String, Map<String, Double>> price,
-        VisionConfig vision,
         String activePet,
         boolean terminateOnNoToolCall,
         List<ModelChannelConfig> modelChannels,
@@ -46,15 +45,6 @@ public record ConfigDTO(
             int contextTokens,
             boolean imageInput,
             Map<String, Double> price
-    ) {
-    }
-    /**
-     * 视觉模型配置。
-     */
-    public record VisionConfig(
-            String baseUrl,
-            String apiKey,
-            String model
     ) {
     }
 }
