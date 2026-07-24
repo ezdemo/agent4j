@@ -20,6 +20,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class AgentLoopContextOverflowTest {
 
     @Test
+    void usesServerPromptUsageWhenOfflineEstimateIsLower() {
+        assertEquals(230_000, AgentLoop.effectivePromptTokens(190_000, 230_000));
+        assertEquals(190_000, AgentLoop.effectivePromptTokens(190_000, 0));
+    }
+
+    @Test
     void foldsHistoryAndRetriesOnceAfterContextOverflow() throws Exception {
         ToolRegistry registry = new ToolRegistry().setDisabledTools(Set.of());
         ConversationContext context = new ConversationContext(

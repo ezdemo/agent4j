@@ -900,6 +900,10 @@ public class AgentLoop implements AgentLoopController {
 
     // ==================== 步骤 1: 消息准备 ====================
 
+    static int effectivePromptTokens(int offlineEstimate, int lastPromptTokens) {
+        return Math.max(offlineEstimate, lastPromptTokens);
+    }
+
     private PreparedMessages prepareMessages(int step, ONode tools) throws IOException {
         List<ChatMessage> messages = ctx.buildMessages();
         MessageHealer.HealResult healResult = MessageHealer.heal(messages);
@@ -912,9 +916,9 @@ public class AgentLoop implements AgentLoopController {
         boolean foldedThisStep = false;
         int maxCtx = client.getMaxContextTokens();
         int tokenThreshold = (int) (maxCtx * 0.8);
-        int estimatedPromptTokens = beforeFold.exactTokenizer() || lastPromptTokens <= 0
-                ? beforeFold.totalTokens()
-                : lastPromptTokens;
+        // 服务端最近一次 prompt_tokens 是真实用量下界；即使离线 tokenizer 可用，
+        // 不同模型 tokenizer 及请求封装差异也可能让离线估算偏低，因此取两者较大值。
+        int estimatedPromptTokens = effectivePromptTokens(beforeFold.totalTokens(), lastPromptTokens);
         boolean needFold = estimatedPromptTokens > tokenThreshold;
         if (needFold) {
             try {

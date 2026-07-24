@@ -26,11 +26,15 @@ echo ""
 # =============================================
 SOURCE_DIR="$(cd "$(dirname "$0")" && pwd)"
 
-# 目标目录
-TARGET_DIR="$HOME/.loopra"
+LOOPRA_CONFIG_DIR="$HOME/.loopra"
+TARGET_DIR="${LOOPRA_INSTALL_DIR:-$LOOPRA_CONFIG_DIR}"
 TARGET_BIN_DIR="$TARGET_DIR/bin"
 JRE25_DIR="$TARGET_DIR/jre25"
 JRE25_JAVA="$JRE25_DIR/bin/java"
+IS_GUI_INSTALL="${LOOPRA_GUI_INSTALL:-0}"
+if [ "$TARGET_DIR" != "$LOOPRA_CONFIG_DIR" ]; then
+    IS_GUI_INSTALL="1"
+fi
 
 # 源目录
 SOURCE_BIN_DIR="$SOURCE_DIR/bin"
@@ -57,7 +61,7 @@ detect_arch() {
 }
 
 # =============================================
-# 下载并安装 JRE 25 到 ~/.loopra/jre25/
+# 下载并安装 JRE 25 到运行时目录
 # 参考 lib.rs: Adoptium API → 清华镜像
 # =============================================
 download_jre25() {
@@ -202,8 +206,8 @@ fi
 echo "[1/5] Checking for existing configuration..."
 CONFIG_BACKUP=""
 AGENTS_BACKUP=""
-TARGET_CONFIG="$TARGET_DIR/config.json"
-TARGET_AGENTS="$TARGET_DIR/loopra.md"
+TARGET_CONFIG="$LOOPRA_CONFIG_DIR/config.json"
+TARGET_AGENTS="$LOOPRA_CONFIG_DIR/loopra.md"
 
 # 备份现有的配置文件
 if [ -f "$TARGET_CONFIG" ]; then
@@ -229,6 +233,7 @@ echo ""
 echo "[2/5] Preparing target directory: $TARGET_DIR"
 
 mkdir -p "$TARGET_DIR"
+mkdir -p "$LOOPRA_CONFIG_DIR"
 mkdir -p "$TARGET_BIN_DIR"
 
 echo "      Created directory structure"
@@ -413,10 +418,14 @@ chmod +x "$TARGET_BIN_DIR/loopra"
 echo "      Created: $TARGET_BIN_DIR/loopra"
 
 # =============================================
-# 配置 PATH 环境变量（兼容多种 shell 和系统）
+# 配置 PATH 环境变量（桌面运行时不注册命令行 PATH）
 # =============================================
-echo ""
-echo "Configuring PATH..."
+if [ "$IS_GUI_INSTALL" = "1" ]; then
+    echo ""
+    echo "Skipping PATH configuration for desktop runtime"
+else
+    echo ""
+    echo "Configuring PATH..."
 
 # 要添加的 PATH 配置
 PATH_LINE='export PATH="$PATH:$HOME/.loopra/bin"'
@@ -480,12 +489,13 @@ for CONFIG_FILE in "${CONFIG_FILES[@]}"; do
     echo "      Added to PATH in $(basename "$CONFIG_FILE")"
     CONFIG_UPDATED=true
 done
+fi
 
 # =============================================
-# 尝试创建软链接到 /usr/local/bin（可选）
+# 尝试创建软链接到 /usr/local/bin（仅命令行安装）
 # =============================================
 SYMLINK_CREATED=false
-if [ ! -e "/usr/local/bin/loopra" ]; then
+if [ "$IS_GUI_INSTALL" != "1" ] && [ ! -e "/usr/local/bin/loopra" ]; then
     if [ -w "/usr/local/bin" ] 2>/dev/null; then
         ln -sf "$TARGET_BIN_DIR/loopra" /usr/local/bin/loopra 2>/dev/null && SYMLINK_CREATED=true
     elif command -v sudo >/dev/null 2>&1; then
@@ -508,10 +518,13 @@ echo -e "${GREEN}   Installation Complete!${NC}"
 echo -e "${GREEN}============================================${NC}"
 echo ""
 echo "  Install path: $TARGET_DIR"
+echo "  Config path:  $LOOPRA_CONFIG_DIR"
 echo "  JRE path:     $JRE25_DIR"
 echo ""
 
-if [ "$SYMLINK_CREATED" = true ]; then
+if [ "$IS_GUI_INSTALL" = "1" ]; then
+    echo -e "  ${CYAN}Desktop runtime is managed by the Loopra Desktop app.${NC}"
+elif [ "$SYMLINK_CREATED" = true ]; then
     echo -e "  ${CYAN}Symlink created: /usr/local/bin/loopra${NC}"
     echo -e "  You can run ${CYAN}loopra web${NC} directly now!"
 else
@@ -525,22 +538,25 @@ fi
 
 echo ""
 echo -e "  ${CYAN}Directory structure:${NC}"
-echo "    ~/.loopra/"
-echo "    ├── config.json      (configuration, preserved if exists)"
-echo "    ├── loopra.md       (project docs, preserved if exists)"
+echo "    $TARGET_DIR/"
 echo "    ├── jre25/           (bundled JRE 25)"
 echo "    │   ├── bin/java"
 echo "    │   └── ..."
-echo "    ├── bin/             (executables)"
-echo "    │   ├── loopra-web.jar"
-echo "    │   ├── loopra           (launcher)"
-echo "    │   └── uninstall.sh      (uninstall script)"
+echo "    └── bin/             (executables)"
+echo "        ├── loopra-web.jar"
+echo "        ├── loopra           (launcher)"
+echo "        └── uninstall.sh    (uninstall script)"
+echo "    $LOOPRA_CONFIG_DIR/"
+echo "    ├── config.json      (configuration, preserved if exists)"
+echo "    └── loopra.md        (project docs, preserved if exists)"
 echo ""
 echo -e "  ${CYAN}API Endpoint:${NC}"
 echo "    http://localhost:8097"
 echo ""
-echo -e "  ${YELLOW}[Tip]${NC} To use loopra immediately in current terminal:"
-echo "    source ~/.${USER_SHELL}rc"
+if [ "$IS_GUI_INSTALL" != "1" ]; then
+    echo -e "  ${YELLOW}[Tip]${NC} To use loopra immediately in current terminal:"
+    echo "    source ~/.${USER_SHELL}rc"
+fi
 echo ""
 
 # If not called from setup.sh, wait for user input

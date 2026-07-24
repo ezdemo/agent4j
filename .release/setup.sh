@@ -94,7 +94,9 @@ echo ""
 info "Installation complete!"
 echo ""
 
-if [ "$SYMLINK_EXISTS" = true ]; then
+if [ "$LOOPRA_GUI_INSTALL" = "1" ]; then
+    echo -e "Desktop runtime installed for the Loopra Desktop app."
+elif [ "$SYMLINK_EXISTS" = true ]; then
     echo -e "You can now run: ${CYAN}loopra web${NC} or ${CYAN}loopra web 0${NC}"
 else
     echo -e "To use loopra immediately, run:"

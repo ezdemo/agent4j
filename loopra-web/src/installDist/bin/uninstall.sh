@@ -10,7 +10,9 @@ echo "   Loopra Uninstaller"
 echo "============================================"
 echo ""
 
-INSTALL_DIR="$HOME/.loopra"
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+INSTALL_DIR="${LOOPRA_INSTALL_DIR:-$(cd "$SCRIPT_DIR/.." && pwd)}"
+CONFIG_DIR="$HOME/.loopra"
 
 # 检查是否已安装
 if [ ! -d "$INSTALL_DIR" ]; then
@@ -20,11 +22,18 @@ if [ ! -d "$INSTALL_DIR" ]; then
 fi
 
 # 确认卸载
-echo "This will remove Loopra completely:"
-echo "  - Executables and configuration"
-echo "  - Sessions and memory data"
-echo "  - Skills modules"
-echo "  - PATH configuration"
+if [ "$INSTALL_DIR" = "$CONFIG_DIR" ]; then
+    echo "This will remove Loopra completely:"
+    echo "  - Executables and configuration"
+    echo "  - Sessions and memory data"
+    echo "  - Skills modules"
+    echo "  - PATH configuration"
+else
+    echo "This will remove the Loopra Desktop runtime:"
+    echo "  - Desktop runtime executables and bundled JRE"
+    echo "  - Desktop runtime configuration files"
+    echo "  - CLI installation and ~/.loopra configuration will be preserved"
+fi
 echo ""
 read -p "Continue? (Y/N): " -n 1 -r
 echo ""
@@ -41,7 +50,8 @@ echo "[Info] Detected OS: $OS_TYPE"
 #  [1/4] 清理 shell 配置文件中的 PATH 配置
 # ============================================
 echo ""
-echo "[1/4] Cleaning shell configuration files..."
+if [ "$INSTALL_DIR" = "$CONFIG_DIR" ]; then
+    echo "[1/4] Cleaning shell configuration files..."
 
 clean_shell_config() {
     local config_file="$1"
@@ -85,6 +95,9 @@ if [ -f "$FISH_CONFIG" ]; then
     fi
     echo "      Cleaned: $FISH_CONFIG"
 fi
+else
+    echo "[1/4] Skipping shell PATH cleanup for desktop runtime"
+fi
 
 # ============================================
 #  [2/4] 删除符号链接
@@ -92,8 +105,8 @@ fi
 echo ""
 echo "[2/4] Removing command symlinks..."
 
-# 系统级链接
-if [ -L "/usr/local/bin/loopra" ] || [ -f "/usr/local/bin/loopra" ]; then
+# 系统级链接（仅命令行安装）
+if [ "$INSTALL_DIR" = "$CONFIG_DIR" ] && { [ -L "/usr/local/bin/loopra" ] || [ -f "/usr/local/bin/loopra" ]; }; then
     if [ "$(id -u)" -eq 0 ]; then
         rm -f /usr/local/bin/loopra 2>/dev/null && echo "      Removed /usr/local/bin/loopra"
     elif command -v sudo &> /dev/null; then
@@ -102,11 +115,11 @@ if [ -L "/usr/local/bin/loopra" ] || [ -f "/usr/local/bin/loopra" ]; then
 fi
 
 # 用户级链接 (homebrew 或用户 bin)
-if [ -L "$HOME/.local/bin/loopra" ] || [ -f "$HOME/.local/bin/loopra" ]; then
+if [ "$INSTALL_DIR" = "$CONFIG_DIR" ] && { [ -L "$HOME/.local/bin/loopra" ] || [ -f "$HOME/.local/bin/loopra" ]; }; then
     rm -f "$HOME/.local/bin/loopra" 2>/dev/null && echo "      Removed ~/.local/bin/loopra"
 fi
 
-if [ -L "$HOME/bin/loopra" ] || [ -f "$HOME/bin/loopra" ]; then
+if [ "$INSTALL_DIR" = "$CONFIG_DIR" ] && { [ -L "$HOME/bin/loopra" ] || [ -f "$HOME/bin/loopra" ]; }; then
     rm -f "$HOME/bin/loopra" 2>/dev/null && echo "      Removed ~/bin/loopra"
 fi
 
@@ -116,9 +129,14 @@ fi
 echo ""
 echo "[3/4] Configuration files..."
 
-read -p "Keep configuration files (config.json, sessions, memory)? (Y/N): " -n 1 -r
-echo ""
-KEEP_CONFIG=$REPLY
+if [ "$INSTALL_DIR" != "$CONFIG_DIR" ]; then
+    KEEP_CONFIG="Y"
+    echo "Desktop runtime detected; configuration at $CONFIG_DIR will be preserved."
+else
+    read -p "Keep configuration files (config.json, sessions, memory)? (Y/N): " -n 1 -r
+    echo ""
+    KEEP_CONFIG=$REPLY
+fi
 
 # ============================================
 #  [4/4] 删除安装目录
@@ -127,7 +145,15 @@ echo ""
 echo "[4/4] Removing installation directory..."
 
 if [ -d "$INSTALL_DIR" ]; then
-    if [[ $KEEP_CONFIG =~ ^[Yy]$ ]]; then
+    if [ "$INSTALL_DIR" != "$CONFIG_DIR" ]; then
+        rm -rf "$INSTALL_DIR"
+        if [ -d "$INSTALL_DIR" ]; then
+            echo "      [Warning] Could not remove $INSTALL_DIR"
+        else
+            echo "      Removed runtime: $INSTALL_DIR"
+            echo "      Preserved configuration at: $CONFIG_DIR"
+        fi
+    elif [[ $KEEP_CONFIG =~ ^[Yy]$ ]]; then
         # 只删除 bin 目录
         if [ -d "$INSTALL_DIR/bin" ]; then
             rm -rf "$INSTALL_DIR/bin"
@@ -135,7 +161,6 @@ if [ -d "$INSTALL_DIR" ]; then
         fi
         echo "      Preserved config.json, sessions/, memory/"
     else
-        # 删除整个目录
         rm -rf "$INSTALL_DIR"
         if [ -d "$INSTALL_DIR" ]; then
             echo "      [Warning] Could not remove $INSTALL_DIR"
@@ -174,8 +199,8 @@ echo "============================================"
 echo ""
 
 if [[ $KEEP_CONFIG =~ ^[Yy]$ ]]; then
-    echo "  Loopra has been removed."
-    echo "  Configuration files preserved at: $INSTALL_DIR"
+    echo "  Loopra runtime has been removed."
+    echo "  Configuration files preserved at: $CONFIG_DIR"
 else
     echo "  Loopra has been fully removed."
 fi
