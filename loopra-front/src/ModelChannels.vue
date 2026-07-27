@@ -15,6 +15,13 @@
 
     <div v-if="loading" class="model-channels-empty">正在加载模型渠道...</div>
     <div v-else class="model-channels-body">
+      <div v-if="setupNoticeVisible" class="model-channels-setup-overlay">
+        <section class="model-channels-setup-notice" role="dialog" aria-modal="true" aria-labelledby="model-channels-setup-title">
+          <h2 id="model-channels-setup-title">首次使用需要完成模型配置</h2>
+          <p>请填写 API 地址和 API Key，添加并选择一个模型后保存。</p>
+          <button class="model-channels-setup-confirm" type="button" @click="setupNoticeVisible = false">确定，开始配置</button>
+        </section>
+      </div>
       <section class="model-validator">
         <label>
           <span>命令校验模型</span>
@@ -154,7 +161,11 @@ import {configAPI} from './services/api'
 const priceFields = ['input', 'cache', 'output']
 const priceFieldLabels = {input: '输入', cache: '缓存', output: '输出'}
 
-defineProps({showBack: {type: Boolean, default: true}})
+const props = defineProps({
+  showBack: {type: Boolean, default: true},
+  setupRequired: {type: Boolean, default: false}
+})
+const setupNoticeVisible = ref(props.setupRequired)
 const emit = defineEmits(['back', 'saved'])
 const store = useAppStore()
 const theme = computed(() => store.settings.theme)
@@ -457,7 +468,13 @@ onMounted(load)
 .model-channels-header { height: 64px; display: flex; align-items: center; gap: 12px; padding: 0 28px; border-bottom: 1px solid var(--border); flex: 0 0 auto; }
 .model-channels-header h1 { margin: 0; font-size: 16px; font-weight: 600; }
 .model-channels-header p { margin: 3px 0 0; color: var(--fg-4); font-size: 12px; }
-.model-channels-back, .model-channel-delete, .model-config-delete { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 5px; background: transparent; color: var(--fg-3); cursor: pointer; }
+.model-channels-setup-overlay { position: fixed; z-index: 10; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(0, 0, 0, .38); }
+.model-channels-setup-notice { width: min(100%, 400px); box-sizing: border-box; padding: 20px; border: 1px solid var(--border); border-top: 3px solid var(--accent); border-radius: 7px; background: var(--bg); box-shadow: 0 18px 48px rgba(0, 0, 0, .24); }
+.model-channels-setup-notice h2 { margin: 0; color: var(--fg); font-size: 16px; line-height: 1.4; }
+.model-channels-setup-notice p { margin: 8px 0 18px; color: var(--fg-2); font-size: 13px; line-height: 1.55; }
+.model-channels-setup-confirm { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 0 13px; border: 0; border-radius: 5px; background: var(--accent); color: #fff; font: inherit; font-size: 13px; cursor: pointer; }
+.model-channels-setup-confirm:hover { filter: brightness(.96); }
+
 .model-channels-back:hover { background: var(--bg-3); color: var(--fg); }
 .model-channels-back svg, .model-channel-delete svg, .model-config-delete svg { width: 17px; height: 17px; }
 .model-collapse-icon { width: 16px; height: 16px; flex: 0 0 auto; transition: transform .15s ease; }
