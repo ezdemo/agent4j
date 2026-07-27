@@ -727,7 +727,15 @@ public class HttpModelClient implements ModelClient {
                 process = true;
                 break;
             }
-            ONode chunk = ONode.ofJson(data);
+            ONode chunk;
+            try {
+                chunk = ONode.ofJson(data);
+            }catch (Exception e){
+                result.errorData = data;
+                result.retryableError = true;
+                process = true;
+                break;
+            }
             log.debug("收到SSE数据块，大小: {} 字符", data.length());
             process = true;
             apiProtocol.processStreamChunk(chunk, callback, result);
