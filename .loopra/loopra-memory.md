@@ -41,3 +41,7 @@ OpenAI 兼容模型的上下文超限标准错误码是 `context_length_exceeded
 ## [2026-07-24 15:04] 会话折叠沉淀
 
 桌面启动时通过 ~/.loopra-gui/bin/version.txt 与 Electron app.getVersion() 比较；版本不一致在 SplashScreen 提示更新，用户可选择暂不更新后继续启动。缺少 version.txt 亦视为版本不一致。
+
+## [2026-07-28 17:56] 会话折叠沉淀
+
+Loopra Web 停止生成需三层取消：前端流请求携带 requestId 并传给 /chat/abort；ChatController 从任务提交起登记 Future/SseEmitter 以覆盖 Agent 创建前竞态；AgentLoop 工具必须用 ExecutorService.submit 返回的 Future 才能由 cancel(true) 中断，并登记 bash/bash_start 等脱离工具 Future 的进程资源，停止时终止进程树。

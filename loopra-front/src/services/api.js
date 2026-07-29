@@ -153,16 +153,18 @@ export const chatAPI = {
     const body = {}
     if (options.workspaceHash) body.workspaceHash = options.workspaceHash
     if (options.sessionName) body.sessionName = options.sessionName
+    if (options.requestId) body.requestId = options.requestId
     return api.post('/chat/abort', body)
   },
 
     // SSE流式聊天 - POST /api/chat/stream
   sendMessageStream: (message, onMessage, onDone, onError, options = {}) => {
     const abortController = new AbortController()
+    const requestId = generateRequestId()
 
     ;(async () => {
       try {
-        const requestBody = { message }
+        const requestBody = { message, requestId }
         // 添加工作区和会话信息
         if (options.workspaceHash) requestBody.workspaceHash = options.workspaceHash
         if (options.sessionName) requestBody.sessionName = options.sessionName
@@ -182,7 +184,7 @@ export const chatAPI = {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'X-Request-ID': generateRequestId(),
+            'X-Request-ID': requestId,
             'X-Timestamp': Date.now().toString()
           },
           body: JSON.stringify(requestBody),
@@ -248,7 +250,7 @@ export const chatAPI = {
       }
     })()
 
-    return { abort: () => abortController.abort() }
+    return { requestId, abort: () => abortController.abort() }
   }
 }
 
