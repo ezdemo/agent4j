@@ -119,6 +119,14 @@ public interface AgentLoopController {
     default void clearToolCancellation() {
     }
 
+    /** 注册跨工具调用持续存在的可取消资源（例如 bash_start 启动的进程会话）。 */
+    default void registerAbortResource(String resourceId, Runnable cancellation) {
+    }
+
+    /** 注销已完成的可取消资源。 */
+    default void clearAbortResource(String resourceId) {
+    }
+
     /**
      * 获取当前 HITL 模式状态。
      * <p>保留该布尔接口用于兼容只区分开启/关闭的调用方。</p>

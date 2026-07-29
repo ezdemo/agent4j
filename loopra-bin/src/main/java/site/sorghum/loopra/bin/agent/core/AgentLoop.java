@@ -41,6 +41,7 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
@@ -72,6 +73,13 @@ public class AgentLoop implements AgentLoopController {
     private static final int DEFAULT_STREAM_LATCH_TIMEOUT_SEC = 300;
     /** 服务端确认上下文超限时最多执行两次折叠恢复。 */
     private static final int MAX_CONTEXT_RECOVERIES = 2;
+    /** 工具任务必须由可中断的 Future 承载，CompletableFuture.cancel(true) 不会中断运行线程。 */
+    private static final AtomicInteger TOOL_THREAD_COUNTER = new AtomicInteger();
+    private static final ExecutorService TOOL_EXECUTOR = Executors.newCachedThreadPool(r -> {
+        Thread thread = new Thread(r, "loopra-tool-" + TOOL_THREAD_COUNTER.incrementAndGet());
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private int maxTotalChars() {
         return config != null ? config.maxContextChars() : DEFAULT_MAX_CONTEXT_CHARS;
@@ -142,13 +150,16 @@ public class AgentLoop implements AgentLoopController {
     private volatile Path workspace;
 
     /** 当前正在执行的工具 Future 数组（用于 abort 时取消） */
-    private volatile CompletableFuture<ChatMessage>[] activeToolFutures = null;
+    private volatile Future<ChatMessage>[] activeToolFutures = null;
 
     /** 当前工具的显式取消控制器（用于停止子代理等长运行任务） */
     private volatile ToolExecutionControl[] activeToolControls = null;
 
     /** 工具工作线程对应的取消控制器。 */
     private final ThreadLocal<ToolExecutionControl> currentToolControl = new ThreadLocal<>();
+
+    /** 已脱离单次工具 Future、但仍需随用户停止而终止的资源。 */
+    private final ConcurrentHashMap<String, Runnable> abortResources = new ConcurrentHashMap<>();
 
     /** 任务完成标志 —— finish 工具设置，非空时主循环将退出并返回该内容 */
     private volatile String finishContent = null;
@@ -349,6 +360,7 @@ public class AgentLoop implements AgentLoopController {
         userAbortRequested = true;
         client.abortStream();
         cancelAllFutures(activeToolFutures, activeToolControls);
+        cancelAbortResources();
     }
 
     @Override
@@ -419,6 +431,40 @@ public class AgentLoop implements AgentLoopController {
         ToolExecutionControl control = currentToolControl.get();
         if (control != null) {
             control.clearCancellation();
+        }
+    }
+
+    @Override
+    public void registerAbortResource(String resourceId, Runnable cancellation) {
+        if (resourceId == null || resourceId.isBlank() || cancellation == null) return;
+        if (userAbortRequested) {
+            runAbortResource(resourceId, cancellation);
+            return;
+        }
+        abortResources.put(resourceId, cancellation);
+        if (userAbortRequested && abortResources.remove(resourceId, cancellation)) {
+            runAbortResource(resourceId, cancellation);
+        }
+    }
+
+    @Override
+    public void clearAbortResource(String resourceId) {
+        if (resourceId != null) abortResources.remove(resourceId);
+    }
+
+    private void cancelAbortResources() {
+        abortResources.forEach((resourceId, cancellation) -> {
+            if (abortResources.remove(resourceId, cancellation)) {
+                runAbortResource(resourceId, cancellation);
+            }
+        });
+    }
+
+    private static void runAbortResource(String resourceId, Runnable cancellation) {
+        try {
+            cancellation.run();
+        } catch (Exception e) {
+            log.warn("[abort] 取消工具资源失败: {}, {}", resourceId, e.getMessage());
         }
     }
 
@@ -1229,7 +1275,7 @@ public class AgentLoop implements AgentLoopController {
         }
     }
 
-    private record DispatchResult(CompletableFuture<ChatMessage>[] futures,
+    private record DispatchResult(Future<ChatMessage>[] futures,
                                   ToolExecutionControl[] controls,
                                   AtomicBoolean anySuppressed,
                                   AtomicReference<HitlRequiredException> hitlRef) {}
@@ -1237,7 +1283,7 @@ public class AgentLoop implements AgentLoopController {
     private DispatchResult dispatchToolCallsAsync(List<ONode> tcArray) {
         int tcCount = tcArray.size();
         @SuppressWarnings("unchecked")
-        CompletableFuture<ChatMessage>[] futures = new CompletableFuture[tcCount];
+        Future<ChatMessage>[] futures = new Future[tcCount];
         ToolExecutionControl[] controls = new ToolExecutionControl[tcCount];
         final AtomicBoolean anySuppressed = new AtomicBoolean(false);
         final AtomicReference<HitlRequiredException> hitlRef = new AtomicReference<>(null);
@@ -1245,7 +1291,7 @@ public class AgentLoop implements AgentLoopController {
         for (int i = 0; i < tcCount; i++) {
             final int idx = i;
             controls[i] = new ToolExecutionControl();
-            futures[i] = CompletableFuture.supplyAsync(() -> {
+            futures[i] = TOOL_EXECUTOR.submit(() -> {
                 // 同步外部中断源（子代理检查父级 abort 状态，确保父级中断后工具不继续执行）
                 Runnable extAbort = externalAbortSource;
                 if (extAbort != null) {
@@ -1363,7 +1409,7 @@ public class AgentLoop implements AgentLoopController {
      * 等待所有工具 Future 完成（带超时保护），收集结果。
      * 如果用户请求中断，立即取消未完成的 Future 并返回。
      */
-    private List<ChatMessage> collectToolResults(CompletableFuture<ChatMessage>[] futures,
+    private List<ChatMessage> collectToolResults(Future<ChatMessage>[] futures,
                                                  ToolExecutionControl[] controls,
                                                  List<ONode> tcArray) {
         this.activeToolControls = controls;
@@ -1441,13 +1487,13 @@ public class AgentLoop implements AgentLoopController {
                 .toJson());
     }
 
-    private static void cancelFuture(CompletableFuture<ChatMessage> future,
+    private static void cancelFuture(Future<ChatMessage> future,
                                      ToolExecutionControl control) {
         if (control != null) control.cancel();
         if (future != null && !future.isDone()) future.cancel(true);
     }
 
-    private static void cancelAllFutures(CompletableFuture<ChatMessage>[] futures,
+    private static void cancelAllFutures(Future<ChatMessage>[] futures,
                                          ToolExecutionControl[] controls) {
         if (futures == null) return;
         for (int i = 0; i < futures.length; i++) {
@@ -1459,7 +1505,7 @@ public class AgentLoop implements AgentLoopController {
     /**
      * 构建用户中断时的工具结果（全部标记为 aborted）。
      */
-    private List<ChatMessage> buildAbortedResults(CompletableFuture<ChatMessage>[] futures,
+    private List<ChatMessage> buildAbortedResults(Future<ChatMessage>[] futures,
                                                   List<ONode> tcArray) {
         List<ChatMessage> results = new ArrayList<>();
         for (int i = 0; i < futures.length; i++) {

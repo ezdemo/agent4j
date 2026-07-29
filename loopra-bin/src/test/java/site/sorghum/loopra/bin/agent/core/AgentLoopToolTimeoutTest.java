@@ -19,6 +19,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
 import java.util.Set;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -89,6 +90,47 @@ class AgentLoopToolTimeoutTest {
     }
 
     @Test
+    void userAbortInterruptsRunningTool() throws Exception {
+        CountDownLatch started = new CountDownLatch(1);
+        CountDownLatch interrupted = new CountDownLatch(1);
+        ToolRegistry registry = registryWith(tool("blocking", args -> {
+            started.countDown();
+            try {
+                Thread.sleep(30_000);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                interrupted.countDown();
+            }
+            return "stopped";
+        }));
+        AgentLoop loop = loop(registry, 60, 60);
+
+        CompletableFuture<ToolExecutionResult> execution = CompletableFuture.supplyAsync(
+                () -> loop.executeToolCalls(toolCalls("blocking")));
+        assertTrue(started.await(1, TimeUnit.SECONDS));
+
+        loop.requestUserAbort();
+
+        execution.get(1, TimeUnit.SECONDS);
+        assertTrue(interrupted.await(1, TimeUnit.SECONDS),
+                "取消 Future 时必须中断正在运行的工具线程");
+    }
+
+    @Test
+    void userAbortCancelsDetachedResourcesAcrossRegistrationRace() throws Exception {
+        AgentLoop loop = loop(registryWith(tool("noop", args -> "done")), 5, 5);
+        CountDownLatch existingResourceCancelled = new CountDownLatch(1);
+        CountDownLatch lateResourceCancelled = new CountDownLatch(1);
+        loop.registerAbortResource("existing", existingResourceCancelled::countDown);
+
+        loop.requestUserAbort();
+        loop.registerAbortResource("late", lateResourceCancelled::countDown);
+
+        assertTrue(existingResourceCancelled.await(1, TimeUnit.SECONDS));
+        assertTrue(lateResourceCancelled.await(1, TimeUnit.SECONDS));
+    }
+
+    @Test
     void httpModelClientForkHasIndependentCallState() {
         HttpModelClient client = new HttpModelClient(
                 "http://localhost/v1/chat/completions", "test-key", "test-model", "high", "test-channel");
@@ -141,7 +183,7 @@ class AgentLoopToolTimeoutTest {
 
     private static AgentLoop loop(ToolRegistry registry, int toolTimeoutSec,
                                   int subAgentTimeoutSec) throws Exception {
-        return new AgentLoop(null, registry, null, "free",
+        return new AgentLoop(new BlockingModelClient(), registry, null, "free",
                 config(toolTimeoutSec, subAgentTimeoutSec));
     }
 

@@ -227,7 +227,8 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
                 state.invalidRequestError = ModelApiError.isInvalidRequestError(state.errorData);
                 state.retryableError = state.contextLengthExceeded
                         || Objects.equals(errorCode, "rate_limit_exceeded")
-                        || Objects.equals(errorCode, "upstream_error");
+                        || Objects.equals(errorCode, "upstream_error")
+                        || Objects.equals(errorCode, "server_is_overloaded");
                 log.warn("收到 Responses API 终止错误: {}", state.errorData);
             }
             case "error" -> {

@@ -1595,7 +1595,11 @@ const abortChat = async (targetSessionName = props.sessionName, targetWorkspaceH
   if (ctrl) ctrl.abort()
   // 同时通知后端中断
   try {
-    await chatAPI.abort({workspaceHash: targetWorkspaceHash, sessionName: targetSessionName})
+    await chatAPI.abort({
+      workspaceHash: targetWorkspaceHash,
+      sessionName: targetSessionName,
+      requestId: ctrl?.requestId
+    })
   } catch {
   }
   store.setSessionStreaming(targetSessionName, false)
