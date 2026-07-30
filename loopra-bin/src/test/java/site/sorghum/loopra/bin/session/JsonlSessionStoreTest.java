@@ -230,6 +230,20 @@ class JsonlSessionStoreTest {
     }
 
     @Test
+    void imageToolResultSurvivesSessionRoundTrip() throws IOException {
+        ChatMessage message = ChatMessage.toolWithImage("call-image", "图片已读取",
+                "data:image/png;base64,AA==", "low");
+        store.append(message);
+        store.flush();
+
+        ChatMessage loaded = store.load().get(0);
+
+        assertEquals("call-image", loaded.getToolCallId());
+        assertEquals("data:image/png;base64,AA==", loaded.getToolImageUrl());
+        assertEquals("low", loaded.getToolImageDetail());
+    }
+
+    @Test
     void responsesReasoningSurvivesSessionRoundTrip() throws IOException {
         String responseReasoning = "{\"type\":\"reasoning\",\"encrypted_content\":\"encrypted\"}";
         ChatMessage message = ChatMessage.assistant("", List.of(new ToolCallEntry(

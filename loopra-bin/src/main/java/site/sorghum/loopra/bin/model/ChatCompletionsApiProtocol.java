@@ -107,7 +107,23 @@ final class ChatCompletionsApiProtocol extends AbstractModelApiProtocol {
             }
             if (message.getToolCallId() != null) node.set("tool_call_id", message.getToolCallId());
             if (node.get(CONTENT).isNull()) node.set(CONTENT, "");
-            if (!skip) messages.add(node);
+            if (!skip) {
+                messages.add(node);
+                if (message.isTool() && message.hasToolImage()) {
+                    ONode imageMessage = messages.addNew().asObject();
+                    imageMessage.set("role", "user");
+                    ONode imageContent = imageMessage.getOrNew(CONTENT).asArray();
+                    imageContent.addNew().set(TYPE, "text").set("text",
+                            "The preceding read_image tool result includes the image below. Inspect it and continue the task.");
+                    ONode imagePart = imageContent.addNew().asObject();
+                    imagePart.set(TYPE, "image_url");
+                    ONode imageNode = imagePart.getOrNew("image_url").asObject();
+                    imageNode.set("url", message.getToolImageUrl());
+                    if (message.getToolImageDetail() != null) {
+                        imageNode.set("detail", message.getToolImageDetail());
+                    }
+                }
+            }
         }
 
         if (context.tools() != null && !context.tools().isEmpty()) body.set(TOOLS, context.tools());

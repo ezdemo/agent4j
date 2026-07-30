@@ -190,6 +190,12 @@ public class JsonlSessionStore implements SessionStore {
         if (msg.getToolCallId() != null) {
             node.set("tool_call_id", msg.getToolCallId());
         }
+        if (msg.getToolImageUrl() != null) {
+            node.set("tool_image_url", msg.getToolImageUrl());
+        }
+        if (msg.getToolImageDetail() != null) {
+            node.set("tool_image_detail", msg.getToolImageDetail());
+        }
         if (msg.hasToolCalls()) {
             org.noear.snack4.ONode tcArr = node.getOrNew("tool_calls").asArray();
             for (ToolCallEntry tc : msg.getToolCalls()) {

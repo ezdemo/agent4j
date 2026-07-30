@@ -21,6 +21,7 @@ import site.sorghum.loopra.bin.agent.output.ConsoleAgentOutput;
 import site.sorghum.loopra.bin.agent.resilient.ReasonBreaker;
 import site.sorghum.loopra.bin.agent.resilient.Scavenger;
 import site.sorghum.loopra.bin.agent.resilient.StormBreaker;
+import site.sorghum.loopra.bin.builtin.ImageReadTool;
 import site.sorghum.loopra.bin.builtin.SubAgentTool;
 import site.sorghum.loopra.bin.config.LoopraConfig;
 import site.sorghum.loopra.bin.goal.Goal;
@@ -792,7 +793,7 @@ public class AgentLoop implements AgentLoopController {
             // ---- 7. 写入 assistant 消息 + 工具结果 ----
             ctx.addAssistant(sr.content(), ter.tcList(), sr.reasoningContent(), ter.fileChanges());
             for (ChatMessage tr : ter.toolResults()) {
-                ctx.addToolResult(tr.getToolCallId(), tr.getContent());
+                ctx.addToolResult(tr);
             }
 
             // ---- 7.5. finish 工具显式结束本轮 ----
@@ -846,7 +847,7 @@ public class AgentLoop implements AgentLoopController {
 
         // 写入工具结果
         for (ChatMessage tr : ter.toolResults()) {
-            ctx.addToolResult(tr.getToolCallId(), tr.getContent());
+            ctx.addToolResult(tr);
         }
 
         // 进入统一推理循环
@@ -881,7 +882,7 @@ public class AgentLoop implements AgentLoopController {
 
         // 写入工具结果
         for (ChatMessage tr : initialTer.toolResults()) {
-            ctx.addToolResult(tr.getToolCallId(), tr.getContent());
+            ctx.addToolResult(tr);
         }
 
         // Self-Correction 检查
@@ -1350,10 +1351,15 @@ public class AgentLoop implements AgentLoopController {
                     ToolRequest req = new ToolRequest(null,extraMap, toolCall.getArguments());
                     try {
                         ToolResult call = fc.call(req.getArgs());
-                        String result = call.getContent();
+                        String rawResult = call.getContent();
+                        ImageReadTool.ImageResult imageResult = "read_image".equals(toolCall.getName())
+                                ? ImageReadTool.parseResult(rawResult) : null;
+                        String result = imageResult == null ? rawResult : imageResult.summary();
                         safeListener("toolResult", () -> listener.onToolResult(toolCall.getName(), result));
                         safeOutputDebug("toolResult", () -> output.onToolResult(toolCall.getName(), result));
-                        return toolResult(toolCall.getId(), result);
+                        return imageResult == null ? toolResult(toolCall.getId(), result)
+                                : ChatMessage.toolWithImage(toolCall.getId(), result,
+                                imageResult.dataUri(), imageResult.detail());
                     } catch (HitlRequiredException e) {
                         hitlRef.compareAndSet(null, e);
                         return toolResult(toolCall.getId(),

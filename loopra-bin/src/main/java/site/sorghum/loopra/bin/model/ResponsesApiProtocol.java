@@ -41,8 +41,20 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
                 ONode item = input.addNew();
                 item.set(TYPE, "function_call_output");
                 item.set("call_id", message.getToolCallId());
-                item.set("output", message.getContent() == null || message.getContent().isEmpty()
-                        ? "ERROR 工具执行失败或者工具执行结果为空" : message.getContent());
+                String outputText = message.getContent() == null || message.getContent().isEmpty()
+                        ? "ERROR 工具执行失败或者工具执行结果为空" : message.getContent();
+                if (message.hasToolImage()) {
+                    ONode output = item.getOrNew("output").asArray();
+                    output.addNew().set(TYPE, "input_text").set("text", outputText);
+                    ONode imagePart = output.addNew().asObject();
+                    imagePart.set(TYPE, "input_image");
+                    imagePart.set("image_url", message.getToolImageUrl());
+                    if (message.getToolImageDetail() != null) {
+                        imagePart.set("detail", message.getToolImageDetail());
+                    }
+                } else {
+                    item.set("output", outputText);
+                }
                 continue;
             }
 
