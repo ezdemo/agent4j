@@ -52,6 +52,27 @@ class ModelApiProtocolsTest {
     }
 
     @Test
+    void imageToolResultUsesVisualOutputForBothProtocols() {
+        ChatMessage imageToolResult = ChatMessage.toolWithImage("call-image", "图片已读取", "data:image/png;base64,AA==", "high");
+        ModelApiProtocol.RequestContext context = new ModelApiProtocol.RequestContext(
+                "test-model", "none", List.of(imageToolResult), new ONode().asArray(), null, null);
+
+        ONode chatRequest = ModelApiProtocols.resolve("chat_completions").buildRequest(context);
+        assertEquals("tool", chatRequest.select("$.messages[0].role").getString());
+        assertEquals("图片已读取", chatRequest.select("$.messages[0].content").getString());
+        assertEquals("user", chatRequest.select("$.messages[1].role").getString());
+        assertEquals("data:image/png;base64,AA==",
+                chatRequest.select("$.messages[1].content[1].image_url.url").getString());
+
+        ONode responsesRequest = ModelApiProtocols.resolve("responses").buildRequest(context);
+        assertEquals("function_call_output", responsesRequest.select("$.input[0].type").getString());
+        assertEquals("input_text", responsesRequest.select("$.input[0].output[0].type").getString());
+        assertEquals("input_image", responsesRequest.select("$.input[0].output[1].type").getString());
+        assertEquals("data:image/png;base64,AA==",
+                responsesRequest.select("$.input[0].output[1].image_url").getString());
+    }
+
+    @Test
     void chatCompletionsStrategyMapsRequestAndResponse() throws Exception {
         ModelApiProtocol protocol = ModelApiProtocols.resolve("chat_completions");
         ONode tools = ONode.ofJson("""

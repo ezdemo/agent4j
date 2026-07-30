@@ -47,6 +47,16 @@ public class ChatMessage {
     @ONodeAttr(name = "tool_call_id")
     private String toolCallId;
 
+    /**
+     * 工具返回的视觉输入，仅由 read_image 产生。
+     * 在不同模型 API 协议中会转换为对应的图片型工具结果。
+     */
+    @ONodeAttr(name = "tool_image_url")
+    private String toolImageUrl;
+
+    @ONodeAttr(name = "tool_image_detail")
+    private String toolImageDetail;
+
     @ONodeAttr(name = "reasoning_content")
     private String reasoningContent;
 
@@ -170,6 +180,10 @@ public class ChatMessage {
         }
         Object toolCallId = m.get("tool_call_id");
         msg.toolCallId = toolCallId != null ? toolCallId.toString() : null;
+        Object toolImageUrl = m.get("tool_image_url");
+        msg.toolImageUrl = toolImageUrl != null ? toolImageUrl.toString() : null;
+        Object toolImageDetail = m.get("tool_image_detail");
+        msg.toolImageDetail = toolImageDetail != null ? toolImageDetail.toString() : null;
         Object snapshotId = m.get("snapshot_id");
         msg.snapshotId = snapshotId != null ? snapshotId.toString() : null;
         Object rollbackId = m.get("rollback_id");
@@ -258,6 +272,13 @@ public class ChatMessage {
         return msg;
     }
 
+    public static ChatMessage toolWithImage(String toolCallId, String content, String imageUrl, String imageDetail) {
+        ChatMessage msg = tool(toolCallId, content);
+        msg.toolImageUrl = imageUrl;
+        msg.toolImageDetail = imageDetail;
+        return msg;
+    }
+
     // ==================== 便捷判断 ====================
 
     public Map<String, Object> toMap() {
@@ -286,6 +307,8 @@ public class ChatMessage {
             m.put("content", content);
         }
         if (toolCallId != null) m.put("tool_call_id", toolCallId);
+        if (toolImageUrl != null) m.put("tool_image_url", toolImageUrl);
+        if (toolImageDetail != null) m.put("tool_image_detail", toolImageDetail);
         if (reasoningContent != null) m.put("reasoning_content", reasoningContent);
         if (responseReasoning != null) m.put("response_reasoning", responseReasoning);
         if (fileChanges != null && !fileChanges.isEmpty()) m.put("file_changes", fileChanges);
@@ -330,6 +353,10 @@ public class ChatMessage {
         return toolCallId != null && !toolCallId.isEmpty();
     }
 
+    public boolean hasToolImage() {
+        return toolImageUrl != null && !toolImageUrl.isBlank();
+    }
+
     public boolean hasToolCalls() {
         return toolCalls != null && !toolCalls.isEmpty();
     }
@@ -349,6 +376,8 @@ public class ChatMessage {
             copy.toolCalls = new ArrayList<>(this.toolCalls);
         }
         copy.toolCallId = this.toolCallId;
+        copy.toolImageUrl = this.toolImageUrl;
+        copy.toolImageDetail = this.toolImageDetail;
         copy.reasoningContent = this.reasoningContent;
         copy.responseReasoning = this.responseReasoning;
         if (this.fileChanges != null) {

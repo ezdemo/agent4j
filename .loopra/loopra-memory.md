@@ -45,3 +45,10 @@ OpenAI 兼容模型的上下文超限标准错误码是 `context_length_exceeded
 ## [2026-07-28 17:56] 会话折叠沉淀
 
 Loopra Web 停止生成需三层取消：前端流请求携带 requestId 并传给 /chat/abort；ChatController 从任务提交起登记 Future/SseEmitter 以覆盖 Agent 创建前竞态；AgentLoop 工具必须用 ExecutorService.submit 返回的 Future 才能由 cancel(true) 中断，并登记 bash/bash_start 等脱离工具 Future 的进程资源，停止时终止进程树。
+
+## [2026-07-30 12:58] 会话折叠沉淀
+
+- 项目使用 `ChatMessage.contentParts` 表示多模态消息，支持 `text` 与 `image_url`；JSONL 会话持久化和 `ContextTokenEstimator` 已能序列化/估算该字段。
+- `AgentLoop` 在主循环、普通 HITL 恢复和沙箱 HITL 恢复三处将工具执行结果写入 `ConversationContext`，修改工具结果消息结构时必须同步处理这三条路径。
+- OpenAI Responses API 的 `function_call_output.output` 可为包含文本、图像或文件内容的数组；工具错误应使用 `status: incomplete`，而非 `is_error`。
+- 用户偏好中文回复。
