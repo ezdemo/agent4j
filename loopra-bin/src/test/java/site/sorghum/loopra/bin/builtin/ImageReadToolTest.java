@@ -62,6 +62,17 @@ class ImageReadToolTest {
     }
 
     @Test
+    void createsVisualResultForBrowserSnapshot() {
+        String result = ImageReadTool.imageResult("{\"snapshotId\":\"tab-1-s1\"}",
+                "data:image/png;base64," + Base64.getEncoder().encodeToString(PNG_HEADER), "auto");
+        ImageReadTool.ImageResult image = ImageReadTool.parseResult(result);
+
+        assertNotNull(image);
+        assertEquals("auto", image.detail());
+        assertEquals("{\"snapshotId\":\"tab-1-s1\"}", image.summary());
+    }
+
+    @Test
     void rejectsPathsOutsideWorkspace() throws Exception {
         Path outside = workspace.getParent().resolve("outside.png");
         Files.write(outside, PNG_HEADER);
