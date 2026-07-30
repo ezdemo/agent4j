@@ -1352,7 +1352,8 @@ public class AgentLoop implements AgentLoopController {
                     try {
                         ToolResult call = fc.call(req.getArgs());
                         String rawResult = call.getContent();
-                        ImageReadTool.ImageResult imageResult = "read_image".equals(toolCall.getName())
+                        ImageReadTool.ImageResult imageResult = ("read_image".equals(toolCall.getName())
+                                || "browser_screenshot".equals(toolCall.getName()))
                                 ? ImageReadTool.parseResult(rawResult) : null;
                         String result = imageResult == null ? rawResult : imageResult.summary();
                         safeListener("toolResult", () -> listener.onToolResult(toolCall.getName(), result));

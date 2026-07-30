@@ -24,8 +24,8 @@ import java.util.Map;
 /** Reads a local, base64-encoded, or remote image as visual context for the next model request. */
 @Component
 public class ImageReadTool extends AbsToolProvider implements SolonToTools {
-    private static final String RESULT_PREFIX = "__LOOPRA_IMAGE_RESULT__\n";
     private static final long MAX_IMAGE_BYTES = 5L * 1024 * 1024;
+    private static final String RESULT_PREFIX = "__LOOPRA_IMAGE_RESULT__\n";
     private static final Map<String, String> MIME_TYPES = Map.of(
             "png", "image/png",
             "jpg", "image/jpeg",
@@ -67,7 +67,7 @@ public class ImageReadTool extends AbsToolProvider implements SolonToTools {
                     + Base64.getEncoder().encodeToString(image.bytes());
             String summary = "已读取图片 " + image.source() + "（" + image.mimeType() + "，" + image.bytes().length
                     + " 字节），图片已作为视觉上下文传给 AI。";
-            return RESULT_PREFIX + normalizedDetail + "\n" + summary + "\n" + dataUri;
+            return imageResult(summary, dataUri, normalizedDetail);
         } catch (SecurityException e) {
             return "PATH_DENIED: 工作区相对路径必须位于当前工作区内";
         } catch (IllegalArgumentException e) {
@@ -82,6 +82,18 @@ public class ImageReadTool extends AbsToolProvider implements SolonToTools {
     /** Preserves the former direct Java API for callers that only read a workspace image. */
     public String readImage(String filePath, String detail, ToolContext ctx) {
         return readImage(filePath, null, null, detail, ctx);
+    }
+
+    public static String imageResult(String summary, String dataUri, String detail) {
+        if (dataUri == null || !dataUri.startsWith("data:image/")) {
+            throw new IllegalArgumentException("image data URI is invalid");
+        }
+        String normalizedDetail = normalizeDetail(detail);
+        if (normalizedDetail == null) {
+            throw new IllegalArgumentException("image detail is invalid");
+        }
+        String text = summary == null || summary.isBlank() ? "图片已读取。" : summary.replaceAll("\\R", " ");
+        return RESULT_PREFIX + normalizedDetail + "\n" + text + "\n" + dataUri;
     }
 
     public static ImageResult parseResult(String result) {

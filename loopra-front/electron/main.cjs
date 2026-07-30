@@ -67,6 +67,8 @@ let aiBrowserBridgeAddress = ''
 let aiBrowserActivity = { state: 'idle', message: '等待 AI 操作', timestamp: Date.now() }
 let desktopPetWindow = null
 const aiBrowserTabs = new Map()
+const AI_BROWSER_SCREENSHOT_MAX_BYTES = 5 * 1024 * 1024
+const AI_BROWSER_SCREENSHOT_MAX_WIDTH = 1600
 const desktopChatTabs = new Map()
 let desktopChatActiveTabId = null
 const AI_BROWSER_BRIDGE_PREFERRED_PORT = Number(process.env.LOOPRA_BROWSER_BRIDGE_PORT || 0)
@@ -1190,6 +1192,24 @@ function waitForAiBrowserPageLoad(tab, timeoutMs = 30_000) {
   })
 }
 
+async function captureAiBrowserScreenshot(tab) {
+  let image = await tab.view.webContents.capturePage()
+  if (image.getSize().width > AI_BROWSER_SCREENSHOT_MAX_WIDTH) {
+    image = image.resize({ width: AI_BROWSER_SCREENSHOT_MAX_WIDTH })
+  }
+  let png = image.toPNG()
+  for (let attempt = 0; png.length > AI_BROWSER_SCREENSHOT_MAX_BYTES && attempt < 4; attempt++) {
+    const size = image.getSize()
+    if (size.width <= 320 || size.height <= 180) break
+    image = image.resize({ width: Math.max(320, Math.floor(size.width * 0.7)) })
+    png = image.toPNG()
+  }
+  if (png.length > AI_BROWSER_SCREENSHOT_MAX_BYTES) {
+    throw new Error('Browser screenshot exceeds the 5 MiB visual-context limit')
+  }
+  return `data:image/png;base64,${png.toString('base64')}`
+}
+
 async function aiBrowserSnapshot(tabId) {
   const tab = getAiBrowserTab(tabId)
   if (tab.loading || tab.view.webContents.isLoadingMainFrame()) {
@@ -1257,7 +1277,8 @@ async function aiBrowserSnapshot(tabId) {
         return result;
       };
       const ignored = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'META', 'LINK', 'HEAD', 'SVG', 'PATH']);
-      const structuralInteractive = (el) => el.matches('a[href],button,input,textarea,select,summary,[role="button"],[role="link"],[role="checkbox"],[role="radio"],[role="switch"],[role="tab"],[role="menuitem"],[role="option"],[role="combobox"],[role="textbox"],[role="slider"],[role="treeitem"],[contenteditable="true"],[onclick],[aria-expanded],[aria-haspopup],[tabindex]:not([tabindex="-1"])');
+      const textEditable = (el) => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el.isContentEditable;
+      const structuralInteractive = (el) => textEditable(el) || el.matches('a[href],button,select,summary,[role="button"],[role="link"],[role="checkbox"],[role="radio"],[role="switch"],[role="tab"],[role="menuitem"],[role="option"],[role="combobox"],[role="textbox"],[role="slider"],[role="treeitem"],[onclick],[aria-expanded],[aria-haspopup],[tabindex]:not([tabindex="-1"])');
       const interactive = (el) => structuralInteractive(el) || styleOf(el).cursor === 'pointer';
       const collectElements = (root, result = []) => {
         for (const el of root.querySelectorAll('*')) {
@@ -1293,7 +1314,7 @@ async function aiBrowserSnapshot(tabId) {
         .filter((node) => node.nodeType === Node.TEXT_NODE)
         .map((node) => node.textContent)
         .join(' '), 180);
-      const actionsFor = (el) => el.matches('input,textarea,[contenteditable="true"]')
+      const actionsFor = (el) => textEditable(el)
         ? ['fill', 'press', 'scroll']
         : (el.matches('select') ? ['select', 'scroll'] : ['click', 'scroll']);
       const stateFor = (el) => {
@@ -1304,6 +1325,8 @@ async function aiBrowserSnapshot(tabId) {
           const value = el.getAttribute(name);
           if (value != null) state[name.slice(5)] = value;
         }
+        if (textEditable(el)) state.editable = true;
+        if (el.isContentEditable) state.contentEditable = true;
         if ('disabled' in el) state.disabled = Boolean(el.disabled);
         if ('required' in el && el.required) state.required = true;
         if (el instanceof HTMLInputElement) {
@@ -1361,8 +1384,8 @@ async function aiBrowserSnapshot(tabId) {
         const target = closestActionTarget(source);
         if (!target) continue;
         const rect = target.getBoundingClientRect();
-        const text = textOf(source) || textOf(target);
-        if (rect.width < 2 || rect.height < 2 || (!text && !target.matches('input,textarea,select'))) continue;
+        const text = textOf(source) || textOf(target) || (textEditable(target) ? '可编辑区域' : '');
+        if (rect.width < 2 || rect.height < 2 || (!text && !textEditable(target) && !target.matches('select'))) continue;
         const candidate = { el: target, rect, text, overlay: overlayOf(target) };
         const existing = candidateByTarget.get(target);
         if (!existing || (text.length && text.length < existing.text.length)) candidateByTarget.set(target, candidate);
@@ -1454,8 +1477,9 @@ async function aiBrowserSnapshot(tabId) {
       };
     })()
   `, true)
+  const imageUrl = await captureAiBrowserScreenshot(tab)
   tab.snapshotId = `${tab.id}-s${++tab.snapshotVersion}`
-  return { tabId: tab.id, snapshotId: tab.snapshotId, ...snapshot }
+  return { tabId: tab.id, snapshotId: tab.snapshotId, imageUrl, imageDetail: 'auto', ...snapshot }
 }
 
 async function aiBrowserAct(tabId, targetId, action, value, snapshotId) {
@@ -1570,7 +1594,7 @@ function startAiBrowserBridge() {
         'new-tab': 'AI 正在打开新标签页',
         tabs: 'AI 正在查看标签页',
         navigate: 'AI 正在跳转页面',
-        screenshot: 'AI 正在读取页面结构',
+        screenshot: 'AI 正在捕获页面快照',
         act: `AI 正在${actionLabels[payload.action] || '操作页面'}`,
         'request-user-action': 'AI 正在请求你手动完成浏览器操作',
         'close-tab': 'AI 正在关闭标签页'
@@ -1608,7 +1632,7 @@ function startAiBrowserBridge() {
         'new-tab': 'AI 已打开新标签页',
         tabs: 'AI 已读取标签页列表',
         navigate: 'AI 已完成页面跳转',
-        screenshot: 'AI 已读取页面结构',
+        screenshot: 'AI 已捕获页面快照',
         act: `AI 已完成${actionLabels[payload.action] || '页面操作'}`,
         'close-tab': 'AI 已关闭标签页'
       }
