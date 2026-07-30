@@ -79,19 +79,29 @@
       </section>
     </Transition>
 
-    <section v-if="queuedMessages.length > 0" class="composer-queue" aria-label="排队消息">
-      <div v-for="item in queuedMessages" :key="item.id" class="composer-queue-item">
-        <svg class="composer-queue-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+    <section v-if="queuedMessages.length > 0" class="composer-queue" :aria-label="`排队消息 ${queuedMessages.length} 条`">
+      <div class="composer-queue-summary" title="悬停查看排队消息" aria-hidden="true">
+        <svg class="composer-queue-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
           <path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>
         </svg>
-        <span class="composer-queue-text" :title="item.text">{{ item.text }}</span>
-        <button type="button" class="composer-queue-guide" title="停止当前生成并立即发送" @click="$emit('guideQueued', item.id)">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-          <span>引导</span>
-        </button>
-        <button type="button" class="composer-queue-remove" title="移出队列" aria-label="移出队列" @click="$emit('removeQueued', item.id)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/></svg>
-        </button>
+        <span>排队消息 {{ queuedMessages.length }} 条</span>
+      </div>
+      <div class="composer-queue-items">
+        <div class="composer-queue-items-content">
+          <div v-for="item in queuedMessages" :key="item.id" class="composer-queue-item">
+            <svg class="composer-queue-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>
+            </svg>
+            <span class="composer-queue-text" :title="item.text">{{ item.text }}</span>
+            <button type="button" class="composer-queue-guide" title="停止当前生成并立即发送" @click="$emit('guideQueued', item.id)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              <span>引导</span>
+            </button>
+            <button type="button" class="composer-queue-remove" title="移出队列" aria-label="移出队列" @click="$emit('removeQueued', item.id)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/></svg>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -1371,6 +1381,52 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   margin: 0 2px 8px;
 }
 
+.composer-queue-summary {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 30px;
+  gap: 8px;
+  padding: 3px 8px 3px 10px;
+  color: var(--fg-3);
+  background: color-mix(in srgb, var(--bg-2) 72%, transparent);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 14px;
+  line-height: 20px;
+  transition: color 120ms ease;
+}
+
+.composer-queue:hover .composer-queue-summary,
+.composer-queue:focus-within .composer-queue-summary {
+  color: var(--fg-2);
+}
+
+.composer-queue-items {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  opacity: 0;
+  transition: grid-template-rows 160ms ease, opacity 120ms ease;
+}
+
+.composer-queue:hover .composer-queue-items,
+.composer-queue:focus-within .composer-queue-items {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.composer-queue-items > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.composer-queue-items-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
 .composer-queue-item {
   display: flex;
   align-items: center;
@@ -1378,7 +1434,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   gap: 8px;
   padding: 7px 8px 7px 10px;
   color: var(--fg-2);
-  background: color-mix(in srgb, var(--bg-2) 88%, transparent);
+  background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 8px;
 }

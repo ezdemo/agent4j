@@ -44,6 +44,22 @@ function mountInput(props) {
 }
 
 describe('ChatInput default model actions', () => {
+  it('renders queued messages behind a compact summary and preserves queue actions', async () => {
+    const wrapper = mountInput({
+      queuedMessages: [{id: 'queued-1', text: '继续处理当前任务'}]
+    })
+
+    expect(wrapper.find('.composer-queue-summary').text()).toBe('排队消息 1 条')
+    expect(wrapper.find('.composer-queue-items-content').exists()).toBe(true)
+
+    await wrapper.find('.composer-queue-guide').trigger('click')
+    expect(wrapper.emitted('guideQueued')).toEqual([['queued-1']])
+
+    await wrapper.find('.composer-queue-remove').trigger('click')
+    expect(wrapper.emitted('removeQueued')).toEqual([['queued-1']])
+    wrapper.unmount()
+  })
+
   it('emits the selected row model and channel when setting a default model', async () => {
     const wrapper = mountInput()
 
