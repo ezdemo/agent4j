@@ -1592,9 +1592,8 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
 
 const abortChat = async (targetSessionName = props.sessionName, targetWorkspaceHash = props.workspaceHash) => {
   const ctrl = store.getSessionController(targetSessionName)
-  if (ctrl) ctrl.abort()
-  // 同时通知后端中断
   try {
+    // 保持 SSE 读取，等待服务端取消 Agent 并主动关闭 emitter。
     await chatAPI.abort({
       workspaceHash: targetWorkspaceHash,
       sessionName: targetSessionName,
@@ -1602,7 +1601,6 @@ const abortChat = async (targetSessionName = props.sessionName, targetWorkspaceH
     })
   } catch {
   }
-  store.setSessionStreaming(targetSessionName, false)
 }
 
 const openRollbackDialog = (msgId, canRollbackCode, rollbackTimestamp) => {
