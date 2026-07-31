@@ -361,6 +361,13 @@ function createWindow() {
 
   if (shouldOpenDevTools) mainWindow.webContents.openDevTools()
 
+  mainWindow.on('focus', () => {
+    const tab = desktopChatTabs.get(desktopChatActiveTabId)
+    if (!tab || !tab.visible || tab.view.webContents.isDestroyed()) return
+    tab.view.webContents.focus()
+    tab.view.webContents.send('desktop-chat-tab-focus-composer')
+  })
+
   mainWindow.webContents.on('context-menu', (event, params) => {
     const menu = Menu.buildFromTemplate([
       { label: '检查元素', click: () => mainWindow.webContents.inspectElement(params.x, params.y) },
@@ -749,6 +756,8 @@ ipcMain.handle('desktop-chat-tab-show', async (event, tabId, rawBounds) => {
   }
   tab.view.setBounds(normalizeDesktopChatBounds(rawBounds))
   tab.view.setVisible(true)
+  tab.view.webContents.focus()
+  tab.view.webContents.send('desktop-chat-tab-focus-composer')
   tab.visible = true
   hideDesktopChatViews(tab.id)
   desktopChatActiveTabId = tab.id
