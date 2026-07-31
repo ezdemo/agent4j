@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, dialog, ipcMain, Menu, shell } = require('electron')
+const { app, BrowserWindow, WebContentsView, dialog, ipcMain, Menu, shell, Notification } = require('electron')
 const http = require('http')
 const path = require('path')
 const { spawn, execFile, execSync } = require('child_process')
@@ -66,6 +66,7 @@ let aiBrowserBridgeReady = null
 let aiBrowserBridgeAddress = ''
 let aiBrowserActivity = { state: 'idle', message: '等待 AI 操作', timestamp: Date.now() }
 let desktopPetWindow = null
+let pendingDesktopPetReply = null
 const aiBrowserTabs = new Map()
 const AI_BROWSER_SCREENSHOT_MAX_BYTES = 5 * 1024 * 1024
 const AI_BROWSER_SCREENSHOT_MAX_WIDTH = 1600
@@ -395,17 +396,102 @@ function createWindow() {
   })
 }
 
+function isDesktopChatSender(sender) {
+  return sender === mainWindow?.webContents
+    || [...desktopChatTabs.values()].some((tab) => tab.view.webContents === sender)
+}
+
+function sendPendingDesktopPetReply() {
+  if (!pendingDesktopPetReply || !desktopPetWindow || desktopPetWindow.isDestroyed()) return
+  desktopPetWindow.webContents.send('desktop-pet-reply', pendingDesktopPetReply)
+  pendingDesktopPetReply = null
+}
+
+function deliverAssistantReply(rawReply) {
+  const text = String(rawReply || '').trim()
+  if (!text) return false
+  const payload = {text: text.slice(0, 180)}
+
+  if (desktopPetWindow && !desktopPetWindow.isDestroyed() && desktopPetWindow.isVisible()) {
+    pendingDesktopPetReply = payload
+    if (desktopPetWindow.webContents.isLoading()) return true
+    sendPendingDesktopPetReply()
+    return true
+  }
+
+  if (!Notification.isSupported()) return false
+  const notification = new Notification({
+    title: 'Loopra 收到 AI 回复',
+    body: payload.text
+  })
+  notification.on('click', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+  })
+  notification.show()
+  return true
+}
+
+function getDesktopPetStatePath() {
+  return path.join(getLoopraPaths().configDir, 'pet', 'desktop.json')
+}
+
+function readDesktopPetState() {
+  try {
+    const state = JSON.parse(fs.readFileSync(getDesktopPetStatePath(), 'utf8'))
+    return state && typeof state === 'object' ? state : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveDesktopPetState(changes) {
+  try {
+    const statePath = getDesktopPetStatePath()
+    fs.mkdirSync(path.dirname(statePath), { recursive: true })
+    fs.writeFileSync(statePath, JSON.stringify({ ...readDesktopPetState(), ...changes }), 'utf8')
+  } catch (error) {
+    console.error('[desktop-pet] failed to persist state:', error.message)
+  }
+}
+
+function isDesktopPetEnabled() {
+  return readDesktopPetState().visible === true
+}
+
+function getDesktopPetPosition() {
+  const { x, y } = readDesktopPetState()
+  return Number.isInteger(x) && Number.isInteger(y) ? { x, y } : null
+}
+
+function setDesktopPetEnabled(visible) {
+  saveDesktopPetState({ visible: Boolean(visible) })
+}
+
+function setDesktopPetPosition(x, y) {
+  saveDesktopPetState({ x: Math.round(x), y: Math.round(y) })
+}
+
 function openDesktopPetWindow() {
   if (desktopPetWindow && !desktopPetWindow.isDestroyed()) {
     desktopPetWindow.showInactive()
     return desktopPetWindow
   }
 
+  const persistedPosition = getDesktopPetPosition()
+  const initialPosition = persistedPosition || {
+    x: Math.max(0, (mainWindow?.getBounds().x || 0) + (mainWindow?.getBounds().width || 800) - 260),
+    y: Math.max(0, (mainWindow?.getBounds().y || 0) + (mainWindow?.getBounds().height || 600) - 300)
+  }
+  if (!persistedPosition) setDesktopPetPosition(initialPosition.x, initialPosition.y)
+
   desktopPetWindow = new BrowserWindow({
     width: 240,
     height: 240,
-    x: Math.max(0, (mainWindow?.getBounds().x || 0) + (mainWindow?.getBounds().width || 800) - 260),
-    y: Math.max(0, (mainWindow?.getBounds().y || 0) + (mainWindow?.getBounds().height || 600) - 300),
+    x: initialPosition.x,
+    y: initialPosition.y,
     frame: false,
     transparent: true,
     resizable: false,
@@ -429,6 +515,7 @@ function openDesktopPetWindow() {
   desktopPetWindow.on('closed', () => { desktopPetWindow = null })
   desktopPetWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   desktopPetWindow.once('ready-to-show', () => desktopPetWindow?.showInactive())
+  desktopPetWindow.webContents.on('did-finish-load', sendPendingDesktopPetReply)
 
   if (isDev) {
     desktopPetWindow.loadURL('http://localhost:3000/?desktopPet=1')
@@ -443,6 +530,7 @@ app.whenReady().then(() => {
   Menu.setApplicationMenu(null)
   startAiBrowserBridge().catch((error) => console.error('[ai-browser] failed to start bridge:', error.message))
   createWindow()
+  if (isDesktopPetEnabled()) openDesktopPetWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -685,11 +773,13 @@ ipcMain.handle('window-close', () => { if (mainWindow) mainWindow.close() })
 ipcMain.handle('window-is-maximized', () => mainWindow ? mainWindow.isMaximized() : false)
 ipcMain.handle('desktop-pet-open', (event) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop pet request')
+  setDesktopPetEnabled(true)
   openDesktopPetWindow()
   return true
 })
 ipcMain.handle('desktop-pet-close', (event) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop pet request')
+  setDesktopPetEnabled(false)
   if (desktopPetWindow && !desktopPetWindow.isDestroyed()) desktopPetWindow.close()
   return false
 })
@@ -709,12 +799,29 @@ ipcMain.handle('desktop-pet-move-by', (event, delta) => {
     throw new Error('Invalid desktop pet move')
   }
   const bounds = desktopPetWindow.getBounds()
-  desktopPetWindow.setPosition(Math.round(bounds.x + dx), Math.round(bounds.y + dy))
+  const nextX = Math.round(bounds.x + dx)
+  const nextY = Math.round(bounds.y + dy)
+  desktopPetWindow.setPosition(nextX, nextY)
+  setDesktopPetPosition(nextX, nextY)
 })
 ipcMain.on('desktop-pet-set-interactive', (event, interactive) => {
   if (event.sender !== desktopPetWindow?.webContents || !desktopPetWindow || desktopPetWindow.isDestroyed()) return
   desktopPetWindow.setIgnoreMouseEvents(!interactive, { forward: true })
 })
+ipcMain.handle('desktop-pet-activate-main', (event) => {
+  if (event.sender !== desktopPetWindow?.webContents) throw new Error('Unauthorized desktop pet activation')
+  if (!mainWindow || mainWindow.isDestroyed()) return false
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+  return true
+})
+
+ipcMain.handle('desktop-pet-reply', (event, rawReply) => {
+  if (!isDesktopChatSender(event.sender)) throw new Error('Unauthorized desktop pet reply')
+  return deliverAssistantReply(rawReply)
+})
+
 ipcMain.handle('pick_loopra_workspace_folder', async (event) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized folder picker request')
   const result = await dialog.showOpenDialog(mainWindow, {

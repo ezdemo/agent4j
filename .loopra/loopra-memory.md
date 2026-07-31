@@ -52,3 +52,27 @@ Loopra Web 停止生成需三层取消：前端流请求携带 requestId 并传�
 - `AgentLoop` 在主循环、普通 HITL 恢复和沙箱 HITL 恢复三处将工具执行结果写入 `ConversationContext`，修改工具结果消息结构时必须同步处理这三条路径。
 - OpenAI Responses API 的 `function_call_output.output` 可为包含文本、图像或文件内容的数组；工具错误应使用 `status: incomplete`，而非 `is_error`。
 - 用户偏好中文回复。
+
+## [2026-07-31 16:44] 会话折叠沉淀
+
+桌面端 AI 回复完成提醒由 Chat.vue 通过 Electron IPC 触发；主进程检测独立桌面宠物窗口可见则向其发送预览气泡，否则用 Electron Notification 发送 macOS/Windows 原生系统通知。桌面聊天实际运行在 WebContentsView，相关 IPC sender 校验须同时允许 mainWindow 与已注册 desktopChatTabs。
+
+## [2026-07-31 17:01] 会话折叠沉淀
+
+- 用户偏好中文回复。
+- 桌面宠物窗口的短左键用于恢复、显示并聚焦主窗口；拖动宠物只移动宠物窗口，不能触发主窗口激活。
+- 桌面宠物主窗口激活通过受限 Electron IPC 实现，仅宠物窗口可调用。
+- 宠物状态与位置持久化 API 前缀为 `/api/pets`，位置文件为 `~/.loopra/pet/position.json`。
+- 当前宠物尺寸持久化字段为整数 `sizeIndex`，若实现连续缩放需新增浮点尺寸字段并兼容旧数据。
+
+## [2026-07-31 17:13] 会话折叠沉淀
+
+桌面宠物展示开关由 Electron 主进程持久化到 ~/.loopra/pet/desktop.json（visible 布尔值）；应用启动时会按该值自动恢复宠物独立窗口。
+
+## [2026-07-31 17:17] 会话折叠沉淀
+
+桌面宠物拖动后的 Electron 窗口绝对坐标也保存到 ~/.loopra/pet/desktop.json 的 x、y；下次启动优先恢复，首次展示才使用右下角默认坐标。
+
+## [2026-07-31 17:28] 会话折叠沉淀
+
+桌面宠物的宠物 API 请求使用 Axios silent 配置，服务端离线时不触发全局 Network Error toast；已加载精灵会保留并显示“服务端离线中…”，下一次成功轮询自动恢复。

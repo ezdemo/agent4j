@@ -80,6 +80,7 @@ api.interceptors.response.use(
     return data
   },
   (error) => {
+    if (error.config?.silent) return Promise.reject(error)
     console.error('API Error:', error)
 
     if (error.response) {
@@ -973,9 +974,9 @@ export const scheduleAPI = {
 
 export const petAPI = {
   /** 获取宠物元数据（旧版兼容，同 getActive） */
-  getInfo: () => api.get('/pets/active'),
+  getInfo: () => api.get('/pets/active', {silent: true}),
   /** 保存位置/大小 */
-  savePosition: (pos) => api.put('/pets/position', pos),
+  savePosition: (pos) => api.put('/pets/position', pos, {silent: true}),
   /** 获取当前活跃宠物的 spritesheet URL */
   getSpritesheetUrl: () => '/api/pets/active/spritesheet',
 
@@ -988,7 +989,7 @@ export const petAPI = {
   /** 删除指定宠物（清空文件夹） */
   deletePet: (name) => api.delete(`/pets/${name}`),
   /** 获取当前活跃宠物信息 */
-  getActive: () => api.get('/pets/active'),
+  getActive: () => api.get('/pets/active', {silent: true}),
   /** 设置活跃宠物 */
   setActive: (name) => api.put('/pets/active', { name }),
 }
