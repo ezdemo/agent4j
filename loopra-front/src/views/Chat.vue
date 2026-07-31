@@ -1019,6 +1019,22 @@ const jumpToMessage = (globalIdx) => {
 
 const now = () => new Date().toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit'})
 
+const assistantPreview = (blocks) => {
+  if (!Array.isArray(blocks)) return ''
+  const text = blocks.flatMap(block => {
+    if (block?.type === 'content') return [block.content || '']
+    if (block?.type === 'sub_agent') return assistantPreview(block.blocks)
+    return []
+  }).join(' ').replace(/\s+/g, ' ').trim()
+  return text.length > 150 ? text.slice(0, 150) + '…' : text
+}
+
+const notifyAssistantReply = (msg) => {
+  const preview = assistantPreview(msg?.blocks)
+  if (!preview) return
+  window.electronAPI?.desktopPet?.showReply(preview).catch?.(() => {})
+}
+
 // 格式化时间戳（Unix 毫秒）为本地时间字符串
 const formatTimestamp = (timestamp) => {
   if (!timestamp) return now()
@@ -1558,6 +1574,8 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
         enqueueStreamEvent,
         () => {
           flushStreamEvents()
+          const completedMessage = getMsg()
+          notifyAssistantReply(completedMessage)
           store.setSessionStreaming(sessionName, false)
           // 流结束后清理空的助手气泡
           const msgs = store.getSessionMessages(sessionName)

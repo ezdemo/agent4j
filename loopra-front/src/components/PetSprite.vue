@@ -2,7 +2,14 @@
   <div class="pet-sprite" :class="{ 'pet-hidden': !loaded, 'pet-dragging': dragging }"
        :style="wrapStyle"
        @pointerenter="setInteractive(true)" @pointerleave="setInteractive(false)"
-       @pointerdown="onPointerDown" @click.prevent="onClick">
+       @pointerdown="onPointerDown" @click.prevent="onClick" @contextmenu.prevent="toggleSizeControl">
+    <div v-if="showSizeControl" class="pet-size-control" :class="{ 'has-bubble': bubbleText }"
+         @pointerdown.stop="keepSizeControlOpen" @click.stop @contextmenu.prevent.stop>
+      <input type="range" :min="MIN_PET_SCALE" :max="MAX_PET_SCALE" step="0.01"
+             :value="petScale" aria-label="宠物大小" @input="updateScale" @change="commitScale">
+    </div>
+    <div v-if="bubbleText" class="pet-reply-bubble" role="status"
+         @pointerdown.stop @click.stop @contextmenu.prevent.stop @wheel.stop>{{ bubbleText }}</div>
     <div class="pet-sprite-frame" :style="spriteStyle" />
   </div>
 </template>
@@ -29,7 +36,10 @@ const ACTION_LABELS = { idle: '空闲', 'running-right': '向右跑', 'running-l
 // 空闲时随机播放的动画池（目前未在状态映射中使用的）
 const IDLE_SELF_PLAY_POOL = ['running-right', 'running-left', 'waving', 'jumping']
 
-// 大小档位：[label, scale]
+const MIN_PET_SCALE = 0.25
+const MAX_PET_SCALE = 1.25
+
+// 兼容旧版离散大小配置，新尺寸用连续比例保存。
 const SIZE_LEVELS = [
   { label: '小', scale: 0.4 },
   { label: '中', scale: 0.55 },
@@ -45,15 +55,25 @@ const props = defineProps({
   initialX: { type: Number, default: 0 },
   initialY: { type: Number, default: 0 },
   initialSizeIndex: { type: Number, default: 1 },
+  initialScale: { type: Number, default: null },
+  bubbleText: { type: String, default: '' },
   externalDrag: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['position-change', 'drag-move', 'interactive-change', 'size-change'])
+const emit = defineEmits(['position-change', 'drag-move', 'interactive-change', 'scale-change', 'activate'])
+
+const scaleForIndex = (index) => SIZE_LEVELS[index]?.scale || SIZE_LEVELS[1].scale
+const normalizeScale = (value, fallback) => {
+  const scale = Number(value)
+  return Number.isFinite(scale) ? Math.min(MAX_PET_SCALE, Math.max(MIN_PET_SCALE, scale)) : fallback
+}
 
 const elapsedMs = ref(0)
 const loaded = ref(false)
-const sizeIndex = ref(props.initialSizeIndex)
-const renderScale = computed(() => SIZE_LEVELS[sizeIndex.value].scale * 0.75)
+const petScale = ref(normalizeScale(props.initialScale, scaleForIndex(props.initialSizeIndex)))
+const showSizeControl = ref(false)
+let sizeControlTimer = null
+const renderScale = computed(() => petScale.value * 0.75)
 let frameId = 0
 let animStart = 0
 
@@ -70,7 +90,12 @@ let startOffsetX = 0, startOffsetY = 0
 
 watch(() => props.initialX, v => { offsetX.value = v })
 watch(() => props.initialY, v => { offsetY.value = v })
-watch(() => props.initialSizeIndex, v => { sizeIndex.value = v })
+watch(() => props.initialScale, scale => {
+  if (Number.isFinite(scale)) petScale.value = normalizeScale(scale, petScale.value)
+})
+watch(() => props.initialSizeIndex, index => {
+  if (!Number.isFinite(props.initialScale)) petScale.value = scaleForIndex(index)
+})
 
 // ── 空闲自播放 ──
 const randomAnim = ref(null)
@@ -146,6 +171,7 @@ function setInteractive(interactive) {
 }
 
 function onPointerDown(e) {
+  if (e.button !== 0) return
   setInteractive(true)
   dragging.value = true
   dragDirection.value = null
@@ -200,9 +226,28 @@ function onPointerUp(e) {
 }
 
 function onClick() {
-  if (hasDragged) return
-  sizeIndex.value = (sizeIndex.value + 1) % SIZE_LEVELS.length
-  emit('size-change', sizeIndex.value)
+  if (!hasDragged && props.externalDrag) emit('activate')
+}
+
+function toggleSizeControl() {
+  showSizeControl.value = !showSizeControl.value
+  if (showSizeControl.value) keepSizeControlOpen()
+  else clearTimeout(sizeControlTimer)
+}
+
+function keepSizeControlOpen() {
+  clearTimeout(sizeControlTimer)
+  sizeControlTimer = setTimeout(() => { showSizeControl.value = false }, 2000)
+}
+
+function updateScale(event) {
+  petScale.value = normalizeScale(event.target.value, petScale.value)
+  keepSizeControlOpen()
+}
+
+function commitScale() {
+  emit('scale-change', petScale.value)
+  keepSizeControlOpen()
 }
 
 // ── 动画 ──
@@ -257,6 +302,7 @@ onBeforeUnmount(() => {
   if (frameId) cancelAnimationFrame(frameId)
   clearTimeout(saveTimer)
   clearTimeout(idleTimer)
+  clearTimeout(sizeControlTimer)
   window.removeEventListener('pointermove', onPointerMove)
   window.removeEventListener('pointerup', onPointerUp)
 })
@@ -273,6 +319,7 @@ watch(() => props.spritesheetUrl, (url) => {
 
 <style scoped>
 .pet-sprite {
+  position: relative;
   cursor: grab;
   user-select: none;
   transition: opacity 0.3s ease, filter 0.15s ease;
@@ -281,6 +328,65 @@ watch(() => props.spritesheetUrl, (url) => {
 }
 .pet-sprite.pet-hidden { opacity: 0; }
 .pet-sprite.pet-dragging { cursor: grabbing; opacity: 0.85; }
+.pet-size-control {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 3;
+  width: 164px;
+  padding: 8px 11px;
+  box-sizing: border-box;
+  background: #fffdf7;
+  border: 1px solid rgba(83, 63, 39, 0.2);
+  border-radius: 8px;
+  box-shadow: 0 5px 18px rgba(35, 25, 15, 0.18);
+  transform: translateX(-50%);
+}
+.pet-size-control.has-bubble { bottom: calc(100% + 118px); }
+.pet-size-control input {
+  display: block;
+  width: 100%;
+  margin: 0;
+  accent-color: #5b7c51;
+  cursor: ew-resize;
+}
+.pet-reply-bubble {
+  position: absolute;
+  left: 50%;
+  bottom: calc(100% + 8px);
+  z-index: 2;
+  width: min(200px, 78vw);
+  max-height: 92px;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding: 10px 13px;
+  box-sizing: border-box;
+  color: #24201b;
+  background: #fffdf7;
+  border: 1px solid rgba(83, 63, 39, 0.2);
+  border-radius: 12px;
+  box-shadow: 0 5px 18px rgba(35, 25, 15, 0.18);
+  font-size: 13px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+  cursor: default;
+  pointer-events: auto;
+  touch-action: pan-y;
+  transform: translateX(-50%);
+}
+.pet-reply-bubble::after {
+  content: '';
+  position: absolute;
+  left: 50%;
+  bottom: -7px;
+  width: 12px;
+  height: 12px;
+  background: #fffdf7;
+  border-right: 1px solid rgba(83, 63, 39, 0.2);
+  border-bottom: 1px solid rgba(83, 63, 39, 0.2);
+  transform: translateX(-50%) rotate(45deg);
+}
 .pet-sprite-frame {
   background-repeat: no-repeat;
   image-rendering: pixelated;

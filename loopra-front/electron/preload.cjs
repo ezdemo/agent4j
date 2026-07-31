@@ -67,11 +67,18 @@ contextBridge.exposeInMainWorld('electronAPI', {
     isVisible: () => ipcRenderer.invoke('desktop-pet-is-visible'),
     moveBy: (delta) => ipcRenderer.invoke('desktop-pet-move-by', delta),
     setInteractive: (interactive) => ipcRenderer.send('desktop-pet-set-interactive', Boolean(interactive)),
+    activateMain: () => ipcRenderer.invoke('desktop-pet-activate-main'),
     refresh: () => ipcRenderer.invoke('desktop-pet-refresh'),
     onRefresh: (callback) => {
       const listener = () => callback()
       ipcRenderer.on('desktop-pet-refresh', listener)
       return () => ipcRenderer.removeListener('desktop-pet-refresh', listener)
+    },
+    showReply: (text) => ipcRenderer.invoke('desktop-pet-reply', text),
+    onReply: (callback) => {
+      const listener = (event, payload) => callback(payload?.text || '')
+      ipcRenderer.on('desktop-pet-reply', listener)
+      return () => ipcRenderer.removeListener('desktop-pet-reply', listener)
     }
   },
 

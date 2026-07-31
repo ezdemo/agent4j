@@ -456,8 +456,9 @@
                :state="petState"
                :initial-x="petPosition.x" :initial-y="petPosition.y"
                :initial-size-index="petSizeIndex"
+               :initial-scale="petScale"
                @position-change="savePetPosition"
-               @size-change="savePetSize" />
+               @scale-change="savePetScale" />
   </div>
 </template>
 
@@ -1275,6 +1276,7 @@ onBeforeUnmount(() => {
 const petSpritesheetUrl = ref('')
 const petPosition = ref({ x: 0, y: 0 })
 const petSizeIndex = ref(1)
+const petScale = ref(null)
 
 async function loadPet() {
   try {
@@ -1293,6 +1295,9 @@ async function loadPet() {
       }
       if (typeof petData.sizeIndex === 'number') {
         petSizeIndex.value = petData.sizeIndex
+      }
+      if (typeof petData.scale === 'number') {
+        petScale.value = petData.scale
       }
     }
   } catch { /* pet 不可用时静默 */ }
@@ -1313,10 +1318,10 @@ async function savePetPosition(pos) {
   } catch { /* 保存失败静默 */ }
 }
 
-async function savePetSize(idx) {
-  petSizeIndex.value = idx
+async function savePetScale(scale) {
+  petScale.value = scale
   try {
-    await petAPI.savePosition({ sizeIndex: idx })
+    await petAPI.savePosition({scale})
   } catch { /* 保存失败静默 */ }
 }
 

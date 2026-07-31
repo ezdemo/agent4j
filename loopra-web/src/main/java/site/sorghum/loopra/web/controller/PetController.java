@@ -42,6 +42,8 @@ public class PetController {
             Paths.get(System.getProperty("user.home"), ".loopra", "pet");
 
     private static final Path POSITION_FILE = POSITION_DIR.resolve("position.json");
+    private static final double MIN_PET_SCALE = 0.25d;
+    private static final double MAX_PET_SCALE = 1.25d;
 
     @Inject
     private ConfigService configService;
@@ -179,6 +181,8 @@ public class PetController {
 
         result.put("position", readPetPosition());
         result.put("sizeIndex", readPetSizeIndex());
+        Double scale = readPetScale();
+        if (scale != null) result.put("scale", scale);
         result.put("spritesheetUrl", "/api/pets/" + activeName + "/spritesheet");
 
         return ApiResponse.ok(result);
@@ -269,6 +273,19 @@ public class PetController {
         return 1;
     }
 
+    private Double readPetScale() {
+        try {
+            if (Files.exists(POSITION_FILE)) {
+                ONode node = ONode.ofJson(Files.readString(POSITION_FILE, StandardCharsets.UTF_8));
+                if (node.get("scale") != null) {
+                    double scale = node.get("scale").getDouble();
+                    if (Double.isFinite(scale) && scale >= MIN_PET_SCALE && scale <= MAX_PET_SCALE) return scale;
+                }
+            }
+        } catch (Exception ignored) {}
+        return null;
+    }
+
     @SneakyThrows
     private void savePetPosition(Map<String, Object> pos) {
         Files.createDirectories(POSITION_DIR);
@@ -281,6 +298,14 @@ public class PetController {
         if (pos.containsKey("x")) root.set("x", pos.get("x"));
         if (pos.containsKey("y")) root.set("y", pos.get("y"));
         if (pos.containsKey("sizeIndex")) root.set("sizeIndex", pos.get("sizeIndex"));
+        if (pos.containsKey("scale")) {
+            try {
+                double scale = Double.parseDouble(String.valueOf(pos.get("scale")));
+                if (Double.isFinite(scale) && scale >= MIN_PET_SCALE && scale <= MAX_PET_SCALE) {
+                    root.set("scale", scale);
+                }
+            } catch (NumberFormatException ignored) {}
+        }
         Files.writeString(POSITION_FILE, root.toJson(), StandardCharsets.UTF_8);
     }
 }
