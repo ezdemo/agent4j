@@ -49,6 +49,7 @@ let stopRightPanelListener = null
 let stopThemeListener = null
 let stopElementInspectionListener = null
 let stopRefreshHistoryListener = null
+let stopFocusComposerListener = null
 
 onMounted(async () => {
   try {
@@ -67,6 +68,9 @@ onMounted(async () => {
   })
   stopElementInspectionListener = window.electronAPI?.events?.listen('desktop-chat-tab-element-inspection', addElementInspectionToSession)
   stopRefreshHistoryListener = window.electronAPI?.events?.listen('desktop-chat-tab-refresh-history', () => chatRef.value?.refreshHistory())
+  stopFocusComposerListener = window.electronAPI?.events?.listen('desktop-chat-tab-focus-composer', () => {
+    void chatRef.value?.focusComposer?.()
+  })
   document.documentElement.setAttribute('data-theme', pageTheme.value)
   try {
     await sessionsAPI.switchSession(sessionName, workspaceHash.value)
@@ -141,6 +145,7 @@ onBeforeUnmount(() => {
   stopThemeListener?.()
   stopElementInspectionListener?.()
   stopRefreshHistoryListener?.()
+  stopFocusComposerListener?.()
 })
 
 // 工作区变化时自动上报，确保标签栏图标实时更新

@@ -29,7 +29,10 @@
     </div>
 
     <!-- 消息区 -->
-    <div ref="messagesContainer" class="messages" :class="{ 'messages-welcome': !props.sessionName || messages.length === 0 }">
+    <div ref="messagesContainer" class="messages" :class="{
+      'messages-welcome': !props.sessionName || messages.length === 0,
+      'messages-with-queue': queuedMessages.length > 0
+    }">
       <!-- 空状态：无会话或新建的空会话 -->
       <div v-if="!props.sessionName || messages.length === 0" class="empty welcome-screen">
         <section class="welcome-panel">
@@ -788,6 +791,7 @@ watch(() => messages.value.map(messageKey), ids => {
 watch(() => props.sessionName, () => {
   messageHeights.clear()
   virtualScrollTop.value = 0
+  void focusComposer()
 })
 
 // Only the active streaming message needs to repatch for every server event.
@@ -1115,6 +1119,10 @@ const scroll = async (force = false, smooth = false) => {
   }
   updateScrollBtn()
 }
+
+watch(() => queuedMessages.value.length > 0, (hasQueue, hadQueue) => {
+  if (hasQueue !== hadQueue) void scroll(true, true)
+})
 
 const scrollToBottom = () => {
   userScrolledAway = false
@@ -1953,6 +1961,7 @@ const loadSession = async (name, workspaceHash) => {
       // 缓存命中，直接滚动到底部
       await scroll(true)
     }
+    await focusComposer()
     await loadUsage({sessionName: name, workspaceHash})
   } catch (e) {
     console.error('切换会话失败:', e)
@@ -1993,10 +2002,20 @@ const appendElementInspection = async (inspection) => {
 // 加载历史消息（仅在明确选了 session 时）
 onMounted(() => {
   document.addEventListener('click', handleWelcomeOutsideClick)
-  if (props.sessionName) loadHistory()
+  if (props.sessionName) {
+    void loadHistory().finally(focusComposer)
+  } else {
+    void focusComposer()
+  }
 })
 
 onBeforeUnmount(() => document.removeEventListener('click', handleWelcomeOutsideClick))
+
+const focusComposer = async () => {
+  await nextTick()
+  const target = props.sessionName && messages.value.length > 0 ? chatInput.value : welcomeInput.value
+  target?.focus?.()
+}
 
 const setDraft = async (text) => {
   const draft = text || ''
@@ -2011,7 +2030,7 @@ const setDraft = async (text) => {
   chatInput.value?.focus?.()
 }
 
-defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, startWelcomePrompt, appendFileSelection, appendElementInspection, exportChat, refreshHistory, setDraft})
+defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, startWelcomePrompt, appendFileSelection, appendElementInspection, exportChat, refreshHistory, focusComposer, setDraft})
 </script>
 
 <style scoped>
@@ -2075,6 +2094,11 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   scrollbar-color: transparent transparent;
   padding: 16px 72px 146px;
   position: relative;
+  transition: padding-bottom 180ms ease;
+}
+
+.messages.messages-with-queue {
+  padding-bottom: 184px;
 }
 
 .messages::-webkit-scrollbar {
@@ -2789,6 +2813,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 
 @media (max-width: 640px) {
   .messages { padding: 12px 8px 100px; }
+  .messages.messages-with-queue { padding-bottom: 138px; }
   .msg-body { max-width: 95%; }
   .empty-title { font-size: 14px; }
   .empty-desc { font-size: 12px; }

@@ -677,6 +677,11 @@ function addFileSelectionToSession(selection) {
 }
 
 const chatRef = ref(null)
+watch(mainView, async (view) => {
+  if (view !== 'chat') return
+  await nextTick()
+  await chatRef.value?.focusComposer?.()
+})
 const dashboardRef = ref(null)
 const workspace = ref('')
 

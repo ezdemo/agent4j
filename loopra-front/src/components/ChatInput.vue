@@ -414,7 +414,7 @@
               <div ref="modelDropdownList" class="model-dropdown-list">
                 <section v-for="group in modelGroups" :key="group.key" class="model-channel-group">
                   <button type="button" class="model-channel-toggle" :aria-expanded="!isModelChannelCollapsed(group)" @click="toggleModelChannel(group)">
-                    <svg :class="{ expanded: !isModelChannelCollapsed(group) }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    <svg :class="{ expanded: !isModelChannelCollapsed(group) }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg>
                     <span class="model-channel-name">{{ group.name }}</span>
                     <span class="model-channel-count">{{ group.models.length }}</span>
                   </button>
@@ -496,6 +496,15 @@ const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export'
 
 const inputField = ref(null)
 const inputFocused = ref(false)
+let restoreInputFocusOnWindowFocus = false
+const rememberInputFocus = () => {
+  restoreInputFocusOnWindowFocus = document.activeElement === inputField.value
+}
+const restoreInputFocus = () => {
+  if (!restoreInputFocusOnWindowFocus) return
+  restoreInputFocusOnWindowFocus = false
+  nextTick(() => inputField.value?.focus())
+}
 const localText = ref(props.inputText)
 const images = ref([]) // 粘贴的图片 base64 Data URI 列表
 const selectedFileContexts = ref([])
@@ -1248,6 +1257,8 @@ const compositionItems = computed(() => {
 onMounted(async () => {
   loadCommands();
   document.addEventListener('click', handleOutside)
+  window.addEventListener('blur', rememberInputFocus)
+  window.addEventListener('focus', restoreInputFocus)
   if (window.electronAPI?.desktopPet) {
     appStore.desktopPetVisible = await window.electronAPI.desktopPet.isVisible()
   }
@@ -1256,6 +1267,8 @@ onBeforeUnmount(() => {
   stopChecklistPolling()
   if (fileMentionSearchTimer) clearTimeout(fileMentionSearchTimer)
   document.removeEventListener('click', handleOutside)
+  window.removeEventListener('blur', rememberInputFocus)
+  window.removeEventListener('focus', restoreInputFocus)
 })
 
 // ── 桌面宠物精灵图 ──
@@ -1378,28 +1391,56 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 0 2px 8px;
+  margin: 0 2px;
+}
+
+.composer-queue:hover,
+.composer-queue:focus-within {
+  margin-bottom: 8px;
 }
 
 .composer-queue-summary {
   display: flex;
   align-items: center;
   width: 100%;
-  min-height: 30px;
-  gap: 8px;
-  padding: 3px 8px 3px 10px;
-  color: var(--fg-3);
-  background: color-mix(in srgb, var(--bg-2) 72%, transparent);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  font-size: 14px;
+  min-height: 32px;
+  gap: 7px;
+  padding: 4px 9px;
+  color: var(--fg-2);
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: 9px;
+  box-shadow: 0 2px 7px color-mix(in srgb, var(--accent) 8%, transparent);
+  font-size: 13px;
+  font-weight: 500;
   line-height: 20px;
-  transition: color 120ms ease;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.composer-queue-summary::after {
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  content: '';
+  opacity: .55;
+  transform: rotate(45deg) translate(-1px, -1px);
+  transition: opacity 120ms ease, transform 120ms ease;
 }
 
 .composer-queue:hover .composer-queue-summary,
 .composer-queue:focus-within .composer-queue-summary {
-  color: var(--fg-2);
+  color: var(--fg);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.composer-queue:hover .composer-queue-summary::after,
+.composer-queue:focus-within .composer-queue-summary::after {
+  opacity: .85;
+  transform: rotate(225deg) translate(-1px, -1px);
 }
 
 .composer-queue-items {
@@ -1441,7 +1482,8 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 
 .composer-queue-icon {
   flex: 0 0 auto;
-  color: var(--fg-4);
+  color: var(--accent);
+  opacity: .82;
 }
 
 .composer-queue-text {
@@ -3309,7 +3351,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 .model-channel-toggle:hover { color: var(--fg); background: var(--bg-3); }
 .model-channel-toggle svg { flex: 0 0 auto; transition: transform var(--t); }
-.model-channel-toggle svg.expanded { transform: rotate(180deg); }
+.model-channel-toggle svg.expanded { transform: rotate(90deg); }
 .model-channel-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-channel-count { margin-left: auto; color: var(--fg-4); font-size: 11px; }
 .model-option-name { min-width: 0; display: flex; flex-direction: column; gap: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
