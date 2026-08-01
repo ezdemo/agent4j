@@ -3,22 +3,14 @@ package site.sorghum.loopra.web.controller;
 import io.swagger.annotations.Api;
 import io.swagger.annotations.ApiOperation;
 import org.noear.snack4.ONode;
-import org.noear.solon.annotation.Body;
-import org.noear.solon.annotation.Controller;
-import org.noear.solon.annotation.Get;
-import org.noear.solon.annotation.Put;
-import org.noear.solon.annotation.Mapping;
+import org.noear.solon.annotation.*;
 import site.sorghum.loopra.web.model.ApiResponse;
 
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.LinkedHashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * 常用要求预设 API。
@@ -41,6 +33,7 @@ public class PromptPresetController {
 
     @ApiOperation(value = "获取常用要求预设")
     @Get
+    @Mapping("")
     public ApiResponse<List<Map<String, String>>> list() {
         try {
             if (!Files.exists(PRESETS_FILE)) {
@@ -57,6 +50,7 @@ public class PromptPresetController {
 
     @ApiOperation(value = "保存常用要求预设")
     @Put
+    @Mapping("")
     public ApiResponse<List<Map<String, String>>> save(@Body Map<String, Object> body) {
         Object rawPresets = body == null ? null : body.get("presets");
         if (!(rawPresets instanceof List<?> submitted)) {
