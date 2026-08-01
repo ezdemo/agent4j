@@ -225,6 +225,49 @@
       <!-- Token 用量 & 模型选择 -->
       <div class="usage-bar">
         <div class="usage-stats">
+        <div class="quick-command-selector">
+          <button type="button" class="quick-command-trigger" :class="{ active: showQuickCommandPicker }"
+                  title="常用要求" aria-label="常用要求" :aria-expanded="showQuickCommandPicker"
+                  @click="toggleQuickCommandPicker">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M8 3h8l3 3v15H5V3h3z"/><path d="M8 3v5h8V3M9 13h6M9 17h4"/>
+            </svg>
+          </button>
+          <div v-if="showQuickCommandPicker" class="quick-command-panel" @click.stop>
+            <div class="quick-command-header">
+              <div>
+                <strong>常用要求</strong>
+                <span>点击复制要求到剪贴板</span>
+              </div>
+              <button type="button" class="quick-command-add" title="添加预设" aria-label="添加预设" @click="openQuickCommandEditor()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              </button>
+            </div>
+            <div v-if="quickCommands.length" class="quick-command-list">
+              <div v-for="command in quickCommands" :key="command.id" class="quick-command-item">
+                <button type="button" class="quick-command-copy" :title="`复制 ${command.text}`" @click="copyQuickCommand(command)">
+                  <span class="quick-command-label">{{ command.label }}</span>
+                  <code>{{ command.text }}</code>
+                </button>
+                <button type="button" class="quick-command-action" title="编辑预设" :aria-label="`编辑 ${command.label}`" @click="openQuickCommandEditor(command)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z"/></svg>
+                </button>
+                <button type="button" class="quick-command-action quick-command-delete" title="删除预设" :aria-label="`删除 ${command.label}`" @click="removeQuickCommand(command.id)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/></svg>
+                </button>
+              </div>
+            </div>
+            <div v-else class="quick-command-empty">还没有常用要求</div>
+            <form v-if="quickCommandEditorOpen" class="quick-command-form" @submit.prevent="saveQuickCommand">
+              <input v-model.trim="quickCommandDraft.label" type="text" maxlength="24" placeholder="预设名称" aria-label="预设名称" />
+              <textarea v-model.trim="quickCommandDraft.text" rows="2" maxlength="500" placeholder="例如：请先运行相关测试" aria-label="要求内容"></textarea>
+              <div class="quick-command-form-actions">
+                <button type="button" @click="closeQuickCommandEditor">取消</button>
+                <button type="submit" class="primary" :disabled="!quickCommandDraft.label || !quickCommandDraft.text">保存</button>
+              </div>
+            </form>
+          </div>
+        </div>
         <div class="usage-context-control"
              @mouseenter="refreshContextComposition"
              @mouseleave="showContextComposition = false">
@@ -466,7 +509,7 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {StarFilled, StarOutlined} from '@ant-design/icons-vue'
 import {useAppStore} from '../stores/app'
-import {agentAPI, filesAPI, petAPI} from '../services/api'
+import {agentAPI, filesAPI, petAPI, promptPresetsAPI} from '../services/api'
 import PetSprite from './PetSprite.vue'
 import ChecklistSteps from './ChecklistSteps.vue'
 
@@ -516,7 +559,85 @@ const fileDropActive = ref(false)
 watch(() => props.inputText, v => localText.value = v)
 watch(localText, v => emit('update:inputText', v))
 
-// ============= 斜杠命令 =============
+const DEFAULT_QUICK_COMMANDS = [
+  {id: 'quick-test', label: '要求测试', text: '请先运行与本次修改相关的测试，确认通过后再报告结果。'},
+  {id: 'quick-git', label: '要求提交到 Git', text: '请检查本次修改，运行必要的验证，并将完成的代码提交到 Git。'},
+  {id: 'quick-analyze', label: '要求先分析', text: '请先分析现有代码、调用链和影响范围，再开始修改。'},
+  {id: 'quick-review', label: '要求代码审查', text: '请按代码审查标准检查本次修改，优先报告真实缺陷和回归风险。'}
+]
+
+const loadQuickCommands = () => DEFAULT_QUICK_COMMANDS.map(item => ({...item}))
+
+const loadPromptPresets = async () => {
+  try {
+    const response = await promptPresetsAPI.list()
+    if (response?.success && Array.isArray(response.data)) {
+      quickCommands.value = response.data.filter(item => item?.id && item?.label && item?.text)
+    }
+  } catch {
+    // 后端不可用时使用内置预设
+  }
+}
+
+const quickCommands = ref(loadQuickCommands())
+const showQuickCommandPicker = ref(false)
+const quickCommandEditorOpen = ref(false)
+const quickCommandDraft = ref({id: '', label: '', text: ''})
+
+const persistQuickCommands = async () => {
+  try {
+    await promptPresetsAPI.save(quickCommands.value)
+  } catch {
+    // 保存失败时保留当前页面状态
+  }
+}
+
+const toggleQuickCommandPicker = () => {
+  const nextOpen = !showQuickCommandPicker.value
+  if (nextOpen) closePickers('quick')
+  showQuickCommandPicker.value = nextOpen
+  if (!nextOpen) closeQuickCommandEditor()
+}
+
+const openQuickCommandEditor = (command = null) => {
+  quickCommandDraft.value = command ? {...command} : {id: '', label: '', text: ''}
+  quickCommandEditorOpen.value = true
+}
+
+const closeQuickCommandEditor = () => {
+  quickCommandEditorOpen.value = false
+  quickCommandDraft.value = {id: '', label: '', text: ''}
+}
+
+const saveQuickCommand = () => {
+  const {id, label, text} = quickCommandDraft.value
+  if (!label || !text) return
+  if (id) {
+    const index = quickCommands.value.findIndex(item => item.id === id)
+    if (index !== -1) quickCommands.value[index] = {id, label, text}
+  } else {
+    quickCommands.value.push({id: `quick-${Date.now()}`, label, text})
+  }
+  persistQuickCommands()
+  closeQuickCommandEditor()
+}
+
+const removeQuickCommand = (id) => {
+  quickCommands.value = quickCommands.value.filter(item => item.id !== id)
+  persistQuickCommands()
+}
+
+const copyQuickCommand = async (command) => {
+  try {
+    await navigator.clipboard.writeText(command.text)
+    showQuickCommandPicker.value = false
+    closeQuickCommandEditor()
+    window.dispatchEvent(new CustomEvent('copy-success', {detail: `${command.label}已复制` }))
+  } catch {
+  }
+}
+
+
 const slashPopupOpen = ref(false)
 const slashQuery = ref('')
 const activePopupIdx = ref(0)
@@ -1148,6 +1269,10 @@ const handleOutside = (e) => {
   if (!e.target.closest('.reasoning-effort-selector')) showEffortPicker.value = false
   if (!e.target.closest('.skill-selector')) showSkillPicker.value = false
   if (!e.target.closest('.permission-hitl-selector')) showPermissionPicker.value = false
+  if (!e.target.closest('.quick-command-selector')) {
+    showQuickCommandPicker.value = false
+    closeQuickCommandEditor()
+  }
 }
 
 // ============= 推理强度切换 =============
@@ -1157,6 +1282,7 @@ const closePickers = (except = '') => {
   if (except !== 'skill') showSkillPicker.value = false
   if (except !== 'permission') showPermissionPicker.value = false
   if (except !== 'effort') showEffortPicker.value = false
+  if (except !== 'quick') showQuickCommandPicker.value = false
   showContextComposition.value = false
 }
 const effortOptions = [
@@ -1257,6 +1383,7 @@ const compositionItems = computed(() => {
 
 onMounted(async () => {
   loadCommands();
+  loadPromptPresets();
   document.addEventListener('click', handleOutside)
   window.addEventListener('blur', rememberInputFocus)
   window.addEventListener('focus', restoreInputFocus)
@@ -2230,6 +2357,93 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   opacity: 0;
   transform: translateY(8px) scale(0.98);
 }
+
+.quick-command-selector {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.quick-command-trigger,
+.quick-command-add,
+.quick-command-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--fg-4);
+  cursor: pointer;
+}
+
+.quick-command-trigger {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  transition: color var(--t), background var(--t);
+}
+
+.quick-command-trigger:hover,
+.quick-command-trigger.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.quick-command-panel {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: -8px;
+  z-index: 120;
+  width: min(330px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+}
+
+.quick-command-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.quick-command-header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.quick-command-header strong { color: var(--fg-2); font-size: 12px; }
+.quick-command-header span { color: var(--fg-4); font-size: 11px; }
+.quick-command-add { width: 26px; height: 26px; border-radius: var(--r-sm); }
+.quick-command-add:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.quick-command-list { max-height: 240px; overflow-y: auto; padding: 4px; }
+.quick-command-item { display: flex; align-items: center; min-width: 0; gap: 2px; padding: 2px; border-radius: var(--r-sm); }
+.quick-command-item:hover { background: var(--bg-2); }
+.quick-command-copy { display: grid; flex: 1; min-width: 0; gap: 2px; padding: 6px 7px; border: 0; background: transparent; color: var(--fg-2); cursor: pointer; text-align: left; }
+.quick-command-label { overflow: hidden; color: var(--fg-2); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.quick-command-copy code { overflow: hidden; color: var(--fg-4); font: 11px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.quick-command-action { width: 26px; height: 26px; flex: 0 0 auto; border-radius: var(--r-sm); }
+.quick-command-action:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.quick-command-delete:hover { color: var(--red); background: color-mix(in srgb, var(--red) 10%, transparent); }
+.quick-command-empty { padding: 18px 12px; color: var(--fg-4); font-size: 12px; text-align: center; }
+.quick-command-form { display: grid; gap: 7px; padding: 9px; border-top: 1px solid var(--border); background: var(--bg-2); }
+.quick-command-form input,
+.quick-command-form textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--bg); color: var(--fg); font: inherit; font-size: 12px; outline: none; }
+.quick-command-form input { height: 28px; padding: 0 8px; }
+.quick-command-form textarea { min-height: 48px; padding: 6px 8px; resize: vertical; }
+.quick-command-form input:focus,
+.quick-command-form textarea:focus { border-color: var(--accent); }
+.quick-command-form-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.quick-command-form-actions button { padding: 4px 9px; border: 1px solid var(--border); border-radius: var(--r-sm); background: transparent; color: var(--fg-3); cursor: pointer; font: inherit; font-size: 11px; }
+.quick-command-form-actions button:hover { color: var(--fg); background: var(--bg); }
+.quick-command-form-actions button.primary { border-color: var(--accent); background: var(--accent); color: var(--bg); }
+.quick-command-form-actions button:disabled { cursor: not-allowed; opacity: .45; }
 
 /* Usage bar — 融入 input-box 底部 */
 .usage-bar {
