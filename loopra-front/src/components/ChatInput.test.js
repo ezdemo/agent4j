@@ -1,7 +1,7 @@
 /* @vitest-environment jsdom */
 
 import {shallowMount} from '@vue/test-utils'
-import {describe, expect, it, vi} from 'vitest'
+import {describe, expect, it, beforeEach, vi} from 'vitest'
 
 Object.defineProperty(Element.prototype, 'scrollIntoView', {
   configurable: true,
@@ -22,9 +22,19 @@ vi.mock('../services/api', () => ({
     getInfo: vi.fn().mockResolvedValue({data: null}),
     getSpritesheetUrl: vi.fn(),
     savePosition: vi.fn().mockResolvedValue({success: true})
+  },
+  promptPresetsAPI: {
+    list: vi.fn().mockResolvedValue({
+      success: true,
+      data: [
+        {id: 'quick-test', label: '要求测试', text: '请先运行与本次修改相关的测试，确认通过后再报告结果。'}
+      ]
+    }),
+    save: vi.fn().mockResolvedValue({success: true})
   }
 }))
 
+import {promptPresetsAPI} from '../services/api'
 import ChatInput from './ChatInput.vue'
 
 function mountInput(props) {
@@ -42,6 +52,42 @@ function mountInput(props) {
     global: {stubs: {PetSprite: true, ChecklistSteps: true}}
   })
 }
+
+describe('ChatInput quick commands', () => {
+  beforeEach(() => {
+    vi.clearAllMocks()
+    Object.defineProperty(navigator, 'clipboard', {
+      configurable: true,
+      value: {writeText: vi.fn().mockResolvedValue(undefined)}
+    })
+  })
+
+  it('copies a preset command to the clipboard', async () => {
+    const wrapper = mountInput()
+    await wrapper.find('.quick-command-trigger').trigger('click')
+    await wrapper.find('.quick-command-copy').trigger('click')
+
+    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('请先运行与本次修改相关的测试，确认通过后再报告结果。')
+    wrapper.unmount()
+  })
+
+  it('persists a newly added preset', async () => {
+    const wrapper = mountInput()
+    await wrapper.find('.quick-command-trigger').trigger('click')
+    await wrapper.find('.quick-command-add').trigger('click')
+    const fields = wrapper.findAll('.quick-command-form input, .quick-command-form textarea')
+    await fields[0].setValue('检查状态')
+    await fields[1].setValue('请检查当前状态并报告结果')
+    await wrapper.find('.quick-command-form').trigger('submit')
+
+    expect(promptPresetsAPI.save).toHaveBeenCalledWith(
+      expect.arrayContaining([
+        expect.objectContaining({label: '检查状态', text: '请检查当前状态并报告结果'})
+      ])
+    )
+    wrapper.unmount()
+  })
+})
 
 describe('ChatInput default model actions', () => {
   it('renders queued messages behind a compact summary and preserves queue actions', async () => {

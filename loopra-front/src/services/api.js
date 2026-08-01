@@ -301,6 +301,12 @@ export const agentAPI = {
   }
 }
 
+// 常用要求预设 API
+export const promptPresetsAPI = {
+  list: () => api.get('/prompt-presets'),
+  save: (presets) => api.put('/prompt-presets', {presets})
+}
+
 // 会话 API
 const sessionPathName = (name) => encodeURIComponent(name)
 

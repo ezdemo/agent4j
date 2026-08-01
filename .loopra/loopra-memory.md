@@ -76,3 +76,12 @@ Loopra Web 停止生成需三层取消：前端流请求携带 requestId 并传�
 ## [2026-07-31 17:28] 会话折叠沉淀
 
 桌面宠物的宠物 API 请求使用 Axios silent 配置，服务端离线时不触发全局 Network Error toast；已加载精灵会保留并显示“服务端离线中…”，下一次成功轮询自动恢复。
+
+## [2026-07-31 17:56] 会话折叠沉淀
+
+- 快捷命令功能位于 `ChatInput.vue` 输入栏底部使用信息区域的左侧。
+- 快捷命令本地存储键名为 `loopra.quick-commands`。
+- 默认快捷命令为 `/new`、`/plan`、`/compact`、`/continue`。
+- 复制成功反馈复用窗口事件 `copy-success`。
+- 项目前端使用 Vue、Vite、Vitest，组件测试位于 `src/components/*.test.js`。
+- 用户偏好使用中文交流。
