@@ -385,6 +385,12 @@ export const sessionsAPI = {
     return api.get(`/sessions/${sessionPathName(name)}/checklist`, { params })
   },
 
+  // 获取会话 Goal - GET /api/sessions/{name}/goal?workspaceHash=xxx
+  getGoal: (name, workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.get(`/sessions/${sessionPathName(name)}/goal`, { params })
+  },
+
 }
 
 // 工具 API

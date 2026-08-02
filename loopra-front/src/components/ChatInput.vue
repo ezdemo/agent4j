@@ -57,6 +57,28 @@
     </Transition>
 
     <Transition name="workflow-float">
+      <section v-if="goalData" class="workflow-float goal-float" aria-label="当前 Goal"
+               @mouseenter="goalHover = true" @mouseleave="goalHover = false"
+               @focusin="goalHover = true" @focusout="goalHover = false">
+        <button type="button" class="workflow-trigger" :aria-expanded="goalHover">
+          <span class="workflow-trigger-dot" :class="goalData.status?.toLowerCase()"></span>
+          🎯 {{ goalData.doneSteps }}/{{ goalData.totalSteps }}
+        </button>
+        <Transition name="workflow-detail">
+          <div v-if="goalHover" class="workflow-detail">
+            <div class="workflow-detail-heading">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+              </svg>
+              Goal 进度
+            </div>
+            <GoalSteps :data="goalData" />
+          </div>
+        </Transition>
+      </section>
+    </Transition>
+
+    <Transition name="workflow-float">
       <section v-if="clData" class="workflow-float" aria-label="当前工作流"
                @mouseenter="workflowHover = true" @mouseleave="workflowHover = false"
                @focusin="workflowHover = true" @focusout="workflowHover = false">
@@ -512,6 +534,7 @@ import {useAppStore} from '../stores/app'
 import {agentAPI, filesAPI, petAPI, promptPresetsAPI} from '../services/api'
 import PetSprite from './PetSprite.vue'
 import ChecklistSteps from './ChecklistSteps.vue'
+import GoalSteps from './GoalSteps.vue'
 
 const props = defineProps({
   inputText: {type: String, default: ''},
@@ -1224,20 +1247,64 @@ const startChecklistPolling = () => {
   clRefreshTimer = setInterval(loadChecklist, 3000)
 }
 
+// ============= Goal =============
+const goalData = ref(null)
+const goalHover = ref(false)
+let goalRefreshTimer = null
+
+const loadGoal = async () => {
+  if (!props.workspaceHash || !props.sessionName) {
+    goalData.value = null
+    return
+  }
+  try {
+    const { sessionsAPI } = await import('../services/api')
+    const res = await sessionsAPI.getGoal(props.sessionName, props.workspaceHash)
+    if (res.success && res.data && !['COMPLETED', 'CANCELLED'].includes(res.data.status)) {
+      goalData.value = res.data
+    } else {
+      goalData.value = null
+    }
+  } catch {
+    goalData.value = null
+  }
+}
+
+const stopGoalPolling = () => {
+  if (goalRefreshTimer) clearInterval(goalRefreshTimer)
+  goalRefreshTimer = null
+}
+
+const startGoalPolling = () => {
+  stopGoalPolling()
+  if (!props.streaming) return
+  goalRefreshTimer = setInterval(loadGoal, 3000)
+}
+
 watch([() => props.workspaceHash, () => props.sessionName], () => {
   clData.value = null
   workflowHover.value = false
+  goalData.value = null
+  goalHover.value = false
   loadChecklist()
   startChecklistPolling()
+  loadGoal()
+  startGoalPolling()
 }, { immediate: true })
 
 watch(() => props.streaming, (streaming, wasStreaming) => {
   if (streaming) {
     loadChecklist()
     startChecklistPolling()
+    loadGoal()
+    startGoalPolling()
   } else {
     stopChecklistPolling()
-    if (wasStreaming) loadChecklist()
+    stopGoalPolling()
+    if (wasStreaming) {
+      loadChecklist()
+      loadGoal()
+    }
   }
 })
 
@@ -3816,6 +3883,50 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 
 .workflow-detail :deep(.cl-tag) {
   font-size: 11px;
+}
+
+/* Goal 浮层复用 workflow 样式，补充 goal 专属 deep 覆盖 */
+.goal-float {
+  left: auto;
+  right: 12px;
+  transform: none;
+}
+.goal-float .workflow-detail {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+.workflow-float-enter-from,
+.workflow-float-leave-to {
+  opacity: 0;
+}
+.goal-float.workflow-float-enter-from,
+.goal-float.workflow-float-leave-to {
+  transform: translateY(8px);
+}
+
+.workflow-detail :deep(.gl) {
+  font-size: 14px;
+}
+.workflow-detail :deep(.gl-title),
+.workflow-detail :deep(.gl-desc) {
+  font-size: 14px;
+}
+.workflow-detail :deep(.gl-title),
+.workflow-detail :deep(.gl-row.current .gl-desc) {
+  font-weight: 600;
+}
+.workflow-detail :deep(.gl-badge),
+.workflow-detail :deep(.gl-progress),
+.workflow-detail :deep(.gl-evidence) {
+  font-size: 12px;
+}
+.workflow-trigger-dot.blocked {
+  background: var(--red, #c62828);
+  box-shadow: 0 0 0 3px var(--red-bg, #ffebee);
+}
+.workflow-trigger-dot.paused {
+  background: var(--yellow, #f57f17);
 }
 
 .workflow-float-enter-active,

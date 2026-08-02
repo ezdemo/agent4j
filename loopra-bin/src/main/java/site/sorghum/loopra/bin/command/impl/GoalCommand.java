@@ -47,6 +47,8 @@ public class GoalCommand implements ChatCommand {
 
     @Override
     public CommandResult execute(MessageWrapper input, ChatCommandContext context) {
+        boolean created = false;
+        String objective = "";
         try {
             String[] parts = input.getMessage().trim().split("\\s+", 3);
             String action = parts.length > 1 ? parts[1].toLowerCase(Locale.ROOT) : "status";
@@ -55,7 +57,12 @@ public class GoalCommand implements ChatCommand {
                     context.getAgent().getSessionStore().currentName());
 
             String result = switch (action) {
-                case "create" -> create(scope, argument);
+                case "create" -> {
+                    objective = argument;
+                    String r = create(scope, argument);
+                    created = !r.startsWith("当前已有未关闭");
+                    yield r;
+                }
                 case "status" -> goals.describe(scope.load());
                 case "pause" -> mutate(scope, goals::pause);
                 case "resume" -> mutate(scope, goals::resume);
@@ -69,6 +76,11 @@ public class GoalCommand implements ChatCommand {
             context.getAgent().getOutput().onLog(LogLevel.INFO, result);
         } catch (Exception e) {
             context.getAgent().getOutput().onLog(LogLevel.ERROR, "Goal 命令失败: " + e.getMessage());
+        }
+        // 创建成功后进入推理循环，让 Agent 自动开始执行 Goal
+        if (created) {
+            input.setMessage("请开始执行刚创建的 Goal：" + objective);
+            return CommandResult.LOOP;
         }
         return CommandResult.CONTINUE;
     }
