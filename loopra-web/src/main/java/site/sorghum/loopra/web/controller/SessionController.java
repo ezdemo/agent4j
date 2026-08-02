@@ -7,6 +7,8 @@ import lombok.SneakyThrows;
 import org.noear.solon.annotation.*;
 import site.sorghum.loopra.bin.checklist.Checklist;
 import site.sorghum.loopra.bin.checklist.ChecklistStore;
+import site.sorghum.loopra.bin.goal.Goal;
+import site.sorghum.loopra.bin.goal.GoalStep;
 import site.sorghum.loopra.bin.workspace.WorkspaceManager;
 import site.sorghum.loopra.tool.interact.InteractionService;
 import site.sorghum.loopra.web.common.ServiceException;
@@ -197,6 +199,47 @@ public class SessionController {
             throw new ServiceException("获取清单失败: " + e.getMessage());
         }
     }
-    
+
+    @ApiOperation(value = "获取会话 Goal", notes = "返回指定会话的 Goal 状态和步骤")
+    @Get
+    @Mapping("/{name}/goal")
+    public ApiResponse<GoalStatusDTO> getGoal(
+            @ApiParam(value = "会话名称") @Path("name") String sessionName,
+            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash) {
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+
+        WorkspaceManager workspaceManager = WorkspaceManager.getOrCreate(workspacePath);
+        try {
+            Goal goal = workspaceManager.getGoalStore().findBySession(sessionName);
+            if (goal == null) {
+                return ApiResponse.ok(null);
+            }
+            long doneSteps = goal.getSteps() == null ? 0 :
+                    goal.getSteps().stream().filter(GoalStep::isClosed).count();
+            return ApiResponse.ok(GoalStatusDTO.builder()
+                    .goalId(goal.getId())
+                    .title(goal.getTitle())
+                    .description(goal.getDescription())
+                    .status(goal.getStatus().name())
+                    .progress(goal.progressText())
+                    .totalSteps(goal.getSteps() == null ? 0 : goal.getSteps().size())
+                    .doneSteps((int) doneSteps)
+                    .verifyCommand(goal.getVerifyCommand())
+                    .blockedReason(goal.getBlockedReason())
+                    .completionSummary(goal.getCompletionSummary())
+                    .steps(goal.getSteps() == null ? List.of() : goal.getSteps().stream()
+                            .map(s -> GoalStatusDTO.StepDTO.builder()
+                                    .index(s.getIndex())
+                                    .description(s.getDescription())
+                                    .status(s.getStatus().name())
+                                    .evidence(s.getEvidence())
+                                    .build())
+                            .collect(java.util.stream.Collectors.toList()))
+                    .build());
+        } catch (Exception e) {
+            throw new ServiceException("获取 Goal 失败: " + e.getMessage());
+        }
+    }
 
 }

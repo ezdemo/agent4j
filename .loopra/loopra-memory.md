@@ -155,3 +155,7 @@ Responses API 发送到 DeepSeek/Console Go 时，不能只回放 reasoning item
 - `response_reasoning` 在当前消息模型中归属于 assistant 消息级，而不是单个 `ToolCallEntry`；旧工具调用级字段只用于兼容迁移。
 - OpenAI Responses API 的加密 reasoning 回放与 DeepSeek 的明文 reasoning 回放需要按供应商能力区分，不能统一假设支持 `encrypted_content`。
 - 用户偏好中文沟通。
+
+## [2026-08-02 22:37] 会话折叠沉淀
+
+GoalCommand 的 /goal create 成功后需返回 CommandResult.LOOP 并修改 MessageWrapper 为执行提示，否则 Agent 不会自动开始执行 Goal（已修复 2026-08-02）。UserMessageSanitizerTest 中 visionService 引用已清理。

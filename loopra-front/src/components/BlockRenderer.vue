@@ -278,6 +278,39 @@
           <span class="tool-status" :class="block.status">{{ block.status }}</span>
         </div>
       </div>
+      <!-- Goal 工具 -->
+      <div v-else-if="isGoalTool(block) && block.result" class="block-tool block-goal">
+        <div class="tool-head" @click="block.expanded = !block.expanded">
+          <span class="tool-icon default-icon" :class="block.status">
+            <span v-if="block.status === '执行中'" v-html="SPINNER_ICON"></span>
+            <span v-else-if="block.status === '成功'" v-html="CHECK_ICON_SM"></span>
+            <span v-else v-html="CIRCLE_ICON"></span>
+          </span>
+          <code class="tool-name">{{ block.name }}</code>
+          <span class="tool-status" :class="block.status">{{ block.status }}</span>
+          <span class="tool-param">{{ getGoalTitle(block) }}</span>
+          <span class="default-icon"
+                v-html="CHEVRON_DOWN_ICON"
+                :style="{
+                  transform: block.expanded ? 'rotate(180deg)' : 'rotate(0deg)',
+                  display: 'inline-block',
+                  transition: 'transform 0.25s ease',
+                  lineHeight: 0
+                }">
+          </span>
+        </div>
+        <div v-if="block.expanded" class="tool-detail goal-detail">
+          <pre><code>{{ block.result }}</code></pre>
+        </div>
+      </div>
+      <!-- Goal 工具执行中 -->
+      <div v-else-if="isGoalTool(block) && block.status" class="block-tool">
+        <div class="tool-head">
+          <span class="tool-icon default-icon" :class="block.status" v-html="SPINNER_ICON"></span>
+          <code class="tool-name">{{ block.name }}</code>
+          <span class="tool-status" :class="block.status">{{ block.status }}</span>
+        </div>
+      </div>
       <!-- 其他工具 -->
       <div v-else class="block-tool">
         <div class="tool-head" @click="block.expanded = !block.expanded">
@@ -442,6 +475,7 @@ const emit = defineEmits(['sendChoice', 'openFile', 'openDiff', 'revertFileChang
 
 // 清单工具列表（需要在 processedBlocks 之前定义）
 const CHECKLIST_TOOLS = ['checklist_start', 'checklist_step', 'checklist_status']
+const GOAL_TOOLS = ['goal_create', 'goal_status', 'goal_update_step', 'goal_complete', 'goal_block', 'goal_resume']
 const FILE_CHANGE_COLLAPSE_LIMIT = 3
 
 const getVisibleFileChanges = (block) => block.showAll
@@ -744,6 +778,15 @@ const initChecklistToolExpanded = (block) => {
   if (isChecklistTool(block) && block.expanded === undefined) {
     block.expanded = true
   }
+}
+
+const isGoalTool = (block) => GOAL_TOOLS.includes(block?.name)
+
+const getGoalTitle = (block) => {
+  if (!block.result) return ''
+  // 从 "Goal [ACTIVE] 标题\n进度: ..." 中提取标题
+  const match = block.result.match(/^Goal \[\w+\] (.+)$/m)
+  return match ? match[1] : ''
 }
 
 const getChecklistTitle = (block) => {
@@ -1447,6 +1490,19 @@ watchEffect(() => {
 .checklist-tool-detail {
   padding: 8px;
   border-top: 1px solid var(--border, #e5e7eb);
+}
+
+.block-goal {
+  border-left: 2px solid var(--accent, #6366f1);
+}
+
+.goal-detail pre {
+  margin: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--fg-2);
 }
 
 .tool-param {
