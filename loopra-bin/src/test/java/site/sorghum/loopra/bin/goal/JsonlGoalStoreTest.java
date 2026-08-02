@@ -159,4 +159,26 @@ class JsonlGoalStoreTest {
         JsonlGoalStore store = new JsonlGoalStore(workspace);
         assertThrows(java.io.IOException.class, () -> store.findBySession(sessionId));
     }
+
+    @Test
+    void deleteRemovesBrokenSnapshotSoSessionCanRecover() throws Exception {
+        String sessionId = "corrupt-session";
+        String encoded = Base64.getUrlEncoder().withoutPadding()
+                .encodeToString(sessionId.getBytes(StandardCharsets.UTF_8));
+        Path goalsDir = workspace.resolve("goals");
+        Files.createDirectories(goalsDir);
+        Path v2File = goalsDir.resolve("v2-" + encoded + ".jsonl");
+        Path legacyFile = goalsDir.resolve("corrupt-session.jsonl");
+        Files.writeString(v2File, "{corrupted json", StandardCharsets.UTF_8);
+        Files.writeString(legacyFile, "not-json-at-all", StandardCharsets.UTF_8);
+
+        JsonlGoalStore store = new JsonlGoalStore(workspace);
+        assertThrows(java.io.IOException.class, () -> store.findBySession(sessionId));
+
+        // 快照损坏时 delete 仍应成功，让用户可以用 /goal reset 恢复会话。
+        assertTrue(store.delete(sessionId));
+        assertFalse(Files.exists(v2File));
+        assertFalse(Files.exists(legacyFile));
+        assertNull(store.findBySession(sessionId));
+    }
 }

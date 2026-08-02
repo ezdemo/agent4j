@@ -119,8 +119,14 @@ public class JsonlGoalStore implements GoalStore {
             boolean deleted = Files.deleteIfExists(fileFor(sessionId));
             Path legacy = legacyFileFor(sessionId);
             if (Files.exists(legacy)) {
-                Goal legacyGoal = readLegacyGoal(legacy, sessionId);
-                if (legacyGoal != null) deleted |= Files.deleteIfExists(legacy);
+                try {
+                    Goal legacyGoal = readLegacyGoal(legacy, sessionId);
+                    if (legacyGoal != null) deleted |= Files.deleteIfExists(legacy);
+                } catch (IOException e) {
+                    // 快照损坏时同样允许显式删除，避免会话被不可读文件锁死。
+                    log.warn("[goal] 删除无法解析的旧目标快照 {}: {}", legacy, e.getMessage());
+                    deleted |= Files.deleteIfExists(legacy);
+                }
             }
             return deleted;
         });

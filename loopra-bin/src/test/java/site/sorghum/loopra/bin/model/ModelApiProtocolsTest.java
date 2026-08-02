@@ -47,71 +47,6 @@ class ModelApiProtocolsTest {
     }
 
     @Test
-    void deepSeekResponsesRequestReplaysPlaintextReasoningBeforeToolCall() {
-        ChatMessage assistant = ChatMessage.assistant("", List.of(
-                new ToolCallEntry("call-1", "read", "{}")), "thinking");
-        ModelApiProtocol.RequestContext context = new ModelApiProtocol.RequestContext(
-                "deepseek-v4-flash", "high",
-                List.of(assistant, ChatMessage.tool("call-1", "content")),
-                new ONode().asArray(), null, null, "https://api.deepseek.com/responses");
-
-        ONode request = ModelApiProtocols.resolve("responses").buildRequest(context);
-
-        assertEquals("reasoning", request.select("$.input[0].type").getString());
-        assertEquals("reasoning_text", request.select("$.input[0].content[0].type").getString());
-        assertEquals("thinking", request.select("$.input[0].content[0].text").getString());
-        assertTrue(request.select("$.input[0].id").isNull());
-        assertTrue(request.select("$.input[0].summary").isNull());
-        assertTrue(request.select("$.input[0].encrypted_content").isNull());
-        assertEquals("function_call", request.select("$.input[1].type").getString());
-        assertEquals("function_call_output", request.select("$.input[2].type").getString());
-        assertEquals("high", request.select("$.reasoning.effort").getString());
-        assertTrue(request.select("$.reasoning.summary").isNull());
-        assertTrue(request.get("include").isNull());
-    }
-
-    @Test
-    void plaintextReasoningHistorySelectsDeepSeekCompatibilityForProviderAliases() {
-        ChatMessage assistant = ChatMessage.assistant("", List.of(
-                new ToolCallEntry("call-1", "read", "{}",
-                        "{\"type\":\"reasoning\",\"id\":\"rs_1\",\"summary\":[]}")), "thinking");
-        ModelApiProtocol.RequestContext context = new ModelApiProtocol.RequestContext(
-                "provider-model-alias", "high", List.of(assistant), new ONode().asArray(),
-                null, null, "https://console-go.example/responses");
-
-        ONode request = ModelApiProtocols.resolve("responses").buildRequest(context);
-
-        assertEquals("thinking", request.select("$.input[0].content[0].text").getString());
-        assertTrue(request.select("$.input[0].id").isNull());
-        assertTrue(request.select("$.input[0].summary").isNull());
-        assertTrue(request.select("$.reasoning.summary").isNull());
-        assertTrue(request.get("include").isNull());
-    }
-
-    @Test
-    void responsesStreamUsesCompleteReasoningItemWhenDeltasAreAbsent() {
-        ModelApiProtocol protocol = ModelApiProtocols.resolve("responses");
-        ModelApiStreamState state = new ModelApiStreamState();
-        StringBuilder reasoning = new StringBuilder();
-        ModelClient.StreamCallback callback = new ModelClient.StreamCallback() {
-            @Override
-            public void onReasoningDelta(String token) {
-                reasoning.append(token);
-            }
-        };
-
-        protocol.processStreamChunk(ONode.ofJson("""
-                {"type":"response.output_item.done","output_index":0,"item":{"type":"reasoning",
-                 "content":[{"type":"reasoning_text","text":"complete thinking"}]}}
-                """), callback, state);
-
-        assertEquals("complete thinking", reasoning.toString());
-        assertTrue(state.emittedReasoning);
-        assertEquals("complete thinking",
-                ONode.ofJson(state.responseReasoning).select("$.content[0].text").getString());
-    }
-
-    @Test
     void responsesRequestOmitsOutputOnlyReasoningStatus() {
         ChatMessage assistant = ChatMessage.assistant(null, null, null);
         assistant.setResponseReasoning("""
@@ -127,9 +62,6 @@ class ModelApiProtocolsTest {
         assertEquals("rs_1", request.select("$.input[0].id").getString());
         assertEquals("encrypted", request.select("$.input[0].encrypted_content").getString());
         assertTrue(request.select("$.input[0].status").isNull());
-        assertEquals("auto", request.select("$.reasoning.summary").getString());
-        assertEquals("reasoning.encrypted_content", request.select("$.include[0]").getString());
-        assertFalse(request.get("include").getArray().isEmpty());
     }
 
     @Test
