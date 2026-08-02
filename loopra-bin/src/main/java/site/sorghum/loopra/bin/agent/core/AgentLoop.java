@@ -574,7 +574,8 @@ public class AgentLoop implements AgentLoopController {
             return goalService.instruction(loadOpenGoal());
         } catch (Exception e) {
             log.warn("[goal] 读取当前 Goal 失败", e);
-            return "## Goal 状态不可用\n持久化 Goal 暂时无法读取。不要声称目标已完成；可以说明错误并结束当前回合。";
+            return "## Goal 状态不可用\n持久化 Goal 暂时无法读取。不要声称目标已完成；可以说明错误并结束当前回合。"
+                    + "若持续无法读取，可提示用户执行 `/goal reset` 清除损坏快照后重试。";
         }
     }
 
@@ -601,7 +602,8 @@ public class AgentLoop implements AgentLoopController {
             client.resetStreamAbort();
             return null;
         } catch (Exception e) {
-            String reminder = "[Goal guard] 无法读取持久化 Goal 状态，已拒绝 finish：" + e.getMessage();
+            String reminder = "[Goal guard] 无法读取持久化 Goal 状态，已拒绝 finish：" + e.getMessage()
+                    + "。若持续无法读取，可提示用户执行 `/goal reset` 清除损坏快照后重试。";
             injectUserMessage(reminder);
             safeOutput("goalFinishGuard", () -> output.onLog(LogLevel.ERROR, reminder));
             client.resetStreamAbort();
@@ -772,7 +774,8 @@ public class AgentLoop implements AgentLoopController {
                 try {
                     openGoal = goalGuardEnabled ? loadOpenGoal() : null;
                 } catch (Exception e) {
-                    String reminder = "[Goal guard] 无法读取持久化 Goal 状态：" + e.getMessage();
+                    String reminder = "[Goal guard] 无法读取持久化 Goal 状态：" + e.getMessage()
+                            + "。若持续无法读取，可提示用户执行 `/goal reset` 清除损坏快照后重试。";
                     safeOutput("goalRead", () -> output.onLog(LogLevel.ERROR, reminder));
                     String content = sr.content() == null ? "" : sr.content();
                     return reminder + (content.isBlank() ? "" : "\n" + content);

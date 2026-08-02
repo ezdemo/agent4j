@@ -63,6 +63,7 @@ public class GoalCommand implements ChatCommand {
                 case "block" -> mutate(scope, goal -> goals.block(goal, argument));
                 case "complete" -> mutate(scope, goal -> goals.complete(goal, argument));
                 case "done" -> markDone(scope, argument);
+                case "reset" -> reset(scope);
                 default -> usage();
             };
             context.getAgent().getOutput().onLog(LogLevel.INFO, result);
@@ -89,13 +90,23 @@ public class GoalCommand implements ChatCommand {
         return goals.describe(goal);
     }
 
+    /**
+     * 直接删除当前会话的 Goal 快照，不经过解析；快照损坏导致无法读写时用它恢复会话。
+     * 不检查是否有未关闭 Goal，由用户显式决定清除。
+     */
+    private String reset(GoalRuntime.Scope scope) throws Exception {
+        boolean deleted = scope.delete();
+        return deleted ? "已清除当前会话的 Goal 快照，可重新创建。" : "当前会话没有 Goal 快照。";
+    }
+
     private String mutate(GoalRuntime.Scope scope, GoalMutation mutation) throws Exception {
         return goals.describe(scope.update(mutation::apply));
     }
 
     private static String usage() {
         return "用法: /goal create <目标> | /goal status | /goal pause | /goal resume | "
-                + "/goal done <步骤号> <证据> | /goal block <原因> | /goal complete <摘要> | /goal cancel [原因]";
+                + "/goal done <步骤号> <证据> | /goal block <原因> | /goal complete <摘要> | /goal cancel [原因] | "
+                + "/goal reset（清除快照，快照损坏时用）";
     }
 
     @FunctionalInterface
