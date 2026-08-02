@@ -1,7 +1,9 @@
 /* @vitest-environment jsdom */
 
 import {shallowMount} from '@vue/test-utils'
-import {describe, expect, it, beforeEach, vi} from 'vitest'
+import {beforeEach, describe, expect, it, vi} from 'vitest'
+import {promptPresetsAPI} from '../services/api'
+import ChatInput from './ChatInput.vue'
 
 Object.defineProperty(Element.prototype, 'scrollIntoView', {
   configurable: true,
@@ -33,9 +35,6 @@ vi.mock('../services/api', () => ({
     save: vi.fn().mockResolvedValue({success: true})
   }
 }))
-
-import {promptPresetsAPI} from '../services/api'
-import ChatInput from './ChatInput.vue'
 
 function mountInput(props) {
   return shallowMount(ChatInput, {
@@ -85,6 +84,18 @@ describe('ChatInput quick commands', () => {
         expect.objectContaining({label: '检查状态', text: '请检查当前状态并报告结果'})
       ])
     )
+    wrapper.unmount()
+  })
+})
+
+describe('ChatInput reasoning effort', () => {
+  it('emits the selected reasoning effort', async () => {
+    const wrapper = mountInput({currentReasoningEffort: 'max'})
+
+    await wrapper.find('.model-actions > .reasoning-effort-selector .effort-btn').trigger('click')
+    await wrapper.findAll('.chat-reasoning-levels button')[1].trigger('click')
+
+    expect(wrapper.emitted('switchReasoningEffort')).toEqual([['low']])
     wrapper.unmount()
   })
 })

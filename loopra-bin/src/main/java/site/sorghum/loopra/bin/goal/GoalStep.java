@@ -20,7 +20,7 @@ import java.time.Instant;
 @NoArgsConstructor
 @AllArgsConstructor
 public class GoalStep {
-    /** 步骤序号（从 0 开始） */
+    /** 步骤序号（从 1 开始） */
     private int index;
     /** 步骤描述 */
     private String description;
@@ -32,4 +32,9 @@ public class GoalStep {
     private Instant startedAt;
     /** 完成时间 */
     private Instant completedAt;
+
+    /** 已完成或跳过的步骤不再需要推进。 */
+    public boolean isClosed() {
+        return status == StepStatus.DONE || status == StepStatus.SKIPPED;
+    }
 }

@@ -2359,6 +2359,7 @@ const saveSettings = async () => {
     // 准备配置更新
     const configToUpdate = {
       hitl: settings.workspace.mode,
+      reasoningEffort: settings.ai.reasoningEffort,
       security: {...settings.security},
       disabledTools: settings.security.disabledToolsText.split('\n').map(s => s.trim()).filter(s => s)
     }
