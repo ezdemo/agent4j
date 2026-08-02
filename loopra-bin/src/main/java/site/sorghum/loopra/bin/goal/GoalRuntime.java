@@ -19,6 +19,14 @@ public final class GoalRuntime {
         public void save(Goal goal) throws IOException {
             store.save(goal);
         }
+
+        public Goal createIfNoOpenGoal(Goal goal) throws IOException {
+            return store.createIfNoOpenGoal(goal);
+        }
+
+        public Goal update(GoalStore.GoalMutation mutation) throws IOException {
+            return store.update(sessionId, mutation);
+        }
     }
 
     public static Scope forTool(ToolContext context) {

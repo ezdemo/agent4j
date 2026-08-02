@@ -52,17 +52,27 @@ public class Goal {
     /** 完成时间 */
     private Instant completedAt;
 
-    /** 是否仍需继续推进。 */
+    /** 是否仍未关闭，可在后续回合恢复。 */
     public boolean isOpen() {
-        return status == GoalStatus.ACTIVE || status == GoalStatus.PAUSED || status == GoalStatus.BLOCKED;
+        return !isTerminal();
+    }
+
+    /** 是否已经不可再推进。 */
+    public boolean isTerminal() {
+        return status == GoalStatus.COMPLETED || status == GoalStatus.CANCELLED;
+    }
+
+    /** 当前回合是否应继续自主推进；暂停或阻塞时应把控制权交还用户。 */
+    public boolean requiresAgentWork() {
+        return status == GoalStatus.ACTIVE;
     }
 
     /**
-     * 生成进度文本：如 "3/6 (50%)"
+     * 生成进度文本：如 "3/6 (50%)"。跳过的步骤也视为已处理。
      */
     public String progressText() {
-        long done = steps.stream().filter(s -> s.getStatus() == StepStatus.DONE).count();
-        long total = steps.size();
+        long done = steps == null ? 0 : steps.stream().filter(GoalStep::isClosed).count();
+        long total = steps == null ? 0 : steps.size();
         long pct = total > 0 ? (done * 100 / total) : 0;
         return done + "/" + total + " (" + pct + "%)";
     }
@@ -71,15 +81,13 @@ public class Goal {
      * 判断是否全部完成。
      */
     public boolean isAllDone() {
-        return steps != null && !steps.isEmpty() && steps.stream().allMatch(
-                s -> s.getStatus() == StepStatus.DONE || s.getStatus() == StepStatus.SKIPPED);
+        return steps != null && !steps.isEmpty() && steps.stream().allMatch(GoalStep::isClosed);
     }
 
     /** 返回第一个未完成步骤，没有则返回 null。 */
     public GoalStep nextOpenStep() {
         if (steps == null) return null;
-        return steps.stream().filter(step -> step.getStatus() != StepStatus.DONE
-                        && step.getStatus() != StepStatus.SKIPPED)
+        return steps.stream().filter(step -> !step.isClosed())
                 .findFirst().orElse(null);
     }
 }

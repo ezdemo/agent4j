@@ -1,7 +1,6 @@
 package site.sorghum.loopra.bin.model;
 
 import lombok.extern.slf4j.Slf4j;
-import org.noear.snack4.Feature;
 import org.noear.snack4.ONode;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
@@ -25,13 +24,18 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
     @Override
     public ONode buildRequest(RequestContext context) {
         ONode body = ONode.ofJson("{}");
-        body.set(MODEL, ModelContextUtils.stripContextSizeSuffix(context.model()));
+        String model = ModelContextUtils.stripContextSizeSuffix(context.model());
+        body.set(MODEL, model);
+        boolean deepSeek = isDeepSeekProvider(model, context.apiUrl())
+                || context.messages().stream().anyMatch(ResponsesApiProtocol::hasPlaintextReasoning);
         String reasoningEffort = context.reasoningEffort();
         if (reasoningEffort != null && !reasoningEffort.isEmpty() && !"none".equals(reasoningEffort)) {
             ONode reasoning = body.getOrNew("reasoning");
             reasoning.set("effort", reasoningEffort);
-            reasoning.set("summary", "auto");
-            body.getOrNew("include").asArray().add("reasoning.encrypted_content");
+            if (!deepSeek) {
+                reasoning.set("summary", "auto");
+                body.getOrNew("include").asArray().add("reasoning.encrypted_content");
+            }
         }
 
         ONode input = body.getOrNew("input").asArray();
@@ -65,7 +69,11 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
                         .filter(Objects::nonNull)
                         .findFirst().orElse(null);
             }
-            if (responseReasoning != null) {
+            boolean plaintextReasoning = shouldReplayPlaintextReasoning(
+                    responseReasoning, message.getReasoningContent());
+            if (deepSeek || plaintextReasoning) {
+                addDeepSeekReasoning(input, message.getReasoningContent(), responseReasoning);
+            } else if (responseReasoning != null) {
                 ONode reasoningItem = ONode.ofJson(responseReasoning);
                 // `status` is output-only and rejected when the item is replayed through input.
                 reasoningItem.remove("status");
@@ -100,6 +108,9 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
                 for (ToolCallEntry toolCall : message.getToolCalls()) {
                     ONode item = input.addNew();
                     item.set(TYPE, "function_call");
+                    // Some strict Responses-compatible gateways require the output item id
+                    // in addition to the call_id used to pair the tool result.
+                    item.set(ID, toolCall.id());
                     item.set("call_id", toolCall.id());
                     item.set(NAME, toolCall.name());
                     Object arguments = toolCall.arguments();
@@ -138,6 +149,64 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
         return body;
     }
 
+    private static boolean isDeepSeekProvider(String model, String apiUrl) {
+        String normalizedModel = model == null ? "" : model.toLowerCase(java.util.Locale.ROOT);
+        String normalizedUrl = apiUrl == null ? "" : apiUrl.toLowerCase(java.util.Locale.ROOT);
+        return normalizedModel.contains("deepseek") || normalizedUrl.contains("deepseek");
+    }
+
+    private static boolean hasPlaintextReasoning(ChatMessage message) {
+        String responseReasoning = message.getResponseReasoning();
+        if (responseReasoning == null && message.hasToolCalls()) {
+            responseReasoning = message.getToolCalls().stream()
+                    .map(ToolCallEntry::responseReasoning)
+                    .filter(Objects::nonNull)
+                    .findFirst().orElse(null);
+        }
+        return shouldReplayPlaintextReasoning(responseReasoning, message.getReasoningContent());
+    }
+
+    private static boolean shouldReplayPlaintextReasoning(String responseReasoning,
+                                                          String reasoningContent) {
+        if (responseReasoning == null || responseReasoning.isEmpty()) {
+            return hasText(reasoningContent);
+        }
+        ONode item = ONode.ofJson(responseReasoning);
+        return item.get("encrypted_content").isNull()
+                && (hasText(reasoningContent) || hasText(extractReasoningContent(item)));
+    }
+
+    private static boolean hasText(String value) {
+        return value != null && !value.isEmpty();
+    }
+
+    private static void addDeepSeekReasoning(ONode input, String reasoningContent,
+                                             String responseReasoning) {
+        String content = reasoningContent;
+        if ((content == null || content.isEmpty()) && responseReasoning != null) {
+            content = extractReasoningContent(ONode.ofJson(responseReasoning));
+        }
+        if (content == null || content.isEmpty()) return;
+
+        ONode reasoningItem = input.addNew();
+        reasoningItem.set(TYPE, "reasoning");
+        ONode part = reasoningItem.getOrNew(CONTENT).asArray().addNew();
+        part.set(TYPE, "reasoning_text");
+        part.set("text", content);
+    }
+
+    private static String extractReasoningContent(ONode reasoningItem) {
+        ONode content = reasoningItem.get(CONTENT);
+        if (content == null || !content.isArray()) return null;
+        StringBuilder result = new StringBuilder();
+        for (ONode part : content.getArray()) {
+            if (!"reasoning_text".equals(part.get(TYPE).getString())) continue;
+            String text = part.get("text").getString();
+            if (text != null) result.append(text);
+        }
+        return result.isEmpty() ? null : result.toString();
+    }
+
     @Override
     public ONode parseResponse(ONode response, String responseText) throws IOException {
         ONode output = response.get("output");
@@ -154,6 +223,11 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
         for (ONode item : output.getArray()) {
             if ("reasoning".equals(item.get(TYPE).getString())) {
                 reasoningItem = item;
+                String reasoningText = extractReasoningContent(item);
+                if (reasoningText != null) {
+                    reasoning.append(reasoningText);
+                    continue;
+                }
                 ONode summary = item.get("summary");
                 if (summary != null && summary.isArray()) {
                     for (ONode part : summary.getArray()) {
@@ -213,13 +287,21 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
                 String delta = chunk.get("delta").getString();
                 if (delta != null && !delta.isEmpty()) {
                     state.emittedOutput = true;
+                    state.emittedReasoning = true;
                     safeCallback("onReasoningDelta", () -> callback.onReasoningDelta(delta));
                 }
             }
+            case "response.reasoning_text.done" -> {
+                if (!state.emittedReasoning) {
+                    String text = chunk.get("text").getString();
+                    if (text == null) text = chunk.get("delta").getString();
+                    emitCompleteReasoning(text, callback, state);
+                }
+            }
             case "response.output_item.added" -> accumulateOutputItem(
-                    chunk.get("item"), chunk.get("output_index").getInt(), state, false);
+                    chunk.get("item"), chunk.get("output_index").getInt(), state, callback, false);
             case "response.output_item.done" -> accumulateOutputItem(
-                    chunk.get("item"), chunk.get("output_index").getInt(), state, true);
+                    chunk.get("item"), chunk.get("output_index").getInt(), state, callback, true);
             case "response.function_call_arguments.delta" -> accumulateFunctionArguments(
                     chunk.get("output_index").getInt(), chunk.get("delta").getString(), state, false);
             case "response.function_call_arguments.done" -> accumulateFunctionArguments(
@@ -262,10 +344,15 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
     }
 
     private void accumulateOutputItem(ONode item, int index, ModelApiStreamState state,
-                                      boolean replaceArguments) {
+                                      ModelClient.StreamCallback callback, boolean replaceArguments) {
         if (item == null || item.isNull()) return;
         if ("reasoning".equals(item.get(TYPE).getString())) {
-            if (replaceArguments) state.responseReasoning = item.toJson();
+            if (replaceArguments) {
+                state.responseReasoning = item.toJson();
+                if (!state.emittedReasoning) {
+                    emitCompleteReasoning(extractReasoningContent(item), callback, state);
+                }
+            }
             return;
         }
         if (!"function_call".equals(item.get(TYPE).getString())) return;
@@ -277,6 +364,16 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
         if (name != null && !name.isEmpty()) call.getOrNew(FUNCTION).set(NAME, name);
         String arguments = item.get(ARGUMENTS).getString();
         if (arguments != null) accumulateFunctionArguments(index, arguments, state, replaceArguments);
+    }
+
+    private void emitCompleteReasoning(String text, ModelClient.StreamCallback callback,
+                                       ModelApiStreamState state) {
+        if (text == null || text.isEmpty()) return;
+        state.emittedOutput = true;
+        state.emittedReasoning = true;
+        if (callback != null) {
+            safeCallback("onReasoningDelta", () -> callback.onReasoningDelta(text));
+        }
     }
 
     private void accumulateFunctionArguments(int index, String arguments, ModelApiStreamState state,

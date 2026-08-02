@@ -18,9 +18,6 @@ import site.sorghum.loopra.bin.command.ChatCommandRegistry;
 import site.sorghum.loopra.bin.command.MessageWrapper;
 import site.sorghum.loopra.bin.config.ConfigChangedEvent;
 import site.sorghum.loopra.bin.config.LoopraConfig;
-import site.sorghum.loopra.bin.goal.Goal;
-import site.sorghum.loopra.bin.goal.GoalStatus;
-import site.sorghum.loopra.bin.goal.GoalStore;
 import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.session.SessionService;
 import site.sorghum.loopra.bin.session.SessionStore;
@@ -116,6 +113,7 @@ public class LoopraAgent {
             try {
                 switch (e.key()) {
                     case "model" -> setModel((String) e.value());
+                    case "reasoningEffort" -> setReasoningEffort(String.valueOf(e.value()));
                     case "hitl" -> setHitlMode(String.valueOf(e.value()));
                     case "terminateOnNoToolCall" -> setTerminateOnNoToolCall(Boolean.parseBoolean(String.valueOf(e.value())));
                     case "disabledTools", "toolReadOnlyOverrides" -> refreshTools();
@@ -225,9 +223,6 @@ public class LoopraAgent {
             }
         }
 
-        // 目标恢复检测
-        detectAndNotifyPendingGoal();
-
         // 普通聊天逻辑
         String text = userMessage.getText();
         generateSessionTitleIfNeeded(text);
@@ -255,6 +250,10 @@ public class LoopraAgent {
         if (cmd == null) {
             return null; // "/" 开头但不是已知命令，降级为普通聊天消息
         }
+        if ("goal".equals(cmd.getCommand())) {
+            sessionService.ensureSessionName();
+            loop.setSessionId(sessionService.getStore().currentName());
+        }
 
         MessageWrapper wrapper = MessageWrapper.builder().message(text).build();
         ChatCommandContext cmdContext = new ChatCommandContext(
@@ -280,32 +279,6 @@ public class LoopraAgent {
         }
         // LOOP: 命令已修改消息，继续走正常聊天流程
         return new CommandHandleResult(null, updated);
-    }
-
-    /**
-     * 检查当前会话是否有未完成的活跃目标，若有则注入系统消息提醒用户。
-     */
-    private void detectAndNotifyPendingGoal() {
-        if (sessionService == null || workspaceManager == null) return;
-        try {
-            String currentSessionId = sessionService.getStore().currentName();
-            if (currentSessionId == null) return;
-
-            GoalStore goalStore = workspaceManager.getGoalStore();
-            Goal pendingGoal = goalStore.findBySession(currentSessionId);
-            if (pendingGoal != null
-                    && (pendingGoal.getStatus() == GoalStatus.ACTIVE
-                    || pendingGoal.getStatus() == GoalStatus.PAUSED)) {
-                ctx.addSystemMessage(
-                        "📋 检测到未完成的目标：「" + pendingGoal.getTitle() + "」\n"
-                                + "进度：" + pendingGoal.progressText() + "\n"
-                                + "使用 /goal status 查看详情，或直接继续执行。");
-                log.info("[goal] 会话恢复，发现未完成目标: {} - {}",
-                        pendingGoal.getId(), pendingGoal.getTitle());
-            }
-        } catch (Exception e) {
-            log.warn("[goal] 目标恢复检测失败", e);
-        }
     }
 
     /**

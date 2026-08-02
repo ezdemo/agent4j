@@ -328,7 +328,7 @@ const handleSetDefaultModel = async (modelName, channelId) => {
 const currentReasoningEffort = ref('max')
 const terminateOnNoToolCall = ref(true)
 
-const handleSwitchReasoningEffort = (value) => {
+const handleSwitchReasoningEffort = async (value) => {
   const reasoningEffort = String(value || '').trim()
   if (!reasoningEffort || reasoningEffort === currentReasoningEffort.value) return
   sessionReasoningEfforts.value = {
@@ -336,6 +336,13 @@ const handleSwitchReasoningEffort = (value) => {
     [conversationKey()]: reasoningEffort
   }
   currentReasoningEffort.value = reasoningEffort
+  try {
+    // 输入框的选择既作为当前会话覆盖，也更新全局默认值，保证刷新和新会话仍能恢复。
+    await configAPI.updateConfig({reasoningEffort})
+  } catch (e) {
+    // 请求失败时会话级 localStorage 缓存仍可继续使用。
+    console.error('持久化推理强度失败:', e)
+  }
 }
 
 const handleSwitchTerminateOnNoToolCall = async (value) => {

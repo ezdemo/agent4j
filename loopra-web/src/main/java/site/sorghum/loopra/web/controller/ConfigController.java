@@ -121,7 +121,7 @@ public class ConfigController {
                     || "modelChannels".equals(key) || "modelChannelId".equals(key)
                     || "validationModel".equals(key) || "validationModelChannelId".equals(key)) continue;
             // 只发布已知的运行时配置键
-            if ("model".equals(key) || "hitl".equals(key)
+            if ("model".equals(key) || "reasoningEffort".equals(key) || "hitl".equals(key)
                     || "terminateOnNoToolCall".equals(key) || "disabledTools".equals(key)) {
                 Dami.bus().send("config.changed", new ConfigChangedEvent(key, entry.getValue()));
             }

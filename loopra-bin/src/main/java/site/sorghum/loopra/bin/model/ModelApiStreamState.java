@@ -16,6 +16,7 @@ final class ModelApiStreamState {
     /** Responses API 拒绝回放的历史 item，可净化请求后重试一次。 */
     boolean invalidRequestError;
     boolean emittedOutput;
+    boolean emittedReasoning;
     boolean aborted;
     boolean completed;
     String responseReasoning;

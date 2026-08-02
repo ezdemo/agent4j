@@ -355,7 +355,7 @@ public class HttpModelClient implements ModelClient {
 
     private ModelApiProtocol.RequestContext requestContext(List<ChatMessage> messages, ONode tools) {
         return new ModelApiProtocol.RequestContext(
-                model, reasoningEffort, messages, tools, UserIdProvider.getUserId(), resolveSessionAffinity());
+                model, reasoningEffort, messages, tools, UserIdProvider.getUserId(), resolveSessionAffinity(), apiUrl);
     }
 
     /**
