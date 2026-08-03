@@ -1,4 +1,4 @@
-#
+﻿#
 # Loopra Uninstaller for Windows PowerShell
 # 完全卸载 Loopra Web，包括配置目录
 #
