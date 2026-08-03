@@ -17,7 +17,9 @@ import site.sorghum.loopra.bin.command.ChatCommandContext;
 import site.sorghum.loopra.bin.command.ChatCommandRegistry;
 import site.sorghum.loopra.bin.command.MessageWrapper;
 import site.sorghum.loopra.bin.config.ConfigChangedEvent;
+import site.sorghum.loopra.bin.config.ConfigServiceToolPolicyProvider;
 import site.sorghum.loopra.bin.config.LoopraConfig;
+import site.sorghum.loopra.bin.goal.GoalGuardImpl;
 import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.session.SessionService;
 import site.sorghum.loopra.bin.session.SessionStore;
@@ -163,7 +165,9 @@ public class LoopraAgent {
 
         final AgentLoop agentLoop = new AgentLoop(client, registry, ctx, hitl, config);
         agentLoop.setWorkspace(this.workspace);
-        agentLoop.setSessionService(this.sessionService);
+        agentLoop.setSessionUsageSink(this.sessionService);
+        agentLoop.setGoalGuard(new GoalGuardImpl());
+        registry.setToolPolicyProvider(new ConfigServiceToolPolicyProvider());
         return agentLoop;
     }
 

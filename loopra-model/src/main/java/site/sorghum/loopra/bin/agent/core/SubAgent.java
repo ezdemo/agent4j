@@ -8,9 +8,9 @@ import site.sorghum.loopra.bin.agent.listener.AgentLoopListener;
 import site.sorghum.loopra.bin.agent.model.UserMessage;
 import site.sorghum.loopra.bin.agent.output.SubAgentAgentOutput;
 import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
-import site.sorghum.loopra.bin.config.LoopraConfig;
+import site.sorghum.loopra.bin.agent.spi.AgentConfig;
+import site.sorghum.loopra.bin.agent.spi.SessionUsageSink;
 import site.sorghum.loopra.bin.model.ModelClient;
-import site.sorghum.loopra.bin.session.SessionService;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.tool.AgentLoopController;
 import site.sorghum.loopra.tool.AgentOutput;
@@ -76,10 +76,10 @@ public class SubAgent {
     private AgentOutput parentOutput = null;
     /** 父会话 ID（用于子代理 tools 中的 sessionId 传递） */
     private String sessionId = null;
-    /** 父会话服务（用于子代理 token 用量直接上报） */
-    private SessionService sessionService = null;
+    /** 父会话用量上报通道（用于子代理 token 用量直接上报） */
+    private SessionUsageSink sessionUsageSink = null;
     /** 代理配置（继承父级，确保上下文折叠/工具超时等行为一致） */
-    private LoopraConfig config = null;
+    private AgentConfig config = null;
     /** 子代理 HITL 模式。默认 "free"，由父代理精确继承 free/approval/auto。 */
     private String hitlMode = "free";
     /** 子代理的 AgentLoop 引用（用于 HITL 暂停-恢复） */
@@ -161,16 +161,16 @@ public class SubAgent {
     }
 
     /**
-     * 设置父会话服务，用于子代理 token 用量直接上报。
+     * 设置父会话用量上报通道，用于子代理 token 用量直接上报。
      */
-    public void setSessionService(SessionService sessionService) {
-        this.sessionService = sessionService;
+    public void setSessionUsageSink(SessionUsageSink sessionUsageSink) {
+        this.sessionUsageSink = sessionUsageSink;
     }
 
     /**
      * 设置代理配置，继承父级以确保上下文折叠/工具超时等行为一致。
      */
-    public void setConfig(LoopraConfig config) {
+    public void setConfig(AgentConfig config) {
         this.config = config;
     }
 
@@ -236,8 +236,8 @@ public class SubAgent {
         }
         ConversationContext ctx = new ConversationContext(
                 new PromptPrefix(systemPrompt, registry.toOpenAiTools()));
-        // 继承父级配置（config、sessionId、sessionService）和父代理的完整 HITL 模式。
-        LoopraConfig effectiveConfig = (this.config != null) ? this.config : LoopraConfig.getInstance();
+        // 继承父级配置（config、sessionId、sessionUsageSink）和父代理的完整 HITL 模式。
+        AgentConfig effectiveConfig = this.config;
         this.subLoop = new AgentLoop(client, registry, ctx, this.hitlMode, effectiveConfig);
         AgentLoop subLoop = this.subLoop;
         if (parentController != null) {
@@ -262,7 +262,7 @@ public class SubAgent {
             subLoop.setOutput(wrapped);
         }
 
-        // 继承父级 sessionId 和 sessionService（用于 tools 中正确的会话上下文和用量上报）。
+        // 继承父级 sessionId 和 sessionUsageSink（用于 tools 中正确的会话上下文和用量上报）。
         // 文件变更必须由父循环统一 drain 并持久化；否则子循环会提前消费同一会话范围的记录，
         // 使主消息无法展示“已编辑 X 个文件”。
         if (sessionId != null) {
@@ -270,8 +270,8 @@ public class SubAgent {
         }
         subLoop.setGoalGuardEnabled(false);
         subLoop.setDrainFileChanges(false);
-        if (sessionService != null) {
-            subLoop.setSessionService(sessionService);
+        if (sessionUsageSink != null) {
+            subLoop.setSessionUsageSink(sessionUsageSink);
         }
         subLoop.freezePromptPrefix();
 

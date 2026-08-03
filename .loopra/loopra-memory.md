@@ -64,3 +64,20 @@ browser_screenshot 图片能力门控（2026-08-03）：AiBrowserTool.postProces
 
 模块化重构全量验证通过（2026-08-04）：mvn clean compile/test/package 全绿（loopra-model 217、loopra-harness 50、loopra-web 31 个测试，0 失败），loopra-web fat jar 冒烟启动正常（42 个内置工具、/api/system/health=200）；loopra-model 对 harness/acp 包零 import。前端静态资产由 loopra-front 构建后同步到 loopra-web/src/main/resources/static（CI 脚本 .release/ci-sync-web-assets.sh；本地等价操作：pnpm build 后复制 dist/renderer 内容，保留 static/config.json）。loopra-bin 包名（site.sorghum.loopra.bin.*）保留未改，仅物理拆分为多 Maven 模块，故无 JPMS/包名迁移风险。
 
+
+## [2026-08-04 01:06] 会话折叠沉淀
+
+- loopra 项目多模块化重构已于 2026-08-04 全量验证通过：mvn clean compile/test/package 全绿（loopra-model 217、loopra-harness 50、loopra-web 31 个测试，0 失败），loopra-web.jar 冒烟启动正常（42 个内置工具、/api/system/health=200），loopra-model 经正则扫描确认对 harness/acp 包零 import。
+- loopra 三条解耦红线（后续修改内核时须保持）：工具来源只走 ToolScanProvider SPI、图片结果只走 ImageToolResult 文本协议、父输出只走 ParentOutputHolder；新增上层能力应在 loopra-harness 实现、由 loopra-web 聚合。
+- 踩坑教训：loopra-web 资源过滤（filtering=true）遇到二进制字体（ttf/woff/woff2 等）会报 MalformedInputException，必须在 maven-resources-plugin 配置 nonFilteredFileExtensions 排除；前端重建引入新二进制资产后需同步检查此处。
+- 前端静态资产流程：loopra-front 构建后同步到 loopra-web/src/main/resources/static（CI 脚本 .release/ci-sync-web-assets.sh；本地为 pnpm build 后复制 dist/renderer 内容并保留 static/config.json）。
+- loopra-bin 包名（site.sorghum.loopra.bin.*）保留未改，仅物理拆分为多 Maven 模块，无 JPMS/包名迁移风险。
+- 项目事实：项目根路径 C:\Users\sorghum\IdeaProjects\agent4j，当前版本 26.8.3.2，基于 Solon 4.0.4 框架；maven-resources-plugin 使用 @...@ 定界符（避免与 Solon ${...} 冲突）。</摘要>
+
+## [2026-08-04 01:10] 会话折叠沉淀
+
+loopra-web 打包踩坑：根 pom 对 loopra-web 资源启用了 filtering，前端重建新增 KaTeX 二进制字体（ttf/woff/woff2）会触发 MalformedInputException 构建失败。修复：loopra-web/pom.xml 的 maven-resources-plugin 配置 nonFilteredFileExtensions 加入 ttf/otf/woff/woff2。新增任何二进制静态资产时注意同样问题。
+
+## [2026-08-04 04:38] 会话折叠沉淀
+
+loopra 模块边界（2026-08-04 压薄后定稿）：loopra-model 只含 model(ChatModel)/agent 推理内核(AgentLoop/SubAgent/context/hitl/listener/memory/output/prompt/resilient)/tool 抽象/session 的 SessionStore 接口与 SessionFileChangeTracker/util，另新增 SPI 包 agent/spi（AgentConfig/GoalGuard/SessionUsageSink/ToolPolicyProvider）。LoopraAgent、goal/checklist/workspace/command、SessionService/JsonlSessionStore、LoopraConfig/ConfigService/ConfigChangedEvent、AppConfig 全部下沉 loopra-harness（FQCN 不变）。装配：LoopraConfig implements AgentConfig、SessionService implements SessionUsageSink、GoalGuardImpl 与 ConfigServiceToolPolicyProvider 由 LoopraAgent 构造时注入。loopra-acp 依赖 loopra-harness（非 model）。内核换型方法名：getSessionUsageSink/setSessionUsageSink（原 getSessionService/setSessionService）。

@@ -20,6 +20,12 @@
             <artifactId>loopra-model</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <!-- Loopra 工具装备（LoopraAgent/会话/工作区/配置等编排设施） -->
+        <dependency>
+            <groupId>site.sorghum.agent</groupId>
+            <artifactId>loopra-harness</artifactId>
+            <version>${project.version}</version>
+        </dependency>
 
         <!-- ACP Agent SDK -->
         <dependency>

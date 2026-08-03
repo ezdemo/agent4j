@@ -22,14 +22,12 @@ import site.sorghum.loopra.bin.agent.output.ParentOutputHolder;
 import site.sorghum.loopra.bin.agent.resilient.ReasonBreaker;
 import site.sorghum.loopra.bin.agent.resilient.Scavenger;
 import site.sorghum.loopra.bin.agent.resilient.StormBreaker;
-import site.sorghum.loopra.bin.config.LoopraConfig;
-import site.sorghum.loopra.bin.goal.Goal;
-import site.sorghum.loopra.bin.goal.GoalRuntime;
-import site.sorghum.loopra.bin.goal.GoalService;
+import site.sorghum.loopra.bin.agent.spi.AgentConfig;
+import site.sorghum.loopra.bin.agent.spi.GoalGuard;
+import site.sorghum.loopra.bin.agent.spi.SessionUsageSink;
 import site.sorghum.loopra.bin.model.ModelApiError;
 import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.model.UserMessageSanitizer;
-import site.sorghum.loopra.bin.session.SessionService;
 import site.sorghum.loopra.bin.tool.ToolMetadata;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.tool.*;
@@ -105,14 +103,16 @@ public class AgentLoop implements AgentLoopController {
 
     private final ModelClient client;
     private final ToolRegistry registry;
-    private final LoopraConfig config;
+    private final AgentConfig config;
     private volatile boolean terminateOnNoToolCall;
     @Getter
     private final ConversationContext ctx;
     private final ReasonBreaker reasonBreaker = new ReasonBreaker();
     private final StormBreaker stormBreaker;
     private final ToolCallValidator toolCallValidator;
-    private final GoalService goalService = new GoalService();
+    /** Goal 守卫（由上层注入）；null 时等价于无开放 Goal，守卫全部放行。 */
+    @Setter
+    private volatile GoalGuard goalGuard;
     /** Goal 生命周期只由拥有会话的主代理约束，子代理共享 sessionId 但不拥有 Goal。 */
     @Setter
     private volatile boolean goalGuardEnabled = true;
@@ -123,7 +123,7 @@ public class AgentLoop implements AgentLoopController {
     private final HitlManager hitlManager;
 
     @Setter
-    private SessionService sessionService;
+    private SessionUsageSink sessionUsageSink;
 
     private AgentLoopListener listener = NoOpAgentLoopListener.INSTANCE;
 
@@ -192,18 +192,19 @@ public class AgentLoop implements AgentLoopController {
     }
 
     public AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx,
-                     String hitlMode, LoopraConfig config) {
+                     String hitlMode, AgentConfig config) {
         this(client, registry, ctx, hitlMode, config, null);
     }
 
     AgentLoop(ModelClient client, ToolRegistry registry, ConversationContext ctx,
-              String hitlMode, LoopraConfig config, ToolCallValidator toolCallValidator) {
+              String hitlMode, AgentConfig config, ToolCallValidator toolCallValidator) {
         this.client = client;
         this.registry = registry;
         this.ctx = ctx;
         this.config = config;
         this.terminateOnNoToolCall = config == null || config.terminateOnNoToolCall();
         this.hitlManager = new HitlManager(hitlMode);
+        this.hitlManager.setConfig(config);
         this.stormBreaker = StormBreaker.fromConfig(config);
         this.toolCallValidator = toolCallValidator != null ? toolCallValidator
                 : ToolCallValidator.fromConfig(config, registry == null ? null : registry.getWorkspace());
@@ -398,8 +399,8 @@ public class AgentLoop implements AgentLoopController {
     }
 
     @Override
-    public SessionService getSessionService() {
-        return this.sessionService;
+    public SessionUsageSink getSessionUsageSink() {
+        return this.sessionUsageSink;
     }
 
     @Override
@@ -408,7 +409,7 @@ public class AgentLoop implements AgentLoopController {
     }
 
     @Override
-    public LoopraConfig getAgentConfig() {
+    public AgentConfig getAgentConfig() {
         return config;
     }
 
@@ -568,9 +569,9 @@ public class AgentLoop implements AgentLoopController {
     }
 
     private String currentGoalInstruction() {
-        if (!goalGuardEnabled) return "";
+        if (!goalGuardEnabled || goalGuard == null) return "";
         try {
-            return goalService.instruction(loadOpenGoal());
+            return goalGuard.instruction(loadOpenGoal());
         } catch (Exception e) {
             log.warn("[goal] 读取当前 Goal 失败", e);
             return "## Goal 状态不可用\n持久化 Goal 暂时无法读取。不要声称目标已完成；可以说明错误并结束当前回合。"
@@ -578,22 +579,21 @@ public class AgentLoop implements AgentLoopController {
         }
     }
 
-    private Goal loadOpenGoal() throws IOException {
-        if (sessionId == null || sessionId.isBlank() || registry == null || registry.getWorkspace() == null) {
+    private GoalGuard.GoalView loadOpenGoal() throws IOException {
+        if (goalGuard == null || sessionId == null || sessionId.isBlank() || registry == null || registry.getWorkspace() == null) {
             return null;
         }
-        Goal goal = GoalRuntime.forWorkspace(registry.getWorkspace(), sessionId).load();
-        return goal != null && goal.isOpen() ? goal : null;
+        return goalGuard.openGoal(registry.getWorkspace(), sessionId);
     }
 
     private String takeFinishContentIfAllowed() {
         String requested = finishContent;
         finishContent = null;
-        if (requested == null || !goalGuardEnabled) return requested;
+        if (requested == null || !goalGuardEnabled || goalGuard == null) return requested;
         try {
-            Goal goal = loadOpenGoal();
+            GoalGuard.GoalView goal = loadOpenGoal();
             if (goal == null || !goal.requiresAgentWork()) return requested;
-            String reminder = "[Goal guard] 当前 Goal 仍在推进：" + goal.getTitle()
+            String reminder = "[Goal guard] 当前 Goal 仍在推进：" + goal.title()
                     + "（" + goal.progressText() + "）。请继续当前步骤并调用 goal_complete；"
                     + "只有确实需要用户输入或外部状态变化时才调用 goal_block。";
             injectUserMessage(reminder);
@@ -769,9 +769,9 @@ public class AgentLoop implements AgentLoopController {
             // ---- 5. 无 tool calls → 根据配置结束或要求模型继续 ----
             if (!hasToolCalls) {
                 ctx.addAssistant(sr.content(), null, sr.reasoningContent());
-                Goal openGoal;
+                GoalGuard.GoalView openGoal;
                 try {
-                    openGoal = goalGuardEnabled ? loadOpenGoal() : null;
+                    openGoal = (goalGuardEnabled && goalGuard != null) ? loadOpenGoal() : null;
                 } catch (Exception e) {
                     String reminder = "[Goal guard] 无法读取持久化 Goal 状态：" + e.getMessage()
                             + "。若持续无法读取，可提示用户执行 `/goal reset` 清除损坏快照后重试。";
@@ -1137,8 +1137,8 @@ public class AgentLoop implements AgentLoopController {
             public void onUsage(int promptTokens, int completionTokens, int totalTokens,
                                 int cacheHit, int cacheMiss) {
                 lastPromptTokens = promptTokens;
-                if (sessionService != null) {
-                    sessionService.updateLastPromptTokens(promptTokens);
+                if (sessionUsageSink != null) {
+                    sessionUsageSink.updateLastPromptTokens(promptTokens);
                 }
                 String currentModel = client.getModel();
                 safeListener("usage", () -> listener.onUsage(currentModel, promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss));

@@ -6,7 +6,7 @@ import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.tool.FunctionToolDesc;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.ToolExecutionResult;
-import site.sorghum.loopra.bin.config.LoopraConfig;
+import site.sorghum.loopra.bin.agent.spi.AgentConfig;
 import site.sorghum.loopra.bin.model.HttpModelClient;
 import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
@@ -14,7 +14,6 @@ import site.sorghum.loopra.tool.ToolContext;
 import site.sorghum.loopra.bin.session.SessionFileChangeTracker;
 
 import java.io.IOException;
-import java.lang.reflect.Constructor;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.List;
@@ -187,14 +186,22 @@ class AgentLoopToolTimeoutTest {
                 config(toolTimeoutSec, subAgentTimeoutSec));
     }
 
-    private static LoopraConfig config(int toolTimeoutSec,
-                                        int subAgentTimeoutSec) throws Exception {
-        String json = "{\"toolTimeoutSec\":" + toolTimeoutSec
-                + ",\"subAgentTimeoutSec\":" + subAgentTimeoutSec + "}";
-        Constructor<LoopraConfig> constructor =
-                LoopraConfig.class.getDeclaredConstructor(ONode.class);
-        constructor.setAccessible(true);
-        return constructor.newInstance(ONode.ofJson(json));
+    private static AgentConfig config(int toolTimeoutSec,
+                                        int subAgentTimeoutSec) {
+        return new TimeoutConfig(toolTimeoutSec, subAgentTimeoutSec);
+    }
+
+    /** AgentConfig 测试替身：仅覆写工具超时，其余返回内核默认值。 */
+    private record TimeoutConfig(int toolTimeoutSec, int subAgentTimeoutSec) implements AgentConfig {
+        @Override public int maxContextChars() { return 200_000; }
+        @Override public int keepTailChars() { return 80_000; }
+        @Override public int maxSelfCorrectionAttempts() { return 5; }
+        @Override public boolean terminateOnNoToolCall() { return true; }
+        @Override public int stormWindowSize() { return 6; }
+        @Override public int stormThreshold() { return 3; }
+        @Override public String validationModel() { return ""; }
+        @Override public Channel validationModelChannel() { return null; }
+        @Override public List<String> autoWhitelist() { return List.of(); }
     }
 
     private static ToolRegistry registryWith(FunctionToolDesc tool) {
