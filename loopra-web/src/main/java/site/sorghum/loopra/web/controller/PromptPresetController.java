@@ -24,12 +24,7 @@ public class PromptPresetController {
     private static final Path PRESETS_FILE = Paths.get(
             System.getProperty("user.home"), ".loopra", "prompt-presets.json");
 
-    private static final List<Map<String, String>> DEFAULT_PRESETS = List.of(
-            preset("test", "要求测试", "请先运行与本次修改相关的测试，确认通过后再报告结果。"),
-            preset("git", "要求提交到 Git", "请检查本次修改，运行必要的验证，并将完成的代码提交到 Git。"),
-            preset("analyze", "要求先分析", "请先分析现有代码、调用链和影响范围，再开始修改。"),
-            preset("review", "要求代码审查", "请按代码审查标准检查本次修改，优先报告真实缺陷和回归风险。")
-    );
+    private static final List<Map<String, String>> DEFAULT_PRESETS = List.of();
 
     @ApiOperation(value = "获取常用要求预设")
     @Get

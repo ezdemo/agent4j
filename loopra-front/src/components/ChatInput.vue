@@ -259,7 +259,7 @@
             <div class="quick-command-header">
               <div>
                 <strong>常用要求</strong>
-                <span>点击复制要求到剪贴板</span>
+                <span>点击添加要求到输入框</span>
               </div>
               <button type="button" class="quick-command-add" title="添加预设" aria-label="添加预设" @click="openQuickCommandEditor()">
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
@@ -267,7 +267,7 @@
             </div>
             <div v-if="quickCommands.length" class="quick-command-list">
               <div v-for="command in quickCommands" :key="command.id" class="quick-command-item">
-                <button type="button" class="quick-command-copy" :title="`复制 ${command.text}`" @click="copyQuickCommand(command)">
+                <button type="button" class="quick-command-copy" :title="`添加 ${command.text}`" @click="appendQuickCommand(command)">
                   <span class="quick-command-label">{{ command.label }}</span>
                   <code>{{ command.text }}</code>
                 </button>
@@ -582,15 +582,6 @@ const fileDropActive = ref(false)
 watch(() => props.inputText, v => localText.value = v)
 watch(localText, v => emit('update:inputText', v))
 
-const DEFAULT_QUICK_COMMANDS = [
-  {id: 'quick-test', label: '要求测试', text: '请先运行与本次修改相关的测试，确认通过后再报告结果。'},
-  {id: 'quick-git', label: '要求提交到 Git', text: '请检查本次修改，运行必要的验证，并将完成的代码提交到 Git。'},
-  {id: 'quick-analyze', label: '要求先分析', text: '请先分析现有代码、调用链和影响范围，再开始修改。'},
-  {id: 'quick-review', label: '要求代码审查', text: '请按代码审查标准检查本次修改，优先报告真实缺陷和回归风险。'}
-]
-
-const loadQuickCommands = () => DEFAULT_QUICK_COMMANDS.map(item => ({...item}))
-
 const loadPromptPresets = async () => {
   try {
     const response = await promptPresetsAPI.list()
@@ -598,11 +589,11 @@ const loadPromptPresets = async () => {
       quickCommands.value = response.data.filter(item => item?.id && item?.label && item?.text)
     }
   } catch {
-    // 后端不可用时使用内置预设
+    // 后端不可用时保持空列表
   }
 }
 
-const quickCommands = ref(loadQuickCommands())
+const quickCommands = ref([])
 const showQuickCommandPicker = ref(false)
 const quickCommandEditorOpen = ref(false)
 const quickCommandDraft = ref({id: '', label: '', text: ''})
@@ -650,14 +641,12 @@ const removeQuickCommand = (id) => {
   persistQuickCommands()
 }
 
-const copyQuickCommand = async (command) => {
-  try {
-    await navigator.clipboard.writeText(command.text)
-    showQuickCommandPicker.value = false
-    closeQuickCommandEditor()
-    window.dispatchEvent(new CustomEvent('copy-success', {detail: `${command.label}已复制` }))
-  } catch {
-  }
+const appendQuickCommand = (command) => {
+  const separator = localText.value && !localText.value.endsWith('\n') ? '\n' : ''
+  localText.value = `${localText.value}${separator}${command.text}`
+  showQuickCommandPicker.value = false
+  closeQuickCommandEditor()
+  nextTick(() => inputField.value?.focus())
 }
 
 
