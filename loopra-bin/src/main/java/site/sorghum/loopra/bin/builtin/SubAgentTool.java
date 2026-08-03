@@ -65,6 +65,9 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
     @Inject
     private ModelClient modelClient;
 
+    @Inject
+    private SubAgentProfileStore profileStore;
+
     @ToolMapping(name = "sub_agent", description = """
                  派生一个带预设角色的隔离子代理，完成后将结果返回给主代理。
                  可用角色: explore（只读项目探索）, implement（实现）, test（测试）, review（只读项目审查）, plan（只读项目方案）。
@@ -78,9 +81,9 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
         if (task == null || task.isBlank()) {
             return "INVALID_SUB_AGENT_TASK: task 不能为空";
         }
-        final SubAgentProfile selectedProfile;
+        final SubAgentProfileConfig selectedProfile;
         try {
-            selectedProfile = SubAgentProfile.from(profile);
+            selectedProfile = profileStore.from(profile);
         } catch (IllegalArgumentException e) {
             return "INVALID_SUB_AGENT_PROFILE: " + e.getMessage();
         }

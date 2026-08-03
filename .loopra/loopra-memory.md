@@ -139,3 +139,23 @@ PowerShell 脚本（.ps1）必须保存为 UTF-8 with BOM：PS 5.1 对无 BOM �
 ## [2026-08-03 20:08] 会话折叠沉淀
 
 桌面首页（DesktopHome.vue）左下角菜单最终布局（2026-08-03 第三次调整）：第一行「技能」整行文字按钮（sparkles 四角星图标）；第二行「设置」文字按钮（flex:1 占满左侧）+ 右侧图标区顺序：子代理（desktop-sub-agents-button）、服务进程管理、工具（desktop-tools-button，Lucide wrench）、主题切换（desktop-theme-button）。「数据面板」入口仍在设置页左侧导航底部「功能」区（仅 ?desktopShell=1 时显示）。
+
+## [2026-08-03 20:17] 会话折叠沉淀
+
+子代理角色配置已从硬编码枚举改为可持久化：新增 SubAgentProfileStore（loopra-bin，Solon 组件）以 ~/.loopra/sub-agents.json 按 id 覆盖内置默认（SubAgentProfile 枚举保留为默认值来源，含 name/description/readOnly/instructions/allowedTools 字段）；每次读取实时加载文件，改配置立即生效无需重启；allowedTools 显式配置时优先于 readOnly 过滤；SubAgentTool 与 SubAgentController 均走 Store，SubAgentInfoDTO 新增 name/description 字段，前端 SubAgents.vue 优先展示配置值。
+
+## [2026-08-03 20:25] 会话折叠沉淀
+
+子代理角色配置最终模型（2026-08-03）：~/.loopra/sub-agents.json 为权威存储，首次访问自动生成默认文件（内置 5 角色 enable=true，id 稳定不重复合并）；用户可改 name/description/instructions/readOnly/allowedTools 或 enable=false 禁用；读取实时加载，改文件立即生效；文件损坏回退内置默认且不覆盖用户文件；配置缺 enable 字段视为启用（Boolean 包装类）。相关测试：SubAgentProfileStoreTest（loopra-bin，临时 user.home 隔离）。
+
+## [2026-08-03 20:38] 会话折叠沉淀
+
+子代理前端编辑功能（2026-08-03）：GET /api/sub-agents 返回全部角色（含 enable=false，供重新启用），DTO 含 allowedTools（原始白名单配置）与 enable；PUT /api/sub-agents 全量保存（body {profiles:[...]}，参照 prompt-presets 模式）；SubAgentProfileStore.save 校验 id 非空/不重复、id 归一化小写、allowedTools 空列表归一化为 null；SubAgents.vue 支持编辑（名称/描述/提示词/只读/工具白名单/启用开关，取消时快照恢复）、新增角色（id 可编辑，保存后不可改）、禁用/启用、移除未保存的新角色；保存后重新加载。
+
+## [2026-08-03 20:53] 会话折叠沉淀
+
+子代理工具选择面板（2026-08-03）：GET /api/sub-agents/denied-tools 返回 SUB_AGENT_DENY 清单（sub_agent/checklist_*/goal_*/ask_choice/browser_request_user_action）；前端 chips 面板用 GET /api/tools 全量工具对象（readOnly = readOnlyOverride ?? readOnly，与 ToolMetadata.isReadOnly 一致），子代理不可用或已禁用的工具置灰不可选；「一键导入只读/写入」按实际只读性过滤并排除不可用工具，替换当前白名单。
+
+## [2026-08-03 21:09] 会话折叠沉淀
+
+子代理配置同步策略（2026-08-03，用户拍板"内置为准"）：Java 内置角色（SubAgentProfile 枚举）内容字段（name/description/instructions/readOnly/allowedTools）为权威，进程内首次访问 SubAgentProfileStore 时执行一次 mergeBuiltins：内容字段强制覆盖为内置值、enable 保留用户设置、被删的内置角色自动追加（enable=true）、自定义角色不动；merge 后写盘。DTO 新增 builtin 字段，前端内置角色不显示编辑按钮（仅启用/禁用），带"系统内置"标记。注意：全量保存（PUT）仍可提交内置角色内容，重启 merge 会纠正回内置值。
