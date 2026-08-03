@@ -72,6 +72,7 @@ describe('DesktopHome 项目拖拽排序', () => {
     const menuButtons = wrapper.findAll('.desktop-project-footer-menu > button')
     expect(menuButtons.map((button) => button.text().trim())).toEqual(['技能'])
     expect(wrapper.find('.desktop-project-footer-settings').text()).toContain('设置')
+    expect(wrapper.find('.desktop-sub-agents-button').exists()).toBe(true)
     expect(wrapper.find('.desktop-tools-button').exists()).toBe(true)
     expect(wrapper.find('.desktop-theme-button').exists()).toBe(true)
     expect(wrapper.text()).not.toContain('子代理')

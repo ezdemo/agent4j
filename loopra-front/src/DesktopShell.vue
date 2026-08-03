@@ -94,6 +94,7 @@
         @open-session="openSession"
         @open-skills="openSkills"
         @open-tools="openTools"
+        @open-sub-agents="openSubAgents"
         @open-settings="openSettings"
         @toggle-theme="toggleTheme"
         @add-workspace="addWorkspaceFromFolder"
