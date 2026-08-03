@@ -4,6 +4,40 @@
 
 ---
 
+## [26.8.3.2] - 2026-08-03
+
+### Added
+
+#### 🛠️ OpenAPI 与安装发布
+
+- ✨ 新增 `OpenApiV2Resolver` 解析器，支持 Swagger 2.0（OpenAPI V2）规范解析 API 工具；数组 items 与对象属性中的循环引用可自动退出并标记 `_Circular_Reference_`，避免无限递归
+- ✨ 新增 Gitee 镜像安装脚本 `setup-mirror` / `setup-gui-mirror`（Windows PowerShell / macOS / Linux），国内网络可从 Gitee 直接下载安装包
+- ✨ 新增 `bump-version.ps1` 版本升级辅助脚本
+
+#### 🖥️ 桌面工作台与打包
+
+- ✨ DesktopHome 支持工作区（项目）拖拽排序，实时预览并持久化到服务端配置，读取失败时回退默认顺序
+- ✨ 新增 Electron 打包流水线，支持构建 macOS 与 Windows 平台的桌面安装包
+
+### Changed
+
+- 🔄 工具校验模型自身故障（超时、调用异常等）时不再直接判定拒绝，改为回退人工审批由用户决定是否执行
+- 🔄 安装脚本与 README 下载地址从 Gitee 迁移至 GitHub 发布源，国内用户可选用新增的 Gitee 镜像脚本
+- 🔄 桌面端将后端返回的相对资源路径统一解析为完整 URL（`resolveApiUrl`），修复 `file://` 协议下宠物 spritesheet 加载失败
+- 🔄 CI 全面迁移至 GitHub Actions 构建与发布流水线，Release 只上传最终安装包，剔除 unpacked 解包目录
+- 🔄 更新 solon-parent 至 4.0.4，版本号统一升级至 26.8.3.2
+
+### Fixed
+
+- 🐛 修复 GitHub Actions 构建失败并消除 Node 20 弃用警告
+- 🐛 修复连续审批时误删上一轮已完成工具卡片的问题
+
+### Chore
+
+- 🔧 删除临时脚本 `fix2.cjs` 与 `fix-app.cjs`
+
+---
+
 ## [26.8.3] - 2026-08-03
 
 ### Added

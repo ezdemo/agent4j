@@ -11,10 +11,10 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Java-17-blue?logo=openjdk" alt="Java 17"/>
-  <img src="https://img.shields.io/badge/Solon-4.0.3-important?logo=java" alt="Solon 4.0.3"/>
+  <img src="https://img.shields.io/badge/Solon-4.0.4-important?logo=java" alt="Solon 4.0.4"/>
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js" alt="Vue 3"/>
   <img src="https://img.shields.io/badge/Electron-42.4-47848F?logo=electron" alt="Electron"/>
-  <img src="https://img.shields.io/badge/version-26.8.3-lightgrey" alt="Version 26.8.3"/>
+  <img src="https://img.shields.io/badge/version-26.8.3.2-lightgrey" alt="Version 26.8.3.2"/>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/>
 </p>
 
@@ -25,7 +25,7 @@
   <a href="#从源码开发">从源码开发</a>
 </p>
 
-> 当前版本：`26.8.3`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+> 当前版本：`26.8.3.2`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 概览
 
@@ -66,7 +66,7 @@ macOS / Linux：
 curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash
 ```
 
-国内网络可选用 Gitee 镜像脚本（脚本与安装包均从 Gitee 下载，速度更快）：
+国内网络可选用 Github 镜像脚本（脚本与安装包仍从 Github 下载，速度更快）：
 
 Windows PowerShell：
 
@@ -276,14 +276,15 @@ loopra/
 ├── intro/          # 官网内容
 ├── docs/           # 项目文档
 ├── .release/       # 安装与发布脚本
-└── .workflow/      # CI 流水线配置
+├── .workflow/      # 旧版 CI 流水线配置（已迁移至 GitHub Actions）
+└── .github/        # GitHub Actions 构建与发布流水线
 ```
 
 ## 技术栈
 
 | 层 | 技术 |
 |---|---|
-| 核心 | Java 17、Solon 4.0.3、Snack4、OkHttp |
+| 核心 | Java 17、Solon 4.0.4、Snack4、OkHttp |
 | Web | Solon Web、Jetty、SSE、Knife4j |
 | 前端 | Vue 3、Vite、Pinia、Ant Design Vue |
 | 桌面 | Electron、electron-builder |
