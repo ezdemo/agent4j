@@ -23,6 +23,11 @@ public class ChatRequest {
     private boolean stream;
 
     /**
+     * 本次流式请求 ID，用于在 Agent 尚未创建时精确取消后台任务。
+     */
+    private String requestId;
+
+    /**
      * 工作区 hash（用于多工作区隔离，由 /api/workspaces 返回）
      */
     private String workspaceHash;

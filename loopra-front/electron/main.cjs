@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, dialog, ipcMain, Menu, shell } = require('electron')
+const { app, BrowserWindow, WebContentsView, dialog, ipcMain, Menu, shell, Notification } = require('electron')
 const http = require('http')
 const path = require('path')
 const { spawn, execFile, execSync } = require('child_process')
@@ -66,7 +66,10 @@ let aiBrowserBridgeReady = null
 let aiBrowserBridgeAddress = ''
 let aiBrowserActivity = { state: 'idle', message: '等待 AI 操作', timestamp: Date.now() }
 let desktopPetWindow = null
+let pendingDesktopPetReply = null
 const aiBrowserTabs = new Map()
+const AI_BROWSER_SCREENSHOT_MAX_BYTES = 5 * 1024 * 1024
+const AI_BROWSER_SCREENSHOT_MAX_WIDTH = 1600
 const desktopChatTabs = new Map()
 let desktopChatActiveTabId = null
 const AI_BROWSER_BRIDGE_PREFERRED_PORT = Number(process.env.LOOPRA_BROWSER_BRIDGE_PORT || 0)
@@ -241,6 +244,7 @@ function getLoopraPaths() {
     binDir,
     binPath: path.join(binDir, binName),
     jarPath: path.join(binDir, 'loopra-web.jar'),
+    versionPath: path.join(binDir, 'version.txt'),
     javaPath: isWin
       ? path.join(runtimeDir, 'jre25', 'bin', 'java.exe')
       : path.join(runtimeDir, 'jre25', 'bin', 'java'),
@@ -251,6 +255,15 @@ function getLoopraPaths() {
 function getLoopraBinPath() {
   const { binDir, binPath } = getLoopraPaths()
   return { binDir, binPath }
+}
+
+function readLoopraGuiVersion() {
+  const { versionPath } = getLoopraPaths()
+  try {
+    return fs.readFileSync(versionPath, 'utf8').trim().replace(/^v/i, '')
+  } catch {
+    return ''
+  }
 }
 
 function isLoopraGuiInstalled() {
@@ -349,6 +362,13 @@ function createWindow() {
 
   if (shouldOpenDevTools) mainWindow.webContents.openDevTools()
 
+  mainWindow.on('focus', () => {
+    const tab = desktopChatTabs.get(desktopChatActiveTabId)
+    if (!tab || !tab.visible || tab.view.webContents.isDestroyed()) return
+    tab.view.webContents.focus()
+    tab.view.webContents.send('desktop-chat-tab-focus-composer')
+  })
+
   mainWindow.webContents.on('context-menu', (event, params) => {
     const menu = Menu.buildFromTemplate([
       { label: '检查元素', click: () => mainWindow.webContents.inspectElement(params.x, params.y) },
@@ -376,17 +396,102 @@ function createWindow() {
   })
 }
 
+function isDesktopChatSender(sender) {
+  return sender === mainWindow?.webContents
+    || [...desktopChatTabs.values()].some((tab) => tab.view.webContents === sender)
+}
+
+function sendPendingDesktopPetReply() {
+  if (!pendingDesktopPetReply || !desktopPetWindow || desktopPetWindow.isDestroyed()) return
+  desktopPetWindow.webContents.send('desktop-pet-reply', pendingDesktopPetReply)
+  pendingDesktopPetReply = null
+}
+
+function deliverAssistantReply(rawReply) {
+  const text = String(rawReply || '').trim()
+  if (!text) return false
+  const payload = {text: text.slice(0, 180)}
+
+  if (desktopPetWindow && !desktopPetWindow.isDestroyed() && desktopPetWindow.isVisible()) {
+    pendingDesktopPetReply = payload
+    if (desktopPetWindow.webContents.isLoading()) return true
+    sendPendingDesktopPetReply()
+    return true
+  }
+
+  if (!Notification.isSupported()) return false
+  const notification = new Notification({
+    title: 'Loopra 收到 AI 回复',
+    body: payload.text
+  })
+  notification.on('click', () => {
+    if (!mainWindow || mainWindow.isDestroyed()) return
+    if (mainWindow.isMinimized()) mainWindow.restore()
+    mainWindow.show()
+    mainWindow.focus()
+  })
+  notification.show()
+  return true
+}
+
+function getDesktopPetStatePath() {
+  return path.join(getLoopraPaths().configDir, 'pet', 'desktop.json')
+}
+
+function readDesktopPetState() {
+  try {
+    const state = JSON.parse(fs.readFileSync(getDesktopPetStatePath(), 'utf8'))
+    return state && typeof state === 'object' ? state : {}
+  } catch {
+    return {}
+  }
+}
+
+function saveDesktopPetState(changes) {
+  try {
+    const statePath = getDesktopPetStatePath()
+    fs.mkdirSync(path.dirname(statePath), { recursive: true })
+    fs.writeFileSync(statePath, JSON.stringify({ ...readDesktopPetState(), ...changes }), 'utf8')
+  } catch (error) {
+    console.error('[desktop-pet] failed to persist state:', error.message)
+  }
+}
+
+function isDesktopPetEnabled() {
+  return readDesktopPetState().visible === true
+}
+
+function getDesktopPetPosition() {
+  const { x, y } = readDesktopPetState()
+  return Number.isInteger(x) && Number.isInteger(y) ? { x, y } : null
+}
+
+function setDesktopPetEnabled(visible) {
+  saveDesktopPetState({ visible: Boolean(visible) })
+}
+
+function setDesktopPetPosition(x, y) {
+  saveDesktopPetState({ x: Math.round(x), y: Math.round(y) })
+}
+
 function openDesktopPetWindow() {
   if (desktopPetWindow && !desktopPetWindow.isDestroyed()) {
     desktopPetWindow.showInactive()
     return desktopPetWindow
   }
 
+  const persistedPosition = getDesktopPetPosition()
+  const initialPosition = persistedPosition || {
+    x: Math.max(0, (mainWindow?.getBounds().x || 0) + (mainWindow?.getBounds().width || 800) - 260),
+    y: Math.max(0, (mainWindow?.getBounds().y || 0) + (mainWindow?.getBounds().height || 600) - 300)
+  }
+  if (!persistedPosition) setDesktopPetPosition(initialPosition.x, initialPosition.y)
+
   desktopPetWindow = new BrowserWindow({
     width: 240,
     height: 240,
-    x: Math.max(0, (mainWindow?.getBounds().x || 0) + (mainWindow?.getBounds().width || 800) - 260),
-    y: Math.max(0, (mainWindow?.getBounds().y || 0) + (mainWindow?.getBounds().height || 600) - 300),
+    x: initialPosition.x,
+    y: initialPosition.y,
     frame: false,
     transparent: true,
     resizable: false,
@@ -410,6 +515,7 @@ function openDesktopPetWindow() {
   desktopPetWindow.on('closed', () => { desktopPetWindow = null })
   desktopPetWindow.webContents.setWindowOpenHandler(() => ({ action: 'deny' }))
   desktopPetWindow.once('ready-to-show', () => desktopPetWindow?.showInactive())
+  desktopPetWindow.webContents.on('did-finish-load', sendPendingDesktopPetReply)
 
   if (isDev) {
     desktopPetWindow.loadURL('http://localhost:3000/?desktopPet=1')
@@ -424,6 +530,7 @@ app.whenReady().then(() => {
   Menu.setApplicationMenu(null)
   startAiBrowserBridge().catch((error) => console.error('[ai-browser] failed to start bridge:', error.message))
   createWindow()
+  if (isDesktopPetEnabled()) openDesktopPetWindow()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
@@ -511,8 +618,17 @@ ipcMain.handle('get_resource_dir', async () => {
 })
 
 ipcMain.handle('check_install_needed', async () => {
-  const installed = isLoopraGuiInstalled()
-  return { needed: !installed, reason: installed ? '' : 'not_installed' }
+  if (!isLoopraGuiInstalled()) {
+    return { needed: true, reason: 'not_installed' }
+  }
+
+  const runtimeVersion = readLoopraGuiVersion()
+  const desktopVersion = app.getVersion().replace(/^v/i, '')
+  if (runtimeVersion !== desktopVersion) {
+    return { needed: true, reason: 'version_mismatch', runtimeVersion, desktopVersion }
+  }
+
+  return { needed: false, reason: '', runtimeVersion, desktopVersion }
 })
 ipcMain.handle('install_loopra_web', async () => ({
   success: false,
@@ -520,12 +636,22 @@ ipcMain.handle('install_loopra_web', async () => ({
 }))
 
 ipcMain.handle('start_loopra_web', async () => {
+  // 无论服务由 CLI、旧版 GUI 或当前 GUI 启动，优先复用稳定的默认端口。
+  const preferredPort = 4567
+  if (await healthCheck(preferredPort)) {
+    if (loopraWebProcess && currentPort !== preferredPort) cleanupLoopraWeb()
+    console.log(`Loopra Web already running on port ${preferredPort}, reusing`)
+    currentPort = preferredPort
+    await closeOtherLoopraJavaProcesses(currentPort)
+    return preferredPort
+  }
+
   if (loopraWebProcess) {
     await closeOtherLoopraJavaProcesses(currentPort)
     return currentPort
   }
 
-  // 桌面端只复用自己的运行时进程，不接管命令行安装在 ~/.loopra 下的服务。
+  // 桌面端只复用自己的运行时进程，不接管命令行安装在 ~/.loopra 下的非默认端口服务。
   const guiProcesses = await listLoopraJavaProcesses()
   const existingGui = guiProcesses.find((item) => isLoopraGuiRuntime(item.commandLine) && item.port > 0)
   if (existingGui && await healthCheck(existingGui.port)) {
@@ -647,11 +773,13 @@ ipcMain.handle('window-close', () => { if (mainWindow) mainWindow.close() })
 ipcMain.handle('window-is-maximized', () => mainWindow ? mainWindow.isMaximized() : false)
 ipcMain.handle('desktop-pet-open', (event) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop pet request')
+  setDesktopPetEnabled(true)
   openDesktopPetWindow()
   return true
 })
 ipcMain.handle('desktop-pet-close', (event) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop pet request')
+  setDesktopPetEnabled(false)
   if (desktopPetWindow && !desktopPetWindow.isDestroyed()) desktopPetWindow.close()
   return false
 })
@@ -671,12 +799,29 @@ ipcMain.handle('desktop-pet-move-by', (event, delta) => {
     throw new Error('Invalid desktop pet move')
   }
   const bounds = desktopPetWindow.getBounds()
-  desktopPetWindow.setPosition(Math.round(bounds.x + dx), Math.round(bounds.y + dy))
+  const nextX = Math.round(bounds.x + dx)
+  const nextY = Math.round(bounds.y + dy)
+  desktopPetWindow.setPosition(nextX, nextY)
+  setDesktopPetPosition(nextX, nextY)
 })
 ipcMain.on('desktop-pet-set-interactive', (event, interactive) => {
   if (event.sender !== desktopPetWindow?.webContents || !desktopPetWindow || desktopPetWindow.isDestroyed()) return
   desktopPetWindow.setIgnoreMouseEvents(!interactive, { forward: true })
 })
+ipcMain.handle('desktop-pet-activate-main', (event) => {
+  if (event.sender !== desktopPetWindow?.webContents) throw new Error('Unauthorized desktop pet activation')
+  if (!mainWindow || mainWindow.isDestroyed()) return false
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+  return true
+})
+
+ipcMain.handle('desktop-pet-reply', (event, rawReply) => {
+  if (!isDesktopChatSender(event.sender)) throw new Error('Unauthorized desktop pet reply')
+  return deliverAssistantReply(rawReply)
+})
+
 ipcMain.handle('pick_loopra_workspace_folder', async (event) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized folder picker request')
   const result = await dialog.showOpenDialog(mainWindow, {
@@ -718,6 +863,8 @@ ipcMain.handle('desktop-chat-tab-show', async (event, tabId, rawBounds) => {
   }
   tab.view.setBounds(normalizeDesktopChatBounds(rawBounds))
   tab.view.setVisible(true)
+  tab.view.webContents.focus()
+  tab.view.webContents.send('desktop-chat-tab-focus-composer')
   tab.visible = true
   hideDesktopChatViews(tab.id)
   desktopChatActiveTabId = tab.id
@@ -1161,6 +1308,24 @@ function waitForAiBrowserPageLoad(tab, timeoutMs = 30_000) {
   })
 }
 
+async function captureAiBrowserScreenshot(tab) {
+  let image = await tab.view.webContents.capturePage()
+  if (image.getSize().width > AI_BROWSER_SCREENSHOT_MAX_WIDTH) {
+    image = image.resize({ width: AI_BROWSER_SCREENSHOT_MAX_WIDTH })
+  }
+  let png = image.toPNG()
+  for (let attempt = 0; png.length > AI_BROWSER_SCREENSHOT_MAX_BYTES && attempt < 4; attempt++) {
+    const size = image.getSize()
+    if (size.width <= 320 || size.height <= 180) break
+    image = image.resize({ width: Math.max(320, Math.floor(size.width * 0.7)) })
+    png = image.toPNG()
+  }
+  if (png.length > AI_BROWSER_SCREENSHOT_MAX_BYTES) {
+    throw new Error('Browser screenshot exceeds the 5 MiB visual-context limit')
+  }
+  return `data:image/png;base64,${png.toString('base64')}`
+}
+
 async function aiBrowserSnapshot(tabId) {
   const tab = getAiBrowserTab(tabId)
   if (tab.loading || tab.view.webContents.isLoadingMainFrame()) {
@@ -1228,7 +1393,8 @@ async function aiBrowserSnapshot(tabId) {
         return result;
       };
       const ignored = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'TEMPLATE', 'META', 'LINK', 'HEAD', 'SVG', 'PATH']);
-      const structuralInteractive = (el) => el.matches('a[href],button,input,textarea,select,summary,[role="button"],[role="link"],[role="checkbox"],[role="radio"],[role="switch"],[role="tab"],[role="menuitem"],[role="option"],[role="combobox"],[role="textbox"],[role="slider"],[role="treeitem"],[contenteditable="true"],[onclick],[aria-expanded],[aria-haspopup],[tabindex]:not([tabindex="-1"])');
+      const textEditable = (el) => el instanceof HTMLInputElement || el instanceof HTMLTextAreaElement || el.isContentEditable;
+      const structuralInteractive = (el) => textEditable(el) || el.matches('a[href],button,select,summary,[role="button"],[role="link"],[role="checkbox"],[role="radio"],[role="switch"],[role="tab"],[role="menuitem"],[role="option"],[role="combobox"],[role="textbox"],[role="slider"],[role="treeitem"],[onclick],[aria-expanded],[aria-haspopup],[tabindex]:not([tabindex="-1"])');
       const interactive = (el) => structuralInteractive(el) || styleOf(el).cursor === 'pointer';
       const collectElements = (root, result = []) => {
         for (const el of root.querySelectorAll('*')) {
@@ -1264,7 +1430,7 @@ async function aiBrowserSnapshot(tabId) {
         .filter((node) => node.nodeType === Node.TEXT_NODE)
         .map((node) => node.textContent)
         .join(' '), 180);
-      const actionsFor = (el) => el.matches('input,textarea,[contenteditable="true"]')
+      const actionsFor = (el) => textEditable(el)
         ? ['fill', 'press', 'scroll']
         : (el.matches('select') ? ['select', 'scroll'] : ['click', 'scroll']);
       const stateFor = (el) => {
@@ -1275,6 +1441,8 @@ async function aiBrowserSnapshot(tabId) {
           const value = el.getAttribute(name);
           if (value != null) state[name.slice(5)] = value;
         }
+        if (textEditable(el)) state.editable = true;
+        if (el.isContentEditable) state.contentEditable = true;
         if ('disabled' in el) state.disabled = Boolean(el.disabled);
         if ('required' in el && el.required) state.required = true;
         if (el instanceof HTMLInputElement) {
@@ -1332,8 +1500,8 @@ async function aiBrowserSnapshot(tabId) {
         const target = closestActionTarget(source);
         if (!target) continue;
         const rect = target.getBoundingClientRect();
-        const text = textOf(source) || textOf(target);
-        if (rect.width < 2 || rect.height < 2 || (!text && !target.matches('input,textarea,select'))) continue;
+        const text = textOf(source) || textOf(target) || (textEditable(target) ? '可编辑区域' : '');
+        if (rect.width < 2 || rect.height < 2 || (!text && !textEditable(target) && !target.matches('select'))) continue;
         const candidate = { el: target, rect, text, overlay: overlayOf(target) };
         const existing = candidateByTarget.get(target);
         if (!existing || (text.length && text.length < existing.text.length)) candidateByTarget.set(target, candidate);
@@ -1425,8 +1593,9 @@ async function aiBrowserSnapshot(tabId) {
       };
     })()
   `, true)
+  const imageUrl = await captureAiBrowserScreenshot(tab)
   tab.snapshotId = `${tab.id}-s${++tab.snapshotVersion}`
-  return { tabId: tab.id, snapshotId: tab.snapshotId, ...snapshot }
+  return { tabId: tab.id, snapshotId: tab.snapshotId, imageUrl, imageDetail: 'auto', ...snapshot }
 }
 
 async function aiBrowserAct(tabId, targetId, action, value, snapshotId) {
@@ -1541,7 +1710,7 @@ function startAiBrowserBridge() {
         'new-tab': 'AI 正在打开新标签页',
         tabs: 'AI 正在查看标签页',
         navigate: 'AI 正在跳转页面',
-        screenshot: 'AI 正在读取页面结构',
+        screenshot: 'AI 正在捕获页面快照',
         act: `AI 正在${actionLabels[payload.action] || '操作页面'}`,
         'request-user-action': 'AI 正在请求你手动完成浏览器操作',
         'close-tab': 'AI 正在关闭标签页'
@@ -1579,7 +1748,7 @@ function startAiBrowserBridge() {
         'new-tab': 'AI 已打开新标签页',
         tabs: 'AI 已读取标签页列表',
         navigate: 'AI 已完成页面跳转',
-        screenshot: 'AI 已读取页面结构',
+        screenshot: 'AI 已捕获页面快照',
         act: `AI 已完成${actionLabels[payload.action] || '页面操作'}`,
         'close-tab': 'AI 已关闭标签页'
       }

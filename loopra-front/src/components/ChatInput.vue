@@ -57,6 +57,28 @@
     </Transition>
 
     <Transition name="workflow-float">
+      <section v-if="goalData" class="workflow-float goal-float" aria-label="当前 Goal"
+               @mouseenter="goalHover = true" @mouseleave="goalHover = false"
+               @focusin="goalHover = true" @focusout="goalHover = false">
+        <button type="button" class="workflow-trigger" :aria-expanded="goalHover">
+          <span class="workflow-trigger-dot" :class="goalData.status?.toLowerCase()"></span>
+          🎯 {{ goalData.doneSteps }}/{{ goalData.totalSteps }}
+        </button>
+        <Transition name="workflow-detail">
+          <div v-if="goalHover" class="workflow-detail">
+            <div class="workflow-detail-heading">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                <circle cx="12" cy="12" r="10"/><circle cx="12" cy="12" r="6"/><circle cx="12" cy="12" r="2"/>
+              </svg>
+              Goal 进度
+            </div>
+            <GoalSteps :data="goalData" />
+          </div>
+        </Transition>
+      </section>
+    </Transition>
+
+    <Transition name="workflow-float">
       <section v-if="clData" class="workflow-float" aria-label="当前工作流"
                @mouseenter="workflowHover = true" @mouseleave="workflowHover = false"
                @focusin="workflowHover = true" @focusout="workflowHover = false">
@@ -79,19 +101,29 @@
       </section>
     </Transition>
 
-    <section v-if="queuedMessages.length > 0" class="composer-queue" aria-label="排队消息">
-      <div v-for="item in queuedMessages" :key="item.id" class="composer-queue-item">
-        <svg class="composer-queue-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+    <section v-if="queuedMessages.length > 0" class="composer-queue" :aria-label="`排队消息 ${queuedMessages.length} 条`">
+      <div class="composer-queue-summary" title="悬停查看排队消息" aria-hidden="true">
+        <svg class="composer-queue-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
           <path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>
         </svg>
-        <span class="composer-queue-text" :title="item.text">{{ item.text }}</span>
-        <button type="button" class="composer-queue-guide" title="停止当前生成并立即发送" @click="$emit('guideQueued', item.id)">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
-          <span>引导</span>
-        </button>
-        <button type="button" class="composer-queue-remove" title="移出队列" aria-label="移出队列" @click="$emit('removeQueued', item.id)">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/></svg>
-        </button>
+        <span>排队消息 {{ queuedMessages.length }} 条</span>
+      </div>
+      <div class="composer-queue-items">
+        <div class="composer-queue-items-content">
+          <div v-for="item in queuedMessages" :key="item.id" class="composer-queue-item">
+            <svg class="composer-queue-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M9 6h11M9 12h11M9 18h11M4 6h.01M4 12h.01M4 18h.01"/>
+            </svg>
+            <span class="composer-queue-text" :title="item.text">{{ item.text }}</span>
+            <button type="button" class="composer-queue-guide" title="停止当前生成并立即发送" @click="$emit('guideQueued', item.id)">
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
+              <span>引导</span>
+            </button>
+            <button type="button" class="composer-queue-remove" title="移出队列" aria-label="移出队列" @click="$emit('removeQueued', item.id)">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/></svg>
+            </button>
+          </div>
+        </div>
       </div>
     </section>
 
@@ -215,6 +247,49 @@
       <!-- Token 用量 & 模型选择 -->
       <div class="usage-bar">
         <div class="usage-stats">
+        <div class="quick-command-selector">
+          <button type="button" class="quick-command-trigger" :class="{ active: showQuickCommandPicker }"
+                  title="常用要求" aria-label="常用要求" :aria-expanded="showQuickCommandPicker"
+                  @click="toggleQuickCommandPicker">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+              <path d="M8 3h8l3 3v15H5V3h3z"/><path d="M8 3v5h8V3M9 13h6M9 17h4"/>
+            </svg>
+          </button>
+          <div v-if="showQuickCommandPicker" class="quick-command-panel" @click.stop>
+            <div class="quick-command-header">
+              <div>
+                <strong>常用要求</strong>
+                <span>点击添加要求到输入框</span>
+              </div>
+              <button type="button" class="quick-command-add" title="添加预设" aria-label="添加预设" @click="openQuickCommandEditor()">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14"/></svg>
+              </button>
+            </div>
+            <div v-if="quickCommands.length" class="quick-command-list">
+              <div v-for="command in quickCommands" :key="command.id" class="quick-command-item">
+                <button type="button" class="quick-command-copy" :title="`添加 ${command.text}`" @click="appendQuickCommand(command)">
+                  <span class="quick-command-label">{{ command.label }}</span>
+                  <code>{{ command.text }}</code>
+                </button>
+                <button type="button" class="quick-command-action" title="编辑预设" :aria-label="`编辑 ${command.label}`" @click="openQuickCommandEditor(command)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 013 3L7 19l-4 1 1-4z"/></svg>
+                </button>
+                <button type="button" class="quick-command-action quick-command-delete" title="删除预设" :aria-label="`删除 ${command.label}`" @click="removeQuickCommand(command.id)">
+                  <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 6h18M8 6V4h8v2M19 6l-1 14H6L5 6M10 11v5M14 11v5"/></svg>
+                </button>
+              </div>
+            </div>
+            <div v-else class="quick-command-empty">还没有常用要求</div>
+            <form v-if="quickCommandEditorOpen" class="quick-command-form" @submit.prevent="saveQuickCommand">
+              <input v-model.trim="quickCommandDraft.label" type="text" maxlength="24" placeholder="预设名称" aria-label="预设名称" />
+              <textarea v-model.trim="quickCommandDraft.text" rows="2" maxlength="500" placeholder="例如：请先运行相关测试" aria-label="要求内容"></textarea>
+              <div class="quick-command-form-actions">
+                <button type="button" @click="closeQuickCommandEditor">取消</button>
+                <button type="submit" class="primary" :disabled="!quickCommandDraft.label || !quickCommandDraft.text">保存</button>
+              </div>
+            </form>
+          </div>
+        </div>
         <div class="usage-context-control"
              @mouseenter="refreshContextComposition"
              @mouseleave="showContextComposition = false">
@@ -404,7 +479,7 @@
               <div ref="modelDropdownList" class="model-dropdown-list">
                 <section v-for="group in modelGroups" :key="group.key" class="model-channel-group">
                   <button type="button" class="model-channel-toggle" :aria-expanded="!isModelChannelCollapsed(group)" @click="toggleModelChannel(group)">
-                    <svg :class="{ expanded: !isModelChannelCollapsed(group) }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+                    <svg :class="{ expanded: !isModelChannelCollapsed(group) }" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 6 15 12 9 18"/></svg>
                     <span class="model-channel-name">{{ group.name }}</span>
                     <span class="model-channel-count">{{ group.models.length }}</span>
                   </button>
@@ -446,8 +521,9 @@
                :state="petState"
                :initial-x="petPosition.x" :initial-y="petPosition.y"
                :initial-size-index="petSizeIndex"
+               :initial-scale="petScale"
                @position-change="savePetPosition"
-               @size-change="savePetSize" />
+               @scale-change="savePetScale" />
   </div>
 </template>
 
@@ -455,9 +531,10 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {StarFilled, StarOutlined} from '@ant-design/icons-vue'
 import {useAppStore} from '../stores/app'
-import {agentAPI, filesAPI, petAPI} from '../services/api'
+import {agentAPI, filesAPI, petAPI, promptPresetsAPI} from '../services/api'
 import PetSprite from './PetSprite.vue'
 import ChecklistSteps from './ChecklistSteps.vue'
+import GoalSteps from './GoalSteps.vue'
 
 const props = defineProps({
   inputText: {type: String, default: ''},
@@ -486,6 +563,15 @@ const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export'
 
 const inputField = ref(null)
 const inputFocused = ref(false)
+let restoreInputFocusOnWindowFocus = false
+const rememberInputFocus = () => {
+  restoreInputFocusOnWindowFocus = document.activeElement === inputField.value
+}
+const restoreInputFocus = () => {
+  if (!restoreInputFocusOnWindowFocus) return
+  restoreInputFocusOnWindowFocus = false
+  nextTick(() => inputField.value?.focus())
+}
 const localText = ref(props.inputText)
 const images = ref([]) // 粘贴的图片 base64 Data URI 列表
 const selectedFileContexts = ref([])
@@ -496,7 +582,74 @@ const fileDropActive = ref(false)
 watch(() => props.inputText, v => localText.value = v)
 watch(localText, v => emit('update:inputText', v))
 
-// ============= 斜杠命令 =============
+const loadPromptPresets = async () => {
+  try {
+    const response = await promptPresetsAPI.list()
+    if (response?.success && Array.isArray(response.data)) {
+      quickCommands.value = response.data.filter(item => item?.id && item?.label && item?.text)
+    }
+  } catch {
+    // 后端不可用时保持空列表
+  }
+}
+
+const quickCommands = ref([])
+const showQuickCommandPicker = ref(false)
+const quickCommandEditorOpen = ref(false)
+const quickCommandDraft = ref({id: '', label: '', text: ''})
+
+const persistQuickCommands = async () => {
+  try {
+    await promptPresetsAPI.save(quickCommands.value)
+  } catch {
+    // 保存失败时保留当前页面状态
+  }
+}
+
+const toggleQuickCommandPicker = () => {
+  const nextOpen = !showQuickCommandPicker.value
+  if (nextOpen) closePickers('quick')
+  showQuickCommandPicker.value = nextOpen
+  if (!nextOpen) closeQuickCommandEditor()
+}
+
+const openQuickCommandEditor = (command = null) => {
+  quickCommandDraft.value = command ? {...command} : {id: '', label: '', text: ''}
+  quickCommandEditorOpen.value = true
+}
+
+const closeQuickCommandEditor = () => {
+  quickCommandEditorOpen.value = false
+  quickCommandDraft.value = {id: '', label: '', text: ''}
+}
+
+const saveQuickCommand = () => {
+  const {id, label, text} = quickCommandDraft.value
+  if (!label || !text) return
+  if (id) {
+    const index = quickCommands.value.findIndex(item => item.id === id)
+    if (index !== -1) quickCommands.value[index] = {id, label, text}
+  } else {
+    quickCommands.value.push({id: `quick-${Date.now()}`, label, text})
+  }
+  persistQuickCommands()
+  closeQuickCommandEditor()
+}
+
+const removeQuickCommand = (id) => {
+  quickCommands.value = quickCommands.value.filter(item => item.id !== id)
+  persistQuickCommands()
+}
+
+const appendQuickCommand = (command) => {
+  const separator = localText.value && !localText.value.endsWith('\n') ? '\n' : ''
+  localText.value = `${localText.value}${separator}${command.text}`
+  showQuickCommandPicker.value = false
+  closeQuickCommandEditor()
+  nextTick(() => inputField.value?.focus())
+}
+
+
 const slashPopupOpen = ref(false)
 const slashQuery = ref('')
 const activePopupIdx = ref(0)
@@ -1083,20 +1236,64 @@ const startChecklistPolling = () => {
   clRefreshTimer = setInterval(loadChecklist, 3000)
 }
 
+// ============= Goal =============
+const goalData = ref(null)
+const goalHover = ref(false)
+let goalRefreshTimer = null
+
+const loadGoal = async () => {
+  if (!props.workspaceHash || !props.sessionName) {
+    goalData.value = null
+    return
+  }
+  try {
+    const { sessionsAPI } = await import('../services/api')
+    const res = await sessionsAPI.getGoal(props.sessionName, props.workspaceHash)
+    if (res.success && res.data && !['COMPLETED', 'CANCELLED'].includes(res.data.status)) {
+      goalData.value = res.data
+    } else {
+      goalData.value = null
+    }
+  } catch {
+    goalData.value = null
+  }
+}
+
+const stopGoalPolling = () => {
+  if (goalRefreshTimer) clearInterval(goalRefreshTimer)
+  goalRefreshTimer = null
+}
+
+const startGoalPolling = () => {
+  stopGoalPolling()
+  if (!props.streaming) return
+  goalRefreshTimer = setInterval(loadGoal, 3000)
+}
+
 watch([() => props.workspaceHash, () => props.sessionName], () => {
   clData.value = null
   workflowHover.value = false
+  goalData.value = null
+  goalHover.value = false
   loadChecklist()
   startChecklistPolling()
+  loadGoal()
+  startGoalPolling()
 }, { immediate: true })
 
 watch(() => props.streaming, (streaming, wasStreaming) => {
   if (streaming) {
     loadChecklist()
     startChecklistPolling()
+    loadGoal()
+    startGoalPolling()
   } else {
     stopChecklistPolling()
-    if (wasStreaming) loadChecklist()
+    stopGoalPolling()
+    if (wasStreaming) {
+      loadChecklist()
+      loadGoal()
+    }
   }
 })
 
@@ -1128,6 +1325,10 @@ const handleOutside = (e) => {
   if (!e.target.closest('.reasoning-effort-selector')) showEffortPicker.value = false
   if (!e.target.closest('.skill-selector')) showSkillPicker.value = false
   if (!e.target.closest('.permission-hitl-selector')) showPermissionPicker.value = false
+  if (!e.target.closest('.quick-command-selector')) {
+    showQuickCommandPicker.value = false
+    closeQuickCommandEditor()
+  }
 }
 
 // ============= 推理强度切换 =============
@@ -1137,6 +1338,7 @@ const closePickers = (except = '') => {
   if (except !== 'skill') showSkillPicker.value = false
   if (except !== 'permission') showPermissionPicker.value = false
   if (except !== 'effort') showEffortPicker.value = false
+  if (except !== 'quick') showQuickCommandPicker.value = false
   showContextComposition.value = false
 }
 const effortOptions = [
@@ -1237,7 +1439,10 @@ const compositionItems = computed(() => {
 
 onMounted(async () => {
   loadCommands();
+  loadPromptPresets();
   document.addEventListener('click', handleOutside)
+  window.addEventListener('blur', rememberInputFocus)
+  window.addEventListener('focus', restoreInputFocus)
   if (window.electronAPI?.desktopPet) {
     appStore.desktopPetVisible = await window.electronAPI.desktopPet.isVisible()
   }
@@ -1246,12 +1451,15 @@ onBeforeUnmount(() => {
   stopChecklistPolling()
   if (fileMentionSearchTimer) clearTimeout(fileMentionSearchTimer)
   document.removeEventListener('click', handleOutside)
+  window.removeEventListener('blur', rememberInputFocus)
+  window.removeEventListener('focus', restoreInputFocus)
 })
 
 // ── 桌面宠物精灵图 ──
 const petSpritesheetUrl = ref('')
 const petPosition = ref({ x: 0, y: 0 })
 const petSizeIndex = ref(1)
+const petScale = ref(null)
 
 async function loadPet() {
   try {
@@ -1270,6 +1478,9 @@ async function loadPet() {
       }
       if (typeof petData.sizeIndex === 'number') {
         petSizeIndex.value = petData.sizeIndex
+      }
+      if (typeof petData.scale === 'number') {
+        petScale.value = petData.scale
       }
     }
   } catch { /* pet 不可用时静默 */ }
@@ -1290,10 +1501,10 @@ async function savePetPosition(pos) {
   } catch { /* 保存失败静默 */ }
 }
 
-async function savePetSize(idx) {
-  petSizeIndex.value = idx
+async function savePetScale(scale) {
+  petScale.value = scale
   try {
-    await petAPI.savePosition({ sizeIndex: idx })
+    await petAPI.savePosition({scale})
   } catch { /* 保存失败静默 */ }
 }
 
@@ -1368,7 +1579,81 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 0 2px 8px;
+  margin: 0 2px;
+}
+
+.composer-queue:hover,
+.composer-queue:focus-within {
+  margin-bottom: 8px;
+}
+
+.composer-queue-summary {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  min-height: 32px;
+  gap: 7px;
+  padding: 4px 9px;
+  color: var(--fg-2);
+  background: color-mix(in srgb, var(--accent) 6%, var(--bg));
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, var(--border));
+  border-radius: 9px;
+  box-shadow: 0 2px 7px color-mix(in srgb, var(--accent) 8%, transparent);
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 20px;
+  transition: color 120ms ease, background 120ms ease, border-color 120ms ease, box-shadow 120ms ease;
+}
+
+.composer-queue-summary::after {
+  width: 6px;
+  height: 6px;
+  margin-left: auto;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  content: '';
+  opacity: .55;
+  transform: rotate(45deg) translate(-1px, -1px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.composer-queue:hover .composer-queue-summary,
+.composer-queue:focus-within .composer-queue-summary {
+  color: var(--fg);
+  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
+  border-color: color-mix(in srgb, var(--accent) 34%, var(--border));
+  box-shadow: 0 3px 10px color-mix(in srgb, var(--accent) 12%, transparent);
+}
+
+.composer-queue:hover .composer-queue-summary::after,
+.composer-queue:focus-within .composer-queue-summary::after {
+  opacity: .85;
+  transform: rotate(225deg) translate(-1px, -1px);
+}
+
+.composer-queue-items {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  opacity: 0;
+  transition: grid-template-rows 160ms ease, opacity 120ms ease;
+}
+
+.composer-queue:hover .composer-queue-items,
+.composer-queue:focus-within .composer-queue-items {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.composer-queue-items > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.composer-queue-items-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .composer-queue-item {
@@ -1378,14 +1663,15 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   gap: 8px;
   padding: 7px 8px 7px 10px;
   color: var(--fg-2);
-  background: color-mix(in srgb, var(--bg-2) 88%, transparent);
+  background: var(--bg-2);
   border: 1px solid var(--border);
   border-radius: 8px;
 }
 
 .composer-queue-icon {
   flex: 0 0 auto;
-  color: var(--fg-4);
+  color: var(--accent);
+  opacity: .82;
 }
 
 .composer-queue-text {
@@ -2127,6 +2413,93 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   opacity: 0;
   transform: translateY(8px) scale(0.98);
 }
+
+.quick-command-selector {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  align-items: center;
+}
+
+.quick-command-trigger,
+.quick-command-add,
+.quick-command-action {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  background: transparent;
+  color: var(--fg-4);
+  cursor: pointer;
+}
+
+.quick-command-trigger {
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r-sm);
+  transition: color var(--t), background var(--t);
+}
+
+.quick-command-trigger:hover,
+.quick-command-trigger.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 10%, transparent);
+}
+
+.quick-command-panel {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: -8px;
+  z-index: 120;
+  width: min(330px, calc(100vw - 32px));
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  background: var(--bg);
+  box-shadow: 0 10px 28px rgba(15, 23, 42, 0.18);
+}
+
+.quick-command-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-2);
+}
+
+.quick-command-header > div {
+  display: grid;
+  gap: 2px;
+}
+
+.quick-command-header strong { color: var(--fg-2); font-size: 12px; }
+.quick-command-header span { color: var(--fg-4); font-size: 11px; }
+.quick-command-add { width: 26px; height: 26px; border-radius: var(--r-sm); }
+.quick-command-add:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.quick-command-list { max-height: 240px; overflow-y: auto; padding: 4px; }
+.quick-command-item { display: flex; align-items: center; min-width: 0; gap: 2px; padding: 2px; border-radius: var(--r-sm); }
+.quick-command-item:hover { background: var(--bg-2); }
+.quick-command-copy { display: grid; flex: 1; min-width: 0; gap: 2px; padding: 6px 7px; border: 0; background: transparent; color: var(--fg-2); cursor: pointer; text-align: left; }
+.quick-command-label { overflow: hidden; color: var(--fg-2); font-size: 12px; font-weight: 600; text-overflow: ellipsis; white-space: nowrap; }
+.quick-command-copy code { overflow: hidden; color: var(--fg-4); font: 11px var(--mono); text-overflow: ellipsis; white-space: nowrap; }
+.quick-command-action { width: 26px; height: 26px; flex: 0 0 auto; border-radius: var(--r-sm); }
+.quick-command-action:hover { color: var(--accent); background: color-mix(in srgb, var(--accent) 10%, transparent); }
+.quick-command-delete:hover { color: var(--red); background: color-mix(in srgb, var(--red) 10%, transparent); }
+.quick-command-empty { padding: 18px 12px; color: var(--fg-4); font-size: 12px; text-align: center; }
+.quick-command-form { display: grid; gap: 7px; padding: 9px; border-top: 1px solid var(--border); background: var(--bg-2); }
+.quick-command-form input,
+.quick-command-form textarea { width: 100%; box-sizing: border-box; border: 1px solid var(--border); border-radius: var(--r-sm); background: var(--bg); color: var(--fg); font: inherit; font-size: 12px; outline: none; }
+.quick-command-form input { height: 28px; padding: 0 8px; }
+.quick-command-form textarea { min-height: 48px; padding: 6px 8px; resize: vertical; }
+.quick-command-form input:focus,
+.quick-command-form textarea:focus { border-color: var(--accent); }
+.quick-command-form-actions { display: flex; justify-content: flex-end; gap: 6px; }
+.quick-command-form-actions button { padding: 4px 9px; border: 1px solid var(--border); border-radius: var(--r-sm); background: transparent; color: var(--fg-3); cursor: pointer; font: inherit; font-size: 11px; }
+.quick-command-form-actions button:hover { color: var(--fg); background: var(--bg); }
+.quick-command-form-actions button.primary { border-color: var(--accent); background: var(--accent); color: var(--bg); }
+.quick-command-form-actions button:disabled { cursor: not-allowed; opacity: .45; }
 
 /* Usage bar — 融入 input-box 底部 */
 .usage-bar {
@@ -3253,7 +3626,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 .model-channel-toggle:hover { color: var(--fg); background: var(--bg-3); }
 .model-channel-toggle svg { flex: 0 0 auto; transition: transform var(--t); }
-.model-channel-toggle svg.expanded { transform: rotate(180deg); }
+.model-channel-toggle svg.expanded { transform: rotate(90deg); }
 .model-channel-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .model-channel-count { margin-left: auto; color: var(--fg-4); font-size: 11px; }
 .model-option-name { min-width: 0; display: flex; flex-direction: column; gap: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -3499,6 +3872,50 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 
 .workflow-detail :deep(.cl-tag) {
   font-size: 11px;
+}
+
+/* Goal 浮层复用 workflow 样式，补充 goal 专属 deep 覆盖 */
+.goal-float {
+  left: auto;
+  right: 12px;
+  transform: none;
+}
+.goal-float .workflow-detail {
+  left: auto;
+  right: 0;
+  transform: none;
+}
+.workflow-float-enter-from,
+.workflow-float-leave-to {
+  opacity: 0;
+}
+.goal-float.workflow-float-enter-from,
+.goal-float.workflow-float-leave-to {
+  transform: translateY(8px);
+}
+
+.workflow-detail :deep(.gl) {
+  font-size: 14px;
+}
+.workflow-detail :deep(.gl-title),
+.workflow-detail :deep(.gl-desc) {
+  font-size: 14px;
+}
+.workflow-detail :deep(.gl-title),
+.workflow-detail :deep(.gl-row.current .gl-desc) {
+  font-weight: 600;
+}
+.workflow-detail :deep(.gl-badge),
+.workflow-detail :deep(.gl-progress),
+.workflow-detail :deep(.gl-evidence) {
+  font-size: 12px;
+}
+.workflow-trigger-dot.blocked {
+  background: var(--red, #c62828);
+  box-shadow: 0 0 0 3px var(--red-bg, #ffebee);
+}
+.workflow-trigger-dot.paused {
+  background: var(--yellow, #f57f17);
 }
 
 .workflow-float-enter-active,

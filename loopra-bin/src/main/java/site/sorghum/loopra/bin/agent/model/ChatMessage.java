@@ -47,8 +47,25 @@ public class ChatMessage {
     @ONodeAttr(name = "tool_call_id")
     private String toolCallId;
 
+    /**
+     * 工具返回的视觉输入，仅由 read_image 或 browser_screenshot 产生。
+     * 在不同模型 API 协议中会转换为对应的图片型工具结果。
+     */
+    @ONodeAttr(name = "tool_image_url")
+    private String toolImageUrl;
+
+    @ONodeAttr(name = "tool_image_detail")
+    private String toolImageDetail;
+
     @ONodeAttr(name = "reasoning_content")
     private String reasoningContent;
+
+    /**
+     * Responses API 本轮推理 item 的原始 JSON。
+     * 该 item 属于 assistant response，而不是单个工具调用。
+     */
+    @ONodeAttr(name = "response_reasoning")
+    private String responseReasoning;
 
     /** Actual write/edit changes associated with this assistant tool-call message. */
     @ONodeAttr(name = "file_changes")
@@ -145,6 +162,8 @@ public class ChatMessage {
         }
         Object reasoning = m.get("reasoning_content");
         msg.reasoningContent = reasoning != null ? reasoning.toString() : null;
+        Object responseReasoning = m.get("response_reasoning");
+        msg.responseReasoning = responseReasoning != null ? responseReasoning.toString() : null;
         Object fileChanges = m.get("file_changes");
         if (fileChanges instanceof List<?> changeMaps) {
             msg.fileChanges = new ArrayList<>();
@@ -161,6 +180,10 @@ public class ChatMessage {
         }
         Object toolCallId = m.get("tool_call_id");
         msg.toolCallId = toolCallId != null ? toolCallId.toString() : null;
+        Object toolImageUrl = m.get("tool_image_url");
+        msg.toolImageUrl = toolImageUrl != null ? toolImageUrl.toString() : null;
+        Object toolImageDetail = m.get("tool_image_detail");
+        msg.toolImageDetail = toolImageDetail != null ? toolImageDetail.toString() : null;
         Object snapshotId = m.get("snapshot_id");
         msg.snapshotId = snapshotId != null ? snapshotId.toString() : null;
         Object rollbackId = m.get("rollback_id");
@@ -183,7 +206,7 @@ public class ChatMessage {
                     String tcId = String.valueOf(tc.getOrDefault("id", "unknown"));
                     String tcName;
                     Object tcArgsObj;
-                    Object responseReasoning = tc.get("response_reasoning");
+                    Object legacyResponseReasoning = tc.get("response_reasoning");
                     Object funcObj = tc.get("function");
                     if (funcObj instanceof Map) {
                         @SuppressWarnings("unchecked")
@@ -202,8 +225,10 @@ public class ChatMessage {
                             log.debug("工具调用参数 JSON 解析失败，保留原始字符串: {}", e.getMessage());
                         }
                     }
-                    msg.toolCalls.add(new ToolCallEntry(tcId, tcName, tcArgsObj,
-                            responseReasoning == null ? null : responseReasoning.toString()));
+                    if (msg.responseReasoning == null && legacyResponseReasoning != null) {
+                        msg.responseReasoning = legacyResponseReasoning.toString();
+                    }
+                    msg.toolCalls.add(new ToolCallEntry(tcId, tcName, tcArgsObj));
                 }
             }
         }
@@ -213,10 +238,21 @@ public class ChatMessage {
     public static ChatMessage assistant(String content, List<ToolCallEntry> toolCalls, String reasoningContent) {
         ChatMessage msg = new ChatMessage("assistant");
         msg.content = content;
-        msg.toolCalls = toolCalls;
         msg.reasoningContent = reasoningContent;
+        msg.setToolCallsWithLegacyReasoning(toolCalls);
         msg.timestamp = System.currentTimeMillis();
         return msg;
+    }
+
+    private void setToolCallsWithLegacyReasoning(List<ToolCallEntry> entries) {
+        if (entries == null) return;
+        toolCalls = new ArrayList<>(entries.size());
+        for (ToolCallEntry entry : entries) {
+            if (responseReasoning == null && entry.responseReasoning() != null) {
+                responseReasoning = entry.responseReasoning();
+            }
+            toolCalls.add(new ToolCallEntry(entry.id(), entry.name(), entry.arguments()));
+        }
     }
 
     private static int asInt(Object value) {
@@ -233,6 +269,13 @@ public class ChatMessage {
         msg.toolCallId = toolCallId;
         msg.content = content != null ? content : "(empty)";
         msg.timestamp = System.currentTimeMillis();
+        return msg;
+    }
+
+    public static ChatMessage toolWithImage(String toolCallId, String content, String imageUrl, String imageDetail) {
+        ChatMessage msg = tool(toolCallId, content);
+        msg.toolImageUrl = imageUrl;
+        msg.toolImageDetail = imageDetail;
         return msg;
     }
 
@@ -264,7 +307,10 @@ public class ChatMessage {
             m.put("content", content);
         }
         if (toolCallId != null) m.put("tool_call_id", toolCallId);
+        if (toolImageUrl != null) m.put("tool_image_url", toolImageUrl);
+        if (toolImageDetail != null) m.put("tool_image_detail", toolImageDetail);
         if (reasoningContent != null) m.put("reasoning_content", reasoningContent);
+        if (responseReasoning != null) m.put("response_reasoning", responseReasoning);
         if (fileChanges != null && !fileChanges.isEmpty()) m.put("file_changes", fileChanges);
         if (snapshotId != null) m.put("snapshot_id", snapshotId);
         if (rollbackId != null) m.put("rollback_id", rollbackId);
@@ -307,6 +353,10 @@ public class ChatMessage {
         return toolCallId != null && !toolCallId.isEmpty();
     }
 
+    public boolean hasToolImage() {
+        return toolImageUrl != null && !toolImageUrl.isBlank();
+    }
+
     public boolean hasToolCalls() {
         return toolCalls != null && !toolCalls.isEmpty();
     }
@@ -326,7 +376,10 @@ public class ChatMessage {
             copy.toolCalls = new ArrayList<>(this.toolCalls);
         }
         copy.toolCallId = this.toolCallId;
+        copy.toolImageUrl = this.toolImageUrl;
+        copy.toolImageDetail = this.toolImageDetail;
         copy.reasoningContent = this.reasoningContent;
+        copy.responseReasoning = this.responseReasoning;
         if (this.fileChanges != null) {
             copy.fileChanges = new ArrayList<>(this.fileChanges);
         }

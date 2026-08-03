@@ -16,6 +16,16 @@ public interface GoalStore {
     /** 保存/更新目标（覆盖写入） */
     void save(Goal goal) throws IOException;
 
+    /**
+     * 在当前会话没有未关闭目标时创建目标。
+     *
+     * @return 已创建目标；存在未关闭目标时返回该目标
+     */
+    Goal createIfNoOpenGoal(Goal goal) throws IOException;
+
+    /** 在单个持久化临界区内读取、转换并保存目标。 */
+    Goal update(String sessionId, GoalMutation mutation) throws IOException;
+
     /** 按会话 ID 加载目标 */
     Goal findBySession(String sessionId) throws IOException;
 
@@ -24,4 +34,9 @@ public interface GoalStore {
 
     /** 删除目标 */
     boolean delete(String sessionId) throws IOException;
+
+    @FunctionalInterface
+    interface GoalMutation {
+        void apply(Goal goal);
+    }
 }

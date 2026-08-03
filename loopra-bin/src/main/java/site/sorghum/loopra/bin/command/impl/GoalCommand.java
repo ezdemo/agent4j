@@ -47,61 +47,82 @@ public class GoalCommand implements ChatCommand {
 
     @Override
     public CommandResult execute(MessageWrapper input, ChatCommandContext context) {
+        boolean created = false;
+        String objective = "";
         try {
             String[] parts = input.getMessage().trim().split("\\s+", 3);
             String action = parts.length > 1 ? parts[1].toLowerCase(Locale.ROOT) : "status";
             String argument = parts.length > 2 ? parts[2].trim() : "";
             GoalRuntime.Scope scope = GoalRuntime.forWorkspace(context.getAgent().getWorkspace(),
                     context.getAgent().getSessionStore().currentName());
-            Goal current = scope.load();
 
             String result = switch (action) {
-                case "create" -> create(scope, current, argument);
-                case "status" -> goals.describe(current);
-                case "pause" -> mutate(scope, current, () -> goals.pause(current));
-                case "resume" -> mutate(scope, current, () -> goals.resume(current));
-                case "cancel" -> mutate(scope, current, () -> goals.cancel(current, argument));
-                case "block" -> mutate(scope, current, () -> goals.block(current, argument));
-                case "complete" -> mutate(scope, current, () -> goals.complete(current, argument));
-                case "done" -> markDone(scope, current, argument);
+                case "create" -> {
+                    objective = argument;
+                    String r = create(scope, argument);
+                    created = !r.startsWith("当前已有未关闭");
+                    yield r;
+                }
+                case "status" -> goals.describe(scope.load());
+                case "pause" -> mutate(scope, goals::pause);
+                case "resume" -> mutate(scope, goals::resume);
+                case "cancel" -> mutate(scope, goal -> goals.cancel(goal, argument));
+                case "block" -> mutate(scope, goal -> goals.block(goal, argument));
+                case "complete" -> mutate(scope, goal -> goals.complete(goal, argument));
+                case "done" -> markDone(scope, argument);
+                case "reset" -> reset(scope);
                 default -> usage();
             };
             context.getAgent().getOutput().onLog(LogLevel.INFO, result);
         } catch (Exception e) {
             context.getAgent().getOutput().onLog(LogLevel.ERROR, "Goal 命令失败: " + e.getMessage());
         }
+        // 创建成功后进入推理循环，让 Agent 自动开始执行 Goal
+        if (created) {
+            input.setMessage("请开始执行刚创建的 Goal：" + objective);
+            return CommandResult.LOOP;
+        }
         return CommandResult.CONTINUE;
     }
 
-    private String create(GoalRuntime.Scope scope, Goal current, String objective) throws Exception {
-        if (current != null && current.isOpen()) return "当前已有未关闭 Goal。请先完成或取消：\n" + goals.describe(current);
+    private String create(GoalRuntime.Scope scope, String objective) throws Exception {
         Goal goal = goals.create(scope.sessionId(), scope.workspaceHash(), objective, List.of(), null);
-        scope.save(goal);
-        return "已创建\n" + goals.describe(goal);
+        Goal stored = scope.createIfNoOpenGoal(goal);
+        if (!goal.getId().equals(stored.getId())) {
+            return "当前已有未关闭 Goal。请先完成或取消：\n" + goals.describe(stored);
+        }
+        return "已创建\n" + goals.describe(stored);
     }
 
-    private String markDone(GoalRuntime.Scope scope, Goal current, String argument) throws Exception {
+    private String markDone(GoalRuntime.Scope scope, String argument) throws Exception {
         String[] parts = argument.split("\\s+", 2);
         if (parts.length < 2) return "用法: /goal done <步骤号> <验证证据>";
         int index = Integer.parseInt(parts[0]);
-        goals.updateStep(current, index, StepStatus.DONE, parts[1]);
-        scope.save(current);
-        return goals.describe(current);
+        Goal goal = scope.update(current -> goals.updateStep(current, index, StepStatus.DONE, parts[1]));
+        return goals.describe(goal);
     }
 
-    private String mutate(GoalRuntime.Scope scope, Goal current, ThrowingAction action) throws Exception {
-        action.run();
-        scope.save(current);
-        return goals.describe(current);
+    /**
+     * 直接删除当前会话的 Goal 快照，不经过解析；快照损坏导致无法读写时用它恢复会话。
+     * 不检查是否有未关闭 Goal，由用户显式决定清除。
+     */
+    private String reset(GoalRuntime.Scope scope) throws Exception {
+        boolean deleted = scope.delete();
+        return deleted ? "已清除当前会话的 Goal 快照，可重新创建。" : "当前会话没有 Goal 快照。";
+    }
+
+    private String mutate(GoalRuntime.Scope scope, GoalMutation mutation) throws Exception {
+        return goals.describe(scope.update(mutation::apply));
     }
 
     private static String usage() {
         return "用法: /goal create <目标> | /goal status | /goal pause | /goal resume | "
-                + "/goal done <步骤号> <证据> | /goal block <原因> | /goal complete <摘要> | /goal cancel [原因]";
+                + "/goal done <步骤号> <证据> | /goal block <原因> | /goal complete <摘要> | /goal cancel [原因] | "
+                + "/goal reset（清除快照，快照损坏时用）";
     }
 
     @FunctionalInterface
-    private interface ThrowingAction {
-        void run() throws Exception;
+    private interface GoalMutation {
+        void apply(Goal goal);
     }
 }

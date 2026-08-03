@@ -33,14 +33,13 @@ public class GoalTool extends AbsToolProvider implements SolonToTools {
                          ToolContext ctx) {
         try {
             GoalRuntime.Scope scope = GoalRuntime.forTool(ctx);
-            Goal existing = scope.load();
-            if (existing != null && existing.isOpen()) {
-                return "GOAL_EXISTS: " + goals.describe(existing);
-            }
             Goal goal = goals.create(scope.sessionId(), scope.workspaceHash(), objective,
                     parseSteps(steps), verifyCommand);
-            scope.save(goal);
-            return goals.describe(goal);
+            Goal stored = scope.createIfNoOpenGoal(goal);
+            if (!goal.getId().equals(stored.getId())) {
+                return "GOAL_EXISTS: " + goals.describe(stored);
+            }
+            return goals.describe(stored);
         } catch (Exception e) {
             return "GOAL_CREATE_ERROR: " + e.getMessage();
         }
@@ -65,14 +64,10 @@ public class GoalTool extends AbsToolProvider implements SolonToTools {
                              ToolContext ctx) {
         try {
             GoalRuntime.Scope scope = GoalRuntime.forTool(ctx);
-            Goal goal = scope.load();
-            StepStatus target = parseStepStatus(status);
-            if ((target == StepStatus.DONE || target == StepStatus.BLOCKED || target == StepStatus.SKIPPED)
-                    && (evidence == null || evidence.isBlank())) {
-                return "GOAL_UPDATE_ERROR: " + target + " 状态必须提供 evidence";
-            }
-            goals.updateStep(goal, stepIndex, target, evidence);
-            scope.save(goal);
+            Goal goal = scope.update(current -> {
+                StepStatus target = parseStepStatus(status);
+                goals.updateStep(current, stepIndex, target, evidence);
+            });
             return goals.describe(goal);
         } catch (Exception e) {
             return "GOAL_UPDATE_ERROR: " + e.getMessage();
@@ -88,9 +83,7 @@ public class GoalTool extends AbsToolProvider implements SolonToTools {
         try {
             if (summary == null || summary.isBlank()) return "GOAL_COMPLETE_ERROR: summary 不能为空";
             GoalRuntime.Scope scope = GoalRuntime.forTool(ctx);
-            Goal goal = scope.load();
-            goals.complete(goal, summary);
-            scope.save(goal);
+            Goal goal = scope.update(current -> goals.complete(current, summary));
             return goals.describe(goal);
         } catch (Exception e) {
             return "GOAL_COMPLETE_ERROR: " + e.getMessage();
@@ -102,9 +95,7 @@ public class GoalTool extends AbsToolProvider implements SolonToTools {
                         ToolContext ctx) {
         try {
             GoalRuntime.Scope scope = GoalRuntime.forTool(ctx);
-            Goal goal = scope.load();
-            goals.block(goal, reason);
-            scope.save(goal);
+            Goal goal = scope.update(current -> goals.block(current, reason));
             return goals.describe(goal);
         } catch (Exception e) {
             return "GOAL_BLOCK_ERROR: " + e.getMessage();
@@ -115,9 +106,7 @@ public class GoalTool extends AbsToolProvider implements SolonToTools {
     public String resume(ToolContext ctx) {
         try {
             GoalRuntime.Scope scope = GoalRuntime.forTool(ctx);
-            Goal goal = scope.load();
-            goals.resume(goal);
-            scope.save(goal);
+            Goal goal = scope.update(goals::resume);
             return goals.describe(goal);
         } catch (Exception e) {
             return "GOAL_RESUME_ERROR: " + e.getMessage();

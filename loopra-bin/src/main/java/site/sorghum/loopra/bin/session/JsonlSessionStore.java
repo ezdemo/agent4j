@@ -164,6 +164,9 @@ public class JsonlSessionStore implements SessionStore {
         if (msg.getReasoningContent() != null) {
             node.set("reasoning_content", msg.getReasoningContent());
         }
+        if (msg.getResponseReasoning() != null) {
+            node.set("response_reasoning", msg.getResponseReasoning());
+        }
         if (msg.getFileChanges() != null && !msg.getFileChanges().isEmpty()) {
             org.noear.snack4.ONode changes = node.getOrNew("file_changes").asArray();
             for (FileChange change : msg.getFileChanges()) {
@@ -187,13 +190,18 @@ public class JsonlSessionStore implements SessionStore {
         if (msg.getToolCallId() != null) {
             node.set("tool_call_id", msg.getToolCallId());
         }
+        if (msg.getToolImageUrl() != null) {
+            node.set("tool_image_url", msg.getToolImageUrl());
+        }
+        if (msg.getToolImageDetail() != null) {
+            node.set("tool_image_detail", msg.getToolImageDetail());
+        }
         if (msg.hasToolCalls()) {
             org.noear.snack4.ONode tcArr = node.getOrNew("tool_calls").asArray();
             for (ToolCallEntry tc : msg.getToolCalls()) {
                 org.noear.snack4.ONode tcn = tcArr.addNew();
                 tcn.set("id", tc.id() != null ? tc.id() : "unknown");
                 tcn.set("type", "function");
-                if (tc.responseReasoning() != null) tcn.set("response_reasoning", tc.responseReasoning());
                 org.noear.snack4.ONode func = tcn.getOrNew("function");
                 func.set("name", tc.name() != null ? tc.name() : "unknown");
                 Object tcArgs = tc.arguments();

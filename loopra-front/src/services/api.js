@@ -80,6 +80,7 @@ api.interceptors.response.use(
     return data
   },
   (error) => {
+    if (error.config?.silent) return Promise.reject(error)
     console.error('API Error:', error)
 
     if (error.response) {
@@ -153,16 +154,18 @@ export const chatAPI = {
     const body = {}
     if (options.workspaceHash) body.workspaceHash = options.workspaceHash
     if (options.sessionName) body.sessionName = options.sessionName
+    if (options.requestId) body.requestId = options.requestId
     return api.post('/chat/abort', body)
   },
 
     // SSE流式聊天 - POST /api/chat/stream
   sendMessageStream: (message, onMessage, onDone, onError, options = {}) => {
     const abortController = new AbortController()
+    const requestId = generateRequestId()
 
     ;(async () => {
       try {
-        const requestBody = { message }
+        const requestBody = { message, requestId }
         // 添加工作区和会话信息
         if (options.workspaceHash) requestBody.workspaceHash = options.workspaceHash
         if (options.sessionName) requestBody.sessionName = options.sessionName
@@ -182,7 +185,7 @@ export const chatAPI = {
           method: 'POST',
           headers: { 
             'Content-Type': 'application/json',
-            'X-Request-ID': generateRequestId(),
+            'X-Request-ID': requestId,
             'X-Timestamp': Date.now().toString()
           },
           body: JSON.stringify(requestBody),
@@ -248,7 +251,7 @@ export const chatAPI = {
       }
     })()
 
-    return { abort: () => abortController.abort() }
+    return { requestId, abort: () => abortController.abort() }
   }
 }
 
@@ -296,6 +299,12 @@ export const agentAPI = {
     getSystemPrompt: (params) => {
         return api.get('/agent/prompt', {params: params || {}})
   }
+}
+
+// 常用要求预设 API
+export const promptPresetsAPI = {
+  list: () => api.get('/prompt-presets'),
+  save: (presets) => api.put('/prompt-presets', {presets})
 }
 
 // 会话 API
@@ -376,6 +385,12 @@ export const sessionsAPI = {
     return api.get(`/sessions/${sessionPathName(name)}/checklist`, { params })
   },
 
+  // 获取会话 Goal - GET /api/sessions/{name}/goal?workspaceHash=xxx
+  getGoal: (name, workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.get(`/sessions/${sessionPathName(name)}/goal`, { params })
+  },
+
 }
 
 // 工具 API
@@ -453,16 +468,6 @@ export const configAPI = {
     return api.post('/remote-models', channel)
   },
 
-  // 从远程 API 获取视觉模型列表 - GET /api/remote-vision-models
-  getRemoteVisionModels: () => {
-    return api.get('/remote-vision-models')
-  },
-
-  // 从 AI 模型复制视觉配置 - POST /api/config/copy-vision-from-ai
-  copyVisionFromAi: () => {
-    return api.post('/config/copy-vision-from-ai')
-  },
-  
   // 获取Token用量统计 - GET /api/usage?workspaceHash=xxx&sessionName=xxx
   getUsage: (params) => {
     return api.get('/usage', { params })
@@ -981,9 +986,9 @@ export const scheduleAPI = {
 
 export const petAPI = {
   /** 获取宠物元数据（旧版兼容，同 getActive） */
-  getInfo: () => api.get('/pets/active'),
+  getInfo: () => api.get('/pets/active', {silent: true}),
   /** 保存位置/大小 */
-  savePosition: (pos) => api.put('/pets/position', pos),
+  savePosition: (pos) => api.put('/pets/position', pos, {silent: true}),
   /** 获取当前活跃宠物的 spritesheet URL */
   getSpritesheetUrl: () => '/api/pets/active/spritesheet',
 
@@ -996,7 +1001,7 @@ export const petAPI = {
   /** 删除指定宠物（清空文件夹） */
   deletePet: (name) => api.delete(`/pets/${name}`),
   /** 获取当前活跃宠物信息 */
-  getActive: () => api.get('/pets/active'),
+  getActive: () => api.get('/pets/active', {silent: true}),
   /** 设置活跃宠物 */
   setActive: (name) => api.put('/pets/active', { name }),
 }

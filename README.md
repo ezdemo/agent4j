@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Solon-4.0.3-important?logo=java" alt="Solon 4.0.3"/>
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js" alt="Vue 3"/>
   <img src="https://img.shields.io/badge/Electron-42.4-47848F?logo=electron" alt="Electron"/>
-  <img src="https://img.shields.io/badge/version-26.7.23-lightgrey" alt="Version 26.7.23"/>
+  <img src="https://img.shields.io/badge/version-26.8.3-lightgrey" alt="Version 26.8.3"/>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/>
 </p>
 
@@ -25,7 +25,7 @@
   <a href="#从源码开发">从源码开发</a>
 </p>
 
-> 当前版本：`26.7.23`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+> 当前版本：`26.8.3`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 概览
 
@@ -48,7 +48,7 @@ Loopra 将用户任务、模型推理与受控工具调用组织成持续执行�
 
 > 建议手动运行下面命令再安装桌面端
 
-桌面端下载地址：[Releases](https://gitcode.com/Sorghum/loopra/releases/latest)
+桌面端下载地址：[Releases](https://gitcode.com/Sorghum/loopra/releases/latest)。Desktop 首次启动会安装独立运行时到 `~/.loopra-gui`；CLI 仍安装在 `~/.loopra`，两者共用配置目录但不会复用或终止对方的服务进程。Desktop 启动时优先复用本机 `4567` 端口上的健康 Loopra Web 服务；独立运行时版本不一致时，启动引导会提示更新，也可以暂不更新继续使用。
 
 ### 1. 安装
 
@@ -76,7 +76,7 @@ loopra web 0
 
 ### 3. 配置模型渠道
 
-在 Web 设置页维护模型渠道，或直接编辑 `~/.loopra/config.json`。配置 API Key 后重启服务。每个渠道独立维护 API 地址、密钥、协议与模型能力；`apiProtocol` 支持 `chat_completions` 和 `responses`。
+在 Web 设置页维护模型渠道，或直接编辑 `~/.loopra/config.json`。配置 API Key 后重启服务。每个渠道独立维护 API 地址、密钥、协议与模型能力；`apiProtocol` 支持 `chat_completions` 和 `responses`。首次使用且尚未配置模型渠道时，界面会显示引导提示，帮助完成 API 地址、密钥和模型配置。
 
 ```json
 {
@@ -128,9 +128,9 @@ loopra web 0
 | 命令与网络 | `bash`、交互式命令会话、`webfetch`、`call_api` |
 | 任务协作 | `sub_agent`、`checklist_*`、`goal_*`、`workspace_*` |
 | 项目状态 | `memory` 将跨会话事实保存到 `.loopra/loopra-memory.md`；共享工作区保存到 `.loopra/workspace/` |
-| 多模态与浏览器 | `vision_recognize`，以及桌面端可见 AI 浏览器的 `browser_*` 工具 |
+| 多模态与浏览器 | `read_image`，以及桌面端可见 AI 浏览器的 `browser_*` 工具 |
 
-MCP、OpenAPI 和技能可为 Agent 注入额外工具。浏览器工具只操作可见的 Desktop 浏览器；遇到登录、验证码或安全验证时，Agent 会请求用户接管，不会代填或读取敏感凭据。
+MCP、OpenAPI 和技能可为 Agent 注入额外工具。`read_image` 支持工作区路径、绝对路径、Base64/data URI 和 HTTP(S) URL，单张图片最大 5 MiB；当前模型未声明 `imageInput` 能力时，工具会明确提示不可用。`browser_screenshot` 会返回可见视口截图和结构化页面快照，交互操作必须使用对应的 `snapshotId`。浏览器工具只操作可见的 Desktop 浏览器；遇到登录、验证码或安全验证时，Agent 会请求用户接管，不会代填或读取敏感凭据。
 
 ### 子代理与长期协作
 
@@ -196,6 +196,9 @@ MCP、OpenAPI 和技能可为 Agent 注入额外工具。浏览器工具只操�
 | `/retry` / `/rewind N` / `/continue` | 管理当前回复的重试、回退和继续。 |
 | `/init` | 分析项目并生成项目文档。 |
 
+### 输入框辅助功能
+
+输入框底部的“常用要求”用于管理个人预设，数据保存到 `~/.loopra/prompt-presets.json`；点击预设会直接追加到当前输入框，首次使用时列表默认为空。生成期间发送的新消息会排队显示，可移除，也可以引导发送以停止当前生成并立即处理排队消息。
 ### ACP
 
 Web 进程可通过启动参数启用 Agent Client Protocol：

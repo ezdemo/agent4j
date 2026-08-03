@@ -15,6 +15,13 @@
 
     <div v-if="loading" class="model-channels-empty">正在加载模型渠道...</div>
     <div v-else class="model-channels-body">
+      <div v-if="setupNoticeVisible" class="model-channels-setup-overlay">
+        <section class="model-channels-setup-notice" role="dialog" aria-modal="true" aria-labelledby="model-channels-setup-title">
+          <h2 id="model-channels-setup-title">首次使用需要完成模型配置</h2>
+          <p>请填写 API 地址和 API Key，添加并选择一个模型后保存。</p>
+          <button class="model-channels-setup-confirm" type="button" @click="setupNoticeVisible = false">确定，开始配置</button>
+        </section>
+      </div>
       <section class="model-validator">
         <label>
           <span>命令校验模型</span>
@@ -68,17 +75,29 @@
           <section class="model-channel-models" aria-label="模型列表">
             <header class="model-channel-models-label">
               <span>模型列表</span>
-              <button
-                class="model-channel-sync"
-                type="button"
-                :disabled="syncingChannelId === channel.id || !canSyncRemoteModels(channel)"
-                :title="canSyncRemoteModels(channel) ? '从此渠道的服务端同步模型列表' : '请填写 API 地址和密钥'"
-                @click="syncRemoteModels(channel)"
-              >
-                <svg v-if="syncingChannelId !== channel.id" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20 11a8 8 0 1 0 2 5.3"/><path d="M20 4v7h-7"/></svg>
-                <svg v-else class="model-channel-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="8" stroke-dasharray="12 8"/></svg>
-                同步远端模型
-              </button>
+              <div class="model-channel-actions">
+                <button
+                  class="model-channel-clear"
+                  type="button"
+                  :disabled="syncingChannelId === channel.id || !channel.models.length"
+                  title="清空当前渠道的模型列表"
+                  @click="clearModels(channel)"
+                >
+                  <DeleteOutlined />
+                  清空当前模型列表
+                </button>
+                <button
+                  class="model-channel-sync"
+                  type="button"
+                  :disabled="syncingChannelId === channel.id || !canSyncRemoteModels(channel)"
+                  :title="canSyncRemoteModels(channel) ? '从此渠道的服务端同步模型列表' : '请填写 API 地址和密钥'"
+                  @click="syncRemoteModels(channel)"
+                >
+                  <ReloadOutlined v-if="syncingChannelId !== channel.id" />
+                  <LoadingOutlined v-else class="model-channel-spin" />
+                  同步远端模型
+                </button>
+              </div>
             </header>
 
             <div v-if="!channel.models.length" class="model-list-empty">尚未添加模型</div>
@@ -148,13 +167,18 @@
 <script setup>
 import {computed, onMounted, ref} from 'vue'
 import {message} from 'ant-design-vue'
+import {DeleteOutlined, LoadingOutlined, ReloadOutlined} from '@ant-design/icons-vue'
 import {useAppStore} from './stores/app'
 import {configAPI} from './services/api'
 
 const priceFields = ['input', 'cache', 'output']
 const priceFieldLabels = {input: '输入', cache: '缓存', output: '输出'}
 
-defineProps({showBack: {type: Boolean, default: true}})
+const props = defineProps({
+  showBack: {type: Boolean, default: true},
+  setupRequired: {type: Boolean, default: false}
+})
+const setupNoticeVisible = ref(props.setupRequired)
 const emit = defineEmits(['back', 'saved'])
 const store = useAppStore()
 const theme = computed(() => store.settings.theme)
@@ -309,6 +333,14 @@ function removeModel(channel, index) {
   ensureValidationModel()
 }
 
+function clearModels(channel) {
+  if (!channel?.models.length) return
+  channel.models = []
+  ensureCurrentModel(channel)
+  ensureValidationModel()
+  message.success('已清空当前渠道模型列表')
+}
+
 function addChannel() {
   const channel = normalizeChannel({}, channels.value.length)
   channel.expanded = true
@@ -433,15 +465,14 @@ async function syncRemoteModels(channel) {
     const remoteNames = [...new Set((response.data || [])
       .map((item) => typeof item === 'string' ? item.trim() : String(item?.name || '').trim())
       .filter(Boolean))]
+    channel.models = remoteNames.map((name) => newModel(name))
+    if (channel.id === activeChannelId.value) ensureCurrentModel(channel)
+    ensureValidationModel()
     if (!remoteNames.length) {
-      message.warning('远端没有返回可用模型')
+      message.warning('远端没有返回可用模型，已清空本地模型')
       return
     }
-    const existingNames = new Set(namedModels(channel).map((model) => model.name))
-    const added = remoteNames.filter((name) => !existingNames.has(name))
-    channel.models.push(...added.map((name) => newModel(name)))
-    if (channel.id === activeChannelId.value) ensureCurrentModel(channel)
-    message.success(`已同步 ${remoteNames.length} 个远端模型，新增 ${added.length} 个，保存后生效`)
+    message.success(`已同步 ${remoteNames.length} 个远端模型，已替换本地模型，保存后生效`)
   } catch (error) {
     message.error('远端模型同步失败：' + (error.message || '未知错误'))
   } finally {
@@ -457,7 +488,13 @@ onMounted(load)
 .model-channels-header { height: 64px; display: flex; align-items: center; gap: 12px; padding: 0 28px; border-bottom: 1px solid var(--border); flex: 0 0 auto; }
 .model-channels-header h1 { margin: 0; font-size: 16px; font-weight: 600; }
 .model-channels-header p { margin: 3px 0 0; color: var(--fg-4); font-size: 12px; }
-.model-channels-back, .model-channel-delete, .model-config-delete { width: 30px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 5px; background: transparent; color: var(--fg-3); cursor: pointer; }
+.model-channels-setup-overlay { position: fixed; z-index: 10; inset: 0; display: grid; place-items: center; padding: 20px; background: rgba(0, 0, 0, .38); }
+.model-channels-setup-notice { width: min(100%, 400px); box-sizing: border-box; padding: 20px; border: 1px solid var(--border); border-top: 3px solid var(--accent); border-radius: 7px; background: var(--bg); box-shadow: 0 18px 48px rgba(0, 0, 0, .24); }
+.model-channels-setup-notice h2 { margin: 0; color: var(--fg); font-size: 16px; line-height: 1.4; }
+.model-channels-setup-notice p { margin: 8px 0 18px; color: var(--fg-2); font-size: 13px; line-height: 1.55; }
+.model-channels-setup-confirm { display: inline-flex; align-items: center; justify-content: center; min-height: 32px; padding: 0 13px; border: 0; border-radius: 5px; background: var(--accent); color: #fff; font: inherit; font-size: 13px; cursor: pointer; }
+.model-channels-setup-confirm:hover { filter: brightness(.96); }
+
 .model-channels-back:hover { background: var(--bg-3); color: var(--fg); }
 .model-channels-back svg, .model-channel-delete svg, .model-config-delete svg { width: 17px; height: 17px; }
 .model-collapse-icon { width: 16px; height: 16px; flex: 0 0 auto; transition: transform .15s ease; }
@@ -492,10 +529,12 @@ onMounted(load)
 .model-channel-fields input:focus, .model-channel-fields select:focus, .model-config-row input:focus { border-color: var(--accent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 12%, transparent); }
 .model-channel-models { grid-column: 1 / -1; min-width: 0; display: grid; gap: 8px; }
 .model-channel-models-label { display: flex; align-items: center; min-height: 18px; color: var(--fg-3); font-size: 12px; }
-.model-channel-sync { margin-left: auto; display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 4px; padding: 2px 5px; background: transparent; color: var(--fg-4); font: inherit; font-size: 12px; cursor: pointer; }
+.model-channel-actions { margin-left: auto; display: inline-flex; align-items: center; gap: 8px; }
+.model-channel-clear, .model-channel-sync { display: inline-flex; align-items: center; gap: 5px; border: 0; border-radius: 4px; padding: 2px 5px; background: transparent; color: var(--fg-4); font: inherit; font-size: 12px; cursor: pointer; }
+.model-channel-clear:hover:not(:disabled) { background: rgba(220, 38, 38, .09); color: #c2413b; }
 .model-channel-sync:hover:not(:disabled) { background: var(--bg-3); color: var(--accent); }
-.model-channel-sync:disabled { cursor: not-allowed; opacity: .48; }
-.model-channel-sync svg, .model-config-add svg { width: 14px; height: 14px; }
+.model-channel-clear:disabled, .model-channel-sync:disabled { cursor: not-allowed; opacity: .48; }
+.model-channel-clear :deep(svg), .model-channel-sync :deep(svg), .model-config-add svg { width: 14px; height: 14px; }
 .model-channel-spin { animation: model-channel-spin .8s linear infinite; }
 @keyframes model-channel-spin { to { transform: rotate(360deg); } }
 .model-list-empty { padding: 10px; border: 1px dashed var(--border); border-radius: 5px; color: var(--fg-4); font-size: 12px; text-align: center; }
