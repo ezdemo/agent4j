@@ -31,6 +31,11 @@ import java.time.format.DateTimeFormatter;
 public class VersionController {
 
     /**
+     * 最新发布页地址（GitHub）。通过访问其 302 重定向目标地址提取最新版本标签。
+     */
+    private static final String LATEST_RELEASE_URL = "https://github.com/ezdemo/loopra/releases/latest";
+
+    /**
      * 获取当前系统版本信息。
      *
      * @return 当前版本号、构建时间、应用名称
@@ -50,9 +55,9 @@ public class VersionController {
     /**
      * 检查远程最新版本，与当前版本比较后返回结果。
      * <p>
-     * 通过访问 {@code https://gitee.com/ezdemo/loopra/releases/latest} 的 302 重定向目标地址
+     * 通过访问 {@link #LATEST_RELEASE_URL} 的 302 重定向目标地址
      * 来提取最新版本标签（例如重定向到 {@code /releases/tag/v26.6.15} 得到版本 {@code 26.6.15}），
-     * 比直接调用 Gitee API 更稳定（不受 API 频率限制和格式变更影响）。
+     * 比直接调用 GitHub API 更稳定（不受 API 频率限制和格式变更影响）。
      * </p>
      *
      * @return 版本检查结果（当前版本、最新版本、是否有更新、发布说明等）
@@ -69,7 +74,7 @@ public class VersionController {
         String checkTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
 
         try {
-            String checkUrl = "https://gitee.com/ezdemo/loopra/releases/latest";
+            String checkUrl = LATEST_RELEASE_URL;
 
             // 发送请求，不跟随重定向，获取 Location 头中的最新版本标签
             URL url = new URL(checkUrl);
@@ -90,7 +95,7 @@ public class VersionController {
                 String location = conn.getHeaderField("Location");
                 if (location != null && !location.isEmpty()) {
                     // 从 Location 中提取版本标签
-                    // 格式如: https://gitee.com/ezdemo/loopra/releases/tag/v26.6.15
+                    // 格式如: https://github.com/ezdemo/loopra/releases/tag/v26.6.15
                     int tagIndex = location.lastIndexOf("/tag/");
                     if (tagIndex >= 0) {
                         String tagName = location.substring(tagIndex + 5); // "/tag/" 长度为 5

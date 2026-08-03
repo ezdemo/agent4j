@@ -82,8 +82,6 @@
         @open-session="openSession"
         @open-skills="openSkills"
         @open-tools="openTools"
-        @open-sub-agents="openSubAgents"
-        @open-dashboard="openDashboard"
         @open-settings="openSettings"
         @toggle-theme="toggleTheme"
         @add-workspace="addWorkspaceFromFolder"
@@ -106,7 +104,7 @@
         </header>
         <DashboardPanel class="desktop-dashboard-content" />
       </section>
-      <SettingsView v-else-if="!starting && showSettings" class="desktop-settings" />
+      <SettingsView v-else-if="!starting && showSettings" class="desktop-settings" @open-sub-agents="openSubAgents" @open-dashboard="openDashboard" />
     </main>
   </div>
 </template>

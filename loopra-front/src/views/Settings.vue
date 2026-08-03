@@ -24,6 +24,19 @@
           <span v-if="tab.badge" class="nav-badge">{{ tab.badge }}</span>
         </button>
       </div>
+
+      <!-- 桌面壳专属功能入口（子代理/数据面板从首页左下角收进这里） -->
+      <div v-if="inDesktopShell" class="nav-extra">
+        <div class="nav-extra-title">功能</div>
+        <button class="nav-item" type="button" @click="emit('open-sub-agents')">
+          <span class="nav-icon" v-html="SUB_AGENTS_ICON"></span>
+          <span class="nav-label">子代理</span>
+        </button>
+        <button class="nav-item" type="button" @click="emit('open-dashboard')">
+          <span class="nav-icon" v-html="DASHBOARD_ICON"></span>
+          <span class="nav-label">数据面板</span>
+        </button>
+      </div>
     </nav>
 
     <!-- 主内容区 -->
@@ -1632,6 +1645,7 @@ import {
   systemAPI
 } from '../services/api'
 import {md} from '../utils/highlight'
+import {RELEASE_LATEST_URL} from '../utils/constants'
 import platform from '../services/platform'
 import VersionInfoPanel from '../components/VersionInfoPanel.vue'
 import PetSprite from '../components/PetSprite.vue'
@@ -1884,7 +1898,7 @@ const showUpdateModal = ref(false)
 const electronVersion = ref('')
 const autoUpdating = ref(false)
 
-const emit = defineEmits(['auto-update', 'init-pet'])
+const emit = defineEmits(['auto-update', 'init-pet', 'open-sub-agents', 'open-dashboard'])
 
 // 桌面端版本信息（由 handleCheckVersion 一并更新）
 const desktopInfo = ref({
@@ -1893,6 +1907,11 @@ const desktopInfo = ref({
   releaseUrl: null,
   checkTime: null
 })
+
+// 桌面壳功能入口图标（与首页左下角风格一致），仅 ?desktopShell=1 时显示
+const SUB_AGENTS_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><path d="M3.5 19v-1.5A4.5 4.5 0 0 1 8 13h2a4.5 4.5 0 0 1 4.5 4.5V19"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A4 4 0 0 1 21 18v1"/></svg>`
+const DASHBOARD_ICON = `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>`
+const inDesktopShell = new URLSearchParams(window.location.search).get('desktopShell') === '1'
 
 // 检查更新（同时刷新当前版本和桌面端版本信息）
 async function handleCheckVersion() {
@@ -1923,7 +1942,7 @@ async function handleCheckVersion() {
             ...desktopInfo.value,
             latestVersion: res.data.latestVersion,
             hasNewVersion: compareVersions(ver, res.data.latestVersion) < 0,
-            releaseUrl: res.data.releaseUrl || 'https://gitee.com/ezdemo/loopra/releases/latest',
+            releaseUrl: res.data.releaseUrl || RELEASE_LATEST_URL,
             checkTime: res.data.checkTime
           }
         }
@@ -2212,7 +2231,7 @@ async function fetchElectronVersion() {
 
 // 打开下载页面
 async function openDesktopDownload(url) {
-  const target = url || 'https://gitee.com/ezdemo/loopra/releases/latest'
+  const target = url || RELEASE_LATEST_URL
   if (platform.isElectron) {
     try {
       await window.electronAPI.openExternal(target)
@@ -3522,6 +3541,23 @@ const saveLoopraMd = async () => {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.nav-extra {
+  flex: 0 0 auto;
+  padding: 8px 12px 0;
+  border-top: 1px solid var(--border);
+  margin-top: 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.nav-extra-title {
+  padding: 0 12px 6px;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--fg-3);
 }
 
 .nav-item {
