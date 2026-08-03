@@ -1,0 +1,175 @@
+name: Build & Release
+
+on:
+  push:
+    branches: [main, master, release/*]
+    tags: ['v*']
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ──────────────────────────────────────────────
+  # 1. Electron 三平台构建
+  #    每个平台用对应的原生 Runner 构建，Windows 包不再
+  #    依赖 Linux + Wine（替代原云端 electron-pipeline）
+  # ──────────────────────────────────────────────
+  electron-build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            builder_flag: --mac
+            artifact_name: Loopra-mac
+
+          - os: ubuntu-latest
+            builder_flag: --linux
+            artifact_name: Loopra-linux
+
+          - os: windows-latest
+            builder_flag: --win
+            artifact_name: Loopra-win
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 10
+          run_install: false
+
+      - name: Get pnpm store directory
+        id: pnpm-cache
+        shell: bash
+        run: |
+          echo "store=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      - name: Cache pnpm store
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.pnpm-cache.outputs.store }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      - name: Cache Electron
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/electron
+            ~/.cache/electron-builder
+          key: ${{ runner.os }}-electron-${{ hashFiles('**/pnpm-lock.yaml') }}
+
+      - name: Install dependencies
+        working-directory: loopra-front
+        run: pnpm install --frozen-lockfile
+
+      - name: Lint
+        working-directory: loopra-front
+        run: pnpm run lint || echo 'Lint 有警告，继续构建'
+
+      - name: Build Vite bundles
+        working-directory: loopra-front
+        run: pnpm run build:vite
+
+      - name: Package with electron-builder
+        working-directory: loopra-front
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+        run: npx electron-builder ${{ matrix.builder_flag }} --publish=never
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: loopra-front/release/
+          retention-days: 7
+
+  # ──────────────────────────────────────────────
+  # 2. Web 分发包
+  #    前端资产同步 + Maven 打包（与原 master-pipeline 行为一致）
+  # ──────────────────────────────────────────────
+  web-dist:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+          cache: maven
+
+      - name: Sync frontend assets
+        run: bash .release/ci-sync-web-assets.sh
+
+      - name: Package web distribution
+        run: mvn -B -ntp -DskipTests -gs .workflow/maven-central-settings.xml -s .workflow/maven-central-settings.xml clean verify
+
+      - name: Verify artifact
+        run: test -f ./loopra-web/target/loopra-web-dist.tar.gz
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: loopra-web-dist
+          path: ./loopra-web/target/loopra-web-dist.tar.gz
+          retention-days: 7
+
+  # ──────────────────────────────────────────────
+  # 3. 打 tag（v*）时发布 GitHub Release
+  #    生成草稿，确认无误后在 GitHub 页面手动发布
+  #    （替代原云端 publish@release_artifacts 手动发布）
+  # ──────────────────────────────────────────────
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [electron-build, web-dist]
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: release-artifacts
+          pattern: '*'
+          merge-multiple: true
+
+      - name: Display structure
+        run: find release-artifacts -type f | sort
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Loopra ${{ github.ref_name }}
+          body: |
+            ## Loopra ${{ github.ref_name }}
+
+            请根据你的操作系统下载对应的安装包：
+
+            - **macOS** → `Loopra-mac/*.zip`
+            - **Windows** → `Loopra-win/*.exe`
+            - **Linux** → `Loopra-linux/*.deb`
+            - **Web** → `loopra-web-dist.tar.gz`
+          draft: true
+          prerelease: false
+          files: |
+            release-artifacts/**/*
