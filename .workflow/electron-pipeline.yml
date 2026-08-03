@@ -1,0 +1,38 @@
+version: '1.0'
+name: electron-pipeline
+displayName: Electron Package Pipeline
+triggers:
+  trigger: auto
+  push:
+    branches:
+      include:
+        - main
+stages:
+  - stage:
+    name: package
+    displayName: Package Electron Linux App
+    strategy: fast
+    trigger: auto
+    steps:
+      - step: build@nodejs
+        name: package_electron_linux
+        displayName: Build Electron Linux Package
+        nodeVersion: 15.12.0
+        commands:
+          - bash .release/ci-package-electron.sh
+        artifacts:
+          - name: LOOPRA_ELECTRON_LINUX
+            path:
+              - ./loopra-front/release
+  - stage:
+    name: publish
+    displayName: Publish Electron Package
+    strategy: fast
+    trigger: auto
+    steps:
+      - step: publish@general_artifacts
+        name: upload_electron_linux
+        displayName: Upload Electron Linux Package
+        dependArtifact: LOOPRA_ELECTRON_LINUX
+        artifactRepository: default
+        artifactName: loopra-electron-linux

@@ -321,24 +321,7 @@ public class ConfigController {
     @Mapping("/workspaces/order")
     public ApiResponse<List<String>> getWorkspaceOrder() {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        try {
-            Path configPath = Paths.get(System.getProperty("user.home"), ".loopra", "config.json");
-            if (Files.exists(configPath)) {
-                String json = new String(Files.readAllBytes(configPath), StandardCharsets.UTF_8);
-                ONode node = ONode.ofJson(json);
-                ONode orderNode = node.get("workspaceOrder");
-                if (orderNode != null && orderNode.isArray()) {
-                    List<String> order = new ArrayList<>();
-                    for (ONode item : orderNode.getArray()) {
-                        String s = item.getString();
-                        if (s != null) order.add(s);
-                    }
-                    return ApiResponse.ok(order);
-                }
-            }
-        } catch (Exception ignored) {
-        }
-        return ApiResponse.ok(new ArrayList<>());
+        return ApiResponse.ok(ConfigService.getWorkspaceOrder());
     }
 
     // ============ loopra.md 编辑 ============
