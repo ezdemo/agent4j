@@ -159,3 +159,7 @@ Responses API 发送到 DeepSeek/Console Go 时，不能只回放 reasoning item
 ## [2026-08-02 22:37] 会话折叠沉淀
 
 GoalCommand 的 /goal create 成功后需返回 CommandResult.LOOP 并修改 MessageWrapper 为执行提示，否则 Agent 不会自动开始执行 Goal（已修复 2026-08-02）。UserMessageSanitizerTest 中 visionService 引用已清理。
+
+## [2026-08-02 23:19] 会话折叠沉淀
+
+ImageReadTool.read_image 在模型不支持图片输入时不可用：通过 ToolContext.getLoopController() → getModelClient() 获取当前模型，经静态注入的 ModelModalityProvider.getModalitySupport(channelId, modelName).imageInput() 判断，不支持时返回 "MODEL_NOT_SUPPORTED: ..." 错误；无控制器/无 provider（单元测试、CLI）时跳过拦截保持兼容。

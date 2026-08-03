@@ -1,7 +1,14 @@
 package site.sorghum.loopra.bin.builtin;
 
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import site.sorghum.loopra.bin.model.HttpModelClient;
+import site.sorghum.loopra.bin.model.ModalitySupport;
+import site.sorghum.loopra.bin.model.ModelClient;
+import site.sorghum.loopra.bin.model.ModelModalityProvider;
+import site.sorghum.loopra.tool.AgentLoopController;
+import site.sorghum.loopra.tool.AgentOutput;
 import site.sorghum.loopra.tool.ToolContext;
 
 import java.nio.file.Files;
@@ -9,9 +16,7 @@ import java.nio.file.Path;
 import java.util.Base64;
 import java.util.Map;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNotNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class ImageReadToolTest {
     private static final byte[] PNG_HEADER = {
@@ -20,6 +25,12 @@ class ImageReadToolTest {
 
     @TempDir
     Path workspace;
+
+    @AfterEach
+    void resetDependencies() {
+        ImageReadTool.modalityProvider = null;
+        ToolContext.clearCurrentController();
+    }
 
     @Test
     void readsWorkspaceImageAsVisualContext() throws Exception {
@@ -82,5 +93,71 @@ class ImageReadToolTest {
                 new ToolContext(Map.of(), workspace.toString(), "session-1"));
 
         assertEquals("PATH_DENIED: 工作区相对路径必须位于当前工作区内", result);
+    }
+
+    @Test
+    void blocksImageReadWhenModelLacksImageInput() throws Exception {
+        Files.write(workspace.resolve("diagram.png"), PNG_HEADER);
+        ImageReadTool tool = new ImageReadTool();
+        ImageReadTool.modalityProvider = new ModelModalityProvider() {
+            @Override
+            public ModalitySupport _getModalitySupport(String modelName) {
+                return ModalitySupport.TEXT_ONLY;
+            }
+        };
+        ToolContext.setCurrentController(controllerWith(new HttpModelClient(
+                "https://api.example.test/v1/chat/completions", "key", "text-model", "high", "text-channel")));
+
+        String result = tool.readImage("diagram.png", "high",
+                new ToolContext(Map.of(), workspace.toString(), "session-1"));
+
+        assertTrue(result.startsWith("MODEL_NOT_SUPPORTED: "), result);
+        assertTrue(result.contains("text-model"), result);
+    }
+
+    @Test
+    void allowsImageReadWhenModelSupportsImageInput() throws Exception {
+        Files.write(workspace.resolve("diagram.png"), PNG_HEADER);
+        ImageReadTool tool = new ImageReadTool();
+        ImageReadTool.modalityProvider = new ModelModalityProvider() {
+            @Override
+            public ModalitySupport _getModalitySupport(String modelName) {
+                return new ModalitySupport(true, false, false, false, false, false, false, true, true);
+            }
+        };
+        ToolContext.setCurrentController(controllerWith(new HttpModelClient(
+                "https://api.example.test/v1/chat/completions", "key", "vision-model", "high", "vision-channel")));
+
+        String result = tool.readImage("diagram.png", "high",
+                new ToolContext(Map.of(), workspace.toString(), "session-1"));
+
+        assertNotNull(ImageReadTool.parseResult(result));
+    }
+
+    private static AgentLoopController controllerWith(ModelClient client) {
+        return new AgentLoopController() {
+            @Override
+            public AgentOutput getOutput() {
+                return null;
+            }
+
+            @Override
+            public void requestStop() {
+            }
+
+            @Override
+            public void injectUserMessage(String message) {
+            }
+
+            @Override
+            public <T> T getToolRegistry() {
+                return null;
+            }
+
+            @Override
+            public ModelClient getModelClient() {
+                return client;
+            }
+        };
     }
 }
