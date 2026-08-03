@@ -119,7 +119,8 @@
       </section>
       <SettingsView v-else-if="!starting && showSettings" class="desktop-settings" @open-sub-agents="openSubAgents" @open-dashboard="openDashboard" />
     </main>
-  </div>
+  <ConfirmDialog />
+</div>
 </template>
 
 <script setup>
@@ -136,6 +137,7 @@ import ToolsView from './views/Tools.vue'
 import SubAgentsView from './views/SubAgents.vue'
 import ModelChannels from './ModelChannels.vue'
 import DashboardPanel from './components/Dashboard.vue'
+import ConfirmDialog from './components/ConfirmDialog.vue'
 import {hasConfiguredModelChannel} from './utils/modelChannels'
 
 const store = useAppStore()
