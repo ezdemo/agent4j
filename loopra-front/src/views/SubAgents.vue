@@ -89,6 +89,19 @@
                 <textarea v-model="profile.instructions" class="form-textarea prompt-textarea" placeholder="预置系统提示词"></textarea>
               </div>
               <div class="form-row">
+                <label class="form-label">渠道模型</label>
+                <div class="model-select-row">
+                  <select v-model="profile._modelChannel" class="model-select" @change="saveModelChannel(profile)">
+                    <option value="">继承主代理（默认）</option>
+                    <option v-for="ch in modelChannels" :key="ch.id" :value="ch.id">{{ ch.name || ch.id }}</option>
+                  </select>
+                  <select v-if="profile._modelChannel" v-model="profile._model" class="model-select" @change="saveModelChannel(profile)">
+                    <option value="">渠道默认模型</option>
+                    <option v-for="m in channelModels(profile._modelChannel)" :key="m" :value="m">{{ m }}</option>
+                  </select>
+                </div>
+              </div>
+              <div class="form-row">
                 <label class="form-label">工具白名单</label>
                 <div class="tool-picker">
                   <div class="tag-input" @click.self="focusTagInput">
@@ -128,6 +141,19 @@
 
           <!-- 展示模式 -->
           <div v-else class="profile-body">
+            <div class="profile-section model-section">
+              <h3>渠道模型</h3>
+              <div class="model-select-row">
+                <select v-model="profile._modelChannel" class="model-select" @change="saveModelChannel(profile)">
+                  <option value="">继承主代理（默认）</option>
+                  <option v-for="ch in modelChannels" :key="ch.id" :value="ch.id">{{ ch.name || ch.id }}</option>
+                </select>
+                <select v-if="profile._modelChannel" v-model="profile._model" class="model-select" @change="saveModelChannel(profile)">
+                  <option value="">渠道默认模型</option>
+                  <option v-for="m in channelModels(profile._modelChannel)" :key="m" :value="m">{{ m }}</option>
+                </select>
+              </div>
+            </div>
             <div class="profile-section tools-section">
               <h3>实际可用工具</h3>
               <div v-if="profile.tools.length" class="tool-list">
@@ -149,7 +175,7 @@
 <script setup>
 import {nextTick, onMounted, ref} from 'vue'
 import {message} from 'ant-design-vue'
-import {toolsAPI} from '../services/api'
+import {configAPI, toolsAPI} from '../services/api'
 import {useConfirm} from '../composables/useConfirm'
 
 const profiles = ref([])
@@ -159,6 +185,7 @@ const error = ref('')
 const editingProfile = ref(null)
 const allTools = ref([])
 const deniedTools = ref([])
+const modelChannels = ref([])
 let toolNamesLoaded = false
 const { confirm } = useConfirm()
 
@@ -181,7 +208,8 @@ const serialize = (profile) => {
     enable: profile.enable !== false,
     readOnly: !!profile.readOnly,
     instructions: profile.instructions,
-    ...(profile._selectedTools && profile._selectedTools.length ? {allowedTools: profile._selectedTools} : {})
+    ...(profile._selectedTools && profile._selectedTools.length ? {allowedTools: profile._selectedTools} : {}),
+    ...(profile._modelChannel ? {modelChannel: profile._modelChannel, ...(profile._model ? {model: profile._model} : {})} : {})
   }
 }
 
@@ -198,7 +226,9 @@ async function loadSubAgents(silent = false) {
       _key: 'p-' + index + '-' + Math.random().toString(36).slice(2, 7),
       instructions: profile.systemPrompt || '',
       _selectedTools: profile.allowedTools || [],
-      _tagInput: ''
+      _tagInput: '',
+      _modelChannel: profile.modelChannel || '',
+      _model: profile.model || ''
     }))
   } catch (loadError) {
     error.value = loadError.message || '无法加载子代理'
@@ -219,6 +249,37 @@ function startEdit(profile) {
   profile._showPicker = false
   editingProfile.value = profile
   void loadToolNames()
+}
+
+/** 加载模型渠道列表（下拉选项；与子代理列表并行加载） */
+async function loadModelChannels() {
+  try {
+    const response = await configAPI.getConfig()
+    if (response.success && response.data) {
+      modelChannels.value = (response.data.modelChannels || [])
+        .map((channel) => ({id: channel.id, name: channel.name, models: (channel.models || []).map((m) => (typeof m === 'string' ? m : (m.name || ''))).filter(Boolean)}))
+    }
+  } catch {
+    // 渠道列表加载失败不阻塞页面，下拉仅显示“继承主代理”
+  }
+}
+
+/** 指定渠道内的模型名列表 */
+const channelModels = (channelId) => modelChannels.value.find((c) => c.id === channelId)?.models || []
+
+/** 渠道/模型变更后静默保存（不重载列表，保持滚动位置）；失败时回滚 */
+async function saveModelChannel(profile) {
+  const originalChannel = profile._modelChannel
+  const originalModel = profile._model
+  try {
+    const response = await toolsAPI.saveSubAgents(profiles.value.map(serialize))
+    if (!response.success) throw new Error(response.message || '保存失败')
+    message.success('渠道模型已保存')
+  } catch (saveError) {
+    profile._modelChannel = originalChannel
+    profile._model = originalModel
+    message.error('保存失败：' + (saveError.message || '未知错误'))
+  }
 }
 
 /** 加载全部已注册工具（含只读分类与启用状态）及子代理不可用清单（首次编辑时加载一次） */
@@ -406,7 +467,10 @@ async function deleteProfile(profile) {
   }
 }
 
-onMounted(loadSubAgents)
+onMounted(() => {
+  void loadSubAgents()
+  void loadModelChannels()
+})
 </script>
 
 <style scoped>
@@ -467,6 +531,9 @@ onMounted(loadSubAgents)
 .action-button.danger:hover:not(:disabled) { color: #b42318; border-color: #fecaca; background: #fef2f2; }
 .profile-body { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(320px, .9fr); }
 .profile-section { min-width: 0; padding: 18px 20px 20px; }
+.model-section { grid-column: 1 / -1; border-bottom: 1px solid var(--border, #e5e7eb); padding-bottom: 14px; }
+.model-select-row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.model-select { min-width: 0; flex: 1 1 180px; max-width: 320px; padding: 5px 8px; border: 1px solid var(--border, #e5e7eb); border-radius: 4px; background: var(--bg, #fff); color: var(--fg, #202124); font: inherit; font-size: 12px; }
 .prompt-section { border-left: 1px solid var(--border, #e5e7eb); }
 .profile-section h3 { margin: 0 0 12px; color: var(--fg-3, #616975); font-size: 11px; font-weight: 600; }
 .tool-list { display: flex; flex-wrap: wrap; gap: 6px; }

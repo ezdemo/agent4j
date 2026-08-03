@@ -4,6 +4,7 @@
  */
 import hljs from 'highlight.js'
 import {Marked, marked, Renderer} from 'marked'
+import markedKatex from 'marked-katex-extension'
 
 // ═══════════════════════════════════════════
 // 文件扩展名 → highlight.js 语言标识映射
@@ -134,6 +135,11 @@ renderer.code = (code, language) => {
   </div>`
 }
 
+// KaTeX 数学公式扩展：$...$ 行内 / $$...$$ 块级
+// output:'html' 仅输出 span 结构（与 sanitize 的 DOMPurify 白名单兼容，避免 MathML 被剥离后残留文本）
+// throwOnError:false 渲染失败时原样展示公式源码，不阻断整条消息
+const katexOptions = {throwOnError: false, output: 'html'}
+
 export const md = new Marked({
   breaks: true,
   gfm: true,
@@ -141,6 +147,7 @@ export const md = new Marked({
   mangle: false,
   renderer
 })
+md.use(markedKatex(katexOptions))
 
 // 兼容旧的全局 marked() 调用
 marked.setOptions({
@@ -150,3 +157,4 @@ marked.setOptions({
   mangle: false,
   renderer
 })
+marked.use(markedKatex(katexOptions))

@@ -97,6 +97,8 @@ public class SubAgentController {
                     .filter(tool -> !tool.isEmpty())
                     .toList();
         }
+        config.modelChannel = text(map.get("modelChannel"));
+        config.model = text(map.get("model"));
         return config;
     }
 
@@ -115,6 +117,7 @@ public class SubAgentController {
                 .sorted(Comparator.naturalOrder())
                 .toList();
         return new SubAgentInfoDTO(profile.id(), profile.name(), profile.description(), profile.readOnly(),
-                profile.instructions(), tools, profile.allowedTools, profile.enable, SubAgentProfileStore.isBuiltin(profile.id()));
+                profile.instructions(), tools, profile.allowedTools, profile.enable, SubAgentProfileStore.isBuiltin(profile.id()),
+                profile.modelChannel, profile.model);
     }
 }

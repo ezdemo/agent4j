@@ -28,6 +28,10 @@ public class SubAgentProfileConfig {
     public String instructions;
     /** 显式工具白名单（可空：readOnly 角色用只读工具集，可写角色用全部工具） */
     public List<String> allowedTools;
+    /** 独立模型渠道 id（可空：继承父级/主代理渠道） */
+    public String modelChannel;
+    /** 渠道内模型名（可空：使用渠道默认模型） */
+    public String model;
 
     public boolean enabled() {
         return enable == null || enable;

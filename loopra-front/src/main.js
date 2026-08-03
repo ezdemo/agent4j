@@ -1,6 +1,7 @@
 import {createApp} from 'vue'
 import {createPinia} from 'pinia'
 import 'ant-design-vue/dist/reset.css'
+import 'katex/dist/katex.min.css' // 数学公式渲染样式（含字体）
 import App from './App.vue'
 import DesktopShell from './DesktopShell.vue'
 import DesktopChatTab from './DesktopChatTab.vue'
