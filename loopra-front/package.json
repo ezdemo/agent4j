@@ -1,6 +1,6 @@
 {
   "name": "loopra-front",
-  "version": "26.7.24.1",
+  "version": "26.8.3",
   "private": true,
   "main": "dist/main/main.cjs",
   "type": "module",
