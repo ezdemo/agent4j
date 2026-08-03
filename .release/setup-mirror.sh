@@ -1,13 +1,13 @@
 #!/bin/bash
 #
-# Loopra Web Installer
-# Usage: curl -fsSL https://github.com/ezdemo/loopra/releases/download/v26.8.3.1/setup.sh | bash
+# Loopra Web Installer (Mirror via GitHub + gh-proxy)
+# Usage: curl -fsSL https://gh-proxy.org/https://github.com/ezdemo/loopra/releases/download/v26.8.3.1/setup-mirror.sh | bash
 #
 
 set -e
 
 VERSION="v26.8.3.2"
-PACKAGE_URL="https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-web-dist.tar.gz"
+PACKAGE_URL="https://gh-proxy.org/https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-web-dist.tar.gz"
 TEMP_DIR="/tmp/loopra-install"
 
 # Colors
@@ -38,7 +38,7 @@ trap cleanup EXIT
 # Create temp directory
 mkdir -p "$TEMP_DIR"
 
-info "Downloading Loopra Web ${VERSION}..."
+info "Downloading Loopra Web ${VERSION} via GitHub mirror (gh-proxy)..."
 
 # Download package
 if command -v curl &> /dev/null; then

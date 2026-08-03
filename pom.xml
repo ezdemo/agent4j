@@ -7,11 +7,11 @@
     <parent>
         <groupId>org.noear</groupId>
         <artifactId>solon-parent</artifactId>
-        <version>4.0.3</version>
+        <version>4.0.4</version>
     </parent>
     <groupId>site.sorghum.agent</groupId>
     <artifactId>loopra</artifactId>
-    <version>26.8.3</version>
+    <version>26.8.3.2</version>
     <packaging>pom</packaging>
 
     <modules>
