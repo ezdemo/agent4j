@@ -46,7 +46,8 @@ async function loadPet() {
       return
     }
     serviceOffline.value = false
-    const url = pet.spritesheetUrl || pet.spritesheetPath
+    // 后端返回的相对路径需解析为完整 URL，桌面端 file:// 协议下才能加载（适配服务端端口）
+    const url = petAPI.resolveUrl(pet.spritesheetUrl || pet.spritesheetPath)
     const petKey = pet.name || url
     if (activePetKey.value !== petKey) {
       activePetKey.value = petKey

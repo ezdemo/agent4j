@@ -22,7 +22,7 @@ vi.mock('../services/api', () => ({
   filesAPI: {search: vi.fn().mockResolvedValue({success: true, data: []})},
   petAPI: {
     getInfo: vi.fn().mockResolvedValue({data: null}),
-    getSpritesheetUrl: vi.fn(),
+    resolveUrl: vi.fn((url) => url),
     savePosition: vi.fn().mockResolvedValue({success: true})
   },
   promptPresetsAPI: {
