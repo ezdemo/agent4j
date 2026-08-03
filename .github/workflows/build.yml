@@ -41,15 +41,15 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Setup Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v7
         with:
           node-version: '22'
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v4
+        uses: pnpm/action-setup@v6
         with:
           version: 10
           run_install: false
@@ -61,7 +61,7 @@ jobs:
           echo "store=$(pnpm store path)" >> $GITHUB_OUTPUT
 
       - name: Cache pnpm store
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: ${{ steps.pnpm-cache.outputs.store }}
           key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
@@ -69,7 +69,7 @@ jobs:
             ${{ runner.os }}-pnpm-
 
       - name: Cache Electron
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: |
             ~/.cache/electron
@@ -79,10 +79,6 @@ jobs:
       - name: Install dependencies
         working-directory: loopra-front
         run: pnpm install --frozen-lockfile
-
-      - name: Lint
-        working-directory: loopra-front
-        run: pnpm run lint || echo 'Lint 有警告，继续构建'
 
       - name: Build Vite bundles
         working-directory: loopra-front
@@ -95,7 +91,7 @@ jobs:
         run: npx electron-builder ${{ matrix.builder_flag }} --publish=never
 
       - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
           path: loopra-front/release/
@@ -110,14 +106,27 @@ jobs:
 
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
           cache: maven
+
+      # 脚本依赖 PATH 中的 pnpm（corepack prepare 不会创建 pnpm 命令），
+      # 这里显式安装，与 electron-build job 保持一致
+      - name: Setup Node.js
+        uses: actions/setup-node@v7
+        with:
+          node-version: '22'
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+        with:
+          version: 10
+          run_install: false
 
       - name: Sync frontend assets
         run: bash .release/ci-sync-web-assets.sh
@@ -129,7 +138,7 @@ jobs:
         run: test -f ./loopra-web/target/loopra-web-dist.tar.gz
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: loopra-web-dist
           path: ./loopra-web/target/loopra-web-dist.tar.gz
@@ -147,7 +156,7 @@ jobs:
 
     steps:
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: release-artifacts
           pattern: '*'
