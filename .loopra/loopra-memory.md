@@ -123,3 +123,11 @@ Gitee Electron 流水线 `.workflow/electron-pipeline.yml` 监听 main；脚本 
 
 PowerShell 脚本（.ps1）必须保存为 UTF-8 with BOM：PS 5.1 对无 BOM 文件按系统 ANSI(GBK) 读取，UTF-8 中文会被误读成双字节乱码，可能吞掉 { } 括号导致解析失败（典型报错"表达式或语句中包含意外的标记 }"）；CRLF 版可能侥幸通过，但发布打包转成 LF 后必现。installDist 的 install.ps1/uninstall.ps1 与 .release 脚本均已加 BOM（2026-08-03）。新脚本或修改后检查：文件头为 EF BB BF 且 Parser::ParseFile 无错误。
 
+
+## [2026-08-03 19:26] 会话折叠沉淀
+
+桌面首页（DesktopHome.vue）左下角菜单 2026-08-03 精简：只保留「技能/工具」两个文字入口；「子代理/数据面板」入口移到设置页左侧导航底部「功能」区（仅 ?desktopShell=1 时显示，通过 emit open-sub-agents/open-dashboard 由 DesktopShell 切换视图）；「设置」改为齿轮图标（desktop-settings-button），与主题按钮、服务进程管理并排一行。
+
+## [2026-08-03 19:30] 会话折叠沉淀
+
+桌面首页（DesktopHome.vue）左下角菜单最终布局（2026-08-03 二次调整）：第一行「技能」整行文字按钮；第二行「设置」文字按钮（flex:1 占满左侧）+ 右侧图标区（服务进程管理、工具图标 desktop-tools-button、主题切换 desktop-theme-button）。「子代理/数据面板」入口在设置页左侧导航底部「功能」区（仅 ?desktopShell=1 时显示），通过 emit open-sub-agents/open-dashboard 由 DesktopShell 切换视图。

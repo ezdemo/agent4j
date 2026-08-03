@@ -484,6 +484,7 @@ import DashboardPanel from './components/Dashboard.vue'
 import AIBrowser from './components/AIBrowser.vue'
 import {platform} from '@/services/platform'
 import {hasConfiguredModelChannel} from '@/utils/modelChannels'
+import {RELEASE_LATEST_URL} from '@/utils/constants'
 
 const isElementInspectorWindow = new URLSearchParams(window.location.search).get('elementInspector') === '1'
 const isAiBrowserWindow = new URLSearchParams(window.location.search).get('aiBrowser') === '1'
@@ -1682,7 +1683,7 @@ async function handleCheckVersion() {
 
 // 打开下载页面
 async function openDesktopDownloadUrl() {
-  const url = 'https://gitee.com/ezdemo/loopra/releases/latest'
+  const url = RELEASE_LATEST_URL
   if (platform.isElectron) {
     try {
       await window.electronAPI.openExternal(url)

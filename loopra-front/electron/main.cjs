@@ -3,6 +3,7 @@ const http = require('http')
 const path = require('path')
 const { spawn, execFile, execSync } = require('child_process')
 const { promisify } = require('util')
+const { compareVersions } = require('./version.cjs')
 const fs = require('fs')
 const net = require('net')
 
@@ -624,8 +625,12 @@ ipcMain.handle('check_install_needed', async () => {
 
   const runtimeVersion = readLoopraGuiVersion()
   const desktopVersion = app.getVersion().replace(/^v/i, '')
-  if (runtimeVersion !== desktopVersion) {
+  const versionResult = compareVersions(runtimeVersion, desktopVersion)
+  if (versionResult < 0) {
     return { needed: true, reason: 'version_mismatch', runtimeVersion, desktopVersion }
+  }
+  if (versionResult > 0) {
+    return { needed: true, reason: 'desktop_outdated', runtimeVersion, desktopVersion }
   }
 
   return { needed: false, reason: '', runtimeVersion, desktopVersion }

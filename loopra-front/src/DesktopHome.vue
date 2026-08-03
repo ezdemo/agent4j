@@ -44,39 +44,30 @@
         <div class="desktop-project-footer">
           <div class="desktop-project-footer-menu">
             <button type="button" @click="emit('open-skills')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m12 3-1.9 5.8a2 2 0 0 1-1.3 1.3L3 12l5.8 1.9a2 2 0 0 1 1.3 1.3L12 21l1.9-5.8a2 2 0 0 1 1.3-1.3L21 12l-5.8-1.9a2 2 0 0 1-1.3-1.3L12 3Z"/><path d="M5 3v4"/><path d="M19 17v4"/><path d="M3 5h4"/><path d="M17 19h4"/></svg>
               技能
             </button>
-            <button type="button" @click="emit('open-tools')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m14.7 6.3 3 3"/><path d="m5 21 5.6-5.6"/><path d="m5.5 15.5-2-2a2.1 2.1 0 0 1 3-3l2 2"/><path d="m18.5 8.5 2 2a2.1 2.1 0 0 1-3 3l-2-2"/><path d="m8 16 8-8"/></svg>
-              工具
+          </div>
+          <div class="desktop-project-footer-settings">
+            <button type="button" @click="emit('open-settings')">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15.14 19a1.65 1.65 0 0 0-1 1.51V20.6a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.86 15a1.65 1.65 0 0 0-1.51-1H3.4a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 5 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9.32 4a1.65 1.65 0 0 0 1-1.51V2.4a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19 8.32a1.65 1.65 0 0 0 1.51 1h.09a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.11 1.68Z"/></svg>
+              设置
             </button>
-            <button type="button" @click="emit('open-sub-agents')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="9" cy="8" r="3"/><path d="M3.5 19v-1.5A4.5 4.5 0 0 1 8 13h2a4.5 4.5 0 0 1 4.5 4.5V19"/><circle cx="17" cy="9" r="2.5"/><path d="M15.5 14.2A4 4 0 0 1 21 18v1"/></svg>
-              子代理
-            </button>
-            <button type="button" @click="emit('open-dashboard')">
-              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 20V10"/><path d="M18 20V4"/><path d="M6 20v-4"/></svg>
-              数据面板
-            </button>
-            <div class="desktop-project-footer-settings">
-              <button type="button" @click="emit('open-settings')">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06A1.65 1.65 0 0 0 15.14 19a1.65 1.65 0 0 0-1 1.51V20.6a2 2 0 0 1-4 0v-.09a1.65 1.65 0 0 0-1-1.51 1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.86 15a1.65 1.65 0 0 0-1.51-1H3.4a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 5 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9.32 4a1.65 1.65 0 0 0 1-1.51V2.4a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19 8.32a1.65 1.65 0 0 0 1.51 1h.09a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.11 1.68Z"/></svg>
-                设置
+            <div class="desktop-project-footer-tools">
+              <ServiceProcessManager placement="top" />
+              <button class="desktop-tools-button" type="button" title="工具" aria-label="工具" @click="emit('open-tools')">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
               </button>
-              <div class="desktop-project-footer-tools">
-                <ServiceProcessManager placement="top" />
-                <button
-                  class="desktop-theme-button"
-                  type="button"
-                  :title="theme === 'dark' ? '切换为浅色模式' : '切换为深色模式'"
-                  :aria-label="theme === 'dark' ? '切换为浅色模式' : '切换为深色模式'"
-                  @click="emit('toggle-theme')"
-                >
-                  <svg v-if="theme === 'dark'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
-                  <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.2 14.1A8.5 8.5 0 0 1 9.9 3.8 8.5 8.5 0 1 0 20.2 14.1Z"/></svg>
-                </button>
-              </div>
+              <button
+                class="desktop-theme-button"
+                type="button"
+                :title="theme === 'dark' ? '切换为浅色模式' : '切换为深色模式'"
+                :aria-label="theme === 'dark' ? '切换为浅色模式' : '切换为深色模式'"
+                @click="emit('toggle-theme')"
+              >
+                <svg v-if="theme === 'dark'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+                <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.2 14.1A8.5 8.5 0 0 1 9.9 3.8 8.5 8.5 0 1 0 20.2 14.1Z"/></svg>
+              </button>
             </div>
           </div>
         </div>
@@ -147,7 +138,7 @@ const props = defineProps({
   refreshKey: { type: Number, default: 0 },
   refreshing: { type: Boolean, default: false }
 })
-const emit = defineEmits(['select-workspace', 'new-session', 'open-session', 'open-skills', 'open-tools', 'open-sub-agents', 'open-dashboard', 'open-settings', 'toggle-theme', 'add-workspace', 'refresh', 'delete-session', 'clear-workspace', 'delete-workspace', 'reorder-workspaces'])
+const emit = defineEmits(['select-workspace', 'new-session', 'open-session', 'open-skills', 'open-tools', 'open-settings', 'toggle-theme', 'add-workspace', 'refresh', 'delete-session', 'clear-workspace', 'delete-workspace', 'reorder-workspaces'])
 
 const query = ref('')
 const sessions = ref([])
@@ -365,7 +356,7 @@ onBeforeUnmount(() => {
 .desktop-project, .desktop-session { width: 100%; height: 32px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 5px; background: transparent; color: var(--fg-2, #525866); font: inherit; font-size: 13px; text-align: left; cursor: pointer; padding: 0 8px; box-sizing: border-box; }.desktop-project:hover, .desktop-session:hover, .desktop-project.active { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-project > span:last-child, .desktop-session > span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }.desktop-session { font-weight: 400; }.desktop-home-muted { padding: 12px 8px; color: var(--fg-4, #9ca3af); font-size: 12px; }
 .desktop-project.dragging { opacity: 0.55; }.desktop-project.drag-over-before, .desktop-project.drag-over-after { background: var(--accent-bg, var(--bg-3, #f2f3f5)); }.desktop-project.drag-over-before { box-shadow: inset 0 2px 0 0 var(--blue, #52525b); }.desktop-project.drag-over-after { box-shadow: inset 0 -2px 0 0 var(--blue, #52525b); }
 .desktop-monogram { width: 17px; height: 17px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 4px; color: #fff; font-size: 11px; font-weight: 700; line-height: 1; text-shadow: 0 1px rgba(0, 0, 0, 0.25); box-shadow: inset 0 1px rgba(255, 255, 255, 0.25), 0 1px 1px rgba(0, 0, 0, 0.16); }.desktop-monogram.tone-0 { background: linear-gradient(135deg, #8b95a3, #5e6878); }.desktop-monogram.tone-1 { background: linear-gradient(135deg, #3dd0e8, #18b4d0); }.desktop-monogram.tone-2 { background: linear-gradient(135deg, #ffa86b, #ff7a3d); }.desktop-monogram.tone-3 { background: linear-gradient(135deg, #9aacf5, #6d80e8); }.desktop-monogram.tone-4 { background: linear-gradient(135deg, #6dd49d, #3eb878); }.desktop-monogram.tone-5 { background: linear-gradient(135deg, #f87fb5, #e85a9c); }.desktop-monogram.tone-6 { background: linear-gradient(135deg, #fcd34d, #f5b800); }.desktop-monogram.tone-7 { background: linear-gradient(135deg, #4dd9a6, #20c084); }.desktop-session-monogram { background: linear-gradient(135deg, #737373, #4c4c4c); }
-.desktop-project-footer { display: flex; flex-direction: column; padding-top: 8px; border-top: 1px solid var(--border, #e8e8e8); flex: 0 0 auto; }.desktop-project-footer-menu { display: grid; gap: 2px; }.desktop-project-footer-menu > button { width: 100%; }.desktop-project-footer-settings { display: flex; align-items: center; }.desktop-project-footer-settings > button { min-width: 0; flex: 1; }.desktop-project-footer-tools { display: flex; align-items: center; gap: 4px; margin-left: auto; }.desktop-project-footer-tools .desktop-theme-button { width: 32px; justify-content: center; }.desktop-project-footer button { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--fg-3, #727987); font: inherit; font-size: 13px; cursor: pointer; }.desktop-project-footer button:hover { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-project-footer svg { width: 16px; height: 16px; }
+.desktop-project-footer { display: flex; flex-direction: column; gap: 2px; padding-top: 8px; border-top: 1px solid var(--border, #e8e8e8); flex: 0 0 auto; }.desktop-project-footer-menu { display: grid; gap: 2px; }.desktop-project-footer-menu > button { width: 100%; }.desktop-project-footer-settings { display: flex; align-items: center; }.desktop-project-footer-settings > button { min-width: 0; flex: 1; }.desktop-project-footer-tools { display: flex; align-items: center; gap: 4px; margin-left: auto; }.desktop-project-footer-tools .desktop-tools-button, .desktop-project-footer-tools .desktop-theme-button { width: 32px; justify-content: center; }.desktop-project-footer button { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--fg-3, #727987); font: inherit; font-size: 13px; cursor: pointer; }.desktop-project-footer button:hover { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-project-footer svg { width: 16px; height: 16px; }
 .desktop-context-menu { position: fixed; z-index: 1000; width: 156px; padding: 4px; border: 1px solid var(--border, #e5e7eb); border-radius: 6px; background: var(--bg, #fff); box-shadow: var(--shadow-lg, 0 10px 28px rgba(0, 0, 0, 0.16)); }.desktop-context-menu button { width: 100%; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--fg-2, #525866); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }.desktop-context-menu button:hover { color: var(--fg, #202124); background: var(--bg-3, #f2f3f5); }.desktop-context-menu button.danger { color: #c2413b; }.desktop-context-menu button.danger:hover { color: #b42318; background: rgba(220, 38, 38, 0.09); }.desktop-context-menu svg { width: 15px; height: 15px; }.desktop-context-menu-divider { height: 1px; margin: 4px; background: var(--border, #e5e7eb); }
 @media (max-width: 1000px) { .desktop-home { --project-column: 220px; --column-gap: 24px; padding-inline: 24px; } }
 @media (max-width: 720px) { .desktop-home { --project-column: 1fr; --column-gap: 24px; padding: 18px 18px 22px; overflow: auto; }.desktop-home-search { margin-left: 0; margin-bottom: 16px; }.desktop-home-grid { flex: initial; grid-template-columns: 1fr; overflow: visible; }.desktop-project-list, .desktop-session-timeline { overflow: visible; } }

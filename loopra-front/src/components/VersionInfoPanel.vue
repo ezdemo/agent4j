@@ -78,6 +78,7 @@
 <script setup>
 import {computed} from 'vue'
 import {message} from 'ant-design-vue'
+import {RELEASE_LATEST_URL} from '../utils/constants'
 
 const props = defineProps({
   appVersion: {type: String, default: ''},
@@ -129,7 +130,7 @@ function handleDownload() {
   if (props.releaseUrl) {
     emit('download', props.releaseUrl)
   } else {
-    const url = 'https://gitee.com/ezdemo/loopra/releases/latest'
+    const url = RELEASE_LATEST_URL
     emit('download', url)
   }
 }
