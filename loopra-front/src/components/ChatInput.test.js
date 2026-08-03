@@ -1,6 +1,6 @@
 /* @vitest-environment jsdom */
 
-import {shallowMount} from '@vue/test-utils'
+import {flushPromises, shallowMount} from '@vue/test-utils'
 import {beforeEach, describe, expect, it, vi} from 'vitest'
 import {promptPresetsAPI} from '../services/api'
 import ChatInput from './ChatInput.vue'
@@ -55,18 +55,31 @@ function mountInput(props) {
 describe('ChatInput quick commands', () => {
   beforeEach(() => {
     vi.clearAllMocks()
-    Object.defineProperty(navigator, 'clipboard', {
-      configurable: true,
-      value: {writeText: vi.fn().mockResolvedValue(undefined)}
-    })
   })
 
-  it('copies a preset command to the clipboard', async () => {
+  it('keeps the preset list empty when no presets can be loaded', async () => {
+    promptPresetsAPI.list.mockRejectedValueOnce(new Error('offline'))
     const wrapper = mountInput()
+    await flushPromises()
+    await wrapper.find('.quick-command-trigger').trigger('click')
+
+    expect(wrapper.find('.quick-command-list').exists()).toBe(false)
+    expect(wrapper.find('.quick-command-empty').text()).toBe('还没有常用要求')
+    wrapper.unmount()
+  })
+
+  it('appends a preset command to the input', async () => {
+    const wrapper = mountInput({inputText: '已有内容'})
+    await flushPromises()
     await wrapper.find('.quick-command-trigger').trigger('click')
     await wrapper.find('.quick-command-copy').trigger('click')
 
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('请先运行与本次修改相关的测试，确认通过后再报告结果。')
+    expect(wrapper.find('.input-row textarea').element.value).toBe(
+      '已有内容\n请先运行与本次修改相关的测试，确认通过后再报告结果。'
+    )
+    expect(wrapper.emitted('update:inputText').at(-1)).toEqual([
+      '已有内容\n请先运行与本次修改相关的测试，确认通过后再报告结果。'
+    ])
     wrapper.unmount()
   })
 
