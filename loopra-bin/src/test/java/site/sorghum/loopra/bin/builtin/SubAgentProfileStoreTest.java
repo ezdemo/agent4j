@@ -16,17 +16,22 @@ class SubAgentProfileStoreTest {
 
     private Path tempHome;
     private Path configFile;
+    private String originalUserHome;
 
     @BeforeEach
     void setUp() throws IOException {
         tempHome = Files.createTempDirectory("loopra-subagent-test");
+        originalUserHome = System.getProperty("user.home");
         System.setProperty("user.home", tempHome.toString());
         configFile = tempHome.resolve(".loopra/sub-agents.json");
     }
 
     @AfterEach
     void tearDown() {
-        System.clearProperty("user.home");
+        // 恢复原值而非清除：清除会导致同 JVM 后续测试读不到 user.home（如 LoopraConfigTest）
+        if (originalUserHome != null) {
+            System.setProperty("user.home", originalUserHome);
+        }
     }
 
     @Test
