@@ -1,1 +1,0 @@
-const fs=require("fs");var c=fs.readFileSync("loopra-front/src/stores/app.js","utf8");var old="animations: true,\n  ai:";var rep="animations: true,\n  server: {\n    apiBaseUrl: '',\n    autoConnect: true\n  },\n  ai:";c=c.replace(old,rep);fs.writeFileSync("loopra-front/src/stores/app.js",c,"utf8");console.log("Done");

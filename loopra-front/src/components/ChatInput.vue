@@ -1467,10 +1467,9 @@ async function loadPet() {
     const petData = resp.data
     if (petData && petData.active && (petData.spritesheetUrl || petData.spritesheetPath)) {
       // 兼容新旧字段名：spritesheetUrl（新）或 spritesheetPath（旧）
-      const url = petData.spritesheetUrl || petData.spritesheetPath
-      if (url && !url.startsWith('/api/')) {
-        petSpritesheetUrl.value = petAPI.getSpritesheetUrl() + '?t=' + Date.now()
-      } else if (url) {
+      // 统一解析为完整 URL，桌面端 file:// 协议下才能加载（适配服务端端口）
+      const url = petAPI.resolveUrl(petData.spritesheetUrl || petData.spritesheetPath)
+      if (url) {
         petSpritesheetUrl.value = url + '?t=' + Date.now()
       }
       if (petData.position) {
