@@ -131,3 +131,7 @@ PowerShell 脚本（.ps1）必须保存为 UTF-8 with BOM：PS 5.1 对无 BOM �
 ## [2026-08-03 19:30] 会话折叠沉淀
 
 桌面首页（DesktopHome.vue）左下角菜单最终布局（2026-08-03 二次调整）：第一行「技能」整行文字按钮；第二行「设置」文字按钮（flex:1 占满左侧）+ 右侧图标区（服务进程管理、工具图标 desktop-tools-button、主题切换 desktop-theme-button）。「子代理/数据面板」入口在设置页左侧导航底部「功能」区（仅 ?desktopShell=1 时显示），通过 emit open-sub-agents/open-dashboard 由 DesktopShell 切换视图。
+
+## [2026-08-03 19:52] 会话折叠沉淀
+
+桌面端标题栏（DesktopShell.vue .desktop-window-controls）有"检查更新"按钮：启动立即检查+每30分钟定时，通过 window.electronAPI.getElectronVersion()（app.getVersion()）对比后端 /api/version/check 的 latestVersion 判断桌面端是否有新版；有新版时高亮按钮点击跳 GitHub releases（releaseUrl 优先，兜底 RELEASE_LATEST_URL，openExternal 打开）。

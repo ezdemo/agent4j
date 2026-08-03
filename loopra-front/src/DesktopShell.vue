@@ -53,6 +53,18 @@
       </nav>
 
       <div class="desktop-window-controls">
+        <button
+          class="window-button update-check-button"
+          :class="{ 'has-update': hasNewVersion }"
+          type="button"
+          :title="hasNewVersion ? `发现新版本 v${latestVersion}，点击前往发布页` : (latestVersion ? `已是最新版本 v${latestVersion}，点击检查更新` : '检查更新')"
+          @click="onUpdateButtonClick"
+        >
+          <svg v-if="checkingUpdate" class="update-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span v-if="hasNewVersion" class="update-label">更新</span>
+          <i v-if="hasNewVersion" class="update-dot" />
+        </button>
         <button v-if="activeTabId" class="window-button" type="button" title="元素检查" @click="openElementInspector">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><path d="M8 21h8M12 17v4"/></svg>
         </button>
@@ -113,7 +125,8 @@
 import {computed, nextTick, onBeforeUnmount, ref, watch} from 'vue'
 import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from './stores/app'
-import {configAPI, sessionsAPI} from './services/api'
+import {configAPI, sessionsAPI, systemAPI} from './services/api'
+import {RELEASE_LATEST_URL} from './utils/constants'
 import {platform} from './services/platform'
 import SplashScreen from './components/SplashScreen.vue'
 import DesktopHome from './DesktopHome.vue'
@@ -150,6 +163,77 @@ const dragOverTabId = ref('')
 const host = ref(null)
 let resizeObserver = null
 let renderVersion = 0
+
+// 版本更新检查：启动后立即检查一次，之后每 30 分钟自动定时检查
+const UPDATE_CHECK_INTERVAL = 30 * 60 * 1000
+let updateCheckTimer = null
+const latestVersion = ref('')
+const hasNewVersion = ref(false)
+const releaseUrl = ref('')
+const checkingUpdate = ref(false)
+
+async function checkForUpdates() {
+  if (checkingUpdate.value) return
+  checkingUpdate.value = true
+  try {
+    const res = await systemAPI.checkLatestVersion()
+    if (res.success && res.data) {
+      latestVersion.value = res.data.latestVersion || ''
+      releaseUrl.value = res.data.releaseUrl || ''
+      // 对比桌面端（Electron）版本：桌面端版本 < 最新版本即提示更新
+      let desktopVersion = ''
+      if (platform.isElectron) {
+        try {
+          desktopVersion = await window.electronAPI.getElectronVersion()
+        } catch (error) {
+          console.warn('[desktop-shell] 获取桌面端版本失败:', error)
+        }
+      }
+      if (desktopVersion && desktopVersion !== '未知' && latestVersion.value) {
+        hasNewVersion.value = compareVersions(desktopVersion, latestVersion.value) < 0
+      } else {
+        // 非桌面环境（Web 模式）无桌面端版本，退化为核心服务版本对比
+        hasNewVersion.value = !!res.data.hasNewVersion
+      }
+    }
+  } catch (error) {
+    console.warn('[desktop-shell] 检查更新失败:', error)
+  } finally {
+    checkingUpdate.value = false
+  }
+}
+
+// 版本对比：支持 v 前缀与 1~4 段数字版本（与 electron/version.cjs 保持一致）
+function compareVersions(a, b) {
+  const pa = String(a || '').replace(/^v/i, '').split('.').map((part) => Number.parseInt(part, 10) || 0)
+  const pb = String(b || '').replace(/^v/i, '').split('.').map((part) => Number.parseInt(part, 10) || 0)
+  for (let i = 0; i < Math.max(pa.length, pb.length); i++) {
+    const na = pa[i] || 0
+    const nb = pb[i] || 0
+    if (na > nb) return 1
+    if (na < nb) return -1
+  }
+  return 0
+}
+
+// 无新版时点击手动检查；有新版本时点击跳转发布页
+function onUpdateButtonClick() {
+  if (hasNewVersion.value) void openReleasePage()
+  else void checkForUpdates()
+}
+
+async function openReleasePage() {
+  const url = (hasNewVersion.value && releaseUrl.value) || RELEASE_LATEST_URL
+  if (platform.isElectron) {
+    try {
+      await window.electronAPI.openExternal(url)
+    } catch {
+      window.open(url, '_blank')
+    }
+  } else {
+    window.open(url, '_blank')
+  }
+}
 
 const tabId = (workspaceHash, sessionName) => `${workspaceHash || ''}:${sessionName}`
 const tabTitle = (sessionName) => {
@@ -620,6 +704,9 @@ async function onReady() {
   await nextTick()
   resizeObserver = new ResizeObserver(() => { void renderActiveTab() })
   if (host.value) resizeObserver.observe(host.value)
+  // 启动后立即检查更新，并开启定时检查
+  void checkForUpdates()
+  updateCheckTimer = setInterval(() => { void checkForUpdates() }, UPDATE_CHECK_INTERVAL)
   if (await redirectToModelChannelsWhenUnconfigured()) return
   await initializeWorkspace()
 }
@@ -656,6 +743,10 @@ async function closeWindow() { await platform.implementation.window.close() }
 
 onBeforeUnmount(() => {
   resizeObserver?.disconnect()
+  if (updateCheckTimer) {
+    clearInterval(updateCheckTimer)
+    updateCheckTimer = null
+  }
   stopTitleListener?.()
   stopWorkspaceListener?.()
   stopOpenHomeListener?.()
@@ -700,7 +791,16 @@ onBeforeUnmount(() => {
 .desktop-tab-add { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 5px; flex: 0 0 auto; cursor: pointer; }
 .desktop-window-controls { height: 100%; display: flex; align-items: center; padding-right: 14px; flex: 0 0 auto; -webkit-app-region: no-drag; }
 .window-button { width: 44px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 5px; }
+.update-check-button.has-update { width: auto; padding: 0 12px; gap: 5px; background: rgba(59, 130, 246, 0.1); color: #2563eb; }
+.update-check-button.has-update:hover { background: rgba(59, 130, 246, 0.16); color: #1d4ed8; }
+.update-label { font-size: 12px; font-weight: 500; line-height: 1; }
+.update-dot { width: 5px; height: 5px; border-radius: 50%; background: #ff4d4f; flex: 0 0 auto; }
+.update-spinner { animation: update-spin 0.9s linear infinite; }
+@keyframes update-spin { to { transform: rotate(360deg); } }
+[data-theme="dark"] .update-check-button.has-update { background: rgba(96, 165, 250, 0.14); color: #93c5fd; }
+[data-theme="dark"] .update-check-button.has-update:hover { background: rgba(96, 165, 250, 0.22); color: #bfdbfe; }
 .window-button svg { width: 17px; height: 17px; }
+.update-check-button svg { width: 14px; height: 14px; }
 .window-button.close:hover { background: #e81123; color: #fff; }
 .minimize-mark { width: 13px; border-top: 1.5px solid currentColor; }
 .maximize-mark { width: 13px; height: 13px; border: 1.5px solid currentColor; border-radius: 2px; }
