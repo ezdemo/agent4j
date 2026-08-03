@@ -10,6 +10,15 @@ if (-not $root) { $root = Get-Location }
 # UTF8 without BOM to avoid breaking JSON parsers
 $utf8NoBom = New-Object System.Text.UTF8Encoding $false
 
+# For Electron-related files, only keep first 3 version parts (e.g. 26.8.3.2 -> 26.8.3)
+# electron-builder requires a valid semver (major.minor.patch), 4-part versions throw
+# "Invalid version" in app-builder-lib/out/util/normalizePackageData.js
+$versionParts = $Version.Split('.')
+$electronVersion = $versionParts[0..2] -join '.'
+if ($versionParts.Length -gt 3) {
+    Write-Host "[bump] Full version: $Version, Electron version (first 3 parts): $electronVersion"
+}
+
 Write-Host "[bump] Updating version to $Version"
 Write-Host ""
 
@@ -144,11 +153,11 @@ if ($c -ne $old) {
     Write-Host "  [OK] .release/setup-gui-mirror.ps1"
 } else { Write-Host "  [--] .release/setup-gui-mirror.ps1 (unchanged)" }
 
-# 9. loopra-front/package.json (Electron)
+# 9. loopra-front/package.json (Electron, semver 3-part only)
 $path = Join-Path $root "loopra-front/package.json"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
-$c = [regex]::Replace($c, '(?<="version"\s*:\s*")[\d.]+(?=")', $Version)
+$c = [regex]::Replace($c, '(?<="version"\s*:\s*")[\d.]+(?=")', $electronVersion)
 if ($c -ne $old) {
     $c = $c.TrimStart([char]0xFEFF)
     [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
