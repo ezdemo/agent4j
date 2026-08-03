@@ -253,7 +253,7 @@ LLM: workflow_step(action="done")
 
 ### 6.6 ⚠️ 遗漏：AgentLoop 系统提示词中的工具文档
 
-`loopra-bin/.../agent/core/AgentLoop.java` 的 system prompt 中（约第393-419行）硬编码了旧工具的说明文档：
+`loopra-model/.../agent/core/AgentLoop.java` 的 system prompt 中（约第393-419行）硬编码了旧工具的说明文档：
 
 ```
 ### workflow_create_dag — 创建工作流 DAG  ← ❌ 删除
@@ -319,13 +319,13 @@ WorkflowVisualizationDTO  WorkflowStatusDTO
 
 ### 6.9 ⚠️ 遗漏：WorkspaceManager 存储适配
 
-`loopra-bin/.../workspace/WorkspaceManager.java`（第125-130行）：
+`loopra-model/.../workspace/WorkspaceManager.java`（第125-130行）：
 - `getWorkflowStore()` 只返回 `JsonlWorkflowStore`（旧 DAG 持久化）
 - 需要新增 `SimpleWorkflow` 的存储方式（KV 模式即可，无需 JSONL）
 
 ### 6.10 ⚠️ 遗漏：测试文件 WorkflowTest.java
 
-`loopra-bin/src/test/.../workflow/WorkflowTest.java`（775行）：
+`loopra-bin/src/test/.../workflow/WorkflowTest.java`（775行；该测试已随本次工作流重构删除，loopra-bin 后亦拆分为 loopra-model 等模块）：
 - 14 个测试方法覆盖了旧 DAG 模型（节点状态、前驱后继、序列化、分支条件等）
 - **需要全部重写**为 Step 列表模型的测试（约 200 行即可）
 

@@ -15,7 +15,9 @@
     <packaging>pom</packaging>
 
     <modules>
-        <module>loopra-bin</module>
+        <module>loopra-model</module>
+        <module>loopra-harness</module>
+        <module>loopra-acp</module>
         <module>loopra-web</module>
     </modules>
 
