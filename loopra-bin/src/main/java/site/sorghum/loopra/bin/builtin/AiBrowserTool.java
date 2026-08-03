@@ -61,14 +61,22 @@ public class AiBrowserTool extends AbsToolProvider implements SolonToTools {
 
     @ToolMapping(name = "browser_screenshot", description = """
             等待指定标签页成功加载后，返回清洗后的结构化 HTML 页面快照及当前可见视口的图片；页面加载失败或超过 30 秒会返回明确错误。
+            视口截图仅在当前模型支持图片输入时附带；否则只返回结构化快照，不会附带图片。
             结果中的 elements 是优先使用的可操作元素列表，会识别原生控件、ARIA 控件、可聚焦元素、开放 Shadow DOM 和 cursor:pointer 的自定义控件；每项含可访问名称、表单状态、坐标、是否可见/被遮挡及所在上下文。
             overlays 和 notices 分别表示当前弹层/下拉框与提示错误，优先处理；viewport 表示页面滚动状态。html 是经过深度、节点数和无效节点过滤的辅助 DOM 树。密码输入值不会返回。
             每次快照返回 snapshotId。调用 browser_act 时应同时传入该 snapshotId；页面变化后必须重新调用本工具。
             """)
     public String screenshot(@Param(name = "tabId", description = "目标标签页 ID；为空时使用当前激活标签页", required = false) String tabId,
                              ToolContext ctx) {
-        String result = call("screenshot", new ONode().set("tabId", safe(tabId)));
-        if (result.startsWith("BROWSER_UNAVAILABLE:")) return result;
+        return postProcessScreenshot(call("screenshot", new ONode().set("tabId", safe(tabId))), ctx);
+    }
+
+    /**
+     * 根据当前模型的图片输入能力处理截图结果：
+     * 支持或无法判断时附带截图图片；明确不支持时去除图片，仅回传结构化快照。
+     */
+    static String postProcessScreenshot(String result, ToolContext ctx) {
+        if (result == null || result.startsWith("BROWSER_UNAVAILABLE:")) return result;
         try {
             ONode data = ONode.ofJson(result).get("data");
             String imageUrl = data.get("imageUrl").getString();
@@ -76,6 +84,10 @@ public class AiBrowserTool extends AbsToolProvider implements SolonToTools {
             String detail = data.get("imageDetail").getString();
             data.remove("imageUrl");
             data.remove("imageDetail");
+            if (!ImageReadTool.supportsImageInput(ctx)) {
+                data.set("imageOmitted", "当前模型不支持图片输入，未附带视口截图，请依据 elements 和 html 理解页面");
+                return data.toJson();
+            }
             return ImageReadTool.imageResult(data.toJson(), imageUrl, detail);
         } catch (Exception e) {
             return result;
