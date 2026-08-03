@@ -1,6 +1,8 @@
 package site.sorghum.loopra.web.controller;
 
 import org.junit.jupiter.api.Test;
+import site.sorghum.loopra.web.model.WorkspaceInfoDTO;
+import site.sorghum.loopra.web.service.AgentService;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -10,99 +12,64 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * 工作区排序逻辑单元测试。
+ * 工作区排序合并逻辑单元测试。
+ * <p>
+ * 验证 {@link AgentService#applyWorkspaceOrder(List, List)}：
+ * 已保存排序的 hash 按顺序在前，新工作区追加到末尾，已删除的 hash 被忽略。
  */
 class WorkspaceOrderTest {
 
-    @Test
-    void emptyOrderShouldReturnEmptyList() {
-        List<String> order = new ArrayList<>();
-        assertNotNull(order);
-        assertTrue(order.isEmpty());
+    private static WorkspaceInfoDTO workspace(String hash) {
+        return new WorkspaceInfoDTO(hash, "ws-" + hash, "/path/" + hash, 0, 0, 0);
+    }
+
+    private static List<String> hashes(List<WorkspaceInfoDTO> workspaces) {
+        List<String> result = new ArrayList<>();
+        for (WorkspaceInfoDTO workspace : workspaces) {
+            result.add(workspace.hash());
+        }
+        return result;
     }
 
     @Test
-    void orderListShouldMaintainInsertionOrder() {
-        List<String> order = new ArrayList<>(Arrays.asList("hash3", "hash1", "hash2"));
-        assertEquals("hash3", order.get(0));
-        assertEquals("hash1", order.get(1));
-        assertEquals("hash2", order.get(2));
-        assertEquals(3, order.size());
+    void emptyOrderShouldReturnOriginalList() {
+        List<WorkspaceInfoDTO> workspaces = Arrays.asList(workspace("h1"), workspace("h2"), workspace("h3"));
+        assertEquals(workspaces, AgentService.applyWorkspaceOrder(workspaces, Collections.emptyList()));
+        assertEquals(workspaces, AgentService.applyWorkspaceOrder(workspaces, null));
+    }
+
+    @Test
+    void orderListShouldMaintainSavedOrder() {
+        List<WorkspaceInfoDTO> workspaces = Arrays.asList(workspace("h1"), workspace("h2"), workspace("h3"));
+        List<WorkspaceInfoDTO> result = AgentService.applyWorkspaceOrder(workspaces, Arrays.asList("h3", "h1", "h2"));
+        assertEquals(Arrays.asList("h3", "h1", "h2"), hashes(result));
     }
 
     @Test
     void orderListShouldAllowReorder() {
-        List<String> order = new ArrayList<>(Arrays.asList("hash1", "hash2", "hash3"));
-
-        String item = order.remove(2);
-        order.add(0, item);
-
-        assertEquals("hash3", order.get(0));
-        assertEquals("hash1", order.get(1));
-        assertEquals("hash2", order.get(2));
+        List<WorkspaceInfoDTO> workspaces = Arrays.asList(workspace("h1"), workspace("h2"), workspace("h3"));
+        List<WorkspaceInfoDTO> result = AgentService.applyWorkspaceOrder(workspaces, Arrays.asList("h3", "h1", "h2"));
+        assertEquals(Arrays.asList("h3", "h1", "h2"), hashes(result));
     }
 
     @Test
     void orderListShouldFilterUnknownHashes() {
-        List<String> savedOrder = Arrays.asList("hash1", "unknown", "hash2");
-        List<String> validHashes = Arrays.asList("hash1", "hash2", "hash3");
-
-        List<String> result = new ArrayList<>();
-        for (String h : savedOrder) {
-            if (validHashes.contains(h)) {
-                result.add(h);
-            }
-        }
-
-        assertEquals(2, result.size());
-        assertEquals("hash1", result.get(0));
-        assertEquals("hash2", result.get(1));
+        List<WorkspaceInfoDTO> workspaces = Arrays.asList(workspace("h1"), workspace("h2"), workspace("h3"));
+        List<WorkspaceInfoDTO> result = AgentService.applyWorkspaceOrder(workspaces, Arrays.asList("h1", "unknown", "h2"));
+        assertEquals(Arrays.asList("h1", "h2", "h3"), hashes(result));
     }
 
     @Test
     void newItemsShouldBeAppendedToEnd() {
-        List<String> savedOrder = Arrays.asList("hash1", "hash2");
-        List<String> allHashes = Arrays.asList("hash1", "hash2", "hash3", "hash4");
-
-        List<String> result = new ArrayList<>();
-        for (String h : savedOrder) {
-            if (allHashes.contains(h)) {
-                result.add(h);
-            }
-        }
-        for (String h : allHashes) {
-            if (!result.contains(h)) {
-                result.add(h);
-            }
-        }
-
-        assertEquals(4, result.size());
-        assertEquals("hash1", result.get(0));
-        assertEquals("hash2", result.get(1));
-        assertEquals("hash3", result.get(2));
-        assertEquals("hash4", result.get(3));
+        List<WorkspaceInfoDTO> workspaces = Arrays.asList(workspace("h1"), workspace("h2"), workspace("h3"), workspace("h4"));
+        List<WorkspaceInfoDTO> result = AgentService.applyWorkspaceOrder(workspaces, Arrays.asList("h1", "h2"));
+        assertEquals(Arrays.asList("h1", "h2", "h3", "h4"), hashes(result));
     }
 
     @Test
     void emptySavedOrderShouldReturnAllItems() {
-        List<String> savedOrder = Collections.emptyList();
-        List<String> allHashes = Arrays.asList("hash1", "hash2", "hash3");
-
-        List<String> result = new ArrayList<>();
-        for (String h : savedOrder) {
-            if (allHashes.contains(h)) {
-                result.add(h);
-            }
-        }
-        for (String h : allHashes) {
-            if (!result.contains(h)) {
-                result.add(h);
-            }
-        }
-
-        assertEquals(3, result.size());
-        assertEquals("hash1", result.get(0));
-        assertEquals("hash2", result.get(1));
-        assertEquals("hash3", result.get(2));
+        List<WorkspaceInfoDTO> workspaces = Arrays.asList(workspace("h1"), workspace("h2"), workspace("h3"));
+        List<WorkspaceInfoDTO> result = AgentService.applyWorkspaceOrder(workspaces, Collections.emptyList());
+        assertEquals(Arrays.asList("h1", "h2", "h3"), hashes(result));
     }
 }

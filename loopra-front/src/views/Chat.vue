@@ -1208,11 +1208,12 @@ const sendChoice = async (value, block) => {
     const opt = (block.options || []).find(o => o.value === value)
     block.selectedTitle = opt ? opt.title : value
   }
-  // 清理当前消息中已拦截的 tool_call 块（避免与重放执行重复）
+  // 只清理本轮拦截、尚未执行的 tool_call 块（无 result），
+  // 保留已完成（有结果）的历史工具卡片，避免连续审批时误删上一轮的工具渲染。
   const last = messages.value[messages.value.length - 1]
   if (last?.role === 'assistant' && last.blocks) {
     last.blocks = last.blocks.filter(b =>
-        b === block || b.type !== 'tool_call'
+        b === block || b.type !== 'tool_call' || b.result
     )
   }
   inputText.value = value
