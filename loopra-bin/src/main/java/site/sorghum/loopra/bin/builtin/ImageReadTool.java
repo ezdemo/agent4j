@@ -4,7 +4,12 @@ import org.noear.solon.ai.annotation.ToolMapping;
 import org.noear.solon.ai.chat.tool.AbsToolProvider;
 import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
+import org.noear.solon.annotation.Inject;
 import org.noear.solon.annotation.Param;
+import site.sorghum.loopra.bin.model.ModalitySupport;
+import site.sorghum.loopra.bin.model.ModelClient;
+import site.sorghum.loopra.bin.model.ModelModalityProvider;
+import site.sorghum.loopra.tool.AgentLoopController;
 import site.sorghum.loopra.tool.ToolContext;
 import site.sorghum.loopra.tool.solon.SolonToTools;
 
@@ -25,6 +30,11 @@ import java.util.Map;
 @Component
 public class ImageReadTool extends AbsToolProvider implements SolonToTools {
     private static final long MAX_IMAGE_BYTES = 5L * 1024 * 1024;
+
+    /** 模型多模态支持提供者（Solon 注入，无容器环境为 null 时不做能力拦截）。 */
+    @Inject
+    public static ModelModalityProvider modalityProvider;
+
     private static final String RESULT_PREFIX = "__LOOPRA_IMAGE_RESULT__\n";
     private static final Map<String, String> MIME_TYPES = Map.of(
             "png", "image/png",
@@ -57,6 +67,12 @@ public class ImageReadTool extends AbsToolProvider implements SolonToTools {
             return "PARAM_INVALID: provide only one of file_path, base64, or url";
         }
 
+        // 模型不支持图片输入时工具不可用，避免生成模型无法接收的图片消息。
+        String blocked = modelImageSupportBlocked(ctx);
+        if (blocked != null) {
+            return "MODEL_NOT_SUPPORTED: " + blocked;
+        }
+
         try {
             ImageData image = !isBlank(filePath) ? readPath(filePath, ctx)
                     : !isBlank(base64) ? decodeBase64(base64) : downloadUrl(url);
@@ -82,6 +98,25 @@ public class ImageReadTool extends AbsToolProvider implements SolonToTools {
     /** Preserves the former direct Java API for callers that only read a workspace image. */
     public String readImage(String filePath, String detail, ToolContext ctx) {
         return readImage(filePath, null, null, detail, ctx);
+    }
+
+    /**
+     * 检查当前模型是否支持图片输入。
+     * 不支持时返回错误描述；支持或无法判断（无控制器/无客户端/无提供者）时返回 {@code null}。
+     */
+    private static String modelImageSupportBlocked(ToolContext ctx) {
+        if (ctx == null) return null;
+        AgentLoopController controller = ctx.getLoopController();
+        if (controller == null) return null;
+        ModelClient client = controller.getModelClient();
+        if (client == null) return null;
+        ModelModalityProvider provider = modalityProvider;
+        if (provider == null) return null;
+        ModalitySupport support = provider.getModalitySupport(client.getModelChannelId(), client.getModel());
+        if (support != null && !support.imageInput()) {
+            return "当前模型（" + client.getModel() + "）不支持图片输入，read_image 工具不可用";
+        }
+        return null;
     }
 
     public static String imageResult(String summary, String dataUri, String detail) {
