@@ -3,7 +3,7 @@ package site.sorghum.loopra.bin.agent.core;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
-import site.sorghum.loopra.bin.config.LoopraConfig;
+import site.sorghum.loopra.bin.agent.spi.AgentConfig;
 import site.sorghum.loopra.bin.model.HttpModelClient;
 import site.sorghum.loopra.bin.model.ModelClient;
 
@@ -37,11 +37,11 @@ final class ToolCallValidator {
         this.configurationError = configurationError;
     }
 
-    static ToolCallValidator fromConfig(LoopraConfig config, Path workspace) {
+    static ToolCallValidator fromConfig(AgentConfig config, Path workspace) {
         if (config == null || config.validationModel().isBlank()) {
             return new ToolCallValidator(null, workspace, null);
         }
-        LoopraConfig.ModelChannel channel = config.validationModelChannel();
+        AgentConfig.Channel channel = config.validationModelChannel();
         if (channel == null) {
             return new ToolCallValidator(null, workspace, "校验模型渠道不存在");
         }

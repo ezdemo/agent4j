@@ -4,7 +4,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.tool.FunctionTool;
-import site.sorghum.loopra.bin.config.ConfigService;
+import site.sorghum.loopra.bin.agent.spi.ToolPolicyProvider;
 
 import java.nio.file.Path;
 import java.util.*;
@@ -30,8 +30,20 @@ public class ToolRegistry {
 
     /** 静态快照（setDisabledTools 方式设置时使用，兼容 CLI/测试） */
     private Set<String> disabledToolsSnapshot = Collections.emptySet();
-    /** true=使用静态快照，false=使用 ConfigService 实时读取 */
+    /** true=使用静态快照，false=使用 ToolPolicyProvider 实时读取 */
     private boolean useSnapshot = false;
+
+    /** 工具启用策略提供者（由上层注入，替代对 ConfigService 的直接依赖）；可为 null。 */
+    @Getter
+    private ToolPolicyProvider toolPolicyProvider;
+
+    /**
+     * 设置工具启用策略提供者（禁用工具 + 只读覆盖的实时来源）。
+     */
+    public ToolRegistry setToolPolicyProvider(ToolPolicyProvider toolPolicyProvider) {
+        this.toolPolicyProvider = toolPolicyProvider;
+        return this;
+    }
 
     /**
      * 强制禁止的工具名集合 — 独立于用户配置的 disabledTools。
@@ -66,11 +78,11 @@ public class ToolRegistry {
 
     /**
      * 获取当前生效的禁用工具列表。
-     * 优先使用 ConfigService 实时读取，否则回退到静态快照。
+     * 快照模式优先；否则回退到 ToolPolicyProvider 实时读取，未注入时用快照。
      */
     private Set<String> getCurrentDisabledTools() {
-        if (!useSnapshot) {
-            return ConfigService.getDisabledTools();
+        if (!useSnapshot && toolPolicyProvider != null) {
+            return toolPolicyProvider.disabledTools();
         }
         return disabledToolsSnapshot;
     }
@@ -126,7 +138,9 @@ public class ToolRegistry {
      */
     public void refresh() {
         Set<String> disabled = getCurrentDisabledTools();
-        Map<String, Boolean> readOnlyOverrides = ConfigService.getToolReadOnlyOverrides();
+        Map<String, Boolean> readOnlyOverrides = toolPolicyProvider != null
+                ? toolPolicyProvider.toolReadOnlyOverrides()
+                : Collections.emptyMap();
         functionToolMap.clear();
         allScannedTools.clear();
         cachedOpenAiTools = null; // 失效缓存
@@ -188,6 +202,8 @@ public class ToolRegistry {
                 ? Collections.emptySet()
                 : new HashSet<>(this.forceDenyTools);
         copy.forceAllowTools = this.forceAllowTools == null ? null : new HashSet<>(this.forceAllowTools);
+        // 复制工具策略提供者（实时禁用/只读来源）
+        copy.toolPolicyProvider = this.toolPolicyProvider;
         // 复制刷新上下文
         copy.workspace = this.workspace;
         copy.apiUrl = this.apiUrl;

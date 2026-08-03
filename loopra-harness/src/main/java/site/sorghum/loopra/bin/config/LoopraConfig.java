@@ -6,6 +6,7 @@ import org.noear.snack4.Feature;
 import org.noear.snack4.ONode;
 import org.noear.snack4.Options;
 import org.noear.snack4.json.JsonWriter;
+import site.sorghum.loopra.bin.agent.spi.AgentConfig;
 
 import java.io.IOException;
 import java.nio.file.*;
@@ -20,7 +21,7 @@ import java.util.stream.Collectors;
  * @author Sorghum
  */
 @Slf4j
-public class LoopraConfig {
+public class LoopraConfig implements AgentConfig {
 
     private static volatile LoopraConfig INSTANCE;
 
@@ -439,7 +440,7 @@ public class LoopraConfig {
 
     /** 配置文件中的单个模型渠道。models() 保持名称列表以兼容已有调用。 */
     public record ModelChannel(String id, String name, String baseUrl, String apiKey, String apiProtocol,
-                               List<ModelEntry> modelEntries) {
+                               List<ModelEntry> modelEntries) implements AgentConfig.Channel {
         public ModelChannel(String id, String name, String baseUrl, String apiKey, List<ModelEntry> modelEntries) {
             this(id, name, baseUrl, apiKey, "chat_completions", modelEntries);
         }
@@ -474,7 +475,8 @@ public class LoopraConfig {
     }
 
     /** 配置文件中的单个模型条目。价格单位为每百万 token 的人民币金额。 */
-    public record ModelEntry(String name, int contextTokens, boolean imageInput, Map<String, Double> price) {
+    public record ModelEntry(String name, int contextTokens, boolean imageInput, Map<String, Double> price)
+            implements AgentConfig.Entry {
         public ModelEntry {
             name = trim(name);
             contextTokens = contextTokens > 0 ? contextTokens : -1;

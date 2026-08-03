@@ -2,7 +2,7 @@ package site.sorghum.loopra.bin.agent.resilient;
 
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
-import site.sorghum.loopra.bin.config.LoopraConfig;
+import site.sorghum.loopra.bin.agent.spi.AgentConfig;
 
 import java.util.LinkedList;
 
@@ -28,7 +28,7 @@ public class StormBreaker {
         this.threshold = Math.max(1, threshold);
     }
 
-    public static StormBreaker fromConfig(LoopraConfig config) {
+    public static StormBreaker fromConfig(AgentConfig config) {
         if (config == null) {
             return new StormBreaker();
         }

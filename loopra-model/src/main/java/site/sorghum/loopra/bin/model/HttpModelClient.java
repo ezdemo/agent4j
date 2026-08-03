@@ -7,7 +7,7 @@ import okhttp3.*;
 import org.noear.snack4.ONode;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
-import site.sorghum.loopra.bin.config.UserIdProvider;
+import site.sorghum.loopra.bin.util.UserIdProvider;
 
 import java.io.BufferedReader;
 import java.io.IOException;

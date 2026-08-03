@@ -10,9 +10,9 @@ import org.noear.solon.annotation.Param;
 import site.sorghum.loopra.bin.agent.core.SubAgent;
 import site.sorghum.loopra.bin.agent.output.ParentOutputHolder;
 import site.sorghum.loopra.bin.config.LoopraConfig;
+import site.sorghum.loopra.bin.agent.spi.SessionUsageSink;
 import site.sorghum.loopra.bin.model.HttpModelClient;
 import site.sorghum.loopra.bin.model.ModelClient;
-import site.sorghum.loopra.bin.session.SessionService;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.tool.AgentLoopController;
 import site.sorghum.loopra.tool.AgentOutput;
@@ -153,20 +153,20 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
                 if (parentSessionId != null) {
                     sub.setSessionId(parentSessionId);
                 }
-                SessionService parentSessionService = (parentController != null) ? parentController.getSessionService() : null;
-                if (parentSessionService != null) {
-                    sub.setSessionService(parentSessionService);
+                SessionUsageSink parentSink = (parentController != null) ? parentController.getSessionUsageSink() : null;
+                if (parentSink != null) {
+                    sub.setSessionUsageSink(parentSink);
                 }
 
                 String result = sub.run(task, new SubAgentListener());
 
                 // 子代理的 token 用量通过 SubAgent 的 capturingListener 累积到 SubAgent 字段中，
-                // 此处将其上报到父会话的 sessionService（累加到会话总用量）。
-                if (sub.hasUsage() && parentSessionService != null) {
+                // 此处将其上报到父会话的用量通道（累加到会话总用量）。
+                if (sub.hasUsage() && parentSink != null) {
                     var usage = sub.getModelUsage();
                     for (var e : usage.entrySet()) {
                         long[] u = e.getValue();
-                        parentSessionService.addUsage(e.getKey(), (int) u[0], (int) u[1], (int) u[2], (int) u[3]);
+                        parentSink.addUsage(e.getKey(), (int) u[0], (int) u[1], (int) u[2], (int) u[3]);
                     }
                 }
 

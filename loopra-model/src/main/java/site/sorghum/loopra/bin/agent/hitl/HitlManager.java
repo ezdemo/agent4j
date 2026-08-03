@@ -5,7 +5,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import site.sorghum.loopra.bin.agent.model.HitlState;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
-import site.sorghum.loopra.bin.config.LoopraConfig;
+import site.sorghum.loopra.bin.agent.spi.AgentConfig;
 import site.sorghum.loopra.tool.AgentOutput;
 import site.sorghum.loopra.tool.ChoiceOption;
 
@@ -51,6 +51,20 @@ public class HitlManager {
 
     /** HITL 模式（free / approval / auto） */
     private volatile String hitlMode = MODE_FREE;
+
+    /** 配置视图（提供 auto 模式白名单）；可为 null，此时白名单为空。 */
+    private volatile AgentConfig config;
+
+    /**
+     * 注入配置视图（由 AgentLoop 构造后设置），用于 auto 模式读取白名单。
+     */
+    public void setConfig(AgentConfig config) {
+        this.config = config;
+    }
+
+    private List<String> currentAutoWhitelist() {
+        return config == null ? List.of() : config.autoWhitelist();
+    }
 
     /** HITL 当前审批状态 */
     private volatile HitlState hitlState = HitlState.NONE;
@@ -205,7 +219,7 @@ public class HitlManager {
      */
     public boolean requiresHITL(ONode toolCalls) {
         List<String> whitelist = MODE_AUTO.equals(hitlMode)
-                ? LoopraConfig.getInstance().autoWhitelist()
+                ? currentAutoWhitelist()
                 : List.of();
         return requiresHITL(toolCalls, whitelist);
     }
@@ -242,7 +256,7 @@ public class HitlManager {
         List<ToolCallEntry> tcList = parseToolCalls(toolCalls);
 
         List<String> whitelist = MODE_AUTO.equals(hitlMode)
-                ? LoopraConfig.getInstance().autoWhitelist()
+                ? currentAutoWhitelist()
                 : List.of();
         if (!requiresHITL(tcList, whitelist)) {
             return null;

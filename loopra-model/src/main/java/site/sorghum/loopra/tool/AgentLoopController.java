@@ -1,8 +1,8 @@
 package site.sorghum.loopra.tool;
 
-import site.sorghum.loopra.bin.config.LoopraConfig;
+import site.sorghum.loopra.bin.agent.spi.AgentConfig;
+import site.sorghum.loopra.bin.agent.spi.SessionUsageSink;
 import site.sorghum.loopra.bin.model.ModelClient;
-import site.sorghum.loopra.bin.session.SessionService;
 
 /**
  * AgentLoop 控制接口 —— 工具通过此接口影响推理循环的控制流。
@@ -85,10 +85,10 @@ public interface AgentLoopController {
     <T>T getToolRegistry();
 
     /**
-     * 获取会话管理服务（可为 null，表示无会话持久化）。
+     * 获取会话用量上报通道（可为 null，表示无会话持久化）。
      * <p>子代理通过此接口向父会话上报 token 用量。</p>
      */
-    default SessionService getSessionService() {
+    default SessionUsageSink getSessionUsageSink() {
         return null;
     }
 
@@ -98,16 +98,16 @@ public interface AgentLoopController {
     }
 
     /** 获取当前循环配置，供子代理继承超时等运行参数。 */
-    default LoopraConfig getAgentConfig() {
+    default AgentConfig getAgentConfig() {
         return null;
     }
 
     /**
      * 无工具调用时是否直接结束本轮对话。
-     * 默认从静态配置读取；AgentLoop 可覆盖此方法以支持运行时热更新。
+     * 默认从配置视图读取；AgentLoop 可覆盖此方法以支持运行时热更新。
      */
     default boolean terminateOnNoToolCall() {
-        LoopraConfig config = getAgentConfig();
+        AgentConfig config = getAgentConfig();
         return config == null || config.terminateOnNoToolCall();
     }
 

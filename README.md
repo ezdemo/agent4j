@@ -270,9 +270,9 @@ pnpm dev:electron
 
 ```text
 loopra/
-├── loopra-model/    # 内核（可独立发包）：ChatModel 客户端/协议、Agent 推理循环、工具基础抽象、会话/配置/Goal/Checklist/工作区
-├── loopra-harness/  # 工具装备（可独立发包，依赖 loopra-model）：内置工具、MCP/LSP/OpenAPI/Skill 技能桥接、定时任务
-├── loopra-acp/      # ACP 支持（可独立发包，依赖 loopra-model）：将 Agent 注册为 ACP Agent（stdio/WebSocket）
+├── loopra-model/    # 纯内核（可独立发包）：ChatModel 客户端/协议、AgentLoop/SubAgent 推理循环、工具抽象与 SPI（AgentConfig/GoalGuard 等），不含任何编排设施
+├── loopra-harness/  # 工具装备 + 编排设施（可独立发包，依赖 loopra-model）：LoopraAgent 门面、内置工具、Goal/Checklist/工作区/命令/会话持久化/配置、MCP/LSP/OpenAPI/Skill 技能桥接、定时任务
+├── loopra-acp/      # ACP 支持（可独立发包，依赖 loopra-harness）：将 Agent 注册为 ACP Agent（stdio/WebSocket）
 ├── loopra-web/      # Solon Web 服务、REST/SSE 接口和打包配置（聚合上述模块）
 ├── loopra-front/    # Vue 前端与 Electron Desktop
 ├── intro/           # 官网内容
@@ -285,17 +285,17 @@ loopra/
 ### 模块依赖关系
 
 ```text
-loopra-model   ← loopra-harness（内置工具/MCP/Skill）
+loopra-model   ← loopra-harness（LoopraAgent/内置工具/Goal/工作区/MCP/Skill）
      ↑
-     └────────← loopra-acp（ACP 注册）
+     └────────← loopra-acp（ACP 注册，经 loopra-harness）
 
-loopra-web     ← 聚合 loopra-model + loopra-harness + loopra-acp
+loopra-web     ← 聚合 loopra-harness + loopra-acp（传递引入 loopra-model）
 ```
 
 `loopra-model`、`loopra-harness`、`loopra-acp` 均为独立 Maven 模块，可单独发布供外部服务/工具复用：
 
-- 只需基础 ChatModel / Agent 推理能力 → 依赖 `loopra-model`
-- 需要开箱即用的内置工具与 MCP/Skill → 追加依赖 `loopra-harness`
+- 只需基础 ChatModel / AgentLoop 推理内核 → 依赖 `loopra-model`（不含 Goal/工作区/会话持久化等编排设施，通过 SPI 自行装配）
+- 需要开箱即用的 LoopraAgent、内置工具与 Goal/工作区/MCP/Skill → 追加依赖 `loopra-harness`
 - 需要把 Agent 暴露为 ACP Agent → 追加依赖 `loopra-acp`
 
 ## 技术栈

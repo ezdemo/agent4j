@@ -6,6 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import site.sorghum.loopra.bin.agent.context.ConversationContext;
 import site.sorghum.loopra.bin.agent.context.MessageHealer;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.spi.SessionUsageSink;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -24,7 +25,7 @@ import java.util.regex.Pattern;
  * @author Sorghum
  */
 @Slf4j
-public class SessionService {
+public class SessionService implements SessionUsageSink {
 
     private static final Pattern LEADING_COLLAPSIBLE_USER_BLOCK = Pattern.compile(
             "^```折叠块[ \\t]*\\r?\\n[\\s\\S]*?\\r?\\n```(?:\\r?\\n)*");
