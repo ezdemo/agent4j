@@ -1,13 +1,13 @@
 #!/bin/bash
 #
-# Loopra Desktop Web Installer (Mirror via Gitee)
-# Usage: curl -fsSL https://gitee.com/ezdemo/loopra/releases/download/v26.8.3.1/setup-gui-mirror.sh | bash
+# Loopra Desktop Web Installer (Mirror via GitHub + gh-proxy)
+# Usage: curl -fsSL https://gh-proxy.org/https://github.com/ezdemo/loopra/releases/download/v26.8.3.1/setup-gui-mirror.sh | bash
 #
 
 set -euo pipefail
 
 VERSION="v26.8.3.2"
-PACKAGE_URL="https://gitee.com/ezdemo/loopra/releases/download/${VERSION}/loopra-web-dist.tar.gz"
+PACKAGE_URL="https://gh-proxy.org/https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-web-dist.tar.gz"
 TEMP_DIR="/tmp/loopra-gui-install"
 
 RED='\033[0;31m'
@@ -29,7 +29,7 @@ cleanup() {
 trap cleanup EXIT
 mkdir -p "$TEMP_DIR"
 
-info "Downloading Loopra Desktop runtime ${VERSION} via Gitee mirror..."
+info "Downloading Loopra Desktop runtime ${VERSION} via GitHub mirror (gh-proxy)..."
 
 if command -v curl &> /dev/null; then
     curl -fsSL "$PACKAGE_URL" -o "$TEMP_DIR/package.tar.gz"
