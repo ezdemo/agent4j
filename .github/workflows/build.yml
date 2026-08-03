@@ -28,14 +28,17 @@ jobs:
           - os: macos-latest
             builder_flag: --mac
             artifact_name: Loopra-mac
+            upload_pattern: 'loopra-front/release/*.zip'
 
           - os: ubuntu-latest
             builder_flag: --linux
             artifact_name: Loopra-linux
+            upload_pattern: 'loopra-front/release/*.deb'
 
           - os: windows-latest
             builder_flag: --win
             artifact_name: Loopra-win
+            upload_pattern: 'loopra-front/release/*.exe'
 
     runs-on: ${{ matrix.os }}
 
@@ -94,7 +97,8 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.artifact_name }}
-          path: loopra-front/release/
+          path: ${{ matrix.upload_pattern }}
+          if-no-files-found: error
           retention-days: 7
 
   # ──────────────────────────────────────────────
@@ -174,9 +178,9 @@ jobs:
 
             请根据你的操作系统下载对应的安装包：
 
-            - **macOS** → `Loopra-mac/*.zip`
-            - **Windows** → `Loopra-win/*.exe`
-            - **Linux** → `Loopra-linux/*.deb`
+            - **macOS**（Apple Silicon）→ `Loopra-*.zip`
+            - **Windows** → `Loopra Setup *.exe`
+            - **Linux** → `loopra-front_*.deb`
             - **Web** → `loopra-web-dist.tar.gz`
           draft: true
           prerelease: false
