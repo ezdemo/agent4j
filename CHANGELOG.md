@@ -21,6 +21,8 @@
 
 ### Changed
 
+- 🔄 **模块化重构**：原 `loopra-bin` 拆分为三个可独立发布的 Maven 模块 —— `loopra-model`（内核：ChatModel 客户端/协议、Agent 推理循环、工具基础抽象、会话/配置/Goal/Checklist/工作区）、`loopra-harness`（内置工具与 MCP/LSP/OpenAPI/Skill 技能桥接、定时任务）、`loopra-acp`（将 Agent 注册为 ACP Agent）；`loopra-web` 聚合上述模块，功能不变
+- 🔄 内核与上层解耦：工具扫描改为 `ToolScanProvider` SPI（harness 启动时安装），图片结果改由 `ImageToolResult` 文本协议传递，父代理输出经 `ParentOutputHolder` 线程桥接，`loopra-model` 不再依赖任何上层模块
 - 🔄 工具校验模型自身故障（超时、调用异常等）时不再直接判定拒绝，改为回退人工审批由用户决定是否执行
 - 🔄 安装脚本与 README 下载地址从 Gitee 迁移至 GitHub 发布源，国内用户可选用新增的 Gitee 镜像脚本
 - 🔄 桌面端将后端返回的相对资源路径统一解析为完整 URL（`resolveApiUrl`），修复 `file://` 协议下宠物 spritesheet 加载失败
