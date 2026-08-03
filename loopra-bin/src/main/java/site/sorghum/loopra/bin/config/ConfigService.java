@@ -3,11 +3,15 @@ package site.sorghum.loopra.bin.config;
 import lombok.Data;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
+import org.noear.snack4.ONode;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
 import site.sorghum.loopra.bin.workspace.WorkspaceManager;
 
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.*;
 
 /**
@@ -171,6 +175,34 @@ public class ConfigService {
         Set<String> current = new LinkedHashSet<>(config.autoWhitelist());
         current.removeAll(toolNames);
         setAutoWhitelist(current);
+    }
+
+    // ==================== 工作区排序 ====================
+
+    /**
+     * 获取用户保存的工作区排序（hash 有序列表）。
+     * 未保存过排序或读取失败时返回空列表，调用方应回退到默认顺序。
+     */
+    public static List<String> getWorkspaceOrder() {
+        try {
+            Path configPath = LoopraConfig.getConfigPath();
+            if (Files.exists(configPath)) {
+                String json = new String(Files.readAllBytes(configPath), StandardCharsets.UTF_8);
+                ONode node = ONode.ofJson(json);
+                ONode orderNode = node.get("workspaceOrder");
+                if (orderNode != null && orderNode.isArray()) {
+                    List<String> order = new ArrayList<>();
+                    for (ONode item : orderNode.getArray()) {
+                        String s = item.getString();
+                        if (s != null) order.add(s);
+                    }
+                    return order;
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[config] 读取工作区排序失败，返回空排序: {}", e.getMessage());
+        }
+        return Collections.emptyList();
     }
 
     // ==================== 通用配置更新 ====================

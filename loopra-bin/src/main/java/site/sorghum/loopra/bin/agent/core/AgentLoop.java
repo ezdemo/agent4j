@@ -809,12 +809,22 @@ public class AgentLoop implements AgentLoopController {
             if (hitlManager.isHitlMode() && hitlManager.requiresHITL(toolCalls)) {
                 if (toolCallValidator.enabled()) {
                     ToolCallValidator.Decision decision = validateHITLToolCalls(toolCalls);
-                    if (decision.requiresHuman()) {
-                        hitlManager.setSandboxPending(toolCalls, decision.reason());
-                        hitlManager.storeSandboxContent(sr.content(), sr.reasoningContent());
-                        return hitlManager.interceptForSandboxHITL(output);
+                if (decision.requiresHuman()) {
+                    hitlManager.setSandboxPending(toolCalls, decision.reason());
+                    hitlManager.storeSandboxContent(sr.content(), sr.reasoningContent());
+                    return hitlManager.interceptForSandboxHITL(output);
+                }
+                if (decision.failed()) {
+                    // 校验模型调用失败（如超时）：回退到人工审批，由用户决定是否执行。
+                    safeOutput("toolValidator", () -> output.onLog(LogLevel.WARN,
+                            "[tool-validator] " + decision.reason() + "，回退人工审批"));
+                    String hitlPrompt = hitlManager.interceptForHITL(
+                            toolCalls, sr.content(), sr.reasoningContent(), output);
+                    if (hitlPrompt != null) {
+                        return hitlPrompt;
                     }
-                    if (!decision.allowed()) {
+                }
+                if (!decision.allowed()) {
                         String denyMsg = "工具调用未通过 AI 审批: " + decision.reason();
                         safeOutput("toolValidator", () -> output.onLog(LogLevel.WARN,
                                 "[tool-validator] " + denyMsg));
@@ -1450,6 +1460,10 @@ public class AgentLoop implements AgentLoopController {
                     toolCall.getName(), ONode.ofBean(toolCall.getArguments()).toJson());
             if (decision.requiresHuman()) {
                 return ToolCallValidator.Decision.requireHuman(
+                        toolCall.getName() + ": " + decision.reason());
+            }
+            if (decision.failed()) {
+                return ToolCallValidator.Decision.failed(
                         toolCall.getName() + ": " + decision.reason());
             }
             if (!decision.allowed()) {

@@ -18,20 +18,28 @@
             </button>
           </div>
         </div>
-        <div class="desktop-project-list">
+        <div class="desktop-project-list" @dragover.prevent="onListDragOver" @drop.prevent="onListDrop" @dragend="onListDragEnd">
           <button
-            v-for="workspace in workspaces"
+            v-for="workspace in displayWorkspaces"
             :key="workspace.hash"
             class="desktop-project"
-            :class="{ active: workspace.hash === activeWorkspaceHash }"
+            :class="{
+              active: workspace.hash === activeWorkspaceHash,
+              dragging: draggingHash === workspace.hash,
+              'drag-over-before': dragOverHash === workspace.hash && dragOverBefore,
+              'drag-over-after': dragOverHash === workspace.hash && !dragOverBefore
+            }"
+            :data-hash="workspace.hash"
             type="button"
+            draggable="true"
+            @dragstart="onProjectDragStart($event, workspace.hash)"
             @click="workspace.hash === activeWorkspaceHash ? emit('select-workspace', '') : emit('select-workspace', workspace.hash)"
             @contextmenu.prevent.stop="openContextMenu($event, 'workspace', workspace)"
         >
             <span class="desktop-monogram" :class="badgeTone(workspace.name)">{{ initial(workspace.name) }}</span>
             <span>{{ workspace.name }}</span>
           </button>
-          <div v-if="!workspaces.length" class="desktop-home-muted">暂无项目</div>
+          <div v-if="!displayWorkspaces.length" class="desktop-home-muted">暂无项目</div>
         </div>
         <div class="desktop-project-footer">
           <div class="desktop-project-footer-menu">
@@ -139,11 +147,16 @@ const props = defineProps({
   refreshKey: { type: Number, default: 0 },
   refreshing: { type: Boolean, default: false }
 })
-const emit = defineEmits(['select-workspace', 'new-session', 'open-session', 'open-skills', 'open-tools', 'open-sub-agents', 'open-dashboard', 'open-settings', 'toggle-theme', 'add-workspace', 'refresh', 'delete-session', 'clear-workspace', 'delete-workspace'])
+const emit = defineEmits(['select-workspace', 'new-session', 'open-session', 'open-skills', 'open-tools', 'open-sub-agents', 'open-dashboard', 'open-settings', 'toggle-theme', 'add-workspace', 'refresh', 'delete-session', 'clear-workspace', 'delete-workspace', 'reorder-workspaces'])
 
 const query = ref('')
 const sessions = ref([])
 const loading = ref(false)
+// 项目拖拽排序：本地副本用于实时预览，props 变化时同步
+const displayWorkspaces = ref([])
+const draggingHash = ref('')
+const dragOverHash = ref('')
+const dragOverBefore = ref(false)
 const contextMenu = reactive({ visible: false, type: '', item: null, x: 0, y: 0 })
 const activeWorkspace = computed(() => props.workspaces.find((workspace) => workspace.hash === props.activeWorkspaceHash))
 const filteredSessions = computed(() => {
@@ -197,6 +210,72 @@ function openSession(session) {
     sessionName: session.name,
     title: session.title
   })
+}
+
+// ============ 项目拖拽排序 ============
+
+watch(() => props.workspaces, (list) => {
+  displayWorkspaces.value = (list || []).map((workspace) => ({ ...workspace }))
+}, { immediate: true, deep: true })
+
+function onProjectDragStart(_event, hash) {
+  draggingHash.value = hash
+  dragOverHash.value = ''
+}
+
+function onListDragOver(event) {
+  if (!draggingHash.value) return
+  event.preventDefault()
+  const itemEl = event.target.closest?.('.desktop-project')
+  if (!itemEl) {
+    // 拖到列表空白处：视为插入到末尾
+    const last = displayWorkspaces.value[displayWorkspaces.value.length - 1]
+    dragOverHash.value = last ? last.hash : ''
+    dragOverBefore.value = false
+    return
+  }
+  const targetHash = itemEl.getAttribute('data-hash')
+  if (!targetHash || targetHash === draggingHash.value) {
+    // 悬停在自己上方：清除插入指示（保持原位）
+    dragOverHash.value = ''
+    return
+  }
+  const rect = itemEl.getBoundingClientRect()
+  dragOverBefore.value = event.clientY < rect.top + rect.height / 2
+  dragOverHash.value = targetHash
+}
+
+function onListDrop() {
+  if (!draggingHash.value) return
+  // 列表保持静止，松手时一次性计算新顺序
+  const next = [...displayWorkspaces.value]
+  const fromIndex = next.findIndex((workspace) => workspace.hash === draggingHash.value)
+  const dragged = fromIndex !== -1 ? next.splice(fromIndex, 1)[0] : null
+  if (dragged) {
+    if (dragOverHash.value) {
+      let insertAt = next.findIndex((workspace) => workspace.hash === dragOverHash.value)
+      if (insertAt === -1) insertAt = next.length
+      next.splice(dragOverBefore.value ? insertAt : insertAt + 1, 0, dragged)
+    } else {
+      // 没有有效插入目标（拖回原位）：恢复原位置
+      next.splice(fromIndex, 0, dragged)
+    }
+  }
+  const orderedHashes = next.map((workspace) => workspace.hash)
+  clearDragState()
+  if (orderedHashes.join('\u0000') !== displayWorkspaces.value.map((workspace) => workspace.hash).join('\u0000')) {
+    displayWorkspaces.value = next
+    emit('reorder-workspaces', orderedHashes)
+  }
+}
+
+function onListDragEnd() {
+  clearDragState()
+}
+
+function clearDragState() {
+  draggingHash.value = ''
+  dragOverHash.value = ''
 }
 
 function openContextMenu(event, type, item) {
@@ -284,6 +363,7 @@ onBeforeUnmount(() => {
 .desktop-project-list:hover::-webkit-scrollbar-thumb, .desktop-session-timeline:hover::-webkit-scrollbar-thumb { background: rgba(80, 88, 102, 0.38); border-radius: 6px; }
 .desktop-project-list:hover::-webkit-scrollbar-track, .desktop-session-timeline:hover::-webkit-scrollbar-track { background: transparent; }
 .desktop-project, .desktop-session { width: 100%; height: 32px; display: flex; align-items: center; gap: 8px; border: 0; border-radius: 5px; background: transparent; color: var(--fg-2, #525866); font: inherit; font-size: 13px; text-align: left; cursor: pointer; padding: 0 8px; box-sizing: border-box; }.desktop-project:hover, .desktop-session:hover, .desktop-project.active { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-project > span:last-child, .desktop-session > span:last-child { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }.desktop-session { font-weight: 400; }.desktop-home-muted { padding: 12px 8px; color: var(--fg-4, #9ca3af); font-size: 12px; }
+.desktop-project.dragging { opacity: 0.55; }.desktop-project.drag-over-before, .desktop-project.drag-over-after { background: var(--accent-bg, var(--bg-3, #f2f3f5)); }.desktop-project.drag-over-before { box-shadow: inset 0 2px 0 0 var(--blue, #52525b); }.desktop-project.drag-over-after { box-shadow: inset 0 -2px 0 0 var(--blue, #52525b); }
 .desktop-monogram { width: 17px; height: 17px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 4px; color: #fff; font-size: 11px; font-weight: 700; line-height: 1; text-shadow: 0 1px rgba(0, 0, 0, 0.25); box-shadow: inset 0 1px rgba(255, 255, 255, 0.25), 0 1px 1px rgba(0, 0, 0, 0.16); }.desktop-monogram.tone-0 { background: linear-gradient(135deg, #8b95a3, #5e6878); }.desktop-monogram.tone-1 { background: linear-gradient(135deg, #3dd0e8, #18b4d0); }.desktop-monogram.tone-2 { background: linear-gradient(135deg, #ffa86b, #ff7a3d); }.desktop-monogram.tone-3 { background: linear-gradient(135deg, #9aacf5, #6d80e8); }.desktop-monogram.tone-4 { background: linear-gradient(135deg, #6dd49d, #3eb878); }.desktop-monogram.tone-5 { background: linear-gradient(135deg, #f87fb5, #e85a9c); }.desktop-monogram.tone-6 { background: linear-gradient(135deg, #fcd34d, #f5b800); }.desktop-monogram.tone-7 { background: linear-gradient(135deg, #4dd9a6, #20c084); }.desktop-session-monogram { background: linear-gradient(135deg, #737373, #4c4c4c); }
 .desktop-project-footer { display: flex; flex-direction: column; padding-top: 8px; border-top: 1px solid var(--border, #e8e8e8); flex: 0 0 auto; }.desktop-project-footer-menu { display: grid; gap: 2px; }.desktop-project-footer-menu > button { width: 100%; }.desktop-project-footer-settings { display: flex; align-items: center; }.desktop-project-footer-settings > button { min-width: 0; flex: 1; }.desktop-project-footer-tools { display: flex; align-items: center; gap: 4px; margin-left: auto; }.desktop-project-footer-tools .desktop-theme-button { width: 32px; justify-content: center; }.desktop-project-footer button { height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 5px; background: transparent; color: var(--fg-3, #727987); font: inherit; font-size: 13px; cursor: pointer; }.desktop-project-footer button:hover { background: var(--bg-3, #f2f3f5); color: var(--fg, #202124); }.desktop-project-footer svg { width: 16px; height: 16px; }
 .desktop-context-menu { position: fixed; z-index: 1000; width: 156px; padding: 4px; border: 1px solid var(--border, #e5e7eb); border-radius: 6px; background: var(--bg, #fff); box-shadow: var(--shadow-lg, 0 10px 28px rgba(0, 0, 0, 0.16)); }.desktop-context-menu button { width: 100%; height: 32px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--fg-2, #525866); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }.desktop-context-menu button:hover { color: var(--fg, #202124); background: var(--bg-3, #f2f3f5); }.desktop-context-menu button.danger { color: #c2413b; }.desktop-context-menu button.danger:hover { color: #b42318; background: rgba(220, 38, 38, 0.09); }.desktop-context-menu svg { width: 15px; height: 15px; }.desktop-context-menu-divider { height: 1px; margin: 4px; background: var(--border, #e5e7eb); }

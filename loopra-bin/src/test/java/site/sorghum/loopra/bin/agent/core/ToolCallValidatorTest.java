@@ -135,6 +135,51 @@ class ToolCallValidatorTest {
         assertTrue(decision.reason().contains("allow 字段不是布尔值"));
     }
 
+    @Test
+    void validationModelFailureFallsBackToManualHitl() throws Exception {
+        AtomicInteger executions = new AtomicInteger();
+        AgentLoop loop = loop("approval", toolCallingModel(toolCalls("bash", "{\"command\":\"mvn test\"}")),
+                registryWith(tool("bash", args -> {
+                    executions.incrementAndGet();
+                    return "executed";
+                })), ToolCallValidator.forClient(failingClient(new IllegalStateException("timeout")), Paths.get(".")));
+
+        String result = loop.run(UserMessage.of("run tests"));
+
+        // 校验失败原因只写入日志，HITL 提示文本不含该信息。
+        assertTrue(result.contains("HITL"), result);
+        assertTrue(loop.getHitlManager().hasPendingHITL());
+        assertEquals(0, executions.get());
+
+        // 决策层面：failed 状态且携带校验失败原因
+        ToolCallValidator.Decision decision = loop.validateHITLToolCalls(toolCalls("bash", "{}"));
+        assertTrue(decision.failed());
+        assertTrue(decision.reason().contains("校验模型调用失败"));
+        assertTrue(decision.reason().contains("timeout"));
+    }
+
+    private static ModelClient failingClient(Exception failure) {
+        return new ModelClient() {
+            @Override
+            public ONode chat(List<ChatMessage> messages, ONode tools) {
+                throw new RuntimeException(failure);
+            }
+
+            @Override
+            public void chatStream(List<ChatMessage> messages, ONode tools, StreamCallback callback) {
+            }
+
+            @Override
+            public String getModel() {
+                return "validator";
+            }
+
+            @Override
+            public void setModel(String model) {
+            }
+        };
+    }
+
     private static AgentLoop loop(String hitlMode, ModelClient mainClient, ToolRegistry registry,
                                   ToolCallValidator validator) {
         ConversationContext context = new ConversationContext(
