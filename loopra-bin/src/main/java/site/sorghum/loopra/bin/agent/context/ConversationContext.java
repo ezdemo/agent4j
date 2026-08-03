@@ -149,7 +149,10 @@ public class ConversationContext {
     }
 
     public void addToolResult(String toolCallId, String result) {
-        ChatMessage msg = ChatMessage.tool(toolCallId, result);
+        addToolResult(ChatMessage.tool(toolCallId, result));
+    }
+
+    public void addToolResult(ChatMessage msg) {
         history.add(msg);
         persist(msg);
     }

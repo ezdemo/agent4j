@@ -30,6 +30,10 @@ public final class ModelApiError {
                 || value.contains("上下文窗口");
     }
 
+    public static boolean isInvalidRequestError(String error) {
+        return error != null && error.toLowerCase(Locale.ROOT).contains("invalid_request_error");
+    }
+
     /**
      * Adds a stable marker while preserving the provider's original error payload.
      */

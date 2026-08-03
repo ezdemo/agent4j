@@ -15,7 +15,6 @@ class UserMessageSanitizerTest {
     @AfterEach
     void resetDependencies() {
         UserMessageSanitizer.modalityProvider = null;
-        UserMessageSanitizer.visionService = null;
     }
 
     @Test

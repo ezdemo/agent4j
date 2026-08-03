@@ -60,14 +60,26 @@ public class AiBrowserTool extends AbsToolProvider implements SolonToTools {
     }
 
     @ToolMapping(name = "browser_screenshot", description = """
-            等待指定标签页成功加载后，返回清洗后的结构化 HTML 页面快照，不返回图片；页面加载失败或超过 30 秒会返回明确错误。
+            等待指定标签页成功加载后，返回清洗后的结构化 HTML 页面快照及当前可见视口的图片；页面加载失败或超过 30 秒会返回明确错误。
             结果中的 elements 是优先使用的可操作元素列表，会识别原生控件、ARIA 控件、可聚焦元素、开放 Shadow DOM 和 cursor:pointer 的自定义控件；每项含可访问名称、表单状态、坐标、是否可见/被遮挡及所在上下文。
             overlays 和 notices 分别表示当前弹层/下拉框与提示错误，优先处理；viewport 表示页面滚动状态。html 是经过深度、节点数和无效节点过滤的辅助 DOM 树。密码输入值不会返回。
             每次快照返回 snapshotId。调用 browser_act 时应同时传入该 snapshotId；页面变化后必须重新调用本工具。
             """)
     public String screenshot(@Param(name = "tabId", description = "目标标签页 ID；为空时使用当前激活标签页", required = false) String tabId,
                              ToolContext ctx) {
-        return call("screenshot", new ONode().set("tabId", safe(tabId)));
+        String result = call("screenshot", new ONode().set("tabId", safe(tabId)));
+        if (result.startsWith("BROWSER_UNAVAILABLE:")) return result;
+        try {
+            ONode data = ONode.ofJson(result).get("data");
+            String imageUrl = data.get("imageUrl").getString();
+            if (imageUrl == null || imageUrl.isBlank()) return result;
+            String detail = data.get("imageDetail").getString();
+            data.remove("imageUrl");
+            data.remove("imageDetail");
+            return ImageReadTool.imageResult(data.toJson(), imageUrl, detail);
+        } catch (Exception e) {
+            return result;
+        }
     }
 
     @ToolMapping(name = "browser_act", description = """

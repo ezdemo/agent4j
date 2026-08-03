@@ -268,6 +268,7 @@ public class SubAgent {
         if (sessionId != null) {
             subLoop.setSessionId(sessionId);
         }
+        subLoop.setGoalGuardEnabled(false);
         subLoop.setDrainFileChanges(false);
         if (sessionService != null) {
             subLoop.setSessionService(sessionService);

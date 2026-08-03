@@ -29,7 +29,10 @@
     </div>
 
     <!-- 消息区 -->
-    <div ref="messagesContainer" class="messages" :class="{ 'messages-welcome': !props.sessionName || messages.length === 0 }">
+    <div ref="messagesContainer" class="messages" :class="{
+      'messages-welcome': !props.sessionName || messages.length === 0,
+      'messages-with-queue': queuedMessages.length > 0
+    }">
       <!-- 空状态：无会话或新建的空会话 -->
       <div v-if="!props.sessionName || messages.length === 0" class="empty welcome-screen">
         <section class="welcome-panel">
@@ -325,7 +328,7 @@ const handleSetDefaultModel = async (modelName, channelId) => {
 const currentReasoningEffort = ref('max')
 const terminateOnNoToolCall = ref(true)
 
-const handleSwitchReasoningEffort = (value) => {
+const handleSwitchReasoningEffort = async (value) => {
   const reasoningEffort = String(value || '').trim()
   if (!reasoningEffort || reasoningEffort === currentReasoningEffort.value) return
   sessionReasoningEfforts.value = {
@@ -333,6 +336,13 @@ const handleSwitchReasoningEffort = (value) => {
     [conversationKey()]: reasoningEffort
   }
   currentReasoningEffort.value = reasoningEffort
+  try {
+    // 输入框的选择既作为当前会话覆盖，也更新全局默认值，保证刷新和新会话仍能恢复。
+    await configAPI.updateConfig({reasoningEffort})
+  } catch (e) {
+    // 请求失败时会话级 localStorage 缓存仍可继续使用。
+    console.error('持久化推理强度失败:', e)
+  }
 }
 
 const handleSwitchTerminateOnNoToolCall = async (value) => {
@@ -788,6 +798,7 @@ watch(() => messages.value.map(messageKey), ids => {
 watch(() => props.sessionName, () => {
   messageHeights.clear()
   virtualScrollTop.value = 0
+  void focusComposer()
 })
 
 // Only the active streaming message needs to repatch for every server event.
@@ -1015,6 +1026,22 @@ const jumpToMessage = (globalIdx) => {
 
 const now = () => new Date().toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit'})
 
+const assistantPreview = (blocks) => {
+  if (!Array.isArray(blocks)) return ''
+  const text = blocks.flatMap(block => {
+    if (block?.type === 'content') return [block.content || '']
+    if (block?.type === 'sub_agent') return assistantPreview(block.blocks)
+    return []
+  }).join(' ').replace(/\s+/g, ' ').trim()
+  return text.length > 150 ? text.slice(0, 150) + '…' : text
+}
+
+const notifyAssistantReply = (msg) => {
+  const preview = assistantPreview(msg?.blocks)
+  if (!preview) return
+  window.electronAPI?.desktopPet?.showReply(preview).catch?.(() => {})
+}
+
 // 格式化时间戳（Unix 毫秒）为本地时间字符串
 const formatTimestamp = (timestamp) => {
   if (!timestamp) return now()
@@ -1115,6 +1142,10 @@ const scroll = async (force = false, smooth = false) => {
   }
   updateScrollBtn()
 }
+
+watch(() => queuedMessages.value.length > 0, (hasQueue, hadQueue) => {
+  if (hasQueue !== hadQueue) void scroll(true, true)
+})
 
 const scrollToBottom = () => {
   userScrolledAway = false
@@ -1550,6 +1581,8 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
         enqueueStreamEvent,
         () => {
           flushStreamEvents()
+          const completedMessage = getMsg()
+          notifyAssistantReply(completedMessage)
           store.setSessionStreaming(sessionName, false)
           // 流结束后清理空的助手气泡
           const msgs = store.getSessionMessages(sessionName)
@@ -1592,13 +1625,15 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
 
 const abortChat = async (targetSessionName = props.sessionName, targetWorkspaceHash = props.workspaceHash) => {
   const ctrl = store.getSessionController(targetSessionName)
-  if (ctrl) ctrl.abort()
-  // 同时通知后端中断
   try {
-    await chatAPI.abort({workspaceHash: targetWorkspaceHash, sessionName: targetSessionName})
+    // 保持 SSE 读取，等待服务端取消 Agent 并主动关闭 emitter。
+    await chatAPI.abort({
+      workspaceHash: targetWorkspaceHash,
+      sessionName: targetSessionName,
+      requestId: ctrl?.requestId
+    })
   } catch {
   }
-  store.setSessionStreaming(targetSessionName, false)
 }
 
 const openRollbackDialog = (msgId, canRollbackCode, rollbackTimestamp) => {
@@ -1951,6 +1986,7 @@ const loadSession = async (name, workspaceHash) => {
       // 缓存命中，直接滚动到底部
       await scroll(true)
     }
+    await focusComposer()
     await loadUsage({sessionName: name, workspaceHash})
   } catch (e) {
     console.error('切换会话失败:', e)
@@ -1991,10 +2027,20 @@ const appendElementInspection = async (inspection) => {
 // 加载历史消息（仅在明确选了 session 时）
 onMounted(() => {
   document.addEventListener('click', handleWelcomeOutsideClick)
-  if (props.sessionName) loadHistory()
+  if (props.sessionName) {
+    void loadHistory().finally(focusComposer)
+  } else {
+    void focusComposer()
+  }
 })
 
 onBeforeUnmount(() => document.removeEventListener('click', handleWelcomeOutsideClick))
+
+const focusComposer = async () => {
+  await nextTick()
+  const target = props.sessionName && messages.value.length > 0 ? chatInput.value : welcomeInput.value
+  target?.focus?.()
+}
 
 const setDraft = async (text) => {
   const draft = text || ''
@@ -2009,7 +2055,7 @@ const setDraft = async (text) => {
   chatInput.value?.focus?.()
 }
 
-defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, startWelcomePrompt, appendFileSelection, appendElementInspection, exportChat, refreshHistory, setDraft})
+defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, startWelcomePrompt, appendFileSelection, appendElementInspection, exportChat, refreshHistory, focusComposer, setDraft})
 </script>
 
 <style scoped>
@@ -2073,6 +2119,11 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   scrollbar-color: transparent transparent;
   padding: 16px 72px 146px;
   position: relative;
+  transition: padding-bottom 180ms ease;
+}
+
+.messages.messages-with-queue {
+  padding-bottom: 184px;
 }
 
 .messages::-webkit-scrollbar {
@@ -2787,6 +2838,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 
 @media (max-width: 640px) {
   .messages { padding: 12px 8px 100px; }
+  .messages.messages-with-queue { padding-bottom: 138px; }
   .msg-body { max-width: 95%; }
   .empty-title { font-size: 14px; }
   .empty-desc { font-size: 12px; }

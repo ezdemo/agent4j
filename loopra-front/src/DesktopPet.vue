@@ -6,10 +6,13 @@
       :spritesheet-url="spritesheetUrl"
       state="idle"
       :initial-size-index="sizeIndex"
+      :initial-scale="scale"
+      :bubble-text="serviceOffline ? OFFLINE_MESSAGE : replyBubble"
       external-drag
+      @activate="openMainWindow"
+      @scale-change="saveScale"
       @drag-move="moveWindow"
       @interactive-change="setInteractive"
-      @size-change="saveSize"
     />
   </main>
 </template>
@@ -19,12 +22,19 @@ import {onBeforeUnmount, onMounted, ref} from 'vue'
 import PetSprite from './components/PetSprite.vue'
 import {petAPI} from './services/api'
 
+const OFFLINE_MESSAGE = '服务端离线中…'
+
 const spritesheetUrl = ref('')
 const sizeIndex = ref(1)
 const spriteKey = ref(0)
 const activePetKey = ref('')
+const replyBubble = ref('')
+const serviceOffline = ref(false)
+const scale = ref(null)
 let refreshTimer = null
+let replyTimer = null
 let removeRefreshListener = null
+let removeReplyListener = null
 
 async function loadPet() {
   try {
@@ -35,6 +45,7 @@ async function loadPet() {
       activePetKey.value = ''
       return
     }
+    serviceOffline.value = false
     const url = pet.spritesheetUrl || pet.spritesheetPath
     const petKey = pet.name || url
     if (activePetKey.value !== petKey) {
@@ -43,8 +54,9 @@ async function loadPet() {
       spriteKey.value++
     }
     if (typeof pet.sizeIndex === 'number') sizeIndex.value = pet.sizeIndex
+    if (typeof pet.scale === 'number') scale.value = pet.scale
   } catch {
-    spritesheetUrl.value = ''
+    serviceOffline.value = true
   }
 }
 
@@ -56,10 +68,14 @@ function setInteractive(interactive) {
   window.electronAPI?.desktopPet?.setInteractive(interactive)
 }
 
-async function saveSize(nextSizeIndex) {
-  sizeIndex.value = nextSizeIndex
+function openMainWindow() {
+  window.electronAPI?.desktopPet?.activateMain()
+}
+
+async function saveScale(nextScale) {
+  scale.value = nextScale
   try {
-    await petAPI.savePosition({sizeIndex: nextSizeIndex})
+    await petAPI.savePosition({scale: nextScale})
   } catch {
   }
 }
@@ -69,12 +85,20 @@ onMounted(() => {
   loadPet()
   refreshTimer = setInterval(loadPet, 4000)
   removeRefreshListener = window.electronAPI?.desktopPet?.onRefresh(loadPet)
+  removeReplyListener = window.electronAPI?.desktopPet?.onReply((text) => {
+    if (!text) return
+    replyBubble.value = text
+    clearTimeout(replyTimer)
+    replyTimer = setTimeout(() => { replyBubble.value = '' }, 8000)
+  })
 })
 
 onBeforeUnmount(() => {
   window.electronAPI?.desktopPet?.setInteractive(true)
   if (refreshTimer) clearInterval(refreshTimer)
+  clearTimeout(replyTimer)
   removeRefreshListener?.()
+  removeReplyListener?.()
 })
 </script>
 

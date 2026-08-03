@@ -6,13 +6,17 @@ import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import org.noear.snack4.ONode;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
 import site.sorghum.loopra.bin.config.UserIdProvider;
 
 import java.io.BufferedReader;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -351,7 +355,7 @@ public class HttpModelClient implements ModelClient {
 
     private ModelApiProtocol.RequestContext requestContext(List<ChatMessage> messages, ONode tools) {
         return new ModelApiProtocol.RequestContext(
-                model, reasoningEffort, messages, tools, UserIdProvider.getUserId(), resolveSessionAffinity());
+                model, reasoningEffort, messages, tools, UserIdProvider.getUserId(), resolveSessionAffinity(), apiUrl);
     }
 
     /**
@@ -463,9 +467,7 @@ public class HttpModelClient implements ModelClient {
                            StreamCallback callback) {
         String jsonBody;
         try {
-            ONode body = apiProtocol.buildRequest(requestContext(messages, tools));
-            body.set(FIELD_STREAM, true);
-            jsonBody = body.toJson();
+            jsonBody = buildStreamRequest(messages, tools);
             log.debug("构建流式请求体: 大小={} 字符, 工具数={}, 消息数={}",
                     jsonBody.length(), tools != null ? tools.size() : 0, messages.size());
         } catch (Exception e) {
@@ -473,8 +475,11 @@ public class HttpModelClient implements ModelClient {
             return;
         }
 
+        boolean recoveredInvalidRequest = false;
+
+        int retryAttempt = 0;
         RetryContext retry = new RetryContext("流式", callback);
-        for (int attempt = 0; attempt <= retryDelays.length; attempt++) {
+        while (true) {
             ModelApiStreamState parseResult = new ModelApiStreamState();
             Request.Builder requestBuilder = new Request.Builder()
                     .url(apiUrl)
@@ -495,7 +500,8 @@ public class HttpModelClient implements ModelClient {
                 int status = response.code();
                 if (retryable(status)) {
                     try {
-                        retry.waitOrThrow("HTTP " + status, attempt);
+                        retry.waitOrThrow("HTTP " + status, retryAttempt);
+                        retryAttempt++;
                     } catch (IOException e) {
                         finishRetryFailure(e, callback);
                         return;
@@ -506,6 +512,16 @@ public class HttpModelClient implements ModelClient {
                 if (status >= 400) {
                     ResponseBody errorBody = response.body();
                     String err = errorBody != null ? errorBody.string() : "unknown error";
+                    if (!recoveredInvalidRequest && !ModelApiError.isContextLengthExceeded(err)
+                            && ModelApiError.isInvalidRequestError(err)) {
+                        List<ChatMessage> recoveryMessages = withoutLatestResponsesAssistant(messages);
+                        if (recoveryMessages != null) {
+                            jsonBody = buildStreamRequest(recoveryMessages, tools);
+                            recoveredInvalidRequest = true;
+                            log.warn("Responses API 返回 invalid_request_error，已回退最近的 reasoning assistant 轮次后重试一次");
+                            continue;
+                        }
+                    }
                     safeCallback("onError", () -> callback.onError(
                             ModelApiError.annotate("API error " + status + ": " + err)));
                     return;
@@ -541,12 +557,29 @@ public class HttpModelClient implements ModelClient {
                             return;
                         }
 
+                        if (parseResult.invalidRequestError && !recoveredInvalidRequest
+                                && !parseResult.emittedOutput) {
+                            List<ChatMessage> recoveryMessages = withoutLatestResponsesAssistant(messages);
+                            if (recoveryMessages != null) {
+                                try {
+                                    jsonBody = buildStreamRequest(recoveryMessages, tools);
+                                    recoveredInvalidRequest = true;
+                                    log.warn("Responses API 返回 invalid_request_error，已回退最近的 reasoning assistant 轮次后重试一次");
+                                    continue;
+                                } catch (Exception e) {
+                                    safeCallback("onError", () -> callback.onError(e.getMessage()));
+                                    return;
+                                }
+                            }
+                        }
+
                         if (!parseResult.retryableError || parseResult.emittedOutput) {
                             safeCallback("onError", () -> callback.onError(errorData));
                             return;
                         }
                         try {
-                            retry.waitOrThrow("SSE流错误: " + errorData, attempt);
+                            retry.waitOrThrow("SSE流错误: " + errorData, retryAttempt);
+                            retryAttempt++;
                         } catch (IOException e) {
                             finishRetryFailure(e, callback);
                             return;
@@ -586,7 +619,8 @@ public class HttpModelClient implements ModelClient {
                     return;
                 }
                 try {
-                    retry.waitOrThrow(e, attempt);
+                    retry.waitOrThrow(e, retryAttempt);
+                    retryAttempt++;
                 } catch (IOException retryEx) {
                     // 重试耗尽或中断
                     safeCallback("onError", () -> callback.onError(retryEx.getMessage()));
@@ -602,6 +636,51 @@ public class HttpModelClient implements ModelClient {
                 activeCall = null;
             }
         }
+    }
+
+    private String buildStreamRequest(List<ChatMessage> messages, ONode tools) {
+        ONode body = apiProtocol.buildRequest(requestContext(messages, tools));
+        body.set(FIELD_STREAM, true);
+        return body.toJson();
+    }
+
+    /**
+     * Removes only the newest assistant turn that carries a replayable Responses reasoning item.
+     * Tool outputs produced by that turn are removed with it so their function_call_output items do
+     * not become orphaned. The persisted conversation remains untouched.
+     *
+     * @return recovery messages, or {@code null} when no reasoning assistant can be rolled back
+     */
+    private static List<ChatMessage> withoutLatestResponsesAssistant(List<ChatMessage> messages) {
+        int assistantIndex = -1;
+        Set<String> toolCallIds = new HashSet<>();
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            ChatMessage message = messages.get(i);
+            if (!"assistant".equals(message.getRole()) || !hasResponseReasoning(message)) continue;
+            assistantIndex = i;
+            if (message.getToolCalls() != null) {
+                for (ToolCallEntry toolCall : message.getToolCalls()) {
+                    if (toolCall.id() != null) toolCallIds.add(toolCall.id());
+                }
+            }
+            break;
+        }
+        if (assistantIndex < 0) return null;
+
+        List<ChatMessage> cleaned = new ArrayList<>(messages.size() - 1);
+        for (int i = 0; i < messages.size(); i++) {
+            ChatMessage message = messages.get(i);
+            if (i == assistantIndex) continue;
+            if (message.isTool() && toolCallIds.contains(message.getToolCallId())) continue;
+            cleaned.add(message);
+        }
+        return cleaned;
+    }
+
+    private static boolean hasResponseReasoning(ChatMessage message) {
+        if (message.getResponseReasoning() != null) return true;
+        return message.getToolCalls() != null && message.getToolCalls().stream()
+                .anyMatch(toolCall -> toolCall.responseReasoning() != null);
     }
 
     private void finishRetryFailure(IOException error, StreamCallback callback) {
@@ -626,15 +705,16 @@ public class HttpModelClient implements ModelClient {
         boolean process = false;
         while ((line = reader.readLine()) != null) {
             content.append(line).append("\n");
+            line = line.trim();
             if (abortRequested.compareAndSet(true, false)) {
                 result.aborted = true;
                 log.info("流式请求被 ReasonBreaker 中断");
                 break;
             }
-            if (!line.startsWith("data: ")) {
+            if (!line.startsWith("data:")) {
                 continue;
             }
-            String data = line.substring(6).trim();
+            String data = line.substring(5).trim();
             if ("[DONE]".equals(data)) {
                 log.info("收到SSE流结束标记");
                 break;
@@ -647,7 +727,15 @@ public class HttpModelClient implements ModelClient {
                 process = true;
                 break;
             }
-            ONode chunk = ONode.ofJson(data);
+            ONode chunk;
+            try {
+                chunk = ONode.ofJson(data);
+            }catch (Exception e){
+                result.errorData = data;
+                result.retryableError = true;
+                process = true;
+                break;
+            }
             log.debug("收到SSE数据块，大小: {} 字符", data.length());
             process = true;
             apiProtocol.processStreamChunk(chunk, callback, result);

@@ -21,6 +21,7 @@ import site.sorghum.loopra.bin.agent.output.ConsoleAgentOutput;
 import site.sorghum.loopra.bin.agent.resilient.ReasonBreaker;
 import site.sorghum.loopra.bin.agent.resilient.Scavenger;
 import site.sorghum.loopra.bin.agent.resilient.StormBreaker;
+import site.sorghum.loopra.bin.builtin.ImageReadTool;
 import site.sorghum.loopra.bin.builtin.SubAgentTool;
 import site.sorghum.loopra.bin.config.LoopraConfig;
 import site.sorghum.loopra.bin.goal.Goal;
@@ -41,6 +42,7 @@ import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 
@@ -72,6 +74,13 @@ public class AgentLoop implements AgentLoopController {
     private static final int DEFAULT_STREAM_LATCH_TIMEOUT_SEC = 300;
     /** 服务端确认上下文超限时最多执行两次折叠恢复。 */
     private static final int MAX_CONTEXT_RECOVERIES = 2;
+    /** 工具任务必须由可中断的 Future 承载，CompletableFuture.cancel(true) 不会中断运行线程。 */
+    private static final AtomicInteger TOOL_THREAD_COUNTER = new AtomicInteger();
+    private static final ExecutorService TOOL_EXECUTOR = Executors.newCachedThreadPool(r -> {
+        Thread thread = new Thread(r, "loopra-tool-" + TOOL_THREAD_COUNTER.incrementAndGet());
+        thread.setDaemon(true);
+        return thread;
+    });
 
     private int maxTotalChars() {
         return config != null ? config.maxContextChars() : DEFAULT_MAX_CONTEXT_CHARS;
@@ -105,6 +114,9 @@ public class AgentLoop implements AgentLoopController {
     private final StormBreaker stormBreaker;
     private final ToolCallValidator toolCallValidator;
     private final GoalService goalService = new GoalService();
+    /** Goal 生命周期只由拥有会话的主代理约束，子代理共享 sessionId 但不拥有 Goal。 */
+    @Setter
+    private volatile boolean goalGuardEnabled = true;
     /** 子代理可冻结这两部分，确保其整个生命周期内模型请求前缀完全一致。 */
     private volatile ONode frozenTools;
     private volatile String frozenToolInstructions;
@@ -142,13 +154,16 @@ public class AgentLoop implements AgentLoopController {
     private volatile Path workspace;
 
     /** 当前正在执行的工具 Future 数组（用于 abort 时取消） */
-    private volatile CompletableFuture<ChatMessage>[] activeToolFutures = null;
+    private volatile Future<ChatMessage>[] activeToolFutures = null;
 
     /** 当前工具的显式取消控制器（用于停止子代理等长运行任务） */
     private volatile ToolExecutionControl[] activeToolControls = null;
 
     /** 工具工作线程对应的取消控制器。 */
     private final ThreadLocal<ToolExecutionControl> currentToolControl = new ThreadLocal<>();
+
+    /** 已脱离单次工具 Future、但仍需随用户停止而终止的资源。 */
+    private final ConcurrentHashMap<String, Runnable> abortResources = new ConcurrentHashMap<>();
 
     /** 任务完成标志 —— finish 工具设置，非空时主循环将退出并返回该内容 */
     private volatile String finishContent = null;
@@ -349,19 +364,11 @@ public class AgentLoop implements AgentLoopController {
         userAbortRequested = true;
         client.abortStream();
         cancelAllFutures(activeToolFutures, activeToolControls);
+        cancelAbortResources();
     }
 
     @Override
     public void finish(String content) {
-        Goal openGoal = getOpenGoal();
-        if (openGoal != null) {
-            String reminder = "[Goal guard] 当前 Goal 尚未关闭：" + openGoal.getTitle()
-                    + "（" + openGoal.progressText() + "）。请推进步骤并调用 goal_complete，"
-                    + "或者在确实无法继续时调用 goal_block；不要调用 finish。";
-            injectUserMessage(reminder);
-            safeOutput("goalFinishGuard", () -> output.onLog(LogLevel.WARN, reminder));
-            return;
-        }
         if (content == null || content.isBlank()) {
             // 尝试从上下文获取最后一条 assistant 回复作为回退
             String lastAssistant = ctx.getLastAssistantContent();
@@ -419,6 +426,40 @@ public class AgentLoop implements AgentLoopController {
         ToolExecutionControl control = currentToolControl.get();
         if (control != null) {
             control.clearCancellation();
+        }
+    }
+
+    @Override
+    public void registerAbortResource(String resourceId, Runnable cancellation) {
+        if (resourceId == null || resourceId.isBlank() || cancellation == null) return;
+        if (userAbortRequested) {
+            runAbortResource(resourceId, cancellation);
+            return;
+        }
+        abortResources.put(resourceId, cancellation);
+        if (userAbortRequested && abortResources.remove(resourceId, cancellation)) {
+            runAbortResource(resourceId, cancellation);
+        }
+    }
+
+    @Override
+    public void clearAbortResource(String resourceId) {
+        if (resourceId != null) abortResources.remove(resourceId);
+    }
+
+    private void cancelAbortResources() {
+        abortResources.forEach((resourceId, cancellation) -> {
+            if (abortResources.remove(resourceId, cancellation)) {
+                runAbortResource(resourceId, cancellation);
+            }
+        });
+    }
+
+    private static void runAbortResource(String resourceId, Runnable cancellation) {
+        try {
+            cancellation.run();
+        } catch (Exception e) {
+            log.warn("[abort] 取消工具资源失败: {}, {}", resourceId, e.getMessage());
         }
     }
 
@@ -524,20 +565,63 @@ public class AgentLoop implements AgentLoopController {
                 """.formatted(terminateOnNoToolCall()
                 ? "- 无工具调用时，模型的纯文本回复会结束对话"
                 : "- 结束对话**必须**调用 `finish`，纯文本回复不会退出循环")
-                + "\n\n" + goalService.instruction(getOpenGoal());
+                + "\n\n" + currentGoalInstruction();
     }
 
-    private Goal getOpenGoal() {
+    private String currentGoalInstruction() {
+        if (!goalGuardEnabled) return "";
+        try {
+            return goalService.instruction(loadOpenGoal());
+        } catch (Exception e) {
+            log.warn("[goal] 读取当前 Goal 失败", e);
+            return "## Goal 状态不可用\n持久化 Goal 暂时无法读取。不要声称目标已完成；可以说明错误并结束当前回合。"
+                    + "若持续无法读取，可提示用户执行 `/goal reset` 清除损坏快照后重试。";
+        }
+    }
+
+    private Goal loadOpenGoal() throws IOException {
         if (sessionId == null || sessionId.isBlank() || registry == null || registry.getWorkspace() == null) {
             return null;
         }
+        Goal goal = GoalRuntime.forWorkspace(registry.getWorkspace(), sessionId).load();
+        return goal != null && goal.isOpen() ? goal : null;
+    }
+
+    private String takeFinishContentIfAllowed() {
+        String requested = finishContent;
+        finishContent = null;
+        if (requested == null || !goalGuardEnabled) return requested;
         try {
-            Goal goal = GoalRuntime.forWorkspace(registry.getWorkspace(), sessionId).load();
-            return goal != null && goal.isOpen() ? goal : null;
+            Goal goal = loadOpenGoal();
+            if (goal == null || !goal.requiresAgentWork()) return requested;
+            String reminder = "[Goal guard] 当前 Goal 仍在推进：" + goal.getTitle()
+                    + "（" + goal.progressText() + "）。请继续当前步骤并调用 goal_complete；"
+                    + "只有确实需要用户输入或外部状态变化时才调用 goal_block。";
+            injectUserMessage(reminder);
+            safeOutput("goalFinishGuard", () -> output.onLog(LogLevel.WARN, reminder));
+            client.resetStreamAbort();
+            return null;
         } catch (Exception e) {
-            log.debug("[goal] 读取当前 Goal 失败: {}", e.getMessage());
+            String reminder = "[Goal guard] 无法读取持久化 Goal 状态，已拒绝 finish：" + e.getMessage()
+                    + "。若持续无法读取，可提示用户执行 `/goal reset` 清除损坏快照后重试。";
+            injectUserMessage(reminder);
+            safeOutput("goalFinishGuard", () -> output.onLog(LogLevel.ERROR, reminder));
+            client.resetStreamAbort();
             return null;
         }
+    }
+
+    private String finishAfterToolBatch() {
+        String requested = takeFinishContentIfAllowed();
+        if (requested != null) {
+            safeOutput("finish", () -> output.onLog(LogLevel.DEBUG, requested));
+        }
+        return requested;
+    }
+
+    private void discardFinishRequest() {
+        finishContent = null;
+        client.resetStreamAbort();
     }
 
     // ==================== 主入口：run() ====================
@@ -686,8 +770,18 @@ public class AgentLoop implements AgentLoopController {
             // ---- 5. 无 tool calls → 根据配置结束或要求模型继续 ----
             if (!hasToolCalls) {
                 ctx.addAssistant(sr.content(), null, sr.reasoningContent());
-                Goal openGoal = getOpenGoal();
-                if (terminateOnNoToolCall() && openGoal == null) {
+                Goal openGoal;
+                try {
+                    openGoal = goalGuardEnabled ? loadOpenGoal() : null;
+                } catch (Exception e) {
+                    String reminder = "[Goal guard] 无法读取持久化 Goal 状态：" + e.getMessage()
+                            + "。若持续无法读取，可提示用户执行 `/goal reset` 清除损坏快照后重试。";
+                    safeOutput("goalRead", () -> output.onLog(LogLevel.ERROR, reminder));
+                    String content = sr.content() == null ? "" : sr.content();
+                    return reminder + (content.isBlank() ? "" : "\n" + content);
+                }
+                if ((openGoal != null && !openGoal.requiresAgentWork())
+                        || (terminateOnNoToolCall() && openGoal == null)) {
                     return sr.content() == null ? "" : sr.content();
                 }
 
@@ -696,7 +790,11 @@ public class AgentLoop implements AgentLoopController {
                 if (noToolCallStreak >= 3) {
                     log.warn("[loop] 连续 {} 轮无工具调用，降级终止", noToolCallStreak);
                     String degraded = ctx.getLastAssistantContent();
-                    return degraded != null && !degraded.isEmpty() ? degraded : "任务中断，未完成（已收集部分结果）";
+                    String fallback = degraded != null && !degraded.isEmpty()
+                            ? degraded : "任务中断，未完成（已收集部分结果）";
+                    return openGoal != null
+                            ? "[Goal 尚未关闭，后续回合可继续]\n" + fallback
+                            : fallback;
                 }
 
                 ctx.addUser(openGoal != null
@@ -746,15 +844,13 @@ public class AgentLoop implements AgentLoopController {
             // ---- 7. 写入 assistant 消息 + 工具结果 ----
             ctx.addAssistant(sr.content(), ter.tcList(), sr.reasoningContent(), ter.fileChanges());
             for (ChatMessage tr : ter.toolResults()) {
-                ctx.addToolResult(tr.getToolCallId(), tr.getContent());
+                ctx.addToolResult(tr);
             }
 
-            // ---- 7.5. finish 工具显式结束本轮 ----
-            if (finishContent != null) {
-                String result = finishContent;
-                finishContent = null;
-                safeOutput("finish", () -> output.onLog(LogLevel.DEBUG, result));
-                return result;
+            // ---- 7.5. finish 工具显式结束本轮（Goal 判定在整批工具落盘后执行） ----
+            String requestedFinish = finishAfterToolBatch();
+            if (requestedFinish != null) {
+                return requestedFinish;
             }
 
             // ---- 8. Self-Correction ----
@@ -778,6 +874,7 @@ public class AgentLoop implements AgentLoopController {
         HitlManager.PendingHITLState state = hitlManager.drainPendingHITL();
 
         if (!approved) {
+            discardFinishRequest();
             String denyMsg = "工具调用已被用户拒绝。";
             ctx.addAssistant(denyMsg, null, null);
             return denyMsg;
@@ -800,8 +897,10 @@ public class AgentLoop implements AgentLoopController {
 
         // 写入工具结果
         for (ChatMessage tr : ter.toolResults()) {
-            ctx.addToolResult(tr.getToolCallId(), tr.getContent());
+            ctx.addToolResult(tr);
         }
+        String requestedFinish = finishAfterToolBatch();
+        if (requestedFinish != null) return requestedFinish;
 
         // 进入统一推理循环
         return mainLoop();
@@ -814,6 +913,7 @@ public class AgentLoop implements AgentLoopController {
         HitlManager.PendingSandboxState state = hitlManager.drainSandboxHITL();
 
         if (!approved) {
+            discardFinishRequest();
             // 用户拒绝
             List<ToolCallEntry> tcList = parseToolCallsFromONode(state.toolCalls());
             ctx.addAssistant(state.content(), tcList, state.reasoningContent());
@@ -835,8 +935,10 @@ public class AgentLoop implements AgentLoopController {
 
         // 写入工具结果
         for (ChatMessage tr : initialTer.toolResults()) {
-            ctx.addToolResult(tr.getToolCallId(), tr.getContent());
+            ctx.addToolResult(tr);
         }
+        String requestedFinish = finishAfterToolBatch();
+        if (requestedFinish != null) return requestedFinish;
 
         // Self-Correction 检查
         int scAttempts = handleSelfCorrection(initialTer.toolResults(), initialTer.anySuppressed(), 0);
@@ -1229,7 +1331,7 @@ public class AgentLoop implements AgentLoopController {
         }
     }
 
-    private record DispatchResult(CompletableFuture<ChatMessage>[] futures,
+    private record DispatchResult(Future<ChatMessage>[] futures,
                                   ToolExecutionControl[] controls,
                                   AtomicBoolean anySuppressed,
                                   AtomicReference<HitlRequiredException> hitlRef) {}
@@ -1237,7 +1339,7 @@ public class AgentLoop implements AgentLoopController {
     private DispatchResult dispatchToolCallsAsync(List<ONode> tcArray) {
         int tcCount = tcArray.size();
         @SuppressWarnings("unchecked")
-        CompletableFuture<ChatMessage>[] futures = new CompletableFuture[tcCount];
+        Future<ChatMessage>[] futures = new Future[tcCount];
         ToolExecutionControl[] controls = new ToolExecutionControl[tcCount];
         final AtomicBoolean anySuppressed = new AtomicBoolean(false);
         final AtomicReference<HitlRequiredException> hitlRef = new AtomicReference<>(null);
@@ -1245,7 +1347,7 @@ public class AgentLoop implements AgentLoopController {
         for (int i = 0; i < tcCount; i++) {
             final int idx = i;
             controls[i] = new ToolExecutionControl();
-            futures[i] = CompletableFuture.supplyAsync(() -> {
+            futures[i] = TOOL_EXECUTOR.submit(() -> {
                 // 同步外部中断源（子代理检查父级 abort 状态，确保父级中断后工具不继续执行）
                 Runnable extAbort = externalAbortSource;
                 if (extAbort != null) {
@@ -1304,10 +1406,16 @@ public class AgentLoop implements AgentLoopController {
                     ToolRequest req = new ToolRequest(null,extraMap, toolCall.getArguments());
                     try {
                         ToolResult call = fc.call(req.getArgs());
-                        String result = call.getContent();
+                        String rawResult = call.getContent();
+                        ImageReadTool.ImageResult imageResult = ("read_image".equals(toolCall.getName())
+                                || "browser_screenshot".equals(toolCall.getName()))
+                                ? ImageReadTool.parseResult(rawResult) : null;
+                        String result = imageResult == null ? rawResult : imageResult.summary();
                         safeListener("toolResult", () -> listener.onToolResult(toolCall.getName(), result));
                         safeOutputDebug("toolResult", () -> output.onToolResult(toolCall.getName(), result));
-                        return toolResult(toolCall.getId(), result);
+                        return imageResult == null ? toolResult(toolCall.getId(), result)
+                                : ChatMessage.toolWithImage(toolCall.getId(), result,
+                                imageResult.dataUri(), imageResult.detail());
                     } catch (HitlRequiredException e) {
                         hitlRef.compareAndSet(null, e);
                         return toolResult(toolCall.getId(),
@@ -1363,7 +1471,7 @@ public class AgentLoop implements AgentLoopController {
      * 等待所有工具 Future 完成（带超时保护），收集结果。
      * 如果用户请求中断，立即取消未完成的 Future 并返回。
      */
-    private List<ChatMessage> collectToolResults(CompletableFuture<ChatMessage>[] futures,
+    private List<ChatMessage> collectToolResults(Future<ChatMessage>[] futures,
                                                  ToolExecutionControl[] controls,
                                                  List<ONode> tcArray) {
         this.activeToolControls = controls;
@@ -1441,13 +1549,13 @@ public class AgentLoop implements AgentLoopController {
                 .toJson());
     }
 
-    private static void cancelFuture(CompletableFuture<ChatMessage> future,
+    private static void cancelFuture(Future<ChatMessage> future,
                                      ToolExecutionControl control) {
         if (control != null) control.cancel();
         if (future != null && !future.isDone()) future.cancel(true);
     }
 
-    private static void cancelAllFutures(CompletableFuture<ChatMessage>[] futures,
+    private static void cancelAllFutures(Future<ChatMessage>[] futures,
                                          ToolExecutionControl[] controls) {
         if (futures == null) return;
         for (int i = 0; i < futures.length; i++) {
@@ -1459,7 +1567,7 @@ public class AgentLoop implements AgentLoopController {
     /**
      * 构建用户中断时的工具结果（全部标记为 aborted）。
      */
-    private List<ChatMessage> buildAbortedResults(CompletableFuture<ChatMessage>[] futures,
+    private List<ChatMessage> buildAbortedResults(Future<ChatMessage>[] futures,
                                                   List<ONode> tcArray) {
         List<ChatMessage> results = new ArrayList<>();
         for (int i = 0; i < futures.length; i++) {

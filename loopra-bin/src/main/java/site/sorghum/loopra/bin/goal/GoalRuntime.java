@@ -19,6 +19,19 @@ public final class GoalRuntime {
         public void save(Goal goal) throws IOException {
             store.save(goal);
         }
+
+        public Goal createIfNoOpenGoal(Goal goal) throws IOException {
+            return store.createIfNoOpenGoal(goal);
+        }
+
+        public Goal update(GoalStore.GoalMutation mutation) throws IOException {
+            return store.update(sessionId, mutation);
+        }
+
+        /** 直接删除当前会话的 Goal 快照（不解析内容，损坏快照也可清除）。 */
+        public boolean delete() throws IOException {
+            return store.delete(sessionId);
+        }
     }
 
     public static Scope forTool(ToolContext context) {

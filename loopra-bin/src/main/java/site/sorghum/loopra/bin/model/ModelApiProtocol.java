@@ -31,6 +31,10 @@ interface ModelApiProtocol {
     }
 
     record RequestContext(String model, String reasoningEffort, List<ChatMessage> messages,
-                          ONode tools, String userId, String sessionId) {
+                          ONode tools, String userId, String sessionId, String apiUrl) {
+        RequestContext(String model, String reasoningEffort, List<ChatMessage> messages,
+                       ONode tools, String userId, String sessionId) {
+            this(model, reasoningEffort, messages, tools, userId, sessionId, null);
+        }
     }
 }

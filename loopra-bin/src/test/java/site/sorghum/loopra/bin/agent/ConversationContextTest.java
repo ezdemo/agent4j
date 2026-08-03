@@ -8,6 +8,7 @@ import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -17,6 +18,29 @@ class ConversationContextTest {
     private ConversationContext createContext() {
         PromptPrefix prefix = new PromptPrefix("system prompt", new ONode());
         return new ConversationContext(prefix);
+    }
+
+    @Test
+    void promotesLegacyToolCallReasoningToMessageLevel() {
+        String responseReasoning = "{\"type\":\"reasoning\",\"encrypted_content\":\"encrypted\"}";
+        ChatMessage message = ChatMessage.fromMap(Map.of(
+                "role", "assistant",
+                "tool_calls", List.of(
+                        Map.of("id", "call-1", "name", "read", "arguments", "{}",
+                                "response_reasoning", responseReasoning),
+                        Map.of("id", "call-2", "name", "glob", "arguments", "{}",
+                                "response_reasoning", responseReasoning)
+                )
+        ));
+
+        assertEquals(responseReasoning, message.getResponseReasoning());
+        assertNull(message.getToolCalls().get(0).responseReasoning());
+        assertNull(message.getToolCalls().get(1).responseReasoning());
+        assertEquals(responseReasoning, message.toMap().get("response_reasoning"));
+        @SuppressWarnings("unchecked")
+        List<Map<String, Object>> persistedCalls = (List<Map<String, Object>>) message.toMap().get("tool_calls");
+        assertNull(persistedCalls.get(0).get("response_reasoning"));
+        assertNull(persistedCalls.get(1).get("response_reasoning"));
     }
 
     @Test
