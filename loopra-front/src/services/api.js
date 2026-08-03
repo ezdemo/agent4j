@@ -19,8 +19,20 @@ export async function initConfig() {
 
 // 读取持久化的 API 地址（用户在设置页配置的）
 // 优先级：localStorage 用户设置 > config.json > 硬编码
-function getCustomBaseURL() {
+export function getCustomBaseURL() {
   return localStorage.getItem('loopra-api-base') || DEFAULT_API_BASE
+}
+
+/**
+ * 将后端返回的相对 API 路径（如 /api/pets/xxx/spritesheet）解析为完整 URL。
+ * 与 axios baseURL 逻辑一致，适配用户在设置页/启动时配置的服务端端口；
+ * 桌面端 Electron 以 file:// 协议加载页面，相对路径会解析到本地文件系统，必须使用完整地址。
+ */
+export function resolveApiUrl(path) {
+  if (!path) return ''
+  if (/^https?:\/\//i.test(path)) return path
+  const base = (getCustomBaseURL() || DEFAULT_API_BASE).replace(/\/+$/, '')
+  return base + (path.startsWith('/') ? path : '/' + path)
 }
 
 const api = axios.create({
@@ -989,15 +1001,17 @@ export const petAPI = {
   getInfo: () => api.get('/pets/active', {silent: true}),
   /** 保存位置/大小 */
   savePosition: (pos) => api.put('/pets/position', pos, {silent: true}),
-  /** 获取当前活跃宠物的 spritesheet URL */
-  getSpritesheetUrl: () => '/api/pets/active/spritesheet',
+  /** 将后端返回的相对 spritesheet 路径解析为完整 URL（适配服务端端口） */
+  resolveUrl: resolveApiUrl,
+  /** 获取当前活跃宠物的 spritesheet URL（完整地址） */
+  getSpritesheetUrl: () => resolveApiUrl('/api/pets/active/spritesheet'),
 
   /** 列出所有可用宠物 */
   listPets: () => api.get('/pets'),
   /** 获取指定宠物元数据 */
   getPetInfo: (name) => api.get(`/pets/${name}`),
-  /** 获取指定宠物的 spritesheet URL */
-  getPetSpritesheetUrl: (name) => `/api/pets/${name}/spritesheet`,
+  /** 获取指定宠物的 spritesheet URL（完整地址） */
+  getPetSpritesheetUrl: (name) => resolveApiUrl(`/api/pets/${name}/spritesheet`),
   /** 删除指定宠物（清空文件夹） */
   deletePet: (name) => api.delete(`/pets/${name}`),
   /** 获取当前活跃宠物信息 */

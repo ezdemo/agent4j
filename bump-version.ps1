@@ -104,6 +104,46 @@ if ($c -ne $old) {
     Write-Host "  [OK] .release/setup-gui.ps1"
 } else { Write-Host "  [--] .release/setup-gui.ps1 (unchanged)" }
 
+# 8.1 .release/setup-mirror.sh
+$path = Join-Path $root ".release/setup-mirror.sh"
+$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+$old = $c
+$c = [regex]::Replace($c, '(?<=VERSION=")v[\d.]+(?=")', "v$Version")
+if ($c -ne $old) {
+    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
+    Write-Host "  [OK] .release/setup-mirror.sh"
+} else { Write-Host "  [--] .release/setup-mirror.sh (unchanged)" }
+
+# 8.2 .release/setup-mirror.ps1
+$path = Join-Path $root ".release/setup-mirror.ps1"
+$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+$old = $c
+$c = [regex]::Replace($c, '(?<=\$VERSION = ")v[\d.]+(?=")', "v$Version")
+if ($c -ne $old) {
+    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
+    Write-Host "  [OK] .release/setup-mirror.ps1"
+} else { Write-Host "  [--] .release/setup-mirror.ps1 (unchanged)" }
+
+# 8.3 .release/setup-gui-mirror.sh
+$path = Join-Path $root ".release/setup-gui-mirror.sh"
+$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+$old = $c
+$c = [regex]::Replace($c, '(?<=VERSION=")v[\d.]+(?=")', "v$Version")
+if ($c -ne $old) {
+    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
+    Write-Host "  [OK] .release/setup-gui-mirror.sh"
+} else { Write-Host "  [--] .release/setup-gui-mirror.sh (unchanged)" }
+
+# 8.4 .release/setup-gui-mirror.ps1
+$path = Join-Path $root ".release/setup-gui-mirror.ps1"
+$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+$old = $c
+$c = [regex]::Replace($c, '(?<=\$VERSION = ")v[\d.]+(?=")', "v$Version")
+if ($c -ne $old) {
+    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
+    Write-Host "  [OK] .release/setup-gui-mirror.ps1"
+} else { Write-Host "  [--] .release/setup-gui-mirror.ps1 (unchanged)" }
+
 # 9. loopra-front/package.json (Electron)
 $path = Join-Path $root "loopra-front/package.json"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)

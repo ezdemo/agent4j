@@ -48,7 +48,9 @@ Loopra 将用户任务、模型推理与受控工具调用组织成持续执行�
 
 > 建议手动运行下面命令再安装桌面端
 
-桌面端下载地址：[Releases](https://gitcode.com/Sorghum/loopra/releases/latest)。Desktop 首次启动会安装独立运行时到 `~/.loopra-gui`；CLI 仍安装在 `~/.loopra`，两者共用配置目录但不会复用或终止对方的服务进程。Desktop 启动时优先复用本机 `4567` 端口上的健康 Loopra Web 服务；独立运行时版本不一致时，启动引导会提示更新，也可以暂不更新继续使用。
+桌面端下载地址：[Releases](https://github.com/ezdemo/loopra/releases/latest)。
+
+Desktop 首次启动会安装独立运行时到 `~/.loopra-gui`；CLI 仍安装在 `~/.loopra`，两者共用配置目录但不会复用或终止对方的服务进程。Desktop 启动时优先复用本机 `4567` 端口上的健康 Loopra Web 服务；独立运行时版本不一致时，启动引导会提示更新，也可以暂不更新继续使用。
 
 ### 1. 安装
 
@@ -62,6 +64,20 @@ macOS / Linux：
 
 ```bash
 curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash
+```
+
+国内网络可选用 Gitee 镜像脚本（脚本与安装包均从 Gitee 下载，速度更快）：
+
+Windows PowerShell：
+
+```powershell
+irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-mirror.ps1 | iex
+```
+
+macOS / Linux：
+
+```bash
+curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-mirror.sh | bash
 ```
 
 ### 2. 启动服务

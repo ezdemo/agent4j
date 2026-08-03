@@ -1,12 +1,12 @@
 #
-# Loopra Desktop Web Installer for Windows
-# Usage: irm https://raw.githubusercontent.com/ezdemo/loopra/main/.release/setup-gui.ps1 | iex
+# Loopra Desktop Web Installer for Windows (Mirror via Gitee)
+# Usage: irm https://gitee.com/ezdemo/loopra/releases/download/v26.8.3.1/setup-gui-mirror.ps1 | iex
 #
 
 $ErrorActionPreference = "Stop"
 
 $VERSION = "v26.8.3.2"
-$PACKAGE_URL = "https://github.com/ezdemo/loopra/releases/download/$VERSION/loopra-web-dist.tar.gz"
+$PACKAGE_URL = "https://gitee.com/ezdemo/loopra/releases/download/$VERSION/loopra-web-dist.tar.gz"
 $TEMP_DIR = Join-Path $env:TEMP "loopra-gui-install"
 
 function Write-Info {
@@ -27,7 +27,7 @@ if (Test-Path $TEMP_DIR) {
 New-Item -ItemType Directory -Path $TEMP_DIR | Out-Null
 
 try {
-    Write-Info "Downloading Loopra Desktop runtime $VERSION..."
+    Write-Info "Downloading Loopra Desktop runtime $VERSION via Gitee mirror..."
 
     $packageFile = Join-Path $TEMP_DIR "package.tar.gz"
     Invoke-WebRequest -Uri $PACKAGE_URL -OutFile $packageFile -UseBasicParsing
