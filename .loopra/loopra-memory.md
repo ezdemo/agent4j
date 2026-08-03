@@ -163,3 +163,11 @@ GoalCommand 的 /goal create 成功后需返回 CommandResult.LOOP 并修改 Mes
 ## [2026-08-02 23:19] 会话折叠沉淀
 
 ImageReadTool.read_image 在模型不支持图片输入时不可用：通过 ToolContext.getLoopController() → getModelClient() 获取当前模型，经静态注入的 ModelModalityProvider.getModalitySupport(channelId, modelName).imageInput() 判断，不支持时返回 "MODEL_NOT_SUPPORTED: ..." 错误；无控制器/无 provider（单元测试、CLI）时跳过拦截保持兼容。
+
+## [2026-08-03 12:10] 会话折叠沉淀
+
+ToolCallValidator 校验模型调用失败（超时等异常）时返回 Decision.failed（新增状态），AgentLoop 在 HITL 拦截处回退到普通人工审批（interceptForHITL 弹 /agree /deny），而非直接拒绝终止；AI 明确判定危险（allow=false）仍直接拒绝。Decision record 字段为 (allowed, requiresHuman, failed, reason)。
+
+## [2026-08-03 13:44] 会话折叠沉淀
+
+Gitee Electron 打包流水线新增为 `.workflow/electron-pipeline.yml`：监听 main，使用 Gitee `build@nodejs` 的 Node 15 入口后由 `.release/ci-package-electron.sh` 自举 Node 22.14.0 和 pnpm 10.24.0，构建 Linux `.deb` 并上传到默认制品库；macOS/Windows 不在默认 Linux runner 中交叉打包。

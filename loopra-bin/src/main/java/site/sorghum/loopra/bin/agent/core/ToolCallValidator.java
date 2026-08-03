@@ -85,7 +85,8 @@ final class ToolCallValidator {
             return parse(response);
         } catch (Exception e) {
             log.warn("[tool-validator] 校验模型调用失败: tool={}, error={}", toolName, e.getMessage());
-            return Decision.deny("校验模型调用失败: " + safeMessage(e));
+            // 校验模型自身故障（如超时）不能当作判定拒绝，回退到人工审批由用户决定。
+            return Decision.failed("校验模型调用失败: " + safeMessage(e));
         }
     }
 
@@ -129,17 +130,22 @@ final class ToolCallValidator {
         return e.getMessage() == null || e.getMessage().isBlank() ? e.getClass().getSimpleName() : e.getMessage();
     }
 
-    record Decision(boolean allowed, boolean requiresHuman, String reason) {
+    record Decision(boolean allowed, boolean requiresHuman, boolean failed, String reason) {
         static Decision allow() {
-            return new Decision(true, false, "");
+            return new Decision(true, false, false, "");
         }
 
         static Decision deny(String reason) {
-            return new Decision(false, false, reason);
+            return new Decision(false, false, false, reason);
         }
 
         static Decision requireHuman(String reason) {
-            return new Decision(false, true, reason);
+            return new Decision(false, true, false, reason);
+        }
+
+        /** 校验模型自身故障（调用异常、超时等），应回退人工审批而非判定拒绝。 */
+        static Decision failed(String reason) {
+            return new Decision(false, false, true, reason);
         }
     }
 }

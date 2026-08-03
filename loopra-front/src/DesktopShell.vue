@@ -91,6 +91,7 @@
         @delete-session="confirmDeleteSession"
         @clear-workspace="confirmClearWorkspace"
         @delete-workspace="confirmDeleteWorkspace"
+        @reorder-workspaces="reorderWorkspaces"
       />
       <SettingsView v-else-if="!starting && showSkills" class="desktop-settings" market-only />
       <ToolsView v-else-if="!starting && showTools" class="desktop-tools" />
@@ -360,6 +361,22 @@ async function refreshHome() {
     message.error('刷新失败：' + (error.message || '未知错误'))
   } finally {
     refreshingHome.value = false
+  }
+}
+
+// 项目拖拽排序：本地立即重排，并持久化到服务端；失败时回滚重新加载
+async function reorderWorkspaces(orderedHashes) {
+  if (!Array.isArray(orderedHashes) || orderedHashes.length === 0) return
+  const byHash = new Map(workspaces.value.map((workspace) => [workspace.hash, workspace]))
+  const reordered = orderedHashes.map((hash) => byHash.get(hash)).filter(Boolean)
+  if (reordered.length !== workspaces.value.length) return
+  workspaces.value = reordered
+  try {
+    const response = await configAPI.saveWorkspaceOrder(orderedHashes)
+    if (!response.success) throw new Error(response.message || '保存排序失败')
+  } catch (error) {
+    message.error('保存排序失败：' + (error.message || '未知错误'))
+    await refreshHome()
   }
 }
 

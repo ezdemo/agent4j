@@ -1248,6 +1248,35 @@ public class AgentService {
             }
         }
 
+        return applyWorkspaceOrder(result, ConfigService.getWorkspaceOrder());
+    }
+
+    /**
+     * 按用户保存的顺序合并工作区列表：
+     * order 中的 hash 按保存顺序排列在前，未保存过排序的工作区按原顺序追加到末尾，
+     * order 中已不存在（被删除）的 hash 自动忽略。
+     */
+    public static List<WorkspaceInfoDTO> applyWorkspaceOrder(List<WorkspaceInfoDTO> workspaces, List<String> order) {
+        if (workspaces == null || workspaces.isEmpty() || order == null || order.isEmpty()) {
+            return workspaces;
+        }
+        Map<String, WorkspaceInfoDTO> byHash = new LinkedHashMap<>();
+        for (WorkspaceInfoDTO workspace : workspaces) {
+            byHash.put(workspace.hash(), workspace);
+        }
+        List<WorkspaceInfoDTO> result = new ArrayList<>(workspaces.size());
+        Set<String> placed = new HashSet<>();
+        for (String hash : order) {
+            WorkspaceInfoDTO workspace = byHash.get(hash);
+            if (workspace != null && placed.add(hash)) {
+                result.add(workspace);
+            }
+        }
+        for (WorkspaceInfoDTO workspace : workspaces) {
+            if (placed.add(workspace.hash())) {
+                result.add(workspace);
+            }
+        }
         return result;
     }
 
