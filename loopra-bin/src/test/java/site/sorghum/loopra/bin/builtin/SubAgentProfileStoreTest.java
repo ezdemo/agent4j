@@ -161,7 +161,7 @@ class SubAgentProfileStoreTest {
         // 模拟重启：用户改过内置角色内容/禁用/删除，并新增了自定义角色
         Files.writeString(configFile, """
                 {"profiles":[
-                  {"id":"explore","name":"改名","enable":false,"readOnly":true,"instructions":"用户自定义提示词","allowedTools":["workspace_write"]},
+                  {"id":"explore","name":"改名","enable":false,"readOnly":true,"instructions":"用户自定义提示词","allowedTools":["workspace_write"],"modelChannel":"ch-a","model":"m-1"},
                   {"id":"custom-agent","name":"自定义","enable":true,"readOnly":false,"instructions":"自定义角色"}
                 ]}
                 """, StandardCharsets.UTF_8);
@@ -174,6 +174,8 @@ class SubAgentProfileStoreTest {
         assertEquals(SubAgentProfile.EXPLORE.displayName(), explore.name(), "内置名称应恢复为 Java 定义");
         assertEquals(false, explore.enable, "禁用状态应保留");
         assertTrue(explore.allowedTools == null, "内置角色白名单应清空（内置为准）");
+        assertEquals("ch-a", explore.modelChannel, "渠道配置是用户偏好，应保留");
+        assertEquals("m-1", explore.model, "渠道内模型是用户偏好，应保留");
         // 被删除的内置角色重新追加且启用
         assertTrue(all.stream().anyMatch(c -> c.id.equals("implement") && c.enabled()), "删除的内置角色应重新追加");
         // 自定义角色保留

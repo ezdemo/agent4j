@@ -159,3 +159,15 @@ PowerShell 脚本（.ps1）必须保存为 UTF-8 with BOM：PS 5.1 对无 BOM �
 ## [2026-08-03 21:09] 会话折叠沉淀
 
 子代理配置同步策略（2026-08-03，用户拍板"内置为准"）：Java 内置角色（SubAgentProfile 枚举）内容字段（name/description/instructions/readOnly/allowedTools）为权威，进程内首次访问 SubAgentProfileStore 时执行一次 mergeBuiltins：内容字段强制覆盖为内置值、enable 保留用户设置、被删的内置角色自动追加（enable=true）、自定义角色不动；merge 后写盘。DTO 新增 builtin 字段，前端内置角色不显示编辑按钮（仅启用/禁用），带"系统内置"标记。注意：全量保存（PUT）仍可提交内置角色内容，重启 merge 会纠正回内置值。
+
+## [2026-08-03 21:34] 会话折叠沉淀
+
+子代理独立渠道模型（2026-08-03）：SubAgentProfileConfig 新增 modelChannel（渠道 id）/model（渠道内模型名，可空=渠道默认模型=渠道第一个模型条目，空渠道用全局 model）；SubAgentTool.resolveSubClient 按角色渠道构建独立 HttpModelClient（含 apiKey/protocol/reasoningEffort），渠道不存在或未配置时回退 fork 父级 client；渠道配置视为用户偏好，mergeBuiltins 不覆盖（与 enable 一致）；前端卡片展示区（所有角色含内置）和编辑表单均有渠道/模型下拉（configAPI.getConfig().modelChannels 提供选项），变更即静默全量保存不重载；DTO 新增 modelChannel/model 字段。
+
+## [2026-08-03 21:58] 会话折叠沉淀
+
+踩坑：HttpModelClient 直接把传入字符串当请求 URL，不会补 /chat/completions 后缀。凡按渠道建立 ModelClient 必须用 LoopraConfig.ModelChannel.apiUrl()（toApiUrl 会按 apiProtocol 规范化并补 /chat/completions 或 /responses），不能用 baseUrl()——否则请求发到裸地址（如 POST /v1），OpenAI 兼容网关返回 404 "Invalid URL (POST /v1)"。已修复 SubAgentTool.resolveSubClient（原用 channel.baseUrl()）。
+
+## [2026-08-03 22:19] 会话折叠沉淀
+
+前端 AI 消息数学公式渲染（2026-08-03）：所有 Markdown 渲染统一走 loopra-front/src/utils/highlight.js 的共享 marked 实例 md（+全局 marked），已通过 marked-katex-extension 接入 KaTeX；关键约定：katex 必须用 output:'html'（纯 span 输出），因为消息 HTML 会过 sanitize()（DOMPurify 白名单只放行 span/class/style），默认的 htmlAndMathml 输出中 MathML 标签会被剥离并残留文本；throwOnError:false 保证坏公式降级显示不阻断消息。样式：main.js 引入 katex/dist/katex.min.css（Vite 打包字体，base:'./' 适配 Electron file://），main.css 有 .katex-display 横向滚动。多行块级 $$ 公式需前后空行（marked 块级扩展限制），单行 $$...$$ 与行内 $...$ 无此限制。katex 版本锁定 ^0.16（marked-katex-extension peer <0.18）。测试：src/utils/highlight.test.js。

@@ -382,6 +382,13 @@ pre {
   padding: 12px;
   overflow-x: auto;
 }
+
+/* KaTeX 块级公式：超宽时横向滚动，避免撑破消息容器 */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+}
 pre code { background: none; padding: 0; }
 pre code.hljs { background: transparent; } /* 让 pre 背景透出，避免 hljs 自带背景色干扰 */
 

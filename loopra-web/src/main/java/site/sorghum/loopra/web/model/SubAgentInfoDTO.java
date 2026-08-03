@@ -11,6 +11,8 @@ public record SubAgentInfoDTO(
         List<String> tools,
         List<String> allowedTools,
         Boolean enable,
-        boolean builtin
+        boolean builtin,
+        String modelChannel,
+        String model
 ) {
 }

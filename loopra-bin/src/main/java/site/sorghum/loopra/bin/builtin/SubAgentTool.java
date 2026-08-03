@@ -1,5 +1,6 @@
 package site.sorghum.loopra.bin.builtin;
 
+import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.ai.annotation.ToolMapping;
 import org.noear.solon.ai.chat.tool.AbsToolProvider;
 import org.noear.solon.ai.chat.tool.FunctionTool;
@@ -7,6 +8,8 @@ import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import org.noear.solon.annotation.Param;
 import site.sorghum.loopra.bin.agent.core.SubAgent;
+import site.sorghum.loopra.bin.config.LoopraConfig;
+import site.sorghum.loopra.bin.model.HttpModelClient;
 import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.session.SessionService;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
@@ -27,6 +30,7 @@ import java.util.Set;
  *
  * @author Sorghum
  */
+@Slf4j
 @Component
 public class SubAgentTool extends AbsToolProvider implements SolonToTools {
 
@@ -67,6 +71,9 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
 
     @Inject
     private SubAgentProfileStore profileStore;
+
+    @Inject
+    private LoopraConfig loopraConfig;
 
     @ToolMapping(name = "sub_agent", description = """
                  派生一个带预设角色的隔离子代理，完成后将结果返回给主代理。
@@ -124,7 +131,7 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
             // 获取父级 AgentLoopController，传播中断信号到子代理
             ModelClient parentClient = parentController != null ? parentController.getModelClient() : null;
             ModelClient sourceClient = parentClient != null ? parentClient : modelClient;
-            SubAgent sub = new SubAgent(sourceClient.fork(), registry, systemPrompt, parentController);
+            SubAgent sub = new SubAgent(resolveSubClient(selectedProfile, sourceClient), registry, systemPrompt, parentController);
             sub.setAllowedTools(allowedTools);
 
             if (parentController != null) {
@@ -180,6 +187,28 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
             return "IO_ERROR: " + e.getMessage();
         }
     }
+
+    /**
+     * 解析子代理的模型客户端：角色配置了独立渠道时按渠道创建，否则继承父级渠道。
+     */
+    private ModelClient resolveSubClient(SubAgentProfileConfig profile, ModelClient fallback) {
+        if (profile.modelChannel == null || profile.modelChannel.isBlank()) {
+            return fallback.fork();
+        }
+        LoopraConfig.ModelChannel channel = loopraConfig.modelChannel(profile.modelChannel);
+        if (channel == null) {
+            log.warn("子代理 {} 配置的模型渠道不存在: {}，回退继承父级渠道", profile.id(), profile.modelChannel);
+            return fallback.fork();
+        }
+        String model = profile.model != null && !profile.model.isBlank()
+                ? profile.model
+                : (channel.modelEntries().isEmpty() ? loopraConfig.model() : channel.modelEntries().get(0).name());
+        // 注意：必须使用 apiUrl()（按协议补全 /chat/completions 或 /responses 后缀），
+        // 直接传 baseUrl() 会把请求发到裸地址（如 POST /v1），网关会返回 404 Invalid URL。
+        return new HttpModelClient(channel.apiUrl(), channel.apiKey(), model,
+                loopraConfig.reasoningEffort(), channel.id(), channel.apiProtocol());
+    }
+
 
     static String resolveInheritedHitlMode(AgentLoopController parentController) {
         return parentController != null ? parentController.getHitlMode() : "free";
