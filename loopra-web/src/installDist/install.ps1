@@ -1,4 +1,4 @@
-#
+﻿#
 # Loopra Web Installer for Windows PowerShell
 # 支持重复安装，保留已有 config.json
 # 自动下载 JRE 25（无需系统 Java）
