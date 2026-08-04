@@ -1,5 +1,5 @@
 <template>
-  <div class="desktop-update" :data-theme="theme">
+  <div class="desktop-update" :class="{ embedded }" :data-theme="theme">
     <header class="du-header">
       <div class="du-title">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -265,6 +265,11 @@ function closeWindow() {
   height: 100vh;
   background: var(--bg);
   color: var(--fg);
+}
+
+/* embedded（Web 端弹层）时填满父容器，避免 100vh 溢出导致底部按钮被裁剪 */
+.desktop-update.embedded {
+  height: 100%;
 }
 
 .du-header {
