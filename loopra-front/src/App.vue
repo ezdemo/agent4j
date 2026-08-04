@@ -1384,7 +1384,11 @@ const startTaskFromWelcome = async (request) => {
     currentSessionWorkspace.value = workspaceHash
     await newChat(true)
     await nextTick()
-    await chatRef.value?.startWelcomePrompt(prompt)
+    if (request?.planMode) {
+      await chatRef.value?.enablePlanMode()
+    } else {
+      await chatRef.value?.startWelcomePrompt(prompt)
+    }
   } catch (e) {
     console.error('从欢迎页创建会话失败:', e)
     message.error('创建新会话失败: ' + (e.message || '未知错误'))

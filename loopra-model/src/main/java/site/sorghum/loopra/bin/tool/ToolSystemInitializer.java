@@ -21,18 +21,6 @@ import java.util.Set;
  */
 @Slf4j
 public class ToolSystemInitializer {
-    /**
-     * Plan Mode 说明（永久存在于 system prompt 中，不随模式切换动态注入）
-     */
-    private static final String PLAN_MODE_DESCRIPTION = """
-            ## Plan Mode（计划模式）
-            
-            用户可以使用 /plan 命令进入计划模式。在计划模式下：
-            - 仅只读工具可用（read_file / glob / grep / tree / get_file_info / web_search 等）
-            - 写入/修改工具被禁用（edit_file / multi_edit / write_file / run_command 等）
-            - 先用只读工具探索代码库，了解现状后再用 submit_plan 提交执行计划供审查
-            - 用户输入 /execute 退出计划模式后，所有工具恢复正常
-            """;
 
     /**
      * 执行完整的工具系统初始化。
@@ -88,8 +76,9 @@ public class ToolSystemInitializer {
         systemPrompt = systemPrompt + "\n\n---\n\n" + EnvInfoUtil.buildEnvInfo(workspace);
 
         // 7. 项目文档后置到最底部 —— 最大化前缀缓存命中。
-        //    稳定的 system prompt（身份/规则/工具定义/Plan Mode/Skill 索引）保持在头部，
+        //    稳定的 system prompt（身份/规则/工具定义/Skill 索引）保持在头部，
         //    项目特定的 loopra.md/CLAUDE.md 放在末尾，换项目时只需 discard 尾部缓存。
+        //    计划模式等动态状态不进 system prompt，由 AgentLoop 按需注入工具约定尾部。
         String projectMd = loadProjectMd(workspace);
         if (!projectMd.isEmpty()) {
             systemPrompt = systemPrompt + "\n\n---\n\n" + projectMd;
@@ -134,11 +123,11 @@ public class ToolSystemInitializer {
         public final ToolRegistry toolRegistry;
         public final PromptPrefix promptPrefix;
         /**
-         * 完整系统提示词（含项目文档 + base + 工具定义 + Plan Mode + Skill 索引）
+         * 完整系统提示词（含项目文档 + base + 工具定义 + Skill 索引）
          */
         public final String systemPrompt;
         /**
-         * 后缀部分（工具定义 + Plan Mode + Skill 索引），不依赖于具体工作区的项目文档
+         * 后缀部分（工具定义 + Skill 索引），不依赖于具体工作区的项目文档
          */
         public final String suffix;
 

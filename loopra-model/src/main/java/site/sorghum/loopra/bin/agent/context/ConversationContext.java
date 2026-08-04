@@ -72,6 +72,9 @@ public class ConversationContext {
         if (msg != null && msg.getRollbackId() != null) {
             chatMsg.setRollbackId(msg.getRollbackId());
         }
+        if (msg != null) {
+            chatMsg.setWebHidden(msg.isWebHidden());
+        }
         history.add(chatMsg);
         persist(chatMsg);
     }

@@ -70,6 +70,11 @@ public class LoopraAgent {
     @Getter
     private SessionService sessionService;
     /**
+     * 会话存储是否为 Agent 自建（未注入 sessionStore 时为 true）。
+     * 仅自建存储在 {@link #dispose()} 时关闭，上层注入的共享存储由注入方管理生命周期。
+     */
+    private boolean ownsSessionStore;
+    /**
      * 获取当前工作目录
      */
     @Getter
@@ -89,7 +94,8 @@ public class LoopraAgent {
     private volatile boolean terminated = false;
 
     /**
-     * 共享 ModelClient，每次构建独立初始化工具系统。
+     * 共享 ModelClient，工具系统默认每次构建独立初始化；
+     * 注入 {@code toolSystem} 时复用共享初始化结果，跳过重复扫描。
      * </br>仅创建独立的会话上下文。适用于"一个会话一个 Agent"场景，减少资源消耗。
      *
      * @param b                  Builder
@@ -102,9 +108,12 @@ public class LoopraAgent {
 
         final ModelClient client = b.modelClient;
         final String prompt = resolvePrompt(b);
-        final ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
-                b.workspace, b.apiUrl, b.apiKey,
-                b.disabledTools, b.blockedPaths, prompt);
+        // 注入共享工具系统时直接复用，跳过完整的工具扫描与提示词构建
+        final ToolSystemInitializer.Result initResult = b.toolSystem != null
+                ? b.toolSystem
+                : ToolSystemInitializer.initialize(
+                        b.workspace, b.apiUrl, b.apiKey,
+                        b.disabledTools, b.blockedPaths, prompt);
         this.ctx = new ConversationContext(initResult.promptPrefix);
         LoopraConfig loopConfig = b.loopraConfig != null ? b.loopraConfig : LoopraConfig.getInstance();
         this.loop = initSessionAndLoop(b, client, initResult.toolRegistry, loopConfig);
@@ -151,13 +160,14 @@ public class LoopraAgent {
      * @return 构造完成的 AgentLoop 实例
      */
     private AgentLoop initSessionAndLoop(Builder b, ModelClient client, ToolRegistry registry,
-                                         LoopraConfig config) {
+                                          LoopraConfig config) {
         try {
             final String workspacePath = this.workspace != null
                     ? this.workspace.toAbsolutePath().toString()
                     : Paths.get(System.getProperty("user.home"), ".loopra").toString();
             this.workspaceManager = WorkspaceManager.getOrCreate(workspacePath);
             final Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
+            this.ownsSessionStore = b.sessionStore == null;
             this.sessionService = (b.sessionStore != null)
                     ? new SessionService(ctx, b.sessionStore)
                     : new SessionService(ctx, sessionsDir);
@@ -170,7 +180,12 @@ public class LoopraAgent {
         final AgentLoop agentLoop = new AgentLoop(client, registry, ctx, b.hitl, config);
         agentLoop.setWorkspace(this.workspace);
         agentLoop.setSessionUsageSink(this.sessionService);
+        agentLoop.setPendingPlanSink(plan -> {
+            String name = getSessionStore().currentName();
+            if (name != null) getSessionStore().setPendingPlan(name, plan);
+        });
         agentLoop.setGoalGuard(b.goalGuard != null ? b.goalGuard : new GoalGuardImpl());
+        restorePlanState(agentLoop, getSessionStore().currentName());
         registry.setToolPolicyProvider(b.toolPolicyProvider != null ? b.toolPolicyProvider : new ConfigServiceToolPolicyProvider());
         return agentLoop;
     }
@@ -310,12 +325,23 @@ public class LoopraAgent {
             sessionService.restoreUsage(name);
             String existingTitle = getSessionStore().getTitle(name);
             sessionService.setTitleGenerated(existingTitle != null && !existingTitle.isEmpty());
+            // 恢复持久化的计划模式与待审查计划（静默恢复，不发事件；
+            // Agent 重建/会话切换后不丢失只读约束和待批准计划）
+            restorePlanState(loop, name);
         }
     }
 
-    /**
-     * 累计 token 用量
-     */
+    private void restorePlanState(AgentLoop targetLoop, String name) {
+        if (targetLoop == null || name == null) return;
+        try {
+            targetLoop.setPlanMode(getSessionStore().isPlanMode(name));
+            targetLoop.restorePendingPlan(getSessionStore().getPendingPlan(name));
+        } catch (Exception e) {
+            log.warn("[plan] 恢复计划状态失败: {}", e.getMessage());
+        }
+    }
+
+    /** 累计 token 用量 */
     public void addUsage(int prompt, int completion, int cacheHit, int cacheMiss) {
         sessionService.addUsage(prompt, completion, cacheHit, cacheMiss);
     }
@@ -486,6 +512,99 @@ public class LoopraAgent {
         loop.setTerminateOnNoToolCall(enabled);
     }
 
+    // ========== 计划模式（Plan Mode） ==========
+
+    /**
+     * 切换计划模式：更新循环状态 + 持久化到会话元数据 + 通知前端。
+     * <p>幂等：重复设置相同状态时不做任何操作。</p>
+     *
+     * @param enabled true 进入（仅只读），false 退出（恢复全部工具）
+     */
+    public void setPlanMode(boolean enabled) {
+        if (loop == null || loop.isPlanMode() == enabled) {
+            return;
+        }
+        loop.setPlanMode(enabled);
+        // 持久化：Agent 被 LRU 淘汰重建后能恢复，避免静默放宽为可写
+        try {
+            if (sessionService != null) {
+                sessionService.ensureSessionName();
+                String name = getSessionStore().currentName();
+                if (name != null) {
+                    getSessionStore().setPlanMode(name, enabled);
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[plan] 持久化计划模式失败: {}", e.getMessage());
+        }
+        AgentOutput out = loop.getOutput();
+        if (out != null) {
+            out.sendEvent("mode_changed",
+                    "{\"mode\":\"" + (enabled ? "plan" : "execute") + "\"}");
+        }
+        log.info("[plan] 计划模式已{}", enabled ? "开启" : "关闭");
+    }
+
+    /** 当前是否处于计划模式。 */
+    public boolean isPlanMode() {
+        return loop != null && loop.isPlanMode();
+    }
+
+    /** 取出并清空 submit_plan 提交的待审查计划（/execute 批准时调用）。 */
+    public String consumePendingPlan() {
+        return loop != null ? loop.consumePendingPlan() : null;
+    }
+
+    /** 获取待审查计划（不移除）。 */
+    public String getPendingPlan() {
+        return loop != null ? loop.getPendingPlan() : null;
+    }
+
+    /**
+     * 为 Web 批准流程准备执行指令。待审查计划在模型真正启动前不会被消费，
+     * 以便请求失败时恢复审查状态。
+     */
+    public String preparePendingPlanExecution() {
+        String plan = getPendingPlan();
+        if (plan == null || plan.isBlank()) return null;
+        setPlanMode(false);
+        return buildPlanExecutionMessage(plan);
+    }
+
+    /** 模型执行已启动，提交本次批准。 */
+    public void completePendingPlanExecution() {
+        clearPendingPlan();
+    }
+
+    /** 模型执行尚未启动即失败，恢复计划模式并重新推送待审查计划。 */
+    public void restorePendingPlanExecution() {
+        String plan = getPendingPlan();
+        if (plan == null || plan.isBlank()) return;
+        setPlanMode(true);
+        loop.submitPlan(plan);
+    }
+
+    public String approvePendingPlan() {
+        String executionMessage = preparePendingPlanExecution();
+        if (executionMessage != null) completePendingPlanExecution();
+        return executionMessage;
+    }
+
+    public static String buildPlanExecutionMessage(String plan) {
+        return """
+                执行计划已批准，计划模式已退出（全部工具恢复可用）。请严格按以下计划逐步执行：
+
+                %s
+
+                现在开始执行：按步骤推进，每步完成后继续下一步；如遇与计划不符的情况，先说明差异再妥善处理。
+                """.formatted(plan.trim());
+    }
+
+    /** 清除待审查计划（撤回/重写历史时调用）。 */
+    public void clearPendingPlan() {
+        if (loop != null) loop.clearPendingPlan();
+    }
+
     /**
      * 刷新工具列表（工具启用/禁用状态变更后调用）。
      */
@@ -539,6 +658,10 @@ public class LoopraAgent {
         }
     }
 
+    public boolean isAbortRequested() {
+        return loop != null && loop.isAbortRequested();
+    }
+
     /**
      * 刷入会话数据到磁盘。
      * 每轮对话结束后调用，确保消息已持久化。
@@ -548,8 +671,9 @@ public class LoopraAgent {
     }
 
     /**
-     * 释放 Agent 资源：注销事件监听、刷入会话、保存用量。
+     * 释放 Agent 资源：注销事件监听、刷入会话、保存用量、关闭自建会话存储。
      * 当 Agent 被 LRU 淘汰或应用关闭时调用，防止内存泄漏。
+     * <p>仅关闭自建的 SessionStore；上层注入的共享存储由注入方管理生命周期。</p>
      */
     public void dispose() {
         // 注销 Dami 事件监听
@@ -567,6 +691,14 @@ public class LoopraAgent {
             saveUsage();
         } catch (Exception e) {
             log.warn("[dispose] 刷入会话失败: {}", e.getMessage());
+        }
+        // 关闭自建会话存储（释放消费者线程 + 定时刷入 scheduler + writer）
+        if (ownsSessionStore && sessionService != null) {
+            try {
+                sessionService.getStore().shutdown();
+            } catch (Exception e) {
+                log.warn("[dispose] 关闭会话存储失败: {}", e.getMessage());
+            }
         }
     }
 
@@ -624,6 +756,13 @@ public class LoopraAgent {
          * <p>上层可注入自定义 {@link SessionStore} 以定制会话持久化。</p>
          */
         SessionStore sessionStore;
+        /**
+         * 共享工具系统初始化结果（可选，含 ToolRegistry + PromptPrefix + 系统提示词）。
+         * <p>注入后跳过 {@link ToolSystemInitializer#initialize}，复用共享的工具注册表
+         * 与预构建的提示词前缀，避免每个 Agent 重复扫描工具。注意：Result 内的工作区
+         * 相关内容（Skill 工具、环境信息、项目文档）应与 Builder 配置的工作区一致。</p>
+         */
+        ToolSystemInitializer.Result toolSystem;
 
         public Builder loopraConfig(LoopraConfig loopraConfig){
             this.loopraConfig = loopraConfig;
@@ -696,9 +835,19 @@ public class LoopraAgent {
 
         /**
          * 注入自定义会话存储；不设置则使用默认的 JSONL 文件存储。
+         * <p>注入的存储由调用方管理生命周期，{@code dispose()} 不会关闭它。</p>
          */
         public Builder sessionStore(SessionStore v) {
             this.sessionStore = v;
+            return this;
+        }
+
+        /**
+         * 注入共享的工具系统初始化结果；设置后跳过内部工具系统初始化，直接复用。
+         * <p>用于多 Agent 共享同一工作区的工具注册表与提示词前缀，避免重复初始化。</p>
+         */
+        public Builder toolSystem(ToolSystemInitializer.Result v) {
+            this.toolSystem = v;
             return this;
         }
 

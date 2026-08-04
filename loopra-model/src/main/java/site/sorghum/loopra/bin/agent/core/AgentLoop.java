@@ -42,6 +42,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
+import java.util.function.Consumer;
 
 /**
  * Agent 循环 —— 编排 prompt → LLM → 工具调用 → 反馈结果 → LLM 的循环。
@@ -119,6 +120,19 @@ public class AgentLoop implements AgentLoopController {
     /** 子代理可冻结这两部分，确保其整个生命周期内模型请求前缀完全一致。 */
     private volatile ONode frozenTools;
     private volatile String frozenToolInstructions;
+    /**
+     * 计划模式 —— 会话级状态：仅允许只读工具（工具列表过滤 + 执行拒绝 + 指令感知）。
+     * 由 /plan、/execute 命令切换；不修改共享的 ToolRegistry，因此不影响同工作区的其他会话。
+     */
+    private volatile boolean planMode = false;
+    /**
+     * 计划模式下经 submit_plan 提交、待用户审查的执行计划。
+     * /execute 批准时取出并注入为执行依据（取出即清空）。
+     */
+    private volatile String pendingPlan = null;
+    /** 上层会话存储回调：计划提交/消费时同步持久化；子代理默认不设置。 */
+    @Setter
+    private Consumer<String> pendingPlanSink;
     @Getter
     private final HitlManager hitlManager;
 
@@ -502,18 +516,114 @@ public class AgentLoop implements AgentLoopController {
             return fixed;
         }
         registry.refresh();
-        return registry.toOpenAiTools();
+        ONode tools = registry.toOpenAiTools();
+        return planMode ? filterReadOnlyTools(tools) : tools;
     }
 
     /** 固定后续请求的 system 附加指令和工具定义；必须在首轮模型调用前执行。 */
     public void freezePromptPrefix() {
         frozenToolInstructions = buildToolInstructions();
-        frozenTools = ONode.ofJson(registry.toOpenAiTools().toJson());
+        ONode tools = registry.toOpenAiTools();
+        frozenTools = ONode.ofJson((planMode ? filterReadOnlyTools(tools) : tools).toJson());
     }
 
     private String currentToolInstructions() {
         String fixed = frozenToolInstructions;
-        return fixed != null ? fixed : buildToolInstructions();
+        String base = fixed != null ? fixed : buildToolInstructions();
+        return planMode ? base + "\n\n" + PLAN_MODE_INSTRUCTIONS : base;
+    }
+
+    // ==================== 计划模式 ====================
+
+    /**
+     * 计划模式动态指令 —— 激活时追加到工具协作约定末尾。
+     * 放在动态尾部而非 system prompt 固定前缀，避免模式切换破坏前缀缓存稳定性。
+     */
+    private static final String PLAN_MODE_INSTRUCTIONS = """
+            ## Plan Mode（当前处于计划模式）
+
+            - 仅只读工具可用：写入/修改/执行类工具已从工具列表移除，任何此类调用都会被直接拒绝
+            - 不要尝试修改文件、执行命令等任何改变操作，也不要尝试绕过此限制
+            - 先用只读工具充分探索，理解现状、明确目标、影响面与风险
+            - 探索完成后用 `submit_plan` 工具提交完整执行计划供用户审查，然后向用户简要总结计划要点并结束本轮
+            - 用户批准计划后系统会退出计划模式并按计划执行
+            """;
+
+    @Override
+    public boolean isPlanMode() {
+        return planMode;
+    }
+
+    /**
+     * 切换计划模式（会话级状态，仅影响本循环）。
+     * <p>切换在下一步立即生效：工具列表过滤为只读集合、非只读调用被拒绝、
+     * 计划模式指令注入工具约定。持久化与事件通知由上层（LoopraAgent）负责。</p>
+     */
+    public void setPlanMode(boolean enabled) {
+        this.planMode = enabled;
+    }
+
+    /**
+     * 保存 submit_plan 提交的任务计划，并通过 plan_submitted 事件通知前端。
+     */
+    @Override
+    public void submitPlan(String planMarkdown) {
+        this.pendingPlan = planMarkdown;
+        persistPendingPlan(planMarkdown);
+        ONode data = ONode.ofJson("{}").asObject();
+        data.set("plan", planMarkdown != null ? planMarkdown : "");
+        safeOutput("planSubmitted", () -> output.sendEvent("plan_submitted", data.toJson()));
+    }
+
+    /** 获取待审查计划（不移除）。 */
+    public String getPendingPlan() {
+        return pendingPlan;
+    }
+
+    /** 静默恢复持久化的待审查计划，不触发事件或重复写盘。 */
+    public void restorePendingPlan(String planMarkdown) {
+        this.pendingPlan = planMarkdown;
+    }
+
+    /** 清除待审查计划并同步持久化。 */
+    public void clearPendingPlan() {
+        this.pendingPlan = null;
+        persistPendingPlan(null);
+    }
+
+    /** 取出并清空待审查计划（/execute 批准时调用）。 */
+    public String consumePendingPlan() {
+        String plan = pendingPlan;
+        clearPendingPlan();
+        return plan;
+    }
+
+    private void persistPendingPlan(String planMarkdown) {
+        Consumer<String> sink = pendingPlanSink;
+        if (sink == null) return;
+        try {
+            sink.accept(planMarkdown);
+        } catch (Exception e) {
+            log.warn("[plan] 持久化待审查计划失败: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * 将工具列表过滤为只读集合（不修改注册表及其缓存，返回新节点）。
+     * 注册表中找不到对应 FunctionTool 的条目一律剔除（保守策略）。
+     */
+    private ONode filterReadOnlyTools(ONode tools) {
+        if (tools == null || !tools.isArray()) {
+            return tools;
+        }
+        Map<String, FunctionTool> available = registry.all();
+        ONode filtered = ONode.ofJson(tools.toJson()).asArray();
+        filtered.getArray().removeIf(item -> {
+            String name = item.get("function").get("name").getString();
+            FunctionTool tool = name != null ? available.get(name) : null;
+            return tool == null || !ToolMetadata.isReadOnly(tool);
+        });
+        return filtered;
     }
 
     /**
@@ -1385,6 +1495,17 @@ public class AgentLoop implements AgentLoopController {
                         safeListener("toolResult", () -> listener.onToolResult(toolCall.getName(), result));
                         safeOutputDebug("toolResult", () -> output.onToolResult(toolCall.getName(), result));
                         return toolResult(toolCall.getId(), "工具不存在");
+                    }
+
+                    // 计划模式硬约束：非只读工具直接拒绝。
+                    // 正常情况下写工具已从工具列表移除，此处兼容模型凭记忆幻觉调用的兑底。
+                    if (planMode && !ToolMetadata.isReadOnly(fc)) {
+                        String result = rejectedToolResult(
+                                "当前处于计划模式，仅允许只读工具；本次调用已被拒绝。请继续使用只读工具探索，完成后用 submit_plan 提交计划。",
+                                "plan_mode");
+                        safeListener("toolResult", () -> listener.onToolResult(toolCall.getName(), result));
+                        safeOutputDebug("toolResult", () -> output.onToolResult(toolCall.getName(), result));
+                        return toolResult(toolCall.getId(), result);
                     }
 
                     String argumentsJson = toolCall.getArgumentsStr();

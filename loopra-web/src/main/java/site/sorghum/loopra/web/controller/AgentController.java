@@ -12,6 +12,7 @@ import site.sorghum.loopra.web.common.WebErrorMessages;
 import site.sorghum.loopra.web.model.AgentStatusDTO;
 import site.sorghum.loopra.web.model.ApiResponse;
 import site.sorghum.loopra.web.model.CommandMetaDTO;
+import site.sorghum.loopra.web.model.PlanModeRequest;
 import site.sorghum.loopra.web.model.SkillMetaDTO;
 import site.sorghum.loopra.web.service.AgentService;
 
@@ -59,6 +60,38 @@ public class AgentController {
         }
         String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
         return ApiResponse.ok(agentService.getHistory(workspacePath, sessionName));
+    }
+
+    @ApiOperation(value = "查询会话计划模式", notes = "返回指定会话是否处于计划模式（前端加载会话时恢复状态用）")
+    @Get
+    @Mapping("/mode")
+    public ApiResponse<java.util.Map<String, Object>> mode(
+            @ApiParam(value = "工作区 hash", required = true)
+            @Param(value = "workspaceHash", required = true)
+            String workspaceHash,
+            @ApiParam(value = "会话名称", required = true)
+            @Param(value = "sessionName", required = true)
+            String sessionName) {
+        if (!agentService.isReady()) {
+            throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        }
+        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
+        return ApiResponse.ok(agentService.getPlanState(workspacePath, sessionName));
+    }
+
+    @ApiOperation(value = "切换会话计划模式", notes = "由 Web UI 显式开启或关闭计划模式")
+    @Post
+    @Mapping("/mode")
+    public ApiResponse<java.util.Map<String, Object>> updateMode(@Body PlanModeRequest request) {
+        if (!agentService.isReady()) {
+            throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        }
+        if (request == null || request.getSessionName() == null || request.getSessionName().isBlank()) {
+            throw new ServiceException("请先选择会话");
+        }
+        String workspacePath = agentService.resolveWorkspacePath(request.getWorkspaceHash());
+        return ApiResponse.ok(agentService.setPlanMode(
+                workspacePath, request.getSessionName(), request.isEnabled()));
     }
 
     @ApiOperation(value = "获取可用命令列表", notes = "返回所有可用的聊天命令（如 /help、/retry、/compact 等）")

@@ -90,6 +90,22 @@ class ContextFoldingTest {
     }
 
     @Test
+    void foldKeepLastPreservesWebHiddenOnRetainedMessages(@TempDir Path dir) throws Exception {
+        List<ChatMessage> msgs = buildLongHistory(30);
+        ChatMessage hidden = msgs.get(msgs.size() - 2);
+        hidden.setWebHidden(true);
+
+        List<ChatMessage> folded = ContextFolding.foldKeepLast(
+                msgs, 20, mockClientReturning("<摘要>摘要</摘要>"), dir);
+
+        ChatMessage retained = folded.stream()
+                .filter(message -> hidden.getContent().equals(message.getContent()))
+                .findFirst()
+                .orElseThrow();
+        assertTrue(retained.isWebHidden());
+    }
+
+    @Test
     void foldKeepLastWithWorkspacePersistsMemoryAndCompressesHistory(@TempDir Path dir) throws Exception {
         String llmOutput = """
                 <摘要>用户在给 Loopra 加记忆系统，已改 AgentLoop 和 ContextFolding，尚未写测试。</摘要>

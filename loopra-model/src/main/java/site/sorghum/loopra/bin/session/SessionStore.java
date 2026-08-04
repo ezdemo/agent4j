@@ -111,6 +111,36 @@ public interface SessionStore {
     String getTitle(String name);
 
     /**
+     * 持久化会话的计划模式开关。
+     * <p>默认空实现；支持会话元数据的实现（如 JSONL .meta 文件）应覆盖，
+     * 保证 Agent 重建/会话切换后能恢复计划模式，避免静默放宽为可写。</p>
+     */
+    default void setPlanMode(String name, boolean enabled) {
+        // 默认空实现，向后兼容
+    }
+
+    /**
+     * 读取会话持久化的计划模式状态（默认 false）。
+     */
+    default boolean isPlanMode(String name) {
+        return false;
+    }
+
+    /**
+     * 持久化待用户审查的计划；传 null 表示清除。
+     */
+    default void setPendingPlan(String name, String plan) {
+        // 默认空实现，向后兼容
+    }
+
+    /**
+     * 读取待用户审查的计划，不存在则返回 null。
+     */
+    default String getPendingPlan(String name) {
+        return null;
+    }
+
+    /**
      * 追加一条每日用量记录到全局日志文件 {@code ~/.loopra/usage_daily.jsonl}。
      * <p>
      * 记录格式为一行 JSON：
@@ -125,6 +155,17 @@ public interface SessionStore {
      */
     default void appendDailyUsage(String model, int prompt, int completion,
                                   int cacheHit, int cacheMiss) {
+        // 默认空实现，向后兼容
+    }
+
+    /**
+     * 关闭存储，释放其持有的资源（如后台线程、定时器、文件句柄）。
+     * <p>
+     * 调用后不应再使用该 store 实例。默认空实现，
+     * 无资源需要释放的存储（如纯同步实现）无需覆盖。
+     * </p>
+     */
+    default void shutdown() {
         // 默认空实现，向后兼容
     }
 

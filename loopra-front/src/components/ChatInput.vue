@@ -127,6 +127,8 @@
       </div>
     </section>
 
+    <slot name="plan-review"></slot>
+
     <div class="input-box" :class="{ focused: inputFocused, 'file-drop-active': fileDropActive }"
          @dragenter.prevent="handleFileDragEnter" @dragover.prevent="handleFileDragOver"
          @dragleave="handleFileDragLeave" @drop.prevent="handleFileDrop">
@@ -219,7 +221,11 @@
         </div>
 
         <div class="input-actions">
-          <!-- 计划模式按钮已移除 -->
+          <button type="button" class="plan-mode-btn" :class="{ active: planMode }"
+                  :disabled="streaming || (!sessionName && !workspaceHash)" :aria-pressed="planMode"
+                  :title="planMode ? '退出计划模式' : '进入计划模式'" @click="$emit('togglePlan')">
+            <FileTextOutlined />
+          </button>
           <button v-if="streaming" class="stop-btn" @click="$emit('abort')" title="停止生成 (Esc)">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                  class="animate-spin">
@@ -529,7 +535,7 @@
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {StarFilled, StarOutlined} from '@ant-design/icons-vue'
+import {FileTextOutlined, StarFilled, StarOutlined} from '@ant-design/icons-vue'
 import {useAppStore} from '../stores/app'
 import {agentAPI, filesAPI, petAPI, promptPresetsAPI} from '../services/api'
 import PetSprite from './PetSprite.vue'
@@ -556,10 +562,11 @@ const props = defineProps({
   petState: {type: String, default: 'idle'},
   rightPanelOpen: {type: Boolean, default: false},
   welcomeMode: {type: Boolean, default: false},
-  queuedMessages: {type: Array, default: () => []}
+  queuedMessages: {type: Array, default: () => []},
+  planMode: {type: Boolean, default: false}
 })
 
-const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'setDefaultModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission', 'pickerOpen', 'manageModels', 'removeQueued', 'guideQueued'])
+const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'setDefaultModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission', 'pickerOpen', 'manageModels', 'removeQueued', 'guideQueued', 'togglePlan'])
 
 const inputField = ref(null)
 const inputFocused = ref(false)
@@ -663,8 +670,6 @@ const defaultSlashCmds = [
   {cmd: '/retry', desc: '重试最后一条', type: 'session'},
   {cmd: '/compact', desc: '折叠上下文', type: 'session'},
   {cmd: '/export', desc: '导出对话', type: 'session'},
-  {cmd: '/plan', desc: '进入计划模式', type: 'mode'},
-  {cmd: '/execute', desc: '退出计划模式', type: 'mode'},
   {cmd: '/continue', desc: '继续生成', type: 'mode'},
   {cmd: '/sessions', desc: '列出历史会话', type: 'session'},
   {cmd: '/help', desc: '显示帮助信息', type: 'system'},
@@ -676,7 +681,9 @@ const defaultSlashCmds = [
 ]
 
 const mergedCommands = computed(() => {
-  if (backendCommands.value.length > 0) return backendCommands.value.map(c => ({
+  if (backendCommands.value.length > 0) return backendCommands.value
+      .filter(c => c.cmd !== '/plan' && c.cmd !== '/execute')
+      .map(c => ({
     cmd: c.cmd,
     desc: c.desc || '',
     type: c.type || 'system'
@@ -1750,6 +1757,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 
 .input-area:not(.welcome-mode) .send-btn,
+.input-area:not(.welcome-mode) .plan-mode-btn,
 .input-area:not(.welcome-mode) .continue-btn {
   width: 38px;
   height: 38px;
@@ -1757,6 +1765,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 
 .input-area:not(.welcome-mode) .send-btn svg,
+.input-area:not(.welcome-mode) .plan-mode-btn :deep(svg),
 .input-area:not(.welcome-mode) .continue-btn svg {
   width: 18px;
   height: 18px;
@@ -1911,6 +1920,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   opacity: 0.5;
 }
 
+.plan-mode-btn,
 .continue-btn {
   width: 28px;
   height: 28px;
@@ -1923,11 +1933,18 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   cursor: pointer;
 }
 
+.plan-mode-btn:hover,
 .continue-btn:hover {
   background: var(--bg-3);
   color: var(--accent);
 }
 
+.plan-mode-btn.active {
+  background: var(--accent-bg);
+  color: var(--accent);
+}
+
+.plan-mode-btn:disabled,
 .continue-btn:disabled {
   cursor: not-allowed;
   opacity: 0.35;
@@ -3427,6 +3444,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 
 .input-area.welcome-mode .send-btn,
+.input-area.welcome-mode .plan-mode-btn,
 .input-area.welcome-mode .continue-btn {
   width: 38px;
   height: 38px;
@@ -3434,6 +3452,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 
 .input-area.welcome-mode .send-btn svg,
+.input-area.welcome-mode .plan-mode-btn :deep(svg),
 .input-area.welcome-mode .continue-btn svg {
   width: 18px;
   height: 18px;
@@ -3684,7 +3703,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
     gap: 4px;
   }
 
-  .btn-icon-sm, .send-btn, .continue-btn, .stop-btn {
+  .btn-icon-sm, .send-btn, .plan-mode-btn, .continue-btn, .stop-btn {
     width: 32px;
     height: 32px;
   }

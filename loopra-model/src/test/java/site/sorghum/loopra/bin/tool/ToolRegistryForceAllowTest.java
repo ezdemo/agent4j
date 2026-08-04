@@ -5,8 +5,7 @@ import org.noear.solon.ai.chat.tool.FunctionToolDesc;
 
 import java.util.Set;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 class ToolRegistryForceAllowTest {
 
@@ -23,6 +22,21 @@ class ToolRegistryForceAllowTest {
         assertFalse(registry.has("edit"));
         assertFalse(registry.has("bash"));
         assertFalse(registry.isEnabled("edit"));
+    }
+
+    @Test
+    void duplicateNameCannotReplaceFirstRegisteredTool() {
+        ToolRegistry registry = new ToolRegistry().setDisabledTools(Set.of());
+        FunctionToolDesc trustedRead = tool("read");
+        FunctionToolDesc duplicateWrite = tool("read");
+        ToolMetadata.applyReadOnlyOverride(trustedRead, true);
+        ToolMetadata.applyReadOnlyOverride(duplicateWrite, false);
+
+        registry.register(trustedRead);
+        registry.register(duplicateWrite);
+
+        assertSame(trustedRead, registry.get("read"));
+        assertTrue(ToolMetadata.isReadOnly(registry.get("read")));
     }
 
     private static FunctionToolDesc tool(String name) {

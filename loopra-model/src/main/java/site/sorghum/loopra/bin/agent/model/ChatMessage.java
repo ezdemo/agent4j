@@ -84,6 +84,10 @@ public class ChatMessage {
     @ONodeAttr(name = "rollback_id")
     private String rollbackId;
 
+    /** Internal user turn kept for model context but hidden by Web history rendering. */
+    @ONodeAttr(name = "web_hidden")
+    private boolean webHidden;
+
     /**
      * 消息时间戳（Unix 毫秒），用于前端渲染消息时间。
      */
@@ -188,6 +192,8 @@ public class ChatMessage {
         msg.snapshotId = snapshotId != null ? snapshotId.toString() : null;
         Object rollbackId = m.get("rollback_id");
         msg.rollbackId = rollbackId != null ? rollbackId.toString() : null;
+        Object webHidden = m.get("web_hidden");
+        msg.webHidden = Boolean.parseBoolean(String.valueOf(webHidden));
         Object timestamp = m.get("timestamp");
         if (timestamp instanceof Number) {
             msg.timestamp = ((Number) timestamp).longValue();
@@ -314,6 +320,7 @@ public class ChatMessage {
         if (fileChanges != null && !fileChanges.isEmpty()) m.put("file_changes", fileChanges);
         if (snapshotId != null) m.put("snapshot_id", snapshotId);
         if (rollbackId != null) m.put("rollback_id", rollbackId);
+        if (webHidden) m.put("web_hidden", true);
         if (timestamp != null) m.put("timestamp", timestamp);
         if (toolCalls != null && !toolCalls.isEmpty()) {
             List<Map<String, Object>> tcMaps = new ArrayList<>();

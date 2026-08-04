@@ -147,4 +147,24 @@ public interface AgentLoopController {
     default String getHitlMode() {
         return isHitlMode() ? "approval" : "free";
     }
+
+    /**
+     * 当前循环是否处于计划模式（仅允许只读工具）。
+     * <p>计划模式下工具列表被过滤为只读集合，非只读调用会被拒绝。
+     * 子代理通过此接口继承父代理的计划模式约束。</p>
+     */
+    default boolean isPlanMode() {
+        return false;
+    }
+
+    /**
+     * 提交执行计划供用户审查（计划模式产物）。
+     * <p>由 {@code submit_plan} 工具调用；实现方应保存计划并在用户批准后
+     * 作为执行依据注入后续对话。默认空实现（如测试桩、无计划能力的控制器）。</p>
+     *
+     * @param planMarkdown 计划内容（Markdown 文本）
+     */
+    default void submitPlan(String planMarkdown) {
+        // 默认空实现，AgentLoop 中会覆盖此方法
+    }
 }

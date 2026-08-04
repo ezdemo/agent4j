@@ -184,6 +184,9 @@ public class JsonlSessionStore implements SessionStore {
         if (msg.getRollbackId() != null) {
             node.set("rollback_id", msg.getRollbackId());
         }
+        if (msg.isWebHidden()) {
+            node.set("web_hidden", true);
+        }
         if (msg.getTimestamp() != null) {
             node.set("timestamp", msg.getTimestamp());
         }
@@ -391,6 +394,7 @@ public class JsonlSessionStore implements SessionStore {
      * 关闭 store，释放所有资源（消费者线程 + 定时器 + writer）。
      * 调用后不能再使用此 store 实例。
      */
+    @Override
     public void shutdown() {
         lock.lock();
         try {
@@ -569,6 +573,7 @@ public class JsonlSessionStore implements SessionStore {
     public List<SessionInfo> list() throws IOException {
         if (!Files.isDirectory(sessionsDir)) return new ArrayList<>();
         List<SessionInfo> list = new ArrayList<>();
+        Set<String> listedNames = new HashSet<>();
         try (DirectoryStream<Path> ds = Files.newDirectoryStream(sessionsDir, "*.jsonl")) {
             for (Path p : ds) {
                 String name = p.getFileName().toString().replace(".jsonl", "");
@@ -592,6 +597,25 @@ public class JsonlSessionStore implements SessionStore {
                     }
                 }
                 list.add(new SessionInfo(name, size, lines, attr.lastModifiedTime().toMillis(), title));
+                listedNames.add(name);
+            }
+        }
+        // 计划模式可在首条消息前开启，此时只有 .meta；仍需让会话可被刷新后重新发现。
+        try (DirectoryStream<Path> ds = Files.newDirectoryStream(sessionsDir, "*.meta")) {
+            for (Path p : ds) {
+                String name = p.getFileName().toString().replace(".meta", "");
+                if (listedNames.contains(name) || name.contains("__archive")) continue;
+                try {
+                    ONode meta = ONode.ofJson(Files.readString(p));
+                    boolean planMode = meta.get("planMode").getBoolean();
+                    String pendingPlan = meta.get("pendingPlan").getString();
+                    if (!planMode && (pendingPlan == null || pendingPlan.isBlank())) continue;
+                    String title = meta.get("title").getString();
+                    BasicFileAttributes attr = Files.readAttributes(p, BasicFileAttributes.class);
+                    list.add(new SessionInfo(name, 0, 0, attr.lastModifiedTime().toMillis(), title));
+                } catch (Exception e) {
+                    log.warn("[jsonl] 读取计划会话元数据失败 {}: {}", p.getFileName(), e.getMessage());
+                }
             }
         }
         list.sort((a, b) -> Long.compare(b.mtime(), a.mtime()));
@@ -606,8 +630,8 @@ public class JsonlSessionStore implements SessionStore {
         Path usage = sessionsDir.resolve(safe + ".usage");
         Path meta = sessionsDir.resolve(safe + ".meta");
         boolean deleted = Files.deleteIfExists(jsonl);
-        Files.deleteIfExists(usage);
-        Files.deleteIfExists(meta);
+        deleted |= Files.deleteIfExists(usage);
+        deleted |= Files.deleteIfExists(meta);
         return deleted;
     }
 
@@ -662,22 +686,99 @@ public class JsonlSessionStore implements SessionStore {
 
     @Override
     public void updateTitle(String name, String title) throws IOException {
-        Path file = sessionsDir.resolve(sanitize(name) + ".meta");
-        org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson("{}");
-        node.set("title", title);
-        Files.writeString(file, node.toJson());
+        writeMeta(name, node -> node.set("title", title));
     }
 
     @Override
     public String getTitle(String name) {
+        org.noear.snack4.ONode meta = readMeta(name);
+        return meta != null ? meta.get("title").getString() : null;
+    }
+
+    @Override
+    public void setPlanMode(String name, boolean enabled) {
+        try {
+            writeMeta(name, node -> node.set("planMode", enabled));
+        } catch (IOException e) {
+            log.warn("[jsonl] 持久化计划模式失败: {}", e.getMessage());
+        }
+    }
+
+    @Override
+    public boolean isPlanMode(String name) {
+        org.noear.snack4.ONode meta = readMeta(name);
+        if (meta == null) return false;
+        org.noear.snack4.ONode flag = meta.get("planMode");
+        return flag != null && !flag.isNull() && flag.getBoolean();
+    }
+
+    @Override
+    public void setPendingPlan(String name, String plan) {
+        try {
+            writeMeta(name, node -> {
+                if (plan == null || plan.isBlank()) {
+                    node.remove("pendingPlan");
+                } else {
+                    node.set("pendingPlan", plan);
+                }
+            });
+        } catch (IOException e) {
+            log.warn("[jsonl] 持久化待审查计划失败: {}", e.getMessage());
+        }
+    }
+
+    @Override
+    public String getPendingPlan(String name) {
+        org.noear.snack4.ONode meta = readMeta(name);
+        if (meta == null) return null;
+        String plan = meta.get("pendingPlan").getString();
+        return plan == null || plan.isBlank() ? null : plan;
+    }
+
+    /**
+     * 读取会话 .meta JSON（不存在或解析失败返回 null）。
+     */
+    private org.noear.snack4.ONode readMeta(String name) {
         Path file = sessionsDir.resolve(sanitize(name) + ".meta");
         if (!Files.exists(file)) return null;
+        ReentrantLock metaLock = fileLock(file);
+        metaLock.lock();
         try {
-            String metaJson = Files.readString(file);
-            org.noear.snack4.ONode metaNode = org.noear.snack4.ONode.ofJson(metaJson);
-            return metaNode.get("title").getString();
+            if (!Files.exists(file)) return null;
+            return org.noear.snack4.ONode.ofJson(Files.readString(file));
         } catch (Exception e) {
+            log.warn("[jsonl] 读取会话元数据失败: {}", e.getMessage());
             return null;
+        } finally {
+            metaLock.unlock();
+        }
+    }
+
+    /**
+     * 读-改-写会话 .meta JSON，保留已有字段（title 与 planMode 共存）。
+     */
+    private void writeMeta(String name, java.util.function.Consumer<org.noear.snack4.ONode> modifier) throws IOException {
+        Path file = sessionsDir.resolve(sanitize(name) + ".meta");
+        ReentrantLock metaLock = fileLock(file);
+        metaLock.lock();
+        Path temp = null;
+        try {
+            org.noear.snack4.ONode node = readMeta(name);
+            if (node == null || !node.isObject()) {
+                node = org.noear.snack4.ONode.ofJson("{}").asObject();
+            }
+            modifier.accept(node);
+            temp = Files.createTempFile(sessionsDir, sanitize(name) + "-", ".meta.tmp");
+            Files.writeString(temp, node.toJson());
+            try {
+                Files.move(temp, file, StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING);
+            } catch (AtomicMoveNotSupportedException e) {
+                Files.move(temp, file, StandardCopyOption.REPLACE_EXISTING);
+            }
+            temp = null;
+        } finally {
+            if (temp != null) Files.deleteIfExists(temp);
+            metaLock.unlock();
         }
     }
 
