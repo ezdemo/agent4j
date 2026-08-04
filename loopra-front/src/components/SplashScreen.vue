@@ -2,7 +2,7 @@
   <div class="splash-screen" v-if="visible">
     <!-- 关闭按钮 -->
     <button class="close-btn" @click="closeApp" title="关闭程序">✕</button>
-    <div class="splash-content">
+    <div class="splash-content" ref="contentRef">
       <!-- Logo -->
       <div class="logo-container">
         <img src="@/assets/logo.svg" alt="Loopra" class="logo" />
@@ -55,6 +55,23 @@
           <p class="info-text" v-if="installReason !== 'not_installed' && installReason !== 'version_mismatch' && installReason !== 'desktop_outdated'">
             需要重新安装 Loopra 桌面运行时
           </p>
+
+          <!-- 下载源选择：GitHub 直连 / 镜像加速，与更新窗口共享 localStorage -->
+          <div class="install-source" v-if="installReason !== 'desktop_outdated'">
+            <span>选择下载方式</span>
+            <div class="source-row">
+              <label class="source-option" :class="{ active: updateSource === UPDATE_SOURCE_NORMAL }">
+                <input v-model="updateSource" type="radio" :value="UPDATE_SOURCE_NORMAL" />
+                <span class="source-name">GitHub 直连</span>
+                <span class="source-desc">官方发布源</span>
+              </label>
+              <label class="source-option" :class="{ active: updateSource === UPDATE_SOURCE_MIRROR }">
+                <input v-model="updateSource" type="radio" :value="UPDATE_SOURCE_MIRROR" />
+                <span class="source-name">镜像下载</span>
+                <span class="source-desc">gh-proxy 加速</span>
+              </label>
+            </div>
+          </div>
 
           <div class="install-command" v-if="installReason !== 'desktop_outdated'">
             <span>将执行以下安装命令：</span>
@@ -152,10 +169,11 @@
 </template>
 
 <script setup>
-import {computed, nextTick, onMounted, ref} from 'vue'
+import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import {platform} from '@/services/platform'
 import {systemAPI} from '@/services/api'
 import {RELEASE_LATEST_URL} from '@/utils/constants'
+import {UPDATE_SOURCE_MIRROR, UPDATE_SOURCE_NORMAL, buildUpdateCommand, loadUpdateSource, saveUpdateSource} from '@/utils/updateScripts'
 // 动态获取当前平台的 loopraWebService
 const { loopraWebService } = platform.implementation
 
@@ -178,21 +196,40 @@ const installProgress = ref(0)
 // 是否在桌面环境（Electron）中
 const isDesktop = ref(false)
 
-const installCommand = computed(() => platform.isElectron
-  ? (window.electronAPI?.platform === 'win32'
-    ? 'irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-gui.ps1 | iex'
-    : 'curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-gui.sh | bash')
-  : (window.electronAPI?.platform === 'win32'
-    ? 'irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex'
-    : 'curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash'))
+// 下载源（GitHub 直连 / 镜像），与更新窗口共享 localStorage
+const updateSource = ref(loadUpdateSource())
+watch(updateSource, (value) => saveUpdateSource(value))
+
+// 安装命令随下载源切换（直连 setup / 镜像 setup-mirror）
+const installCommand = computed(() => {
+  const cmd = buildUpdateCommand(updateSource.value, platform.isElectron)
+  return window.electronAPI?.platform === 'win32' ? cmd.windows : cmd.unix
+})
 
 // 在线安装日志
 const installLogs = ref([])
 const logContainer = ref(null)
 let unlistenInstallOutput = null
 
+// 窗口自适应：内容高度变化时通知主进程调整窗口（仅桌面环境）
+const contentRef = ref(null)
+let contentObserver = null
+function observeContentSize() {
+  const el = contentRef.value
+  if (!el || !window.electronAPI?.splash?.resize) return
+  contentObserver = new ResizeObserver(() => {
+    window.electronAPI.splash.resize({ height: el.offsetHeight + 16 })
+  })
+  contentObserver.observe(el)
+}
+
 onMounted(async () => {
   await checkEnvironment()
+  observeContentSize()
+})
+
+onUnmounted(() => {
+  if (contentObserver) contentObserver.disconnect()
 })
 
 async function checkEnvironment() {
@@ -446,7 +483,7 @@ async function onlineInstall() {
   }
 
   try {
-    await loopraWebService.installOnline()
+    await loopraWebService.installOnline(updateSource.value)
     // 安装成功，启动服务
     installLogs.value.push('')
     installLogs.value.push('✅ 安装完成，正在启动服务...')
@@ -633,6 +670,57 @@ defineExpose({
   color: var(--fg-2);
   line-height: 1.5;
   white-space: nowrap;
+}
+
+/* 下载源选择（GitHub 直连 / 镜像） */
+.install-source {
+  width: 100%;
+  text-align: left;
+  color: var(--fg-4);
+  font-size: 12px;
+}
+
+.source-row {
+  display: flex;
+  gap: 8px;
+  margin-top: 8px;
+}
+
+.source-option {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-2);
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.source-option:hover {
+  border-color: var(--accent);
+}
+
+.source-option.active {
+  border-color: var(--accent);
+  background: rgba(47, 128, 237, 0.08);
+}
+
+.source-option input {
+  display: none;
+}
+
+.source-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.source-desc {
+  font-size: 11px;
+  color: var(--fg-4);
 }
 
 .java-check {
