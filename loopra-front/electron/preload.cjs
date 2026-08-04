@@ -15,7 +15,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
     terminateProcess: (pid) => ipcRenderer.invoke('terminate_loopra_java_process', pid),
     pickFolder: () => ipcRenderer.invoke('pick_loopra_workspace_folder'),
     getCurrentPort: () => ipcRenderer.invoke('get_loopra_web_port'),
-    installOnline: () => ipcRenderer.invoke('install_loopra_web_online')
+    installOnline: (source) => ipcRenderer.invoke('install_loopra_web_online', { source })
+  },
+
+  // 启动窗口：检测/安装/启动完成后通知主进程创建主窗口
+  splash: {
+    ready: () => ipcRenderer.invoke('splash_ready')
+  },
+
+  // 更新窗口管理
+  updateWindow: {
+    open: () => ipcRenderer.invoke('open-update-window'),
+    close: () => ipcRenderer.invoke('update-window-close'),
+    requestChatUpdate: (source) => ipcRenderer.invoke('chat-update-request', { source })
   },
   
   // 窗口控制
@@ -74,6 +86,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('desktop-pet-refresh', listener)
       return () => ipcRenderer.removeListener('desktop-pet-refresh', listener)
     },
+    onClosed: (callback) => {
+      const listener = () => callback()
+      ipcRenderer.on('desktop-pet-closed', listener)
+      return () => ipcRenderer.removeListener('desktop-pet-closed', listener)
+    },
     showReply: (text) => ipcRenderer.invoke('desktop-pet-reply', text),
     onReply: (callback) => {
       const listener = (event, payload) => callback(payload?.text || '')
@@ -103,6 +120,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     setTheme: (theme) => ipcRenderer.invoke('desktop-chat-tab-set-theme', theme),
     openHome: () => ipcRenderer.send('desktop-chat-tab-open-home'),
     openModelChannels: () => ipcRenderer.send('desktop-chat-tab-open-model-channels'),
+    sendCommand: (tabId, command) => ipcRenderer.invoke('desktop-chat-tab-send-command', tabId, command),
     reportTitle: (payload) => ipcRenderer.send('desktop-chat-tab-report-title', payload),
     reportWorkspace: (payload) => ipcRenderer.send('desktop-chat-tab-report-workspace', payload)
   },

@@ -7,21 +7,26 @@
     <parent>
         <groupId>site.sorghum.agent</groupId>
         <artifactId>loopra</artifactId>
-        <version>26.8.3.2</version>
+        <version>26.0804.1</version>
     </parent>
 
     <artifactId>loopra-web</artifactId>
 
     <dependencies>
+        <!-- Loopra 模块（置顶声明，shade 时保证补丁类/资源优先于传递依赖中的同名类） -->
+        <dependency>
+            <groupId>site.sorghum.agent</groupId>
+            <artifactId>loopra-harness</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>site.sorghum.agent</groupId>
+            <artifactId>loopra-acp</artifactId>
+            <version>${project.version}</version>
+        </dependency>
         <dependency>
             <groupId>org.noear</groupId>
             <artifactId>solon-openapi2-knife4j</artifactId>
-        </dependency>
-        <!-- loopra 核心模块 -->
-        <dependency>
-            <groupId>site.sorghum.agent</groupId>
-            <artifactId>loopra-bin</artifactId>
-            <version>${project.version}</version>
         </dependency>
 
         <!-- Solon Web（内置 Tomcat / Jetty / Undertow） -->
@@ -115,6 +120,13 @@
                     <delimiters>
                         <delimiter>@</delimiter>
                     </delimiters>
+                    <!-- 二进制资源不参与过滤（前端字体等，避免 MalformedInputException） -->
+                    <nonFilteredFileExtensions>
+                        <nonFilteredFileExtension>ttf</nonFilteredFileExtension>
+                        <nonFilteredFileExtension>otf</nonFilteredFileExtension>
+                        <nonFilteredFileExtension>woff</nonFilteredFileExtension>
+                        <nonFilteredFileExtension>woff2</nonFilteredFileExtension>
+                    </nonFilteredFileExtensions>
                 </configuration>
             </plugin>
 

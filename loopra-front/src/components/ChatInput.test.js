@@ -11,7 +11,7 @@ Object.defineProperty(Element.prototype, 'scrollIntoView', {
 })
 
 vi.mock('../stores/app', () => ({
-  useAppStore: () => ({desktopPetVisible: false, activePetName: ''})
+  useAppStore: () => ({desktopPetVisible: false, activePetName: '', petHidden: false})
 }))
 
 vi.mock('../services/api', () => ({
@@ -97,6 +97,27 @@ describe('ChatInput quick commands', () => {
         expect.objectContaining({label: '检查状态', text: '请检查当前状态并报告结果'})
       ])
     )
+    wrapper.unmount()
+  })
+})
+
+describe('ChatInput plan mode', () => {
+  it('allows plan mode before a session exists when a workspace is selected', async () => {
+    const wrapper = mountInput({workspaceHash: 'workspace-1', welcomeMode: true})
+
+    expect(wrapper.find('.plan-mode-btn').attributes('disabled')).toBeUndefined()
+    await wrapper.find('.plan-mode-btn').trigger('click')
+    expect(wrapper.emitted('togglePlan')).toEqual([[]])
+    wrapper.unmount()
+  })
+
+  it('emits a UI event without inserting a slash command', async () => {
+    const wrapper = mountInput({sessionName: 'session-1', planMode: true})
+    await wrapper.find('.plan-mode-btn').trigger('click')
+
+    expect(wrapper.emitted('togglePlan')).toEqual([[]])
+    expect(wrapper.find('.input-row textarea').element.value).toBe('')
+    expect(wrapper.find('.plan-mode-btn').attributes('aria-pressed')).toBe('true')
     wrapper.unmount()
   })
 })

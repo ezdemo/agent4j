@@ -3,6 +3,7 @@ const http = require('http')
 const path = require('path')
 const { spawn, execFile, execSync } = require('child_process')
 const { promisify } = require('util')
+const { compareVersions } = require('./version.cjs')
 const fs = require('fs')
 const net = require('net')
 
@@ -51,6 +52,8 @@ const isWin = process.platform === 'win32'
 const shouldOpenDevTools = process.env.LOOPRA_OPEN_DEVTOOLS === '1'
 
 let mainWindow = null
+let splashWindow = null
+let updateWindow = null
 let loopraWebProcess = null
 let currentPort = 0
 const loopraWebWindows = new Map()
@@ -338,6 +341,90 @@ function cleanupLoopraWeb() {
 
 // ==================== 窗口 ====================
 
+// 启动窗口：承载检测/安装/服务启动全流程，完成后关闭并创建主窗口
+function createSplashWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.show()
+    mainWindow.focus()
+    return
+  }
+  if (splashWindow && !splashWindow.isDestroyed()) {
+    splashWindow.show()
+    splashWindow.focus()
+    return
+  }
+
+  splashWindow = new BrowserWindow({
+    width: 520,
+    height: 620,
+    resizable: false,
+    frame: false,
+    title: 'Loopra',
+    icon: appIconPath,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      backgroundThrottling: false
+    }
+  })
+
+  splashWindow.on('closed', () => {
+    splashWindow = null
+    // 启动窗口被用户关闭（未完成启动）时退出应用，避免留下无主窗口的空进程
+    if (!mainWindow || mainWindow.isDestroyed()) app.quit()
+  })
+
+  // 加载失败回退：直接创建主窗口
+  splashWindow.webContents.on('did-fail-load', (event, errorCode) => {
+    if (errorCode === -3) return // ERR_ABORTED：主动中断，忽略
+    console.error('[main] splash window failed to load:', errorCode)
+    if (!mainWindow || mainWindow.isDestroyed()) createWindow()
+    if (splashWindow && !splashWindow.isDestroyed()) splashWindow.destroy()
+  })
+
+  if (isDev) {
+    splashWindow.loadURL('http://localhost:3000/?desktopSplash=1')
+  } else {
+    splashWindow.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { desktopSplash: '1' } })
+  }
+  return splashWindow
+}
+
+// 更新窗口：独立窗口承载版本信息、下载源选择与核心服务更新
+function openUpdateWindow() {
+  if (updateWindow && !updateWindow.isDestroyed()) {
+    updateWindow.show()
+    updateWindow.focus()
+    return updateWindow
+  }
+
+  updateWindow = new BrowserWindow({
+    width: 720,
+    height: 760,
+    minWidth: 560,
+    minHeight: 600,
+    title: 'Loopra 更新',
+    icon: appIconPath,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      backgroundThrottling: false
+    }
+  })
+  updateWindow.on('closed', () => { updateWindow = null })
+
+  if (isDev) {
+    updateWindow.loadURL('http://localhost:3000/?desktopUpdate=1')
+  } else {
+    updateWindow.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { desktopUpdate: '1' } })
+  }
+  return updateWindow
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200, height: 800,
@@ -529,10 +616,11 @@ app.whenReady().then(() => {
   // The renderer provides its own toolbar; do not expose Electron's default menu bar.
   Menu.setApplicationMenu(null)
   startAiBrowserBridge().catch((error) => console.error('[ai-browser] failed to start bridge:', error.message))
-  createWindow()
+  createSplashWindow()
   if (isDesktopPetEnabled()) openDesktopPetWindow()
   app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) createWindow()
+    // macOS dock 点击时无窗口则重新走启动窗口流程（服务已就绪时快速通过）
+    if (BrowserWindow.getAllWindows().length === 0) createSplashWindow()
   })
 })
 
@@ -624,8 +712,12 @@ ipcMain.handle('check_install_needed', async () => {
 
   const runtimeVersion = readLoopraGuiVersion()
   const desktopVersion = app.getVersion().replace(/^v/i, '')
-  if (runtimeVersion !== desktopVersion) {
+  const versionResult = compareVersions(runtimeVersion, desktopVersion)
+  if (versionResult < 0) {
     return { needed: true, reason: 'version_mismatch', runtimeVersion, desktopVersion }
+  }
+  if (versionResult > 0) {
+    return { needed: true, reason: 'desktop_outdated', runtimeVersion, desktopVersion }
   }
 
   return { needed: false, reason: '', runtimeVersion, desktopVersion }
@@ -674,18 +766,23 @@ ipcMain.handle('start_loopra_web', async () => {
   }
 })
 
-// 推送安装日志到前端
+// 推送安装日志到前端（广播给主窗口/启动窗口/更新窗口）
 function sendInstallLog(line) {
-  if (mainWindow && !mainWindow.isDestroyed()) {
-    mainWindow.webContents.send('install-output', { type: 'log', line })
-  }
+  const payload = { type: 'log', line }
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('install-output', payload)
+  if (splashWindow && !splashWindow.isDestroyed()) splashWindow.webContents.send('install-output', payload)
+  if (updateWindow && !updateWindow.isDestroyed()) updateWindow.webContents.send('install-output', payload)
 }
 
-// 在线一键安装 loopra（走远程脚本）
-ipcMain.handle('install_loopra_web_online', async () => {
+// 在线一键安装 loopra（走远程脚本，支持直连/镜像源）
+ipcMain.handle('install_loopra_web_online', async (event, options = {}) => {
+  // 镜像源使用 setup-gui-mirror 脚本（安装包经 gh-proxy 加速下载）
+  const source = options && options.source === 'mirror' ? 'mirror' : 'normal'
+  const scriptName = source === 'mirror' ? 'setup-gui-mirror' : 'setup-gui'
   sendInstallLog('='.repeat(50))
   sendInstallLog('  Loopra 在线一键安装')
   sendInstallLog('='.repeat(50))
+  sendInstallLog(`>> 下载源: ${source === 'mirror' ? '镜像 (gh-proxy)' : 'GitHub 直连'}`)
   sendInstallLog('>> 桌面运行时将安装到 ~/.loopra-gui，配置继续使用 ~/.loopra')
   sendInstallLog('')
 
@@ -696,23 +793,23 @@ ipcMain.handle('install_loopra_web_online', async () => {
       sendInstallLog('>> 检测到 Windows 系统，使用 PowerShell 安装...')
       const psCmd = [
         '-ExecutionPolicy', 'Bypass', '-NoProfile', '-Command',
-        'irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-gui.ps1 | iex'
+        `irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/${scriptName}.ps1 | iex`
       ]
       child = spawn('powershell', psCmd, {
         stdio: ['ignore', 'pipe', 'pipe'],
         windowsHide: true
       })
-      sendInstallLog('>> 执行: irm setup-gui.ps1 | iex')
+      sendInstallLog(`>> 执行: irm ${scriptName}.ps1 | iex`)
     } else {
       // macOS/Linux: curl ... | bash
       sendInstallLog('>> 检测到 Unix 系统，使用 curl 安装...')
       // 下载脚本并管道给 bash 执行，-fsSL = 静默+显示错误+跟随跳转
       child = spawn('bash', ['-c',
-        'curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-gui.sh | bash'
+        `curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/${scriptName}.sh | bash`
       ], {
         stdio: ['ignore', 'pipe', 'pipe']
       })
-      sendInstallLog('>> 执行: curl setup-gui.sh | bash')
+      sendInstallLog(`>> 执行: curl ${scriptName}.sh | bash`)
     }
 
     sendInstallLog('>> 安装进程已启动，等待输出...')
@@ -769,8 +866,56 @@ ipcMain.handle('window-minimize', () => { if (mainWindow) mainWindow.minimize() 
 ipcMain.handle('window-maximize', () => {
   if (mainWindow) mainWindow.isMaximized() ? mainWindow.unmaximize() : mainWindow.maximize()
 })
-ipcMain.handle('window-close', () => { if (mainWindow) mainWindow.close() })
+ipcMain.handle('window-close', (event) => {
+  // 按调用方窗口关闭，供主窗口/启动窗口/更新窗口通用
+  const win = BrowserWindow.fromWebContents(event.sender)
+  if (win && !win.isDestroyed()) win.close()
+})
 ipcMain.handle('window-is-maximized', () => mainWindow ? mainWindow.isMaximized() : false)
+
+// 启动窗口完成检测/安装/启动后：创建主窗口并关闭启动窗口
+ipcMain.handle('splash_ready', () => {
+  if (!mainWindow || mainWindow.isDestroyed()) createWindow()
+  if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close()
+  return true
+})
+
+// 更新窗口管理
+ipcMain.handle('open-update-window', (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized update window request')
+  openUpdateWindow()
+  return { success: true }
+})
+ipcMain.handle('update-window-close', () => {
+  if (updateWindow && !updateWindow.isDestroyed()) updateWindow.close()
+})
+
+// 更新窗口发起「更新核心服务」：转发给主窗口（DesktopShell 新建会话后由 Agent 在聊天框执行）
+ipcMain.handle('chat-update-request', (event, payload = {}) => {
+  if (event.sender !== updateWindow?.webContents) throw new Error('Unauthorized chat update request')
+  if (!mainWindow || mainWindow.isDestroyed()) return false
+  const source = payload && payload.source === 'mirror' ? 'mirror' : 'normal'
+  mainWindow.webContents.send('chat-update-request', { source })
+  if (mainWindow.isMinimized()) mainWindow.restore()
+  mainWindow.show()
+  mainWindow.focus()
+  return true
+})
+
+// 主窗口（DesktopShell）向指定聊天标签发送命令（等待标签加载完成后投递）
+ipcMain.handle('desktop-chat-tab-send-command', (event, tabId, command) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
+  const tab = desktopChatTabs.get(String(tabId || ''))
+  const cmd = String(command || '').trim()
+  if (!tab || !cmd || tab.view.webContents.isDestroyed()) return false
+  const send = () => tab.view.webContents.send('desktop-chat-tab-send-command', cmd)
+  if (tab.view.webContents.isLoading()) {
+    tab.view.webContents.once('did-finish-load', send)
+  } else {
+    send()
+  }
+  return true
+})
 ipcMain.handle('desktop-pet-open', (event) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop pet request')
   setDesktopPetEnabled(true)
@@ -778,9 +923,13 @@ ipcMain.handle('desktop-pet-open', (event) => {
   return true
 })
 ipcMain.handle('desktop-pet-close', (event) => {
-  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop pet request')
+  // 主窗口与宠物窗口均可主动关闭（宠物右键菜单“关闭宠物”由宠物窗口发起）
+  if (event.sender !== mainWindow?.webContents && event.sender !== desktopPetWindow?.webContents) {
+    throw new Error('Unauthorized desktop pet request')
+  }
   setDesktopPetEnabled(false)
   if (desktopPetWindow && !desktopPetWindow.isDestroyed()) desktopPetWindow.close()
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('desktop-pet-closed')
   return false
 })
 ipcMain.handle('desktop-pet-is-visible', (event) => {

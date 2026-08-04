@@ -11,11 +11,13 @@
     </parent>
     <groupId>site.sorghum.agent</groupId>
     <artifactId>loopra</artifactId>
-    <version>26.8.3.2</version>
+    <version>26.0804.1</version>
     <packaging>pom</packaging>
 
     <modules>
-        <module>loopra-bin</module>
+        <module>loopra-model</module>
+        <module>loopra-harness</module>
+        <module>loopra-acp</module>
         <module>loopra-web</module>
     </modules>
 
@@ -73,6 +75,26 @@
             </dependency>
         </dependencies>
     </dependencyManagement>
+    <repositories>
+        <repository>
+            <id>sonatype-snapshots</id>
+            <name>Sonatype Snapshots</name>
+            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+        </repository>
+    </repositories>
+    <pluginRepositories>
+        <pluginRepository>
+            <id>sonatype-snapshots</id>
+            <name>Sonatype Snapshots</name>
+            <url>https://central.sonatype.com/repository/maven-snapshots/</url>
+            <releases>
+                <enabled>false</enabled>
+            </releases>
+        </pluginRepository>
+    </pluginRepositories>
     <build>
         <pluginManagement>
             <plugins>

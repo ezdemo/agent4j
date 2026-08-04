@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xmlns="http://maven.apache.org/POM/4.0.0"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>site.sorghum.agent</groupId>
+        <artifactId>loopra</artifactId>
+        <version>26.0804.1</version>
+    </parent>
+
+    <artifactId>loopra-harness</artifactId>
+    <description>Loopra 工具装备：内置工具（子代理/检查清单/目标/工作区/图片/浏览器等）、MCP/LSP/OpenAPI/Skill 技能桥接、定时任务</description>
+
+    <dependencies>
+        <!-- Loopra 内核 -->
+        <dependency>
+            <groupId>site.sorghum.agent</groupId>
+            <artifactId>loopra-model</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+
+        <!-- Solon AI 工具体系（内置文件/终端等 Talent 工具与自动装配） -->
+        <dependency>
+            <groupId>org.noear</groupId>
+            <artifactId>solon-ai-talent-sys</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.noear</groupId>
+            <artifactId>solon-ai-talent-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.noear</groupId>
+            <artifactId>solon-ai-harness</artifactId>
+        </dependency>
+
+        <!-- 日志 -->
+        <dependency>
+            <groupId>org.noear</groupId>
+            <artifactId>solon-logging-logback</artifactId>
+        </dependency>
+
+        <dependency>
+            <groupId>org.noear</groupId>
+            <artifactId>solon-test-junit5</artifactId>
+            <version>${solon.version}</version>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
+
+</project>

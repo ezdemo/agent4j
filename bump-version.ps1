@@ -34,17 +34,19 @@ if ($c -ne $old) {
     Write-Host "  [OK] pom.xml"
 } else { Write-Host "  [--] pom.xml (unchanged)" }
 
-# 2. loopra-bin/pom.xml
-$path = Join-Path $root "loopra-bin/pom.xml"
-$c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
-$old = $c
-$re = [regex]'(?<=<artifactId>loopra</artifactId>\s*\r?\n\s*<version>)\d[\d.]*-?[A-Z]*(?=</version>)'
-$c = $re.Replace($c, $Version)
-if ($c -ne $old) {
-    $c = $c.TrimStart([char]0xFEFF)
-    [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
-    Write-Host "  [OK] loopra-bin/pom.xml"
-} else { Write-Host "  [--] loopra-bin/pom.xml (unchanged)" }
+# 2. loopra-model/pom.xml, loopra-harness/pom.xml, loopra-acp/pom.xml
+foreach ($module in @("loopra-model", "loopra-harness", "loopra-acp")) {
+    $path = Join-Path $root "$module/pom.xml"
+    $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+    $old = $c
+    $re = [regex]'(?<=<artifactId>loopra</artifactId>\s*\r?\n\s*<version>)\d[\d.]*-?[A-Z]*(?=</version>)'
+    $c = $re.Replace($c, $Version)
+    if ($c -ne $old) {
+        $c = $c.TrimStart([char]0xFEFF)
+        [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
+        Write-Host "  [OK] $module/pom.xml"
+    } else { Write-Host "  [--] $module/pom.xml (unchanged)" }
+}
 
 
 # 4. loopra-web/pom.xml

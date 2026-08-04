@@ -184,6 +184,7 @@ export const chatAPI = {
         if (options.model) requestBody.model = options.model
         if (options.modelChannelId) requestBody.modelChannelId = options.modelChannelId
         if (options.reasoningEffort) requestBody.reasoningEffort = options.reasoningEffort
+        if (options.action) requestBody.action = options.action
           // 添加图片（base64 Data URI 列表）
           if (options.images && options.images.length > 0) {
               requestBody.images = options.images
@@ -280,6 +281,19 @@ export const agentAPI = {
     if (workspaceHash) params.workspaceHash = workspaceHash
     if (sessionName) params.sessionName = sessionName
     return api.get('/agent/history', { params })
+  },
+
+  // 获取会话计划模式 - GET /api/agent/mode?workspaceHash=xxx&sessionName=xxx
+  getMode: (workspaceHash, sessionName) => {
+    const params = {}
+    if (workspaceHash) params.workspaceHash = workspaceHash
+    if (sessionName) params.sessionName = sessionName
+    return api.get('/agent/mode', { params })
+  },
+
+  // 通过 Web UI 切换会话计划模式 - POST /api/agent/mode
+  setMode: (workspaceHash, sessionName, enabled) => {
+    return api.post('/agent/mode', { workspaceHash, sessionName, enabled })
   },
   
   // 执行命令 - POST /api/chat
@@ -445,6 +459,16 @@ export const toolsAPI = {
   // 获取子代理及其实时可用工具 - GET /api/sub-agents
   listSubAgents: () => {
     return api.get('/sub-agents')
+  },
+
+  // 全量保存子代理配置（含新增/修改/禁用） - PUT /api/sub-agents
+  saveSubAgents: (profiles) => {
+    return api.put('/sub-agents', {profiles})
+  },
+
+  // 子代理不可用工具清单 - GET /api/sub-agents/denied-tools
+  listSubAgentDeniedTools: () => {
+    return api.get('/sub-agents/denied-tools')
   },
 
   // 获取工具分类 - GET /api/tools/categories

@@ -382,6 +382,13 @@ pre {
   padding: 12px;
   overflow-x: auto;
 }
+
+/* KaTeX 块级公式：超宽时横向滚动，避免撑破消息容器 */
+.katex-display {
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 4px 0;
+}
 pre code { background: none; padding: 0; }
 pre code.hljs { background: transparent; } /* 让 pre 背景透出，避免 hljs 自带背景色干扰 */
 
@@ -421,6 +428,57 @@ textarea { resize: none; }
   color: #fff;
 }
 .btn-danger:hover { background: #b91c1c; }
+
+/* 有新版时的强调按钮（如「更新桌面端」），与首页顶栏更新按钮一致的蓝色风格 */
+.btn-update-highlight {
+  background: rgba(59, 130, 246, 0.1);
+  color: #2563eb;
+  border: 1px solid rgba(59, 130, 246, 0.35);
+}
+.btn-update-highlight:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.16);
+  color: #1d4ed8;
+}
+[data-theme="dark"] .btn-update-highlight {
+  background: rgba(96, 165, 250, 0.14);
+  color: #93c5fd;
+  border-color: rgba(96, 165, 250, 0.3);
+}
+[data-theme="dark"] .btn-update-highlight:hover:not(:disabled) {
+  background: rgba(96, 165, 250, 0.22);
+  color: #bfdbfe;
+}
+
+/* 强调按钮内的「有新版本」徽章 */
+.btn-update-badge {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 1px 7px;
+  border-radius: 4px;
+  background: rgba(37, 99, 235, 0.12);
+  color: #2563eb;
+  white-space: nowrap;
+}
+[data-theme="dark"] .btn-update-badge {
+  background: rgba(147, 197, 253, 0.15);
+  color: #93c5fd;
+}
+
+/* 推荐按钮（如 Web 端「下载桌面端（推荐）」）：实心蓝色渐变高亮，跨主题一致 */
+.btn-recommend {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.35);
+}
+.btn-recommend:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+}
+
+/* 通用禁用态：所有主题下保持一致（避免 dark 主题深黑禁用色） */
+.btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+}
 .btn-sm { padding: 4px 8px; font-size: 12px; }
 .btn-lg { padding: 8px 16px; font-size: 14px; }
 .btn-icon-sm {

@@ -75,6 +75,8 @@ export const useAppStore = defineStore('app', () => {
   // 宠物状态（用于跨组件同步）
   const activePetName = ref('')
   const desktopPetVisible = ref(typeof window !== 'undefined' && Boolean(window.electronAPI?.desktopPet))
+  // 用户主动关闭宠物（关闭后主窗口内嵌宠物也不再显示，直到重新打开）
+  const petHidden = ref(false)
   
   // 计算属性
   const isConnected = computed(() => connectionStatus.value === 'connected')
@@ -458,6 +460,7 @@ export const useAppStore = defineStore('app', () => {
     isLoading,
     activePetName,
     desktopPetVisible,
+    petHidden,
     isConnected,
     hasMessages,
     unreadNotifications,
