@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Solon-4.0.4-important?logo=java" alt="Solon 4.0.4"/>
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js" alt="Vue 3"/>
   <img src="https://img.shields.io/badge/Electron-42.4-47848F?logo=electron" alt="Electron"/>
-  <img src="https://img.shields.io/badge/version-26.0804.1-lightgrey" alt="Version 26.0804.1"/>
+  <img src="https://img.shields.io/badge/version-26.8.40-lightgrey" alt="Version 26.8.40"/>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/>
 </p>
 
@@ -25,7 +25,7 @@
   <a href="#从源码开发">从源码开发</a>
 </p>
 
-> 当前版本：`26.0804.1`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+> 当前版本：`26.8.40`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 概览
 
