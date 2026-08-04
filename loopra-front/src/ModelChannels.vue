@@ -390,6 +390,7 @@ async function load() {
     if (!response.success) throw new Error(response.message || '加载模型配置失败')
     const config = response.data || {}
     channels.value = (config.modelChannels || []).map(normalizeChannel)
+    if (channels.value.length === 1) channels.value[0].expanded = true
     activeChannelId.value = config.modelChannelId || channels.value[0]?.id || ''
     currentModel.value = config.model || ''
     validationModel.value = config.validationModel || ''
