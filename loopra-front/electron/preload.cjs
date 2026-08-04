@@ -20,7 +20,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 启动窗口：检测/安装/启动完成后通知主进程创建主窗口
   splash: {
-    ready: () => ipcRenderer.invoke('splash_ready')
+    ready: () => ipcRenderer.invoke('splash_ready'),
+    resize: (size) => ipcRenderer.send('splash-resize', size)
   },
 
   // 更新窗口管理

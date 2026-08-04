@@ -55,7 +55,7 @@
           class="window-button update-check-button"
           :class="{ 'has-update': hasNewVersion }"
           type="button"
-          :title="hasNewVersion ? `发现新版本 v${latestVersion}，点击打开更新` : (latestVersion ? `已是最新版本 v${latestVersion}，点击检查更新` : '检查更新')"
+          :title="hasNewVersion ? `发现新版本 v${latestVersion}，点击打开更新` : (latestVersion ? `已是最新版本 v${latestVersion}，点击打开更新窗口` : '点击打开更新窗口')"
           @click="onUpdateButtonClick"
         >
           <svg v-if="checkingUpdate" class="update-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
@@ -216,10 +216,9 @@ function compareVersions(a, b) {
   return 0
 }
 
-// 无新版时点击手动检查；有新版本时打开更新窗口
+// 点击更新按钮始终打开更新窗口，窗口内会自行检查版本
 function onUpdateButtonClick() {
-  if (hasNewVersion.value) void openUpdateWindow()
-  else void checkForUpdates()
+  void openUpdateWindow()
 }
 
 async function openUpdateWindow() {
