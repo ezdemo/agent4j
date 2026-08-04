@@ -46,6 +46,11 @@ public class UserMessage {
     @Setter
     private String rollbackId;
 
+    /** Persisted in session history but omitted from Web chat rendering. */
+    @Getter
+    @Setter
+    private boolean webHidden;
+
     private UserMessage(String text, List<String> images) {
         this.text = text;
         this.images = images != null ? List.copyOf(images) : Collections.emptyList();

@@ -8,6 +8,7 @@ import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.HitlState;
 import site.sorghum.loopra.bin.agent.model.ToolExecutionResult;
 import site.sorghum.loopra.bin.model.ModelClient;
+import site.sorghum.loopra.bin.tool.ToolMetadata;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.tool.HitlRequiredException;
 import site.sorghum.loopra.tool.ToolContext;
@@ -124,6 +125,49 @@ class AgentLoopToolSignalTest {
     }
 
     @Test
+    void planModeFiltersWriteToolsAndRejectsRememberedCalls() throws Exception {
+        AtomicInteger readExecutions = new AtomicInteger();
+        AtomicInteger editExecutions = new AtomicInteger();
+        FunctionToolDesc read = tool("read", args -> {
+            readExecutions.incrementAndGet();
+            return "contents";
+        });
+        FunctionToolDesc edit = tool("edit", args -> {
+            editExecutions.incrementAndGet();
+            return "changed";
+        });
+        ToolMetadata.applyReadOnlyOverride(read, true);
+        ToolMetadata.applyReadOnlyOverride(edit, false);
+        ToolRegistry registry = registryWith(read, edit);
+        AgentLoop loop = new AgentLoop(null, registry, null);
+
+        loop.setPlanMode(true);
+        java.lang.reflect.Method filter = AgentLoop.class.getDeclaredMethod("filterReadOnlyTools", ONode.class);
+        filter.setAccessible(true);
+        ONode advertisedTools = (ONode) filter.invoke(loop, registry.toOpenAiTools());
+        ToolExecutionResult rejected = loop.executeToolCalls(toolCalls("edit", "{}"));
+        ToolExecutionResult allowed = loop.executeToolCalls(toolCalls("read", "{}"));
+
+        assertEquals(1, advertisedTools.getArray().size());
+        assertEquals("read", advertisedTools.get(0).get("function").get("name").getString());
+        assertEquals(0, editExecutions.get());
+        assertTrue(rejected.toolResults().get(0).getContent().contains("\"rejectedReason\":\"plan_mode\""));
+        assertEquals(1, readExecutions.get());
+        assertEquals("contents", allowed.toolResults().get(0).getContent());
+    }
+
+    @Test
+    void pendingPlanIsConsumedOnlyOnce() {
+        AgentLoop loop = new AgentLoop(null, registryWith(tool("read", args -> "ok")), null);
+
+        loop.submitPlan("1. inspect\n2. implement");
+
+        assertEquals("1. inspect\n2. implement", loop.getPendingPlan());
+        assertEquals("1. inspect\n2. implement", loop.consumePendingPlan());
+        assertNull(loop.consumePendingPlan());
+    }
+
+    @Test
     void bashWaitIsNeverSuppressed() {
         AtomicInteger executions = new AtomicInteger();
         AgentLoop loop = new AgentLoop(null, registryWith(tool("bash_wait", args -> {
@@ -155,10 +199,12 @@ class AgentLoopToolSignalTest {
         assertEquals(3, executions.get());
     }
 
-    private static ToolRegistry registryWith(FunctionToolDesc tool) {
+    private static ToolRegistry registryWith(FunctionToolDesc... tools) {
         ToolRegistry registry = new ToolRegistry().setDisabledTools(Set.of());
         registry.setRefreshContext(Paths.get(".").toAbsolutePath(), null, null, java.util.List.of());
-        registry.register(tool);
+        for (FunctionToolDesc tool : tools) {
+            registry.register(tool);
+        }
         return registry;
     }
 

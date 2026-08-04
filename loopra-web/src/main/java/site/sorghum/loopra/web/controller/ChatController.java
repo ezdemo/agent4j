@@ -25,6 +25,7 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
 import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -49,6 +50,7 @@ public class ChatController {
     /** 请求级流任务，使停止请求在 Agent 创建前也能取消后台工作。 */
     private final ConcurrentHashMap<String, Future<?>> activeChatTasks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, SseEmitter> activeChatEmitters = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, AtomicBoolean> activeChatStarted = new ConcurrentHashMap<>();
     /** 处理停止请求先于流任务登记到达的竞态；过期项在后续请求时清理。 */
     private final ConcurrentHashMap<String, Long> cancelledChatRequests = new ConcurrentHashMap<>();
     private static final long CANCEL_MARKER_TTL_MS = 5 * 60 * 1000L;
@@ -109,17 +111,22 @@ public class ChatController {
             ctx.outputAsJson(jsonError(WebErrorMessages.AGENT_NOT_READY));
             return;
         }
-        if (request == null || request.getMessage() == null || request.getMessage().trim().isEmpty()) {
+        boolean executePlan = request != null && "execute_plan".equals(request.getAction());
+        if (request == null || (!executePlan
+                && (request.getMessage() == null || request.getMessage().trim().isEmpty()))) {
             ctx.outputAsJson(jsonError(WebErrorMessages.MESSAGE_REQUIRED));
             return;
         }
 
         SseEmitter emitter = new SseEmitter(ctx);
-        final UserMessage userMsg = UserMessage.of(request.getMessage().trim(), request.getImages());
+        final String message = request.getMessage() != null ? request.getMessage().trim() : "";
+        final UserMessage userMsg = UserMessage.of(message, request.getImages());
         final String resolvedPath = agentService.resolveWorkspacePath(request.getWorkspaceHash());
         final String sessionName = request.getSessionName();
 
+        AtomicBoolean taskStarted = new AtomicBoolean(false);
         Runnable streamTask = () -> {
+            taskStarted.set(true);
             try {
                 // ★ 创建快照检查点：在 AI 执行修改前保存当前工作区状态
                 String msgId = UUID.randomUUID().toString().substring(0, 8);
@@ -134,7 +141,8 @@ public class ChatController {
                 }
 
                 agentService.chatStream(userMsg, resolvedPath, sessionName, emitter,
-                        request.getModel(), request.getModelChannelId(), request.getReasoningEffort());
+                        request.getModel(), request.getModelChannelId(), request.getReasoningEffort(),
+                        request.getAction());
             } catch (Exception e) {
                 try {
                     emitter.sendError(e.getMessage());
@@ -147,7 +155,7 @@ public class ChatController {
             }
         };
         FutureTask<Void> task = new FutureTask<>(streamTask, null);
-        registerStreamTask(request.getRequestId(), task, emitter);
+        registerStreamTask(request.getRequestId(), task, emitter, taskStarted);
         if (!task.isCancelled()) {
             chatExecutor.execute(task);
         }
@@ -156,14 +164,17 @@ public class ChatController {
         emitter.awaitCompletion();
     }
 
-    private void registerStreamTask(String requestId, FutureTask<Void> task, SseEmitter emitter) {
+    private void registerStreamTask(String requestId, FutureTask<Void> task, SseEmitter emitter,
+                                    AtomicBoolean taskStarted) {
         if (requestId == null || requestId.isBlank()) return;
         cleanupExpiredCancelMarkers();
         activeChatTasks.put(requestId, task);
         activeChatEmitters.put(requestId, emitter);
+        activeChatStarted.put(requestId, taskStarted);
         if (cancelledChatRequests.remove(requestId) != null) {
             activeChatTasks.remove(requestId, task);
             activeChatEmitters.remove(requestId, emitter);
+            activeChatStarted.remove(requestId, taskStarted);
             task.cancel(true);
             emitter.complete();
         }
@@ -173,15 +184,18 @@ public class ChatController {
         cleanupExpiredCancelMarkers();
         cancelledChatRequests.put(requestId, System.currentTimeMillis());
         Future<?> task = activeChatTasks.remove(requestId);
+        AtomicBoolean taskStarted = activeChatStarted.remove(requestId);
         if (task != null) task.cancel(true);
         SseEmitter emitter = activeChatEmitters.remove(requestId);
-        if (emitter != null) emitter.complete();
+        // 已启动任务必须自行完成 finally，让计划恢复事件在 SSE 关闭前送达。
+        if (emitter != null && (taskStarted == null || !taskStarted.get())) emitter.complete();
     }
 
     private void cleanupStreamTask(String requestId, SseEmitter emitter) {
         if (requestId == null || requestId.isBlank()) return;
         activeChatTasks.remove(requestId);
         activeChatEmitters.remove(requestId, emitter);
+        activeChatStarted.remove(requestId);
         cancelledChatRequests.remove(requestId);
     }
 

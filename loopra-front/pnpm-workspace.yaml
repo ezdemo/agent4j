@@ -4,3 +4,4 @@ allowBuilds:
   vue-demi: true
   electron: true
   app-builder-lib: true
+  electron-winstaller: false

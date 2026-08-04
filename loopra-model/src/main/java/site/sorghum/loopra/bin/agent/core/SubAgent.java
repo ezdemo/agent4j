@@ -56,7 +56,8 @@ public class SubAgent {
             "goal_block",
             "goal_resume",
             "ask_choice",          // 用户交互（主代理专用）
-            "browser_request_user_action" // 浏览器人工接管（主代理专用）
+            "browser_request_user_action", // 浏览器人工接管（主代理专用）
+            "submit_plan"          // 计划提交（主代理专用，计划模式产物由主代理负责）
     )));
 
     private final ModelClient client;
@@ -272,6 +273,11 @@ public class SubAgent {
         subLoop.setDrainFileChanges(false);
         if (sessionUsageSink != null) {
             subLoop.setSessionUsageSink(sessionUsageSink);
+        }
+        // 继承父代理的计划模式：子代理同样被限制为只读工具
+        // （必须在 freezePromptPrefix 前设置，冻结的工具列表才会过滤为只读集合）
+        if (parentController != null && parentController.isPlanMode()) {
+            subLoop.setPlanMode(true);
         }
         subLoop.freezePromptPrefix();
 

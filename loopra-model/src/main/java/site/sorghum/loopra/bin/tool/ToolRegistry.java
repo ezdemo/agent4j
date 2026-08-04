@@ -134,9 +134,10 @@ public class ToolRegistry {
      * 将最新发现的工具重新注册到注册表中。
      * <p>
      * 此方法不改变系统提示词，只影响后续 API 请求中的工具挂载列表。
+     * synchronized 防止共享注册表（多 Agent 复用同一实例）时并发清空/注册造成结构损坏。
      * </p>
      */
-    public void refresh() {
+    public synchronized void refresh() {
         Set<String> disabled = getCurrentDisabledTools();
         Map<String, Boolean> readOnlyOverrides = toolPolicyProvider != null
                 ? toolPolicyProvider.toolReadOnlyOverrides()
@@ -163,10 +164,15 @@ public class ToolRegistry {
 
     private void register(FunctionTool tool, Set<String> disabled) {
         Objects.requireNonNull(tool, "tool");
-        allScannedTools.put(tool.name(), tool);
+        FunctionTool existing = allScannedTools.putIfAbsent(tool.name(), tool);
+        if (existing != null && existing != tool) {
+            log.warn("[tool] 忽略同名工具注册: name={}, existing={}, duplicate={}",
+                    tool.name(), existing.getClass().getName(), tool.getClass().getName());
+            return;
+        }
         if (!disabled.contains(tool.name()) && !forceDenyTools.contains(tool.name())
                 && isForceAllowed(tool.name())) {
-            functionToolMap.put(tool.name(), tool);
+            functionToolMap.putIfAbsent(tool.name(), tool);
         }
         cachedOpenAiTools = null;
     }

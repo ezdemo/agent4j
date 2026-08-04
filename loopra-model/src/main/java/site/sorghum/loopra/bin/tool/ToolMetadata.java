@@ -14,7 +14,8 @@ public final class ToolMetadata {
     private static final Set<String> BUILT_IN_READ_ONLY_TOOLS = Set.of(
             "read", "glob", "grep", "ls",
             "workspace_read", "workspace_list", "workspace_write",
-            "java_source", "codesearch", "codegraph_explore", "webfetch", "finish", "goal_status");
+            "java_source", "codesearch", "codegraph_explore", "webfetch", "finish", "goal_status",
+            "submit_plan");
 
     private ToolMetadata() {
     }

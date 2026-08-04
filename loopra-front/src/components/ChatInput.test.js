@@ -101,6 +101,27 @@ describe('ChatInput quick commands', () => {
   })
 })
 
+describe('ChatInput plan mode', () => {
+  it('allows plan mode before a session exists when a workspace is selected', async () => {
+    const wrapper = mountInput({workspaceHash: 'workspace-1', welcomeMode: true})
+
+    expect(wrapper.find('.plan-mode-btn').attributes('disabled')).toBeUndefined()
+    await wrapper.find('.plan-mode-btn').trigger('click')
+    expect(wrapper.emitted('togglePlan')).toEqual([[]])
+    wrapper.unmount()
+  })
+
+  it('emits a UI event without inserting a slash command', async () => {
+    const wrapper = mountInput({sessionName: 'session-1', planMode: true})
+    await wrapper.find('.plan-mode-btn').trigger('click')
+
+    expect(wrapper.emitted('togglePlan')).toEqual([[]])
+    expect(wrapper.find('.input-row textarea').element.value).toBe('')
+    expect(wrapper.find('.plan-mode-btn').attributes('aria-pressed')).toBe('true')
+    wrapper.unmount()
+  })
+})
+
 describe('ChatInput reasoning effort', () => {
   it('emits the selected reasoning effort', async () => {
     const wrapper = mountInput({currentReasoningEffort: 'max'})

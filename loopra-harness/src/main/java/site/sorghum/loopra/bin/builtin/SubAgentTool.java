@@ -13,6 +13,7 @@ import site.sorghum.loopra.bin.config.LoopraConfig;
 import site.sorghum.loopra.bin.agent.spi.SessionUsageSink;
 import site.sorghum.loopra.bin.model.HttpModelClient;
 import site.sorghum.loopra.bin.model.ModelClient;
+import site.sorghum.loopra.bin.tool.ToolMetadata;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.tool.AgentLoopController;
 import site.sorghum.loopra.tool.AgentOutput;
@@ -21,6 +22,7 @@ import site.sorghum.loopra.tool.SolonToTools;
 
 import java.io.IOException;
 import java.util.Collection;
+import java.util.LinkedHashSet;
 import java.util.Set;
 
 /**
@@ -96,6 +98,22 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
             ToolRegistry registry = ctx.getLoopController().getToolRegistry();
             AgentLoopController parentController = ctx.getLoopController();
             Set<String> allowedTools = selectedProfile.allowedTools(registry.all().values());
+
+            // 计划模式继承：父代理处于计划模式时，子代理工具强制收敛为只读集合
+            // （同时影响子代理 system prompt 的工具规范列举与子循环的冻结工具列表）
+            if (parentController != null && parentController.isPlanMode()) {
+                Set<String> readOnlyNames = new LinkedHashSet<>();
+                for (FunctionTool def : registry.all().values()) {
+                    if (ToolMetadata.isReadOnly(def)) {
+                        readOnlyNames.add(def.name());
+                    }
+                }
+                if (allowedTools == null) {
+                    allowedTools = readOnlyNames;
+                } else {
+                    allowedTools.retainAll(readOnlyNames);
+                }
+            }
 
             StringBuilder systemPromptBuilder = new StringBuilder(
                     selectedProfile.buildSystemPrompt(task, instructions));

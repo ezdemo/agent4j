@@ -180,6 +180,77 @@ class JsonlSessionStoreTest {
     }
 
     @Test
+    void planMetadataOnlySessionIsListedAndDeletable() throws IOException {
+        String name = "plan-only-" + System.nanoTime();
+        store.bindTo(name);
+        store.setPlanMode(name, true);
+
+        SessionStore.SessionInfo info = store.list().stream()
+                .filter(session -> name.equals(session.name()))
+                .findFirst()
+                .orElseThrow();
+        assertEquals(0, info.messageCount());
+        assertTrue(store.delete(name));
+        assertTrue(store.list().stream().noneMatch(session -> name.equals(session.name())));
+    }
+
+    @Test
+    void titleAndPlanModeMetadataDoNotOverwriteEachOther() throws IOException {
+        String name = store.currentName();
+
+        store.updateTitle(name, "Initial title");
+        store.setPlanMode(name, true);
+        store.setPendingPlan(name, "1. inspect\n2. implement");
+
+        assertEquals("Initial title", store.getTitle(name));
+        assertTrue(store.isPlanMode(name));
+        assertEquals("1. inspect\n2. implement", store.getPendingPlan(name));
+
+        store.updateTitle(name, "Updated title");
+        assertTrue(store.isPlanMode(name));
+
+        store.setPlanMode(name, false);
+        assertEquals("Updated title", store.getTitle(name));
+        assertFalse(store.isPlanMode(name));
+        assertEquals("1. inspect\n2. implement", store.getPendingPlan(name));
+
+        store.setPendingPlan(name, null);
+        assertNull(store.getPendingPlan(name));
+    }
+
+    @Test
+    void concurrentMetadataUpdatesPreserveAllFields() throws Exception {
+        Path sessionsDir = java.nio.file.Files.createTempDirectory("loopra-meta-lock");
+        JsonlSessionStore first = new JsonlSessionStore(sessionsDir);
+        JsonlSessionStore second = new JsonlSessionStore(sessionsDir);
+        ExecutorService executor = Executors.newFixedThreadPool(2);
+        try {
+            String name = "concurrent-meta";
+            first.bindTo(name);
+            second.bindTo(name);
+            for (int i = 0; i < 50; i++) {
+                final int round = i;
+                Future<?> titleWrite = executor.submit(() -> {
+                    try {
+                        first.updateTitle(name, "title-" + round);
+                    } catch (IOException e) {
+                        throw new RuntimeException(e);
+                    }
+                });
+                Future<?> modeWrite = executor.submit(() -> second.setPlanMode(name, true));
+                titleWrite.get(2, TimeUnit.SECONDS);
+                modeWrite.get(2, TimeUnit.SECONDS);
+                assertEquals("title-" + round, first.getTitle(name));
+                assertTrue(second.isPlanMode(name));
+            }
+        } finally {
+            executor.shutdownNow();
+            first.shutdown();
+            second.shutdown();
+        }
+    }
+
+    @Test
     void saveAndLoadUsage() throws IOException {
         store.saveUsage("test-session", 100, 200, 50, 50);
         long[] usage = store.loadUsage("test-session");

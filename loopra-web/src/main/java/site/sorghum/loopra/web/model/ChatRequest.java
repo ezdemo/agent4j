@@ -53,6 +53,11 @@ public class ChatRequest {
     private String reasoningEffort;
 
     /**
+     * Structured Web action. Currently supports execute_plan.
+     */
+    private String action;
+
+    /**
      * 图片列表（可选）。
      * 支持公开 URL 和 Base64 Data URI 两种格式。
      * 与 message 配合生成多模态消息。

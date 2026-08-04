@@ -29,7 +29,7 @@
     </div>
 
     <!-- 消息区 -->
-    <div ref="messagesContainer" class="messages" :class="{
+    <div ref="messagesContainer" class="messages" :style="messagesBottomStyle" :class="{
       'messages-welcome': !props.sessionName || messages.length === 0,
       'messages-with-queue': queuedMessages.length > 0
     }">
@@ -64,7 +64,7 @@
             </div>
             <ChatInput ref="welcomeInput" welcome-mode v-model:input-text="welcomeText" :usage="usage" :current-model="currentModel" :default-model="defaultModel" :default-model-channel-id="defaultModelChannelId" :setting-default-model="settingDefaultModel" :available-models="availableModels"
                        :current-reasoning-effort="currentReasoningEffort" :terminate-on-no-tool-call="terminateOnNoToolCall" :current-permission="currentPermission"
-                       :workspace-hash="welcomeWorkspaceHash" :current-skill="currentSkill" @send="sendWelcomeMessage" @switch-model="handleSwitchModel" @set-default-model="handleSetDefaultModel"
+                       :workspace-hash="welcomeWorkspaceHash" :session-name="props.sessionName" :plan-mode="planMode" :current-skill="currentSkill" @send="sendWelcomeMessage" @toggle-plan="togglePlan" @switch-model="handleSwitchModel" @set-default-model="handleSetDefaultModel"
                        @switch-reasoning-effort="handleSwitchReasoningEffort" @switch-terminate-on-no-tool-call="handleSwitchTerminateOnNoToolCall"
                        @switch-permission="handleSwitchPermission" @switch-skill="handleSwitchSkill" @picker-open="handleWelcomePickerOpen" @refresh-models="loadUsage" @manage-models="$emit('manageModels')" />
           </div>
@@ -218,7 +218,9 @@
         :currentPermission="currentPermission"
         :petState="petState"
         :queued-messages="queuedMessages"
+        :plan-mode="planMode"
         @send="(imgs, text) => sendMessage(imgs, text)"
+        @toggle-plan="togglePlan"
         @remove-queued="removeQueuedMessage"
         @guide-queued="guideQueuedMessage"
         @abort="abortChat"
@@ -234,9 +236,43 @@
         @switchSkill="handleSwitchSkill"
         @switchPermission="handleSwitchPermission"
         @manageModels="$emit('manageModels')"
-    />
+    >
+      <template #plan-review>
+        <Transition name="plan-review">
+          <section v-if="planMode" class="plan-review-band">
+            <div class="plan-review-head">
+              <FileTextOutlined class="plan-review-icon" />
+              <strong>计划模式</strong>
+              <span class="plan-review-status">{{ pendingPlan ? '待审查' : '只读探索' }}</span>
+              <span v-if="pendingPlan" class="plan-review-chevron" aria-hidden="true"></span>
+              <div class="plan-review-actions">
+                <button v-if="pendingPlan" type="button" class="plan-approve-btn" :disabled="streaming || planModeBusy" @click="approvePendingPlan">
+                  <CheckOutlined />
+                  批准并执行
+                </button>
+                <button type="button" class="plan-exit-btn" :disabled="streaming || planModeBusy" title="退出计划模式" aria-label="退出计划模式" @click="togglePlan">
+                  <CloseOutlined />
+                </button>
+              </div>
+            </div>
+            <div v-if="pendingPlan" class="plan-review-body">
+              <div class="plan-review-content markdown-body" v-html="fmtPlan(pendingPlan)"></div>
+            </div>
+          </section>
+        </Transition>
+      </template>
+    </ChatInput>
     </Transition>
 
+    <ActionConfirmDialog
+        :model-value="discardPlanDialog.visible"
+        title="退出计划模式"
+        :message="pendingPlan ? '待审查计划将被丢弃，且无法恢复。' : '将退出计划模式并恢复全部工具。'"
+        :actions="discardPlanActions"
+        :pending="planModeBusy"
+        @update:model-value="value => { if (!value) closeDiscardPlanDialog() }"
+        @action="handleDiscardPlanAction"
+    />
     <ActionConfirmDialog
         :model-value="rollbackDialog.visible"
         title="撤回消息"
@@ -258,8 +294,9 @@
 </template>
 
 <script setup>
-import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect} from 'vue'
 import {message} from 'ant-design-vue'
+import {CheckOutlined, CloseOutlined, FileTextOutlined} from '@ant-design/icons-vue'
 import {agentAPI, chatAPI, configAPI, gitAPI, sessionsAPI, snapshotAPI} from '../services/api'
 import {md} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
@@ -813,6 +850,40 @@ const activeAssistantMessageIndex = computed(() => {
 const branchingSession = ref(false)
 const hasHistory = computed(() => messages.value.length > 0)
 const planMode = ref(false)
+const pendingPlan = ref(null)
+
+// 输入区实际高度测量：消息区底部预留空间跟随输入区真实高度，
+// 计划条/排队消息/用量条等高度变化时自动适配，避免遮挡消息
+// （输入区自身含上下 padding 透明区，无需额外余量，精确对齐顶边）
+const composerHeight = ref(0)
+let composerResizeObserver = null
+watchEffect(() => {
+  const el = chatInput.value && chatInput.value.$el
+  if (composerResizeObserver) {
+    composerResizeObserver.disconnect()
+    composerResizeObserver = null
+  }
+  if (!el) {
+    composerHeight.value = 0
+    return
+  }
+  composerResizeObserver = new ResizeObserver(entries => {
+    composerHeight.value = entries[0].target.getBoundingClientRect().height
+  })
+  composerResizeObserver.observe(el)
+  composerHeight.value = el.getBoundingClientRect().height
+})
+onBeforeUnmount(() => composerResizeObserver && composerResizeObserver.disconnect())
+
+const messagesBottomStyle = computed(() =>
+    composerHeight.value > 0 ? {paddingBottom: composerHeight.value + 'px'} : undefined)
+const planModeBusy = ref(false)
+const discardPlanDialog = ref({visible: false})
+const discardPlanActions = [
+  {key: 'cancel', label: '取消'},
+  {key: 'discard', label: '退出计划模式', type: 'danger'}
+]
+let planModeRequestId = 0
 
 // Usage 相关
 const usage = ref({
@@ -900,12 +971,36 @@ const formatTime = (t) => {
   return d.toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'})
 }
 
-// 监听 workspace 和 session 变化，重新加载 usage
-watch([() => props.workspaceHash, () => props.sessionName], ([ws, sess]) => {
-  if (ws || sess) {
-    loadUsage()
+    // 监听 workspace 和 session 变化，重新加载 usage 和计划状态
+    watch([() => props.workspaceHash, () => props.sessionName], ([ws, sess]) => {
+      if (ws || sess) loadUsage()
+      syncPlanMode()
+    })
+
+// 从后端同步计划模式状态（会话切换/页面刷新后恢复，服务端为唯一事实来源）
+const syncPlanMode = async () => {
+  const requestId = ++planModeRequestId
+  const workspaceHash = props.workspaceHash
+  const sessionName = props.sessionName
+  if (!workspaceHash || !sessionName) {
+    if (requestId === planModeRequestId) {
+      planMode.value = false
+      pendingPlan.value = null
+    }
+    return
   }
-})
+  try {
+    const res = await agentAPI.getMode(workspaceHash, sessionName)
+    if (requestId !== planModeRequestId || workspaceHash !== props.workspaceHash || sessionName !== props.sessionName) return
+    planMode.value = !!(res && res.success && res.data && res.data.mode === 'plan')
+    pendingPlan.value = res?.success ? (res.data?.pendingPlan || null) : null
+  } catch (e) {
+    if (requestId === planModeRequestId && workspaceHash === props.workspaceHash && sessionName === props.sessionName) {
+      planMode.value = false
+      pendingPlan.value = null
+    }
+  }
+}
 
 onMounted(() => {
   loadUsage()
@@ -1066,6 +1161,11 @@ const fmt = c => {
 }
 
 const fmtPrompt = c => {
+  if (!c) return ''
+  return sanitize(md.parse(c))
+}
+
+const fmtPlan = c => {
   if (!c) return ''
   return sanitize(md.parse(c))
 }
@@ -1266,9 +1366,10 @@ const moveFileChangesToEnd = (blocks) => {
 
 const sendMessage = async (images = [], overrideText = null, modelSelection = null,
                             targetSessionName = props.sessionName, targetWorkspaceHash = props.workspaceHash,
-                            reasoningEffort = getSessionReasoningEffort(targetSessionName, targetWorkspaceHash)) => {
-  const text = overrideText || inputText.value.trim()
-  if (!text && images.length === 0) return
+                            reasoningEffort = getSessionReasoningEffort(targetSessionName, targetWorkspaceHash),
+                            requestAction = null) => {
+  const text = requestAction ? '' : (overrideText ?? inputText.value.trim())
+  if (!text && images.length === 0 && !requestAction) return
   const sessionName = targetSessionName
   if (!sessionName) return
   const selectedModel = modelSelection || getSessionModelSelection(sessionName, targetWorkspaceHash)
@@ -1281,7 +1382,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
 
   const firstWord = text.split(/\s+/)[0].toLowerCase()
   // 静默命令不显示用户气泡（系统命令、模式切换、HITL 审批等）
-  const isSilent = SILENT_CMDS.has(firstWord)
+  const isSilent = !!requestAction || SILENT_CMDS.has(firstWord)
 
 
   // 静默命令不显示用户气泡
@@ -1293,7 +1394,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
     emit('sessionUpdated', sessionName, true)
   }
   userScrolledAway = false
-  inputText.value = ''
+  if (!requestAction) inputText.value = ''
   await scroll(true)  // 用户刚发送，强制滚到底
 
   store.setSessionStreaming(sessionName, true)
@@ -1317,6 +1418,22 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
 
   try {
     const processStreamEvent = (data) => {
+          // 模式事件不依赖消息气泡，直接更新会话状态（需在 msg 守卫前处理）
+          if (data.type === 'mode_changed') {
+            if (sessionName === props.sessionName) {
+              planMode.value = data.mode === 'plan'
+              if (!planMode.value) pendingPlan.value = null
+            }
+            return
+          }
+          if (data.type === 'plan_submitted') {
+            if (sessionName === props.sessionName) {
+              pendingPlan.value = data.plan || null
+              planMode.value = true
+              addLog({level: 'INFO', text: '执行计划已提交，等待审查', time: Date.now()})
+            }
+            return
+          }
           // 静默命令：首次收到有内容的数据时才创建助手气泡（只创建一次）
           if (isSilent && !silentBubbleCreated) {
             if (!data.type || data.type === 'done') return
@@ -1585,6 +1702,10 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
           const completedMessage = getMsg()
           notifyAssistantReply(completedMessage)
           store.setSessionStreaming(sessionName, false)
+          if (requestAction === 'execute_plan') {
+            planModeBusy.value = false
+            void syncPlanMode()
+          }
           // 流结束后清理空的助手气泡
           const msgs = store.getSessionMessages(sessionName)
           const last = msgs[msgs.length - 1]
@@ -1600,6 +1721,10 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
         () => {
           flushStreamEvents()
           store.setSessionStreaming(sessionName, false)
+          if (requestAction === 'execute_plan') {
+            planModeBusy.value = false
+            void syncPlanMode()
+          }
           const msg = getMsg()
           if (msg && !msg.blocks.length) msg.blocks.push({type: 'content', content: '连接错误'})
           emit('sessionUpdated')
@@ -1612,12 +1737,17 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
           images,
           model: selectedModel.model,
           modelChannelId: selectedModel.channelId,
-          reasoningEffort: selectedReasoningEffort
+          reasoningEffort: selectedReasoningEffort,
+          action: requestAction
         }
     )
     store.setSessionController(sessionName, streamResult)
   } catch {
     store.setSessionStreaming(sessionName, false)
+    if (requestAction === 'execute_plan') {
+      planModeBusy.value = false
+      void syncPlanMode()
+    }
     emit('sessionUpdated')
     nextTick(() => sendNextQueuedMessage(sessionName, targetWorkspaceHash))
   }
@@ -1854,10 +1984,57 @@ const viewSystemPrompt = async () => {
   }
 }
 
-const togglePlan = async () => {
-  planMode.value = !planMode.value
-  inputText.value = planMode.value ? '/plan' : '/execute'
-  await sendMessage()
+const setPlanMode = async (enabled) => {
+  if (!props.workspaceHash || !props.sessionName || streaming.value || planModeBusy.value) return
+  planModeBusy.value = true
+  try {
+    const res = await agentAPI.setMode(props.workspaceHash, props.sessionName, enabled)
+    if (!res?.success) throw new Error(res?.message || '计划模式切换失败')
+    planMode.value = res.data?.mode === 'plan'
+    pendingPlan.value = res.data?.pendingPlan || null
+  } catch (error) {
+    message.error(error?.message || '计划模式切换失败')
+  } finally {
+    planModeBusy.value = false
+  }
+}
+
+const togglePlan = () => {
+  if (streaming.value || planModeBusy.value) return
+  if (!props.sessionName) {
+    if (welcomeWorkspaceHash.value) {
+      emit('startTask', {prompt: '', workspaceHash: welcomeWorkspaceHash.value, planMode: true})
+    }
+    return
+  }
+  if (planMode.value) {
+    discardPlanDialog.value = {visible: true}
+    return
+  }
+  void setPlanMode(true)
+}
+
+const closeDiscardPlanDialog = () => {
+  if (!planModeBusy.value) discardPlanDialog.value = {visible: false}
+}
+
+const handleDiscardPlanAction = async (action) => {
+  if (action === 'cancel') {
+    closeDiscardPlanDialog()
+    return
+  }
+  await setPlanMode(false)
+  closeDiscardPlanDialog()
+}
+
+const approvePendingPlan = async () => {
+  if (!pendingPlan.value || streaming.value || planModeBusy.value) return
+  planModeBusy.value = true
+  try {
+    await sendMessage([], '', null, props.sessionName, props.workspaceHash, null, 'execute_plan')
+  } catch {
+    planModeBusy.value = false
+  }
 }
 
 const loadHistory = async (sessionName, force = false) => {
@@ -1884,6 +2061,10 @@ const loadHistory = async (sessionName, force = false) => {
       for (const m of raw) {
         if (m.role === 'tool') continue
         if (m.role === 'user') {
+          if (m.web_hidden || m.webHidden) {
+            lastAssistantItem = null
+            continue
+          }
           // 用户消息：创建新item
           const item = {id: Date.now() + idCounter++, role: 'user', time: formatTimestamp(m.timestamp), blocks: []}
           // 多模态消息：contentParts 为 [{type:'text',...},{type:'image_url',...}] 数组
@@ -2030,6 +2211,7 @@ onMounted(() => {
   document.addEventListener('click', handleWelcomeOutsideClick)
   if (props.sessionName) {
     void loadHistory().finally(focusComposer)
+    void syncPlanMode()
   } else {
     void focusComposer()
   }
@@ -2056,7 +2238,9 @@ const setDraft = async (text) => {
   chatInput.value?.focus?.()
 }
 
-defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, startWelcomePrompt, appendFileSelection, appendElementInspection, exportChat, refreshHistory, focusComposer, setDraft})
+const enablePlanMode = () => setPlanMode(true)
+
+defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, startWelcomePrompt, appendFileSelection, appendElementInspection, exportChat, refreshHistory, focusComposer, setDraft, enablePlanMode})
 </script>
 
 <style scoped>
@@ -2066,6 +2250,266 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   height: 100%;
   background: var(--bg);
   position: relative;
+}
+
+.plan-review-band {
+  max-height: min(42vh, 360px);
+  margin-bottom: 6px;
+  overflow: hidden;
+  background: var(--glass-bg-2);
+  border: 1px solid var(--accent);
+  border-radius: var(--r-lg);
+  box-shadow: var(--glass-shadow);
+}
+
+.plan-review-head {
+  min-height: 38px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px 6px 12px;
+  border-bottom: 1px solid var(--border);
+}
+
+.plan-review-icon {
+  color: var(--accent);
+  font-size: 15px;
+}
+
+.plan-review-head strong {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.plan-review-status {
+  color: var(--fg-4);
+  font-size: 12px;
+}
+
+.plan-review-chevron {
+  width: 6px;
+  height: 6px;
+  margin-left: 2px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  content: '';
+  opacity: .55;
+  transform: rotate(45deg) translate(-1px, -1px);
+  transition: opacity 120ms ease, transform 120ms ease;
+}
+
+.plan-review-band:hover .plan-review-chevron,
+.plan-review-band:focus-within .plan-review-chevron {
+  opacity: .85;
+  transform: rotate(225deg) translate(-1px, -1px);
+}
+
+.plan-review-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+}
+
+.plan-approve-btn,
+.plan-exit-btn {
+  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  border-radius: var(--r);
+  transition: background var(--t), color var(--t);
+}
+
+.plan-approve-btn {
+  padding: 0 10px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 12px;
+}
+
+.plan-approve-btn:hover:not(:disabled) {
+  background: var(--blue-dark);
+}
+
+.plan-exit-btn {
+  width: 28px;
+  color: var(--fg-3);
+}
+
+.plan-exit-btn:hover:not(:disabled) {
+  background: var(--bg-3);
+  color: var(--red);
+}
+
+.plan-approve-btn:disabled,
+.plan-exit-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+/* 待审查计划自动折叠：悬停/聚焦展开（与排队消息交互一致） */
+.plan-review-body {
+  display: grid;
+  grid-template-rows: 0fr;
+  overflow: hidden;
+  opacity: 0;
+  transition: grid-template-rows 160ms ease, opacity 120ms ease;
+}
+
+.plan-review-band:hover .plan-review-body,
+.plan-review-band:focus-within .plan-review-body {
+  grid-template-rows: 1fr;
+  opacity: 1;
+}
+
+.plan-review-body > * {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.plan-review-content {
+  max-height: calc(min(42vh, 360px) - 38px);
+  overflow: auto;
+  padding: 12px 16px;
+  color: var(--fg-2);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+/* markdown 排版（与消息内容块一致；全局 reset 清掉了列表缩进，需恢复） */
+.plan-review-content :deep(p) {
+  margin: 0.5em 0;
+}
+
+.plan-review-content :deep(h1) {
+  font-size: 1.5em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.plan-review-content :deep(h2) {
+  font-size: 1.3em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.plan-review-content :deep(h3) {
+  font-size: 1.1em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.plan-review-content :deep(h4) {
+  font-size: 1em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.plan-review-content :deep(h5) {
+  font-size: 0.9em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.plan-review-content :deep(h6) {
+  font-size: 0.8em;
+  margin: 0.5em 0;
+  font-weight: 600;
+}
+
+.plan-review-content :deep(ul),
+.plan-review-content :deep(ol) {
+  margin: 0.5em 0;
+  padding-left: 1.5em;
+}
+
+.plan-review-content :deep(li) {
+  margin: 0.25em 0;
+}
+
+.plan-review-content :deep(strong) {
+  font-weight: 600;
+}
+
+.plan-review-content :deep(a) {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.plan-review-content :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.plan-review-content :deep(pre) {
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  padding: 10px;
+  margin: 6px 0;
+  overflow-x: auto;
+}
+
+.plan-review-content :deep(code) {
+  font-family: var(--mono);
+  font-size: 12px;
+}
+
+.plan-review-content :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+
+.plan-review-content :deep(blockquote) {
+  margin: 0.5em 0;
+  padding: 0.5em 1em;
+  border-left: 3px solid var(--accent);
+  background: var(--bg-3);
+  border-radius: 0 var(--r) var(--r) 0;
+}
+
+.plan-review-content :deep(table) {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.5em 0;
+}
+
+.plan-review-content :deep(th),
+.plan-review-content :deep(td) {
+  border: 1px solid var(--border);
+  padding: 6px 10px;
+  text-align: left;
+}
+
+.plan-review-content :deep(th) {
+  background: var(--bg-3);
+  font-weight: 600;
+}
+
+.plan-review-content :deep(hr) {
+  border: none;
+  border-top: 1px solid var(--border);
+  margin: 1em 0;
+}
+
+.plan-review-content :deep(:first-child) {
+  margin-top: 0;
+}
+
+.plan-review-content :deep(:last-child) {
+  margin-bottom: 0;
+}
+
+.plan-review-enter-active,
+.plan-review-leave-active {
+  transition: opacity 160ms ease, transform 160ms ease;
+}
+
+.plan-review-enter-from,
+.plan-review-leave-to {
+  opacity: 0;
+  transform: translateY(6px);
 }
 
 .chat-head {

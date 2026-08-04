@@ -184,6 +184,7 @@ export const chatAPI = {
         if (options.model) requestBody.model = options.model
         if (options.modelChannelId) requestBody.modelChannelId = options.modelChannelId
         if (options.reasoningEffort) requestBody.reasoningEffort = options.reasoningEffort
+        if (options.action) requestBody.action = options.action
           // 添加图片（base64 Data URI 列表）
           if (options.images && options.images.length > 0) {
               requestBody.images = options.images
@@ -280,6 +281,19 @@ export const agentAPI = {
     if (workspaceHash) params.workspaceHash = workspaceHash
     if (sessionName) params.sessionName = sessionName
     return api.get('/agent/history', { params })
+  },
+
+  // 获取会话计划模式 - GET /api/agent/mode?workspaceHash=xxx&sessionName=xxx
+  getMode: (workspaceHash, sessionName) => {
+    const params = {}
+    if (workspaceHash) params.workspaceHash = workspaceHash
+    if (sessionName) params.sessionName = sessionName
+    return api.get('/agent/mode', { params })
+  },
+
+  // 通过 Web UI 切换会话计划模式 - POST /api/agent/mode
+  setMode: (workspaceHash, sessionName, enabled) => {
+    return api.post('/agent/mode', { workspaceHash, sessionName, enabled })
   },
   
   // 执行命令 - POST /api/chat

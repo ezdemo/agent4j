@@ -7,8 +7,11 @@ import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -35,6 +38,22 @@ class SubAgentSessionAffinityTest {
         assertNotEquals(firstAffinity, secondAffinity);
     }
 
+    @Test
+    void inheritsPlanModeFromParentController() throws Exception {
+        ToolRegistry registry = new ToolRegistry().setDisabledTools(Set.of());
+        registry.setRefreshContext(Paths.get(".").toAbsolutePath(), null, null, List.of());
+        AgentLoop parent = new AgentLoop(new RecordingModelClient(), registry, null);
+        parent.setPlanMode(true);
+        SubAgent child = new SubAgent(new RecordingModelClient(), registry, "system", parent);
+
+        assertEquals("done", child.run("inspect", null));
+
+        Field field = SubAgent.class.getDeclaredField("subLoop");
+        field.setAccessible(true);
+        AgentLoop childLoop = (AgentLoop) field.get(child);
+        assertTrue(childLoop.isPlanMode());
+    }
+
     private static final class RecordingModelClient implements ModelClient {
         private final List<String> affinities = new ArrayList<>();
 
@@ -49,7 +68,8 @@ class SubAgentSessionAffinityTest {
 
         @Override
         public void chatStream(List<ChatMessage> messages, ONode tools, StreamCallback callback) {
-            throw new UnsupportedOperationException();
+            callback.onContentDelta("done");
+            callback.onDone();
         }
 
         @Override
