@@ -1,536 +1,697 @@
-<!doctype html>
-<html lang="zh-CN">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta
-      name="description"
-      content="Loopra - 纯 Java 的 AI 编码代理，面向本地代码库的推理循环、工具调用、会话协作与桌面工作台。"
-    />
-    <meta name="theme-color" content="#101215" />
-    <title>Loopra - AI Coding Agent</title>
-    <link rel="icon" href="../img/logo.png" />
-    <link rel="stylesheet" href="css/styles.css" />
-  </head>
-  <body>
-    <header class="site-header">
-      <div class="container header-inner">
-        <a class="brand" href="#top" aria-label="Loopra home">
-          <img src="../img/logo.png" alt="Loopra" />
-          <span>loopra</span>
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Loopra — 纯 Java 的 AI 编码代理</title>
+  <meta name="description" content="Loopra 是纯 Java 的 AI 编码代理：推理循环、工具调用、子代理协作，提供 Web 与 Electron 桌面工作台，面向本地代码库完成开发、排障、测试与文档整理。">
+  <meta name="theme-color" content="#ffffff">
+  <link rel="icon" type="image/svg+xml" href="assets/logo.svg">
+  <script>
+    (function () {
+      var t = null;
+      try { t = localStorage.getItem('loopra-site-theme'); } catch (e) {}
+      if (t !== 'light' && t !== 'dark') {
+        t = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+      }
+      document.documentElement.setAttribute('data-theme', t);
+    })();
+  </script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/inter@5.0.8/index.css">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@fontsource/jetbrains-mono@5.0.6/index.css">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- 共享 SVG 定义（Logo 渐变） -->
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <linearGradient id="lr-ring" x1="20" y1="18" x2="78" y2="80" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#2F80ED"/>
+      <stop offset="1" stop-color="#5B9CF2"/>
+    </linearGradient>
+  </defs>
+</svg>
+
+<!-- ================= 导航 ================= -->
+<header class="site-nav">
+  <div class="nav-inner">
+    <a class="nav-brand" href="#top">
+      <svg viewBox="0 0 96 96" aria-hidden="true">
+        <rect x="16" y="16" width="64" height="64" rx="21" fill="none" stroke="url(#lr-ring)" stroke-width="8"/>
+        <path class="logo-mark-l" d="M41 35v20c0 3.87 3.13 7 7 7h11" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="6"/>
+      </svg>
+      Loopra
+    </a>
+    <nav class="nav-links" data-nav-links>
+      <a href="#overview" data-i18n="nav.work">工作方式</a>
+      <a href="#quickstart" data-i18n="nav.quickstart">快速开始</a>
+      <a href="#features" data-i18n="nav.features">核心能力</a>
+      <a href="#tools" data-i18n="nav.tools">工具系统</a>
+      <a href="#architecture" data-i18n="nav.arch">架构</a>
+      <a href="#develop" data-i18n="nav.dev">开发</a>
+    </nav>
+    <div class="nav-actions">
+      <span class="nav-version">v26.8.40</span>
+      <button class="icon-btn nav-lang" data-lang-toggle title="切换语言" aria-label="切换语言" data-i18n-label="label.langToggle">EN</button>
+      <button class="icon-btn" data-theme-toggle title="切换主题" aria-label="切换主题" data-i18n-label="label.themeToggle">
+        <svg data-icon-sun width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+        </svg>
+        <svg data-icon-moon width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="display:none">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+        </svg>
+      </button>
+      <a class="icon-btn" href="https://github.com/ezdemo/loopra" target="_blank" rel="noopener" title="GitHub" aria-label="GitHub">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+          <path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/>
+        </svg>
+      </a>
+      <button class="icon-btn nav-toggle" data-nav-toggle title="菜单" aria-label="打开菜单" data-i18n-label="label.navToggle">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
+    </div>
+  </div>
+</header>
+
+<main id="top">
+
+  <!-- ================= Hero ================= -->
+  <section class="hero" style="border-top:none">
+    <div class="container">
+      <div class="hero-logo">
+        <svg viewBox="0 0 96 96" role="img" aria-label="Loopra Logo">
+          <rect x="16" y="16" width="64" height="64" rx="21" fill="none" stroke="url(#lr-ring)" stroke-width="8"/>
+          <path class="logo-mark-l" d="M41 35v20c0 3.87 3.13 7 7 7h11" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="6"/>
+        </svg>
+      </div>
+
+      <div class="hero-badge" data-i18n="hero.badge"><span class="dot"></span>纯 Java 的 AI 编码代理</div>
+
+      <h1><span class="gradient-text">Loopra</span></h1>
+      <p class="hero-tagline" data-i18n="hero.tagline">推理循环 · 工具调用 · 子代理协作 · 双端工作台</p>
+      <p class="hero-desc" data-i18n="hero.desc">
+        Loopra 将用户任务、模型推理与受控工具调用组织成持续执行循环：读取项目上下文，搜索、编辑或构建代码，
+        消费执行结果后继续推理，直至完成任务或需要用户决策。提供 Web 与 Electron Desktop 工作台，
+        适合在本地代码库中完成开发、排障、测试、文档整理和多步骤协作。
+      </p>
+
+      <div class="hero-actions">
+        <a class="btn btn-primary btn-lg" href="#quickstart">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          <span data-i18n="hero.ctaQuickstart">快速开始</span>
         </a>
-        <nav class="desktop-nav" aria-label="Primary navigation">
-          <a href="#capabilities">能力</a>
-          <a href="#workflow">工作方式</a>
-          <a href="#develop">安装</a>
-          <a
-            href="https://gitee.com/ezdemo/loopra"
-            target="_blank"
-            rel="noreferrer"
-            >Gitee <span aria-hidden="true">&#8599;</span></a
-          >
-          <a
-            href="https://github.com/ezdemo/agent4j"
-            target="_blank"
-            rel="noreferrer"
-            >GitHub <span aria-hidden="true">&#8599;</span></a
-          >
-        </nav>
-        <a class="header-action" href="#start"
-          >开始使用 <span aria-hidden="true">&#8594;</span></a
-        >
-        <button
-          class="menu-button"
-          type="button"
-          aria-expanded="false"
-          aria-controls="mobile-nav"
-          aria-label="打开导航菜单"
-        >
-          <span></span><span></span>
-        </button>
+        <a class="btn btn-secondary btn-lg" href="https://github.com/ezdemo/loopra/releases/latest" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span data-i18n="hero.ctaDownload">下载桌面端</span>
+        </a>
+        <a class="btn btn-outline btn-lg" href="https://github.com/ezdemo/loopra" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+          GitHub
+        </a>
       </div>
-      <nav class="mobile-nav" id="mobile-nav" aria-label="Mobile navigation">
-        <a href="#capabilities">能力</a>
-        <a href="#workflow">工作方式</a>
-        <a href="#develop">安装</a>
-        <a
-          href="https://gitee.com/ezdemo/loopra"
-          target="_blank"
-          rel="noreferrer"
-          >Gitee 源码</a
-        >
-        <a
-          href="https://github.com/ezdemo/agent4j"
-          target="_blank"
-          rel="noreferrer"
-          >GitHub 镜像</a
-        >
-      </nav>
-    </header>
 
-    <main id="top">
-      <section class="hero">
-        <div class="container hero-grid">
-          <div class="hero-copy">
-            <div class="eyebrow">
-              <span class="status-dot"></span>Local-first coding agent
-            </div>
-            <h1>把复杂的代码任务<br />交给一个能持续工作的 Agent。</h1>
-            <p class="hero-text">
-              Loopra 是纯 Java 的 AI
-              编码代理。它读懂本地代码库，调用受控工具完成搜索、编辑、构建与验证，并在需要时把决策留给你。
-            </p>
-            <div class="hero-actions" id="start">
-              <div class="download-menu">
-                <button
-                  class="button button-primary download-menu-trigger"
-                  type="button"
-                  aria-expanded="false"
-                  aria-controls="download-options"
-                >
-                  下载
-                  <span class="download-caret" aria-hidden="true">&#9662;</span>
+      <div class="hero-meta">
+        <span class="meta-chip"><b>Java</b> 17</span>
+        <span class="meta-chip"><b>Solon</b> 4.0.4</span>
+        <span class="meta-chip"><b>Vue</b> 3.4</span>
+        <span class="meta-chip"><b>Electron</b> 42.4</span>
+        <span class="meta-chip"><b>License</b> MIT</span>
+      </div>
+
+      <div class="terminal reveal">
+        <div class="terminal-bar">
+          <span class="t-dot r"></span><span class="t-dot y"></span><span class="t-dot g"></span>
+          <span class="t-title">loopra — bash</span>
+        </div>
+        <div class="terminal-body">
+          <div class="t-line"><span class="t-prompt">$</span> <span class="t-cmd">loopra web 0</span></div>
+          <div class="t-line"><span class="t-info" data-i18n="hero.termStarted">[Loopra] Web 服务已启动 · http://localhost:51788</span></div>
+          <div class="t-line"> </div>
+          <div class="t-line"><span class="t-you">You</span> <span class="t-tool" data-i18n="hero.termUser">修复 SessionStoreTest 的失败用例并跑一遍回归</span></div>
+          <div class="t-line"><span class="t-ai">AI</span> <span class="t-tool" data-i18n="hero.termAi1">grep "SessionStoreTest" → 定位测试与被测类</span></div>
+          <div class="t-line"><span class="t-ai">AI</span> <span class="t-tool" data-i18n="hero.termAi2">edit SessionStore.java · 唯一匹配校验通过，已写入</span></div>
+          <div class="t-line"><span class="t-ai">AI</span> <span class="t-tool">bash mvn -pl loopra-web -am test</span></div>
+          <div class="t-line"><span class="t-ok">✔</span> <span class="t-tool" data-i18n="hero.termDone">任务完成：2 个文件变更，128 个测试全部通过</span> <span class="t-cursor"></span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 工作方式 ================= -->
+  <section id="overview">
+    <div class="container">
+      <div class="section-head center reveal">
+        <span class="section-tag" data-i18n="overview.tag">工作方式</span>
+        <h2 data-i18n="overview.title">像工程师一样迭代，直到把事做完</h2>
+        <p data-i18n="overview.desc">AI 不是一次生成完事，而是读代码、写代码、跑命令、看日志、调整、再试——一整轮一整轮地迭代。</p>
+      </div>
+
+      <div class="loop-flow reveal">
+        <span class="loop-node start" data-i18n="overview.n1">任务</span>
+        <span class="loop-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+        <span class="loop-node" data-i18n="overview.n2">模型推理</span>
+        <span class="loop-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+        <span class="loop-node" data-i18n="overview.n3">工具调用</span>
+        <span class="loop-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+        <span class="loop-node" data-i18n="overview.n4">结果反馈</span>
+        <span class="loop-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+        <span class="loop-node" data-i18n="overview.n5">继续推理 …</span>
+        <span class="loop-arrow"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></span>
+        <span class="loop-node end" data-i18n="overview.n6">完成</span>
+      </div>
+
+      <div class="grid grid-4 reveal">
+        <div class="card">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          </div>
+          <h3 data-i18n="overview.c1t">处理代码库任务</h3>
+          <p data-i18n="overview.c1d">工作区内文件读写、代码检索、命令执行与 API 调用。</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          </div>
+          <h3 data-i18n="overview.c2t">保持任务连续性</h3>
+          <p data-i18n="overview.c2d">JSONL 会话、上下文折叠、Goal、Checklist 与项目记忆。</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          </div>
+          <h3 data-i18n="overview.c3t">安全地协作</h3>
+          <p data-i18n="overview.c3d">工具权限分类、HITL 审批、路径边界与独立校验模型。</p>
+        </div>
+        <div class="card">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </div>
+          <h3 data-i18n="overview.c4t">使用合适的界面</h3>
+          <p data-i18n="overview.c4d">Web 管理界面与包含本地进程、文件、Git、浏览器的 Desktop 工作台。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 快速开始 ================= -->
+  <section id="quickstart">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="section-tag" data-i18n="qs.tag">快速开始</span>
+        <h2 data-i18n="qs.title">三步上手</h2>
+        <p data-i18n="qs.desc">安装、启动、配置模型渠道，即可在你的代码库中开始使用。</p>
+      </div>
+
+      <div class="qs-steps">
+        <div class="qs-step reveal">
+          <div class="qs-rail"><span class="qs-num">1</span></div>
+          <div class="qs-body">
+            <div class="qs-step-head"><h3 data-i18n="qs.s1.title">安装</h3></div>
+            <p data-i18n="qs.s1.desc">一键脚本安装 CLI，桌面端可从 <a href="https://github.com/ezdemo/loopra/releases/latest" target="_blank" rel="noopener">Releases</a> 下载；国内网络推荐使用镜像加速。</p>
+
+            <div class="os-tabs" data-tabs>
+              <div class="os-tabs-bar" role="tablist" aria-label="选择操作系统" data-i18n-label="label.osTabs">
+                <button type="button" class="os-tab active" data-tab="win" role="tab" aria-selected="true">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><line x1="2" y1="8" x2="22" y2="8"/></svg>
+                  Windows PowerShell
                 </button>
-                <div class="download-options" id="download-options" hidden>
-                  <div class="download-step download-start">
-                    <a
-                      href="https://gitcode.com/Sorghum/loopra/releases/latest"
-                      target="_blank"
-                      rel="noreferrer"
-                      >桌面端下载 <span>GitCode &#8599;</span></a
-                    >
-                    <button class="web-install-trigger" type="button">
-                      轻量 Web 安装 <span aria-hidden="true">&#8594;</span>
-                    </button>
-                  </div>
-                  <div class="download-step web-install-options" hidden>
-                    <p class="menu-title">选择系统</p>
-                    <button
-                      class="install-option"
-                      type="button"
-                      data-platform="Windows PowerShell"
-                      data-command="irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex"
-                    >
-                      Windows PowerShell
-                    </button>
-                    <button
-                      class="install-option"
-                      type="button"
-                      data-platform="macOS / Linux"
-                      data-command="curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash"
-                    >
-                      macOS / Linux
-                    </button>
-                    <button class="menu-back" type="button">&#8592; 返回</button>
-                  </div>
-                  <div class="download-step install-command" hidden>
-                    <p class="install-command-label"></p>
-                    <code class="install-command-text"></code>
-                    <button class="install-copy-button" type="button">
-                      复制命令
-                    </button>
-                    <button class="menu-back" type="button">&#8592; 更换系统</button>
-                  </div>
-                </div>
-              </div>
-              <div class="source-menu">
-                <button
-                  class="button button-secondary source-menu-trigger"
-                  type="button"
-                  aria-expanded="false"
-                  aria-controls="source-options"
-                >
-                  <span class="source-mark" aria-hidden="true">&#9670;</span>
-                  查看源码
-                  <span class="source-caret" aria-hidden="true">&#9662;</span>
+                <button type="button" class="os-tab" data-tab="unix" role="tab" aria-selected="false">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+                  macOS / Linux
                 </button>
-                <div class="source-options" id="source-options" hidden>
-                  <a
-                    href="https://gitee.com/ezdemo/loopra"
-                    target="_blank"
-                    rel="noreferrer"
-                    >Gitee <span aria-hidden="true">&#8599;</span></a
-                  >
-                  <a
-                    href="https://github.com/ezdemo/agent4j"
-                    target="_blank"
-                    rel="noreferrer"
-                    >GitHub <span aria-hidden="true">&#8599;</span></a
-                  >
-                  <a
-                    href="https://gitcode.com/Sorghum/loopra/releases/latest"
-                    target="_blank"
-                    rel="noreferrer"
-                    >GitCode Desktop <span aria-hidden="true">&#8599;</span></a
-                  >
-                </div>
               </div>
-            </div>
-            <div class="platforms">
-              <span>Windows</span><span>macOS</span><span>Linux</span
-              ><span>Java 17+</span>
-            </div>
-          </div>
 
-          <div
-            class="app-preview"
-            aria-label="Loopra desktop workspace preview"
-          >
-            <div class="window-chrome">
-              <div class="window-controls"><i></i><i></i><i></i></div>
-              <div class="window-title">Loopra Desktop</div>
-              <div class="window-icons">
-                <span>_</span><span>&#9633;</span><span>&#10005;</span>
-              </div>
-            </div>
-            <div class="workspace">
-              <aside class="preview-sidebar">
-                <div class="preview-logo">
-                  <img src="../img/logo.png" alt="" /><span>loopra</span>
-                </div>
-                <button class="new-task">+ 新任务</button>
-                <div class="side-label">今天</div>
-                <div class="conversation active">
-                  <span class="conversation-icon">&#10022;</span
-                  ><span>重构认证流程</span>
-                </div>
-                <div class="conversation">
-                  <span class="conversation-icon">&#10022;</span
-                  ><span>完善 API 文档</span>
-                </div>
-                <div class="conversation">
-                  <span class="conversation-icon">&#10022;</span
-                  ><span>排查构建失败</span>
-                </div>
-                <div class="side-label project-label">工作区</div>
-                <div class="project">
-                  <span class="folder-icon">&#9634;</span><span>agent4j</span
-                  ><em>Java</em>
-                </div>
-                <div class="preview-user">
-                  <span class="user-avatar">S</span><span>Sorghum</span
-                  ><b>&#8942;</b>
-                </div>
-              </aside>
-              <section class="preview-chat">
-                <div class="tab-strip">
-                  <div class="chat-tab active-tab">
-                    <span class="spark">&#10022;</span> 重构认证流程
-                    <b>&#215;</b>
+              <div class="os-tab-panel active" data-tab-panel="win" role="tabpanel">
+                <div class="cmd-group">
+                  <span class="cmd-label" data-i18n="qs.direct">直连源</span>
+                  <div class="codeblock">
+                    <button class="copy-btn" data-copy="irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      <span class="copy-label" data-i18n="common.copy">复制</span>
+                    </button>
+                    <pre>irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex</pre>
                   </div>
-                  <button>+</button>
-                </div>
-                <div class="chat-header">
-                  <span class="crumb">agent4j</span
-                  ><span class="chat-header-actions"
-                    >&#8635; &nbsp; &#8942;</span
-                  >
-                </div>
-                <div class="messages">
-                  <div class="message user-message">
-                    <span class="message-avatar">S</span>
-                    <div>
-                      <p>
-                        检查当前认证模块，整理重复的 token
-                        校验逻辑，并补充测试。
-                      </p>
-                    </div>
-                  </div>
-                  <div class="message assistant-message">
-                    <span class="message-avatar agent-avatar"
-                      ><img src="../img/logo.png" alt=""
-                    /></span>
-                    <div class="agent-content">
-                      <p>
-                        我会先定位认证调用链和现有测试，再给出最小范围的修改。
-                      </p>
-                      <div class="tool-call">
-                        <div>
-                          <span class="tool-icon">&#128269;</span
-                          ><b>搜索代码库</b><em>完成</em>
-                        </div>
-                        <code>rg "validateToken|Authentication" src</code>
-                      </div>
-                      <p>发现 3 处重复校验，正在提取为共享拦截器。</p>
-                      <div class="tool-call success">
-                        <div>
-                          <span class="tool-icon">&#10003;</span><b>运行测试</b
-                          ><em>通过</em>
-                        </div>
-                        <code>mvn -pl loopra-web -am test</code>
-                      </div>
-                    </div>
+                  <span class="cmd-label" data-i18n="qs.mirror">镜像加速<span class="cmd-chip" data-i18n="qs.mirrorChip">国内推荐</span></span>
+                  <div class="codeblock">
+                    <button class="copy-btn" data-copy="irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-mirror.ps1 | iex">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      <span class="copy-label" data-i18n="common.copy">复制</span>
+                    </button>
+                    <pre>irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-mirror.ps1 | iex</pre>
                   </div>
                 </div>
-                <div class="chat-input">
-                  <span>继续交代任务...</span><kbd>Enter</kbd
-                  ><button aria-label="发送">&#8593;</button>
+              </div>
+
+              <div class="os-tab-panel" data-tab-panel="unix" role="tabpanel">
+                <div class="cmd-group">
+                  <span class="cmd-label" data-i18n="qs.direct">直连源</span>
+                  <div class="codeblock">
+                    <button class="copy-btn" data-copy="curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      <span class="copy-label" data-i18n="common.copy">复制</span>
+                    </button>
+                    <pre>curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash</pre>
+                  </div>
+                  <span class="cmd-label" data-i18n="qs.mirror">镜像加速<span class="cmd-chip" data-i18n="qs.mirrorChip">国内推荐</span></span>
+                  <div class="codeblock">
+                    <button class="copy-btn" data-copy="curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-mirror.sh | bash">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                      <span class="copy-label" data-i18n="common.copy">复制</span>
+                    </button>
+                    <pre>curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-mirror.sh | bash</pre>
+                  </div>
                 </div>
-              </section>
-              <aside class="preview-panel">
-                <div class="panel-title">任务状态 <span>&#8942;</span></div>
-                <div class="goal-row">
-                  <span class="goal-check">&#10003;</span
-                  ><span>分析认证模块</span>
-                </div>
-                <div class="goal-row">
-                  <span class="goal-check">&#10003;</span
-                  ><span>提取共享校验</span>
-                </div>
-                <div class="goal-row in-progress">
-                  <span class="goal-spinner"></span><span>补充单元测试</span>
-                </div>
-                <div class="goal-row muted">
-                  <span class="goal-empty"></span><span>验证完整构建</span>
-                </div>
-                <div class="panel-divider"></div>
-                <div class="panel-title">工具调用</div>
-                <div class="tool-summary"><span>read</span><b>12</b></div>
-                <div class="tool-summary"><span>grep</span><b>4</b></div>
-                <div class="tool-summary"><span>bash</span><b>2</b></div>
-              </aside>
+              </div>
             </div>
           </div>
         </div>
-      </section>
 
-      <section class="signal-band">
-        <div class="container signal-inner">
-          <p>为真实代码库而生</p>
-          <div>
-            <span>JAVA 17</span><span>SOLON</span><span>VUE 3</span
-            ><span>ELECTRON</span><span>MCP</span><span>OPENAPI</span>
-          </div>
-        </div>
-      </section>
-
-      <section class="capabilities section" id="capabilities">
-        <div class="container">
-          <div class="section-heading">
-            <p class="kicker">Core capabilities</p>
-            <h2>不仅能回答，<br />更能把任务推进到结果。</h2>
-            <p>
-              Loopra
-              将模型推理与本地工具调用组织为持续循环，在任务完成、需要审批或遇到阻塞前保持工作上下文。
-            </p>
-          </div>
-          <div class="capability-grid">
-            <article class="capability-card capability-featured">
-              <div class="card-icon search-icon">&#8981;</div>
-              <div>
-                <h3>理解整个工作区</h3>
-                <p>
-                  读取、检索与修改都在项目边界内进行。Agent
-                  先建立上下文，再动手处理真实的调用链和依赖关系。
-                </p>
+        <div class="qs-step reveal">
+          <div class="qs-rail"><span class="qs-num">2</span></div>
+          <div class="qs-body">
+            <div class="qs-step-head"><h3 data-i18n="qs.s2.title">启动服务</h3></div>
+            <p data-i18n="qs.s2.desc">使用 <code>0</code> 让服务自动选择可用端口，控制台会输出本地访问地址。</p>
+            <div class="cmd-group">
+              <div class="codeblock">
+                <button class="copy-btn" data-copy="loopra web 0">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <span class="copy-label" data-i18n="common.copy">复制</span>
+                </button>
+                <pre>loopra web 0</pre>
               </div>
-              <div class="file-map">
-                <span class="tree-line"><b>&#9662;</b> src</span
-                ><span class="tree-indent"><b>&#9662;</b> auth</span
-                ><span class="tree-deep active-file"
-                  >&#9670; TokenValidator.java</span
-                ><span class="tree-deep">&#9670; AuthInterceptor.java</span
-                ><span class="tree-indent">&#9670; AuthServiceTest.java</span>
-              </div>
-            </article>
-            <article class="capability-card">
-              <div class="card-icon loop-icon">&#8635;</div>
-              <h3>持续的推理循环</h3>
-              <p>
-                任务、工具结果与下一步决策连接成循环。无需为每次文件读取和命令输出反复补充上下文。
-              </p>
-              <div class="mini-loop">
-                <span>任务</span><b>&#8594;</b><span>推理</span><b>&#8594;</b
-                ><span>执行</span>
-              </div>
-            </article>
-            <article class="capability-card">
-              <div class="card-icon shield-icon">&#9670;</div>
-              <h3>权限始终清晰</h3>
-              <p>
-                只读、审批与自动三种模式，将高风险调用交给人工确认。路径边界与校验模型提供额外保障。
-              </p>
-              <div class="permission-row">
-                <span class="permission-pill allowed">read</span
-                ><span class="permission-pill allowed">grep</span
-                ><span class="permission-pill review">bash · 审批</span>
-              </div>
-            </article>
-            <article class="capability-card">
-              <div class="card-icon collaboration-icon">&#10022;</div>
-              <h3>适合长任务的协作状态</h3>
-              <p>
-                Goal、Checklist、会话折叠与项目记忆，让 Agent
-                在多步骤任务中保留进度、证据和稳定约定。
-              </p>
-              <div class="check-list">
-                <span><b>&#10003;</b> 定位影响范围</span
-                ><span><b>&#10003;</b> 修改与测试</span
-                ><span class="pending"><b></b> 汇总结果</span>
-              </div>
-            </article>
-            <article class="capability-card">
-              <div class="card-icon extension-icon">&#8862;</div>
-              <h3>把工具接进来</h3>
-              <p>
-                通过 Solon 声明工具，也可接入 MCP、OpenAPI、REST API
-                和技能。选择工具而不是重新发明工作流。
-              </p>
-              <div class="extension-tags">
-                <span>MCP</span><span>OpenAPI</span><span>Skills</span>
-              </div>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="workflow section" id="workflow">
-        <div class="container workflow-layout">
-          <div>
-            <p class="kicker">A visible workflow</p>
-            <h2>过程留在界面里，<br />控制权留在你手里。</h2>
-            <p class="workflow-copy">
-              从任务分解到命令执行，Loopra
-              的每一步都有可检查的上下文和结果。需要决策时，Agent
-              会暂停并把明确的问题交还给你。
-            </p>
-            <a class="text-link" href="#develop"
-              >查看本地开发方式 <span aria-hidden="true">&#8594;</span></a
-            >
-          </div>
-          <div class="workflow-steps">
-            <article>
-              <div class="step-number">01</div>
-              <div>
-                <h3>描述目标</h3>
-                <p>用自然语言交代结果，不必先拆成机械步骤。</p>
-              </div>
-            </article>
-            <article>
-              <div class="step-number">02</div>
-              <div>
-                <h3>观察与行动</h3>
-                <p>模型读取代码、调用工具，并根据真实输出调整下一步。</p>
-              </div>
-            </article>
-            <article>
-              <div class="step-number">03</div>
-              <div>
-                <h3>确认与交付</h3>
-                <p>高风险操作等待审批，完成后带着验证结果回到对话。</p>
-              </div>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="developer section" id="develop">
-        <div class="container developer-layout">
-          <div class="developer-copy">
-            <p class="kicker">Start local</p>
-            <h2>几分钟，启动你的本地工作台。</h2>
-            <p>
-              从 Gitee 获取发布版本并在本机运行。Desktop 安装包由 GitCode
-              发布；源码同时提供 Gitee 主仓库与 GitHub 镜像。
-            </p>
-            <a
-              class="button button-primary"
-              href="https://github.com/ezdemo/loopra/releases/latest"
-              target="_blank"
-              rel="noreferrer"
-              >查看 Github Releases <span aria-hidden="true">&#8594;</span></a
-            >
-            <div class="source-links" aria-label="Download and source links">
-              <a
-                href="https://gitee.com/ezdemo/loopra"
-                target="_blank"
-                rel="noreferrer"
-                >Gitee 源码 <span>&#8599;</span></a
-              >
-              <a
-                href="https://github.com/ezdemo/agent4j"
-                target="_blank"
-                rel="noreferrer"
-                >GitHub 镜像 <span>&#8599;</span></a
-              >
-              <a
-                href="https://gitcode.com/Sorghum/loopra/releases/latest"
-                target="_blank"
-                rel="noreferrer"
-                >GitCode Desktop <span>&#8599;</span></a
-              >
-            </div>
-          </div>
-          <div class="terminal" aria-label="Installation commands">
-            <div class="terminal-top">
-              <span><i></i><i></i><i></i></span><b>Install and run</b
-              ><button
-                class="copy-button"
-                type="button"
-                data-copy="irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex"
-                aria-label="复制 Windows 安装命令"
-              >
-                复制 Windows 命令
-              </button>
-            </div>
-            <div class="terminal-body install-body">
-              <p class="terminal-label">Windows PowerShell</p>
-              <p>
-                <span class="prompt">PS&gt;</span> irm
-                https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1
-                | iex
-              </p>
-              <p class="terminal-label terminal-label-spaced">macOS / Linux</p>
-              <p>
-                <span class="prompt">$</span> curl -fsSL
-                https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh
-                | bash
-              </p>
-              <p class="terminal-label terminal-label-spaced">启动服务</p>
-              <p><span class="prompt">$</span> loopra web 0</p>
-              <p class="terminal-result">
-                Serving Loopra at <b>http://localhost:5210</b>
-              </p>
             </div>
           </div>
         </div>
-      </section>
-    </main>
 
-    <footer class="site-footer">
-      <div class="container footer-inner">
-        <a class="brand footer-brand" href="#top"
-          ><img src="../img/logo.png" alt="" /><span>loopra</span></a
-        >
-        <p>Pure Java AI coding agent. Built for local workspaces.</p>
+        <div class="qs-step reveal">
+          <div class="qs-rail"><span class="qs-num">3</span></div>
+          <div class="qs-body">
+            <div class="qs-step-head"><h3 data-i18n="qs.s3.title">配置模型渠道</h3></div>
+            <p data-i18n="qs.s3.desc">在 Web 设置页维护模型渠道，或直接编辑 <code>~/.loopra/config.json</code>，配置 API Key 后重启服务。</p>
+            <div class="cmd-group">
+              <div class="codeblock">
+                <button class="copy-btn" data-copy-from="#config-json">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+                  <span class="copy-label" data-i18n="common.copy">复制</span>
+                </button>
+<pre id="config-json">{
+  <span class="c-key">"model"</span>: <span class="c-str">"deepseek-v4-flash"</span>,
+  <span class="c-key">"modelChannelId"</span>: <span class="c-str">"default"</span>,
+  <span class="c-key">"modelChannels"</span>: [
+    {
+      <span class="c-key">"id"</span>: <span class="c-str">"default"</span>,
+      <span class="c-key">"name"</span>: <span class="c-str">"Default"</span>,
+      <span class="c-key">"baseUrl"</span>: <span class="c-str">"https://api.deepseek.com/v1"</span>,
+      <span class="c-key">"apiKey"</span>: <span class="c-str">"sk-your-api-key"</span>,
+      <span class="c-key">"apiProtocol"</span>: <span class="c-str">"chat_completions"</span>,
+      <span class="c-key">"models"</span>: [
+        {
+          <span class="c-key">"name"</span>: <span class="c-str">"deepseek-v4-flash"</span>,
+          <span class="c-key">"contextTokens"</span>: -1,
+          <span class="c-key">"imageInput"</span>: false
+        }
+      ]
+    }
+  ],
+  <span class="c-key">"workspaceDir"</span>: <span class="c-str">"/path/to/your/project"</span>
+}</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div class="qs-note reveal">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+        <span data-i18n="qs.note">
+          镜像脚本与安装包仍从 GitHub 下载，仅加速脚本拉取，适合国内网络。
+          每个渠道独立维护 API 地址、密钥、协议与模型能力，<code>apiProtocol</code> 支持 <code>chat_completions</code> 和 <code>responses</code>。
+          首次启动会在 <code>~/.loopra/config.json</code> 创建默认配置。
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 核心能力 ================= -->
+  <section id="features">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="section-tag" data-i18n="features.tag">核心能力</span>
+        <h2 data-i18n="features.title">为真实开发场景设计的完整能力</h2>
+        <p data-i18n="features.desc">从推理循环到审批边界，从上下文管理到桌面工作台。</p>
+      </div>
+
+      <div class="grid grid-3">
+        <div class="card reveal">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          </div>
+          <h3 data-i18n="features.f1t">自主推理循环</h3>
+          <p data-i18n="features.f1d">流式输出推理、工具调用和结果，持续处理多轮任务。</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 2 7 12 12 22 7 12 2"/><polyline points="2 17 12 22 22 17"/><polyline points="2 12 12 17 22 12"/></svg>
+          </div>
+          <h3 data-i18n="features.f2t">上下文管理</h3>
+          <p data-i18n="features.f2d">JSONL 会话持久化、自动摘要折叠、消息自愈和 token 用量统计。</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+          </div>
+          <h3 data-i18n="features.f3t">多模型渠道</h3>
+          <p data-i18n="features.f3d">支持多渠道、Chat Completions API、OpenAI Responses API、推理强度和模型能力配置。</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+          </div>
+          <h3 data-i18n="features.f4t">可扩展工具系统</h3>
+          <p data-i18n="features.f4d">通过 Solon <code>@ToolMapping</code> 声明式注册，支持内置工具、MCP、OpenAPI、技能和 REST API。</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
+          </div>
+          <h3 data-i18n="features.f5t">代码库操作</h3>
+          <p data-i18n="features.f5d">在工作区边界内读取、搜索、编辑文件，运行一次性或交互式命令。</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+          </div>
+          <h3 data-i18n="features.f6t">子代理协作</h3>
+          <p data-i18n="features.f6d">内置 explore、implement、test、review、plan 五种角色，支持隔离上下文、权限约束和超时控制。</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1" ry="1"/><line x1="9" y1="12" x2="15" y2="12"/><line x1="9" y1="16" x2="13" y2="16"/></svg>
+          </div>
+          <h3 data-i18n="features.f7t">计划模式</h3>
+          <p data-i18n="features.f7d">输入框一键进入只读探索，探索完成后提交计划供用户审查，批准后按计划执行。</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
+          </div>
+          <h3 data-i18n="features.f8t">持久协作状态</h3>
+          <p data-i18n="features.f8d">Checklist、会话级 Goal、项目记忆和共享工作区支持长任务及父子代理协作。</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/><polyline points="9 12 11 14 15 10"/></svg>
+          </div>
+          <h3 data-i18n="features.f9t">审批与边界</h3>
+          <p data-i18n="features.f9d">三态 HITL（free / approval / auto）、工具白名单、路径边界保护，以及可选的独立校验模型。</p>
+        </div>
+        <div class="card reveal">
+          <div class="card-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>
+          </div>
+          <h3 data-i18n="features.f10t">桌面工作台</h3>
+          <p data-i18n="features.f10d">Electron Desktop 提供多聊天标签、Git/文件面板、元素检查、服务进程管理和 AI 浏览器。</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 工具系统 ================= -->
+  <section id="tools">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="section-tag" data-i18n="tools.tag">工具系统</span>
+        <h2 data-i18n="tools.title">武装到牙齿的内置工具</h2>
+        <p data-i18n="tools.desc">工具由 Solon 自动发现，可在工具管理界面启用、禁用，并为自定义工具指定只读或写入分类。</p>
+      </div>
+
+      <div class="table-wrap reveal">
+        <table>
+          <thead>
+            <tr><th style="width:200px" data-i18n="tools.thCat">分类</th><th data-i18n="tools.thScope">覆盖场景</th></tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td data-i18n="tools.r1">文件与代码检索</td>
+              <td><code>read</code>、<code>write</code>、<code>edit</code>、<code>glob</code>、<code>grep</code>、<code>ls</code>、<code>java_source</code>、<code>codesearch</code></td>
+            </tr>
+            <tr>
+              <td data-i18n="tools.r2">命令与网络</td>
+              <td data-i18n="tools.r2d"><code>bash</code>、交互式命令会话、<code>webfetch</code>、<code>call_api</code></td>
+            </tr>
+            <tr>
+              <td data-i18n="tools.r3">任务协作</td>
+              <td><code>sub_agent</code>、<code>checklist_*</code>、<code>goal_*</code>、<code>workspace_*</code></td>
+            </tr>
+            <tr>
+              <td data-i18n="tools.r4">项目状态</td>
+              <td data-i18n="tools.r4d"><code>memory</code> 将跨会话事实保存到 <code>.loopra/loopra-memory.md</code>；共享工作区保存到 <code>.loopra/workspace/</code></td>
+            </tr>
+            <tr>
+              <td data-i18n="tools.r5">多模态与浏览器</td>
+              <td data-i18n="tools.r5d"><code>read_image</code>，以及桌面端可见 AI 浏览器的 <code>browser_*</code> 工具</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="qs-note reveal" style="margin-top:24px">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        <span data-i18n="tools.note">
+          MCP、OpenAPI 和技能可为 Agent 注入额外工具。<code>read_image</code> 支持工作区路径、绝对路径、Base64/data URI 和 HTTP(S) URL，单张图片最大 5 MiB。
+          浏览器工具只操作可见的 Desktop 浏览器；遇到登录、验证码或安全验证时，Agent 会请求用户接管，不会代填或读取敏感凭据。
+        </span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 架构 ================= -->
+  <section id="architecture">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="section-tag" data-i18n="arch.tag">架构</span>
+        <h2 data-i18n="arch.title">模块化设计，按需取用</h2>
+        <p data-i18n="arch.desc"><code>loopra-model</code>、<code>loopra-harness</code>、<code>loopra-acp</code> 均为独立 Maven 模块，可单独发布供外部服务复用。</p>
+      </div>
+
+      <div class="arch-grid">
+        <div class="card arch-card reveal">
+          <span class="card-badge" data-i18n="arch.b1">纯内核</span>
+          <h3>loopra-model</h3>
+          <p data-i18n="arch.p1">ChatModel 客户端/协议、AgentLoop/SubAgent 推理循环、工具抽象与 SPI（AgentConfig/GoalGuard 等），不含任何编排设施。</p>
+        </div>
+        <div class="card arch-card reveal">
+          <span class="card-badge" data-i18n="arch.b2">工具装备 + 编排</span>
+          <h3>loopra-harness</h3>
+          <p data-i18n="arch.p2">LoopraAgent 门面、内置工具、Goal/Checklist/工作区/命令/会话持久化/配置、MCP/LSP/OpenAPI/Skill 技能桥接、定时任务。</p>
+        </div>
+        <div class="card arch-card reveal">
+          <span class="card-badge" data-i18n="arch.b3">协议支持</span>
+          <h3>loopra-acp</h3>
+          <p data-i18n="arch.p3">ACP 支持：将 Agent 注册为 ACP Agent（stdio / WebSocket）。</p>
+        </div>
+        <div class="card arch-card reveal">
+          <span class="card-badge" data-i18n="arch.b4">Web 服务</span>
+          <h3>loopra-web</h3>
+          <p data-i18n="arch.p4">Solon Web 服务、REST/SSE 接口和打包配置（聚合上述模块）。</p>
+        </div>
+        <div class="card arch-card reveal">
+          <span class="card-badge" data-i18n="arch.b5">前端 &amp; 桌面</span>
+          <h3>loopra-front</h3>
+          <p data-i18n="arch.p5">Vue 前端与 Electron Desktop。</p>
+        </div>
+        <div class="card arch-card reveal">
+          <span class="card-badge" data-i18n="arch.b6">文档</span>
+          <h3>intro / docs</h3>
+          <p data-i18n="arch.p6">官网内容与项目文档，随仓库一同维护。</p>
+        </div>
+      </div>
+
+      <div class="arch-dep reveal">
+<pre data-i18n="arch.dep">loopra-model   ← loopra-harness（LoopraAgent / 内置工具 / Goal / 工作区 / MCP / Skill）
+     ↑
+     └────────← loopra-acp（ACP 注册，经 loopra-harness）
+
+loopra-web     ← 聚合 loopra-harness + loopra-acp（传递引入 loopra-model）</pre>
+      </div>
+
+      <ul class="arch-points reveal">
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span data-i18n="arch.pt1">只需基础 ChatModel / AgentLoop 推理内核 → 依赖 <b>loopra-model</b>，通过 SPI 自行装配编排设施。</span>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span data-i18n="arch.pt2">需要开箱即用的 LoopraAgent、内置工具与 Goal / 工作区 / MCP / Skill → 追加依赖 <b>loopra-harness</b>。</span>
+        </li>
+        <li>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+          <span data-i18n="arch.pt3">需要把 Agent 暴露为 ACP Agent → 追加依赖 <b>loopra-acp</b>。</span>
+        </li>
+      </ul>
+    </div>
+  </section>
+
+  <!-- ================= 技术栈 ================= -->
+  <section id="stack">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="section-tag" data-i18n="stack.tag">技术栈</span>
+        <h2 data-i18n="stack.title">基于成熟的技术构建</h2>
+      </div>
+      <div class="table-wrap reveal">
+        <table>
+          <thead>
+            <tr><th style="width:140px" data-i18n="stack.thLayer">层</th><th data-i18n="stack.thTech">技术</th></tr>
+          </thead>
+          <tbody>
+            <tr><td data-i18n="stack.l1">核心</td><td>Java 17、Solon 4.0.4、Snack4、OkHttp</td></tr>
+            <tr><td>Web</td><td>Solon Web、Jetty、SSE、Knife4j</td></tr>
+            <tr><td data-i18n="stack.l3">前端</td><td>Vue 3、Vite、Pinia、Ant Design Vue</td></tr>
+            <tr><td data-i18n="stack.l4">桌面</td><td>Electron、electron-builder</td></tr>
+            <tr><td data-i18n="stack.l5">协议</td><td>MCP、OpenAPI、ACP、Chat Completions API、Responses API</td></tr>
+            <tr><td data-i18n="stack.l6">持久化</td><td data-i18n="stack.l6d">JSONL 会话、工作区本地 JSON、项目 Markdown 记忆</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 从源码开发 ================= -->
+  <section id="develop">
+    <div class="container">
+      <div class="section-head reveal">
+        <span class="section-tag" data-i18n="dev.tag">从源码开发</span>
+        <h2 data-i18n="dev.title">构建、测试与二次开发</h2>
+      </div>
+
+      <div class="dev-cols">
         <div>
-          <a
-            href="https://gitee.com/ezdemo/loopra"
-            target="_blank"
-            rel="noreferrer"
-            >Gitee</a
-          >
-          <a
-            href="https://github.com/ezdemo/agent4j"
-            target="_blank"
-            rel="noreferrer"
-            >GitHub</a
-          >
-          <a
-            href="https://gitcode.com/Sorghum/loopra/releases/latest"
-            target="_blank"
-            rel="noreferrer"
-            >Desktop</a
-          >
-          <a
-            href="https://gitee.com/ezdemo/loopra/blob/main/LICENSE"
-            target="_blank"
-            rel="noreferrer"
-            >MIT License</a
-          >
+          <span class="cmd-label" style="margin-bottom:12px" data-i18n="dev.reqs">前置条件</span>
+          <div class="dev-reqs reveal">
+            <div class="dev-req">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>
+              JDK <code>17</code>
+            </div>
+            <div class="dev-req">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+              Maven <code>3.9+</code>
+            </div>
+            <div class="dev-req">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+              Node.js <code>18+</code>
+            </div>
+            <div class="dev-req">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><line x1="9" y1="3" x2="9" y2="21"/></svg>
+              pnpm <code>8+</code>
+            </div>
+          </div>
+
+          <span class="cmd-label" style="margin:24px 0 12px" data-i18n="dev.acp">启用 ACP（Agent Client Protocol）</span>
+          <div class="codeblock reveal">
+            <button class="copy-btn" data-copy-from="#acp-cmds">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span class="copy-label" data-i18n="common.copy">复制</span>
+            </button>
+<pre id="acp-cmds"><span class="c-com" data-i18n="dev.cStdio"># stdio 模式</span>
+loopra web 0 --loopra.acp=true
+
+<span class="c-com" data-i18n="dev.cWs"># WebSocket 模式</span>
+loopra web 0 --loopra.acp=true --loopra.acp.ws.port=8765</pre>
+          </div>
+        </div>
+
+        <div class="dev-cmds">
+          <span class="cmd-label" data-i18n="dev.backend">后端构建与测试</span>
+          <div class="codeblock reveal">
+            <button class="copy-btn" data-copy-from="#backend-cmds">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span class="copy-label" data-i18n="common.copy">复制</span>
+            </button>
+<pre id="backend-cmds"><span class="c-com" data-i18n="dev.cBuild"># 构建后端模块</span>
+mvn clean package
+
+<span class="c-com" data-i18n="dev.cTest"># 运行全部后端测试</span>
+mvn test
+
+<span class="c-com" data-i18n="dev.cWeb"># 仅验证 Web 模块及其依赖模块</span>
+mvn -pl loopra-web -am test</pre>
+          </div>
+
+          <span class="cmd-label" data-i18n="dev.front">前端与 Desktop</span>
+          <div class="codeblock reveal">
+            <button class="copy-btn" data-copy-from="#front-cmds">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              <span class="copy-label" data-i18n="common.copy">复制</span>
+            </button>
+<pre id="front-cmds">cd loopra-front
+pnpm install
+
+<span class="c-com" data-i18n="dev.cDev"># 启动前端开发服务</span>
+pnpm dev
+
+<span class="c-com" data-i18n="dev.cTestFront"># 运行前端测试并构建</span>
+pnpm test -- --run
+pnpm build
+
+<span class="c-com" data-i18n="dev.cElectron"># 启动 Electron 开发模式</span>
+pnpm dev:electron</pre>
+          </div>
         </div>
       </div>
-    </footer>
-    <script src="js/main.js"></script>
-  </body>
+    </div>
+  </section>
+
+  <!-- ================= CTA ================= -->
+  <section class="cta" style="border-top:1px solid var(--border)">
+    <div class="container reveal">
+      <h2 data-i18n="cta.title">准备好开始了吗？</h2>
+      <p data-i18n="cta.desc">让 Loopra 在你的代码库里，像同事一样干活。</p>
+      <div class="cta-actions">
+        <a class="btn btn-primary btn-lg" href="https://github.com/ezdemo/loopra/releases/latest" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          <span data-i18n="cta.download">下载最新版本</span>
+        </a>
+        <a class="btn btn-secondary btn-lg" href="https://github.com/ezdemo/loopra" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="currentColor"><path d="M12 .297c-6.63 0-12 5.373-12 12 0 5.303 3.438 9.8 8.205 11.385.6.113.82-.258.82-.577 0-.285-.01-1.04-.015-2.04-3.338.724-4.042-1.61-4.042-1.61C4.422 18.07 3.633 17.7 3.633 17.7c-1.087-.744.084-.729.084-.729 1.205.084 1.838 1.236 1.838 1.236 1.07 1.835 2.809 1.305 3.495.998.108-.776.417-1.305.76-1.605-2.665-.3-5.466-1.332-5.466-5.93 0-1.31.465-2.38 1.235-3.22-.135-.303-.54-1.523.105-3.176 0 0 1.005-.322 3.3 1.23.96-.267 1.98-.399 3-.405 1.02.006 2.04.138 3 .405 2.28-1.552 3.285-1.23 3.285-1.23.645 1.653.24 2.873.12 3.176.765.84 1.23 1.91 1.23 3.22 0 4.61-2.805 5.625-5.475 5.92.42.36.81 1.096.81 2.22 0 1.606-.015 2.896-.015 3.286 0 .315.21.69.825.57C20.565 22.092 24 17.592 24 12.297c0-6.627-5.373-12-12-12"/></svg>
+          <span data-i18n="cta.github">在 GitHub 上查看</span>
+        </a>
+        <a class="btn btn-outline btn-lg" href="https://github.com/ezdemo/loopra/blob/main/CHANGELOG.md" target="_blank" rel="noopener">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+          <span data-i18n="cta.changelog">更新日志</span>
+        </a>
+      </div>
+    </div>
+  </section>
+
+</main>
+
+<!-- ================= Footer ================= -->
+<footer class="site-footer">
+  <div class="container footer-inner">
+    <div class="footer-brand">
+      <svg viewBox="0 0 96 96" aria-hidden="true">
+        <rect x="16" y="16" width="64" height="64" rx="21" fill="none" stroke="url(#lr-ring)" stroke-width="8"/>
+        <path class="logo-mark-l" d="M41 35v20c0 3.87 3.13 7 7 7h11" fill="none" stroke-linecap="round" stroke-linejoin="round" stroke-width="6"/>
+      </svg>
+      Loopra
+      <span class="sub" data-i18n="footer.sub">纯 Java 的 AI 编码代理</span>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/ezdemo/loopra" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://gitee.com/ezdemo/loopra" target="_blank" rel="noopener">Gitee</a>
+      <a href="https://github.com/ezdemo/loopra/releases/latest" target="_blank" rel="noopener">Releases</a>
+      <a href="https://github.com/ezdemo/loopra/blob/main/CHANGELOG.md" target="_blank" rel="noopener">CHANGELOG</a>
+      <a href="https://github.com/ezdemo/loopra/blob/main/LICENSE" target="_blank" rel="noopener">MIT License</a>
+    </div>
+    <div class="footer-copy" data-i18n="footer.copy">MIT License © <span data-year>2026</span> Sorghum · 当前版本 v26.8.40</div>
+  </div>
+</footer>
+
+<script src="i18n.js"></script>
+<script src="main.js"></script>
+</body>
 </html>
