@@ -10,7 +10,7 @@
           <div class="uvc-name">核心服务</div>
           <div class="uvc-version">v{{ appVersion || '-' }}</div>
         </div>
-        <div v-if="hasNewVersion" class="uvc-status warn">有新版本</div>
+        <div v-if="hasNewVersion" class="uvc-status warn">新版</div>
         <div v-else class="uvc-status ok">已是最新</div>
       </div>
 
@@ -22,7 +22,7 @@
           <div class="uvc-name">桌面端</div>
           <div class="uvc-version">v{{ electronVersion || '加载中...' }}</div>
         </div>
-        <div v-if="desktopHasNewVersion" class="uvc-status warn">有新版本</div>
+        <div v-if="desktopHasNewVersion" class="uvc-status warn">新版</div>
         <div v-else class="uvc-status ok">已是最新</div>
       </div>
     </div>
@@ -60,23 +60,25 @@
         </svg>
         {{ checking ? '检查中...' : '检查更新' }}
       </button>
-      <button v-if="isElectron" class="btn btn-secondary" :disabled="coreUpdating || desktopHasNewVersion" :title="desktopHasNewVersion ? '请先更新桌面端后再更新核心服务' : ''" @click="$emit('core-update')">
+      <button v-if="isElectron" class="btn" :class="hasNewVersion ? 'btn-update-highlight' : 'btn-secondary'" :disabled="coreUpdating || desktopHasNewVersion" :title="desktopHasNewVersion ? '请先更新桌面端后再更新核心服务' : ''" @click="$emit('core-update')">
         <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
+        <span v-if="hasNewVersion" class="btn-update-badge">新版</span>
         {{ coreUpdating ? '更新中...' : '更新核心服务' }}
       </button>
-      <button v-if="isElectron" class="btn" :class="desktopHasNewVersion ? 'btn-update-highlight' : 'btn-secondary'" @click="$emit('desktop-update')" :title="desktopHasNewVersion ? '检测到桌面端新版本，建议优先更新' : ''">
+      <button class="btn" :class="isElectron ? (desktopHasNewVersion ? 'btn-update-highlight' : 'btn-secondary') : 'btn-recommend'" @click="$emit('desktop-update')" :title="desktopHasNewVersion ? '检测到桌面端新版本，建议优先更新' : (isElectron ? '' : '下载桌面端安装包，桌面端体验更佳')">
         <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
           <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
         </svg>
-        <span v-if="desktopHasNewVersion" class="btn-update-badge">有新版本</span>
-        更新桌面端
+        <span v-if="isElectron && desktopHasNewVersion" class="btn-update-badge">新版</span>
+        {{ isElectron ? '更新桌面端' : '下载桌面端（推荐）' }}
       </button>
-      <button v-if="!isElectron" class="btn btn-secondary" :disabled="autoUpdating" @click="$emit('auto-update')" style="margin-left:auto;">
+      <button v-if="!isElectron" class="btn" :class="hasNewVersion ? 'btn-update-highlight' : 'btn-secondary'" :disabled="autoUpdating" @click="$emit('auto-update')" style="margin-left:auto;">
         <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
+        <span v-if="hasNewVersion" class="btn-update-badge">新版</span>
         {{ autoUpdating ? '正在创建会话...' : '更新核心服务' }}
       </button>
     </div>

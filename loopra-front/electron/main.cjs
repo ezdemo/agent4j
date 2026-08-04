@@ -923,9 +923,13 @@ ipcMain.handle('desktop-pet-open', (event) => {
   return true
 })
 ipcMain.handle('desktop-pet-close', (event) => {
-  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop pet request')
+  // 主窗口与宠物窗口均可主动关闭（宠物右键菜单“关闭宠物”由宠物窗口发起）
+  if (event.sender !== mainWindow?.webContents && event.sender !== desktopPetWindow?.webContents) {
+    throw new Error('Unauthorized desktop pet request')
+  }
   setDesktopPetEnabled(false)
   if (desktopPetWindow && !desktopPetWindow.isDestroyed()) desktopPetWindow.close()
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.webContents.send('desktop-pet-closed')
   return false
 })
 ipcMain.handle('desktop-pet-is-visible', (event) => {

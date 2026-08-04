@@ -522,14 +522,15 @@
     </div>
 
     <!-- 桌面宠物精灵 -->
-    <PetSprite v-if="petSpritesheetUrl && !welcomeMode && !appStore.desktopPetVisible" class="pet-float"
+    <PetSprite v-if="petSpritesheetUrl && !welcomeMode && !appStore.desktopPetVisible && !appStore.petHidden" class="pet-float"
                :spritesheet-url="petSpritesheetUrl"
                :state="petState"
                :initial-x="petPosition.x" :initial-y="petPosition.y"
                :initial-size-index="petSizeIndex"
                :initial-scale="petScale"
                @position-change="savePetPosition"
-               @scale-change="savePetScale" />
+               @scale-change="savePetScale"
+               @close-request="closeFloatingPet" />
   </div>
 </template>
 
@@ -1452,6 +1453,11 @@ onMounted(async () => {
   window.addEventListener('focus', restoreInputFocus)
   if (window.electronAPI?.desktopPet) {
     appStore.desktopPetVisible = await window.electronAPI.desktopPet.isVisible()
+    // 桌面宠物窗口被关闭（含宠物右键“关闭宠物”）时同步状态
+    removePetClosedListener = window.electronAPI.desktopPet.onClosed(() => {
+      appStore.desktopPetVisible = false
+      appStore.petHidden = true
+    })
   }
 })
 onBeforeUnmount(() => {
@@ -1460,6 +1466,7 @@ onBeforeUnmount(() => {
   document.removeEventListener('click', handleOutside)
   window.removeEventListener('blur', rememberInputFocus)
   window.removeEventListener('focus', restoreInputFocus)
+  removePetClosedListener?.()
 })
 
 // ── 桌面宠物精灵图 ──
@@ -1467,6 +1474,12 @@ const petSpritesheetUrl = ref('')
 const petPosition = ref({ x: 0, y: 0 })
 const petSizeIndex = ref(1)
 const petScale = ref(null)
+let removePetClosedListener = null
+
+// 主窗口内嵌宠物被右键关闭：隐藏宠物（不重新出现，直到用户重新打开）
+function closeFloatingPet() {
+  appStore.petHidden = true
+}
 
 async function loadPet() {
   try {

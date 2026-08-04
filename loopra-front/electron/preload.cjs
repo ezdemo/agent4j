@@ -86,6 +86,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('desktop-pet-refresh', listener)
       return () => ipcRenderer.removeListener('desktop-pet-refresh', listener)
     },
+    onClosed: (callback) => {
+      const listener = () => callback()
+      ipcRenderer.on('desktop-pet-closed', listener)
+      return () => ipcRenderer.removeListener('desktop-pet-closed', listener)
+    },
     showReply: (text) => ipcRenderer.invoke('desktop-pet-reply', text),
     onReply: (callback) => {
       const listener = (event, payload) => callback(payload?.text || '')
