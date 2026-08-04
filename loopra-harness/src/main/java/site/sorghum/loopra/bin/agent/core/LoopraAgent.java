@@ -12,6 +12,8 @@ import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.FileChange;
 import site.sorghum.loopra.bin.agent.model.UserMessage;
 import site.sorghum.loopra.bin.agent.prompt.DEFAULT_PROMPT;
+import site.sorghum.loopra.bin.agent.spi.GoalGuard;
+import site.sorghum.loopra.bin.agent.spi.ToolPolicyProvider;
 import site.sorghum.loopra.bin.command.ChatCommand;
 import site.sorghum.loopra.bin.command.ChatCommandContext;
 import site.sorghum.loopra.bin.command.ChatCommandRegistry;
@@ -105,7 +107,7 @@ public class LoopraAgent {
                 b.disabledTools, b.blockedPaths, prompt);
         this.ctx = new ConversationContext(initResult.promptPrefix);
         LoopraConfig loopConfig = b.loopraConfig != null ? b.loopraConfig : LoopraConfig.getInstance();
-        this.loop = initSessionAndLoop(client, initResult.toolRegistry, b.hitl, loopConfig);
+        this.loop = initSessionAndLoop(b, client, initResult.toolRegistry, loopConfig);
 
         //  —— 每个 Agent 自监听自更新（保存引用以便 dispose 时注销）
         this.configListener = event -> {
@@ -143,12 +145,12 @@ public class LoopraAgent {
      * 历史会话加载以及 AgentLoop 的构造与 SessionService 绑定。
      * </p>
      *
+     * @param b        Builder（携带上层可选注入的 goalGuard / toolPolicyProvider / sessionStore）
      * @param client   模型客户端（HttpModelClient 或共享实例）
      * @param registry 工具注册表
-     * @param hitl     HITL 模式（free / approval / auto）
      * @return 构造完成的 AgentLoop 实例
      */
-    private AgentLoop initSessionAndLoop(ModelClient client, ToolRegistry registry, String hitl,
+    private AgentLoop initSessionAndLoop(Builder b, ModelClient client, ToolRegistry registry,
                                          LoopraConfig config) {
         try {
             final String workspacePath = this.workspace != null
@@ -156,18 +158,20 @@ public class LoopraAgent {
                     : Paths.get(System.getProperty("user.home"), ".loopra").toString();
             this.workspaceManager = WorkspaceManager.getOrCreate(workspacePath);
             final Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
-            this.sessionService = new SessionService(ctx, sessionsDir);
+            this.sessionService = (b.sessionStore != null)
+                    ? new SessionService(ctx, b.sessionStore)
+                    : new SessionService(ctx, sessionsDir);
             sessionService.loadOrCreate(System.getenv("LOOPRA_SESSION"));
         } catch (IOException e) {
             log.error("[session] 初始化失败: {}", e.getMessage(), e);
             throw new RuntimeException("[session] Loopra 会话初始化失败，无法继续运行", e);
         }
 
-        final AgentLoop agentLoop = new AgentLoop(client, registry, ctx, hitl, config);
+        final AgentLoop agentLoop = new AgentLoop(client, registry, ctx, b.hitl, config);
         agentLoop.setWorkspace(this.workspace);
         agentLoop.setSessionUsageSink(this.sessionService);
-        agentLoop.setGoalGuard(new GoalGuardImpl());
-        registry.setToolPolicyProvider(new ConfigServiceToolPolicyProvider());
+        agentLoop.setGoalGuard(b.goalGuard != null ? b.goalGuard : new GoalGuardImpl());
+        registry.setToolPolicyProvider(b.toolPolicyProvider != null ? b.toolPolicyProvider : new ConfigServiceToolPolicyProvider());
         return agentLoop;
     }
 
@@ -605,6 +609,21 @@ public class LoopraAgent {
          * 共享配置
          */
         LoopraConfig loopraConfig;
+        /**
+         * Goal 守卫（可选，默认 {@link GoalGuardImpl}）。
+         * <p>上层（如 loopra-web）可注入自定义实现以定制 Goal 生命周期管理。</p>
+         */
+        GoalGuard goalGuard;
+        /**
+         * 工具策略提供者（可选，默认 {@link ConfigServiceToolPolicyProvider}）。
+         * <p>上层可注入自定义实现以定制工具启用/禁用与只读策略。</p>
+         */
+        ToolPolicyProvider toolPolicyProvider;
+        /**
+         * 会话存储（可选，默认基于工作区会话目录的 {@code JsonlSessionStore}）。
+         * <p>上层可注入自定义 {@link SessionStore} 以定制会话持久化。</p>
+         */
+        SessionStore sessionStore;
 
         public Builder loopraConfig(LoopraConfig loopraConfig){
             this.loopraConfig = loopraConfig;
@@ -656,6 +675,30 @@ public class LoopraAgent {
          */
         public Builder modelClient(ModelClient v) {
             this.modelClient = v;
+            return this;
+        }
+
+        /**
+         * 注入自定义 Goal 守卫；不设置则使用默认 {@link GoalGuardImpl}。
+         */
+        public Builder goalGuard(GoalGuard v) {
+            this.goalGuard = v;
+            return this;
+        }
+
+        /**
+         * 注入自定义工具策略提供者；不设置则使用默认 {@link ConfigServiceToolPolicyProvider}。
+         */
+        public Builder toolPolicyProvider(ToolPolicyProvider v) {
+            this.toolPolicyProvider = v;
+            return this;
+        }
+
+        /**
+         * 注入自定义会话存储；不设置则使用默认的 JSONL 文件存储。
+         */
+        public Builder sessionStore(SessionStore v) {
+            this.sessionStore = v;
             return this;
         }
 

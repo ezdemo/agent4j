@@ -81,3 +81,14 @@ loopra-web 打包踩坑：根 pom 对 loopra-web 资源启用了 filtering，前
 ## [2026-08-04 04:38] 会话折叠沉淀
 
 loopra 模块边界（2026-08-04 压薄后定稿）：loopra-model 只含 model(ChatModel)/agent 推理内核(AgentLoop/SubAgent/context/hitl/listener/memory/output/prompt/resilient)/tool 抽象/session 的 SessionStore 接口与 SessionFileChangeTracker/util，另新增 SPI 包 agent/spi（AgentConfig/GoalGuard/SessionUsageSink/ToolPolicyProvider）。LoopraAgent、goal/checklist/workspace/command、SessionService/JsonlSessionStore、LoopraConfig/ConfigService/ConfigChangedEvent、AppConfig 全部下沉 loopra-harness（FQCN 不变）。装配：LoopraConfig implements AgentConfig、SessionService implements SessionUsageSink、GoalGuardImpl 与 ConfigServiceToolPolicyProvider 由 LoopraAgent 构造时注入。loopra-acp 依赖 loopra-harness（非 model）。内核换型方法名：getSessionUsageSink/setSessionUsageSink（原 getSessionService/setSessionService）。
+
+## [2026-08-04 09:01] 会话折叠沉淀
+
+- LoopraAgent（loopra-harness .../bin/agent/core/LoopraAgent.java）是私有构造+Builder 的具体门面类，内部硬编码：ToolSystemInitializer、文件型 SessionService、WorkspaceManager、GoalGuardImpl、ConfigServiceToolPolicyProvider，并用 Dami.bus() 监听 "config.changed" 实现热更新（dispose 时需注销监听）。
+- loopra-web 的 AgentService 按 sessionKey（workspacePath::sessionName）用 LRU 缓存 LoopraAgent，经 buildLightweight() 创建后依次 bindSession、setListener(WebUsageListener)、setOutput(SseAgentOutput 或 AgentOutput.NOOP)。
+- Loopra 现存可扩展点仅三个：AgentLoopListener、AgentOutput、ChatCommand/ChatCommandRegistry；其余行为（会话持久化、工作区、工具策略、目标守卫、系统提示词 DEFAULT_PROMPT）均不可替换，这是本次接口抽取的动机。
+- 用户偏好中文回复。
+
+## [2026-08-04 09:13] 会话折叠沉淀
+
+LoopraAgent 定制接口已开放（2026-08-04）：Builder 新增三个可选注入点 goalGuard(GoalGuard)、toolPolicyProvider(ToolPolicyProvider)、sessionStore(SessionStore)，未设置时默认 GoalGuardImpl/ConfigServiceToolPolicyProvider/JsonlSessionStore（工作区会话目录），行为与改造前完全一致；SessionService 新增 (ConversationContext, SessionStore) 构造，原 (ctx, Path) 构造委托为默认 JsonlSessionStore。initSessionAndLoop 签名改为接收 Builder。web 等上层可通过 builder 替换 Goal 守卫、工具策略与会话持久化；测试 SessionServiceTest.usesInjectedSessionStore 验证注入装配。

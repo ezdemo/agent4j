@@ -56,14 +56,25 @@ public class SessionService implements SessionUsageSink {
     private boolean titleGenerated = false;
 
     /**
-     * 创建支持工作区隔离的 SessionService
+     * 创建支持工作区隔离的 SessionService（默认 JSONL 文件存储）
      *
      * @param ctx         会话上下文
      * @param sessionsDir 会话目录路径
      */
     public SessionService(ConversationContext ctx, Path sessionsDir) throws IOException {
+        this(ctx, new JsonlSessionStore(sessionsDir));
+    }
+
+    /**
+     * 使用自定义 SessionStore 创建 SessionService。
+     * <p>供上层（如 loopra-web）注入自定义会话存储，定制持久化方式。</p>
+     *
+     * @param ctx   会话上下文
+     * @param store 会话存储实现
+     */
+    public SessionService(ConversationContext ctx, SessionStore store) {
         this.ctx = ctx;
-        this.store = new JsonlSessionStore(sessionsDir);
+        this.store = store;
         ctx.setSessionStore(store);
     }
 
