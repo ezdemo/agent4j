@@ -11,7 +11,7 @@
     </parent>
     <groupId>site.sorghum.agent</groupId>
     <artifactId>loopra</artifactId>
-    <version>26.8.3</version>
+    <version>26.0804.1</version>
     <packaging>pom</packaging>
 
     <modules>

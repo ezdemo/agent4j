@@ -4,6 +4,54 @@
 
 ---
 
+## [26.0804.1] - 2026-08-04
+
+### Added
+
+#### 📋 计划模式
+
+- ✨ 计划模式 UI 化：输入框新增计划模式按钮与计划审查面板，集成 `agent/mode` 接口，实现只读探索 → 待审计划展示 → 批准执行的完整闭环；移除 `/plan`、`/execute` 斜杠命令
+- ✨ 新增 `submit_plan` 工具：计划模式下提交执行计划（步骤、概述、风险），经 `plan_submitted` 事件推送前端；用户批准后自动退出计划模式并按计划执行
+- ✨ AgentLoop 支持计划模式状态管理与计划注入，会话持久化（`JsonlSessionStore`）同步增强
+
+#### 🖥️ 桌面更新与启动体验
+
+- ✨ 新增启动窗口（DesktopSplash）与更新窗口（DesktopUpdate），版本更新流程独立成窗
+- ✨ 新增下载源选择：直连（GitHub 官方发布）或镜像（gh-proxy 加速），选择本地持久化，更新命令随所选源切换
+- ✨ 标题栏新增版本更新检查与提醒按钮；更新面板拆分“更新核心服务”与“更新桌面端”，检测到桌面端新版本时高亮提示
+- ✨ 重构桌面首页布局并统一外部链接管理；首页左下角菜单新增子代理入口
+- ✨ 桌面宠物右键菜单新增“关闭宠物”（带警告确认）；宠物窗口与主窗口均可关闭宠物，关闭后主窗口同步隐藏状态
+
+#### 🧩 子代理与前端
+
+- ✨ 子代理配置支持前端编辑、持久化与同步策略
+- ✨ 子代理支持选择渠道模型，变更时静默保存
+- ✨ 前端支持数学公式渲染（KaTeX），`$...$` 行内公式与 `$$...$$` 块级公式
+
+#### 🔌 内核与扩展
+
+- ✨ `browser_screenshot` 按当前模型 `imageInput` 能力自适应附带截图
+- ✨ `loopra-model` 压薄为纯内核，编排设施下沉 `loopra-harness` 并以 SPI 倒置（`ToolScanProvider`、`AgentConfig`、`GoalGuard`、`ToolPolicyProvider`、`SessionUsageSink`）
+- ✨ `LoopraAgent` 开放 `goalGuard` / `toolPolicyProvider` / `sessionStore` 注入点，支持上层定制
+
+### Changed
+
+- 🔄 计划模式交互由斜杠命令迁移至输入框按钮与计划审查面板
+- 🔄 最新版本检查地址由 GitHub 切换至 Gitee Releases
+- 🔄 代码注释统一调整为中文并修复缩进
+
+### Fixed
+
+- 🐛 修复更新窗口内嵌布局
+- 🐛 修复桌面宠物窗口关闭后主窗口宠物状态不同步的问题
+
+### Chore
+
+- 🔧 清理 Loopra 配置目录，更新 `.gitignore`
+- 📚 新增文档：模块化改造全程沉淀（`docs/loopra-modular-refactor.md`）、LoopraAgent 定制接口改造记录（`docs/loopra-agent-customization.md`）
+
+---
+
 ## [26.8.3.2] - 2026-08-03
 
 ### Added

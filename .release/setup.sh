@@ -6,7 +6,7 @@
 
 set -e
 
-VERSION="v26.8.3"
+VERSION="v26.0804.1"
 PACKAGE_URL="https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-web-dist.tar.gz"
 TEMP_DIR="/tmp/loopra-install"
 
