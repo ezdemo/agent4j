@@ -231,8 +231,8 @@ const electronImplementation = {
     async getCurrentPort() {
       return await window.electronAPI.loopraWebService.getCurrentPort()
     },
-    async installOnline() {
-      return await window.electronAPI.loopraWebService.installOnline()
+    async installOnline(source) {
+      return await window.electronAPI.loopraWebService.installOnline(source)
     },
     async waitForReady(maxAttempts = 30, interval = 1000) {
       const port = await this.getCurrentPort()

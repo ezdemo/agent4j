@@ -1,7 +1,5 @@
 <template>
   <div class="desktop-shell" :data-theme="theme">
-    <SplashScreen v-if="starting" @ready="onReady" @error="onStartError" />
-
     <header class="desktop-titlebar">
       <div class="desktop-left-controls">
         <button
@@ -57,7 +55,7 @@
           class="window-button update-check-button"
           :class="{ 'has-update': hasNewVersion }"
           type="button"
-          :title="hasNewVersion ? `发现新版本 v${latestVersion}，点击前往发布页` : (latestVersion ? `已是最新版本 v${latestVersion}，点击检查更新` : '检查更新')"
+          :title="hasNewVersion ? `发现新版本 v${latestVersion}，点击打开更新` : (latestVersion ? `已是最新版本 v${latestVersion}，点击检查更新` : '检查更新')"
           @click="onUpdateButtonClick"
         >
           <svg v-if="checkingUpdate" class="update-spinner" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
@@ -78,12 +76,12 @@
     </header>
 
     <main ref="host" class="desktop-view-host">
-      <div v-if="!starting && startupError" class="desktop-empty desktop-error">
+      <div v-if="startupError" class="desktop-empty desktop-error">
         <span>{{ startupError }}</span>
         <button type="button" @click="initializeWorkspace">重试</button>
       </div>
       <DesktopHome
-        v-else-if="!starting && !activeTabId && !showSkills && !showTools && !showSubAgents && !showSettings && !showModelChannels && !showDashboard"
+        v-else-if="!activeTabId && !showSkills && !showTools && !showSubAgents && !showSettings && !showModelChannels && !showDashboard"
         :workspaces="workspaces"
         :active-workspace-hash="activeWorkspaceHash"
         :theme="theme"
@@ -104,11 +102,11 @@
         @delete-workspace="confirmDeleteWorkspace"
         @reorder-workspaces="reorderWorkspaces"
       />
-      <SettingsView v-else-if="!starting && showSkills" class="desktop-settings" market-only />
-      <ToolsView v-else-if="!starting && showTools" class="desktop-tools" />
-      <SubAgentsView v-else-if="!starting && showSubAgents" class="desktop-sub-agents" />
-      <ModelChannels v-else-if="!starting && showModelChannels" class="desktop-settings" :show-back="false" @saved="reloadAfterModelChannelsSaved" />
-      <section v-else-if="!starting && showDashboard" class="desktop-dashboard">
+      <SettingsView v-else-if="showSkills" class="desktop-settings" market-only />
+      <ToolsView v-else-if="showTools" class="desktop-tools" />
+      <SubAgentsView v-else-if="showSubAgents" class="desktop-sub-agents" />
+      <ModelChannels v-else-if="showModelChannels" class="desktop-settings" :show-back="false" @saved="reloadAfterModelChannelsSaved" />
+      <section v-else-if="showDashboard" class="desktop-dashboard">
         <header class="desktop-dashboard-header">
           <div>
             <h1>数据面板</h1>
@@ -117,20 +115,20 @@
         </header>
         <DashboardPanel class="desktop-dashboard-content" />
       </section>
-      <SettingsView v-else-if="!starting && showSettings" class="desktop-settings" @open-sub-agents="openSubAgents" @open-dashboard="openDashboard" />
+      <SettingsView v-else-if="showSettings" class="desktop-settings" @open-sub-agents="openSubAgents" @open-dashboard="openDashboard" />
     </main>
   <ConfirmDialog />
 </div>
 </template>
 
 <script setup>
-import {computed, nextTick, onBeforeUnmount, ref, watch} from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from './stores/app'
 import {configAPI, sessionsAPI, systemAPI} from './services/api'
 import {RELEASE_LATEST_URL} from './utils/constants'
+import {buildUpdatePrompt} from './utils/updateScripts'
 import {platform} from './services/platform'
-import SplashScreen from './components/SplashScreen.vue'
 import DesktopHome from './DesktopHome.vue'
 import SettingsView from './views/Settings.vue'
 import ToolsView from './views/Tools.vue'
@@ -142,7 +140,6 @@ import {hasConfiguredModelChannel} from './utils/modelChannels'
 
 const store = useAppStore()
 const theme = computed(() => store.settings.theme)
-const starting = ref(true)
 const creating = ref(false)
 const startupError = ref('')
 const workspaces = ref([])
@@ -158,7 +155,7 @@ const modelChannelsRequireReload = ref(false)
 const showDashboard = ref(false)
 const tabs = ref([])
 const activeTabId = ref('')
-const isHomeActive = computed(() => !starting.value && !startupError.value
+const isHomeActive = computed(() => !startupError.value
   && !activeTabId.value && !showSkills.value && !showTools.value && !showSubAgents.value && !showSettings.value && !showModelChannels.value && !showDashboard.value)
 const tabsNav = ref(null)
 const draggedTabId = ref('')
@@ -219,10 +216,23 @@ function compareVersions(a, b) {
   return 0
 }
 
-// 无新版时点击手动检查；有新版本时点击跳转发布页
+// 无新版时点击手动检查；有新版本时打开更新窗口
 function onUpdateButtonClick() {
-  if (hasNewVersion.value) void openReleasePage()
+  if (hasNewVersion.value) void openUpdateWindow()
   else void checkForUpdates()
+}
+
+async function openUpdateWindow() {
+  if (platform.isElectron) {
+    try {
+      await window.electronAPI?.updateWindow?.open()
+    } catch (error) {
+      console.warn('[desktop-shell] failed to open update window:', error)
+      openReleasePage()
+    }
+  } else {
+    openReleasePage()
+  }
 }
 
 async function openReleasePage() {
@@ -316,6 +326,10 @@ const stopWorkspaceListener = window.electronAPI?.events?.listen('desktop-chat-t
 })
 const stopOpenHomeListener = window.electronAPI?.events?.listen('desktop-shell-open-home', () => { void showHome() })
 const stopOpenSettingsListener = window.electronAPI?.events?.listen('desktop-shell-open-model-channels', () => { void openModelChannels() })
+// 更新窗口发起的「更新核心服务」：新建会话并由 Agent 在聊天框执行更新命令
+const stopChatUpdateListener = window.electronAPI?.events?.listen('chat-update-request', ({ source }) => {
+  void runChatUpdate(source)
+})
 
 async function renderActiveTab() {
   const current = tabs.value.find((tab) => tab.id === activeTabId.value)
@@ -347,7 +361,7 @@ async function renderActiveTab() {
 }
 
 async function createTab() {
-  if (creating.value || starting.value) return
+  if (creating.value) return
   const targetHash = activeWorkspaceHash.value || (workspaces.value[0] && workspaces.value[0].hash)
   if (!targetHash) {
     startupError.value = '未找到可用工作区，请先在网页版添加工作区。'
@@ -369,6 +383,36 @@ async function createTab() {
     const errorMessage = '新建会话失败：' + (error.message || '未知错误')
     message.error(errorMessage)
     if (tabs.value.length === 0) startupError.value = errorMessage
+  } finally {
+    creating.value = false
+  }
+}
+
+// 更新窗口「更新核心服务」：新建会话并由 Agent 在聊天框执行更新命令（优先于在线安装）
+async function runChatUpdate(source) {
+  if (creating.value) return
+  const targetHash = activeWorkspaceHash.value || (workspaces.value[0] && workspaces.value[0].hash)
+  if (!targetHash) {
+    message.warning('未找到可用工作区，请先添加项目')
+    return
+  }
+  creating.value = true
+  try {
+    const response = await sessionsAPI.createNew({ workspaceHash: targetHash })
+    if (!response.success || !response.data?.sessionName) throw new Error(response.message || '创建会话失败')
+    const sessionName = response.data.sessionName
+    const workspaceHash = response.data.workspaceHash || targetHash
+    const id = tabId(workspaceHash, sessionName)
+    hideStandaloneViews()
+    tabs.value = [...tabs.value, { id, sessionName, workspaceHash, title: tabTitle(sessionName) }]
+    activeTabId.value = id
+    startupError.value = ''
+    await renderActiveTab()
+    // 发送更新命令（主进程会在标签加载完成后投递给聊天框）
+    await nativeTabs()?.sendCommand(id, buildUpdatePrompt(source, true))
+    message.success('已新建更新会话，正在聊天框中执行更新…')
+  } catch (error) {
+    message.error('新建更新会话失败：' + (error.message || '未知错误'))
   } finally {
     creating.value = false
   }
@@ -702,17 +746,18 @@ function confirmDeleteWorkspace(workspace) {
   })
 }
 
-async function onReady() {
-  starting.value = false
-  await nextTick()
+onMounted(() => {
+  // 服务已由启动窗口（SplashScreen）完成检测/安装/启动，主窗口直接初始化
   resizeObserver = new ResizeObserver(() => { void renderActiveTab() })
   if (host.value) resizeObserver.observe(host.value)
   // 启动后立即检查更新，并开启定时检查
   void checkForUpdates()
   updateCheckTimer = setInterval(() => { void checkForUpdates() }, UPDATE_CHECK_INTERVAL)
-  if (await redirectToModelChannelsWhenUnconfigured()) return
-  await initializeWorkspace()
-}
+  void (async () => {
+    if (await redirectToModelChannelsWhenUnconfigured()) return
+    await initializeWorkspace()
+  })()
+})
 
 async function redirectToModelChannelsWhenUnconfigured() {
   try {
@@ -735,11 +780,6 @@ function reloadAfterModelChannelsSaved() {
   modelChannelsRequireReload.value = false
 }
 
-function onStartError(error) {
-  starting.value = false
-  startupError.value = '桌面服务启动失败：' + (error?.message || error || '未知错误')
-}
-
 async function minimize() { await platform.implementation.window.minimize() }
 async function maximize() { await platform.implementation.window.maximize() }
 async function closeWindow() { await platform.implementation.window.close() }
@@ -754,6 +794,7 @@ onBeforeUnmount(() => {
   stopWorkspaceListener?.()
   stopOpenHomeListener?.()
   stopOpenSettingsListener?.()
+  stopChatUpdateListener?.()
   void nativeTabs()?.hide()
 })
 </script>

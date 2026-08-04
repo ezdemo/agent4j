@@ -4,6 +4,8 @@ import 'ant-design-vue/dist/reset.css'
 import 'katex/dist/katex.min.css' // 数学公式渲染样式（含字体）
 import App from './App.vue'
 import DesktopShell from './DesktopShell.vue'
+import DesktopSplash from './DesktopSplash.vue'
+import DesktopUpdate from './DesktopUpdate.vue'
 import DesktopChatTab from './DesktopChatTab.vue'
 import DesktopPet from './DesktopPet.vue'
 import router from './router'
@@ -20,7 +22,9 @@ const initApp = async () => {
   const page = new URLSearchParams(window.location.search)
   const RootComponent = page.get('desktopShell') === '1'
     ? DesktopShell
-    : (page.get('desktopChatTab') === '1' ? DesktopChatTab : (page.get('desktopPet') === '1' ? DesktopPet : App))
+    : (page.get('desktopSplash') === '1' ? DesktopSplash
+      : (page.get('desktopUpdate') === '1' ? DesktopUpdate
+        : (page.get('desktopChatTab') === '1' ? DesktopChatTab : (page.get('desktopPet') === '1' ? DesktopPet : App))))
   const app = createApp(RootComponent)
 
   // 添加 Pinia 状态管理
