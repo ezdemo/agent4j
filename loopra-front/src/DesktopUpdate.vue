@@ -59,23 +59,25 @@
         </svg>
         {{ checking ? '检查中...' : '检查更新' }}
       </button>
-      <button v-if="platform.isElectron" class="btn btn-secondary" :disabled="desktopHasNewVersion" :title="desktopHasNewVersion ? '请先更新桌面端后再更新核心服务' : ''" @click="handleCoreServiceUpdate">
+      <button v-if="platform.isElectron" class="btn" :class="hasNewVersion ? 'btn-update-highlight' : 'btn-secondary'" :disabled="desktopHasNewVersion" :title="desktopHasNewVersion ? '请先更新桌面端后再更新核心服务' : ''" @click="handleCoreServiceUpdate">
         <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
+        <span v-if="hasNewVersion" class="btn-update-badge">新版</span>
         更新核心服务
       </button>
-      <button v-if="platform.isElectron" class="btn" :class="desktopHasNewVersion ? 'btn-update-highlight' : 'btn-secondary'" @click="handleDesktopUpdate" :title="desktopHasNewVersion ? '检测到桌面端新版本，建议优先更新' : ''">
+      <button class="btn" :class="platform.isElectron ? (desktopHasNewVersion ? 'btn-update-highlight' : 'btn-secondary') : 'btn-recommend'" @click="handleDesktopUpdate" :title="desktopHasNewVersion ? '检测到桌面端新版本，建议优先更新' : (platform.isElectron ? '' : '下载桌面端安装包，桌面端体验更佳')">
         <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
           <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
         </svg>
-        <span v-if="desktopHasNewVersion" class="btn-update-badge">有新版本</span>
-        更新桌面端
+        <span v-if="platform.isElectron && desktopHasNewVersion" class="btn-update-badge">新版</span>
+        {{ platform.isElectron ? '更新桌面端' : '下载桌面端（推荐）' }}
       </button>
-      <button v-if="!platform.isElectron" class="btn btn-secondary" @click="handleAutoUpdate">
+      <button v-if="!platform.isElectron" class="btn" :class="hasNewVersion ? 'btn-update-highlight' : 'btn-secondary'" @click="handleAutoUpdate">
         <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
+        <span v-if="hasNewVersion" class="btn-update-badge">新版</span>
         更新核心服务
       </button>
       <span class="du-footer-hint">{{ platform.isElectron ? '优先更新桌面端，再更新核心服务' : '更新将在聊天框中执行' }}</span>

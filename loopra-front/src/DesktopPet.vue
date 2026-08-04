@@ -13,6 +13,7 @@
       @scale-change="saveScale"
       @drag-move="moveWindow"
       @interactive-change="setInteractive"
+      @close-request="closePet"
     />
   </main>
 </template>
@@ -79,6 +80,10 @@ async function saveScale(nextScale) {
     await petAPI.savePosition({scale: nextScale})
   } catch {
   }
+}
+
+function closePet() {
+  window.electronAPI?.desktopPet?.close()
 }
 
 onMounted(() => {

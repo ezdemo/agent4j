@@ -22,10 +22,31 @@ describe('DesktopUpdate footer buttons (web)', () => {
     const text = footer.text()
     expect(text).toContain('检查更新')
     expect(text).toContain('更新核心服务')
+    expect(text).toContain('下载桌面端（推荐）')
     expect(text).toContain('更新将在聊天框中执行')
+    // 推荐按钮使用独立高亮样式
+    expect(wrapper.find('.du-footer .btn-recommend').exists()).toBe(true)
+    expect(wrapper.find('.du-footer .btn-recommend').text()).toContain('下载桌面端（推荐）')
   })
 
-  it('does not render desktop-only buttons on web', async () => {
+  it('shows 有新版本 badge on core service button when core has updates', async () => {
+    const wrapper = mount(DesktopUpdate, {
+      global: {plugins: [createPinia()]}
+    })
+    await wrapper.vm.$nextTick()
+    // 模拟核心服务有新版本（onMounted 的检查返回 hasNewVersion）
+    wrapper.vm.hasNewVersion = true
+    await wrapper.vm.$nextTick()
+    const badges = wrapper.findAll('.du-footer .btn-update-badge')
+    expect(badges.length).toBe(1)
+    expect(badges[0].text()).toContain('新版')
+    // 与桌面端按钮一致：核心服务按钮整体蓝色高亮
+    const coreButton = wrapper.findAll('.du-footer .btn-update-highlight')
+    expect(coreButton.length).toBe(1)
+    expect(coreButton[0].text()).toContain('更新核心服务')
+  })
+
+  it('does not render desktop-only button label on web', async () => {
     const wrapper = mount(DesktopUpdate, {
       global: {plugins: [createPinia()]}
     })

@@ -1768,6 +1768,7 @@ async function loadPets() {
     if (isElectron) {
       desktopPetVisible.value = await window.electronAPI.desktopPet.isVisible()
       store.desktopPetVisible = desktopPetVisible.value
+      if (desktopPetVisible.value) store.petHidden = false
     }
   } catch (err) {
     console.error('加载宠物设置失败:', err)
@@ -1800,11 +1801,13 @@ async function toggleDesktopPet() {
     await window.electronAPI.desktopPet.close()
     desktopPetVisible.value = false
     store.desktopPetVisible = false
+    store.petHidden = true
     return
   }
   await window.electronAPI.desktopPet.open()
   desktopPetVisible.value = true
   store.desktopPetVisible = true
+  store.petHidden = false
 }
 
 // 删除宠物
@@ -1826,6 +1829,7 @@ async function deletePet(name) {
               await window.electronAPI.desktopPet.close()
               desktopPetVisible.value = false
               store.desktopPetVisible = false
+              store.petHidden = true
             }
           }
           message.success('宠物已删除: ' + name)

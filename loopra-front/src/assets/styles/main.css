@@ -464,6 +464,16 @@ textarea { resize: none; }
   color: #93c5fd;
 }
 
+/* 推荐按钮（如 Web 端「下载桌面端（推荐）」）：实心蓝色渐变高亮，跨主题一致 */
+.btn-recommend {
+  background: linear-gradient(135deg, #3b82f6, #2563eb);
+  color: #fff;
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.35);
+}
+.btn-recommend:hover:not(:disabled) {
+  background: linear-gradient(135deg, #2563eb, #1d4ed8);
+}
+
 /* 通用禁用态：所有主题下保持一致（避免 dark 主题深黑禁用色） */
 .btn:disabled {
   cursor: not-allowed;

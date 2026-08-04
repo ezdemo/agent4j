@@ -1644,6 +1644,8 @@ const runInFreshSession = async (cmd, opts = {}) => {
 
 // 自动更新：复用 runInFreshSession 跳到聊天界面发送更新命令（按当前下载源拼接脚本）
 const handleAutoUpdate = async () => {
+  // 更新转由聊天框执行，关闭 Web 端更新面板（Electron/Settings 场景下无面板，无副作用）
+  showUpdatePanel.value = false
   autoUpdating.value = true
   try {
     const updateSource = loadUpdateSource()

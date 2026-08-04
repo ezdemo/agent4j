@@ -35,6 +35,8 @@ public class VersionController {
      */
     private static final String LATEST_RELEASE_URL = "https://gitee.com/ezdemo/loopra/releases/latest";
 
+    private static final String GITHUB_LATEST_RELEASE_URL = "https://github.com/ezdemo/loopra/releases/latest";
+
     /**
      * 获取当前系统版本信息。
      *
@@ -74,10 +76,9 @@ public class VersionController {
         String checkTime = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"));
 
         try {
-            String checkUrl = LATEST_RELEASE_URL;
 
             // 发送请求，不跟随重定向，获取 Location 头中的最新版本标签
-            URL url = new URL(checkUrl);
+            URL url = new URL(LATEST_RELEASE_URL);
             HttpURLConnection conn = (HttpURLConnection) url.openConnection();
             conn.setInstanceFollowRedirects(false);
             conn.setConnectTimeout(10000);
@@ -120,7 +121,7 @@ public class VersionController {
                     currentVersion,
                     latestVersion,
                     hasNewVersion,
-                    releaseUrl,
+                    GITHUB_LATEST_RELEASE_URL,
                     null, // 通过重定向方式无法获取发布说明
                     checkTime
             ));
