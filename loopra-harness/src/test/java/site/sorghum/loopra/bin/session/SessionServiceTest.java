@@ -9,6 +9,7 @@ import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
 import java.nio.file.Path;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 
 class SessionServiceTest {
 
@@ -44,5 +45,16 @@ class SessionServiceTest {
                 /skill:analysis
                 ```
                 """));
+    }
+
+    @Test
+    void usesInjectedSessionStore() throws Exception {
+        JsonlSessionStore injected = new JsonlSessionStore(tempDir);
+        ConversationContext ctx = new ConversationContext(new PromptPrefix("test", ONode.ofJson("[]")));
+
+        SessionService service = new SessionService(ctx, injected);
+
+        assertSame(injected, service.getStore());
+        assertSame(injected, ctx.getSessionStore());
     }
 }
