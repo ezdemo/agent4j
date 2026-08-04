@@ -357,7 +357,8 @@ function createSplashWindow() {
   splashWindow = new BrowserWindow({
     width: 520,
     height: 620,
-    resizable: false,
+    useContentSize: true,
+    resizable: true,
     frame: false,
     title: 'Loopra',
     icon: appIconPath,
@@ -878,6 +879,13 @@ ipcMain.handle('splash_ready', () => {
   if (!mainWindow || mainWindow.isDestroyed()) createWindow()
   if (splashWindow && !splashWindow.isDestroyed()) splashWindow.close()
   return true
+})
+
+// 启动窗口自适应内容：高度跟随渲染内容变化（渲染端 ResizeObserver 上报），宽度固定
+ipcMain.on('splash-resize', (event, size = {}) => {
+  if (!splashWindow || splashWindow.isDestroyed()) return
+  const height = Math.max(560, Math.min(980, Number(size.height) || 620))
+  splashWindow.setContentSize(520, height)
 })
 
 // 更新窗口管理
