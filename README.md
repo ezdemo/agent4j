@@ -19,6 +19,7 @@
 </p>
 
 <p align="center">
+  <a href="https://loopra.cn">官网</a> ·
   <a href="#快速开始">快速开始</a> ·
   <a href="#核心能力">核心能力</a> ·
   <a href="#配置参考">配置参考</a> ·
@@ -26,6 +27,14 @@
 </p>
 
 > 当前版本：`26.8.40`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+
+## 技术交流群
+
+想交流 AI 编码代理的玩法、反馈问题或提建议？扫码添加我的个人微信，备注 **loopra**，我会拉你进技术交流群：
+
+<p align="center">
+  <img src="img/wx.png" alt="个人微信二维码（添加时请备注 loopra）" width="240"/>
+</p>
 
 ## 概览
 
