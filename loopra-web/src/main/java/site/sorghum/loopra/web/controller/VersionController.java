@@ -31,9 +31,9 @@ import java.time.format.DateTimeFormatter;
 public class VersionController {
 
     /**
-     * 最新发布页地址（GitHub）。通过访问其 302 重定向目标地址提取最新版本标签。
+     * 最新发布页地址（Gitee）。通过访问其 302 重定向目标地址提取最新版本标签。
      */
-    private static final String LATEST_RELEASE_URL = "https://github.com/ezdemo/loopra/releases/latest";
+    private static final String LATEST_RELEASE_URL = "https://gitee.com/ezdemo/loopra/releases/latest";
 
     /**
      * 获取当前系统版本信息。

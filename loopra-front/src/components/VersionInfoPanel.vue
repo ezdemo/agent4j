@@ -51,25 +51,33 @@
       </div>
     </div>
 
-    <!-- 操作按钮 -->
-    <div class="update-actions">
+    <!-- 操作按钮：检查更新 / 更新核心服务 / 更新桌面端（Web 端为自动更新）
+         可通过 showActions 隐藏，由父组件自行在底部提供按钮栏 -->
+    <div v-if="showActions" class="update-actions">
       <button class="btn btn-primary" :disabled="checking" @click="$emit('check')">
         <svg :class="{ 'animate-spin': checking }" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
           <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
         </svg>
         {{ checking ? '检查中...' : '检查更新' }}
       </button>
-      <button v-if="isElectron" class="btn btn-secondary" @click="handleDownload">
+      <button v-if="isElectron" class="btn btn-secondary" :disabled="coreUpdating || desktopHasNewVersion" :title="desktopHasNewVersion ? '请先更新桌面端后再更新核心服务' : ''" @click="$emit('core-update')">
         <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
           <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
-        下载新版
+        {{ coreUpdating ? '更新中...' : '更新核心服务' }}
+      </button>
+      <button v-if="isElectron" class="btn" :class="desktopHasNewVersion ? 'btn-update-highlight' : 'btn-secondary'" @click="$emit('desktop-update')" :title="desktopHasNewVersion ? '检测到桌面端新版本，建议优先更新' : ''">
+        <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/>
+        </svg>
+        <span v-if="desktopHasNewVersion" class="btn-update-badge">有新版本</span>
+        更新桌面端
       </button>
       <button v-if="!isElectron" class="btn btn-secondary" :disabled="autoUpdating" @click="$emit('auto-update')" style="margin-left:auto;">
         <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
-          <path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3"/>
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
         </svg>
-        {{ autoUpdating ? '正在创建会话...' : '自动更新' }}
+        {{ autoUpdating ? '正在创建会话...' : '更新核心服务' }}
       </button>
     </div>
   </div>
@@ -79,6 +87,7 @@
 import {computed} from 'vue'
 import {message} from 'ant-design-vue'
 import {RELEASE_LATEST_URL} from '../utils/constants'
+import {buildUpdateCommand} from '../utils/updateScripts'
 
 const props = defineProps({
   appVersion: {type: String, default: ''},
@@ -89,27 +98,16 @@ const props = defineProps({
   desktopHasNewVersion: {type: Boolean, default: false},
   checking: {type: Boolean, default: false},
   isElectron: {type: Boolean, default: false},
-  autoUpdating: {type: Boolean, default: false}
+  autoUpdating: {type: Boolean, default: false},
+  coreUpdating: {type: Boolean, default: false},
+  updateSource: {type: String, default: 'normal'},
+  showActions: {type: Boolean, default: true}
 })
 
-const emit = defineEmits(['check', 'download', 'auto-update'])
+const emit = defineEmits(['check', 'download', 'core-update', 'desktop-update', 'auto-update'])
 
-const updateCommands = computed(() => {
-  if (props.isElectron) {
-    return {
-      windows: 'irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-gui.ps1 | iex',
-      windowsLabel: 'irm ...setup-gui.ps1 | iex',
-      unix: 'curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-gui.sh | bash',
-      unixLabel: 'curl ...setup-gui.sh | bash'
-    }
-  }
-  return {
-    windows: 'irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.ps1 | iex',
-    windowsLabel: 'irm ...setup.ps1 | iex',
-    unix: 'curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup.sh | bash',
-    unixLabel: 'curl ...setup.sh | bash'
-  }
-})
+// 更新命令随下载源切换（直连 setup / 镜像 setup-mirror）
+const updateCommands = computed(() => buildUpdateCommand(props.updateSource, props.isElectron))
 
 function copyText(text) {
   try {

@@ -1391,8 +1391,11 @@ X-Custom-Header=value"
                   :checking="aboutChecking"
                   :is-electron="platform.isElectron"
                   :auto-updating="autoUpdating"
+                  :update-source="updateSource"
                   @check="handleCheckVersion"
                   @download="openDesktopDownload"
+                  @core-update="handleCoreUpdateFromPanel"
+                  @desktop-update="openDesktopDownload"
                   @auto-update="handleAutoUpdateFromPanel"
               />
               <div v-if="aboutError" class="about-error">{{ aboutError }}</div>
@@ -1646,6 +1649,7 @@ import {
 } from '../services/api'
 import {md} from '../utils/highlight'
 import {RELEASE_LATEST_URL} from '../utils/constants'
+import {loadUpdateSource} from '../utils/updateScripts'
 import platform from '../services/platform'
 import VersionInfoPanel from '../components/VersionInfoPanel.vue'
 import PetSprite from '../components/PetSprite.vue'
@@ -1894,9 +1898,10 @@ const aboutInfo = ref({
 })
 const aboutChecking = ref(false)
 const aboutError = ref('')
-const showUpdateModal = ref(false)
 const electronVersion = ref('')
 const autoUpdating = ref(false)
+// 更新源（直连/镜像），与更新窗口共享 localStorage
+const updateSource = ref(loadUpdateSource())
 
 const emit = defineEmits(['auto-update', 'init-pet', 'open-sub-agents', 'open-dashboard'])
 
@@ -1996,6 +2001,17 @@ async function handleAutoUpdateFromPanel() {
     console.warn('自动更新失败:', e)
   } finally {
     autoUpdating.value = false
+  }
+}
+
+// 更新核心服务：桌面端打开独立更新窗口执行在线安装（安装日志与进度在更新窗口中）
+async function handleCoreUpdateFromPanel() {
+  if (!platform.isElectron) return
+  try {
+    await window.electronAPI?.updateWindow?.open()
+  } catch (e) {
+    console.warn('[Settings] failed to open update window:', e)
+    message.error('打开更新窗口失败：' + (e.message || '未知错误'))
   }
 }
 
