@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Solon-4.0.4-important?logo=java" alt="Solon 4.0.4"/>
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js" alt="Vue 3"/>
   <img src="https://img.shields.io/badge/Electron-42.4-47848F?logo=electron" alt="Electron"/>
-  <img src="https://img.shields.io/badge/version-26.8.3.2-lightgrey" alt="Version 26.8.3.2"/>
+  <img src="https://img.shields.io/badge/version-26.0804.1-lightgrey" alt="Version 26.0804.1"/>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/>
 </p>
 
@@ -25,7 +25,7 @@
   <a href="#从源码开发">从源码开发</a>
 </p>
 
-> 当前版本：`26.8.3.2`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+> 当前版本：`26.0804.1`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 概览
 
@@ -50,7 +50,7 @@ Loopra 将用户任务、模型推理与受控工具调用组织成持续执行�
 
 桌面端下载地址：[Releases](https://github.com/ezdemo/loopra/releases/latest)。
 
-Desktop 首次启动会安装独立运行时到 `~/.loopra-gui`；CLI 仍安装在 `~/.loopra`，两者共用配置目录但不会复用或终止对方的服务进程。Desktop 启动时优先复用本机 `4567` 端口上的健康 Loopra Web 服务；独立运行时版本不一致时，启动引导会提示更新，也可以暂不更新继续使用。
+Desktop 首次启动会安装独立运行时到 `~/.loopra-gui`；CLI 仍安装在 `~/.loopra`，两者共用配置目录但不会复用或终止对方的服务进程。Desktop 启动时优先复用本机 `4567` 端口上的健康 Loopra Web 服务，并展示启动窗口；独立运行时版本不一致时，可在更新窗口选择下载源（GitHub 直连或镜像加速）更新核心服务与桌面端，也可以暂不更新继续使用。
 
 ### 1. 安装
 
@@ -129,7 +129,8 @@ loopra web 0
 | 多模型渠道 | 支持多渠道、Chat Completions API、OpenAI Responses API、推理强度和模型能力配置。 |
 | 可扩展工具系统 | 通过 Solon `@ToolMapping` 声明式注册，支持内置工具、MCP、OpenAPI、技能和 REST API。 |
 | 代码库操作 | 在工作区边界内读取、搜索、编辑文件，运行一次性或交互式命令。 |
-| 子代理协作 | 内置 `explore`、`implement`、`test`、`review`、`plan` 五种角色，支持隔离上下文、权限约束和超时控制。 |
+| 子代理协作 | 内置 `explore`、`implement`、`test`、`review`、`plan` 五种角色，支持隔离上下文、权限约束和超时控制；配置可在桌面端编辑并持久化，支持选择渠道模型。 |
+| 计划模式 | 输入框一键进入只读探索，探索完成后提交计划供用户审查，批准后按计划执行。 |
 | 持久协作状态 | Checklist、会话级 Goal、项目记忆和共享工作区支持长任务及父子代理协作。 |
 | 审批与边界 | 三态 HITL、工具白名单、路径边界保护，以及可选的独立校验模型。 |
 | 桌面工作台 | Electron Desktop 提供多聊天标签、Git/文件面板、元素检查、服务进程管理和 AI 浏览器。 |
@@ -205,7 +206,7 @@ MCP、OpenAPI 和技能可为 Agent 注入额外工具。`read_image` 支持工�
 | `/help` | 显示可用命令。 |
 | `/new` | 创建会话。 |
 | `/sessions` / `/load N` | 查看和加载历史会话。 |
-| `/plan` / `/execute` | 切换只读计划模式与执行模式。 |
+| 计划模式按钮 | 输入框左侧按钮进入只读计划模式，探索完成后提交计划供审查，批准后自动按计划执行。 |
 | `/compact` | 手动折叠历史上下文。 |
 | `/goal ...` | 创建、查看、暂停、恢复、阻塞或完成会话目标。 |
 | `/hitl` / `/agree` / `/deny` | 切换审批模式或处理待审批工具调用。 |
