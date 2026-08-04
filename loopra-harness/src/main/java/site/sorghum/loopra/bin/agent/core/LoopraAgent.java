@@ -94,11 +94,7 @@ public class LoopraAgent {
     private volatile boolean terminated = false;
 
     /**
-     * 共享 ModelClient，工具系统默认每次构建独立初始化；
-     * 注入 {@code toolSystem} 时复用共享初始化结果，跳过重复扫描。
-     * </br>仅创建独立的会话上下文。适用于"一个会话一个 Agent"场景，减少资源消耗。
-     *
-     * @param b                  Builder
+     * 配置变更事件监听器（每个 Agent 自监听自更新，dispose 时注销）。
      */
     private EventListener<ConfigChangedEvent> configListener;
 
@@ -855,8 +851,9 @@ public class LoopraAgent {
 
         /**
          * 构建轻量级 Agent 实例。
-         * 共享 ModelClient，仅创建独立的会话上下文。
-         * 适用于"一个会话一个 Agent"场景，减少资源消耗。
+         * <p>共享 ModelClient，工具系统默认每次构建独立初始化；
+         * 注入 {@code toolSystem} 时复用共享初始化结果，跳过重复扫描。
+         * 仅创建独立的会话上下文。适用于"一个会话一个 Agent"场景，减少资源消耗。</p>
          *
          * @return 轻量级 Agent 实例
          */

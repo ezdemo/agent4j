@@ -46,7 +46,7 @@ public class UserMessage {
     @Setter
     private String rollbackId;
 
-    /** Persisted in session history but omitted from Web chat rendering. */
+    /** 持久化到会话历史，但不在 Web 聊天界面显示。 */
     @Getter
     @Setter
     private boolean webHidden;
