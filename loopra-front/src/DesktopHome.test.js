@@ -67,6 +67,18 @@ describe('DesktopHome 项目拖拽排序', () => {
     expect(projectNames(wrapper)).toEqual(['A', 'B', 'C'])
   })
 
+  it('左下角菜单精简：技能/设置文字入口 + 工具图标，子代理/数据面板已收进设置页', async () => {
+    await flushPromises()
+    const menuButtons = wrapper.findAll('.desktop-project-footer-menu > button')
+    expect(menuButtons.map((button) => button.text().trim())).toEqual(['技能'])
+    expect(wrapper.find('.desktop-project-footer-settings').text()).toContain('设置')
+    expect(wrapper.find('.desktop-sub-agents-button').exists()).toBe(true)
+    expect(wrapper.find('.desktop-tools-button').exists()).toBe(true)
+    expect(wrapper.find('.desktop-theme-button').exists()).toBe(true)
+    expect(wrapper.text()).not.toContain('子代理')
+    expect(wrapper.text()).not.toContain('数据面板')
+  })
+
   it('拖拽过程中列表保持不动，仅显示插入指示，drop 后按新顺序发出 reorder-workspaces', async () => {
     await flushPromises()
     const projects = wrapper.findAll('.desktop-project')

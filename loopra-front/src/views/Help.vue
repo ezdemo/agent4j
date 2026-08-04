@@ -103,7 +103,7 @@
                   <h4>启动系统</h4>
                   <p>运行 Loopra 应用，系统会自动加载配置和工具。</p>
                   <div class="step-command">
-                    <code>mvn exec:java -pl loopra-bin</code>
+                    <code>mvn exec:java -pl loopra-web</code>
                   </div>
                 </div>
               </div>
@@ -427,8 +427,6 @@ const shortcuts = [
 // 命令列表
 const commands = [
   { name: '/new', desc: '开启新会话', example: '/new' },
-  { name: '/plan', desc: '进入计划模式', example: '/plan' },
-  { name: '/execute', desc: '退出计划模式', example: '/execute' },
   { name: '/compact', desc: '折叠历史消息', example: '/compact' },
   { name: '/retry', desc: '撤回最后一条消息并重试', example: '/retry' },
   { name: '/rewind', desc: '回退到第N轮对话', example: '/rewind 5' },
@@ -487,8 +485,8 @@ const apiEndpoints = [
   { method: 'POST', path: '/api/agent/retry', desc: '撤回并重试' },
   { method: 'POST', path: '/api/agent/rewind', desc: '回退到指定轮次' },
   { method: 'POST', path: '/api/agent/compact', desc: '折叠上下文' },
-  { method: 'POST', path: '/api/agent/plan/enable', desc: '进入计划模式' },
-  { method: 'POST', path: '/api/agent/plan/disable', desc: '退出计划模式' },
+  { method: 'GET', path: '/api/agent/mode', desc: '查询会话计划模式和待审查计划' },
+  { method: 'POST', path: '/api/agent/mode', desc: '切换会话计划模式' },
   { method: 'GET', path: '/api/sessions', desc: '列出所有会话' },
   { method: 'GET', path: '/api/sessions/current', desc: '获取当前会话' },
   { method: 'POST', path: '/api/sessions/new', desc: '新建会话' },
@@ -510,7 +508,7 @@ const changelog = [
       { type: '新增', desc: '文件操作工具集' },
       { type: '新增', desc: '会话管理和持久化' },
       { type: '新增', desc: '流式输出支持' },
-      { type: '新增', desc: '计划模式' },
+      { type: '新增', desc: '计划模式（/plan 只读探索 + submit_plan 提交计划 + /execute 批准执行）' },
       { type: '新增', desc: '深色/浅色主题' }
     ]
   }

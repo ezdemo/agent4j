@@ -44,27 +44,38 @@
             首次运行，需要安装 Loopra 桌面运行时
           </p>
           <p class="info-text" v-else-if="installReason === 'version_mismatch'">
-            检测到新版本，需要更新桌面运行时
+            检测到运行时版本较旧，需要更新桌面运行时
           </p>
-          <p class="version-details" v-if="installReason === 'version_mismatch'">
+          <p class="info-text" v-else-if="installReason === 'desktop_outdated'">
+            当前运行时版本较新，是否前往 GitHub 更新桌面版？
+          </p>
+          <p class="version-details" v-if="installReason === 'version_mismatch' || installReason === 'desktop_outdated'">
             桌面端 {{ desktopVersion }} · 当前运行时 {{ runtimeVersion || '未知' }}
           </p>
-          <p class="info-text" v-if="installReason !== 'not_installed' && installReason !== 'version_mismatch'">
+          <p class="info-text" v-if="installReason !== 'not_installed' && installReason !== 'version_mismatch' && installReason !== 'desktop_outdated'">
             需要重新安装 Loopra 桌面运行时
           </p>
 
-          <div class="install-command">
+          <div class="install-command" v-if="installReason !== 'desktop_outdated'">
             <span>将执行以下安装命令：</span>
             <code>{{ installCommand }}</code>
           </div>
 
-          <div class="java-check" v-if="javaInfo">
+          <div class="java-check" v-if="javaInfo && installReason !== 'desktop_outdated'">
             <span class="java-badge">✓</span>
             <span class="java-text">{{ javaInfo }}</span>
           </div>
 
           <div class="confirm-actions">
-            <button class="btn btn-primary btn-lg install-btn" @click="startInstall">
+            <button v-if="installReason === 'desktop_outdated'" class="btn btn-primary btn-lg install-btn" @click="openDesktopUpdate">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M14 3h7v7"/>
+                <path d="M10 14 21 3"/>
+                <path d="M21 14v5a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5"/>
+              </svg>
+              更新桌面版
+            </button>
+            <button v-else class="btn btn-primary btn-lg install-btn" @click="startInstall">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="7 10 12 15 17 10"/>
@@ -72,8 +83,8 @@
               </svg>
               {{ installReason === 'version_mismatch' ? '更新运行时' : '开始安装' }}
             </button>
-            <button v-if="installReason === 'version_mismatch'" class="btn btn-secondary btn-lg" @click="skipRuntimeUpdate">
-              暂不更新
+            <button v-if="installReason === 'version_mismatch' || installReason === 'desktop_outdated'" class="btn btn-secondary btn-lg" @click="skipRuntimeUpdate">
+              {{ installReason === 'desktop_outdated' ? '继续使用' : '暂不更新' }}
             </button>
             <button class="btn btn-secondary btn-lg" @click="closeApp">
               退出
@@ -144,6 +155,7 @@
 import {computed, nextTick, onMounted, ref} from 'vue'
 import {platform} from '@/services/platform'
 import {systemAPI} from '@/services/api'
+import {RELEASE_LATEST_URL} from '@/utils/constants'
 // 动态获取当前平台的 loopraWebService
 const { loopraWebService } = platform.implementation
 
@@ -256,6 +268,18 @@ async function skipRuntimeUpdate() {
   await startService()
 }
 
+async function openDesktopUpdate() {
+  const url = RELEASE_LATEST_URL
+  try {
+    if (platform.isElectron && window.electronAPI?.openExternal) {
+      await window.electronAPI.openExternal(url)
+    } else {
+      window.open(url, '_blank', 'noopener,noreferrer')
+    }
+  } catch {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  }
+}
 
 async function startService() {
   phase.value = 'starting'

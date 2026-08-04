@@ -3,10 +3,27 @@
        :style="wrapStyle"
        @pointerenter="setInteractive(true)" @pointerleave="setInteractive(false)"
        @pointerdown="onPointerDown" @click.prevent="onClick" @contextmenu.prevent="toggleSizeControl">
-    <div v-if="showSizeControl" class="pet-size-control" :class="{ 'has-bubble': bubbleText }"
+    <div v-if="showSizeControl" class="pet-size-control"
+         :class="{ 'has-bubble': bubbleText, 'pet-close-showing': confirmClose }"
          @pointerdown.stop="keepSizeControlOpen" @click.stop @contextmenu.prevent.stop>
-      <input type="range" :min="MIN_PET_SCALE" :max="MAX_PET_SCALE" step="0.01"
-             :value="petScale" aria-label="宠物大小" @input="updateScale" @change="commitScale">
+      <template v-if="!confirmClose">
+        <div class="pet-size-row">
+          <input type="range" :min="MIN_PET_SCALE" :max="MAX_PET_SCALE" step="0.01"
+                 :value="petScale" aria-label="宠物大小" @input="updateScale" @change="commitScale">
+          <button type="button" class="pet-close-btn" title="关闭宠物" aria-label="关闭宠物" @click="requestClose">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+              <path d="M18 6 6 18M6 6l12 12"/>
+            </svg>
+          </button>
+        </div>
+      </template>
+      <div v-else class="pet-close-confirm">
+        <p class="pet-close-warning">确定要关闭宠物吗？</p>
+        <div class="pet-close-actions">
+          <button type="button" class="pet-btn pet-btn-cancel" @click="cancelClose">取消</button>
+          <button type="button" class="pet-btn pet-btn-danger" @click="confirmClosePet">关闭</button>
+        </div>
+      </div>
     </div>
     <div v-if="bubbleText" class="pet-reply-bubble" role="status"
          @pointerdown.stop @click.stop @contextmenu.prevent.stop @wheel.stop>{{ bubbleText }}</div>
@@ -60,7 +77,7 @@ const props = defineProps({
   externalDrag: { type: Boolean, default: false },
 })
 
-const emit = defineEmits(['position-change', 'drag-move', 'interactive-change', 'scale-change', 'activate'])
+const emit = defineEmits(['position-change', 'drag-move', 'interactive-change', 'scale-change', 'activate', 'close-request'])
 
 const scaleForIndex = (index) => SIZE_LEVELS[index]?.scale || SIZE_LEVELS[1].scale
 const normalizeScale = (value, fallback) => {
@@ -72,6 +89,7 @@ const elapsedMs = ref(0)
 const loaded = ref(false)
 const petScale = ref(normalizeScale(props.initialScale, scaleForIndex(props.initialSizeIndex)))
 const showSizeControl = ref(false)
+const confirmClose = ref(false)
 let sizeControlTimer = null
 const renderScale = computed(() => petScale.value * 0.75)
 let frameId = 0
@@ -231,8 +249,27 @@ function onClick() {
 
 function toggleSizeControl() {
   showSizeControl.value = !showSizeControl.value
+  confirmClose.value = false
   if (showSizeControl.value) keepSizeControlOpen()
   else clearTimeout(sizeControlTimer)
+}
+
+// 关闭宠物：先弹出警告确认，确认后交由父组件执行关闭
+function requestClose() {
+  clearTimeout(sizeControlTimer)
+  confirmClose.value = true
+}
+
+function cancelClose() {
+  confirmClose.value = false
+  keepSizeControlOpen()
+}
+
+function confirmClosePet() {
+  confirmClose.value = false
+  showSizeControl.value = false
+  clearTimeout(sizeControlTimer)
+  emit('close-request')
 }
 
 function keepSizeControlOpen() {
@@ -333,7 +370,7 @@ watch(() => props.spritesheetUrl, (url) => {
   left: 50%;
   bottom: calc(100% + 8px);
   z-index: 3;
-  width: 164px;
+  width: 180px;
   padding: 8px 11px;
   box-sizing: border-box;
   background: #fffdf7;
@@ -343,12 +380,78 @@ watch(() => props.spritesheetUrl, (url) => {
   transform: translateX(-50%);
 }
 .pet-size-control.has-bubble { bottom: calc(100% + 118px); }
-.pet-size-control input {
+/* 确认关闭弹框：覆盖在宠物精灵上居中，避免宠物窗口内上方空间不足被裁剪 */
+.pet-size-control.pet-close-showing {
+  bottom: auto;
+  top: 50%;
+  transform: translate(-50%, -50%);
+}
+.pet-size-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.pet-size-row input {
   display: block;
-  width: 100%;
+  flex: 1;
+  min-width: 0;
   margin: 0;
   accent-color: #5b7c51;
   cursor: ew-resize;
+}
+.pet-close-btn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(150, 55, 40, 0.35);
+  border-radius: 50%;
+  background: #fdf1ec;
+  color: #a3402e;
+  cursor: pointer;
+}
+.pet-close-btn:hover {
+  background: #f9e3da;
+  border-color: rgba(150, 55, 40, 0.55);
+}
+.pet-close-confirm {
+  text-align: center;
+}
+.pet-close-warning {
+  margin: 0 0 8px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #a3402e;
+}
+.pet-close-actions {
+  display: flex;
+  gap: 8px;
+  justify-content: center;
+}
+.pet-btn {
+  flex: 1;
+  padding: 5px 0;
+  border: 1px solid rgba(83, 63, 39, 0.25);
+  border-radius: 6px;
+  background: #fffdf7;
+  color: #6b5d4e;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.pet-btn:hover {
+  background: #f4efe6;
+}
+.pet-btn-danger {
+  border-color: rgba(150, 55, 40, 0.4);
+  background: #a3402e;
+  color: #fff;
+}
+.pet-btn-danger:hover {
+  background: #8f3525;
 }
 .pet-reply-bubble {
   position: absolute;

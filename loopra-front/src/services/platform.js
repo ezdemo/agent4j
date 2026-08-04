@@ -2,6 +2,7 @@
  * 平台抽象层 - 根据当前环境提供统一的 API 接口
  * 支持 Electron 和 Web 环境
  */
+import {RELEASES_URL} from '../utils/constants'
 
 // 环境检测
 const isElectron = typeof window !== 'undefined' && window.electronAPI !== undefined
@@ -115,7 +116,7 @@ const webImplementation = {
 
     // 在线安装：web 环境下跳转到浏览器下载
     async installOnline() {
-      window.open('https://gitee.com/ezdemo/loopra/releases')
+      window.open(RELEASES_URL)
       return { success: true, steps: ['redirected_to_browser'] }
     },
 
@@ -230,8 +231,8 @@ const electronImplementation = {
     async getCurrentPort() {
       return await window.electronAPI.loopraWebService.getCurrentPort()
     },
-    async installOnline() {
-      return await window.electronAPI.loopraWebService.installOnline()
+    async installOnline(source) {
+      return await window.electronAPI.loopraWebService.installOnline(source)
     },
     async waitForReady(maxAttempts = 30, interval = 1000) {
       const port = await this.getCurrentPort()

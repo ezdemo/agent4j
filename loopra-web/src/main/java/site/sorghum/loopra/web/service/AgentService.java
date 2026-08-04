@@ -21,7 +21,7 @@ import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.bin.tool.ToolSystemInitializer;
 import site.sorghum.loopra.bin.workspace.WorkspaceManager;
 import site.sorghum.loopra.tool.AgentOutput;
-import site.sorghum.loopra.tool.solon.common.SessionFileChangeTracker;
+import site.sorghum.loopra.bin.session.SessionFileChangeTracker;
 import site.sorghum.loopra.web.common.ServiceException;
 import site.sorghum.loopra.web.common.UsageCostCalculator;
 import site.sorghum.loopra.web.model.*;
@@ -171,10 +171,17 @@ public class AgentService {
     private final ConcurrentHashMap<String, ModelTarget> sessionModelTargets = new ConcurrentHashMap<>();
 
     /**
-     * 共享的 ToolRegistry（所有会话复用）
+     * 默认工作区的共享 ToolRegistry（供 /api/tools 等接口与就绪检查使用）
      */
     @Getter
     private volatile ToolRegistry sharedToolRegistry;
+
+    /**
+     * 按工作区缓存的工具系统初始化结果（绝对路径 -> Result）。
+     * <p>同一工作区的所有会话 Agent 复用其 ToolRegistry 与 PromptPrefix，
+     * 避免每个 Agent 重复扫描工具/构建提示词；配置重建（{@link #reinitialize()}）时清空。</p>
+     */
+    private final ConcurrentHashMap<String, ToolSystemInitializer.Result> sharedToolSystems = new ConcurrentHashMap<>();
 
     /**
      * 加载默认系统提示词。
@@ -266,6 +273,7 @@ public class AgentService {
         // 2. 清空所有缓存
         sessionCache.clear();
         sessionModelTargets.clear();
+        sharedToolSystems.clear();
 
         // 3. 重新加载配置并构建共享组件
         try {
@@ -310,14 +318,39 @@ public class AgentService {
             log.info("[config] 已屏蔽目录: {}", String.join(", ", blockedPaths));
         }
 
-        // 使用 ToolSystemInitializer 统一初始化
-        ToolSystemInitializer.Result initResult = ToolSystemInitializer.initialize(
-                config.workspaceDir(), apiUrl, apiKey,
-                disabledTools, blockedPaths,
-                loadDefaultSystemPrompt());
+        // 预构建默认工作区的共享工具系统（其余工作区在创建 Agent 时按需构建）
+        ToolSystemInitializer.Result initResult = buildSharedToolSystem(config.workspaceDir(), config);
+        sharedToolSystems.put(workspaceKey(config.workspaceDir()), initResult);
         this.sharedToolRegistry = initResult.toolRegistry;
 
         return true;
+    }
+
+    /**
+     * 构建指定工作区的共享工具系统（ToolRegistry + PromptPrefix + 系统提示词）。
+     * <p>纯构建，不操作缓存 Map —— 供 {@code computeIfAbsent} 的映射函数安全调用
+     * （ConcurrentHashMap 禁止在 computeIfAbsent 内递归更新同一 Map）。</p>
+     */
+    private ToolSystemInitializer.Result buildSharedToolSystem(Path workspace, LoopraConfig config) {
+        ToolSystemInitializer.Result result = ToolSystemInitializer.initialize(
+                workspace, config.apiUrl(), config.apiKey(),
+                config.disabledTools(), config.blockedPaths(),
+                loadDefaultSystemPrompt());
+        log.info("[web] 已构建共享工具系统 — 工作区: {}", workspace);
+        return result;
+    }
+
+    /**
+     * 获取（或首次构建）指定工作区的共享工具系统。
+     */
+    private ToolSystemInitializer.Result getOrCreateSharedToolSystem(Path workspace) {
+        return sharedToolSystems.computeIfAbsent(workspaceKey(workspace),
+                k -> buildSharedToolSystem(workspace, ConfigService.getConfig()));
+    }
+
+    private static String workspaceKey(Path workspace) {
+        // 未配置工作区时返回空键（initialize 本身容忍 null 工作区）
+        return workspace == null ? "" : workspace.toAbsolutePath().normalize().toString();
     }
 
     /**
@@ -426,6 +459,8 @@ public class AgentService {
                 .commandRegistry(commandRegistry)
                 .hitl(hitl)
                 .loopraConfig(cfg)
+                // 复用该工作区的共享工具系统，跳过 Agent 内部的重复初始化
+                .toolSystem(getOrCreateSharedToolSystem(Paths.get(workspacePath)))
                 .modelClient(new HttpModelClient(apiUrl, apiKey, target.model(), reasoningEffort,
                         target.channelId(), channel.apiProtocol()));
         LoopraAgent agent = builder.buildLightweight();
@@ -542,6 +577,68 @@ public class AgentService {
         return new ArrayList<>();
     }
 
+    /** 返回会话计划模式及待审查计划。 */
+    public Map<String, Object> getPlanState(String workspacePath, String sessionName) {
+        String effectiveSessionName = sessionName;
+        if (effectiveSessionName == null || effectiveSessionName.isEmpty()) {
+            effectiveSessionName = getCurrentSessionName(workspacePath);
+        }
+        boolean enabled = false;
+        String pendingPlan = null;
+        if (effectiveSessionName != null) {
+            String sessionKey = generateSessionKey(workspacePath, effectiveSessionName);
+            LoopraAgent agent = sessionCache.get(sessionKey);
+            if (agent != null) {
+                enabled = agent.isPlanMode();
+                pendingPlan = agent.getPendingPlan();
+            } else {
+                try {
+                    String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+                    if (resolvedPath != null) {
+                        Path sessionsDir = new WorkspaceManager().getSessionsDir(resolvedPath);
+                        if (sessionsDir != null && Files.exists(sessionsDir)) {
+                            SessionStore store = new JsonlSessionStore(sessionsDir);
+                            try {
+                                enabled = store.isPlanMode(effectiveSessionName);
+                                pendingPlan = store.getPendingPlan(effectiveSessionName);
+                            } finally {
+                                store.shutdown();
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    log.warn("[web] 查询计划模式失败: {}", e.getMessage());
+                }
+            }
+        }
+        Map<String, Object> state = new LinkedHashMap<>();
+        state.put("mode", enabled ? "plan" : "execute");
+        state.put("pendingPlan", pendingPlan);
+        return state;
+    }
+
+    public boolean getPlanMode(String workspacePath, String sessionName) {
+        return "plan".equals(getPlanState(workspacePath, sessionName).get("mode"));
+    }
+
+    /** Web UI 切换会话计划模式；关闭时同时丢弃待审查计划。 */
+    public Map<String, Object> setPlanMode(String workspacePath, String sessionName, boolean enabled) {
+        if (sessionName == null || sessionName.isBlank()) {
+            throw new ServiceException("请先选择会话");
+        }
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        ReentrantLock sessionLock = getSessionLock(sessionKey);
+        sessionLock.lock();
+        try {
+            LoopraAgent agent = getOrCreateAgent(sessionKey);
+            if (!enabled) agent.clearPendingPlan();
+            agent.setPlanMode(enabled);
+            return getPlanState(workspacePath, sessionName);
+        } finally {
+            sessionLock.unlock();
+        }
+    }
+
     /**
      * 中断当前聊天 —— 中断所有活跃的 Agent。
      */
@@ -576,27 +673,34 @@ public class AgentService {
         }
         if (sessionName == null || (rollbackId == null && rollbackTimestamp == null)) return null;
         String sessionKey = generateSessionKey(workspacePath, sessionName);
-        LoopraAgent agent = getOrCreateAgent(sessionKey);
-        ConversationContext ctx = agent.getCtx();
-        if (ctx == null) return null;
-        List<ChatMessage> history = ctx.getHistory();
-        int targetIdx = -1;
-        String rollbackText = null;
-        for (int i = 0; i < history.size(); i++) {
-            ChatMessage msg = history.get(i);
-            boolean matchesRollbackId = rollbackId != null
-                    && (rollbackId.equals(msg.getRollbackId()) || rollbackId.equals(msg.getSnapshotId()));
-            boolean matchesTimestamp = rollbackTimestamp != null && rollbackTimestamp.equals(msg.getTimestamp());
-            if ("user".equals(msg.getRole()) && (matchesRollbackId || matchesTimestamp)) {
-                targetIdx = i;
-                rollbackText = msg.getContent();
-                break;
+        ReentrantLock lock = getSessionLock(sessionKey);
+        lock.lock();
+        try {
+            LoopraAgent agent = getOrCreateAgent(sessionKey);
+            ConversationContext ctx = agent.getCtx();
+            if (ctx == null) return null;
+            List<ChatMessage> history = ctx.getHistory();
+            int targetIdx = -1;
+            String rollbackText = null;
+            for (int i = 0; i < history.size(); i++) {
+                ChatMessage msg = history.get(i);
+                boolean matchesRollbackId = rollbackId != null
+                        && (rollbackId.equals(msg.getRollbackId()) || rollbackId.equals(msg.getSnapshotId()));
+                boolean matchesTimestamp = rollbackTimestamp != null && rollbackTimestamp.equals(msg.getTimestamp());
+                if ("user".equals(msg.getRole()) && (matchesRollbackId || matchesTimestamp)) {
+                    targetIdx = i;
+                    rollbackText = msg.getContent();
+                    break;
+                }
             }
+            if (targetIdx < 0) return null;
+            // 任何历史截断都会使待审查计划失效，避免执行界面中已撤销的旧计划。
+            agent.clearPendingPlan();
+            ctx.truncate(targetIdx);
+            return rollbackText;
+        } finally {
+            lock.unlock();
         }
-        if (targetIdx < 0) return null;
-        // 截断历史并持久化
-        ctx.truncate(targetIdx);
-        return rollbackText;
     }
 
     // ==================== 会话管理 ====================
@@ -641,7 +745,8 @@ public class AgentService {
      * 流式聊天（多模态）—— 使用 {@link UserMessage} 统一表示文本+图片。
      */
     public void chatStream(UserMessage userMessage, String workspacePath, String sessionName, SseEmitter emitter,
-                           String requestedModel, String requestedChannelId, String requestedReasoningEffort) {
+                           String requestedModel, String requestedChannelId, String requestedReasoningEffort,
+                           String action) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         ReentrantLock lock = getSessionLock(sessionKey);
         lock.lock();
@@ -661,7 +766,57 @@ public class AgentService {
             // 设置 AgentOutput：将所有事件桥接到 SSE
             agent.setOutput(new SseAgentOutput(emitter));
 
-            String reply = agent.chat(userMessage);
+            UserMessage effectiveMessage = userMessage;
+            boolean planExecutionPrepared = false;
+            int historySizeBeforeExecution = agent.historySize();
+            if (action != null && !action.isBlank()) {
+                if (!"execute_plan".equals(action)) {
+                    throw new ServiceException("不支持的聊天操作: " + action);
+                }
+                String executionMessage = agent.preparePendingPlanExecution();
+                if (executionMessage == null) {
+                    throw new ServiceException("当前会话没有待审查计划");
+                }
+                planExecutionPrepared = true;
+                effectiveMessage = UserMessage.of(executionMessage);
+                effectiveMessage.setWebHidden(true);
+                if (userMessage != null) {
+                    effectiveMessage.setRollbackId(userMessage.getRollbackId());
+                    effectiveMessage.setSnapshotId(userMessage.getSnapshotId());
+                }
+            }
+
+            String reply;
+            try {
+                reply = agent.chat(effectiveMessage);
+            } catch (Exception executionError) {
+                if (planExecutionPrepared) {
+                    if (!hasPlanExecutionStarted(agent)) {
+                        agent.getCtx().truncate(historySizeBeforeExecution);
+                        agent.restorePendingPlanExecution();
+                    } else {
+                        agent.completePendingPlanExecution();
+                    }
+                }
+                throw executionError;
+            }
+            if (planExecutionPrepared) {
+                if (agent.isAbortRequested()) {
+                    if (!hasPlanExecutionStarted(agent)) {
+                        agent.getCtx().truncate(historySizeBeforeExecution);
+                        agent.restorePendingPlanExecution();
+                    } else {
+                        agent.completePendingPlanExecution();
+                    }
+                    throw new ServiceException("计划执行已停止");
+                }
+                if (!hasPlanExecutionStarted(agent)) {
+                    agent.getCtx().truncate(historySizeBeforeExecution);
+                    agent.restorePendingPlanExecution();
+                    throw new ServiceException("计划执行未能启动，请重试");
+                }
+                agent.completePendingPlanExecution();
+            }
 
             // 发送最终完整回复（使用 complete 事件，与增量 content 事件区分）
             // HITL 待审批时跳过：interceptForHITL/interceptForSandboxHITL 已通过
@@ -698,6 +853,27 @@ public class AgentService {
 
             lock.unlock();
         }
+    }
+
+    private boolean hasPlanExecutionStarted(LoopraAgent agent) {
+        List<ChatMessage> history = agent.getCtx().getHistory();
+        int hiddenInstruction = -1;
+        for (int i = history.size() - 1; i >= 0; i--) {
+            if (history.get(i).isWebHidden()) {
+                hiddenInstruction = i;
+                break;
+            }
+        }
+        if (hiddenInstruction < 0) return false;
+        for (int i = hiddenInstruction + 1; i < history.size(); i++) {
+            ChatMessage message = history.get(i);
+            if (message.isTool()) return true;
+            if (!message.isAssistant()) continue;
+            if (message.getContent() != null && !message.getContent().isBlank()) return true;
+            if (message.getReasoningContent() != null && !message.getReasoningContent().isBlank()) return true;
+            if (message.hasToolCalls()) return true;
+        }
+        return false;
     }
 
     /**

@@ -50,6 +50,7 @@ let stopThemeListener = null
 let stopElementInspectionListener = null
 let stopRefreshHistoryListener = null
 let stopFocusComposerListener = null
+let stopSendCommandListener = null
 
 onMounted(async () => {
   try {
@@ -70,6 +71,10 @@ onMounted(async () => {
   stopRefreshHistoryListener = window.electronAPI?.events?.listen('desktop-chat-tab-refresh-history', () => chatRef.value?.refreshHistory())
   stopFocusComposerListener = window.electronAPI?.events?.listen('desktop-chat-tab-focus-composer', () => {
     void chatRef.value?.focusComposer?.()
+  })
+  // 主窗口（DesktopShell）发来的命令（如「更新核心服务」由 Agent 在聊天框执行）
+  stopSendCommandListener = window.electronAPI?.events?.listen('desktop-chat-tab-send-command', (command) => {
+    if (command) void chatRef.value?.sendCommand?.(command)
   })
   document.documentElement.setAttribute('data-theme', pageTheme.value)
   try {
@@ -146,6 +151,7 @@ onBeforeUnmount(() => {
   stopElementInspectionListener?.()
   stopRefreshHistoryListener?.()
   stopFocusComposerListener?.()
+  stopSendCommandListener?.()
 })
 
 // 工作区变化时自动上报，确保标签栏图标实时更新
