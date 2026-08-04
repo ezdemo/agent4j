@@ -84,7 +84,7 @@ public class ChatMessage {
     @ONodeAttr(name = "rollback_id")
     private String rollbackId;
 
-    /** Internal user turn kept for model context but hidden by Web history rendering. */
+    /** 内部用户消息：保留在模型上下文中，但 Web 历史渲染时隐藏。 */
     @ONodeAttr(name = "web_hidden")
     private boolean webHidden;
 

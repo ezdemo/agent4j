@@ -971,11 +971,11 @@ const formatTime = (t) => {
   return d.toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit', second: '2-digit'})
 }
 
-    // 监听 workspace 和 session 变化，重新加载 usage 和计划状态
-    watch([() => props.workspaceHash, () => props.sessionName], ([ws, sess]) => {
-      if (ws || sess) loadUsage()
-      syncPlanMode()
-    })
+// 监听 workspace 和 session 变化，重新加载 usage 和计划状态
+watch([() => props.workspaceHash, () => props.sessionName], ([ws, sess]) => {
+  if (ws || sess) loadUsage()
+  syncPlanMode()
+})
 
 // 从后端同步计划模式状态（会话切换/页面刷新后恢复，服务端为唯一事实来源）
 const syncPlanMode = async () => {

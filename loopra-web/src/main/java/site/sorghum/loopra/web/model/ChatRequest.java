@@ -53,7 +53,7 @@ public class ChatRequest {
     private String reasoningEffort;
 
     /**
-     * Structured Web action. Currently supports execute_plan.
+     * 结构化 Web 操作（当前支持 execute_plan：批准并执行待审查计划）。
      */
     private String action;
 
