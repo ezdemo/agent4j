@@ -534,6 +534,17 @@ defineExpose({
   justify-content: center;
   align-items: center;
   z-index: 9999;
+  /* 无边框窗口：整体作为拖动区域，交互元素单独排除（见下方 no-drag） */
+  -webkit-app-region: drag;
+}
+
+/* 拖动区域内的可交互元素需排除，否则点击/滚动会被窗口拖动吞掉 */
+.splash-screen .close-btn,
+.splash-screen .btn,
+.splash-screen .source-option,
+.splash-screen .install-log,
+.splash-screen .install-command code {
+  -webkit-app-region: no-drag;
 }
 
 .splash-content {
