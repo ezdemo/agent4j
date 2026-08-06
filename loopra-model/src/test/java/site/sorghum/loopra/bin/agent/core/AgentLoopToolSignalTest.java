@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.tool.FunctionToolDesc;
 import site.sorghum.loopra.bin.agent.hitl.HitlManager;
-import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.HitlState;
 import site.sorghum.loopra.bin.agent.model.ToolExecutionResult;
 import site.sorghum.loopra.bin.model.ModelClient;
@@ -39,12 +39,12 @@ class AgentLoopToolSignalTest {
         AtomicInteger resets = new AtomicInteger();
         ModelClient client = new ModelClient() {
             @Override
-            public ONode chat(List<LoopraChatMessage> messages, ONode tools) {
+            public ONode chat(List<ChatMessage> messages, ONode tools) {
                 return null;
             }
 
             @Override
-            public void chatStream(List<LoopraChatMessage> messages, ONode tools, StreamCallback callback) {
+            public void chatStream(List<ChatMessage> messages, ONode tools, StreamCallback callback) {
             }
 
             @Override

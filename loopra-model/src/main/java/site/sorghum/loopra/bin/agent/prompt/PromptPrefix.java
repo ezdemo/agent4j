@@ -1,7 +1,7 @@
 package site.sorghum.loopra.bin.agent.prompt;
 
 import org.noear.snack4.ONode;
-import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -36,9 +36,9 @@ public class PromptPrefix {
     /**
      * 构建消息前缀：[{role: system, content: ...}]
      */
-    public List<LoopraChatMessage> toMessages() {
-        List<LoopraChatMessage> msgs = new ArrayList<>();
-        msgs.add(LoopraChatMessage.ofSystem(system));
+    public List<ChatMessage> toMessages() {
+        List<ChatMessage> msgs = new ArrayList<>();
+        msgs.add(ChatMessage.ofSystem(system));
         return msgs;
     }
 

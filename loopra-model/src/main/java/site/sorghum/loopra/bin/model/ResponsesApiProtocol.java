@@ -2,7 +2,7 @@ package site.sorghum.loopra.bin.model;
 
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
-import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
 
 import java.io.IOException;
@@ -34,7 +34,7 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
         }
 
         ONode input = body.getOrNew("input").asArray();
-        for (LoopraChatMessage message : context.messages()) {
+        for (ChatMessage message : context.messages()) {
             if (message.isTool()) {
                 if (message.getToolCallId() == null || message.getToolCallId().isEmpty()) continue;
                 ONode item = input.addNew();
@@ -77,7 +77,7 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
                 item.set("role", message.getRole());
                 if (hasParts) {
                     ONode content = item.getOrNew(CONTENT).asArray();
-                    for (LoopraChatMessage.ContentPart part : message.getContentParts()) {
+                    for (ChatMessage.ContentPart part : message.getContentParts()) {
                         ONode partNode = content.addNew();
                         if ("text".equals(part.getType())) {
                             partNode.set(TYPE, "input_text");

@@ -1,6 +1,6 @@
 package site.sorghum.loopra.bin.session;
 
-import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
 
 import java.io.IOException;
 import java.util.List;
@@ -35,22 +35,22 @@ public interface SessionStore {
     /**
      * 追加一条消息
      */
-    void append(LoopraChatMessage message) throws IOException;
+    void append(ChatMessage message) throws IOException;
 
     /**
      * 加载当前会话全部消息
      */
-    List<LoopraChatMessage> load() throws IOException;
+    List<ChatMessage> load() throws IOException;
 
     /**
      * 加载指定会话的消息
      */
-    List<LoopraChatMessage> load(String name) throws IOException;
+    List<ChatMessage> load(String name) throws IOException;
 
     /**
      * 重写整个会话文件
      */
-    void rewrite(List<LoopraChatMessage> messages) throws IOException;
+    void rewrite(List<ChatMessage> messages) throws IOException;
 
     /**
      * 列出所有活跃会话（最新在前）

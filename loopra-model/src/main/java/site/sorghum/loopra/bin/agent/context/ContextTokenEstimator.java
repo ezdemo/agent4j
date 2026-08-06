@@ -3,7 +3,7 @@ package site.sorghum.loopra.bin.agent.context;
 import ai.djl.huggingface.tokenizers.HuggingFaceTokenizer;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
-import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
 
 import java.io.IOException;
@@ -24,8 +24,8 @@ public final class ContextTokenEstimator {
     private ContextTokenEstimator() {
     }
 
-    public static ContextTokenEstimate estimate(List<LoopraChatMessage> messages, ONode tools,
-                                                String additionalSystemText) {
+    public static ContextTokenEstimate estimate(List<ChatMessage> messages, ONode tools,
+                                                 String additionalSystemText) {
         boolean exact = tokenizer() != null;
         int system = 0;
         int user = 0;
@@ -34,8 +34,8 @@ public final class ContextTokenEstimator {
         boolean appendedSystemText = false;
 
         if (messages != null) {
-            for (LoopraChatMessage message : messages) {
-                LoopraChatMessage messageToCount = message;
+            for (ChatMessage message : messages) {
+                ChatMessage messageToCount = message;
                 if (!appendedSystemText && additionalSystemText != null && !additionalSystemText.isEmpty()
                         && message != null && message.isSystem() && message.getContentParts() == null) {
                     messageToCount = message.copy();
@@ -60,7 +60,7 @@ public final class ContextTokenEstimator {
                 total, exact, exact ? "deepseek-v3-tokenizer" : "chars/2");
     }
 
-    private static String serializedMessage(LoopraChatMessage message) {
+    private static String serializedMessage(ChatMessage message) {
         if (message == null) return "";
         if (message.isTool() && (message.getToolCallId() == null || message.getToolCallId().isEmpty())) {
             return "";
@@ -83,7 +83,7 @@ public final class ContextTokenEstimator {
 
         if (hasContentParts) {
             ONode parts = payload.getOrNew("content").asArray();
-            for (LoopraChatMessage.ContentPart part : message.getContentParts()) {
+            for (ChatMessage.ContentPart part : message.getContentParts()) {
                 ONode partNode = parts.addNew();
                 partNode.set("type", part.getType());
                 if ("text".equals(part.getType())) {

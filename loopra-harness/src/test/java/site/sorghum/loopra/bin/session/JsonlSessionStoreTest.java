@@ -3,7 +3,7 @@ package site.sorghum.loopra.bin.session;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.FileChange;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
 
@@ -61,11 +61,11 @@ class JsonlSessionStoreTest {
 
     @Test
     void appendAndLoad() throws IOException {
-        LoopraChatMessage msg = LoopraChatMessage.ofUser("hello");
+        ChatMessage msg = ChatMessage.ofUser("hello");
         store.append(msg);
 
         store.flush();
-        List<LoopraChatMessage> loaded = store.load();
+        List<ChatMessage> loaded = store.load();
         assertEquals(1, loaded.size());
         assertEquals("user", loaded.get(0).getRole());
         assertEquals("hello", loaded.get(0).getContent());
@@ -73,7 +73,7 @@ class JsonlSessionStoreTest {
 
     @Test
     void loadFromAnotherStoreWaitsForOngoingWrite() throws Exception {
-        store.append(LoopraChatMessage.ofUser("complete message"));
+        store.append(ChatMessage.ofUser("complete message"));
         store.flush();
 
         Path sessionsDir = Paths.get(System.getProperty("user.home"), ".loopra", "sessions");
@@ -85,7 +85,7 @@ class JsonlSessionStoreTest {
         ExecutorService reader = Executors.newSingleThreadExecutor();
         writeLock.lock();
         try {
-            Future<List<LoopraChatMessage>> loading = reader.submit(() -> readerStore.load(store.currentName()));
+            Future<List<ChatMessage>> loading = reader.submit(() -> readerStore.load(store.currentName()));
             Thread.sleep(50);
             assertFalse(loading.isDone(), "load must not read while another Store writes the same session");
 
@@ -101,25 +101,25 @@ class JsonlSessionStoreTest {
     @Test
     void appendMultipleMessages() throws IOException {
         for (int i = 0; i < 5; i++) {
-            LoopraChatMessage msg = LoopraChatMessage.ofUser("msg" + i);
+            ChatMessage msg = ChatMessage.ofUser("msg" + i);
             store.append(msg);
         }
         store.flush();
-        List<LoopraChatMessage> loaded = store.load();
+        List<ChatMessage> loaded = store.load();
         assertEquals(5, loaded.size());
     }
 
     @Test
     void rewriteReplacesAllMessages() throws IOException {
-        LoopraChatMessage msg1 = LoopraChatMessage.ofUser("original");
+        ChatMessage msg1 = ChatMessage.ofUser("original");
         store.append(msg1);
         store.flush();
 
-        List<LoopraChatMessage> newMsgs = new ArrayList<>();
-        newMsgs.add(LoopraChatMessage.assistant("replaced", null, null));
+        List<ChatMessage> newMsgs = new ArrayList<>();
+        newMsgs.add(ChatMessage.assistant("replaced", null, null));
         store.rewrite(newMsgs);
 
-        List<LoopraChatMessage> loaded = store.load();
+        List<ChatMessage> loaded = store.load();
         assertEquals(1, loaded.size());
         assertEquals("replaced", loaded.get(0).getContent());
     }
@@ -127,7 +127,7 @@ class JsonlSessionStoreTest {
     @Test
     void bindToAndLoad() throws IOException {
         String uniqueName = "sw-" + System.nanoTime();
-        LoopraChatMessage msg = LoopraChatMessage.ofUser("in session 1");
+        ChatMessage msg = ChatMessage.ofUser("in session 1");
         store.append(msg);
         store.flush();
 
@@ -135,16 +135,16 @@ class JsonlSessionStoreTest {
         assertTrue(store.bindTo(uniqueName));
         assertNotEquals(name1, store.currentName());
 
-        LoopraChatMessage msg2 = LoopraChatMessage.ofUser("in session 2");
+        ChatMessage msg2 = ChatMessage.ofUser("in session 2");
         store.append(msg2);
         store.flush();
 
-        List<LoopraChatMessage> loaded = store.load();
+        List<ChatMessage> loaded = store.load();
         assertEquals(1, loaded.size());
         assertEquals("in session 2", loaded.get(0).getContent());
 
         store.bindTo(name1);
-        List<LoopraChatMessage> loaded1 = store.load();
+        List<ChatMessage> loaded1 = store.load();
         assertEquals(1, loaded1.size());
         assertEquals("in session 1", loaded1.get(0).getContent());
     }
@@ -155,7 +155,7 @@ class JsonlSessionStoreTest {
         assertTrue(store.bindTo(name));
         assertEquals(name, store.currentName());
 
-        store.append(LoopraChatMessage.ofUser("copied"));
+        store.append(ChatMessage.ofUser("copied"));
         store.flush();
 
         assertTrue(store.list().stream().anyMatch(session -> name.equals(session.name())));
@@ -163,7 +163,7 @@ class JsonlSessionStoreTest {
 
     @Test
     void listReturnsSessions() throws IOException {
-        LoopraChatMessage msg = LoopraChatMessage.ofUser("hi");
+        ChatMessage msg = ChatMessage.ofUser("hi");
         store.append(msg);
         store.flush();
 
@@ -273,7 +273,7 @@ class JsonlSessionStoreTest {
 
     @Test
     void deleteSession() throws IOException {
-        LoopraChatMessage msg = LoopraChatMessage.ofUser("to be deleted");
+        ChatMessage msg = ChatMessage.ofUser("to be deleted");
         store.append(msg);
         store.flush();
 
@@ -291,7 +291,7 @@ class JsonlSessionStoreTest {
 
     @Test
     void serializeMessageWithToolCalls() {
-        LoopraChatMessage msg = LoopraChatMessage.assistant("I'll edit",
+        ChatMessage msg = ChatMessage.assistant("I'll edit",
                 List.of(new ToolCallEntry("tc_1", "edit_file", "{\"path\":\"a.java\"}")),
                 null);
 
@@ -302,12 +302,12 @@ class JsonlSessionStoreTest {
 
     @Test
     void imageToolResultSurvivesSessionRoundTrip() throws IOException {
-        LoopraChatMessage message = LoopraChatMessage.toolWithImage("call-image", "图片已读取",
+        ChatMessage message = ChatMessage.toolWithImage("call-image", "图片已读取",
                 "data:image/png;base64,AA==", "low");
         store.append(message);
         store.flush();
 
-        LoopraChatMessage loaded = store.load().get(0);
+        ChatMessage loaded = store.load().get(0);
 
         assertEquals("call-image", loaded.getToolCallId());
         assertEquals("data:image/png;base64,AA==", loaded.getToolImageUrl());
@@ -317,12 +317,12 @@ class JsonlSessionStoreTest {
     @Test
     void responsesReasoningSurvivesSessionRoundTrip() throws IOException {
         String responseReasoning = "{\"type\":\"reasoning\",\"encrypted_content\":\"encrypted\"}";
-        LoopraChatMessage message = LoopraChatMessage.assistant("", List.of(new ToolCallEntry(
+        ChatMessage message = ChatMessage.assistant("", List.of(new ToolCallEntry(
                 "call_1", "read", "{}", responseReasoning)), null);
         store.append(message);
         store.flush();
 
-        LoopraChatMessage loaded = store.load().get(0);
+        ChatMessage loaded = store.load().get(0);
 
         assertEquals("call_1", loaded.getToolCalls().get(0).id());
         assertEquals(responseReasoning, loaded.getResponseReasoning());
@@ -331,12 +331,12 @@ class JsonlSessionStoreTest {
 
     @Test
     void fileChangesSurviveSessionRoundTrip() throws IOException {
-        LoopraChatMessage message = LoopraChatMessage.assistant("已完成", null, null);
+        ChatMessage message = ChatMessage.assistant("已完成", null, null);
         message.setFileChanges(List.of(new FileChange("src/App.java", 12, 3, false, "@@ -1 +1 @@\n-old\n+new\n")));
         store.append(message);
         store.flush();
 
-        LoopraChatMessage loaded = store.load().get(0);
+        ChatMessage loaded = store.load().get(0);
 
         assertNotNull(loaded.getFileChanges());
         assertEquals(1, loaded.getFileChanges().size());

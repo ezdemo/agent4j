@@ -8,7 +8,7 @@ import org.noear.solon.annotation.Inject;
 import site.sorghum.loopra.bin.agent.context.ContextTokenEstimate;
 import site.sorghum.loopra.bin.agent.context.ConversationContext;
 import site.sorghum.loopra.bin.agent.core.LoopraAgent;
-import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.UserMessage;
 import site.sorghum.loopra.bin.command.ChatCommandRegistry;
 import site.sorghum.loopra.bin.config.ConfigService;
@@ -555,7 +555,7 @@ public class AgentService {
      * @param sessionName   会话名称（可选，不传则使用当前活跃会话）
      * @return 历史消息列表
      */
-    public List<LoopraChatMessage> getHistory(String workspacePath, String sessionName) {
+    public List<ChatMessage> getHistory(String workspacePath, String sessionName) {
         // 未指定会话名时，使用当前活跃会话
         if (sessionName == null || sessionName.isEmpty()) {
             sessionName = getCurrentSessionName(workspacePath);
@@ -679,11 +679,11 @@ public class AgentService {
             LoopraAgent agent = getOrCreateAgent(sessionKey);
             ConversationContext ctx = agent.getCtx();
             if (ctx == null) return null;
-            List<LoopraChatMessage> history = ctx.getHistory();
+            List<ChatMessage> history = ctx.getHistory();
             int targetIdx = -1;
             String rollbackText = null;
             for (int i = 0; i < history.size(); i++) {
-                LoopraChatMessage msg = history.get(i);
+                ChatMessage msg = history.get(i);
                 boolean matchesRollbackId = rollbackId != null
                         && (rollbackId.equals(msg.getRollbackId()) || rollbackId.equals(msg.getSnapshotId()));
                 boolean matchesTimestamp = rollbackTimestamp != null && rollbackTimestamp.equals(msg.getTimestamp());
@@ -856,7 +856,7 @@ public class AgentService {
     }
 
     private boolean hasPlanExecutionStarted(LoopraAgent agent) {
-        List<LoopraChatMessage> history = agent.getCtx().getHistory();
+        List<ChatMessage> history = agent.getCtx().getHistory();
         int hiddenInstruction = -1;
         for (int i = history.size() - 1; i >= 0; i--) {
             if (history.get(i).isWebHidden()) {
@@ -866,7 +866,7 @@ public class AgentService {
         }
         if (hiddenInstruction < 0) return false;
         for (int i = hiddenInstruction + 1; i < history.size(); i++) {
-            LoopraChatMessage message = history.get(i);
+            ChatMessage message = history.get(i);
             if (message.isTool()) return true;
             if (!message.isAssistant()) continue;
             if (message.getContent() != null && !message.getContent().isBlank()) return true;
@@ -984,8 +984,8 @@ public class AgentService {
 
         // 加载源会话消息
         store.flush();
-        List<LoopraChatMessage> sourceMessages = store.load(sourceSession);
-        List<LoopraChatMessage> branchMessages = copyBranchMessages(sourceMessages, messageCount);
+        List<ChatMessage> sourceMessages = store.load(sourceSession);
+        List<ChatMessage> branchMessages = copyBranchMessages(sourceMessages, messageCount);
         String sourceTitle = store.getTitle(sourceSession);
 
         // Use an independent store so the source agent remains bound to its session.
@@ -1007,7 +1007,7 @@ public class AgentService {
         }
     }
 
-    static List<LoopraChatMessage> copyBranchMessages(List<LoopraChatMessage> sourceMessages, int messageCount) {
+    static List<ChatMessage> copyBranchMessages(List<ChatMessage> sourceMessages, int messageCount) {
         if (sourceMessages == null || sourceMessages.isEmpty()) {
             throw new ServiceException("源会话没有消息");
         }

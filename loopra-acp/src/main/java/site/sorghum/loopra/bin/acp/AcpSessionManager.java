@@ -3,7 +3,7 @@ package site.sorghum.loopra.bin.acp;
 import lombok.extern.slf4j.Slf4j;
 import site.sorghum.loopra.bin.agent.context.MessageHealer;
 import site.sorghum.loopra.bin.agent.core.LoopraAgent;
-import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.UserMessage;
 import site.sorghum.loopra.bin.config.ConfigService;
 import site.sorghum.loopra.bin.config.LoopraConfig;
@@ -194,11 +194,11 @@ public class AcpSessionManager {
             agent.setSessionId(sessionId);
 
             // 5. 从 JSONL 加载历史消息并注入上下文
-            List<LoopraChatMessage> history = agent.getSessionStore().load(sessionId);
+            List<ChatMessage> history = agent.getSessionStore().load(sessionId);
             if (history != null && !history.isEmpty()) {
                 // Healing：修复可能截断的消息
                 var healResult = MessageHealer.heal(history);
-                for (LoopraChatMessage msg : healResult.messages()) {
+                for (ChatMessage msg : healResult.messages()) {
                     agent.injectHistory(msg);
                 }
                 log.info("[acp] 已恢复 {} 条历史消息", healResult.messages().size());
