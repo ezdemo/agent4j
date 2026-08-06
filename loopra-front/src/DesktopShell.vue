@@ -91,6 +91,7 @@
         @new-session="createTab"
         @open-session="openSession"
         @open-skills="openSkills"
+        @open-requirement-board="openRequirementBoard"
         @open-tools="openTools"
         @open-sub-agents="openSubAgents"
         @open-settings="openSettings"
@@ -137,6 +138,7 @@ import ModelChannels from './ModelChannels.vue'
 import DashboardPanel from './components/Dashboard.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
 import {hasConfiguredModelChannel} from './utils/modelChannels'
+import {switchThemeWithReveal} from './utils/themeTransition'
 
 const store = useAppStore()
 const theme = computed(() => store.settings.theme)
@@ -555,6 +557,17 @@ async function openSkills() {
   await renderActiveTab()
 }
 
+function openRequirementBoard() {
+  // 桌面端：打开独立 BrowserWindow；Web 端：新标签页打开看板
+  if (window.electronAPI?.requirementBoardWindow?.open) {
+    window.electronAPI.requirementBoardWindow.open().catch((error) => {
+      message.error('打开需求池失败：' + (error.message || '未知错误'))
+    })
+  } else {
+    window.open(`${window.location.pathname}?requirementBoard=1`, '_blank')
+  }
+}
+
 async function openTools() {
   hideStandaloneViews()
   showTools.value = true
@@ -601,7 +614,8 @@ function hideStandaloneViews() {
 }
 
 function toggleTheme() {
-  store.settings.theme = theme.value === 'dark' ? 'gray' : 'dark'
+  // 中心扩散动画：动画完成后再真正切换主题
+  switchThemeWithReveal(theme.value === 'dark' ? 'gray' : 'dark', (v) => { store.settings.theme = v })
 }
 
 async function openElementInspector() {

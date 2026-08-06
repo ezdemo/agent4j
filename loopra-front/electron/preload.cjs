@@ -74,6 +74,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getBridgeAddress: () => ipcRenderer.invoke('get-ai-browser-bridge-address')
   },
 
+  requirementBoardWindow: {
+    open: () => ipcRenderer.invoke('open-requirement-board-window')
+  },
+
   desktopPet: {
     open: () => ipcRenderer.invoke('desktop-pet-open'),
     close: () => ipcRenderer.invoke('desktop-pet-close'),

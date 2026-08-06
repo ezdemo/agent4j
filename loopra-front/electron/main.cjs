@@ -61,6 +61,7 @@ let elementWebView = null
 let elementInspectorWindow = null
 let elementInspectorReady = false
 let elementInspectorPendingUrl = ''
+let requirementBoardWindow = null
 let aiBrowserWindow = null
 let aiBrowserActiveTabId = null
 let aiBrowserNextTabId = 1
@@ -2139,6 +2140,47 @@ ipcMain.handle('open-element-inspector-window', (event, rawUrl) => {
   if (!isMainWindow && !isDesktopChatTab) throw new Error('Unauthorized inspector request')
   const url = rawUrl ? validateInspectableUrl(rawUrl) : ''
   openElementInspectorWindow(url)
+  return { success: true }
+})
+
+// ==================== Requirement Board ====================
+
+function openRequirementBoardWindow() {
+  if (requirementBoardWindow && !requirementBoardWindow.isDestroyed()) {
+    requirementBoardWindow.show()
+    requirementBoardWindow.focus()
+    return requirementBoardWindow
+  }
+  requirementBoardWindow = new BrowserWindow({
+    width: 1280,
+    height: 820,
+    minWidth: 860,
+    minHeight: 560,
+    title: 'Loopra 需求池',
+    icon: appIconPath,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false
+    }
+  })
+  requirementBoardWindow.on('closed', () => {
+    requirementBoardWindow = null
+  })
+  if (isDev) {
+    requirementBoardWindow.loadURL('http://localhost:3000/?requirementBoard=1')
+  } else {
+    requirementBoardWindow.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { requirementBoard: '1' } })
+  }
+  return requirementBoardWindow
+}
+
+ipcMain.handle('open-requirement-board-window', (event) => {
+  const isMainWindow = event.sender === mainWindow?.webContents
+  const isDesktopChatTab = [...desktopChatTabs.values()].some((tab) => tab.view.webContents === event.sender)
+  if (!isMainWindow && !isDesktopChatTab) throw new Error('Unauthorized requirement board request')
+  openRequirementBoardWindow()
   return { success: true }
 })
 
