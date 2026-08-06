@@ -8,6 +8,7 @@ import DesktopSplash from './DesktopSplash.vue'
 import DesktopUpdate from './DesktopUpdate.vue'
 import DesktopChatTab from './DesktopChatTab.vue'
 import DesktopPet from './DesktopPet.vue'
+import RequirementBoard from './views/RequirementBoard.vue'
 import router from './router'
 import './utils/hljsTheme' // 高亮主题（在 main.css 前加载，避免闪烁）
 import './assets/styles/main.css'
@@ -24,7 +25,9 @@ const initApp = async () => {
     ? DesktopShell
     : (page.get('desktopSplash') === '1' ? DesktopSplash
       : (page.get('desktopUpdate') === '1' ? DesktopUpdate
-        : (page.get('desktopChatTab') === '1' ? DesktopChatTab : (page.get('desktopPet') === '1' ? DesktopPet : App))))
+        : (page.get('desktopChatTab') === '1' ? DesktopChatTab
+          : (page.get('desktopPet') === '1' ? DesktopPet
+            : (page.get('requirementBoard') === '1' ? RequirementBoard : App)))))
   const app = createApp(RootComponent)
 
   // 添加 Pinia 状态管理

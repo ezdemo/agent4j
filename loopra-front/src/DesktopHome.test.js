@@ -67,10 +67,10 @@ describe('DesktopHome 项目拖拽排序', () => {
     expect(projectNames(wrapper)).toEqual(['A', 'B', 'C'])
   })
 
-  it('左下角菜单精简：技能/设置文字入口 + 工具图标，子代理/数据面板已收进设置页', async () => {
+  it('左下角菜单精简：需求池/技能/设置文字入口 + 工具图标，子代理/数据面板已收进设置页', async () => {
     await flushPromises()
     const menuButtons = wrapper.findAll('.desktop-project-footer-menu > button')
-    expect(menuButtons.map((button) => button.text().trim())).toEqual(['技能'])
+    expect(menuButtons.map((button) => button.text().trim())).toEqual(['需求池', '技能'])
     expect(wrapper.find('.desktop-project-footer-settings').text()).toContain('设置')
     expect(wrapper.find('.desktop-sub-agents-button').exists()).toBe(true)
     expect(wrapper.find('.desktop-tools-button').exists()).toBe(true)
