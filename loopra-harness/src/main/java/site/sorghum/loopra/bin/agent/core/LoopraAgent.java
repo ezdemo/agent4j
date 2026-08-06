@@ -8,7 +8,7 @@ import org.noear.dami2.bus.EventListener;
 import site.sorghum.loopra.bin.agent.context.ContextTokenEstimate;
 import site.sorghum.loopra.bin.agent.context.ConversationContext;
 import site.sorghum.loopra.bin.agent.listener.AgentLoopListener;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 import site.sorghum.loopra.bin.agent.model.FileChange;
 import site.sorghum.loopra.bin.agent.model.UserMessage;
 import site.sorghum.loopra.bin.agent.prompt.DEFAULT_PROMPT;
@@ -310,8 +310,8 @@ public class LoopraAgent {
             // 加载会话历史消息到上下文，将 JSONL 中的 OpenAI 格式 tool_calls
             // 转回内存格式 {id, name, arguments}，与新创建的消息保持一致
             try {
-                List<ChatMessage> loaded = getSessionStore().load();
-                for (ChatMessage m : loaded) {
+                List<LoopraChatMessage> loaded = getSessionStore().load();
+                for (LoopraChatMessage m : loaded) {
                     sessionService.injectHistory(m);
                 }
             } catch (IOException e) {
@@ -435,9 +435,9 @@ public class LoopraAgent {
     /** Returns every persisted file-change list produced in the current user turn. */
     public List<List<FileChange>> getCurrentTurnFileChanges() {
         List<List<FileChange>> result = new java.util.ArrayList<>();
-        List<ChatMessage> history = ctx.getHistory();
+        List<LoopraChatMessage> history = ctx.getHistory();
         for (int i = history.size() - 1; i >= 0; i--) {
-            ChatMessage message = history.get(i);
+            LoopraChatMessage message = history.get(i);
             if (message.isUser()) break;
             if (message.isAssistant() && message.getFileChanges() != null && !message.getFileChanges().isEmpty()) {
                 result.add(0, List.copyOf(message.getFileChanges()));
@@ -456,7 +456,7 @@ public class LoopraAgent {
     /**
      * 注入历史消息（加载会话时）
      */
-    public void injectHistory(ChatMessage msg) {
+    public void injectHistory(LoopraChatMessage msg) {
         sessionService.injectHistory(msg);
     }
 

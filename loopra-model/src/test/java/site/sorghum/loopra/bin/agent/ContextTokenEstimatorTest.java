@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
 import site.sorghum.loopra.bin.agent.context.ContextTokenEstimate;
 import site.sorghum.loopra.bin.agent.context.ContextTokenEstimator;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 
 import java.util.List;
 
@@ -15,11 +15,11 @@ class ContextTokenEstimatorTest {
 
     @Test
     void usesBundledDeepSeekV3TokenizerAndSeparatesContextParts() {
-        List<ChatMessage> messages = List.of(
-                ChatMessage.ofSystem("You are a helpful coding assistant."),
-                ChatMessage.ofUser("请统计这个请求的 token。"),
-                ChatMessage.assistant("我会先检查上下文。", null, "Thinking about the request."),
-                ChatMessage.tool("call-1", "tool output")
+        List<LoopraChatMessage> messages = List.of(
+                LoopraChatMessage.ofSystem("You are a helpful coding assistant."),
+                LoopraChatMessage.ofUser("请统计这个请求的 token。"),
+                LoopraChatMessage.assistant("我会先检查上下文。", null, "Thinking about the request."),
+                LoopraChatMessage.tool("call-1", "tool output")
         );
         ONode tools = ONode.ofJson("[{\"type\":\"function\",\"function\":{\"name\":\"read\",\"parameters\":{}}}]");
 
@@ -39,7 +39,7 @@ class ContextTokenEstimatorTest {
     @Test
     void usesTheSameTokenizerForEveryModel() {
         ContextTokenEstimate estimate = ContextTokenEstimator.estimate(
-                List.of(ChatMessage.ofUser("hello")), null, null);
+                List.of(LoopraChatMessage.ofUser("hello")), null, null);
 
         assertTrue(estimate.exactTokenizer());
         assertEquals("deepseek-v3-tokenizer", estimate.estimator());
@@ -50,17 +50,17 @@ class ContextTokenEstimatorTest {
         String longContent = "token ".repeat(2_000);
 
         ContextTokenEstimate estimate = ContextTokenEstimator.estimate(
-                List.of(ChatMessage.ofUser(longContent)), null, null);
+                List.of(LoopraChatMessage.ofUser(longContent)), null, null);
 
         assertTrue(estimate.userTokens() > 512);
     }
 
     @Test
     void ignoresLocalOnlyTimestampAndSnapshotMetadata() {
-        ChatMessage withMetadata = ChatMessage.ofUser("same request content");
+        LoopraChatMessage withMetadata = LoopraChatMessage.ofUser("same request content");
         withMetadata.setSnapshotId("snapshot-123");
         withMetadata.setTimestamp(1_753_000_000_000L);
-        ChatMessage withoutMetadata = ChatMessage.ofUser("same request content");
+        LoopraChatMessage withoutMetadata = LoopraChatMessage.ofUser("same request content");
         withoutMetadata.setTimestamp(null);
 
         ContextTokenEstimate withMetadataEstimate = ContextTokenEstimator.estimate(List.of(withMetadata), null, null);

@@ -1,7 +1,7 @@
 package site.sorghum.loopra.bin.model;
 
 import org.noear.snack4.ONode;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 
 import java.io.IOException;
 import java.util.List;
@@ -21,13 +21,13 @@ public interface ModelClient {
      * 非流式调用 —— 发送消息列表和工具定义，返回 API 消息节点。
      * 用于后台操作（上下文折叠摘要等）。
      */
-    ONode chat(List<ChatMessage> messages,
+    ONode chat(List<LoopraChatMessage> messages,
                ONode tools) throws IOException;
 
     /**
      * 流式调用 —— 通过回调逐 token 推送推理和内容。
      */
-    void chatStream(List<ChatMessage> messages,
+    void chatStream(List<LoopraChatMessage> messages,
                     ONode tools,
                     StreamCallback callback);
 

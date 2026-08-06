@@ -5,7 +5,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import site.sorghum.loopra.bin.agent.context.ConversationContext;
 import site.sorghum.loopra.bin.agent.context.MessageHealer;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 import site.sorghum.loopra.bin.agent.spi.SessionUsageSink;
 
 import java.io.IOException;
@@ -92,10 +92,10 @@ public class SessionService implements SessionUsageSink {
                 log.warn("[session] 切换到指定会话失败: {}，使用新会话", sessionName);
             }
             // 仅在明确指定会话时才加载历史和恢复用量
-            List<ChatMessage> loaded = store.load();
+            List<LoopraChatMessage> loaded = store.load();
             var healResult = MessageHealer.heal(loaded);
             loaded = healResult.messages();
-            for (ChatMessage m : loaded) {
+            for (LoopraChatMessage m : loaded) {
                 ctx.injectHistory(m);
             }
             restoreUsage(store.currentName());
@@ -216,7 +216,7 @@ public class SessionService implements SessionUsageSink {
     /**
      * 注入单条历史消息
      */
-    public void injectHistory(ChatMessage msg) {
+    public void injectHistory(LoopraChatMessage msg) {
         ctx.injectHistory(msg);
     }
 

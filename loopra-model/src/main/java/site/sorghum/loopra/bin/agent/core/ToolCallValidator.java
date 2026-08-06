@@ -2,7 +2,7 @@ package site.sorghum.loopra.bin.agent.core;
 
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 import site.sorghum.loopra.bin.agent.spi.AgentConfig;
 import site.sorghum.loopra.bin.model.HttpModelClient;
 import site.sorghum.loopra.bin.model.ModelClient;
@@ -79,8 +79,8 @@ final class ToolCallValidator {
 
         try {
             ONode response = client.chat(List.of(
-                    ChatMessage.ofSystem(SYSTEM_PROMPT),
-                    ChatMessage.ofUser(request.toJson())
+                    LoopraChatMessage.ofSystem(SYSTEM_PROMPT),
+                    LoopraChatMessage.ofUser(request.toJson())
             ), null);
             return parse(response);
         } catch (Exception e) {

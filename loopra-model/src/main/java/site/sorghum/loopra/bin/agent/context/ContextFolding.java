@@ -3,7 +3,7 @@ package site.sorghum.loopra.bin.agent.context;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import site.sorghum.loopra.bin.agent.memory.ProjectMemoryStore;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 import site.sorghum.loopra.bin.model.ModelClient;
 
 import java.io.IOException;
@@ -36,8 +36,8 @@ public class ContextFolding {
      * @param client    API 客户端
      * @return 折叠后的消息列表，未触发折叠时返回原列表
      */
-    public static List<ChatMessage> fold(
-            List<ChatMessage> messages,
+    public static List<LoopraChatMessage> fold(
+            List<LoopraChatMessage> messages,
             int maxChars, int keepChars,
             ModelClient client) throws IOException {
         return fold(messages, maxChars, keepChars, client, null);
@@ -48,8 +48,8 @@ public class ContextFolding {
      *
      * @param workspace 工作区根目录（可为 null，null 时跳过记忆沉淀）
      */
-    public static List<ChatMessage> fold(
-            List<ChatMessage> messages,
+    public static List<LoopraChatMessage> fold(
+            List<LoopraChatMessage> messages,
             int maxChars, int keepChars,
             ModelClient client, Path workspace) throws IOException {
         // 快速检查阈值，未超时直接返回原列表避免转换开销
@@ -224,12 +224,12 @@ public class ContextFolding {
         // 截断后再清理 tool_calls/tool 对（顺序重要：先截断后清理）
         trimmed = sanitizeMessagesForSummary(trimmed);
 
-        List<ChatMessage> msgs = new ArrayList<>();
-        msgs.add(ChatMessage.ofSystem(sp));
+        List<LoopraChatMessage> msgs = new ArrayList<>();
+        msgs.add(LoopraChatMessage.ofSystem(sp));
         for (Map<String, Object> m : trimmed) {
-            msgs.add(ChatMessage.fromMap(m));
+            msgs.add(LoopraChatMessage.fromMap(m));
         }
-        msgs.add(ChatMessage.ofUser("请按格式总结上面的对话，产出会话摘要与长期记忆两部分。"));
+        msgs.add(LoopraChatMessage.ofUser("请按格式总结上面的对话，产出会话摘要与长期记忆两部分。"));
 
         ONode resp = client.chat(msgs, null);
         String content = resp.get("content").getString();
@@ -364,8 +364,8 @@ public class ContextFolding {
      * @param client    API 客户端
      * @return 折叠后的消息列表（不含 system prompt，用于替换 history），未触发时返回原 history
      */
-    public static List<ChatMessage> foldKeepLast(
-            List<ChatMessage> messages,
+    public static List<LoopraChatMessage> foldKeepLast(
+            List<LoopraChatMessage> messages,
             int keepCount,
             ModelClient client) throws IOException {
         return foldKeepLast(messages, keepCount, client, null);
@@ -376,8 +376,8 @@ public class ContextFolding {
      *
      * @param workspace 工作区根目录（可为 null，null 时跳过记忆沉淀）
      */
-    public static List<ChatMessage> foldKeepLast(
-            List<ChatMessage> messages,
+    public static List<LoopraChatMessage> foldKeepLast(
+            List<LoopraChatMessage> messages,
             int keepCount,
             ModelClient client, Path workspace) throws IOException {
         List<Map<String, Object>> mapMessages = toMapList(messages);
@@ -468,20 +468,20 @@ public class ContextFolding {
      * 估算消息列表的总字符数，用于判断是否触发折叠。
      * 注意：这不包含 tools JSON 的大小，实际请求体会更大。
      */
-    public static int estimateChars(List<ChatMessage> messages) {
+    public static int estimateChars(List<LoopraChatMessage> messages) {
         int total = 0;
-        for (ChatMessage m : messages) total += estimateChars(m);
+        for (LoopraChatMessage m : messages) total += estimateChars(m);
         return total;
     }
 
     /**
      * 估算单条消息的字符数（role + content + tool_calls + reasoning_content）。
      */
-    public static int estimateChars(ChatMessage m) {
+    public static int estimateChars(LoopraChatMessage m) {
         int n = 0;
         if (m.getRole() != null) n += m.getRole().length();
         if (m.getContentParts() != null && !m.getContentParts().isEmpty()) {
-            for (ChatMessage.ContentPart part : m.getContentParts()) {
+            for (LoopraChatMessage.ContentPart part : m.getContentParts()) {
                 if (part.getText() != null) n += part.getText().length();
                 if (part.getImageUrl() != null && part.getImageUrl().getUrl() != null) {
                     n += part.getImageUrl().getUrl().length();
@@ -518,15 +518,15 @@ public class ContextFolding {
 
     // ==================== 转换工具方法 ====================
 
-    private static List<Map<String, Object>> toMapList(List<ChatMessage> messages) {
+    private static List<Map<String, Object>> toMapList(List<LoopraChatMessage> messages) {
         List<Map<String, Object>> result = new ArrayList<>();
-        for (ChatMessage m : messages) result.add(m.toMap());
+        for (LoopraChatMessage m : messages) result.add(m.toMap());
         return result;
     }
 
-    private static List<ChatMessage> fromMapList(List<Map<String, Object>> maps) {
-        List<ChatMessage> result = new ArrayList<>();
-        for (Map<String, Object> m : maps) result.add(ChatMessage.fromMap(m));
+    private static List<LoopraChatMessage> fromMapList(List<Map<String, Object>> maps) {
+        List<LoopraChatMessage> result = new ArrayList<>();
+        for (Map<String, Object> m : maps) result.add(LoopraChatMessage.fromMap(m));
         return result;
     }
 }

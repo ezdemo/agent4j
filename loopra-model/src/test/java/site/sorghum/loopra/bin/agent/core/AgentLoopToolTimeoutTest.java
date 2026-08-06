@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.tool.FunctionToolDesc;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 import site.sorghum.loopra.bin.agent.model.ToolExecutionResult;
 import site.sorghum.loopra.bin.agent.spi.AgentConfig;
 import site.sorghum.loopra.bin.model.HttpModelClient;
@@ -237,12 +237,12 @@ class AgentLoopToolTimeoutTest {
         private final AtomicBoolean aborted = new AtomicBoolean(false);
 
         @Override
-        public ONode chat(List<ChatMessage> messages, ONode tools) throws IOException {
+        public ONode chat(List<LoopraChatMessage> messages, ONode tools) throws IOException {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public void chatStream(List<ChatMessage> messages, ONode tools, StreamCallback callback) {
+        public void chatStream(List<LoopraChatMessage> messages, ONode tools, StreamCallback callback) {
             started.countDown();
             try {
                 while (!aborted.get()) {

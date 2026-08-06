@@ -5,7 +5,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.noear.snack4.ONode;
 import site.sorghum.loopra.bin.agent.context.ContextFolding;
 import site.sorghum.loopra.bin.agent.memory.ProjectMemoryStore;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 import site.sorghum.loopra.bin.model.ModelClient;
 
 import java.nio.file.Files;
@@ -19,32 +19,32 @@ class ContextFoldingTest {
 
     @Test
     void estimateCharsSingleMessage() {
-        ChatMessage msg = ChatMessage.ofUser("hello world");
+        LoopraChatMessage msg = LoopraChatMessage.ofUser("hello world");
         int n = ContextFolding.estimateChars(msg);
         assertEquals(4 + 11, n, "role=4 chars + content=11 chars");
     }
 
     @Test
     void estimateCharsMultipleMessages() {
-        List<ChatMessage> msgs = new ArrayList<>();
-        msgs.add(ChatMessage.ofUser("hi"));
-        msgs.add(ChatMessage.assistant("hello", null, null));
+        List<LoopraChatMessage> msgs = new ArrayList<>();
+        msgs.add(LoopraChatMessage.ofUser("hi"));
+        msgs.add(LoopraChatMessage.assistant("hello", null, null));
         int n = ContextFolding.estimateChars(msgs);
         assertTrue(n > 0);
     }
 
     @Test
     void estimateCharsWithReasoning() {
-        ChatMessage msg = ChatMessage.assistant("ok", null, "thinking...");
+        LoopraChatMessage msg = LoopraChatMessage.assistant("ok", null, "thinking...");
         int n = ContextFolding.estimateChars(msg);
         assertTrue(n > 4 + 2, "reasoning_content 也应计入字符数");
     }
 
     @Test
     void foldReturnsOriginalIfUnderThreshold() throws Exception {
-        List<ChatMessage> msgs = new ArrayList<>();
-        msgs.add(ChatMessage.ofUser("short"));
-        List<ChatMessage> result = ContextFolding.fold(msgs, 1000, 500, null);
+        List<LoopraChatMessage> msgs = new ArrayList<>();
+        msgs.add(LoopraChatMessage.ofUser("short"));
+        List<LoopraChatMessage> result = ContextFolding.fold(msgs, 1000, 500, null);
         assertSame(msgs, result, "未超阈值应返回原列表");
     }
 
@@ -55,14 +55,14 @@ class ContextFoldingTest {
     private static ModelClient mockClientReturning(String fullText) {
         return new ModelClient() {
             @Override
-            public ONode chat(List<ChatMessage> messages, ONode tools) {
+            public ONode chat(List<LoopraChatMessage> messages, ONode tools) {
                 ONode resp = ONode.ofJson("{}");
                 resp.set("content", fullText);
                 return resp;
             }
 
             @Override
-            public void chatStream(List<ChatMessage> messages, ONode tools, StreamCallback callback) {
+            public void chatStream(List<LoopraChatMessage> messages, ONode tools, StreamCallback callback) {
             }
 
             @Override
@@ -79,26 +79,26 @@ class ContextFoldingTest {
     /**
      * 构造超过 keepCount 的消息列表：1 条 system + N 条 user/assistant 交替。
      */
-    private static List<ChatMessage> buildLongHistory(int rounds) {
-        List<ChatMessage> msgs = new ArrayList<>();
-        msgs.add(ChatMessage.ofSystem("system prompt"));
+    private static List<LoopraChatMessage> buildLongHistory(int rounds) {
+        List<LoopraChatMessage> msgs = new ArrayList<>();
+        msgs.add(LoopraChatMessage.ofSystem("system prompt"));
         for (int i = 0; i < rounds; i++) {
-            msgs.add(ChatMessage.ofUser("用户第" + i + "轮：请帮我改 AgentLoop"));
-            msgs.add(ChatMessage.assistant("已修改第" + i + "轮", null, null));
+            msgs.add(LoopraChatMessage.ofUser("用户第" + i + "轮：请帮我改 AgentLoop"));
+            msgs.add(LoopraChatMessage.assistant("已修改第" + i + "轮", null, null));
         }
         return msgs;
     }
 
     @Test
     void foldKeepLastPreservesWebHiddenOnRetainedMessages(@TempDir Path dir) throws Exception {
-        List<ChatMessage> msgs = buildLongHistory(30);
-        ChatMessage hidden = msgs.get(msgs.size() - 2);
+        List<LoopraChatMessage> msgs = buildLongHistory(30);
+        LoopraChatMessage hidden = msgs.get(msgs.size() - 2);
         hidden.setWebHidden(true);
 
-        List<ChatMessage> folded = ContextFolding.foldKeepLast(
+        List<LoopraChatMessage> folded = ContextFolding.foldKeepLast(
                 msgs, 20, mockClientReturning("<摘要>摘要</摘要>"), dir);
 
-        ChatMessage retained = folded.stream()
+        LoopraChatMessage retained = folded.stream()
                 .filter(message -> hidden.getContent().equals(message.getContent()))
                 .findFirst()
                 .orElseThrow();
@@ -115,9 +115,9 @@ class ContextFoldingTest {
                 - 改动 ContextFolding 后必须跑 ContextFoldingTest
                 </记忆>""";
         ModelClient client = mockClientReturning(llmOutput);
-        List<ChatMessage> msgs = buildLongHistory(30); // 60 条历史 + 1 system
+        List<LoopraChatMessage> msgs = buildLongHistory(30); // 60 条历史 + 1 system
 
-        List<ChatMessage> folded = ContextFolding.foldKeepLast(msgs, 20, client, dir);
+        List<LoopraChatMessage> folded = ContextFolding.foldKeepLast(msgs, 20, client, dir);
 
         // 1. 历史被压缩（含一条摘要 + 近 20 条尾部）
         assertTrue(folded.size() < msgs.size() - 1, "折叠后消息数应显著减少");
@@ -143,7 +143,7 @@ class ContextFoldingTest {
                 - 应被沉淀的记忆
                 </记忆>""";
         ModelClient client = mockClientReturning(llmOutput);
-        List<ChatMessage> msgs = buildLongHistory(30);
+        List<LoopraChatMessage> msgs = buildLongHistory(30);
 
         ContextFolding.foldKeepLast(msgs, 20, client, null);
 
@@ -155,9 +155,9 @@ class ContextFoldingTest {
     void foldKeepLastDegradesWhenNoMemorySection(@TempDir Path dir) throws Exception {
         // LLM 未按格式输出，无 <<<MEMORY>>> 分隔 —— 降级：整段当摘要，不沉淀
         ModelClient client = mockClientReturning("只是一段普通摘要，没有记忆分隔标记。");
-        List<ChatMessage> msgs = buildLongHistory(30);
+        List<LoopraChatMessage> msgs = buildLongHistory(30);
 
-        List<ChatMessage> folded = ContextFolding.foldKeepLast(msgs, 20, client, dir);
+        List<LoopraChatMessage> folded = ContextFolding.foldKeepLast(msgs, 20, client, dir);
 
         assertTrue(folded.size() < msgs.size() - 1, "仍应完成历史压缩");
         Path memFile = ProjectMemoryStore.memoryFilePath(dir);

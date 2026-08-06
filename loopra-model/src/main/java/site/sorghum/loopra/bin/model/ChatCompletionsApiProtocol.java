@@ -2,7 +2,7 @@ package site.sorghum.loopra.bin.model;
 
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
 
 import java.io.IOException;
@@ -43,7 +43,7 @@ final class ChatCompletionsApiProtocol extends AbstractModelApiProtocol {
         }
 
         ONode messages = body.getOrNew("messages").asArray();
-        for (ChatMessage message : context.messages()) {
+        for (LoopraChatMessage message : context.messages()) {
             if (message.isTool() && (message.getToolCallId() == null || message.getToolCallId().isEmpty())) {
                 log.warn("buildBody: 跳过没有tool_call_id的tool消息");
                 continue;
@@ -67,13 +67,13 @@ final class ChatCompletionsApiProtocol extends AbstractModelApiProtocol {
 
             if (hasParts) {
                 ONode content = node.getOrNew(CONTENT).asArray();
-                for (ChatMessage.ContentPart part : message.getContentParts()) {
+                for (LoopraChatMessage.ContentPart part : message.getContentParts()) {
                     ONode partNode = content.addNew();
                     partNode.set(TYPE, part.getType());
                     if ("text".equals(part.getType())) {
                         partNode.set("text", part.getText() != null ? part.getText() : "");
                     } else if ("image_url".equals(part.getType())) {
-                        ChatMessage.ContentPart.ImageUrl image = part.getImageUrl();
+                        LoopraChatMessage.ContentPart.ImageUrl image = part.getImageUrl();
                         if (image != null) {
                             ONode imageNode = partNode.getOrNew("image_url");
                             imageNode.set("url", image.getUrl() != null ? image.getUrl() : "");

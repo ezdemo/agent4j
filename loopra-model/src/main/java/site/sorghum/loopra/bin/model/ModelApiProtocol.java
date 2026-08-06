@@ -1,7 +1,7 @@
 package site.sorghum.loopra.bin.model;
 
 import org.noear.snack4.ONode;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 
 import java.io.IOException;
 import java.util.List;
@@ -30,9 +30,9 @@ interface ModelApiProtocol {
     default void completeStream(ModelApiStreamState state, ModelClient.StreamCallback callback) {
     }
 
-    record RequestContext(String model, String reasoningEffort, List<ChatMessage> messages,
+    record RequestContext(String model, String reasoningEffort, List<LoopraChatMessage> messages,
                           ONode tools, String userId, String sessionId, String apiUrl) {
-        RequestContext(String model, String reasoningEffort, List<ChatMessage> messages,
+        RequestContext(String model, String reasoningEffort, List<LoopraChatMessage> messages,
                        ONode tools, String userId, String sessionId) {
             this(model, reasoningEffort, messages, tools, userId, sessionId, null);
         }

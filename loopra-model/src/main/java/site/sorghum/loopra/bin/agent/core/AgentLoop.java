@@ -167,7 +167,7 @@ public class AgentLoop implements AgentLoopController {
     private volatile Path workspace;
 
     /** 当前正在执行的工具 Future 数组（用于 abort 时取消） */
-    private volatile Future<ChatMessage>[] activeToolFutures = null;
+    private volatile Future<LoopraChatMessage>[] activeToolFutures = null;
 
     /** 当前工具的显式取消控制器（用于停止子代理等长运行任务） */
     private volatile ToolExecutionControl[] activeToolControls = null;
@@ -292,8 +292,8 @@ public class AgentLoop implements AgentLoopController {
 
     /** 手动触发上下文折叠（/compact 命令） */
     public void compactNow() throws IOException {
-        List<ChatMessage> messages = ctx.buildMessages();
-        List<ChatMessage> folded = ContextFolding.foldKeepLast(messages, 20, client, workspace);
+        List<LoopraChatMessage> messages = ctx.buildMessages();
+        List<LoopraChatMessage> folded = ContextFolding.foldKeepLast(messages, 20, client, workspace);
         if (folded.size() < ctx.size()) {
             ctx.compact(folded);
             output.onLog(LogLevel.INFO, "[compact] " + ctx.size() + " 条消息（保留近20条，较早消息已摘要）");
@@ -506,8 +506,8 @@ public class AgentLoop implements AgentLoopController {
         }
     }
 
-    private static ChatMessage toolResult(String id, String result) {
-        return ChatMessage.tool(id, result);
+    private static LoopraChatMessage toolResult(String id, String result) {
+        return LoopraChatMessage.tool(id, result);
     }
 
     public ONode refreshTools() {
@@ -825,7 +825,7 @@ public class AgentLoop implements AgentLoopController {
 
             // ---- 1. 消息准备：构建 + Healing + 折叠 ----
             PreparedMessages prepared = prepareMessages(step, tools);
-            List<ChatMessage> messages = prepared.messages();
+            List<LoopraChatMessage> messages = prepared.messages();
 
             // ---- 2. 流式调用 LLM ----
             StreamResult sr = streamLLM(messages, tools);
@@ -962,7 +962,7 @@ public class AgentLoop implements AgentLoopController {
 
             // ---- 7. 写入 assistant 消息 + 工具结果 ----
             ctx.addAssistant(sr.content(), ter.tcList(), sr.reasoningContent(), ter.fileChanges());
-            for (ChatMessage tr : ter.toolResults()) {
+            for (LoopraChatMessage tr : ter.toolResults()) {
                 ctx.addToolResult(tr);
             }
 
@@ -1015,7 +1015,7 @@ public class AgentLoop implements AgentLoopController {
         }
 
         // 写入工具结果
-        for (ChatMessage tr : ter.toolResults()) {
+        for (LoopraChatMessage tr : ter.toolResults()) {
             ctx.addToolResult(tr);
         }
         String requestedFinish = finishAfterToolBatch();
@@ -1053,7 +1053,7 @@ public class AgentLoop implements AgentLoopController {
         ctx.setLatestAssistantFileChanges(initialTer.fileChanges());
 
         // 写入工具结果
-        for (ChatMessage tr : initialTer.toolResults()) {
+        for (LoopraChatMessage tr : initialTer.toolResults()) {
             ctx.addToolResult(tr);
         }
         String requestedFinish = finishAfterToolBatch();
@@ -1096,8 +1096,8 @@ public class AgentLoop implements AgentLoopController {
     private boolean compactAfterContextOverflow(int recoveryAttempt) {
         int keepCount = recoveryAttempt == 1 ? 20 : 8;
         try {
-            List<ChatMessage> before = ctx.getHistory();
-            List<ChatMessage> folded = ContextFolding.foldKeepLast(
+            List<LoopraChatMessage> before = ctx.getHistory();
+            List<LoopraChatMessage> folded = ContextFolding.foldKeepLast(
                     ctx.buildMessages(), keepCount, client, workspace);
             boolean reduced = folded.size() < before.size()
                     || ContextFolding.estimateChars(folded) < ContextFolding.estimateChars(before);
@@ -1126,7 +1126,7 @@ public class AgentLoop implements AgentLoopController {
     }
 
     private PreparedMessages prepareMessages(int step, ONode tools) throws IOException {
-        List<ChatMessage> messages = ctx.buildMessages();
+        List<LoopraChatMessage> messages = ctx.buildMessages();
         MessageHealer.HealResult healResult = MessageHealer.heal(messages);
         messages = healResult.messages();
 
@@ -1165,10 +1165,10 @@ public class AgentLoop implements AgentLoopController {
 
         // 注入动态工具使用指引到系统提示词
         if (!instr.isEmpty()) {
-            ChatMessage sysMsg = messages.get(0);
+            LoopraChatMessage sysMsg = messages.get(0);
             String enhancedContent = sysMsg.getContent() + "\n\n" + instr;
-            ChatMessage enhancedSys = ChatMessage.ofSystem(enhancedContent);
-            List<ChatMessage> withInstr = new ArrayList<>(messages.size());
+            LoopraChatMessage enhancedSys = LoopraChatMessage.ofSystem(enhancedContent);
+            List<LoopraChatMessage> withInstr = new ArrayList<>(messages.size());
             withInstr.add(enhancedSys);
             withInstr.addAll(messages.subList(1, messages.size()));
             messages = withInstr;
@@ -1181,7 +1181,7 @@ public class AgentLoop implements AgentLoopController {
 
     // ==================== 步骤 2: 流式调用 LLM ====================
 
-    private StreamResult streamLLM(List<ChatMessage> messages, ONode tools) {
+    private StreamResult streamLLM(List<LoopraChatMessage> messages, ONode tools) {
         final StringBuilder contentBuf = new StringBuilder();
         final StringBuilder reasoningBuf = new StringBuilder();
         final AtomicReference<ONode> streamedTcs = new AtomicReference<>();
@@ -1354,7 +1354,7 @@ public class AgentLoop implements AgentLoopController {
         DispatchResult dispatch = dispatchToolCallsAsync(finalTcArray);
 
         // 3. 等待并收集结果
-        List<ChatMessage> toolResults = collectToolResults(
+        List<LoopraChatMessage> toolResults = collectToolResults(
                 dispatch.futures(), dispatch.controls(), finalTcArray);
 
         // 4. 沙箱越界 HITL
@@ -1450,7 +1450,7 @@ public class AgentLoop implements AgentLoopController {
         }
     }
 
-    private record DispatchResult(Future<ChatMessage>[] futures,
+    private record DispatchResult(Future<LoopraChatMessage>[] futures,
                                   ToolExecutionControl[] controls,
                                   AtomicBoolean anySuppressed,
                                   AtomicReference<HitlRequiredException> hitlRef) {}
@@ -1458,7 +1458,7 @@ public class AgentLoop implements AgentLoopController {
     private DispatchResult dispatchToolCallsAsync(List<ONode> tcArray) {
         int tcCount = tcArray.size();
         @SuppressWarnings("unchecked")
-        Future<ChatMessage>[] futures = new Future[tcCount];
+        Future<LoopraChatMessage>[] futures = new Future[tcCount];
         ToolExecutionControl[] controls = new ToolExecutionControl[tcCount];
         final AtomicBoolean anySuppressed = new AtomicBoolean(false);
         final AtomicReference<HitlRequiredException> hitlRef = new AtomicReference<>(null);
@@ -1544,7 +1544,7 @@ public class AgentLoop implements AgentLoopController {
                         safeListener("toolResult", () -> listener.onToolResult(toolCall.getName(), result));
                         safeOutputDebug("toolResult", () -> output.onToolResult(toolCall.getName(), result));
                         return imageResult == null ? toolResult(toolCall.getId(), result)
-                                : ChatMessage.toolWithImage(toolCall.getId(), result,
+                                : LoopraChatMessage.toolWithImage(toolCall.getId(), result,
                                 imageResult.dataUri(), imageResult.detail());
                     } catch (HitlRequiredException e) {
                         hitlRef.compareAndSet(null, e);
@@ -1605,15 +1605,15 @@ public class AgentLoop implements AgentLoopController {
      * 等待所有工具 Future 完成（带超时保护），收集结果。
      * 如果用户请求中断，立即取消未完成的 Future 并返回。
      */
-    private List<ChatMessage> collectToolResults(Future<ChatMessage>[] futures,
-                                                 ToolExecutionControl[] controls,
-                                                 List<ONode> tcArray) {
+    private List<LoopraChatMessage> collectToolResults(Future<LoopraChatMessage>[] futures,
+                                                       ToolExecutionControl[] controls,
+                                                       List<ONode> tcArray) {
         this.activeToolControls = controls;
         this.activeToolFutures = futures;
         long startedAt = System.nanoTime();
         long regularDeadline = startedAt + TimeUnit.SECONDS.toNanos(Math.max(1, toolTimeoutSec()));
         long subAgentDeadline = startedAt + TimeUnit.SECONDS.toNanos(Math.max(1, subAgentTimeoutSec()));
-        List<ChatMessage> results = new ArrayList<>(Collections.nCopies(futures.length, null));
+        List<LoopraChatMessage> results = new ArrayList<>(Collections.nCopies(futures.length, null));
 
         try {
             // 先处理普通工具，确保它们不会因同批次长运行子代理而获得更长超时。
@@ -1675,7 +1675,7 @@ public class AgentLoop implements AgentLoopController {
         return toolCall.get("function").get("name").getString();
     }
 
-    private static ChatMessage timeoutResult(ONode toolCall, String label, int timeoutSec) {
+    private static LoopraChatMessage timeoutResult(ONode toolCall, String label, int timeoutSec) {
         return toolResult(toolCall.get("id").getString(), ONode.ofJson("{}")
                 .asObject()
                 .set("error", label + "执行超时（" + timeoutSec + "s）")
@@ -1683,13 +1683,13 @@ public class AgentLoop implements AgentLoopController {
                 .toJson());
     }
 
-    private static void cancelFuture(Future<ChatMessage> future,
+    private static void cancelFuture(Future<LoopraChatMessage> future,
                                      ToolExecutionControl control) {
         if (control != null) control.cancel();
         if (future != null && !future.isDone()) future.cancel(true);
     }
 
-    private static void cancelAllFutures(Future<ChatMessage>[] futures,
+    private static void cancelAllFutures(Future<LoopraChatMessage>[] futures,
                                          ToolExecutionControl[] controls) {
         if (futures == null) return;
         for (int i = 0; i < futures.length; i++) {
@@ -1701,9 +1701,9 @@ public class AgentLoop implements AgentLoopController {
     /**
      * 构建用户中断时的工具结果（全部标记为 aborted）。
      */
-    private List<ChatMessage> buildAbortedResults(Future<ChatMessage>[] futures,
-                                                  List<ONode> tcArray) {
-        List<ChatMessage> results = new ArrayList<>();
+    private List<LoopraChatMessage> buildAbortedResults(Future<LoopraChatMessage>[] futures,
+                                                        List<ONode> tcArray) {
+        List<LoopraChatMessage> results = new ArrayList<>();
         for (int i = 0; i < futures.length; i++) {
             ONode tc = tcArray.get(i);
             String tcId = tc.get("id").getString();
@@ -1715,12 +1715,12 @@ public class AgentLoop implements AgentLoopController {
 
     // ==================== Self-Correction ====================
 
-    private int handleSelfCorrection(List<ChatMessage> toolResults,
+    private int handleSelfCorrection(List<LoopraChatMessage> toolResults,
                                      boolean anySuppressed, int selfCorrectionAttempts) {
         if (!anySuppressed) return selfCorrectionAttempts;
 
         boolean allSuppressed = true;
-        for (ChatMessage tr : toolResults) {
+        for (LoopraChatMessage tr : toolResults) {
             String r = tr.getContent();
             if (r == null || !r.contains("\"rejectedReason\":\"storm\"")) {
                 allSuppressed = false;
