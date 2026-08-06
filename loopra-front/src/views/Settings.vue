@@ -128,6 +128,13 @@
                     </svg>
                     {{ desktopPetVisible ? '隐藏桌面宠物' : '显示到桌面' }}
                   </button>
+                  <button v-if="!isElectron" class="btn btn-ghost" @click="toggleWebPet">
+                    <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                      <path d="M1 12s4-7 11-7 11 7 11 7-4 7-11 7-11-7-11-7z"/>
+                      <circle cx="12" cy="12" r="3"/>
+                    </svg>
+                    {{ store.petHidden ? '显示聊天宠物' : '隐藏聊天宠物' }}
+                  </button>
                   <button class="btn btn-ghost" @click="loadPets">
                     <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
                       <path d="M1 4v6h6M23 20v-6h-6"/>
@@ -1768,7 +1775,6 @@ async function loadPets() {
     if (isElectron) {
       desktopPetVisible.value = await window.electronAPI.desktopPet.isVisible()
       store.desktopPetVisible = desktopPetVisible.value
-      if (desktopPetVisible.value) store.petHidden = false
     }
   } catch (err) {
     console.error('加载宠物设置失败:', err)
@@ -1801,13 +1807,16 @@ async function toggleDesktopPet() {
     await window.electronAPI.desktopPet.close()
     desktopPetVisible.value = false
     store.desktopPetVisible = false
-    store.petHidden = true
     return
   }
   await window.electronAPI.desktopPet.open()
   desktopPetVisible.value = true
   store.desktopPetVisible = true
-  store.petHidden = false
+}
+
+// web 端：显示/隐藏聊天内宠物（状态持久化，桌面端聊天内不展示宠物）
+function toggleWebPet() {
+  store.setPetHidden(!store.petHidden)
 }
 
 // 删除宠物
@@ -1829,7 +1838,6 @@ async function deletePet(name) {
               await window.electronAPI.desktopPet.close()
               desktopPetVisible.value = false
               store.desktopPetVisible = false
-              store.petHidden = true
             }
           }
           message.success('宠物已删除: ' + name)
