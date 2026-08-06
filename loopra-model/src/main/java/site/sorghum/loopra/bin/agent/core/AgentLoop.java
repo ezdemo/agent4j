@@ -8,10 +8,17 @@ import org.noear.snack4.ONode;
 import org.noear.snack4.Options;
 import org.noear.snack4.json.JsonReader;
 import org.noear.snack4.json.util.FormatUtil;
+import org.noear.solon.ai.chat.ChatModel;
+import org.noear.solon.ai.chat.ChatResponse;
+import org.noear.solon.ai.chat.ModelOptionsAmend;
+import org.noear.solon.ai.chat.interceptor.ChatInterceptor;
+import org.noear.solon.ai.chat.interceptor.ToolChain;
 import org.noear.solon.ai.chat.interceptor.ToolRequest;
 import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.ai.chat.tool.ToolCall;
 import org.noear.solon.ai.chat.tool.ToolResult;
+import reactor.core.publisher.Flux;
+import site.sorghum.loopra.bin.agent.bridge.LoopraChatMessageConverter;
 import site.sorghum.loopra.bin.agent.context.*;
 import site.sorghum.loopra.bin.agent.hitl.HitlManager;
 import site.sorghum.loopra.bin.agent.listener.AgentLoopListener;
@@ -25,6 +32,7 @@ import site.sorghum.loopra.bin.agent.resilient.StormBreaker;
 import site.sorghum.loopra.bin.agent.spi.AgentConfig;
 import site.sorghum.loopra.bin.agent.spi.GoalGuard;
 import site.sorghum.loopra.bin.agent.spi.SessionUsageSink;
+import site.sorghum.loopra.bin.model.HttpModelClient;
 import site.sorghum.loopra.bin.model.ModelApiError;
 import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.model.UserMessageSanitizer;
@@ -119,16 +127,28 @@ public class AgentLoop implements AgentLoopController {
     private volatile boolean goalGuardEnabled = true;
     /** 子代理可冻结这两部分，确保其整个生命周期内模型请求前缀完全一致。 */
     private volatile ONode frozenTools;
+    /** frozenTools 对应的 solon-ai FunctionTool 视图（供 {@link #refreshFunctionTools()} 冻结路径使用）。 */
+    private volatile List<FunctionTool> frozenFunctionTools;
     private volatile String frozenToolInstructions;
     /**
      * 计划模式 —— 会话级状态：仅允许只读工具（工具列表过滤 + 执行拒绝 + 指令感知）。
      * 由 /plan、/execute 命令切换；不修改共享的 ToolRegistry，因此不影响同工作区的其他会话。
+     * -- SETTER --
+     *  切换计划模式（会话级状态，仅影响本循环）。
+     *  <p>切换在下一步立即生效：工具列表过滤为只读集合、非只读调用被拒绝、
+     *  计划模式指令注入工具约定。持久化与事件通知由上层（LoopraAgent）负责。</p>
+
      */
+    @Setter
     private volatile boolean planMode = false;
     /**
      * 计划模式下经 submit_plan 提交、待用户审查的执行计划。
      * /execute 批准时取出并注入为执行依据（取出即清空）。
+     * -- GETTER --
+     * 获取待审查计划（不移除）。
+
      */
+    @Getter
     private volatile String pendingPlan = null;
     /** 上层会话存储回调：计划提交/消费时同步持久化；子代理默认不设置。 */
     @Setter
@@ -520,11 +540,28 @@ public class AgentLoop implements AgentLoopController {
         return planMode ? filterReadOnlyTools(tools) : tools;
     }
 
+    /**
+     * 刷新并返回 solon-ai 的 {@link FunctionTool} 列表，与 {@link #refreshTools()} 同一逻辑：
+     * 冻结优先 + 计划模式只读过滤。
+     */
+    public List<FunctionTool> refreshFunctionTools() {
+        List<FunctionTool> fixed = frozenFunctionTools;
+        if (fixed != null) {
+            return fixed;
+        }
+        registry.refresh();
+        List<FunctionTool> tools = new ArrayList<>(registry.all().values());
+        return planMode ? filterReadOnlyFunctionTools(tools) : tools;
+    }
+
     /** 固定后续请求的 system 附加指令和工具定义；必须在首轮模型调用前执行。 */
     public void freezePromptPrefix() {
         frozenToolInstructions = buildToolInstructions();
         ONode tools = registry.toOpenAiTools();
         frozenTools = ONode.ofJson((planMode ? filterReadOnlyTools(tools) : tools).toJson());
+        // 同步缓存 FunctionTool 视图，保持两种形态的冻结语义一致
+        List<FunctionTool> all = new ArrayList<>(registry.all().values());
+        frozenFunctionTools = planMode ? filterReadOnlyFunctionTools(all) : all;
     }
 
     private String currentToolInstructions() {
@@ -555,15 +592,6 @@ public class AgentLoop implements AgentLoopController {
     }
 
     /**
-     * 切换计划模式（会话级状态，仅影响本循环）。
-     * <p>切换在下一步立即生效：工具列表过滤为只读集合、非只读调用被拒绝、
-     * 计划模式指令注入工具约定。持久化与事件通知由上层（LoopraAgent）负责。</p>
-     */
-    public void setPlanMode(boolean enabled) {
-        this.planMode = enabled;
-    }
-
-    /**
      * 保存 submit_plan 提交的任务计划，并通过 plan_submitted 事件通知前端。
      */
     @Override
@@ -573,11 +601,6 @@ public class AgentLoop implements AgentLoopController {
         ONode data = ONode.ofJson("{}").asObject();
         data.set("plan", planMarkdown != null ? planMarkdown : "");
         safeOutput("planSubmitted", () -> output.sendEvent("plan_submitted", data.toJson()));
-    }
-
-    /** 获取待审查计划（不移除）。 */
-    public String getPendingPlan() {
-        return pendingPlan;
     }
 
     /** 静默恢复持久化的待审查计划，不触发事件或重复写盘。 */
@@ -623,6 +646,22 @@ public class AgentLoop implements AgentLoopController {
             FunctionTool tool = name != null ? available.get(name) : null;
             return tool == null || !ToolMetadata.isReadOnly(tool);
         });
+        return filtered;
+    }
+
+    /**
+     * 将工具列表过滤为只读集合（不修改注册表，返回新列表）。
+     */
+    private List<FunctionTool> filterReadOnlyFunctionTools(List<FunctionTool> tools) {
+        if (tools == null) {
+            return tools;
+        }
+        List<FunctionTool> filtered = new ArrayList<>(tools.size());
+        for (FunctionTool tool : tools) {
+            if (tool != null && ToolMetadata.isReadOnly(tool)) {
+                filtered.add(tool);
+            }
+        }
         return filtered;
     }
 
@@ -783,10 +822,6 @@ public class AgentLoop implements AgentLoopController {
         resetUserAbort();
 
         // ---- 进入统一的主推理循环（含自动重试闭环） ----
-        return runWithAutoRetry();
-    }
-
-    private String runWithAutoRetry() throws IOException {
         return mainLoop();
     }
 
@@ -823,12 +858,96 @@ public class AgentLoop implements AgentLoopController {
             // ---- 0.5. 动态刷新工具列表 ----
             ONode tools = refreshTools();
 
+            List<FunctionTool> functionTools = refreshFunctionTools();
+
             // ---- 1. 消息准备：构建 + Healing + 折叠 ----
             PreparedMessages prepared = prepareMessages(step, tools);
             List<LoopraChatMessage> messages = prepared.messages();
 
             // ---- 2. 流式调用 LLM ----
             StreamResult sr = streamLLM(messages, tools);
+
+            // --------------------------- 改装 ---------------------------
+            ModelClient modelClient = getModelClient();
+            if (modelClient instanceof HttpModelClient httpModelClient){
+                String apiUrl = httpModelClient.getApiUrl();
+                ChatModel chatModel = ChatModel.of(apiUrl).apiKey(httpModelClient.getApiKey()).model(httpModelClient.getModel()).build();
+                Flux<ChatResponse> stream = chatModel
+                        .prompt(LoopraChatMessageConverter.convertToPrompt(messages))
+                        .options(op -> {
+                            op.thinking(true);
+                            op.thinkingReplay(true);
+                            op.interceptorAdd(new ChatInterceptor() {
+                                @Override
+                                public ToolResult interceptTool(ToolRequest req, ToolChain chain) throws Throwable {
+                                    FunctionTool fc = chain.getTool();
+                                    String toolName = fc.name();
+                                    String argsJson = ONode.ofBean(req.getArgs()).toJson();
+                                    log.debug("[solon-ai] 拦截工具调用: {} args={}", toolName, req.getArgs());
+
+                                    // 1. 计划模式硬约束：非只读工具直接拒绝
+                                    //    （对应 dispatchToolCallsAsync 的 plan_mode 拒绝）
+                                    if (planMode && !ToolMetadata.isReadOnly(fc)) {
+                                        return ToolResult.error(rejectedToolResult(
+                                                "当前处于计划模式，仅允许只读工具；本次调用已被拒绝。请继续使用只读工具探索，完成后用 submit_plan 提交计划。",
+                                                "plan_mode"));
+                                    }
+
+                                    // 2. 风暴抑制：重复/风暴式调用直接拒绝
+                                    //    （对应 dispatchToolCallsAsync 的 storm 拒绝）
+                                    if (!ToolMetadata.isStormExempt(fc)) {
+                                        StormBreaker.SuppressResult suppression =
+                                                stormBreaker.inspect(toolName, argsJson, ToolMetadata.isReadOnly(fc));
+                                        if (suppression.suppressed()) {
+                                            return ToolResult.error(rejectedToolResult(suppression.reason(), "storm"));
+                                        }
+                                    }
+
+                                    // 3. HITL 审批：配置校验模型时由 AI 代替人工审批
+                                    //    （单工具粒度，对应主循环 validateHITLToolCalls；
+                                    //     UI 级审批流 interceptForHITL 不在拦截器职责内）
+                                    if (hitlManager.isHitlMode() && toolCallValidator.enabled()) {
+                                        ToolCallValidator.Decision decision =
+                                                toolCallValidator.validate(toolName, argsJson);
+                                        if (decision.requiresHuman() || decision.failed() || !decision.allowed()) {
+                                            return ToolResult.error(rejectedToolResult(
+                                                    "工具调用未通过 AI 审批: " + decision.reason(), "hitl"));
+                                        }
+                                    }
+
+                                    // 4. 参数改写：注入工具上下文（__cwd / ctx），与 executeToolCalls 一致
+                                    ToolContext.setCurrentController(AgentLoop.this);
+                                    String workspacePath = registry.getWorkspace().toAbsolutePath().normalize().toString();
+                                    req.getArgs().put("__cwd", workspacePath);
+                                    req.getArgs().put("ctx", new ToolContext(new HashMap<>(), workspacePath, getSessionId()));
+
+                                    try {
+                                        return chain.doIntercept(req);
+                                    } catch (HitlRequiredException e) {
+                                        // 沙箱越界 HITL：进入强制审批，不执行工具
+                                        //    （对应 dispatchToolCallsAsync 的 HITL_PENDING）
+                                        hitlManager.setSandboxPending(null, e.getDetails());
+                                        return ToolResult.error("[HITL_PENDING:" + e.getReason() + "] " + e.getDetails());
+                                    } finally {
+                                        ToolContext.clearCurrentController();
+                                    }
+                                }
+                            });
+                        })
+                        .options(op -> op.toolAdd(refreshFunctionTools())).stream();
+                stream.subscribe(
+                        resp -> log.info("[solon-ai] resp: content={} reasoning={} finished={}",
+                                resp.getContent(),
+                                resp.getMessage() != null ? resp.getMessage().getReasoning() : null,
+                                resp.isFinished()),
+                        err -> log.error("[solon-ai] stream error: {}", err.getMessage()),
+                        () -> log.info("[solon-ai] stream complete")
+                );
+            }
+
+
+            // --------------------------- 改装 ---------------------------
+
 
             // ---- 2.05. 同步外部中断源（streamLLM 期间父级可能已中断）----
             Runnable extSource2 = externalAbortSource;
