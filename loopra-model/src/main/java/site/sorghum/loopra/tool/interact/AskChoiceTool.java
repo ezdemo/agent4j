@@ -1,5 +1,6 @@
 package site.sorghum.loopra.tool.interact;
 
+import org.noear.snack4.ONode;
 import org.noear.solon.ai.annotation.ToolMapping;
 import org.noear.solon.ai.chat.tool.AbsToolProvider;
 import org.noear.solon.ai.chat.tool.FunctionTool;
@@ -15,6 +16,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 /**
  * 用户选择菜单工具 —— 通过 {@link AgentOutput#ask} 向用户展示多选菜单。
@@ -67,21 +69,20 @@ public class AskChoiceTool extends AbsToolProvider implements SolonToTools {
         if (raw == null || raw.isEmpty()) return new ArrayList<>();
         List<Map<String, Object>> result = new ArrayList<>();
         for (Object item : raw) {
-            if (item instanceof Map) {
-                Map<String, Object> src = (Map<String, Object>) item;
-                // 复制一份，避免修改入参；并做 key 归一化以兼容 { "label": ..., "value": ... } 格式
-                Map<String, Object> opt = new java.util.LinkedHashMap<>(src);
-                if (!opt.containsKey("title") && opt.containsKey("label")) {
-                    opt.put("title", opt.get("label"));
-                }
-                result.add(opt);
-            } else if (item instanceof String) {
+             if (item instanceof String) {
                 Map<String, Object> opt = new java.util.HashMap<>();
                 opt.put("title", item);
                 result.add(opt);
             } else {
                 Map<String, Object> opt = new java.util.HashMap<>();
-                opt.put("title", String.valueOf(item));
+                 Map itemMap = ONode.ofBean(item).toBean(Map.class);
+                 String title = (String) itemMap.keySet()
+                         .stream()
+                         .sorted()
+                         .map(itemMap::get)
+                         .map(Object::toString)
+                         .collect(Collectors.joining(" "));
+                 opt.put("title", title);
                 result.add(opt);
             }
         }

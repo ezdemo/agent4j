@@ -205,6 +205,44 @@ async function healthCheck(port) {
   } catch { return false }
 }
 
+// 获取运行中服务的版本（health API 返回的 data.version）
+async function fetchServiceVersion(port) {
+  try {
+    const resp = await fetch(`http://127.0.0.1:${port}/api/system/health`, {
+      signal: AbortSignal.timeout(3000)
+    })
+    if (!resp.ok) return ''
+    const body = await resp.json()
+    return String(body?.data?.version || '').trim()
+  } catch { return '' }
+}
+
+// 运行中的服务版本是否与本地安装的运行时版本一致：
+// 本地版本读不到时保守复用；运行版本读不到时保守重启（保证更新后的 jar 生效）；
+// 运行版本不低于本地版本即可复用（避免把更新的服务降级重启）。
+async function isServiceVersionCurrent(port) {
+  const installedVersion = readLoopraGuiVersion()
+  if (!installedVersion) return true
+  const runningVersion = await fetchServiceVersion(port)
+  if (!runningVersion) return false
+  return compareVersions(runningVersion, installedVersion) >= 0
+}
+
+// 终止指定端口上的 loopra-web 进程（用于替换旧版本服务）
+async function stopLoopraWebOnPort(port) {
+  try {
+    const processes = await listLoopraJavaProcesses()
+    const target = processes.find((item) => item.port === port)
+    if (!target) return false
+    await stopLoopraJavaProcess(target.pid)
+    console.log(`Stopped stale loopra-web process ${target.pid} on port ${port}`)
+    return true
+  } catch (error) {
+    console.warn(`Failed to stop loopra-web process on port ${port}: ${error.message}`)
+    return false
+  }
+}
+
 // 杀掉整个进程树（包括 java 子进程）
 function killProcessTree(child) {
   if (!child) return
@@ -731,12 +769,36 @@ ipcMain.handle('install_loopra_web', async () => ({
 ipcMain.handle('start_loopra_web', async () => {
   // 无论服务由 CLI、旧版 GUI 或当前 GUI 启动，优先复用稳定的默认端口。
   const preferredPort = 4567
+
+  // 桌面端重启后，核心服务也应随之重新启动：
+  // 终止上次遗留的 GUI 运行时进程（~/.loopra-gui），避免直接复用旧进程/旧版本服务；
+  // CLI（~/.loopra）启动的服务不在清理范围，仍按上面的约定优先复用 4567。
+  try {
+    const existingProcesses = await listLoopraJavaProcesses()
+    for (const item of existingProcesses.filter((p) => isLoopraGuiRuntime(p.commandLine) && p.port > 0)) {
+      try {
+        await stopLoopraJavaProcess(item.pid)
+        console.log(`Stopped stale GUI loopra-web process ${item.pid} on port ${item.port}`)
+      } catch (error) {
+        console.warn(`Failed to stop stale GUI loopra-web process ${item.pid}: ${error.message}`)
+      }
+    }
+  } catch (error) {
+    console.warn('Failed to list loopra java processes:', error.message)
+  }
+
   if (await healthCheck(preferredPort)) {
-    if (loopraWebProcess && currentPort !== preferredPort) cleanupLoopraWeb()
-    console.log(`Loopra Web already running on port ${preferredPort}, reusing`)
-    currentPort = preferredPort
-    await closeOtherLoopraJavaProcesses(currentPort)
-    return preferredPort
+    // 复用前校验版本：运行中的服务若与本地安装的运行时版本不一致（如刚更新过核心服务），
+    // 终止旧进程并继续走启动逻辑，避免更新后的 jar 不生效。
+    if (await isServiceVersionCurrent(preferredPort)) {
+      if (loopraWebProcess && currentPort !== preferredPort) cleanupLoopraWeb()
+      console.log(`Loopra Web already running on port ${preferredPort}, reusing`)
+      currentPort = preferredPort
+      await closeOtherLoopraJavaProcesses(currentPort)
+      return preferredPort
+    }
+    console.log(`Loopra Web on port ${preferredPort} is outdated, restarting with installed runtime`)
+    await stopLoopraWebOnPort(preferredPort)
   }
 
   if (loopraWebProcess) {
