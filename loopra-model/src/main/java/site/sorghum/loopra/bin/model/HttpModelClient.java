@@ -30,6 +30,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  * @author Sorghum
  */
 @Slf4j
+@Getter
 public class HttpModelClient implements ModelClient {
 
     /**
