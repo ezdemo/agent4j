@@ -11,7 +11,7 @@ Object.defineProperty(Element.prototype, 'scrollIntoView', {
 })
 
 vi.mock('../stores/app', () => ({
-  useAppStore: () => ({desktopPetVisible: false, activePetName: '', petHidden: false})
+  useAppStore: () => ({desktopPetVisible: false, isDesktopEnv: false, activePetName: '', petHidden: false, setPetHidden: vi.fn()})
 }))
 
 vi.mock('../services/api', () => ({
