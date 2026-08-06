@@ -2,7 +2,7 @@ package site.sorghum.loopra.bin.agent.core;
 
 import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 
@@ -62,12 +62,12 @@ class SubAgentSessionAffinityTest {
         }
 
         @Override
-        public ONode chat(List<ChatMessage> messages, ONode tools) throws IOException {
+        public ONode chat(List<LoopraChatMessage> messages, ONode tools) throws IOException {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public void chatStream(List<ChatMessage> messages, ONode tools, StreamCallback callback) {
+        public void chatStream(List<LoopraChatMessage> messages, ONode tools, StreamCallback callback) {
             callback.onContentDelta("done");
             callback.onDone();
         }

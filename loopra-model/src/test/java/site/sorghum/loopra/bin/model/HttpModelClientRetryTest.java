@@ -4,7 +4,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
@@ -33,7 +33,7 @@ class HttpModelClientRetryTest {
             AtomicReference<String> retryReason = new AtomicReference<>();
             AtomicReference<String> content = new AtomicReference<>("");
 
-            client.chatStream(List.of(ChatMessage.ofUser("hello")), new ONode().asArray(),
+            client.chatStream(List.of(LoopraChatMessage.ofUser("hello")), new ONode().asArray(),
                     new ModelClient.StreamCallback() {
                         @Override
                         public void onRetry(String reason, int retryAttempt, int maxAttempts, int delaySeconds) {
@@ -74,7 +74,7 @@ class HttpModelClientRetryTest {
                     "test-key", "test-model", "high", new int[0]);
 
             assertThrows(IOException.class,
-                    () -> client.chat(List.of(ChatMessage.ofUser("hello")), new ONode().asArray()));
+                    () -> client.chat(List.of(LoopraChatMessage.ofUser("hello")), new ONode().asArray()));
         } finally {
             server.stop(0);
         }
@@ -94,7 +94,7 @@ class HttpModelClientRetryTest {
             AtomicReference<String> content = new AtomicReference<>("");
             AtomicReference<String> error = new AtomicReference<>();
 
-            client.chatStream(List.of(ChatMessage.ofUser("hello")), new ONode().asArray(),
+            client.chatStream(List.of(LoopraChatMessage.ofUser("hello")), new ONode().asArray(),
                     new ModelClient.StreamCallback() {
                         @Override
                         public void onContentDelta(String token) {

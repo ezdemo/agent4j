@@ -3,7 +3,7 @@ package site.sorghum.loopra.bin.agent;
 import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
 import site.sorghum.loopra.bin.agent.context.ConversationContext;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
 
 import java.util.ArrayList;
@@ -23,7 +23,7 @@ class ConversationContextTest {
     @Test
     void promotesLegacyToolCallReasoningToMessageLevel() {
         String responseReasoning = "{\"type\":\"reasoning\",\"encrypted_content\":\"encrypted\"}";
-        ChatMessage message = ChatMessage.fromMap(Map.of(
+        LoopraChatMessage message = LoopraChatMessage.fromMap(Map.of(
                 "role", "assistant",
                 "tool_calls", List.of(
                         Map.of("id", "call-1", "name", "read", "arguments", "{}",
@@ -69,7 +69,7 @@ class ConversationContextTest {
     void buildMessagesIncludesSystemPrefix() {
         ConversationContext ctx = createContext();
         ctx.addUser("hi");
-        List<ChatMessage> msgs = ctx.buildMessages();
+        List<LoopraChatMessage> msgs = ctx.buildMessages();
         assertEquals(2, msgs.size());
         assertEquals("system", msgs.get(0).getRole());
         assertEquals("system prompt", msgs.get(0).getContent());
@@ -138,8 +138,8 @@ class ConversationContextTest {
         ctx.addAssistant("reply1", null, null);
         ctx.addUser("msg2");
 
-        List<ChatMessage> folded = new ArrayList<>();
-        folded.add(ChatMessage.ofUser("summary"));
+        List<LoopraChatMessage> folded = new ArrayList<>();
+        folded.add(LoopraChatMessage.ofUser("summary"));
 
         ctx.compact(folded);
         assertEquals(1, ctx.size());
@@ -149,7 +149,7 @@ class ConversationContextTest {
     @Test
     void injectHistoryDoesNotAffectSize() {
         ConversationContext ctx = createContext();
-        ChatMessage msg = ChatMessage.ofUser("loaded");
+        LoopraChatMessage msg = LoopraChatMessage.ofUser("loaded");
         ctx.injectHistory(msg);
         assertEquals(1, ctx.size());
     }
@@ -158,7 +158,7 @@ class ConversationContextTest {
     void getHistoryReturnsCopy() {
         ConversationContext ctx = createContext();
         ctx.addUser("hello");
-        List<ChatMessage> history = ctx.getHistory();
+        List<LoopraChatMessage> history = ctx.getHistory();
         history.clear();
         assertEquals(1, ctx.size(), "getHistory 返回副本，修改不应影响内部状态");
     }

@@ -2,7 +2,7 @@ package site.sorghum.loopra.bin.model;
 
 import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
 
 import java.util.List;
@@ -21,7 +21,7 @@ class ModelApiProtocolsTest {
 
     @Test
     void chatCompletionsRequestMappingDoesNotMutateMessages() {
-        ChatMessage toolMessage = ChatMessage.tool("call-1", "");
+        LoopraChatMessage toolMessage = LoopraChatMessage.tool("call-1", "");
         ModelApiProtocol.RequestContext context = new ModelApiProtocol.RequestContext(
                 "test-model", "none", List.of(toolMessage), new ONode().asArray(), null, null);
 
@@ -34,7 +34,7 @@ class ModelApiProtocolsTest {
 
     @Test
     void responsesFunctionCallInputIncludesItemIdAlongsideCallId() {
-        ChatMessage assistant = ChatMessage.assistant("", List.of(
+        LoopraChatMessage assistant = LoopraChatMessage.assistant("", List.of(
                 new ToolCallEntry("call-1", "read", "{}")), null);
         ModelApiProtocol.RequestContext context = new ModelApiProtocol.RequestContext(
                 "test-model", "none", List.of(assistant), new ONode().asArray(), null, null);
@@ -48,7 +48,7 @@ class ModelApiProtocolsTest {
 
     @Test
     void responsesRequestOmitsOutputOnlyReasoningStatus() {
-        ChatMessage assistant = ChatMessage.assistant(null, null, null);
+        LoopraChatMessage assistant = LoopraChatMessage.assistant(null, null, null);
         assistant.setResponseReasoning("""
                 {"type":"reasoning","id":"rs_1","status":"completed", "summary":[],
                  "encrypted_content":"encrypted"}
@@ -66,7 +66,7 @@ class ModelApiProtocolsTest {
 
     @Test
     void imageToolResultUsesVisualOutputForBothProtocols() {
-        ChatMessage imageToolResult = ChatMessage.toolWithImage("call-image", "图片已读取", "data:image/png;base64,AA==", "high");
+        LoopraChatMessage imageToolResult = LoopraChatMessage.toolWithImage("call-image", "图片已读取", "data:image/png;base64,AA==", "high");
         ModelApiProtocol.RequestContext context = new ModelApiProtocol.RequestContext(
                 "test-model", "none", List.of(imageToolResult), new ONode().asArray(), null, null);
 
@@ -92,7 +92,7 @@ class ModelApiProtocolsTest {
                 [{"type":"function","function":{"name":"read","parameters":{"type":"object"}}}]
                 """);
         ModelApiProtocol.RequestContext context = new ModelApiProtocol.RequestContext(
-                "test-model[128k]", "high", List.of(ChatMessage.ofUser("hello")), tools,
+                "test-model[128k]", "high", List.of(LoopraChatMessage.ofUser("hello")), tools,
                 "user-1", "session-1");
 
         ONode request = protocol.buildRequest(context);

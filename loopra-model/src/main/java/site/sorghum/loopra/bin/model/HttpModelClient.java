@@ -5,7 +5,7 @@ import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import okhttp3.*;
 import org.noear.snack4.ONode;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
 import site.sorghum.loopra.bin.util.UserIdProvider;
 
@@ -353,7 +353,7 @@ public class HttpModelClient implements ModelClient {
         return fork;
     }
 
-    private ModelApiProtocol.RequestContext requestContext(List<ChatMessage> messages, ONode tools) {
+    private ModelApiProtocol.RequestContext requestContext(List<LoopraChatMessage> messages, ONode tools) {
         return new ModelApiProtocol.RequestContext(
                 model, reasoningEffort, messages, tools, UserIdProvider.getUserId(), resolveSessionAffinity(), apiUrl);
     }
@@ -404,7 +404,7 @@ public class HttpModelClient implements ModelClient {
      * 非流式调用（用于 fold 摘要、/compact 等后台操作），5xx 自动重试最多 10 次
      */
     @Override
-    public ONode chat(List<ChatMessage> messages,
+    public ONode chat(List<LoopraChatMessage> messages,
                       ONode tools) throws IOException {
         ONode body = apiProtocol.buildRequest(requestContext(messages, tools));
         body.set(FIELD_STREAM, false);
@@ -462,7 +462,7 @@ public class HttpModelClient implements ModelClient {
      * </p>
      */
     @Override
-    public void chatStream(List<ChatMessage> messages,
+    public void chatStream(List<LoopraChatMessage> messages,
                            ONode tools,
                            StreamCallback callback) {
         String jsonBody;
@@ -514,7 +514,7 @@ public class HttpModelClient implements ModelClient {
                     String err = errorBody != null ? errorBody.string() : "unknown error";
                     if (!recoveredInvalidRequest && !ModelApiError.isContextLengthExceeded(err)
                             && ModelApiError.isInvalidRequestError(err)) {
-                        List<ChatMessage> recoveryMessages = withoutLatestResponsesAssistant(messages);
+                        List<LoopraChatMessage> recoveryMessages = withoutLatestResponsesAssistant(messages);
                         if (recoveryMessages != null) {
                             jsonBody = buildStreamRequest(recoveryMessages, tools);
                             recoveredInvalidRequest = true;
@@ -559,7 +559,7 @@ public class HttpModelClient implements ModelClient {
 
                         if (parseResult.invalidRequestError && !recoveredInvalidRequest
                                 && !parseResult.emittedOutput) {
-                            List<ChatMessage> recoveryMessages = withoutLatestResponsesAssistant(messages);
+                            List<LoopraChatMessage> recoveryMessages = withoutLatestResponsesAssistant(messages);
                             if (recoveryMessages != null) {
                                 try {
                                     jsonBody = buildStreamRequest(recoveryMessages, tools);
@@ -638,7 +638,7 @@ public class HttpModelClient implements ModelClient {
         }
     }
 
-    private String buildStreamRequest(List<ChatMessage> messages, ONode tools) {
+    private String buildStreamRequest(List<LoopraChatMessage> messages, ONode tools) {
         ONode body = apiProtocol.buildRequest(requestContext(messages, tools));
         body.set(FIELD_STREAM, true);
         return body.toJson();
@@ -651,11 +651,11 @@ public class HttpModelClient implements ModelClient {
      *
      * @return recovery messages, or {@code null} when no reasoning assistant can be rolled back
      */
-    private static List<ChatMessage> withoutLatestResponsesAssistant(List<ChatMessage> messages) {
+    private static List<LoopraChatMessage> withoutLatestResponsesAssistant(List<LoopraChatMessage> messages) {
         int assistantIndex = -1;
         Set<String> toolCallIds = new HashSet<>();
         for (int i = messages.size() - 1; i >= 0; i--) {
-            ChatMessage message = messages.get(i);
+            LoopraChatMessage message = messages.get(i);
             if (!"assistant".equals(message.getRole()) || !hasResponseReasoning(message)) continue;
             assistantIndex = i;
             if (message.getToolCalls() != null) {
@@ -667,9 +667,9 @@ public class HttpModelClient implements ModelClient {
         }
         if (assistantIndex < 0) return null;
 
-        List<ChatMessage> cleaned = new ArrayList<>(messages.size() - 1);
+        List<LoopraChatMessage> cleaned = new ArrayList<>(messages.size() - 1);
         for (int i = 0; i < messages.size(); i++) {
-            ChatMessage message = messages.get(i);
+            LoopraChatMessage message = messages.get(i);
             if (i == assistantIndex) continue;
             if (message.isTool() && toolCallIds.contains(message.getToolCallId())) continue;
             cleaned.add(message);
@@ -677,7 +677,7 @@ public class HttpModelClient implements ModelClient {
         return cleaned;
     }
 
-    private static boolean hasResponseReasoning(ChatMessage message) {
+    private static boolean hasResponseReasoning(LoopraChatMessage message) {
         if (message.getResponseReasoning() != null) return true;
         return message.getToolCalls() != null && message.getToolCalls().stream()
                 .anyMatch(toolCall -> toolCall.responseReasoning() != null);

@@ -10,7 +10,7 @@ import org.noear.solon.ai.chat.tool.FunctionToolDesc;
 import org.noear.solon.ai.chat.tool.ToolHandler;
 import site.sorghum.loopra.bin.agent.core.AgentLoop;
 import site.sorghum.loopra.bin.agent.core.LoopraAgent;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 import site.sorghum.loopra.bin.agent.model.UserMessage;
 import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
 import site.sorghum.loopra.bin.agent.spi.ToolPolicyProvider;
@@ -184,16 +184,16 @@ class LoopraAgentInjectionTest {
 
     /** 记录最近一次请求的消息与工具列表；固定回复一段内容、不带工具调用。 */
     private static final class RecordingModelClient implements ModelClient {
-        volatile List<ChatMessage> lastMessages;
+        volatile List<LoopraChatMessage> lastMessages;
         volatile ONode lastTools;
 
         @Override
-        public ONode chat(List<ChatMessage> messages, ONode tools) {
+        public ONode chat(List<LoopraChatMessage> messages, ONode tools) {
             throw new UnsupportedOperationException();
         }
 
         @Override
-        public void chatStream(List<ChatMessage> messages, ONode tools, StreamCallback callback) {
+        public void chatStream(List<LoopraChatMessage> messages, ONode tools, StreamCallback callback) {
             this.lastMessages = messages;
             this.lastTools = tools;
             callback.onContentDelta("hello-from-stub");
@@ -233,21 +233,21 @@ class LoopraAgentInjectionTest {
         }
 
         @Override
-        public void append(ChatMessage message) {
+        public void append(LoopraChatMessage message) {
         }
 
         @Override
-        public List<ChatMessage> load() {
+        public List<LoopraChatMessage> load() {
             return new ArrayList<>();
         }
 
         @Override
-        public List<ChatMessage> load(String name) {
+        public List<LoopraChatMessage> load(String name) {
             return new ArrayList<>();
         }
 
         @Override
-        public void rewrite(List<ChatMessage> messages) {
+        public void rewrite(List<LoopraChatMessage> messages) {
         }
 
         @Override

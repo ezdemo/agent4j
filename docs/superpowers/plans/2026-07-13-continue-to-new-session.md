@@ -162,7 +162,7 @@ Add package-level tests for a new `AgentService.copyBranchMessages` helper. Veri
 
 ```java
 import org.junit.jupiter.api.Test;
-import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
 import site.sorghum.loopra.web.common.ServiceException;
 

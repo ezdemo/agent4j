@@ -10,7 +10,7 @@ import java.util.List;
  * @param anySuppressed 是否有工具调用被风暴断路器抑制
  */
 public record ToolExecutionResult(List<ToolCallEntry> tcList,
-                                  List<ChatMessage> toolResults,
+                                  List<LoopraChatMessage> toolResults,
                                   List<FileChange> fileChanges,
                                   boolean anySuppressed) {
 }
