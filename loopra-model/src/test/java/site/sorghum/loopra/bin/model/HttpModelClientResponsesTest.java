@@ -5,7 +5,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
-import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
 
 import java.io.IOException;
@@ -36,12 +36,12 @@ class HttpModelClientResponsesTest {
                     "parameters":{"type":"object","properties":{"path":{"type":"string"}}}}}]
                     """);
             String previousReasoning = "{\"type\":\"reasoning\",\"id\":\"rs_old\",\"encrypted_content\":\"encrypted-old\",\"summary\":[]}";
-            List<LoopraChatMessage> messages = List.of(
-                    LoopraChatMessage.ofSystem("system prompt"),
-                    LoopraChatMessage.ofUser("hello"),
-                    LoopraChatMessage.assistant("", List.of(new ToolCallEntry(
+            List<ChatMessage> messages = List.of(
+                    ChatMessage.ofSystem("system prompt"),
+                    ChatMessage.ofUser("hello"),
+                    ChatMessage.assistant("", List.of(new ToolCallEntry(
                             "call_1", "read", "{\"path\":\"old.txt\"}", previousReasoning)), null),
-                    LoopraChatMessage.tool("call_1", "old content")
+                    ChatMessage.tool("call_1", "old content")
             );
             AtomicReference<String> content = new AtomicReference<>("");
             AtomicReference<String> reasoning = new AtomicReference<>("");
@@ -130,7 +130,7 @@ class HttpModelClientResponsesTest {
                     "http://127.0.0.1:" + server.getAddress().getPort() + "/chat",
                     "test-key", "gpt-test", "high");
             client.setSessionAffinity(affinity);
-            client.chat(List.of(LoopraChatMessage.ofUser("hello")), new ONode().asArray());
+            client.chat(List.of(ChatMessage.ofUser("hello")), new ONode().asArray());
 
             assertEquals(affinity, ONode.ofJson(requestBody.get()).get("prompt_cache_key").getString());
             assertEquals(affinity, requestHeaders.get().getFirst("x-session-affinity"));
@@ -152,7 +152,7 @@ class HttpModelClientResponsesTest {
         server.start();
 
         try {
-            ONode message = responsesClient(server).chat(List.of(LoopraChatMessage.ofUser("hello")), new ONode().asArray());
+            ONode message = responsesClient(server).chat(List.of(ChatMessage.ofUser("hello")), new ONode().asArray());
 
             assertEquals("assistant", message.get("role").getString());
             assertEquals("doneblocked", message.get("content").getString());
@@ -183,7 +183,7 @@ class HttpModelClientResponsesTest {
         try {
             AtomicReference<String> error = new AtomicReference<>();
             AtomicInteger done = new AtomicInteger();
-            responsesClient(server).chatStream(List.of(LoopraChatMessage.ofUser("hello")), new ONode().asArray(),
+            responsesClient(server).chatStream(List.of(ChatMessage.ofUser("hello")), new ONode().asArray(),
                     new ModelClient.StreamCallback() {
                         @Override
                         public void onError(String value) {
@@ -219,7 +219,7 @@ class HttpModelClientResponsesTest {
 
         try {
             AtomicReference<String> error = new AtomicReference<>();
-            responsesClientWithRetries(server).chatStream(List.of(LoopraChatMessage.ofUser("hello")),
+            responsesClientWithRetries(server).chatStream(List.of(ChatMessage.ofUser("hello")),
                     new ONode().asArray(), new ModelClient.StreamCallback() {
                         @Override
                         public void onError(String value) {
@@ -250,7 +250,7 @@ class HttpModelClientResponsesTest {
 
         try {
             AtomicReference<String> error = new AtomicReference<>();
-            responsesClientWithRetries(server).chatStream(List.of(LoopraChatMessage.ofUser("hello")),
+            responsesClientWithRetries(server).chatStream(List.of(ChatMessage.ofUser("hello")),
                     new ONode().asArray(), new ModelClient.StreamCallback() {
                         @Override
                         public void onError(String value) {
@@ -285,17 +285,17 @@ class HttpModelClientResponsesTest {
         server.start();
 
         try {
-            LoopraChatMessage previousAssistant = LoopraChatMessage.assistant("", List.of(new ToolCallEntry(
+            ChatMessage previousAssistant = ChatMessage.assistant("", List.of(new ToolCallEntry(
                     "call_1", "read", "{\"path\":\"previous.txt\"}",
                     "{\"type\":\"reasoning\",\"id\":\"rs_previous\",\"encrypted_content\":\"previous\"}")), null);
-            LoopraChatMessage failedAssistant = LoopraChatMessage.assistant("", List.of(new ToolCallEntry(
+            ChatMessage failedAssistant = ChatMessage.assistant("", List.of(new ToolCallEntry(
                     "call_2", "write", "{\"path\":\"failed.txt\"}",
                     "{\"type\":\"reasoning\",\"id\":\"rs_failed\",\"encrypted_content\":\"failed\"}")), null);
             AtomicReference<String> error = new AtomicReference<>();
             AtomicInteger done = new AtomicInteger();
             responsesClientWithoutRetries(server).chatStream(List.of(
-                            LoopraChatMessage.ofUser("hello"), previousAssistant, LoopraChatMessage.tool("call_1", "previous content"),
-                            failedAssistant, LoopraChatMessage.tool("call_2", "failed content")),
+                            ChatMessage.ofUser("hello"), previousAssistant, ChatMessage.tool("call_1", "previous content"),
+                            failedAssistant, ChatMessage.tool("call_2", "failed content")),
                     new ONode().asArray(), new ModelClient.StreamCallback() {
                         @Override
                         public void onError(String value) {
@@ -353,12 +353,12 @@ class HttpModelClientResponsesTest {
         server.start();
 
         try {
-            LoopraChatMessage assistant = LoopraChatMessage.assistant("", List.of(new ToolCallEntry(
+            ChatMessage assistant = ChatMessage.assistant("", List.of(new ToolCallEntry(
                     "call_1", "read", "{}", "{\"type\":\"reasoning\",\"encrypted_content\":\"encrypted\"}")), null);
             AtomicReference<String> error = new AtomicReference<>();
             AtomicInteger done = new AtomicInteger();
             responsesClientWithoutRetries(server).chatStream(List.of(
-                            LoopraChatMessage.ofUser("hello"), assistant, LoopraChatMessage.tool("call_1", "content")),
+                            ChatMessage.ofUser("hello"), assistant, ChatMessage.tool("call_1", "content")),
                     new ONode().asArray(), new ModelClient.StreamCallback() {
                         @Override
                         public void onError(String value) {
@@ -398,7 +398,7 @@ class HttpModelClientResponsesTest {
             AtomicReference<String> error = new AtomicReference<>();
             AtomicReference<ONode> toolCalls = new AtomicReference<>();
             AtomicInteger done = new AtomicInteger();
-            responsesClient(server).chatStream(List.of(LoopraChatMessage.ofUser("hello")), new ONode().asArray(),
+            responsesClient(server).chatStream(List.of(ChatMessage.ofUser("hello")), new ONode().asArray(),
                     new ModelClient.StreamCallback() {
                         @Override
                         public void onToolCalls(ONode calls) {

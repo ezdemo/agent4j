@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.tool.FunctionToolDesc;
 import site.sorghum.loopra.bin.agent.context.ConversationContext;
-import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.UserMessage;
 import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
 import site.sorghum.loopra.bin.model.ModelClient;
@@ -161,12 +161,12 @@ class ToolCallValidatorTest {
     private static ModelClient failingClient(Exception failure) {
         return new ModelClient() {
             @Override
-            public ONode chat(List<LoopraChatMessage> messages, ONode tools) {
+            public ONode chat(List<ChatMessage> messages, ONode tools) {
                 throw new RuntimeException(failure);
             }
 
             @Override
-            public void chatStream(List<LoopraChatMessage> messages, ONode tools, StreamCallback callback) {
+            public void chatStream(List<ChatMessage> messages, ONode tools, StreamCallback callback) {
             }
 
             @Override
@@ -193,12 +193,12 @@ class ToolCallValidatorTest {
         AtomicInteger streams = new AtomicInteger();
         return new ModelClient() {
             @Override
-            public ONode chat(List<LoopraChatMessage> messages, ONode tools) {
+            public ONode chat(List<ChatMessage> messages, ONode tools) {
                 return null;
             }
 
             @Override
-            public void chatStream(List<LoopraChatMessage> messages, ONode tools, StreamCallback callback) {
+            public void chatStream(List<ChatMessage> messages, ONode tools, StreamCallback callback) {
                 if (streams.getAndIncrement() == 0) {
                     callback.onToolCalls(toolCalls);
                 } else {
@@ -225,7 +225,7 @@ class ToolCallValidatorTest {
     private static ModelClient reply(AtomicInteger calls, String content) {
         return new ModelClient() {
             @Override
-            public ONode chat(List<LoopraChatMessage> messages, ONode tools) {
+            public ONode chat(List<ChatMessage> messages, ONode tools) {
                 calls.incrementAndGet();
                 ONode response = new ONode().asObject();
                 response.set("content", content);
@@ -233,7 +233,7 @@ class ToolCallValidatorTest {
             }
 
             @Override
-            public void chatStream(List<LoopraChatMessage> messages, ONode tools, StreamCallback callback) {
+            public void chatStream(List<ChatMessage> messages, ONode tools, StreamCallback callback) {
             }
 
             @Override

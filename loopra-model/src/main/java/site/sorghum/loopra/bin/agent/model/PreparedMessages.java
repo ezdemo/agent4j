@@ -8,5 +8,5 @@ import java.util.List;
  * @param messages       修复/折叠后的消息列表
  * @param foldedThisStep 当前步骤是否触发了上下文折叠
  */
-public record PreparedMessages(List<LoopraChatMessage> messages, boolean foldedThisStep) {
+public record PreparedMessages(List<ChatMessage> messages, boolean foldedThisStep) {
 }

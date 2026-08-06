@@ -3,7 +3,7 @@ package site.sorghum.loopra.bin.agent.core;
 import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
 import site.sorghum.loopra.bin.agent.context.ConversationContext;
-import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.UserMessage;
 import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
 import site.sorghum.loopra.bin.model.ModelClient;
@@ -51,12 +51,12 @@ class AgentLoopContextOverflowTest {
         private final AtomicInteger streamCalls = new AtomicInteger();
 
         @Override
-        public ONode chat(List<LoopraChatMessage> messages, ONode tools) {
+        public ONode chat(List<ChatMessage> messages, ONode tools) {
             return ONode.ofJson("{\"content\":\"历史摘要\"}");
         }
 
         @Override
-        public void chatStream(List<LoopraChatMessage> messages, ONode tools, StreamCallback callback) {
+        public void chatStream(List<ChatMessage> messages, ONode tools, StreamCallback callback) {
             if (streamCalls.incrementAndGet() == 1) {
                 callback.onError("{\"type\":\"response.failed\",\"response\":{\"error\":{\"code\":\"context_length_exceeded\"}}}");
                 return;

@@ -1,7 +1,7 @@
 package site.sorghum.loopra.bin.agent.context;
 
 import org.noear.snack4.ONode;
-import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
 
 import java.util.ArrayList;
@@ -12,7 +12,7 @@ import java.util.Set;
 /**
  * 消息修复器（整流器）—— 发送前修复消息列表。
  * <p>
- * 四项修复单次遍历完成，直接操作 {@link LoopraChatMessage} 对象，
+ * 四项修复单次遍历完成，直接操作 {@link ChatMessage} 对象，
  * 避免 ChatMessage ↔ Map 的序列化/反序列化往返。
  * <ol>
  *   <li><b>fixToolCallPairing</b> — 修复不完整 tool_calls/tool 对</li>
@@ -29,11 +29,11 @@ public class MessageHealer {
     /**
      * 整流结果：修复后的消息列表 + 是否发生了修改。
      */
-    public record HealResult(List<LoopraChatMessage> messages, boolean changed) {}
+    public record HealResult(List<ChatMessage> messages, boolean changed) {}
 
     /**
      * 对消息列表执行全部修复，单次遍历（不创建临时列表）。
-     * 直接操作 {@link LoopraChatMessage} 对象，消除 ChatMessage ↔ Map 序列化往返。
+     * 直接操作 {@link ChatMessage} 对象，消除 ChatMessage ↔ Map 序列化往返。
      * 修复：
      * 1. 修复 tool_calls/tool 配对（丢弃孤立的 tool 和未配对的 tool_calls）
      * 2. 为推理模型补全 reasoning_content 字段
@@ -43,8 +43,8 @@ public class MessageHealer {
      * @param messages 原始消息列表
      * @return 整流结果（修复后的消息列表 + 是否发生修改）
      */
-    public static HealResult heal(List<LoopraChatMessage> messages) {
-        List<LoopraChatMessage> out = new ArrayList<>();
+    public static HealResult heal(List<ChatMessage> messages) {
+        List<ChatMessage> out = new ArrayList<>();
         int pendingToolCount = 0;
         int lastAssistantWithTcIdx = -1;
         boolean changed = false;
@@ -52,11 +52,11 @@ public class MessageHealer {
         // 跟踪所有已出现的 tool_call_id（用于重复检测兜底）
         Set<String> seenToolCallIds = new HashSet<>();
 
-        for (LoopraChatMessage msg : messages) {
+        for (ChatMessage msg : messages) {
             String role = msg.getRole();
 
             // ======== 1. ensure tool_call_id + 重复 tool_call_id 检测 ========
-            LoopraChatMessage current = msg;
+            ChatMessage current = msg;
             if ("tool".equals(role)) {
                 String rawTcId = current.getToolCallId();
                 boolean hasNoId = rawTcId == null;
@@ -171,7 +171,7 @@ public class MessageHealer {
 
             // ======== 3. stamp missing reasoning_content ========
             if ( "assistant".equals(role) && current.getReasoningContent() == null) {
-                LoopraChatMessage stamped = current.copy();
+                ChatMessage stamped = current.copy();
                 stamped.setReasoningContent("");
                 out.add(stamped);
                 // reasoning_content 补空不算"修改"（这是正常的模型适配）
@@ -182,10 +182,10 @@ public class MessageHealer {
 
         // ======== 末尾未配对的 tool_calls → 剥离 ========
         if (pendingToolCount > 0 && lastAssistantWithTcIdx >= 0) {
-            LoopraChatMessage m = out.get(lastAssistantWithTcIdx);
+            ChatMessage m = out.get(lastAssistantWithTcIdx);
             boolean hasContent = m.hasContent();
             boolean hasReasoning = m.getReasoningContent() != null;
-            LoopraChatMessage stripped = new LoopraChatMessage("assistant");
+            ChatMessage stripped = new ChatMessage("assistant");
             if (hasContent) stripped.setContent(m.getContent());
             if (hasReasoning) stripped.setReasoningContent(m.getReasoningContent());
             if (!hasContent && !hasReasoning) {

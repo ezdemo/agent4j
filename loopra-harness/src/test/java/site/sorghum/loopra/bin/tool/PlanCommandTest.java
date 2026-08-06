@@ -8,7 +8,7 @@ import org.junit.jupiter.api.io.TempDir;
 import org.noear.snack4.ONode;
 import site.sorghum.loopra.bin.agent.core.AgentLoop;
 import site.sorghum.loopra.bin.agent.core.LoopraAgent;
-import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
 import site.sorghum.loopra.bin.command.ChatCommand;
 import site.sorghum.loopra.bin.command.ChatCommandContext;
@@ -145,12 +145,12 @@ class PlanCommandTest {
 
     private static final class NoOpModelClient implements ModelClient {
         @Override
-        public ONode chat(List<LoopraChatMessage> messages, ONode tools) {
+        public ONode chat(List<ChatMessage> messages, ONode tools) {
             return null;
         }
 
         @Override
-        public void chatStream(List<LoopraChatMessage> messages, ONode tools, StreamCallback callback) {
+        public void chatStream(List<ChatMessage> messages, ONode tools, StreamCallback callback) {
             callback.onContentDelta("done");
             callback.onDone();
         }

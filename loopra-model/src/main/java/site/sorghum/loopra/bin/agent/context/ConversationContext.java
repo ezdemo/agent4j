@@ -3,7 +3,7 @@ package site.sorghum.loopra.bin.agent.context;
 import lombok.Getter;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
-import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.FileChange;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
 import site.sorghum.loopra.bin.agent.model.UserMessage;
@@ -35,7 +35,7 @@ public class ConversationContext {
             FinishTool.TIPS
     );
 
-    private final List<LoopraChatMessage> history = new ArrayList<>();
+    private final List<ChatMessage> history = new ArrayList<>();
     private final PromptPrefix prefix;
     /**
      * 持久化存储（可选）
@@ -58,12 +58,12 @@ public class ConversationContext {
      * @param msg 用户消息对象（纯文本或文本+图片）
      */
     public void addUser(UserMessage msg) {
-        LoopraChatMessage chatMsg;
+        ChatMessage chatMsg;
         if (msg != null && msg.hasImages()) {
-            chatMsg = LoopraChatMessage.ofUser(msg.getText(), msg.getImages());
+            chatMsg = ChatMessage.ofUser(msg.getText(), msg.getImages());
         } else {
             String text = msg != null ? msg.getText() : null;
-            chatMsg = LoopraChatMessage.ofUser(text);
+            chatMsg = ChatMessage.ofUser(text);
         }
         // 传递快照检查点 ID 到 ChatMessage，以便 JSONL 持久化
         if (msg != null && msg.getSnapshotId() != null) {
@@ -93,7 +93,7 @@ public class ConversationContext {
      * @param content 系统消息内容
      */
     public void addSystemMessage(String content) {
-        LoopraChatMessage msg = LoopraChatMessage.ofSystem(content);
+        ChatMessage msg = ChatMessage.ofSystem(content);
         history.add(msg);
         persist(msg);
     }
@@ -131,7 +131,7 @@ public class ConversationContext {
             // 让 toMap() 不输出 content 字段，避免 "content":"" 导致 API 400
             content = null;
         }
-        LoopraChatMessage msg = LoopraChatMessage.assistant(content, toolCalls, reasoningContent);
+        ChatMessage msg = ChatMessage.assistant(content, toolCalls, reasoningContent);
         if (fileChanges != null && !fileChanges.isEmpty()) {
             msg.setFileChanges(new ArrayList<>(fileChanges));
         }
@@ -142,7 +142,7 @@ public class ConversationContext {
     public void setLatestAssistantFileChanges(List<FileChange> fileChanges) {
         if (fileChanges == null || fileChanges.isEmpty()) return;
         for (int i = history.size() - 1; i >= 0; i--) {
-            LoopraChatMessage message = history.get(i);
+            ChatMessage message = history.get(i);
             if (message.isAssistant()) {
                 message.setFileChanges(new ArrayList<>(fileChanges));
                 rewriteStore();
@@ -152,10 +152,10 @@ public class ConversationContext {
     }
 
     public void addToolResult(String toolCallId, String result) {
-        addToolResult(LoopraChatMessage.tool(toolCallId, result));
+        addToolResult(ChatMessage.tool(toolCallId, result));
     }
 
-    public void addToolResult(LoopraChatMessage msg) {
+    public void addToolResult(ChatMessage msg) {
         history.add(msg);
         persist(msg);
     }
@@ -164,7 +164,7 @@ public class ConversationContext {
      * 将消息追加写入 JSONL 文件。
      * 如果 sessionStore 未设置或写入失败，静默忽略。
      */
-    private void persist(LoopraChatMessage msg) {
+    private void persist(ChatMessage msg) {
         if (msg.hasContent() && NO_TO_JSONL.contains(msg.getContent())){
             return;
         }
@@ -187,9 +187,9 @@ public class ConversationContext {
      * 构建发给 API 的消息列表 = prefix（system msg） + history。
      * prefix 始终保持不变 → DeepSeek 前缀缓存命中。
      */
-    public List<LoopraChatMessage> buildMessages() {
-        List<LoopraChatMessage> prefixMsgs = prefix.toMessages();
-        List<LoopraChatMessage> msgs = new ArrayList<>(prefixMsgs.size() + history.size());
+    public List<ChatMessage> buildMessages() {
+        List<ChatMessage> prefixMsgs = prefix.toMessages();
+        List<ChatMessage> msgs = new ArrayList<>(prefixMsgs.size() + history.size());
         msgs.addAll(prefixMsgs);
         msgs.addAll(history);
         return msgs;
@@ -199,7 +199,7 @@ public class ConversationContext {
      * 加载历史会话时注入消息到上下文，不触发持久化。
      * 用于 /load 命令从 JSONL 文件恢复会话。
      */
-    public void injectHistory(LoopraChatMessage msg) {
+    public void injectHistory(ChatMessage msg) {
         history.add(msg);
     }
 
@@ -289,7 +289,7 @@ public class ConversationContext {
      * 折叠历史：用折叠后的消息列表替换当前历史。
      * 由 AgentLoop 的预检调用，将旧消息替换为摘要。
      */
-    public void compact(List<LoopraChatMessage> foldedMessages) {
+    public void compact(List<ChatMessage> foldedMessages) {
         history.clear();
         history.addAll(foldedMessages);
         // 持久化回写
@@ -311,7 +311,7 @@ public class ConversationContext {
     /**
      * 获取完整历史消息列表的副本（用于调试）。
      */
-    public List<LoopraChatMessage> getHistory() {
+    public List<ChatMessage> getHistory() {
         return new ArrayList<>(history);
     }
 
@@ -322,7 +322,7 @@ public class ConversationContext {
      */
     public String getLastAssistantContent() {
         for (int i = history.size() - 1; i >= 0; i--) {
-            LoopraChatMessage msg = history.get(i);
+            ChatMessage msg = history.get(i);
             if (msg.isAssistant()) {
                 String content = msg.getContent();
                 if (content != null && !content.isEmpty()) {

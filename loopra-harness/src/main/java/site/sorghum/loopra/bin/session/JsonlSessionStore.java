@@ -3,7 +3,7 @@ package site.sorghum.loopra.bin.session;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
-import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.FileChange;
 import site.sorghum.loopra.bin.agent.model.ToolCallEntry;
 import site.sorghum.loopra.bin.util.ONodeUtil;
@@ -75,7 +75,7 @@ public class JsonlSessionStore implements SessionStore {
     /**
      * 异步写入缓冲区（关键路径不阻塞 IO）
      */
-    private final BlockingQueue<LoopraChatMessage> buffer = new LinkedBlockingQueue<>(MAX_BUFFER_SIZE);
+    private final BlockingQueue<ChatMessage> buffer = new LinkedBlockingQueue<>(MAX_BUFFER_SIZE);
     /**
      * 异步消费者线程
      */
@@ -138,19 +138,19 @@ public class JsonlSessionStore implements SessionStore {
         return FILE_LOCKS[index];
     }
 
-    public static String serializeMessage(LoopraChatMessage msg) {
+    public static String serializeMessage(ChatMessage msg) {
         org.noear.snack4.ONode node = org.noear.snack4.ONode.ofJson("{}");
         node.set("role", msg.getRole());
         // 多模态 contentParts 优先序列化为 JSON array（与 OpenAI API 格式一致）
         if (msg.getContentParts() != null && !msg.getContentParts().isEmpty()) {
             org.noear.snack4.ONode contentArr = node.getOrNew("content").asArray();
-            for (LoopraChatMessage.ContentPart part : msg.getContentParts()) {
+            for (ChatMessage.ContentPart part : msg.getContentParts()) {
                 org.noear.snack4.ONode partNode = contentArr.addNew();
                 partNode.set("type", part.getType());
                 if ("text".equals(part.getType())) {
                     partNode.set("text", part.getText() != null ? part.getText() : "");
                 } else if ("image_url".equals(part.getType())) {
-                    LoopraChatMessage.ContentPart.ImageUrl iu = part.getImageUrl();
+                    ChatMessage.ContentPart.ImageUrl iu = part.getImageUrl();
                     if (iu != null) {
                         org.noear.snack4.ONode urlNode = partNode.getOrNew("image_url");
                         urlNode.set("url", iu.getUrl() != null ? iu.getUrl() : "");
@@ -254,7 +254,7 @@ public class JsonlSessionStore implements SessionStore {
      * 当缓冲区为空时阻塞等待，减少忙轮询。
      */
     private void consumerLoop() {
-        List<LoopraChatMessage> batch = new ArrayList<>(BATCH_SIZE);
+        List<ChatMessage> batch = new ArrayList<>(BATCH_SIZE);
         try {
             while (consumerRunning) {
                 lock.lock();
@@ -300,7 +300,7 @@ public class JsonlSessionStore implements SessionStore {
     /**
      * 批量写入消息到文件。
      */
-    private void writeBatch(List<LoopraChatMessage> messages, boolean flushWriter) {
+    private void writeBatch(List<ChatMessage> messages, boolean flushWriter) {
         if (messages.isEmpty()) return;
         lock.lock();
         try {
@@ -311,7 +311,7 @@ public class JsonlSessionStore implements SessionStore {
             ReentrantLock fileIoLock = fileLock(currentFile);
             fileIoLock.lock();
             try {
-                for (LoopraChatMessage msg : messages) {
+                for (ChatMessage msg : messages) {
                     writer.write(serializeMessage(msg));
                     writer.newLine();
                 }
@@ -442,7 +442,7 @@ public class JsonlSessionStore implements SessionStore {
     }
 
     @Override
-    public void append(LoopraChatMessage message) throws IOException {
+    public void append(ChatMessage message) throws IOException {
         lock.lock();
         try {
             if (buffer.offer(message)) {
@@ -473,7 +473,7 @@ public class JsonlSessionStore implements SessionStore {
             while (inFlightMessages > 0) {
                 writesCompleted.await();
             }
-            List<LoopraChatMessage> pending = new ArrayList<>();
+            List<ChatMessage> pending = new ArrayList<>();
             buffer.drainTo(pending);
             writeBatch(pending, true);
             if (writer != null) {
@@ -495,7 +495,7 @@ public class JsonlSessionStore implements SessionStore {
     }
 
     @Override
-    public List<LoopraChatMessage> load() throws IOException {
+    public List<ChatMessage> load() throws IOException {
         lock.lock();
         try {
             if (currentName == null) return new ArrayList<>();
@@ -506,7 +506,7 @@ public class JsonlSessionStore implements SessionStore {
     }
 
     @Override
-    public List<LoopraChatMessage> load(String name) throws IOException {
+    public List<ChatMessage> load(String name) throws IOException {
         lock.lock();
         try {
             Path file = sessionPath(name);
@@ -514,13 +514,13 @@ public class JsonlSessionStore implements SessionStore {
             fileIoLock.lock();
             try {
                 if (!Files.exists(file)) return new ArrayList<>();
-                List<LoopraChatMessage> messages = new ArrayList<>();
+                List<ChatMessage> messages = new ArrayList<>();
                 for (String line : Files.readAllLines(file, StandardCharsets.UTF_8)) {
                     line = line.trim();
                     if (line.isEmpty() || line.startsWith("//")) continue;
                     try {
                         ONode node = ONode.ofJson(line);
-                        messages.add(LoopraChatMessage.fromMap(ONodeUtil.toMap(node)));
+                        messages.add(ChatMessage.fromMap(ONodeUtil.toMap(node)));
                     } catch (Exception e) {
                         log.warn("[jsonl] 解析消息行失败: {}", e.getMessage());
                     }
@@ -538,7 +538,7 @@ public class JsonlSessionStore implements SessionStore {
     }
 
     @Override
-    public void rewrite(List<LoopraChatMessage> messages) throws IOException {
+    public void rewrite(List<ChatMessage> messages) throws IOException {
         flush();
         lock.lock();
         try {
@@ -552,7 +552,7 @@ public class JsonlSessionStore implements SessionStore {
                 Files.createDirectories(file.getParent());
                 Path tmp = file.resolveSibling(file.getFileName() + ".tmp");
                 try (BufferedWriter w = Files.newBufferedWriter(tmp, StandardCharsets.UTF_8)) {
-                    for (LoopraChatMessage m : messages) {
+                    for (ChatMessage m : messages) {
                         w.write(serializeMessage(m));
                         w.newLine();
                     }

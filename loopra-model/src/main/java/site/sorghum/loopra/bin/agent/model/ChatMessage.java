@@ -28,7 +28,7 @@ import java.util.Map;
  */
 @Slf4j
 @Data
-public class LoopraChatMessage {
+public class ChatMessage {
 
     private final String role;
 
@@ -96,8 +96,8 @@ public class LoopraChatMessage {
 
     // ==================== 内容段模型 ====================
 
-    public static LoopraChatMessage ofUser(String content) {
-        LoopraChatMessage msg = new LoopraChatMessage("user");
+    public static ChatMessage ofUser(String content) {
+        ChatMessage msg = new ChatMessage("user");
         msg.content = content;
         msg.timestamp = System.currentTimeMillis();
         return msg;
@@ -105,8 +105,8 @@ public class LoopraChatMessage {
 
     // ==================== 工厂方法 ====================
 
-    public static LoopraChatMessage ofSystem(String content) {
-        LoopraChatMessage msg = new LoopraChatMessage("system");
+    public static ChatMessage ofSystem(String content) {
+        ChatMessage msg = new ChatMessage("system");
         msg.content = content;
         return msg;
     }
@@ -118,8 +118,8 @@ public class LoopraChatMessage {
      * @param images 图片 URL 列表（公开 URL 或 Base64 Data URI）
      * @return 用户消息
      */
-    public static LoopraChatMessage ofUser(String text, List<String> images) {
-        LoopraChatMessage msg = new LoopraChatMessage("user");
+    public static ChatMessage ofUser(String text, List<String> images) {
+        ChatMessage msg = new ChatMessage("user");
         msg.contentParts = new ArrayList<>();
         for (String img : images) {
             msg.contentParts.add(ContentPart.imageUrl(img));
@@ -131,9 +131,9 @@ public class LoopraChatMessage {
         return msg;
     }
 
-    public static LoopraChatMessage fromMap(Map<String, Object> m) {
+    public static ChatMessage fromMap(Map<String, Object> m) {
         String role = String.valueOf(m.getOrDefault("role", "user"));
-        LoopraChatMessage msg = new LoopraChatMessage(role);
+        ChatMessage msg = new ChatMessage(role);
         Object content = m.get("content");
         if (content instanceof List) {
             // 多模态内容段：[{"type":"text",...},{"type":"image_url",...}]
@@ -241,8 +241,8 @@ public class LoopraChatMessage {
         return msg;
     }
 
-    public static LoopraChatMessage assistant(String content, List<ToolCallEntry> toolCalls, String reasoningContent) {
-        LoopraChatMessage msg = new LoopraChatMessage("assistant");
+    public static ChatMessage assistant(String content, List<ToolCallEntry> toolCalls, String reasoningContent) {
+        ChatMessage msg = new ChatMessage("assistant");
         msg.content = content;
         msg.reasoningContent = reasoningContent;
         msg.setToolCallsWithLegacyReasoning(toolCalls);
@@ -270,16 +270,16 @@ public class LoopraChatMessage {
         }
     }
 
-    public static LoopraChatMessage tool(String toolCallId, String content) {
-        LoopraChatMessage msg = new LoopraChatMessage("tool");
+    public static ChatMessage tool(String toolCallId, String content) {
+        ChatMessage msg = new ChatMessage("tool");
         msg.toolCallId = toolCallId;
         msg.content = content != null ? content : "(empty)";
         msg.timestamp = System.currentTimeMillis();
         return msg;
     }
 
-    public static LoopraChatMessage toolWithImage(String toolCallId, String content, String imageUrl, String imageDetail) {
-        LoopraChatMessage msg = tool(toolCallId, content);
+    public static ChatMessage toolWithImage(String toolCallId, String content, String imageUrl, String imageDetail) {
+        ChatMessage msg = tool(toolCallId, content);
         msg.toolImageUrl = imageUrl;
         msg.toolImageDetail = imageDetail;
         return msg;
@@ -373,8 +373,8 @@ public class LoopraChatMessage {
      * toolCalls 列表是独立副本，但 ToolCallEntry 本身不可变。
      * snapshotId 也一并复制，避免回滚场景下快照 ID 丢失。
      */
-    public LoopraChatMessage copy() {
-        LoopraChatMessage copy = new LoopraChatMessage(this.role);
+    public ChatMessage copy() {
+        ChatMessage copy = new ChatMessage(this.role);
         copy.content = this.content;
         if (this.contentParts != null) {
             copy.contentParts = new ArrayList<>(this.contentParts);

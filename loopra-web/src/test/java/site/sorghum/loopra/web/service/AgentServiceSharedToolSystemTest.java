@@ -6,7 +6,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import site.sorghum.loopra.bin.agent.core.AgentLoop;
 import site.sorghum.loopra.bin.agent.core.LoopraAgent;
-import site.sorghum.loopra.bin.agent.model.LoopraChatMessage;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.config.ConfigService;
 import site.sorghum.loopra.bin.tool.ToolSystemInitializer;
 
@@ -76,14 +76,14 @@ class AgentServiceSharedToolSystemTest {
     void planExecutionStartRequiresSubstantiveModelOutput() throws Exception {
         AgentService service = new AgentService();
         LoopraAgent agent = getOrCreateAgent(service, workspaceA, "plan-start-detection");
-        LoopraChatMessage hidden = LoopraChatMessage.ofUser("internal execution instruction");
+        ChatMessage hidden = ChatMessage.ofUser("internal execution instruction");
         hidden.setWebHidden(true);
         agent.getCtx().injectHistory(hidden);
-        agent.getCtx().injectHistory(LoopraChatMessage.assistant("", null, null));
+        agent.getCtx().injectHistory(ChatMessage.assistant("", null, null));
 
         assertFalse(hasPlanExecutionStarted(service, agent));
 
-        agent.getCtx().injectHistory(LoopraChatMessage.assistant("execution started", null, null));
+        agent.getCtx().injectHistory(ChatMessage.assistant("execution started", null, null));
         assertTrue(hasPlanExecutionStarted(service, agent));
     }
 
@@ -92,7 +92,7 @@ class AgentServiceSharedToolSystemTest {
         AgentService service = new AgentService();
         String sessionName = "rollback-plan";
         LoopraAgent agent = getOrCreateAgent(service, workspaceA, sessionName);
-        LoopraChatMessage user = LoopraChatMessage.ofUser("plan task");
+        ChatMessage user = ChatMessage.ofUser("plan task");
         user.setRollbackId("rollback-1");
         agent.getCtx().injectHistory(user);
         loopOf(agent).submitPlan("1. inspect\n2. implement");
