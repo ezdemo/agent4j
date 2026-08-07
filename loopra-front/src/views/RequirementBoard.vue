@@ -45,7 +45,7 @@
                 <span v-else class="req-priority req-priority-low" title="低优先级">低</span>
               </div>
               <div class="req-card-meta">
-                <span v-if="item.project?.name" class="req-project-badge" :title="`项目：${item.project.name}`">{{ item.project.name }}</span>
+                <span v-if="item.projectName" class="req-project-badge" :title="`项目：${item.projectName}`">{{ item.projectName }}</span>
                 <span class="req-ai-badge" title="由 AI 根据任务描述自动执行">
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 4v4M9 13h.01M15 13h.01M9 17h6"/></svg>
                   AI 执行
@@ -73,16 +73,20 @@
           <span class="req-detail-id">#{{ selected.id.slice(-4) }}</span>
           <span class="req-detail-title-text">{{ selected.title }}</span>
         </div>
-        <button type="button" class="req-detail-close" title="关闭" @click="closeDetail">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18"/></svg>
-        </button>
+          <button v-if="deleteArmed" type="button" class="req-detail-close req-delete-confirm" title="再次点击确认删除" @click="requestDelete">确认删除？</button>
+          <button v-else type="button" class="req-detail-close" title="删除需求" @click="requestDelete">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+          </button>
+          <button type="button" class="req-detail-close" title="关闭" @click="closeDetail">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          </button>
       </header>
 
       <div class="req-detail-main">
         <!-- 信息区：描述 + AI 执行 -->
         <section class="req-detail-info">
           <div class="req-info-card req-info-desc">
-            <h3>描述 <span v-if="selected.project?.name" class="req-info-project">项目：{{ selected.project.name }}</span></h3>
+            <h3>描述 <span v-if="selected.projectName" class="req-info-project">项目：{{ selected.projectName }}</span></h3>
             <p class="req-detail-desc">{{ selected.description || '暂无描述' }}</p>
           </div>
           <div class="req-info-card">
@@ -101,21 +105,24 @@
                   type="button"
                   class="req-btn req-btn-sm req-btn-primary"
                   :disabled="aiRunning"
-                  @click="runAI('doing')"
+                  @click="runRequirement"
                 >
                   <svg v-if="aiRunning" class="req-spin" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>
                   <template v-else>让 AI 执行</template>
                 </button>
-                <template v-else-if="selected.status === 'doing'">
-                  <button type="button" class="req-btn req-btn-sm req-btn-success" :disabled="aiRunning" @click="runAI('done')">AI 已完成</button>
-                  <button type="button" class="req-btn req-btn-sm req-btn-danger" :disabled="aiRunning" @click="runAI('failed')">AI 失败</button>
-                </template>
+                <button
+                  v-else-if="selected.status === 'doing'"
+                  type="button"
+                  class="req-btn req-btn-sm req-btn-danger"
+                  :disabled="aiRunning"
+                  @click="abortRequirement"
+                >取消执行</button>
                 <button
                   v-else
                   type="button"
                   class="req-btn req-btn-sm"
                   :disabled="aiRunning"
-                  @click="runAI('todo')"
+                  @click="runRequirement"
                 >重新执行</button>
               </div>
             </div>
@@ -129,20 +136,20 @@
             class="req-detail-tab"
             :class="{ active: detailTab === 'comments' }"
             @click="switchTab('comments')"
-          >评论 ({{ selected.comments.length }})</button>
+          >评论 ({{ commentCount }})</button>
           <button
             type="button"
             class="req-detail-tab"
             :class="{ active: detailTab === 'logs' }"
             @click="switchTab('logs')"
-          >执行日志 ({{ selected.logs.length }})</button>
+          >执行日志 ({{ logCount }})</button>
         </div>
 
-        <!-- 聊天区：复用聊天框组件（ChatMessage / BlockRenderer） -->
-        <div class="req-chat-area">
+        <!-- 执行日志：复用聊天框组件（ChatMessage / BlockRenderer） -->
+        <div v-if="detailTab === 'logs'" class="req-chat-area">
           <div ref="chatMessagesRef" class="req-chat-messages">
             <ChatMessage
-              v-for="(m, i) in currentMessages"
+              v-for="(m, i) in logMessages"
               :key="m.id"
               :idx="i"
               :msg="m"
@@ -152,18 +159,37 @@
               :branch-disabled="true"
               @copy-message="copyMessage"
             />
-            <div v-if="!currentMessages.length" class="req-chat-empty">
-              {{ detailTab === 'comments' ? '暂无评论，来抢沙发～' : '暂无执行日志' }}
-            </div>
+            <div v-if="!logMessages.length" class="req-chat-empty">暂无执行日志</div>
           </div>
-          <form v-if="detailTab === 'comments'" class="req-chat-input" @submit.prevent="addComment">
-            <input
+        </div>
+
+        <!-- 评论：看板系统风格（头像 + 作者 + 相对时间 + 评论条目） -->
+        <div v-else class="req-comments">
+          <div ref="commentListRef" class="req-comment-list">
+            <div v-for="item in commentItems" :key="item.id" class="req-comment" :class="`req-comment-${item.role}`">
+              <div class="req-comment-head">
+                <span class="req-comment-avatar" :class="{ ai: item.role === 'assistant' }">
+                  <svg v-if="item.role === 'assistant'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 4v4M9 13h.01M15 13h.01M9 17h6"/></svg>
+                  <span v-else>{{ commentAuthor(item).charAt(0) }}</span>
+                </span>
+                <span class="req-comment-author">{{ commentAuthor(item) }}</span>
+                <span class="req-comment-time">{{ fmtRelative(item.timestamp) }}</span>
+              </div>
+              <p class="req-comment-text">{{ item.content }}</p>
+            </div>
+            <div v-if="!commentItems.length" class="req-comments-empty">暂无评论，来抢沙发～</div>
+          </div>
+          <form class="req-comment-form" @submit.prevent="addComment">
+            <textarea
               v-model="commentDraft"
-              type="text"
-              placeholder="写下你的评论…"
-              maxlength="200"
-            />
-            <button type="submit" class="req-btn req-btn-sm req-btn-primary" :disabled="!commentDraft.trim()">发送</button>
+              rows="2"
+              placeholder="写下你的评论…（Enter 发送，Shift+Enter 换行）"
+              maxlength="500"
+              @keydown.enter.exact.prevent="addComment"
+            ></textarea>
+            <div class="req-comment-form-foot">
+              <button type="submit" class="req-btn req-btn-sm req-btn-primary" :disabled="!commentDraft.trim()">发送评论</button>
+            </div>
           </form>
         </div>
       </div>
@@ -228,11 +254,9 @@
 import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
 import ChatMessage from '../components/ChatMessage.vue'
 import ReqSelect from '../components/ReqSelect.vue'
-import {configAPI} from '../services/api'
+import {configAPI, requirementAPI} from '../services/api'
 
 // ============ 常量 ============
-const STORAGE_KEY = 'loopra-requirement-board'
-
 const COLUMNS = [
   { key: 'todo', label: '待执行', color: '#9ca3af' },
   { key: 'doing', label: '执行中', color: '#3b82f6' },
@@ -251,127 +275,7 @@ const MOCK_PROJECTS = [
 const STATUS_LABELS = { todo: '待执行', doing: '执行中', done: '已完成', failed: '已失败' }
 const PRIORITY_LABELS = { high: '高', medium: '中', low: '低' }
 
-// 状态流转时的 AI 视角文案（由 AI 根据任务自动流转）
-const AI_ACTION_LOGS = {
-  todo: { level: 'info', text: '重新提交给 AI，进入待执行队列' },
-  doing: { level: 'info', text: 'AI 已接收需求，开始分析任务描述并制定执行计划' },
-  done: { level: 'info', text: 'AI 已完成实现并通过验证，需求关闭' },
-  failed: { level: 'error', text: 'AI 执行失败：未能满足验收条件，等待人工确认后重新执行' }
-}
-
-let idSeed = 1
-const nextId = () => `req_${Date.now().toString(36)}_${(idSeed++).toString(36)}`
-
-// ============ 种子数据（AI 视角执行日志） ============
-function seedRequirements() {
-  const now = Date.now()
-  const H = 3600 * 1000
-  const D = 24 * H
-  const mk = (partial) => ({
-    id: nextId(),
-    priority: 'medium',
-    comments: [],
-    logs: [],
-    createdAt: now,
-    updatedAt: now,
-    ...partial
-  })
-  return [
-    mk({
-      title: '优化会话列表加载性能',
-      description: '首页会话列表接口改为分页加载，首屏 200ms 内渲染完成；列表滚动到底自动加载下一页，避免一次性拉取全量会话导致卡顿。',
-      priority: 'high',
-      project: { hash: 'p_loopra-front', name: 'loopra-front' },
-      status: 'todo',
-      createdAt: now - 2 * D,
-      updatedAt: now - 2 * D,
-      logs: [
-        { id: nextId(), time: now - 2 * D, level: 'info', text: '需求已创建，等待 AI 调度' }
-      ]
-    }),
-    mk({
-      title: '支持 Markdown 表格导出',
-      description: '对话内容支持一键导出为 Markdown 文件，保留标题层级、代码块与表格结构。',
-      project: { hash: 'p_agent4j', name: 'agent4j' },
-      status: 'todo',
-      createdAt: now - 1 * D,
-      updatedAt: now - 20 * H,
-      logs: [
-        { id: nextId(), time: now - 1 * D, level: 'info', text: '需求已创建，等待 AI 调度' },
-        { id: nextId(), time: now - 20 * H, level: 'info', text: 'AI 已完成优先级评估，进入待执行队列' }
-      ]
-    }),
-    mk({
-      title: '新增深色模式对比度优化',
-      description: '调整深色主题下正文与背景的对比度，确保 WCAG AA 级别可读性；同步更新代码高亮配色。',
-      project: { hash: 'p_loopra-front', name: 'loopra-front' },
-      status: 'todo',
-      createdAt: now - 10 * H,
-      updatedAt: now - 10 * H,
-      logs: [
-        { id: nextId(), time: now - 10 * H, level: 'info', text: '需求已创建，等待 AI 调度' }
-      ]
-    }),
-    mk({
-      title: '重构工具调用结果渲染',
-      description: '将工具调用结果从纯文本渲染升级为结构化展示（表格 / Diff / 文件树），支持折叠与展开。',
-      priority: 'high',
-      project: { hash: 'p_loopra-front', name: 'loopra-front' },
-      status: 'doing',
-      createdAt: now - 3 * D,
-      updatedAt: now - 1 * H,
-      logs: [
-        { id: nextId(), time: now - 3 * D, level: 'info', text: '需求已创建，等待 AI 调度' },
-        { id: nextId(), time: now - 3 * D + 1 * H, level: 'info', text: 'AI 已接收需求，开始分析现有 BlockRenderer 渲染链路' },
-        { id: nextId(), time: now - 2 * D, level: 'debug', text: '完成工具结果事件流梳理（tool_call → tool_result）' },
-        { id: nextId(), time: now - 1 * D, level: 'info', text: 'AI 已实现 Diff 渲染器 v1，通过本地冒烟测试' },
-        { id: nextId(), time: now - 1 * H, level: 'warn', text: '表格渲染在窄窗口下溢出，AI 正在调整布局策略' }
-      ]
-    }),
-    mk({
-      title: '会话分支合并功能',
-      description: '支持将分支会话合并回主会话，合并时保留两边的消息顺序并自动标记冲突片段。',
-      project: { hash: 'p_loopra-front', name: 'loopra-front' },
-      status: 'doing',
-      createdAt: now - 5 * D,
-      updatedAt: now - 6 * H,
-      logs: [
-        { id: nextId(), time: now - 5 * D, level: 'info', text: '需求已创建，等待 AI 调度' },
-        { id: nextId(), time: now - 4 * D, level: 'info', text: 'AI 已接收需求，完成分支数据模型设计评审' },
-        { id: nextId(), time: now - 6 * H, level: 'info', text: 'AI 正在实现合并算法：三条分支的冲突矩阵已生成' }
-      ]
-    }),
-    mk({
-      title: '修复窗口拖动失效问题',
-      description: '无边框窗口在部分系统下无法通过标题栏拖动，需要补充 -webkit-app-region 兼容处理。',
-      priority: 'high',
-      project: { hash: 'p_loopra-front', name: 'loopra-front' },
-      status: 'done',
-      createdAt: now - 6 * D,
-      updatedAt: now - 4 * D,
-      logs: [
-        { id: nextId(), time: now - 6 * D, level: 'info', text: '需求已创建，等待 AI 调度' },
-        { id: nextId(), time: now - 5 * D, level: 'info', text: 'AI 已接收需求，定位根因：标题栏缺少 drag 区域标记' },
-        { id: nextId(), time: now - 5 * D + 3 * H, level: 'debug', text: '修复方案：TitleBar / DesktopShell 补充 drag 区域样式' },
-        { id: nextId(), time: now - 4 * D, level: 'info', text: 'AI 已完成修复并全平台冒烟通过，需求关闭' }
-      ]
-    }),
-    mk({
-      title: '接入第三方知识库检索',
-      description: '将常用文档接入 RAG 检索，支持在对话中引用知识库片段作为上下文。',
-      project: { hash: 'p_loopra-harness', name: 'loopra-harness' },
-      status: 'failed',
-      createdAt: now - 4 * D,
-      updatedAt: now - 2 * D,
-      logs: [
-        { id: nextId(), time: now - 4 * D, level: 'info', text: '需求已创建，等待 AI 调度' },
-        { id: nextId(), time: now - 3 * D, level: 'info', text: 'AI 已接收需求，完成第三方服务鉴权配置，开始索引构建' },
-        { id: nextId(), time: now - 2 * D, level: 'error', text: 'AI 执行失败：服务端限流 429，重试 3 次后放弃' },
-        { id: nextId(), time: now - 2 * D, level: 'error', text: '需求标记为失败，等待人工确认后重新执行' }
-      ]
-    })
-  ]
-}
+// 需求数据由后端 RequirementStore 权威管理（见 docs/requirement-board-ai-design.md）
 
 // ============ 状态 ============
 const requirements = ref([])
@@ -382,10 +286,13 @@ const createOpen = ref(false)
 const projects = ref([])
 const draft = reactive({ title: '', description: '', priority: 'medium', projectHash: '' })
 const theme = ref('gray')
-// 模拟 AI 执行中的 loading 态（后续接后端时替换为真实的执行中状态）
+const loading = ref(false)
+// 需求专属会话的消息流（评论 + 执行日志，来自后端）
+const messages = ref([])
+// AI 操作请求中的 loading 态（执行状态以后端为准，轮询刷新）
 const aiRunning = ref(false)
-let aiTimer = null
 const chatMessagesRef = ref(null)
+const commentListRef = ref(null)
 // ChatMessage 必需 prop：快照回滚 loading 表（需求池不使用回滚，传空 Map）
 const snapshotRollbackLoading = new Map()
 
@@ -404,25 +311,40 @@ const priorityOptions = [
   { value: 'low', label: '低', dot: '#6b7280' }
 ]
 
-// 聊天消息流：执行日志 → AI 消息；评论 → 用户消息（复用 ChatMessage 渲染）
-const currentMessages = computed(() => {
+// 聊天消息流：从后端会话消息派生（复用 ChatMessage 渲染）
+// 日志 tab → assistant 消息（执行过程）；评论 tab → user 消息 + 紧跟其后的 assistant 消息（AI 回复）
+// 消息流数据源：
+// 日志 tab → logMessages（assistant 执行过程，复用 ChatMessage 聊天组件）
+// 评论 tab → commentItems（看板风格评论条目：user 消息 + 紧跟其后的 AI 回复）
+const logMessages = computed(() => {
   if (!selected.value) return []
-  if (detailTab.value === 'logs') {
-    return selected.value.logs.map((log) => ({
-      id: log.id,
+  return messages.value
+    .filter((m) => m.role === 'assistant' && m.content)
+    .map((m) => ({
+      id: m.id || `assistant_${m.timestamp}`,
       role: 'assistant',
-      time: fmtTime(log.time),
-      blocks: [{ type: 'content', content: log.text }]
+      time: fmtTime(m.timestamp),
+      blocks: [{ type: 'content', content: m.content }]
     }))
-  }
-  return selected.value.comments.map((comment) => ({
-    id: comment.id,
-    role: 'user',
-    time: fmtTime(comment.time),
-    content: comment.text,
-    blocks: []
-  }))
 })
+const commentItems = computed(() => {
+  if (!selected.value) return []
+  const items = []
+  for (let i = 0; i < messages.value.length; i++) {
+    const message = messages.value[i]
+    if (message.role !== 'user' || !message.content) continue
+    items.push({ id: message.id || `user_${message.timestamp}`, role: 'user', content: message.content, timestamp: message.timestamp })
+    const next = messages.value[i + 1]
+    if (next && next.role === 'assistant' && next.content) {
+      items.push({ id: next.id || `assistant_${next.timestamp}`, role: 'assistant', content: next.content, timestamp: next.timestamp })
+      i++
+    }
+  }
+  return items
+})
+const commentAuthor = (item) => (item.role === 'assistant' ? 'AI 执行 Agent' : '我')
+const commentCount = computed(() => messages.value.filter((m) => m.role === 'user' && m.content).length)
+const logCount = computed(() => messages.value.filter((m) => m.role === 'assistant' && m.content).length)
 
 // ============ 工具函数 ============
 const statusLabel = (status) => STATUS_LABELS[status] || status
@@ -440,29 +362,44 @@ function fmtTime(timestamp) {
   return `${date.getMonth() + 1}/${date.getDate()} ${time}`
 }
 
-// ============ 持久化 ============
-function persist() {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(requirements.value))
+// 看板评论风格：相对时间（刚刚 / N 分钟前 / N 小时前 / N 天前 / 日期）
+function fmtRelative(timestamp) {
+  if (!timestamp) return ''
+  const diff = Date.now() - timestamp
+  if (diff < 60 * 1000) return '刚刚'
+  if (diff < 60 * 60 * 1000) return `${Math.floor(diff / 60000)} 分钟前`
+  if (diff < 24 * 60 * 60 * 1000) return `${Math.floor(diff / 3600000)} 小时前`
+  if (diff < 7 * 24 * 60 * 60 * 1000) return `${Math.floor(diff / 86400000)} 天前`
+  const date = new Date(timestamp)
+  return `${date.getMonth() + 1}月${date.getDate()}日`
 }
-function load() {
+
+// ============ 数据加载（后端权威） ============
+async function loadFromAPI() {
+  loading.value = true
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (raw) {
-      const parsed = JSON.parse(raw)
-      // 旧版数据含 agent 字段（执行 Agent 已废弃），直接重置为新版种子数据
-      if (Array.isArray(parsed) && parsed.some((item) => item && item.agent)) {
-        requirements.value = seedRequirements()
-        persist()
-        return
-      }
-      requirements.value = parsed
-    } else {
-      requirements.value = seedRequirements()
-      persist()
+    const res = await requirementAPI.list()
+    if (res?.success && Array.isArray(res.data)) {
+      requirements.value = res.data
     }
   } catch (error) {
-    console.warn('[requirement-board] 读取本地数据失败，使用演示数据:', error)
-    requirements.value = seedRequirements()
+    console.warn('[requirement-board] 加载需求失败:', error)
+  } finally {
+    loading.value = false
+  }
+}
+
+async function loadMessages() {
+  if (!selected.value) return
+  try {
+    const res = await requirementAPI.getMessages(selected.value.id)
+    if (res?.success && Array.isArray(res.data)) {
+      messages.value = res.data
+      scrollChatToBottom()
+    }
+  } catch (error) {
+    console.warn('[requirement-board] 加载需求消息失败:', error)
+    messages.value = []
   }
 }
 
@@ -470,11 +407,14 @@ function load() {
 function openDetail(item) {
   selected.value = item
   detailTab.value = 'comments'
+  messages.value = []
+  loadMessages()
 }
 function closeDetail() {
   selected.value = null
   detailTab.value = 'comments'
   commentDraft.value = ''
+  messages.value = []
 }
 
 function switchTab(tab) {
@@ -482,53 +422,86 @@ function switchTab(tab) {
   scrollChatToBottom()
 }
 
-// 切换 tab / 新增消息后滚动到聊天区底部
+// 切换 tab / 新增消息后滚动到当前展示区底部（日志聊天流 / 评论列表）
 function scrollChatToBottom() {
   nextTick(() => {
-    const el = chatMessagesRef.value
+    const el = detailTab.value === 'logs' ? chatMessagesRef.value : commentListRef.value
     if (el) el.scrollTop = el.scrollHeight
   })
 }
 
-// 模拟 AI 流转：短暂 loading 后写 AI 视角日志并推进状态
-// （后续接后端时，由后端 AI 执行器真实驱动，前端仅展示）
-function runAI(nextStatus) {
-  if (aiRunning.value) return
+// 让 AI 执行：调后端 /run（RequirementExecutor 驱动真实流转），状态由后端权威维护
+async function runRequirement() {
   const item = selected.value
-  if (!item) return
+  if (!item || aiRunning.value) return
   aiRunning.value = true
-  aiTimer = setTimeout(() => {
-    const from = item.status
-    item.status = nextStatus
-    item.updatedAt = Date.now()
-    const action = AI_ACTION_LOGS[nextStatus]
-    item.logs.push({
-      id: nextId(),
-      time: item.updatedAt,
-      level: action.level,
-      text: `${action.text}（${STATUS_LABELS[from]} → ${STATUS_LABELS[nextStatus]}）`
-    })
+  try {
+    const res = await requirementAPI.run(item.id)
+    if (res?.success) {
+      item.status = 'doing' // 立即反馈，轮询兜底
+      item.updatedAt = Date.now()
+    }
+  } catch (error) {
+    console.warn('[requirement-board] 触发执行失败:', error)
+  } finally {
     aiRunning.value = false
-    aiTimer = null
-    persist()
-    // 停留在日志 tab 时展示新增日志
-    if (detailTab.value === 'logs') scrollChatToBottom()
-  }, 600)
+  }
 }
 
-function addComment() {
+// 人工取消执行：中断会话并回退 todo
+async function abortRequirement() {
+  const item = selected.value
+  if (!item || aiRunning.value) return
+  aiRunning.value = true
+  try {
+    const res = await requirementAPI.abort(item.id)
+    if (res?.success) {
+      item.status = 'todo'
+      item.updatedAt = Date.now()
+    }
+  } catch (error) {
+    console.warn('[requirement-board] 取消执行失败:', error)
+  } finally {
+    aiRunning.value = false
+  }
+}
+
+// 删除需求（二次点击确认，3 秒内未确认自动解除）
+const deleteArmed = ref(false)
+let deleteArmTimer = null
+async function requestDelete() {
+  const item = selected.value
+  if (!item) return
+  if (!deleteArmed.value) {
+    deleteArmed.value = true
+    deleteArmTimer = setTimeout(() => { deleteArmed.value = false }, 3000)
+    return
+  }
+  clearTimeout(deleteArmTimer)
+  deleteArmed.value = false
+  try {
+    const res = await requirementAPI.delete(item.id)
+    if (res?.success) {
+      closeDetail()
+      await loadFromAPI()
+    }
+  } catch (error) {
+    console.warn('[requirement-board] 删除需求失败:', error)
+  }
+}
+
+async function addComment() {
   const text = commentDraft.value.trim()
   if (!text || !selected.value) return
-  selected.value.comments.push({
-    id: nextId(),
-    author: '我',
-    time: Date.now(),
-    text
-  })
-  selected.value.updatedAt = Date.now()
-  commentDraft.value = ''
-  persist()
-  scrollChatToBottom()
+  try {
+    const res = await requirementAPI.addComment(selected.value.id, text)
+    if (res?.success) {
+      commentDraft.value = ''
+      await loadMessages()
+    }
+  } catch (error) {
+    console.warn('[requirement-board] 提交评论失败:', error)
+  }
 }
 
 function copyMessage(msg) {
@@ -547,27 +520,27 @@ function openCreateModal() {
   createOpen.value = true
 }
 
-function createRequirement() {
+async function createRequirement() {
   const title = draft.title.trim()
   if (!title) return
   // 新建需求必须选择项目
   const project = projects.value.find((item) => item.hash === draft.projectHash)
   if (!project) return
-  const now = Date.now()
-  requirements.value.unshift({
-    id: nextId(),
-    title,
-    description: draft.description.trim(),
-    priority: draft.priority,
-    project: { hash: project.hash, name: project.name },
-    status: 'todo',
-    createdAt: now,
-    updatedAt: now,
-    comments: [],
-    logs: [{ id: nextId(), time: now, level: 'info', text: '需求已创建，等待 AI 调度' }]
-  })
-  createOpen.value = false
-  persist()
+  try {
+    const res = await requirementAPI.create({
+      title,
+      description: draft.description.trim(),
+      priority: draft.priority,
+      projectHash: project.hash,
+      projectName: project.name
+    })
+    if (res?.success && res.data) {
+      createOpen.value = false
+      await loadFromAPI()
+    }
+  } catch (error) {
+    console.warn('[requirement-board] 创建需求失败:', error)
+  }
 }
 
 // 加载项目列表：后端可用时用真实项目，否则回退演示项目（纯前端模式）
@@ -585,18 +558,44 @@ async function loadProjects() {
   projects.value = MOCK_PROJECTS
 }
 
-watch(currentMessages, scrollChatToBottom)
+// ============ 轮询刷新 ============
+const POLL_INTERVAL = 5000
+let pollTimer = null
+let aiTimer = null
+
+// 周期刷新：看板列表 + 执行中需求的消息流（日志增量）
+async function poll() {
+  await loadFromAPI()
+  if (selected.value?.status === 'doing') {
+    await loadMessages()
+  }
+}
+function startPolling() {
+  stopPolling()
+  pollTimer = setInterval(poll, POLL_INTERVAL)
+}
+function stopPolling() {
+  if (pollTimer) {
+    clearInterval(pollTimer)
+    pollTimer = null
+  }
+}
+
+watch([logMessages, commentItems], scrollChatToBottom)
 
 onMounted(() => {
   // 独立窗口主题：与主应用保持一致（localStorage 同步）
   theme.value = localStorage.getItem('loopra-theme') || 'gray'
   document.documentElement.setAttribute('data-theme', theme.value)
-  load()
+  loadFromAPI()
   loadProjects()
+  startPolling()
 })
 
 onBeforeUnmount(() => {
+  stopPolling()
   if (aiTimer) clearTimeout(aiTimer)
+  if (deleteArmTimer) clearTimeout(deleteArmTimer)
 })
 </script>
 
@@ -674,6 +673,8 @@ onBeforeUnmount(() => {
 .req-detail-close { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--fg-3, #727987); cursor: pointer; flex: 0 0 auto; }
 .req-detail-close:hover { background: var(--bg-3, #f3f4f6); color: var(--fg, #202124); }
 .req-detail-close svg { width: 15px; height: 15px; }
+.req-delete-confirm { padding: 0 10px; color: #dc2626; font-size: 12px; }
+.req-delete-confirm:hover { color: #b42318; background: rgba(220, 38, 38, 0.1); }
 
 .req-detail-main { min-height: 0; flex: 1; display: flex; flex-direction: column; padding: 14px clamp(16px, 4vw, 48px) 0; }
 
@@ -699,16 +700,32 @@ onBeforeUnmount(() => {
 .req-detail-tab:hover { color: var(--fg, #202124); }
 .req-detail-tab.active { color: var(--fg, #202124); font-weight: 600; border-bottom-color: var(--accent, #52525b); }
 
-/* 聊天区（复用聊天框组件渲染） */
+/* 执行日志聊天区（复用聊天框组件渲染） */
 .req-chat-area { min-height: 0; flex: 1; display: flex; flex-direction: column; }
 .req-chat-messages { min-height: 0; flex: 1; overflow-y: auto; padding: 12px 4px 4px; }
 .req-chat-messages::-webkit-scrollbar { width: 6px; }
 .req-chat-messages::-webkit-scrollbar-thumb { background: rgba(80, 88, 102, 0.35); border-radius: 6px; }
 .req-chat-empty { padding: 32px 0; text-align: center; color: var(--fg-4, #9ca3af); font-size: 12px; }
-.req-chat-input { flex: 0 0 auto; display: flex; gap: 8px; padding: 10px 0 14px; border-top: 1px solid var(--border, #e8e8e8); }
-.req-chat-input input { min-width: 0; flex: 1; height: 34px; padding: 0 12px; border: 1px solid var(--border, #e8e8e8); border-radius: var(--r, 6px); outline: 0; background: var(--bg, #fff); color: var(--fg, #202124); font: 13px var(--sans, inherit); box-sizing: border-box; transition: all var(--t, 0.15s); }
-.req-chat-input input::placeholder { color: var(--fg-4, #9ca3af); }
-.req-chat-input input:focus { border-color: var(--accent, #52525b); box-shadow: 0 0 0 2px var(--accent-bg, rgba(82, 82, 91, 0.12)); }
+
+/* 评论（看板系统风格：头像 + 作者 + 相对时间 + 评论条目） */
+.req-comments { min-height: 0; flex: 1; display: flex; flex-direction: column; }
+.req-comment-list { min-height: 0; flex: 1; overflow-y: auto; padding: 14px 0; display: grid; gap: 10px; align-content: start; }
+.req-comment-list::-webkit-scrollbar { width: 6px; }
+.req-comment-list::-webkit-scrollbar-thumb { background: rgba(80, 88, 102, 0.35); border-radius: 6px; }
+.req-comment { padding: 10px 12px; border: 1px solid var(--border, #e8e8e8); border-radius: 8px; background: var(--bg-2, #f9fafb); }
+.req-comment-head { display: flex; align-items: center; gap: 8px; }
+.req-comment-avatar { width: 22px; height: 22px; display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; border-radius: 50%; background: var(--bg-3, #f3f4f6); color: var(--fg-3, #727987); font-size: 11px; font-weight: 700; }
+.req-comment-avatar svg { width: 12px; height: 12px; }
+.req-comment-avatar.ai { background: var(--accent-bg, rgba(82, 82, 91, 0.12)); color: var(--fg-2, #525866); }
+.req-comment-author { font-size: 12px; font-weight: 600; color: var(--fg, #202124); }
+.req-comment-time { margin-left: auto; font-size: 11px; color: var(--fg-4, #9ca3af); }
+.req-comment-text { margin: 8px 0 0; font-size: 13px; line-height: 1.65; color: var(--fg-2, #525866); white-space: pre-wrap; word-break: break-word; }
+.req-comments-empty { padding: 32px 0; text-align: center; color: var(--fg-4, #9ca3af); font-size: 12px; }
+.req-comment-form { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border, #e8e8e8); }
+.req-comment-form textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border, #e8e8e8); border-radius: var(--r, 6px); outline: 0; background: var(--bg, #fff); color: var(--fg, #202124); font: 13px var(--sans, inherit); box-sizing: border-box; resize: vertical; min-height: 56px; line-height: 1.6; transition: all var(--t, 0.15s); }
+.req-comment-form textarea::placeholder { color: var(--fg-4, #9ca3af); }
+.req-comment-form textarea:focus { border-color: var(--accent, #52525b); box-shadow: 0 0 0 2px var(--accent-bg, rgba(82, 82, 91, 0.12)); }
+.req-comment-form-foot { display: flex; justify-content: flex-end; }
 
 /* ============ 新建需求弹窗 ============ */
 .req-create-mask { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.3); }

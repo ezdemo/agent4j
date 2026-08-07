@@ -3,22 +3,84 @@
 import {shallowMount} from '@vue/test-utils'
 import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 import {nextTick} from 'vue'
-import {configAPI} from './services/api'
 import RequirementBoard from './views/RequirementBoard.vue'
 
-vi.mock('./services/api', () => ({
+// ============ mock 后端数据 ============
+const NOW = 1750000000000
+let idCounter = 0
+const nextId = () => `req_${(idCounter++).toString(36)}`
+
+function req(title, status, extra = {}) {
+  return {
+    id: nextId(),
+    title,
+    description: '描述文本',
+    priority: 'medium',
+    projectHash: 'ws_front',
+    projectName: 'loopra-front',
+    status,
+    summary: '',
+    sessionName: '',
+    createdAt: NOW,
+    updatedAt: NOW,
+    ...extra
+  }
+}
+
+const REQUIREMENTS = [
+  req('待执行需求A', 'todo'),
+  req('待执行需求B', 'todo'),
+  req('待执行需求C', 'todo', {priority: 'high'}),
+  req('执行中需求D', 'doing'),
+  req('执行中需求E', 'doing'),
+  req('已完成需求F', 'done'),
+  req('已失败需求G', 'failed')
+]
+
+const MESSAGES = [
+  {id: 'm1', role: 'user', content: '这是一条评论', timestamp: NOW - 3000},
+  {id: 'm2', role: 'assistant', content: 'AI 回复评论：收到，正在处理', timestamp: NOW - 2000},
+  {id: 'm3', role: 'user', content: '第二条评论', timestamp: NOW - 1000},
+  {id: 'm4', role: 'assistant', content: 'AI 已接收需求，开始执行', timestamp: NOW - 500},
+  {id: 'm5', role: 'assistant', content: 'AI 完成实现并通过验证', timestamp: NOW}
+]
+
+// hoisted：mock 工厂只能引用此容器（vi.mock 提升到文件顶部执行）
+const {requirementAPI, configAPI} = vi.hoisted(() => ({
+  requirementAPI: {
+    list: vi.fn(),
+    create: vi.fn(),
+    addComment: vi.fn(),
+    getMessages: vi.fn(),
+    delete: vi.fn(),
+    update: vi.fn(),
+    run: vi.fn(),
+    abort: vi.fn()
+  },
   configAPI: {
-    listWorkspaces: vi.fn().mockResolvedValue({
-      success: true,
-      data: [
-        { hash: 'ws_agent4j', name: 'agent4j', path: '/p/agent4j' },
-        { hash: 'ws_front', name: 'loopra-front', path: '/p/loopra-front' }
-      ]
-    })
+    listWorkspaces: vi.fn()
   }
 }))
 
-const STORAGE_KEY = 'loopra-requirement-board'
+vi.mock('./services/api', () => ({requirementAPI, configAPI}))
+
+beforeEach(() => {
+  requirementAPI.list.mockResolvedValue({success: true, data: REQUIREMENTS})
+  requirementAPI.create.mockResolvedValue({success: true, data: req('新需求标题', 'todo')})
+  requirementAPI.addComment.mockResolvedValue({success: true})
+  requirementAPI.getMessages.mockResolvedValue({success: true, data: MESSAGES})
+  requirementAPI.delete.mockResolvedValue({success: true})
+  requirementAPI.update.mockResolvedValue({success: true})
+  requirementAPI.run.mockResolvedValue({success: true})
+  requirementAPI.abort.mockResolvedValue({success: true})
+  configAPI.listWorkspaces.mockResolvedValue({
+    success: true,
+    data: [
+      { hash: 'ws_agent4j', name: 'agent4j', path: '/p/agent4j' },
+      { hash: 'ws_front', name: 'loopra-front', path: '/p/loopra-front' }
+    ]
+  })
+})
 
 // ChatMessage 用 stub 验证消息流数据契约（组件本身由 ChatMessage.test.js 覆盖）
 const ChatMessageStub = {
@@ -47,138 +109,147 @@ function mountBoard() {
   })
 }
 
-describe('RequirementBoard 需求池看板', () => {
+describe('RequirementBoard 需求池看板（后端数据）', () => {
   let wrapper
 
   beforeEach(async () => {
-    localStorage.clear()
+    idCounter = 0
+    requirementAPI.list.mockClear()
+    requirementAPI.create.mockClear()
+    requirementAPI.addComment.mockClear()
+    requirementAPI.getMessages.mockClear()
+    requirementAPI.delete.mockClear()
+    requirementAPI.run.mockClear()
+    requirementAPI.abort.mockClear()
     vi.useFakeTimers()
     wrapper = mountBoard()
-    // flushPromises 依赖 setTimeout，在 fake timers 下不可靠，显式等待项目列表加载
+    // flushPromises 依赖 setTimeout，在 fake timers 下不可靠，显式等待数据加载
+    await wrapper.vm.loadFromAPI?.()
     await wrapper.vm.loadProjects?.()
     await nextTick()
   })
 
   afterEach(() => {
     vi.useRealTimers()
+    wrapper.unmount()
   })
 
-  it('渲染四列看板且种子数据分布在各列', () => {
+  it('从后端加载需求并渲染四列看板', () => {
+    expect(requirementAPI.list).toHaveBeenCalled()
     const columns = wrapper.findAll('.req-column')
     expect(columns).toHaveLength(4)
     expect(columns.map((col) => col.find('.req-column-name').text()))
       .toEqual(['待执行', '执行中', '已完成', '已失败'])
-    // 种子数据：待执行 3 条、执行中 2 条、已完成 1 条、已失败 1 条
     expect(wrapper.findAll('.req-column-todo .req-card')).toHaveLength(3)
     expect(wrapper.findAll('.req-column-doing .req-card')).toHaveLength(2)
     expect(wrapper.findAll('.req-column-done .req-card')).toHaveLength(1)
     expect(wrapper.findAll('.req-column-failed .req-card')).toHaveLength(1)
   })
 
-  it('卡片展示 AI 执行标识，无执行 Agent', () => {
+  it('卡片展示 AI 执行标识与项目名', () => {
     const card = wrapper.findAll('.req-column-todo .req-card')[0]
-    expect(card.find('.req-ai-badge').exists()).toBe(true)
     expect(card.find('.req-ai-badge').text()).toContain('AI 执行')
+    expect(card.find('.req-project-badge').text()).toBe('loopra-front')
     expect(card.find('.req-card-agent').exists()).toBe(false)
   })
 
-  it('点击卡片打开全屏详情：描述 + AI 执行区 + 聊天区，看板隐藏', async () => {
-    const card = wrapper.findAll('.req-column-todo .req-card')[0]
-    const title = card.find('.req-card-title').text().replace(/高|中|低$/, '').trim()
-    await card.trigger('click')
+  it('点击卡片打开全屏详情并拉取消息流', async () => {
+    await wrapper.findAll('.req-column-todo .req-card')[0].trigger('click')
 
-    // 全屏详情视图覆盖，看板不渲染
+    expect(requirementAPI.getMessages).toHaveBeenCalled()
     expect(wrapper.find('.req-detail-view').exists()).toBe(true)
     expect(wrapper.find('.req-board-columns').exists()).toBe(false)
-    expect(wrapper.find('.req-detail-title-text').text()).toBe(title)
-    expect(wrapper.find('.req-info-desc').text()).toContain('描述')
+    expect(wrapper.find('.req-info-desc').text()).toContain('项目：loopra-front')
     expect(wrapper.find('.req-ai-box').exists()).toBe(true)
-    expect(wrapper.find('.req-ai-name').text()).toBe('待执行')
-    expect(wrapper.find('.req-chat-messages').exists()).toBe(true)
+
+    // 消息流异步到达
+    await nextTick()
+    // 评论 tab（看板风格）：user 评论 + AI 回复 共 4 条
+    expect(wrapper.findAll('.req-comment')).toHaveLength(4)
   })
 
-  it('执行日志以聊天消息流展示（assistant 消息），评论以 user 消息展示', async () => {
-    // 第一条待执行需求：1 条日志、0 条评论
+  it('评论 tab 为看板风格条目（头像/作者/时间），执行日志 tab 为聊天消息流', async () => {
     await wrapper.findAll('.req-column-todo .req-card')[0].trigger('click')
+    await nextTick()
 
-    // 默认评论 tab：空态
-    expect(wrapper.findAll('.stub-msg')).toHaveLength(0)
-    expect(wrapper.find('.req-chat-empty').text()).toContain('暂无评论')
+    // 评论条目：m1(user) + m2(AI回复) + m3(user) + m4(AI回复)，m5 为执行过程日志不混入
+    const comments = wrapper.findAll('.req-comment')
+    expect(comments).toHaveLength(4)
+    expect(comments[0].find('.req-comment-author').text()).toBe('我')
+    expect(comments[0].find('.req-comment-text').text()).toBe('这是一条评论')
+    expect(comments[0].find('.req-comment-time').text()).toBeTruthy() // 相对时间
+    expect(comments[0].find('.req-comment-avatar').text()).toBe('我')
+    expect(comments[1].find('.req-comment-author').text()).toBe('AI 执行 Agent')
+    expect(comments[1].find('.req-comment-avatar').exists()).toBe(true)
+    expect(comments[1].find('.req-comment-text').text()).toBe('AI 回复评论：收到，正在处理')
+    expect(comments[3].find('.req-comment-text').text()).toBe('AI 已接收需求，开始执行')
+    // 输入区：多行 textarea + 发送按钮
+    expect(wrapper.find('.req-comment-form textarea').exists()).toBe(true)
+    expect(wrapper.find('.req-comment-form-foot .req-btn-primary').text()).toBe('发送评论')
 
-    // 切到执行日志 tab：日志渲染为 assistant 消息
+    // 执行日志 tab：ChatMessage 聊天流（assistant 消息）
     await wrapper.findAll('.req-detail-tab')[1].trigger('click')
-    const logStubs = wrapper.findAll('.stub-msg')
-    expect(logStubs).toHaveLength(1)
-    expect(logStubs[0].attributes('data-role')).toBe('assistant')
-    expect(logStubs[0].text()).toContain('等待 AI 调度')
-
-    // 切回评论 tab
-    await wrapper.findAll('.req-detail-tab')[0].trigger('click')
-    expect(wrapper.find('.req-chat-input').exists()).toBe(true)
+    const logs = wrapper.findAll('.stub-msg')
+    expect(logs).toHaveLength(3)
+    expect(logs.map((log) => log.attributes('data-role'))).toEqual(['assistant', 'assistant', 'assistant'])
+    expect(logs[2].text()).toContain('AI 完成实现并通过验证')
   })
 
-  it('添加评论：以 user 消息出现在聊天流并持久化', async () => {
+  it('提交评论调用后端接口并重新拉取消息流', async () => {
     await wrapper.findAll('.req-column-todo .req-card')[0].trigger('click')
-    await wrapper.findAll('.req-detail-tab')[0].trigger('click')
+    await nextTick()
 
-    const input = wrapper.find('.req-chat-input input')
-    await input.setValue('这是一条测试评论')
-    await wrapper.find('.req-chat-input').trigger('submit')
+    const textarea = wrapper.find('.req-comment-form textarea')
+    await textarea.setValue('新评论内容')
+    await wrapper.find('.req-comment-form').trigger('submit')
+    await nextTick()
 
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY))
-    const target = stored.find((item) => item.status === 'todo')
-    expect(target.comments.at(-1).text).toBe('这是一条测试评论')
-
-    const commentStubs = wrapper.findAll('.stub-msg')
-    expect(commentStubs).toHaveLength(1)
-    expect(commentStubs[0].attributes('data-role')).toBe('user')
-    expect(commentStubs[0].text()).toBe('这是一条测试评论')
+    expect(requirementAPI.addComment).toHaveBeenCalledWith(expect.any(String), '新评论内容')
+    expect(requirementAPI.getMessages).toHaveBeenCalledTimes(2)
   })
 
-  it('AI 流转：待执行 → 执行中 → 已完成，日志以聊天消息呈现', async () => {
+  it('让 AI 执行：调用后端 run 接口并进入执行中', async () => {
     await wrapper.findAll('.req-column-todo .req-card')[0].trigger('click')
+    await nextTick()
     expect(wrapper.find('.req-status-todo').exists()).toBe(true)
 
-    // 让 AI 执行（模拟 loading 后流转）
     await wrapper.find('.req-ai-actions .req-btn-primary').trigger('click')
-    expect(wrapper.find('.req-ai-name').text()).toBe('AI 执行中…')
-    vi.advanceTimersByTime(700)
     await nextTick()
 
+    expect(requirementAPI.run).toHaveBeenCalledWith(expect.any(String))
     expect(wrapper.find('.req-status-doing').exists()).toBe(true)
-    const doing = JSON.parse(localStorage.getItem(STORAGE_KEY))
-    expect(doing.find((item) => item.status === 'doing').logs.at(-1).text).toContain('AI 已接收需求')
-
-    // AI 已完成
-    const actions = wrapper.findAll('.req-ai-actions .req-btn')
-    await actions.find((btn) => btn.text().includes('AI 已完成')).trigger('click')
-    vi.advanceTimersByTime(700)
-    await nextTick()
-
-    expect(wrapper.find('.req-status-done').exists()).toBe(true)
-    const done = JSON.parse(localStorage.getItem(STORAGE_KEY))
-    expect(done.find((item) => item.status === 'done').logs.at(-1).text).toContain('AI 已完成实现并通过验证')
-
-    // 日志 tab 中新增日志以 assistant 消息展示（原 1 条 + 流转 2 条）
-    await wrapper.findAll('.req-detail-tab')[1].trigger('click')
-    const logStubs = wrapper.findAll('.stub-msg')
-    expect(logStubs).toHaveLength(3)
-    expect(logStubs[2].text()).toContain('AI 已完成实现并通过验证')
+    expect(wrapper.find('.req-ai-actions .req-btn-danger').text()).toBe('取消执行')
   })
 
-  it('AI 流转：执行中 → 已失败', async () => {
-    const card = wrapper.findAll('.req-column-doing .req-card')[0]
-    await card.trigger('click')
-    const actions = wrapper.findAll('.req-ai-actions .req-btn')
-    await actions.find((btn) => btn.text().includes('AI 失败')).trigger('click')
-    vi.advanceTimersByTime(700)
+  it('取消执行：调用后端 abort 接口并回退待执行', async () => {
+    // 打开一个执行中的需求
+    await wrapper.findAll('.req-column-doing .req-card')[0].trigger('click')
+    await nextTick()
+    expect(wrapper.find('.req-status-doing').exists()).toBe(true)
+
+    await wrapper.find('.req-ai-actions .req-btn-danger').trigger('click')
     await nextTick()
 
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY))
-    const failed = stored.find((item) => item.id === wrapper.vm.selected.id)
-    expect(failed.status).toBe('failed')
-    expect(failed.logs.at(-1).text).toContain('AI 执行失败')
-    expect(wrapper.find('.req-status-failed').exists()).toBe(true)
+    expect(requirementAPI.abort).toHaveBeenCalledWith(expect.any(String))
+    expect(wrapper.find('.req-status-todo').exists()).toBe(true)
+  })
+
+  it('删除需求：二次确认后调用后端接口并刷新列表', async () => {
+    await wrapper.findAll('.req-column-todo .req-card')[0].trigger('click')
+    await nextTick()
+
+    // 第一次点击：进入确认态
+    await wrapper.find('[title="删除需求"]').trigger('click')
+    expect(wrapper.find('.req-delete-confirm').exists()).toBe(true)
+    expect(requirementAPI.delete).not.toHaveBeenCalled()
+
+    // 第二次点击：执行删除
+    await wrapper.find('.req-delete-confirm').trigger('click')
+    await nextTick()
+
+    expect(requirementAPI.delete).toHaveBeenCalledWith(expect.any(String))
+    expect(wrapper.find('.req-detail-view').exists()).toBe(false) // 详情已关闭
+    expect(wrapper.find('.req-board-columns').exists()).toBe(true) // 回到看板
   })
 
   it('返回按钮关闭全屏详情，回到看板', async () => {
@@ -190,40 +261,32 @@ describe('RequirementBoard 需求池看板', () => {
     expect(wrapper.find('.req-board-columns').exists()).toBe(true)
   })
 
-  it('新建需求：必须选择项目才能创建', async () => {
+  it('新建需求：必须选择项目，创建走后端接口', async () => {
     await wrapper.find('.req-btn-primary').trigger('click')
     expect(wrapper.find('.req-create-modal').exists()).toBe(true)
 
     const selects = wrapper.findAll('.stub-select')
-    // 项目 + 优先级两个自定义下拉
     expect(selects).toHaveLength(2)
 
-    // 未选项目：创建按钮禁用，提交不创建
+    // 未选项目：创建按钮禁用
     await wrapper.find('.req-field input').setValue('新需求标题')
     expect(wrapper.find('.req-create-footer .req-btn-primary').attributes('disabled')).toBeDefined()
     await wrapper.find('.req-create-modal').trigger('submit')
-    expect(JSON.parse(localStorage.getItem(STORAGE_KEY))).toHaveLength(7)
+    expect(requirementAPI.create).not.toHaveBeenCalled()
 
-    // 通过自定义下拉选择项目后创建成功
+    // 选择项目后创建
     await selects[0].find('.stub-select-trigger').trigger('click')
     await selects[0].findAll('.stub-select-option')[1].trigger('click') // loopra-front
     expect(wrapper.find('.req-create-footer .req-btn-primary').attributes('disabled')).toBeUndefined()
     await wrapper.find('.req-create-modal').trigger('submit')
+    await nextTick()
 
-    const stored = JSON.parse(localStorage.getItem(STORAGE_KEY))
-    const created = stored.find((item) => item.title === '新需求标题')
-    expect(created.status).toBe('todo')
-    expect(created.project).toEqual({ hash: 'ws_front', name: 'loopra-front' })
-    expect(created.logs[0].text).toContain('等待 AI 调度')
-    expect(wrapper.findAll('.req-column-todo .req-card')).toHaveLength(4)
-  })
-
-  it('卡片展示所属项目徽章，详情描述区显示项目', async () => {
-    const card = wrapper.findAll('.req-column-todo .req-card')[0]
-    expect(card.find('.req-project-badge').exists()).toBe(true)
-    expect(card.find('.req-project-badge').text()).toBe('loopra-front')
-
-    await card.trigger('click')
-    expect(wrapper.find('.req-info-desc .req-info-project').text()).toContain('loopra-front')
+    expect(requirementAPI.create).toHaveBeenCalledWith(expect.objectContaining({
+      title: '新需求标题',
+      projectHash: 'ws_front',
+      projectName: 'loopra-front'
+    }))
+    // 创建后刷新列表（含挂载时加载，共至少 2 次）
+    expect(requirementAPI.list.mock.calls.length).toBeGreaterThanOrEqual(2)
   })
 })

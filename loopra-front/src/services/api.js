@@ -1020,6 +1020,34 @@ export const scheduleAPI = {
   }
 }
 
+// 需求池 API
+// 需求绑定项目与专属执行会话，评论/执行日志从会话消息流读取（GET /{id}/messages）
+export const requirementAPI = {
+  // 列出全部需求 - GET /api/requirements
+  list: () => api.get('/requirements'),
+
+  // 创建需求 - POST /api/requirements  body: { title, description, priority, projectHash, projectName }
+  create: (requirement) => api.post('/requirements', requirement),
+
+  // 更新需求（仅描述/优先级） - PUT /api/requirements/{id}
+  update: (id, update) => api.put(`/requirements/${id}`, update),
+
+  // 删除需求 - DELETE /api/requirements/{id}
+  delete: (id) => api.delete(`/requirements/${id}`),
+
+  // 追加评论（写入需求专属会话） - POST /api/requirements/{id}/comments  body: { text }
+  addComment: (id, text) => api.post(`/requirements/${id}/comments`, { text }),
+
+  // 触发执行（todo/failed 入队，状态 → doing） - POST /api/requirements/{id}/run
+  run: (id) => api.post(`/requirements/${id}/run`),
+
+  // 取消执行（中断会话，状态回退 todo） - POST /api/requirements/{id}/abort
+  abort: (id) => api.post(`/requirements/${id}/abort`),
+
+  // 拉取需求消息流（评论 + 执行日志） - GET /api/requirements/{id}/messages
+  getMessages: (id) => api.get(`/requirements/${id}/messages`)
+}
+
 export const petAPI = {
   /** 获取宠物元数据（旧版兼容，同 getActive） */
   getInfo: () => api.get('/pets/active', {silent: true}),
