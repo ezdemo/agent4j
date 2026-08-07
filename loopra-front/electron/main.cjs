@@ -1,4 +1,4 @@
-const { app, BrowserWindow, WebContentsView, dialog, ipcMain, Menu, shell, Notification } = require('electron')
+const { app, BrowserWindow, WebContentsView, dialog, ipcMain, Menu, nativeTheme, shell, Notification } = require('electron')
 const http = require('http')
 const path = require('path')
 const { spawn, execFile, execSync } = require('child_process')
@@ -497,6 +497,7 @@ function createWindow() {
   })
 
   mainWindow.webContents.on('context-menu', (event, params) => {
+    if (params.y < 44) return
     const menu = Menu.buildFromTemplate([
       { label: '检查元素', click: () => mainWindow.webContents.inspectElement(params.x, params.y) },
       { type: 'separator' },
@@ -936,6 +937,30 @@ ipcMain.handle('window-close', (event) => {
   if (win && !win.isDestroyed()) win.close()
 })
 ipcMain.handle('window-is-maximized', () => mainWindow ? mainWindow.isMaximized() : false)
+// A native menu remains above WebContentsView-backed desktop chat tabs.
+ipcMain.handle('desktop-home-context-menu', (event, rawTheme) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop home menu request')
+  if (!mainWindow || mainWindow.isDestroyed()) return null
+  const themeSource = rawTheme === 'dark' ? 'dark' : 'light'
+  if (nativeTheme.themeSource !== themeSource) nativeTheme.themeSource = themeSource
+
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (action) => {
+      if (settled) return
+      settled = true
+      resolve(action)
+    }
+    const menu = Menu.buildFromTemplate([
+      { label: '打开需求池', click: () => finish('open-requirement-board') },
+      { label: '切换主题', click: () => finish('toggle-theme') }
+    ])
+    menu.popup({
+      window: mainWindow,
+      callback: () => finish(null)
+    })
+  })
+})
 
 // 启动窗口完成检测/安装/启动后：创建主窗口并关闭启动窗口
 ipcMain.handle('splash_ready', () => {
