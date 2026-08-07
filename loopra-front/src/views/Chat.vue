@@ -1489,6 +1489,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
                 status: '执行中',
                 args,
                 result: '',
+                toolStartedAt: Date.now(),
                 expanded: true
               })
             } else if (data.type === 'sub_error') {
@@ -1504,7 +1505,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
             if (targetName) {
               for (let j = c.blocks.length - 1; j >= 0; j--) {
                 if (c.blocks[j].type === 'tool_call' && c.blocks[j].name === targetName && !c.blocks[j].result) {
-                  c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].expanded = false
+                  c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].toolDurationMs = Date.now() - c.blocks[j].toolStartedAt; c.blocks[j].expanded = false
                   matched = true; break
                 }
               }
@@ -1512,7 +1513,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
             if (!matched) {
               for (let j = c.blocks.length - 1; j >= 0; j--) {
                 if (c.blocks[j].type === 'tool_call' && !c.blocks[j].result) {
-                  c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].expanded = false
+                  c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].toolDurationMs = Date.now() - c.blocks[j].toolStartedAt; c.blocks[j].expanded = false
                   break
                 }
               }
@@ -1564,6 +1565,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
               status: '执行中',
               args,
               result: '',
+              toolStartedAt: Date.now(),
               expanded: true
             })
           } else if (data.type === 'tool_result') {
@@ -1577,6 +1579,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
                 if (msg.blocks[i].type === 'tool_call' && msg.blocks[i].name === targetName && !msg.blocks[i].result) {
                   msg.blocks[i].result = rn;
                   msg.blocks[i].status = '成功';
+                  msg.blocks[i].toolDurationMs = Date.now() - msg.blocks[i].toolStartedAt;
                   msg.blocks[i].expanded = false;
                   matched = true
                   break
@@ -1589,6 +1592,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
                 if (msg.blocks[i].type === 'tool_call' && !msg.blocks[i].result) {
                   msg.blocks[i].result = rn;
                   msg.blocks[i].status = '成功';
+                  msg.blocks[i].toolDurationMs = Date.now() - msg.blocks[i].toolStartedAt;
                   msg.blocks[i].expanded = false;
                   break
                 }
@@ -2054,7 +2058,14 @@ const loadHistory = async (sessionName, force = false) => {
       const raw = r.data, tr = {}
       const assistantBoundaries = getAssistantTurnBoundaries(raw)
       let assistantTurn = 0
-      for (const m of raw) if (m.role === 'tool' && m.tool_call_id) tr[m.tool_call_id] = m.content || ''
+      for (const m of raw) if (m.role === 'tool' && m.tool_call_id) {
+        tr[m.tool_call_id] = {
+          content: m.content || '',
+          durationMs: m.tool_duration_ms ?? m.toolDurationMs ?? null,
+          startedAt: m.tool_started_at ?? m.toolStartedAt ?? null,
+          finishedAt: m.tool_finished_at ?? m.toolFinishedAt ?? null
+        }
+      }
       const merged = []
       let lastAssistantItem = null
       let idCounter = 0
@@ -2114,13 +2125,18 @@ const loadHistory = async (sessionName, force = false) => {
               args = JSON.parse(args)
             } catch {
             }
+            const toolResult = tr[tc.id]
+            const hasResult = Object.hasOwn(tr, tc.id)
             lastAssistantItem.blocks.push({
               type: 'tool_call',
               name,
-              status: tr[tc.id] ? '成功' : '执行中',
+              status: hasResult ? '成功' : '执行中',
               args,
-              result: tr[tc.id] || '',
-              expanded: !tr[tc.id]
+              result: toolResult?.content || '',
+              toolDurationMs: toolResult?.durationMs,
+              toolStartedAt: toolResult?.startedAt || m.timestamp,
+              toolFinishedAt: toolResult?.finishedAt,
+              expanded: !hasResult
             })
           }
           if (m.content) lastAssistantItem.blocks.push({type: 'content', content: m.content})

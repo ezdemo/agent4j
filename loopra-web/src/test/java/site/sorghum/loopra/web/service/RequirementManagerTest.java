@@ -29,12 +29,16 @@ class RequirementManagerTest {
     private static class StubAgentService extends AgentService {
         final List<String> injectedComments = new ArrayList<>();
         final List<String> executedSessions = new ArrayList<>();
+        final List<Boolean> executedWebHidden = new ArrayList<>();
+        final List<String> executedConfigs = new ArrayList<>();
         final List<String> abortedSessions = new ArrayList<>();
         final CountDownLatch executedLatch = new CountDownLatch(1);
         final CountDownLatch blockExecute = new CountDownLatch(1);
         boolean workspaceExists = true;
         boolean throwOnExecute = false;
         boolean blockExecution = false;
+        boolean pendingApproval = false;
+        boolean approvalResolved = false;
         /** 模拟 AI 在 chat 内调用 finish_requirement（由测试注入） */
         Runnable onExecute = null;
 
@@ -65,8 +69,25 @@ class RequirementManagerTest {
         }
 
         @Override
-        public String executeRequirement(String workspacePath, String sessionName, String systemPrompt, String message, boolean webHidden) {
+        public boolean hasPendingRequirementApproval(String workspacePath, String sessionName) {
+            return pendingApproval;
+        }
+
+        @Override
+        public String resolveRequirementApproval(String workspacePath, String sessionName, boolean approved) {
+            approvalResolved = approved;
+            pendingApproval = false;
+            return "ok";
+        }
+
+        @Override
+        public String executeRequirement(String workspacePath, String sessionName, String systemPrompt, String message,
+                                         boolean webHidden, String model, String modelChannelId,
+                                         String reasoningEffort, String hitl) {
             executedSessions.add(sessionName);
+            executedWebHidden.add(webHidden);
+            executedConfigs.add(String.join("|", String.valueOf(model), String.valueOf(modelChannelId),
+                    String.valueOf(reasoningEffort), String.valueOf(hitl)));
             executedLatch.countDown();
             if (blockExecution) {
                 try {
@@ -102,7 +123,27 @@ class RequirementManagerTest {
         assertEquals("req_" + created.getId(), created.getSessionName());
         assertEquals("todo", created.getStatus());
         assertEquals("", created.getSummary());
+        assertNull(created.getModel());
+        assertNull(created.getModelChannelId());
+        assertNull(created.getReasoningEffort());
+        assertNull(created.getHitl());
         assertEquals(1, manager.list().size());
+    }
+
+    @Test
+    void createPreservesExecutionConfiguration() {
+        Requirement draft = draft("优化性能", "p1", "agent4j", "high");
+        draft.setModel("gpt-5");
+        draft.setModelChannelId("openai");
+        draft.setReasoningEffort("max");
+        draft.setHitl("approval");
+
+        Requirement created = manager.create(draft);
+
+        assertEquals("gpt-5", created.getModel());
+        assertEquals("openai", created.getModelChannelId());
+        assertEquals("max", created.getReasoningEffort());
+        assertEquals("approval", created.getHitl());
     }
 
     @Test
@@ -138,7 +179,12 @@ class RequirementManagerTest {
 
     @Test
     void commentOnFinishedRequirementTriggersReplyRound() throws Exception {
-        Requirement created = manager.create(draft("优化性能", "p1", "agent4j", "high"));
+        Requirement draft = draft("优化性能", "p1", "agent4j", "high");
+        draft.setModel("gpt-5");
+        draft.setModelChannelId("openai");
+        draft.setReasoningEffort("max");
+        draft.setHitl("approval");
+        Requirement created = manager.create(draft);
         // 先执行完成（兜底 done）
         assertEquals("started", manager.run(created.getId()));
         awaitStatus(created.getId(), "done");
@@ -150,6 +196,8 @@ class RequirementManagerTest {
 
         assertEquals("done", find(created.getId()).getStatus());
         assertTrue(agentService.injectedComments.contains("执行得不错"));
+        assertEquals("gpt-5|openai|max|approval",
+                agentService.executedConfigs.get(agentService.executedConfigs.size() - 1));
     }
 
     @Test
@@ -174,11 +222,43 @@ class RequirementManagerTest {
         assertEquals("doing", running.getStatus());
         assertTrue(agentService.executedLatch.await(3, TimeUnit.SECONDS));
         assertEquals(List.of(running.getSessionName()), agentService.executedSessions);
+        assertEquals(List.of(true), agentService.executedWebHidden);
+        assertEquals(List.of("null|null|null|null"), agentService.executedConfigs);
 
         // AI 未显式调用 finish_requirement → 兜底完成 + 写 AI 结束评论
         awaitStatus(created.getId(), "done");
         assertTrue(find(created.getId()).getSummary().contains("未显式调用 finish_requirement"));
         assertTrue(agentService.injectedComments.stream().anyMatch(c -> c.contains("✅ 已完成")));
+    }
+
+    @Test
+    void approvalModePausesAndResumesTheRequirement() throws Exception {
+        Requirement draft = draft("优化性能", "p1", "agent4j", "high");
+        draft.setHitl("approval");
+        Requirement created = manager.create(draft);
+        agentService.pendingApproval = true;
+
+        assertEquals("started", manager.run(created.getId()));
+        awaitApprovalPending(created.getId());
+        assertEquals("doing", find(created.getId()).getStatus());
+        assertTrue(manager.resolveApproval(created.getId(), true));
+        awaitStatus(created.getId(), "done");
+        assertTrue(agentService.approvalResolved);
+    }
+
+    @Test
+    void runUsesRequirementExecutionConfiguration() throws Exception {
+        Requirement draft = draft("优化性能", "p1", "agent4j", "high");
+        draft.setModel("gpt-5");
+        draft.setModelChannelId("openai");
+        draft.setReasoningEffort("high");
+        draft.setHitl("approval");
+        Requirement created = manager.create(draft);
+
+        assertEquals("started", manager.run(created.getId()));
+        assertTrue(agentService.executedLatch.await(3, TimeUnit.SECONDS));
+
+        assertEquals(List.of("gpt-5|openai|high|approval"), agentService.executedConfigs);
     }
 
     @Test
@@ -286,6 +366,28 @@ class RequirementManagerTest {
     }
 
     @Test
+    void scanAndRunDefersFutureScheduledRequirementUntilDue() throws Exception {
+        Requirement draft = draft("定时执行", "p1", "agent4j", "medium");
+        draft.setScheduleMode("scheduled");
+        draft.setScheduledAt(System.currentTimeMillis() + TimeUnit.MINUTES.toMillis(1));
+        Requirement scheduled = manager.create(draft);
+        agentService.blockExecution = true;
+
+        manager.scanAndRun();
+        assertEquals("scheduled", scheduled.getScheduleMode());
+        assertEquals("todo", find(scheduled.getId()).getStatus());
+        assertTrue(agentService.executedSessions.isEmpty());
+
+        scheduled.setScheduledAt(System.currentTimeMillis() - 1);
+        manager.update(scheduled.getId(), Requirement.builder().build());
+        manager.scanAndRun();
+        assertTrue(agentService.executedLatch.await(3, TimeUnit.SECONDS));
+        assertEquals("doing", find(scheduled.getId()).getStatus());
+
+        agentService.blockExecute.countDown();
+    }
+
+    @Test
     void getMessagesReadsSessionHistory() {
         Requirement created = manager.create(draft("优化性能", "p1", "agent4j", "high"));
 
@@ -318,6 +420,18 @@ class RequirementManagerTest {
             Thread.sleep(20);
         }
         fail("等待状态超时: " + status);
+    }
+
+    private void awaitApprovalPending(String id) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 5000;
+        while (System.currentTimeMillis() < deadline) {
+            Requirement requirement = find(id);
+            if (requirement != null && requirement.isApprovalPending()) {
+                return;
+            }
+            Thread.sleep(20);
+        }
+        fail("等待审批状态超时");
     }
 
     private void awaitCount(java.util.function.BooleanSupplier condition, String message) throws InterruptedException {

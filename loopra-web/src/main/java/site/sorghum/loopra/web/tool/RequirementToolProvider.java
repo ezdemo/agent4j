@@ -42,11 +42,11 @@ public class RequirementToolProvider extends AbsToolProvider implements SolonToT
     @ToolMapping(name = "finish_requirement", description = """
             声明当前需求执行结果并流转状态（仅需求执行会话可用）。
             完成任务后必须调用本工具：status=done 表示已完成，failed 表示失败；
-            summary 填写执行总结（做了什么、改动、结果）。
+            summary 填写执行总结（做了什么、改动、结果）。请使用简洁 Markdown：结论单独一行，多个改动或验证结果使用 `- ` 分行列出。
             """)
     public String finishRequirement(
             @Param(name = "status", description = "执行结果：done(已完成) / failed(已失败)", required = true) String status,
-            @Param(name = "summary", description = "执行总结", required = true) String summary,
+            @Param(name = "summary", description = "执行总结。使用 Markdown 分段，多个项目使用列表分行", required = true) String summary,
             ToolContext ctx) {
         String sessionId = resolveRequirementSession(ctx);
         if (sessionId == null) {

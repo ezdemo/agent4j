@@ -94,6 +94,20 @@ public class ChatMessage {
     @ONodeAttr(name = "timestamp")
     private Long timestamp;
 
+    /**
+     * 工具实际开始执行的时间（Unix 毫秒），仅由本地执行记录使用。
+     */
+    @ONodeAttr(name = "tool_started_at")
+    private Long toolStartedAt;
+
+    /** 工具实际执行结束的时间（Unix 毫秒）。 */
+    @ONodeAttr(name = "tool_finished_at")
+    private Long toolFinishedAt;
+
+    /** 工具实际执行耗时（毫秒）。 */
+    @ONodeAttr(name = "tool_duration_ms")
+    private Long toolDurationMs;
+
     // ==================== 内容段模型 ====================
 
     public static ChatMessage ofUser(String content) {
@@ -204,6 +218,9 @@ public class ChatMessage {
                 // 忽略无效的时间戳
             }
         }
+        msg.toolStartedAt = asLong(m.get("tool_started_at"));
+        msg.toolFinishedAt = asLong(m.get("tool_finished_at"));
+        msg.toolDurationMs = asLong(m.get("tool_duration_ms"));
         if (m.containsKey("tool_calls")) {
             List<Map<String, Object>> tcMaps = (List<Map<String, Object>>) m.get("tool_calls");
             if (tcMaps != null) {
@@ -261,6 +278,15 @@ public class ChatMessage {
         }
     }
 
+    private static Long asLong(Object value) {
+        if (value instanceof Number number) return number.longValue();
+        try {
+            return value == null ? null : Long.parseLong(value.toString());
+        } catch (NumberFormatException ignored) {
+            return null;
+        }
+    }
+
     private static int asInt(Object value) {
         if (value instanceof Number number) return number.intValue();
         try {
@@ -276,6 +302,19 @@ public class ChatMessage {
         msg.content = content != null ? content : "(empty)";
         msg.timestamp = System.currentTimeMillis();
         return msg;
+    }
+
+    /** 创建带工具执行计时信息的工具结果消息。 */
+    public static ChatMessage tool(String toolCallId, String content, long startedAt, long finishedAt) {
+        ChatMessage msg = tool(toolCallId, content);
+        msg.setToolTiming(startedAt, finishedAt);
+        return msg;
+    }
+
+    public void setToolTiming(long startedAt, long finishedAt) {
+        this.toolStartedAt = startedAt;
+        this.toolFinishedAt = finishedAt;
+        this.toolDurationMs = Math.max(0L, finishedAt - startedAt);
     }
 
     public static ChatMessage toolWithImage(String toolCallId, String content, String imageUrl, String imageDetail) {
@@ -393,6 +432,9 @@ public class ChatMessage {
         copy.snapshotId = this.snapshotId;
         copy.rollbackId = this.rollbackId;
         copy.timestamp = this.timestamp;
+        copy.toolStartedAt = this.toolStartedAt;
+        copy.toolFinishedAt = this.toolFinishedAt;
+        copy.toolDurationMs = this.toolDurationMs;
         return copy;
     }
 

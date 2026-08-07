@@ -482,10 +482,10 @@ public class AgentService {
      */
     private LoopraAgent getOrCreateAgentWithPrompt(String sessionKey, ModelTarget target, String systemPrompt) {
         LoopraAgent agent = sessionCache.get(sessionKey);
-        if (agent != null) return agent;
+        if (agent != null) return getOrCreateAgent(sessionKey, target);
         synchronized (this) {
             agent = sessionCache.get(sessionKey);
-            if (agent != null) return agent;
+            if (agent != null) return getOrCreateAgent(sessionKey, target);
             sessionCache.evictIfNeeded();
             agent = createAgent(sessionKey, target, systemPrompt);
             sessionCache.put(sessionKey, agent);
@@ -1666,6 +1666,15 @@ public class AgentService {
      * @return Agent 回复内容
      */
     public String executeRequirement(String workspacePath, String sessionName, String systemPrompt, String message, boolean webHidden) {
+        return executeRequirement(workspacePath, sessionName, systemPrompt, message, webHidden, null, null, null, null);
+    }
+
+    /**
+     * 执行需求并使用需求创建时保存的模型、推理强度和审批模式。
+     */
+    public String executeRequirement(String workspacePath, String sessionName, String systemPrompt, String message,
+                                     boolean webHidden, String requestedModel, String requestedChannelId,
+                                     String requestedReasoningEffort, String requestedHitl) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         ReentrantLock lock = getSessionLock(sessionKey);
         lock.lock();
@@ -1675,12 +1684,71 @@ public class AgentService {
         HttpModelClient.CURRENT_LOG_SESSION.set(effectiveSessionName);
 
         try {
-            LoopraAgent agent = getOrCreateAgentWithPrompt(sessionKey, defaultModelTarget(), systemPrompt);
+            LoopraAgent agent = getOrCreateAgentWithPrompt(sessionKey,
+                    resolveModelTarget(requestedModel, requestedChannelId), systemPrompt);
+            if (requestedReasoningEffort != null && !requestedReasoningEffort.isBlank()) {
+                agent.setReasoningEffort(requestedReasoningEffort.trim());
+            }
+            if (requestedHitl != null && !requestedHitl.isBlank()) {
+                agent.setHitlMode(requestedHitl.trim());
+            }
             agent.setOutput(AgentOutput.NOOP);
             agent.setSessionId(effectiveSessionName);
             UserMessage userMessage = UserMessage.of(message);
             userMessage.setWebHidden(webHidden);
             return agent.chat(userMessage);
+        } finally {
+            CURRENT_SESSION_NAME.remove();
+            HttpModelClient.CURRENT_LOG_SESSION.remove();
+            LoopraAgent agent = sessionCache.get(sessionKey);
+            if (agent != null) {
+                agent.setOutput(AgentOutput.NOOP);
+                agent.flushSession();
+                agent.saveUsage();
+            }
+            lock.unlock();
+        }
+    }
+
+    /**
+     * 判断需求会话是否正等待人工审批。
+     */
+    public boolean hasPendingRequirementApproval(String workspacePath, String sessionName) {
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        ReentrantLock lock = getSessionLock(sessionKey);
+        lock.lock();
+        try {
+            LoopraAgent agent = sessionCache.get(sessionKey);
+            return agent != null && !agent.noPendingHITL();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * 对需求会话的待审批工具调用作出决定并恢复执行。
+     */
+    public String resolveRequirementApproval(String workspacePath, String sessionName, boolean approved) {
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        ReentrantLock lock = getSessionLock(sessionKey);
+        lock.lock();
+
+        String effectiveSessionName = sessionName != null ? sessionName : "default";
+        CURRENT_SESSION_NAME.set(effectiveSessionName);
+        HttpModelClient.CURRENT_LOG_SESSION.set(effectiveSessionName);
+        try {
+            LoopraAgent agent = sessionCache.get(sessionKey);
+            if (agent == null || agent.noPendingHITL()) {
+                throw new ServiceException("当前需求没有待审批的工具调用");
+            }
+            if (approved) {
+                agent.approveHITL();
+            } else {
+                agent.denyHITL();
+            }
+            agent.setOutput(AgentOutput.NOOP);
+            agent.setSessionId(effectiveSessionName);
+            return agent.chat(null);
         } finally {
             CURRENT_SESSION_NAME.remove();
             HttpModelClient.CURRENT_LOG_SESSION.remove();

@@ -114,6 +114,7 @@
               </button>
               <span v-else-if="t.name === 'ask_choice' && getChoiceQuestion(t)" class="tool-param tool-param-wide"
                     :title="getChoiceQuestion(t)">{{ getChoiceQuestion(t) }}</span>
+              <span v-if="formatToolDuration(t)" class="tool-duration">{{ formatToolDuration(t) }}</span>
               <span class="default-icon" v-html="CHEVRON_DOWN_ICON"
                     :style="{
                       transform: t.expanded ? 'rotate(180deg)' : 'rotate(0deg)',
@@ -200,6 +201,7 @@
                 </button>
                 <span v-else-if="ib.name === 'ask_choice' && getChoiceQuestion(ib)" class="tool-param tool-param-wide"
                       :title="getChoiceQuestion(ib)">{{ getChoiceQuestion(ib) }}</span>
+                <span v-if="formatToolDuration(ib)" class="tool-duration">{{ formatToolDuration(ib) }}</span>
                 <span class="default-icon"
                       v-html="CHEVRON_DOWN_ICON"
                       :style="{
@@ -334,6 +336,7 @@
           </button>
           <span v-else-if="block.name === 'ask_choice' && getChoiceQuestion(block)" class="tool-param tool-param-wide"
                 :title="getChoiceQuestion(block)">{{ getChoiceQuestion(block) }}</span>
+          <span v-if="formatToolDuration(block)" class="tool-duration">{{ formatToolDuration(block) }}</span>
           <span class="default-icon"
                 v-html="CHEVRON_DOWN_ICON"
                 :style="{
@@ -382,6 +385,7 @@
               </span>
               <code class="tool-name">{{ sb.name }}</code>
               <span class="tool-status" :class="sb.status">{{ sb.status }}</span>
+              <span v-if="formatToolDuration(sb)" class="tool-duration">{{ formatToolDuration(sb) }}</span>
               <span class="default-icon"
                     v-html="CHEVRON_DOWN_ICON"
                     :style="{
@@ -463,13 +467,38 @@ import {md} from '../utils/highlight'
 import {sanitize} from '../utils/sanitize'
 import {CHECK_ICON_SM, CHEVRON_DOWN_ICON, CIRCLE_ICON, SPINNER_ICON, THINKING_ICON} from '../utils/icons'
 import {LRUCache} from '../utils/cache'
-import {computed, ref, watchEffect} from 'vue'
+import {computed, onBeforeUnmount, onMounted, ref, watchEffect} from 'vue'
 import ChecklistSteps from './ChecklistSteps.vue'
 
 const props = defineProps({
   blocks: {type: Array, required: true},
   streaming: {type: Boolean, default: false}
 })
+
+const clock = ref(Date.now())
+let durationTimer = null
+onMounted(() => {
+  durationTimer = window.setInterval(() => { clock.value = Date.now() }, 1000)
+})
+onBeforeUnmount(() => {
+  if (durationTimer != null) window.clearInterval(durationTimer)
+})
+
+const formatToolDuration = (block) => {
+  let duration = Number(block?.toolDurationMs)
+  if (!Number.isFinite(duration)) {
+    if (block?.status !== '执行中') return ''
+    const startedAt = Number(block?.toolStartedAt)
+    if (!Number.isFinite(startedAt)) return ''
+    duration = Math.max(0, clock.value - startedAt)
+  }
+  if (duration < 1000) return `${Math.round(duration)}ms`
+  if (duration < 10000) return `${(duration / 1000).toFixed(1)}s`
+  if (duration < 60000) return `${Math.round(duration / 1000)}s`
+  const minutes = Math.floor(duration / 60000)
+  const seconds = Math.floor((duration % 60000) / 1000)
+  return `${minutes}m ${String(seconds).padStart(2, '0')}s`
+}
 
 const emit = defineEmits(['sendChoice', 'openFile', 'openDiff', 'revertFileChanges'])
 
@@ -1426,6 +1455,15 @@ watchEffect(() => {
   font-weight: 500;
   border-radius: var(--r-sm);
   font-family: var(--mono);
+}
+
+.tool-duration {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: var(--fg-4);
+  font-size: 10px;
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
 }
 
 .tool-status.执行中 {

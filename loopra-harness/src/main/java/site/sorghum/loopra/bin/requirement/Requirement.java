@@ -44,6 +44,27 @@ public class Requirement implements Serializable {
     /** 状态：todo(待执行) / doing(执行中) / done(已完成) / failed(已失败) */
     private volatile String status;
 
+    /** 调度方式：immediate(立即执行) / scheduled(定时执行)，旧数据缺失时按 immediate 处理 */
+    private volatile String scheduleMode;
+
+    /** 执行时使用的模型名称；为空时使用全局默认模型 */
+    private volatile String model;
+
+    /** 执行时使用的模型渠道 ID；为空时使用全局默认渠道 */
+    private volatile String modelChannelId;
+
+    /** 执行时使用的推理强度；为空时使用全局默认值 */
+    private volatile String reasoningEffort;
+
+    /** 执行时使用的审批模式：free / approval / auto；为空时使用全局默认值 */
+    private volatile String hitl;
+
+    /** 是否正等待人工审批；仅审批模式下的工具调用暂停时为 true */
+    private volatile boolean approvalPending;
+
+    /** 定时执行时间戳（ms）；仅 scheduleMode=scheduled 时有效 */
+    private volatile long scheduledAt;
+
     /** AI 完成总结（finish_requirement 写入） */
     private volatile String summary;
 

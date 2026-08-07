@@ -1041,6 +1041,9 @@ export const requirementAPI = {
   // 触发执行（todo/failed 入队，状态 → doing） - POST /api/requirements/{id}/run
   run: (id) => api.post(`/requirements/${id}/run`),
 
+  // 处理审批模式下的待审批工具调用 - POST /api/requirements/{id}/approval
+  resolveApproval: (id, action) => api.post(`/requirements/${id}/approval`, { action }),
+
   // 取消执行（中断会话，状态回退 todo） - POST /api/requirements/{id}/abort
   abort: (id) => api.post(`/requirements/${id}/abort`),
 
