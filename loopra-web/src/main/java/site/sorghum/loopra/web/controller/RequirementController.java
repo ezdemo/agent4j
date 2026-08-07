@@ -56,6 +56,14 @@ public class RequirementController {
         if (draft.getProjectHash() == null || draft.getProjectHash().isBlank()) {
             return ApiResponse.fail("必须选择项目");
         }
+        String scheduleMode = draft.getScheduleMode();
+        if (scheduleMode != null && !scheduleMode.isBlank()
+                && !"immediate".equals(scheduleMode) && !"scheduled".equals(scheduleMode)) {
+            return ApiResponse.fail("不支持的调度方式: " + scheduleMode);
+        }
+        if ("scheduled".equals(scheduleMode) && draft.getScheduledAt() <= System.currentTimeMillis()) {
+            return ApiResponse.fail("定时执行时间必须晚于当前时间");
+        }
         if (agentService.resolveWorkspacePath(draft.getProjectHash()) == null) {
             return ApiResponse.fail("项目不存在: " + draft.getProjectHash());
         }
@@ -128,6 +136,22 @@ public class RequirementController {
             case "busy" -> ApiResponse.fail("需求正在执行或状态不允许触发: " + id);
             default -> ApiResponse.fail("需求不存在: " + id);
         };
+    }
+
+    @ApiOperation(value = "处理待审批工具调用", notes = "审批模式下在原需求会话继续执行")
+    @Post
+    @Mapping("/{id}/approval")
+    public ApiResponse<String> resolveApproval(
+            @ApiParam(value = "需求 ID") @Path("id") String id,
+            @Body Map<String, String> body) {
+        String action = body == null ? null : body.get("action");
+        if (!"approve".equals(action) && !"deny".equals(action)) {
+            return ApiResponse.fail("审批操作必须为 approve 或 deny");
+        }
+        if (!requirementManager.resolveApproval(id, "approve".equals(action))) {
+            return ApiResponse.fail("需求不存在、未在执行中或没有待审批操作: " + id);
+        }
+        return ApiResponse.ok("已" + ("approve".equals(action) ? "同意" : "拒绝") + "，AI 将继续执行");
     }
 
     @ApiOperation(value = "取消执行", notes = "中断会话并将状态回退到 todo")

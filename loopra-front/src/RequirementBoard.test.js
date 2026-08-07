@@ -38,8 +38,9 @@ const REQUIREMENTS = [
 ]
 
 const MESSAGES = [
+  {id: 'm0', role: 'user', content: '请执行需求。执行期间用户评论会作为消息进入本会话，可回复；完成后必须调用 finish_requirement 声明结果。', timestamp: NOW - 5000},
   {id: 'm1', role: 'user', content: '这是一条评论', timestamp: NOW - 4000},
-  {id: 'm2', role: 'assistant', content: 'AI 回复评论：收到，正在处理', timestamp: NOW - 3000},
+  {id: 'm2', role: 'assistant', content: '## AI 回复评论：收到，正在处理', timestamp: NOW - 3000},
   {id: 'm3', role: 'user', content: '第二条评论', timestamp: NOW - 2000},
   {id: 'm4', role: 'assistant', content: '开始执行需求', reasoning_content: '先分析需求描述与验收标准', timestamp: NOW - 1500,
    tool_calls: [{id: 'tc1', type: 'function', function: {name: 'read', arguments: '{"file_path":"src/a.java"}'}}]},
@@ -60,10 +61,12 @@ const {requirementAPI, configAPI} = vi.hoisted(() => ({
     delete: vi.fn(),
     update: vi.fn(),
     run: vi.fn(),
+    resolveApproval: vi.fn(),
     abort: vi.fn()
   },
   configAPI: {
-    listWorkspaces: vi.fn()
+    listWorkspaces: vi.fn(),
+    getConfig: vi.fn()
   }
 }))
 
@@ -77,6 +80,7 @@ beforeEach(() => {
   requirementAPI.delete.mockResolvedValue({success: true})
   requirementAPI.update.mockResolvedValue({success: true})
   requirementAPI.run.mockResolvedValue({success: true})
+  requirementAPI.resolveApproval.mockResolvedValue({success: true})
   requirementAPI.abort.mockResolvedValue({success: true})
   configAPI.listWorkspaces.mockResolvedValue({
     success: true,
@@ -84,6 +88,19 @@ beforeEach(() => {
       { hash: 'ws_agent4j', name: 'agent4j', path: '/p/agent4j' },
       { hash: 'ws_front', name: 'loopra-front', path: '/p/loopra-front' }
     ]
+  })
+  configAPI.getConfig.mockResolvedValue({
+    success: true,
+    data: {
+      model: 'gpt-5',
+      modelChannelId: 'openai',
+      reasoningEffort: 'high',
+      hitl: 'approval',
+      modelChannels: [
+        {id: 'openai', name: 'OpenAI', models: [{name: 'gpt-5'}, {name: 'gpt-4.1'}]},
+        {id: 'anthropic', name: 'Anthropic', models: [{name: 'claude-sonnet'}]}
+      ]
+    }
   })
 })
 
@@ -188,6 +205,7 @@ describe('RequirementBoard 需求池看板（后端数据）', () => {
     // m5 为执行过程日志、m7 为 webHidden 内部指令（不显示但保留回复配对）
     const comments = wrapper.findAll('.req-comment')
     expect(comments).toHaveLength(6)
+    expect(comments.some((comment) => comment.text().includes('请执行需求。执行期间'))).toBe(false)
     expect(comments[0].find('.req-comment-author').text()).toBe('我')
     expect(comments[0].find('.req-comment-text').text()).toBe('这是一条评论')
     expect(comments[0].find('.req-comment-time').text()).toBeTruthy() // 相对时间
@@ -195,6 +213,7 @@ describe('RequirementBoard 需求池看板（后端数据）', () => {
     expect(comments[1].find('.req-comment-author').text()).toBe('AI 执行 Agent')
     expect(comments[1].find('.req-comment-avatar').exists()).toBe(true)
     expect(comments[1].find('.req-comment-text').text()).toBe('AI 回复评论：收到，正在处理')
+    expect(comments[1].find('.req-comment-text h2').text()).toBe('AI 回复评论：收到，正在处理')
     expect(comments[3].find('.req-comment-text').text()).toBe('开始执行需求')
     // AI 结束评论（✅ 前缀）即使前面没有用户评论也独立展示
     expect(comments[4].find('.req-comment-author').text()).toBe('AI 执行 Agent')
@@ -276,6 +295,7 @@ describe('RequirementBoard 需求池看板（后端数据）', () => {
     // 第一次点击：进入确认态
     await wrapper.find('[title="删除需求"]').trigger('click')
     expect(wrapper.find('.req-delete-confirm').exists()).toBe(true)
+    expect(wrapper.find('.req-delete-confirm').text()).toBe('确认删除')
     expect(requirementAPI.delete).not.toHaveBeenCalled()
 
     // 第二次点击：执行删除
@@ -343,12 +363,26 @@ describe('RequirementBoard 需求池看板（后端数据）', () => {
     expect(wrapper.find('.req-board-columns').exists()).toBe(true)
   })
 
+  it('审批模式需求显示批准和拒绝操作，并向后端提交决定', async () => {
+    const pending = req('等待审批需求', 'doing', {approvalPending: true})
+    requirementAPI.list.mockResolvedValue({success: true, data: [pending]})
+    await wrapper.vm.loadFromAPI()
+    await wrapper.find('.req-card').trigger('click')
+
+    expect(wrapper.find('.req-ai-name').text()).toBe('等待审批')
+    const actions = wrapper.findAll('.req-ai-actions .req-btn')
+    expect(actions.map((button) => button.text())).toEqual(['同意执行', '拒绝执行'])
+    await actions[0].trigger('click')
+    expect(requirementAPI.resolveApproval).toHaveBeenCalledWith(pending.id, 'approve')
+  })
+
   it('新建需求：必须选择项目，创建走后端接口', async () => {
     await wrapper.find('.req-btn-primary').trigger('click')
+    await flushAll()
     expect(wrapper.find('.req-create-modal').exists()).toBe(true)
 
     const selects = wrapper.findAll('.stub-select')
-    expect(selects).toHaveLength(2)
+    expect(selects).toHaveLength(5)
 
     // 未选项目：创建按钮禁用
     await wrapper.find('.req-field input').setValue('新需求标题')
@@ -366,9 +400,62 @@ describe('RequirementBoard 需求池看板（后端数据）', () => {
     expect(requirementAPI.create).toHaveBeenCalledWith(expect.objectContaining({
       title: '新需求标题',
       projectHash: 'ws_front',
-      projectName: 'loopra-front'
+      projectName: 'loopra-front',
+      model: 'gpt-5',
+      modelChannelId: 'openai',
+      reasoningEffort: 'high',
+      hitl: 'approval'
     }))
     // 创建后刷新列表（含挂载时加载，共至少 2 次）
     expect(requirementAPI.list.mock.calls.length).toBeGreaterThanOrEqual(2)
+  })
+
+  it('新建需求：可选择指定模型、推理强度和审批模式', async () => {
+    await wrapper.find('.req-btn-primary').trigger('click')
+    await flushAll()
+    const selects = wrapper.findAll('.stub-select')
+
+    // 模型、推理和审批模式依次是第 3、4、5 个下拉框
+    await selects[2].find('.stub-select-trigger').trigger('click')
+    await selects[2].findAll('.stub-select-option')[2].trigger('click')
+    await selects[3].find('.stub-select-trigger').trigger('click')
+    await selects[3].findAll('.stub-select-option')[1].trigger('click')
+    await selects[4].find('.stub-select-trigger').trigger('click')
+    await selects[4].findAll('.stub-select-option')[2].trigger('click')
+
+    await wrapper.find('.req-field input').setValue('配置专属执行参数')
+    await selects[0].find('.stub-select-trigger').trigger('click')
+    await selects[0].find('.stub-select-option').trigger('click')
+    await wrapper.find('.req-create-modal').trigger('submit')
+
+    expect(requirementAPI.create).toHaveBeenCalledWith(expect.objectContaining({
+      model: 'claude-sonnet',
+      modelChannelId: 'anthropic',
+      reasoningEffort: 'low',
+      hitl: 'auto'
+    }))
+  })
+
+  it('新建定时需求：展示时间配置并只保存计划，不立即执行', async () => {
+    await wrapper.find('.req-btn-primary').trigger('click')
+    await wrapper.find('.req-field input').setValue('定时需求')
+
+    const selects = wrapper.findAll('.stub-select')
+    await selects[0].find('.stub-select-trigger').trigger('click')
+    await selects[0].find('.stub-select-option').trigger('click')
+    await wrapper.find('.req-schedule-mode button:nth-child(2)').trigger('click')
+
+    expect(wrapper.find('input[type="datetime-local"]').exists()).toBe(true)
+    const scheduledAt = new Date(Date.now() + 2 * 60 * 60 * 1000)
+    await wrapper.find('input[type="datetime-local"]').setValue(new Date(scheduledAt - scheduledAt.getTimezoneOffset() * 60 * 1000).toISOString().slice(0, 16))
+    await wrapper.find('.req-create-modal').trigger('submit')
+    await nextTick()
+
+    expect(requirementAPI.create).toHaveBeenCalledWith(expect.objectContaining({
+      title: '定时需求',
+      scheduleMode: 'scheduled',
+      scheduledAt: expect.any(Number)
+    }))
+    expect(requirementAPI.run).not.toHaveBeenCalled()
   })
 })

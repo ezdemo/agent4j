@@ -110,6 +110,12 @@ public class RequirementManager {
                 .projectHash(draft.getProjectHash())
                 .projectName(draft.getProjectName())
                 .status("todo")
+                .scheduleMode("scheduled".equals(draft.getScheduleMode()) ? "scheduled" : "immediate")
+                .scheduledAt("scheduled".equals(draft.getScheduleMode()) ? draft.getScheduledAt() : 0)
+                .model(blankToNull(draft.getModel()))
+                .modelChannelId(blankToNull(draft.getModelChannelId()))
+                .reasoningEffort(blankToNull(draft.getReasoningEffort()))
+                .hitl(blankToNull(draft.getHitl()))
                 .summary("")
                 .sessionName("req_" + id)
                 .createdAt(now)
@@ -117,6 +123,10 @@ public class RequirementManager {
                 .build();
         store.upsert(requirement);
         return requirement;
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
     }
 
     /**
@@ -192,7 +202,8 @@ public class RequirementManager {
             }
             agentService.executeRequirement(workspacePath, requirement.getSessionName(),
                     buildSystemPrompt(requirement),
-                    "用户发表了新评论，请阅读并回复（可直接回复，或用 reply_requirement_comment 工具）。", true);
+                    "用户发表了新评论，请阅读并回复（可直接回复，或用 reply_requirement_comment 工具）。", true,
+                    requirement.getModel(), requirement.getModelChannelId(), requirement.getReasoningEffort(), requirement.getHitl());
         } catch (Exception e) {
             log.warn("[requirement] 评论回复回合失败: {}", e.getMessage());
         }
@@ -286,11 +297,30 @@ public class RequirementManager {
             return "busy";
         }
         requirement.setStatus("doing");
+        requirement.setApprovalPending(false);
         requirement.setUpdatedAt(System.currentTimeMillis());
         store.upsert(requirement);
         log.info("[requirement] 需求开始执行: {} ({})", requirement.getTitle(), id);
         executor.submit(() -> executeRequirement(id));
         return "started";
+    }
+
+    /**
+     * 对审批模式下暂存的工具调用作出决定，并在原需求会话继续执行。
+     */
+    public boolean resolveApproval(String id, boolean approved) {
+        Requirement requirement = store.get(id);
+        if (requirement == null || !"doing".equals(requirement.getStatus()) || !requirement.isApprovalPending()) {
+            return false;
+        }
+        if (!runningIds.add(id)) {
+            return false;
+        }
+        requirement.setApprovalPending(false);
+        requirement.setUpdatedAt(System.currentTimeMillis());
+        store.upsert(requirement);
+        executor.submit(() -> resumeRequirement(id, approved));
+        return true;
     }
 
     /**
@@ -311,6 +341,7 @@ public class RequirementManager {
                 }
             }
             requirement.setStatus("todo");
+            requirement.setApprovalPending(false);
             requirement.setUpdatedAt(System.currentTimeMillis());
             store.upsert(requirement);
             log.info("[requirement] 需求已人工取消: {}", id);
@@ -327,6 +358,7 @@ public class RequirementManager {
             return;
         }
         requirement.setStatus("done".equals(status) ? "done" : "failed");
+        requirement.setApprovalPending(false);
         requirement.setSummary(summary != null ? summary : "");
         requirement.setUpdatedAt(System.currentTimeMillis());
         store.upsert(requirement);
@@ -334,14 +366,22 @@ public class RequirementManager {
     }
 
     /**
-     * 守护 ticker：自动拉起 todo 且未在执行的待执行需求。
+     * 守护 ticker：自动拉起立即执行，或已到执行时间的定时需求。
      */
     void scanAndRun() {
+        long now = System.currentTimeMillis();
         for (Requirement requirement : store.loadAll()) {
-            if ("todo".equals(requirement.getStatus()) && !runningIds.contains(requirement.getId())) {
+            if ("todo".equals(requirement.getStatus())
+                    && !runningIds.contains(requirement.getId())
+                    && isDue(requirement, now)) {
                 run(requirement.getId());
             }
         }
+    }
+
+    private boolean isDue(Requirement requirement, long now) {
+        return !"scheduled".equals(requirement.getScheduleMode())
+                || requirement.getScheduledAt() <= now;
     }
 
     /**
@@ -363,12 +403,22 @@ public class RequirementManager {
                 throw new IllegalStateException("需求所属项目不存在: " + requirement.getProjectHash());
             }
             agentService.executeRequirement(workspacePath, requirement.getSessionName(),
-                    buildSystemPrompt(requirement), "请执行需求。执行期间用户评论会作为消息进入本会话，可回复；完成后必须调用 finish_requirement 声明结果。");
+                    buildSystemPrompt(requirement),
+                    "请执行需求。执行期间用户评论会作为消息进入本会话，可回复；完成后必须调用 finish_requirement 声明结果。", true,
+                    requirement.getModel(), requirement.getModelChannelId(), requirement.getReasoningEffort(), requirement.getHitl());
+
+            if (agentService.hasPendingRequirementApproval(workspacePath, requirement.getSessionName())) {
+                requirement.setApprovalPending(true);
+                requirement.setUpdatedAt(System.currentTimeMillis());
+                store.upsert(requirement);
+                return;
+            }
 
             // chat 正常返回但 AI 未显式声明结果 → 按完成处理
             Requirement current = store.get(id);
             if (current != null && "doing".equals(current.getStatus())) {
                 current.setStatus("done");
+                current.setApprovalPending(false);
                 current.setSummary("AI 执行完成（未显式调用 finish_requirement，已按正常完成处理）");
                 current.setUpdatedAt(System.currentTimeMillis());
                 store.upsert(current);
@@ -378,6 +428,7 @@ public class RequirementManager {
             Requirement current = store.get(id);
             if (current != null && "doing".equals(current.getStatus())) {
                 current.setStatus("failed");
+                current.setApprovalPending(false);
                 current.setSummary("执行异常: " + e.getMessage());
                 current.setUpdatedAt(System.currentTimeMillis());
                 store.upsert(current);
@@ -387,6 +438,53 @@ public class RequirementManager {
         }
 
         // 执行结束（done/failed）→ 在评论区追加一条 AI 结束评论（✅/❌ 前缀，前端据此展示）
+        Requirement finalState = store.get(id);
+        if (finalState != null && workspacePath != null
+                && ("done".equals(finalState.getStatus()) || "failed".equals(finalState.getStatus()))) {
+            appendFinishComment(finalState, workspacePath);
+        }
+    }
+
+    private void resumeRequirement(String id, boolean approved) {
+        String workspacePath = null;
+        try {
+            Requirement requirement = store.get(id);
+            if (requirement == null) {
+                return;
+            }
+            workspacePath = agentService.resolveWorkspacePath(requirement.getProjectHash());
+            if (workspacePath == null) {
+                throw new IllegalStateException("需求所属项目不存在: " + requirement.getProjectHash());
+            }
+            agentService.resolveRequirementApproval(workspacePath, requirement.getSessionName(), approved);
+            if (agentService.hasPendingRequirementApproval(workspacePath, requirement.getSessionName())) {
+                requirement.setApprovalPending(true);
+                requirement.setUpdatedAt(System.currentTimeMillis());
+                store.upsert(requirement);
+                return;
+            }
+            Requirement current = store.get(id);
+            if (current != null && "doing".equals(current.getStatus())) {
+                current.setStatus("done");
+                current.setApprovalPending(false);
+                current.setSummary("AI 执行完成（未显式调用 finish_requirement，已按正常完成处理）");
+                current.setUpdatedAt(System.currentTimeMillis());
+                store.upsert(current);
+            }
+        } catch (Exception e) {
+            log.error("[requirement] 审批后恢复执行异常: {}", e.getMessage());
+            Requirement current = store.get(id);
+            if (current != null && "doing".equals(current.getStatus())) {
+                current.setStatus("failed");
+                current.setApprovalPending(false);
+                current.setSummary("审批后执行异常: " + e.getMessage());
+                current.setUpdatedAt(System.currentTimeMillis());
+                store.upsert(current);
+            }
+        } finally {
+            runningIds.remove(id);
+        }
+
         Requirement finalState = store.get(id);
         if (finalState != null && workspacePath != null
                 && ("done".equals(finalState.getStatus()) || "failed".equals(finalState.getStatus()))) {
@@ -419,6 +517,7 @@ public class RequirementManager {
         return """
                 你是需求执行 Agent。当前会话绑定一个需求，请在所属项目工作区中完成它。
                 完成后必须调用 finish_requirement 工具声明结果（status 传 done 或 failed，summary 总结所做改动与结果）。
+                summary 必须使用简洁 Markdown：先写一句结论，后续多个改动、问题或验证结果使用 `- ` 分行列出，项目之间留空行；不要把多项内容压成一整段。
                 执行期间用户评论会作为消息进入本会话，可用 reply_requirement_comment 回复用户评论。
 
                 需求详情：

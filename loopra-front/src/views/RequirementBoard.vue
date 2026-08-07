@@ -50,6 +50,10 @@
                   <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M12 4v4M9 13h.01M15 13h.01M9 17h6"/></svg>
                   AI 执行
                 </span>
+                <span v-if="isScheduled(item)" class="req-schedule-badge" :title="scheduleDescription(item)">
+                  <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
+                  {{ scheduleLabel(item) }}
+                </span>
                 <span class="req-card-time">{{ fmtTime(item.updatedAt) }}</span>
               </div>
             </article>
@@ -73,13 +77,18 @@
           <span class="req-detail-id">#{{ selected.id.slice(-4) }}</span>
           <span class="req-detail-title-text">{{ selected.title }}</span>
         </div>
-          <button v-if="deleteArmed" type="button" class="req-detail-close req-delete-confirm" title="再次点击确认删除" @click="requestDelete">确认删除？</button>
-          <button v-else type="button" class="req-detail-close" title="删除需求" @click="requestDelete">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
-          </button>
-          <button type="button" class="req-detail-close" title="关闭" @click="closeDetail">
-            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18"/></svg>
-          </button>
+          <div class="req-detail-actions">
+            <button v-if="deleteArmed" type="button" class="req-btn req-btn-sm req-btn-danger req-delete-confirm" title="确认删除需求" @click="requestDelete">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+              确认删除
+            </button>
+            <button v-else type="button" class="req-detail-close" title="删除需求" @click="requestDelete">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+            </button>
+            <button type="button" class="req-detail-close" title="关闭" @click="closeDetail">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 6 12 12M18 6 6 18"/></svg>
+            </button>
+          </div>
       </header>
 
       <div class="req-detail-main">
@@ -97,11 +106,15 @@
               </span>
               <div class="req-ai-info">
                 <span class="req-ai-name">{{ aiStateText }}</span>
-                <span class="req-ai-role">AI 根据任务描述自动执行并流转状态</span>
+                <span class="req-ai-role">{{ scheduleDescription(selected) }}</span>
               </div>
               <div class="req-ai-actions">
+                <template v-if="selected.status === 'doing' && selected.approvalPending">
+                  <button type="button" class="req-btn req-btn-sm req-btn-primary" :disabled="aiRunning" @click="resolveApproval(true)">同意执行</button>
+                  <button type="button" class="req-btn req-btn-sm req-btn-danger" :disabled="aiRunning" @click="resolveApproval(false)">拒绝执行</button>
+                </template>
                 <button
-                  v-if="selected.status === 'todo'"
+                  v-else-if="selected.status === 'todo'"
                   type="button"
                   class="req-btn req-btn-sm req-btn-primary"
                   :disabled="aiRunning"
@@ -175,7 +188,7 @@
                 <span class="req-comment-author">{{ commentAuthor(item) }}</span>
                 <span class="req-comment-time">{{ fmtRelative(item.timestamp) }}</span>
               </div>
-              <p class="req-comment-text">{{ item.content }}</p>
+                <div class="req-comment-text" v-html="renderComment(item.content)"></div>
             </div>
             <div v-if="!commentItems.length" class="req-comments-empty">暂无评论，来抢沙发～</div>
           </div>
@@ -239,7 +252,65 @@
               </template>
             </ReqSelect>
           </label>
-          <p class="req-create-tip">创建后将自动进入「待执行」，由 AI 调度执行并流转状态。</p>
+          <div class="req-config-row">
+            <label class="req-field">
+              <span>模型</span>
+              <ReqSelect
+                v-model="draft.modelSelection"
+                :options="modelOptions"
+                placeholder="使用默认模型"
+              />
+            </label>
+            <label class="req-field">
+              <span>推理强度</span>
+              <ReqSelect
+                v-model="draft.reasoningEffort"
+                :options="reasoningEffortOptions"
+                placeholder="选择推理强度"
+              />
+            </label>
+            <label class="req-field">
+              <span>审批模式</span>
+              <ReqSelect
+                v-model="draft.hitl"
+                :options="hitlOptions"
+                placeholder="选择审批模式"
+              />
+            </label>
+          </div>
+          <label class="req-field">
+            <span>执行方式</span>
+            <div class="req-schedule-mode" role="radiogroup" aria-label="执行方式">
+              <button
+                type="button"
+                :class="{ active: draft.scheduleMode === 'immediate' }"
+                :aria-checked="draft.scheduleMode === 'immediate'"
+                role="radio"
+                @click="draft.scheduleMode = 'immediate'; draft.scheduledAt = ''"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="m13 2-9 12h7l-1 8 10-13h-7z"/></svg>
+                <span>立即执行<small>创建后直接进入执行队列</small></span>
+              </button>
+              <button
+                type="button"
+                :class="{ active: draft.scheduleMode === 'scheduled' }"
+                :aria-checked="draft.scheduleMode === 'scheduled'"
+                role="radio"
+                @click="draft.scheduleMode = 'scheduled'"
+              >
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
+                <span>定时执行<small>到指定时间后自动执行</small></span>
+              </button>
+            </div>
+          </label>
+          <label v-if="draft.scheduleMode === 'scheduled'" class="req-field">
+            <span>执行时间 <em>*</em></span>
+            <div class="req-datetime-field">
+              <input v-model="draft.scheduledAt" type="datetime-local" :min="scheduleMin" required />
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true"><rect x="3" y="5" width="18" height="16" rx="2"/><path d="M16 3v4M8 3v4M3 10h18"/></svg>
+            </div>
+          </label>
+          <p class="req-create-tip">立即执行会直接入队；定时执行将在指定时间由 AI 自动启动。</p>
         </div>
         <footer class="req-create-footer">
           <button type="button" class="req-btn" @click="createOpen = false">取消</button>
@@ -255,6 +326,8 @@ import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} fr
 import ChatMessage from '../components/ChatMessage.vue'
 import ReqSelect from '../components/ReqSelect.vue'
 import {configAPI, requirementAPI} from '../services/api'
+import {md} from '../utils/highlight'
+import {sanitize} from '../utils/sanitize'
 
 // ============ 常量 ============
 const COLUMNS = [
@@ -275,6 +348,23 @@ const MOCK_PROJECTS = [
 const STATUS_LABELS = { todo: '待执行', doing: '执行中', done: '已完成', failed: '已失败' }
 const PRIORITY_LABELS = { high: '高', medium: '中', low: '低' }
 
+const commentRenderCache = new Map()
+const normalizeCommentMarkdown = (source) => {
+  if (!source.startsWith('✅') && !source.startsWith('❌')) return source
+  const numberedItems = source.match(/\d+\)\s/g)
+  if (!numberedItems || numberedItems.length < 2) return source
+  return source.replace(/(^|\s|[：:；;])\s*\d+\)\s*/g, '$1\n\n- ')
+}
+const renderComment = (content) => {
+  const source = normalizeCommentMarkdown(String(content || ''))
+  if (!source) return ''
+  if (commentRenderCache.has(source)) return commentRenderCache.get(source)
+  const html = sanitize(md.parse(source))
+  if (commentRenderCache.size >= 200) commentRenderCache.delete(commentRenderCache.keys().next().value)
+  commentRenderCache.set(source, html)
+  return html
+}
+
 // 需求数据由后端 RequirementStore 权威管理（见 docs/requirement-board-ai-design.md）
 
 // ============ 状态 ============
@@ -284,7 +374,12 @@ const detailTab = ref('comments')
 const commentDraft = ref('')
 const createOpen = ref(false)
 const projects = ref([])
-const draft = reactive({ title: '', description: '', priority: 'medium', projectHash: '' })
+const modelConfig = ref(null)
+const draft = reactive({
+  title: '', description: '', priority: 'medium', projectHash: '',
+  modelSelection: '', reasoningEffort: 'max', hitl: 'free',
+  scheduleMode: 'immediate', scheduledAt: ''
+})
 const theme = ref('gray')
 const loading = ref(false)
 // 需求专属会话的消息流（评论 + 执行日志，来自后端）
@@ -302,6 +397,7 @@ const columns = COLUMNS
 const listOf = (key) => requirements.value.filter((item) => item.status === key)
 const aiStateText = computed(() => {
   if (aiRunning.value) return 'AI 执行中…'
+  if (selected.value?.approvalPending) return '等待审批'
   return STATUS_LABELS[selected.value?.status] || ''
 })
 
@@ -312,6 +408,30 @@ const priorityOptions = [
   { value: 'medium', label: '中', dot: '#f59e0b' },
   { value: 'low', label: '低', dot: '#6b7280' }
 ]
+const modelOptions = computed(() => (modelConfig.value?.modelChannels || []).flatMap((channel) =>
+  (channel.models || []).map((model) => ({
+    value: `${channel.id}::${model.name}`,
+    label: `${model.name} (${channel.name || channel.id})`
+  }))
+))
+const reasoningEffortOptions = [
+  { value: 'none', label: '无' },
+  { value: 'low', label: '低' },
+  { value: 'medium', label: '中' },
+  { value: 'high', label: '高' },
+  { value: 'max', label: '最大' }
+]
+const hitlOptions = [
+  { value: 'free', label: '自由模式' },
+  { value: 'approval', label: '审批模式' },
+  { value: 'auto', label: '自动模式' }
+]
+const scheduleMin = computed(() => toDateTimeLocal(Date.now() + 60 * 1000))
+const isScheduled = (item) => item?.scheduleMode === 'scheduled' && Number(item.scheduledAt) > 0
+const scheduleLabel = (item) => `定时 ${fmtTime(item.scheduledAt)}`
+const scheduleDescription = (item) => isScheduled(item)
+  ? `定时执行：${fmtTime(item.scheduledAt)} 自动启动`
+  : '立即执行：创建后直接进入执行队列'
 
 // 消息流数据源：
 // 日志 tab → logMessages（完整复刻聊天框历史组装：思考/工具调用/文件改动，复用 ChatMessage 组件）
@@ -321,7 +441,14 @@ const priorityOptions = [
 function buildToolResults(rawMessages) {
   const results = {}
   for (const m of rawMessages) {
-    if (m.role === 'tool' && m.tool_call_id) results[m.tool_call_id] = m.content || ''
+    if (m.role === 'tool' && m.tool_call_id) {
+      results[m.tool_call_id] = {
+        content: m.content || '',
+        durationMs: m.tool_duration_ms ?? m.toolDurationMs ?? null,
+        startedAt: m.tool_started_at ?? m.toolStartedAt ?? null,
+        finishedAt: m.tool_finished_at ?? m.toolFinishedAt ?? null
+      }
+    }
   }
   return results
 }
@@ -382,14 +509,19 @@ function toChatLogMessages(rawMessages) {
       if (typeof args === 'string') {
         try { args = JSON.parse(args) } catch { /* 保留原字符串 */ }
       }
-      lastAssistantItem.blocks.push({
-        type: 'tool_call',
-        name,
-        status: toolResults[tc.id] ? '成功' : '执行中',
-        args,
-        result: toolResults[tc.id] || '',
-        expanded: !toolResults[tc.id]
-      })
+       const toolResult = toolResults[tc.id]
+       const hasResult = Object.hasOwn(toolResults, tc.id)
+       lastAssistantItem.blocks.push({
+         type: 'tool_call',
+         name,
+         status: hasResult ? '成功' : '执行中',
+         args,
+         result: toolResult?.content || '',
+         toolDurationMs: toolResult?.durationMs,
+         toolStartedAt: toolResult?.startedAt || m.timestamp,
+         toolFinishedAt: toolResult?.finishedAt,
+         expanded: !hasResult
+       })
     }
     if (m.content) lastAssistantItem.blocks.push({ type: 'content', content: m.content })
     const fileChanges = m.file_changes || m.fileChanges
@@ -405,6 +537,9 @@ const logMessages = computed(() => {
 })
 // AI 结束评论标记（执行结果总结，由后端 appendFinishComment 写入）
 const isFinishComment = (content) => content && (content.startsWith('✅') || content.startsWith('❌'))
+// 兼容旧数据：早期需求启动消息错误地以普通 user 消息写入，会话日志保留但评论区不展示。
+const isInternalExecutionPrompt = (content) => typeof content === 'string'
+  && content.startsWith('请执行需求。执行期间用户评论会作为消息进入本会话')
 const commentItems = computed(() => {
   if (!selected.value) return []
   const items = []
@@ -413,7 +548,7 @@ const commentItems = computed(() => {
     const message = messages.value[i]
     if (message.role === 'user' && message.content) {
       // 跳过 webHidden 消息（如回复回合的内部指令），但保留其后的 AI 回复配对
-      if (!(message.web_hidden || message.webHidden)) {
+      if (!(message.web_hidden || message.webHidden) && !isInternalExecutionPrompt(message.content)) {
         items.push({ id: message.id || `user_${message.timestamp}`, role: 'user', content: message.content, timestamp: message.timestamp })
       }
       pendingUser = true
@@ -430,12 +565,17 @@ const commentItems = computed(() => {
   return items
 })
 const commentAuthor = (item) => (item.role === 'assistant' ? 'AI 执行 Agent' : '我')
-const commentCount = computed(() => messages.value.filter((m) => m.role === 'user' && m.content && !m.web_hidden && !m.webHidden).length)
+const commentCount = computed(() => messages.value.filter((m) => m.role === 'user' && m.content && !m.web_hidden && !m.webHidden && !isInternalExecutionPrompt(m.content)).length)
 const logCount = computed(() => messages.value.filter((m) => m.role === 'assistant' && m.content).length)
 
 // ============ 工具函数 ============
 const statusLabel = (status) => STATUS_LABELS[status] || status
 const priorityLabel = (priority) => PRIORITY_LABELS[priority] || priority
+
+function toDateTimeLocal(timestamp) {
+  const date = new Date(timestamp - new Date(timestamp).getTimezoneOffset() * 60 * 1000)
+  return date.toISOString().slice(0, 16)
+}
 
 function fmtTime(timestamp) {
   const date = new Date(timestamp)
@@ -547,6 +687,22 @@ async function runRequirement() {
 }
 
 // 人工取消执行：中断会话并回退 todo
+async function resolveApproval(approved) {
+  if (!selected.value) return
+  aiRunning.value = true
+  try {
+    const res = await requirementAPI.resolveApproval(selected.value.id, approved ? 'approve' : 'deny')
+    if (res?.success) {
+      await loadFromAPI()
+      await loadMessages()
+    }
+  } catch (error) {
+    console.warn('[requirement-board] 处理审批失败:', error)
+  } finally {
+    aiRunning.value = false
+  }
+}
+
 async function abortRequirement() {
   const item = selected.value
   if (!item || aiRunning.value) return
@@ -611,10 +767,17 @@ function copyMessage(msg) {
 }
 
 function openCreateModal() {
+  const config = modelConfig.value || {}
   draft.title = ''
   draft.description = ''
   draft.priority = 'medium'
   draft.projectHash = ''
+  draft.modelSelection = config.modelChannelId && config.model
+    ? `${config.modelChannelId}::${config.model}` : ''
+  draft.reasoningEffort = config.reasoningEffort || 'max'
+  draft.hitl = config.hitl || 'free'
+  draft.scheduleMode = 'immediate'
+  draft.scheduledAt = ''
   createOpen.value = true
 }
 
@@ -624,16 +787,28 @@ async function createRequirement() {
   // 新建需求必须选择项目
   const project = projects.value.find((item) => item.hash === draft.projectHash)
   if (!project) return
+  const scheduledAt = draft.scheduleMode === 'scheduled' ? new Date(draft.scheduledAt).getTime() : 0
+  if (draft.scheduleMode === 'scheduled' && (!Number.isFinite(scheduledAt) || scheduledAt <= Date.now())) return
+  const [modelChannelId = '', model = ''] = draft.modelSelection.split('::')
   try {
     const res = await requirementAPI.create({
       title,
       description: draft.description.trim(),
       priority: draft.priority,
       projectHash: project.hash,
-      projectName: project.name
+      projectName: project.name,
+      model: model || null,
+      modelChannelId: modelChannelId || null,
+      reasoningEffort: draft.reasoningEffort,
+      hitl: draft.hitl,
+      scheduleMode: draft.scheduleMode,
+      scheduledAt
     })
     if (res?.success && res.data) {
       createOpen.value = false
+      if (draft.scheduleMode === 'immediate') {
+        await requirementAPI.run(res.data.id)
+      }
       await loadFromAPI()
     }
   } catch (error) {
@@ -654,6 +829,17 @@ async function loadProjects() {
     console.warn('[requirement-board] 加载项目列表失败，使用演示项目:', error)
   }
   projects.value = MOCK_PROJECTS
+}
+
+async function loadModelConfig() {
+  try {
+    const res = await configAPI.getConfig()
+    if (res?.success && res.data) {
+      modelConfig.value = res.data
+    }
+  } catch (error) {
+    console.warn('[requirement-board] 加载模型配置失败，将使用全局默认值:', error)
+  }
 }
 
 // ============ 轮询刷新 ============
@@ -687,6 +873,7 @@ onMounted(() => {
   document.documentElement.setAttribute('data-theme', theme.value)
   loadFromAPI()
   loadProjects()
+  loadModelConfig()
   startPolling()
 })
 
@@ -741,8 +928,10 @@ onBeforeUnmount(() => {
 .req-card-title { display: flex; align-items: flex-start; gap: 6px; font-size: 13px; line-height: 1.45; word-break: break-word; }
 .req-card-title .req-priority { margin-top: 1px; flex: 0 0 auto; }
 .req-card-meta { display: flex; align-items: center; gap: 6px; margin-top: 8px; }
-.req-ai-badge { height: 18px; display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; border-radius: 4px; background: var(--accent-bg, rgba(82, 82, 91, 0.1)); color: var(--fg-3, #727987); font-size: 11px; flex: 0 0 auto; }
-.req-ai-badge svg { width: 11px; height: 11px; }
+.req-ai-badge, .req-schedule-badge { height: 18px; display: inline-flex; align-items: center; gap: 4px; padding: 0 6px; border-radius: 4px; font-size: 11px; flex: 0 0 auto; }
+.req-ai-badge { background: var(--accent-bg, rgba(82, 82, 91, 0.1)); color: var(--fg-3, #727987); }
+.req-schedule-badge { background: rgba(59, 130, 246, 0.1); color: #2563eb; }
+.req-ai-badge svg, .req-schedule-badge svg { width: 11px; height: 11px; }
 .req-project-badge { max-width: 120px; height: 18px; display: inline-flex; align-items: center; padding: 0 6px; border: 1px solid var(--border-2, #d1d5db); border-radius: 4px; color: var(--fg-3, #727987); font-size: 11px; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 0 0 auto; }
 .req-card-time { margin-left: auto; flex: 0 0 auto; font-size: 11px; color: var(--fg-4, #9ca3af); }
 .req-column-empty { padding: 24px 0; text-align: center; color: var(--fg-4, #9ca3af); font-size: 12px; }
@@ -771,8 +960,8 @@ onBeforeUnmount(() => {
 .req-detail-close { width: 28px; height: 28px; display: inline-flex; align-items: center; justify-content: center; border: 0; border-radius: 6px; background: transparent; color: var(--fg-3, #727987); cursor: pointer; flex: 0 0 auto; }
 .req-detail-close:hover { background: var(--bg-3, #f3f4f6); color: var(--fg, #202124); }
 .req-detail-close svg { width: 15px; height: 15px; }
-.req-delete-confirm { padding: 0 10px; color: #dc2626; font-size: 12px; }
-.req-delete-confirm:hover { color: #b42318; background: rgba(220, 38, 38, 0.1); }
+.req-detail-actions { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
+.req-delete-confirm { min-width: 84px; justify-content: center; white-space: nowrap; }
 
 .req-detail-main { min-height: 0; flex: 1; display: flex; flex-direction: column; padding: 14px clamp(16px, 4vw, 48px) 0; }
 
@@ -817,7 +1006,18 @@ onBeforeUnmount(() => {
 .req-comment-avatar.ai { background: var(--accent-bg, rgba(82, 82, 91, 0.12)); color: var(--fg-2, #525866); }
 .req-comment-author { font-size: 12px; font-weight: 600; color: var(--fg, #202124); }
 .req-comment-time { margin-left: auto; font-size: 11px; color: var(--fg-4, #9ca3af); }
-.req-comment-text { margin: 8px 0 0; font-size: 13px; line-height: 1.65; color: var(--fg-2, #525866); white-space: pre-wrap; word-break: break-word; }
+.req-comment-text { margin: 8px 0 0; font-size: 13px; line-height: 1.65; color: var(--fg-2, #525866); word-break: break-word; }
+.req-comment-text :deep(p) { margin: 0 0 8px; }
+.req-comment-text :deep(p:last-child) { margin-bottom: 0; }
+.req-comment-text :deep(h1), .req-comment-text :deep(h2), .req-comment-text :deep(h3) { margin: 12px 0 6px; color: var(--fg, #202124); font-size: 14px; line-height: 1.4; }
+.req-comment-text :deep(h1:first-child), .req-comment-text :deep(h2:first-child), .req-comment-text :deep(h3:first-child) { margin-top: 0; }
+.req-comment-text :deep(ul), .req-comment-text :deep(ol) { margin: 6px 0 8px; padding-left: 22px; }
+.req-comment-text :deep(li) { margin: 3px 0; }
+.req-comment-text :deep(pre) { margin: 8px 0; padding: 10px 12px; overflow-x: auto; border-radius: 6px; background: var(--bg-2, #f3f4f6); }
+.req-comment-text :deep(code) { font-family: var(--mono, monospace); font-size: 12px; }
+.req-comment-text :deep(:not(pre) > code) { padding: 2px 4px; border-radius: 4px; background: var(--bg-2, #f3f4f6); }
+.req-comment-text :deep(blockquote) { margin: 8px 0; padding-left: 10px; border-left: 3px solid var(--border-2, #d1d5db); color: var(--fg-3, #727987); }
+.req-comment-text :deep(a) { color: var(--accent, #2563eb); text-decoration: underline; }
 .req-comments-empty { padding: 32px 0; text-align: center; color: var(--fg-4, #9ca3af); font-size: 12px; }
 .req-comment-form { flex: 0 0 auto; display: flex; flex-direction: column; gap: 8px; padding-top: 12px; border-top: 1px solid var(--border, #e8e8e8); }
 .req-comment-form textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border, #e8e8e8); border-radius: var(--r, 6px); outline: 0; background: var(--bg, #fff); color: var(--fg, #202124); font: 13px var(--sans, inherit); box-sizing: border-box; resize: vertical; min-height: 56px; line-height: 1.6; transition: all var(--t, 0.15s); }
@@ -827,10 +1027,11 @@ onBeforeUnmount(() => {
 
 /* ============ 新建需求弹窗 ============ */
 .req-create-mask { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; background: rgba(0, 0, 0, 0.3); }
-.req-create-modal { width: min(480px, 92vw); display: flex; flex-direction: column; border: 1px solid var(--border, #e8e8e8); border-radius: 12px; background: var(--bg, #fff); box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18); }
-.req-create-header { height: 48px; display: flex; align-items: center; justify-content: space-between; padding: 0 16px 0 20px; border-bottom: 1px solid var(--border, #e8e8e8); font-size: 14px; font-weight: 650; }
-.req-create-body { padding: 18px 20px; display: grid; gap: 14px; }
-.req-field { display: flex; flex-direction: column; gap: 6px; }
+.req-create-modal { width: min(720px, 92vw); max-height: 90vh; display: flex; flex-direction: column; border: 1px solid var(--border, #e8e8e8); border-radius: 12px; background: var(--bg, #fff); box-shadow: 0 16px 48px rgba(0, 0, 0, 0.18); overflow: hidden; }
+ .req-create-header { height: 48px; flex: 0 0 auto; display: flex; align-items: center; justify-content: space-between; padding: 0 16px 0 20px; border-bottom: 1px solid var(--border, #e8e8e8); font-size: 14px; font-weight: 650; }
+ .req-create-body { min-height: 0; overflow-y: auto; padding: 18px 20px; display: grid; gap: 14px; }
+.req-config-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+ .req-field { display: flex; flex-direction: column; gap: 6px; }
 .req-field > span { font-size: 12px; color: var(--fg-3, #727987); }
 .req-field > span em { color: #dc2626; font-style: normal; }
 .req-field input, .req-field textarea { width: 100%; padding: 8px 12px; border: 1px solid var(--border, #e8e8e8); border-radius: var(--r, 6px); outline: 0; background: var(--bg, #fff); color: var(--fg, #202124); font: 13px var(--sans, inherit); box-sizing: border-box; transition: all var(--t, 0.15s); }
@@ -841,8 +1042,28 @@ onBeforeUnmount(() => {
 .req-option-dot { width: 8px; height: 8px; border-radius: 50%; flex: 0 0 auto; }
 .req-create-tip { margin: 0; font-size: 12px; color: var(--fg-4, #9ca3af); }
 .req-create-footer { display: flex; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--border, #e8e8e8); }
+.req-schedule-mode { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.req-schedule-mode button { min-width: 0; display: flex; align-items: flex-start; gap: 8px; padding: 9px 10px; border: 1px solid var(--border, #e8e8e8); border-radius: 6px; background: var(--bg, #fff); color: var(--fg-2, #525866); font: inherit; font-size: 12px; text-align: left; cursor: pointer; }
+.req-schedule-mode button:hover { border-color: var(--border-2, #d1d5db); background: var(--bg-2, #f9fafb); }
+.req-schedule-mode button.active { border-color: var(--accent, #52525b); background: var(--accent-bg, rgba(82, 82, 91, 0.12)); color: var(--fg, #202124); box-shadow: 0 0 0 2px var(--accent-bg, rgba(82, 82, 91, 0.12)); }
+.req-schedule-mode svg { width: 16px; height: 16px; flex: 0 0 auto; margin-top: 1px; }
+.req-schedule-mode span { min-width: 0; display: flex; flex-direction: column; gap: 2px; font-weight: 600; }
+.req-schedule-mode small { color: var(--fg-4, #9ca3af); font-size: 11px; font-weight: 400; line-height: 1.35; }
+.req-schedule-mode button.active small { color: var(--fg-3, #727987); }
+.req-field input[type="datetime-local"] { color-scheme: light; appearance: none; padding-right: 40px; }
+.req-datetime-field { position: relative; }
+.req-datetime-field input { display: block; }
+.req-datetime-field svg { position: absolute; right: 12px; top: 50%; width: 16px; height: 16px; transform: translateY(-50%); color: var(--fg-3, #727987); pointer-events: none; }
+.req-datetime-field input::-webkit-calendar-picker-indicator { position: absolute; inset: 0; width: auto; opacity: 0; cursor: pointer; }
+.req-datetime-field input::-webkit-datetime-edit { padding: 0; }
+.req-datetime-field input::-webkit-datetime-edit-fields-wrapper { padding: 0; }
+[data-theme="dark"] .req-field input[type="datetime-local"] { color-scheme: dark; }
 
 @media (max-width: 900px) {
   .req-detail-info { grid-template-columns: 1fr; }
+}
+
+@media (max-width: 640px) {
+  .req-config-row { grid-template-columns: 1fr; }
 }
 </style>
