@@ -74,6 +74,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     getBridgeAddress: () => ipcRenderer.invoke('get-ai-browser-bridge-address')
   },
 
+  desktopHomeMenu: {
+    open: (theme) => ipcRenderer.invoke('desktop-home-context-menu', theme)
+  },
+
   requirementBoardWindow: {
     open: () => ipcRenderer.invoke('open-requirement-board-window')
   },

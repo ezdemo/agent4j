@@ -3,12 +3,16 @@
     <header class="desktop-titlebar">
       <div class="desktop-left-controls">
         <button
+          ref="homeButton"
           class="icon-button"
           :class="{ active: isHomeActive }"
           type="button"
           title="会话首页"
           :aria-pressed="isHomeActive"
+          aria-haspopup="menu"
+          :aria-expanded="homeContextMenu.visible"
           @click="showHome"
+          @contextmenu.prevent.stop="openHomeContextMenu"
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M17.5 14v7M14 17.5h7"/></svg>
         </button>
@@ -75,6 +79,32 @@
       </div>
     </header>
 
+    <Teleport to="body">
+      <div
+        v-if="homeContextMenu.visible"
+        class="desktop-shell-context-menu"
+        role="menu"
+        aria-label="首页菜单"
+        :style="{ left: `${homeContextMenu.x}px`, top: `${homeContextMenu.y}px` }"
+        @contextmenu.prevent
+      >
+        <button type="button" role="menuitem" @click="chooseHomeContextAction('open-requirement-board')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
+          打开需求池
+        </button>
+        <button
+          type="button"
+          role="menuitem"
+          :title="theme === 'dark' ? '切换为浅色主题' : '切换为深色主题'"
+          @click="chooseHomeContextAction('toggle-theme')"
+        >
+          <svg v-if="theme === 'dark'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
+          <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.2 14.1A8.5 8.5 0 0 1 9.9 3.8 8.5 8.5 0 1 0 20.2 14.1Z"/></svg>
+          切换主题
+        </button>
+      </div>
+    </Teleport>
+
     <main ref="host" class="desktop-view-host">
       <div v-if="startupError" class="desktop-empty desktop-error">
         <span>{{ startupError }}</span>
@@ -123,7 +153,7 @@
 </template>
 
 <script setup>
-import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
 import {message, Modal} from 'ant-design-vue'
 import {useAppStore} from './stores/app'
 import {configAPI, sessionsAPI, systemAPI} from './services/api'
@@ -163,6 +193,10 @@ const tabsNav = ref(null)
 const draggedTabId = ref('')
 const dragOverTabId = ref('')
 const host = ref(null)
+const homeButton = ref(null)
+const homeContextMenu = reactive({visible: false, x: 0, y: 0})
+const HOME_CONTEXT_MENU_WIDTH = 176
+const HOME_CONTEXT_MENU_HEIGHT = 78
 let resizeObserver = null
 let renderVersion = 0
 
@@ -544,7 +578,50 @@ async function addWorkspaceFromFolder() {
   }
 }
 
+async function openHomeContextMenu(event = {}) {
+  if (window.electronAPI?.desktopHomeMenu?.open) {
+    closeHomeContextMenu()
+    try {
+      const action = await window.electronAPI.desktopHomeMenu.open(theme.value)
+      if (action) chooseHomeContextAction(action)
+    } catch (error) {
+      console.warn('[desktop-shell] failed to open native home menu:', error)
+    }
+    return
+  }
+
+  const buttonRect = homeButton.value?.getBoundingClientRect()
+  const hasPointerPosition = Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
+    && (event.clientX !== 0 || event.clientY !== 0)
+  const x = hasPointerPosition ? event.clientX : (buttonRect?.left || 0)
+  const y = hasPointerPosition ? event.clientY : (buttonRect?.bottom || 0)
+  const maxX = Math.max(8, window.innerWidth - HOME_CONTEXT_MENU_WIDTH - 8)
+  const maxY = Math.max(8, window.innerHeight - HOME_CONTEXT_MENU_HEIGHT - 8)
+  homeContextMenu.x = Math.max(8, Math.min(x, maxX))
+  homeContextMenu.y = Math.max(8, Math.min(y, maxY))
+  homeContextMenu.visible = true
+}
+
+function closeHomeContextMenu() {
+  homeContextMenu.visible = false
+}
+
+function chooseHomeContextAction(action) {
+  closeHomeContextMenu()
+  if (action === 'open-requirement-board') openRequirementBoard()
+  else if (action === 'toggle-theme') toggleTheme()
+}
+
+function onWindowClick() {
+  closeHomeContextMenu()
+}
+
+function onWindowKeydown(event) {
+  if (event.key === 'Escape') closeHomeContextMenu()
+}
+
 async function showHome() {
+  closeHomeContextMenu()
   hideStandaloneViews()
   activeTabId.value = ''
   await renderActiveTab()
@@ -605,6 +682,7 @@ async function openDashboard() {
 }
 
 function hideStandaloneViews() {
+  closeHomeContextMenu()
   showSkills.value = false
   showTools.value = false
   showSubAgents.value = false
@@ -766,6 +844,8 @@ onMounted(() => {
   // 启动后立即检查更新，并开启定时检查
   void checkForUpdates()
   updateCheckTimer = setInterval(() => { void checkForUpdates() }, UPDATE_CHECK_INTERVAL)
+  window.addEventListener('click', onWindowClick)
+  window.addEventListener('keydown', onWindowKeydown)
   void (async () => {
     if (await redirectToModelChannelsWhenUnconfigured()) return
     await initializeWorkspace()
@@ -803,6 +883,8 @@ onBeforeUnmount(() => {
     clearInterval(updateCheckTimer)
     updateCheckTimer = null
   }
+  window.removeEventListener('click', onWindowClick)
+  window.removeEventListener('keydown', onWindowKeydown)
   stopTitleListener?.()
   stopWorkspaceListener?.()
   stopOpenHomeListener?.()
@@ -876,4 +958,8 @@ onBeforeUnmount(() => {
 .desktop-error { align-content: center; gap: 12px; }
 .desktop-error button { justify-self: center; border: 1px solid var(--border, #e5e7eb); border-radius: 5px; background: var(--bg, #fff); color: var(--fg, #202124); padding: 6px 14px; cursor: pointer; }
 .desktop-error button:hover { background: var(--bg-3, #f3f4f6); }
+.desktop-shell-context-menu { box-sizing: border-box; position: fixed; z-index: 1000; width: 176px; padding: 4px; border: 1px solid var(--border, #e5e7eb); border-radius: 6px; background: var(--bg, #fff); box-shadow: var(--shadow-lg, 0 10px 28px rgba(0, 0, 0, 0.16)); }
+.desktop-shell-context-menu button { width: 100%; height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--fg-2, #525866); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.desktop-shell-context-menu button:hover, .desktop-shell-context-menu button:focus-visible { color: var(--fg, #202124); background: var(--bg-3, #f2f3f5); outline: 0; }
+.desktop-shell-context-menu svg { width: 15px; height: 15px; flex: 0 0 auto; }
 </style>
