@@ -439,6 +439,10 @@ public class AgentService {
     }
 
     private LoopraAgent createAgent(String sessionKey, ModelTarget target) {
+        return createAgent(sessionKey, target, null);
+    }
+
+    private LoopraAgent createAgent(String sessionKey, ModelTarget target, String systemPrompt) {
         String[] parts = sessionKey.split("::", 2);
         String workspacePath = parts[0];
         String sessionName = parts.length > 1 ? parts[1] : "default";
@@ -463,11 +467,32 @@ public class AgentService {
                 .toolSystem(getOrCreateSharedToolSystem(Paths.get(workspacePath)))
                 .modelClient(new HttpModelClient(apiUrl, apiKey, target.model(), reasoningEffort,
                         target.channelId(), channel.apiProtocol()));
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            builder.systemPrompt(systemPrompt);
+        }
         LoopraAgent agent = builder.buildLightweight();
         agent.bindSession(sessionName);
         agent.setListener(new WebUsageListener(agent));
         agent.setOutput(AgentOutput.NOOP);
         return agent;
+    }
+
+    /**
+     * 获取或创建会话 Agent（创建时注入自定义系统提示词，仅首次创建生效）。
+     */
+    private LoopraAgent getOrCreateAgentWithPrompt(String sessionKey, ModelTarget target, String systemPrompt) {
+        LoopraAgent agent = sessionCache.get(sessionKey);
+        if (agent != null) return agent;
+        synchronized (this) {
+            agent = sessionCache.get(sessionKey);
+            if (agent != null) return agent;
+            sessionCache.evictIfNeeded();
+            agent = createAgent(sessionKey, target, systemPrompt);
+            sessionCache.put(sessionKey, agent);
+            sessionModelTargets.put(sessionKey, target);
+            log.info("[web] 创建新 Agent（自定义提示词）: {}", sessionKey);
+            return agent;
+        }
     }
 
     private ModelTarget defaultModelTarget() {
@@ -575,6 +600,38 @@ public class AgentService {
             }
         }
         return new ArrayList<>();
+    }
+
+    /**
+     * 向指定会话注入一条用户消息（不触发 AI 回复）。
+     * <p>
+     * 用于需求池评论等场景：消息进入会话历史并持久化，
+     * 对 Agent 上下文可见；webHidden 为 true 时 Web 历史不展示（但仍可通过专属接口读取）。
+     * </p>
+     *
+     * @param workspacePath 工作区路径
+     * @param sessionName   目标会话名称
+     * @param text          消息文本
+     * @param webHidden     是否对 Web 历史隐藏
+     */
+    public void appendUserMessage(String workspacePath, String sessionName, String text, boolean webHidden) {
+        if (sessionName == null || sessionName.isBlank() || text == null || text.isBlank()) {
+            return;
+        }
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        LoopraAgent agent = getOrCreateAgent(sessionKey);
+        SessionStore store = agent.getSessionStore();
+        if (store == null) {
+            return;
+        }
+        ChatMessage message = ChatMessage.ofUser(text);
+        message.setWebHidden(webHidden);
+        try {
+            store.append(message);
+            store.flush();
+        } catch (IOException e) {
+            throw new ServiceException("写入会话消息失败: " + e.getMessage());
+        }
     }
 
     /** 返回会话计划模式及待审查计划。 */
@@ -1543,6 +1600,71 @@ public class AgentService {
             return "错误：" + e.getMessage();
         } finally {
             CURRENT_SESSION_NAME.remove();
+            LoopraAgent agent = sessionCache.get(sessionKey);
+            if (agent != null) {
+                agent.setOutput(AgentOutput.NOOP);
+                agent.flushSession();
+                agent.saveUsage();
+            }
+            lock.unlock();
+        }
+    }
+
+    /**
+     * 向指定会话注入一条 assistant 消息（不触发 AI 回复）。
+     * <p>用于需求执行中 AI 回复用户评论（reply_requirement_comment 工具）。</p>
+     */
+    public void appendAssistantMessage(String workspacePath, String sessionName, String content) {
+        if (sessionName == null || sessionName.isBlank() || content == null || content.isBlank()) {
+            return;
+        }
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        LoopraAgent agent = getOrCreateAgent(sessionKey);
+        SessionStore store = agent.getSessionStore();
+        if (store == null) {
+            return;
+        }
+        ChatMessage message = new ChatMessage("assistant");
+        message.setContent(content);
+        message.setTimestamp(System.currentTimeMillis());
+        try {
+            store.append(message);
+            store.flush();
+        } catch (IOException e) {
+            throw new ServiceException("写入会话消息失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 执行需求：以指定系统提示词驱动需求专属会话（req_&lt;id&gt;）执行一次任务。
+     * <p>
+     * 与 {@link #executeScheduledTask} 同构：会话锁 + ThreadLocal 上下文 + 无头执行；
+     * 差异在于首次创建 Agent 时注入需求 SystemPrompt，且异常不吞掉（由执行器兜底流转 failed）。
+     * </p>
+     *
+     * @param workspacePath 工作区路径
+     * @param sessionName   需求专属会话名
+     * @param systemPrompt  需求 SystemPrompt（首次创建会话 Agent 时生效）
+     * @param message       触发执行的消息
+     * @return Agent 回复内容
+     */
+    public String executeRequirement(String workspacePath, String sessionName, String systemPrompt, String message) {
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        ReentrantLock lock = getSessionLock(sessionKey);
+        lock.lock();
+
+        String effectiveSessionName = sessionName != null ? sessionName : "default";
+        CURRENT_SESSION_NAME.set(effectiveSessionName);
+        HttpModelClient.CURRENT_LOG_SESSION.set(effectiveSessionName);
+
+        try {
+            LoopraAgent agent = getOrCreateAgentWithPrompt(sessionKey, defaultModelTarget(), systemPrompt);
+            agent.setOutput(AgentOutput.NOOP);
+            agent.setSessionId(effectiveSessionName);
+            return agent.chat(UserMessage.of(message));
+        } finally {
+            CURRENT_SESSION_NAME.remove();
+            HttpModelClient.CURRENT_LOG_SESSION.remove();
             LoopraAgent agent = sessionCache.get(sessionKey);
             if (agent != null) {
                 agent.setOutput(AgentOutput.NOOP);

@@ -1,0 +1,285 @@
+package site.sorghum.loopra.web.service;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
+import site.sorghum.loopra.bin.agent.model.ChatMessage;
+import site.sorghum.loopra.bin.requirement.Requirement;
+import site.sorghum.loopra.bin.requirement.RequirementStore;
+
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.TimeUnit;
+
+import static org.junit.jupiter.api.Assertions.*;
+
+/**
+ * 需求池管理器单元测试：CRUD / 评论注入 / 执行器（run/finish/abort/ticker/兜底）。
+ *
+ * @author Sorghum
+ */
+class RequirementManagerTest {
+
+    @TempDir
+    Path tempDir;
+
+    /** AgentService 探针：记录调用并模拟执行结果。 */
+    private static class StubAgentService extends AgentService {
+        final List<String> injectedComments = new ArrayList<>();
+        final List<String> executedSessions = new ArrayList<>();
+        final List<String> abortedSessions = new ArrayList<>();
+        final CountDownLatch executedLatch = new CountDownLatch(1);
+        final CountDownLatch blockExecute = new CountDownLatch(1);
+        boolean workspaceExists = true;
+        boolean throwOnExecute = false;
+        boolean blockExecution = false;
+
+        @Override
+        public String resolveWorkspacePath(String hash) {
+            return workspaceExists ? "/tmp/" + hash : null;
+        }
+
+        @Override
+        public void appendUserMessage(String workspacePath, String sessionName, String text, boolean webHidden) {
+            injectedComments.add(text);
+        }
+
+        @Override
+        public void appendAssistantMessage(String workspacePath, String sessionName, String content) {
+            injectedComments.add("[AI] " + content);
+        }
+
+        @Override
+        public void abortChat(String workspacePath, String sessionName) {
+            abortedSessions.add(sessionName);
+        }
+
+        @Override
+        public List<ChatMessage> getHistory(String workspacePath, String sessionName) {
+            ChatMessage message = ChatMessage.ofUser("历史消息");
+            return List.of(message);
+        }
+
+        @Override
+        public String executeRequirement(String workspacePath, String sessionName, String systemPrompt, String message) {
+            executedSessions.add(sessionName);
+            executedLatch.countDown();
+            if (blockExecution) {
+                try {
+                    blockExecute.await();
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            }
+            if (throwOnExecute) {
+                throw new RuntimeException("模拟执行异常");
+            }
+            return "ok";
+        }
+    }
+
+    private StubAgentService agentService;
+    private RequirementManager manager;
+
+    @BeforeEach
+    void setUp() {
+        agentService = new StubAgentService();
+        manager = new RequirementManager(new RequirementStore(tempDir), agentService);
+    }
+
+    // ==================== CRUD / 评论 ====================
+
+    @Test
+    void createGeneratesIdSessionAndTodoStatus() {
+        Requirement created = manager.create(draft("优化性能", "p1", "agent4j", "high"));
+
+        assertNotNull(created.getId());
+        assertEquals("req_" + created.getId(), created.getSessionName());
+        assertEquals("todo", created.getStatus());
+        assertEquals("", created.getSummary());
+        assertEquals(1, manager.list().size());
+    }
+
+    @Test
+    void updateOnlyChangesDescriptionAndPriority() {
+        Requirement created = manager.create(draft("优化性能", "p1", "agent4j", "high"));
+        created.setStatus("doing");
+
+        Requirement updated = manager.update(created.getId(),
+                Requirement.builder().description("新描述").priority("low").build());
+
+        assertEquals("新描述", updated.getDescription());
+        assertEquals("low", updated.getPriority());
+        assertEquals("doing", updated.getStatus());
+        assertEquals("优化性能", updated.getTitle());
+    }
+
+    @Test
+    void addCommentInjectsWebHiddenUserMessage() {
+        Requirement created = manager.create(draft("优化性能", "p1", "agent4j", "high"));
+
+        assertTrue(manager.addComment(created.getId(), "请优先处理"));
+        assertEquals(List.of("请优先处理"), agentService.injectedComments);
+    }
+
+    @Test
+    void addCommentFailsWhenProjectMissing() {
+        Requirement created = manager.create(draft("优化性能", "p1", "agent4j", "high"));
+        agentService.workspaceExists = false;
+
+        assertFalse(manager.addComment(created.getId(), "评论"));
+        assertTrue(agentService.injectedComments.isEmpty());
+    }
+
+    // ==================== 执行器 ====================
+
+    @Test
+    void runStartsExecutionAndFlipsStatusToDoingThenDone() throws Exception {
+        Requirement created = manager.create(draft("优化性能", "p1", "agent4j", "high"));
+
+        assertEquals("started", manager.run(created.getId()));
+
+        Requirement running = find(created.getId());
+        assertEquals("doing", running.getStatus());
+        assertTrue(agentService.executedLatch.await(3, TimeUnit.SECONDS));
+        assertEquals(List.of(running.getSessionName()), agentService.executedSessions);
+
+        // AI 未显式调用 finish_requirement → 兜底完成
+        awaitStatus(created.getId(), "done");
+        assertTrue(find(created.getId()).getSummary().contains("未显式调用 finish_requirement"));
+    }
+
+    @Test
+    void runRejectsWhenAlreadyDoingOrRunning() throws Exception {
+        Requirement created = manager.create(draft("优化性能", "p1", "agent4j", "high"));
+
+        assertEquals("started", manager.run(created.getId()));
+        // doing 中重复触发
+        assertEquals("busy", manager.run(created.getId()));
+        agentService.executedLatch.await(3, TimeUnit.SECONDS);
+        awaitStatus(created.getId(), "done");
+        // 已完成不可触发
+        assertEquals("busy", manager.run(created.getId()));
+    }
+
+    @Test
+    void runAllowsRetryFromFailed() throws Exception {
+        Requirement created = manager.create(draft("优化性能", "p1", "agent4j", "high"));
+        agentService.throwOnExecute = true;
+
+        assertEquals("started", manager.run(created.getId()));
+        awaitStatus(created.getId(), "failed");
+        assertTrue(find(created.getId()).getSummary().contains("模拟执行异常"));
+
+        // 手动重试：failed → doing → 成功（本次不抛异常）
+        agentService.throwOnExecute = false;
+        assertEquals("started", manager.run(created.getId()));
+        awaitStatus(created.getId(), "done");
+    }
+
+    @Test
+    void finishFlipsStatusAndSummary() {
+        Requirement created = manager.create(draft("优化性能", "p1", "agent4j", "high"));
+
+        manager.finish(created.getId(), "done", "完成重构，测试全过");
+        Requirement done = find(created.getId());
+        assertEquals("done", done.getStatus());
+        assertEquals("完成重构，测试全过", done.getSummary());
+
+        manager.finish(created.getId(), "failed", "接口限流");
+        Requirement failed = find(created.getId());
+        assertEquals("failed", failed.getStatus());
+        assertEquals("接口限流", failed.getSummary());
+    }
+
+    @Test
+    void abortReturnsToTodoAndInterruptsSession() throws Exception {
+        Requirement created = manager.create(draft("优化性能", "p1", "agent4j", "high"));
+        agentService.blockExecution = true; // 保持执行中，模拟真实 chat 阻塞
+        manager.run(created.getId());
+        // 等待执行启动（latch 在 executeRequirement 入口计数）
+        assertTrue(agentService.executedLatch.await(3, TimeUnit.SECONDS));
+        assertEquals("doing", find(created.getId()).getStatus());
+
+        assertTrue(manager.abort(created.getId()));
+        assertEquals("todo", find(created.getId()).getStatus());
+        assertEquals(1, agentService.abortedSessions.size());
+
+        // 放行阻塞的执行，验证兜底不覆盖已取消状态
+        agentService.blockExecute.countDown();
+        Thread.sleep(100);
+        assertEquals("todo", find(created.getId()).getStatus());
+    }
+
+    @Test
+    void scanAndRunOnlyPicksTodoRequirements() throws Exception {
+        Requirement todoA = manager.create(draft("待执行A", "p1", "agent4j", "high"));
+        Requirement todoB = manager.create(draft("待执行B", "p1", "agent4j", "medium"));
+        Requirement doing = manager.create(draft("执行中", "p1", "agent4j", "high"));
+        doing.setStatus("doing");
+        manager.update(doing.getId(), Requirement.builder().build());
+        Requirement done = manager.create(draft("已完成", "p1", "agent4j", "high"));
+        done.setStatus("done");
+        manager.update(done.getId(), Requirement.builder().build());
+
+        agentService.blockExecution = true; // 保持执行中，避免异步任务立刻兜底完成
+        manager.scanAndRun();
+        assertTrue(agentService.executedLatch.await(3, TimeUnit.SECONDS));
+
+        // 两个 todo 被拉起（并发上限 2 内）
+        assertEquals("doing", find(todoA.getId()).getStatus());
+        assertEquals("doing", find(todoB.getId()).getStatus());
+        // doing/done 不被触碰
+        assertEquals("doing", find(doing.getId()).getStatus());
+        assertEquals("done", find(done.getId()).getStatus());
+
+        agentService.blockExecute.countDown();
+    }
+
+    @Test
+    void getMessagesReadsSessionHistory() {
+        Requirement created = manager.create(draft("优化性能", "p1", "agent4j", "high"));
+
+        List<ChatMessage> messages = manager.getMessages(created.getId());
+        assertEquals(1, messages.size());
+        assertEquals("历史消息", messages.get(0).getContent());
+    }
+
+    @Test
+    void replyCommentInjectsAssistantMessage() {
+        Requirement created = manager.create(draft("优化性能", "p1", "agent4j", "high"));
+
+        assertTrue(manager.replyComment(created.getId(), "收到，正在处理"));
+        assertEquals(List.of("[AI] 收到，正在处理"), agentService.injectedComments);
+    }
+
+    // ==================== 工具上下文 ====================
+
+    private Requirement find(String id) {
+        return manager.list().stream().filter(r -> r.getId().equals(id)).findFirst().orElse(null);
+    }
+
+    private void awaitStatus(String id, String status) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 5000;
+        while (System.currentTimeMillis() < deadline) {
+            Requirement requirement = find(id);
+            if (requirement != null && status.equals(requirement.getStatus())) {
+                return;
+            }
+            Thread.sleep(20);
+        }
+        fail("等待状态超时: " + status);
+    }
+
+    private static Requirement draft(String title, String projectHash, String projectName, String priority) {
+        return Requirement.builder()
+                .title(title)
+                .description("描述")
+                .priority(priority)
+                .projectHash(projectHash)
+                .projectName(projectName)
+                .build();
+    }
+}

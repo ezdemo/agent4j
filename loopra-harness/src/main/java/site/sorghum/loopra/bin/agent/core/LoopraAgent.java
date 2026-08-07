@@ -779,6 +779,11 @@ public class LoopraAgent {
             return this;
         }
 
+        public Builder systemPrompt(String v) {
+            this.systemPrompt = v;
+            return this;
+        }
+
         public Builder workspace(Path v) {
             this.workspace = v;
             return this;
