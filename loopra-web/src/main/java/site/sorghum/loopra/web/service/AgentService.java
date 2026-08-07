@@ -605,32 +605,29 @@ public class AgentService {
     /**
      * 向指定会话注入一条用户消息（不触发 AI 回复）。
      * <p>
-     * 用于需求池评论等场景：消息进入会话历史并持久化，
-     * 对 Agent 上下文可见；webHidden 为 true 时 Web 历史不展示（但仍可通过专属接口读取）。
+     * 用于需求池评论等场景：消息通过 {@code ConversationContext.addUser} 同时进入
+     * <b>Agent 上下文</b>（模型可见）并持久化到会话存储，Web 历史正常可见。
+     * 注意：必须走 ctx 注入而非直接 store.append —— chat 时上下文来自内存 history，
+     * 不会重新从 JSONL 加载，只写存储的消息 Agent 永远看不到。
      * </p>
      *
      * @param workspacePath 工作区路径
      * @param sessionName   目标会话名称
      * @param text          消息文本
-     * @param webHidden     是否对 Web 历史隐藏
      */
-    public void appendUserMessage(String workspacePath, String sessionName, String text, boolean webHidden) {
+    public void appendUserMessage(String workspacePath, String sessionName, String text) {
         if (sessionName == null || sessionName.isBlank() || text == null || text.isBlank()) {
             return;
         }
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         LoopraAgent agent = getOrCreateAgent(sessionKey);
-        SessionStore store = agent.getSessionStore();
-        if (store == null) {
+        if (agent.getCtx() == null) {
             return;
         }
-        ChatMessage message = ChatMessage.ofUser(text);
-        message.setWebHidden(webHidden);
-        try {
-            store.append(message);
+        agent.getCtx().addUser(UserMessage.of(text)); // 进上下文 + 落盘（persist）
+        SessionStore store = agent.getSessionStore();
+        if (store != null) {
             store.flush();
-        } catch (IOException e) {
-            throw new ServiceException("写入会话消息失败: " + e.getMessage());
         }
     }
 
@@ -1649,6 +1646,26 @@ public class AgentService {
      * @return Agent 回复内容
      */
     public String executeRequirement(String workspacePath, String sessionName, String systemPrompt, String message) {
+        return executeRequirement(workspacePath, sessionName, systemPrompt, message, false);
+    }
+
+    /**
+     * 执行需求：以指定系统提示词驱动需求专属会话（req_&lt;id&gt;）执行一次任务。
+     * <p>
+     * 与 {@link #executeScheduledTask} 同构：会话锁 + ThreadLocal 上下文 + 无头执行；
+     * 差异在于首次创建 Agent 时注入需求 SystemPrompt，且异常不吞掉（由执行器兜底流转 failed）。
+     * webHidden 为 true 时触发消息仅模型可见（Web 历史与需求评论不展示），
+     * 用于执行完成后评论触发的回复回合（避免内部指令污染评论区）。
+     * </p>
+     *
+     * @param workspacePath 工作区路径
+     * @param sessionName   需求专属会话名
+     * @param systemPrompt  需求 SystemPrompt（首次创建会话 Agent 时生效）
+     * @param message       触发执行的消息
+     * @param webHidden     触发消息是否对 Web 历史隐藏
+     * @return Agent 回复内容
+     */
+    public String executeRequirement(String workspacePath, String sessionName, String systemPrompt, String message, boolean webHidden) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         ReentrantLock lock = getSessionLock(sessionKey);
         lock.lock();
@@ -1661,7 +1678,9 @@ public class AgentService {
             LoopraAgent agent = getOrCreateAgentWithPrompt(sessionKey, defaultModelTarget(), systemPrompt);
             agent.setOutput(AgentOutput.NOOP);
             agent.setSessionId(effectiveSessionName);
-            return agent.chat(UserMessage.of(message));
+            UserMessage userMessage = UserMessage.of(message);
+            userMessage.setWebHidden(webHidden);
+            return agent.chat(userMessage);
         } finally {
             CURRENT_SESSION_NAME.remove();
             HttpModelClient.CURRENT_LOG_SESSION.remove();

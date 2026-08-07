@@ -36,7 +36,7 @@ class RequirementToolProviderTest {
         }
 
         @Override
-        public void appendUserMessage(String workspacePath, String sessionName, String text, boolean webHidden) {
+        public void appendUserMessage(String workspacePath, String sessionName, String text) {
             comments.add(text);
         }
 

@@ -35,6 +35,8 @@ class RequirementManagerTest {
         boolean workspaceExists = true;
         boolean throwOnExecute = false;
         boolean blockExecution = false;
+        /** 模拟 AI 在 chat 内调用 finish_requirement（由测试注入） */
+        Runnable onExecute = null;
 
         @Override
         public String resolveWorkspacePath(String hash) {
@@ -42,7 +44,7 @@ class RequirementManagerTest {
         }
 
         @Override
-        public void appendUserMessage(String workspacePath, String sessionName, String text, boolean webHidden) {
+        public void appendUserMessage(String workspacePath, String sessionName, String text) {
             injectedComments.add(text);
         }
 
@@ -63,7 +65,7 @@ class RequirementManagerTest {
         }
 
         @Override
-        public String executeRequirement(String workspacePath, String sessionName, String systemPrompt, String message) {
+        public String executeRequirement(String workspacePath, String sessionName, String systemPrompt, String message, boolean webHidden) {
             executedSessions.add(sessionName);
             executedLatch.countDown();
             if (blockExecution) {
@@ -73,6 +75,7 @@ class RequirementManagerTest {
                     Thread.currentThread().interrupt();
                 }
             }
+            if (onExecute != null) onExecute.run(); // 模拟 AI 调用 finish_requirement
             if (throwOnExecute) {
                 throw new RuntimeException("模拟执行异常");
             }
@@ -133,6 +136,32 @@ class RequirementManagerTest {
         assertTrue(agentService.injectedComments.isEmpty());
     }
 
+    @Test
+    void commentOnFinishedRequirementTriggersReplyRound() throws Exception {
+        Requirement created = manager.create(draft("优化性能", "p1", "agent4j", "high"));
+        // 先执行完成（兜底 done）
+        assertEquals("started", manager.run(created.getId()));
+        awaitStatus(created.getId(), "done");
+        int executedCount = agentService.executedSessions.size();
+
+        // 执行完成后评论 → 异步触发回复回合（再次驱动 Agent，状态不变）
+        assertTrue(manager.addComment(created.getId(), "执行得不错"));
+        awaitCount(() -> agentService.executedSessions.size() >= executedCount + 1, "回复回合未触发");
+
+        assertEquals("done", find(created.getId()).getStatus());
+        assertTrue(agentService.injectedComments.contains("执行得不错"));
+    }
+
+    @Test
+    void commentOnTodoRequirementDoesNotTriggerReplyRound() throws Exception {
+        Requirement created = manager.create(draft("优化性能", "p1", "agent4j", "high"));
+
+        assertTrue(manager.addComment(created.getId(), "待执行评论"));
+        // todo 状态不触发回复回合（评论将在执行时被 Agent 看到）
+        Thread.sleep(100);
+        assertTrue(agentService.executedSessions.isEmpty());
+    }
+
     // ==================== 执行器 ====================
 
     @Test
@@ -146,9 +175,24 @@ class RequirementManagerTest {
         assertTrue(agentService.executedLatch.await(3, TimeUnit.SECONDS));
         assertEquals(List.of(running.getSessionName()), agentService.executedSessions);
 
-        // AI 未显式调用 finish_requirement → 兜底完成
+        // AI 未显式调用 finish_requirement → 兜底完成 + 写 AI 结束评论
         awaitStatus(created.getId(), "done");
         assertTrue(find(created.getId()).getSummary().contains("未显式调用 finish_requirement"));
+        assertTrue(agentService.injectedComments.stream().anyMatch(c -> c.contains("✅ 已完成")));
+    }
+
+    @Test
+    void finishDeclarationWritesAIFinishComment() throws Exception {
+        Requirement created = manager.create(draft("优化性能", "p1", "agent4j", "high"));
+        // 模拟 AI 在 chat 内调用 finish_requirement(done, 总结)
+        agentService.onExecute = () -> manager.finish(created.getId(), "done", "完成重构，测试全过");
+
+        assertEquals("started", manager.run(created.getId()));
+        awaitStatus(created.getId(), "done");
+
+        assertEquals("完成重构，测试全过", find(created.getId()).getSummary());
+        // 结束评论：✅ 前缀 + 总结
+        assertTrue(agentService.injectedComments.stream().anyMatch(c -> c.equals("[AI] ✅ 已完成：完成重构，测试全过")));
     }
 
     @Test
@@ -172,6 +216,8 @@ class RequirementManagerTest {
         assertEquals("started", manager.run(created.getId()));
         awaitStatus(created.getId(), "failed");
         assertTrue(find(created.getId()).getSummary().contains("模拟执行异常"));
+        // 异常兜底同样写 AI 结束评论（❌）
+        assertTrue(agentService.injectedComments.stream().anyMatch(c -> c.contains("❌ 已失败")));
 
         // 手动重试：failed → doing → 成功（本次不抛异常）
         agentService.throwOnExecute = false;
@@ -207,10 +253,11 @@ class RequirementManagerTest {
         assertEquals("todo", find(created.getId()).getStatus());
         assertEquals(1, agentService.abortedSessions.size());
 
-        // 放行阻塞的执行，验证兜底不覆盖已取消状态
+        // 放行阻塞的执行，验证兜底不覆盖已取消状态，且不写结束评论
         agentService.blockExecute.countDown();
         Thread.sleep(100);
         assertEquals("todo", find(created.getId()).getStatus());
+        assertTrue(agentService.injectedComments.stream().noneMatch(c -> c.contains("✅") || c.contains("❌")));
     }
 
     @Test
@@ -271,6 +318,17 @@ class RequirementManagerTest {
             Thread.sleep(20);
         }
         fail("等待状态超时: " + status);
+    }
+
+    private void awaitCount(java.util.function.BooleanSupplier condition, String message) throws InterruptedException {
+        long deadline = System.currentTimeMillis() + 5000;
+        while (System.currentTimeMillis() < deadline) {
+            if (condition.getAsBoolean()) {
+                return;
+            }
+            Thread.sleep(20);
+        }
+        fail(message);
     }
 
     private static Requirement draft(String title, String projectHash, String projectName, String priority) {

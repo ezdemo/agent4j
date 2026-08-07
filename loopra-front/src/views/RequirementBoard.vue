@@ -147,7 +147,7 @@
 
         <!-- 执行日志：复用聊天框组件（ChatMessage / BlockRenderer） -->
         <div v-if="detailTab === 'logs'" class="req-chat-area">
-          <div ref="chatMessagesRef" class="req-chat-messages">
+          <div ref="chatMessagesRef" class="req-chat-messages" @scroll="onListScroll">
             <ChatMessage
               v-for="(m, i) in logMessages"
               :key="m.id"
@@ -165,7 +165,7 @@
 
         <!-- 评论：看板系统风格（头像 + 作者 + 相对时间 + 评论条目） -->
         <div v-else class="req-comments">
-          <div ref="commentListRef" class="req-comment-list">
+          <div ref="commentListRef" class="req-comment-list" @scroll="onListScroll">
             <div v-for="item in commentItems" :key="item.id" class="req-comment" :class="`req-comment-${item.role}`">
               <div class="req-comment-head">
                 <span class="req-comment-avatar" :class="{ ai: item.role === 'assistant' }">
@@ -293,6 +293,8 @@ const messages = ref([])
 const aiRunning = ref(false)
 const chatMessagesRef = ref(null)
 const commentListRef = ref(null)
+// 用户是否上滑浏览历史（轮询刷新时不打扰；滚回底部自动恢复跟随）
+const userScrolledAway = ref(false)
 // ChatMessage 必需 prop：快照回滚 loading 表（需求池不使用回滚，传空 Map）
 const snapshotRollbackLoading = new Map()
 
@@ -311,39 +313,124 @@ const priorityOptions = [
   { value: 'low', label: '低', dot: '#6b7280' }
 ]
 
-// 聊天消息流：从后端会话消息派生（复用 ChatMessage 渲染）
-// 日志 tab → assistant 消息（执行过程）；评论 tab → user 消息 + 紧跟其后的 assistant 消息（AI 回复）
 // 消息流数据源：
-// 日志 tab → logMessages（assistant 执行过程，复用 ChatMessage 聊天组件）
+// 日志 tab → logMessages（完整复刻聊天框历史组装：思考/工具调用/文件改动，复用 ChatMessage 组件）
 // 评论 tab → commentItems（看板风格评论条目：user 消息 + 紧跟其后的 AI 回复）
+
+// —— 与 Chat.vue loadHistory 一致的消息组装（工具结果映射 / 文件改动合并） ——
+function buildToolResults(rawMessages) {
+  const results = {}
+  for (const m of rawMessages) {
+    if (m.role === 'tool' && m.tool_call_id) results[m.tool_call_id] = m.content || ''
+  }
+  return results
+}
+
+// 合并文件改动统计（与 Chat.vue mergeFileChanges 一致）
+function mergeFileChanges(blocks, changes) {
+  if (!Array.isArray(changes) || changes.length === 0) return
+  let summary = blocks.find((block) => block.type === 'file_changes')
+  if (!summary) {
+    summary = { type: 'file_changes', changes: [] }
+    blocks.push(summary)
+  }
+  const byPath = new Map(summary.changes.map((change) => [change.path, { ...change }]))
+  for (const change of changes) {
+    if (!change?.path) continue
+    const existing = byPath.get(change.path)
+    byPath.set(change.path, existing ? {
+      ...existing,
+      additions: Number(existing.additions || 0) + Number(change.additions || 0),
+      deletions: Number(existing.deletions || 0) + Number(change.deletions || 0),
+      created: Boolean(existing.created || change.created),
+      diff: [existing.diff, change.diff].filter(Boolean).join('\n')
+    } : { ...change })
+  }
+  summary.changes = [...byPath.values()]
+}
+
+function moveFileChangesToEnd(blocks) {
+  const changes = blocks.filter((block) => block.type === 'file_changes')
+  if (changes.length === 0) return
+  const summary = changes[0]
+  const rest = blocks.filter((block) => block.type !== 'file_changes')
+  blocks.splice(0, blocks.length, ...rest, summary)
+}
+
+// 后端会话消息 → ChatMessage 组件消息（连续 assistant 合并，含 reasoning/tool_call/content/file_changes）
+function toChatLogMessages(rawMessages) {
+  const toolResults = buildToolResults(rawMessages)
+  const merged = []
+  let lastAssistantItem = null
+  let idCounter = 0
+  for (const m of rawMessages) {
+    if (m.role === 'tool') continue
+    if (m.role === 'user') {
+      lastAssistantItem = null // 评论/用户消息分隔 assistant 组
+      continue
+    }
+    if (!lastAssistantItem) {
+      lastAssistantItem = { id: m.id || `assistant_${m.timestamp}_${idCounter++}`, role: 'assistant', time: fmtTime(m.timestamp), blocks: [] }
+      merged.push(lastAssistantItem)
+    } else {
+      lastAssistantItem.time = fmtTime(m.timestamp)
+    }
+    if (m.reasoning_content) lastAssistantItem.blocks.push({ type: 'reasoning', content: m.reasoning_content, showContent: false })
+    if (m.tool_calls) for (const tc of m.tool_calls) {
+      let name = tc.function?.name || tc.name || ''
+      let args = tc.function?.arguments || tc.arguments || ''
+      if (typeof args === 'string') {
+        try { args = JSON.parse(args) } catch { /* 保留原字符串 */ }
+      }
+      lastAssistantItem.blocks.push({
+        type: 'tool_call',
+        name,
+        status: toolResults[tc.id] ? '成功' : '执行中',
+        args,
+        result: toolResults[tc.id] || '',
+        expanded: !toolResults[tc.id]
+      })
+    }
+    if (m.content) lastAssistantItem.blocks.push({ type: 'content', content: m.content })
+    const fileChanges = m.file_changes || m.fileChanges
+    if (Array.isArray(fileChanges) && fileChanges.length > 0) mergeFileChanges(lastAssistantItem.blocks, fileChanges)
+  }
+  for (const item of merged) moveFileChangesToEnd(item.blocks)
+  return merged
+}
+
 const logMessages = computed(() => {
   if (!selected.value) return []
-  return messages.value
-    .filter((m) => m.role === 'assistant' && m.content)
-    .map((m) => ({
-      id: m.id || `assistant_${m.timestamp}`,
-      role: 'assistant',
-      time: fmtTime(m.timestamp),
-      blocks: [{ type: 'content', content: m.content }]
-    }))
+  return toChatLogMessages(messages.value)
 })
+// AI 结束评论标记（执行结果总结，由后端 appendFinishComment 写入）
+const isFinishComment = (content) => content && (content.startsWith('✅') || content.startsWith('❌'))
 const commentItems = computed(() => {
   if (!selected.value) return []
   const items = []
+  let pendingUser = false // 最近是否出现 user 消息（含 webHidden 指令），其后的 assistant 视为回复
   for (let i = 0; i < messages.value.length; i++) {
     const message = messages.value[i]
-    if (message.role !== 'user' || !message.content) continue
-    items.push({ id: message.id || `user_${message.timestamp}`, role: 'user', content: message.content, timestamp: message.timestamp })
-    const next = messages.value[i + 1]
-    if (next && next.role === 'assistant' && next.content) {
-      items.push({ id: next.id || `assistant_${next.timestamp}`, role: 'assistant', content: next.content, timestamp: next.timestamp })
-      i++
+    if (message.role === 'user' && message.content) {
+      // 跳过 webHidden 消息（如回复回合的内部指令），但保留其后的 AI 回复配对
+      if (!(message.web_hidden || message.webHidden)) {
+        items.push({ id: message.id || `user_${message.timestamp}`, role: 'user', content: message.content, timestamp: message.timestamp })
+      }
+      pendingUser = true
+    } else if (message.role === 'assistant' && message.content) {
+      if (pendingUser) {
+        items.push({ id: message.id || `assistant_${message.timestamp}`, role: 'assistant', content: message.content, timestamp: message.timestamp })
+        pendingUser = false
+      } else if (isFinishComment(message.content)) {
+        // AI 结束评论（执行总结）：即使前面没有用户评论也独立展示
+        items.push({ id: message.id || `assistant_${message.timestamp}`, role: 'assistant', content: message.content, timestamp: message.timestamp })
+      }
     }
   }
   return items
 })
 const commentAuthor = (item) => (item.role === 'assistant' ? 'AI 执行 Agent' : '我')
-const commentCount = computed(() => messages.value.filter((m) => m.role === 'user' && m.content).length)
+const commentCount = computed(() => messages.value.filter((m) => m.role === 'user' && m.content && !m.web_hidden && !m.webHidden).length)
 const logCount = computed(() => messages.value.filter((m) => m.role === 'assistant' && m.content).length)
 
 // ============ 工具函数 ============
@@ -407,6 +494,7 @@ async function loadMessages() {
 function openDetail(item) {
   selected.value = item
   detailTab.value = 'comments'
+  userScrolledAway.value = false // 打开新详情从底部开始
   messages.value = []
   loadMessages()
 }
@@ -414,16 +502,26 @@ function closeDetail() {
   selected.value = null
   detailTab.value = 'comments'
   commentDraft.value = ''
+  userScrolledAway.value = false
   messages.value = []
+}
+
+// 用户滚动时记录是否离开底部（上滑浏览历史时暂停自动滚底）
+function onListScroll(event) {
+  const el = event?.target
+  if (!el) return
+  userScrolledAway.value = el.scrollHeight - el.scrollTop - el.clientHeight > 40
 }
 
 function switchTab(tab) {
   detailTab.value = tab
+  userScrolledAway.value = false // 切换 tab 重新跟随到底部
   scrollChatToBottom()
 }
 
-// 切换 tab / 新增消息后滚动到当前展示区底部（日志聊天流 / 评论列表）
+// 切换 tab / 新增消息后滚动到当前展示区底部（用户上滑浏览时跳过）
 function scrollChatToBottom() {
+  if (userScrolledAway.value) return
   nextTick(() => {
     const el = detailTab.value === 'logs' ? chatMessagesRef.value : commentListRef.value
     if (el) el.scrollTop = el.scrollHeight
@@ -559,14 +657,14 @@ async function loadProjects() {
 }
 
 // ============ 轮询刷新 ============
-const POLL_INTERVAL = 5000
+// 详情打开时 3s 刷新一次：看板列表 + 评论/执行日志消息流（含 AI 回复回合的自动出现）
+const POLL_INTERVAL = 3000
 let pollTimer = null
 let aiTimer = null
 
-// 周期刷新：看板列表 + 执行中需求的消息流（日志增量）
 async function poll() {
   await loadFromAPI()
-  if (selected.value?.status === 'doing') {
+  if (selected.value) {
     await loadMessages()
   }
 }
