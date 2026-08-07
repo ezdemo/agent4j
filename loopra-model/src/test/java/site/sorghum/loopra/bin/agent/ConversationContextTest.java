@@ -52,6 +52,26 @@ class ConversationContextTest {
     }
 
     @Test
+    void addWebHiddenUserMessageEntersContextHistory() {
+        // 需求评论注入路径：webHidden 用户消息必须进入上下文历史（模型可见）
+        ConversationContext ctx = createContext();
+        site.sorghum.loopra.bin.agent.model.UserMessage comment = site.sorghum.loopra.bin.agent.model.UserMessage.of("请优先处理");
+        comment.setWebHidden(true);
+        ctx.addUser(comment);
+
+        assertEquals(1, ctx.size());
+        ChatMessage stored = ctx.getHistory().get(0);
+        assertEquals("user", stored.getRole());
+        assertEquals("请优先处理", stored.getContent());
+        assertEquals(true, stored.isWebHidden());
+        // buildMessages（发给模型的消息）同样包含该评论
+        List<ChatMessage> messages = ctx.buildMessages();
+        assertEquals(2, messages.size());
+        assertEquals("user", messages.get(1).getRole());
+        assertEquals("请优先处理", messages.get(1).getContent());
+    }
+
+    @Test
     void addAssistantIncreasesSize() {
         ConversationContext ctx = createContext();
         ctx.addAssistant("hi", null, null);

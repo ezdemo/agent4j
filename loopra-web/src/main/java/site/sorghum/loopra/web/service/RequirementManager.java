@@ -150,7 +150,8 @@ public class RequirementManager {
     // ==================== 评论与消息 ====================
 
     /**
-     * 追加评论：作为 user 消息（webHidden）写入需求专属会话，对 Agent 上下文可见。
+     * 追加评论：作为普通 user 消息写入需求专属会话（Agent 上下文可见，Web 历史也可见）。
+     * <p>已完成/已失败的需求收到评论时，异步触发一次 AI 回复回合（不动状态）。</p>
      */
     public boolean addComment(String id, String text) {
         Requirement requirement = store.get(id);
@@ -162,10 +163,39 @@ public class RequirementManager {
             log.warn("[requirement] 评论失败：需求 {} 所属项目不存在: {}", id, requirement.getProjectHash());
             return false;
         }
-        agentService.appendUserMessage(workspacePath, requirement.getSessionName(), text, true);
+        agentService.appendUserMessage(workspacePath, requirement.getSessionName(), text);
         requirement.setUpdatedAt(System.currentTimeMillis());
         store.upsert(requirement);
+
+        // 执行已结束（done/failed）的需求：评论触发一次 AI 回复回合
+        String status = requirement.getStatus();
+        if ("done".equals(status) || "failed".equals(status)) {
+            String requirementId = requirement.getId();
+            executor.submit(() -> replyToComment(requirementId));
+        }
         return true;
+    }
+
+    /**
+     * 回复回合：驱动需求会话的 Agent 回复最新评论（webHidden 指令消息，不流转状态）。
+     * <p>评论本身已通过 appendUserMessage 进入 Agent 上下文，此回合只是让 AI 开口。</p>
+     */
+    private void replyToComment(String id) {
+        try {
+            Requirement requirement = store.get(id);
+            if (requirement == null) {
+                return;
+            }
+            String workspacePath = agentService.resolveWorkspacePath(requirement.getProjectHash());
+            if (workspacePath == null) {
+                return;
+            }
+            agentService.executeRequirement(workspacePath, requirement.getSessionName(),
+                    buildSystemPrompt(requirement),
+                    "用户发表了新评论，请阅读并回复（可直接回复，或用 reply_requirement_comment 工具）。", true);
+        } catch (Exception e) {
+            log.warn("[requirement] 评论回复回合失败: {}", e.getMessage());
+        }
     }
 
     /**
@@ -322,12 +352,13 @@ public class RequirementManager {
      * </p>
      */
     private void executeRequirement(String id) {
+        String workspacePath = null;
         try {
             Requirement requirement = store.get(id);
             if (requirement == null) {
                 return;
             }
-            String workspacePath = agentService.resolveWorkspacePath(requirement.getProjectHash());
+            workspacePath = agentService.resolveWorkspacePath(requirement.getProjectHash());
             if (workspacePath == null) {
                 throw new IllegalStateException("需求所属项目不存在: " + requirement.getProjectHash());
             }
@@ -353,6 +384,31 @@ public class RequirementManager {
             }
         } finally {
             runningIds.remove(id);
+        }
+
+        // 执行结束（done/failed）→ 在评论区追加一条 AI 结束评论（✅/❌ 前缀，前端据此展示）
+        Requirement finalState = store.get(id);
+        if (finalState != null && workspacePath != null
+                && ("done".equals(finalState.getStatus()) || "failed".equals(finalState.getStatus()))) {
+            appendFinishComment(finalState, workspacePath);
+        }
+    }
+
+    /**
+     * 追加 AI 结束评论：把执行结果（状态 + 总结）写入需求会话，展示在评论区。
+     * <p>必须在 chat 结束后调用（工具回调内直接写会与回合落库顺序冲突）。</p>
+     */
+    private void appendFinishComment(Requirement requirement, String workspacePath) {
+        String prefix = "done".equals(requirement.getStatus()) ? "✅ 已完成：" : "❌ 已失败：";
+        String summary = requirement.getSummary();
+        if (summary == null || summary.isBlank()) {
+            summary = "（无总结）";
+        }
+        try {
+            agentService.appendAssistantMessage(workspacePath, requirement.getSessionName(), prefix + summary);
+            log.info("[requirement] 已写入 AI 结束评论: {} ({})", prefix.trim(), requirement.getId());
+        } catch (Exception e) {
+            log.warn("[requirement] 写入结束评论失败: {}", e.getMessage());
         }
     }
 
