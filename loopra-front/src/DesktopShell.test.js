@@ -67,6 +67,11 @@ async function mountShell() {
   return {wrapper, store}
 }
 
+async function openTab(wrapper, sessionName) {
+  await wrapper.vm.openSession({workspaceHash: 'h1', sessionName, title: sessionName})
+  await flushPromises()
+}
+
 beforeEach(() => {
   configAPI.getConfig.mockResolvedValue({success: true, data: {modelChannelsConfigured: true}})
   configAPI.listWorkspaces.mockResolvedValue({success: true, data: [{hash: 'h1', name: 'A', path: '/p/a'}]})
@@ -80,6 +85,7 @@ beforeEach(() => {
 afterEach(() => {
   vi.restoreAllMocks()
   document.body.querySelector('.desktop-shell-context-menu')?.remove()
+  document.body.querySelector('.desktop-tab-context-menu')?.remove()
   if (initialElectronAPI === undefined) delete window.electronAPI
   else window.electronAPI = initialElectronAPI
 })
@@ -160,5 +166,185 @@ describe('DesktopShell 首页右键菜单', () => {
     expect(document.body.querySelector('.desktop-shell-context-menu')).toBeNull()
 
     wrapper.unmount()
+  })
+})
+
+describe('DesktopShell 会话标签右键菜单', () => {
+  function chatTabsBridge() {
+    return {
+      create: vi.fn().mockResolvedValue({success: true}),
+      show: vi.fn().mockResolvedValue({success: true}),
+      hide: vi.fn().mockResolvedValue({success: true}),
+      close: vi.fn().mockResolvedValue({success: true}),
+      reload: vi.fn().mockResolvedValue({success: true})
+    }
+  }
+
+  it('提供刷新、关闭和关闭左右标签操作', async () => {
+    const desktopChatTabs = chatTabsBridge()
+    window.electronAPI = {desktopChatTabs}
+    const {wrapper} = await mountShell()
+    await openTab(wrapper, 'a')
+    await openTab(wrapper, 'b')
+    await openTab(wrapper, 'c')
+
+    let tab = wrapper.findAll('.desktop-tab')[1]
+    await tab.trigger('contextmenu', {clientX: 40, clientY: 30})
+    let menu = document.body.querySelector('.desktop-tab-context-menu')
+    expect(menu).not.toBeNull()
+    expect(menu.textContent).toContain('刷新')
+    expect(menu.textContent).toContain('关闭')
+    expect(menu.textContent).toContain('关闭左侧标签')
+    expect(menu.textContent).toContain('关闭右侧标签')
+
+    let menuItems = menu.querySelectorAll('[role="menuitem"]')
+    menuItems[0].click()
+    await flushPromises()
+    expect(desktopChatTabs.reload).toHaveBeenCalledWith('h1:b')
+
+    tab = wrapper.findAll('.desktop-tab')[1]
+    await tab.trigger('contextmenu', {clientX: 40, clientY: 30})
+    menu = document.body.querySelector('.desktop-tab-context-menu')
+    menuItems = menu.querySelectorAll('[role="menuitem"]')
+    expect(menuItems[2].disabled).toBe(false)
+    expect(menuItems[3].disabled).toBe(false)
+    menuItems[2].click()
+    await flushPromises()
+    expect(desktopChatTabs.close).toHaveBeenCalledWith('h1:a')
+    expect(wrapper.findAll('.desktop-tab').map((item) => item.attributes('title'))).toEqual(['b', 'c'])
+
+    tab = wrapper.findAll('.desktop-tab')[0]
+    await tab.trigger('contextmenu', {clientX: 40, clientY: 30})
+    menu = document.body.querySelector('.desktop-tab-context-menu')
+    menuItems = menu.querySelectorAll('[role="menuitem"]')
+    expect(menuItems[2].disabled).toBe(true)
+    menuItems[3].click()
+    await flushPromises()
+    expect(desktopChatTabs.close).toHaveBeenCalledWith('h1:c')
+    expect(wrapper.findAll('.desktop-tab').map((item) => item.attributes('title'))).toEqual(['b'])
+
+    await wrapper.find('.desktop-tab').trigger('contextmenu', {clientX: 40, clientY: 30})
+    menu = document.body.querySelector('.desktop-tab-context-menu')
+    menu.querySelectorAll('[role="menuitem"]')[1].click()
+    await flushPromises()
+    expect(desktopChatTabs.close).toHaveBeenCalledWith('h1:b')
+    expect(wrapper.findAll('.desktop-tab')).toHaveLength(0)
+
+    wrapper.unmount()
+  })
+
+  it('加载失败时移除已创建的死标签', async () => {
+    const desktopChatTabs = chatTabsBridge()
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    desktopChatTabs.create.mockRejectedValue(new Error('ERR_FAILED'))
+    window.electronAPI = {desktopChatTabs}
+    const {wrapper} = await mountShell()
+
+    await openTab(wrapper, 'failed')
+
+    expect(wrapper.findAll('.desktop-tab')).toHaveLength(0)
+    expect(wrapper.find('desktop-home-stub').exists()).toBe(true)
+    expect(desktopChatTabs.show).not.toHaveBeenCalled()
+    expect(desktopChatTabs.close).toHaveBeenCalledWith('h1:failed')
+    expect(desktopChatTabs.hide).toHaveBeenCalled()
+    expect(consoleError).toHaveBeenCalledWith('[desktop-shell] failed to show tab:', expect.any(Error))
+    wrapper.unmount()
+  })
+
+  it('显示失败时关闭已创建的原生标签', async () => {
+    const desktopChatTabs = chatTabsBridge()
+    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+    desktopChatTabs.show.mockRejectedValue(new Error('ERR_FAILED'))
+    window.electronAPI = {desktopChatTabs}
+    const {wrapper} = await mountShell()
+
+    await openTab(wrapper, 'show-failed')
+
+    expect(desktopChatTabs.create).toHaveBeenCalledWith(expect.objectContaining({id: 'h1:show-failed'}))
+    expect(desktopChatTabs.close).toHaveBeenCalledWith('h1:show-failed')
+    expect(desktopChatTabs.hide).toHaveBeenCalled()
+    expect(wrapper.findAll('.desktop-tab')).toHaveLength(0)
+    expect(consoleError).toHaveBeenCalledWith('[desktop-shell] failed to show tab:', expect.any(Error))
+    wrapper.unmount()
+  })
+
+  it('快速切换会话时只显示最后一次渲染请求', async () => {
+    const desktopChatTabs = chatTabsBridge()
+    let resolveFirstCreate
+    const firstCreate = new Promise((resolve) => { resolveFirstCreate = resolve })
+    desktopChatTabs.create
+      .mockImplementationOnce(() => firstCreate)
+      .mockResolvedValue({success: true})
+    window.electronAPI = {desktopChatTabs}
+    const {wrapper} = await mountShell()
+
+    const firstOpen = wrapper.vm.openSession({workspaceHash: 'h1', sessionName: 'a', title: 'a'})
+    await vi.waitFor(() => expect(desktopChatTabs.create).toHaveBeenCalledTimes(1))
+    const secondOpen = wrapper.vm.openSession({workspaceHash: 'h1', sessionName: 'b', title: 'b'})
+    resolveFirstCreate({success: true})
+    await Promise.all([firstOpen, secondOpen])
+    await flushPromises()
+
+    expect(desktopChatTabs.show).toHaveBeenCalledTimes(1)
+    expect(desktopChatTabs.show).toHaveBeenCalledWith('h1:b', expect.any(Object))
+    expect(wrapper.findAll('.desktop-tab').map((item) => item.attributes('title'))).toEqual(['a', 'b'])
+    wrapper.unmount()
+  })
+
+  it('关闭在途创建的标签后清理原生视图', async () => {
+    const desktopChatTabs = chatTabsBridge()
+    let resolveCreate
+    const pendingCreate = new Promise((resolve) => { resolveCreate = resolve })
+    desktopChatTabs.create.mockImplementationOnce(() => pendingCreate)
+    window.electronAPI = {desktopChatTabs}
+    const {wrapper} = await mountShell()
+
+    const open = wrapper.vm.openSession({workspaceHash: 'h1', sessionName: 'closing', title: 'closing'})
+    await vi.waitFor(() => expect(desktopChatTabs.create).toHaveBeenCalledTimes(1))
+    const close = wrapper.vm.closeTab('h1:closing')
+    resolveCreate({success: true})
+    await Promise.all([open, close])
+
+    expect(desktopChatTabs.show).not.toHaveBeenCalled()
+    expect(desktopChatTabs.close).toHaveBeenCalledTimes(2)
+    expect(wrapper.findAll('.desktop-tab')).toHaveLength(0)
+    wrapper.unmount()
+  })
+
+  it('Electron 环境通过原生菜单返回标签动作', async () => {
+    const desktopChatTabs = chatTabsBridge()
+    const openNativeMenu = vi.fn().mockResolvedValue('close-left')
+    window.electronAPI = {desktopChatTabs, desktopTabMenu: {open: openNativeMenu}}
+    const {wrapper} = await mountShell()
+    await openTab(wrapper, 'a')
+    await openTab(wrapper, 'b')
+    await openTab(wrapper, 'c')
+
+    await wrapper.findAll('.desktop-tab')[1].trigger('contextmenu', {clientX: 40, clientY: 30})
+    await flushPromises()
+
+    expect(openNativeMenu).toHaveBeenCalledWith({tabId: 'h1:b', index: 1, tabCount: 3, theme: 'gray'})
+    expect(desktopChatTabs.close).toHaveBeenCalledWith('h1:a')
+    expect(document.body.querySelector('.desktop-tab-context-menu')).toBeNull()
+    expect(wrapper.findAll('.desktop-tab').map((item) => item.attributes('title'))).toEqual(['b', 'c'])
+
+    wrapper.unmount()
+  })
+
+  it('桌面壳缺少原生菜单 API 时不回退 DOM 菜单', async () => {
+    const desktopChatTabs = chatTabsBridge()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const originalUrl = window.location.href
+    window.history.replaceState({}, '', '/?desktopShell=1')
+    window.electronAPI = {desktopChatTabs}
+    const {wrapper} = await mountShell()
+    await openTab(wrapper, 'a')
+
+    await wrapper.find('.desktop-tab').trigger('contextmenu', {clientX: 40, clientY: 30})
+    expect(warn).toHaveBeenCalledWith('[desktop-shell] native tab menu API is unavailable')
+    expect(document.body.querySelector('.desktop-tab-context-menu')).toBeNull()
+
+    wrapper.unmount()
+    window.history.replaceState({}, '', originalUrl)
   })
 })
