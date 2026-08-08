@@ -78,6 +78,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
     open: (theme) => ipcRenderer.invoke('desktop-home-context-menu', theme)
   },
 
+  desktopTabMenu: {
+    open: (payload) => ipcRenderer.invoke('desktop-tab-context-menu', payload)
+  },
+
   requirementBoardWindow: {
     open: () => ipcRenderer.invoke('open-requirement-board-window')
   },

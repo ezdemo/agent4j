@@ -27,6 +27,8 @@
           draggable="true"
           role="tab"
           :aria-selected="tab.id === activeTabId"
+          :aria-haspopup="'menu'"
+          :aria-expanded="tabContextMenu.visible && tabContextMenu.tabId === tab.id"
           tabindex="0"
           :title="tab.title"
           @dragstart="startTabReorder($event, tab.id)"
@@ -34,6 +36,7 @@
           @drop="dropTab($event, tab.id)"
           @dragend="endTabReorder"
           @click="activateTab(tab.id)"
+          @contextmenu.prevent.stop="openTabContextMenu($event, tab.id)"
           @auxclick="closeTabWithMiddleClick($event, tab.id)"
           @keydown.enter="activateTab(tab.id)"
           @keydown.space.prevent="activateTab(tab.id)"
@@ -101,6 +104,31 @@
           <svg v-if="theme === 'dark'" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></svg>
           <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M20.2 14.1A8.5 8.5 0 0 1 9.9 3.8 8.5 8.5 0 1 0 20.2 14.1Z"/></svg>
           切换主题
+        </button>
+      </div>
+      <div
+        v-if="tabContextMenu.visible"
+        class="desktop-tab-context-menu"
+        role="menu"
+        aria-label="会话标签菜单"
+        :style="{ left: `${tabContextMenu.x}px`, top: `${tabContextMenu.y}px` }"
+        @contextmenu.prevent
+      >
+        <button type="button" role="menuitem" @click="chooseTabContextAction('reload')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M20 11a8 8 0 1 0 2 5"/><path d="M20 4v7h-7"/></svg>
+          刷新
+        </button>
+        <button type="button" role="menuitem" @click="chooseTabContextAction('close')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
+          关闭
+        </button>
+        <button type="button" role="menuitem" :disabled="!hasTabsToClose('left')" @click="chooseTabContextAction('close-left')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M5 5v14M9 8h10M9 12h7M9 16h10"/></svg>
+          关闭左侧标签
+        </button>
+        <button type="button" role="menuitem" :disabled="!hasTabsToClose('right')" @click="chooseTabContextAction('close-right')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M19 5v14M5 8h10M8 12h7M5 16h10"/></svg>
+          关闭右侧标签
         </button>
       </div>
     </Teleport>
@@ -195,10 +223,14 @@ const dragOverTabId = ref('')
 const host = ref(null)
 const homeButton = ref(null)
 const homeContextMenu = reactive({visible: false, x: 0, y: 0})
+const tabContextMenu = reactive({visible: false, tabId: '', x: 0, y: 0})
 const HOME_CONTEXT_MENU_WIDTH = 176
 const HOME_CONTEXT_MENU_HEIGHT = 78
+const TAB_CONTEXT_MENU_WIDTH = 188
+const TAB_CONTEXT_MENU_HEIGHT = 146
 let resizeObserver = null
 let renderVersion = 0
+let renderQueue = Promise.resolve()
 
 // 版本更新检查：启动后立即检查一次，之后每 30 分钟自动定时检查
 const UPDATE_CHECK_INTERVAL = 30 * 60 * 1000
@@ -290,6 +322,12 @@ const tabTitle = (sessionName) => {
 }
 
 const nativeTabs = () => window.electronAPI?.desktopChatTabs
+const isElectronRuntime = () => {
+  const hasNativeMenuAPI = Boolean(window.electronAPI?.desktopHomeMenu || window.electronAPI?.desktopTabMenu)
+  const isDesktopShellRoute = typeof window !== 'undefined'
+    && new URLSearchParams(window.location.search).get('desktopShell') === '1'
+  return platform.isElectron || hasNativeMenuAPI || isDesktopShellRoute
+}
 
 // 项目图标：首字符 + 色调（与 TitleBar/DesktopHome 保持一致）
 const initial = (name) => String(name || 'L').trim().charAt(0).toUpperCase() || 'L'
@@ -366,17 +404,23 @@ const stopChatUpdateListener = window.electronAPI?.events?.listen('chat-update-r
   void runChatUpdate(source)
 })
 
-async function renderActiveTab() {
+function renderActiveTab() {
+  const version = ++renderVersion
+  const task = renderQueue.then(() => renderActiveTabNow(version))
+  renderQueue = task.catch(() => {})
+  return task
+}
+
+async function renderActiveTabNow(version) {
   const current = tabs.value.find((tab) => tab.id === activeTabId.value)
   const bridge = nativeTabs()
-  if (!bridge) return
-  const version = ++renderVersion
+  if (!bridge) return true
   if (!current) {
-    await bridge.hide()
-    return
+    try { await bridge.hide() } catch (error) { console.warn('[desktop-shell] failed to hide tabs:', error) }
+    return true
   }
   await nextTick()
-  if (!host.value) return
+  if (!host.value) return true
   try {
     await bridge.create({
       id: current.id,
@@ -384,14 +428,30 @@ async function renderActiveTab() {
       workspaceHash: current.workspaceHash,
       theme: theme.value
     })
-    if (version !== renderVersion) return
+    if (!tabs.value.some((tab) => tab.id === current.id)) {
+      try { await bridge.close(current.id) } catch (cleanupError) { console.warn('[desktop-shell] failed to clean up closed tab:', cleanupError) }
+      return false
+    }
+    if (version !== renderVersion) return false
     const bounds = host.value.getBoundingClientRect()
     await bridge.show(current.id, {
       x: Math.round(bounds.left), y: Math.round(bounds.top), width: Math.round(bounds.width), height: Math.round(bounds.height)
     })
+    return true
   } catch (error) {
+    if (!tabs.value.some((tab) => tab.id === current.id)) {
+      try { await bridge.close(current.id) } catch (cleanupError) { console.warn('[desktop-shell] failed to clean up closed tab:', cleanupError) }
+      return false
+    }
     console.error('[desktop-shell] failed to show tab:', error)
+    tabs.value = tabs.value.filter((tab) => tab.id !== current.id)
+    try { await bridge.close(current.id) } catch (cleanupError) { console.warn('[desktop-shell] failed to clean up failed tab:', cleanupError) }
+    if (activeTabId.value === current.id) {
+      activeTabId.value = ''
+      try { await bridge.hide() } catch (hideError) { console.warn('[desktop-shell] failed to hide tabs after load error:', hideError) }
+    }
     message.error('打开会话失败：' + (error.message || '未知错误'))
+    return false
   }
 }
 
@@ -442,9 +502,10 @@ async function runChatUpdate(source) {
     tabs.value = [...tabs.value, { id, sessionName, workspaceHash, title: tabTitle(sessionName) }]
     activeTabId.value = id
     startupError.value = ''
-    await renderActiveTab()
+    if (!await renderActiveTab()) return
     // 发送更新命令（主进程会在标签加载完成后投递给聊天框）
-    await nativeTabs()?.sendCommand(id, buildUpdatePrompt(source, true))
+    const delivered = await nativeTabs()?.sendCommand(id, buildUpdatePrompt(source, true))
+    if (!delivered) throw new Error('更新命令未能投递到会话')
     message.success('已新建更新会话，正在聊天框中执行更新…')
   } catch (error) {
     message.error('新建更新会话失败：' + (error.message || '未知错误'))
@@ -578,11 +639,27 @@ async function addWorkspaceFromFolder() {
   }
 }
 
+function setContextMenuPosition(menu, event, rect, width, height) {
+  const hasPointerPosition = Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
+    && (event.clientX !== 0 || event.clientY !== 0)
+  const x = hasPointerPosition ? event.clientX : (rect?.left || 0)
+  const y = hasPointerPosition ? event.clientY : (rect?.bottom || 0)
+  const maxX = Math.max(8, window.innerWidth - width - 8)
+  const maxY = Math.max(8, window.innerHeight - height - 8)
+  menu.x = Math.max(8, Math.min(x, maxX))
+  menu.y = Math.max(8, Math.min(y, maxY))
+}
+
 async function openHomeContextMenu(event = {}) {
-  if (window.electronAPI?.desktopHomeMenu?.open) {
-    closeHomeContextMenu()
+  const nativeMenu = window.electronAPI?.desktopHomeMenu?.open
+  if (isElectronRuntime()) {
+    if (!nativeMenu) {
+      console.warn('[desktop-shell] native home menu API is unavailable')
+      return
+    }
+    closeContextMenus()
     try {
-      const action = await window.electronAPI.desktopHomeMenu.open(theme.value)
+      const action = await nativeMenu(theme.value)
       if (action) chooseHomeContextAction(action)
     } catch (error) {
       console.warn('[desktop-shell] failed to open native home menu:', error)
@@ -590,38 +667,85 @@ async function openHomeContextMenu(event = {}) {
     return
   }
 
-  const buttonRect = homeButton.value?.getBoundingClientRect()
-  const hasPointerPosition = Number.isFinite(event.clientX) && Number.isFinite(event.clientY)
-    && (event.clientX !== 0 || event.clientY !== 0)
-  const x = hasPointerPosition ? event.clientX : (buttonRect?.left || 0)
-  const y = hasPointerPosition ? event.clientY : (buttonRect?.bottom || 0)
-  const maxX = Math.max(8, window.innerWidth - HOME_CONTEXT_MENU_WIDTH - 8)
-  const maxY = Math.max(8, window.innerHeight - HOME_CONTEXT_MENU_HEIGHT - 8)
-  homeContextMenu.x = Math.max(8, Math.min(x, maxX))
-  homeContextMenu.y = Math.max(8, Math.min(y, maxY))
+  setContextMenuPosition(homeContextMenu, event, homeButton.value?.getBoundingClientRect(), HOME_CONTEXT_MENU_WIDTH, HOME_CONTEXT_MENU_HEIGHT)
+  closeTabContextMenu()
   homeContextMenu.visible = true
+}
+
+async function openTabContextMenu(event, id) {
+  const index = tabs.value.findIndex((tab) => tab.id === id)
+  if (index < 0) return
+  const nativeMenu = window.electronAPI?.desktopTabMenu?.open
+  if (isElectronRuntime()) {
+    if (!nativeMenu) {
+      console.warn('[desktop-shell] native tab menu API is unavailable')
+      return
+    }
+    closeContextMenus()
+    try {
+      const action = await nativeMenu({
+        tabId: id,
+        index,
+        tabCount: tabs.value.length,
+        theme: theme.value
+      })
+      if (action) chooseTabContextAction(action, id)
+    } catch (error) {
+      console.warn('[desktop-shell] failed to open native tab menu:', error)
+    }
+    return
+  }
+
+  setContextMenuPosition(tabContextMenu, event, event.currentTarget?.getBoundingClientRect(), TAB_CONTEXT_MENU_WIDTH, TAB_CONTEXT_MENU_HEIGHT)
+  closeHomeContextMenu()
+  tabContextMenu.tabId = id
+  tabContextMenu.visible = true
 }
 
 function closeHomeContextMenu() {
   homeContextMenu.visible = false
 }
 
-function chooseHomeContextAction(action) {
+function closeTabContextMenu() {
+  tabContextMenu.visible = false
+  tabContextMenu.tabId = ''
+}
+
+function closeContextMenus() {
   closeHomeContextMenu()
+  closeTabContextMenu()
+}
+
+function chooseHomeContextAction(action) {
+  closeContextMenus()
   if (action === 'open-requirement-board') openRequirementBoard()
   else if (action === 'toggle-theme') toggleTheme()
 }
 
+function hasTabsToClose(side) {
+  const index = tabs.value.findIndex((tab) => tab.id === tabContextMenu.tabId)
+  return side === 'left' ? index > 0 : index >= 0 && index < tabs.value.length - 1
+}
+
+function chooseTabContextAction(action, id = tabContextMenu.tabId) {
+  closeContextMenus()
+  if (!id) return
+  if (action === 'reload') void reloadTab(id)
+  else if (action === 'close') void closeTab(id)
+  else if (action === 'close-left') void closeTabsToSide(id, 'left')
+  else if (action === 'close-right') void closeTabsToSide(id, 'right')
+}
+
 function onWindowClick() {
-  closeHomeContextMenu()
+  closeContextMenus()
 }
 
 function onWindowKeydown(event) {
-  if (event.key === 'Escape') closeHomeContextMenu()
+  if (event.key === 'Escape') closeContextMenus()
 }
 
 async function showHome() {
-  closeHomeContextMenu()
+  closeContextMenus()
   hideStandaloneViews()
   activeTabId.value = ''
   await renderActiveTab()
@@ -682,7 +806,7 @@ async function openDashboard() {
 }
 
 function hideStandaloneViews() {
-  closeHomeContextMenu()
+  closeContextMenus()
   showSkills.value = false
   showTools.value = false
   showSubAgents.value = false
@@ -744,6 +868,25 @@ async function reloadTab(id) {
   } catch (error) {
     message.error('刷新会话失败：' + (error.message || '未知错误'))
   }
+}
+
+async function closeTabsToSide(id, side) {
+  const index = tabs.value.findIndex((tab) => tab.id === id)
+  if (index < 0) return
+  const removedTabs = tabs.value.filter((_, tabIndex) => side === 'left' ? tabIndex < index : tabIndex > index)
+  if (!removedTabs.length) return
+  await Promise.all(removedTabs.map(async (tab) => {
+    try {
+      await nativeTabs()?.close(tab.id)
+    } catch (error) {
+      console.warn('[desktop-shell] failed to close tab:', error)
+    }
+  }))
+  const removedIds = new Set(removedTabs.map((tab) => tab.id))
+  tabs.value = tabs.value.filter((tab) => !removedIds.has(tab.id))
+  const activeWasRemoved = removedIds.has(activeTabId.value)
+  if (activeWasRemoved) activeTabId.value = id
+  if (activeWasRemoved) await renderActiveTab()
 }
 
 function closeTabWithMiddleClick(event, id) {
@@ -958,8 +1101,11 @@ onBeforeUnmount(() => {
 .desktop-error { align-content: center; gap: 12px; }
 .desktop-error button { justify-self: center; border: 1px solid var(--border, #e5e7eb); border-radius: 5px; background: var(--bg, #fff); color: var(--fg, #202124); padding: 6px 14px; cursor: pointer; }
 .desktop-error button:hover { background: var(--bg-3, #f3f4f6); }
-.desktop-shell-context-menu { box-sizing: border-box; position: fixed; z-index: 1000; width: 176px; padding: 4px; border: 1px solid var(--border, #e5e7eb); border-radius: 6px; background: var(--bg, #fff); box-shadow: var(--shadow-lg, 0 10px 28px rgba(0, 0, 0, 0.16)); }
-.desktop-shell-context-menu button { width: 100%; height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--fg-2, #525866); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
-.desktop-shell-context-menu button:hover, .desktop-shell-context-menu button:focus-visible { color: var(--fg, #202124); background: var(--bg-3, #f2f3f5); outline: 0; }
-.desktop-shell-context-menu svg { width: 15px; height: 15px; flex: 0 0 auto; }
+.desktop-shell-context-menu, .desktop-tab-context-menu { box-sizing: border-box; position: fixed; z-index: 1000; padding: 4px; border: 1px solid var(--border, #e5e7eb); border-radius: 6px; background: var(--bg, #fff); box-shadow: var(--shadow-lg, 0 10px 28px rgba(0, 0, 0, 0.16)); }
+.desktop-shell-context-menu { width: 176px; }
+.desktop-tab-context-menu { width: 188px; }
+.desktop-shell-context-menu button, .desktop-tab-context-menu button { width: 100%; height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--fg-2, #525866); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.desktop-shell-context-menu button:hover, .desktop-shell-context-menu button:focus-visible, .desktop-tab-context-menu button:hover, .desktop-tab-context-menu button:focus-visible { color: var(--fg, #202124); background: var(--bg-3, #f2f3f5); outline: 0; }
+.desktop-tab-context-menu button:disabled { opacity: 0.45; cursor: default; }
+.desktop-shell-context-menu svg, .desktop-tab-context-menu svg { width: 15px; height: 15px; flex: 0 0 auto; }
 </style>

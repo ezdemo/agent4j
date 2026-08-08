@@ -50,6 +50,10 @@ if (handleSquirrelEvent()) {
 const isDev = process.env.NODE_ENV === 'development' || !app.isPackaged
 const isWin = process.platform === 'win32'
 const shouldOpenDevTools = process.env.LOOPRA_OPEN_DEVTOOLS === '1'
+const DESKTOP_CHAT_DEV_RENDERER_ORIGINS = ['http://localhost:3000', 'http://127.0.0.1:3000']
+const DESKTOP_CHAT_LOAD_ATTEMPTS = DESKTOP_CHAT_DEV_RENDERER_ORIGINS.length
+const DESKTOP_CHAT_LOAD_RETRY_DELAY_MS = 200
+const DESKTOP_CHAT_LOAD_TIMEOUT_MS = 10000
 
 let mainWindow = null
 let splashWindow = null
@@ -938,11 +942,15 @@ ipcMain.handle('window-close', (event) => {
 })
 ipcMain.handle('window-is-maximized', () => mainWindow ? mainWindow.isMaximized() : false)
 // A native menu remains above WebContentsView-backed desktop chat tabs.
+function applyNativeMenuTheme(rawTheme) {
+  const themeSource = rawTheme === 'dark' ? 'dark' : 'light'
+  if (nativeTheme.themeSource !== themeSource) nativeTheme.themeSource = themeSource
+}
+
 ipcMain.handle('desktop-home-context-menu', (event, rawTheme) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop home menu request')
   if (!mainWindow || mainWindow.isDestroyed()) return null
-  const themeSource = rawTheme === 'dark' ? 'dark' : 'light'
-  if (nativeTheme.themeSource !== themeSource) nativeTheme.themeSource = themeSource
+  applyNativeMenuTheme(rawTheme)
 
   return new Promise((resolve) => {
     let settled = false
@@ -954,6 +962,39 @@ ipcMain.handle('desktop-home-context-menu', (event, rawTheme) => {
     const menu = Menu.buildFromTemplate([
       { label: '打开需求池', click: () => finish('open-requirement-board') },
       { label: '切换主题', click: () => finish('toggle-theme') }
+    ])
+    menu.popup({
+      window: mainWindow,
+      callback: () => finish(null)
+    })
+  })
+})
+
+ipcMain.handle('desktop-tab-context-menu', (event, rawPayload = {}) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop tab menu request')
+  if (!mainWindow || mainWindow.isDestroyed()) return null
+  const tabId = String(rawPayload?.tabId || '').trim()
+  const tab = desktopChatTabs.get(tabId)
+  if (!tab || tab.view.webContents.isDestroyed()) return null
+  const index = Number.isInteger(rawPayload?.index) ? rawPayload.index : -1
+  const tabCount = Number.isInteger(rawPayload?.tabCount) ? rawPayload.tabCount : 0
+  applyNativeMenuTheme(rawPayload?.theme)
+  const canCloseLeft = index > 0
+  const canCloseRight = index >= 0 && index < tabCount - 1
+
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (action) => {
+      if (settled) return
+      settled = true
+      resolve(action)
+    }
+    const menu = Menu.buildFromTemplate([
+      { label: '刷新', click: () => finish('reload') },
+      { label: '关闭', click: () => finish('close') },
+      { type: 'separator' },
+      { label: '关闭左侧标签', enabled: canCloseLeft, click: () => finish('close-left') },
+      { label: '关闭右侧标签', enabled: canCloseRight, click: () => finish('close-right') }
     ])
     menu.popup({
       window: mainWindow,
@@ -1087,21 +1128,16 @@ ipcMain.handle('desktop-chat-tab-create', async (event, rawTab) => {
   if (!tabId || !sessionName || tabId.length > 240 || sessionName.length > 240 || workspaceHash.length > 240) {
     throw new Error('Invalid desktop chat tab')
   }
-  try {
-    await getOrCreateDesktopChatTab(tabId, sessionName, workspaceHash, theme)
-    return { success: true, tabId }
-  } catch (error) {
-    const tab = desktopChatTabs.get(tabId)
-    if (tab && !tab.view.webContents.isDestroyed()) tab.view.webContents.close()
-    desktopChatTabs.delete(tabId)
-    throw error
-  }
+  await getOrCreateDesktopChatTab(tabId, sessionName, workspaceHash, theme)
+  return { success: true, tabId }
 })
 
 ipcMain.handle('desktop-chat-tab-show', async (event, tabId, rawBounds) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
   const tab = desktopChatTabs.get(String(tabId || ''))
   if (!tab) throw new Error('Desktop chat tab no longer exists')
+  if (tab.ready) await tab.ready
+  if (tab.view.webContents.isDestroyed()) throw new Error('Desktop chat tab no longer exists')
   if (!tab.attached) {
     mainWindow.contentView.addChildView(tab.view)
     tab.attached = true
@@ -1126,11 +1162,7 @@ ipcMain.handle('desktop-chat-tab-close', (event, tabId) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
   const tab = desktopChatTabs.get(String(tabId || ''))
   if (!tab) return { success: true }
-  tab.view.setVisible(false)
-  tab.visible = false
-  if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close()
-  desktopChatTabs.delete(tab.id)
-  if (desktopChatActiveTabId === tab.id) desktopChatActiveTabId = null
+  destroyDesktopChatTab(tab)
   return { success: true }
 })
 
@@ -1198,6 +1230,24 @@ function normalizeAiBrowserUrl(rawUrl, allowBlank = false) {
   return url.href
 }
 
+function detachDesktopChatTab(tab) {
+  if (!tab) return
+  if (tab.attached && mainWindow && !mainWindow.isDestroyed()) {
+    try { mainWindow.contentView.removeChildView(tab.view) } catch { /* window may already be closing */ }
+  }
+  tab.attached = false
+}
+
+function destroyDesktopChatTab(tab) {
+  if (!tab) return
+  if (!tab.view.webContents.isDestroyed()) tab.view.setVisible(false)
+  tab.visible = false
+  detachDesktopChatTab(tab)
+  if (desktopChatTabs.get(tab.id)?.view === tab.view) desktopChatTabs.delete(tab.id)
+  if (desktopChatActiveTabId === tab.id) desktopChatActiveTabId = null
+  if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close()
+}
+
 function hideDesktopChatViews(exceptTabId = null) {
   const targets = [...desktopChatTabs.values()].filter((tab) => tab.id !== exceptTabId && tab.visible)
   for (const tab of targets) {
@@ -1207,11 +1257,7 @@ function hideDesktopChatViews(exceptTabId = null) {
 }
 
 function destroyDesktopChatTabs() {
-  for (const tab of desktopChatTabs.values()) {
-    tab.view.setVisible(false)
-    tab.visible = false
-    if (!tab.view.webContents.isDestroyed()) tab.view.webContents.close()
-  }
+  for (const tab of [...desktopChatTabs.values()]) destroyDesktopChatTab(tab)
   desktopChatTabs.clear()
   desktopChatActiveTabId = null
 }
@@ -1226,9 +1272,74 @@ function normalizeDesktopChatBounds(rawBounds) {
   return { x, y, width: Math.max(1, Math.min(values[2], contentBounds.width - x)), height: Math.max(1, Math.min(values[3], contentBounds.height - y)) }
 }
 
+function waitForDesktopChatLoad(view, load, target) {
+  return new Promise((resolve, reject) => {
+    let settled = false
+    let failure = null
+    const finish = (callback, value) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      view.webContents.removeListener('destroyed', onDestroyed)
+      view.webContents.removeListener('did-fail-load', onFailedLoad)
+      callback(value)
+    }
+    const onDestroyed = () => finish(reject, new Error('Desktop chat tab was destroyed while loading'))
+    const onFailedLoad = (event, errorCode, errorDescription, validatedURL, isMainFrame) => {
+      if (isMainFrame) failure = { errorCode, errorDescription, url: validatedURL }
+    }
+    const timeout = setTimeout(() => finish(reject, new Error(`Timed out loading desktop chat tab: ${target}`)), DESKTOP_CHAT_LOAD_TIMEOUT_MS)
+    view.webContents.once('destroyed', onDestroyed)
+    view.webContents.on('did-fail-load', onFailedLoad)
+    Promise.resolve()
+      .then(load)
+      .then(() => finish(resolve))
+      .catch((error) => {
+        const detail = failure ? ` (${failure.errorCode} ${failure.errorDescription}: ${failure.url})` : ''
+        finish(reject, new Error(`${error.message || 'Failed to load desktop chat tab'}${detail}`))
+      })
+  })
+}
+
+async function loadDesktopChatTab(view, sessionName, workspaceHash, theme) {
+  const query = new URLSearchParams({ desktopChatTab: '1', sessionName, workspaceHash: workspaceHash || '', theme }).toString()
+  const rendererPath = path.join(__dirname, '../renderer/index.html')
+  const targets = isDev
+    ? DESKTOP_CHAT_DEV_RENDERER_ORIGINS.map((origin) => `${origin}/?${query}`)
+    : [rendererPath]
+  let lastError = null
+
+  for (let attempt = 0; attempt < DESKTOP_CHAT_LOAD_ATTEMPTS; attempt++) {
+    const target = targets[Math.min(attempt, targets.length - 1)]
+    try {
+      if (isDev) {
+        await waitForDesktopChatLoad(view, () => view.webContents.loadURL(target), target)
+      } else {
+        await waitForDesktopChatLoad(view, () => view.webContents.loadFile(target, {
+          query: { desktopChatTab: '1', sessionName, workspaceHash: workspaceHash || '', theme }
+        }), target)
+      }
+      return
+    } catch (error) {
+      lastError = error
+      if (view.webContents.isDestroyed() || attempt === DESKTOP_CHAT_LOAD_ATTEMPTS - 1) break
+      const nextTarget = targets[Math.min(attempt + 1, targets.length - 1)]
+      console.warn(`[desktop-chat-tab] load failed from ${target}, retrying with ${nextTarget}: ${error.message}`)
+      await new Promise((resolve) => setTimeout(resolve, DESKTOP_CHAT_LOAD_RETRY_DELAY_MS))
+    }
+  }
+
+  throw lastError || new Error('Failed to load desktop chat tab')
+}
+
 async function getOrCreateDesktopChatTab(tabId, sessionName, workspaceHash, theme = 'gray') {
-  const existing = desktopChatTabs.get(tabId)
+  let existing = desktopChatTabs.get(tabId)
+  if (existing?.view.webContents.isDestroyed()) {
+    desktopChatTabs.delete(tabId)
+    existing = null
+  }
   if (existing) {
+    if (existing.ready) await existing.ready
     if (!existing.view.webContents.isDestroyed()) existing.view.webContents.send('desktop-chat-tab-theme', theme)
     return existing
   }
@@ -1243,7 +1354,7 @@ async function getOrCreateDesktopChatTab(tabId, sessionName, workspaceHash, them
     }
   })
   view.setBackgroundColor(theme === 'dark' ? '#141518' : '#ffffff')
-  const tab = { id: tabId, sessionName, workspaceHash, view, attached: false, visible: false }
+  const tab = { id: tabId, sessionName, workspaceHash, view, attached: false, visible: false, ready: null }
   desktopChatTabs.set(tabId, tab)
   view.setVisible(false)
   view.webContents.setWindowOpenHandler(({ url }) => {
@@ -1251,13 +1362,24 @@ async function getOrCreateDesktopChatTab(tabId, sessionName, workspaceHash, them
     return { action: 'deny' }
   })
   view.webContents.on('destroyed', () => {
+    tab.attached = false
+    tab.visible = false
+    if (desktopChatTabs.get(tabId)?.view !== view) return
     desktopChatTabs.delete(tabId)
     if (desktopChatActiveTabId === tabId) desktopChatActiveTabId = null
   })
-  const query = new URLSearchParams({ desktopChatTab: '1', sessionName, workspaceHash: workspaceHash || '', theme }).toString()
-  if (isDev) await view.webContents.loadURL(`http://localhost:3000/?${query}`)
-  else await view.webContents.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { desktopChatTab: '1', sessionName, workspaceHash: workspaceHash || '', theme } })
-  return tab
+
+  try {
+    // Keep the view attached while it loads so a concurrent show call cannot interrupt navigation.
+    mainWindow.contentView.addChildView(view)
+    tab.attached = true
+    tab.ready = loadDesktopChatTab(view, sessionName, workspaceHash, theme)
+    await tab.ready
+    return tab
+  } catch (error) {
+    destroyDesktopChatTab(tab)
+    throw error
+  }
 }
 
 async function stopLoopraJavaProcess(pid) {
