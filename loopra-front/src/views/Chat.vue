@@ -10,19 +10,9 @@
       <button :disabled="loadingPrompt" class="btn btn-ghost btn-sm" @click="viewSystemPrompt">提示词</button>
     </div>
 
-    <!-- 流式加载动画横线 -->
-    <div v-if="streaming" class="streaming-bar">
+    <!-- 流式加载动画横线：本地流式或服务端后台执行中均展示（会话正在执行） -->
+    <div v-if="streaming || sessionTaskRunning" class="streaming-bar">
       <div class="streaming-bar-inner"></div>
-    </div>
-
-    <!-- 服务端仍在执行时，保持当前会话只读并保留停止入口 -->
-    <div v-if="sessionStatusBusy" class="session-task-status" :class="{ stopping: sessionStatusStopping }" role="status" aria-live="polite">
-      <span class="session-task-status-dot" aria-hidden="true"></span>
-      <span>{{ sessionStatusStopping ? '正在停止后台任务…' : sessionTaskRunning ? '该会话正在后台执行' : '正在确认会话状态…' }}</span>
-      <button v-if="sessionTaskRunning" type="button" class="session-task-stop" :disabled="sessionStatusStopping"
-              title="停止当前会话任务" @click="abortChat()">
-        {{ sessionStatusStopping ? '停止中' : '停止' }}
-      </button>
     </div>
 
     <!-- 悬浮日志通知（全局，不受消息滚动影响） -->
@@ -2677,55 +2667,6 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 @keyframes streaming-slide {
   0% { left: -40%; }
   100% { left: 100%; }
-}
-
-.session-task-status {
-  min-height: 34px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  padding: 6px 16px;
-  border-bottom: 1px solid color-mix(in srgb, var(--accent) 35%, var(--border));
-  background: color-mix(in srgb, var(--accent) 10%, var(--bg));
-  color: var(--accent);
-  font-size: 12px;
-}
-
-.session-task-status.stopping {
-  color: var(--fg-3);
-}
-
-.session-task-status-dot {
-  width: 7px;
-  height: 7px;
-  flex: 0 0 7px;
-  border-radius: 50%;
-  background: currentColor;
-  animation: session-task-pulse 1.2s ease-in-out infinite;
-}
-
-.session-task-stop {
-  min-height: 24px;
-  margin-left: auto;
-  padding: 0 9px;
-  border: 1px solid currentColor;
-  border-radius: var(--r);
-  color: inherit;
-  font-size: 12px;
-}
-
-.session-task-stop:hover:not(:disabled) {
-  background: color-mix(in srgb, currentColor 12%, transparent);
-}
-
-.session-task-stop:disabled {
-  cursor: wait;
-  opacity: .65;
-}
-
-@keyframes session-task-pulse {
-  0%, 100% { opacity: .45; transform: scale(.85); }
-  50% { opacity: 1; transform: scale(1); }
 }
 
 /* 消息区 */
