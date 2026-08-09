@@ -208,6 +208,7 @@
 
       <div class="input-row">
         <textarea ref="inputField" v-model="localText" @keydown="handleKeydown"
+                  :disabled="sessionBusy"
                   :placeholder="welcomeMode ? '输入消息... (Enter 发送, Tab 补全, / 命令，粘贴图片)' : '输入消息，/ 使用命令，@ 引用上下文...'" rows="1" @blur="handleBlur"
                   @focus="inputFocused=true"
                   @input="handleInput" @paste="handlePaste"></textarea>
@@ -222,26 +223,27 @@
 
         <div class="input-actions">
           <button type="button" class="plan-mode-btn" :class="{ active: planMode }"
-                  :disabled="streaming || (!sessionName && !workspaceHash)" :aria-pressed="planMode"
+                  :disabled="streaming || sessionBusy || (!sessionName && !workspaceHash)" :aria-pressed="planMode"
                   :title="planMode ? '退出计划模式' : '进入计划模式'" @click="$emit('togglePlan')">
             <FileTextOutlined />
           </button>
-          <button v-if="streaming" class="stop-btn" @click="$emit('abort')" title="停止生成 (Esc)">
+          <button v-if="streaming || sessionRunning" class="stop-btn" @click="$emit('abort')"
+                  :disabled="sessionStatusStopping" :title="sessionStatusStopping ? '正在停止当前任务' : '停止生成 (Esc)'">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
                  class="animate-spin">
               <path d="M21 12a9 9 0 11-6.219-8.56"/>
             </svg>
           </button>
-          <template v-if="!streaming">
-            <button :disabled="!hasHistory" class="continue-btn" title="让 AI 继续生成" @click="$emit('continue')">
+          <template v-if="!streaming && !sessionRunning">
+            <button :disabled="sessionBusy || !hasHistory" class="continue-btn" title="让 AI 继续生成" @click="$emit('continue')">
               <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
                 <polyline points="5 4 15 12 5 20"/>
                 <line x1="19" x2="19" y1="5" y2="19"/>
               </svg>
             </button>
           </template>
-          <button :class="{ active: localText.trim() }" :disabled="!localText.trim()"
-                  class="send-btn" :title="streaming ? '加入队列' : '发送消息'" @click="handleSend">
+          <button :class="{ active: localText.trim() }" :disabled="sessionBusy || !localText.trim()"
+                  class="send-btn" :title="sessionRunning ? '该会话正在后台执行' : streaming ? '加入队列' : '发送消息'" @click="handleSend">
             <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
               <line x1="22" x2="11" y1="2" y2="13"/>
               <polygon points="22 2 15 22 11 13 2 9 22 2"/>
@@ -564,7 +566,10 @@ const props = defineProps({
   rightPanelOpen: {type: Boolean, default: false},
   welcomeMode: {type: Boolean, default: false},
   queuedMessages: {type: Array, default: () => []},
-  planMode: {type: Boolean, default: false}
+  planMode: {type: Boolean, default: false},
+  sessionRunning: {type: Boolean, default: false},
+  sessionBusy: {type: Boolean, default: false},
+  sessionStatusStopping: {type: Boolean, default: false}
 })
 
 const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'setDefaultModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission', 'pickerOpen', 'manageModels', 'removeQueued', 'guideQueued', 'togglePlan'])
@@ -885,7 +890,7 @@ const handleKeydown = (e) => {
       return
     }
   }
-  if (e.key === 'Escape' && props.streaming) {
+  if (e.key === 'Escape' && (props.streaming || props.sessionRunning)) {
     e.preventDefault();
     emit('abort');
     return
@@ -897,6 +902,7 @@ const handleKeydown = (e) => {
 }
 
 const handleSend = () => {
+  if (props.sessionBusy) return
   if (localText.value.trim()) {
     let text = localText.value.trim()
     const collapsedParts = []

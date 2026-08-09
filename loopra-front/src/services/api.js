@@ -85,7 +85,7 @@ api.interceptors.response.use(
     // 后端业务错误（HTTP 200 但 success=false）
     if (data && data.success === false) {
       const errMsg = data.error || data.message || '操作失败'
-      message.error(errMsg)
+      if (!response.config.silent) message.error(errMsg)
       return Promise.reject({ code: response.status, message: errMsg, data })
     }
 
@@ -275,6 +275,14 @@ export const agentAPI = {
     return api.get('/agent/status')
   },
   
+  // 获取指定会话运行状态 - GET /api/agent/session-status?workspaceHash=xxx&sessionName=xxx
+  getSessionStatus: (workspaceHash, sessionName) => {
+    return api.get('/agent/session-status', {
+      params: {workspaceHash, sessionName},
+      silent: true
+    })
+  },
+
   // 获取历史消息 - GET /api/agent/history?workspaceHash=xxx&sessionName=xxx
   getHistory: (workspaceHash, sessionName) => {
     const params = {}

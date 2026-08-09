@@ -73,6 +73,39 @@ class AgentServiceSharedToolSystemTest {
     }
 
     @Test
+    void sessionStatusUsesActiveTaskRegistrationAndKeepsSessionsIsolated() {
+        AgentService service = new AgentService();
+        String sessionName = "running-session";
+        String taskA = "task-a";
+        String taskB = "task-b";
+
+        service.registerSessionTask(workspaceA.toString(), sessionName, taskA);
+        assertTrue(service.getSessionStatus(workspaceA.toString(), sessionName).running());
+        assertEquals(taskA, service.getSessionStatus(workspaceA.toString(), sessionName).requestId());
+        assertFalse(service.getSessionStatus(workspaceB.toString(), sessionName).running(),
+                "不同工作区的同名会话不能共享运行状态");
+
+        service.registerSessionTask(workspaceA.toString(), sessionName, taskB);
+        service.unregisterSessionTask(workspaceA.toString(), sessionName, taskA);
+        assertTrue(service.getSessionStatus(workspaceA.toString(), sessionName).running(),
+                "清理旧任务不能清除同一会话的新任务");
+        assertEquals(taskB, service.getSessionStatus(workspaceA.toString(), sessionName).requestId());
+
+        service.unregisterSessionTask(workspaceA.toString(), sessionName, taskB);
+        assertFalse(service.getSessionStatus(workspaceA.toString(), sessionName).running());
+    }
+
+    @Test
+    void sessionStatusDoesNotInferRunningFromHistory() throws Exception {
+        AgentService service = new AgentService();
+        String sessionName = "history-only";
+        getOrCreateAgent(service, workspaceA, sessionName);
+
+        assertFalse(service.getSessionStatus(workspaceA.toString(), sessionName).running(),
+                "仅存在历史和缓存 Agent 时不应报告运行中");
+    }
+
+    @Test
     void planExecutionStartRequiresSubstantiveModelOutput() throws Exception {
         AgentService service = new AgentService();
         LoopraAgent agent = getOrCreateAgent(service, workspaceA, "plan-start-detection");

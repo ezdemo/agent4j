@@ -9,11 +9,7 @@ import org.noear.solon.annotation.*;
 import site.sorghum.loopra.tool.solon.common.LoopraSkillProvider;
 import site.sorghum.loopra.web.common.ServiceException;
 import site.sorghum.loopra.web.common.WebErrorMessages;
-import site.sorghum.loopra.web.model.AgentStatusDTO;
-import site.sorghum.loopra.web.model.ApiResponse;
-import site.sorghum.loopra.web.model.CommandMetaDTO;
-import site.sorghum.loopra.web.model.PlanModeRequest;
-import site.sorghum.loopra.web.model.SkillMetaDTO;
+import site.sorghum.loopra.web.model.*;
 import site.sorghum.loopra.web.service.AgentService;
 
 import java.util.Collection;
@@ -43,6 +39,26 @@ public class AgentController {
             throw new ServiceException("Agent 未初始化，请检查 ~/.loopra/config.json 配置");
         }
         return ApiResponse.ok(agentService.getStatus());
+    }
+
+    @ApiOperation(value = "查询会话运行状态", notes = "按工作区和会话精确返回当前后台 Agent 任务是否仍在执行")
+    @Get
+    @Mapping("/session-status")
+    public ApiResponse<SessionStatusDTO> sessionStatus(
+            @ApiParam(value = "工作区 hash", required = true)
+            @Param(value = "workspaceHash", required = true)
+            String workspaceHash,
+            @ApiParam(value = "会话名称", required = true)
+            @Param(value = "sessionName", required = true)
+            String sessionName) {
+        if (!agentService.isReady()) {
+            throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        }
+        if (sessionName == null || sessionName.isBlank()) {
+            throw new ServiceException("sessionName 不能为空");
+        }
+        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+        return ApiResponse.ok(agentService.getSessionStatus(workspacePath, sessionName));
     }
 
     @ApiOperation(value = "获取历史消息", notes = "根据工作区 hash 和会话名称获取历史消息列表")

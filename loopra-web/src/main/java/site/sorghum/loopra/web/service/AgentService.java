@@ -16,12 +16,12 @@ import site.sorghum.loopra.bin.config.LoopraConfig;
 import site.sorghum.loopra.bin.model.HttpModelClient;
 import site.sorghum.loopra.bin.model.ModelPriceProvider;
 import site.sorghum.loopra.bin.session.JsonlSessionStore;
+import site.sorghum.loopra.bin.session.SessionFileChangeTracker;
 import site.sorghum.loopra.bin.session.SessionStore;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.bin.tool.ToolSystemInitializer;
 import site.sorghum.loopra.bin.workspace.WorkspaceManager;
 import site.sorghum.loopra.tool.AgentOutput;
-import site.sorghum.loopra.bin.session.SessionFileChangeTracker;
 import site.sorghum.loopra.web.common.ServiceException;
 import site.sorghum.loopra.web.common.UsageCostCalculator;
 import site.sorghum.loopra.web.model.*;
@@ -83,6 +83,11 @@ public class AgentService {
                 }
             }
             return agent;
+        }
+
+        /** 不改变 LRU 顺序地读取缓存中的 Agent。 */
+        LoopraAgent peek(String key) {
+            return agents.get(key);
         }
 
         void put(String key, LoopraAgent agent) {
@@ -375,6 +380,51 @@ public class AgentService {
             sessionName = "default";
         }
         return workspacePath + "::" + sessionName;
+    }
+
+    /**
+     * 当前正在处理的会话任务登记。
+     * <p>
+     * AgentLoop 的运行标志覆盖已经进入推理循环的任务；这里额外登记 Web 请求，
+     * 覆盖流任务在线程池中等待或尚未创建 Agent 的窗口。
+     * </p>
+     */
+    private final ConcurrentHashMap<String, Set<String>> activeSessionTasks = new ConcurrentHashMap<>();
+
+    /**
+     * 登记一个会话级后台任务。
+     *
+     * @param workspacePath 工作区路径
+     * @param sessionName   会话名称
+     * @param requestId     请求/任务唯一 ID
+     */
+    public void registerSessionTask(String workspacePath, String sessionName, String requestId) {
+        if (requestId == null || requestId.isBlank()) return;
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        activeSessionTasks.computeIfAbsent(sessionKey, key -> ConcurrentHashMap.newKeySet()).add(requestId);
+    }
+
+    /** 移除指定会话任务登记；不会误删同一会话随后登记的任务。 */
+    public void unregisterSessionTask(String workspacePath, String sessionName, String requestId) {
+        if (requestId == null || requestId.isBlank()) return;
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        Set<String> tasks = activeSessionTasks.get(sessionKey);
+        if (tasks == null) return;
+        tasks.remove(requestId);
+        if (tasks.isEmpty()) activeSessionTasks.remove(sessionKey, tasks);
+    }
+
+    /**
+     * 获取指定工作区/会话的运行状态。
+     * <p>状态只来自活动任务登记或缓存 Agent 的实际运行标志，不根据历史消息变化推断。</p>
+     */
+    public SessionStatusDTO getSessionStatus(String workspacePath, String sessionName) {
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        Set<String> tasks = activeSessionTasks.get(sessionKey);
+        String requestId = tasks == null ? null : tasks.stream().findFirst().orElse(null);
+        LoopraAgent agent = sessionCache.peek(sessionKey);
+        boolean running = (tasks != null && !tasks.isEmpty()) || (agent != null && agent.isRunning());
+        return new SessionStatusDTO(running, requestId);
     }
 
     // ==================== 状态查询 ====================
