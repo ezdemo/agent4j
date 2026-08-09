@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Solon-4.0.4-important?logo=java" alt="Solon 4.0.4"/>
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js" alt="Vue 3"/>
   <img src="https://img.shields.io/badge/Electron-42.4-47848F?logo=electron" alt="Electron"/>
-  <img src="https://img.shields.io/badge/version-26.8.40-lightgrey" alt="Version 26.8.40"/>
+  <img src="https://img.shields.io/badge/version-26.8.91-lightgrey" alt="Version 26.8.91"/>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/>
 </p>
 
@@ -26,7 +26,7 @@
   <a href="#从源码开发">从源码开发</a>
 </p>
 
-> 当前版本：`26.8.40`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+> 当前版本：`26.8.91`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 技术交流群
 
@@ -140,9 +140,10 @@ loopra web 0
 | 代码库操作 | 在工作区边界内读取、搜索、编辑文件，运行一次性或交互式命令。 |
 | 子代理协作 | 内置 `explore`、`implement`、`test`、`review`、`plan` 五种角色，支持隔离上下文、权限约束和超时控制；配置可在桌面端编辑并持久化，支持选择渠道模型。 |
 | 计划模式 | 输入框一键进入只读探索，探索完成后提交计划供用户审查，批准后按计划执行。 |
+| 需求池 | 以看板管理需求，支持 AI 自动执行、评论与执行日志、立即/定时执行，以及按需求配置模型和审批模式。 |
 | 持久协作状态 | Checklist、会话级 Goal、项目记忆和共享工作区支持长任务及父子代理协作。 |
 | 审批与边界 | 三态 HITL、工具白名单、路径边界保护，以及可选的独立校验模型。 |
-| 桌面工作台 | Electron Desktop 提供多聊天标签、Git/文件面板、元素检查、服务进程管理和 AI 浏览器。 |
+| 桌面工作台 | Electron Desktop 提供多聊天标签、Git/文件面板、元素检查、服务进程管理、AI 浏览器、需求池窗口和右键上下文操作。 |
 
 ### 工具与扩展
 
@@ -204,7 +205,7 @@ MCP、OpenAPI 和技能可为 Agent 注入额外工具。`read_image` 支持工�
 
 ### Web 与 Desktop
 
-`loopra web [port]` 启动 Web 服务，控制台会输出本地访问地址。Web 界面支持会话、工作区、工具、模型渠道、Git 和配置管理；Electron Desktop 在此基础上增加本地进程和浏览器能力。
+`loopra web [port]` 启动 Web 服务，控制台会输出本地访问地址。Web 界面支持会话、工作区、工具、模型渠道、Git 和配置管理，并提供需求池 API；Electron Desktop 在此基础上增加本地进程、浏览器、需求池窗口和桌面上下文菜单能力。
 
 ### 聊天命令
 
@@ -224,7 +225,7 @@ MCP、OpenAPI 和技能可为 Agent 注入额外工具。`read_image` 支持工�
 
 ### 输入框辅助功能
 
-输入框底部的“常用要求”用于管理个人预设，数据保存到 `~/.loopra/prompt-presets.json`；点击预设会直接追加到当前输入框，首次使用时列表默认为空。生成期间发送的新消息会排队显示，可移除，也可以引导发送以停止当前生成并立即处理排队消息。
+输入框底部的“常用要求”用于管理个人预设，数据保存到 `~/.loopra/prompt-presets.json`；点击预设会直接追加到当前输入框，首次使用时列表默认为空。生成期间发送的新消息会排队显示，可移除，也可以引导发送以停止当前生成并立即处理排队消息。重新打开或切换到仍在后台执行的会话时，输入区会保持锁定并提供停止入口，直到任务结束。
 ### ACP
 
 Web 进程可通过启动参数启用 Agent Client Protocol：
