@@ -19,12 +19,7 @@ import site.sorghum.loopra.web.service.SseEmitter;
 
 import java.util.Map;
 import java.util.UUID;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
-import java.util.concurrent.FutureTask;
-import java.util.concurrent.ThreadFactory;
+import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
@@ -51,6 +46,7 @@ public class ChatController {
     private final ConcurrentHashMap<String, Future<?>> activeChatTasks = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, SseEmitter> activeChatEmitters = new ConcurrentHashMap<>();
     private final ConcurrentHashMap<String, AtomicBoolean> activeChatStarted = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ChatSessionKey> activeChatTaskSessions = new ConcurrentHashMap<>();
     /** 处理停止请求先于流任务登记到达的竞态；过期项在后续请求时清理。 */
     private final ConcurrentHashMap<String, Long> cancelledChatRequests = new ConcurrentHashMap<>();
     private static final long CANCEL_MARKER_TTL_MS = 5 * 60 * 1000L;
@@ -123,6 +119,7 @@ public class ChatController {
         final UserMessage userMsg = UserMessage.of(message, request.getImages());
         final String resolvedPath = agentService.resolveWorkspacePath(request.getWorkspaceHash());
         final String sessionName = request.getSessionName();
+        final String requestId = ensureRequestId(request);
 
         AtomicBoolean taskStarted = new AtomicBoolean(false);
         Runnable streamTask = () -> {
@@ -150,12 +147,12 @@ public class ChatController {
                     log.warn("[web] 发送错误信息失败（可能SSE连接已断开）: {}", ex.getMessage());
                 }
             } finally {
-                cleanupStreamTask(request.getRequestId(), emitter);
+                cleanupStreamTask(requestId, emitter);
                 emitter.complete();
             }
         };
         FutureTask<Void> task = new FutureTask<>(streamTask, null);
-        registerStreamTask(request.getRequestId(), task, emitter, taskStarted);
+        registerStreamTask(requestId, resolvedPath, sessionName, task, emitter, taskStarted);
         if (!task.isCancelled()) {
             chatExecutor.execute(task);
         }
@@ -164,10 +161,22 @@ public class ChatController {
         emitter.awaitCompletion();
     }
 
-    private void registerStreamTask(String requestId, FutureTask<Void> task, SseEmitter emitter,
+    private String ensureRequestId(ChatRequest request) {
+        String requestId = request.getRequestId();
+        if (requestId == null || requestId.isBlank()) {
+            requestId = UUID.randomUUID().toString();
+            request.setRequestId(requestId);
+        }
+        return requestId;
+    }
+
+    private void registerStreamTask(String requestId, String workspacePath, String sessionName,
+                                    FutureTask<Void> task, SseEmitter emitter,
                                     AtomicBoolean taskStarted) {
         if (requestId == null || requestId.isBlank()) return;
         cleanupExpiredCancelMarkers();
+        activeChatTaskSessions.put(requestId, new ChatSessionKey(workspacePath, sessionName));
+        agentService.registerSessionTask(workspacePath, sessionName, requestId);
         activeChatTasks.put(requestId, task);
         activeChatEmitters.put(requestId, emitter);
         activeChatStarted.put(requestId, taskStarted);
@@ -175,6 +184,7 @@ public class ChatController {
             activeChatTasks.remove(requestId, task);
             activeChatEmitters.remove(requestId, emitter);
             activeChatStarted.remove(requestId, taskStarted);
+            unregisterSessionTask(requestId);
             task.cancel(true);
             emitter.complete();
         }
@@ -185,6 +195,7 @@ public class ChatController {
         cancelledChatRequests.put(requestId, System.currentTimeMillis());
         Future<?> task = activeChatTasks.remove(requestId);
         AtomicBoolean taskStarted = activeChatStarted.remove(requestId);
+        unregisterSessionTask(requestId);
         if (task != null) task.cancel(true);
         SseEmitter emitter = activeChatEmitters.remove(requestId);
         // 已启动任务必须自行完成 finally，让计划恢复事件在 SSE 关闭前送达。
@@ -196,7 +207,18 @@ public class ChatController {
         activeChatTasks.remove(requestId);
         activeChatEmitters.remove(requestId, emitter);
         activeChatStarted.remove(requestId);
+        unregisterSessionTask(requestId);
         cancelledChatRequests.remove(requestId);
+    }
+
+    private void unregisterSessionTask(String requestId) {
+        ChatSessionKey session = activeChatTaskSessions.remove(requestId);
+        if (session != null) {
+            agentService.unregisterSessionTask(session.workspacePath(), session.sessionName(), requestId);
+        }
+    }
+
+    private record ChatSessionKey(String workspacePath, String sessionName) {
     }
 
     private void cleanupExpiredCancelMarkers() {

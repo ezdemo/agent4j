@@ -398,6 +398,7 @@ import AIBrowser from './components/AIBrowser.vue'
 import {platform} from '@/services/platform'
 import {hasConfiguredModelChannel} from '@/utils/modelChannels'
 import {RELEASE_LATEST_URL} from '@/utils/constants'
+import {switchThemeWithReveal} from './utils/themeTransition'
 
 const isElementInspectorWindow = new URLSearchParams(window.location.search).get('elementInspector') === '1'
 const isAiBrowserWindow = new URLSearchParams(window.location.search).get('aiBrowser') === '1'
@@ -723,7 +724,9 @@ const formatName = n => {
 const themeOrder = ['gray', 'dark']
 const toggleTheme = () => {
   const idx = themeOrder.indexOf(store.settings.theme)
-  store.settings.theme = themeOrder[(idx + 1) % themeOrder.length]
+  const target = themeOrder[(idx + 1) % themeOrder.length]
+  // 中心扩散动画：动画完成后再真正切换主题，实现从中间向四周变黑/变白
+  switchThemeWithReveal(target, (v) => { store.settings.theme = v })
 }
 
 let heartbeatTimer = null

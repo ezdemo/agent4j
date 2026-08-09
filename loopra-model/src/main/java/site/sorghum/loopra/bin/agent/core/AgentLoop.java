@@ -28,11 +28,11 @@ import site.sorghum.loopra.bin.agent.spi.SessionUsageSink;
 import site.sorghum.loopra.bin.model.ModelApiError;
 import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.model.UserMessageSanitizer;
+import site.sorghum.loopra.bin.session.SessionFileChangeTracker;
 import site.sorghum.loopra.bin.tool.ToolMetadata;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.tool.*;
 import site.sorghum.loopra.tool.interact.FinishTool;
-import site.sorghum.loopra.bin.session.SessionFileChangeTracker;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -40,6 +40,7 @@ import java.util.*;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BooleanSupplier;
 import java.util.function.Consumer;
@@ -194,6 +195,15 @@ public class AgentLoop implements AgentLoopController {
 
     /** 主循环是否正在执行中（防止巡检线程与主循环冲突） */
     private final AtomicBoolean running = new AtomicBoolean(false);
+
+    /**
+     * 查询主循环是否正在执行。
+     *
+     * @return true 表示当前 Agent 正在处理一个回合
+     */
+    public boolean isRunning() {
+        return running.get();
+    }
 
     // ==================== 构造器 ====================
 
@@ -508,6 +518,15 @@ public class AgentLoop implements AgentLoopController {
 
     private static ChatMessage toolResult(String id, String result) {
         return ChatMessage.tool(id, result);
+    }
+
+    private static ChatMessage timedToolResult(String id, String result, long startedAt) {
+        return ChatMessage.tool(id, result, startedAt, System.currentTimeMillis());
+    }
+
+    private static ChatMessage timedToolResult(ChatMessage result, long startedAt) {
+        result.setToolTiming(startedAt, System.currentTimeMillis());
+        return result;
     }
 
     public ONode refreshTools() {
@@ -1411,7 +1430,16 @@ public class AgentLoop implements AgentLoopController {
      */
     private static final class ToolExecutionControl {
         private final AtomicBoolean cancelled = new AtomicBoolean(false);
+        private final AtomicLong startedAt = new AtomicLong(0L);
         private final AtomicReference<Runnable> cancellation = new AtomicReference<>();
+
+        void markStarted(long timestamp) {
+            startedAt.compareAndSet(0L, timestamp);
+        }
+
+        long startedAt() {
+            return startedAt.get();
+        }
 
         boolean isCancelled() {
             return cancelled.get();
@@ -1534,6 +1562,8 @@ public class AgentLoop implements AgentLoopController {
                     ));
 
                     ToolRequest req = new ToolRequest(null,extraMap, toolCall.getArguments());
+                    long toolStartedAt = System.currentTimeMillis();
+                    control.markStarted(toolStartedAt);
                     try {
                         ToolResult call = fc.call(req.getArgs());
                         String rawResult = call.getContent();
@@ -1543,9 +1573,10 @@ public class AgentLoop implements AgentLoopController {
                         String result = imageResult == null ? rawResult : imageResult.summary();
                         safeListener("toolResult", () -> listener.onToolResult(toolCall.getName(), result));
                         safeOutputDebug("toolResult", () -> output.onToolResult(toolCall.getName(), result));
-                        return imageResult == null ? toolResult(toolCall.getId(), result)
+                        ChatMessage toolMessage = imageResult == null ? ChatMessage.tool(toolCall.getId(), result)
                                 : ChatMessage.toolWithImage(toolCall.getId(), result,
                                 imageResult.dataUri(), imageResult.detail());
+                        return timedToolResult(toolMessage, toolStartedAt);
                     } catch (HitlRequiredException e) {
                         hitlRef.compareAndSet(null, e);
                         return toolResult(toolCall.getId(),
@@ -1554,7 +1585,7 @@ public class AgentLoop implements AgentLoopController {
                         String result = e.getMessage();
                         safeListener("toolResult", () -> listener.onToolResult(toolCall.getName(), result));
                         safeOutputDebug("toolResult", () -> output.onToolResult(toolCall.getName(), result));
-                        return toolResult(toolCall.getId(), result);
+                        return timedToolResult(toolCall.getId(), result, toolStartedAt);
                     }
                 } finally {
                     SessionFileChangeTracker.clearBinding();
@@ -1643,13 +1674,13 @@ public class AgentLoop implements AgentLoopController {
                         safeOutput("toolTimeout", () -> output.onLog(LogLevel.WARN,
                                 "[tool] " + timeoutLabel + "执行超时（" + timeoutSec
                                         + "s），已请求停止: " + toolName(tcArray.get(resultIndex))));
-                        results.set(i, timeoutResult(tcArray.get(i), timeoutLabel, timeoutSec));
+                        results.set(i, timeoutResult(tcArray.get(i), timeoutLabel, timeoutSec, controls[i]));
                     } catch (CancellationException e) {
                         if (userAbortRequested) {
                             cancelAllFutures(futures, controls);
                             return buildAbortedResults(futures, tcArray);
                         }
-                        results.set(i, timeoutResult(tcArray.get(i), timeoutLabel, timeoutSec));
+                        results.set(i, timeoutResult(tcArray.get(i), timeoutLabel, timeoutSec, controls[i]));
                     } catch (InterruptedException e) {
                         Thread.currentThread().interrupt();
                         cancelAllFutures(futures, controls);
@@ -1675,12 +1706,18 @@ public class AgentLoop implements AgentLoopController {
         return toolCall.get("function").get("name").getString();
     }
 
-    private static ChatMessage timeoutResult(ONode toolCall, String label, int timeoutSec) {
-        return toolResult(toolCall.get("id").getString(), ONode.ofJson("{}")
+    private static ChatMessage timeoutResult(ONode toolCall, String label, int timeoutSec,
+                                             ToolExecutionControl control) {
+        String content = ONode.ofJson("{}")
                 .asObject()
                 .set("error", label + "执行超时（" + timeoutSec + "s）")
                 .set("rejectedReason", "timeout")
-                .toJson());
+                .toJson();
+        long startedAt = control == null ? 0L : control.startedAt();
+        return startedAt > 0L
+                ? ChatMessage.tool(toolCall.get("id").getString(), content,
+                startedAt, System.currentTimeMillis())
+                : toolResult(toolCall.get("id").getString(), content);
     }
 
     private static void cancelFuture(Future<ChatMessage> future,

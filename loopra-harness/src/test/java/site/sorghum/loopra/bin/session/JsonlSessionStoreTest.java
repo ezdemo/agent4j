@@ -72,6 +72,18 @@ class JsonlSessionStoreTest {
     }
 
     @Test
+    void toolExecutionTimingRoundTripsThroughJsonl() throws IOException {
+        ChatMessage msg = ChatMessage.tool("tc-timing", "result", 1_000L, 1_125L);
+        store.append(msg);
+        store.flush();
+
+        ChatMessage loaded = store.load().get(0);
+        assertEquals(1_000L, loaded.getToolStartedAt());
+        assertEquals(1_125L, loaded.getToolFinishedAt());
+        assertEquals(125L, loaded.getToolDurationMs());
+    }
+
+    @Test
     void loadFromAnotherStoreWaitsForOngoingWrite() throws Exception {
         store.append(ChatMessage.ofUser("complete message"));
         store.flush();

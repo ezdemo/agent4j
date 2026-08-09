@@ -74,4 +74,15 @@ describe('BlockRenderer active response state', () => {
     })
     expect(wrapper.find('.tool-icon .animate-spin').exists()).toBe(false)
   })
+
+  it('shows persisted durations in milliseconds below one second', async () => {
+    const wrapper = mount(BlockRenderer, {
+      props: {
+        blocks: [{type: 'tool_call', name: 'read', status: '成功', args: {}, result: 'ok', toolDurationMs: 640}]
+      }
+    })
+
+    await wrapper.find('.tool-head').trigger('click')
+    expect(wrapper.find('.tool-duration').text()).toBe('640ms')
+  })
 })

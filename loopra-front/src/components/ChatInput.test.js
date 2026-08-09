@@ -11,7 +11,7 @@ Object.defineProperty(Element.prototype, 'scrollIntoView', {
 })
 
 vi.mock('../stores/app', () => ({
-  useAppStore: () => ({desktopPetVisible: false, activePetName: '', petHidden: false})
+  useAppStore: () => ({desktopPetVisible: false, isDesktopEnv: false, activePetName: '', petHidden: false, setPetHidden: vi.fn()})
 }))
 
 vi.mock('../services/api', () => ({
@@ -118,6 +118,37 @@ describe('ChatInput plan mode', () => {
     expect(wrapper.emitted('togglePlan')).toEqual([[]])
     expect(wrapper.find('.input-row textarea').element.value).toBe('')
     expect(wrapper.find('.plan-mode-btn').attributes('aria-pressed')).toBe('true')
+    wrapper.unmount()
+  })
+  it('locks message and plan controls while the session task is running but keeps stop available', async () => {
+    const wrapper = mountInput({
+      inputText: '不要重复发送',
+      sessionName: 'session-1',
+      sessionRunning: true,
+      sessionBusy: true
+    })
+
+    expect(wrapper.find('textarea').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.send-btn').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.plan-mode-btn').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.continue-btn').exists()).toBe(false)
+    expect(wrapper.find('.stop-btn').exists()).toBe(true)
+
+    await wrapper.find('.send-btn').trigger('click')
+    expect(wrapper.emitted('send')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('allows stopping a remotely running session after a stop request is sent', async () => {
+    const wrapper = mountInput({
+      sessionName: 'session-1',
+      sessionRunning: true,
+      sessionBusy: true,
+      sessionStatusStopping: true
+    })
+
+    expect(wrapper.find('.stop-btn').attributes('disabled')).toBeDefined()
+    expect(wrapper.find('.stop-btn').attributes('title')).toContain('正在停止')
     wrapper.unmount()
   })
 })

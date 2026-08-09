@@ -363,6 +363,15 @@ public class LoopraAgent {
         return sessionService.getModelUsage();
     }
 
+    /**
+     * 查询当前 Agent 是否正在执行推理回合。
+     *
+     * @return true 表示主循环正在运行
+     */
+    public boolean isRunning() {
+        return loop != null && loop.isRunning();
+    }
+
     /** getMaxContextTokens 回退默认值（模型客户端不可用时的保守值） */
     private static final int DEFAULT_FALLBACK_MAX_TOKENS = 128000;
 
@@ -776,6 +785,11 @@ public class LoopraAgent {
 
         public Builder model(String v) {
             this.model = v;
+            return this;
+        }
+
+        public Builder systemPrompt(String v) {
+            this.systemPrompt = v;
             return this;
         }
 

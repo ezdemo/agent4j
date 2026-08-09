@@ -190,6 +190,15 @@ public class JsonlSessionStore implements SessionStore {
         if (msg.getTimestamp() != null) {
             node.set("timestamp", msg.getTimestamp());
         }
+        if (msg.getToolStartedAt() != null) {
+            node.set("tool_started_at", msg.getToolStartedAt());
+        }
+        if (msg.getToolFinishedAt() != null) {
+            node.set("tool_finished_at", msg.getToolFinishedAt());
+        }
+        if (msg.getToolDurationMs() != null) {
+            node.set("tool_duration_ms", msg.getToolDurationMs());
+        }
         if (msg.getToolCallId() != null) {
             node.set("tool_call_id", msg.getToolCallId());
         }
