@@ -28,11 +28,11 @@ import site.sorghum.loopra.bin.agent.spi.SessionUsageSink;
 import site.sorghum.loopra.bin.model.ModelApiError;
 import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.model.UserMessageSanitizer;
+import site.sorghum.loopra.bin.session.SessionFileChangeTracker;
 import site.sorghum.loopra.bin.tool.ToolMetadata;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.tool.*;
 import site.sorghum.loopra.tool.interact.FinishTool;
-import site.sorghum.loopra.bin.session.SessionFileChangeTracker;
 
 import java.io.IOException;
 import java.nio.file.Path;
@@ -195,6 +195,15 @@ public class AgentLoop implements AgentLoopController {
 
     /** 主循环是否正在执行中（防止巡检线程与主循环冲突） */
     private final AtomicBoolean running = new AtomicBoolean(false);
+
+    /**
+     * 查询主循环是否正在执行。
+     *
+     * @return true 表示当前 Agent 正在处理一个回合
+     */
+    public boolean isRunning() {
+        return running.get();
+    }
 
     // ==================== 构造器 ====================
 
