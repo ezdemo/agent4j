@@ -16,12 +16,12 @@ import site.sorghum.loopra.bin.config.LoopraConfig;
 import site.sorghum.loopra.bin.model.HttpModelClient;
 import site.sorghum.loopra.bin.model.ModelPriceProvider;
 import site.sorghum.loopra.bin.session.JsonlSessionStore;
+import site.sorghum.loopra.bin.session.SessionFileChangeTracker;
 import site.sorghum.loopra.bin.session.SessionStore;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.bin.tool.ToolSystemInitializer;
 import site.sorghum.loopra.bin.workspace.WorkspaceManager;
 import site.sorghum.loopra.tool.AgentOutput;
-import site.sorghum.loopra.bin.session.SessionFileChangeTracker;
 import site.sorghum.loopra.web.common.ServiceException;
 import site.sorghum.loopra.web.common.UsageCostCalculator;
 import site.sorghum.loopra.web.model.*;
@@ -83,6 +83,11 @@ public class AgentService {
                 }
             }
             return agent;
+        }
+
+        /** 不改变 LRU 顺序地读取缓存中的 Agent。 */
+        LoopraAgent peek(String key) {
+            return agents.get(key);
         }
 
         void put(String key, LoopraAgent agent) {
@@ -377,6 +382,51 @@ public class AgentService {
         return workspacePath + "::" + sessionName;
     }
 
+    /**
+     * 当前正在处理的会话任务登记。
+     * <p>
+     * AgentLoop 的运行标志覆盖已经进入推理循环的任务；这里额外登记 Web 请求，
+     * 覆盖流任务在线程池中等待或尚未创建 Agent 的窗口。
+     * </p>
+     */
+    private final ConcurrentHashMap<String, Set<String>> activeSessionTasks = new ConcurrentHashMap<>();
+
+    /**
+     * 登记一个会话级后台任务。
+     *
+     * @param workspacePath 工作区路径
+     * @param sessionName   会话名称
+     * @param requestId     请求/任务唯一 ID
+     */
+    public void registerSessionTask(String workspacePath, String sessionName, String requestId) {
+        if (requestId == null || requestId.isBlank()) return;
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        activeSessionTasks.computeIfAbsent(sessionKey, key -> ConcurrentHashMap.newKeySet()).add(requestId);
+    }
+
+    /** 移除指定会话任务登记；不会误删同一会话随后登记的任务。 */
+    public void unregisterSessionTask(String workspacePath, String sessionName, String requestId) {
+        if (requestId == null || requestId.isBlank()) return;
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        Set<String> tasks = activeSessionTasks.get(sessionKey);
+        if (tasks == null) return;
+        tasks.remove(requestId);
+        if (tasks.isEmpty()) activeSessionTasks.remove(sessionKey, tasks);
+    }
+
+    /**
+     * 获取指定工作区/会话的运行状态。
+     * <p>状态只来自活动任务登记或缓存 Agent 的实际运行标志，不根据历史消息变化推断。</p>
+     */
+    public SessionStatusDTO getSessionStatus(String workspacePath, String sessionName) {
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        Set<String> tasks = activeSessionTasks.get(sessionKey);
+        String requestId = tasks == null ? null : tasks.stream().findFirst().orElse(null);
+        LoopraAgent agent = sessionCache.peek(sessionKey);
+        boolean running = (tasks != null && !tasks.isEmpty()) || (agent != null && agent.isRunning());
+        return new SessionStatusDTO(running, requestId);
+    }
+
     // ==================== 状态查询 ====================
 
     /**
@@ -439,6 +489,10 @@ public class AgentService {
     }
 
     private LoopraAgent createAgent(String sessionKey, ModelTarget target) {
+        return createAgent(sessionKey, target, null);
+    }
+
+    private LoopraAgent createAgent(String sessionKey, ModelTarget target, String systemPrompt) {
         String[] parts = sessionKey.split("::", 2);
         String workspacePath = parts[0];
         String sessionName = parts.length > 1 ? parts[1] : "default";
@@ -463,11 +517,32 @@ public class AgentService {
                 .toolSystem(getOrCreateSharedToolSystem(Paths.get(workspacePath)))
                 .modelClient(new HttpModelClient(apiUrl, apiKey, target.model(), reasoningEffort,
                         target.channelId(), channel.apiProtocol()));
+        if (systemPrompt != null && !systemPrompt.isBlank()) {
+            builder.systemPrompt(systemPrompt);
+        }
         LoopraAgent agent = builder.buildLightweight();
         agent.bindSession(sessionName);
         agent.setListener(new WebUsageListener(agent));
         agent.setOutput(AgentOutput.NOOP);
         return agent;
+    }
+
+    /**
+     * 获取或创建会话 Agent（创建时注入自定义系统提示词，仅首次创建生效）。
+     */
+    private LoopraAgent getOrCreateAgentWithPrompt(String sessionKey, ModelTarget target, String systemPrompt) {
+        LoopraAgent agent = sessionCache.get(sessionKey);
+        if (agent != null) return getOrCreateAgent(sessionKey, target);
+        synchronized (this) {
+            agent = sessionCache.get(sessionKey);
+            if (agent != null) return getOrCreateAgent(sessionKey, target);
+            sessionCache.evictIfNeeded();
+            agent = createAgent(sessionKey, target, systemPrompt);
+            sessionCache.put(sessionKey, agent);
+            sessionModelTargets.put(sessionKey, target);
+            log.info("[web] 创建新 Agent（自定义提示词）: {}", sessionKey);
+            return agent;
+        }
     }
 
     private ModelTarget defaultModelTarget() {
@@ -575,6 +650,35 @@ public class AgentService {
             }
         }
         return new ArrayList<>();
+    }
+
+    /**
+     * 向指定会话注入一条用户消息（不触发 AI 回复）。
+     * <p>
+     * 用于需求池评论等场景：消息通过 {@code ConversationContext.addUser} 同时进入
+     * <b>Agent 上下文</b>（模型可见）并持久化到会话存储，Web 历史正常可见。
+     * 注意：必须走 ctx 注入而非直接 store.append —— chat 时上下文来自内存 history，
+     * 不会重新从 JSONL 加载，只写存储的消息 Agent 永远看不到。
+     * </p>
+     *
+     * @param workspacePath 工作区路径
+     * @param sessionName   目标会话名称
+     * @param text          消息文本
+     */
+    public void appendUserMessage(String workspacePath, String sessionName, String text) {
+        if (sessionName == null || sessionName.isBlank() || text == null || text.isBlank()) {
+            return;
+        }
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        LoopraAgent agent = getOrCreateAgent(sessionKey);
+        if (agent.getCtx() == null) {
+            return;
+        }
+        agent.getCtx().addUser(UserMessage.of(text)); // 进上下文 + 落盘（persist）
+        SessionStore store = agent.getSessionStore();
+        if (store != null) {
+            store.flush();
+        }
     }
 
     /** 返回会话计划模式及待审查计划。 */
@@ -1543,6 +1647,161 @@ public class AgentService {
             return "错误：" + e.getMessage();
         } finally {
             CURRENT_SESSION_NAME.remove();
+            LoopraAgent agent = sessionCache.get(sessionKey);
+            if (agent != null) {
+                agent.setOutput(AgentOutput.NOOP);
+                agent.flushSession();
+                agent.saveUsage();
+            }
+            lock.unlock();
+        }
+    }
+
+    /**
+     * 向指定会话注入一条 assistant 消息（不触发 AI 回复）。
+     * <p>用于需求执行中 AI 回复用户评论（reply_requirement_comment 工具）。</p>
+     */
+    public void appendAssistantMessage(String workspacePath, String sessionName, String content) {
+        if (sessionName == null || sessionName.isBlank() || content == null || content.isBlank()) {
+            return;
+        }
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        LoopraAgent agent = getOrCreateAgent(sessionKey);
+        SessionStore store = agent.getSessionStore();
+        if (store == null) {
+            return;
+        }
+        ChatMessage message = new ChatMessage("assistant");
+        message.setContent(content);
+        message.setTimestamp(System.currentTimeMillis());
+        try {
+            store.append(message);
+            store.flush();
+        } catch (IOException e) {
+            throw new ServiceException("写入会话消息失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 执行需求：以指定系统提示词驱动需求专属会话（req_&lt;id&gt;）执行一次任务。
+     * <p>
+     * 与 {@link #executeScheduledTask} 同构：会话锁 + ThreadLocal 上下文 + 无头执行；
+     * 差异在于首次创建 Agent 时注入需求 SystemPrompt，且异常不吞掉（由执行器兜底流转 failed）。
+     * </p>
+     *
+     * @param workspacePath 工作区路径
+     * @param sessionName   需求专属会话名
+     * @param systemPrompt  需求 SystemPrompt（首次创建会话 Agent 时生效）
+     * @param message       触发执行的消息
+     * @return Agent 回复内容
+     */
+    public String executeRequirement(String workspacePath, String sessionName, String systemPrompt, String message) {
+        return executeRequirement(workspacePath, sessionName, systemPrompt, message, false);
+    }
+
+    /**
+     * 执行需求：以指定系统提示词驱动需求专属会话（req_&lt;id&gt;）执行一次任务。
+     * <p>
+     * 与 {@link #executeScheduledTask} 同构：会话锁 + ThreadLocal 上下文 + 无头执行；
+     * 差异在于首次创建 Agent 时注入需求 SystemPrompt，且异常不吞掉（由执行器兜底流转 failed）。
+     * webHidden 为 true 时触发消息仅模型可见（Web 历史与需求评论不展示），
+     * 用于执行完成后评论触发的回复回合（避免内部指令污染评论区）。
+     * </p>
+     *
+     * @param workspacePath 工作区路径
+     * @param sessionName   需求专属会话名
+     * @param systemPrompt  需求 SystemPrompt（首次创建会话 Agent 时生效）
+     * @param message       触发执行的消息
+     * @param webHidden     触发消息是否对 Web 历史隐藏
+     * @return Agent 回复内容
+     */
+    public String executeRequirement(String workspacePath, String sessionName, String systemPrompt, String message, boolean webHidden) {
+        return executeRequirement(workspacePath, sessionName, systemPrompt, message, webHidden, null, null, null, null);
+    }
+
+    /**
+     * 执行需求并使用需求创建时保存的模型、推理强度和审批模式。
+     */
+    public String executeRequirement(String workspacePath, String sessionName, String systemPrompt, String message,
+                                     boolean webHidden, String requestedModel, String requestedChannelId,
+                                     String requestedReasoningEffort, String requestedHitl) {
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        ReentrantLock lock = getSessionLock(sessionKey);
+        lock.lock();
+
+        String effectiveSessionName = sessionName != null ? sessionName : "default";
+        CURRENT_SESSION_NAME.set(effectiveSessionName);
+        HttpModelClient.CURRENT_LOG_SESSION.set(effectiveSessionName);
+
+        try {
+            LoopraAgent agent = getOrCreateAgentWithPrompt(sessionKey,
+                    resolveModelTarget(requestedModel, requestedChannelId), systemPrompt);
+            if (requestedReasoningEffort != null && !requestedReasoningEffort.isBlank()) {
+                agent.setReasoningEffort(requestedReasoningEffort.trim());
+            }
+            if (requestedHitl != null && !requestedHitl.isBlank()) {
+                agent.setHitlMode(requestedHitl.trim());
+            }
+            agent.setOutput(AgentOutput.NOOP);
+            agent.setSessionId(effectiveSessionName);
+            UserMessage userMessage = UserMessage.of(message);
+            userMessage.setWebHidden(webHidden);
+            return agent.chat(userMessage);
+        } finally {
+            CURRENT_SESSION_NAME.remove();
+            HttpModelClient.CURRENT_LOG_SESSION.remove();
+            LoopraAgent agent = sessionCache.get(sessionKey);
+            if (agent != null) {
+                agent.setOutput(AgentOutput.NOOP);
+                agent.flushSession();
+                agent.saveUsage();
+            }
+            lock.unlock();
+        }
+    }
+
+    /**
+     * 判断需求会话是否正等待人工审批。
+     */
+    public boolean hasPendingRequirementApproval(String workspacePath, String sessionName) {
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        ReentrantLock lock = getSessionLock(sessionKey);
+        lock.lock();
+        try {
+            LoopraAgent agent = sessionCache.get(sessionKey);
+            return agent != null && !agent.noPendingHITL();
+        } finally {
+            lock.unlock();
+        }
+    }
+
+    /**
+     * 对需求会话的待审批工具调用作出决定并恢复执行。
+     */
+    public String resolveRequirementApproval(String workspacePath, String sessionName, boolean approved) {
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        ReentrantLock lock = getSessionLock(sessionKey);
+        lock.lock();
+
+        String effectiveSessionName = sessionName != null ? sessionName : "default";
+        CURRENT_SESSION_NAME.set(effectiveSessionName);
+        HttpModelClient.CURRENT_LOG_SESSION.set(effectiveSessionName);
+        try {
+            LoopraAgent agent = sessionCache.get(sessionKey);
+            if (agent == null || agent.noPendingHITL()) {
+                throw new ServiceException("当前需求没有待审批的工具调用");
+            }
+            if (approved) {
+                agent.approveHITL();
+            } else {
+                agent.denyHITL();
+            }
+            agent.setOutput(AgentOutput.NOOP);
+            agent.setSessionId(effectiveSessionName);
+            return agent.chat(null);
+        } finally {
+            CURRENT_SESSION_NAME.remove();
+            HttpModelClient.CURRENT_LOG_SESSION.remove();
             LoopraAgent agent = sessionCache.get(sessionKey);
             if (agent != null) {
                 agent.setOutput(AgentOutput.NOOP);

@@ -10,8 +10,8 @@
       <button :disabled="loadingPrompt" class="btn btn-ghost btn-sm" @click="viewSystemPrompt">提示词</button>
     </div>
 
-    <!-- 流式加载动画横线 -->
-    <div v-if="streaming" class="streaming-bar">
+    <!-- 流式加载动画横线：本地流式或服务端后台执行中均展示（会话正在执行） -->
+    <div v-if="streaming || sessionTaskRunning" class="streaming-bar">
       <div class="streaming-bar-inner"></div>
     </div>
 
@@ -64,7 +64,9 @@
             </div>
             <ChatInput ref="welcomeInput" welcome-mode v-model:input-text="welcomeText" :usage="usage" :current-model="currentModel" :default-model="defaultModel" :default-model-channel-id="defaultModelChannelId" :setting-default-model="settingDefaultModel" :available-models="availableModels"
                        :current-reasoning-effort="currentReasoningEffort" :terminate-on-no-tool-call="terminateOnNoToolCall" :current-permission="currentPermission"
-                       :workspace-hash="welcomeWorkspaceHash" :session-name="props.sessionName" :plan-mode="planMode" :current-skill="currentSkill" @send="sendWelcomeMessage" @toggle-plan="togglePlan" @switch-model="handleSwitchModel" @set-default-model="handleSetDefaultModel"
+                       :workspace-hash="welcomeWorkspaceHash" :session-name="props.sessionName" :plan-mode="planMode"
+                       :session-running="sessionTaskRunning" :session-busy="sessionBusy" :session-status-stopping="sessionStatusStopping"
+                       :current-skill="currentSkill" @send="sendWelcomeMessage" @toggle-plan="togglePlan" @switch-model="handleSwitchModel" @set-default-model="handleSetDefaultModel"
                        @switch-reasoning-effort="handleSwitchReasoningEffort" @switch-terminate-on-no-tool-call="handleSwitchTerminateOnNoToolCall"
                        @switch-permission="handleSwitchPermission" @switch-skill="handleSwitchSkill" @picker-open="handleWelcomePickerOpen" @refresh-models="loadUsage" @manage-models="$emit('manageModels')" />
           </div>
@@ -218,6 +220,9 @@
         :currentPermission="currentPermission"
         :petState="petState"
         :queued-messages="queuedMessages"
+        :session-running="sessionTaskRunning"
+        :session-busy="sessionBusy"
+        :session-status-stopping="sessionStatusStopping"
         :plan-mode="planMode"
         @send="(imgs, text) => sendMessage(imgs, text)"
         @toggle-plan="togglePlan"
@@ -246,11 +251,11 @@
               <span class="plan-review-status">{{ pendingPlan ? '待审查' : '只读探索' }}</span>
               <span v-if="pendingPlan" class="plan-review-chevron" aria-hidden="true"></span>
               <div class="plan-review-actions">
-                <button v-if="pendingPlan" type="button" class="plan-approve-btn" :disabled="streaming || planModeBusy" @click="approvePendingPlan">
+                <button v-if="pendingPlan" type="button" class="plan-approve-btn" :disabled="streaming || sessionBusy || planModeBusy" @click="approvePendingPlan">
                   <CheckOutlined />
                   批准并执行
                 </button>
-                <button type="button" class="plan-exit-btn" :disabled="streaming || planModeBusy" title="退出计划模式" aria-label="退出计划模式" @click="togglePlan">
+                <button type="button" class="plan-exit-btn" :disabled="streaming || sessionBusy || planModeBusy" title="退出计划模式" aria-label="退出计划模式" @click="togglePlan">
                   <CloseOutlined />
                 </button>
               </div>
@@ -523,6 +528,7 @@ const selectWelcomeModel = async (modelName) => {
 
 
 const sendWelcomeMessage = async (images, messageText) => {
+  if (sessionBusy.value && !streaming.value) return
   const prompt = messageText?.trim()
   if (!prompt) return
 
@@ -729,6 +735,7 @@ const removeQueuedMessage = (id) => {
 
 const sendNextQueuedMessage = async (sessionName, workspaceHash) => {
   if (!sessionName || store.getSessionStreaming(sessionName)) return
+  if (sessionName === props.sessionName && sessionBusy.value && !streaming.value) return
   const queue = queuedMessagesBySession.value[conversationKey(workspaceHash, sessionName)] || []
   const next = queue[0]
   if (!next) return
@@ -737,6 +744,7 @@ const sendNextQueuedMessage = async (sessionName, workspaceHash) => {
 }
 
 const guideQueuedMessage = async (id) => {
+  if (sessionBusy.value) return
   const queued = takeQueuedMessage(props.sessionName, props.workspaceHash, id)
   if (!queued) return
   if (streaming.value) await abortChat()
@@ -851,6 +859,85 @@ const branchingSession = ref(false)
 const hasHistory = computed(() => messages.value.length > 0)
 const planMode = ref(false)
 const pendingPlan = ref(null)
+
+// 会话级后台任务状态：请求序号保证旧会话的轮询结果不能覆盖当前会话。
+const sessionTaskRunning = ref(false)
+const sessionStatusChecking = ref(false)
+const sessionStatusStopping = ref(false)
+const sessionStatusRequestId = ref(null)
+const sessionStatusToken = ref(0)
+let sessionStatusTimer = null
+let sessionStatusObservedRunning = false
+const sessionStatusBusy = computed(() => sessionStatusChecking.value || sessionTaskRunning.value)
+const sessionBusy = computed(() => sessionStatusBusy.value)
+
+const isCurrentSessionStatus = (token, workspaceHash, sessionName) =>
+  token === sessionStatusToken.value
+  && workspaceHash === props.workspaceHash
+  && sessionName === props.sessionName
+
+const clearSessionStatusTimer = () => {
+  if (sessionStatusTimer) {
+    clearTimeout(sessionStatusTimer)
+    sessionStatusTimer = null
+  }
+}
+
+const resetSessionStatus = () => {
+  sessionStatusToken.value++
+  clearSessionStatusTimer()
+  sessionTaskRunning.value = false
+  sessionStatusChecking.value = false
+  sessionStatusStopping.value = false
+  sessionStatusRequestId.value = null
+  sessionStatusObservedRunning = false
+}
+
+const scheduleSessionStatusPoll = (token, workspaceHash, sessionName) => {
+  clearSessionStatusTimer()
+  if (!isCurrentSessionStatus(token, workspaceHash, sessionName)) return
+  sessionStatusTimer = setTimeout(() => {
+    void pollSessionStatus(token, workspaceHash, sessionName)
+  }, 3000)
+}
+
+const pollSessionStatus = async (token, workspaceHash, sessionName) => {
+  if (!isCurrentSessionStatus(token, workspaceHash, sessionName)) return
+  try {
+    const response = await agentAPI.getSessionStatus(workspaceHash, sessionName)
+    if (!isCurrentSessionStatus(token, workspaceHash, sessionName)) return
+
+    const running = Boolean(response?.success && response.data?.running)
+    if (running) sessionStatusObservedRunning = true
+    sessionTaskRunning.value = running
+    sessionStatusRequestId.value = response?.data?.requestId || null
+    sessionStatusChecking.value = false
+
+    // 运行期间每次状态采样都刷新一次持久化历史；停止后再做一次最终刷新。
+    if (running || sessionStatusObservedRunning) {
+      await loadHistory(sessionName, true, workspaceHash, token)
+    }
+    if (!running) {
+      sessionStatusObservedRunning = false
+      sessionStatusStopping.value = false
+      if (!isCurrentSessionStatus(token, workspaceHash, sessionName)) return
+    }
+    scheduleSessionStatusPoll(token, workspaceHash, sessionName)
+  } catch {
+    // 状态未知时继续锁定发送入口，避免重复提交；轮询会自动重试且不弹出网络错误提示。
+    if (!isCurrentSessionStatus(token, workspaceHash, sessionName)) return
+    sessionStatusChecking.value = true
+    scheduleSessionStatusPoll(token, workspaceHash, sessionName)
+  }
+}
+
+const startSessionStatusPolling = (workspaceHash = props.workspaceHash, sessionName = props.sessionName) => {
+  resetSessionStatus()
+  if (!workspaceHash || !sessionName) return
+  const token = sessionStatusToken.value
+  sessionStatusChecking.value = true
+  void pollSessionStatus(token, workspaceHash, sessionName)
+}
 
 // 输入区实际高度测量：消息区底部预留空间跟随输入区真实高度，
 // 计划条/排队消息/用量条等高度变化时自动适配，避免遮挡消息
@@ -973,6 +1060,7 @@ const formatTime = (t) => {
 
 // 监听 workspace 和 session 变化，重新加载 usage 和计划状态
 watch([() => props.workspaceHash, () => props.sessionName], ([ws, sess]) => {
+  startSessionStatusPolling(ws, sess)
   if (ws || sess) loadUsage()
   syncPlanMode()
 })
@@ -1004,6 +1092,7 @@ const syncPlanMode = async () => {
 
 onMounted(() => {
   loadUsage()
+  startSessionStatusPolling()
   window.addEventListener('keydown', handleImagePreviewKeydown)
   window.addEventListener('resize', updateVirtualViewport)
   // 监听复制成功事件
@@ -1042,6 +1131,7 @@ onMounted(() => {
 })
 
 onBeforeUnmount(() => {
+  resetSessionStatus()
   window.removeEventListener('keydown', handleImagePreviewKeydown)
   window.removeEventListener('resize', updateVirtualViewport)
   messageResizeObserver?.disconnect()
@@ -1190,7 +1280,7 @@ const copyMessage = (msg) => {
 
 // 分支到新会话：复制当前消息及之前的消息到新会话
 const branchSession = async (msg, msgIdx) => {
-  if (!props.sessionName || !props.workspaceHash || streaming.value || branchingSession.value) return
+  if (!props.sessionName || !props.workspaceHash || streaming.value || sessionBusy.value || branchingSession.value) return
   branchingSession.value = true
   try {
     let count = msg.sourceMessageCount
@@ -1372,6 +1462,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
   if (!text && images.length === 0 && !requestAction) return
   const sessionName = targetSessionName
   if (!sessionName) return
+  if (sessionName === props.sessionName && sessionBusy.value && !streaming.value) return
   const selectedModel = modelSelection || getSessionModelSelection(sessionName, targetWorkspaceHash)
   const selectedReasoningEffort = reasoningEffort || getSessionReasoningEffort(sessionName, targetWorkspaceHash)
   if (store.getSessionStreaming(sessionName)) {
@@ -1489,6 +1580,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
                 status: '执行中',
                 args,
                 result: '',
+                toolStartedAt: Date.now(),
                 expanded: true
               })
             } else if (data.type === 'sub_error') {
@@ -1504,7 +1596,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
             if (targetName) {
               for (let j = c.blocks.length - 1; j >= 0; j--) {
                 if (c.blocks[j].type === 'tool_call' && c.blocks[j].name === targetName && !c.blocks[j].result) {
-                  c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].expanded = false
+                  c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].toolDurationMs = Date.now() - c.blocks[j].toolStartedAt; c.blocks[j].expanded = false
                   matched = true; break
                 }
               }
@@ -1512,7 +1604,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
             if (!matched) {
               for (let j = c.blocks.length - 1; j >= 0; j--) {
                 if (c.blocks[j].type === 'tool_call' && !c.blocks[j].result) {
-                  c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].expanded = false
+                  c.blocks[j].result = rn; c.blocks[j].status = '成功'; c.blocks[j].toolDurationMs = Date.now() - c.blocks[j].toolStartedAt; c.blocks[j].expanded = false
                   break
                 }
               }
@@ -1564,6 +1656,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
               status: '执行中',
               args,
               result: '',
+              toolStartedAt: Date.now(),
               expanded: true
             })
           } else if (data.type === 'tool_result') {
@@ -1577,6 +1670,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
                 if (msg.blocks[i].type === 'tool_call' && msg.blocks[i].name === targetName && !msg.blocks[i].result) {
                   msg.blocks[i].result = rn;
                   msg.blocks[i].status = '成功';
+                  msg.blocks[i].toolDurationMs = Date.now() - msg.blocks[i].toolStartedAt;
                   msg.blocks[i].expanded = false;
                   matched = true
                   break
@@ -1589,6 +1683,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
                 if (msg.blocks[i].type === 'tool_call' && !msg.blocks[i].result) {
                   msg.blocks[i].result = rn;
                   msg.blocks[i].status = '成功';
+                  msg.blocks[i].toolDurationMs = Date.now() - msg.blocks[i].toolStartedAt;
                   msg.blocks[i].expanded = false;
                   break
                 }
@@ -1756,25 +1851,28 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
 
 const abortChat = async (targetSessionName = props.sessionName, targetWorkspaceHash = props.workspaceHash) => {
   const ctrl = store.getSessionController(targetSessionName)
+  const stoppingRemoteTask = targetSessionName === props.sessionName && sessionTaskRunning.value
+  if (stoppingRemoteTask) sessionStatusStopping.value = true
   try {
     // 保持 SSE 读取，等待服务端取消 Agent 并主动关闭 emitter。
     await chatAPI.abort({
       workspaceHash: targetWorkspaceHash,
       sessionName: targetSessionName,
-      requestId: ctrl?.requestId
+      requestId: ctrl?.requestId || (stoppingRemoteTask ? sessionStatusRequestId.value : null)
     })
   } catch {
+    if (stoppingRemoteTask) sessionStatusStopping.value = false
   }
 }
 
 const openRollbackDialog = (msgId, canRollbackCode, rollbackTimestamp) => {
   const rollbackKey = msgId || rollbackTimestamp
-  if (streaming.value || !rollbackKey || snapshotRollbackLoading.value.get(rollbackKey)) return
+  if (streaming.value || sessionBusy.value || !rollbackKey || snapshotRollbackLoading.value.get(rollbackKey)) return
   rollbackDialog.value = {visible: true, msgId, rollbackTimestamp, canRollbackCode}
 }
 
 const openFileRevertDialog = (changes) => {
-  if (streaming.value || !Array.isArray(changes) || changes.length === 0) return
+  if (streaming.value || sessionBusy.value || !Array.isArray(changes) || changes.length === 0) return
   fileRevertDialog.value = {visible: true, pending: false, changes}
 }
 
@@ -1828,7 +1926,7 @@ const handleRollbackAction = (action) => {
 /** 撤回会话消息，并按选择决定是否恢复 AI 修改的代码。 */
 const rollbackSnapshot = async (msgId, rollbackCode, rollbackTimestamp) => {
   const loadingKey = msgId || rollbackTimestamp
-  if (streaming.value || !loadingKey) return
+  if (streaming.value || sessionBusy.value || !loadingKey) return
   if (snapshotRollbackLoading.value.get(loadingKey)) return // 防止重复点击
   snapshotRollbackLoading.value.set(loadingKey, true)
 
@@ -1921,7 +2019,7 @@ const clearMessages = () => {
 
 /** 继续生成：发送 /continue 命令让 AI 继续推理，复用以有的 SSE 流式逻辑 */
 const continueChat = async () => {
-  if (!props.sessionName || streaming.value) return
+  if (!props.sessionName || streaming.value || sessionBusy.value) return
   inputText.value = '/continue'
   nextTick(() => sendMessage())
 }
@@ -1985,7 +2083,7 @@ const viewSystemPrompt = async () => {
 }
 
 const setPlanMode = async (enabled) => {
-  if (!props.workspaceHash || !props.sessionName || streaming.value || planModeBusy.value) return
+  if (!props.workspaceHash || !props.sessionName || streaming.value || sessionBusy.value || planModeBusy.value) return
   planModeBusy.value = true
   try {
     const res = await agentAPI.setMode(props.workspaceHash, props.sessionName, enabled)
@@ -2000,7 +2098,7 @@ const setPlanMode = async (enabled) => {
 }
 
 const togglePlan = () => {
-  if (streaming.value || planModeBusy.value) return
+  if (streaming.value || sessionBusy.value || planModeBusy.value) return
   if (!props.sessionName) {
     if (welcomeWorkspaceHash.value) {
       emit('startTask', {prompt: '', workspaceHash: welcomeWorkspaceHash.value, planMode: true})
@@ -2028,7 +2126,7 @@ const handleDiscardPlanAction = async (action) => {
 }
 
 const approvePendingPlan = async () => {
-  if (!pendingPlan.value || streaming.value || planModeBusy.value) return
+  if (!pendingPlan.value || streaming.value || sessionBusy.value || planModeBusy.value) return
   planModeBusy.value = true
   try {
     await sendMessage([], '', null, props.sessionName, props.workspaceHash, null, 'execute_plan')
@@ -2037,24 +2135,32 @@ const approvePendingPlan = async () => {
   }
 }
 
-const loadHistory = async (sessionName, force = false) => {
+const loadHistory = async (sessionName, force = false, workspaceHash = props.workspaceHash, statusToken = null) => {
   const targetSession = sessionName || props.sessionName
+  const targetWorkspace = workspaceHash ?? props.workspaceHash
   if (!targetSession) return
   
   // 如果 force=true 强制从后端刷新，跳过缓存
   const existing = store.getSessionMessages(targetSession)
   if (!force && existing.length > 0) {
-    if (targetSession === props.sessionName) await scroll(true)
+    if (targetSession === props.sessionName && targetWorkspace === props.workspaceHash) await scroll(true)
     return
   }
   
   try {
-    const r = await agentAPI.getHistory(props.workspaceHash, targetSession)
+    const r = await agentAPI.getHistory(targetWorkspace, targetSession)
     if (r.success && r.data) {
       const raw = r.data, tr = {}
       const assistantBoundaries = getAssistantTurnBoundaries(raw)
       let assistantTurn = 0
-      for (const m of raw) if (m.role === 'tool' && m.tool_call_id) tr[m.tool_call_id] = m.content || ''
+      for (const m of raw) if (m.role === 'tool' && m.tool_call_id) {
+        tr[m.tool_call_id] = {
+          content: m.content || '',
+          durationMs: m.tool_duration_ms ?? m.toolDurationMs ?? null,
+          startedAt: m.tool_started_at ?? m.toolStartedAt ?? null,
+          finishedAt: m.tool_finished_at ?? m.toolFinishedAt ?? null
+        }
+      }
       const merged = []
       let lastAssistantItem = null
       let idCounter = 0
@@ -2114,13 +2220,18 @@ const loadHistory = async (sessionName, force = false) => {
               args = JSON.parse(args)
             } catch {
             }
+            const toolResult = tr[tc.id]
+            const hasResult = Object.hasOwn(tr, tc.id)
             lastAssistantItem.blocks.push({
               type: 'tool_call',
               name,
-              status: tr[tc.id] ? '成功' : '执行中',
+              status: hasResult ? '成功' : '执行中',
               args,
-              result: tr[tc.id] || '',
-              expanded: !tr[tc.id]
+              result: toolResult?.content || '',
+              toolDurationMs: toolResult?.durationMs,
+              toolStartedAt: toolResult?.startedAt || m.timestamp,
+              toolFinishedAt: toolResult?.finishedAt,
+              expanded: !hasResult
             })
           }
           if (m.content) lastAssistantItem.blocks.push({type: 'content', content: m.content})
@@ -2133,8 +2244,12 @@ const loadHistory = async (sessionName, force = false) => {
       for (const item of merged) {
         if (item.role === 'assistant') moveFileChangesToEnd(item.blocks)
       }
+      if (statusToken !== null && !isCurrentSessionStatus(statusToken, targetWorkspace, targetSession)) return
+      // 本地 SSE 流正在活跃输出时禁止用持久化历史整体替换消息数组：
+      // 否则流式消息对象引用失效，后续 SSE 事件无处落地（表现为刷新中断了正在运行的流）。
+      if (store.getSessionStreaming(targetSession)) return
       store.setSessionMessages(targetSession, merged)
-      if (targetSession === props.sessionName) await scroll(true)
+      if (targetSession === props.sessionName && targetWorkspace === props.workspaceHash) await scroll(true)
     }
   } catch {
   }
@@ -2163,7 +2278,7 @@ const loadSession = async (name, workspaceHash) => {
     await sessionsAPI.switchSession(name, workspaceHash)
     const existing = store.getSessionMessages(name)
     if (existing.length === 0) {
-      await loadHistory(name)
+      await loadHistory(name, false, workspaceHash)
     } else {
       // 缓存命中，直接滚动到底部
       await scroll(true)

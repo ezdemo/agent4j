@@ -85,7 +85,7 @@ api.interceptors.response.use(
     // 后端业务错误（HTTP 200 但 success=false）
     if (data && data.success === false) {
       const errMsg = data.error || data.message || '操作失败'
-      message.error(errMsg)
+      if (!response.config.silent) message.error(errMsg)
       return Promise.reject({ code: response.status, message: errMsg, data })
     }
 
@@ -275,6 +275,14 @@ export const agentAPI = {
     return api.get('/agent/status')
   },
   
+  // 获取指定会话运行状态 - GET /api/agent/session-status?workspaceHash=xxx&sessionName=xxx
+  getSessionStatus: (workspaceHash, sessionName) => {
+    return api.get('/agent/session-status', {
+      params: {workspaceHash, sessionName},
+      silent: true
+    })
+  },
+
   // 获取历史消息 - GET /api/agent/history?workspaceHash=xxx&sessionName=xxx
   getHistory: (workspaceHash, sessionName) => {
     const params = {}
@@ -1018,6 +1026,37 @@ export const scheduleAPI = {
     const params = workspaceHash ? { workspaceHash } : {}
     return api.delete(`/schedules/${id}`, { params })
   }
+}
+
+// 需求池 API
+// 需求绑定项目与专属执行会话，评论/执行日志从会话消息流读取（GET /{id}/messages）
+export const requirementAPI = {
+  // 列出全部需求 - GET /api/requirements
+  list: () => api.get('/requirements'),
+
+  // 创建需求 - POST /api/requirements  body: { title, description, priority, projectHash, projectName }
+  create: (requirement) => api.post('/requirements', requirement),
+
+  // 更新需求（仅描述/优先级） - PUT /api/requirements/{id}
+  update: (id, update) => api.put(`/requirements/${id}`, update),
+
+  // 删除需求 - DELETE /api/requirements/{id}
+  delete: (id) => api.delete(`/requirements/${id}`),
+
+  // 追加评论（写入需求专属会话） - POST /api/requirements/{id}/comments  body: { text }
+  addComment: (id, text) => api.post(`/requirements/${id}/comments`, { text }),
+
+  // 触发执行（todo/failed 入队，状态 → doing） - POST /api/requirements/{id}/run
+  run: (id) => api.post(`/requirements/${id}/run`),
+
+  // 处理审批模式下的待审批工具调用 - POST /api/requirements/{id}/approval
+  resolveApproval: (id, action) => api.post(`/requirements/${id}/approval`, { action }),
+
+  // 取消执行（中断会话，状态回退 todo） - POST /api/requirements/{id}/abort
+  abort: (id) => api.post(`/requirements/${id}/abort`),
+
+  // 拉取需求消息流（评论 + 执行日志） - GET /api/requirements/{id}/messages
+  getMessages: (id) => api.get(`/requirements/${id}/messages`)
 }
 
 export const petAPI = {

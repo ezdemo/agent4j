@@ -74,9 +74,19 @@ export const useAppStore = defineStore('app', () => {
   
   // 宠物状态（用于跨组件同步）
   const activePetName = ref('')
+  // 桌面端（Electron）环境标志：桌面宠物在独立悬浮窗口展示，对话框内永不显示内嵌宠物
+  const isDesktopEnv = ref(typeof window !== 'undefined' && window.electronAPI !== undefined)
+  // 桌面宠物独立窗口的可见性（仅供设置页“显示到桌面/隐藏桌面宠物”按钮使用）
   const desktopPetVisible = ref(typeof window !== 'undefined' && Boolean(window.electronAPI?.desktopPet))
-  // 用户主动关闭宠物（关闭后主窗口内嵌宠物也不再显示，直到重新打开）
-  const petHidden = ref(false)
+  // 用户主动隐藏聊天内宠物（仅 web 端生效，持久化到 localStorage）
+  const petHidden = ref(typeof window !== 'undefined' && localStorage.getItem('loopra-pet-hidden') === '1')
+
+  const setPetHidden = (hidden) => {
+    petHidden.value = Boolean(hidden)
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('loopra-pet-hidden', petHidden.value ? '1' : '0')
+    }
+  }
   
   // 计算属性
   const isConnected = computed(() => connectionStatus.value === 'connected')
@@ -459,8 +469,10 @@ export const useAppStore = defineStore('app', () => {
     notifications,
     isLoading,
     activePetName,
+    isDesktopEnv,
     desktopPetVisible,
     petHidden,
+    setPetHidden,
     isConnected,
     hasMessages,
     unreadNotifications,
