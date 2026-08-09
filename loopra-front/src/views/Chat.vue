@@ -2255,6 +2255,9 @@ const loadHistory = async (sessionName, force = false, workspaceHash = props.wor
         if (item.role === 'assistant') moveFileChangesToEnd(item.blocks)
       }
       if (statusToken !== null && !isCurrentSessionStatus(statusToken, targetWorkspace, targetSession)) return
+      // 本地 SSE 流正在活跃输出时禁止用持久化历史整体替换消息数组：
+      // 否则流式消息对象引用失效，后续 SSE 事件无处落地（表现为刷新中断了正在运行的流）。
+      if (store.getSessionStreaming(targetSession)) return
       store.setSessionMessages(targetSession, merged)
       if (targetSession === props.sessionName && targetWorkspace === props.workspaceHash) await scroll(true)
     }
