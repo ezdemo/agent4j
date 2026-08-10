@@ -79,6 +79,9 @@
         <button v-if="activeTabId" class="window-button" type="button" title="切换右侧栏" @click="toggleRightPanel">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/><path d="M7 8h4M7 12h4M7 16h4"/></svg>
         </button>
+        <button v-if="activeTabId" class="window-button" type="button" title="终端" aria-label="终端" @click="toggleTerminal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+        </button>
         <button class="window-button" type="button" title="最小化" @click="minimize"><span class="minimize-mark" /></button>
         <button class="window-button" type="button" title="最大化" @click="maximize"><span class="maximize-mark" /></button>
         <button class="window-button close" type="button" title="关闭" @click="closeWindow"><span class="close-mark" /></button>
@@ -806,6 +809,16 @@ async function openDashboard() {
   showDashboard.value = true
   activeTabId.value = ''
   await renderActiveTab()
+}
+
+// 终端面板：转发给当前会话 tab 控制（与会话绑定、收起不销毁）
+async function toggleTerminal() {
+  if (!activeTabId.value) return
+  try {
+    await nativeTabs()?.toggleTerminal(activeTabId.value)
+  } catch (error) {
+    message.error('切换终端失败：' + (error.message || '未知错误'))
+  }
 }
 
 function hideStandaloneViews() {

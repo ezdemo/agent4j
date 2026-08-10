@@ -4,6 +4,7 @@ const path = require('path')
 const { spawn, execFile, execSync } = require('child_process')
 const { promisify } = require('util')
 const { compareVersions } = require('./version.cjs')
+const { registerTerminalIpc, killAllTerminals } = require('./terminal.cjs')
 const fs = require('fs')
 const net = require('net')
 
@@ -677,9 +678,12 @@ app.on('window-all-closed', () => {
 app.on('before-quit', () => {
   cleanupLoopraWeb()
   stopAiBrowserBridge()
+  killAllTerminals()
 })
 
 // ==================== IPC ====================
+
+registerTerminalIpc()
 
 ipcMain.handle('get_loopra_web_port', async () => currentPort)
 
@@ -1187,6 +1191,14 @@ ipcMain.handle('desktop-chat-tab-toggle-right-panel', (event, tabId) => {
   const tab = desktopChatTabs.get(String(tabId || ''))
   if (!tab || tab.view.webContents.isDestroyed()) throw new Error('Desktop chat tab no longer exists')
   tab.view.webContents.send('desktop-chat-tab-toggle-right-panel')
+  return { success: true }
+})
+
+ipcMain.handle('desktop-chat-tab-toggle-terminal', (event, tabId) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
+  const tab = desktopChatTabs.get(String(tabId || ''))
+  if (!tab || tab.view.webContents.isDestroyed()) throw new Error('Desktop chat tab no longer exists')
+  tab.view.webContents.send('desktop-chat-tab-toggle-terminal')
   return { success: true }
 })
 

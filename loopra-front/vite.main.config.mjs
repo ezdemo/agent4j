@@ -11,7 +11,7 @@ export default defineConfig({
       formats: ['cjs'],
     },
     rollupOptions: {
-      external: ['electron', ...builtinModules],
+      external: ['electron', 'node-pty', ...builtinModules],
     },
     minify: false,
     sourcemap: true,
