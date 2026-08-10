@@ -143,6 +143,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 终端（node-pty + xterm）
   terminal: {
     create: (options) => ipcRenderer.invoke('terminal:create', options),
+    listShells: () => ipcRenderer.invoke('terminal:list-shells'),
     input: (payload) => ipcRenderer.send('terminal:input', payload),
     resize: (payload) => ipcRenderer.send('terminal:resize', payload),
     kill: (id) => ipcRenderer.invoke('terminal:kill', id),
