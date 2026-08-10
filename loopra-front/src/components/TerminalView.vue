@@ -23,9 +23,33 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
           </span>
         </button>
-        <button class="terminal-tab-add" type="button" title="新建终端" aria-label="新建终端" @click="addTerminal">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" /></svg>
-        </button>
+        <div class="terminal-add">
+          <button ref="addBtnEl" class="terminal-tab-add" type="button" title="新建终端" aria-label="新建终端" @click.stop="openShellMenu">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14M5 12h14" /></svg>
+          </button>
+          <Teleport to="body">
+            <div
+              v-if="shellMenuOpen"
+              ref="shellMenuEl"
+              class="terminal-shell-menu"
+              :style="shellMenuStyle"
+              role="menu"
+              aria-label="选择终端 Shell"
+              @click.stop
+            >
+              <button
+                v-for="s in availableShells"
+                :key="s.id"
+                type="button"
+                class="terminal-shell-menu-item"
+                role="menuitem"
+                @click="pickShell(s.id)"
+              >
+                {{ s.name }}
+              </button>
+            </div>
+          </Teleport>
+        </div>
       </div>
       <span v-if="activePid" class="terminal-panel-pid">PID {{ activePid }}</span>
       <button
@@ -71,6 +95,19 @@ const emit = defineEmits(['close'])
 
 const store = useAppStore()
 const unsupported = ref(false)
+// 可用 shell 列表（主进程按系统检测）与「+」菜单开关；新建时默认用列表第一项
+const availableShells = ref([])
+const shellMenuOpen = ref(false)
+// 「+」按钮、菜单元素与基于视口的定位
+const addBtnEl = ref(null)
+const shellMenuEl = ref(null)
+const shellMenuPos = ref({ left: 0, top: 0 })
+const shellMenuStyle = computed(() => ({
+  left: `${shellMenuPos.value.left}px`,
+  top: `${shellMenuPos.value.top}px`
+}))
+const MENU_VIEWPORT_GAP = 8
+const MENU_ANCHOR_GAP = 4
 // 标签列表（响应式，用于渲染标签栏与 PID）；xterm/PTY 实例放在 tabState 避免被 Vue 代理
 const terminals = ref([])
 const activeId = ref('')
@@ -251,12 +288,77 @@ function fitActive() {
   }, 120)
 }
 
-// 新建一个终端标签：创建 xterm + PTY（工作目录 = 当前工作区路径）
-async function addTerminal() {
+// 加载可用 shell 列表（面板首次展开或点击「+」时可能早于 onMounted 完成，这里兜底）
+async function ensureShells() {
+  if (availableShells.value.length > 0) return
+  const terminalAPI = window.electronAPI?.terminal
+  if (!terminalAPI) return
+  try {
+    const shells = await terminalAPI.listShells()
+    availableShells.value = Array.isArray(shells) ? shells : []
+  } catch (error) {
+    console.warn('[terminal] 加载 shell 列表失败:', error)
+  }
+}
+
+function positionShellMenu() {
+  const buttonRect = addBtnEl.value?.getBoundingClientRect()
+  const menuRect = shellMenuEl.value?.getBoundingClientRect()
+  if (!buttonRect || !menuRect) return
+
+  const maxLeft = Math.max(MENU_VIEWPORT_GAP, window.innerWidth - menuRect.width - MENU_VIEWPORT_GAP)
+  const left = Math.min(Math.max(buttonRect.right - menuRect.width, MENU_VIEWPORT_GAP), maxLeft)
+  const belowTop = buttonRect.bottom + MENU_ANCHOR_GAP
+  const aboveTop = buttonRect.top - menuRect.height - MENU_ANCHOR_GAP
+  const top = belowTop + menuRect.height <= window.innerHeight - MENU_VIEWPORT_GAP
+    ? belowTop
+    : Math.max(MENU_VIEWPORT_GAP, aboveTop)
+
+  shellMenuPos.value = { left, top }
+}
+
+function onViewportResize() {
+  if (shellMenuOpen.value) positionShellMenu()
+}
+
+// 点击「+」：菜单已打开则收起；多个 shell 时弹出选择菜单，仅一个时直接创建
+async function openShellMenu() {
+  const terminalAPI = window.electronAPI?.terminal
+  if (!terminalAPI || unsupported.value) return
+  if (shellMenuOpen.value) {
+    shellMenuOpen.value = false
+    return
+  }
+  await ensureShells()
+  if (availableShells.value.length <= 1) {
+    void addTerminal(availableShells.value[0]?.id || '')
+    return
+  }
+  shellMenuOpen.value = true
+  await nextTick()
+  positionShellMenu()
+}
+
+// 菜单中选定 shell 后创建终端并关闭菜单
+function pickShell(shellId) {
+  shellMenuOpen.value = false
+  void addTerminal(shellId)
+}
+
+// 新建一个终端标签：创建 xterm + PTY（工作目录 = 当前工作区路径，shell 由调用方指定）
+async function addTerminal(shellId = '') {
   const terminalAPI = window.electronAPI?.terminal
   if (!terminalAPI || unsupported.value) return
 
-  const tab = { id: `term-${Date.now()}-${nextTerminalNo}`, title: `终端 ${nextTerminalNo++}`, pid: '' }
+  await ensureShells()
+  const shell = shellId || availableShells.value[0]?.id || ''
+  const tab = {
+    id: `term-${Date.now()}-${nextTerminalNo}`,
+    title: `终端 ${nextTerminalNo}`,
+    pid: '',
+    shell
+  }
+  nextTerminalNo++
   terminals.value.push(tab)
   activeId.value = tab.id
   await nextTick()
@@ -282,7 +384,8 @@ async function addTerminal() {
     const created = await terminalAPI.create({
       cols: term.cols,
       rows: term.rows,
-      cwd: props.cwd
+      cwd: props.cwd,
+      shell: tab.shell
     })
     state.ptyId = created.id
     tab.pid = String(created.pid)
@@ -324,6 +427,13 @@ onMounted(() => {
     return
   }
 
+  // 加载系统可用 shell 列表（cmd / powershell / pwsh），供「+」菜单选择
+  ensureShells()
+
+  // 点击终端面板外部时关闭 shell 选择菜单；视口变化时保持菜单贴合按钮
+  document.addEventListener('click', onDocClick)
+  window.addEventListener('resize', onViewportResize)
+
   // PTY 输出 → 对应标签的 xterm
   dataUnsubscribe = terminalAPI.onData(({ id, data }) => {
     const tabId = findTabByPtyId(id)
@@ -351,7 +461,11 @@ onMounted(() => {
 watch(
   () => props.open,
   (open) => {
-    if (open && terminals.value.length === 0) void addTerminal()
+    if (!open) {
+      shellMenuOpen.value = false
+      return
+    }
+    if (terminals.value.length === 0) void addTerminal()
   },
   { immediate: true }
 )
@@ -359,6 +473,8 @@ watch(
 onUnmounted(() => {
   clearTimeout(fitTimer)
   fitTimer = null
+  document.removeEventListener('click', onDocClick)
+  window.removeEventListener('resize', onViewportResize)
   resizeObserver?.disconnect()
   resizeObserver = null
   themeObserver?.disconnect()
@@ -379,6 +495,11 @@ onUnmounted(() => {
 // 主题切换时同步所有 xterm 配色（props / store / DOM 三源都会触发）
 watch(() => props.theme, syncTheme)
 watch(() => store.settings.theme, syncTheme)
+
+// 点击面板外部时关闭 shell 选择菜单（菜单内点击已由 @click.stop 拦截）
+function onDocClick() {
+  shellMenuOpen.value = false
+}
 </script>
 
 <style scoped>
@@ -494,6 +615,43 @@ watch(() => store.settings.theme, syncTheme)
 .terminal-tab-add svg {
   width: 13px;
   height: 13px;
+}
+/* 「+」按钮容器：与标签同一行，紧贴标签右侧；菜单传送到 body 避免被面板裁剪 */
+.terminal-add {
+  flex: 0 0 auto;
+}
+.terminal-shell-menu {
+  position: fixed;
+  z-index: 40;
+  box-sizing: border-box;
+  min-width: 150px;
+  max-width: calc(100vw - 16px);
+  max-height: calc(100vh - 16px);
+  overflow-y: auto;
+  padding: 4px;
+  border: 1px solid var(--border, #e8e8e8);
+  border-radius: 8px;
+  background: var(--bg, #fff);
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.14);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.terminal-shell-menu-item {
+  display: block;
+  width: 100%;
+  height: 30px;
+  padding: 0 10px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg, #202124);
+  font-size: 12px;
+  text-align: left;
+  cursor: pointer;
+}
+.terminal-shell-menu-item:hover {
+  background: var(--bg-3, #f3f4f6);
 }
 .terminal-panel-pid {
   font-size: 11px;
