@@ -79,7 +79,7 @@ const sessions = ref([])
 const chatRef = ref(null)
 const fileRef = ref(null)
 const rightPanelOpen = ref(false)
-const leftPanelOpen = ref(true)
+const leftPanelOpen = ref(false)
 const showTerminal = ref(false)
 const sessionActive = ref(false)
 const rightPanelTab = ref('git')
@@ -183,9 +183,9 @@ async function addFileToSession(payload) {
   await chatRef.value?.appendFileSelection(payload)
 }
 
-// 欢迎页不展示左侧文件栏；进入会话自动展开（仅状态切换时生效，不覆盖用户手动开关）
+// 欢迎页不展示左侧文件栏；进入会话保持当前状态（默认折叠，不覆盖用户手动开关）
 function onWelcomeChange(active) {
-  leftPanelOpen.value = !active
+  if (active) leftPanelOpen.value = false
 }
 
 async function addElementInspectionToSession(payload) {
