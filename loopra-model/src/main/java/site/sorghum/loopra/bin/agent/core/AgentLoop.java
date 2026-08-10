@@ -1290,6 +1290,7 @@ public class AgentLoop implements AgentLoopController {
             public void onError(String err) {
                 streamError.set(true);
                 streamErrorMessage[0] = err;
+                log.warn("[stream] 模型流错误: {}", err);
                 if (!ModelApiError.isContextLengthExceeded(err)) {
                     safeOutput("streamError", () -> output.onError("[stream error] " + err));
                 }

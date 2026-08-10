@@ -980,6 +980,10 @@ export const filesAPI = {
   // 搜索工作区内文件 - GET /api/files/search?workspaceHash=xxx&query=foo
   search: (workspaceHash, query = '') => {
     return api.get('/files/search', { params: { workspaceHash, query } })
+  },
+  // 删除工作区内文件或目录 - DELETE /api/files/delete?workspaceHash=xxx&path=src/a.js
+  remove: (workspaceHash, path) => {
+    return api.delete('/files/delete', { params: { workspaceHash, path } })
   }
 }
 

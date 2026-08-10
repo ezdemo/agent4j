@@ -7,6 +7,7 @@
       type="button"
       :draggable="!displayNode.directory"
       @click="$emit('toggle', displayNode)"
+      @contextmenu.prevent.stop="$emit('contextmenu', $event, displayNode)"
       @dragstart="startFileDrag"
     >
       <svg v-if="displayNode.directory" class="tree-chevron" :class="{ expanded: displayNode.expanded }" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
@@ -25,6 +26,7 @@
         :query="query"
         :selected-path="selectedPath"
         @toggle="$emit('toggle', $event)"
+        @contextmenu="(event, node) => $emit('contextmenu', event, node)"
       />
       <div v-if="!displayNode.loading && displayNode.loaded && displayNode.children.length === 0" class="tree-empty" :style="{ paddingLeft: `${42 + depth * 16}px` }">空文件夹</div>
     </div>
@@ -43,7 +45,7 @@ const props = defineProps({
   selectedPath: { type: String, default: '' }
 })
 
-defineEmits(['toggle'])
+defineEmits(['toggle', 'contextmenu'])
 
 const normalizedQuery = computed(() => props.query.trim().toLowerCase())
 const visible = computed(() => !normalizedQuery.value || props.node.name.toLowerCase().includes(normalizedQuery.value) || props.node.children?.some(child => nodeMatches(child, normalizedQuery.value)))

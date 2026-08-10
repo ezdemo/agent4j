@@ -1,21 +1,50 @@
 <template>
   <main class="desktop-chat-tab" :data-theme="theme">
+    <!-- 会话进行中的波动条：横跨两侧边栏之上 -->
+    <div v-if="sessionActive" class="desktop-streaming-bar">
+      <div class="desktop-streaming-bar-inner"></div>
+    </div>
+    <aside class="desktop-files-left" :class="{ collapsed: !leftPanelOpen }" aria-label="项目文件">
+      <div class="desktop-files-head">
+        <div class="desktop-files-title">
+          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
+            <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2.5h6.5A2.5 2.5 0 0 1 21 9v8.5A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/>
+          </svg>
+          <span>文件</span>
+        </div>
+        <div class="desktop-files-actions">
+          <button class="desktop-files-action" type="button" title="刷新文件树" aria-label="刷新文件树" @click="fileRef?.refresh?.()">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M23 4v6h-6"/>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+            </svg>
+          </button>
+          <button class="desktop-files-action" type="button" title="收起左侧栏" aria-label="收起左侧栏" @click="leftPanelOpen = false">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
+          </button>
+        </div>
+      </div>
+      <FilePanel ref="fileRef" :workspace-hash="workspaceHash" @add-to-session="addFileToSession" />
+    </aside>
     <ChatView
       ref="chatRef"
       class="desktop-chat-view"
       hide-header
+      :streaming-bar-hidden="true"
       :workspace-hash="workspaceHash"
       :session-name="sessionName"
       :right-panel-open="rightPanelOpen"
       :workspaces="workspaces"
       @switch-workspace="switchWorkspace"
       @session-updated="refreshTabTitle"
+      @session-active-change="sessionActive = $event"
       @manage-workspaces="requestHome"
       @manage-models="requestModelSettings"
     />
     <RightPanel
       :open="rightPanelOpen"
       v-model="rightPanelTab"
+      :show-files-tab="false"
       :workspace-hash="workspaceHash"
       :session-name="sessionName"
       :sessions="sessions"
@@ -31,6 +60,7 @@ import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useAppStore} from './stores/app'
 import {configAPI, sessionsAPI} from './services/api'
 import ChatView from './views/Chat.vue'
+import FilePanel from './components/FilePanel.vue'
 import RightPanel from './components/RightPanel.vue'
 
 const params = new URLSearchParams(window.location.search)
@@ -42,9 +72,13 @@ const theme = computed(() => pageTheme.value)
 const workspaces = ref([])
 const sessions = ref([])
 const chatRef = ref(null)
+const fileRef = ref(null)
 const rightPanelOpen = ref(false)
+const leftPanelOpen = ref(true)
+const sessionActive = ref(false)
 const rightPanelTab = ref('git')
 const tabId = `${workspaceHash.value || ''}:${sessionName}`
+let stopLeftPanelListener = null
 let stopRightPanelListener = null
 let stopThemeListener = null
 let stopElementInspectionListener = null
@@ -60,6 +94,9 @@ onMounted(async () => {
     console.error('[desktop-chat-tab] failed to load workspaces:', error)
   }
   await loadSessions()
+  stopLeftPanelListener = window.electronAPI?.events?.listen('desktop-chat-tab-toggle-left-panel', () => {
+    leftPanelOpen.value = !leftPanelOpen.value
+  })
   stopRightPanelListener = window.electronAPI?.events?.listen('desktop-chat-tab-toggle-right-panel', () => {
     rightPanelOpen.value = !rightPanelOpen.value
   })
@@ -146,6 +183,7 @@ function requestModelSettings() {
 }
 
 onBeforeUnmount(() => {
+  stopLeftPanelListener?.()
   stopRightPanelListener?.()
   stopThemeListener?.()
   stopElementInspectionListener?.()
@@ -167,10 +205,123 @@ watch(workspaceHash, (hash) => {
   display: flex;
   overflow: hidden;
   background: var(--bg);
+  position: relative;
+}
+
+/* 会话进行中的波动条：绝对定位横跨两侧边栏之上 */
+.desktop-streaming-bar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 2px;
+  background: var(--bg-3, rgba(0,0,0,0.06));
+  overflow: hidden;
+  z-index: 30;
+  pointer-events: none;
+}
+
+.desktop-streaming-bar-inner {
+  position: absolute;
+  top: 0;
+  left: 0;
+  height: 100%;
+  width: 40%;
+  background: linear-gradient(90deg, transparent, var(--accent), transparent);
+  border-radius: 1px;
+  animation: desktop-streaming-slide 1.4s ease-in-out infinite;
+}
+
+@keyframes desktop-streaming-slide {
+  0% { left: -40%; }
+  100% { left: 100%; }
+}
+
+.desktop-files-left {
+  width: 300px;
+  min-width: 240px;
+  max-width: 34vw;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+  overflow: hidden;
+  background: var(--bg-2, #f7f7f8);
+  border-right: 1px solid var(--border);
+  transition: width 0.2s, opacity 0.2s;
+}
+
+.desktop-files-left.collapsed {
+  width: 0;
+  min-width: 0;
+  opacity: 0;
+  border-right: none;
+  pointer-events: none;
+}
+
+.desktop-files-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 46px;
+  padding: 0 8px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-3, #f1f1f3);
+}
+
+.desktop-files-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.desktop-files-title svg {
+  color: var(--fg-3);
+}
+
+.desktop-files-actions {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.desktop-files-action {
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-3);
+  cursor: pointer;
+}
+
+.desktop-files-action:hover {
+  background: var(--bg-2);
+  color: var(--fg);
+}
+
+.desktop-files-left :deep(.file-panel) {
+  min-height: 0;
 }
 
 .desktop-chat-view {
   flex: 1;
   min-width: 0;
+}
+[data-theme="dark"] .desktop-files-left {
+  background: var(--bg-2, #222327);
+}
+[data-theme="dark"] .desktop-files-head {
+  background: var(--bg-3, #2a2b2f);
+}
+[data-theme="dark"] .desktop-files-action:hover {
+  background: #36373d;
 }
 </style>

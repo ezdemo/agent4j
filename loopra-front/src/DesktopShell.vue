@@ -16,6 +16,9 @@
         >
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><path d="M17.5 14v7M14 17.5h7"/></svg>
         </button>
+        <button v-if="activeTabId" class="icon-button" type="button" title="切换左侧栏" @click="toggleLeftPanel">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18"/><path d="M13 8h4M13 12h4M13 16h4"/></svg>
+        </button>
       </div>
 
       <nav ref="tabsNav" class="desktop-tabs" aria-label="会话标签" @wheel="scrollTabs">
@@ -828,6 +831,15 @@ async function openElementInspector() {
   }
 }
 
+async function toggleLeftPanel() {
+  if (!activeTabId.value) return
+  try {
+    await nativeTabs()?.toggleLeftPanel(activeTabId.value)
+  } catch (error) {
+    message.error('切换左侧栏失败：' + (error.message || '未知错误'))
+  }
+}
+
 async function toggleRightPanel() {
   if (!activeTabId.value) return
   try {
@@ -1040,12 +1052,12 @@ onBeforeUnmount(() => {
 <style scoped>
 .desktop-shell { width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; background: var(--bg, #fff); color: var(--fg, #202124); }
 .desktop-titlebar { height: 44px; min-height: 44px; display: flex; align-items: center; border-bottom: 1px solid var(--border, #e8e8e8); background: var(--bg, #fff); -webkit-app-region: drag; user-select: none; }
-.desktop-left-controls { display: flex; align-items: center; padding: 0 14px 0 32px; flex: 0 0 auto; }
+.desktop-left-controls { display: flex; align-items: center; gap: 4px; padding: 0 8px 0 32px; flex: 0 0 auto; }
 .icon-button, .desktop-tab, .desktop-tab-add, .window-button { -webkit-app-region: no-drag; border: 0; background: transparent; color: var(--fg-2, #5f6368); }
 .icon-button { width: 28px; height: 28px; padding: 5px; border-radius: 5px; }
 .icon-button svg, .desktop-tab svg, .desktop-tab-add svg { width: 18px; height: 18px; }
 .icon-button:hover, .icon-button.active, .desktop-tab-add:hover, .window-button:hover { background: var(--bg-3, #f3f4f6); color: var(--fg, #202124); }
-.desktop-tabs { height: 100%; display: flex; align-items: center; gap: 4px; min-width: 80px; flex: 1; overflow-x: auto; padding: 0 18px; scrollbar-width: none; }
+.desktop-tabs { height: 100%; display: flex; align-items: center; gap: 4px; min-width: 80px; flex: 1; overflow-x: auto; padding: 0 18px 0 8px; scrollbar-width: none; }
 .desktop-tab.dragging { opacity: 0.55; }
 .desktop-tab.drag-over { background: var(--bg-3, #f3f4f6); box-shadow: inset 0 0 0 1px var(--border, #d6dae1); }
 .desktop-tabs::-webkit-scrollbar { display: none; }

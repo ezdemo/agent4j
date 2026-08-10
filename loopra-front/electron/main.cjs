@@ -1174,6 +1174,14 @@ ipcMain.handle('desktop-chat-tab-reload', (event, tabId) => {
   return { success: true }
 })
 
+ipcMain.handle('desktop-chat-tab-toggle-left-panel', (event, tabId) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
+  const tab = desktopChatTabs.get(String(tabId || ''))
+  if (!tab || tab.view.webContents.isDestroyed()) throw new Error('Desktop chat tab no longer exists')
+  tab.view.webContents.send('desktop-chat-tab-toggle-left-panel')
+  return { success: true }
+})
+
 ipcMain.handle('desktop-chat-tab-toggle-right-panel', (event, tabId) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
   const tab = desktopChatTabs.get(String(tabId || ''))

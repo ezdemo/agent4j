@@ -8,15 +8,16 @@
       <div class="rp-tabs">
         <button
           class="rp-tab"
-          :class="{ active: modelValue === 'git' }"
+          :class="{ active: activeTab === 'git' }"
           @click="$emit('update:modelValue', 'git')"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>
           Git
         </button>
         <button
+          v-if="showFilesTab"
           class="rp-tab"
-          :class="{ active: modelValue === 'files' }"
+          :class="{ active: activeTab === 'files' }"
           @click="$emit('update:modelValue', 'files')"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2.5h6.5A2.5 2.5 0 0 1 21 9v8.5A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/></svg>
@@ -24,7 +25,7 @@
         </button>
         <button
           class="rp-tab"
-          :class="{ active: modelValue === 'schedule' }"
+          :class="{ active: activeTab === 'schedule' }"
           @click="$emit('update:modelValue', 'schedule')"
         >
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
@@ -32,13 +33,13 @@
         </button>
       </div>
       <div class="rp-head-actions">
-        <button v-if="modelValue === 'git'" class="btn-icon-sm" @click="gitRef?.loadStatus?.()" title="刷新 Git 状态">
+        <button v-if="activeTab === 'git'" class="btn-icon-sm" @click="gitRef?.loadStatus?.()" title="刷新 Git 状态">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
-        <button v-if="modelValue === 'files'" class="btn-icon-sm" @click="fileRef?.refresh?.()" title="刷新文件树">
+        <button v-if="showFilesTab && activeTab === 'files'" class="btn-icon-sm" @click="fileRef?.refresh?.()" title="刷新文件树">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
-        <button v-if="modelValue === 'schedule'" class="btn-icon-sm" @click="scheduleRef?.loadTasks?.()" title="刷新定时任务">
+        <button v-if="activeTab === 'schedule'" class="btn-icon-sm" @click="scheduleRef?.loadTasks?.()" title="刷新定时任务">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
         <button class="btn-icon-sm" @click="$emit('close')" title="关闭">
@@ -49,13 +50,13 @@
 
     <!-- 面板内容（保活：用 v-show） -->
     <div class="rp-body">
-      <div v-show="modelValue === 'git'" class="rp-page">
+      <div v-show="activeTab === 'git'" class="rp-page">
         <GitPanel ref="gitRef" :workspace-hash="workspaceHash" />
       </div>
-      <div v-show="modelValue === 'files'" class="rp-page">
+      <div v-if="showFilesTab" v-show="activeTab === 'files'" class="rp-page">
         <FilePanel ref="fileRef" :workspace-hash="workspaceHash" @add-to-session="$emit('addToSession', $event)" />
       </div>
-      <div v-show="modelValue === 'schedule'" class="rp-page">
+      <div v-show="activeTab === 'schedule'" class="rp-page">
         <SchedulePanel ref="scheduleRef" :workspace-hash="workspaceHash" :session-name="sessionName" :sessions="sessions" />
       </div>
     </div>
@@ -63,7 +64,7 @@
 </template>
 
 <script setup>
-import {ref} from 'vue'
+import {computed, ref} from 'vue'
 import GitPanel from './GitPanel.vue'
 import FilePanel from './FilePanel.vue'
 import SchedulePanel from './SchedulePanel.vue'
@@ -71,12 +72,14 @@ import SchedulePanel from './SchedulePanel.vue'
 const props = defineProps({
   modelValue: { type: String, default: 'git' },
   open: { type: Boolean, default: true },
+  showFilesTab: { type: Boolean, default: true },
   workspaceHash: { type: String, default: null },
   sessionName: { type: String, default: '' },
   sessions: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['update:modelValue', 'close', 'addToSession'])
+const activeTab = computed(() => !props.showFilesTab && props.modelValue === 'files' ? 'git' : props.modelValue)
 
 const gitRef = ref(null)
 const fileRef = ref(null)
