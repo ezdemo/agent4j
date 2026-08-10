@@ -49,8 +49,12 @@ public class GitService {
     private static final int MIN_STATUS_LINE_LENGTH = 4;
     /** 单文件 diff 最大行数（超出截断） */
     private static final int MAX_DIFF_LINES = 2000;
-    /** 生成提交消息时，每个文件 diff 最大行数 */
-    private static final int MAX_DIFF_LINES_PER_FILE = 100;
+    /** 生成提交消息时最多携带 diff 的文件数 */
+    private static final int MAX_COMMIT_DIFF_FILES = 3;
+    /** 生成提交消息时单文件 diff 最大行数 */
+    private static final int MAX_COMMIT_DIFF_LINES = 100;
+    /** 生成提交消息时单文件 diff 最大字符数 */
+    private static final int MAX_COMMIT_DIFF_CHARS = 12_000;
     /** 生成提交消息时参考的近期提交条数 */
     private static final int RECENT_COMMIT_LOG_COUNT = 3;
     /** Git 命令超时秒数 */
@@ -710,7 +714,7 @@ public class GitService {
     }
 
     /**
-     * AI 自动生成 Git 提交消息 —— 获取当前变更及近 10 条提交日志，调用 LLM 生成。
+     * AI 自动生成 Git 提交消息 —— 获取全部变更文件名、最多 3 个文件的 diff 及近 3 条提交日志，调用 LLM 生成。
      */
     public GitGenerateMessageDTO generateCommitMessage(String workspaceHash, String body) throws Exception {
         File workspaceDir = new File(resolveWorkspace(workspaceHash));
@@ -797,39 +801,16 @@ public class GitService {
         if (files == null || files.isEmpty()) {
             files = getChangedFiles(workspaceDir);
         }
-
-        // 逐文件获取 diff，每个文件最多保留 MAX_DIFF_LINES_PER_FILE 行
-        StringBuilder sb = new StringBuilder();
-        for (String f : files) {
-            String staged = "", unstaged = "";
-            try {
-                ProcessResult sr = runGit(workspaceDir, "git", "diff", "--cached", "--", f);
-                if (sr.stdout != null && !sr.stdout.isEmpty()) staged = sr.stdout;
-            } catch (Exception e) {
-                log.debug("[git] 获取文件 {} 的 staged diff 失败: {}", f, e.getMessage());
-            }
-            try {
-                ProcessResult ur = runGit(workspaceDir, "git", "diff", "--", f);
-                if (ur.stdout != null && !ur.stdout.isEmpty()) unstaged = ur.stdout;
-            } catch (Exception e) {
-                log.debug("[git] 获取文件 {} 的 unstaged diff 失败: {}", f, e.getMessage());
-            }
-            String fileDiff = (staged + "\n" + unstaged).trim();
-            if (!fileDiff.isEmpty()) {
-                sb.append("# ").append(f).append("\n");
-                sb.append(truncateLines(fileDiff, MAX_DIFF_LINES_PER_FILE)).append("\n\n");
-            }
-        }
-        String fullDiff = sb.toString().trim();
-
-        if (fullDiff.isEmpty()) {
+        if (files.isEmpty()) {
             throw new ServiceException("没有待提交的变更");
         }
+        String changedFiles = String.join("\n", files);
+        String changedDiff = getCommitDiff(workspaceDir, files);
 
-        // 3. 构建 AI 提示词
+        // 3. 构建 AI 提示词：发送全部文件名，diff 最多发送 3 个文件
         String systemPrompt = """
                 你是一个 Git 提交消息生成助手。\
-                根据 git diff 内容生成一条简洁、描述性的提交消息。\
+                根据全部变更文件名和提供的部分 git diff 生成一条简洁、描述性的提交消息。\
                 严格遵循以下规约：
                 - 参考「近 3 条提交」的风格（如前缀、格式、语言等）
                 - 消息长度不超过 72 字符（中文不超过 50 字）
@@ -838,7 +819,8 @@ public class GitService {
 
         String userPrompt = "近 3 条提交（风格参考）：\n"
                 + (recentLog.isEmpty() ? "（无历史提交）" : recentLog) + "\n\n"
-                + "当前变更（git diff）：\n" + fullDiff + "\n\n"
+                + "全部变更文件名：\n" + changedFiles + "\n\n"
+                + (changedDiff.isEmpty() ? "" : "部分变更内容（最多 3 个文件）：\n" + changedDiff + "\n\n")
                 + "请生成提交消息：";
 
         // 4. 调用 AI 模型（使用 Solon ChatModel，简单直接）
@@ -962,18 +944,46 @@ public class GitService {
     }
 
     /**
-     * 截断文本到指定行数，超出时末尾添加截断提示。
+     * 获取最多 3 个文件的暂存和未暂存 diff，全部文件名由调用方单独发送。
      */
-    private static String truncateLines(String text, int maxLines) {
-        if (text == null || text.isEmpty()) return text;
-        String[] lines = text.split("\n", -1);
-        if (lines.length <= maxLines) return text;
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < maxLines; i++) {
-            sb.append(lines[i]).append("\n");
+    private String getCommitDiff(File workspaceDir, List<String> files) {
+        StringBuilder diffBuilder = new StringBuilder();
+        int limit = Math.min(files.size(), MAX_COMMIT_DIFF_FILES);
+        for (int i = 0; i < limit; i++) {
+            String file = files.get(i);
+            String staged = "";
+            String unstaged = "";
+            try {
+                ProcessResult result = runGit(workspaceDir, "git", "diff", "--cached", "--", file);
+                if (result.stdout != null) staged = result.stdout;
+            } catch (Exception e) {
+                log.debug("[git] 获取文件 {} 的 staged diff 失败: {}", file, e.getMessage());
+            }
+            try {
+                ProcessResult result = runGit(workspaceDir, "git", "diff", "--", file);
+                if (result.stdout != null) unstaged = result.stdout;
+            } catch (Exception e) {
+                log.debug("[git] 获取文件 {} 的 unstaged diff 失败: {}", file, e.getMessage());
+            }
+
+            String fileDiff = (staged + "\n" + unstaged).trim();
+            if (!fileDiff.isEmpty()) {
+                diffBuilder.append("# ").append(file).append("\n")
+                        .append(truncateCommitDiff(fileDiff)).append("\n\n");
+            }
         }
-        sb.append("... (diff 过长，截断至 ").append(maxLines).append(" 行)");
-        return sb.toString();
+        return diffBuilder.toString().trim();
+    }
+
+    private static String truncateCommitDiff(String diff) {
+        String[] lines = diff.split("\n", -1);
+        String truncated = lines.length <= MAX_COMMIT_DIFF_LINES
+                ? diff
+                : String.join("\n", Arrays.copyOf(lines, MAX_COMMIT_DIFF_LINES))
+                        + "\n... (diff 过长，仅保留前 " + MAX_COMMIT_DIFF_LINES + " 行)";
+        if (truncated.length() <= MAX_COMMIT_DIFF_CHARS) return truncated;
+        return truncated.substring(0, MAX_COMMIT_DIFF_CHARS)
+                + "\n... (diff 过长，仅保留前 " + MAX_COMMIT_DIFF_CHARS + " 个字符)";
     }
 
     // ==================== JSON 解析工具方法 ====================
