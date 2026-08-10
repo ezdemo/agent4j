@@ -1,5 +1,12 @@
 <template>
-  <section class="terminal-panel" :class="{ open }">
+  <section class="terminal-panel" :class="{ open }" :style="panelStyle">
+    <div
+      class="terminal-resize-handle"
+      :class="{ dragging }"
+      title="拖动调整终端高度"
+      aria-hidden="true"
+      @mousedown.prevent="startResize"
+    />
     <header class="terminal-panel-header">
       <div class="terminal-tabs">
         <button
@@ -74,10 +81,29 @@ let dataUnsubscribe = null
 let exitUnsubscribe = null
 let resizeObserver = null
 
-// xterm 主题：跟随应用主题（dark / gray）
+// xterm 主题：跟随应用主题（dark / gray），ANSI 色板浅色化保证亮色模式下文字可读
 const THEMES = {
-  dark: { background: '#1e1e1e', foreground: '#cccccc', cursor: '#aeafad', selectionBackground: '#264f78' },
-  gray: { background: '#ffffff', foreground: '#333333', cursor: '#333333', selectionBackground: '#add6ff' }
+  dark: {
+    background: '#1e1e1e',
+    foreground: '#cccccc',
+    cursor: '#aeafad',
+    selectionBackground: '#264f78',
+    ansi: [
+      '#000000', '#cd3131', '#0dbc79', '#e5e510', '#2472c8', '#bc3fbc', '#11a8cd', '#e5e5e5',
+      '#666666', '#f14c4c', '#23d18b', '#f5f543', '#3b8eea', '#d670d6', '#29b8db', '#e5e5e5'
+    ]
+  },
+  gray: {
+    background: '#ffffff',
+    foreground: '#333333',
+    cursor: '#333333',
+    selectionBackground: '#add6ff',
+    // VS Code Light+ 风格：黄色系加深（index 3/11），避免白色背景上看不清
+    ansi: [
+      '#000000', '#cd3131', '#00bc00', '#949800', '#0451a5', '#bc05bc', '#0598bc', '#555555',
+      '#666666', '#cd3131', '#14ce14', '#b5ba00', '#0451a5', '#bc05bc', '#0598bc', '#a5a5a5'
+    ]
+  }
 }
 
 // 主题：优先用宿主页面传入的主题，未传时回退到全局 store（独立使用场景）
@@ -92,6 +118,46 @@ const activePid = computed(() => {
   const tab = terminals.value.find((item) => item.id === activeId.value)
   return tab?.pid || ''
 })
+
+// ── 面板高度：可拖拽调整，持久化到 localStorage ──
+const DEFAULT_HEIGHT = 187
+const MIN_HEIGHT = 80
+const MAX_HEIGHT_RATIO = 0.7
+const savedHeight = Number(localStorage.getItem('loopra-terminal-height'))
+const panelHeight = ref(Number.isFinite(savedHeight) && savedHeight >= MIN_HEIGHT ? savedHeight : DEFAULT_HEIGHT)
+const dragging = ref(false)
+
+// 展开时用自定义高度；拖拽过程中禁用过渡动画，避免拖拽时高度跳动
+const panelStyle = computed(() => {
+  if (!props.open) return null
+  return {
+    height: `${panelHeight.value}px`,
+    ...(dragging.value ? { transition: 'none' } : {})
+  }
+})
+
+function startResize(event) {
+  const startY = event.clientY
+  const startHeight = panelHeight.value
+  dragging.value = true
+  const onMove = (ev) => {
+    const maxHeight = Math.floor(window.innerHeight * MAX_HEIGHT_RATIO)
+    const next = Math.min(Math.max(startHeight + (startY - ev.clientY), MIN_HEIGHT), maxHeight)
+    panelHeight.value = Math.round(next)
+  }
+  const onUp = () => {
+    dragging.value = false
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', onUp)
+    try {
+      localStorage.setItem('loopra-terminal-height', String(panelHeight.value))
+    } catch (error) {
+      // 存储不可用时忽略
+    }
+  }
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onUp)
+}
 
 const findTab = (id) => terminals.value.find((item) => item.id === id)
 
@@ -264,6 +330,17 @@ watch(
 }
 .terminal-panel.open {
   height: 187px;
+}
+/* 拖拽手柄：面板顶部细条，上下拖动调整高度 */
+.terminal-resize-handle {
+  height: 5px;
+  flex: 0 0 auto;
+  cursor: ns-resize;
+  background: transparent;
+}
+.terminal-resize-handle:hover,
+.terminal-resize-handle.dragging {
+  background: var(--accent, rgba(59, 130, 246, 0.35));
 }
 .terminal-panel-header {
   height: 34px;

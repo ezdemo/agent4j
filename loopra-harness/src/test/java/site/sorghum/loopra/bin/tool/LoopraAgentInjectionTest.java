@@ -19,6 +19,7 @@ import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.session.JsonlSessionStore;
 import site.sorghum.loopra.bin.session.SessionStore;
 
+import java.io.BufferedWriter;
 import java.io.IOException;
 import java.lang.reflect.Field;
 import java.nio.file.Files;
@@ -32,6 +33,8 @@ import java.util.Set;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -137,11 +140,13 @@ class LoopraAgentInjectionTest {
 
         SessionStore store = agent.getSessionStore();
         assertInstanceOf(JsonlSessionStore.class, store);
-        assertTrue(consumerRunning((JsonlSessionStore) store), "dispose 前消费者线程应在运行");
+        // 触发一次写入使 writer 句柄打开，作为 dispose 后可观察的关闭信号
+        store.append(ChatMessage.ofUser("warm-up"));
+        assertNotNull(writerOf((JsonlSessionStore) store), "dispose 前写入句柄应已打开");
 
         agent.dispose();
 
-        assertFalse(consumerRunning((JsonlSessionStore) store),
+        assertNull(writerOf((JsonlSessionStore) store),
                 "未注入 SessionStore 时 Agent 自建存储，dispose 必须关闭它");
     }
 
@@ -160,11 +165,11 @@ class LoopraAgentInjectionTest {
         }
     };
 
-    /** 读取 JsonlSessionStore 内部停止标志，作为"已关闭"的可观察信号。 */
-    private static boolean consumerRunning(JsonlSessionStore store) throws Exception {
-        Field field = JsonlSessionStore.class.getDeclaredField("consumerRunning");
+    /** 读取 JsonlSessionStore 内部 writer 句柄，作为"已关闭"的可观察信号（null = 已关闭）。 */
+    private static BufferedWriter writerOf(JsonlSessionStore store) throws Exception {
+        Field field = JsonlSessionStore.class.getDeclaredField("writer");
         field.setAccessible(true);
-        return (boolean) field.get(store);
+        return (BufferedWriter) field.get(store);
     }
 
     /** LoopraAgent 未暴露内部 AgentLoop，测试经反射访问以断言装配同一性。 */

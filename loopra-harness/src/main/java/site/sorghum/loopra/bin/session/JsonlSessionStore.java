@@ -17,8 +17,6 @@ import java.nio.file.*;
 import java.nio.file.attribute.BasicFileAttributes;
 import java.text.SimpleDateFormat;
 import java.util.*;
-import java.util.concurrent.*;
-import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.ReentrantLock;
 
 /**
@@ -29,8 +27,9 @@ import java.util.concurrent.locks.ReentrantLock;
  * </p>
  * <p>
  * 使用 {@link BufferedWriter} 保持文件打开，避免每次写入打开/关闭文件。
- * 将消息先入内存队列，后台消费者线程异步批量写入，减少关键路径 IO 阻塞。
- * 提供 {@link #flush()} 方法显式刷入磁盘，并启动定时线程每 30 秒自动刷入。
+ * 每条消息同步写入并立即 flush（来一条落一条），append 返回即已持久化，
+ * 进程崩溃/强制退出不丢已确认的消息；消息粒度写入开销小，可接受。
+ * {@link #flush()} 保留为幂等兜底，兼容接口契约。
  * </p>
  *
  * @author Sorghum
@@ -40,18 +39,6 @@ public class JsonlSessionStore implements SessionStore {
 
     private static final Path DEFAULT_SESSIONS_DIR = Paths.get(
             System.getProperty("user.home"), ".loopra", "sessions");
-    /**
-     * 定时刷入间隔（秒）
-     */
-    private static final int FLUSH_INTERVAL_SEC = 30;
-    /**
-     * 异步写入缓冲区最大积压数（防止 OOM）
-     */
-    private static final int MAX_BUFFER_SIZE = 10_000;
-    /**
-     * 单次批量写入的最大条数
-     */
-    private static final int BATCH_SIZE = 50;
     /** 进程内按会话文件分片的读写锁，保护独立 Store 实例间的并发访问。 */
     private static final ReentrantLock[] FILE_LOCKS = new ReentrantLock[64];
 
@@ -66,24 +53,6 @@ public class JsonlSessionStore implements SessionStore {
      * 线程同步锁
      */
     private final ReentrantLock lock = new ReentrantLock();
-    private final Condition bufferNotEmpty = lock.newCondition();
-    private final Condition writesCompleted = lock.newCondition();
-    /**
-     * 已被消费者取出但尚未持久化的消息数。
-     */
-    private int inFlightMessages;
-    /**
-     * 异步写入缓冲区（关键路径不阻塞 IO）
-     */
-    private final BlockingQueue<ChatMessage> buffer = new LinkedBlockingQueue<>(MAX_BUFFER_SIZE);
-    /**
-     * 异步消费者线程
-     */
-    private final Thread consumerThread;
-    /**
-     * 消费者线程停止标志
-     */
-    private volatile boolean consumerRunning = true;
     /**
      * 当前会话名
      */
@@ -96,10 +65,6 @@ public class JsonlSessionStore implements SessionStore {
      * 当前会话文件路径（用于 rewrite 时重新打开）
      */
     private Path currentFile;
-    /**
-     * 定时刷入调度器
-     */
-    private ScheduledExecutorService scheduler;
 
     /**
      * 默认构造函数，使用默认会话目录
@@ -120,11 +85,6 @@ public class JsonlSessionStore implements SessionStore {
         // 不自动分配会话名 —— 等用户主动选择或首次写入时才确定
         this.currentName = null;
         this.writer = null;
-        // 启动异步消费者线程
-        this.consumerThread = new Thread(this::consumerLoop, "jsonl-consumer");
-        this.consumerThread.setDaemon(true);
-        this.consumerThread.start();
-        startPeriodicFlush();
     }
 
     // ---- 文件管理 ----
@@ -242,7 +202,7 @@ public class JsonlSessionStore implements SessionStore {
                 StandardOpenOption.CREATE, StandardOpenOption.APPEND);
     }
 
-    // ---- 定时刷入 ----
+    // ---- 写入辅助 ----
 
     /**
      * 确保 writer 已打开，若未打开则按需创建文件和 writer。
@@ -255,85 +215,6 @@ public class JsonlSessionStore implements SessionStore {
             Files.createDirectories(currentFile.getParent());
             this.writer = Files.newBufferedWriter(currentFile, StandardCharsets.UTF_8,
                     StandardOpenOption.CREATE, StandardOpenOption.APPEND);
-        }
-    }
-
-    /**
-     * 异步消费者：从缓冲区批量取出消息并写入文件。
-     * 当缓冲区为空时阻塞等待，减少忙轮询。
-     */
-    private void consumerLoop() {
-        List<ChatMessage> batch = new ArrayList<>(BATCH_SIZE);
-        try {
-            while (consumerRunning) {
-                lock.lock();
-                try {
-                    while (consumerRunning && buffer.isEmpty()) {
-                        bufferNotEmpty.await();
-                    }
-                    if (!consumerRunning) break;
-                    buffer.drainTo(batch, BATCH_SIZE);
-                    inFlightMessages += batch.size();
-                } finally {
-                    lock.unlock();
-                }
-
-                writeBatch(batch, false);
-                completeBatch(batch.size());
-                batch.clear();
-            }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        } finally {
-            if (!batch.isEmpty()) {
-                writeBatch(batch, false);
-                completeBatch(batch.size());
-            }
-            flush();
-        }
-    }
-
-    /**
-     * 标记消费者已持久化的消息，并唤醒等待 flush 的线程。
-     */
-    private void completeBatch(int size) {
-        lock.lock();
-        try {
-            inFlightMessages -= size;
-            writesCompleted.signalAll();
-        } finally {
-            lock.unlock();
-        }
-    }
-
-    /**
-     * 批量写入消息到文件。
-     */
-    private void writeBatch(List<ChatMessage> messages, boolean flushWriter) {
-        if (messages.isEmpty()) return;
-        lock.lock();
-        try {
-            if (currentName == null) {
-                currentName = newSessionName();
-            }
-            ensureWriter();
-            ReentrantLock fileIoLock = fileLock(currentFile);
-            fileIoLock.lock();
-            try {
-                for (ChatMessage msg : messages) {
-                    writer.write(serializeMessage(msg));
-                    writer.newLine();
-                }
-                if (flushWriter) {
-                    writer.flush();
-                }
-            } finally {
-                fileIoLock.unlock();
-            }
-        } catch (IOException e) {
-            log.error("[jsonl] 批量写入失败: {}", e.getMessage());
-        } finally {
-            lock.unlock();
         }
     }
 
@@ -367,60 +248,15 @@ public class JsonlSessionStore implements SessionStore {
         }
     }
 
-    // ---- 关闭/清理 ----
-
-    /**
-     * 启动定时刷入线程（daemon）
-     */
-    private void startPeriodicFlush() {
-        scheduler = Executors.newSingleThreadScheduledExecutor(r -> {
-            Thread t = new Thread(r, "jsonl-flusher");
-            t.setDaemon(true);
-            return t;
-        });
-        scheduler.scheduleAtFixedRate(this::flush,
-                FLUSH_INTERVAL_SEC, FLUSH_INTERVAL_SEC, TimeUnit.SECONDS);
-    }
-
     // ---- SessionStore 接口实现 ----
 
     /**
-     * 停止定时刷入
-     */
-    private void stopPeriodicFlush() {
-        if (scheduler != null && !scheduler.isShutdown()) {
-            scheduler.shutdown();
-            try {
-                scheduler.awaitTermination(2, TimeUnit.SECONDS);
-            } catch (InterruptedException e) {
-                scheduler.shutdownNow();
-                Thread.currentThread().interrupt();
-            }
-        }
-    }
-
-    /**
-     * 关闭 store，释放所有资源（消费者线程 + 定时器 + writer）。
+     * 关闭 store，释放文件句柄。
+     * 同步写入模式下无后台线程/定时器，仅需关闭 writer。
      * 调用后不能再使用此 store 实例。
      */
     @Override
     public void shutdown() {
-        lock.lock();
-        try {
-            consumerRunning = false;
-            bufferNotEmpty.signalAll();
-        } finally {
-            lock.unlock();
-        }
-        if (consumerThread != null) {
-            try {
-                consumerThread.interrupt();
-                consumerThread.join(2000);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
-        }
-        stopPeriodicFlush();
         closeWriter();
     }
 
@@ -454,10 +290,6 @@ public class JsonlSessionStore implements SessionStore {
     public void append(ChatMessage message) throws IOException {
         lock.lock();
         try {
-            if (buffer.offer(message)) {
-                bufferNotEmpty.signal();
-                return;
-            }
             if (currentName == null) {
                 currentName = newSessionName();
             }
@@ -467,6 +299,8 @@ public class JsonlSessionStore implements SessionStore {
             try {
                 writer.write(serializeMessage(message));
                 writer.newLine();
+                // 来一条落一条：立即推向文件，append 返回即已持久化，进程崩溃不丢消息
+                writer.flush();
             } finally {
                 fileIoLock.unlock();
             }
@@ -477,14 +311,9 @@ public class JsonlSessionStore implements SessionStore {
 
     @Override
     public void flush() {
+        // 同步写入模式下 append 已即时刷盘，此处仅做防御性兜底（幂等）
         lock.lock();
         try {
-            while (inFlightMessages > 0) {
-                writesCompleted.await();
-            }
-            List<ChatMessage> pending = new ArrayList<>();
-            buffer.drainTo(pending);
-            writeBatch(pending, true);
             if (writer != null) {
                 ReentrantLock fileIoLock = fileLock(currentFile);
                 fileIoLock.lock();
@@ -494,8 +323,6 @@ public class JsonlSessionStore implements SessionStore {
                     fileIoLock.unlock();
                 }
             }
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
         } catch (IOException e) {
             log.error("[jsonl] flush 失败: {}", e.getMessage());
         } finally {
