@@ -1845,8 +1845,11 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 
 /* Unified conversation composer for both the web and desktop shells. */
+/* 背景只覆盖输入区底部 padding（与背景同色）：消息滚到输入框下方时被干净遮住，
+   不露出半截；输入框上方保持透明，消息进入输入区时仍可透出 */
 .input-area:not(.welcome-mode) {
   padding: 14px clamp(16px, 5vw, 72px) 16px;
+  background: linear-gradient(to top, var(--bg) 16px, transparent 16px);
 }
 
 .composer-queue {
