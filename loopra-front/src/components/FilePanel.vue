@@ -9,6 +9,25 @@
     <div v-if="loading" class="file-state"><span class="loading-spinner"></span></div>
     <div v-else-if="error" class="file-state file-error">{{ error }}</div>
     <div v-else-if="!workspaceHash" class="file-state">请选择一个项目</div>
+    <div v-else-if="searchResults !== null" class="file-tree" role="listbox" aria-label="文件搜索结果">
+      <div v-if="searching" class="file-state"><span class="loading-spinner"></span></div>
+      <div v-else-if="searchResults.length === 0" class="file-state">未找到匹配的文件</div>
+      <button
+        v-for="result in searchResults"
+        v-else
+        :key="result.path"
+        class="file-search-result"
+        type="button"
+        role="option"
+        :title="result.path"
+        @click="openFile(result.path)"
+        @contextmenu.prevent.stop="openContextMenu($event, result)"
+      >
+        <svg class="file-icon" :class="fileClassOf(result.name)" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        <span class="file-search-result-name">{{ result.name }}</span>
+        <span class="file-search-result-path">{{ result.path }}</span>
+      </button>
+    </div>
     <div v-else class="file-tree" role="tree" aria-label="项目文件">
       <FileTreeNode
         v-for="node in rootNodes"
@@ -17,8 +36,39 @@
         :query="query"
         :selected-path="selectedPath"
         @toggle="toggleNode"
+        @contextmenu="openContextMenu"
       />
       <div v-if="rootNodes.length === 0" class="file-state">项目文件夹为空</div>
+    </div>
+
+    <div
+      v-if="contextMenu.visible"
+      class="file-context-menu"
+      role="menu"
+      aria-label="文件操作菜单"
+      :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
+      @contextmenu.prevent
+    >
+      <template v-if="contextMenu.node && !contextMenu.node.directory">
+        <button type="button" role="menuitem" @click="contextOpenFile">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+          打开文件
+        </button>
+        <button type="button" role="menuitem" @click="contextAddToSession">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 5v14M5 12h14"/></svg>
+          添加到上下文
+        </button>
+      </template>
+      <template v-else>
+        <button type="button" role="menuitem" @click="contextRefreshDir">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          刷新
+        </button>
+      </template>
+      <button type="button" role="menuitem" class="danger" @click="contextDelete">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M3 6h18M8 6V4a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6"/><path d="M10 11v6M14 11v6"/></svg>
+        删除
+      </button>
     </div>
 
     <DiffViewer
@@ -36,20 +86,83 @@
 </template>
 
 <script setup>
-import {ref, watch} from 'vue'
+import {onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
+import {Modal, message} from 'ant-design-vue'
 import {filesAPI, gitAPI} from '../services/api'
 import FileTreeNode from './FileTreeNode.vue'
 import DiffViewer from './DiffViewer.vue'
 
 const props = defineProps({ workspaceHash: { type: String, default: null } })
-defineEmits(['addToSession'])
+const emit = defineEmits(['addToSession'])
 
 const rootNodes = ref([])
 const query = ref('')
 const loading = ref(false)
 const error = ref('')
 const selectedPath = ref('')
+// 右键菜单：visible + 定位 + 目标节点
+const contextMenu = reactive({ visible: false, x: 0, y: 0, node: null })
+// 搜索模式：null = 未搜索（显示目录树）；非 null = 后端递归搜索结果列表
+const searchResults = ref(null)
+const searching = ref(false)
+let searchTimer = null
+let searchRequestSeq = 0
 const diffViewer = ref({ open: false, file: '', diff: '', content: '', mode: 'content', loading: false, contentLoaded: false, diffLoaded: false })
+
+// 点击其他区域 / Esc 关闭右键菜单
+function onDocumentClick() {
+  if (contextMenu.visible) closeContextMenu()
+}
+function onDocumentKeydown(event) {
+  if (event.key === 'Escape' && contextMenu.visible) closeContextMenu()
+}
+onMounted(() => {
+  document.addEventListener('click', onDocumentClick)
+  document.addEventListener('keydown', onDocumentKeydown)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('click', onDocumentClick)
+  document.removeEventListener('keydown', onDocumentKeydown)
+})
+
+// 筛选文件：query 非空时走后端递归搜索（覆盖子目录），空时恢复目录树
+watch(query, (value) => {
+  const keyword = value.trim()
+  if (!keyword) {
+    clearTimeout(searchTimer)
+    searchRequestSeq++
+    searchResults.value = null
+    searching.value = false
+    return
+  }
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(() => { void runSearch(keyword) }, 200)
+})
+
+async function runSearch(keyword) {
+  if (!props.workspaceHash) return
+  const seq = ++searchRequestSeq
+  searching.value = true
+  try {
+    const response = await filesAPI.search(props.workspaceHash, keyword)
+    if (seq !== searchRequestSeq) return
+    searchResults.value = response.success ? (response.data || []) : []
+  } catch (e) {
+    if (seq !== searchRequestSeq) return
+    searchResults.value = []
+  } finally {
+    if (seq === searchRequestSeq) searching.value = false
+  }
+}
+
+function fileClassOf(name) {
+  const extension = String(name).split('.').pop()?.toLowerCase()
+  if (['js', 'jsx', 'ts', 'tsx', 'vue'].includes(extension)) return 'code-file'
+  if (['java', 'kt', 'go', 'py'].includes(extension)) return 'source-file'
+  if (['md', 'txt'].includes(extension)) return 'text-file'
+  if (['png', 'jpg', 'jpeg', 'gif', 'svg'].includes(extension)) return 'image-file'
+  return ''
+}
 
 function toNode(entry) {
   return { ...entry, children: [], loaded: false, loading: false, expanded: false }
@@ -158,7 +271,81 @@ function closeDiffViewer() {
 function refresh() {
   rootNodes.value = []
   selectedPath.value = ''
+  clearTimeout(searchTimer)
+  searchRequestSeq++
+  searchResults.value = null
+  searching.value = false
   loadDirectory()
+}
+
+function openContextMenu(event, node) {
+  closeContextMenu()
+  contextMenu.node = node
+  contextMenu.x = Math.min(event.clientX, window.innerWidth - 180)
+  contextMenu.y = Math.min(event.clientY, window.innerHeight - 150)
+  contextMenu.visible = true
+}
+
+function closeContextMenu() {
+  contextMenu.visible = false
+  contextMenu.node = null
+}
+
+function contextOpenFile() {
+  const node = contextMenu.node
+  closeContextMenu()
+  if (node) void openFile(node.path)
+}
+
+function contextAddToSession() {
+  const node = contextMenu.node
+  closeContextMenu()
+  if (node) emit('addToSession', { file: node.path })
+}
+
+function contextRefreshDir() {
+  const node = contextMenu.node
+  closeContextMenu()
+  if (node) void loadDirectory(node.path, node)
+}
+
+function contextDelete() {
+  const node = contextMenu.node
+  closeContextMenu()
+  if (!node) return
+  Modal.confirm({
+    title: `删除${node.directory ? '目录' : '文件'}？`,
+    content: `“${node.path}”将被永久删除，无法恢复。`,
+    okText: '删除',
+    okType: 'danger',
+    cancelText: '取消',
+    onOk: async () => {
+      try {
+        const response = await filesAPI.remove(props.workspaceHash, node.path)
+        if (!response?.success) throw new Error(response?.error || '删除失败')
+        removeNodeFromTree(rootNodes.value, node.path)
+        if (searchResults.value !== null) {
+          searchResults.value = searchResults.value.filter((result) => result.path !== node.path)
+        }
+        if (selectedPath.value === node.path) selectedPath.value = ''
+        message.success('已删除')
+      } catch (e) {
+        message.error('删除失败：' + (e.message || '未知错误'))
+      }
+    }
+  })
+}
+
+function removeNodeFromTree(nodes, path) {
+  for (let i = 0; i < nodes.length; i++) {
+    const node = nodes[i]
+    if (node.path === path) {
+      nodes.splice(i, 1)
+      return true
+    }
+    if (node.children && removeNodeFromTree(node.children, path)) return true
+  }
+  return false
 }
 
 watch(() => props.workspaceHash, refresh, { immediate: true })
@@ -174,6 +361,17 @@ defineExpose({ refresh })
 .clear-search { width: 18px; height: 18px; padding: 0; border: 0; border-radius: 3px; background: transparent; color: var(--fg-4); cursor: pointer; font-size: 18px; line-height: 16px; }
 .clear-search:hover { background: var(--bg-3); color: var(--fg); }
 .file-tree { min-height: 0; flex: 1; overflow: auto; padding: 0 4px 10px; }
+.file-search-result { display: flex; align-items: center; gap: 7px; width: 100%; min-height: 30px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--fg-2); cursor: pointer; font: inherit; font-size: 13px; text-align: left; }
+.file-search-result:hover { background: var(--bg-3); color: var(--fg); }
+.file-search-result-name { flex: 0 0 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 45%; }
+.file-search-result-path { margin-left: auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--fg-4); font-size: 12px; max-width: 55%; }
+.file-search-result:hover .file-search-result-path { color: var(--fg-3); }
+.file-context-menu { box-sizing: border-box; position: fixed; z-index: 1000; width: 168px; padding: 4px; border: 1px solid var(--border, #e5e7eb); border-radius: 6px; background: var(--bg, #fff); box-shadow: var(--shadow-lg, 0 10px 28px rgba(0, 0, 0, 0.16)); }
+.file-context-menu button { width: 100%; height: 34px; display: flex; align-items: center; gap: 8px; padding: 0 8px; border: 0; border-radius: 4px; background: transparent; color: var(--fg-2, #525866); font: inherit; font-size: 13px; text-align: left; cursor: pointer; }
+.file-context-menu button:hover, .file-context-menu button:focus-visible { color: var(--fg, #202124); background: var(--bg-3, #f2f3f5); outline: 0; }
+.file-context-menu svg { width: 15px; height: 15px; flex: 0 0 auto; }
+.file-context-menu button.danger { color: var(--red, #dc2626); }
+.file-context-menu button.danger:hover { background: rgba(220, 38, 38, 0.08); color: var(--red, #dc2626); }
 .file-tree-node { min-width: 0; }
 .file-tree-row { display: flex; align-items: center; width: 100%; min-height: 30px; padding-right: 8px; border: 0; border-radius: 4px; background: transparent; color: var(--fg-2); cursor: pointer; font: inherit; font-size: 13px; text-align: left; }
 .file-tree-row:hover, .file-tree-row.active { background: var(--bg-3); color: var(--fg); }

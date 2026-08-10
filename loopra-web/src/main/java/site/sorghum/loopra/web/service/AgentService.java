@@ -32,6 +32,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
@@ -930,6 +931,14 @@ public class AgentService {
                 emitter.sendComplete(reply);
             }
         } catch (Exception e) {
+            if (isUserAbortLike(e)) {
+                // 用户主动停止/预期重试流程，不是故障，按 info 记录
+                log.info("[chat] 聊天已停止（用户中断）: session={}, 原因: {}",
+                        effectiveSessionName, e.getMessage());
+            } else {
+                log.error("[chat] 流式聊天执行异常: session={}, workspace={}, 原因: {}",
+                        effectiveSessionName, workspacePath, e.getMessage(), e);
+            }
             try {
                 emitter.sendError(e.getMessage());
             } catch (Exception ex) {
@@ -957,6 +966,24 @@ public class AgentService {
 
             lock.unlock();
         }
+    }
+
+    /**
+     * 区分“用户主动停止/预期中断”与真实故障：中断类异常不按错误上报。
+     * <p>普通聊天停止由 AgentLoop 正常返回不抛异常；计划执行（execute_plan）停止/未启动
+     * 会抛 ServiceException，属于预期流程，降级为 info 日志。</p>
+     */
+    private static boolean isUserAbortLike(Exception e) {
+        if (Thread.currentThread().isInterrupted()
+                || e instanceof InterruptedException
+                || e instanceof CancellationException) {
+            return true;
+        }
+        if (e instanceof ServiceException) {
+            String msg = e.getMessage();
+            return msg != null && (msg.contains("已停止") || msg.contains("未能启动"));
+        }
+        return false;
     }
 
     private boolean hasPlanExecutionStarted(LoopraAgent agent) {

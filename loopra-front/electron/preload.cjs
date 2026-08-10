@@ -129,6 +129,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     hide: () => ipcRenderer.invoke('desktop-chat-tab-hide'),
     close: (tabId) => ipcRenderer.invoke('desktop-chat-tab-close', tabId),
     reload: (tabId) => ipcRenderer.invoke('desktop-chat-tab-reload', tabId),
+    toggleLeftPanel: (tabId) => ipcRenderer.invoke('desktop-chat-tab-toggle-left-panel', tabId),
     toggleRightPanel: (tabId) => ipcRenderer.invoke('desktop-chat-tab-toggle-right-panel', tabId),
     setTheme: (theme) => ipcRenderer.invoke('desktop-chat-tab-set-theme', theme),
     openHome: () => ipcRenderer.send('desktop-chat-tab-open-home'),

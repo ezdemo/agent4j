@@ -10,8 +10,8 @@
       <button :disabled="loadingPrompt" class="btn btn-ghost btn-sm" @click="viewSystemPrompt">提示词</button>
     </div>
 
-    <!-- 流式加载动画横线：本地流式或服务端后台执行中均展示（会话正在执行） -->
-    <div v-if="streaming || sessionTaskRunning" class="streaming-bar">
+    <!-- 流式加载动画横线：本地流式或服务端后台执行中均展示（会话正在执行）；桌面端由外层布局接管（streamingBarHidden） -->
+    <div v-if="!streamingBarHidden && (streaming || sessionTaskRunning)" class="streaming-bar">
       <div class="streaming-bar-inner"></div>
     </div>
 
@@ -421,6 +421,7 @@ const handleSwitchPermission = async (mode) => {
 
 const props = defineProps({
   hideHeader: {type: Boolean, default: false},
+  streamingBarHidden: {type: Boolean, default: false},
   workspaceHash: {type: String, default: null},
   sessionName: {type: String, default: null},
   rightPanelOpen: {type: Boolean, default: false},
@@ -428,7 +429,7 @@ const props = defineProps({
   version: {type: String, default: ''}
 })
 
-const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask', 'switchWorkspace', 'manageWorkspaces', 'manageModels'])
+const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask', 'switchWorkspace', 'manageWorkspaces', 'manageModels', 'sessionActiveChange'])
 const store = useAppStore()
 
 const messagesContainer = ref(null)
@@ -871,6 +872,9 @@ let sessionStatusObservedRunning = false
 const sessionStatusBusy = computed(() => sessionStatusChecking.value || sessionTaskRunning.value)
 const sessionBusy = computed(() => sessionStatusBusy.value)
 
+// 会话执行状态上报：外层布局（桌面端横跨两侧边栏的波动条）据此显隐
+watch([streaming, sessionTaskRunning], ([s, r]) => emit('sessionActiveChange', Boolean(s || r)), { immediate: true })
+
 const isCurrentSessionStatus = (token, workspaceHash, sessionName) =>
   token === sessionStatusToken.value
   && workspaceHash === props.workspaceHash
@@ -903,6 +907,14 @@ const scheduleSessionStatusPoll = (token, workspaceHash, sessionName) => {
 
 const pollSessionStatus = async (token, workspaceHash, sessionName) => {
   if (!isCurrentSessionStatus(token, workspaceHash, sessionName)) return
+  // 前端 SSE 流式运行中不发起自动刷新：此时本地消息即最新事实，
+  // 轮询返回的持久化历史可能滞后（最后一条消息尚未完整落盘），
+  // 整体替换会打断/吞掉正在流式输出的消息（表现为 AI 消息消失）。
+  // 流结束后下一轮轮询自然恢复，后台运行状态感知不受影响。
+  if (store.getSessionStreaming(sessionName)) {
+    scheduleSessionStatusPoll(token, workspaceHash, sessionName)
+    return
+  }
   try {
     const response = await agentAPI.getSessionStatus(workspaceHash, sessionName)
     if (!isCurrentSessionStatus(token, workspaceHash, sessionName)) return

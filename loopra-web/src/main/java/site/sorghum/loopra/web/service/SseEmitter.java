@@ -1,5 +1,6 @@
 package site.sorghum.loopra.web.service;
 
+import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import org.noear.solon.core.handle.Context;
 import site.sorghum.loopra.bin.agent.model.FileChange;
@@ -20,6 +21,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
  *
  * @author Sorghum
  */
+@Slf4j
 public class SseEmitter {
 
     /** 可打印字符的最小边界（ASCII 控制字符截止于 0x1F） */
@@ -90,6 +92,7 @@ public class SseEmitter {
         } catch (Exception e) {
             // IOException 或 RuntimeException（如 OutputStream 已关闭时抛出的 IllegalStateException）
             // 设置completed标志，后续调用直接返回，让Agent继续执行完成
+            log.warn("[sse] 写入事件失败，SSE 连接已断开: event={}, 原因: {}", eventType, e.toString());
             completed.set(true);
             completionFuture.complete(null);
         }
@@ -202,8 +205,8 @@ public class SseEmitter {
             try {
                 out.flush();
                 out.close();
-            } catch (Exception ignored) {
-                // 流可能已关闭，忽略异常
+            } catch (Exception e) {
+                log.debug("[sse] 关闭输出流失败: {}", e.toString());
             }
             completionFuture.complete(null);
         }
