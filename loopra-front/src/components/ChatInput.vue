@@ -402,7 +402,7 @@
         </div>
         <div class="model-actions">
         <!-- 技能指定 -->
-        <div class="skill-selector">
+        <div class="skill-selector hover-reveal">
           <button class="effort-btn" @click="toggleSkillPicker" title="选择技能">
             技能
             <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -436,7 +436,7 @@
           </div>
         </div>
         <!-- 权限切换 -->
-        <div class="permission-hitl-selector">
+        <div class="permission-hitl-selector hover-reveal">
           <div class="reasoning-effort-selector">
             <button class="effort-btn" @click="togglePermissionPicker" :title="'当前权限模式: '+currentPermission">
               {{ permissionLabel }}
@@ -458,7 +458,7 @@
             </div>
           </div>
         </div>
-        <div class="reasoning-effort-selector">
+        <div class="reasoning-effort-selector hover-reveal">
           <button class="effort-btn" @click="toggleEffortPicker" :title="`当前推理强度: ${selectedReasoningEffort.label}`">
             <span class="effort-current-label">{{ selectedReasoningEffort.label }}</span>
             <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3017,6 +3017,19 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   display: flex;
   align-items: center;
   gap: 8px;
+}
+
+/* 技能/权限/思考强度默认隐藏，鼠标进入输入框或聚焦时渐显（模型选择常驻） */
+.model-actions .hover-reveal {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+
+.input-box:hover .model-actions .hover-reveal,
+.input-box:focus-within .model-actions .hover-reveal {
+  opacity: 1;
+  pointer-events: auto;
 }
 
 /* ============= 技能选择器 ============= */

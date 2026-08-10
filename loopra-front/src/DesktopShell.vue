@@ -45,7 +45,10 @@
           @keydown.space.prevent="activateTab(tab.id)"
         >
           <span v-if="workspaceNameOf(tab.workspaceHash)" class="desktop-tab-monogram" :class="badgeTone(workspaceNameOf(tab.workspaceHash))">{{ initial(workspaceNameOf(tab.workspaceHash)) }}</span>
-          <span>{{ tab.title }}</span>
+          <span v-else class="desktop-tab-monogram desktop-tab-monogram-default" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          </span>
+          <span class="desktop-tab-title">{{ tab.title }}</span>
           <div class="desktop-tab-actions">
             <button class="desktop-tab-reload" type="button" :aria-label="`刷新 ${tab.title}`" title="刷新会话" @click.stop="reloadTab(tab.id)">
               <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
@@ -1074,11 +1077,11 @@ onBeforeUnmount(() => {
 .desktop-tab.dragging { opacity: 0.55; }
 .desktop-tab.drag-over { background: var(--bg-3, #f3f4f6); box-shadow: inset 0 0 0 1px var(--border, #d6dae1); }
 .desktop-tabs::-webkit-scrollbar { display: none; }
-.desktop-tab { display: inline-flex; align-items: center; gap: 7px; width: clamp(156px, 16vw, 230px); height: 30px; padding: 0 10px; border-radius: 6px; cursor: pointer; flex: 0 0 auto; text-align: left; }
+.desktop-tab { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px; border-radius: 6px; cursor: pointer; flex: 0 1 16vw; min-width: 96px; max-width: 230px; text-align: left; container-type: inline-size; }
 .desktop-tab:hover { background: var(--bg-3, #f3f4f6); color: var(--fg, #202124); }
 .desktop-tab.active { background: var(--bg-3, #f1f2f4); color: var(--fg, #202124); }
-.desktop-tab.active > span:not(.desktop-tab-monogram) { font-weight: 500; }
-.desktop-tab > span:not(.desktop-tab-monogram) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; font-size: 14px; font-weight: 400; }
+.desktop-tab.active .desktop-tab-title { font-weight: 500; }
+.desktop-tab-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 400; }
 .desktop-tab-actions { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
 .desktop-tab-reload, .desktop-tab-close { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border: 0; border-radius: 4px; background: transparent; color: inherit; cursor: pointer; }
 .desktop-tab-reload { display: none; }
@@ -1095,6 +1098,17 @@ onBeforeUnmount(() => {
 .desktop-tab-monogram.tone-5 { background: linear-gradient(135deg, #f87fb5, #e85a9c); }
 .desktop-tab-monogram.tone-6 { background: linear-gradient(135deg, #fcd34d, #f5b800); }
 .desktop-tab-monogram.tone-7 { background: linear-gradient(135deg, #4dd9a6, #20c084); }
+.desktop-tab-monogram-default { background: var(--bg-3, #f3f4f6); color: var(--fg-3, #9ca3af); box-shadow: none; text-shadow: none; }
+.desktop-tab-monogram-default svg { width: 12px; height: 12px; }
+
+/* 会话标签分级收缩：会话变多时标签自动变窄，最窄仅保留 图标 + 两字标题 + 关闭按钮 */
+/* 注意：@container 内不能修改容器自身影响 content-box 的属性（padding/gap 会被 Chromium 忽略），只能作用于子元素 */
+@container (max-width: 149px) {
+  .desktop-tab-reload { display: none !important; }
+}
+@container (max-width: 99px) {
+  .desktop-tab-title { flex: 0 1 auto; max-width: 2em; }
+}
 .desktop-tab-add { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 5px; flex: 0 0 auto; cursor: pointer; }
 .desktop-window-controls { height: 100%; display: flex; align-items: center; padding-right: 14px; flex: 0 0 auto; -webkit-app-region: no-drag; }
 .window-button { width: 44px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 5px; }
