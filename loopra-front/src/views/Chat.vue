@@ -36,7 +36,16 @@
       <!-- 空状态：无会话或新建的空会话 -->
       <div v-if="!props.sessionName || messages.length === 0" class="empty welcome-screen">
         <section class="welcome-panel">
-          <h1 class="welcome-heading">{{ welcomeGreeting }}</h1>
+          <h1 class="welcome-heading" aria-label="Loopra">
+            <svg viewBox="0 0 174 42" preserveAspectRatio="none" aria-hidden="true">
+              <path d="M0 6H6V30H24V36H0V6Z"/>
+              <path fill-rule="evenodd" d="M30 6H54V36H30V6ZM36 12V30H48V12H36Z"/>
+              <path fill-rule="evenodd" d="M60 6H84V36H60V6ZM66 12V30H78V12H66Z"/>
+              <path fill-rule="evenodd" d="M90 6H114V36H96V42H90V6ZM96 12V30H108V12H96Z"/>
+              <path d="M120 6H126V12H132V6H144V12H132V18H126V36H120V6Z"/>
+              <path d="M156 6H174V36H150V18H168V12H156V18H150V12H156V6ZM156 24V30H168V24H156Z" fill-rule="evenodd"/>
+            </svg>
+          </h1>
           <div class="welcome-composer" :class="{ 'workspace-menu-open': welcomeWorkspaceMenuOpen }">
             <div class="welcome-workspace-row">
               <button class="welcome-workspace-button" type="button" @click="toggleWelcomeWorkspace">
@@ -443,24 +452,6 @@ const welcomeModelMenuOpen = ref(false)
 const welcomePermissionSelector = ref(null)
 const welcomeEffortSelector = ref(null)
 const welcomeSkillSelector = ref(null)
-
-const welcomeGreeting = computed(() => {
-  const hour = new Date().getHours()
-  const period = hour < 5 ? '凌晨好' : hour < 8 ? '早晨好' : hour < 12 ? '上午好' : hour < 14 ? '中午好' : hour < 18 ? '下午好' : hour < 22 ? '晚间好' : '深夜好'
-  const prompts = [
-    '有什么想让我帮忙的吗？',
-    '想先从哪件事开始？',
-    '今天准备推进什么？',
-    '有什么问题需要一起解决？',
-    '把接下来的任务交给我吧。',
-    '需要我帮你梳理一下思路吗？',
-    '想先查看项目的哪个部分？',
-    '有什么任务需要我协助完成？',
-    '准备好开始下一项工作了吗？',
-    '现在最想解决的问题是什么？'
-  ]
-  return `${period}，${prompts[Math.floor(Math.random() * prompts.length)]}`
-})
 
 const selectedWelcomeWorkspace = computed(() =>
   props.workspaces.find(workspace => workspace.hash === welcomeWorkspaceHash.value)
@@ -3468,13 +3459,21 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 }
 
 .welcome-heading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  height: 168px;
   margin: 0 0 54px;
-  color: #29292d;
-  font-size: 36px;
-  font-weight: 500;
-  line-height: 1.25;
-  letter-spacing: 0;
-  text-align: center;
+  color: #f0f0f1;
+  line-height: 0;
+}
+
+.welcome-heading svg {
+  display: block;
+  width: 92%;
+  height: 154px;
+  fill: currentColor;
 }
 
 .welcome-composer {
@@ -3790,7 +3789,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 
 .welcome-send-button:disabled { cursor: not-allowed; opacity: 0.42; }
 
-[data-theme="dark"] .welcome-heading { color: var(--fg); }
+[data-theme="dark"] .welcome-heading { color: #29292d; }
 [data-theme="dark"] .welcome-composer { background: var(--bg); }
 [data-theme="dark"] .welcome-workspace-button:hover,
 [data-theme="dark"] .welcome-workspace-button:focus-visible { background: var(--bg-hover); }
@@ -3803,13 +3802,15 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 @media (max-width: 768px) {
   .welcome-screen { padding: 24px 8px 84px; }
   .welcome-panel { transform: translateY(16px); }
-  .welcome-heading { margin-bottom: 28px; font-size: 28px; }
+  .welcome-heading { height: 112px; margin-bottom: 28px; }
+  .welcome-heading svg { height: 103px; }
   .welcome-composer-options { gap: 10px; }
   .welcome-model-button { max-width: 130px; }
 }
 
 @media (max-width: 520px) {
-  .welcome-heading { font-size: 24px; }
+  .welcome-heading { height: 88px; }
+  .welcome-heading svg { height: 81px; }
   .welcome-composer-footer { align-items: flex-end; gap: 10px; }
   .welcome-composer-options { flex-direction: column; align-items: flex-start; gap: 4px; }
   .welcome-model-button { max-width: 94px; }
