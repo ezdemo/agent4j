@@ -3774,9 +3774,9 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 .welcome-send-button:disabled { cursor: not-allowed; opacity: 0.42; }
 
 [data-theme="dark"] .welcome-heading { color: var(--fg); }
-[data-theme="dark"] .welcome-composer { background: #202020; }
+[data-theme="dark"] .welcome-composer { background: var(--bg); }
 [data-theme="dark"] .welcome-workspace-button:hover,
-[data-theme="dark"] .welcome-workspace-button:focus-visible { background: #2b2b2b; }
+[data-theme="dark"] .welcome-workspace-button:focus-visible { background: var(--bg-hover); }
 [data-theme="dark"] .welcome-composer textarea,
 [data-theme="dark"] .welcome-composer-footer {
   border-color: #303030;
