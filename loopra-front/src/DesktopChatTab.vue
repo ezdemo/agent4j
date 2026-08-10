@@ -38,6 +38,7 @@
       @switch-workspace="switchWorkspace"
       @session-updated="refreshTabTitle"
       @session-active-change="sessionActive = $event"
+      @welcome-change="onWelcomeChange"
       @manage-workspaces="requestHome"
       @manage-models="requestModelSettings"
     />
@@ -166,6 +167,11 @@ async function loadSessions() {
 
 async function addFileToSession(payload) {
   await chatRef.value?.appendFileSelection(payload)
+}
+
+// 欢迎页不展示左侧文件栏；进入会话自动展开（仅状态切换时生效，不覆盖用户手动开关）
+function onWelcomeChange(active) {
+  leftPanelOpen.value = !active
 }
 
 async function addElementInspectionToSession(payload) {

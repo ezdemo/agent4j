@@ -429,7 +429,7 @@ const props = defineProps({
   version: {type: String, default: ''}
 })
 
-const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask', 'switchWorkspace', 'manageWorkspaces', 'manageModels', 'sessionActiveChange'])
+const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask', 'switchWorkspace', 'manageWorkspaces', 'manageModels', 'sessionActiveChange', 'welcomeChange'])
 const store = useAppStore()
 
 const messagesContainer = ref(null)
@@ -874,6 +874,10 @@ const sessionBusy = computed(() => sessionStatusBusy.value)
 
 // 会话执行状态上报：外层布局（桌面端横跨两侧边栏的波动条）据此显隐
 watch([streaming, sessionTaskRunning], ([s, r]) => emit('sessionActiveChange', Boolean(s || r)), { immediate: true })
+
+// 欢迎页（无会话或空会话）状态上报：外层布局据此收起左侧文件栏
+const welcomeActive = computed(() => !props.sessionName || messages.value.length === 0)
+watch(welcomeActive, (active) => emit('welcomeChange', active), { immediate: true })
 
 const isCurrentSessionStatus = (token, workspaceHash, sessionName) =>
   token === sessionStatusToken.value
