@@ -26,22 +26,25 @@
       </div>
       <FilePanel ref="fileRef" :workspace-hash="workspaceHash" @add-to-session="addFileToSession" />
     </aside>
-    <ChatView
-      ref="chatRef"
-      class="desktop-chat-view"
-      hide-header
-      :streaming-bar-hidden="true"
-      :workspace-hash="workspaceHash"
-      :session-name="sessionName"
-      :right-panel-open="rightPanelOpen"
-      :workspaces="workspaces"
-      @switch-workspace="switchWorkspace"
-      @session-updated="refreshTabTitle"
-      @session-active-change="sessionActive = $event"
-      @welcome-change="onWelcomeChange"
-      @manage-workspaces="requestHome"
-      @manage-models="requestModelSettings"
-    />
+    <div class="desktop-chat-area">
+      <ChatView
+        ref="chatRef"
+        class="desktop-chat-view"
+        hide-header
+        :streaming-bar-hidden="true"
+        :workspace-hash="workspaceHash"
+        :session-name="sessionName"
+        :right-panel-open="rightPanelOpen"
+        :workspaces="workspaces"
+        @switch-workspace="switchWorkspace"
+        @session-updated="refreshTabTitle"
+        @session-active-change="sessionActive = $event"
+        @welcome-change="onWelcomeChange"
+        @manage-workspaces="requestHome"
+        @manage-models="requestModelSettings"
+      />
+      <TerminalView :open="showTerminal" :cwd="activeWorkspacePath" :theme="theme" @close="showTerminal = false" />
+    </div>
     <RightPanel
       :open="rightPanelOpen"
       v-model="rightPanelTab"
@@ -63,6 +66,7 @@ import {configAPI, sessionsAPI} from './services/api'
 import ChatView from './views/Chat.vue'
 import FilePanel from './components/FilePanel.vue'
 import RightPanel from './components/RightPanel.vue'
+import TerminalView from './components/TerminalView.vue'
 
 const params = new URLSearchParams(window.location.search)
 const sessionName = params.get('sessionName') || ''
@@ -76,11 +80,18 @@ const chatRef = ref(null)
 const fileRef = ref(null)
 const rightPanelOpen = ref(false)
 const leftPanelOpen = ref(true)
+const showTerminal = ref(false)
 const sessionActive = ref(false)
 const rightPanelTab = ref('git')
+// 终端初始工作目录 = 当前工作区路径（终端面板与当前会话绑定）
+const activeWorkspacePath = computed(() => {
+  const workspace = workspaces.value.find((item) => item.hash === workspaceHash.value)
+  return workspace?.path || ''
+})
 const tabId = `${workspaceHash.value || ''}:${sessionName}`
 let stopLeftPanelListener = null
 let stopRightPanelListener = null
+let stopTerminalListener = null
 let stopThemeListener = null
 let stopElementInspectionListener = null
 let stopRefreshHistoryListener = null
@@ -100,6 +111,9 @@ onMounted(async () => {
   })
   stopRightPanelListener = window.electronAPI?.events?.listen('desktop-chat-tab-toggle-right-panel', () => {
     rightPanelOpen.value = !rightPanelOpen.value
+  })
+  stopTerminalListener = window.electronAPI?.events?.listen('desktop-chat-tab-toggle-terminal', () => {
+    showTerminal.value = !showTerminal.value
   })
   stopThemeListener = window.electronAPI?.events?.listen('desktop-chat-tab-theme', (nextTheme) => {
     pageTheme.value = nextTheme === 'dark' ? 'dark' : 'gray'
@@ -191,6 +205,7 @@ function requestModelSettings() {
 onBeforeUnmount(() => {
   stopLeftPanelListener?.()
   stopRightPanelListener?.()
+  stopTerminalListener?.()
   stopThemeListener?.()
   stopElementInspectionListener?.()
   stopRefreshHistoryListener?.()
@@ -235,12 +250,13 @@ watch(workspaceHash, (hash) => {
   width: 40%;
   background: linear-gradient(90deg, transparent, var(--accent), transparent);
   border-radius: 1px;
+  will-change: transform;
   animation: desktop-streaming-slide 1.4s ease-in-out infinite;
 }
 
 @keyframes desktop-streaming-slide {
-  0% { left: -40%; }
-  100% { left: 100%; }
+  0% { transform: translate3d(-100%, 0, 0); }
+  100% { transform: translate3d(250%, 0, 0); }
 }
 
 .desktop-files-left {
@@ -317,8 +333,17 @@ watch(workspaceHash, (hash) => {
   min-height: 0;
 }
 
+.desktop-chat-area {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
 .desktop-chat-view {
   flex: 1;
+  min-height: 0;
   min-width: 0;
 }
 [data-theme="dark"] .desktop-files-left {

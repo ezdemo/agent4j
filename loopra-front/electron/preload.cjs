@@ -131,12 +131,31 @@ contextBridge.exposeInMainWorld('electronAPI', {
     reload: (tabId) => ipcRenderer.invoke('desktop-chat-tab-reload', tabId),
     toggleLeftPanel: (tabId) => ipcRenderer.invoke('desktop-chat-tab-toggle-left-panel', tabId),
     toggleRightPanel: (tabId) => ipcRenderer.invoke('desktop-chat-tab-toggle-right-panel', tabId),
+    toggleTerminal: (tabId) => ipcRenderer.invoke('desktop-chat-tab-toggle-terminal', tabId),
     setTheme: (theme) => ipcRenderer.invoke('desktop-chat-tab-set-theme', theme),
     openHome: () => ipcRenderer.send('desktop-chat-tab-open-home'),
     openModelChannels: () => ipcRenderer.send('desktop-chat-tab-open-model-channels'),
     sendCommand: (tabId, command) => ipcRenderer.invoke('desktop-chat-tab-send-command', tabId, command),
     reportTitle: (payload) => ipcRenderer.send('desktop-chat-tab-report-title', payload),
     reportWorkspace: (payload) => ipcRenderer.send('desktop-chat-tab-report-workspace', payload)
+  },
+
+  // 终端（node-pty + xterm）
+  terminal: {
+    create: (options) => ipcRenderer.invoke('terminal:create', options),
+    input: (payload) => ipcRenderer.send('terminal:input', payload),
+    resize: (payload) => ipcRenderer.send('terminal:resize', payload),
+    kill: (id) => ipcRenderer.invoke('terminal:kill', id),
+    onData: (callback) => {
+      const subscription = (event, payload) => callback(payload)
+      ipcRenderer.on('terminal:data', subscription)
+      return () => ipcRenderer.removeListener('terminal:data', subscription)
+    },
+    onExit: (callback) => {
+      const subscription = (event, payload) => callback(payload)
+      ipcRenderer.on('terminal:exit', subscription)
+      return () => ipcRenderer.removeListener('terminal:exit', subscription)
+    }
   },
 
   // 元素检测（跨域 iframe 穿透）

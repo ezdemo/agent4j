@@ -2677,12 +2677,13 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   width: 40%;
   background: linear-gradient(90deg, transparent, var(--accent), transparent);
   border-radius: 1px;
+  will-change: transform;
   animation: streaming-slide 1.4s ease-in-out infinite;
 }
 
 @keyframes streaming-slide {
-  0% { left: -40%; }
-  100% { left: 100%; }
+  0% { transform: translate3d(-100%, 0, 0); }
+  100% { transform: translate3d(250%, 0, 0); }
 }
 
 /* 消息区 */
