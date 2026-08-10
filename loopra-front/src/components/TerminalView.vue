@@ -35,7 +35,7 @@
         aria-label="收起终端面板"
         @click="$emit('close')"
       >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="m6 6 12 12M18 6 6 18"/></svg>
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
       </button>
     </header>
     <div v-if="unsupported" class="terminal-panel-unsupported">终端仅在桌面端可用</div>
@@ -80,39 +80,85 @@ let nextTerminalNo = 1
 let dataUnsubscribe = null
 let exitUnsubscribe = null
 let resizeObserver = null
+let themeObserver = null
 
-// xterm 主题：跟随应用主题（dark / gray），ANSI 色板浅色化保证亮色模式下文字可读
+// xterm 主题：跟随应用主题（dark / gray）
+// 注意：xterm 6 的 _setTheme 只读取命名键（black/red/.../brightWhite），不读 ansi 数组
 const THEMES = {
   dark: {
     background: '#1e1e1e',
     foreground: '#cccccc',
     cursor: '#aeafad',
     selectionBackground: '#264f78',
-    ansi: [
-      '#000000', '#cd3131', '#0dbc79', '#e5e510', '#2472c8', '#bc3fbc', '#11a8cd', '#e5e5e5',
-      '#666666', '#f14c4c', '#23d18b', '#f5f543', '#3b8eea', '#d670d6', '#29b8db', '#e5e5e5'
-    ]
+    black: '#000000',
+    red: '#cd3131',
+    green: '#0dbc79',
+    yellow: '#e5e510',
+    blue: '#2472c8',
+    magenta: '#bc3fbc',
+    cyan: '#11a8cd',
+    white: '#e5e5e5',
+    brightBlack: '#666666',
+    brightRed: '#f14c4c',
+    brightGreen: '#23d18b',
+    brightYellow: '#f5f543',
+    brightBlue: '#3b8eea',
+    brightMagenta: '#d670d6',
+    brightCyan: '#29b8db',
+    brightWhite: '#e5e5e5'
   },
   gray: {
     background: '#ffffff',
     foreground: '#333333',
     cursor: '#333333',
     selectionBackground: '#add6ff',
-    // VS Code Light+ 风格：黄色系加深（index 3/11），避免白色背景上看不清
-    ansi: [
-      '#000000', '#cd3131', '#00bc00', '#949800', '#0451a5', '#bc05bc', '#0598bc', '#555555',
-      '#666666', '#cd3131', '#14ce14', '#b5ba00', '#0451a5', '#bc05bc', '#0598bc', '#a5a5a5'
-    ]
+    // VS Code Light+ 风格：黄色系加深（yellow/brightYellow），避免白色背景上看不清
+    black: '#000000',
+    red: '#cd3131',
+    green: '#00bc00',
+    yellow: '#949800',
+    blue: '#0451a5',
+    magenta: '#bc05bc',
+    cyan: '#0598bc',
+    white: '#555555',
+    brightBlack: '#666666',
+    brightRed: '#cd3131',
+    brightGreen: '#14ce14',
+    brightYellow: '#b5ba00',
+    brightBlue: '#0451a5',
+    brightMagenta: '#bc05bc',
+    brightCyan: '#0598bc',
+    brightWhite: '#a5a5a5'
   }
 }
 
-// 主题：优先用宿主页面传入的主题，未传时回退到全局 store（独立使用场景）
-const activeTheme = computed(() => props.theme || store.settings.theme)
+// 主题源：页面 DOM data-theme 为权威（实际渲染主题），未设置时兑底 props → store
+function readTheme() {
+  const domTheme = document.documentElement.getAttribute('data-theme')
+  if (domTheme === 'dark' || domTheme === 'gray') return domTheme
+  return props.theme || store.settings.theme
+}
 
+const activeTheme = ref(readTheme())
 const currentTheme = () => THEMES[activeTheme.value] || THEMES.gray
 
 // xterm 容器背景跟随主题，保证留白区域与终端底色无缝衔接
 const terminalThemeClass = computed(() => (activeTheme.value === 'dark' ? 'theme-dark' : 'theme-gray'))
+
+// 同步主题到所有终端：options 赋值（xterm 6 已移除 setOption）+ 强制重绘
+function syncTheme() {
+  activeTheme.value = readTheme()
+  const theme = currentTheme()
+  for (const state of tabState.values()) {
+    if (!state.term) continue
+    try {
+      state.term.options = { theme }
+      state.term.refresh(0, state.term.rows - 1)
+    } catch (error) {
+      console.warn('[terminal] 主题同步失败:', error)
+    }
+  }
+}
 
 const activePid = computed(() => {
   const tab = terminals.value.find((item) => item.id === activeId.value)
@@ -178,17 +224,31 @@ function fitTab(tabId) {
   const tab = findTab(tabId)
   const state = tabState.get(tabId)
   if (!tab || !state || !state.term || !state.ptyId) return
+  const hostEl = slotEls.get(tabId)
+  // 收起/隐藏状态（高度不足）不调整：避免 xterm 被 resize 到极小导致 buffer 重排、滚动位置错乱
+  if (!hostEl || hostEl.clientHeight < 40) return
   try {
+    // fit 前记录视口位置，resize 后恢复，保证收起再展开时内容位置不变
+    const buffer = state.term.buffer.active
+    const prevViewportY = buffer.viewportY
     state.fitAddon.fit()
     window.electronAPI.terminal.resize({ id: state.ptyId, cols: state.term.cols, rows: state.term.rows })
+    if (prevViewportY > 0 && buffer.viewportY !== prevViewportY) {
+      state.term.scrollToLine(Math.min(prevViewportY, buffer.length - state.term.rows))
+    }
   } catch (error) {
     // 容器不可见时 fit 可能失败，等待 ResizeObserver 下次触发
   }
 }
 
 // 只对当前激活的终端做尺寸同步（其余标签处于隐藏状态）
+// 防抖：面板展开/收起动画期间多次触发，合并为动画结束后的最后一次 fit
+let fitTimer = null
 function fitActive() {
-  if (activeId.value) fitTab(activeId.value)
+  clearTimeout(fitTimer)
+  fitTimer = setTimeout(() => {
+    if (activeId.value) fitTab(activeId.value)
+  }, 120)
 }
 
 // 新建一个终端标签：创建 xterm + PTY（工作目录 = 当前工作区路径）
@@ -280,6 +340,11 @@ onMounted(() => {
 
   resizeObserver = new ResizeObserver(fitActive)
   resizeObserver.observe(document.querySelector('.terminal-panel-body') || document.body)
+
+  // DOM data-theme 变化兜底：宿主 props 链路失效时仍能同步主题
+  themeObserver = new MutationObserver(syncTheme)
+  themeObserver.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+  syncTheme()
 })
 
 // 面板首次展开时自动创建首个终端（此时工作区已加载，cwd 有效）；收起/再展开不销毁
@@ -292,8 +357,12 @@ watch(
 )
 
 onUnmounted(() => {
+  clearTimeout(fitTimer)
+  fitTimer = null
   resizeObserver?.disconnect()
   resizeObserver = null
+  themeObserver?.disconnect()
+  themeObserver = null
   // 关闭所有终端（标签会话销毁时清空 PTY）
   for (const state of tabState.values()) {
     if (state.ptyId && window.electronAPI?.terminal) {
@@ -307,15 +376,9 @@ onUnmounted(() => {
   exitUnsubscribe?.()
 })
 
-// 主题切换时同步所有 xterm 配色
-watch(
-  activeTheme,
-  () => {
-    for (const state of tabState.values()) {
-      state.term?.setOption('theme', currentTheme())
-    }
-  }
-)
+// 主题切换时同步所有 xterm 配色（props / store / DOM 三源都会触发）
+watch(() => props.theme, syncTheme)
+watch(() => store.settings.theme, syncTheme)
 </script>
 
 <style scoped>
@@ -331,16 +394,17 @@ watch(
 .terminal-panel.open {
   height: 187px;
 }
-/* 拖拽手柄：面板顶部细条，上下拖动调整高度 */
+/* 拖拽手柄：面板顶部细条，上下拖动调整高度（纤细 + 主题自适应） */
 .terminal-resize-handle {
-  height: 5px;
+  height: 3.5px;
   flex: 0 0 auto;
   cursor: ns-resize;
   background: transparent;
 }
 .terminal-resize-handle:hover,
 .terminal-resize-handle.dragging {
-  background: var(--accent, rgba(59, 130, 246, 0.35));
+  background: rgba(82, 82, 91, 0.25);
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 .terminal-panel-header {
   height: 34px;
