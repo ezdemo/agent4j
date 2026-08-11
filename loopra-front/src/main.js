@@ -2,40 +2,43 @@ import {createApp} from 'vue'
 import {createPinia} from 'pinia'
 import 'ant-design-vue/dist/reset.css'
 import 'katex/dist/katex.min.css' // 数学公式渲染样式（含字体）
-import App from './App.vue'
-import DesktopShell from './DesktopShell.vue'
-import DesktopSplash from './DesktopSplash.vue'
-import DesktopUpdate from './DesktopUpdate.vue'
-import DesktopChatTab from './DesktopChatTab.vue'
-import DesktopPet from './DesktopPet.vue'
-import RequirementBoard from './views/RequirementBoard.vue'
-import router from './router'
 import './utils/hljsTheme' // 高亮主题（在 main.css 前加载，避免闪烁）
 import './assets/styles/main.css'
-import {initConfig} from './services/api'
+
+const resolveRootComponent = (page) => {
+  if (page.get('desktopShell') === '1') return () => import('./DesktopShell.vue')
+  if (page.get('desktopSplash') === '1') return () => import('./DesktopSplash.vue')
+  if (page.get('desktopUpdate') === '1') return () => import('./DesktopUpdate.vue')
+  if (page.get('desktopChatTab') === '1') return () => import('./DesktopChatTab.vue')
+  if (page.get('desktopPet') === '1') return () => import('./DesktopPet.vue')
+  if (page.get('requirementBoard') === '1') return () => import('./views/RequirementBoard.vue')
+  return () => import('./App.vue')
+}
 
 // 初始化应用
 const initApp = async () => {
-  // 优先从 public/config.json 加载运行时配置
-  await initConfig()
-
-  // 创建应用实例
   const page = new URLSearchParams(window.location.search)
-  const RootComponent = page.get('desktopShell') === '1'
-    ? DesktopShell
-    : (page.get('desktopSplash') === '1' ? DesktopSplash
-      : (page.get('desktopUpdate') === '1' ? DesktopUpdate
-        : (page.get('desktopChatTab') === '1' ? DesktopChatTab
-          : (page.get('desktopPet') === '1' ? DesktopPet
-            : (page.get('requirementBoard') === '1' ? RequirementBoard : App)))))
-  const app = createApp(RootComponent)
+  const desktopChatTab = page.get('desktopChatTab') === '1'
+  const webApp = ![...page.keys()].some((key) => [
+    'desktopShell', 'desktopSplash', 'desktopUpdate', 'desktopChatTab', 'desktopPet', 'requirementBoard'
+  ].includes(key) && page.get(key) === '1')
+
+  // 根页面代码与运行时配置并行加载，避免每个桌面子窗口加载无关页面。
+  const [rootModule] = await Promise.all([
+    resolveRootComponent(page)(),
+    import('./services/api').then(({initConfig}) => initConfig())
+  ])
+  const app = createApp(rootModule.default)
 
   // 添加 Pinia 状态管理
   const pinia = createPinia()
   app.use(pinia)
 
-  // 添加路由
-  app.use(router)
+  // 只有 Web 主应用使用路由，桌面子窗口均由查询参数决定根页面。
+  if (webApp) {
+    const {default: router} = await import('./router')
+    app.use(router)
+  }
 
   // Pinia 初始化后，执行 store 的 initialize
   const { useAppStore } = await import('./stores/app')
@@ -61,15 +64,19 @@ const initApp = async () => {
   // 挂载应用
   app.mount('#app')
 
-  // 移除加载动画
+  // 桌面聊天标签优先展示可交互首屏；其他窗口保留原加载动画。
   const loader = document.getElementById('app-loader')
   if (loader) {
-    setTimeout(() => {
-      loader.style.opacity = '0'
+    if (desktopChatTab) {
+      requestAnimationFrame(() => loader.remove())
+    } else {
       setTimeout(() => {
-        loader.remove()
-      }, 300)
-    }, 500)
+        loader.style.opacity = '0'
+        setTimeout(() => {
+          loader.remove()
+        }, 300)
+      }, 500)
+    }
   }
 
   console.log('Loopra v' + app.config.globalProperties.$version + ' 已启动')

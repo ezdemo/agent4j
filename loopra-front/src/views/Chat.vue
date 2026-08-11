@@ -72,6 +72,7 @@
               </div>
             </div>
             <ChatInput ref="welcomeInput" welcome-mode v-model:input-text="welcomeText" :usage="usage" :current-model="currentModel" :default-model="defaultModel" :default-model-channel-id="defaultModelChannelId" :setting-default-model="settingDefaultModel" :available-models="availableModels"
+                       :initially-empty="props.initiallyEmpty"
                        :current-reasoning-effort="currentReasoningEffort" :terminate-on-no-tool-call="terminateOnNoToolCall" :current-permission="currentPermission"
                        :workspace-hash="welcomeWorkspaceHash" :session-name="props.sessionName" :plan-mode="planMode"
                        :session-running="sessionTaskRunning" :session-busy="sessionBusy" :session-status-stopping="sessionStatusStopping"
@@ -222,6 +223,7 @@
         :terminateOnNoToolCall="terminateOnNoToolCall"
         :workspaceHash="props.workspaceHash"
         :sessionName="props.sessionName"
+        :initially-empty="props.initiallyEmpty"
         :rightPanelOpen="props.rightPanelOpen"
         :hasHistory="hasHistory"
         :version="props.version"
@@ -308,17 +310,18 @@
 </template>
 
 <script setup>
-import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect} from 'vue'
+import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch, watchEffect} from 'vue'
 import {message} from 'ant-design-vue'
 import {CheckOutlined, CloseOutlined, FileTextOutlined} from '@ant-design/icons-vue'
 import {agentAPI, chatAPI, configAPI, gitAPI, sessionsAPI, snapshotAPI} from '../services/api'
-import {md} from '../utils/highlight'
+import {basicMarkdown} from '../utils/basicMarkdown'
 import {sanitize} from '../utils/sanitize'
 import {getAssistantTurnBoundaries} from '../utils/sessionBranch'
 import ChatInput from '../components/ChatInput.vue'
-import ChatMessage from '../components/ChatMessage.vue'
-import DiffViewer from '../components/DiffViewer.vue'
 import ActionConfirmDialog from '../components/ActionConfirmDialog.vue'
+
+const ChatMessage = defineAsyncComponent(() => import('../components/ChatMessage.vue'))
+const DiffViewer = defineAsyncComponent(() => import('../components/DiffViewer.vue'))
 
 import {useAppStore} from '../stores/app'
 
@@ -433,6 +436,7 @@ const props = defineProps({
   streamingBarHidden: {type: Boolean, default: false},
   workspaceHash: {type: String, default: null},
   sessionName: {type: String, default: null},
+  initiallyEmpty: {type: Boolean, default: false},
   rightPanelOpen: {type: Boolean, default: false},
   workspaces: {type: Array, default: () => []},
   version: {type: String, default: ''}
@@ -860,6 +864,7 @@ const sessionStatusRequestId = ref(null)
 const sessionStatusToken = ref(0)
 let sessionStatusTimer = null
 let sessionStatusObservedRunning = false
+let sessionStatusPollingStarted = false
 const sessionStatusBusy = computed(() => sessionStatusChecking.value || sessionTaskRunning.value)
 const sessionBusy = computed(() => sessionStatusBusy.value)
 
@@ -890,6 +895,7 @@ const resetSessionStatus = () => {
   sessionStatusStopping.value = false
   sessionStatusRequestId.value = null
   sessionStatusObservedRunning = false
+  sessionStatusPollingStarted = false
 }
 
 const scheduleSessionStatusPoll = (token, workspaceHash, sessionName) => {
@@ -941,6 +947,7 @@ const pollSessionStatus = async (token, workspaceHash, sessionName) => {
 const startSessionStatusPolling = (workspaceHash = props.workspaceHash, sessionName = props.sessionName) => {
   resetSessionStatus()
   if (!workspaceHash || !sessionName) return
+  sessionStatusPollingStarted = true
   const token = sessionStatusToken.value
   sessionStatusChecking.value = true
   void pollSessionStatus(token, workspaceHash, sessionName)
@@ -1007,7 +1014,7 @@ const loadUsage = async (override) => {
     if (sessName) params.sessionName = sessName
 
     const [usageRes, modelsRes, configRes] = await Promise.allSettled([
-      wsHash ? configAPI.getUsage(params) : Promise.resolve(null),
+      wsHash && !override?.skipSessionUsage ? configAPI.getUsage(params) : Promise.resolve(null),
       configAPI.getModels(),
       configAPI.getConfig()
     ])
@@ -1098,8 +1105,8 @@ const syncPlanMode = async () => {
 }
 
 onMounted(() => {
-  loadUsage()
-  startSessionStatusPolling()
+  loadUsage(props.initiallyEmpty ? {skipSessionUsage: true} : undefined)
+  if (!props.initiallyEmpty) startSessionStatusPolling()
   window.addEventListener('keydown', handleImagePreviewKeydown)
   window.addEventListener('resize', updateVirtualViewport)
   // 监听复制成功事件
@@ -1251,20 +1258,15 @@ window.copyCode = (btn) => {
   })
 }
 
-// 使用共享 marked 实例（语法高亮 + 复制按钮已内置）
-const fmt = c => {
-  if (!c) return ''
-  return md.parse(c)
-}
-
+// 系统提示词和计划预览不需要代码高亮，避免空会话加载完整 highlight.js。
 const fmtPrompt = c => {
   if (!c) return ''
-  return sanitize(md.parse(c))
+  return sanitize(basicMarkdown.parse(c))
 }
 
 const fmtPlan = c => {
   if (!c) return ''
-  return sanitize(md.parse(c))
+  return sanitize(basicMarkdown.parse(c))
 }
 
 // 复制整条消息内容
@@ -1496,6 +1498,9 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
   await scroll(true)  // 用户刚发送，强制滚到底
 
   store.setSessionStreaming(sessionName, true)
+  if (!sessionStatusPollingStarted && sessionName === props.sessionName) {
+    startSessionStatusPolling(targetWorkspaceHash, sessionName)
+  }
 
   // 使用唯一 ID 追踪当前 assistant 消息
   const assistantId = Date.now() + 1
@@ -2332,8 +2337,12 @@ const appendElementInspection = async (inspection) => {
 onMounted(() => {
   document.addEventListener('click', handleWelcomeOutsideClick)
   if (props.sessionName) {
-    void loadHistory().finally(focusComposer)
-    void syncPlanMode()
+    if (!props.initiallyEmpty) {
+      void loadHistory().finally(focusComposer)
+      void syncPlanMode()
+    } else {
+      void focusComposer()
+    }
   } else {
     void focusComposer()
   }

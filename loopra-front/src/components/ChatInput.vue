@@ -595,6 +595,7 @@ const props = defineProps({
   availableModels: {type: Array, default: () => []},
   workspaceHash: {type: String, default: null},
   sessionName: {type: String, default: null},
+  initiallyEmpty: {type: Boolean, default: false},
   hasHistory: {type: Boolean, default: false},
   currentReasoningEffort: {type: String, default: 'max'},
   terminateOnNoToolCall: {type: Boolean, default: true},
@@ -612,6 +613,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'setDefaultModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission', 'pickerOpen', 'manageModels', 'removeQueued', 'guideQueued', 'togglePlan'])
+const appStore = useAppStore()
+const sessionInitialized = ref(!props.initiallyEmpty)
 
 const inputField = ref(null)
 const inputFocused = ref(false)
@@ -663,7 +666,10 @@ const persistQuickCommands = async () => {
 
 const toggleQuickCommandPicker = () => {
   const nextOpen = !showQuickCommandPicker.value
-  if (nextOpen) closePickers('quick')
+  if (nextOpen) {
+    closePickers('quick')
+    if (quickCommands.value.length === 0) void loadPromptPresets()
+  }
   showQuickCommandPicker.value = nextOpen
   if (!nextOpen) closeQuickCommandEditor()
 }
@@ -1481,7 +1487,7 @@ const workflowHover = ref(false)
 let clRefreshTimer = null
 
 const loadChecklist = async () => {
-  if (!props.workspaceHash || !props.sessionName) {
+  if (!sessionInitialized.value || !props.workspaceHash || !props.sessionName) {
     clData.value = null
     return
   }
@@ -1515,7 +1521,7 @@ const goalHover = ref(false)
 let goalRefreshTimer = null
 
 const loadGoal = async () => {
-  if (!props.workspaceHash || !props.sessionName) {
+  if (!sessionInitialized.value || !props.workspaceHash || !props.sessionName) {
     goalData.value = null
     return
   }
@@ -1556,6 +1562,7 @@ watch([() => props.workspaceHash, () => props.sessionName], () => {
 
 watch(() => props.streaming, (streaming, wasStreaming) => {
   if (streaming) {
+    sessionInitialized.value = true
     loadChecklist()
     startChecklistPolling()
     loadGoal()
@@ -1711,8 +1718,6 @@ const compositionItems = computed(() => {
 })
 
 onMounted(() => {
-  loadCommands();
-  loadPromptPresets();
   document.addEventListener('click', handleOutside)
   window.addEventListener('blur', rememberInputFocus)
   window.addEventListener('focus', restoreInputFocus)
@@ -1759,12 +1764,11 @@ async function loadPet() {
     }
   } catch { /* pet 不可用时静默 */ }
 }
-loadPet()
+if (!appStore.isDesktopEnv) loadPet()
 
-const appStore = useAppStore()
 // 当其他组件（如设置页）切换宠物时，重新加载
 watch(() => appStore.activePetName, (newName, oldName) => {
-  if (newName && newName !== oldName) {
+  if (!appStore.isDesktopEnv && newName && newName !== oldName) {
     loadPet()
   }
 })

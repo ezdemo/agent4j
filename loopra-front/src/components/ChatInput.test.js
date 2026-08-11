@@ -95,8 +95,10 @@ describe('ChatInput quick commands', () => {
   it('keeps the preset list empty when no presets can be loaded', async () => {
     promptPresetsAPI.list.mockRejectedValueOnce(new Error('offline'))
     const wrapper = mountInput()
-    await flushPromises()
+
+    expect(promptPresetsAPI.list).not.toHaveBeenCalled()
     await wrapper.find('.quick-command-trigger').trigger('click')
+    await flushPromises()
 
     expect(wrapper.find('.quick-command-list').exists()).toBe(false)
     expect(wrapper.find('.quick-command-empty').text()).toBe('还没有常用要求')
@@ -105,8 +107,10 @@ describe('ChatInput quick commands', () => {
 
   it('appends a preset command to the input', async () => {
     const wrapper = mountInput({inputText: '已有内容'})
-    await flushPromises()
+
+    expect(promptPresetsAPI.list).not.toHaveBeenCalled()
     await wrapper.find('.quick-command-trigger').trigger('click')
+    await flushPromises()
     await wrapper.find('.quick-command-copy').trigger('click')
 
     expect(wrapper.find('.input-row textarea').element.value).toBe(

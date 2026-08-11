@@ -125,6 +125,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   desktopChatTabs: {
     create: (tab) => ipcRenderer.invoke('desktop-chat-tab-create', tab),
+    ready: () => ipcRenderer.send('desktop-chat-tab-ready'),
     show: (tabId, bounds) => ipcRenderer.invoke('desktop-chat-tab-show', tabId, bounds),
     hide: () => ipcRenderer.invoke('desktop-chat-tab-hide'),
     close: (tabId) => ipcRenderer.invoke('desktop-chat-tab-close', tabId),
