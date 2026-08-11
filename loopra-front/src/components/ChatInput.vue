@@ -1852,7 +1852,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 /* 背景只覆盖输入区底部 padding（与背景同色）：消息滚到输入框下方时被干净遮住，
    不露出半截；输入框上方保持透明，消息进入输入区时仍可透出 */
 .input-area:not(.welcome-mode) {
-  padding: 14px clamp(16px, 5vw, 72px) 16px;
+  padding: 14px clamp(16px, 2vw, 24px) 16px;
   background: linear-gradient(to top, var(--bg) 16px, transparent 16px);
 }
 
@@ -1997,6 +1997,15 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 .composer-queue-remove:hover {
   color: var(--red);
   background: color-mix(in srgb, var(--red) 10%, transparent);
+}
+
+.input-area:not(.welcome-mode) .input-box,
+.input-area:not(.welcome-mode) .composer-queue {
+  width: 100%;
+  max-width: 1040px;
+  margin-right: auto;
+  margin-left: auto;
+  box-sizing: border-box;
 }
 
 .input-area:not(.welcome-mode) .input-box {
