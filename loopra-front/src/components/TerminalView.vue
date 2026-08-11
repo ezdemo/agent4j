@@ -207,7 +207,7 @@ const activePid = computed(() => {
 // ── 面板尺寸：可拖拽调整（水平=高度 / 垂直=宽度），持久化到 localStorage ──
 const isVertical = () => props.vertical
 const SAVE_KEY = isVertical() ? 'loopra-terminal-width' : 'loopra-terminal-height'
-const DEFAULT_SIZE = isVertical() ? 320 : 187
+const DEFAULT_SIZE = isVertical() ? 650 : 187
 const MIN_SIZE = isVertical() ? 120 : 80
 const MAX_SIZE_RATIO = 0.7
 const savedSize = Number(localStorage.getItem(SAVE_KEY))
@@ -538,7 +538,7 @@ function onDocClick() {
   transition: width 0.22s ease;
 }
 .terminal-panel.vertical.open {
-  width: 320px;
+  width: 650px;
 }
 /* 垂直模式拖拽手柄：面板左边缘竖条，左右拖动调整宽度 */
 .terminal-resize-handle.is-vertical {
