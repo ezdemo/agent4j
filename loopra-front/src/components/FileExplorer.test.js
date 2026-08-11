@@ -169,6 +169,37 @@ describe('FileExplorer 文件树', () => {
     wrapper.unmount()
   })
 
+  it('右键文件可添加到当前对话', async () => {
+    const wrapper = mountTree()
+    await flushPromises()
+
+    await wrapper.findAll('.fen-row')[1].trigger('contextmenu', {clientX: 100, clientY: 120})
+    const menu = document.body.querySelector('.fe-context-menu')
+    const addButton = [...menu.querySelectorAll('button')].find((button) => button.textContent.includes('添加到对话'))
+    expect(addButton).toBeTruthy()
+    await addButton.click()
+
+    expect(wrapper.emitted('addToSession')).toEqual([[{file: 'C:/workspace/readme.md'}]])
+    wrapper.unmount()
+    menu.remove()
+  })
+
+  it('拖动文件时写入聊天输入区识别的文件路径格式', async () => {
+    const wrapper = mountTree()
+    await flushPromises()
+    const setData = vi.fn()
+    const dataTransfer = {effectAllowed: '', setData}
+    const fileRow = wrapper.findAll('.fen-row')[1]
+
+    expect(fileRow.attributes('draggable')).toBe('true')
+    await fileRow.trigger('dragstart', {dataTransfer})
+
+    expect(dataTransfer.effectAllowed).toBe('copy')
+    expect(setData).toHaveBeenCalledWith('application/x-loopra-file-path', 'C:/workspace/readme.md')
+    expect(setData).toHaveBeenCalledWith('text/plain', 'C:/workspace/readme.md')
+    wrapper.unmount()
+  })
+
   it('单击文件仅选中，双击打开预览', async () => {
     const wrapper = mountTree()
     await flushPromises()
