@@ -172,6 +172,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 打开本地文件
   openFile: (filePath) => ipcRenderer.invoke('open-file', filePath),
 
+  // 打开本地文件夹（系统原生文件管理器）
+  openFolder: (folderPath) => ipcRenderer.invoke('open-folder', folderPath),
+
+  // 文件资源管理器（桌面端，主进程直接操作文件系统，不接后端）
+  fileExplorer: {
+    list: (dirPath) => ipcRenderer.invoke('file-explorer-list', dirPath),
+    create: (dirPath, name, type) => ipcRenderer.invoke('file-explorer-create', { dirPath, name, type }),
+    rename: (filePath, newName) => ipcRenderer.invoke('file-explorer-rename', { filePath, newName }),
+    remove: (filePath) => ipcRenderer.invoke('file-explorer-delete', filePath),
+    read: (filePath) => ipcRenderer.invoke('file-explorer-read', filePath),
+    search: (dirPath, keyword) => ipcRenderer.invoke('file-explorer-search', { dirPath, keyword })
+  },
+
   // Electron 版本
   getElectronVersion: () => ipcRenderer.invoke('get_electron_version'),
 

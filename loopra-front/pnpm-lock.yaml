@@ -14,6 +14,9 @@ importers:
       '@ant-design/icons-vue':
         specifier: ^7.0.1
         version: 7.0.1(vue@3.5.41)
+      '@vscode/codicons':
+        specifier: 0.0.46-24
+        version: 0.0.46-24
       '@xterm/addon-fit':
         specifier: ^0.11.0
         version: 0.11.0
@@ -1016,6 +1019,9 @@ packages:
 
   '@vitest/utils@1.3.1':
     resolution: {integrity: sha512-d3Waie/299qqRyHTm2DjADeTaNdNSVsnwHPWrs20JMpjh6eiVq7ggggweO8rc4arhf6rRkWuHKwvxGvejUXZZQ==}
+
+  '@vscode/codicons@0.0.46-24':
+    resolution: {integrity: sha512-KIDWUYxG6eh+DHRg+3G4bS487T+g1ZkLfB4HylOBbCcHsvLdfLMRM/m92DS1Ljhi8nglLr9ucwwWhHTEAC+DpA==}
 
   '@vue/babel-helper-vue-transform-on@1.1.5':
     resolution: {integrity: sha512-SgUymFpMoAyWeYWLAY+MkCK3QEROsiUnfaw5zxOVD/M64KQs8D/4oK6Q5omVA2hnvEOE0SCkH2TZxs/jnnUj7w==}
@@ -4157,6 +4163,8 @@ snapshots:
       estree-walker: 3.0.3
       loupe: 2.3.7
       pretty-format: 29.7.0
+
+  '@vscode/codicons@0.0.46-24': {}
 
   '@vue/babel-helper-vue-transform-on@1.1.5': {}
 

@@ -2802,3 +2802,183 @@ ipcMain.handle('open-file', async (event, filePath) => {
     return { success: false, error: e.message }
   }
 })
+
+// 打开本地文件夹（系统原生文件管理器，如 Windows 资源管理器）
+ipcMain.handle('open-folder', async (event, folderPath) => {
+  try {
+    // 路径验证
+    if (!folderPath || typeof folderPath !== 'string') {
+      return { success: false, error: '无效的文件夹路径' }
+    }
+    // 防止路径遍历攻击
+    if (folderPath.includes('..') || folderPath.includes('~')) {
+      return { success: false, error: '文件夹路径包含非法字符' }
+    }
+    // 确保路径是绝对路径
+    const absolutePath = path.resolve(folderPath)
+    // 检查文件夹是否存在
+    if (!fs.existsSync(absolutePath)) {
+      return { success: false, error: '文件夹不存在' }
+    }
+    // 目录直接打开；文件则打开其所在目录（供“在文件管理器中显示”使用）
+    const stat = fs.statSync(absolutePath)
+    if (!stat.isDirectory() && !stat.isFile()) {
+      return { success: false, error: '路径不是文件夹' }
+    }
+    await shell.openPath(stat.isDirectory() ? absolutePath : path.dirname(absolutePath))
+    return { success: true }
+  } catch (e) {
+    console.error('Failed to open folder:', e)
+    return { success: false, error: e.message }
+  }
+})
+
+// ── 文件资源管理器（桌面端，直接操作本地文件系统，不接后端 API） ──
+
+// 解析并校验绝对路径（防 `..`/`~` 穿越）
+function resolveExplorerPath(rawPath) {
+  if (!rawPath || typeof rawPath !== 'string') throw new Error('无效的路径')
+  if (rawPath.includes('..') || rawPath.includes('~')) throw new Error('路径包含非法字符')
+  return path.resolve(rawPath)
+}
+
+// 校验目录存在
+function validateExplorerDir(rawPath) {
+  const absolutePath = resolveExplorerPath(rawPath)
+  if (!fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isDirectory()) throw new Error('目录不存在')
+  return absolutePath
+}
+
+// 校验新建/重命名名称（仅名字，不允许路径分隔符）
+function validateExplorerName(rawName) {
+  if (!rawName || typeof rawName !== 'string') throw new Error('名称不能为空')
+  const name = rawName.trim()
+  if (!name || name === '.' || name === '..') throw new Error('名称不能为空')
+  if (name.includes('/') || name.includes('\\')) throw new Error('名称不能包含路径分隔符')
+  if (name.includes('\u0000')) throw new Error('名称包含非法字符')
+  return name
+}
+
+// 排序：目录优先，再按名称忽略大小写
+function sortExplorerEntries(entries) {
+  return entries.sort((a, b) => {
+    if (a.directory !== b.directory) return a.directory ? -1 : 1
+    return a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+  })
+}
+
+// 列出目录的直接子项
+ipcMain.handle('file-explorer-list', (event, dirPath) => {
+  try {
+    const absolutePath = validateExplorerDir(dirPath)
+    const entries = fs.readdirSync(absolutePath, { withFileTypes: true }).map((entry) => ({
+      name: entry.name,
+      path: path.join(absolutePath, entry.name),
+      directory: entry.isDirectory()
+    }))
+    return { success: true, data: sortExplorerEntries(entries) }
+  } catch (e) {
+    return { success: false, error: e.message }
+  }
+})
+
+// 新建文件或目录
+ipcMain.handle('file-explorer-create', (event, payload = {}) => {
+  try {
+    const { dirPath, name, type } = payload
+    const parent = validateExplorerDir(dirPath)
+    const safeName = validateExplorerName(name)
+    const target = path.join(parent, safeName)
+    if (fs.existsSync(target)) throw new Error('同名文件或目录已存在')
+    const directory = type === 'directory'
+    if (directory) fs.mkdirSync(target)
+    else fs.writeFileSync(target, '', 'utf8')
+    return { success: true, data: { name: safeName, path: target, directory } }
+  } catch (e) {
+    return { success: false, error: e.message }
+  }
+})
+
+// 重命名（仅同目录改名）
+ipcMain.handle('file-explorer-rename', (event, payload = {}) => {
+  try {
+    const { filePath, newName } = payload
+    const source = resolveExplorerPath(filePath)
+    if (!fs.existsSync(source)) throw new Error('文件或目录不存在')
+    const safeName = validateExplorerName(newName)
+    const target = path.join(path.dirname(source), safeName)
+    const directory = fs.statSync(source).isDirectory()
+    if (target !== source) {
+      if (fs.existsSync(target)) throw new Error('同名文件或目录已存在')
+      fs.renameSync(source, target)
+    }
+    return { success: true, data: { name: safeName, path: target, directory } }
+  } catch (e) {
+    return { success: false, error: e.message }
+  }
+})
+
+// 删除文件或目录（递归）
+ipcMain.handle('file-explorer-delete', (event, filePath) => {
+  try {
+    const target = resolveExplorerPath(filePath)
+    if (!fs.existsSync(target)) throw new Error('文件或目录不存在')
+    fs.rmSync(target, { recursive: true, force: true })
+    return { success: true }
+  } catch (e) {
+    return { success: false, error: e.message }
+  }
+})
+
+// 读取文件内容（预览用，1MB 上限，拒绝二进制）
+const FILE_EXPLORER_READ_LIMIT = 1024 * 1024
+ipcMain.handle('file-explorer-read', (event, filePath) => {
+  try {
+    const target = resolveExplorerPath(filePath)
+    if (!fs.existsSync(target) || !fs.statSync(target).isFile()) throw new Error('文件不存在')
+    const size = fs.statSync(target).size
+    if (size > FILE_EXPLORER_READ_LIMIT) throw new Error(`文件过大（${Math.round(size / 1024)}KB），超过 1MB 预览上限`)
+    const content = fs.readFileSync(target, 'utf8')
+    if (content.includes('\u0000')) throw new Error('二进制文件无法预览')
+    return { success: true, data: content }
+  } catch (e) {
+    return { success: false, error: e.message }
+  }
+})
+
+// 搜索工作区文件（文件名/路径关键字，忽略常见大目录，最多 16 层 / 100 条）
+const FILE_EXPLORER_IGNORED_DIRS = new Set(['.git', 'node_modules', 'target', 'dist', 'build', '.idea'])
+const FILE_EXPLORER_SEARCH_DEPTH = 16
+const FILE_EXPLORER_SEARCH_LIMIT = 100
+ipcMain.handle('file-explorer-search', (event, payload = {}) => {
+  try {
+    const { dirPath, keyword } = payload
+    const root = validateExplorerDir(dirPath)
+    const key = (keyword || '').trim().toLowerCase()
+    if (!key) return { success: true, data: [] }
+    const results = []
+    const stack = [{ dir: root, depth: 0 }]
+    while (stack.length > 0 && results.length < FILE_EXPLORER_SEARCH_LIMIT) {
+      const { dir, depth } = stack.pop()
+      if (depth > FILE_EXPLORER_SEARCH_DEPTH) continue
+      let children
+      try {
+        children = fs.readdirSync(dir, { withFileTypes: true })
+      } catch {
+        continue
+      }
+      for (const entry of children) {
+        if (results.length >= FILE_EXPLORER_SEARCH_LIMIT) break
+        const full = path.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          if (!FILE_EXPLORER_IGNORED_DIRS.has(entry.name)) stack.push({ dir: full, depth: depth + 1 })
+        } else if (entry.name.toLowerCase().includes(key)) {
+          results.push({ name: entry.name, path: full, directory: false })
+        }
+      }
+    }
+    return { success: true, data: results }
+  } catch (e) {
+    return { success: false, error: e.message }
+  }
+})

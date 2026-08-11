@@ -5,26 +5,12 @@
       <div class="desktop-streaming-bar-inner"></div>
     </div>
     <aside class="desktop-files-left" :class="{ collapsed: !leftPanelOpen }" aria-label="项目文件">
-      <div class="desktop-files-head">
-        <div class="desktop-files-title">
-          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8">
-            <path d="M3 6.5A2.5 2.5 0 0 1 5.5 4H10l2 2.5h6.5A2.5 2.5 0 0 1 21 9v8.5A2.5 2.5 0 0 1 18.5 20h-13A2.5 2.5 0 0 1 3 17.5z"/>
-          </svg>
-          <span>文件</span>
-        </div>
-        <div class="desktop-files-actions">
-          <button class="desktop-files-action" type="button" title="刷新文件树" aria-label="刷新文件树" @click="fileRef?.refresh?.()">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M23 4v6h-6"/>
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </svg>
-          </button>
-          <button class="desktop-files-action" type="button" title="收起左侧栏" aria-label="收起左侧栏" @click="leftPanelOpen = false">
-            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m15 18-6-6 6-6"/></svg>
-          </button>
-        </div>
-      </div>
-      <FilePanel v-if="leftPanelMounted" ref="fileRef" :workspace-hash="workspaceHash" @add-to-session="addFileToSession" />
+      <FileExplorer
+        v-if="leftPanelMounted"
+        :root-path="activeWorkspacePath"
+        :workspace-hash="workspaceHash"
+        @add-to-session="addFileToSession"
+      />
     </aside>
     <div class="desktop-chat-area">
       <ChatView
@@ -68,9 +54,9 @@ import {useAppStore} from './stores/app'
 import {configAPI, sessionsAPI} from './services/api'
 import ChatView from './views/Chat.vue'
 
-const FilePanel = defineAsyncComponent(() => import('./components/FilePanel.vue'))
 const RightPanel = defineAsyncComponent(() => import('./components/RightPanel.vue'))
 const TerminalView = defineAsyncComponent(() => import('./components/TerminalView.vue'))
+const FileExplorer = defineAsyncComponent(() => import('./components/FileExplorer.vue'))
 
 const params = new URLSearchParams(window.location.search)
 const sessionName = params.get('sessionName') || ''
@@ -82,7 +68,6 @@ const theme = computed(() => pageTheme.value)
 const workspaces = ref([])
 const sessions = ref([])
 const chatRef = ref(null)
-const fileRef = ref(null)
 const rightPanelOpen = ref(false)
 const rightPanelMounted = ref(false)
 const leftPanelOpen = ref(false)
@@ -333,56 +318,7 @@ watch(workspaceHash, (hash) => {
   pointer-events: none;
 }
 
-.desktop-files-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 46px;
-  padding: 0 8px;
-  flex-shrink: 0;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-3, #f1f1f3);
-}
-
-.desktop-files-title {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  color: var(--fg);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.desktop-files-title svg {
-  color: var(--fg-3);
-}
-
-.desktop-files-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.desktop-files-action {
-  width: 26px;
-  height: 26px;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
-  color: var(--fg-3);
-  cursor: pointer;
-}
-
-.desktop-files-action:hover {
-  background: var(--bg-2);
-  color: var(--fg);
-}
-
-.desktop-files-left :deep(.file-panel) {
+.desktop-files-left :deep(.file-explorer) {
   min-height: 0;
 }
 
@@ -401,11 +337,5 @@ watch(workspaceHash, (hash) => {
 }
 [data-theme="dark"] .desktop-files-left {
   background: var(--bg-2, #222327);
-}
-[data-theme="dark"] .desktop-files-head {
-  background: var(--bg-3, #2a2b2f);
-}
-[data-theme="dark"] .desktop-files-action:hover {
-  background: #36373d;
 }
 </style>
