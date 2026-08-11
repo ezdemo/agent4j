@@ -1,9 +1,9 @@
 <template>
-  <section class="terminal-panel" :class="{ open }" :style="panelStyle">
+  <section class="terminal-panel" :class="{ open, vertical }" :style="panelStyle">
     <div
       class="terminal-resize-handle"
-      :class="{ dragging }"
-      title="拖动调整终端高度"
+      :class="{ dragging, 'is-vertical': vertical }"
+      :title="vertical ? '拖动调整终端宽度' : '拖动调整终端高度'"
       aria-hidden="true"
       @mousedown.prevent="startResize"
     />
@@ -89,7 +89,9 @@ const props = defineProps({
   // 面板展开状态：首次展开时创建首个终端，收起仅隐藏（所有终端持久保留）
   open: { type: Boolean, default: false },
   // 当前主题（dark / gray）；由宿主页面传入，保证与页面实际主题一致
-  theme: { type: String, default: '' }
+  theme: { type: String, default: '' },
+  // 垂直模式（右侧独立面板）：按宽度展开/收起，拖拽手柄在左侧调宽度；默认水平模式（底部面板）
+  vertical: { type: Boolean, default: false }
 })
 const emit = defineEmits(['close'])
 
@@ -202,38 +204,47 @@ const activePid = computed(() => {
   return tab?.pid || ''
 })
 
-// ── 面板高度：可拖拽调整，持久化到 localStorage ──
-const DEFAULT_HEIGHT = 187
-const MIN_HEIGHT = 80
-const MAX_HEIGHT_RATIO = 0.7
-const savedHeight = Number(localStorage.getItem('loopra-terminal-height'))
-const panelHeight = ref(Number.isFinite(savedHeight) && savedHeight >= MIN_HEIGHT ? savedHeight : DEFAULT_HEIGHT)
+// ── 面板尺寸：可拖拽调整（水平=高度 / 垂直=宽度），持久化到 localStorage ──
+const isVertical = () => props.vertical
+const SAVE_KEY = isVertical() ? 'loopra-terminal-width' : 'loopra-terminal-height'
+const DEFAULT_SIZE = isVertical() ? 320 : 187
+const MIN_SIZE = isVertical() ? 120 : 80
+const MAX_SIZE_RATIO = 0.7
+const savedSize = Number(localStorage.getItem(SAVE_KEY))
+const panelSize = ref(Number.isFinite(savedSize) && savedSize >= MIN_SIZE ? savedSize : DEFAULT_SIZE)
 const dragging = ref(false)
 
-// 展开时用自定义高度；拖拽过程中禁用过渡动画，避免拖拽时高度跳动
+// 展开时用自定义尺寸；拖拽过程中禁用过渡动画，避免拖拽时跳动
 const panelStyle = computed(() => {
   if (!props.open) return null
-  return {
-    height: `${panelHeight.value}px`,
-    ...(dragging.value ? { transition: 'none' } : {})
-  }
+  return isVertical()
+    ? {
+      width: `${panelSize.value}px`,
+      ...(dragging.value ? { transition: 'none' } : {})
+    }
+    : {
+      height: `${panelSize.value}px`,
+      ...(dragging.value ? { transition: 'none' } : {})
+    }
 })
 
 function startResize(event) {
-  const startY = event.clientY
-  const startHeight = panelHeight.value
+  const startPos = isVertical() ? event.clientX : event.clientY
+  const startSize = panelSize.value
   dragging.value = true
   const onMove = (ev) => {
-    const maxHeight = Math.floor(window.innerHeight * MAX_HEIGHT_RATIO)
-    const next = Math.min(Math.max(startHeight + (startY - ev.clientY), MIN_HEIGHT), maxHeight)
-    panelHeight.value = Math.round(next)
+    const pos = isVertical() ? ev.clientX : ev.clientY
+    const maxSize = Math.floor((isVertical() ? window.innerWidth : window.innerHeight) * MAX_SIZE_RATIO)
+    // 手柄在面板左侧/顶部：向左/上拖动（startPos - pos > 0）增大尺寸
+    const next = Math.min(Math.max(startSize + (startPos - pos), MIN_SIZE), maxSize)
+    panelSize.value = Math.round(next)
   }
   const onUp = () => {
     dragging.value = false
     window.removeEventListener('mousemove', onMove)
     window.removeEventListener('mouseup', onUp)
     try {
-      localStorage.setItem('loopra-terminal-height', String(panelHeight.value))
+      localStorage.setItem(SAVE_KEY, String(panelSize.value))
     } catch (error) {
       // 存储不可用时忽略
     }
@@ -262,8 +273,9 @@ function fitTab(tabId) {
   const state = tabState.get(tabId)
   if (!tab || !state || !state.term || !state.ptyId) return
   const hostEl = slotEls.get(tabId)
-  // 收起/隐藏状态（高度不足）不调整：避免 xterm 被 resize 到极小导致 buffer 重排、滚动位置错乱
-  if (!hostEl || hostEl.clientHeight < 40) return
+  // 收起/隐藏状态（高度或宽度任一不足）不调整：避免 xterm 被 resize 到极小导致 buffer 重排、滚动位置错乱
+  // 水平模式收起时高度为 0，垂直模式收起时宽度为 0，两个方向都要拦截
+  if (!hostEl || hostEl.clientHeight < 40 || hostEl.clientWidth < 40) return
   try {
     // fit 前记录视口位置，resize 后恢复，保证收起再展开时内容位置不变
     const buffer = state.term.buffer.active
@@ -514,6 +526,36 @@ function onDocClick() {
 }
 .terminal-panel.open {
   height: 187px;
+}
+/* 垂直模式（右侧独立面板）：按宽度展开/收起，高度撑满父容器 */
+.terminal-panel.vertical {
+  position: relative;
+  flex: 0 0 auto;
+  width: 0;
+  height: 100%;
+  border-top: none;
+  border-left: 1px solid var(--border, #e8e8e8);
+  transition: width 0.22s ease;
+}
+.terminal-panel.vertical.open {
+  width: 320px;
+}
+/* 垂直模式拖拽手柄：面板左边缘竖条，左右拖动调整宽度 */
+.terminal-resize-handle.is-vertical {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  height: auto;
+  flex: none;
+  cursor: ew-resize;
+  z-index: 2;
+}
+.terminal-resize-handle.is-vertical:hover,
+.terminal-resize-handle.is-vertical.dragging {
+  background: rgba(82, 82, 91, 0.25);
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 /* 拖拽手柄：面板顶部细条，上下拖动调整高度（纤细 + 主题自适应） */
 .terminal-resize-handle {
