@@ -90,8 +90,22 @@ afterEach(() => {
   else window.electronAPI = initialElectronAPI
 })
 
+describe('DesktopShell 更新按钮', () => {
+  it('仅在检测到新版本时显示', async () => {
+    systemAPI.checkLatestVersion.mockResolvedValueOnce({success: true, data: {hasNewVersion: false, latestVersion: '26.8.91'}})
+    const {wrapper} = await mountShell()
+    expect(wrapper.find('.update-check-button').exists()).toBe(false)
+    wrapper.unmount()
+
+    systemAPI.checkLatestVersion.mockResolvedValueOnce({success: true, data: {hasNewVersion: true, latestVersion: '26.8.92'}})
+    const updated = await mountShell()
+    expect(updated.wrapper.find('.update-check-button').exists()).toBe(true)
+    updated.wrapper.unmount()
+  })
+})
+
 describe('DesktopShell 首页右键菜单', () => {
-  it('提供打开需求池和切换主题操作', async () => {
+  it('提供打开需求池、更新和切换主题操作', async () => {
     const {wrapper, store} = await mountShell()
     const homeButton = wrapper.find('.icon-button')
 
@@ -100,6 +114,7 @@ describe('DesktopShell 首页右键菜单', () => {
     const menu = document.body.querySelector('.desktop-shell-context-menu')
     expect(menu).not.toBeNull()
     expect(menu.textContent).toContain('打开需求池')
+    expect(menu.textContent).toContain('更新')
     expect(menu.textContent).toContain('切换主题')
     expect(homeButton.attributes('aria-expanded')).toBe('true')
 
@@ -111,6 +126,11 @@ describe('DesktopShell 首页右键菜单', () => {
 
     await homeButton.trigger('contextmenu', {clientX: 40, clientY: 30})
     document.body.querySelectorAll('[role="menuitem"]')[1].click()
+    await nextTick()
+    expect(window.open).toHaveBeenLastCalledWith(expect.stringContaining('/releases'), '_blank')
+
+    await homeButton.trigger('contextmenu', {clientX: 40, clientY: 30})
+    document.body.querySelectorAll('[role="menuitem"]')[2].click()
     await nextTick()
     expect(switchThemeWithReveal).toHaveBeenCalledWith('dark', expect.any(Function))
     expect(store.settings.theme).toBe('dark')
@@ -180,6 +200,24 @@ describe('DesktopShell 会话标签右键菜单', () => {
       sendCommand: vi.fn().mockResolvedValue(true)
     }
   }
+
+  it('标签溢出时中键按下关闭标签并阻止自动滚动', async () => {
+    const desktopChatTabs = chatTabsBridge()
+    window.electronAPI = {desktopChatTabs}
+    const {wrapper} = await mountShell()
+    await openTab(wrapper, 'a')
+    await openTab(wrapper, 'b')
+
+    const tab = wrapper.findAll('.desktop-tab')[1]
+    const middleMouseDown = new MouseEvent('mousedown', {button: 1, bubbles: true, cancelable: true})
+    expect(tab.element.dispatchEvent(middleMouseDown)).toBe(false)
+    await flushPromises()
+
+    expect(desktopChatTabs.close).toHaveBeenCalledWith('h1:b')
+    expect(wrapper.findAll('.desktop-tab').map((item) => item.attributes('title'))).toEqual(['a'])
+
+    wrapper.unmount()
+  })
 
   it('提供刷新、关闭和关闭左右标签操作', async () => {
     const desktopChatTabs = chatTabsBridge()

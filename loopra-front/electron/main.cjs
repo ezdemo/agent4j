@@ -965,6 +965,7 @@ ipcMain.handle('desktop-home-context-menu', (event, rawTheme) => {
     }
     const menu = Menu.buildFromTemplate([
       { label: '打开需求池', click: () => finish('open-requirement-board') },
+      { label: '更新', click: () => finish('open-update') },
       { label: '切换主题', click: () => finish('toggle-theme') }
     ])
     menu.popup({

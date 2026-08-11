@@ -239,8 +239,8 @@
       </div>
 
       <div class="input-row">
+        <!-- 输入框永不禁用：会话后台运行/状态检查中也可输入，发送时由 Chat.vue 自动排队 -->
         <textarea ref="inputField" v-model="localText" @keydown="handleKeydown"
-                  :disabled="sessionBusy"
                   :placeholder="welcomeMode ? '输入消息... (Enter 发送, Tab 补全, / 命令，上传/粘贴图片)' : '输入消息，/ 使用命令，@ 引用上下文，上传文件...'" rows="1" @blur="handleBlur"
                   @focus="inputFocused=true"
                   @input="handleInput" @paste="handlePaste"></textarea>
@@ -254,7 +254,7 @@
         </div>
 
         <div class="input-actions">
-          <button type="button" class="upload-btn" :disabled="sessionBusy"
+          <button type="button" class="upload-btn"
                   title="上传文件（图片/文本/PDF/Word/Excel）" aria-label="上传文件" @click="handleUploadClick">
             <PaperClipOutlined />
           </button>
@@ -280,7 +280,7 @@
             </button>
           </template>
           <button :class="{ active: localText.trim() }"
-                  :disabled="sessionBusy || parsingCount > 0 || (!localText.trim() && images.length === 0 && uploadedFiles.length === 0)"
+                  :disabled="parsingCount > 0 || (!localText.trim() && images.length === 0 && uploadedFiles.length === 0)"
                   class="send-btn" :title="sessionRunning ? '该会话正在后台执行' : streaming ? '加入队列' : '发送消息'" @click="handleSend">
             <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
               <line x1="22" x2="11" y1="2" y2="13"/>
@@ -950,7 +950,7 @@ const handleKeydown = (e) => {
 }
 
 const handleSend = () => {
-  if (props.sessionBusy) return
+  // 会话后台运行/状态检查中不拦截发送：Chat.vue 会将其放入排队队列，任务结束后自动发出
   // 文件解析中禁止发送，防止发出不完整内容
   if (parsingCount.value > 0) {
     message.info('文件解析中，请稍候…')
@@ -1177,7 +1177,7 @@ const truncateText = (text, max) => {
 }
 
 const handleUploadClick = () => {
-  if (props.sessionBusy) return
+  // 上传文件与后台任务不冲突，任何时候都允许选择文件
   fileInput.value?.click()
 }
 

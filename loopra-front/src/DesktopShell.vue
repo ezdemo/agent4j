@@ -40,7 +40,7 @@
           @dragend="endTabReorder"
           @click="activateTab(tab.id)"
           @contextmenu.prevent.stop="openTabContextMenu($event, tab.id)"
-          @auxclick="closeTabWithMiddleClick($event, tab.id)"
+          @mousedown.middle.prevent.stop="closeTab(tab.id)"
           @keydown.enter="activateTab(tab.id)"
           @keydown.space.prevent="activateTab(tab.id)"
         >
@@ -65,6 +65,7 @@
 
       <div class="desktop-window-controls">
         <button
+          v-if="hasNewVersion"
           class="window-button update-check-button"
           :class="{ 'has-update': hasNewVersion }"
           type="button"
@@ -83,7 +84,7 @@
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/><path d="M7 8h4M7 12h4M7 16h4"/></svg>
         </button>
         <button v-if="activeTabId" class="window-button" type="button" title="终端" aria-label="终端" @click="toggleTerminal">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>
         </button>
         <button class="window-button" type="button" title="最小化" @click="minimize"><span class="minimize-mark" /></button>
         <button class="window-button" type="button" title="最大化" @click="maximize"><span class="maximize-mark" /></button>
@@ -103,6 +104,10 @@
         <button type="button" role="menuitem" @click="chooseHomeContextAction('open-requirement-board')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
           打开需求池
+        </button>
+        <button type="button" role="menuitem" @click="chooseHomeContextAction('open-update')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          更新
         </button>
         <button
           type="button"
@@ -234,7 +239,7 @@ const homeButton = ref(null)
 const homeContextMenu = reactive({visible: false, x: 0, y: 0})
 const tabContextMenu = reactive({visible: false, tabId: '', x: 0, y: 0})
 const HOME_CONTEXT_MENU_WIDTH = 176
-const HOME_CONTEXT_MENU_HEIGHT = 78
+const HOME_CONTEXT_MENU_HEIGHT = 112
 const TAB_CONTEXT_MENU_WIDTH = 188
 const TAB_CONTEXT_MENU_HEIGHT = 146
 let resizeObserver = null
@@ -729,6 +734,7 @@ function closeContextMenus() {
 function chooseHomeContextAction(action) {
   closeContextMenus()
   if (action === 'open-requirement-board') openRequirementBoard()
+  else if (action === 'open-update') void openUpdateWindow()
   else if (action === 'toggle-theme') toggleTheme()
 }
 
@@ -916,12 +922,6 @@ async function closeTabsToSide(id, side) {
   const activeWasRemoved = removedIds.has(activeTabId.value)
   if (activeWasRemoved) activeTabId.value = id
   if (activeWasRemoved) await renderActiveTab()
-}
-
-function closeTabWithMiddleClick(event, id) {
-  if (event.button !== 1) return
-  event.preventDefault()
-  void closeTab(id)
 }
 
 async function closeWorkspaceTabs(workspaceHash) {
