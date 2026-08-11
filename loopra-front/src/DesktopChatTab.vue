@@ -24,7 +24,7 @@
           </button>
         </div>
       </div>
-      <FilePanel ref="fileRef" :workspace-hash="workspaceHash" @add-to-session="addFileToSession" />
+      <FilePanel v-if="leftPanelMounted" ref="fileRef" :workspace-hash="workspaceHash" @add-to-session="addFileToSession" />
     </aside>
     <div class="desktop-chat-area">
       <ChatView
@@ -34,6 +34,7 @@
         :streaming-bar-hidden="true"
         :workspace-hash="workspaceHash"
         :session-name="sessionName"
+        :initially-empty="newSession"
         :right-panel-open="rightPanelOpen"
         :workspaces="workspaces"
         @switch-workspace="switchWorkspace"
@@ -43,9 +44,10 @@
         @manage-workspaces="requestHome"
         @manage-models="requestModelSettings"
       />
-      <TerminalView :open="showTerminal" :cwd="activeWorkspacePath" :theme="theme" @close="showTerminal = false" />
+      <TerminalView v-if="terminalMounted" :open="showTerminal" :cwd="activeWorkspacePath" :theme="theme" @close="showTerminal = false" />
     </div>
     <RightPanel
+      v-if="rightPanelMounted"
       :open="rightPanelOpen"
       v-model="rightPanelTab"
       :show-files-tab="false"
@@ -60,16 +62,18 @@
 
 <script setup>
 import {message} from 'ant-design-vue'
-import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
+import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useAppStore} from './stores/app'
 import {configAPI, sessionsAPI} from './services/api'
 import ChatView from './views/Chat.vue'
-import FilePanel from './components/FilePanel.vue'
-import RightPanel from './components/RightPanel.vue'
-import TerminalView from './components/TerminalView.vue'
+
+const FilePanel = defineAsyncComponent(() => import('./components/FilePanel.vue'))
+const RightPanel = defineAsyncComponent(() => import('./components/RightPanel.vue'))
+const TerminalView = defineAsyncComponent(() => import('./components/TerminalView.vue'))
 
 const params = new URLSearchParams(window.location.search)
 const sessionName = params.get('sessionName') || ''
+const newSession = params.get('newSession') === '1'
 const workspaceHash = ref(params.get('workspaceHash') || null)
 const store = useAppStore()
 const pageTheme = ref(params.get('theme') === 'dark' ? 'dark' : store.settings.theme)
@@ -79,8 +83,11 @@ const sessions = ref([])
 const chatRef = ref(null)
 const fileRef = ref(null)
 const rightPanelOpen = ref(false)
+const rightPanelMounted = ref(false)
 const leftPanelOpen = ref(false)
+const leftPanelMounted = ref(false)
 const showTerminal = ref(false)
+const terminalMounted = ref(false)
 const sessionActive = ref(false)
 const rightPanelTab = ref('git')
 // 终端初始工作目录 = 当前工作区路径（终端面板与当前会话绑定）
@@ -98,23 +105,11 @@ let stopRefreshHistoryListener = null
 let stopFocusComposerListener = null
 let stopSendCommandListener = null
 
-onMounted(async () => {
-  try {
-    const response = await configAPI.listWorkspaces()
-    if (response.success) workspaces.value = response.data || []
-  } catch (error) {
-    console.error('[desktop-chat-tab] failed to load workspaces:', error)
-  }
-  await loadSessions()
-  stopLeftPanelListener = window.electronAPI?.events?.listen('desktop-chat-tab-toggle-left-panel', () => {
-    leftPanelOpen.value = !leftPanelOpen.value
-  })
-  stopRightPanelListener = window.electronAPI?.events?.listen('desktop-chat-tab-toggle-right-panel', () => {
-    rightPanelOpen.value = !rightPanelOpen.value
-  })
-  stopTerminalListener = window.electronAPI?.events?.listen('desktop-chat-tab-toggle-terminal', () => {
-    showTerminal.value = !showTerminal.value
-  })
+onMounted(() => {
+  // 先注册主进程事件，避免初始化请求期间丢失聚焦或自动发送命令。
+  stopLeftPanelListener = window.electronAPI?.events?.listen('desktop-chat-tab-toggle-left-panel', toggleLeftPanel)
+  stopRightPanelListener = window.electronAPI?.events?.listen('desktop-chat-tab-toggle-right-panel', toggleRightPanel)
+  stopTerminalListener = window.electronAPI?.events?.listen('desktop-chat-tab-toggle-terminal', toggleTerminal)
   stopThemeListener = window.electronAPI?.events?.listen('desktop-chat-tab-theme', (nextTheme) => {
     pageTheme.value = nextTheme === 'dark' ? 'dark' : 'gray'
     document.documentElement.setAttribute('data-theme', pageTheme.value)
@@ -128,15 +123,56 @@ onMounted(async () => {
   stopSendCommandListener = window.electronAPI?.events?.listen('desktop-chat-tab-send-command', (command) => {
     if (command) void chatRef.value?.sendCommand?.(command)
   })
+  window.electronAPI?.desktopChatTabs?.ready?.()
   document.documentElement.setAttribute('data-theme', pageTheme.value)
-  try {
-    await sessionsAPI.switchSession(sessionName, workspaceHash.value)
-  } catch (error) {
-    console.warn('[desktop-chat-tab] failed to synchronize session:', error)
-  }
-  await nextTick()
-  await chatRef.value?.loadSession(sessionName, workspaceHash.value)
+  void initializeTabContext()
 })
+
+async function initializeTabContext() {
+  const tasks = [loadWorkspaces()]
+  if (!newSession) {
+    tasks.push(sessionsAPI.switchSession(sessionName, workspaceHash.value).catch((error) => {
+      console.warn('[desktop-chat-tab] failed to synchronize session:', error)
+    }))
+  }
+  await Promise.all(tasks)
+}
+
+async function loadWorkspaces() {
+  try {
+    const response = await configAPI.listWorkspaces()
+    if (response.success) workspaces.value = response.data || []
+  } catch (error) {
+    console.error('[desktop-chat-tab] failed to load workspaces:', error)
+  }
+}
+
+function toggleLeftPanel() {
+  if (!leftPanelOpen.value) leftPanelMounted.value = true
+  leftPanelOpen.value = !leftPanelOpen.value
+}
+
+function toggleRightPanel() {
+  if (!rightPanelOpen.value) {
+    rightPanelMounted.value = true
+    if (sessions.value.length === 0) void loadSessions()
+  }
+  rightPanelOpen.value = !rightPanelOpen.value
+}
+
+async function toggleTerminal() {
+  if (showTerminal.value) {
+    showTerminal.value = false
+    return
+  }
+  if (!activeWorkspacePath.value) await loadWorkspaces()
+  if (!activeWorkspacePath.value) {
+    message.warning('项目路径尚未加载完成，请稍后重试')
+    return
+  }
+  terminalMounted.value = true
+  showTerminal.value = true
+}
 
 async function switchWorkspace(nextWorkspaceHash) {
   if (!nextWorkspaceHash || nextWorkspaceHash === workspaceHash.value) return

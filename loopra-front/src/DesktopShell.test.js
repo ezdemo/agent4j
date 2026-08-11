@@ -176,7 +176,8 @@ describe('DesktopShell 会话标签右键菜单', () => {
       show: vi.fn().mockResolvedValue({success: true}),
       hide: vi.fn().mockResolvedValue({success: true}),
       close: vi.fn().mockResolvedValue({success: true}),
-      reload: vi.fn().mockResolvedValue({success: true})
+      reload: vi.fn().mockResolvedValue({success: true}),
+      sendCommand: vi.fn().mockResolvedValue(true)
     }
   }
 
@@ -230,6 +231,36 @@ describe('DesktopShell 会话标签右键菜单', () => {
     expect(desktopChatTabs.close).toHaveBeenCalledWith('h1:b')
     expect(wrapper.findAll('.desktop-tab')).toHaveLength(0)
 
+    wrapper.unmount()
+  })
+
+  it('更新请求创建快速路径标签并投递命令', async () => {
+    const desktopChatTabs = chatTabsBridge()
+    const listeners = {}
+    sessionsAPI.createNew.mockResolvedValue({success: true, data: {sessionName: 'update-session', workspaceHash: 'h1'}})
+    window.electronAPI = {
+      desktopChatTabs,
+      events: {
+        listen: vi.fn((channel, callback) => {
+          listeners[channel] = callback
+          return vi.fn()
+        })
+      }
+    }
+    const {wrapper} = await mountShell()
+
+    listeners['chat-update-request']({source: 'mirror'})
+    await vi.waitFor(() => expect(desktopChatTabs.sendCommand).toHaveBeenCalledTimes(1))
+
+    expect(desktopChatTabs.create).toHaveBeenCalledWith(expect.objectContaining({
+      id: 'h1:update-session',
+      sessionName: 'update-session',
+      newSession: true
+    }))
+    expect(desktopChatTabs.sendCommand).toHaveBeenCalledWith(
+      'h1:update-session',
+      expect.stringContaining('setup-gui-mirror')
+    )
     wrapper.unmount()
   })
 

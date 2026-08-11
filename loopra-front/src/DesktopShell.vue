@@ -435,7 +435,8 @@ async function renderActiveTabNow(version) {
       id: current.id,
       sessionName: current.sessionName,
       workspaceHash: current.workspaceHash,
-      theme: theme.value
+      theme: theme.value,
+      newSession: current.newSession === true
     })
     if (!tabs.value.some((tab) => tab.id === current.id)) {
       try { await bridge.close(current.id) } catch (cleanupError) { console.warn('[desktop-shell] failed to clean up closed tab:', cleanupError) }
@@ -479,7 +480,7 @@ async function createTab() {
     const workspaceHash = response.data.workspaceHash || targetHash
     const id = tabId(workspaceHash, sessionName)
     hideStandaloneViews()
-    tabs.value = [...tabs.value, { id, sessionName, workspaceHash, title: tabTitle(sessionName) }]
+    tabs.value = [...tabs.value, { id, sessionName, workspaceHash, title: tabTitle(sessionName), newSession: true }]
     activeTabId.value = id
     startupError.value = ''
     await renderActiveTab()
@@ -508,7 +509,7 @@ async function runChatUpdate(source) {
     const workspaceHash = response.data.workspaceHash || targetHash
     const id = tabId(workspaceHash, sessionName)
     hideStandaloneViews()
-    tabs.value = [...tabs.value, { id, sessionName, workspaceHash, title: tabTitle(sessionName) }]
+    tabs.value = [...tabs.value, { id, sessionName, workspaceHash, title: tabTitle(sessionName), newSession: true }]
     activeTabId.value = id
     startupError.value = ''
     if (!await renderActiveTab()) return
