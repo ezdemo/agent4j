@@ -61,6 +61,40 @@ public class AgentController {
         return ApiResponse.ok(agentService.getSessionStatus(workspacePath, sessionName));
     }
 
+    @ApiOperation(value = "查询 bash 后台命令会话", notes = "返回 bash_start 启动且仍在镜像窗口内的后台命令会话（含 60 秒内刚结束的）；workspaceHash 为空时返回全部工作区")
+    @Get
+    @Mapping("/bash-sessions")
+    public ApiResponse<List<BashSessionDTO>> bashSessions(
+            @ApiParam(value = "工作区 hash（可选，空则返回全部工作区）", required = false)
+            @Param(value = "workspaceHash", required = false)
+            String workspaceHash) {
+        if (!agentService.isReady()) {
+            throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        }
+        String workspacePath = workspaceHash == null || workspaceHash.isBlank()
+                ? null : agentService.resolveWorkspacePath(workspaceHash);
+        return ApiResponse.ok(agentService.listBashSessions(workspacePath));
+    }
+
+    @ApiOperation(value = "手动关闭 bash 后台会话", notes = "终止指定 session_id 的后台命令进程（前端手动关闭按钮），返回终止状态日志")
+    @Post
+    @Mapping("/bash-sessions/terminate")
+    public ApiResponse<String> terminateBashSession(@Body BashSessionTerminateRequest request) {
+        if (!agentService.isReady()) {
+            throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        }
+        if (request == null || request.getSessionId() == null || request.getSessionId().isBlank()) {
+            throw new ServiceException("sessionId 不能为空");
+        }
+        String workspacePath = request.getWorkspaceHash() == null || request.getWorkspaceHash().isBlank()
+                ? null : agentService.resolveWorkspacePath(request.getWorkspaceHash());
+        String message = agentService.terminateBashSession(request.getSessionId(), workspacePath);
+        if (message == null) {
+            return ApiResponse.fail("会话不存在或已结束: " + request.getSessionId());
+        }
+        return ApiResponse.ok(message);
+    }
+
     @ApiOperation(value = "获取历史消息", notes = "根据工作区 hash 和会话名称获取历史消息列表")
     @Get
     @Mapping("/history")

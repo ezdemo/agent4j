@@ -7,7 +7,7 @@
       <div style="flex:1"></div>
       <button class="btn btn-ghost btn-sm" @click="clearChat">清空</button>
       <button class="btn btn-ghost btn-sm" @click="exportChat">导出</button>
-      <button :disabled="loadingPrompt" class="btn btn-ghost btn-sm" @click="viewSystemPrompt">提示词</button>
+        <button :disabled="loadingPrompt" class="btn btn-ghost btn-sm" @click="viewSystemPrompt">提示词</button>
     </div>
 
     <!-- 流式加载动画横线：本地流式或服务端后台执行中均展示（会话正在执行）；桌面端由外层布局接管（streamingBarHidden） -->
@@ -20,10 +20,12 @@
       <TransitionGroup name="log-bar">
         <div v-for="log in currentLogs" :key="log.id" :class="'log-' + (log.level || 'info').toLowerCase()"
              class="log-bar"
-             @click="currentLogs = currentLogs.filter(l => l.id !== log.id)">
+             title="点击复制完整日志"
+             @click="copyLog(log)">
           <span class="log-bar-icon">📋</span>
           <span class="log-bar-text">{{ log.text }}</span>
           <span class="log-bar-time">{{ formatTime(log.time) }}</span>
+          <button class="log-bar-close" title="关闭通知" @click.stop="currentLogs = currentLogs.filter(l => l.id !== log.id)">✕</button>
         </div>
       </TransitionGroup>
     </div>
@@ -1069,6 +1071,32 @@ const addLog = (log) => {
   }, 6000)
 }
 
+// 单击日志通知 → 复制完整日志（时间 + 内容），成功后再次弹出通知
+const copyLog = async (log) => {
+  const content = `[${formatTime(log.time)}] ${log.text}`
+  try {
+    await navigator.clipboard.writeText(content)
+  } catch {
+    // 剪贴板 API 不可用时退回 execCommand
+    const textarea = document.createElement('textarea')
+    textarea.value = content
+    textarea.style.position = 'fixed'
+    textarea.style.opacity = '0'
+    document.body.appendChild(textarea)
+    textarea.select()
+    document.execCommand('copy')
+    document.body.removeChild(textarea)
+  }
+  addLog({level: 'INFO', text: '✅ 日志已复制', time: Date.now()})
+}
+
+// Agent 调用 bash_start 时通知宿主自动展开右侧栏“命令”页签
+const notifyBashStart = () => {
+  window.dispatchEvent(new CustomEvent('loopra:bash-start', {
+    detail: {workspaceHash: props.workspaceHash, sessionName: props.sessionName}
+  }))
+}
+
 const formatTime = (t) => {
   if (!t) return ''
   const d = new Date(t)
@@ -1115,6 +1143,10 @@ onMounted(() => {
   // 监听复制成功事件
   window.addEventListener('copy-success', (e) => {
     addLog({level: 'INFO', text: '✅ ' + (e.detail || '已复制'), time: Date.now()})
+  })
+  // 通用通知事件（如后台进程手动关闭）
+  window.addEventListener('app-notify', (e) => {
+    addLog({level: 'INFO', text: e.detail || '', time: Date.now()})
   })
   messageResizeObserver = new ResizeObserver(entries => {
     const offsets = virtualWindow.value.offsets
@@ -1326,6 +1358,14 @@ const showScrollBtn = ref(false)
 // 用户是否主动滚离了底部（区别于被内容推上去）
 let userScrolledAway = false
 
+// 程序主动滚动保护：scroll() 主动滚动引发的 scroll 事件不应视为用户滚离。
+// 否则流式内容渲染滞后（scrollTo 目标仍是旧 scrollHeight，事件派发时高度已增长）
+// 会被误判为“用户离开”而永久停止自动下滚。
+let programmaticScrollGuard = false
+let programmaticScrollTarget = -1
+// 上一次滚动位置，用于区分滚动方向（只有向上滚才视为用户主动离开）
+let lastScrollTop = 0
+
 const SCROLL_THRESHOLD = 80
 
 const isNearBottom = () => {
@@ -1340,7 +1380,9 @@ const scroll = async (force = false, smooth = false) => {
   if (!el) return
   // 流式渲染中只要用户没主动滚走就一直滚；否则按阈值
   if (force || (streaming.value && !userScrolledAway) || isNearBottom()) {
-    el.scrollTo({top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto'})
+    programmaticScrollGuard = true
+    programmaticScrollTarget = el.scrollHeight
+    el.scrollTo({top: programmaticScrollTarget, behavior: smooth ? 'smooth' : 'auto'})
   }
   updateScrollBtn()
 }
@@ -1358,10 +1400,7 @@ const scrollToBottom = () => {
 const updateScrollBtn = () => {
   const nearBottom = isNearBottom()
   showScrollBtn.value = !nearBottom
-  if (!nearBottom && !streaming.value) {
-    // 不在流式时，用户滚走就算主动离开
-    userScrolledAway = true
-  }
+  // userScrolledAway 统一由 onScroll 维护（区分程序滚动与用户方向），避免误判
 }
 
 // 额外监听 wheel / touch 事件：滚动中如果用户向上滚，标记为主动离开
@@ -1371,11 +1410,26 @@ const onScroll = () => {
   updateVirtualViewport()
   const nearBottom = isNearBottom()
   showScrollBtn.value = !nearBottom
+
+  if (programmaticScrollGuard) {
+    // 程序滚动引发的 scroll 事件不视为用户离开；
+    // 用户明确向上滚动可立即中断保护并恢复“主动离开”判定
+    if (el.scrollTop < lastScrollTop) {
+      programmaticScrollGuard = false
+      userScrolledAway = true
+    } else if (Math.abs(el.scrollTop - programmaticScrollTarget) <= 4) {
+      programmaticScrollGuard = false
+    }
+    lastScrollTop = el.scrollTop
+    return
+  }
+
   if (!nearBottom) {
     userScrolledAway = true
   } else {
     userScrolledAway = false
   }
+  lastScrollTop = el.scrollTop
 }
 
 /** 用户点击选项按钮 → 直接发送 value 作为消息，清理旧工具卡片 */
@@ -1589,6 +1643,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
                 args = JSON.parse(args)
               } catch {
               }
+              if (name === 'bash_start') notifyBashStart()
               container.blocks.push({
                 type: 'tool_call',
                 name: name || 'unknown',
@@ -1665,6 +1720,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
               args = JSON.parse(args)
             } catch {
             }
+            if (name === 'bash_start') notifyBashStart()
             msg.blocks.push({
               type: 'tool_call',
               name: name || 'unknown',
@@ -2996,9 +3052,12 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 .log-bar-text {
   min-width: 0;
   max-width: 50ch;
-  white-space: nowrap;
+  white-space: pre-wrap;
+  word-break: break-all;
   overflow: hidden;
-  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
   font-size: 14px;
   font-weight: 500;
   transition: max-width 0.3s ease;
@@ -3006,6 +3065,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 
 .log-bar:hover .log-bar-text {
   max-width: 100ch;
+  -webkit-line-clamp: unset;
 }
 
 .log-bar-time {
@@ -3013,6 +3073,34 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   font-size: 10px;
   opacity: 0.4;
   font-family: var(--mono);
+}
+
+.log-bar-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  color: rgba(240, 240, 240, 0.45);
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  font-size: 11px;
+  line-height: 1;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.2s;
+}
+
+.log-bar:hover .log-bar-close {
+  opacity: 1;
+}
+
+.log-bar-close:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
 }
 
 /* 进出动画：从顶部滑入 + 淡入 */

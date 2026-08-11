@@ -283,6 +283,25 @@ export const agentAPI = {
     })
   },
 
+  // 获取 bash 后台命令会话 - GET /api/agent/bash-sessions?workspaceHash=xxx（可选，空则全部工作区）
+  getBashSessions: (workspaceHash) => {
+    const params = {}
+    if (workspaceHash) params.workspaceHash = workspaceHash
+    return api.get('/agent/bash-sessions', {
+      params,
+      silent: true
+    })
+  },
+
+  // 手动关闭 bash 后台会话 - POST /api/agent/bash-sessions/terminate
+  terminateBashSession: (sessionId, workspaceHash) => {
+    const body = {sessionId}
+    if (workspaceHash) body.workspaceHash = workspaceHash
+    return api.post('/agent/bash-sessions/terminate', body, {
+      silent: true
+    })
+  },
+
   // 获取历史消息 - GET /api/agent/history?workspaceHash=xxx&sessionName=xxx
   getHistory: (workspaceHash, sessionName) => {
     const params = {}
