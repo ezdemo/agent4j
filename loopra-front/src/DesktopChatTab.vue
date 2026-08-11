@@ -44,8 +44,9 @@
         @manage-workspaces="requestHome"
         @manage-models="requestModelSettings"
       />
-      <TerminalView v-if="terminalMounted" :open="showTerminal" :cwd="activeWorkspacePath" :theme="theme" @close="showTerminal = false" />
     </div>
+    <!-- 终端：独立右侧面板（与右侧栏并排，可拖宽/收起） -->
+    <TerminalView v-if="terminalMounted" vertical :open="showTerminal" :cwd="activeWorkspacePath" :theme="theme" @close="showTerminal = false" />
     <RightPanel
       v-if="rightPanelMounted"
       :open="rightPanelOpen"
