@@ -490,6 +490,10 @@ const toggleSelectAll = () => {
 }
 
 // ---- 加载状态 ----
+const notifyGitChanged = () => {
+  window.dispatchEvent(new CustomEvent('loopra:git-changed', {detail: {workspaceHash: props.workspaceHash}}))
+}
+
 const loadStatus = async () => {
   loading.value = true
   error.value = ''
@@ -502,6 +506,7 @@ const loadStatus = async () => {
       branchName.value = d.branch || ''
       changedFiles.value = d.changed || []
       untrackedFiles.value = d.untracked || []
+      notifyGitChanged()
       // 从状态中读取配置的模型与渠道
       if (d.model) commitModel.value = { name: d.model, channelId: d.modelChannelId || '' }
     } else {
@@ -524,6 +529,7 @@ const loadDiffFallback = async () => {
       branchName.value = r.data.branch || ''
       changedFiles.value = r.data.changed || []
       untrackedFiles.value = r.data.untracked || []
+      notifyGitChanged()
     } else {
       error.value = r.error || '加载失败'
     }

@@ -791,12 +791,12 @@ export const gitAPI = {
   },
 
   // 获取 Git 仓库中指定版本的文件内容 - GET /api/git/file-content?workspaceHash=xxx&path=xxx&ref=HEAD
-  fileContent: (workspaceHash, path, ref) => {
+  fileContent: (workspaceHash, path, ref, options = {}) => {
     const params = {}
     if (workspaceHash) params.workspaceHash = workspaceHash
     if (path) params.path = path
     if (ref) params.ref = ref
-    return api.get('/git/file-content', { params })
+    return api.get('/git/file-content', { params, silent: options.silent })
   },
 
   // 获取工作区当前文件原文，用于代码预览 - GET /api/git/working-file-content

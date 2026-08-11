@@ -43,6 +43,8 @@
         <FileEditor
           ref="fileEditorRef"
           :active-file="activeFileTab"
+          :workspace-hash="workspaceHash"
+          :workspace-path="activeWorkspacePath"
           :theme="theme"
           @saved="onFileSaved"
           @dirty-change="onFileDirtyChange"
