@@ -2946,6 +2946,22 @@ ipcMain.handle('file-explorer-read', (event, filePath) => {
   }
 })
 
+// 写文件内容（编辑器保存用，10MB 上限）
+const FILE_EXPLORER_WRITE_LIMIT = 10 * 1024 * 1024
+ipcMain.handle('file-explorer-write', (event, payload = {}) => {
+  try {
+    const { filePath, content } = payload
+    const target = resolveExplorerPath(filePath)
+    if (!fs.existsSync(target) || !fs.statSync(target).isFile()) throw new Error('文件不存在')
+    if (typeof content !== 'string') throw new Error('内容无效')
+    if (content.length > FILE_EXPLORER_WRITE_LIMIT) throw new Error('内容过大，超过 10MB 保存上限')
+    fs.writeFileSync(target, content, 'utf8')
+    return { success: true }
+  } catch (e) {
+    return { success: false, error: e.message }
+  }
+})
+
 // 搜索工作区文件（文件名/路径关键字，忽略常见大目录，最多 16 层 / 100 条）
 const FILE_EXPLORER_IGNORED_DIRS = new Set(['.git', 'node_modules', 'target', 'dist', 'build', '.idea'])
 const FILE_EXPLORER_SEARCH_DEPTH = 16

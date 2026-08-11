@@ -182,6 +182,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
     rename: (filePath, newName) => ipcRenderer.invoke('file-explorer-rename', { filePath, newName }),
     remove: (filePath) => ipcRenderer.invoke('file-explorer-delete', filePath),
     read: (filePath) => ipcRenderer.invoke('file-explorer-read', filePath),
+    write: (filePath, content) => ipcRenderer.invoke('file-explorer-write', { filePath, content }),
     search: (dirPath, keyword) => ipcRenderer.invoke('file-explorer-search', { dirPath, keyword })
   },
 

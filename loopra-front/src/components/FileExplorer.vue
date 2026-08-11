@@ -150,7 +150,7 @@ const props = defineProps({
   rootPath: { type: String, default: '' },
   workspaceHash: { type: String, default: null }
 })
-const emit = defineEmits(['addToSession'])
+const emit = defineEmits(['addToSession', 'openFile', 'fileDeleted', 'fileRenamed'])
 
 const rootNodes = ref([])
 const decorations = ref({})
@@ -255,6 +255,8 @@ async function loadDirectory(node) {
 function toggleNode(node) {
   if (!node.directory) {
     selectedPath.value = node.path
+    // 单击文件 → 在中间编辑器区域打开标签页（VS Code 风格）
+    emit('openFile', node.path)
     return
   }
   selectedPath.value = node.path
@@ -393,6 +395,7 @@ async function commitEdit(node) {
     node.path = response.data.path
     node.editing = false
     if (selectedPath.value === oldPath) selectedPath.value = node.path
+    emit('fileRenamed', oldPath, node.path)
   } catch (e) {
     message.error('重命名失败：' + (e.message || '未知错误'))
   }
@@ -424,6 +427,7 @@ function removeNode(node) {
         if (!response?.success) throw new Error(response?.error || '删除失败')
         removeFromTree(rootNodes.value, node)
         if (selectedPath.value === node.path) selectedPath.value = ''
+        emit('fileDeleted', node.path)
         message.success('已删除')
       } catch (e) {
         message.error('删除失败：' + (e.message || '未知错误'))
@@ -510,6 +514,8 @@ async function runSearch(keyword) {
 
 function selectResult(result) {
   selectedPath.value = result.path
+  // 搜索结果单击同样打开编辑器标签
+  if (!result.directory) emit('openFile', result.path)
 }
 
 function startFileDrag(event, node) {

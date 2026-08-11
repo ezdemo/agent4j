@@ -7,29 +7,47 @@
     <aside class="desktop-files-left" :class="{ collapsed: !leftPanelOpen }" aria-label="项目文件">
       <FileExplorer
         v-if="leftPanelMounted"
+        ref="fileExplorerRef"
         :root-path="activeWorkspacePath"
         :workspace-hash="workspaceHash"
         @add-to-session="addFileToSession"
+        @open-file="openFileTab"
+        @file-deleted="onFileDeleted"
+        @file-renamed="onFileRenamed"
       />
     </aside>
     <div class="desktop-chat-area">
-      <ChatView
-        ref="chatRef"
-        class="desktop-chat-view"
-        hide-header
-        :streaming-bar-hidden="true"
-        :workspace-hash="workspaceHash"
-        :session-name="sessionName"
-        :initially-empty="newSession"
-        :right-panel-open="rightPanelOpen"
-        :workspaces="workspaces"
-        @switch-workspace="switchWorkspace"
-        @session-updated="refreshTabTitle"
-        @session-active-change="sessionActive = $event"
-        @welcome-change="onWelcomeChange"
-        @manage-workspaces="requestHome"
-        @manage-models="requestModelSettings"
-      />
+      <!-- 编辑器标签栏：Chat 固定第一且不可关闭，文件标签可关闭 -->
+      <EditorTabs v-if="fileTabs.length > 0" :tabs="editorTabs" :active-id="activeTabId" @set-active="setActiveTab" @close="closeFileTab" />
+      <!-- 内容区：Chat 保活 + 单个 Monaco 实例复用多个文件 model -->
+      <div v-show="activeTabId === CHAT_TAB_ID" class="editor-pane">
+        <ChatView
+          ref="chatRef"
+          class="desktop-chat-view"
+          hide-header
+          :streaming-bar-hidden="true"
+          :workspace-hash="workspaceHash"
+          :session-name="sessionName"
+          :initially-empty="newSession"
+          :right-panel-open="rightPanelOpen"
+          :workspaces="workspaces"
+          @switch-workspace="switchWorkspace"
+          @session-updated="refreshTabTitle"
+          @session-active-change="sessionActive = $event"
+          @welcome-change="onWelcomeChange"
+          @manage-workspaces="requestHome"
+          @manage-models="requestModelSettings"
+        />
+      </div>
+      <div v-if="fileTabs.length > 0" v-show="activeTabId !== CHAT_TAB_ID" class="editor-pane">
+        <FileEditor
+          ref="fileEditorRef"
+          :active-file="activeFileTab"
+          :theme="theme"
+          @saved="onFileSaved"
+          @dirty-change="onFileDirtyChange"
+        />
+      </div>
     </div>
     <!-- 终端：独立右侧面板（与右侧栏并排，可拖宽/收起） -->
     <TerminalView v-if="terminalMounted" vertical :open="showTerminal" :cwd="activeWorkspacePath" :theme="theme" @close="showTerminal = false" />
@@ -44,6 +62,14 @@
       @close="rightPanelOpen = false"
       @add-to-session="addFileToSession"
     />
+    <ActionConfirmDialog
+      :model-value="closeConfirm.visible"
+      title="关闭未保存文件"
+      :message="`“${closeConfirm.name}”包含未保存的修改。关闭后，这些修改将丢失。`"
+      :actions="closeConfirmActions"
+      @update:model-value="dismissCloseConfirm"
+      @action="handleCloseConfirmAction"
+    />
   </main>
 </template>
 
@@ -53,6 +79,10 @@ import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, re
 import {useAppStore} from './stores/app'
 import {configAPI, sessionsAPI} from './services/api'
 import ChatView from './views/Chat.vue'
+import EditorTabs from './components/EditorTabs.vue'
+import FileEditor from './components/FileEditor.vue'
+import ActionConfirmDialog from './components/ActionConfirmDialog.vue'
+import {fileIconFor} from './utils/fileIcons'
 
 const RightPanel = defineAsyncComponent(() => import('./components/RightPanel.vue'))
 const TerminalView = defineAsyncComponent(() => import('./components/TerminalView.vue'))
@@ -76,6 +106,19 @@ const showTerminal = ref(false)
 const terminalMounted = ref(false)
 const sessionActive = ref(false)
 const rightPanelTab = ref('git')
+// 编辑器标签：Chat 固定第一且不可关闭，文件标签可关闭
+const CHAT_TAB_ID = 'chat'
+const fileExplorerRef = ref(null)
+const fileEditorRef = ref(null)
+const fileTabs = ref([]) // [{ id, path, name, dirty }]
+const activeTabId = ref(CHAT_TAB_ID)
+const closeConfirm = ref({visible: false, tabId: '', name: ''})
+const closeConfirmActions = [
+  {key: 'cancel', label: '取消'},
+  {key: 'close', label: '关闭文件', variant: 'danger'}
+]
+const activeFileTab = computed(() => fileTabs.value.find((tab) => tab.id === activeTabId.value) || null)
+let fileTabSeq = 0
 // 终端初始工作目录 = 当前工作区路径（终端面板与当前会话绑定）
 const activeWorkspacePath = computed(() => {
   const workspace = workspaces.value.find((item) => item.hash === workspaceHash.value)
@@ -220,6 +263,97 @@ async function addFileToSession(payload) {
   await chatRef.value?.appendFileSelection(payload)
 }
 
+// ── 编辑器标签（VS Code 风格：Chat 固定 + 文件可关闭） ──
+const editorTabs = computed(() => [
+  { id: CHAT_TAB_ID, label: '对话', icon: 'codicon-comment-discussion', closable: false, title: '对话（固定标签）' },
+  ...fileTabs.value.map((tab) => ({
+    id: tab.id,
+    label: tab.name,
+    title: tab.path,
+    fileIcon: fileIconFor(tab.name),
+    dirty: tab.dirty
+  }))
+])
+
+function fileBaseName(path) {
+  const parts = String(path || '').replace(/\\/g, '/').split('/')
+  return parts.pop() || String(path || '')
+}
+
+function openFileTab(path) {
+  if (!path) return
+  const existing = fileTabs.value.find((tab) => tab.path === path)
+  if (existing) {
+    activeTabId.value = existing.id
+    return
+  }
+  const tab = { id: `file-${++fileTabSeq}`, path, name: fileBaseName(path), dirty: false }
+  fileTabs.value.push(tab)
+  activeTabId.value = tab.id
+}
+
+function setActiveTab(id) {
+  activeTabId.value = id
+}
+
+function closeFileTab(id, force = false) {
+  const index = fileTabs.value.findIndex((tab) => tab.id === id)
+  if (index < 0) return
+  const tab = fileTabs.value[index]
+  if (!force && tab.dirty) {
+    closeConfirm.value = {visible: true, tabId: tab.id, name: tab.name}
+    return
+  }
+  removeFileTab(index)
+}
+
+function dismissCloseConfirm() {
+  closeConfirm.value = {visible: false, tabId: '', name: ''}
+}
+
+function handleCloseConfirmAction(action) {
+  if (action === 'close') {
+    const index = fileTabs.value.findIndex((tab) => tab.id === closeConfirm.value.tabId)
+    if (index >= 0) removeFileTab(index)
+  }
+  dismissCloseConfirm()
+}
+
+function removeFileTab(index) {
+  const tab = fileTabs.value[index]
+  const id = tab?.id
+  if (tab) fileEditorRef.value?.closeFile?.(tab.path)
+  fileTabs.value.splice(index, 1)
+  // 关闭的是当前标签 → 激活相邻标签，否则回 Chat
+  if (activeTabId.value === id) {
+    activeTabId.value = fileTabs.value[index] ? fileTabs.value[index].id : CHAT_TAB_ID
+  }
+}
+
+function onFileDeleted(path) {
+  const index = fileTabs.value.findIndex((tab) => tab.path === path)
+  if (index >= 0) removeFileTab(index)
+}
+
+function onFileRenamed(oldPath, newPath) {
+  const tab = fileTabs.value.find((item) => item.path === oldPath)
+  if (tab) {
+    fileEditorRef.value?.renameFile?.(oldPath, newPath)
+    tab.path = newPath
+    tab.name = fileBaseName(newPath)
+  }
+}
+
+function onFileDirtyChange(path, dirty) {
+  const tab = fileTabs.value.find((item) => item.path === path)
+  if (tab) tab.dirty = dirty
+}
+
+function onFileSaved() {
+  // 保存后刷新文件树 Git 装饰
+  fileExplorerRef.value?.refresh?.()
+}
+
 // 欢迎页不展示左侧文件栏；进入会话保持当前状态（默认折叠，不覆盖用户手动开关）
 function onWelcomeChange(active) {
   if (active) leftPanelOpen.value = false
@@ -251,9 +385,12 @@ onBeforeUnmount(() => {
   window.removeEventListener('loopra:bash-start', onBashStart)
 })
 
-// 工作区变化时自动上报，确保标签栏图标实时更新
+// 工作区变化时自动上报，确保标签栏图标实时更新；同时清空已打开的文件标签
 watch(workspaceHash, (hash) => {
   if (hash) window.electronAPI?.desktopChatTabs?.reportWorkspace({ tabId, workspaceHash: hash })
+  fileEditorRef.value?.closeAll?.()
+  fileTabs.value = []
+  activeTabId.value = CHAT_TAB_ID
 }, { immediate: true })
 </script>
 
@@ -328,6 +465,14 @@ watch(workspaceHash, (hash) => {
   display: flex;
   flex-direction: column;
   overflow: hidden;
+}
+
+/* 内容区面板（Chat / 文件编辑器）：v-show 切换时保持 flex 布局 */
+.editor-pane {
+  flex: 1;
+  min-height: 0;
+  min-width: 0;
+  display: flex;
 }
 
 .desktop-chat-view {
