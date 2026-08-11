@@ -1,6 +1,7 @@
 package site.sorghum.loopra.tool.solon.common;
 
 import org.noear.solon.ai.annotation.ToolMapping;
+import org.noear.solon.ai.talents.cli.TerminalSessionManager;
 import org.noear.solon.ai.talents.cli.TerminalTalent;
 import org.noear.solon.ai.talents.mount.MountManager;
 import org.noear.solon.annotation.Param;
@@ -12,15 +13,24 @@ import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 
 /**
  * TerminalTalent with passive write/edit change tracking. The underlying tool behavior is unchanged.
  */
 public class SessionTerminalTalent extends TerminalTalent {
     private static final long MAX_TRACKED_BYTES = 512 * 1024;
+    /** 已结束会话在镜像中的保留时长 —— 供前端短暂展示“已结束”状态，与底层 10 分钟 TTL 无关。 */
+    private static final long COMPLETED_VISIBLE_TTL_MS = 60_000;
 
     private final Path workspace;
+
+    /** bash_start/bash_wait/bash_stdin/bash_stop 后台会话镜像（sessionId → 会话信息）。 */
+    private final ConcurrentMap<String, BashSessionInfo> bashSessions = new ConcurrentHashMap<>();
 
     public SessionTerminalTalent(MountManager mountManager, String workspace) {
         super(mountManager);
@@ -79,6 +89,10 @@ public class SessionTerminalTalent extends TerminalTalent {
                             String __cwd) throws IOException {
         String result = super.bashStart(command, workdir, yieldTimeMs, maxOutputChars, hardTimeoutMs, __cwd);
         String sessionId = commandSessionId(result);
+        if (sessionId != null && isCommandRunning(result)) {
+            bashSessions.put(sessionId, new BashSessionInfo(
+                    sessionId, workspace.toString(), command, commandWorkdir(result)));
+        }
         AgentLoopController controller = ToolContext.getCurrentController();
         if (controller != null && sessionId != null && isCommandRunning(result)) {
             controller.registerAbortResource(sessionId,
@@ -93,6 +107,7 @@ public class SessionTerminalTalent extends TerminalTalent {
                            @Param(value = "yield_time_ms", required = false, defaultValue = "1000") Integer yieldTimeMs,
                            @Param(value = "max_output_chars", required = false, defaultValue = "64000") Integer maxOutputChars) throws IOException {
         String result = super.bashWait(sessionId, yieldTimeMs, maxOutputChars);
+        markBashSessionCompleted(sessionId, result);
         clearCompletedCommand(sessionId, result);
         return result;
     }
@@ -104,6 +119,7 @@ public class SessionTerminalTalent extends TerminalTalent {
                             @Param(value = "yield_time_ms", required = false, defaultValue = "1000") Integer yieldTimeMs,
                             @Param(value = "max_output_chars", required = false, defaultValue = "64000") Integer maxOutputChars) throws IOException {
         String result = super.bashStdin(sessionId, chars, yieldTimeMs, maxOutputChars);
+        markBashSessionCompleted(sessionId, result);
         clearCompletedCommand(sessionId, result);
         return result;
     }
@@ -116,6 +132,7 @@ public class SessionTerminalTalent extends TerminalTalent {
         try {
             return super.bashStop(sessionId, reason, maxOutputChars);
         } finally {
+            if (sessionId != null) bashSessions.remove(sessionId);
             AgentLoopController controller = ToolContext.getCurrentController();
             if (controller != null) controller.clearAbortResource(sessionId);
         }
@@ -134,6 +151,181 @@ public class SessionTerminalTalent extends TerminalTalent {
             if (line.startsWith("session_id: ")) return line.substring("session_id: ".length()).trim();
         }
         return null;
+    }
+
+    private static String commandWorkdir(String result) {
+        if (result == null) return null;
+        for (String line : result.split("\\R")) {
+            if (line.startsWith("workdir: ")) return line.substring("workdir: ".length()).trim();
+        }
+        return null;
+    }
+
+    /**
+     * bash_wait / bash_stdin 检测到会话已结束（非 running）时，将镜像标记为 completed。
+     */
+    private void markBashSessionCompleted(String sessionId, String result) {
+        if (sessionId == null) return;
+        BashSessionInfo info = bashSessions.get(sessionId);
+        if (info != null && !isCommandRunning(result)) {
+            info.markCompleted();
+        }
+    }
+
+    /**
+     * 返回本工作区的会话镜像快照（先清理过期 completed 项）。
+     */
+    public List<BashSessionInfo> snapshotBashSessions() {
+        long now = System.currentTimeMillis();
+        bashSessions.entrySet().removeIf(entry -> entry.getValue().isExpired(now));
+        return new ArrayList<>(bashSessions.values());
+    }
+
+    /**
+     * 跨工作区聚合所有 bash 后台会话镜像，按启动时间倒序（新 → 旧）。
+     */
+    public static List<BashSessionInfo> aggregateBashSessions() {
+        List<BashSessionInfo> all = new ArrayList<>();
+        for (LoopraSkillProvider provider : LoopraSkillProvider.cliSkillProviderMap.values()) {
+            SessionTerminalTalent talent = provider.terminalTalent;
+            if (talent != null) {
+                all.addAll(talent.snapshotBashSessions());
+            }
+        }
+        all.sort(Comparator.comparingLong(BashSessionInfo::getStartedAt).reversed());
+        return all;
+    }
+
+    /**
+     * 终止本实例的指定 bash 会话（前端“手动关闭”入口的实例能力）。
+     *
+     * @return 终止后的状态日志文本（含 session_id/状态/原因/最后输出）；未找到会话返回 null
+     */
+    public String terminateSession(String sessionId, String reason) {
+        if (sessionId == null || sessionId.isBlank()) return null;
+        if (!bashSessions.containsKey(sessionId)) return null;
+        try {
+            TerminalSessionManager.CommandSnapshot snapshot = bashSessionManager.terminate(sessionId,
+                    reason == null ? "用户手动关闭" : reason, 64_000);
+            return formatTerminateMessage(snapshot);
+        } catch (Exception e) {
+            // 底层会话可能已结束（镜像滞后），仍清理镜像
+            return null;
+        } finally {
+            bashSessions.remove(sessionId);
+        }
+    }
+
+    /**
+     * 手动终止指定 bash 后台会话（前端“手动关闭”入口）。
+     *
+     * @param sessionId   命令会话 ID
+     * @param workspace   工作区绝对路径；为空时在所有工作区中查找
+     * @param reason      终止原因（仅日志诊断）
+     * @return 终止后的状态日志文本；未找到会话返回 null
+     */
+    public static String terminateBashSession(String sessionId, String workspace, String reason) {
+        if (sessionId == null || sessionId.isBlank()) return null;
+        for (LoopraSkillProvider provider : LoopraSkillProvider.cliSkillProviderMap.values()) {
+            SessionTerminalTalent talent = provider.terminalTalent;
+            if (talent == null) continue;
+            if (workspace != null && !workspace.isEmpty()
+                    && !talent.workspace.equals(Path.of(workspace).toAbsolutePath().normalize())) {
+                continue;
+            }
+            String message = talent.terminateSession(sessionId, reason);
+            if (message != null) return message;
+        }
+        return null;
+    }
+
+    /**
+     * 将终止快照格式化为提示日志文本（供前端展示）。
+     */
+    private static String formatTerminateMessage(TerminalSessionManager.CommandSnapshot snapshot) {
+        if (snapshot == null) return null;
+        StringBuilder sb = new StringBuilder();
+        sb.append("✅ 已关闭后台进程\n");
+        sb.append("session_id: ").append(snapshot.sessionId()).append('\n');
+        sb.append("status: ").append(snapshot.running() ? "running" : "completed").append('\n');
+        if (snapshot.terminated()) {
+            sb.append("terminated: true\n");
+        }
+        if (snapshot.terminateReason() != null) {
+            sb.append("terminate_reason: ").append(snapshot.terminateReason()).append('\n');
+        }
+        if (snapshot.exitCode() != null) {
+            sb.append("exit_code: ").append(snapshot.exitCode()).append('\n');
+        }
+        String output = snapshot.output();
+        if (output != null && !output.isBlank()) {
+            String tail = output.length() > 300 ? output.substring(output.length() - 300) : output;
+            sb.append("最后输出:\n").append(tail);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * bash 后台会话镜像条目。status 为 running / completed；completed 保留 {@link #COMPLETED_VISIBLE_TTL_MS} 后清理。
+     */
+    public static final class BashSessionInfo {
+        private final String sessionId;
+        private final String workspace;
+        private final String command;
+        private final String workdir;
+        private final long startedAt;
+        private volatile String status;
+        private volatile long completedAt;
+
+        BashSessionInfo(String sessionId, String workspace, String command, String workdir) {
+            this.sessionId = sessionId;
+            this.workspace = workspace;
+            this.command = command;
+            this.workdir = workdir;
+            this.startedAt = System.currentTimeMillis();
+            this.status = "running";
+        }
+
+        public String getSessionId() {
+            return sessionId;
+        }
+
+        public String getWorkspace() {
+            return workspace;
+        }
+
+        public String getCommand() {
+            return command;
+        }
+
+        public String getWorkdir() {
+            return workdir;
+        }
+
+        public long getStartedAt() {
+            return startedAt;
+        }
+
+        public String getStatus() {
+            return status;
+        }
+
+        public long getCompletedAt() {
+            return completedAt;
+        }
+
+        public boolean isRunning() {
+            return "running".equals(status);
+        }
+
+        void markCompleted() {
+            this.status = "completed";
+            this.completedAt = System.currentTimeMillis();
+        }
+
+        boolean isExpired(long now) {
+            return completedAt > 0 && now - completedAt > COMPLETED_VISIBLE_TTL_MS;
+        }
     }
 
     private static boolean isCommandRunning(String result) {

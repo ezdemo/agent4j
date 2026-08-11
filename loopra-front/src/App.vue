@@ -493,6 +493,12 @@ function toggleRightPanel() {
   rightPanelOpen.value = !rightPanelOpen.value
 }
 
+// Agent 调用 bash_start 时自动展开右侧栏并切到“命令”页签
+function onBashStart() {
+  rightPanelOpen.value = true
+  rightPanelTab.value = 'bash'
+}
+
 // 切换元素面板
 function toggleElementPanel() {
   if (platform.isElectron) window.electronAPI.elementInspectorWindow.open()
@@ -1422,6 +1428,9 @@ onMounted(async () => {
   // 监听从 ChatMessage 发出的「在元素界面打开」事件
   window.addEventListener('loopra:open-in-element', onOpenInElement)
 
+  // Agent 调用 bash_start 时自动展开右侧栏“命令”页签
+  window.addEventListener('loopra:bash-start', onBashStart)
+
   // 监听更新窗口（Web 新标签页）发起的自动更新请求
   window.addEventListener('message', onWindowMessage)
 })
@@ -1432,6 +1441,7 @@ onBeforeUnmount(() => {
   stopHeartbeat()
   window.removeEventListener('resize', collapseSidebarForNarrowViewport)
   window.removeEventListener('loopra:open-in-element', onOpenInElement)
+  window.removeEventListener('loopra:bash-start', onBashStart)
   window.removeEventListener('message', onWindowMessage)
 })
 

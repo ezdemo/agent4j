@@ -31,6 +31,14 @@
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
           定时
         </button>
+        <button
+          class="rp-tab"
+          :class="{ active: activeTab === 'bash' }"
+          @click="$emit('update:modelValue', 'bash')"
+        >
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><polyline points="7 9 11 13 7 17"/><line x1="13" y1="17" x2="17" y2="17"/></svg>
+          命令
+        </button>
       </div>
       <div class="rp-head-actions">
         <button v-if="activeTab === 'git'" class="btn-icon-sm" @click="gitRef?.loadStatus?.()" title="刷新 Git 状态">
@@ -59,6 +67,9 @@
       <div v-show="activeTab === 'schedule'" class="rp-page">
         <SchedulePanel ref="scheduleRef" :workspace-hash="workspaceHash" :session-name="sessionName" :sessions="sessions" />
       </div>
+      <div v-show="activeTab === 'bash'" class="rp-page">
+        <BashSessionManager embedded />
+      </div>
     </div>
   </div>
 </template>
@@ -68,6 +79,7 @@ import {computed, ref} from 'vue'
 import GitPanel from './GitPanel.vue'
 import FilePanel from './FilePanel.vue'
 import SchedulePanel from './SchedulePanel.vue'
+import BashSessionManager from './BashSessionManager.vue'
 
 const props = defineProps({
   modelValue: { type: String, default: 'git' },

@@ -123,6 +123,8 @@ onMounted(() => {
   stopSendCommandListener = window.electronAPI?.events?.listen('desktop-chat-tab-send-command', (command) => {
     if (command) void chatRef.value?.sendCommand?.(command)
   })
+  // Agent 调用 bash_start 时自动展开右侧栏“命令”页签（仅当前 tab 响应）
+  window.addEventListener('loopra:bash-start', onBashStart)
   window.electronAPI?.desktopChatTabs?.ready?.()
   document.documentElement.setAttribute('data-theme', pageTheme.value)
   void initializeTabContext()
@@ -158,6 +160,19 @@ function toggleRightPanel() {
     if (sessions.value.length === 0) void loadSessions()
   }
   rightPanelOpen.value = !rightPanelOpen.value
+}
+
+// Agent 调用 bash_start 时自动展开右侧栏并切到“命令”页签（仅当前 tab 响应）
+function onBashStart(event) {
+  const detail = event?.detail || {}
+  if (detail.workspaceHash && detail.workspaceHash !== workspaceHash.value) return
+  if (detail.sessionName && detail.sessionName !== sessionName) return
+  if (!rightPanelOpen.value) {
+    rightPanelMounted.value = true
+    if (sessions.value.length === 0) void loadSessions()
+  }
+  rightPanelOpen.value = true
+  rightPanelTab.value = 'bash'
 }
 
 async function toggleTerminal() {
@@ -247,6 +262,7 @@ onBeforeUnmount(() => {
   stopRefreshHistoryListener?.()
   stopFocusComposerListener?.()
   stopSendCommandListener?.()
+  window.removeEventListener('loopra:bash-start', onBashStart)
 })
 
 // 工作区变化时自动上报，确保标签栏图标实时更新
