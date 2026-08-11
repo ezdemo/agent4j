@@ -4,9 +4,33 @@
     <div v-if="sessionActive" class="desktop-streaming-bar">
       <div class="desktop-streaming-bar-inner"></div>
     </div>
-    <aside class="desktop-files-left" :class="{ collapsed: !leftPanelOpen }" aria-label="项目文件">
+    <!-- 左侧固定活动栏：文件 / 版本管理 -->
+    <nav class="desktop-activity-bar" aria-label="侧边栏菜单">
+      <button
+        type="button"
+        class="activity-bar-item"
+        :class="{ active: leftPanelOpen && leftPanelView === 'files' }"
+        title="文件"
+        aria-label="文件"
+        @click="toggleFilePanel"
+      >
+        <span class="codicon codicon-files" aria-hidden="true"></span>
+      </button>
+      <button
+        type="button"
+        class="activity-bar-item"
+        :class="{ active: leftPanelOpen && leftPanelView === 'git' }"
+        title="版本管理"
+        aria-label="版本管理"
+        @click="toggleGitPanel"
+      >
+        <span class="codicon codicon-source-control" aria-hidden="true"></span>
+      </button>
+    </nav>
+    <aside class="desktop-files-left" :class="{ collapsed: !leftPanelOpen }" :aria-label="leftPanelView === 'git' ? '版本管理' : '项目文件'">
       <FileExplorer
-        v-if="leftPanelMounted"
+        v-if="filePanelMounted"
+        v-show="leftPanelView === 'files'"
         ref="fileExplorerRef"
         :root-path="activeWorkspacePath"
         :workspace-hash="workspaceHash"
@@ -14,6 +38,12 @@
         @open-file="openFileTab"
         @file-deleted="onFileDeleted"
         @file-renamed="onFileRenamed"
+      />
+      <GitPanel
+        v-if="gitPanelMounted"
+        v-show="leftPanelView === 'git'"
+        :workspace-hash="workspaceHash"
+        @close="leftPanelOpen = false"
       />
     </aside>
     <div class="desktop-chat-area">
@@ -58,6 +88,7 @@
       :open="rightPanelOpen"
       v-model="rightPanelTab"
       :show-files-tab="false"
+      :show-git-tab="false"
       :workspace-hash="workspaceHash"
       :session-name="sessionName"
       :sessions="sessions"
@@ -86,6 +117,7 @@ import FileEditor from './components/FileEditor.vue'
 import ActionConfirmDialog from './components/ActionConfirmDialog.vue'
 import {fileIconFor} from './utils/fileIcons'
 
+const GitPanel = defineAsyncComponent(() => import('./components/GitPanel.vue'))
 const RightPanel = defineAsyncComponent(() => import('./components/RightPanel.vue'))
 const TerminalView = defineAsyncComponent(() => import('./components/TerminalView.vue'))
 const FileExplorer = defineAsyncComponent(() => import('./components/FileExplorer.vue'))
@@ -103,11 +135,13 @@ const chatRef = ref(null)
 const rightPanelOpen = ref(false)
 const rightPanelMounted = ref(false)
 const leftPanelOpen = ref(false)
-const leftPanelMounted = ref(false)
+const leftPanelView = ref('files')
+const filePanelMounted = ref(false)
+const gitPanelMounted = ref(false)
 const showTerminal = ref(false)
 const terminalMounted = ref(false)
 const sessionActive = ref(false)
-const rightPanelTab = ref('git')
+const rightPanelTab = ref('schedule')
 // 编辑器标签：Chat 固定第一且不可关闭，文件标签可关闭
 const CHAT_TAB_ID = 'chat'
 const fileExplorerRef = ref(null)
@@ -127,7 +161,6 @@ const activeWorkspacePath = computed(() => {
   return workspace?.path || ''
 })
 const tabId = `${workspaceHash.value || ''}:${sessionName}`
-let stopLeftPanelListener = null
 let stopRightPanelListener = null
 let stopTerminalListener = null
 let stopThemeListener = null
@@ -138,7 +171,6 @@ let stopSendCommandListener = null
 
 onMounted(() => {
   // 先注册主进程事件，避免初始化请求期间丢失聚焦或自动发送命令。
-  stopLeftPanelListener = window.electronAPI?.events?.listen('desktop-chat-tab-toggle-left-panel', toggleLeftPanel)
   stopRightPanelListener = window.electronAPI?.events?.listen('desktop-chat-tab-toggle-right-panel', toggleRightPanel)
   stopTerminalListener = window.electronAPI?.events?.listen('desktop-chat-tab-toggle-terminal', toggleTerminal)
   stopThemeListener = window.electronAPI?.events?.listen('desktop-chat-tab-theme', (nextTheme) => {
@@ -180,9 +212,28 @@ async function loadWorkspaces() {
   }
 }
 
-function toggleLeftPanel() {
-  if (!leftPanelOpen.value) leftPanelMounted.value = true
-  leftPanelOpen.value = !leftPanelOpen.value
+// 活动栏「文件」：在左侧切换文件面板（同时收起右侧栏）
+function toggleFilePanel() {
+  if (leftPanelOpen.value && leftPanelView.value === 'files') {
+    leftPanelOpen.value = false
+    return
+  }
+  rightPanelOpen.value = false
+  leftPanelView.value = 'files'
+  filePanelMounted.value = true
+  leftPanelOpen.value = true
+}
+
+// 活动栏「版本管理」：在左侧切换 Git 面板（同时收起右侧栏）
+function toggleGitPanel() {
+  if (leftPanelOpen.value && leftPanelView.value === 'git') {
+    leftPanelOpen.value = false
+    return
+  }
+  rightPanelOpen.value = false
+  leftPanelView.value = 'git'
+  gitPanelMounted.value = true
+  leftPanelOpen.value = true
 }
 
 function toggleRightPanel() {
@@ -376,7 +427,6 @@ function requestModelSettings() {
 }
 
 onBeforeUnmount(() => {
-  stopLeftPanelListener?.()
   stopRightPanelListener?.()
   stopTerminalListener?.()
   stopThemeListener?.()
@@ -406,7 +456,71 @@ watch(workspaceHash, (hash) => {
   position: relative;
 }
 
-/* 会话进行中的波动条：绝对定位横跨两侧边栏之上 */
+/* 左侧固定活动栏 */
+.desktop-activity-bar {
+  width: 50px;
+  flex: 0 0 50px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 5px;
+  gap: 4px;
+  background: var(--bg);
+  border-right: 1px solid var(--border);
+  box-shadow: 1px 0 0 color-mix(in srgb, var(--border) 35%, transparent);
+  z-index: 40;
+  user-select: none;
+}
+
+.activity-bar-item {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 40px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--fg-2);
+  font-size: 21px;
+  line-height: 1;
+  cursor: pointer;
+  outline: none;
+  transition: color var(--t), background-color var(--t), border-color var(--t), transform 0.12s ease;
+}
+
+.activity-bar-item:hover {
+  color: var(--text);
+  background: color-mix(in srgb, var(--text) 7%, transparent);
+}
+
+.activity-bar-item:active {
+  transform: scale(0.96);
+}
+
+.activity-bar-item:focus-visible {
+  border-color: color-mix(in srgb, var(--accent) 72%, transparent);
+  box-shadow: 0 0 0 1px color-mix(in srgb, var(--accent) 18%, transparent);
+}
+
+.activity-bar-item.active {
+  color: var(--accent);
+  background: color-mix(in srgb, var(--accent) 11%, transparent);
+}
+
+.activity-bar-item .codicon {
+  transition: transform var(--t);
+}
+
+.activity-bar-item:hover .codicon {
+  transform: scale(1.06);
+}
+
+
+/* 会话进行中的波动条：从最左侧向右运行，固定活动栏覆盖其起始段 */
 .desktop-streaming-bar {
   position: absolute;
   top: 0;
@@ -444,7 +558,7 @@ watch(workspaceHash, (hash) => {
   flex-direction: column;
   flex-shrink: 0;
   overflow: hidden;
-  background: var(--bg-2, #f7f7f8);
+  background: #f7f7f8;
   border-right: 1px solid var(--border);
   transition: width 0.2s, opacity 0.2s;
 }
@@ -457,8 +571,11 @@ watch(workspaceHash, (hash) => {
   pointer-events: none;
 }
 
-.desktop-files-left :deep(.file-explorer) {
+.desktop-files-left :deep(.file-explorer),
+.desktop-files-left :deep(.git-panel) {
+  width: 100%;
   min-height: 0;
+  flex: 1;
 }
 
 .desktop-chat-area {

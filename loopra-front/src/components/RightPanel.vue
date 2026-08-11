@@ -7,6 +7,7 @@
     <div class="rp-head">
       <div class="rp-tabs">
         <button
+          v-if="showGitTab"
           class="rp-tab"
           :class="{ active: activeTab === 'git' }"
           @click="$emit('update:modelValue', 'git')"
@@ -41,7 +42,7 @@
         </button>
       </div>
       <div class="rp-head-actions">
-        <button v-if="activeTab === 'git'" class="btn-icon-sm" @click="gitRef?.loadStatus?.()" title="刷新 Git 状态">
+        <button v-if="showGitTab && activeTab === 'git'" class="btn-icon-sm" @click="gitRef?.loadStatus?.()" title="刷新 Git 状态">
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
         </button>
         <button v-if="showFilesTab && activeTab === 'files'" class="btn-icon-sm" @click="fileRef?.refresh?.()" title="刷新文件树">
@@ -58,7 +59,7 @@
 
     <!-- 面板内容（保活：用 v-show） -->
     <div class="rp-body">
-      <div v-show="activeTab === 'git'" class="rp-page">
+      <div v-if="showGitTab" v-show="activeTab === 'git'" class="rp-page">
         <GitPanel ref="gitRef" :workspace-hash="workspaceHash" />
       </div>
       <div v-if="showFilesTab" v-show="activeTab === 'files'" class="rp-page">
@@ -85,13 +86,18 @@ const props = defineProps({
   modelValue: { type: String, default: 'git' },
   open: { type: Boolean, default: true },
   showFilesTab: { type: Boolean, default: true },
+  showGitTab: { type: Boolean, default: true },
   workspaceHash: { type: String, default: null },
   sessionName: { type: String, default: '' },
   sessions: { type: Array, default: () => [] }
 })
 
 const emit = defineEmits(['update:modelValue', 'close', 'addToSession'])
-const activeTab = computed(() => !props.showFilesTab && props.modelValue === 'files' ? 'git' : props.modelValue)
+const activeTab = computed(() => {
+  if (!props.showGitTab && props.modelValue === 'git') return props.showFilesTab ? 'files' : 'schedule'
+  if (!props.showFilesTab && props.modelValue === 'files') return props.showGitTab ? 'git' : 'schedule'
+  return props.modelValue
+})
 
 const gitRef = ref(null)
 const fileRef = ref(null)
