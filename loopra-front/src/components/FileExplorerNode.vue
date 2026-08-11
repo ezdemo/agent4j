@@ -3,9 +3,11 @@
     <div
       class="fen-row"
       :class="{ active: rowNode.path && rowNode.path === selectedPath }"
+      :draggable="!rowNode.directory && !rowNode.editing"
       @click="$emit('toggle', rowNode)"
       @dblclick="$emit('dblclick', rowNode)"
       @contextmenu.prevent.stop="$emit('contextmenu', $event, rowNode)"
+      @dragstart="startFileDrag"
     >
       <!-- 缩进导引线位于内容左侧；每级宽度固定 16px。 -->
       <div v-if="depth > 0" class="fen-indent" :style="{ left: '16px' }">
@@ -169,6 +171,13 @@ const fileIcon = computed(() => {
   return { kind, color, glyph: String.fromCodePoint(codePoint) }
 })
 
+function startFileDrag(event) {
+  if (rowNode.value.directory || rowNode.value.editing) return
+  event.dataTransfer.effectAllowed = 'copy'
+  event.dataTransfer.setData('application/x-loopra-file-path', rowNode.value.path)
+  event.dataTransfer.setData('text/plain', rowNode.value.path)
+}
+
 function normalizePath(path) {
   return String(path || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
 }
@@ -223,6 +232,12 @@ watch(() => rowNode.value.editing, (editing) => {
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
+}
+.fen-row[draggable="true"] {
+  cursor: grab;
+}
+.fen-row[draggable="true"]:active {
+  cursor: grabbing;
 }
 /* 悬停背景（VS Code 浅色 #e8e8e8 / 深色 #2a2d2e） */
 .fen-row:hover {

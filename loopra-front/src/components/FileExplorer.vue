@@ -44,9 +44,11 @@
             :class="{ active: result.path === selectedPath }"
             role="option"
             :title="result.path"
+            :draggable="!result.directory"
             @click="selectResult(result)"
             @dblclick="openPreview(result)"
             @contextmenu.prevent.stop="openContextMenu($event, result)"
+            @dragstart="startFileDrag($event, result)"
           >
             <span class="fen-twistie-placeholder"></span>
             <i class="codicon codicon-file fen-icon"></i>
@@ -94,6 +96,10 @@
           </button>
         </template>
         <template v-else-if="contextMenu.node && !contextMenu.node.directory">
+          <button type="button" role="menuitem" @click="contextAction('add-to-session')">
+            <i class="codicon codicon-comment-add"></i>
+            添加到对话
+          </button>
           <button type="button" role="menuitem" @click="contextAction('open')">
             <i class="codicon codicon-open-preview"></i>
             打开预览
@@ -506,6 +512,13 @@ function selectResult(result) {
   selectedPath.value = result.path
 }
 
+function startFileDrag(event, node) {
+  if (!node || node.directory) return
+  event.dataTransfer.effectAllowed = 'copy'
+  event.dataTransfer.setData('application/x-loopra-file-path', node.path)
+  event.dataTransfer.setData('text/plain', node.path)
+}
+
 // ── 右键菜单 ──
 function openContextMenu(event, node) {
   closeContextMenu()
@@ -527,6 +540,7 @@ function contextAction(action) {
   if (action === 'new-file') startNew(node, 'file')
   else if (action === 'new-folder') startNew(node, 'folder')
   else if (action === 'open') void openPreview(node)
+  else if (action === 'add-to-session' && !node.directory) emit('addToSession', { file: node.path })
   else if (action === 'reveal') revealInExplorer(node)
   else if (action === 'rename') startRename(node)
   else if (action === 'delete') removeNode(node)
@@ -717,6 +731,12 @@ defineExpose({ refresh })
   cursor: pointer;
   white-space: nowrap;
   user-select: none;
+}
+.fen-row[draggable="true"] {
+  cursor: grab;
+}
+.fen-row[draggable="true"]:active {
+  cursor: grabbing;
 }
 .fen-row:hover {
   background: #e8e8e8;
