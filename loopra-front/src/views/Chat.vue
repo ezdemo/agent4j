@@ -2753,7 +2753,7 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
   scrollbar-gutter: stable;
   scrollbar-width: thin;
   scrollbar-color: transparent transparent;
-  padding: 16px 72px 146px;
+  padding: 16px clamp(16px, 2vw, 24px) 146px;
   position: relative;
   transition: padding-bottom 180ms ease;
 }
@@ -2777,6 +2777,15 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 
 .messages:hover::-webkit-scrollbar-thumb {
   background: var(--fg-4);
+}
+
+.virtual-message-item,
+.messages > .msg.assistant {
+  width: 100%;
+  max-width: 1000px;
+  margin-right: auto;
+  margin-left: auto;
+  box-sizing: border-box;
 }
 
 .virtual-message-item {
@@ -2905,7 +2914,8 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 }
 
 .msg.assistant .msg-body {
-  max-width: 78%;
+  width: 100%;
+  max-width: 100%;
 }
 
 .assistant-body {
