@@ -524,7 +524,7 @@ const selectWelcomeModel = async (modelName) => {
 
 
 const sendWelcomeMessage = async (images, messageText) => {
-  if (sessionBusy.value && !streaming.value) return
+  // 不拦截发送：会话后台运行/状态检查中 sendMessage 会自动排队，不会静默丢弃
   const prompt = messageText?.trim()
   if (!prompt) return
 
@@ -934,6 +934,9 @@ const pollSessionStatus = async (token, workspaceHash, sessionName) => {
       sessionStatusObservedRunning = false
       sessionStatusStopping.value = false
       if (!isCurrentSessionStatus(token, workspaceHash, sessionName)) return
+      // 后台任务停止后补发排队消息：流结束瞬间任务状态可能仍为 running，
+      // sendNextQueuedMessage 的 sessionBusy 守卫会暂停队列，这里兜底恢复
+      if (queuedMessages.value.length > 0) nextTick(() => sendNextQueuedMessage(sessionName, workspaceHash))
     }
     scheduleSessionStatusPoll(token, workspaceHash, sessionName)
   } catch {
@@ -1471,10 +1474,10 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
   if (!text && images.length === 0 && !requestAction) return
   const sessionName = targetSessionName
   if (!sessionName) return
-  if (sessionName === props.sessionName && sessionBusy.value && !streaming.value) return
   const selectedModel = modelSelection || getSessionModelSelection(sessionName, targetWorkspaceHash)
   const selectedReasoningEffort = reasoningEffort || getSessionReasoningEffort(sessionName, targetWorkspaceHash)
-  if (store.getSessionStreaming(sessionName)) {
+  // 流式输出中发送 → 排队（原行为）；会话后台任务运行/状态检查中发送 → 也排队，避免静默丢弃
+  if (store.getSessionStreaming(sessionName) || (!requestAction && sessionName === props.sessionName && sessionBusy.value)) {
     addQueuedMessage(sessionName, targetWorkspaceHash, images, text, selectedModel, selectedReasoningEffort)
     inputText.value = ''
     return

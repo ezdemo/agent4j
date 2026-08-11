@@ -159,7 +159,7 @@ describe('ChatInput plan mode', () => {
     expect(wrapper.find('.plan-mode-btn').attributes('aria-pressed')).toBe('true')
     wrapper.unmount()
   })
-  it('locks message and plan controls while the session task is running but keeps stop available', async () => {
+  it('keeps input and send available while the session task is running but locks plan controls', async () => {
     const wrapper = mountInput({
       inputText: '不要重复发送',
       sessionName: 'session-1',
@@ -167,14 +167,15 @@ describe('ChatInput plan mode', () => {
       sessionBusy: true
     })
 
-    expect(wrapper.find('textarea').attributes('disabled')).toBeDefined()
-    expect(wrapper.find('.send-btn').attributes('disabled')).toBeDefined()
+    // 输入区永不禁用：后台运行中也允许输入并发送（Chat.vue 侧自动排队）
+    expect(wrapper.find('textarea').attributes('disabled')).toBeUndefined()
+    expect(wrapper.find('.send-btn').attributes('disabled')).toBeUndefined()
     expect(wrapper.find('.plan-mode-btn').attributes('disabled')).toBeDefined()
     expect(wrapper.find('.continue-btn').exists()).toBe(false)
     expect(wrapper.find('.stop-btn').exists()).toBe(true)
 
     await wrapper.find('.send-btn').trigger('click')
-    expect(wrapper.emitted('send')).toBeUndefined()
+    expect(wrapper.emitted('send')).toBeDefined()
     wrapper.unmount()
   })
 
