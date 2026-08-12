@@ -138,6 +138,7 @@ jobs:
 
       - name: Package with electron-builder
         working-directory: loopra-front
+        shell: bash
         env:
           # 无证书时禁止自动发现，避免 runner 上意外使用无效证书导致打包失败
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
