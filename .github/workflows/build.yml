@@ -87,9 +87,43 @@ jobs:
         working-directory: loopra-front
         run: pnpm run build:vite
 
+      # macOS 代码签名 + 公证：
+      # - 配置了 MAC_CERTIFICATE_P12（Developer ID 证书 base64）时，将其写入
+      #   CSC_LINK 交给 electron-builder 自动签名；
+      # - 同时配置了 APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID 时，
+      #   electron-builder 会对产物做 notarization（公证），否则 Gatekeeper 仍会拦截；
+      # - 未配置任何凭据时保持原行为（不签名），并输出 warning。
+      - name: Prepare macOS code signing
+        if: runner.os == 'macOS'
+        shell: bash
+        env:
+          MAC_CERTIFICATE_P12: ${{ secrets.MAC_CERTIFICATE_P12 }}
+          MAC_CERTIFICATE_P12_PASSWORD: ${{ secrets.MAC_CERTIFICATE_P12_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          if [ -z "$MAC_CERTIFICATE_P12" ]; then
+            echo "::warning::未配置 MAC_CERTIFICATE_P12，macOS 构建将跳过签名（Gatekeeper 可能拦截）"
+            exit 0
+          fi
+          echo "$MAC_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/loopra-mac-cert.p12"
+          chmod 600 "$RUNNER_TEMP/loopra-mac-cert.p12"
+          echo "CSC_LINK=$RUNNER_TEMP/loopra-mac-cert.p12" >> "$GITHUB_ENV"
+          echo "CSC_KEY_PASSWORD=$MAC_CERTIFICATE_P12_PASSWORD" >> "$GITHUB_ENV"
+          if [ -z "$APPLE_ID" ] || [ -z "$APPLE_APP_SPECIFIC_PASSWORD" ] || [ -z "$APPLE_TEAM_ID" ]; then
+            echo "::warning::Apple 公证凭据不完整（APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID），本次仅签名不公证"
+            exit 0
+          fi
+          echo "APPLE_ID=$APPLE_ID" >> "$GITHUB_ENV"
+          echo "APPLE_APP_SPECIFIC_PASSWORD=$APPLE_APP_SPECIFIC_PASSWORD" >> "$GITHUB_ENV"
+          echo "APPLE_TEAM_ID=$APPLE_TEAM_ID" >> "$GITHUB_ENV"
+          echo "::notice::macOS 代码签名与公证凭据已就绪"
+
       - name: Package with electron-builder
         working-directory: loopra-front
         env:
+          # 无证书时禁止自动发现，避免 runner 上意外使用无效证书导致打包失败
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
         run: npx electron-builder ${{ matrix.builder_flag }} --publish=never
 
