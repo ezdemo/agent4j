@@ -28,12 +28,14 @@
         @click="$emit('setActive', tab.id)"
         @mousedown.middle.prevent="maybeClose(tab)"
       >
-        <span
+        <i
           v-if="tab.fileIcon"
-          class="et-file-icon"
+          class="codicon et-file-icon"
+          :class="tab.fileIcon.icon"
           :data-icon="tab.fileIcon.kind"
           :style="{color: tab.fileIcon.color}"
-        >{{ tab.fileIcon.glyph }}</span>
+          aria-hidden="true"
+        ></i>
         <i v-else-if="tab.icon" class="codicon et-icon" :class="tab.icon"></i>
         <span class="et-label">
           <span class="et-label-text">{{ tab.label }}</span>
@@ -139,14 +141,6 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
 </script>
 
 <style scoped>
-@font-face {
-  font-family: 'Seti';
-  src: url('../assets/seti.woff') format('woff');
-  font-style: normal;
-  font-weight: normal;
-  font-display: block;
-}
-
 .editor-tabs {
   display: flex;
   height: 36px;
@@ -210,18 +204,15 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
   color: var(--fg-muted);
 }
 
-.et-file-icon {
-  display: inline-block;
+i.et-file-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
   width: 16px;
   height: 22px;
   flex: 0 0 16px;
-  font-family: 'Seti', sans-serif;
-  font-size: 19.5px;
-  font-style: normal;
-  font-weight: normal;
-  line-height: 22px;
+  font: normal normal normal 14px/1 codicon;
   text-align: left;
-  -webkit-font-smoothing: antialiased;
 }
 
 .et-label {
