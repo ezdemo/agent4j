@@ -290,6 +290,11 @@ public class AgentLoop implements AgentLoopController {
         client.setReasoningEffort(reasoningEffort);
     }
 
+    /** 运行时切换快速模式（热更新，OpenAI service_tier=fast，仅 OpenAI 协议生效） */
+    public void setFastMode(boolean fastMode) {
+        client.setFastMode(fastMode);
+    }
+
     @Override
     public boolean terminateOnNoToolCall() {
         return terminateOnNoToolCall;

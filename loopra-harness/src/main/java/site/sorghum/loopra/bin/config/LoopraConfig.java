@@ -764,19 +764,20 @@ public class LoopraConfig implements AgentConfig {
     }
 
     /**
+     * 是否启用 OpenAI 快速模式（service_tier=fast）。
+     * 仅对 OpenAI 协议（chat_completions / responses）生效，其他协议忽略。默认 false。
+     */
+    public boolean fastMode() {
+        ONode n = root.select("$.fastMode");
+        return n != null && !n.isNull() && n.getBoolean();
+    }
+
+    /**
      * 获取最大自愈尝试次数（每回合重置）
      */
     public int maxSelfCorrectionAttempts() {
         ONode n = root.select("$.maxSelfCorrectionAttempts");
         return n != null && !n.isNull() ? n.getInt() : 5;
-    }
-
-    /**
-     * 获取流式错误最大重试次数
-     */
-    public int maxStreamErrorRetries() {
-        ONode n = root.select("$.maxStreamErrorRetries");
-        return n != null && !n.isNull() ? n.getInt() : 10;
     }
 
     /**

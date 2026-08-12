@@ -25,6 +25,11 @@ final class ResponsesApiProtocol extends AbstractModelApiProtocol {
     public ONode buildRequest(RequestContext context) {
         ONode body = ONode.ofJson("{}");
         body.set(MODEL, ModelContextUtils.stripContextSizeSuffix(context.model()));
+        // 快速模式（service_tier=fast），仅 OpenAI 协议生效
+        String serviceTier = context.serviceTier();
+        if (serviceTier != null && !serviceTier.isBlank()) {
+            body.set("service_tier", serviceTier);
+        }
         String reasoningEffort = context.reasoningEffort();
         if (reasoningEffort != null && !reasoningEffort.isEmpty() && !"none".equals(reasoningEffort)) {
             ONode reasoning = body.getOrNew("reasoning");

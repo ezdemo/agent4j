@@ -139,7 +139,7 @@ public class ChatController {
 
                 agentService.chatStream(userMsg, resolvedPath, sessionName, emitter,
                         request.getModel(), request.getModelChannelId(), request.getReasoningEffort(),
-                        request.getAction());
+                        request.getFastMode(), request.getAction());
             } catch (Exception e) {
                 log.error("[chat] 流任务执行异常: session={}, requestId={}, 原因: {}",
                         sessionName, requestId, e.getMessage(), e);
