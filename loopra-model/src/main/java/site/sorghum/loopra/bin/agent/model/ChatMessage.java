@@ -61,6 +61,14 @@ public class ChatMessage {
     private String reasoningContent;
 
     /**
+     * 原始 thinking / redacted_thinking 内容块 JSON（Anthropic 协议专用）。
+     * 元素为服务端返回的块原文（含 signature），多轮对话时需原样回传，不能拼接或伪造。
+     * 例如 {"type":"thinking","thinking":"...","signature":"..."}。
+     */
+    @ONodeAttr(name = "thinking_blocks")
+    private List<String> thinkingBlocks;
+
+    /**
      * Responses API 本轮推理 item 的原始 JSON。
      * 该 item 属于 assistant response，而不是单个工具调用。
      */
@@ -180,6 +188,18 @@ public class ChatMessage {
         }
         Object reasoning = m.get("reasoning_content");
         msg.reasoningContent = reasoning != null ? reasoning.toString() : null;
+        Object thinkingBlocks = m.get("thinking_blocks");
+        if (thinkingBlocks instanceof List<?> blockList && !blockList.isEmpty()) {
+            msg.thinkingBlocks = new ArrayList<>();
+            for (Object block : blockList) {
+                if (block instanceof String text) {
+                    msg.thinkingBlocks.add(text);
+                } else if (block != null) {
+                    // 反序列化得到的是 Map，需转回 JSON 字符串
+                    msg.thinkingBlocks.add(ONode.serialize(block));
+                }
+            }
+        }
         Object responseReasoning = m.get("response_reasoning");
         msg.responseReasoning = responseReasoning != null ? responseReasoning.toString() : null;
         Object fileChanges = m.get("file_changes");
@@ -355,6 +375,7 @@ public class ChatMessage {
         if (toolImageUrl != null) m.put("tool_image_url", toolImageUrl);
         if (toolImageDetail != null) m.put("tool_image_detail", toolImageDetail);
         if (reasoningContent != null) m.put("reasoning_content", reasoningContent);
+        if (thinkingBlocks != null && !thinkingBlocks.isEmpty()) m.put("thinking_blocks", thinkingBlocks);
         if (responseReasoning != null) m.put("response_reasoning", responseReasoning);
         if (fileChanges != null && !fileChanges.isEmpty()) m.put("file_changes", fileChanges);
         if (snapshotId != null) m.put("snapshot_id", snapshotId);
@@ -425,6 +446,9 @@ public class ChatMessage {
         copy.toolImageUrl = this.toolImageUrl;
         copy.toolImageDetail = this.toolImageDetail;
         copy.reasoningContent = this.reasoningContent;
+        if (this.thinkingBlocks != null) {
+            copy.thinkingBlocks = new ArrayList<>(this.thinkingBlocks);
+        }
         copy.responseReasoning = this.responseReasoning;
         if (this.fileChanges != null) {
             copy.fileChanges = new ArrayList<>(this.fileChanges);

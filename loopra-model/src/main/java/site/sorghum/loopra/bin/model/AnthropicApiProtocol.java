@@ -205,6 +205,19 @@ final class AnthropicApiProtocol extends AbstractModelApiProtocol {
         }
         if (message.isAssistant()) {
             ONode content = ONode.ofJson("[]").asArray();
+            // thinking/redacted_thinking 块必须原样回传（含服务端签名）并置于 text 之前
+            if (message.getThinkingBlocks() != null && !message.getThinkingBlocks().isEmpty()) {
+                for (String blockJson : message.getThinkingBlocks()) {
+                    try {
+                        ONode block = ONode.ofJson(blockJson);
+                        String type = block.get(TYPE).getString();
+                        if (!"thinking".equals(type) && !"redacted_thinking".equals(type)) continue;
+                        content.add(block);
+                    } catch (Exception e) {
+                        log.debug("跳过无法解析的 thinking 块: {}", e.getMessage());
+                    }
+                }
+            }
             if (message.getContent() != null && !message.getContent().isEmpty()) {
                 content.addNew().set(TYPE, "text").set("text", message.getContent());
             }
@@ -279,6 +292,7 @@ final class AnthropicApiProtocol extends AbstractModelApiProtocol {
         StringBuilder text = new StringBuilder();
         StringBuilder reasoning = new StringBuilder();
         ONode toolCalls = ONode.ofJson("[]").asArray();
+        ONode thinkingBlocks = null;
         for (ONode block : content.getArray()) {
             String type = block.get(TYPE).getString();
             if ("text".equals(type)) {
@@ -287,6 +301,12 @@ final class AnthropicApiProtocol extends AbstractModelApiProtocol {
             } else if ("thinking".equals(type)) {
                 String token = block.get("thinking").getString();
                 if (token != null) reasoning.append(token);
+                // 保留原始块（含 signature）供多轮对话原样回传
+                if (thinkingBlocks == null) thinkingBlocks = ONode.ofJson("[]").asArray();
+                thinkingBlocks.add(block);
+            } else if ("redacted_thinking".equals(type)) {
+                if (thinkingBlocks == null) thinkingBlocks = ONode.ofJson("[]").asArray();
+                thinkingBlocks.add(block);
             } else if ("tool_use".equals(type)) {
                 ONode call = toolCalls.addNew();
                 call.set(ID, block.get(ID).getString());
@@ -299,6 +319,7 @@ final class AnthropicApiProtocol extends AbstractModelApiProtocol {
         }
         message.set(CONTENT, text.toString());
         if (!reasoning.isEmpty()) message.set(REASONING_CONTENT, reasoning.toString());
+        if (thinkingBlocks != null) message.set("thinking_blocks", thinkingBlocks);
         if (!toolCalls.isEmpty()) message.set("tool_calls", toolCalls);
         return message;
     }
@@ -319,6 +340,12 @@ final class AnthropicApiProtocol extends AbstractModelApiProtocol {
                     chunk.get("content_block"), chunk.get("index").getInt(), state);
             case "content_block_delta" -> contentBlockDelta(
                     chunk.get("delta"), chunk.get("index").getInt(), callback, state);
+            case "content_block_stop" -> {
+                if (state.anthropicActiveThinkingBlock != null) {
+                    state.anthropicThinkingBlocks.add(state.anthropicActiveThinkingBlock.toJson());
+                    state.anthropicActiveThinkingBlock = null;
+                }
+            }
             case "message_delta" -> {
                 ONode usage = chunk.get(USAGE);
                 if (usage != null && !usage.isNull()) emitUsage(usage, callback, state);
@@ -348,9 +375,29 @@ final class AnthropicApiProtocol extends AbstractModelApiProtocol {
         return state.completed ? null : "Anthropic Messages stream ended before message_stop";
     }
 
+    @Override
+    public void completeStream(ModelApiStreamState state, ModelClient.StreamCallback callback) {
+        if (!state.anthropicThinkingBlocks.isEmpty()) {
+            safeCallback("onThinkingBlocks", () -> callback.onThinkingBlocks(
+                    List.copyOf(state.anthropicThinkingBlocks)));
+        }
+        super.completeStream(state, callback);
+    }
+
     private void contentBlockStart(ONode block, int index, ModelApiStreamState state) {
         if (block == null || block.isNull()) return;
-        if (!"tool_use".equals(block.get(TYPE).getString())) return;
+        String type = block.get(TYPE).getString();
+        if ("thinking".equals(type) || "redacted_thinking".equals(type)) {
+            // thinking 块在流中串行生成：start 时新建，delta 累积，stop 时归档为原始块 JSON。
+            ONode active = ONode.ofJson("{}");
+            active.set(TYPE, type);
+            if (!block.get("thinking").isNull()) active.set("thinking", block.get("thinking"));
+            if (!block.get("signature").isNull()) active.set("signature", block.get("signature"));
+            if (!block.get("data").isNull()) active.set("data", block.get("data"));
+            state.anthropicActiveThinkingBlock = active;
+            return;
+        }
+        if (!"tool_use".equals(type)) return;
         ONode call = toolCall(index, state);
         String id = block.get(ID).getString();
         if (id != null && !id.isEmpty()) call.set(ID, id);
@@ -373,7 +420,18 @@ final class AnthropicApiProtocol extends AbstractModelApiProtocol {
             if (thinking != null && !thinking.isEmpty()) {
                 state.emittedOutput = true;
                 state.emittedReasoning = true;
+                appendThinkingDelta(state, "thinking", thinking);
                 safeCallback("onReasoningDelta", () -> callback.onReasoningDelta(thinking));
+            }
+        } else if ("signature_delta".equals(deltaType)) {
+            String signature = delta.get("signature").getString();
+            if (signature != null && !signature.isEmpty() && state.anthropicActiveThinkingBlock != null) {
+                state.anthropicActiveThinkingBlock.set("signature", signature);
+            }
+        } else if ("redacted_thinking_delta".equals(deltaType)) {
+            String data = delta.get("data").getString();
+            if (data != null && !data.isEmpty() && state.anthropicActiveThinkingBlock != null) {
+                state.anthropicActiveThinkingBlock.set("data", data);
             }
         } else if ("input_json_delta".equals(deltaType)) {
             String partial = delta.get("partial_json").getString();
@@ -383,7 +441,14 @@ final class AnthropicApiProtocol extends AbstractModelApiProtocol {
                 function.set(ARGUMENTS, (previous == null ? "" : previous) + partial);
             }
         }
-        // signature_delta 等其他增量类型不包含用户可见内容，忽略。
+        // 其他增量类型不包含需要回传的内容。
+    }
+
+    private static void appendThinkingDelta(ModelApiStreamState state, String key, String delta) {
+        ONode active = state.anthropicActiveThinkingBlock;
+        if (active == null) return;
+        String previous = active.get(key).isNull() ? "" : active.get(key).getString();
+        active.set(key, (previous == null ? "" : previous) + delta);
     }
 
     /** Anthropic 将输入/输出用量分开发送：message_start 带输入侧，message_delta 带输出侧。 */

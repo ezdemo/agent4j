@@ -120,6 +120,11 @@ public class ConversationContext {
 
     public void addAssistant(String content, List<ToolCallEntry> toolCalls, String reasoningContent,
                              List<FileChange> fileChanges) {
+        addAssistant(content, toolCalls, reasoningContent, null, fileChanges);
+    }
+
+    public void addAssistant(String content, List<ToolCallEntry> toolCalls, String reasoningContent,
+                             List<String> thinkingBlocks, List<FileChange> fileChanges) {
         // 防御：assistant 消息必须至少包含 content、tool_calls 或 reasoning_content 之一
         boolean hasContent = content != null && !content.isEmpty();
         boolean hasToolCalls = toolCalls != null && !toolCalls.isEmpty();
@@ -132,6 +137,9 @@ public class ConversationContext {
             content = null;
         }
         ChatMessage msg = ChatMessage.assistant(content, toolCalls, reasoningContent);
+        if (thinkingBlocks != null && !thinkingBlocks.isEmpty()) {
+            msg.setThinkingBlocks(new ArrayList<>(thinkingBlocks));
+        }
         if (fileChanges != null && !fileChanges.isEmpty()) {
             msg.setFileChanges(new ArrayList<>(fileChanges));
         }
