@@ -72,9 +72,6 @@ importers:
         specifier: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
         version: https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz
     devDependencies:
-      '@electron/rebuild':
-        specifier: ^4.2.0
-        version: 4.2.0
       '@vitejs/plugin-vue':
         specifier: ^5.0.4
         version: 5.0.4(vite@8.0.5(@emnapi/core@1.11.3)(@emnapi/runtime@1.11.3)(@types/node@26.2.0)(jiti@2.7.0))(vue@3.5.41)
