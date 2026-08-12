@@ -5,6 +5,7 @@
   "workspaceDir": ".",
   "editMode": "auto",
   "reasoningEffort": "max",
+  "fastMode": false,
   "lang": "ZH",
   "hitl": false,
   "disabledTools": ["lsp"],

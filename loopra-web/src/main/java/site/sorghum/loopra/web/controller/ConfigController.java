@@ -82,6 +82,7 @@ public class ConfigController {
                 cfg.price(),
                 cfg.activePet(),
                 cfg.terminateOnNoToolCall(),
+                cfg.fastMode(),
                 cfg.modelChannels().stream().map(channel -> new ConfigDTO.ModelChannelConfig(
                         channel.id(), channel.name(), channel.baseUrl(), maskApiKey(channel.apiKey()),
                         channel.apiProtocol(), channel.modelEntries().stream().map(entry -> new ConfigDTO.ModelConfig(
@@ -122,7 +123,7 @@ public class ConfigController {
                     || "validationModel".equals(key) || "validationModelChannelId".equals(key)) continue;
             // 只发布已知的运行时配置键
             if ("model".equals(key) || "reasoningEffort".equals(key) || "hitl".equals(key)
-                    || "terminateOnNoToolCall".equals(key) || "disabledTools".equals(key)) {
+                    || "terminateOnNoToolCall".equals(key) || "fastMode".equals(key) || "disabledTools".equals(key)) {
                 Dami.bus().send("config.changed", new ConfigChangedEvent(key, entry.getValue()));
             }
         }

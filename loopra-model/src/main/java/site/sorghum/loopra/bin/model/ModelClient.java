@@ -57,6 +57,14 @@ public interface ModelClient {
     }
 
     /**
+     * 设置快速模式（运行时切换，OpenAI service_tier=fast）。
+     * 仅 OpenAI 协议（chat_completions / responses）发送该参数，其他协议忽略。
+     * 默认空实现——不支持的客户端可忽略。
+     */
+    default void setFastMode(boolean fastMode) {
+    }
+
+    /**
      * 为当前客户端固定请求级会话亲和标识。
      * <p>实现类应将其用于 prompt cache key 和所有会话亲和请求头；传 null 时回退到上层上下文。</p>
      */

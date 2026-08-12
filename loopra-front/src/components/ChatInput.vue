@@ -468,7 +468,7 @@
           <div v-if="showEffortPicker" class="chat-reasoning-popover"
                :style="{ '--effort-progress': `${reasoningEffortProgress}%` }">
             <div class="chat-reasoning-summary">
-              <span class="chat-reasoning-value">{{ selectedReasoningEffort.label }}</span>
+              <span class="chat-reasoning-value">{{ selectedReasoningEffort.label }}<small class="chat-reasoning-value-en">{{ selectedReasoningEffort.en }}</small></span>
               <span>{{ selectedReasoningEffort.description }}</span>
             </div>
             <div class="chat-reasoning-track">
@@ -492,7 +492,7 @@
               <button v-for="(option, index) in effortOptions" :key="option.value"
                       :aria-pressed="index === reasoningEffortIndex" :class="{ active: index === reasoningEffortIndex }"
                       type="button" @click="selectReasoningEffort(index)">
-                {{ option.label }}
+                {{ option.label }}<small class="chat-reasoning-level-en">{{ option.en }}</small>
               </button>
             </div>
             <label class="chat-reasoning-custom">
@@ -505,6 +505,15 @@
                   :checked="props.terminateOnNoToolCall"
                   type="checkbox"
                   @change="emit('switchTerminateOnNoToolCall', $event.target.checked)"
+              />
+              <span class="chat-reasoning-toggle-slider"></span>
+            </label>
+            <label class="chat-reasoning-end-toggle">
+              <span>快速模式</span>
+              <input
+                  :checked="props.fastMode"
+                  type="checkbox"
+                  @change="emit('switchFastMode', $event.target.checked)"
               />
               <span class="chat-reasoning-toggle-slider"></span>
             </label>
@@ -599,6 +608,7 @@ const props = defineProps({
   hasHistory: {type: Boolean, default: false},
   currentReasoningEffort: {type: String, default: 'max'},
   terminateOnNoToolCall: {type: Boolean, default: true},
+  fastMode: {type: Boolean, default: false},
   version: {type: String, default: ''},
   currentSkill: {type: Object, default: null},
   currentPermission: {type: String, default: 'free'},
@@ -612,7 +622,7 @@ const props = defineProps({
   sessionStatusStopping: {type: Boolean, default: false}
 })
 
-const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'setDefaultModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission', 'pickerOpen', 'manageModels', 'removeQueued', 'guideQueued', 'togglePlan'])
+const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'setDefaultModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchFastMode', 'switchSkill', 'switchPermission', 'pickerOpen', 'manageModels', 'removeQueued', 'guideQueued', 'togglePlan'])
 const appStore = useAppStore()
 const sessionInitialized = ref(!props.initiallyEmpty)
 
@@ -1653,11 +1663,11 @@ const closePickers = (except = '') => {
   showContextComposition.value = false
 }
 const effortOptions = [
-  {value: 'none', label: '无', description: '直接响应'},
-  {value: 'low', label: '低', description: '快速响应'},
-  {value: 'medium', label: '中', description: '速度与深度兼顾'},
-  {value: 'high', label: '高', description: '更充分地思考'},
-  {value: 'max', label: '最大', description: '优先获得最完整的推理'}
+  {value: 'none', label: '无', en: 'none', description: '直接响应'},
+  {value: 'low', label: '低', en: 'low', description: '快速响应'},
+  {value: 'medium', label: '中', en: 'medium', description: '速度与深度兼顾'},
+  {value: 'high', label: '高', en: 'high', description: '更充分地思考'},
+  {value: 'max', label: '最大', en: 'max', description: '优先获得最完整的推理'}
 ]
 const reasoningEffortIndex = ref(4)
 const customReasoningEffort = ref('')
@@ -1666,6 +1676,7 @@ const selectedReasoningEffort = computed(() => {
   return customReasoningEffort.value ? {
     value: customReasoningEffort.value,
     label: '自定义',
+    en: customReasoningEffort.value,
     description: customReasoningEffort.value
   } : option
 })
@@ -3638,6 +3649,14 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   white-space: nowrap;
 }
 
+.chat-reasoning-value-en {
+  margin-left: 5px;
+  color: var(--fg-4);
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
+
 .chat-reasoning-track {
   position: relative;
   display: flex;
@@ -3743,6 +3762,16 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   color: var(--accent);
   font-weight: 700;
   text-shadow: 0 0 8px color-mix(in srgb, var(--accent) 50%, transparent);
+}
+
+.chat-reasoning-level-en {
+  display: block;
+  margin-top: 1px;
+  color: var(--fg-4);
+  font-size: 8px;
+  font-weight: 500;
+  line-height: 1;
+  opacity: 0.85;
 }
 
 .chat-reasoning-custom {
