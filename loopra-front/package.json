@@ -4,7 +4,7 @@
   "private": true,
   "main": "dist/main/main.cjs",
   "type": "module",
-  "description": "Loopra - 智能AI代码助手前端",
+  "description": "Loopra - \u667a\u80fdAI\u4ee3\u7801\u52a9\u624b\u524d\u7aef",
   "homepage": "https://loopra.dev",
   "author": "Loopra Team",
   "license": "MIT",
@@ -84,5 +84,10 @@
     "code-assistant",
     "vue3",
     "vite"
-  ]
+  ],
+  "pnpm": {
+    "overrides": {
+      "lodash": "4.18.0"
+    }
+  }
 }
