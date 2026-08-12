@@ -21,13 +21,14 @@
         :style="{ marginLeft: `${depth * 16}px` }"
       ></i>
       <!-- 目录与截图一致只显示展开箭头；文件显示紧凑的类型图标。 -->
-      <span
+      <i
         v-if="!rowNode.directory"
-        class="fen-file-icon"
+        class="codicon fen-file-icon"
+        :class="fileIcon.icon"
         :data-icon="fileIcon.kind"
         :style="{ color: fileIcon.color }"
         aria-hidden="true"
-      >{{ fileIcon.glyph }}</span>
+      ></i>
       <template v-if="!rowNode.editing">
         <span
           class="fen-name"
@@ -143,14 +144,6 @@ watch(() => rowNode.value.editing, (editing) => {
 </script>
 
 <style scoped>
-@font-face {
-  font-family: 'Seti';
-  src: url('../assets/seti.woff') format('woff');
-  font-style: normal;
-  font-weight: normal;
-  font-display: block;
-}
-
 .fen-node {
   min-width: 0;
 }
@@ -229,22 +222,18 @@ i.fen-chevron {
 .fen-twistie-placeholder {
   flex: 0 0 22px;
 }
-.fen-file-icon {
+i.fen-file-icon {
   box-sizing: content-box;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-start;
   flex: 0 0 16px;
   width: 16px;
   height: 22px;
   padding-right: 6px;
   color: #6d8086;
-  font-family: 'Seti', sans-serif;
-  font-size: 19.5px;
-  font-style: normal;
-  font-weight: normal;
-  line-height: 22px;
+  font: normal normal normal 14px/1 codicon;
   text-align: left;
-  vertical-align: top;
-  -webkit-font-smoothing: antialiased;
 }
 .fen-name {
   flex: 1;
