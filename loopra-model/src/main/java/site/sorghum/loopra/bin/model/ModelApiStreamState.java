@@ -21,6 +21,8 @@ final class ModelApiStreamState {
     boolean completed;
     String responseReasoning;
     ONode toolCalls;
+    /** Anthropic message_start 携带的输入侧用量，待 message_delta 与输出侧合并后上报。 */
+    ONode anthropicInputUsage;
     final Map<String, int[]> lastUsage = new HashMap<>();
     boolean inThinkContent;
 }

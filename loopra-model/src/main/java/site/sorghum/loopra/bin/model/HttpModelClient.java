@@ -418,8 +418,8 @@ public class HttpModelClient implements ModelClient {
                     .url(apiUrl)
                     .post(RequestBody.create(jsonBody, MEDIA_TYPE_JSON))
                     .addHeader("Content-Type", "application/json")
-                    .addHeader("Authorization", "Bearer " + apiKey)
                     .addHeader("User-Agent", "opencode/1.14.21 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13");
+            apiProtocol.applyAuthHeaders(requestBuilder, apiKey);
             addSessionHeaders(requestBuilder, ModelContextUtils.stripContextSizeSuffix(model));
             Request request = requestBuilder.build();
 
@@ -485,8 +485,8 @@ public class HttpModelClient implements ModelClient {
                     .url(apiUrl)
                     .post(RequestBody.create(jsonBody, MEDIA_TYPE_JSON))
                     .addHeader("Content-Type", "application/json")
-                    .addHeader("Authorization", "Bearer " + apiKey)
                     .addHeader("User-Agent", "opencode/1.14.21 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13");
+            apiProtocol.applyAuthHeaders(requestBuilder, apiKey);
             addSessionHeaders(requestBuilder, ModelContextUtils.stripContextSizeSuffix(model));
             Request request = requestBuilder.build();
 

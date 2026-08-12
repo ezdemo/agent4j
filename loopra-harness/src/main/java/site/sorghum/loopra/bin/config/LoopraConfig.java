@@ -334,17 +334,26 @@ public class LoopraConfig implements AgentConfig {
         String suffix = suffixIndex < 0 ? "" : normalized.substring(suffixIndex);
         String endpoint = suffixIndex < 0 ? normalized : normalized.substring(0, suffixIndex);
         endpoint = endpoint.replaceAll("/+$", "")
-                .replaceFirst("/(?:chat/completions|responses?)$", "");
+                .replaceFirst("/(?:chat/completions|responses?|v1/messages|messages)$", "");
         if (endpoint.isEmpty()) return endpoint + suffix;
-        return endpoint + ("responses".equals(normalizeApiProtocol(apiProtocol))
-                ? "/responses" : "/chat/completions") + suffix;
+        String protocol = normalizeApiProtocol(apiProtocol);
+        if ("anthropic".equals(protocol)) {
+            // Anthropic 标准地址为 {base}/v1/messages；baseUrl 已带 /v1 时不再重复拼接。
+            return endpoint + (endpoint.endsWith("/v1") ? "/messages" : "/v1/messages") + suffix;
+        }
+        return endpoint + ("responses".equals(protocol) ? "/responses" : "/chat/completions") + suffix;
     }
     
     private static String normalizeApiProtocol(String apiProtocol) {
         if (apiProtocol == null) return "chat_completions";
         String normalized = apiProtocol.trim().toLowerCase(Locale.ROOT);
-        return "response".equals(normalized) || "responses".equals(normalized)
-                ? "responses" : "chat_completions";
+        if ("response".equals(normalized) || "responses".equals(normalized)) {
+            return "responses";
+        }
+        if ("anthropic".equals(normalized) || "claude".equals(normalized)) {
+            return "anthropic";
+        }
+        return "chat_completions";
     }
 
     /**
