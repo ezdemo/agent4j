@@ -9,10 +9,8 @@ const searchMock = vi.fn().mockResolvedValue({success: true, data: []})
 const removeMock = vi.fn().mockResolvedValue({success: true, data: '已删除'})
 const workingFileContentMock = vi.fn().mockResolvedValue({success: true, data: {content: 'hi'}})
 const diffContentMock = vi.fn().mockResolvedValue({success: true, data: {diff: ''}})
-const modalConfirmMock = vi.fn()
 
 vi.mock('ant-design-vue', () => ({
-  Modal: {confirm: (...args) => modalConfirmMock(...args)},
   message: {success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn()}
 }))
 
@@ -44,6 +42,15 @@ async function typeQuery(wrapper, value) {
   await flushPromises()
 }
 
+/** 在删除确认对话框中点击确认按钮 */
+async function confirmDeleteDialog() {
+  const dialog = document.body.querySelector('.action-confirm-dialog')
+  expect(dialog).not.toBeNull()
+  const confirmButton = [...dialog.querySelectorAll('button')].find((b) => b.textContent.includes('删除'))
+  await confirmButton.click()
+  await flushPromises()
+}
+
 /** 挂载一棵含 src 目录 + readme.md 文件的树 */
 function mountTree() {
   listMock.mockResolvedValue({
@@ -71,7 +78,6 @@ describe('FilePanel 文件筛选', () => {
     removeMock.mockReset().mockResolvedValue({success: true, data: '已删除'})
     workingFileContentMock.mockReset().mockResolvedValue({success: true, data: {content: 'hi'}})
     diffContentMock.mockReset().mockResolvedValue({success: true, data: {diff: ''}})
-    modalConfirmMock.mockReset().mockImplementation((options) => { options.onOk?.() })
   })
 
   it('输入关键词走后端递归搜索，展示子目录文件（名字+路径）', async () => {
@@ -159,7 +165,6 @@ describe('FilePanel 右键菜单', () => {
     removeMock.mockReset().mockResolvedValue({success: true, data: '已删除'})
     workingFileContentMock.mockReset().mockResolvedValue({success: true, data: {content: 'hi'}})
     diffContentMock.mockReset().mockResolvedValue({success: true, data: {diff: ''}})
-    modalConfirmMock.mockReset().mockImplementation((options) => { options.onOk?.() })
   })
 
   it('右键文件显示菜单（打开/添加到上下文/删除）', async () => {
@@ -191,13 +196,13 @@ describe('FilePanel 右键菜单', () => {
     wrapper.unmount()
   })
 
-  it('删除文件：确认后调用删除接口并从树中移除', async () => {
+  it('删除文件：确认对话框确认后调用删除接口并从树中移除', async () => {
     const wrapper = mountTree()
     await openMenuOn(wrapper, 1)
     await wrapper.find('.file-context-menu button.danger').trigger('click')
     await flushPromises()
+    await confirmDeleteDialog()
 
-    expect(modalConfirmMock).toHaveBeenCalledTimes(1)
     expect(removeMock).toHaveBeenCalledWith('h1', 'readme.md')
     // 树中已无 readme.md，src 目录仍在
     expect(wrapper.findAll('.file-tree-row')).toHaveLength(1)
@@ -214,6 +219,7 @@ describe('FilePanel 右键菜单', () => {
 
     await wrapper.find('.file-context-menu button.danger').trigger('click')
     await flushPromises()
+    await confirmDeleteDialog()
     expect(removeMock).toHaveBeenCalledWith('h1', 'src')
     expect(wrapper.findAll('.file-tree-row')).toHaveLength(1)
     expect(wrapper.text()).not.toContain('src')
@@ -242,6 +248,7 @@ describe('FilePanel 右键菜单', () => {
 
     await menu.find('button.danger').trigger('click')
     await flushPromises()
+    await confirmDeleteDialog()
     expect(removeMock).toHaveBeenCalledWith('h1', 'src/child.js')
     expect(wrapper.findAll('.file-tree-row')).toHaveLength(1)
     wrapper.unmount()
@@ -263,6 +270,7 @@ describe('FilePanel 右键菜单', () => {
     await wrapper.find('.file-search-result').trigger('contextmenu', {clientX: 100, clientY: 120})
     await wrapper.find('.file-context-menu button.danger').trigger('click')
     await flushPromises()
+    await confirmDeleteDialog()
 
     expect(removeMock).toHaveBeenCalledWith('h1', 'src/deep/a.js')
     expect(wrapper.findAll('.file-search-result')).toHaveLength(1)
