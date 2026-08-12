@@ -92,7 +92,10 @@ jobs:
       #   CSC_LINK 交给 electron-builder 自动签名；
       # - 同时配置了 APPLE_ID / APPLE_APP_SPECIFIC_PASSWORD / APPLE_TEAM_ID 时，
       #   electron-builder 会对产物做 notarization（公证），否则 Gatekeeper 仍会拦截；
-      # - 未配置任何凭据时保持原行为（不签名），并输出 warning。
+      # - 未配置任何凭据时，回退为 ad-hoc 签名（无需 Apple 开发者账户，
+      #   electron-builder >= 26.0.12 支持 -c.mac.identity=-）。ad-hoc 签名后
+      #   Apple Silicon 上不会出现无法绕过的“已损坏”提示，但 Gatekeeper 仍会
+      #   提示“无法验证开发者”，用户首次需右键 → 打开。
       - name: Prepare macOS code signing
         if: runner.os == 'macOS'
         shell: bash
@@ -104,9 +107,11 @@ jobs:
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           if [ -z "$MAC_CERTIFICATE_P12" ]; then
-            echo "::warning::未配置 MAC_CERTIFICATE_P12，macOS 构建将跳过签名（Gatekeeper 可能拦截）"
+            echo "::notice::未配置 MAC_CERTIFICATE_P12，macOS 构建将使用 ad-hoc 签名（无需 Apple 开发者账户；用户首次打开需右键 → 打开）"
+            echo "MAC_USE_ADHOC=1" >> "$GITHUB_ENV"
             exit 0
           fi
+          echo "MAC_USE_ADHOC=0" >> "$GITHUB_ENV"
           echo "$MAC_CERTIFICATE_P12" | base64 --decode > "$RUNNER_TEMP/loopra-mac-cert.p12"
           chmod 600 "$RUNNER_TEMP/loopra-mac-cert.p12"
           echo "CSC_LINK=$RUNNER_TEMP/loopra-mac-cert.p12" >> "$GITHUB_ENV"
@@ -125,7 +130,13 @@ jobs:
         env:
           # 无证书时禁止自动发现，避免 runner 上意外使用无效证书导致打包失败
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-        run: npx electron-builder ${{ matrix.builder_flag }} --publish=never
+        run: |
+          if [ "$RUNNER_OS" = "macOS" ] && [ "$MAC_USE_ADHOC" = "1" ]; then
+            # 无 Developer ID 证书 → 显式 ad-hoc 签名（identity "-" 与 codesign 约定一致）
+            npx electron-builder ${{ matrix.builder_flag }} --publish=never -c.mac.identity=-
+          else
+            npx electron-builder ${{ matrix.builder_flag }} --publish=never
+          fi
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v7
@@ -212,7 +223,7 @@ jobs:
 
             请根据你的操作系统下载对应的安装包：
 
-            - **macOS**（Apple Silicon）→ `Loopra-*.zip`
+            - **macOS**（Apple Silicon）→ `Loopra-*.zip`（ad-hoc 签名，首次打开请右键 → 打开）
             - **Windows** → `Loopra Setup *.exe`
             - **Linux** → `loopra-front_*.deb`
             - **Web** → `loopra-web-dist.tar.gz`
