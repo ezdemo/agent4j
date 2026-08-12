@@ -245,6 +245,80 @@ class AnthropicApiProtocolTest {
     }
 
     @Test
+    void preservesThinkingBlocksWithSignatureForRoundTrip() throws Exception {
+        // 非流式：服务端返回 thinking 块（含 signature）与 redacted_thinking 块
+        ONode response = ONode.ofJson("""
+                {"id":"msg_t1","type":"message","role":"assistant","content":[
+                  {"type":"redacted_thinking","data":"REDACTED_1"},
+                  {"type":"thinking","thinking":"think step","signature":"SIG_1"},
+                  {"type":"text","text":"done"}
+                ],"usage":{"input_tokens":10,"output_tokens":5}}
+                """);
+
+        ONode message = PROTOCOL.parseResponse(response, "response");
+
+        assertEquals("done", message.get("content").getString());
+        assertEquals("think step", message.get("reasoning_content").getString());
+        assertEquals("redacted_thinking", message.select("$.thinking_blocks[0].type").getString());
+        assertEquals("REDACTED_1", message.select("$.thinking_blocks[0].data").getString());
+        assertEquals("thinking", message.select("$.thinking_blocks[1].type").getString());
+        assertEquals("SIG_1", message.select("$.thinking_blocks[1].signature").getString());
+
+        // 回传：assistant 消息带 thinkingBlocks → 块原样置于 text 之前
+        ChatMessage assistant = ChatMessage.fromMap(message.toBean());
+        assertTrue(assistant.getThinkingBlocks().size() == 2);
+        ModelApiProtocol.RequestContext context = new ModelApiProtocol.RequestContext(
+                "test-model", "none", List.of(assistant), new ONode().asArray(), null, null);
+
+        ONode request = PROTOCOL.buildRequest(context);
+
+        assertEquals("redacted_thinking", request.select("$.messages[0].content[0].type").getString());
+        assertEquals("REDACTED_1", request.select("$.messages[0].content[0].data").getString());
+        assertEquals("thinking", request.select("$.messages[0].content[1].type").getString());
+        assertEquals("SIG_1", request.select("$.messages[0].content[1].signature").getString());
+        assertEquals("text", request.select("$.messages[0].content[2].type").getString());
+        assertEquals("done", request.select("$.messages[0].content[2].text").getString());
+    }
+
+    @Test
+    void streamsThinkingBlocksWithSignatureAndRedactedData() {
+        ModelApiStreamState state = new ModelApiStreamState();
+        AtomicReference<List<String>> blocks = new AtomicReference<>();
+        ModelClient.StreamCallback callback = new ModelClient.StreamCallback() {
+            @Override
+            public void onThinkingBlocks(List<String> value) {
+                blocks.set(value);
+            }
+        };
+
+        // thinking 块：start + thinking_delta + signature_delta + stop
+        PROTOCOL.processStreamChunk(ONode.ofJson(
+                "{\"type\":\"content_block_start\",\"index\":0,\"content_block\":{\"type\":\"thinking\",\"thinking\":\"\"}}"),
+                callback, state);
+        PROTOCOL.processStreamChunk(ONode.ofJson(
+                "{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"thinking_delta\",\"thinking\":\"think\"}}"),
+                callback, state);
+        PROTOCOL.processStreamChunk(ONode.ofJson(
+                "{\"type\":\"content_block_delta\",\"index\":0,\"delta\":{\"type\":\"signature_delta\",\"signature\":\"SIG_2\"}}"),
+                callback, state);
+        PROTOCOL.processStreamChunk(ONode.ofJson("{\"type\":\"content_block_stop\",\"index\":0}"), callback, state);
+        // redacted_thinking 块：start 带 data + stop
+        PROTOCOL.processStreamChunk(ONode.ofJson(
+                "{\"type\":\"content_block_start\",\"index\":1,\"content_block\":{\"type\":\"redacted_thinking\",\"data\":\"REDACTED_2\"}}"),
+                callback, state);
+        PROTOCOL.processStreamChunk(ONode.ofJson("{\"type\":\"content_block_stop\",\"index\":1}"), callback, state);
+        PROTOCOL.completeStream(state, callback);
+
+        List<String> captured = blocks.get();
+        assertEquals(2, captured.size());
+        assertEquals("thinking", ONode.ofJson(captured.get(0)).get("type").getString());
+        assertEquals("think", ONode.ofJson(captured.get(0)).get("thinking").getString());
+        assertEquals("SIG_2", ONode.ofJson(captured.get(0)).get("signature").getString());
+        assertEquals("redacted_thinking", ONode.ofJson(captured.get(1)).get("type").getString());
+        assertEquals("REDACTED_2", ONode.ofJson(captured.get(1)).get("data").getString());
+    }
+
+    @Test
     void marksStreamErrorEvents() {
         ModelApiStreamState state = new ModelApiStreamState();
         PROTOCOL.processStreamChunk(ONode.ofJson(

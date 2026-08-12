@@ -119,6 +119,13 @@ public interface ModelClient {
         }
 
         /**
+         * 收到原始 thinking/redacted_thinking 内容块（Anthropic 协议流结束回调）。
+         * 元素为服务端返回的块 JSON（含 signature），需原样保存并在多轮对话中回传。
+         */
+        default void onThinkingBlocks(List<String> blocks) {
+        }
+
+        /**
          * token 用量回调。
          *
          * @param promptTokens     输入 token 数

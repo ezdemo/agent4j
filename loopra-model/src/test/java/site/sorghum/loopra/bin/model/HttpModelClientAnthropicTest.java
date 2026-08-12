@@ -29,17 +29,25 @@ class HttpModelClientAnthropicTest {
             respondSse(exchange, """
                     data: {"type":"message_start","message":{"id":"msg_1","usage":{"input_tokens":12,"cache_read_input_tokens":5,"cache_creation_input_tokens":7}}}
 
-                    data: {"type":"content_block_start","index":0,"content_block":{"type":"text","text":""}}
+                    data: {"type":"content_block_start","index":0,"content_block":{"type":"thinking","thinking":""}}
 
-                    data: {"type":"content_block_delta","index":0,"delta":{"type":"text_delta","text":"ok"}}
+                    data: {"type":"content_block_delta","index":0,"delta":{"type":"thinking_delta","thinking":"think"}}
+
+                    data: {"type":"content_block_delta","index":0,"delta":{"type":"signature_delta","signature":"SIG_HTTP"}}
 
                     data: {"type":"content_block_stop","index":0}
 
-                    data: {"type":"content_block_start","index":1,"content_block":{"type":"tool_use","id":"toolu_2","name":"read","input":{}}}
+                    data: {"type":"content_block_start","index":1,"content_block":{"type":"text","text":""}}
 
-                    data: {"type":"content_block_delta","index":1,"delta":{"type":"input_json_delta","partial_json":"{\\"path\\":\\"new.txt\\"}"}}
+                    data: {"type":"content_block_delta","index":1,"delta":{"type":"text_delta","text":"ok"}}
 
                     data: {"type":"content_block_stop","index":1}
+
+                    data: {"type":"content_block_start","index":2,"content_block":{"type":"tool_use","id":"toolu_2","name":"read","input":{}}}
+
+                    data: {"type":"content_block_delta","index":2,"delta":{"type":"input_json_delta","partial_json":"{\\"path\\":\\"new.txt\\"}"}}
+
+                    data: {"type":"content_block_stop","index":2}
 
                     data: {"type":"message_delta","delta":{"stop_reason":"tool_use"},"usage":{"output_tokens":4}}
 
@@ -60,6 +68,7 @@ class HttpModelClientAnthropicTest {
             AtomicReference<String> content = new AtomicReference<>("");
             AtomicReference<ONode> toolCalls = new AtomicReference<>();
             AtomicReference<int[]> usage = new AtomicReference<>();
+            AtomicReference<List<String>> thinkingBlocks = new AtomicReference<>();
             AtomicInteger done = new AtomicInteger();
 
             client.chatStream(messages, tools, new ModelClient.StreamCallback() {
@@ -71,6 +80,11 @@ class HttpModelClientAnthropicTest {
                 @Override
                 public void onToolCalls(ONode calls) {
                     toolCalls.set(calls);
+                }
+
+                @Override
+                public void onThinkingBlocks(List<String> blocks) {
+                    thinkingBlocks.set(blocks);
                 }
 
                 @Override
@@ -101,6 +115,10 @@ class HttpModelClientAnthropicTest {
             assertNull(requestHeaders.get().getFirst("Authorization"));
 
             assertEquals("ok", content.get());
+            assertEquals(1, thinkingBlocks.get().size());
+            assertEquals("thinking", ONode.ofJson(thinkingBlocks.get().get(0)).get("type").getString());
+            assertEquals("think", ONode.ofJson(thinkingBlocks.get().get(0)).get("thinking").getString());
+            assertEquals("SIG_HTTP", ONode.ofJson(thinkingBlocks.get().get(0)).get("signature").getString());
             assertEquals("toolu_2", toolCalls.get().select("$[0].id").getString());
             assertEquals("read", toolCalls.get().select("$[0].function.name").getString());
             assertEquals("{\"path\":\"new.txt\"}", toolCalls.get().select("$[0].function.arguments").getString());
