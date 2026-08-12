@@ -87,7 +87,7 @@ vi.mock('../utils/monaco', () => {
       mouseMoveHandler = handler
       return {dispose: vi.fn()}
     }),
-    onDidMouseLeave: vi.fn((handler) => {
+    onMouseLeave: vi.fn((handler) => {
       mouseLeaveHandler = handler
       return {dispose: vi.fn()}
     }),

@@ -426,7 +426,7 @@ async function initializeEditor() {
     editor.value.addCommand(monaco.value.KeyMod.CtrlCmd | monaco.value.KeyCode.KeyS, () => { void save() })
     mouseDisposable = editor.value.onMouseDown(onEditorMouseDown)
     mouseMoveDisposable = editor.value.onMouseMove(onEditorMouseMove)
-    mouseLeaveDisposable = editor.value.onDidMouseLeave(onEditorMouseLeave)
+    mouseLeaveDisposable = editor.value.onMouseLeave(onEditorMouseLeave)
     keyDisposable = editor.value.onKeyDown((event) => {
       if (event.keyCode !== monaco.value.KeyCode.Escape || !peekState) return
       event.preventDefault()

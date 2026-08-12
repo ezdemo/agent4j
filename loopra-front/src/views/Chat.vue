@@ -685,6 +685,7 @@ const sessionModelSelections = ref(loadSessionModelSelections())
 const sessionReasoningEfforts = ref(loadSessionReasoningEfforts())
 const conversationKey = (workspaceHash = props.workspaceHash, sessionName = props.sessionName) => `${workspaceHash || ''}::${sessionName || ''}`
 const queuedMessages = computed(() => queuedMessagesBySession.value[conversationKey()] || [])
+const guidingQueuedMessage = ref(false)
 
 watch(sessionModelSelections, selections => {
   localStorage.setItem(SESSION_MODEL_STORAGE_KEY, JSON.stringify(selections))
@@ -742,11 +743,19 @@ const sendNextQueuedMessage = async (sessionName, workspaceHash) => {
 }
 
 const guideQueuedMessage = async (id) => {
-  if (sessionBusy.value) return
-  const queued = takeQueuedMessage(props.sessionName, props.workspaceHash, id)
-  if (!queued) return
-  if (streaming.value) await abortChat()
-  await sendMessage(queued.images, queued.text, queued.modelSelection, props.sessionName, queued.workspaceHash, queued.reasoningEffort)
+  if (guidingQueuedMessage.value) return
+  guidingQueuedMessage.value = true
+  try {
+    const queued = takeQueuedMessage(props.sessionName, props.workspaceHash, id)
+    if (!queued) return
+    // 无条件中止当前生成：无论流式输出还是后台任务运行，都先停止再立即发送排队消息
+    if (streaming.value || sessionTaskRunning.value) {
+      await abortChat()
+    }
+    await sendMessage(queued.images, queued.text, queued.modelSelection, props.sessionName, queued.workspaceHash, queued.reasoningEffort)
+  } finally {
+    guidingQueuedMessage.value = false
+  }
 }
 
 const ESTIMATED_MESSAGE_HEIGHT = 320
