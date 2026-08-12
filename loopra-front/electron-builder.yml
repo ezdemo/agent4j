@@ -14,6 +14,15 @@ files:
 
 asar: true
 
+# 核心运行时（loopra-web.jar 等）由 CI 解压 web-dist artifact 生成到 resources/loopra-core，
+# 打包进安装包 resources/loopra-core，首次安装时无需再在线下载核心包
+# （本地打包请先运行 .release/ci-embed-core.sh 或 .release/embed-core.ps1）
+extraResources:
+  - from: resources/loopra-core
+    to: loopra-core
+    filter:
+      - "**/*"
+
 # node-pty 为原生模块（.node），必须从 asar 中解包，否则运行时无法加载
 asarUnpack:
   - "**/node_modules/node-pty/**"
