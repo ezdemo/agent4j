@@ -22,6 +22,7 @@ jobs:
   #    依赖 Linux + Wine（替代原云端 electron-pipeline）
   # ──────────────────────────────────────────────
   electron-build:
+    needs: [web-dist]
     strategy:
       matrix:
         include:
@@ -86,6 +87,16 @@ jobs:
       - name: Build Vite bundles
         working-directory: loopra-front
         run: pnpm run build:vite
+
+      # 核心运行时（web-dist 产物）嵌入前端安装包：用户安装桌面端后无需再下载核心包
+      - name: Download web dist artifact
+        uses: actions/download-artifact@v8
+        with:
+          name: loopra-web-dist
+          path: web-dist-artifact
+
+      - name: Embed core runtime into installer
+        run: bash .release/ci-embed-core.sh web-dist-artifact/loopra-web-dist.tar.gz
 
       # macOS 代码签名 + 公证：
       # - 配置了 MAC_CERTIFICATE_P12（Developer ID 证书 base64）时，将其写入
