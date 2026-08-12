@@ -182,7 +182,14 @@ contextBridge.exposeInMainWorld('electronAPI', {
     remove: (filePath) => ipcRenderer.invoke('file-explorer-delete', filePath),
     read: (filePath) => ipcRenderer.invoke('file-explorer-read', filePath),
     write: (filePath, content) => ipcRenderer.invoke('file-explorer-write', { filePath, content }),
-    search: (dirPath, keyword) => ipcRenderer.invoke('file-explorer-search', { dirPath, keyword })
+    search: (dirPath, keyword) => ipcRenderer.invoke('file-explorer-search', { dirPath, keyword }),
+    watch: (dirPath) => ipcRenderer.invoke('file-explorer-watch', dirPath),
+    unwatch: () => ipcRenderer.invoke('file-explorer-unwatch'),
+    onDidChange: (callback) => {
+      const subscription = (event, payload) => callback(payload)
+      ipcRenderer.on('file-explorer-changed', subscription)
+      return () => ipcRenderer.removeListener('file-explorer-changed', subscription)
+    }
   },
 
   // Electron 版本

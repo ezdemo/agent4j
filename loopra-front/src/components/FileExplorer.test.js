@@ -10,6 +10,9 @@ const renameMock = vi.fn()
 const removeMock = vi.fn()
 const readMock = vi.fn()
 const searchMock = vi.fn()
+const watchMock = vi.fn()
+const unwatchMock = vi.fn()
+let fileChangeListener = null
 const gitStatusMock = vi.fn()
 const modalConfirmMock = vi.fn()
 
@@ -52,6 +55,9 @@ beforeEach(() => {
   removeMock.mockReset().mockResolvedValue({success: true})
   readMock.mockReset().mockResolvedValue({success: true, data: 'hello'})
   searchMock.mockReset().mockResolvedValue({success: true, data: []})
+  watchMock.mockReset().mockResolvedValue({success: true})
+  unwatchMock.mockReset().mockResolvedValue({success: true})
+  fileChangeListener = null
   gitStatusMock.mockReset().mockResolvedValue({success: true, data: {initialized: false}})
   modalConfirmMock.mockReset().mockImplementation(({onOk}) => onOk?.())
   window.electronAPI = {
@@ -61,7 +67,13 @@ beforeEach(() => {
       rename: (...args) => renameMock(...args),
       remove: (...args) => removeMock(...args),
       read: (...args) => readMock(...args),
-      search: (...args) => searchMock(...args)
+      search: (...args) => searchMock(...args),
+      watch: (...args) => watchMock(...args),
+      unwatch: (...args) => unwatchMock(...args),
+      onDidChange: (callback) => {
+        fileChangeListener = callback
+        return () => { fileChangeListener = null }
+      }
     },
     openFolder: vi.fn().mockResolvedValue({success: true})
   }
@@ -82,6 +94,63 @@ describe('FileExplorer 文件树', () => {
     expect(wrapper.findAll('.fen-row').length).toBe(2)
     expect(wrapper.text()).toContain('readme.md')
     expect(wrapper.text()).toContain('src')
+    wrapper.unmount()
+  })
+
+  it('磁盘变化后实时刷新并保留已展开目录，加载期间不隐藏旧树', async () => {
+    listMock.mockResolvedValueOnce({
+      success: true,
+      data: [{name: 'src', path: 'C:/workspace/src', directory: true}]
+    }).mockResolvedValueOnce({
+      success: true,
+      data: [{name: 'old.js', path: 'C:/workspace/src/old.js', directory: false}]
+    })
+    const wrapper = mountExplorer({workspaceHash: 'workspace-hash'})
+    await flushPromises()
+    await wrapper.find('.fen-row').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('old.js')
+
+    let resolveRootRefresh
+    listMock.mockReturnValueOnce(new Promise((resolve) => { resolveRootRefresh = resolve }))
+    fileChangeListener?.({rootPath: 'C:/workspace', eventType: 'rename', path: 'src/new.js'})
+    await sleep(180)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('old.js')
+    expect(wrapper.find('.loading-spinner').exists()).toBe(false)
+
+    resolveRootRefresh({
+      success: true,
+      data: [{name: 'src', path: 'C:/workspace/src', directory: true}]
+    })
+    listMock.mockResolvedValueOnce({
+      success: true,
+      data: [{name: 'new.js', path: 'C:/workspace/src/new.js', directory: false}]
+    })
+    await flushPromises()
+
+    expect(watchMock).toHaveBeenCalledWith('C:/workspace')
+    expect(wrapper.text()).toContain('new.js')
+    expect(wrapper.text()).not.toContain('old.js')
+    expect(wrapper.findAll('.fen-row')).toHaveLength(2)
+    expect(gitStatusMock).toHaveBeenCalledTimes(2)
+
+    wrapper.unmount()
+    expect(unwatchMock).toHaveBeenCalled()
+  })
+
+  it('忽略 Git 和 Loopra 内部元数据变化', async () => {
+    const wrapper = mountTree()
+    await flushPromises()
+    const listCalls = listMock.mock.calls.length
+
+    fileChangeListener?.({rootPath: 'C:/workspace', eventType: 'change', path: '.git/index'})
+    fileChangeListener?.({rootPath: 'C:/workspace', eventType: 'change', path: '.loopra/workspace/cache'})
+    await sleep(180)
+    await flushPromises()
+
+    expect(listMock).toHaveBeenCalledTimes(listCalls)
     wrapper.unmount()
   })
 
