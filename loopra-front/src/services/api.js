@@ -283,6 +283,25 @@ export const agentAPI = {
     })
   },
 
+  // 获取 bash 后台命令会话 - GET /api/agent/bash-sessions?workspaceHash=xxx（可选，空则全部工作区）
+  getBashSessions: (workspaceHash) => {
+    const params = {}
+    if (workspaceHash) params.workspaceHash = workspaceHash
+    return api.get('/agent/bash-sessions', {
+      params,
+      silent: true
+    })
+  },
+
+  // 手动关闭 bash 后台会话 - POST /api/agent/bash-sessions/terminate
+  terminateBashSession: (sessionId, workspaceHash) => {
+    const body = {sessionId}
+    if (workspaceHash) body.workspaceHash = workspaceHash
+    return api.post('/agent/bash-sessions/terminate', body, {
+      silent: true
+    })
+  },
+
   // 获取历史消息 - GET /api/agent/history?workspaceHash=xxx&sessionName=xxx
   getHistory: (workspaceHash, sessionName) => {
     const params = {}
@@ -772,12 +791,12 @@ export const gitAPI = {
   },
 
   // 获取 Git 仓库中指定版本的文件内容 - GET /api/git/file-content?workspaceHash=xxx&path=xxx&ref=HEAD
-  fileContent: (workspaceHash, path, ref) => {
+  fileContent: (workspaceHash, path, ref, options = {}) => {
     const params = {}
     if (workspaceHash) params.workspaceHash = workspaceHash
     if (path) params.path = path
     if (ref) params.ref = ref
-    return api.get('/git/file-content', { params })
+    return api.get('/git/file-content', { params, silent: options.silent })
   },
 
   // 获取工作区当前文件原文，用于代码预览 - GET /api/git/working-file-content
@@ -980,6 +999,10 @@ export const filesAPI = {
   // 搜索工作区内文件 - GET /api/files/search?workspaceHash=xxx&query=foo
   search: (workspaceHash, query = '') => {
     return api.get('/files/search', { params: { workspaceHash, query } })
+  },
+  // 删除工作区内文件或目录 - DELETE /api/files/delete?workspaceHash=xxx&path=src/a.js
+  remove: (workspaceHash, path) => {
+    return api.delete('/files/delete', { params: { workspaceHash, path } })
   }
 }
 

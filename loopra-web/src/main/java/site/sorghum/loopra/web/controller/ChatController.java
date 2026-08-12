@@ -141,6 +141,8 @@ public class ChatController {
                         request.getModel(), request.getModelChannelId(), request.getReasoningEffort(),
                         request.getAction());
             } catch (Exception e) {
+                log.error("[chat] 流任务执行异常: session={}, requestId={}, 原因: {}",
+                        sessionName, requestId, e.getMessage(), e);
                 try {
                     emitter.sendError(e.getMessage());
                 } catch (Exception ex) {

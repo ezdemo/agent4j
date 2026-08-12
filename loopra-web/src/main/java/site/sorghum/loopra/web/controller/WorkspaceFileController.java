@@ -36,4 +36,14 @@ public class WorkspaceFileController {
             @ApiParam(value = "文件名或路径关键字") @Param(value = "query", required = false) String query) {
         return ApiResponse.ok(workspaceFileService.search(workspaceHash, query));
     }
+
+    @ApiOperation(value = "删除工作区文件或目录", notes = "递归删除目录；禁止删除工作区根目录")
+    @Delete
+    @Mapping("/delete")
+    public ApiResponse<String> delete(
+            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
+            @ApiParam(value = "相对于工作区的文件或目录路径", required = true) @Param(value = "path", required = true) String path) {
+        workspaceFileService.delete(workspaceHash, path);
+        return ApiResponse.ok("已删除");
+    }
 }

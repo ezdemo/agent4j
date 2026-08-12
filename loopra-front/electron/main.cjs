@@ -4,6 +4,7 @@ const path = require('path')
 const { spawn, execFile, execSync } = require('child_process')
 const { promisify } = require('util')
 const { compareVersions } = require('./version.cjs')
+const { registerTerminalIpc, killAllTerminals } = require('./terminal.cjs')
 const fs = require('fs')
 const net = require('net')
 
@@ -79,6 +80,7 @@ const aiBrowserTabs = new Map()
 const AI_BROWSER_SCREENSHOT_MAX_BYTES = 5 * 1024 * 1024
 const AI_BROWSER_SCREENSHOT_MAX_WIDTH = 1600
 const desktopChatTabs = new Map()
+const fileExplorerWatchers = new Map()
 let desktopChatActiveTabId = null
 const AI_BROWSER_BRIDGE_PREFERRED_PORT = Number(process.env.LOOPRA_BROWSER_BRIDGE_PORT || 0)
 const AI_BROWSER_TAB_CLEANUP_THRESHOLD = 16
@@ -497,7 +499,7 @@ function createWindow() {
     const tab = desktopChatTabs.get(desktopChatActiveTabId)
     if (!tab || !tab.visible || tab.view.webContents.isDestroyed()) return
     tab.view.webContents.focus()
-    tab.view.webContents.send('desktop-chat-tab-focus-composer')
+    sendDesktopChatTabEvent(tab, 'desktop-chat-tab-focus-composer')
   })
 
   mainWindow.webContents.on('context-menu', (event, params) => {
@@ -676,10 +678,14 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   cleanupLoopraWeb()
+  closeAllFileExplorerWatchers()
   stopAiBrowserBridge()
+  killAllTerminals()
 })
 
 // ==================== IPC ====================
+
+registerTerminalIpc()
 
 ipcMain.handle('get_loopra_web_port', async () => currentPort)
 
@@ -961,6 +967,7 @@ ipcMain.handle('desktop-home-context-menu', (event, rawTheme) => {
     }
     const menu = Menu.buildFromTemplate([
       { label: '打开需求池', click: () => finish('open-requirement-board') },
+      { label: '更新', click: () => finish('open-update') },
       { label: '切换主题', click: () => finish('toggle-theme') }
     ])
     menu.popup({
@@ -1039,19 +1046,13 @@ ipcMain.handle('chat-update-request', (event, payload = {}) => {
   return true
 })
 
-// 主窗口（DesktopShell）向指定聊天标签发送命令（等待标签加载完成后投递）
-ipcMain.handle('desktop-chat-tab-send-command', (event, tabId, command) => {
+// 主窗口（DesktopShell）向指定聊天标签发送命令；渲染器未挂载时由 tab 队列暂存。
+ipcMain.handle('desktop-chat-tab-send-command', async (event, tabId, command) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
   const tab = desktopChatTabs.get(String(tabId || ''))
   const cmd = String(command || '').trim()
-  if (!tab || !cmd || tab.view.webContents.isDestroyed()) return false
-  const send = () => tab.view.webContents.send('desktop-chat-tab-send-command', cmd)
-  if (tab.view.webContents.isLoading()) {
-    tab.view.webContents.once('did-finish-load', send)
-  } else {
-    send()
-  }
-  return true
+  if (!tab || !cmd || !await waitForDesktopChatReady(tab)) return false
+  return sendDesktopChatTabEvent(tab, 'desktop-chat-tab-send-command', cmd)
 })
 ipcMain.handle('desktop-pet-open', (event) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop pet request')
@@ -1125,10 +1126,11 @@ ipcMain.handle('desktop-chat-tab-create', async (event, rawTab) => {
   const sessionName = String(rawTab?.sessionName || '').trim()
   const workspaceHash = String(rawTab?.workspaceHash || '').trim()
   const theme = rawTab?.theme === 'dark' ? 'dark' : 'gray'
+  const newSession = rawTab?.newSession === true
   if (!tabId || !sessionName || tabId.length > 240 || sessionName.length > 240 || workspaceHash.length > 240) {
     throw new Error('Invalid desktop chat tab')
   }
-  await getOrCreateDesktopChatTab(tabId, sessionName, workspaceHash, theme)
+  await getOrCreateDesktopChatTab(tabId, sessionName, workspaceHash, theme, newSession)
   return { success: true, tabId }
 })
 
@@ -1145,7 +1147,7 @@ ipcMain.handle('desktop-chat-tab-show', async (event, tabId, rawBounds) => {
   tab.view.setBounds(normalizeDesktopChatBounds(rawBounds))
   tab.view.setVisible(true)
   tab.view.webContents.focus()
-  tab.view.webContents.send('desktop-chat-tab-focus-composer')
+  sendDesktopChatTabEvent(tab, 'desktop-chat-tab-focus-composer')
   tab.visible = true
   hideDesktopChatViews(tab.id)
   desktopChatActiveTabId = tab.id
@@ -1169,26 +1171,42 @@ ipcMain.handle('desktop-chat-tab-close', (event, tabId) => {
 ipcMain.handle('desktop-chat-tab-reload', (event, tabId) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
   const tab = desktopChatTabs.get(String(tabId || ''))
-  if (!tab || tab.view.webContents.isDestroyed()) throw new Error('Desktop chat tab no longer exists')
-  tab.view.webContents.send('desktop-chat-tab-refresh-history')
+  if (!tab) throw new Error('Desktop chat tab no longer exists')
+  sendDesktopChatTabEvent(tab, 'desktop-chat-tab-refresh-history')
   return { success: true }
 })
 
 ipcMain.handle('desktop-chat-tab-toggle-right-panel', (event, tabId) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
   const tab = desktopChatTabs.get(String(tabId || ''))
-  if (!tab || tab.view.webContents.isDestroyed()) throw new Error('Desktop chat tab no longer exists')
-  tab.view.webContents.send('desktop-chat-tab-toggle-right-panel')
+  if (!tab) throw new Error('Desktop chat tab no longer exists')
+  sendDesktopChatTabEvent(tab, 'desktop-chat-tab-toggle-right-panel')
+  return { success: true }
+})
+
+ipcMain.handle('desktop-chat-tab-toggle-terminal', (event, tabId) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
+  const tab = desktopChatTabs.get(String(tabId || ''))
+  if (!tab) throw new Error('Desktop chat tab no longer exists')
+  sendDesktopChatTabEvent(tab, 'desktop-chat-tab-toggle-terminal')
   return { success: true }
 })
 
 ipcMain.handle('desktop-chat-tab-set-theme', (event, rawTheme) => {
   if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized desktop chat tab request')
   const theme = rawTheme === 'dark' ? 'dark' : 'gray'
-  for (const tab of desktopChatTabs.values()) {
-    if (!tab.view.webContents.isDestroyed()) tab.view.webContents.send('desktop-chat-tab-theme', theme)
-  }
+  for (const tab of desktopChatTabs.values()) sendDesktopChatTabEvent(tab, 'desktop-chat-tab-theme', theme)
   return { success: true }
+})
+
+ipcMain.on('desktop-chat-tab-ready', (event) => {
+  const tab = [...desktopChatTabs.values()].find((item) => item.view.webContents === event.sender)
+  if (!tab || tab.view.webContents.isDestroyed()) return
+  tab.rendererReady = true
+  for (const resolve of tab.readyWaiters.splice(0)) resolve(true)
+  for (const [channel, payload] of tab.pendingEvents.splice(0)) {
+    tab.view.webContents.send(channel, payload)
+  }
 })
 
 ipcMain.on('desktop-chat-tab-report-title', (event, payload) => {
@@ -1230,6 +1248,33 @@ function normalizeAiBrowserUrl(rawUrl, allowBlank = false) {
   return url.href
 }
 
+function waitForDesktopChatReady(tab, timeoutMs = 15_000) {
+  if (!tab || tab.view.webContents.isDestroyed()) return Promise.resolve(false)
+  if (tab.rendererReady) return Promise.resolve(true)
+  return new Promise((resolve) => {
+    let settled = false
+    const finish = (ready) => {
+      if (settled) return
+      settled = true
+      clearTimeout(timeout)
+      tab.readyWaiters = tab.readyWaiters.filter((waiter) => waiter !== finish)
+      resolve(ready)
+    }
+    const timeout = setTimeout(() => finish(false), timeoutMs)
+    tab.readyWaiters.push(finish)
+  })
+}
+
+function sendDesktopChatTabEvent(tab, channel, payload) {
+  if (!tab || tab.view.webContents.isDestroyed()) return false
+  if (!tab.rendererReady) {
+    tab.pendingEvents.push([channel, payload])
+    return true
+  }
+  tab.view.webContents.send(channel, payload)
+  return true
+}
+
 function detachDesktopChatTab(tab) {
   if (!tab) return
   if (tab.attached && mainWindow && !mainWindow.isDestroyed()) {
@@ -1240,6 +1285,8 @@ function detachDesktopChatTab(tab) {
 
 function destroyDesktopChatTab(tab) {
   if (!tab) return
+  for (const resolve of tab.readyWaiters.splice(0)) resolve(false)
+  tab.pendingEvents.length = 0
   if (!tab.view.webContents.isDestroyed()) tab.view.setVisible(false)
   tab.visible = false
   detachDesktopChatTab(tab)
@@ -1301,8 +1348,15 @@ function waitForDesktopChatLoad(view, load, target) {
   })
 }
 
-async function loadDesktopChatTab(view, sessionName, workspaceHash, theme) {
-  const query = new URLSearchParams({ desktopChatTab: '1', sessionName, workspaceHash: workspaceHash || '', theme }).toString()
+async function loadDesktopChatTab(view, sessionName, workspaceHash, theme, newSession) {
+  const queryParams = {
+    desktopChatTab: '1',
+    sessionName,
+    workspaceHash: workspaceHash || '',
+    theme,
+    newSession: newSession ? '1' : '0'
+  }
+  const query = new URLSearchParams(queryParams).toString()
   const rendererPath = path.join(__dirname, '../renderer/index.html')
   const targets = isDev
     ? DESKTOP_CHAT_DEV_RENDERER_ORIGINS.map((origin) => `${origin}/?${query}`)
@@ -1316,7 +1370,7 @@ async function loadDesktopChatTab(view, sessionName, workspaceHash, theme) {
         await waitForDesktopChatLoad(view, () => view.webContents.loadURL(target), target)
       } else {
         await waitForDesktopChatLoad(view, () => view.webContents.loadFile(target, {
-          query: { desktopChatTab: '1', sessionName, workspaceHash: workspaceHash || '', theme }
+          query: queryParams
         }), target)
       }
       return
@@ -1332,7 +1386,7 @@ async function loadDesktopChatTab(view, sessionName, workspaceHash, theme) {
   throw lastError || new Error('Failed to load desktop chat tab')
 }
 
-async function getOrCreateDesktopChatTab(tabId, sessionName, workspaceHash, theme = 'gray') {
+async function getOrCreateDesktopChatTab(tabId, sessionName, workspaceHash, theme = 'gray', newSession = false) {
   let existing = desktopChatTabs.get(tabId)
   if (existing?.view.webContents.isDestroyed()) {
     desktopChatTabs.delete(tabId)
@@ -1340,7 +1394,7 @@ async function getOrCreateDesktopChatTab(tabId, sessionName, workspaceHash, them
   }
   if (existing) {
     if (existing.ready) await existing.ready
-    if (!existing.view.webContents.isDestroyed()) existing.view.webContents.send('desktop-chat-tab-theme', theme)
+    sendDesktopChatTabEvent(existing, 'desktop-chat-tab-theme', theme)
     return existing
   }
   if (!mainWindow || mainWindow.isDestroyed()) throw new Error('Main window is not available')
@@ -1354,14 +1408,31 @@ async function getOrCreateDesktopChatTab(tabId, sessionName, workspaceHash, them
     }
   })
   view.setBackgroundColor(theme === 'dark' ? '#141518' : '#ffffff')
-  const tab = { id: tabId, sessionName, workspaceHash, view, attached: false, visible: false, ready: null }
+  const tab = {
+    id: tabId,
+    sessionName,
+    workspaceHash,
+    newSession,
+    view,
+    attached: false,
+    visible: false,
+    rendererReady: false,
+    readyWaiters: [],
+    pendingEvents: [],
+    ready: null
+  }
   desktopChatTabs.set(tabId, tab)
   view.setVisible(false)
   view.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }
   })
+  view.webContents.on('did-start-loading', () => {
+    tab.rendererReady = false
+  })
   view.webContents.on('destroyed', () => {
+    for (const resolve of tab.readyWaiters.splice(0)) resolve(false)
+    tab.pendingEvents.length = 0
     tab.attached = false
     tab.visible = false
     if (desktopChatTabs.get(tabId)?.view !== view) return
@@ -1373,7 +1444,7 @@ async function getOrCreateDesktopChatTab(tabId, sessionName, workspaceHash, them
     // Keep the view attached while it loads so a concurrent show call cannot interrupt navigation.
     mainWindow.contentView.addChildView(view)
     tab.attached = true
-    tab.ready = loadDesktopChatTab(view, sessionName, workspaceHash, theme)
+    tab.ready = loadDesktopChatTab(view, sessionName, workspaceHash, theme, newSession)
     await tab.ready
     return tab
   } catch (error) {
@@ -2722,6 +2793,258 @@ ipcMain.handle('open-file', async (event, filePath) => {
     return { success: true }
   } catch (e) {
     console.error('Failed to open file:', e)
+    return { success: false, error: e.message }
+  }
+})
+
+// 打开本地文件夹（系统原生文件管理器，如 Windows 资源管理器）
+ipcMain.handle('open-folder', async (event, folderPath) => {
+  try {
+    // 路径验证
+    if (!folderPath || typeof folderPath !== 'string') {
+      return { success: false, error: '无效的文件夹路径' }
+    }
+    // 防止路径遍历攻击
+    if (folderPath.includes('..') || folderPath.includes('~')) {
+      return { success: false, error: '文件夹路径包含非法字符' }
+    }
+    // 确保路径是绝对路径
+    const absolutePath = path.resolve(folderPath)
+    // 检查文件夹是否存在
+    if (!fs.existsSync(absolutePath)) {
+      return { success: false, error: '文件夹不存在' }
+    }
+    // 目录直接打开；文件则打开其所在目录（供“在文件管理器中显示”使用）
+    const stat = fs.statSync(absolutePath)
+    if (!stat.isDirectory() && !stat.isFile()) {
+      return { success: false, error: '路径不是文件夹' }
+    }
+    await shell.openPath(stat.isDirectory() ? absolutePath : path.dirname(absolutePath))
+    return { success: true }
+  } catch (e) {
+    console.error('Failed to open folder:', e)
+    return { success: false, error: e.message }
+  }
+})
+
+// ── 文件资源管理器（桌面端，直接操作本地文件系统，不接后端 API） ──
+
+const FILE_EXPLORER_WATCH_DELAY = 100
+
+function isIgnoredFileExplorerPath(filename) {
+  const firstSegment = String(filename || '').replace(/\\/g, '/').split('/')[0].toLowerCase()
+  return firstSegment === '.git' || firstSegment === '.loopra'
+}
+
+function closeFileExplorerWatcher(webContentsId) {
+  const state = fileExplorerWatchers.get(webContentsId)
+  if (!state) return
+  clearTimeout(state.timer)
+  state.watcher.close()
+  state.sender.removeListener('destroyed', state.onDestroyed)
+  fileExplorerWatchers.delete(webContentsId)
+}
+
+function closeAllFileExplorerWatchers() {
+  for (const webContentsId of [...fileExplorerWatchers.keys()]) closeFileExplorerWatcher(webContentsId)
+}
+
+// 解析并校验绝对路径（防 `..`/`~` 穿越）
+function resolveExplorerPath(rawPath) {
+  if (!rawPath || typeof rawPath !== 'string') throw new Error('无效的路径')
+  if (rawPath.includes('..') || rawPath.includes('~')) throw new Error('路径包含非法字符')
+  return path.resolve(rawPath)
+}
+
+// 校验目录存在
+function validateExplorerDir(rawPath) {
+  const absolutePath = resolveExplorerPath(rawPath)
+  if (!fs.existsSync(absolutePath) || !fs.statSync(absolutePath).isDirectory()) throw new Error('目录不存在')
+  return absolutePath
+}
+
+// 校验新建/重命名名称（仅名字，不允许路径分隔符）
+function validateExplorerName(rawName) {
+  if (!rawName || typeof rawName !== 'string') throw new Error('名称不能为空')
+  const name = rawName.trim()
+  if (!name || name === '.' || name === '..') throw new Error('名称不能为空')
+  if (name.includes('/') || name.includes('\\')) throw new Error('名称不能包含路径分隔符')
+  if (name.includes('\u0000')) throw new Error('名称包含非法字符')
+  return name
+}
+
+// 排序：目录优先，再按名称忽略大小写
+function sortExplorerEntries(entries) {
+  return entries.sort((a, b) => {
+    if (a.directory !== b.directory) return a.directory ? -1 : 1
+    return a.name.toLowerCase().localeCompare(b.name.toLowerCase())
+  })
+}
+
+// 实时监听工作区变化；同一渲染进程只保留一个 watcher，事件在主进程先合并一次。
+ipcMain.handle('file-explorer-watch', (event, dirPath) => {
+  const webContentsId = event.sender.id
+  try {
+    const root = validateExplorerDir(dirPath)
+    closeFileExplorerWatcher(webContentsId)
+    const onDestroyed = () => closeFileExplorerWatcher(webContentsId)
+    const state = {watcher: null, timer: null, root, eventType: 'change', relativePath: '', relativePaths: new Set(), sender: event.sender, onDestroyed}
+    const notify = () => {
+      state.timer = null
+      const paths = [...state.relativePaths]
+      state.relativePaths.clear()
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('file-explorer-changed', {
+          rootPath: state.root,
+          eventType: state.eventType,
+          path: state.relativePath,
+          paths
+        })
+      }
+    }
+    const onChange = (eventType, filename) => {
+      if (isIgnoredFileExplorerPath(filename)) return
+      state.eventType = eventType
+      state.relativePath = filename ? String(filename) : ''
+      state.relativePaths.add(state.relativePath)
+      clearTimeout(state.timer)
+      state.timer = setTimeout(notify, FILE_EXPLORER_WATCH_DELAY)
+    }
+    try {
+      state.watcher = fs.watch(root, {recursive: true, persistent: false}, onChange)
+    } catch (error) {
+      // Linux 上原生递归监听可能不可用，至少监听工作区根目录。
+      state.watcher = fs.watch(root, {persistent: false}, onChange)
+    }
+    state.watcher.on('error', (error) => {
+      console.warn(`File explorer watcher failed for ${root}:`, error.message)
+      closeFileExplorerWatcher(webContentsId)
+    })
+    fileExplorerWatchers.set(webContentsId, state)
+    event.sender.once('destroyed', onDestroyed)
+    return {success: true}
+  } catch (e) {
+    closeFileExplorerWatcher(webContentsId)
+    return {success: false, error: e.message}
+  }
+})
+
+ipcMain.handle('file-explorer-unwatch', (event) => {
+  closeFileExplorerWatcher(event.sender.id)
+  return {success: true}
+})
+
+// 列出目录的直接子项
+ipcMain.handle('file-explorer-list', (event, dirPath) => {
+  try {
+    const absolutePath = validateExplorerDir(dirPath)
+    const entries = fs.readdirSync(absolutePath, { withFileTypes: true }).map((entry) => ({
+      name: entry.name,
+      path: path.join(absolutePath, entry.name),
+      directory: entry.isDirectory()
+    }))
+    return { success: true, data: sortExplorerEntries(entries) }
+  } catch (e) {
+    return { success: false, error: e.message }
+  }
+})
+
+// 重命名（仅同目录改名）
+ipcMain.handle('file-explorer-rename', (event, payload = {}) => {
+  try {
+    const { filePath, newName } = payload
+    const source = resolveExplorerPath(filePath)
+    if (!fs.existsSync(source)) throw new Error('文件或目录不存在')
+    const safeName = validateExplorerName(newName)
+    const target = path.join(path.dirname(source), safeName)
+    const directory = fs.statSync(source).isDirectory()
+    if (target !== source) {
+      if (fs.existsSync(target)) throw new Error('同名文件或目录已存在')
+      fs.renameSync(source, target)
+    }
+    return { success: true, data: { name: safeName, path: target, directory } }
+  } catch (e) {
+    return { success: false, error: e.message }
+  }
+})
+
+// 删除文件或目录（递归）
+ipcMain.handle('file-explorer-delete', (event, filePath) => {
+  try {
+    const target = resolveExplorerPath(filePath)
+    if (!fs.existsSync(target)) throw new Error('文件或目录不存在')
+    fs.rmSync(target, { recursive: true, force: true })
+    return { success: true }
+  } catch (e) {
+    return { success: false, error: e.message }
+  }
+})
+
+// 读取文件内容（预览用，1MB 上限，拒绝二进制）
+const FILE_EXPLORER_READ_LIMIT = 1024 * 1024
+ipcMain.handle('file-explorer-read', (event, filePath) => {
+  try {
+    const target = resolveExplorerPath(filePath)
+    if (!fs.existsSync(target) || !fs.statSync(target).isFile()) throw new Error('文件不存在')
+    const size = fs.statSync(target).size
+    if (size > FILE_EXPLORER_READ_LIMIT) throw new Error(`文件过大（${Math.round(size / 1024)}KB），超过 1MB 预览上限`)
+    const content = fs.readFileSync(target, 'utf8')
+    if (content.includes('\u0000')) throw new Error('二进制文件无法预览')
+    return { success: true, data: content }
+  } catch (e) {
+    return { success: false, error: e.message }
+  }
+})
+
+// 写文件内容（编辑器保存用，10MB 上限）
+const FILE_EXPLORER_WRITE_LIMIT = 10 * 1024 * 1024
+ipcMain.handle('file-explorer-write', (event, payload = {}) => {
+  try {
+    const { filePath, content } = payload
+    const target = resolveExplorerPath(filePath)
+    if (!fs.existsSync(target) || !fs.statSync(target).isFile()) throw new Error('文件不存在')
+    if (typeof content !== 'string') throw new Error('内容无效')
+    if (content.length > FILE_EXPLORER_WRITE_LIMIT) throw new Error('内容过大，超过 10MB 保存上限')
+    fs.writeFileSync(target, content, 'utf8')
+    return { success: true }
+  } catch (e) {
+    return { success: false, error: e.message }
+  }
+})
+
+// 搜索工作区文件（文件名/路径关键字，忽略常见大目录，最多 16 层 / 100 条）
+const FILE_EXPLORER_IGNORED_DIRS = new Set(['.git', '.loopra', 'node_modules', 'target', 'dist', 'build', '.idea'])
+const FILE_EXPLORER_SEARCH_DEPTH = 16
+const FILE_EXPLORER_SEARCH_LIMIT = 100
+ipcMain.handle('file-explorer-search', (event, payload = {}) => {
+  try {
+    const { dirPath, keyword } = payload
+    const root = validateExplorerDir(dirPath)
+    const key = (keyword || '').trim().toLowerCase()
+    if (!key) return { success: true, data: [] }
+    const results = []
+    const stack = [{ dir: root, depth: 0 }]
+    while (stack.length > 0 && results.length < FILE_EXPLORER_SEARCH_LIMIT) {
+      const { dir, depth } = stack.pop()
+      if (depth > FILE_EXPLORER_SEARCH_DEPTH) continue
+      let children
+      try {
+        children = fs.readdirSync(dir, { withFileTypes: true })
+      } catch {
+        continue
+      }
+      for (const entry of children) {
+        if (results.length >= FILE_EXPLORER_SEARCH_LIMIT) break
+        const full = path.join(dir, entry.name)
+        if (entry.isDirectory()) {
+          if (!FILE_EXPLORER_IGNORED_DIRS.has(entry.name)) stack.push({ dir: full, depth: depth + 1 })
+        } else if (entry.name.toLowerCase().includes(key)) {
+          results.push({ name: entry.name, path: full, directory: false })
+        }
+      }
+    }
+    return { success: true, data: results }
+  } catch (e) {
     return { success: false, error: e.message }
   }
 })

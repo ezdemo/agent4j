@@ -22,6 +22,8 @@ import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.bin.tool.ToolSystemInitializer;
 import site.sorghum.loopra.bin.workspace.WorkspaceManager;
 import site.sorghum.loopra.tool.AgentOutput;
+import site.sorghum.loopra.tool.solon.common.SessionTerminalTalent;
+import site.sorghum.loopra.tool.solon.common.SessionTerminalTalent.BashSessionInfo;
 import site.sorghum.loopra.web.common.ServiceException;
 import site.sorghum.loopra.web.common.UsageCostCalculator;
 import site.sorghum.loopra.web.model.*;
@@ -32,6 +34,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.concurrent.CancellationException;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.locks.ReentrantLock;
 import java.util.stream.Collectors;
@@ -425,6 +428,37 @@ public class AgentService {
         LoopraAgent agent = sessionCache.peek(sessionKey);
         boolean running = (tasks != null && !tasks.isEmpty()) || (agent != null && agent.isRunning());
         return new SessionStatusDTO(running, requestId);
+    }
+
+    /**
+     * 列出 bash_start 启动的后台命令会话镜像。
+     *
+     * @param workspacePath 工作区绝对路径；为空时返回全部工作区的会话
+     */
+    public List<BashSessionDTO> listBashSessions(String workspacePath) {
+        Path target = workspacePath == null || workspacePath.isEmpty()
+                ? null : Paths.get(workspacePath).toAbsolutePath().normalize();
+        List<BashSessionDTO> result = new ArrayList<>();
+        for (BashSessionInfo info : SessionTerminalTalent.aggregateBashSessions()) {
+            if (target != null && !target.equals(Paths.get(info.getWorkspace()))) {
+                continue;
+            }
+            result.add(new BashSessionDTO(
+                    info.getSessionId(), info.getWorkspace(), info.getCommand(),
+                    info.getWorkdir(), info.getStartedAt(), info.getStatus()));
+        }
+        return result;
+    }
+
+    /**
+     * 手动关闭指定 bash 后台会话（前端“手动关闭”按钮）。
+     *
+     * @param sessionId     命令会话 ID
+     * @param workspacePath 工作区绝对路径；为空时在所有工作区中查找
+     * @return 终止后的状态日志文本；未找到会话返回 null
+     */
+    public String terminateBashSession(String sessionId, String workspacePath) {
+        return SessionTerminalTalent.terminateBashSession(sessionId, workspacePath, "用户手动关闭");
     }
 
     // ==================== 状态查询 ====================
@@ -930,6 +964,14 @@ public class AgentService {
                 emitter.sendComplete(reply);
             }
         } catch (Exception e) {
+            if (isUserAbortLike(e)) {
+                // 用户主动停止/预期重试流程，不是故障，按 info 记录
+                log.info("[chat] 聊天已停止（用户中断）: session={}, 原因: {}",
+                        effectiveSessionName, e.getMessage());
+            } else {
+                log.error("[chat] 流式聊天执行异常: session={}, workspace={}, 原因: {}",
+                        effectiveSessionName, workspacePath, e.getMessage(), e);
+            }
             try {
                 emitter.sendError(e.getMessage());
             } catch (Exception ex) {
@@ -957,6 +999,24 @@ public class AgentService {
 
             lock.unlock();
         }
+    }
+
+    /**
+     * 区分“用户主动停止/预期中断”与真实故障：中断类异常不按错误上报。
+     * <p>普通聊天停止由 AgentLoop 正常返回不抛异常；计划执行（execute_plan）停止/未启动
+     * 会抛 ServiceException，属于预期流程，降级为 info 日志。</p>
+     */
+    private static boolean isUserAbortLike(Exception e) {
+        if (Thread.currentThread().isInterrupted()
+                || e instanceof InterruptedException
+                || e instanceof CancellationException) {
+            return true;
+        }
+        if (e instanceof ServiceException) {
+            String msg = e.getMessage();
+            return msg != null && (msg.contains("已停止") || msg.contains("未能启动"));
+        }
+        return false;
     }
 
     private boolean hasPlanExecutionStarted(LoopraAgent agent) {

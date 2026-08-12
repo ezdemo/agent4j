@@ -6,10 +6,18 @@ directories:
   output: release
   buildResources: build
 
+# 直接使用本地已安装的 Electron（node_modules/electron/dist），跳过网络下载
+# （@electron/get 经 npmmirror 下载后 got 连接挂起导致超时）
+electronDist: node_modules/electron/dist
+
 files:
   - dist/**/*
 
 asar: true
+
+# node-pty 为原生模块（.node），必须从 asar 中解包，否则运行时无法加载
+asarUnpack:
+  - "**/node_modules/node-pty/**"
 
 # ── macOS ──────────────────────────────────────
 mac:

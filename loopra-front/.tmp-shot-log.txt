@@ -1,0 +1,7 @@
+2026-08-10T09:20:29.407Z adjust: found
+2026-08-10T09:20:30.422Z DOM: {"inputAreaBg":"rgba(0, 0, 0, 0) linear-gradient(to top, rgb(255, 255, 255) 16px, rgba(0, 0, 0, 0) 16px) repeat scroll 0% 0% / auto padding-box border-box","inputArea":{"top":760,"bottom":902},"covering":[{"top":586,"bottom":1059,"h":473}]}
+2026-08-10T09:20:30.486Z bitmap W=1803
+2026-08-10T09:20:30.488Z chat bg: rgb(255, 255, 255)
+2026-08-10T09:20:30.492Z PIXEL (threshold=18): top-gap[760~774] diff=10.94% | card[774~886] diff=7.78% | bottom-gap[886~902] diff=22.40%
+2026-08-10T09:20:30.557Z saved
+2026-08-10T09:20:31.761Z BOTTOM: {"lastMsgBottom":759,"inputAreaTop":760,"fullyVisible":true}

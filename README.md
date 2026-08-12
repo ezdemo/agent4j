@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Solon-4.0.4-important?logo=java" alt="Solon 4.0.4"/>
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js" alt="Vue 3"/>
   <img src="https://img.shields.io/badge/Electron-42.4-47848F?logo=electron" alt="Electron"/>
-  <img src="https://img.shields.io/badge/version-26.8.91-lightgrey" alt="Version 26.8.91"/>
+  <img src="https://img.shields.io/badge/version-26.8.121-lightgrey" alt="Version 26.8.121"/>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/>
 </p>
 
@@ -26,7 +26,7 @@
   <a href="#从源码开发">从源码开发</a>
 </p>
 
-> 当前版本：`26.8.91`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+> 当前版本：`26.8.121`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 技术交流群
 
@@ -143,7 +143,7 @@ loopra web 0
 | 需求池 | 以看板管理需求，支持 AI 自动执行、评论与执行日志、立即/定时执行，以及按需求配置模型和审批模式。 |
 | 持久协作状态 | Checklist、会话级 Goal、项目记忆和共享工作区支持长任务及父子代理协作。 |
 | 审批与边界 | 三态 HITL、工具白名单、路径边界保护，以及可选的独立校验模型。 |
-| 桌面工作台 | Electron Desktop 提供多聊天标签、Git/文件面板、元素检查、服务进程管理、AI 浏览器、需求池窗口和右键上下文操作。 |
+| 桌面工作台 | Electron Desktop 提供多聊天标签、文件资源管理器（实时监听磁盘变化）、Monaco 文件编辑器（含 Git 脏文件差异对比）、终端面板（node-pty，支持垂直/水平模式）、Git 面板、活动栏、元素检查、服务进程管理、AI 浏览器、需求池窗口和右键上下文操作。 |
 
 ### 工具与扩展
 
@@ -205,7 +205,7 @@ MCP、OpenAPI 和技能可为 Agent 注入额外工具。`read_image` 支持工�
 
 ### Web 与 Desktop
 
-`loopra web [port]` 启动 Web 服务，控制台会输出本地访问地址。Web 界面支持会话、工作区、工具、模型渠道、Git 和配置管理，并提供需求池 API；Electron Desktop 在此基础上增加本地进程、浏览器、需求池窗口和桌面上下文菜单能力。
+`loopra web [port]` 启动 Web 服务，控制台会输出本地访问地址。Web 界面支持会话、工作区、工具、模型渠道、Git 和配置管理，并提供需求池 API；Electron Desktop 在此基础上增加本地进程、文件资源管理器与文件编辑器、终端、浏览器、需求池窗口和桌面上下文菜单能力。
 
 ### 聊天命令
 

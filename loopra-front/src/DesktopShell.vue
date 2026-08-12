@@ -37,12 +37,15 @@
           @dragend="endTabReorder"
           @click="activateTab(tab.id)"
           @contextmenu.prevent.stop="openTabContextMenu($event, tab.id)"
-          @auxclick="closeTabWithMiddleClick($event, tab.id)"
+          @mousedown.middle.prevent.stop="closeTab(tab.id)"
           @keydown.enter="activateTab(tab.id)"
           @keydown.space.prevent="activateTab(tab.id)"
         >
           <span v-if="workspaceNameOf(tab.workspaceHash)" class="desktop-tab-monogram" :class="badgeTone(workspaceNameOf(tab.workspaceHash))">{{ initial(workspaceNameOf(tab.workspaceHash)) }}</span>
-          <span>{{ tab.title }}</span>
+          <span v-else class="desktop-tab-monogram desktop-tab-monogram-default" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/></svg>
+          </span>
+          <span class="desktop-tab-title">{{ tab.title }}</span>
           <div class="desktop-tab-actions">
             <button class="desktop-tab-reload" type="button" :aria-label="`刷新 ${tab.title}`" title="刷新会话" @click.stop="reloadTab(tab.id)">
               <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2"><path d="M23 4v6h-6"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
@@ -59,6 +62,7 @@
 
       <div class="desktop-window-controls">
         <button
+          v-if="hasNewVersion"
           class="window-button update-check-button"
           :class="{ 'has-update': hasNewVersion }"
           type="button"
@@ -75,6 +79,9 @@
         </button>
         <button v-if="activeTabId" class="window-button" type="button" title="切换右侧栏" @click="toggleRightPanel">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M15 3v18"/><path d="M7 8h4M7 12h4M7 16h4"/></svg>
+        </button>
+        <button v-if="activeTabId" class="window-button" type="button" title="终端" aria-label="终端" @click="toggleTerminal">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>
         </button>
         <button class="window-button" type="button" title="最小化" @click="minimize"><span class="minimize-mark" /></button>
         <button class="window-button" type="button" title="最大化" @click="maximize"><span class="maximize-mark" /></button>
@@ -94,6 +101,10 @@
         <button type="button" role="menuitem" @click="chooseHomeContextAction('open-requirement-board')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
           打开需求池
+        </button>
+        <button type="button" role="menuitem" @click="chooseHomeContextAction('open-update')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          更新
         </button>
         <button
           type="button"
@@ -177,12 +188,20 @@
       <SettingsView v-else-if="showSettings" class="desktop-settings" @open-sub-agents="openSubAgents" @open-dashboard="openDashboard" />
     </main>
   <ConfirmDialog />
+  <ActionConfirmDialog
+    :model-value="deleteConfirm.visible"
+    :title="deleteConfirm.title"
+    :message="deleteConfirm.message"
+    :actions="deleteConfirmActions"
+    @update:model-value="dismissDeleteConfirm"
+    @action="handleDeleteConfirmAction"
+  />
 </div>
 </template>
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
-import {message, Modal} from 'ant-design-vue'
+import {message} from 'ant-design-vue'
 import {useAppStore} from './stores/app'
 import {configAPI, sessionsAPI, systemAPI} from './services/api'
 import {RELEASE_LATEST_URL} from './utils/constants'
@@ -195,6 +214,7 @@ import SubAgentsView from './views/SubAgents.vue'
 import ModelChannels from './ModelChannels.vue'
 import DashboardPanel from './components/Dashboard.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
+import ActionConfirmDialog from './components/ActionConfirmDialog.vue'
 import {hasConfiguredModelChannel} from './utils/modelChannels'
 import {switchThemeWithReveal} from './utils/themeTransition'
 
@@ -225,7 +245,7 @@ const homeButton = ref(null)
 const homeContextMenu = reactive({visible: false, x: 0, y: 0})
 const tabContextMenu = reactive({visible: false, tabId: '', x: 0, y: 0})
 const HOME_CONTEXT_MENU_WIDTH = 176
-const HOME_CONTEXT_MENU_HEIGHT = 78
+const HOME_CONTEXT_MENU_HEIGHT = 112
 const TAB_CONTEXT_MENU_WIDTH = 188
 const TAB_CONTEXT_MENU_HEIGHT = 146
 let resizeObserver = null
@@ -426,7 +446,8 @@ async function renderActiveTabNow(version) {
       id: current.id,
       sessionName: current.sessionName,
       workspaceHash: current.workspaceHash,
-      theme: theme.value
+      theme: theme.value,
+      newSession: current.newSession === true
     })
     if (!tabs.value.some((tab) => tab.id === current.id)) {
       try { await bridge.close(current.id) } catch (cleanupError) { console.warn('[desktop-shell] failed to clean up closed tab:', cleanupError) }
@@ -470,7 +491,7 @@ async function createTab() {
     const workspaceHash = response.data.workspaceHash || targetHash
     const id = tabId(workspaceHash, sessionName)
     hideStandaloneViews()
-    tabs.value = [...tabs.value, { id, sessionName, workspaceHash, title: tabTitle(sessionName) }]
+    tabs.value = [...tabs.value, { id, sessionName, workspaceHash, title: tabTitle(sessionName), newSession: true }]
     activeTabId.value = id
     startupError.value = ''
     await renderActiveTab()
@@ -499,7 +520,7 @@ async function runChatUpdate(source) {
     const workspaceHash = response.data.workspaceHash || targetHash
     const id = tabId(workspaceHash, sessionName)
     hideStandaloneViews()
-    tabs.value = [...tabs.value, { id, sessionName, workspaceHash, title: tabTitle(sessionName) }]
+    tabs.value = [...tabs.value, { id, sessionName, workspaceHash, title: tabTitle(sessionName), newSession: true }]
     activeTabId.value = id
     startupError.value = ''
     if (!await renderActiveTab()) return
@@ -719,6 +740,7 @@ function closeContextMenus() {
 function chooseHomeContextAction(action) {
   closeContextMenus()
   if (action === 'open-requirement-board') openRequirementBoard()
+  else if (action === 'open-update') void openUpdateWindow()
   else if (action === 'toggle-theme') toggleTheme()
 }
 
@@ -805,6 +827,16 @@ async function openDashboard() {
   await renderActiveTab()
 }
 
+// 终端面板：转发给当前会话 tab 控制（与会话绑定、收起不销毁）
+async function toggleTerminal() {
+  if (!activeTabId.value) return
+  try {
+    await nativeTabs()?.toggleTerminal(activeTabId.value)
+  } catch (error) {
+    message.error('切换终端失败：' + (error.message || '未知错误'))
+  }
+}
+
 function hideStandaloneViews() {
   closeContextMenus()
   showSkills.value = false
@@ -889,12 +921,6 @@ async function closeTabsToSide(id, side) {
   if (activeWasRemoved) await renderActiveTab()
 }
 
-function closeTabWithMiddleClick(event, id) {
-  if (event.button !== 1) return
-  event.preventDefault()
-  void closeTab(id)
-}
-
 async function closeWorkspaceTabs(workspaceHash) {
   const removedTabs = tabs.value.filter((tab) => tab.workspaceHash === workspaceHash)
   if (!removedTabs.length) return
@@ -911,73 +937,85 @@ async function closeWorkspaceTabs(workspaceHash) {
   await renderActiveTab()
 }
 
+// 删除/清空确认对话框（系统统一 ActionConfirmDialog）
+const deleteConfirm = ref({ visible: false, kind: '', title: '', message: '', payload: null })
+const deleteConfirmActions = computed(() => {
+  const okLabel = deleteConfirm.value.kind === 'deleteWorkspace' ? '删除项目'
+    : deleteConfirm.value.kind === 'clearWorkspace' ? '清空'
+    : '删除'
+  return [
+    { key: 'cancel', label: '取消' },
+    { key: 'confirm', label: okLabel, variant: 'danger' }
+  ]
+})
+const openDeleteConfirm = (kind, title, message, payload) => {
+  deleteConfirm.value = { visible: true, kind, title, message, payload }
+}
+const dismissDeleteConfirm = () => {
+  deleteConfirm.value.visible = false
+  deleteConfirm.value.payload = null
+}
+const handleDeleteConfirmAction = (action) => {
+  if (action !== 'confirm') return dismissDeleteConfirm()
+  const { kind, payload } = deleteConfirm.value
+  dismissDeleteConfirm()
+  if (kind === 'session') void performDeleteSession(payload)
+  else if (kind === 'clearWorkspace') void performClearWorkspace(payload)
+  else if (kind === 'workspace') void performDeleteWorkspace(payload)
+}
+
 function confirmDeleteSession(session) {
   const title = session?.title || session?.name || '此会话'
-  Modal.confirm({
-    title: '删除会话？',
-    content: `“${title}”将被永久删除，无法恢复。`,
-    okText: '删除',
-    okType: 'danger',
-    cancelText: '取消',
-    onOk: async () => {
-      try {
-        const response = await sessionsAPI.deleteSession(session.name, session.workspaceHash)
-        if (!response.success) throw new Error(response.message || '删除会话失败')
-        await closeTab(tabId(session.workspaceHash, session.name))
-        homeRefreshKey.value++
-        message.success('会话已删除')
-      } catch (error) {
-        message.error('删除会话失败：' + (error.message || '未知错误'))
-      }
-    }
-  })
+  openDeleteConfirm('session', '删除会话？', `“${title}”将被永久删除，无法恢复。`, session)
+}
+
+async function performDeleteSession(session) {
+  try {
+    const response = await sessionsAPI.deleteSession(session.name, session.workspaceHash)
+    if (!response.success) throw new Error(response.message || '删除会话失败')
+    await closeTab(tabId(session.workspaceHash, session.name))
+    homeRefreshKey.value++
+    message.success('会话已删除')
+  } catch (error) {
+    message.error('删除会话失败：' + (error.message || '未知错误'))
+  }
 }
 
 function confirmClearWorkspace(workspace) {
-  Modal.confirm({
-    title: '清空项目会话？',
-    content: `“${workspace.name}”中的全部会话将被永久删除，无法恢复。`,
-    okText: '清空',
-    okType: 'danger',
-    cancelText: '取消',
-    onOk: async () => {
-      try {
-        const response = await sessionsAPI.clearAll(workspace.hash)
-        if (!response.success) throw new Error(response.message || '清空会话失败')
-        await closeWorkspaceTabs(workspace.hash)
-        homeRefreshKey.value++
-        message.success('项目会话已清空')
-      } catch (error) {
-        message.error('清空会话失败：' + (error.message || '未知错误'))
-      }
-    }
-  })
+  openDeleteConfirm('clearWorkspace', '清空项目会话？', `“${workspace.name}”中的全部会话将被永久删除，无法恢复。`, workspace)
+}
+
+async function performClearWorkspace(workspace) {
+  try {
+    const response = await sessionsAPI.clearAll(workspace.hash)
+    if (!response.success) throw new Error(response.message || '清空会话失败')
+    await closeWorkspaceTabs(workspace.hash)
+    homeRefreshKey.value++
+    message.success('项目会话已清空')
+  } catch (error) {
+    message.error('清空会话失败：' + (error.message || '未知错误'))
+  }
 }
 
 function confirmDeleteWorkspace(workspace) {
-  Modal.confirm({
-    title: '删除项目？',
-    content: `“${workspace.name}”将从项目列表移除；项目文件不会被删除。`,
-    okText: '删除项目',
-    okType: 'danger',
-    cancelText: '取消',
-    onOk: async () => {
-      try {
-        const response = await configAPI.deleteWorkspace(workspace.hash)
-        if (!response.success) throw new Error(response.message || '删除项目失败')
-        await closeWorkspaceTabs(workspace.hash)
-        workspaces.value = workspaces.value.filter((item) => item.hash !== workspace.hash)
-        if (activeWorkspaceHash.value === workspace.hash) {
-          activeWorkspaceHash.value = ''
-          if (workspaces.value[0]) await selectWorkspace(workspaces.value[0].hash)
-        }
-        homeRefreshKey.value++
-        message.success('项目已删除')
-      } catch (error) {
-        message.error('删除项目失败：' + (error.message || '未知错误'))
-      }
+  openDeleteConfirm('deleteWorkspace', '删除项目？', `“${workspace.name}”将从项目列表移除；项目文件不会被删除。`, workspace)
+}
+
+async function performDeleteWorkspace(workspace) {
+  try {
+    const response = await configAPI.deleteWorkspace(workspace.hash)
+    if (!response.success) throw new Error(response.message || '删除项目失败')
+    await closeWorkspaceTabs(workspace.hash)
+    workspaces.value = workspaces.value.filter((item) => item.hash !== workspace.hash)
+    if (activeWorkspaceHash.value === workspace.hash) {
+      activeWorkspaceHash.value = ''
+      if (workspaces.value[0]) await selectWorkspace(workspaces.value[0].hash)
     }
-  })
+    homeRefreshKey.value++
+    message.success('项目已删除')
+  } catch (error) {
+    message.error('删除项目失败：' + (error.message || '未知错误'))
+  }
 }
 
 onMounted(() => {
@@ -1039,21 +1077,22 @@ onBeforeUnmount(() => {
 
 <style scoped>
 .desktop-shell { width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; background: var(--bg, #fff); color: var(--fg, #202124); }
-.desktop-titlebar { height: 44px; min-height: 44px; display: flex; align-items: center; border-bottom: 1px solid var(--border, #e8e8e8); background: var(--bg, #fff); -webkit-app-region: drag; user-select: none; }
-.desktop-left-controls { display: flex; align-items: center; padding: 0 14px 0 32px; flex: 0 0 auto; }
+.desktop-titlebar { position: relative; height: 44px; min-height: 44px; display: flex; align-items: center; background: var(--bg, #fff); -webkit-app-region: drag; user-select: none; }
+.desktop-titlebar::after { position: absolute; right: 0; bottom: 0; left: 50px; height: 1px; background: var(--border, #e8e8e8); content: ''; pointer-events: none; }
+.desktop-left-controls { display: flex; align-items: center; gap: 4px; padding: 0 8px 0 32px; flex: 0 0 auto; }
 .icon-button, .desktop-tab, .desktop-tab-add, .window-button { -webkit-app-region: no-drag; border: 0; background: transparent; color: var(--fg-2, #5f6368); }
 .icon-button { width: 28px; height: 28px; padding: 5px; border-radius: 5px; }
 .icon-button svg, .desktop-tab svg, .desktop-tab-add svg { width: 18px; height: 18px; }
 .icon-button:hover, .icon-button.active, .desktop-tab-add:hover, .window-button:hover { background: var(--bg-3, #f3f4f6); color: var(--fg, #202124); }
-.desktop-tabs { height: 100%; display: flex; align-items: center; gap: 4px; min-width: 80px; flex: 1; overflow-x: auto; padding: 0 18px; scrollbar-width: none; }
+.desktop-tabs { height: 100%; display: flex; align-items: center; gap: 4px; min-width: 80px; flex: 1; overflow-x: auto; padding: 0 18px 0 8px; scrollbar-width: none; }
 .desktop-tab.dragging { opacity: 0.55; }
 .desktop-tab.drag-over { background: var(--bg-3, #f3f4f6); box-shadow: inset 0 0 0 1px var(--border, #d6dae1); }
 .desktop-tabs::-webkit-scrollbar { display: none; }
-.desktop-tab { display: inline-flex; align-items: center; gap: 7px; width: clamp(156px, 16vw, 230px); height: 30px; padding: 0 10px; border-radius: 6px; cursor: pointer; flex: 0 0 auto; text-align: left; }
+.desktop-tab { display: inline-flex; align-items: center; gap: 7px; height: 30px; padding: 0 10px; border-radius: 6px; cursor: pointer; flex: 0 1 16vw; min-width: 96px; max-width: 230px; text-align: left; container-type: inline-size; }
 .desktop-tab:hover { background: var(--bg-3, #f3f4f6); color: var(--fg, #202124); }
 .desktop-tab.active { background: var(--bg-3, #f1f2f4); color: var(--fg, #202124); }
-.desktop-tab.active > span:not(.desktop-tab-monogram) { font-weight: 500; }
-.desktop-tab > span:not(.desktop-tab-monogram) { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1; font-size: 14px; font-weight: 400; }
+.desktop-tab.active .desktop-tab-title { font-weight: 500; }
+.desktop-tab-title { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; flex: 1 1 auto; min-width: 0; font-size: 14px; font-weight: 400; }
 .desktop-tab-actions { display: flex; align-items: center; gap: 2px; flex: 0 0 auto; }
 .desktop-tab-reload, .desktop-tab-close { display: inline-flex; width: 22px; height: 22px; align-items: center; justify-content: center; border: 0; border-radius: 4px; background: transparent; color: inherit; cursor: pointer; }
 .desktop-tab-reload { display: none; }
@@ -1070,6 +1109,17 @@ onBeforeUnmount(() => {
 .desktop-tab-monogram.tone-5 { background: linear-gradient(135deg, #f87fb5, #e85a9c); }
 .desktop-tab-monogram.tone-6 { background: linear-gradient(135deg, #fcd34d, #f5b800); }
 .desktop-tab-monogram.tone-7 { background: linear-gradient(135deg, #4dd9a6, #20c084); }
+.desktop-tab-monogram-default { background: var(--bg-3, #f3f4f6); color: var(--fg-3, #9ca3af); box-shadow: none; text-shadow: none; }
+.desktop-tab-monogram-default svg { width: 12px; height: 12px; }
+
+/* 会话标签分级收缩：会话变多时标签自动变窄，最窄仅保留 图标 + 两字标题 + 关闭按钮 */
+/* 注意：@container 内不能修改容器自身影响 content-box 的属性（padding/gap 会被 Chromium 忽略），只能作用于子元素 */
+@container (max-width: 149px) {
+  .desktop-tab-reload { display: none !important; }
+}
+@container (max-width: 99px) {
+  .desktop-tab-title { flex: 0 1 auto; max-width: 2em; }
+}
 .desktop-tab-add { display: inline-flex; width: 28px; height: 28px; align-items: center; justify-content: center; border-radius: 5px; flex: 0 0 auto; cursor: pointer; }
 .desktop-window-controls { height: 100%; display: flex; align-items: center; padding-right: 14px; flex: 0 0 auto; -webkit-app-region: no-drag; }
 .window-button { width: 44px; height: 30px; display: inline-flex; align-items: center; justify-content: center; border-radius: 5px; }
