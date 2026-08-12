@@ -152,7 +152,7 @@ public class GitController {
     // ==================== AI 辅助 ====================
 
     @ApiOperation(value = "AI 自动生成 Git 提交消息",
-            notes = "根据当前 git diff 和近 10 条提交日志，调用 AI 生成符合风格的提交消息。支持传入 files 数组仅针对选中文件生成")
+            notes = "根据全部变更文件名、最多 3 个文件的 git diff 和近 3 条提交日志，调用 AI 生成符合风格的提交消息。支持传入 files 数组仅针对选中文件生成")
     @Post
     @Mapping("/generate-commit-message")
     public ApiResponse<GitGenerateMessageDTO> generateCommitMessage(

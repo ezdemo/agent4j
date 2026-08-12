@@ -206,10 +206,42 @@
         </div>
       </div>
 
+      <!-- 上传文件列表（解析中/成功/失败） -->
+      <div v-if="uploadedFiles.length > 0" class="upload-chips-bar">
+        <div class="file-chips-heading">
+          <span class="file-chips-title">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48"/></svg>
+            上传文件 {{ uploadedFiles.length }} 个
+          </span>
+          <span v-if="parsingCount > 0" class="upload-parsing-hint"><span class="loading-dot"></span> 正在解析文件…</span>
+          <button class="file-clear-all" type="button" @click="clearUploadedFiles">清除</button>
+        </div>
+        <div class="file-chips-list">
+          <span v-for="upload in uploadedFiles" :key="upload.id"
+                class="file-chip upload-chip"
+                :class="{ 'upload-chip-parsing': upload.status === 'parsing', 'upload-chip-error': upload.status === 'error' }"
+                :title="upload.status === 'error' ? upload.error : upload.name">
+            <span class="file-chip-icon">
+              <svg v-if="upload.status === 'parsing'" class="animate-spin" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>
+              <svg v-else-if="upload.status === 'error'" width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 8v4M12 16h.01"/></svg>
+              <svg v-else width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+            </span>
+            <span class="file-chip-name">{{ upload.name }}</span>
+            <small v-if="upload.status === 'ready'" class="upload-chip-size">{{ upload.sizeText }}</small>
+            <span v-else-if="upload.status === 'parsing'" class="upload-chip-size">解析中…</span>
+            <span v-else class="upload-chip-size upload-chip-error-text">解析失败</span>
+            <button class="file-chip-remove" type="button" :aria-label="`移除上传文件 ${upload.name}`" title="移除"
+                    @click.stop="removeUploadedFile(upload.id)">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </span>
+        </div>
+      </div>
+
       <div class="input-row">
+        <!-- 输入框永不禁用：会话后台运行/状态检查中也可输入，发送时由 Chat.vue 自动排队 -->
         <textarea ref="inputField" v-model="localText" @keydown="handleKeydown"
-                  :disabled="sessionBusy"
-                  :placeholder="welcomeMode ? '输入消息... (Enter 发送, Tab 补全, / 命令，粘贴图片)' : '输入消息，/ 使用命令，@ 引用上下文...'" rows="1" @blur="handleBlur"
+                  :placeholder="welcomeMode ? '输入消息... (Enter 发送, Tab 补全, / 命令，上传/粘贴图片)' : '输入消息，/ 使用命令，@ 引用上下文，上传文件...'" rows="1" @blur="handleBlur"
                   @focus="inputFocused=true"
                   @input="handleInput" @paste="handlePaste"></textarea>
 
@@ -222,6 +254,11 @@
         </div>
 
         <div class="input-actions">
+          <button type="button" class="upload-btn"
+                  title="上传文件（图片/文本/PDF/Word/Excel）" aria-label="上传文件" @click="handleUploadClick">
+            <PaperClipOutlined />
+          </button>
+          <input ref="fileInput" type="file" multiple class="upload-file-input" @change="handleFileSelected" />
           <button type="button" class="plan-mode-btn" :class="{ active: planMode }"
                   :disabled="streaming || sessionBusy || (!sessionName && !workspaceHash)" :aria-pressed="planMode"
                   :title="planMode ? '退出计划模式' : '进入计划模式'" @click="$emit('togglePlan')">
@@ -242,7 +279,8 @@
               </svg>
             </button>
           </template>
-          <button :class="{ active: localText.trim() }" :disabled="sessionBusy || !localText.trim()"
+          <button :class="{ active: localText.trim() }"
+                  :disabled="parsingCount > 0 || (!localText.trim() && images.length === 0 && uploadedFiles.length === 0)"
                   class="send-btn" :title="sessionRunning ? '该会话正在后台执行' : streaming ? '加入队列' : '发送消息'" @click="handleSend">
             <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
               <line x1="22" x2="11" y1="2" y2="13"/>
@@ -364,7 +402,7 @@
         </div>
         <div class="model-actions">
         <!-- 技能指定 -->
-        <div class="skill-selector">
+        <div class="skill-selector hover-reveal">
           <button class="effort-btn" @click="toggleSkillPicker" title="选择技能">
             技能
             <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -398,7 +436,7 @@
           </div>
         </div>
         <!-- 权限切换 -->
-        <div class="permission-hitl-selector">
+        <div class="permission-hitl-selector hover-reveal">
           <div class="reasoning-effort-selector">
             <button class="effort-btn" @click="togglePermissionPicker" :title="'当前权限模式: '+currentPermission">
               {{ permissionLabel }}
@@ -420,7 +458,7 @@
             </div>
           </div>
         </div>
-        <div class="reasoning-effort-selector">
+        <div class="reasoning-effort-selector hover-reveal">
           <button class="effort-btn" @click="toggleEffortPicker" :title="`当前推理强度: ${selectedReasoningEffort.label}`">
             <span class="effort-current-label">{{ selectedReasoningEffort.label }}</span>
             <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -537,8 +575,9 @@
 </template>
 
 <script setup>
-import {computed, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
-import {FileTextOutlined, StarFilled, StarOutlined} from '@ant-design/icons-vue'
+import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
+import {FileTextOutlined, PaperClipOutlined, StarFilled, StarOutlined} from '@ant-design/icons-vue'
+import {message} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
 import {agentAPI, filesAPI, petAPI, promptPresetsAPI} from '../services/api'
 import PetSprite from './PetSprite.vue'
@@ -556,6 +595,7 @@ const props = defineProps({
   availableModels: {type: Array, default: () => []},
   workspaceHash: {type: String, default: null},
   sessionName: {type: String, default: null},
+  initiallyEmpty: {type: Boolean, default: false},
   hasHistory: {type: Boolean, default: false},
   currentReasoningEffort: {type: String, default: 'max'},
   terminateOnNoToolCall: {type: Boolean, default: true},
@@ -573,6 +613,8 @@ const props = defineProps({
 })
 
 const emit = defineEmits(['update:inputText', 'send', 'abort', 'clear', 'export', 'refreshUsage', 'switchModel', 'setDefaultModel', 'continue', 'refreshModels', 'switchReasoningEffort', 'switchTerminateOnNoToolCall', 'switchSkill', 'switchPermission', 'pickerOpen', 'manageModels', 'removeQueued', 'guideQueued', 'togglePlan'])
+const appStore = useAppStore()
+const sessionInitialized = ref(!props.initiallyEmpty)
 
 const inputField = ref(null)
 const inputFocused = ref(false)
@@ -586,10 +628,13 @@ const restoreInputFocus = () => {
   nextTick(() => inputField.value?.focus())
 }
 const localText = ref(props.inputText)
-const images = ref([]) // 粘贴的图片 base64 Data URI 列表
+const images = ref([]) // 粘贴/上传的图片 base64 Data URI 列表
 const selectedFileContexts = ref([])
 const selectedElementContexts = ref([])
 const fileDropActive = ref(false)
+const uploadedFiles = ref([]) // 上传文件：{id, name, sizeText, status: 'parsing'|'ready'|'error', content, error}
+const fileInput = ref(null)
+const parsingCount = computed(() => uploadedFiles.value.filter((f) => f.status === 'parsing').length)
 
 // 同步 props 到本地
 watch(() => props.inputText, v => localText.value = v)
@@ -621,7 +666,10 @@ const persistQuickCommands = async () => {
 
 const toggleQuickCommandPicker = () => {
   const nextOpen = !showQuickCommandPicker.value
-  if (nextOpen) closePickers('quick')
+  if (nextOpen) {
+    closePickers('quick')
+    if (quickCommands.value.length === 0) void loadPromptPresets()
+  }
   showQuickCommandPicker.value = nextOpen
   if (!nextOpen) closeQuickCommandEditor()
 }
@@ -902,59 +950,73 @@ const handleKeydown = (e) => {
 }
 
 const handleSend = () => {
-  if (props.sessionBusy) return
-  if (localText.value.trim()) {
-    let text = localText.value.trim()
-    const collapsedParts = []
-    if (selectedFileContexts.value.length > 0) {
-      const fileLines = selectedFileContexts.value.map(context => `- ${context.file}`).join('\n')
-      collapsedParts.push(`引用文件：\n${fileLines}`)
-    }
-    if (selectedSkills.value.length > 0) {
-      const skillLines = selectedSkills.value.map(s => `/skill:${s.name}`).join('\n')
-      collapsedParts.push(`调用技能：\n${skillLines}`)
-    }
-    if (selectedElementContexts.value.length > 0) {
-      const elementLines = selectedElementContexts.value.map((context) => {
-        const details = [
-          `- ${context.label}`,
-          context.selector ? `  选择器: ${context.selector}` : '',
-          context.file ? `  文件: ${context.file}` : '',
-          context.path.length ? `  组件路径: ${context.path.join(' > ')}` : '',
-          context.attrs.length ? `  属性: ${context.attrs.map((attr) => `${attr.key}="${attr.val}"`).join(' ')}` : '',
-          context.text ? `  文本: ${context.text}` : ''
-        ].filter(Boolean)
-        return details.join('\n')
-      }).join('\n')
-      collapsedParts.push(`元素检查：\n${elementLines}`)
-    }
-    if (collapsedParts.length > 0) {
-      text = `\`\`\`折叠块\n${collapsedParts.join('\n\n')}\n\`\`\`\n\n${text}`
-    }
-    emit('send', images.value, text)
-    // 发送后清空图片、文件引用和技能标签
-    images.value = []
-    selectedFileContexts.value = []
-    selectedElementContexts.value = []
-    selectedSkills.value = []
-    // 等待父组件清空文本后，重置 textarea 高度
-    nextTick(() => autoResize())
+  // 会话后台运行/状态检查中不拦截发送：Chat.vue 会将其放入排队队列，任务结束后自动发出
+  // 文件解析中禁止发送，防止发出不完整内容
+  if (parsingCount.value > 0) {
+    message.info('文件解析中，请稍候…')
+    return
   }
+  if (!localText.value.trim() && images.value.length === 0 && uploadedFiles.value.length === 0) return
+  let text = localText.value.trim()
+  const collapsedParts = []
+  if (selectedFileContexts.value.length > 0) {
+    const fileLines = selectedFileContexts.value.map(context => `- ${context.file}`).join('\n')
+    collapsedParts.push(`引用文件：\n${fileLines}`)
+  }
+  if (selectedSkills.value.length > 0) {
+    const skillLines = selectedSkills.value.map(s => `/skill:${s.name}`).join('\n')
+    collapsedParts.push(`调用技能：\n${skillLines}`)
+  }
+  if (selectedElementContexts.value.length > 0) {
+    const elementLines = selectedElementContexts.value.map((context) => {
+      const details = [
+        `- ${context.label}`,
+        context.selector ? `  选择器: ${context.selector}` : '',
+        context.file ? `  文件: ${context.file}` : '',
+        context.path.length ? `  组件路径: ${context.path.join(' > ')}` : '',
+        context.attrs.length ? `  属性: ${context.attrs.map((attr) => `${attr.key}="${attr.val}"`).join(' ')}` : '',
+        context.text ? `  文本: ${context.text}` : ''
+      ].filter(Boolean)
+      return details.join('\n')
+    }).join('\n')
+    collapsedParts.push(`元素检查：\n${elementLines}`)
+  }
+  if (uploadedFiles.value.length > 0) {
+    const uploadLines = uploadedFiles.value
+      .filter((f) => f.status === 'ready' && f.content)
+      .map((f) => `- ${f.name} (${f.sizeText})\n  内容：\n${f.content}`)
+      .join('\n\n')
+    if (uploadLines) collapsedParts.push(`上传文件：\n${uploadLines}`)
+  }
+  if (collapsedParts.length > 0) {
+    text = `\`\`\`折叠块\n${collapsedParts.join('\n\n')}\n\`\`\`\n\n${text}`
+  }
+  emit('send', images.value, text)
+  // 发送后清空图片、文件引用、技能标签和上传文件
+  images.value = []
+  uploadedFiles.value = []
+  selectedFileContexts.value = []
+  selectedElementContexts.value = []
+  selectedSkills.value = []
+  // 等待父组件清空文本后，重置 textarea 高度
+  nextTick(() => autoResize())
 }
 
 /**
- * 粘贴事件处理：从剪贴板捕获图片，转为 base64 Data URI。
+ * 粘贴事件处理：从剪贴板捕获图片（转为 base64 Data URI）和复制的文件（走上传解析管线）。
  */
 const handlePaste = async (e) => {
   const items = e.clipboardData?.items
   if (!items) return
 
+  const pastedFiles = []
   for (const item of items) {
+    if (item.kind !== 'file') continue
+    const file = item.getAsFile()
+    if (!file) continue
+
     if (item.type.startsWith('image/')) {
       e.preventDefault() // 阻止默认粘贴文本
-      const file = item.getAsFile()
-      if (!file) continue
-
       try {
         const dataUrl = await fileToDataUrl(file)
         // 限制图片数量（防止请求体过大）
@@ -966,7 +1028,14 @@ const handlePaste = async (e) => {
       } catch (err) {
         console.error('图片转换失败:', err)
       }
+    } else {
+      // 非图片文件（文本/PDF/Word/Excel 等）：收集后统一走上传解析
+      pastedFiles.push(file)
     }
+  }
+  if (pastedFiles.length > 0) {
+    e.preventDefault() // 阻止默认粘贴文件路径文本
+    handleFiles(pastedFiles)
   }
 }
 
@@ -1044,10 +1113,19 @@ const handleFileDragLeave = (event) => {
 
 const handleFileDrop = (event) => {
   fileDropActive.value = false
+  // 工作区文件引用（应用内拖拽）优先
   const path = event.dataTransfer?.getData('application/x-loopra-file-path')
-  if (!path) return
-  addFileContext({ file: path })
-  nextTick(() => inputField.value?.focus())
+  if (path) {
+    addFileContext({ file: path })
+    nextTick(() => inputField.value?.focus())
+    return
+  }
+  // 本地文件拖拽：走上传解析逻辑（与工作区文件引用并存）
+  const files = Array.from(event.dataTransfer?.files || [])
+  if (files.length > 0) {
+    handleFiles(files)
+    nextTick(() => inputField.value?.focus())
+  }
 }
 
 /**
@@ -1060,6 +1138,193 @@ const fileToDataUrl = (file) => {
     reader.onerror = reject
     reader.readAsDataURL(file)
   })
+}
+
+// ============= 上传文件解析 =============
+const MAX_UPLOAD_FILES = 10 // 上传文件数量上限
+const MAX_TEXT_FILE_SIZE = 512 * 1024 // 文本直读上限 512KB
+const MAX_DOC_FILE_SIZE = 30 * 1024 * 1024 // PDF/docx/xlsx 单文件上限 30MB
+const MAX_EXTRACT_CHARS = 500000 // 单文件提取文本上限
+const MAX_TOTAL_EXTRACT_CHARS = 1000000 // 全部上传文本总量上限
+const TEXT_EXTENSIONS = new Set([
+  'txt', 'md', 'markdown', 'json', 'js', 'jsx', 'ts', 'tsx', 'py', 'java', 'c', 'cpp', 'h', 'hpp',
+  'cs', 'go', 'rs', 'rb', 'php', 'sh', 'bat', 'ps1', 'sql', 'html', 'htm', 'css', 'scss', 'less',
+  'xml', 'yaml', 'yml', 'csv', 'log', 'properties', 'ini', 'toml', 'cfg', 'conf', 'env',
+  'gitignore', 'dockerfile', 'vue', 'svelte'
+])
+
+const getFileKind = (file) => {
+  const name = String(file.name || '')
+  const ext = name.includes('.') ? name.split('.').pop().toLowerCase() : ''
+  const type = String(file.type || '').toLowerCase()
+  if (type.startsWith('image/')) return 'image'
+  if (type.startsWith('text/') || TEXT_EXTENSIONS.has(ext)) return 'text'
+  if (ext === 'pdf' || type === 'application/pdf') return 'pdf'
+  if (ext === 'docx' || type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document') return 'docx'
+  if (ext === 'xlsx' || type === 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet') return 'xlsx'
+  return 'unsupported'
+}
+
+const formatFileSize = (bytes) => {
+  if (bytes < 1024) return `${bytes} B`
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`
+}
+
+const truncateText = (text, max) => {
+  if (text.length <= max) return text
+  return `${text.slice(0, max)}\n...[内容过长，已截断，共 ${text.length} 字符]`
+}
+
+const handleUploadClick = () => {
+  // 上传文件与后台任务不冲突，任何时候都允许选择文件
+  fileInput.value?.click()
+}
+
+const handleFileSelected = (event) => {
+  handleFiles(Array.from(event.target.files || []))
+  event.target.value = '' // 允许重复选择同一文件
+}
+
+const handleFiles = (files) => {
+  files.forEach((file) => addUploadFile(file))
+}
+
+const addUploadFile = (file) => {
+  if (!file) return
+  const kind = getFileKind(file)
+  if (kind === 'image') {
+    handleImageFile(file)
+    return
+  }
+  if (kind === 'unsupported') {
+    message.warning(`暂不支持解析 ${file.name}（仅支持图片/文本/PDF/Word/Excel）`)
+    return
+  }
+  if (uploadedFiles.value.length >= MAX_UPLOAD_FILES) {
+    message.warning(`上传文件数量已达上限（${MAX_UPLOAD_FILES} 个）`)
+    return
+  }
+  const maxSize = kind === 'text' ? MAX_TEXT_FILE_SIZE : MAX_DOC_FILE_SIZE
+  if (file.size > maxSize) {
+    message.warning(`${file.name} 超过大小限制（${kind === 'text' ? '512KB' : '30MB'}）`)
+    return
+  }
+  const entry = reactive({
+    id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    name: file.name,
+    sizeText: formatFileSize(file.size),
+    status: 'parsing',
+    content: '',
+    error: ''
+  })
+  uploadedFiles.value.push(entry)
+  parseUploadedFile(file, kind, entry)
+}
+
+const handleImageFile = async (file) => {
+  if (images.value.length >= 10) {
+    message.warning('图片数量已达上限（10 张）')
+    return
+  }
+  try {
+    const dataUrl = await fileToDataUrl(file)
+    if (images.value.length < 10) images.value.push(dataUrl)
+    else message.warning('图片数量已达上限（10 张）')
+  } catch (err) {
+    console.error('图片转换失败:', err)
+    message.error(`图片读取失败: ${file.name}`)
+  }
+}
+
+const parseUploadedFile = async (file, kind, entry) => {
+  try {
+    let content = ''
+    if (kind === 'text') {
+      content = await readFileAsText(file)
+    } else if (kind === 'pdf') {
+      content = await parsePdfFile(file)
+    } else if (kind === 'docx') {
+      content = await parseDocxFile(file)
+    } else if (kind === 'xlsx') {
+      content = await parseXlsxFile(file)
+    }
+    content = truncateText(content, MAX_EXTRACT_CHARS)
+    if (!content.trim()) {
+      entry.status = 'error'
+      entry.error = '未能提取到文本内容'
+      return
+    }
+    // 总量限制：所有已就绪文件内容之和不得超过上限
+    const total = uploadedFiles.value.reduce((sum, f) => sum + (f.status === 'ready' ? f.content.length : 0), 0)
+    if (total + content.length > MAX_TOTAL_EXTRACT_CHARS) {
+      entry.status = 'error'
+      entry.error = '上传文本总量超限（1M 字符）'
+      message.warning(`${file.name} 未加入：上传文本总量超限（1M 字符）`)
+      return
+    }
+    entry.content = content
+    entry.status = 'ready'
+  } catch (err) {
+    console.error('文件解析失败:', err)
+    entry.status = 'error'
+    entry.error = `解析失败: ${err?.message || '未知错误'}`
+  }
+}
+
+const readFileAsText = (file) => new Promise((resolve, reject) => {
+  const reader = new FileReader()
+  reader.onload = () => resolve(String(reader.result || ''))
+  reader.onerror = () => reject(new Error('文件读取失败'))
+  reader.readAsText(file)
+})
+
+const parsePdfFile = async (file) => {
+  const pdfjs = await import('pdfjs-dist')
+  if (!pdfjs.GlobalWorkerOptions.workerPort) {
+    const {default: PdfWorker} = await import('pdfjs-dist/build/pdf.worker.min.mjs?worker')
+    pdfjs.GlobalWorkerOptions.workerPort = new PdfWorker()
+  }
+  const doc = await pdfjs.getDocument({data: await file.arrayBuffer()}).promise
+  try {
+    const maxPages = Math.min(doc.numPages, 50)
+    let text = ''
+    for (let pageNum = 1; pageNum <= maxPages; pageNum++) {
+      const page = await doc.getPage(pageNum)
+      const content = await page.getTextContent()
+      text += content.items.map((item) => item.str || '').join(' ') + '\n'
+      if (text.length > MAX_EXTRACT_CHARS) break
+    }
+    if (doc.numPages > maxPages) text += `\n...[仅提取前 ${maxPages} 页，共 ${doc.numPages} 页]`
+    return text
+  } finally {
+    doc.destroy?.()
+  }
+}
+
+const parseDocxFile = async (file) => {
+  const mammoth = await import('mammoth/mammoth.browser')
+  const result = await mammoth.extractRawText({arrayBuffer: await file.arrayBuffer()})
+  return String(result?.value || '')
+}
+
+const parseXlsxFile = async (file) => {
+  const XLSX = await import('xlsx')
+  const wb = XLSX.read(await file.arrayBuffer(), {type: 'array'})
+  const parts = []
+  for (const sheetName of wb.SheetNames) {
+    const sheet = wb.Sheets[sheetName]
+    parts.push(`[工作表: ${sheetName}]\n${XLSX.utils.sheet_to_csv(sheet)}`)
+  }
+  return parts.join('\n\n')
+}
+
+const removeUploadedFile = (id) => {
+  uploadedFiles.value = uploadedFiles.value.filter((f) => f.id !== id)
+}
+
+const clearUploadedFiles = () => {
+  uploadedFiles.value = []
 }
 
 const autoResize = () => {
@@ -1222,7 +1487,7 @@ const workflowHover = ref(false)
 let clRefreshTimer = null
 
 const loadChecklist = async () => {
-  if (!props.workspaceHash || !props.sessionName) {
+  if (!sessionInitialized.value || !props.workspaceHash || !props.sessionName) {
     clData.value = null
     return
   }
@@ -1256,7 +1521,7 @@ const goalHover = ref(false)
 let goalRefreshTimer = null
 
 const loadGoal = async () => {
-  if (!props.workspaceHash || !props.sessionName) {
+  if (!sessionInitialized.value || !props.workspaceHash || !props.sessionName) {
     goalData.value = null
     return
   }
@@ -1297,6 +1562,7 @@ watch([() => props.workspaceHash, () => props.sessionName], () => {
 
 watch(() => props.streaming, (streaming, wasStreaming) => {
   if (streaming) {
+    sessionInitialized.value = true
     loadChecklist()
     startChecklistPolling()
     loadGoal()
@@ -1452,8 +1718,6 @@ const compositionItems = computed(() => {
 })
 
 onMounted(() => {
-  loadCommands();
-  loadPromptPresets();
   document.addEventListener('click', handleOutside)
   window.addEventListener('blur', rememberInputFocus)
   window.addEventListener('focus', restoreInputFocus)
@@ -1500,12 +1764,11 @@ async function loadPet() {
     }
   } catch { /* pet 不可用时静默 */ }
 }
-loadPet()
+if (!appStore.isDesktopEnv) loadPet()
 
-const appStore = useAppStore()
 // 当其他组件（如设置页）切换宠物时，重新加载
 watch(() => appStore.activePetName, (newName, oldName) => {
-  if (newName && newName !== oldName) {
+  if (!appStore.isDesktopEnv && newName && newName !== oldName) {
     loadPet()
   }
 })
@@ -1586,8 +1849,11 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 
 /* Unified conversation composer for both the web and desktop shells. */
+/* 背景只覆盖输入区底部 padding（与背景同色）：消息滚到输入框下方时被干净遮住，
+   不露出半截；输入框上方保持透明，消息进入输入区时仍可透出 */
 .input-area:not(.welcome-mode) {
-  padding: 14px clamp(16px, 5vw, 72px) 16px;
+  padding: 14px clamp(16px, 2vw, 24px) 16px;
+  background: linear-gradient(to top, var(--bg) 16px, transparent 16px);
 }
 
 .composer-queue {
@@ -1733,6 +1999,15 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   background: color-mix(in srgb, var(--red) 10%, transparent);
 }
 
+.input-area:not(.welcome-mode) .input-box,
+.input-area:not(.welcome-mode) .composer-queue {
+  width: 100%;
+  max-width: 1040px;
+  margin-right: auto;
+  margin-left: auto;
+  box-sizing: border-box;
+}
+
 .input-area:not(.welcome-mode) .input-box {
   min-height: 98px;
   padding: 14px 16px 9px;
@@ -1766,6 +2041,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 
 .input-area:not(.welcome-mode) .send-btn,
+.input-area:not(.welcome-mode) .upload-btn,
 .input-area:not(.welcome-mode) .plan-mode-btn,
 .input-area:not(.welcome-mode) .continue-btn {
   width: 38px;
@@ -1774,6 +2050,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 
 .input-area:not(.welcome-mode) .send-btn svg,
+.input-area:not(.welcome-mode) .upload-btn :deep(svg),
 .input-area:not(.welcome-mode) .plan-mode-btn :deep(svg),
 .input-area:not(.welcome-mode) .continue-btn svg {
   width: 18px;
@@ -1927,6 +2204,40 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 .send-btn:disabled {
   cursor: not-allowed;
   opacity: 0.5;
+}
+
+.upload-btn {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--r);
+  color: var(--fg-4);
+  transition: all var(--t);
+  cursor: pointer;
+  background: transparent;
+  border: none;
+  padding: 0;
+}
+
+.upload-btn:hover {
+  background: var(--bg-3);
+  color: var(--accent);
+}
+
+.upload-btn:disabled {
+  cursor: not-allowed;
+  opacity: 0.35;
+}
+
+.upload-btn :deep(svg) {
+  width: 16px;
+  height: 16px;
+}
+
+.upload-file-input {
+  display: none;
 }
 
 .plan-mode-btn,
@@ -2724,6 +3035,19 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   gap: 8px;
 }
 
+/* 技能/权限/思考强度默认隐藏，鼠标进入输入框或聚焦时渐显（模型选择常驻） */
+.model-actions .hover-reveal {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.22s ease;
+}
+
+.input-box:hover .model-actions .hover-reveal,
+.input-box:focus-within .model-actions .hover-reveal {
+  opacity: 1;
+  pointer-events: auto;
+}
+
 /* ============= 技能选择器 ============= */
 .skill-selector,
 .permission-hitl-selector {
@@ -2907,6 +3231,19 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 .element-chips-bar .file-chips-title svg { color: #168f9f; }
 .element-chip { border-color: color-mix(in srgb, #168f9f 38%, var(--border)); background: color-mix(in srgb, #168f9f 10%, var(--bg)); }
 .element-chip .file-chip-icon { background: color-mix(in srgb, #168f9f 16%, var(--bg)); color: #168f9f; }
+
+.upload-chips-bar { border-bottom-color: color-mix(in srgb, #7c9a4f 26%, var(--border)); }
+.upload-chips-bar .file-chips-title svg { color: #7c9a4f; }
+.upload-chip { border-color: color-mix(in srgb, #7c9a4f 38%, var(--border)); background: color-mix(in srgb, #7c9a4f 10%, var(--bg)); }
+.upload-chip .file-chip-icon { background: color-mix(in srgb, #7c9a4f 16%, var(--bg)); color: #7c9a4f; }
+.upload-chip-parsing { border-color: color-mix(in srgb, #4f7cac 45%, var(--border)); background: color-mix(in srgb, #4f7cac 12%, var(--bg)); }
+.upload-chip-parsing .file-chip-icon { background: color-mix(in srgb, #4f7cac 16%, var(--bg)); color: #4f7cac; }
+.upload-chip-error { border-color: color-mix(in srgb, #ef4444 45%, var(--border)); background: color-mix(in srgb, #ef4444 10%, var(--bg)); }
+.upload-chip-error .file-chip-icon { background: color-mix(in srgb, #ef4444 16%, var(--bg)); color: #ef4444; }
+.upload-chip-size { color: var(--fg-4); font-size: 10px; font-weight: 400; line-height: 1.4; }
+.upload-chip-error-text { color: var(--red); }
+.upload-parsing-hint { display: inline-flex; align-items: center; gap: 5px; color: var(--accent); font-size: 11px; font-weight: 600; }
+.upload-parsing-hint .loading-dot { width: 6px; height: 6px; }
 
 .file-clear-all {
   border: none;
@@ -3453,6 +3790,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 
 .input-area.welcome-mode .send-btn,
+.input-area.welcome-mode .upload-btn,
 .input-area.welcome-mode .plan-mode-btn,
 .input-area.welcome-mode .continue-btn {
   width: 38px;
@@ -3461,6 +3799,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 
 .input-area.welcome-mode .send-btn svg,
+.input-area.welcome-mode .upload-btn :deep(svg),
 .input-area.welcome-mode .plan-mode-btn :deep(svg),
 .input-area.welcome-mode .continue-btn svg {
   width: 18px;

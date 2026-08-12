@@ -125,17 +125,38 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   desktopChatTabs: {
     create: (tab) => ipcRenderer.invoke('desktop-chat-tab-create', tab),
+    ready: () => ipcRenderer.send('desktop-chat-tab-ready'),
     show: (tabId, bounds) => ipcRenderer.invoke('desktop-chat-tab-show', tabId, bounds),
     hide: () => ipcRenderer.invoke('desktop-chat-tab-hide'),
     close: (tabId) => ipcRenderer.invoke('desktop-chat-tab-close', tabId),
     reload: (tabId) => ipcRenderer.invoke('desktop-chat-tab-reload', tabId),
     toggleRightPanel: (tabId) => ipcRenderer.invoke('desktop-chat-tab-toggle-right-panel', tabId),
+    toggleTerminal: (tabId) => ipcRenderer.invoke('desktop-chat-tab-toggle-terminal', tabId),
     setTheme: (theme) => ipcRenderer.invoke('desktop-chat-tab-set-theme', theme),
     openHome: () => ipcRenderer.send('desktop-chat-tab-open-home'),
     openModelChannels: () => ipcRenderer.send('desktop-chat-tab-open-model-channels'),
     sendCommand: (tabId, command) => ipcRenderer.invoke('desktop-chat-tab-send-command', tabId, command),
     reportTitle: (payload) => ipcRenderer.send('desktop-chat-tab-report-title', payload),
     reportWorkspace: (payload) => ipcRenderer.send('desktop-chat-tab-report-workspace', payload)
+  },
+
+  // 终端（node-pty + xterm）
+  terminal: {
+    create: (options) => ipcRenderer.invoke('terminal:create', options),
+    listShells: () => ipcRenderer.invoke('terminal:list-shells'),
+    input: (payload) => ipcRenderer.send('terminal:input', payload),
+    resize: (payload) => ipcRenderer.send('terminal:resize', payload),
+    kill: (id) => ipcRenderer.invoke('terminal:kill', id),
+    onData: (callback) => {
+      const subscription = (event, payload) => callback(payload)
+      ipcRenderer.on('terminal:data', subscription)
+      return () => ipcRenderer.removeListener('terminal:data', subscription)
+    },
+    onExit: (callback) => {
+      const subscription = (event, payload) => callback(payload)
+      ipcRenderer.on('terminal:exit', subscription)
+      return () => ipcRenderer.removeListener('terminal:exit', subscription)
+    }
   },
 
   // 元素检测（跨域 iframe 穿透）
@@ -149,6 +170,26 @@ contextBridge.exposeInMainWorld('electronAPI', {
 
   // 打开本地文件
   openFile: (filePath) => ipcRenderer.invoke('open-file', filePath),
+
+  // 打开本地文件夹（系统原生文件管理器）
+  openFolder: (folderPath) => ipcRenderer.invoke('open-folder', folderPath),
+
+  // 文件资源管理器（桌面端，主进程直接操作文件系统，不接后端）
+  fileExplorer: {
+    list: (dirPath) => ipcRenderer.invoke('file-explorer-list', dirPath),
+    rename: (filePath, newName) => ipcRenderer.invoke('file-explorer-rename', { filePath, newName }),
+    remove: (filePath) => ipcRenderer.invoke('file-explorer-delete', filePath),
+    read: (filePath) => ipcRenderer.invoke('file-explorer-read', filePath),
+    write: (filePath, content) => ipcRenderer.invoke('file-explorer-write', { filePath, content }),
+    search: (dirPath, keyword) => ipcRenderer.invoke('file-explorer-search', { dirPath, keyword }),
+    watch: (dirPath) => ipcRenderer.invoke('file-explorer-watch', dirPath),
+    unwatch: () => ipcRenderer.invoke('file-explorer-unwatch'),
+    onDidChange: (callback) => {
+      const subscription = (event, payload) => callback(payload)
+      ipcRenderer.on('file-explorer-changed', subscription)
+      return () => ipcRenderer.removeListener('file-explorer-changed', subscription)
+    }
+  },
 
   // Electron 版本
   getElectronVersion: () => ipcRenderer.invoke('get_electron_version'),

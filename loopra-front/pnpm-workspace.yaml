@@ -5,3 +5,7 @@ allowBuilds:
   electron: true
   app-builder-lib: true
   electron-winstaller: false
+  node-pty: true
+
+overrides:
+  app-builder-lib@26.15.3>@electron/get: 3.1.0

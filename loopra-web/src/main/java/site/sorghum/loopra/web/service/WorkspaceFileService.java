@@ -91,6 +91,59 @@ public class WorkspaceFileService {
         return results;
     }
 
+    /**
+     * 删除工作区内的文件或目录（递归）。禁止删除工作区根目录；symlink 目标必须仍位于工作区内。
+     */
+    public void delete(String workspaceHash, String relativePath) {
+        Path workspace = resolveWorkspace(workspaceHash);
+        Path target = resolveTarget(workspace, relativePath);
+        if (target.equals(workspace)) {
+            throw new ServiceException("不能删除工作区根目录");
+        }
+        if (Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) {
+            try (Stream<Path> paths = Files.walk(target)) {
+                paths.sorted(Comparator.reverseOrder()).forEach(path -> {
+                    try {
+                        Files.deleteIfExists(path);
+                    } catch (IOException ignored) {
+                        // 单个文件删除失败不阻断其余文件
+                    }
+                });
+            } catch (IOException e) {
+                throw new ServiceException("删除目录失败: " + e.getMessage());
+            }
+            if (Files.exists(target, LinkOption.NOFOLLOW_LINKS)) {
+                throw new ServiceException("删除目录失败: 部分文件未能删除");
+            }
+        } else {
+            try {
+                Files.deleteIfExists(target);
+            } catch (IOException e) {
+                throw new ServiceException("删除文件失败: " + e.getMessage());
+            }
+        }
+    }
+
+    private Path resolveTarget(Path workspace, String relativePath) {
+        String value = relativePath == null ? "" : relativePath.trim();
+        if (value.isEmpty()) {
+            throw new ServiceException("无效的文件路径");
+        }
+        Path requested = workspace.resolve(value).normalize();
+        if (!requested.startsWith(workspace)) {
+            throw new ServiceException("无效的文件路径");
+        }
+        try {
+            Path target = requested.toRealPath();
+            if (!target.startsWith(workspace)) {
+                throw new ServiceException("无效的文件路径");
+            }
+            return target;
+        } catch (IOException e) {
+            throw new ServiceException("文件或目录不存在或不可访问");
+        }
+    }
+
     private Path resolveWorkspace(String workspaceHash) {
         String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
         try {

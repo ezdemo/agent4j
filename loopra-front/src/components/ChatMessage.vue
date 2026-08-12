@@ -364,6 +364,11 @@ onBeforeUnmount(() => {
   width: min(480px, 85vw);
 }
 
+.msg.assistant .msg-body {
+  width: 100%;
+  max-width: 100%;
+}
+
 .msg-body {
   max-width: 85%;
   user-select: text;
