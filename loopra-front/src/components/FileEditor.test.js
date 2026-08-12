@@ -32,6 +32,17 @@ vi.mock('../utils/monaco', () => {
     }
 
     getValue() { return this.value }
+    getValueInRange(range) {
+      if (!range) return ''
+      const lines = this.value.split('\n')
+      if (range.startLineNumber === range.endLineNumber) {
+        return lines[range.startLineNumber - 1].slice(range.startColumn - 1, range.endColumn - 1)
+      }
+      const parts = [lines[range.startLineNumber - 1].slice(range.startColumn - 1)]
+      for (let i = range.startLineNumber; i < range.endLineNumber - 1; i++) parts.push(lines[i])
+      parts.push(lines[range.endLineNumber - 1].slice(0, range.endColumn - 1))
+      return parts.join('\n')
+    }
     getAlternativeVersionId() { return this.version }
     getEOL() { return '\n' }
     getFullModelRange() { return {startLineNumber: 1, startColumn: 1, endLineNumber: 1, endColumn: this.value.length + 1} }
@@ -56,6 +67,9 @@ vi.mock('../utils/monaco', () => {
   let mouseHandler = null
   let mouseMoveHandler = null
   let mouseLeaveHandler = null
+  let mouseUpHandler = null
+  let selectionHandler = null
+  let scrollHandler = null
   let keyHandler = null
   let nextZoneId = 1
   const editorInstance = {
@@ -75,6 +89,7 @@ vi.mock('../utils/monaco', () => {
     }),
     focus: vi.fn(),
     getModel: vi.fn(() => editorInstance.model || null),
+    getSelection: vi.fn(() => editorInstance.selection || null),
     layout: vi.fn(),
     onKeyDown: vi.fn((handler) => {
       keyHandler = handler
@@ -92,10 +107,23 @@ vi.mock('../utils/monaco', () => {
       mouseLeaveHandler = handler
       return {dispose: vi.fn()}
     }),
+    onMouseUp: vi.fn((handler) => {
+      mouseUpHandler = handler
+      return {dispose: vi.fn()}
+    }),
+    onDidChangeCursorSelection: vi.fn((handler) => {
+      selectionHandler = handler
+      return {dispose: vi.fn()}
+    }),
+    onDidScrollChange: vi.fn((handler) => {
+      scrollHandler = handler
+      return {dispose: vi.fn()}
+    }),
     pushUndoStop: vi.fn(),
     restoreViewState: vi.fn(),
     revealLineInCenter: vi.fn(),
     saveViewState: vi.fn(() => null),
+    selection: null,
     setModel: vi.fn((model) => { editorInstance.model = model })
   }
   const api = {
@@ -113,6 +141,9 @@ vi.mock('../utils/monaco', () => {
     __fireMouseDown: (event) => mouseHandler?.(event),
     __fireMouseMove: (event) => mouseMoveHandler?.(event),
     __fireMouseLeave: () => mouseLeaveHandler?.(),
+    __fireMouseUp: (event) => mouseUpHandler?.(event),
+    __fireSelectionChange: (event) => selectionHandler?.(event),
+    __fireScroll: () => scrollHandler?.({}),
     __zones: zones,
     editor: {
       MinimapPosition: {Gutter: 2},
@@ -148,6 +179,7 @@ beforeEach(() => {
   monacoMock.__createdModels.length = 0
   monacoMock.__zones.clear()
   monacoMock.__editorInstance.model = null
+  monacoMock.__editorInstance.selection = null
   vi.clearAllMocks()
   window.electronAPI = {
     fileExplorer: {
@@ -386,6 +418,100 @@ describe('FileEditor Monaco models', () => {
     await flushPromises()
     expect(readMock.mock.calls.filter(([path]) => path === firstFile.path)).toHaveLength(1)
     expect(monacoMock.__editorInstance.setModel).toHaveBeenLastCalledWith(firstModel)
+    wrapper.unmount()
+  })
+})
+
+describe('FileEditor selection add-to-session', () => {
+  const fullLineSelection = {
+    isEmpty: () => false,
+    startLineNumber: 1,
+    startColumn: 1,
+    endLineNumber: 1,
+    endColumn: 9
+  }
+
+  it('shows the floating button after selecting text and emits file + content', async () => {
+    const wrapper = await mountEditor()
+    monacoMock.__editorInstance.selection = fullLineSelection
+
+    monacoMock.__fireMouseUp({event: {browserEvent: {clientX: 200, clientY: 300}}})
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.fe-selection-action').exists()).toBe(true)
+    expect(wrapper.find('.fe-selection-action').text()).toContain('添加到对话')
+
+    await wrapper.find('.fe-selection-action').trigger('click')
+    expect(wrapper.emitted('addToSession')).toEqual([[
+      {file: firstFile.path, content: 'original', startLine: 1, endLine: 1}
+    ]])
+    expect(wrapper.find('.fe-selection-action').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('emits the start and end line of a multi-line selection', async () => {
+    readMock.mockResolvedValue({success: true, data: 'line 1\nline 2\nline 3\nline 4'})
+    const wrapper = await mountEditor()
+    const model = monacoMock.__createdModels[0]
+    // 选中第 2~3 行（"line 2\nline 3"，endColumn 为第 3 行总长度 + 1）
+    monacoMock.__editorInstance.selection = {
+      isEmpty: () => false,
+      startLineNumber: 2,
+      startColumn: 1,
+      endLineNumber: 3,
+      endColumn: 7
+    }
+
+    monacoMock.__fireMouseUp({event: {browserEvent: {clientX: 200, clientY: 300}}})
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.fe-selection-action').exists()).toBe(true)
+
+    await wrapper.find('.fe-selection-action').trigger('click')
+    expect(wrapper.emitted('addToSession')).toEqual([[
+      {file: firstFile.path, content: 'line 2\nline 3', startLine: 2, endLine: 3}
+    ]])
+    expect(model.getValue()).toBe('line 1\nline 2\nline 3\nline 4')
+    wrapper.unmount()
+  })
+
+  it('hides the floating button on empty selection, editor mousedown or scroll', async () => {
+    const wrapper = await mountEditor()
+    monacoMock.__editorInstance.selection = fullLineSelection
+    monacoMock.__fireMouseUp({event: {browserEvent: {clientX: 200, clientY: 300}}})
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.fe-selection-action').exists()).toBe(true)
+
+    // 清空选区（键盘操作 / 点击空白）
+    monacoMock.__editorInstance.selection = {isEmpty: () => true}
+    monacoMock.__fireSelectionChange({selection: {isEmpty: () => true}})
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.fe-selection-action').exists()).toBe(false)
+
+    // 再次选中后，编辑器 mousedown 隐藏
+    monacoMock.__editorInstance.selection = fullLineSelection
+    monacoMock.__fireMouseUp({event: {browserEvent: {clientX: 200, clientY: 300}}})
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.fe-selection-action').exists()).toBe(true)
+    monacoMock.__fireMouseDown({target: {type: 0, element: null}})
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.fe-selection-action').exists()).toBe(false)
+
+    // 再次选中后，滚动隐藏
+    monacoMock.__editorInstance.selection = fullLineSelection
+    monacoMock.__fireMouseUp({event: {browserEvent: {clientX: 200, clientY: 300}}})
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.fe-selection-action').exists()).toBe(true)
+    monacoMock.__fireScroll()
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('.fe-selection-action').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('does not show the floating button for an empty selection', async () => {
+    const wrapper = await mountEditor()
+    monacoMock.__editorInstance.selection = {isEmpty: () => true}
+
+    monacoMock.__fireMouseUp({event: {browserEvent: {clientX: 200, clientY: 300}}})
+    expect(wrapper.find('.fe-selection-action').exists()).toBe(false)
     wrapper.unmount()
   })
 })

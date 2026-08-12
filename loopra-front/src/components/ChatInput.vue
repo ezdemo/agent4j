@@ -142,11 +142,11 @@
           <button class="file-clear-all" type="button" @click="clearSelectedFileContexts">清除</button>
         </div>
         <div class="file-chips-list">
-          <span v-for="context in selectedFileContexts" :key="context.key" class="file-chip" :title="context.file">
+          <span v-for="context in selectedFileContexts" :key="context.key" class="file-chip" :title="fileChipLabel(context)">
             <span class="file-chip-icon">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
             </span>
-            <span class="file-chip-name">{{ context.file }}</span>
+            <span class="file-chip-name">{{ fileChipLabel(context) }}</span>
             <button class="file-chip-remove" type="button" :aria-label="`移除文件 ${context.file}`" title="移除引用"
                     @click.stop="removeSelectedFileContext(context.key)">
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
@@ -960,7 +960,17 @@ const handleSend = () => {
   let text = localText.value.trim()
   const collapsedParts = []
   if (selectedFileContexts.value.length > 0) {
-    const fileLines = selectedFileContexts.value.map(context => `- ${context.file}`).join('\n')
+    const fileLines = selectedFileContexts.value.map(context => {
+      let base = `- ${context.file}`
+      if (context.startLine != null && context.endLine != null) {
+        base += context.startLine === context.endLine
+          ? `:${context.startLine}`
+          : `:${context.startLine}:${context.endLine}`
+      }
+      if (!context.content) return base
+      // 四反引号围栏：选中代码可能包含 ``` 围栏，避免提前截断外层折叠块
+      return `${base}\n  选中片段：\n  \`\`\`\`text\n${context.content}\n  \`\`\`\``
+    }).join('\n')
     collapsedParts.push(`引用文件：\n${fileLines}`)
   }
   if (selectedSkills.value.length > 0) {
@@ -1049,12 +1059,33 @@ const removeImage = (idx) => {
   images.value.splice(idx, 1)
 }
 
-const addFileContext = ({ file }) => {
+const addFileContext = ({ file, content, startLine, endLine }) => {
   const path = String(file || '未命名文件')
-  const key = path
+  const snippet = String(content || '').trim()
+  // 纯文件引用按路径去重；带片段时按“文件+行号范围”去重（无行号时按片段内容去重），
+  // 同一文件的不同代码块可以同时引用
+  const key = snippet
+    ? (startLine != null && endLine != null
+      ? `${path}:L${startLine}-L${endLine}`
+      : `${path}:snippet:${snippet}`)
+    : path
   if (selectedFileContexts.value.some(context => context.key === key)) return true
-  selectedFileContexts.value.push({ key, file: path })
+  selectedFileContexts.value.push({
+    key,
+    file: path,
+    content: snippet,
+    startLine: startLine ?? null,
+    endLine: endLine ?? null
+  })
   return true
+}
+
+// chip 显示：带行号的片段在文件名后追加 行号:行号，便于区分同一文件的多个引用
+const fileChipLabel = (context) => {
+  if (context.startLine == null || context.endLine == null) return context.file
+  return context.startLine === context.endLine
+    ? `${context.file}:${context.startLine}`
+    : `${context.file}:${context.startLine}:${context.endLine}`
 }
 
 const removeSelectedFileContext = (key) => {

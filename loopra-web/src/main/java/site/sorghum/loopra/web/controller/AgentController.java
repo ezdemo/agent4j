@@ -95,6 +95,31 @@ public class AgentController {
         return ApiResponse.ok(message);
     }
 
+    @ApiOperation(value = "查询 bash 后台会话输出日志", notes = "返回指定 session_id 后台命令会话自启动以来累积的输出日志（bash_start 初始输出 + bash_wait/stdin 增量输出）；workspaceHash 为空时在全部工作区查找")
+    @Get
+    @Mapping("/bash-sessions/log")
+    public ApiResponse<BashSessionLogDTO> bashSessionLog(
+            @ApiParam(value = "会话 ID", required = true)
+            @Param(value = "sessionId", required = true)
+            String sessionId,
+            @ApiParam(value = "工作区 hash（可选，空则全部工作区查找）", required = false)
+            @Param(value = "workspaceHash", required = false)
+            String workspaceHash) {
+        if (!agentService.isReady()) {
+            throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        }
+        if (sessionId == null || sessionId.isBlank()) {
+            throw new ServiceException("sessionId 不能为空");
+        }
+        String workspacePath = workspaceHash == null || workspaceHash.isBlank()
+                ? null : agentService.resolveWorkspacePath(workspaceHash);
+        BashSessionLogDTO dto = agentService.readBashSessionLog(sessionId, workspacePath);
+        if (dto == null) {
+            return ApiResponse.fail("会话不存在或已结束: " + sessionId);
+        }
+        return ApiResponse.ok(dto);
+    }
+
     @ApiOperation(value = "获取历史消息", notes = "根据工作区 hash 和会话名称获取历史消息列表")
     @Get
     @Mapping("/history")

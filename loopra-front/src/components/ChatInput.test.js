@@ -367,6 +367,103 @@ describe('ChatInput file upload', () => {
     wrapper.unmount()
   })
 
+  it('carries a file selection snippet with line numbers into the collapsible block on send', async () => {
+    const wrapper = mountInput({sessionName: 'session-1'})
+    wrapper.vm.addFileContext({
+      file: 'C:/workspace/demo.txt',
+      content: 'const a = 1\n```\nnot a fence\nconst b = 2',
+      startLine: 12,
+      endLine: 30
+    })
+    await flushPromises()
+    // chip 显示文件名 + 行号范围
+    expect(wrapper.find('.file-chip').text()).toContain('demo.txt:12:30')
+
+    await wrapper.find('textarea').setValue('看看这段')
+    await wrapper.find('.send-btn').trigger('click')
+
+    const [images, text] = wrapper.emitted('send')[0]
+    expect(images).toEqual([])
+    expect(text).toContain('```折叠块')
+    expect(text).toContain('引用文件：')
+    expect(text).toContain('- C:/workspace/demo.txt:12:30')
+    expect(text).toContain('选中片段：')
+    // 四反引号围栏包裹，内容中的 ``` 不会提前截断折叠块
+    expect(text).toContain('````text')
+    expect(text).toContain('const a = 1\n```\nnot a fence\nconst b = 2')
+    expect(text).toContain('看看这段')
+    // 发送后清空文件引用
+    expect(wrapper.find('.file-chip').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('keeps distinct snippets from the same file as separate references', async () => {
+    const wrapper = mountInput({sessionName: 'session-1'})
+    // 同一文件的两个不同代码块
+    wrapper.vm.addFileContext({file: 'C:/workspace/demo.txt', content: 'const a = 1', startLine: 12, endLine: 30})
+    wrapper.vm.addFileContext({file: 'C:/workspace/demo.txt', content: 'const b = 2', startLine: 45, endLine: 60})
+    await flushPromises()
+    expect(wrapper.findAll('.file-chip')).toHaveLength(2)
+    expect(wrapper.findAll('.file-chip-name')[0].text()).toContain('demo.txt:12:30')
+    expect(wrapper.findAll('.file-chip-name')[1].text()).toContain('demo.txt:45:60')
+
+    await wrapper.find('textarea').setValue('分析')
+    await wrapper.find('.send-btn').trigger('click')
+    const text = wrapper.emitted('send')[0][1]
+    expect(text).toContain('- C:/workspace/demo.txt:12:30')
+    expect(text).toContain('- C:/workspace/demo.txt:45:60')
+    expect(text).toContain('const a = 1')
+    expect(text).toContain('const b = 2')
+    wrapper.unmount()
+  })
+
+  it('de-duplicates the same snippet range and a single-line range format', async () => {
+    const wrapper = mountInput({sessionName: 'session-1'})
+    wrapper.vm.addFileContext({file: 'C:/workspace/demo.txt', content: 'const a = 1', startLine: 12, endLine: 30})
+    wrapper.vm.addFileContext({file: 'C:/workspace/demo.txt', content: 'const a = 1', startLine: 12, endLine: 30})
+    await flushPromises()
+    expect(wrapper.findAll('.file-chip')).toHaveLength(1)
+
+    // 单行选区：行号只显示一次
+    wrapper.vm.addFileContext({file: 'C:/workspace/demo.txt', content: 'const a = 1', startLine: 5, endLine: 5})
+    await flushPromises()
+    expect(wrapper.findAll('.file-chip-name')[1].text()).toContain('demo.txt:5')
+
+    await wrapper.find('textarea').setValue('分析')
+    await wrapper.find('.send-btn').trigger('click')
+    const text = wrapper.emitted('send')[0][1]
+    expect(text).toContain('- C:/workspace/demo.txt:5')
+    wrapper.unmount()
+  })
+
+  it('de-duplicates snippet references without line numbers by content', async () => {
+    const wrapper = mountInput({sessionName: 'session-1'})
+    // DiffViewer 预览弹框等来源无行号：同一内容不重复引用，不同内容各自保留
+    wrapper.vm.addFileContext({file: 'C:/workspace/demo.txt', content: 'const a = 1'})
+    wrapper.vm.addFileContext({file: 'C:/workspace/demo.txt', content: 'const a = 1'})
+    wrapper.vm.addFileContext({file: 'C:/workspace/demo.txt', content: 'const b = 2'})
+    await flushPromises()
+    expect(wrapper.findAll('.file-chip')).toHaveLength(2)
+    wrapper.unmount()
+  })
+
+  it('keeps a plain file reference and a snippet reference from the same file independent', async () => {
+    const wrapper = mountInput({sessionName: 'session-1'})
+    // 右键“添加到对话”的纯文件引用与选中片段互不覆盖
+    wrapper.vm.addFileContext({file: 'C:/workspace/demo.txt'})
+    wrapper.vm.addFileContext({file: 'C:/workspace/demo.txt', content: 'const a = 1', startLine: 3, endLine: 8})
+    await flushPromises()
+    expect(wrapper.findAll('.file-chip')).toHaveLength(2)
+
+    await wrapper.find('textarea').setValue('分析')
+    await wrapper.find('.send-btn').trigger('click')
+    const text = wrapper.emitted('send')[0][1]
+    expect(text).toContain('- C:/workspace/demo.txt')
+    expect(text).toContain('- C:/workspace/demo.txt:3:8')
+    expect(text).toContain('const a = 1')
+    wrapper.unmount()
+  })
+
   it('removes a single uploaded file and clears all at once', async () => {
     const wrapper = mountInput({sessionName: 'session-1'})
     await selectFiles(wrapper, [new File(['内容'], 'a.txt', {type: 'text/plain'})])
