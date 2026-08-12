@@ -80,6 +80,7 @@ const aiBrowserTabs = new Map()
 const AI_BROWSER_SCREENSHOT_MAX_BYTES = 5 * 1024 * 1024
 const AI_BROWSER_SCREENSHOT_MAX_WIDTH = 1600
 const desktopChatTabs = new Map()
+const fileExplorerWatchers = new Map()
 let desktopChatActiveTabId = null
 const AI_BROWSER_BRIDGE_PREFERRED_PORT = Number(process.env.LOOPRA_BROWSER_BRIDGE_PORT || 0)
 const AI_BROWSER_TAB_CLEANUP_THRESHOLD = 16
@@ -677,6 +678,7 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', () => {
   cleanupLoopraWeb()
+  closeAllFileExplorerWatchers()
   stopAiBrowserBridge()
   killAllTerminals()
 })
@@ -2827,6 +2829,26 @@ ipcMain.handle('open-folder', async (event, folderPath) => {
 
 // ── 文件资源管理器（桌面端，直接操作本地文件系统，不接后端 API） ──
 
+const FILE_EXPLORER_WATCH_DELAY = 100
+
+function isIgnoredFileExplorerPath(filename) {
+  const firstSegment = String(filename || '').replace(/\\/g, '/').split('/')[0].toLowerCase()
+  return firstSegment === '.git' || firstSegment === '.loopra'
+}
+
+function closeFileExplorerWatcher(webContentsId) {
+  const state = fileExplorerWatchers.get(webContentsId)
+  if (!state) return
+  clearTimeout(state.timer)
+  state.watcher.close()
+  state.sender.removeListener('destroyed', state.onDestroyed)
+  fileExplorerWatchers.delete(webContentsId)
+}
+
+function closeAllFileExplorerWatchers() {
+  for (const webContentsId of [...fileExplorerWatchers.keys()]) closeFileExplorerWatcher(webContentsId)
+}
+
 // 解析并校验绝对路径（防 `..`/`~` 穿越）
 function resolveExplorerPath(rawPath) {
   if (!rawPath || typeof rawPath !== 'string') throw new Error('无效的路径')
@@ -2858,6 +2880,55 @@ function sortExplorerEntries(entries) {
     return a.name.toLowerCase().localeCompare(b.name.toLowerCase())
   })
 }
+
+// 实时监听工作区变化；同一渲染进程只保留一个 watcher，事件在主进程先合并一次。
+ipcMain.handle('file-explorer-watch', (event, dirPath) => {
+  const webContentsId = event.sender.id
+  try {
+    const root = validateExplorerDir(dirPath)
+    closeFileExplorerWatcher(webContentsId)
+    const onDestroyed = () => closeFileExplorerWatcher(webContentsId)
+    const state = {watcher: null, timer: null, root, eventType: 'change', relativePath: '', sender: event.sender, onDestroyed}
+    const notify = () => {
+      state.timer = null
+      if (!event.sender.isDestroyed()) {
+        event.sender.send('file-explorer-changed', {
+          rootPath: state.root,
+          eventType: state.eventType,
+          path: state.relativePath
+        })
+      }
+    }
+    const onChange = (eventType, filename) => {
+      if (isIgnoredFileExplorerPath(filename)) return
+      state.eventType = eventType
+      state.relativePath = filename ? String(filename) : ''
+      clearTimeout(state.timer)
+      state.timer = setTimeout(notify, FILE_EXPLORER_WATCH_DELAY)
+    }
+    try {
+      state.watcher = fs.watch(root, {recursive: true, persistent: false}, onChange)
+    } catch (error) {
+      // Linux 上原生递归监听可能不可用，至少监听工作区根目录。
+      state.watcher = fs.watch(root, {persistent: false}, onChange)
+    }
+    state.watcher.on('error', (error) => {
+      console.warn(`File explorer watcher failed for ${root}:`, error.message)
+      closeFileExplorerWatcher(webContentsId)
+    })
+    fileExplorerWatchers.set(webContentsId, state)
+    event.sender.once('destroyed', onDestroyed)
+    return {success: true}
+  } catch (e) {
+    closeFileExplorerWatcher(webContentsId)
+    return {success: false, error: e.message}
+  }
+})
+
+ipcMain.handle('file-explorer-unwatch', (event) => {
+  closeFileExplorerWatcher(event.sender.id)
+  return {success: true}
+})
 
 // 列出目录的直接子项
 ipcMain.handle('file-explorer-list', (event, dirPath) => {
@@ -2955,7 +3026,7 @@ ipcMain.handle('file-explorer-write', (event, payload = {}) => {
 })
 
 // 搜索工作区文件（文件名/路径关键字，忽略常见大目录，最多 16 层 / 100 条）
-const FILE_EXPLORER_IGNORED_DIRS = new Set(['.git', 'node_modules', 'target', 'dist', 'build', '.idea'])
+const FILE_EXPLORER_IGNORED_DIRS = new Set(['.git', '.loopra', 'node_modules', 'target', 'dist', 'build', '.idea'])
 const FILE_EXPLORER_SEARCH_DEPTH = 16
 const FILE_EXPLORER_SEARCH_LIMIT = 100
 ipcMain.handle('file-explorer-search', (event, payload = {}) => {

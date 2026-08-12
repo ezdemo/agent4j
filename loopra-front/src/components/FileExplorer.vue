@@ -162,6 +162,10 @@ const query = ref('')
 const searchResults = ref(null)
 const searching = ref(false)
 let searchTimer = null
+let fileChangeTimer = null
+let stopFileChangeListener = null
+let watchRequestSeq = 0
+let treeReloadSeq = 0
 let searchRequestSeq = 0
 const contextMenu = reactive({ visible: false, x: 0, y: 0, node: null })
 const diffViewer = ref({ open: false, file: '', diff: '', content: '', mode: 'content', loading: false })
@@ -218,6 +222,12 @@ function toNode(entry) {
   return { ...entry, children: [], loaded: false, loading: false, expanded: false, uid: `n${++uidSeq}` }
 }
 
+async function readDirectoryNodes(dirPath) {
+  const response = await explorerAPI()?.list(dirPath)
+  if (!response?.success) throw new Error(response?.error || '读取目录失败')
+  return (response.data || []).map(toNode)
+}
+
 // ── 目录加载（懒加载） ──
 async function loadRoot() {
   if (!props.rootPath) {
@@ -227,9 +237,7 @@ async function loadRoot() {
   loading.value = true
   error.value = ''
   try {
-    const response = await explorerAPI()?.list(props.rootPath)
-    if (!response?.success) throw new Error(response?.error || '读取项目文件失败')
-    rootNodes.value = (response.data || []).map(toNode)
+    rootNodes.value = await readDirectoryNodes(props.rootPath)
   } catch (e) {
     error.value = e.message || '读取项目文件失败'
   } finally {
@@ -241,9 +249,7 @@ async function loadDirectory(node) {
   if (!node || node.loading) return
   node.loading = true
   try {
-    const response = await explorerAPI()?.list(node.path)
-    if (!response?.success) throw new Error(response?.error || '读取目录失败')
-    node.children = (response.data || []).map(toNode)
+    node.children = await readDirectoryNodes(node.path)
     node.loaded = true
   } catch (e) {
     message.error('读取目录失败：' + (e.message || '未知错误'))
@@ -448,6 +454,44 @@ function removeFromTree(nodes, target) {
 }
 
 // ── 刷新 / 折叠 ──
+function collectExpandedPaths(nodes, paths = new Set()) {
+  for (const node of nodes) {
+    if (!node.directory) continue
+    if (node.expanded) paths.add(normalizePath(node.path))
+    collectExpandedPaths(node.children || [], paths)
+  }
+  return paths
+}
+
+async function restoreExpandedPaths(nodes, expandedPaths) {
+  for (const node of nodes) {
+    if (!node.directory || !expandedPaths.has(normalizePath(node.path))) continue
+    node.expanded = true
+    node.children = await readDirectoryNodes(node.path)
+    node.loaded = true
+    await restoreExpandedPaths(node.children, expandedPaths)
+  }
+}
+
+async function reloadTree({preserveExpanded = true} = {}) {
+  if (!props.rootPath) return
+  const seq = ++treeReloadSeq
+  const rootPath = props.rootPath
+  const expandedPaths = preserveExpanded ? collectExpandedPaths(rootNodes.value) : new Set()
+  try {
+    const nextNodes = await readDirectoryNodes(rootPath)
+    if (expandedPaths.size > 0) await restoreExpandedPaths(nextNodes, expandedPaths)
+    if (seq === treeReloadSeq && rootPath === props.rootPath) {
+      rootNodes.value = nextNodes
+      error.value = ''
+    }
+  } catch (e) {
+    if (seq === treeReloadSeq && rootPath === props.rootPath) {
+      error.value = e.message || '读取项目文件失败'
+    }
+  }
+}
+
 function refresh() {
   if (!props.rootPath) return
   if (searchResults.value !== null) {
@@ -455,8 +499,30 @@ function refresh() {
     query.value = ''
     searchOpen.value = false
   }
-  void loadRoot()
+  void reloadTree()
   void loadGitDecorations()
+}
+
+function isIgnoredFileSystemPath(relativePath) {
+  const firstSegment = String(relativePath || '').replace(/\\/g, '/').split('/')[0].toLowerCase()
+  return firstSegment === '.git' || firstSegment === '.loopra'
+}
+
+function handleFileSystemChange(event) {
+  if (normalizePath(event?.rootPath) !== normalizePath(props.rootPath) || isIgnoredFileSystemPath(event?.path)) return
+  clearTimeout(fileChangeTimer)
+  fileChangeTimer = setTimeout(() => {
+    void reloadTree()
+    void loadGitDecorations()
+  }, 120)
+}
+
+async function startFileWatcher() {
+  const seq = ++watchRequestSeq
+  const api = explorerAPI()
+  await api?.unwatch?.()
+  if (seq !== watchRequestSeq || !props.rootPath) return
+  await api?.watch?.(props.rootPath)
 }
 
 function collapseAll() {
@@ -572,21 +638,29 @@ function onDocumentKeydown(event) {
 onMounted(() => {
   document.addEventListener('click', onDocumentClick)
   document.addEventListener('keydown', onDocumentKeydown)
+  stopFileChangeListener = explorerAPI()?.onDidChange?.(handleFileSystemChange) || null
 })
 
 onBeforeUnmount(() => {
   document.removeEventListener('click', onDocumentClick)
   document.removeEventListener('keydown', onDocumentKeydown)
   clearTimeout(searchTimer)
+  clearTimeout(fileChangeTimer)
+  treeReloadSeq++
+  watchRequestSeq++
+  stopFileChangeListener?.()
+  void explorerAPI()?.unwatch?.()
 })
 
 watch([() => props.rootPath, () => props.workspaceHash], () => {
+  treeReloadSeq++
   closeDiffViewer()
   searchResults.value = null
   query.value = ''
   searchOpen.value = false
   void loadRoot()
   void loadGitDecorations()
+  void startFileWatcher()
 }, { immediate: true })
 
 defineExpose({ refresh })
