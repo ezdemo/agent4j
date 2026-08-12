@@ -89,6 +89,17 @@ macOS / Linux：
 curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/setup-mirror.sh | bash
 ```
 
+> **macOS 用户注意**：桌面端（Releases 中的 `Loopra-*.zip`）目前未做 Apple 签名与公证，首次打开可能提示 **“Loopra”已损坏，无法打开**。这是 macOS Gatekeeper 对未签名应用的拦截，安装包本身没有损坏，按下面任一种方式放行即可：
+>
+> 1. 将 `Loopra.app` 拖入「应用程序」后，在终端执行：
+>
+> ```bash
+> xattr -cr "/Applications/Loopra.app"
+> ```
+>
+> 2. 或右键点击 `Loopra.app` → 选择「打开」→ 在弹窗中点击「打开」。
+> 3. 或到「系统设置 → 隐私与安全性」底部点击「仍要打开」。
+
 ### 2. 启动服务
 
 使用 `0` 让服务自动选择可用端口：
