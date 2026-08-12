@@ -1,35 +1,35 @@
-const SETI_ICONS = {
-  default: [0xE021, '#6d8086'],
-  vue: [0xE094, '#8dc149'],
-  javascript: [0xE04D, '#cbcb41'],
-  react: [0xE077, '#519aba'],
-  typescript: [0xE091, '#519aba'],
-  java: [0xE04C, '#cc3e44'],
-  kotlin: [0xE054, '#e37933'],
-  json: [0xE051, '#cbcb41'],
-  markdown: [0xE05C, '#519aba'],
-  css: [0xE01B, '#519aba'],
-  sass: [0xE07D, '#f55385'],
-  html: [0xE044, '#e37933'],
-  xml: [0xE09C, '#e37933'],
-  yaml: [0xE09E, '#a074c4'],
-  python: [0xE075, '#519aba'],
-  go: [0xE037, '#519aba'],
-  rust: [0xE07B, '#6d8086'],
-  php: [0xE06C, '#a074c4'],
-  shell: [0xE082, '#4d5a5e'],
-  powershell: [0xE06F, '#519aba'],
-  database: [0xE020, '#f55385'],
-  image: [0xE048, '#a074c4'],
-  svg: [0xE089, '#a074c4'],
-  pdf: [0xE069, '#cc3e44'],
-  archive: [0xE09F, '#cc3e44'],
-  config: [0xE017, '#6d8086'],
-  git: [0xE032, '#41535b'],
-  npm: [0xE063, '#41535b'],
-  docker: [0xE023, '#519aba'],
-  maven: [0xE05D, '#cc3e44'],
-  gradle: [0xE038, '#519aba']
+const FILE_ICONS = {
+  default: ['codicon-file', '#6d8086'],
+  vue: ['codicon-symbol-color', '#8dc149'],
+  javascript: ['codicon-file-code', '#cbcb41'],
+  react: ['codicon-symbol-class', '#519aba'],
+  typescript: ['codicon-file-code', '#519aba'],
+  java: ['codicon-coffee', '#cc3e44'],
+  kotlin: ['codicon-file-code', '#e37933'],
+  json: ['codicon-json', '#cbcb41'],
+  markdown: ['codicon-markdown', '#519aba'],
+  css: ['codicon-symbol-color', '#519aba'],
+  sass: ['codicon-symbol-color', '#f55385'],
+  html: ['codicon-code', '#e37933'],
+  xml: ['codicon-code', '#e37933'],
+  yaml: ['codicon-list-tree', '#a074c4'],
+  python: ['codicon-file-code', '#519aba'],
+  go: ['codicon-file-code', '#519aba'],
+  rust: ['codicon-settings-gear', '#6d8086'],
+  php: ['codicon-file-code', '#a074c4'],
+  shell: ['codicon-terminal', '#4d5a5e'],
+  powershell: ['codicon-terminal-powershell', '#519aba'],
+  database: ['codicon-database', '#f55385'],
+  image: ['codicon-file-media', '#a074c4'],
+  svg: ['codicon-symbol-color', '#a074c4'],
+  pdf: ['codicon-file-pdf', '#cc3e44'],
+  archive: ['codicon-file-zip', '#cc3e44'],
+  config: ['codicon-settings-gear', '#6d8086'],
+  git: ['codicon-source-control', '#41535b'],
+  npm: ['codicon-package', '#41535b'],
+  docker: ['codicon-package', '#519aba'],
+  maven: ['codicon-package', '#cc3e44'],
+  gradle: ['codicon-package', '#519aba']
 }
 
 const EXTENSION_ICONS = {
@@ -58,6 +58,6 @@ function iconKind(name) {
 
 export function fileIconFor(name) {
   const kind = iconKind(name)
-  const [codePoint, color] = SETI_ICONS[kind]
-  return {kind, color, glyph: String.fromCodePoint(codePoint)}
+  const [icon, color] = FILE_ICONS[kind]
+  return {kind, color, icon}
 }

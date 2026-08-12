@@ -198,7 +198,7 @@ describe('FileExplorer 文件树', () => {
 
     const icon = wrapper.find('.fen-file-icon[data-icon="markdown"]')
     expect(icon.exists()).toBe(true)
-    expect(icon.text().codePointAt(0)).toBe(0xE05C)
+    expect(icon.classes()).toContain('codicon-markdown')
     wrapper.unmount()
   })
 
@@ -227,7 +227,7 @@ describe('FileExplorer 文件树', () => {
     await flushPromises()
     const icon = wrapper.find('.fen-file-icon[data-icon="javascript"]')
     expect(icon.exists()).toBe(true)
-    expect(icon.text().codePointAt(0)).toBe(0xE04D)
+    expect(icon.classes()).toContain('codicon-file-code')
     expect(wrapper.find('.fen-decoration:not(.is-directory)').text()).toBe('M')
     wrapper.unmount()
   })

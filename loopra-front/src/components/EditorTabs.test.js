@@ -6,8 +6,8 @@ import EditorTabs from './EditorTabs.vue'
 
 const tabs = [
   {id: 'chat', label: '对话', closable: false},
-  {id: 'file-1', label: 'first.js', fileIcon: {kind: 'javascript', color: '#cbcb41', glyph: '\uE04D'}, dirty: true},
-  {id: 'file-2', label: 'second.js', fileIcon: {kind: 'javascript', color: '#cbcb41', glyph: '\uE04D'}}
+  {id: 'file-1', label: 'first.js', fileIcon: {kind: 'javascript', color: '#cbcb41', icon: 'codicon-file-code'}, dirty: true},
+  {id: 'file-2', label: 'second.js', fileIcon: {kind: 'javascript', color: '#cbcb41', icon: 'codicon-file-code'}}
 ]
 
 describe('EditorTabs', () => {
@@ -28,6 +28,7 @@ describe('EditorTabs', () => {
     expect(wrapper.find('.et-scroll').text()).not.toContain('对话')
     expect(wrapper.findAll('.et-scroll .et-tab')).toHaveLength(2)
     expect(wrapper.find('.et-scroll .et-file-icon').attributes('data-icon')).toBe('javascript')
+    expect(wrapper.find('.et-scroll .et-file-icon').classes()).toContain('codicon-file-code')
     expect(wrapper.find('.et-close.is-dirty .et-dirty-dot').exists()).toBe(true)
   })
 
