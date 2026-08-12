@@ -56,8 +56,8 @@
             需要重新安装 Loopra 桌面运行时
           </p>
 
-          <!-- 下载源选择：GitHub 直连 / 镜像加速，与更新窗口共享 localStorage -->
-          <div class="install-source" v-if="installReason !== 'desktop_outdated'">
+          <!-- 下载源选择：GitHub 直连 / 镜像加速，与更新窗口共享 localStorage；安装包内置核心时无需选择 -->
+          <div class="install-source" v-if="installReason !== 'desktop_outdated' && !bundledCore">
             <span>选择下载方式</span>
             <div class="source-row">
               <label class="source-option" :class="{ active: updateSource === UPDATE_SOURCE_NORMAL }">
@@ -74,8 +74,9 @@
           </div>
 
           <div class="install-command" v-if="installReason !== 'desktop_outdated'">
-            <span>将执行以下安装命令：</span>
-            <code>{{ installCommand }}</code>
+            <span v-if="bundledCore">安装包已内置核心运行时，将从本地安装（无需下载核心包）</span>
+            <span v-else>将执行以下安装命令：</span>
+            <code v-if="!bundledCore">{{ installCommand }}</code>
           </div>
 
           <div class="java-check" v-if="javaInfo && installReason !== 'desktop_outdated'">
@@ -173,7 +174,13 @@ import {computed, nextTick, onMounted, onUnmounted, ref, watch} from 'vue'
 import {platform} from '@/services/platform'
 import {systemAPI} from '@/services/api'
 import {RELEASE_LATEST_URL} from '@/utils/constants'
-import {UPDATE_SOURCE_MIRROR, UPDATE_SOURCE_NORMAL, buildUpdateCommand, loadUpdateSource, saveUpdateSource} from '@/utils/updateScripts'
+import {
+  buildUpdateCommand,
+  loadUpdateSource,
+  saveUpdateSource,
+  UPDATE_SOURCE_MIRROR,
+  UPDATE_SOURCE_NORMAL
+} from '@/utils/updateScripts'
 // 动态获取当前平台的 loopraWebService
 const { loopraWebService } = platform.implementation
 
@@ -188,6 +195,9 @@ const javaInfo = ref('')
 const errorMessage = ref('')
 const startupMessage = ref('')
 const resourceDir = ref('')
+
+// 安装包是否内置核心运行时（内置时从本地安装，无需下载核心包）
+const bundledCore = ref(false)
 
 // 安装步骤和进度
 const installSteps = ref([])
@@ -256,6 +266,17 @@ async function checkEnvironment() {
     }
   } catch (e) {
     console.warn('[Splash] Failed to get resource dir:', e)
+  }
+
+  // 桌面环境：检测安装包是否内置核心运行时（内置时本地安装，无需下载核心包）
+  try {
+    const status = await loopraWebService.getStatus()
+    if (status && status.bundled_core) {
+      bundledCore.value = true
+      console.log('[Splash] Bundled core runtime detected, local install available')
+    }
+  } catch (e) {
+    console.warn('[Splash] Failed to get loopra web status:', e)
   }
 
   // 检查是否需要安装

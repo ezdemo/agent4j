@@ -305,6 +305,19 @@ function getLoopraBinPath() {
   return { binDir, binPath }
 }
 
+// 安装包内置核心运行时目录：打包时由 CI 把 web-dist 解压到 resources/loopra-core
+// （开发模式读仓库内 resources/loopra-core，未嵌入时返回空路径由调用方回退在线）
+function getLoopraCoreDir() {
+  if (app.isPackaged) return path.join(process.resourcesPath, 'loopra-core')
+  return path.join(__dirname, '../resources/loopra-core')
+}
+
+// 安装包是否内置核心运行时（install 脚本存在即视为内置）
+function isLoopraCoreBundled() {
+  const scriptName = isWin ? 'install.ps1' : 'install.sh'
+  return fs.existsSync(path.join(getLoopraCoreDir(), scriptName))
+}
+
 function readLoopraGuiVersion() {
   const { versionPath } = getLoopraPaths()
   try {
@@ -699,7 +712,8 @@ ipcMain.handle('get_loopra_web_status', async () => {
     installed: isLoopraGuiInstalled(),
     running: loopraWebProcess !== null,
     install_dir: runtimeDir,
-    config_dir: path.join(app.getPath('home'), '.loopra')
+    config_dir: path.join(app.getPath('home'), '.loopra'),
+    bundled_core: isLoopraCoreBundled()
   }
 })
 
@@ -849,44 +863,9 @@ function sendInstallLog(line) {
   if (updateWindow && !updateWindow.isDestroyed()) updateWindow.webContents.send('install-output', payload)
 }
 
-// 在线一键安装 loopra（走远程脚本，支持直连/镜像源）
-ipcMain.handle('install_loopra_web_online', async (event, options = {}) => {
-  // 镜像源使用 setup-gui-mirror 脚本（安装包经 gh-proxy 加速下载）
-  const source = options && options.source === 'mirror' ? 'mirror' : 'normal'
-  const scriptName = source === 'mirror' ? 'setup-gui-mirror' : 'setup-gui'
-  sendInstallLog('='.repeat(50))
-  sendInstallLog('  Loopra 在线一键安装')
-  sendInstallLog('='.repeat(50))
-  sendInstallLog(`>> 下载源: ${source === 'mirror' ? '镜像 (gh-proxy)' : 'GitHub 直连'}`)
-  sendInstallLog('>> 桌面运行时将安装到 ~/.loopra-gui，配置继续使用 ~/.loopra')
-  sendInstallLog('')
-
+// 执行核心运行时安装子进程，输出逐行推送到前端（复用 sendInstallLog）
+function runLoopraCoreInstaller(child) {
   return new Promise((resolve, reject) => {
-    let child
-    if (isWin) {
-      // Windows: irm ... | iex
-      sendInstallLog('>> 检测到 Windows 系统，使用 PowerShell 安装...')
-      const psCmd = [
-        '-ExecutionPolicy', 'Bypass', '-NoProfile', '-Command',
-        `irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/${scriptName}.ps1 | iex`
-      ]
-      child = spawn('powershell', psCmd, {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        windowsHide: true
-      })
-      sendInstallLog(`>> 执行: irm ${scriptName}.ps1 | iex`)
-    } else {
-      // macOS/Linux: curl ... | bash
-      sendInstallLog('>> 检测到 Unix 系统，使用 curl 安装...')
-      // 下载脚本并管道给 bash 执行，-fsSL = 静默+显示错误+跟随跳转
-      child = spawn('bash', ['-c',
-        `curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/${scriptName}.sh | bash`
-      ], {
-        stdio: ['ignore', 'pipe', 'pipe']
-      })
-      sendInstallLog(`>> 执行: curl ${scriptName}.sh | bash`)
-    }
-
     sendInstallLog('>> 安装进程已启动，等待输出...')
     sendInstallLog('')
 
@@ -919,10 +898,8 @@ ipcMain.handle('install_loopra_web_online', async (event, options = {}) => {
       sendInstallLog('')
       sendInstallLog(`>> 安装进程已退出，退出码: ${code}`)
       if (code === 0) {
-        sendInstallLog('>> ✅ Loopra 安装成功！')
         resolve({ success: true })
       } else {
-        sendInstallLog('>> ❌ 安装失败，请检查网络连接后重试')
         reject(new Error(`安装失败，退出码: ${code}`))
       }
     })
@@ -931,6 +908,98 @@ ipcMain.handle('install_loopra_web_online', async (event, options = {}) => {
       reject(new Error(`安装进程启动失败: ${err.message}`))
     })
   })
+}
+
+// 从安装包内置核心运行时本地安装（无需下载核心包；JRE 缺失时由安装脚本在线下载）
+function installLoopraCoreLocal() {
+  const coreDir = getLoopraCoreDir()
+  const installScript = path.join(coreDir, isWin ? 'install.ps1' : 'install.sh')
+  sendInstallLog(`>> 使用安装包内置核心: ${coreDir}`)
+
+  let child
+  if (isWin) {
+    child = spawn('powershell', [
+      '-ExecutionPolicy', 'Bypass', '-NoProfile',
+      '-File', installScript, '-Gui', '-Setup'
+    ], {
+      stdio: ['ignore', 'pipe', 'pipe'],
+      windowsHide: true
+    })
+    sendInstallLog('>> 执行: install.ps1 -Gui -Setup')
+  } else {
+    // bash 显式执行，不依赖 tar 解压后的可执行权限
+    child = spawn('bash', [installScript, '--gui', '--setup'], {
+      stdio: ['ignore', 'pipe', 'pipe']
+    })
+    sendInstallLog('>> 执行: install.sh --gui --setup')
+  }
+  return runLoopraCoreInstaller(child)
+}
+
+// 在线一键安装 loopra（走远程脚本，支持直连/镜像源；作为内置核心缺失或本地安装失败的回退）
+ipcMain.handle('install_loopra_web_online', async (event, options = {}) => {
+  const source = options && options.source === 'mirror' ? 'mirror' : 'normal'
+  sendInstallLog('='.repeat(50))
+  sendInstallLog('  Loopra 核心服务安装')
+  sendInstallLog('='.repeat(50))
+
+  // 优先使用安装包内置核心运行时：安装包已带核心包，用户无需再下载第二遍；
+  // 内置缺失（开发模式/旧版安装包）或本地安装失败时，回退在线下载安装。
+  if (isLoopraCoreBundled()) {
+    sendInstallLog('>> 检测到安装包内置核心运行时，使用本地安装（无需下载核心包）')
+    sendInstallLog('>> 桌面运行时将安装到 ~/.loopra-gui，配置继续使用 ~/.loopra')
+    sendInstallLog('')
+    try {
+      await installLoopraCoreLocal()
+      sendInstallLog('')
+      sendInstallLog('>> ✅ Loopra 安装成功！')
+      return { success: true }
+    } catch (error) {
+      sendInstallLog(`>> ⚠️ 本地安装失败（${error.message}），回退在线下载安装`)
+      sendInstallLog('')
+    }
+  }
+
+  // 镜像源使用 setup-gui-mirror 脚本（安装包经 gh-proxy 加速下载）
+  const scriptName = source === 'mirror' ? 'setup-gui-mirror' : 'setup-gui'
+  sendInstallLog(`>> 下载源: ${source === 'mirror' ? '镜像 (gh-proxy)' : 'GitHub 直连'}`)
+  sendInstallLog('>> 桌面运行时将安装到 ~/.loopra-gui，配置继续使用 ~/.loopra')
+  sendInstallLog('')
+
+  try {
+    let child
+    if (isWin) {
+      // Windows: irm ... | iex
+      sendInstallLog('>> 检测到 Windows 系统，使用 PowerShell 安装...')
+      const psCmd = [
+        '-ExecutionPolicy', 'Bypass', '-NoProfile', '-Command',
+        `irm https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/${scriptName}.ps1 | iex`
+      ]
+      child = spawn('powershell', psCmd, {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        windowsHide: true
+      })
+      sendInstallLog(`>> 执行: irm ${scriptName}.ps1 | iex`)
+    } else {
+      // macOS/Linux: curl ... | bash
+      sendInstallLog('>> 检测到 Unix 系统，使用 curl 安装...')
+      // 下载脚本并管道给 bash 执行，-fsSL = 静默+显示错误+跟随跳转
+      child = spawn('bash', ['-c',
+        `curl -fsSL https://raw.giteeusercontent.com/ezdemo/loopra/raw/main/.release/${scriptName}.sh | bash`
+      ], {
+        stdio: ['ignore', 'pipe', 'pipe']
+      })
+      sendInstallLog(`>> 执行: curl ${scriptName}.sh | bash`)
+    }
+
+    await runLoopraCoreInstaller(child)
+    sendInstallLog('')
+    sendInstallLog('>> ✅ Loopra 安装成功！')
+    return { success: true }
+  } catch (error) {
+    sendInstallLog('>> ❌ 安装失败，请检查网络连接后重试')
+    throw error
+  }
 })
 
 ipcMain.handle('stop_loopra_web', async () => {
