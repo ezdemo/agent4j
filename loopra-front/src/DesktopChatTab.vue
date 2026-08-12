@@ -27,7 +27,12 @@
         <span class="codicon codicon-source-control" aria-hidden="true"></span>
       </button>
     </nav>
-    <aside class="desktop-files-left" :class="{ collapsed: !leftPanelOpen }" :aria-label="leftPanelView === 'git' ? '版本管理' : '项目文件'">
+    <aside
+      class="desktop-files-left"
+      :class="{ collapsed: !leftPanelOpen }"
+      :style="leftPanelOpen ? { width: `${leftPanelWidth}px`, transition: leftPanelDragging ? 'none' : undefined } : null"
+      :aria-label="leftPanelView === 'git' ? '版本管理' : '项目文件'"
+    >
       <FileExplorer
         v-if="filePanelMounted"
         v-show="leftPanelView === 'files'"
@@ -44,6 +49,13 @@
         v-show="leftPanelView === 'git'"
         :workspace-hash="workspaceHash"
         @close="leftPanelOpen = false"
+      />
+      <div
+        class="desktop-files-resize-handle"
+        :class="{ dragging: leftPanelDragging }"
+        title="拖动调整左侧面板宽度"
+        aria-hidden="true"
+        @mousedown.prevent="startLeftPanelResize"
       />
     </aside>
     <div class="desktop-chat-area">
@@ -86,6 +98,7 @@
     <RightPanel
       v-if="rightPanelMounted"
       :open="rightPanelOpen"
+      resizable
       v-model="rightPanelTab"
       :show-files-tab="false"
       :show-git-tab="false"
@@ -136,6 +149,15 @@ const rightPanelOpen = ref(false)
 const rightPanelMounted = ref(false)
 const leftPanelOpen = ref(false)
 const leftPanelView = ref('files')
+const LEFT_PANEL_SIZE_KEY = 'loopra-left-panel-width'
+const LEFT_PANEL_DEFAULT_WIDTH = 300
+const LEFT_PANEL_MIN_WIDTH = 240
+const LEFT_PANEL_MAX_WIDTH_RATIO = 0.34
+const savedLeftPanelWidth = Number(localStorage.getItem(LEFT_PANEL_SIZE_KEY))
+const leftPanelWidth = ref(Number.isFinite(savedLeftPanelWidth) && savedLeftPanelWidth >= LEFT_PANEL_MIN_WIDTH
+  ? savedLeftPanelWidth
+  : LEFT_PANEL_DEFAULT_WIDTH)
+const leftPanelDragging = ref(false)
 const filePanelMounted = ref(false)
 const gitPanelMounted = ref(false)
 const showTerminal = ref(false)
@@ -168,6 +190,7 @@ let stopElementInspectionListener = null
 let stopRefreshHistoryListener = null
 let stopFocusComposerListener = null
 let stopSendCommandListener = null
+let stopLeftPanelResize = null
 
 onMounted(() => {
   // 先注册主进程事件，避免初始化请求期间丢失聚焦或自动发送命令。
@@ -407,6 +430,37 @@ function onFileSaved() {
   fileExplorerRef.value?.refresh?.()
 }
 
+function startLeftPanelResize(event) {
+  stopLeftPanelResize?.()
+  const startX = event.clientX
+  const startWidth = leftPanelWidth.value
+  leftPanelDragging.value = true
+
+  const onMove = (moveEvent) => {
+    const maxWidth = Math.floor(window.innerWidth * LEFT_PANEL_MAX_WIDTH_RATIO)
+    leftPanelWidth.value = Math.min(
+      Math.max(startWidth + moveEvent.clientX - startX, LEFT_PANEL_MIN_WIDTH),
+      Math.max(maxWidth, LEFT_PANEL_MIN_WIDTH)
+    )
+  }
+
+  const onUp = () => {
+    leftPanelDragging.value = false
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', onUp)
+    stopLeftPanelResize = null
+    try {
+      localStorage.setItem(LEFT_PANEL_SIZE_KEY, String(leftPanelWidth.value))
+    } catch (error) {
+      // 存储不可用时忽略
+    }
+  }
+
+  stopLeftPanelResize = onUp
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onUp)
+}
+
 // 欢迎页不展示左侧文件栏；进入会话保持当前状态（默认折叠，不覆盖用户手动开关）
 function onWelcomeChange(active) {
   if (active) leftPanelOpen.value = false
@@ -435,6 +489,8 @@ onBeforeUnmount(() => {
   stopFocusComposerListener?.()
   stopSendCommandListener?.()
   window.removeEventListener('loopra:bash-start', onBashStart)
+  stopLeftPanelResize?.()
+  leftPanelDragging.value = false
 })
 
 // 工作区变化时自动上报，确保标签栏图标实时更新；同时清空已打开的文件标签
@@ -551,6 +607,7 @@ watch(workspaceHash, (hash) => {
 }
 
 .desktop-files-left {
+  position: relative;
   width: 300px;
   min-width: 240px;
   max-width: 34vw;
@@ -576,6 +633,22 @@ watch(workspaceHash, (hash) => {
   width: 100%;
   min-height: 0;
   flex: 1;
+}
+
+.desktop-files-resize-handle {
+  position: absolute;
+  top: 0;
+  right: -4px;
+  bottom: 0;
+  width: 8px;
+  cursor: ew-resize;
+  z-index: 2;
+}
+
+.desktop-files-resize-handle:hover,
+.desktop-files-resize-handle.dragging {
+  background: rgba(82, 82, 91, 0.25);
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 .desktop-chat-area {

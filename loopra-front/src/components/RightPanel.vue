@@ -2,7 +2,16 @@
   <div
     class="rp-panel"
     :class="{ collapsed: !open }"
+    :style="panelStyle"
   >
+    <div
+      v-if="resizable"
+      class="rp-resize-handle"
+      :class="{ dragging }"
+      title="拖动调整右侧面板宽度"
+      aria-hidden="true"
+      @mousedown.prevent="startResize"
+    />
     <!-- 统一头部：标签页切换 + 刷新 + 关闭 -->
     <div class="rp-head">
       <div class="rp-tabs">
@@ -76,7 +85,7 @@
 </template>
 
 <script setup>
-import {computed, ref} from 'vue'
+import {computed, onBeforeUnmount, ref} from 'vue'
 import GitPanel from './GitPanel.vue'
 import FilePanel from './FilePanel.vue'
 import SchedulePanel from './SchedulePanel.vue'
@@ -85,6 +94,7 @@ import BashSessionManager from './BashSessionManager.vue'
 const props = defineProps({
   modelValue: { type: String, default: 'git' },
   open: { type: Boolean, default: true },
+  resizable: { type: Boolean, default: false },
   showFilesTab: { type: Boolean, default: true },
   showGitTab: { type: Boolean, default: true },
   workspaceHash: { type: String, default: null },
@@ -102,10 +112,66 @@ const activeTab = computed(() => {
 const gitRef = ref(null)
 const fileRef = ref(null)
 const scheduleRef = ref(null)
+
+const PANEL_SIZE_KEY = 'loopra-right-panel-width'
+const DEFAULT_PANEL_WIDTH = 320
+const MIN_PANEL_WIDTH = 240
+const MAX_PANEL_WIDTH_RATIO = 0.7
+const savedPanelWidth = Number(localStorage.getItem(PANEL_SIZE_KEY))
+const panelWidth = ref(Number.isFinite(savedPanelWidth) && savedPanelWidth >= MIN_PANEL_WIDTH
+  ? savedPanelWidth
+  : DEFAULT_PANEL_WIDTH)
+const dragging = ref(false)
+let stopResize = null
+
+const panelStyle = computed(() => {
+  if (!props.resizable || !props.open) return null
+  return {
+    width: `${panelWidth.value}px`,
+    ...(dragging.value ? {transition: 'none'} : {})
+  }
+})
+
+function startResize(event) {
+  stopResize?.()
+  const startX = event.clientX
+  const startWidth = panelWidth.value
+  dragging.value = true
+
+  const onMove = (moveEvent) => {
+    const maxWidth = Math.floor(window.innerWidth * MAX_PANEL_WIDTH_RATIO)
+    panelWidth.value = Math.round(Math.min(
+      Math.max(startWidth + startX - moveEvent.clientX, MIN_PANEL_WIDTH),
+      Math.max(maxWidth, MIN_PANEL_WIDTH)
+    ))
+  }
+
+  const onUp = () => {
+    dragging.value = false
+    window.removeEventListener('mousemove', onMove)
+    window.removeEventListener('mouseup', onUp)
+    stopResize = null
+    try {
+      localStorage.setItem(PANEL_SIZE_KEY, String(panelWidth.value))
+    } catch (error) {
+      // 存储不可用时忽略
+    }
+  }
+
+  stopResize = onUp
+  window.addEventListener('mousemove', onMove)
+  window.addEventListener('mouseup', onUp)
+}
+
+onBeforeUnmount(() => {
+  stopResize?.()
+  dragging.value = false
+})
 </script>
 
 <style scoped>
 .rp-panel {
+  position: relative;
   width: 320px;
   flex-shrink: 0;
   display: flex;
@@ -120,6 +186,24 @@ const scheduleRef = ref(null)
   opacity: 0;
   border-left: none;
   pointer-events: none;
+}
+
+.rp-resize-handle {
+  position: absolute;
+  left: -4px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  height: auto;
+  flex: none;
+  cursor: ew-resize;
+  z-index: 2;
+}
+
+.rp-resize-handle:hover,
+.rp-resize-handle.dragging {
+  background: rgba(82, 82, 91, 0.25);
+  background: color-mix(in srgb, var(--accent) 30%, transparent);
 }
 
 /* 头部标签栏 */
