@@ -10,6 +10,8 @@ import site.sorghum.loopra.tool.AgentLoopController;
 import site.sorghum.loopra.tool.ToolContext;
 
 import java.io.IOException;
+import java.lang.reflect.Field;
+import java.nio.charset.Charset;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -18,12 +20,16 @@ import java.util.Comparator;
 import java.util.List;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * TerminalTalent with passive write/edit change tracking. The underlying tool behavior is unchanged.
  */
 public class SessionTerminalTalent extends TerminalTalent {
     private static final long MAX_TRACKED_BYTES = 512 * 1024;
+    /** 单个后台会话累积输出日志的字符上限，超出时保留尾部。 */
+    private static final int MAX_LOG_CHARS = 512 * 1024;
     /** 已结束会话在镜像中的保留时长 —— 供前端短暂展示“已结束”状态，与底层 10 分钟 TTL 无关。 */
     private static final long COMPLETED_VISIBLE_TTL_MS = 60_000;
 
@@ -35,6 +41,48 @@ public class SessionTerminalTalent extends TerminalTalent {
     public SessionTerminalTalent(MountManager mountManager, String workspace) {
         super(mountManager);
         this.workspace = Path.of(workspace).toAbsolutePath().normalize();
+        applyWindowsOutputCharsetFix();
+    }
+
+    /**
+     * Windows 下 cmd 子进程输出采用系统 OEM 代码页（中文系统为 GBK/936），而底层
+     * TerminalSessionManager 固定用 UTF-8 解码，导致中文输出乱码（bash 工具与后台会话日志均受影响）。
+     * 通过反射将 bashSessionManager 替换为按活动代码页构造的实例；非 Windows 或失败时保持默认行为。
+     */
+    private void applyWindowsOutputCharsetFix() {
+        if (!isWindowsOs()) return;
+        String codePage = queryWindowsCodePage();
+        if (codePage == null || codePage.isEmpty()) return;
+        final Charset charset;
+        try {
+            charset = Charset.forName("CP" + codePage);
+        } catch (Exception ignored) {
+            return; // 未知代码页（如 65001 即 UTF-8），保持默认
+        }
+        try {
+            Field field = TerminalTalent.class.getDeclaredField("bashSessionManager");
+            field.setAccessible(true);
+            field.set(this, new TerminalSessionManager(charset));
+        } catch (Exception e) {
+            // 反射失败时保持默认 UTF-8 行为，不影响功能
+        }
+    }
+
+    private static boolean isWindowsOs() {
+        return System.getProperty("os.name").toLowerCase().contains("win");
+    }
+
+    /** 通过 cmd 内置 chcp 查询活动代码页（如 "936"），失败返回 null。 */
+    private static String queryWindowsCodePage() {
+        try {
+            Process process = new ProcessBuilder("cmd", "/c", "chcp")
+                    .redirectErrorStream(true).start();
+            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.US_ASCII);
+            Matcher matcher = Pattern.compile("(\\d{3,5})").matcher(output);
+            return matcher.find() ? matcher.group(1) : null;
+        } catch (Exception ignored) {
+            return null;
+        }
     }
 
     @Override
@@ -90,8 +138,10 @@ public class SessionTerminalTalent extends TerminalTalent {
         String result = super.bashStart(command, workdir, yieldTimeMs, maxOutputChars, hardTimeoutMs, __cwd);
         String sessionId = commandSessionId(result);
         if (sessionId != null && isCommandRunning(result)) {
-            bashSessions.put(sessionId, new BashSessionInfo(
-                    sessionId, workspace.toString(), command, commandWorkdir(result)));
+            BashSessionInfo info = new BashSessionInfo(
+                    sessionId, workspace.toString(), command, commandWorkdir(result));
+            info.appendOutput(extractCommandOutput(result));
+            bashSessions.put(sessionId, info);
         }
         AgentLoopController controller = ToolContext.getCurrentController();
         if (controller != null && sessionId != null && isCommandRunning(result)) {
@@ -107,6 +157,7 @@ public class SessionTerminalTalent extends TerminalTalent {
                            @Param(value = "yield_time_ms", required = false, defaultValue = "1000") Integer yieldTimeMs,
                            @Param(value = "max_output_chars", required = false, defaultValue = "64000") Integer maxOutputChars) throws IOException {
         String result = super.bashWait(sessionId, yieldTimeMs, maxOutputChars);
+        appendBashOutput(sessionId, result);
         markBashSessionCompleted(sessionId, result);
         clearCompletedCommand(sessionId, result);
         return result;
@@ -119,6 +170,7 @@ public class SessionTerminalTalent extends TerminalTalent {
                             @Param(value = "yield_time_ms", required = false, defaultValue = "1000") Integer yieldTimeMs,
                             @Param(value = "max_output_chars", required = false, defaultValue = "64000") Integer maxOutputChars) throws IOException {
         String result = super.bashStdin(sessionId, chars, yieldTimeMs, maxOutputChars);
+        appendBashOutput(sessionId, result);
         markBashSessionCompleted(sessionId, result);
         clearCompletedCommand(sessionId, result);
         return result;
@@ -129,13 +181,40 @@ public class SessionTerminalTalent extends TerminalTalent {
     public String bashStop(@Param(value = "session_id") String sessionId,
                            @Param(value = "reason", required = false) String reason,
                            @Param(value = "max_output_chars", required = false, defaultValue = "64000") Integer maxOutputChars) {
+        String result = null;
         try {
-            return super.bashStop(sessionId, reason, maxOutputChars);
+            result = super.bashStop(sessionId, reason, maxOutputChars);
+            return result;
         } finally {
-            if (sessionId != null) bashSessions.remove(sessionId);
+            if (sessionId != null) {
+                BashSessionInfo info = bashSessions.get(sessionId);
+                if (info != null) info.appendOutput(extractCommandOutput(result));
+                bashSessions.remove(sessionId);
+            }
             AgentLoopController controller = ToolContext.getCurrentController();
             if (controller != null) controller.clearAbortResource(sessionId);
         }
+    }
+
+    /**
+     * 将 bash_start/wait/stdin/stop 返回文本中的增量输出追加到会话日志镜像。
+     */
+    private void appendBashOutput(String sessionId, String result) {
+        if (sessionId == null) return;
+        BashSessionInfo info = bashSessions.get(sessionId);
+        if (info != null) info.appendOutput(extractCommandOutput(result));
+    }
+
+    /**
+     * 从工具返回文本中提取 Output: 段（增量输出），无输出时返回空串。
+     */
+    private static String extractCommandOutput(String result) {
+        if (result == null) return "";
+        String marker = "\nOutput:\n";
+        int outputStart = result.indexOf(marker);
+        if (outputStart < 0) return "";
+        String output = result.substring(outputStart + marker.length());
+        return "(no new output)".equals(output.trim()) ? "" : output;
     }
 
     private static String commandOutput(String result) {
@@ -240,6 +319,28 @@ public class SessionTerminalTalent extends TerminalTalent {
     }
 
     /**
+     * 按 sessionId（可限定工作区）查找后台会话镜像，供前端查询累积输出日志。
+     *
+     * @param sessionId 命令会话 ID
+     * @param workspace 工作区绝对路径；为空时在所有工作区中查找
+     * @return 会话镜像；未找到返回 null
+     */
+    public static BashSessionInfo findBashSession(String sessionId, String workspace) {
+        if (sessionId == null || sessionId.isBlank()) return null;
+        for (LoopraSkillProvider provider : LoopraSkillProvider.cliSkillProviderMap.values()) {
+            SessionTerminalTalent talent = provider.terminalTalent;
+            if (talent == null) continue;
+            if (workspace != null && !workspace.isEmpty()
+                    && !talent.workspace.equals(Path.of(workspace).toAbsolutePath().normalize())) {
+                continue;
+            }
+            BashSessionInfo info = talent.bashSessions.get(sessionId);
+            if (info != null) return info;
+        }
+        return null;
+    }
+
+    /**
      * 将终止快照格式化为提示日志文本（供前端展示）。
      */
     private static String formatTerminateMessage(TerminalSessionManager.CommandSnapshot snapshot) {
@@ -276,6 +377,8 @@ public class SessionTerminalTalent extends TerminalTalent {
         private final long startedAt;
         private volatile String status;
         private volatile long completedAt;
+        /** 累积输出日志（bash_start 初始输出 + bash_wait/stdin 增量输出），超出上限时保留尾部。 */
+        private final StringBuilder outputLog = new StringBuilder();
 
         BashSessionInfo(String sessionId, String workspace, String command, String workdir) {
             this.sessionId = sessionId;
@@ -321,6 +424,22 @@ public class SessionTerminalTalent extends TerminalTalent {
         void markCompleted() {
             this.status = "completed";
             this.completedAt = System.currentTimeMillis();
+        }
+
+        void appendOutput(String chunk) {
+            if (chunk == null || chunk.isEmpty()) return;
+            synchronized (outputLog) {
+                outputLog.append(chunk);
+                if (outputLog.length() > MAX_LOG_CHARS) {
+                    outputLog.delete(0, outputLog.length() - MAX_LOG_CHARS);
+                }
+            }
+        }
+
+        public String getOutput() {
+            synchronized (outputLog) {
+                return outputLog.toString();
+            }
         }
 
         boolean isExpired(long now) {
