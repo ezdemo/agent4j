@@ -14,7 +14,9 @@
         aria-label="文件"
         @click="toggleFilePanel"
       >
-        <span class="codicon codicon-files" aria-hidden="true"></span>
+        <svg class="activity-bar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M3.5 7.5A2.5 2.5 0 0 1 6 5h4.2l1.9 2h5.4A2.5 2.5 0 0 1 20 9.5v7A2.5 2.5 0 0 1 17.5 19h-11A2.5 2.5 0 0 1 4 16.5z"/>
+        </svg>
       </button>
       <button
         type="button"
@@ -568,11 +570,16 @@ watch(workspaceHash, (hash) => {
   background: color-mix(in srgb, var(--accent) 11%, transparent);
 }
 
-.activity-bar-item .codicon {
+.activity-bar-item .codicon,
+.activity-bar-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 22px;
   transition: transform var(--t);
 }
 
-.activity-bar-item:hover .codicon {
+.activity-bar-item:hover .codicon,
+.activity-bar-item:hover .activity-bar-icon {
   transform: scale(1.06);
 }
 
