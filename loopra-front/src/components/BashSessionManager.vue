@@ -70,6 +70,13 @@
           </div>
           <div class="bash-actions">
             <button
+              class="icon-btn"
+              :title="'查看输出日志 ' + item.sessionId"
+              @click.stop="viewLog(item)"
+            >
+              <FileTextOutlined />
+            </button>
+            <button
               v-if="item.status === 'running'"
               class="icon-btn danger"
               :disabled="busySessionId === item.sessionId"
@@ -83,6 +90,32 @@
         </article>
       </div>
     </section>
+
+    <!-- 输出日志弹窗 -->
+    <div v-if="logVisible" class="bash-log-overlay" @click.self="closeLog">
+      <section class="bash-log-dialog" @click.stop @dblclick.stop>
+        <header class="bash-log-head">
+          <div class="bash-log-title">
+            <h3>输出日志</h3>
+            <p class="bash-log-command" :title="logItem?.command">{{ logItem?.command }}</p>
+          </div>
+          <div class="bash-log-actions">
+            <span v-if="logItem" class="bash-state" :class="{ done: logItem.status === 'completed' }">
+              {{ logItem.status === 'running' ? '运行中' : '已结束' }}
+            </span>
+            <button class="icon-btn" title="刷新日志" :disabled="logLoading" @click="loadLog">
+              <ReloadOutlined :class="{ spinning: logLoading }" />
+            </button>
+            <button class="icon-btn" title="关闭" @click="closeLog">
+              <CloseOutlined />
+            </button>
+          </div>
+        </header>
+        <div v-if="logError" class="bash-error">{{ logError }}</div>
+        <pre v-if="logOutput" class="bash-log-body">{{ logOutput }}</pre>
+        <div v-else-if="!logLoading && !logError" class="bash-log-empty">暂无输出</div>
+      </section>
+    </div>
   </div>
 </template>
 
@@ -92,6 +125,7 @@ import {
   CloseOutlined,
   CloudServerOutlined,
   CodeOutlined,
+  FileTextOutlined,
   LoadingOutlined,
   ReloadOutlined
 } from '@ant-design/icons-vue'
@@ -205,6 +239,46 @@ async function terminate(item) {
 function startPolling() {
   refresh()
   if (!refreshTimer) refreshTimer = setInterval(refresh, 3000)
+}
+
+// ---- 输出日志弹窗 ----
+const logVisible = ref(false)
+const logItem = ref(null)
+const logOutput = ref('')
+const logLoading = ref(false)
+const logError = ref('')
+
+async function loadLog() {
+  if (!logItem.value) return
+  logLoading.value = true
+  logError.value = ''
+  try {
+    const response = await agentAPI.getBashSessionLog(logItem.value.sessionId)
+    if (response?.success && response?.data) {
+      logOutput.value = response.data.output || ''
+    } else {
+      logError.value = response?.message || '读取输出日志失败'
+    }
+  } catch (cause) {
+    logError.value = cause?.message || '读取输出日志失败'
+  } finally {
+    logLoading.value = false
+  }
+}
+
+function viewLog(item) {
+  logItem.value = item
+  logOutput.value = ''
+  logError.value = ''
+  logVisible.value = true
+  loadLog()
+}
+
+function closeLog() {
+  logVisible.value = false
+  logItem.value = null
+  logOutput.value = ''
+  logError.value = ''
 }
 
 function handleOutsideClick(event) {
@@ -396,7 +470,7 @@ onBeforeUnmount(close)
 
 .bash-row {
   display: grid;
-  grid-template-columns: 14px minmax(0, 1fr) 28px;
+  grid-template-columns: 14px minmax(0, 1fr) 56px;
   gap: 9px;
   align-items: start;
   padding: 12px 12px 11px 14px;
@@ -407,6 +481,7 @@ onBeforeUnmount(close)
   display: flex;
   align-items: center;
   justify-content: flex-end;
+  gap: 4px;
   height: 22px;
 }
 
@@ -552,5 +627,90 @@ onBeforeUnmount(close)
 [data-theme="dark"] .bash-popover {
   background: var(--bg-2);
   border-color: var(--glass-border);
+}
+
+/* ---- 输出日志弹窗 ---- */
+.bash-log-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.45);
+}
+
+.bash-log-dialog {
+  display: flex;
+  flex-direction: column;
+  width: min(680px, 100%);
+  max-height: min(560px, calc(100vh - 48px));
+  overflow: hidden;
+  color: var(--fg);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  box-shadow: var(--shadow-lg);
+}
+
+[data-theme="dark"] .bash-log-dialog {
+  background: var(--bg-2);
+  border-color: var(--glass-border);
+}
+
+.bash-log-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+}
+
+.bash-log-title {
+  min-width: 0;
+}
+
+.bash-log-title h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.bash-log-command {
+  margin: 3px 0 0;
+  overflow: hidden;
+  color: var(--fg-4);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.bash-log-actions {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+}
+
+.bash-log-body {
+  margin: 0;
+  padding: 12px 14px;
+  overflow: auto;
+  color: var(--fg-2);
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.bash-log-empty {
+  padding: 40px 0;
+  color: var(--fg-4);
+  font-size: 12px;
+  text-align: center;
 }
 </style>

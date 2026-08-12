@@ -4,9 +4,26 @@ import Components from 'unplugin-vue-components/vite'
 import {AntDesignVueResolver} from 'unplugin-vue-components/resolvers'
 import {resolve} from 'path'
 
+// @vscode/codicons 的 codicon.css 源文件自带的 cache-busting query（`?9aab...`）
+// 会被打包保留。http 下无影响，但打包后 Electron 走 file:// 协议，Chromium 会
+// 把 `font.ttf?hash` 整体当作文件名查找导致字体加载失败（图标渲染成缺失字形）。
+// Vite 产物文件名本身已含内容 hash，query 纯属冗余，这里在 transform 阶段直接移除。
+const stripUrlQuery = {
+  name: 'loopra-strip-codicon-url-query',
+  enforce: 'pre',
+  transform(code, id) {
+    if (!id.includes('@vscode/codicons') || !id.endsWith('codicon.css')) return null
+    return code.replace(
+      /url\((['"]?)([^)'"]+?)\?[^)'"]+\1\)/g,
+      (match, quote, path) => `url(${quote}${path}${quote})`
+    )
+  }
+}
+
 export default defineConfig({
   base: './',
   plugins: [
+    stripUrlQuery,
     vue({
       script: {
         defineModel: true,

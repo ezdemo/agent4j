@@ -302,6 +302,16 @@ export const agentAPI = {
     })
   },
 
+  // 获取 bash 后台会话累积输出日志 - GET /api/agent/bash-sessions/log?sessionId=xxx&workspaceHash=xxx（可选）
+  getBashSessionLog: (sessionId, workspaceHash) => {
+    const params = {sessionId}
+    if (workspaceHash) params.workspaceHash = workspaceHash
+    return api.get('/agent/bash-sessions/log', {
+      params,
+      silent: true
+    })
+  },
+
   // 获取历史消息 - GET /api/agent/history?workspaceHash=xxx&sessionName=xxx
   getHistory: (workspaceHash, sessionName) => {
     const params = {}

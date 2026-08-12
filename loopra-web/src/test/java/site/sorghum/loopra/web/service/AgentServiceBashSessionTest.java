@@ -65,4 +65,13 @@ class AgentServiceBashSessionTest {
         assertNull(service.terminateBashSession("cmd_unknown", home.toString()), "指定工作区下终止未知会话也应返回 null");
         assertNull(service.terminateBashSession("", null), "空 sessionId 应返回 null");
     }
+
+    @Test
+    void readBashSessionLogUnknownReturnsNull() {
+        AgentService service = new AgentService();
+
+        assertNull(service.readBashSessionLog("cmd_unknown", null), "空镜像下读取未知会话日志应返回 null");
+        assertNull(service.readBashSessionLog("cmd_unknown", home.toString()), "指定工作区下读取未知会话日志也应返回 null");
+        assertNull(service.readBashSessionLog("", null), "空 sessionId 应返回 null");
+    }
 }
