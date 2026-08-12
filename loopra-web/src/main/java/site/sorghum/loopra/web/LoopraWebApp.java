@@ -30,6 +30,9 @@ public class LoopraWebApp {
                 "args:" + Arrays.toString(args)
         );
 
+        // win下默认 指定powershell
+        System.setProperty("COMSPEC", "powershell");
+
         // 启动 Solon Web 服务
         Solon.start(LoopraWebApp.class, args);
 

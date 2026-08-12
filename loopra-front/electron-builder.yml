@@ -6,10 +6,9 @@ directories:
   output: release
   buildResources: build
 
-# 直接使用本地已安装的 Electron（node_modules/electron/dist），跳过网络下载
-# （@electron/get 经 npmmirror 下载后 got 连接挂起导致超时）
-electronDist: node_modules/electron/dist
-
+# Electron 由 electron-builder 自动下载（走 .npmrc 的 electron_mirror），
+# 并命中 CI 缓存 ~/.cache/electron；不要配置 electronDist 指向本地 dist，
+# 否则 CI 上 node_modules/electron/dist 缺失时打包会直接失败
 files:
   - dist/**/*
 

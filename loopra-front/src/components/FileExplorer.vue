@@ -10,15 +10,12 @@
         <button type="button" class="fe-head-action" title="折叠全部" aria-label="折叠全部" @click="collapseAll">
           <i class="codicon codicon-collapse-all"></i>
         </button>
-        <button type="button" class="fe-head-action" :class="{ active: searchOpen }" title="搜索文件" aria-label="搜索文件" @click="toggleSearch">
-          <i class="codicon codicon-search"></i>
-        </button>
       </div>
     </div>
 
-    <!-- 搜索输入框 -->
-    <div v-if="searchOpen" class="fe-search">
-      <input v-model="query" type="search" placeholder="搜索文件..." aria-label="搜索文件" @keydown.esc="toggleSearch" />
+    <!-- 搜索输入框（常驻） -->
+    <div class="fe-search">
+      <input v-model="query" type="search" placeholder="搜索文件..." aria-label="搜索文件" />
       <button v-if="query" type="button" class="fe-search-clear" title="清除搜索" @click="query = ''">×</button>
     </div>
 
@@ -152,7 +149,6 @@ const decorations = ref({})
 const selectedPath = ref('')
 const loading = ref(false)
 const error = ref('')
-const searchOpen = ref(false)
 const query = ref('')
 const searchResults = ref(null)
 const searching = ref(false)
@@ -430,7 +426,6 @@ function refresh() {
   if (searchResults.value !== null) {
     searchResults.value = null
     query.value = ''
-    searchOpen.value = false
   }
   void reloadTree()
   void loadGitDecorations()
@@ -471,17 +466,6 @@ function collapseAll() {
 }
 
 // ── 搜索（Electron fs，不接后端） ──
-function toggleSearch() {
-  searchOpen.value = !searchOpen.value
-  if (!searchOpen.value) {
-    clearTimeout(searchTimer)
-    searchRequestSeq++
-    searchResults.value = null
-    query.value = ''
-    searching.value = false
-  }
-}
-
 watch(query, (value) => {
   const keyword = value.trim()
   if (!keyword) {
@@ -588,7 +572,6 @@ watch([() => props.rootPath, () => props.workspaceHash], () => {
   closeDiffViewer()
   searchResults.value = null
   query.value = ''
-  searchOpen.value = false
   void loadRoot()
   void loadGitDecorations()
   void startFileWatcher()
