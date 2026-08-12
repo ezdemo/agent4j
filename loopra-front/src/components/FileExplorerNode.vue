@@ -209,8 +209,10 @@ watch(() => rowNode.value.editing, (editing) => {
 [data-theme="dark"] .fen-indent-guide {
   border-left-color: #404040;
 }
-/* twistie：codicon-chevron-right，10px 字体；左内边距由 depth 决定。 */
-.fen-chevron {
+/* twistie：codicon-chevron-right，10px 字体；左内边距由 depth 决定。
+   用 i.fen-chevron 提高特异性，防止与 codicon.css 的 .codicon[class*='codicon-']{font:16px/1 codicon}
+   同级规则（0,2,0）比拼加载顺序导致 10px 被 16px 覆盖（打开文件加载新 chunk 后箭头变大）。 */
+i.fen-chevron {
   box-sizing: content-box;
   width: 16px;
   height: 100%;
@@ -220,8 +222,7 @@ watch(() => rowNode.value.editing, (editing) => {
   align-items: center;
   justify-content: center;
   color: inherit;
-  font-size: 10px;
-  line-height: 22px;
+  font: normal normal normal 10px/22px codicon;
   text-align: right;
 }
 /* 文件行 twistie 占位与目录箭头占用相同宽度。 */
