@@ -2,6 +2,17 @@
   <div class="file-editor">
     <div class="fe-body">
       <div ref="editorRef" class="fe-monaco"></div>
+      <!-- 选中文本后的“添加到对话”浮动按钮（交互参照 DiffViewer 预览弹框） -->
+      <button
+        v-if="selectionAction.visible"
+        type="button"
+        class="fe-selection-action"
+        :style="{ left: `${selectionAction.left}px`, top: `${selectionAction.top}px` }"
+        @mousedown.prevent
+        @click="addSelectionToSession"
+      >
+        添加到对话
+      </button>
       <div v-if="loading" class="fe-state fe-overlay">
         <span class="loading-spinner"></span>
       </div>
@@ -23,7 +34,7 @@ const props = defineProps({
   theme: {type: String, default: 'gray'}
 })
 
-const emit = defineEmits(['saved', 'dirtyChange'])
+const emit = defineEmits(['saved', 'dirtyChange', 'addToSession'])
 
 const editorRef = ref(null)
 const editor = shallowRef(null)
@@ -36,12 +47,17 @@ const loadRequests = new Map()
 let mouseDisposable = null
 let mouseMoveDisposable = null
 let mouseLeaveDisposable = null
+let mouseUpDisposable = null
+let selectionDisposable = null
+let scrollDisposable = null
 let keyDisposable = null
 let stopFileChangeListener = null
 let peekState = null
 let disposed = false
 
 const activePath = computed(() => props.activeFile?.path || '')
+// 选中文本浮动按钮（与 DiffViewer 预览弹框的“添加到会话”交互一致）
+const selectionAction = ref({visible: false, left: 0, top: 0, text: '', startLine: 0, endLine: 0})
 const loading = computed(() => loadingPath.value === activePath.value)
 const explorerAPI = () => window.electronAPI?.fileExplorer
 const editorTheme = () => props.theme === 'dark' ? 'vs-dark' : 'vs'
@@ -253,9 +269,64 @@ function dirtyDiffIndexAt(event, entry) {
 }
 
 function onEditorMouseDown(event) {
+  hideSelectionAction()
   const entry = models.get(activePath.value)
   const index = dirtyDiffIndexAt(event, entry)
   if (index >= 0) openDirtyDiffPeek(entry, index)
+}
+
+function hideSelectionAction() {
+  selectionAction.value.visible = false
+}
+
+function onEditorMouseUp(event) {
+  const model = editor.value?.getModel()
+  const selection = editor.value?.getSelection()
+  if (!model || !selection || selection.isEmpty()) {
+    hideSelectionAction()
+    return
+  }
+  const text = model.getValueInRange(selection).trim()
+  if (!text) {
+    hideSelectionAction()
+    return
+  }
+  const clientX = event.event?.browserEvent?.clientX ?? 0
+  const clientY = event.event?.browserEvent?.clientY ?? 0
+  const rect = editorRef.value?.getBoundingClientRect()
+  const buttonWidth = 112
+  const buttonHeight = 28
+  selectionAction.value = {
+    visible: true,
+    text,
+    startLine: selection.startLineNumber,
+    endLine: selection.endLineNumber,
+    left: rect
+      ? Math.min(Math.max(rect.left + 4, clientX + 6), window.innerWidth - buttonWidth - 4)
+      : clientX,
+    top: rect ? Math.max(rect.top + 4, clientY - buttonHeight - 6) : clientY
+  }
+}
+
+function onSelectionChange() {
+  const selection = editor.value?.getSelection()
+  if (!selection || selection.isEmpty()) hideSelectionAction()
+}
+
+function onEditorScroll() {
+  hideSelectionAction()
+}
+
+function addSelectionToSession() {
+  const action = selectionAction.value
+  if (!action.text) return
+  emit('addToSession', {
+    file: activePath.value,
+    content: action.text,
+    startLine: action.startLine,
+    endLine: action.endLine
+  })
+  hideSelectionAction()
 }
 
 function onEditorMouseMove(event) {
@@ -475,6 +546,9 @@ async function initializeEditor() {
     mouseDisposable = editor.value.onMouseDown(onEditorMouseDown)
     mouseMoveDisposable = editor.value.onMouseMove(onEditorMouseMove)
     mouseLeaveDisposable = editor.value.onMouseLeave(onEditorMouseLeave)
+    mouseUpDisposable = editor.value.onMouseUp(onEditorMouseUp)
+    selectionDisposable = editor.value.onDidChangeCursorSelection(onSelectionChange)
+    scrollDisposable = editor.value.onDidScrollChange(onEditorScroll)
     keyDisposable = editor.value.onKeyDown((event) => {
       if (event.keyCode !== monaco.value.KeyCode.Escape || !peekState) return
       event.preventDefault()
@@ -519,6 +593,9 @@ onBeforeUnmount(() => {
   mouseDisposable?.dispose()
   mouseMoveDisposable?.dispose()
   mouseLeaveDisposable?.dispose()
+  mouseUpDisposable?.dispose()
+  selectionDisposable?.dispose()
+  scrollDisposable?.dispose()
   keyDisposable?.dispose()
   editor.value?.setModel(null)
   closeAll()
@@ -733,6 +810,27 @@ defineExpose({closeAll, closeFile, renameFile, save})
   gap: 8px;
   color: var(--fg-muted);
   font-size: var(--text-sm);
+}
+
+/* 选中文本后的“添加到对话”浮动按钮（样式与 DiffViewer 的 diff-selection-action 一致） */
+.fe-selection-action {
+  position: fixed;
+  z-index: 1000;
+  min-height: 28px;
+  padding: 4px 10px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: var(--bg);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.16);
+  color: var(--fg-2);
+  cursor: pointer;
+  font: 600 12px var(--sans);
+}
+
+.fe-selection-action:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+  background: var(--bg-2);
 }
 
 .fe-overlay {

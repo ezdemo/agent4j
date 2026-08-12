@@ -2381,12 +2381,12 @@ const startWelcomePrompt = async (prompt) => {
   await sendMessage()
 }
 
-const appendFileSelection = async ({ file }) => {
+const appendFileSelection = async ({ file, content, startLine, endLine }) => {
   const path = String(file || '').trim()
   if (!path) return false
   const useSessionInput = Boolean(props.sessionName && messages.value.length > 0)
   const targetInput = useSessionInput ? chatInput.value : welcomeInput.value
-  if (!targetInput?.addFileContext?.({ file: path })) return false
+  if (!targetInput?.addFileContext?.({ file: path, content, startLine, endLine })) return false
   await nextTick()
   targetInput.focus?.()
   return true

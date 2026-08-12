@@ -90,6 +90,7 @@
           :theme="theme"
           @saved="onFileSaved"
           @dirty-change="onFileDirtyChange"
+          @add-to-session="addFileToSession"
         />
       </div>
     </div>
@@ -336,6 +337,8 @@ async function loadSessions() {
 }
 
 async function addFileToSession(payload) {
+  // 从文件标签添加时先切回对话标签，让文件引用 chip 与输入框可见
+  activeTabId.value = CHAT_TAB_ID
   await chatRef.value?.appendFileSelection(payload)
 }
 
