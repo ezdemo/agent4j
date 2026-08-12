@@ -5,7 +5,6 @@ import {afterEach, beforeEach, describe, expect, it, vi} from 'vitest'
 import FileExplorer from './FileExplorer.vue'
 
 const listMock = vi.fn()
-const createMock = vi.fn()
 const renameMock = vi.fn()
 const removeMock = vi.fn()
 const readMock = vi.fn()
@@ -14,14 +13,12 @@ const watchMock = vi.fn()
 const unwatchMock = vi.fn()
 let fileChangeListener = null
 const gitStatusMock = vi.fn()
-const modalConfirmMock = vi.fn()
 
 vi.mock('../services/api', () => ({
   gitAPI: {status: (...args) => gitStatusMock(...args)}
 }))
 
 vi.mock('ant-design-vue', () => ({
-  Modal: {confirm: (...args) => modalConfirmMock(...args)},
   message: {success: vi.fn(), error: vi.fn(), info: vi.fn(), warning: vi.fn()}
 }))
 
@@ -50,7 +47,6 @@ const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms))
 
 beforeEach(() => {
   listMock.mockReset().mockResolvedValue({success: true, data: []})
-  createMock.mockReset().mockResolvedValue({success: true, data: {name: 'new.js', path: 'C:/workspace/new.js', directory: false}})
   renameMock.mockReset().mockResolvedValue({success: true, data: {name: 'renamed.md', path: 'C:/workspace/renamed.md', directory: false}})
   removeMock.mockReset().mockResolvedValue({success: true})
   readMock.mockReset().mockResolvedValue({success: true, data: 'hello'})
@@ -59,11 +55,9 @@ beforeEach(() => {
   unwatchMock.mockReset().mockResolvedValue({success: true})
   fileChangeListener = null
   gitStatusMock.mockReset().mockResolvedValue({success: true, data: {initialized: false}})
-  modalConfirmMock.mockReset().mockImplementation(({onOk}) => onOk?.())
   window.electronAPI = {
     fileExplorer: {
       list: (...args) => listMock(...args),
-      create: (...args) => createMock(...args),
       rename: (...args) => renameMock(...args),
       remove: (...args) => removeMock(...args),
       read: (...args) => readMock(...args),
@@ -285,54 +279,7 @@ describe('FileExplorer 文件树', () => {
   })
 })
 
-describe('FileExplorer 新建/重命名/删除', () => {
-  it('顶部新建文件：输入名称回车后调用 create 并刷新目录', async () => {
-    const wrapper = mountExplorer()
-    await flushPromises()
-
-    await wrapper.find('button[aria-label="新建文件"]').trigger('click')
-    await flushPromises()
-    const input = wrapper.find('input.fen-edit-input')
-    expect(input.exists()).toBe(true)
-
-    await input.setValue('new.js')
-    await input.trigger('keydown.enter')
-    await flushPromises()
-
-    expect(createMock).toHaveBeenCalledWith('C:/workspace', 'new.js', 'file')
-    // 创建成功后重新拉取目录
-    expect(listMock).toHaveBeenLastCalledWith('C:/workspace')
-    wrapper.unmount()
-  })
-
-  it('右键目录新建文件夹：占位节点 + 回车创建目录', async () => {
-    const wrapper = mountTree()
-    await flushPromises()
-    listMock.mockResolvedValue({success: true, data: []})
-
-    // 展开 src 目录
-    await wrapper.findAll('.fen-row')[0].trigger('click')
-    await flushPromises()
-
-    // 右键 src 目录 → 新建文件夹
-    await wrapper.findAll('.fen-row')[0].trigger('contextmenu', {clientX: 100, clientY: 120})
-    const menu = document.body.querySelector('.fe-context-menu')
-    const buttons = menu.querySelectorAll('button')
-    const newFolderButton = [...buttons].find((b) => b.textContent.includes('新建文件夹'))
-    await newFolderButton.click()
-    await flushPromises()
-
-    const input = wrapper.find('input.fen-edit-input')
-    expect(input.exists()).toBe(true)
-    await input.setValue('docs')
-    await input.trigger('keydown.enter')
-    await flushPromises()
-
-    expect(createMock).toHaveBeenCalledWith('C:/workspace/src', 'docs', 'directory')
-    wrapper.unmount()
-    menu.remove()
-  })
-
+describe('FileExplorer 重命名/删除', () => {
   it('右键重命名：预填旧名，回车调用 rename', async () => {
     const wrapper = mountTree()
     await flushPromises()
@@ -356,7 +303,7 @@ describe('FileExplorer 新建/重命名/删除', () => {
     menu.remove()
   })
 
-  it('右键删除：确认后调用 remove 并从树中移除', async () => {
+  it('右键删除：确认对话框确认后调用 remove 并从树中移除', async () => {
     const wrapper = mountTree()
     await flushPromises()
 
@@ -367,6 +314,14 @@ describe('FileExplorer 新建/重命名/删除', () => {
     await deleteButton.click()
     await flushPromises()
 
+    // 统一 ActionConfirmDialog 弹出，点“删除”确认
+    const dialog = document.body.querySelector('.action-confirm-dialog')
+    expect(dialog).not.toBeNull()
+    expect(dialog.textContent).toContain('readme.md')
+    const confirmButton = [...dialog.querySelectorAll('button')].find((b) => b.textContent.includes('删除'))
+    await confirmButton.click()
+    await flushPromises()
+
     expect(removeMock).toHaveBeenCalledWith('C:/workspace/readme.md')
     expect(wrapper.findAll('.fen-row').length).toBe(1)
     expect(wrapper.text()).not.toContain('readme.md')
@@ -374,20 +329,26 @@ describe('FileExplorer 新建/重命名/删除', () => {
     menu.remove()
   })
 
-  it('空名称回车不提交（提示并保留输入框）', async () => {
-    const wrapper = mountExplorer()
+  it('右键删除：点“取消”不调用删除接口', async () => {
+    const wrapper = mountTree()
     await flushPromises()
 
-    await wrapper.find('button[aria-label="新建文件"]').trigger('click')
-    await flushPromises()
-    const input = wrapper.find('input.fen-edit-input')
-    await input.setValue('   ')
-    await input.trigger('keydown.enter')
+    await wrapper.findAll('.fen-row')[1].trigger('contextmenu', {clientX: 100, clientY: 120})
+    const menu = document.body.querySelector('.fe-context-menu')
+    const deleteButton = [...menu.querySelectorAll('button')].find((b) => b.textContent.includes('删除'))
+    await deleteButton.click()
     await flushPromises()
 
-    expect(createMock).not.toHaveBeenCalled()
-    expect(wrapper.find('input.fen-edit-input').exists()).toBe(true)
+    const dialog = document.body.querySelector('.action-confirm-dialog')
+    expect(dialog).not.toBeNull()
+    await [...dialog.querySelectorAll('button')].find((b) => b.textContent.includes('取消')).click()
+    await flushPromises()
+
+    expect(removeMock).not.toHaveBeenCalled()
+    expect(wrapper.findAll('.fen-row').length).toBe(2)
+    expect(wrapper.text()).toContain('readme.md')
     wrapper.unmount()
+    menu.remove()
   })
 })
 

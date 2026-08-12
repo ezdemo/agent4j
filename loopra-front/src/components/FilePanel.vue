@@ -82,13 +82,24 @@
       @change-mode="changeDiffViewerMode"
       @add-to-session="$emit('addToSession', $event)"
     />
+
+    <!-- 删除确认 -->
+    <ActionConfirmDialog
+      :model-value="deleteConfirm.visible"
+      :title="deleteConfirm.node?.directory ? '删除目录？' : '删除文件？'"
+      :message="deleteConfirm.node ? `“${deleteConfirm.node.name}”将被永久删除，无法恢复。` : ''"
+      :actions="deleteConfirmActions"
+      @update:model-value="dismissDeleteConfirm"
+      @action="handleDeleteConfirmAction"
+    />
   </div>
 </template>
 
 <script setup>
 import {onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
-import {Modal, message} from 'ant-design-vue'
+import {message} from 'ant-design-vue'
 import {filesAPI, gitAPI} from '../services/api'
+import ActionConfirmDialog from './ActionConfirmDialog.vue'
 import FileTreeNode from './FileTreeNode.vue'
 import DiffViewer from './DiffViewer.vue'
 
@@ -108,6 +119,12 @@ const searching = ref(false)
 let searchTimer = null
 let searchRequestSeq = 0
 const diffViewer = ref({ open: false, file: '', diff: '', content: '', mode: 'content', loading: false, contentLoaded: false, diffLoaded: false })
+// 删除确认对话框（系统统一 ActionConfirmDialog）
+const deleteConfirm = reactive({ visible: false, node: null })
+const deleteConfirmActions = [
+  { key: 'cancel', label: '取消' },
+  { key: 'confirm', label: '删除', variant: 'danger' }
+]
 
 // 点击其他区域 / Esc 关闭右键菜单
 function onDocumentClick() {
@@ -313,27 +330,33 @@ function contextDelete() {
   const node = contextMenu.node
   closeContextMenu()
   if (!node) return
-  Modal.confirm({
-    title: `删除${node.directory ? '目录' : '文件'}？`,
-    content: `“${node.path}”将被永久删除，无法恢复。`,
-    okText: '删除',
-    okType: 'danger',
-    cancelText: '取消',
-    onOk: async () => {
-      try {
-        const response = await filesAPI.remove(props.workspaceHash, node.path)
-        if (!response?.success) throw new Error(response?.error || '删除失败')
-        removeNodeFromTree(rootNodes.value, node.path)
-        if (searchResults.value !== null) {
-          searchResults.value = searchResults.value.filter((result) => result.path !== node.path)
-        }
-        if (selectedPath.value === node.path) selectedPath.value = ''
-        message.success('已删除')
-      } catch (e) {
-        message.error('删除失败：' + (e.message || '未知错误'))
-      }
+  deleteConfirm.node = node
+  deleteConfirm.visible = true
+}
+
+function dismissDeleteConfirm() {
+  deleteConfirm.visible = false
+  deleteConfirm.node = null
+}
+
+async function handleDeleteConfirmAction(key) {
+  if (key !== 'confirm') return dismissDeleteConfirm()
+  const node = deleteConfirm.node
+  if (!node) return dismissDeleteConfirm()
+  try {
+    const response = await filesAPI.remove(props.workspaceHash, node.path)
+    if (!response?.success) throw new Error(response?.error || '删除失败')
+    removeNodeFromTree(rootNodes.value, node.path)
+    if (searchResults.value !== null) {
+      searchResults.value = searchResults.value.filter((result) => result.path !== node.path)
     }
-  })
+    if (selectedPath.value === node.path) selectedPath.value = ''
+    message.success('已删除')
+  } catch (e) {
+    message.error('删除失败：' + (e.message || '未知错误'))
+  } finally {
+    dismissDeleteConfirm()
+  }
 }
 
 function removeNodeFromTree(nodes, path) {

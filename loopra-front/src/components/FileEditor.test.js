@@ -8,6 +8,7 @@ import monacoMock from '../utils/monaco'
 const readMock = vi.fn()
 const writeMock = vi.fn()
 const fileContentMock = vi.hoisted(() => vi.fn())
+let fileChangeListener = null
 
 vi.mock('ant-design-vue', () => ({
   message: {success: vi.fn(), error: vi.fn()}
@@ -142,6 +143,7 @@ async function mountEditor(props = {}) {
 beforeEach(() => {
   readMock.mockReset().mockImplementation(async (path) => ({success: true, data: path.endsWith('demo.txt') ? 'original' : 'second'}))
   writeMock.mockReset().mockResolvedValue({success: true})
+  fileChangeListener = null
   fileContentMock.mockReset().mockResolvedValue({success: true, data: {content: 'original'}})
   monacoMock.__createdModels.length = 0
   monacoMock.__zones.clear()
@@ -150,7 +152,11 @@ beforeEach(() => {
   window.electronAPI = {
     fileExplorer: {
       read: (...args) => readMock(...args),
-      write: (...args) => writeMock(...args)
+      write: (...args) => writeMock(...args),
+      onDidChange: (callback) => {
+        fileChangeListener = callback
+        return () => { fileChangeListener = null }
+      }
     }
   }
 })
@@ -179,6 +185,52 @@ describe('FileEditor Monaco models', () => {
     expect(writeMock).toHaveBeenCalledWith(firstFile.path, 'changed')
     expect(wrapper.emitted('saved')?.at(-1)).toEqual([firstFile.path])
     expect(wrapper.emitted('dirtyChange')?.at(-1)).toEqual([firstFile.path, false])
+    wrapper.unmount()
+  })
+
+  it('reloads a clean open model after an external file change', async () => {
+    const wrapper = await mountEditor({workspacePath: 'C:/workspace'})
+    const model = monacoMock.__createdModels[0]
+    readMock.mockResolvedValueOnce({success: true, data: 'external change'})
+
+    fileChangeListener?.({rootPath: 'C:/workspace', eventType: 'change', path: 'demo.txt', paths: ['demo.txt']})
+    await flushPromises()
+
+    expect(readMock).toHaveBeenLastCalledWith(firstFile.path)
+    expect(model.getValue()).toBe('external change')
+    expect(wrapper.emitted('dirtyChange')).toBeUndefined()
+    wrapper.unmount()
+  })
+
+  it('does not overwrite unsaved edits after an external file change', async () => {
+    const wrapper = await mountEditor({workspacePath: 'C:/workspace'})
+    const model = monacoMock.__createdModels[0]
+    model.setValue('unsaved edit')
+    await wrapper.vm.$nextTick()
+    readMock.mockClear()
+
+    fileChangeListener?.({rootPath: 'C:/workspace', eventType: 'change', path: 'demo.txt'})
+    await flushPromises()
+
+    expect(readMock).not.toHaveBeenCalled()
+    expect(model.getValue()).toBe('unsaved edit')
+    wrapper.unmount()
+  })
+
+  it('reloads all matching open models from a batched change event', async () => {
+    const wrapper = await mountEditor({workspacePath: 'C:/workspace'})
+    const secondFile = {id: 'file-2', path: 'C:/workspace/second.js', name: 'second.js', dirty: false}
+    await wrapper.setProps({activeFile: secondFile})
+    await flushPromises()
+    await wrapper.setProps({activeFile: firstFile})
+    await flushPromises()
+    readMock.mockImplementation(async (path) => ({success: true, data: path.endsWith('demo.txt') ? 'demo updated' : 'second updated'}))
+
+    fileChangeListener?.({rootPath: 'C:/workspace', eventType: 'change', paths: ['demo.txt', 'second.js']})
+    await flushPromises()
+
+    expect(monacoMock.__createdModels[0].getValue()).toBe('demo updated')
+    expect(monacoMock.__createdModels[1].getValue()).toBe('second updated')
     wrapper.unmount()
   })
 

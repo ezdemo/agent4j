@@ -37,6 +37,7 @@ let mouseDisposable = null
 let mouseMoveDisposable = null
 let mouseLeaveDisposable = null
 let keyDisposable = null
+let stopFileChangeListener = null
 let peekState = null
 let disposed = false
 
@@ -44,6 +45,48 @@ const activePath = computed(() => props.activeFile?.path || '')
 const loading = computed(() => loadingPath.value === activePath.value)
 const explorerAPI = () => window.electronAPI?.fileExplorer
 const editorTheme = () => props.theme === 'dark' ? 'vs-dark' : 'vs'
+
+function normalizePath(path) {
+  return String(path || '').replace(/\\/g, '/').replace(/\/+$/, '').toLowerCase()
+}
+
+function resolveChangedPaths(event) {
+  const root = String(event?.rootPath || '').replace(/[\\/]+$/, '')
+  const paths = Array.isArray(event?.paths) ? event.paths : [event?.path]
+  return paths
+    .filter(Boolean)
+    .map((changedPath) => /^[a-z]:[\\/]/i.test(changedPath) || String(changedPath).startsWith('/')
+      ? String(changedPath)
+      : `${root}/${changedPath}`)
+}
+
+async function refreshExternalFile(path, entry) {
+  if (!entry || entry.dirty) return
+  const request = ++entry.externalRefreshRequest
+  try {
+    const response = await explorerAPI()?.read(path)
+    if (!response?.success || disposed || models.get(path) !== entry || entry.dirty || request !== entry.externalRefreshRequest) return
+    const content = response.data ?? ''
+    if (entry.model.getValue() === content) return
+    entry.changeDisposable?.dispose()
+    entry.model.setValue(content)
+    entry.savedVersion = entry.model.getAlternativeVersionId()
+    entry.dirty = false
+    entry.changeDisposable = listenForModelChanges(path, entry)
+    applyDirtyDiff(entry)
+  } catch {
+    // 文件可能正处于外部工具的原子替换过程，等待下一次文件事件重试。
+  }
+}
+
+function onFileSystemChange(event) {
+  if (normalizePath(event?.rootPath) !== normalizePath(props.workspacePath)) return
+  for (const changedPath of resolveChangedPaths(event)) {
+    const normalizedChangedPath = normalizePath(changedPath)
+    const match = [...models.entries()].find(([path]) => normalizePath(path) === normalizedChangedPath)
+    if (match) void refreshExternalFile(match[0], match[1])
+  }
+}
 
 function gitRelativePath(path) {
   const file = String(path || '').replace(/\\/g, '/')
@@ -257,6 +300,17 @@ function onGitChanged(event) {
   refreshAllBaselines()
 }
 
+function listenForModelChanges(path, entry) {
+  return entry.model.onDidChangeContent(() => {
+    if (peekState?.entry === entry) closeDirtyDiffPeek()
+    scheduleDirtyDiff(entry)
+    const nextDirty = entry.model.getAlternativeVersionId() !== entry.savedVersion
+    if (nextDirty === entry.dirty) return
+    entry.dirty = nextDirty
+    emit('dirtyChange', path, nextDirty)
+  })
+}
+
 function createEntry(path, content, dirty = false) {
   const uri = monaco.value.Uri.file(path)
   const language = /\.vue$/i.test(path) ? 'html' : undefined
@@ -274,16 +328,10 @@ function createEntry(path, content, dirty = false) {
     hoveredChangeIndex: -1,
     peekDecorationIds: [],
     diffTimer: null,
+    externalRefreshRequest: 0,
     changeDisposable: null
   }
-  entry.changeDisposable = model.onDidChangeContent(() => {
-    if (peekState?.entry === entry) closeDirtyDiffPeek()
-    scheduleDirtyDiff(entry)
-    const nextDirty = model.getAlternativeVersionId() !== entry.savedVersion
-    if (nextDirty === entry.dirty) return
-    entry.dirty = nextDirty
-    emit('dirtyChange', path, nextDirty)
-  })
+  entry.changeDisposable = listenForModelChanges(path, entry)
   models.set(path, entry)
   void refreshBaseline(path, entry)
   return entry
@@ -459,12 +507,14 @@ watch([() => props.workspaceHash, () => props.workspacePath], refreshAllBaseline
 
 onMounted(() => {
   window.addEventListener('loopra:git-changed', onGitChanged)
+  stopFileChangeListener = explorerAPI()?.onDidChange?.(onFileSystemChange) || null
   void initializeEditor()
 })
 
 onBeforeUnmount(() => {
   disposed = true
   window.removeEventListener('loopra:git-changed', onGitChanged)
+  stopFileChangeListener?.()
   closeDirtyDiffPeek()
   mouseDisposable?.dispose()
   mouseMoveDisposable?.dispose()

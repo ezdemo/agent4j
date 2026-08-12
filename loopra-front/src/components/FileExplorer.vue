@@ -4,12 +4,6 @@
     <div class="fe-head">
       <span class="fe-title">文件</span>
       <div class="fe-head-actions">
-        <button type="button" class="fe-head-action" title="新建文件" aria-label="新建文件" @click="startNewRoot('file')">
-          <i class="codicon codicon-new-file"></i>
-        </button>
-        <button type="button" class="fe-head-action" title="新建文件夹" aria-label="新建文件夹" @click="startNewRoot('folder')">
-          <i class="codicon codicon-new-folder"></i>
-        </button>
         <button type="button" class="fe-head-action" title="刷新" aria-label="刷新" @click="refresh">
           <i class="codicon codicon-refresh"></i>
         </button>
@@ -85,17 +79,7 @@
         :style="{ left: `${contextMenu.x}px`, top: `${contextMenu.y}px` }"
         @contextmenu.prevent
       >
-        <template v-if="contextMenu.node?.directory">
-          <button type="button" role="menuitem" @click="contextAction('new-file')">
-            <i class="codicon codicon-new-file"></i>
-            新建文件
-          </button>
-          <button type="button" role="menuitem" @click="contextAction('new-folder')">
-            <i class="codicon codicon-new-folder"></i>
-            新建文件夹
-          </button>
-        </template>
-        <template v-else-if="contextMenu.node && !contextMenu.node.directory">
+        <template v-if="contextMenu.node && !contextMenu.node.directory">
           <button type="button" role="menuitem" @click="contextAction('add-to-session')">
             <i class="codicon codicon-comment-add"></i>
             添加到对话
@@ -135,13 +119,24 @@
       @close="closeDiffViewer"
       @add-to-session="$emit('addToSession', $event)"
     />
+
+    <!-- 删除确认 -->
+    <ActionConfirmDialog
+      :model-value="deleteConfirm.visible"
+      :title="deleteConfirm.node?.directory ? '删除目录？' : '删除文件？'"
+      :message="deleteConfirm.node ? `“${deleteConfirm.node.name}”将被永久删除，无法恢复。` : ''"
+      :actions="deleteConfirmActions"
+      @update:model-value="dismissDeleteConfirm"
+      @action="handleDeleteConfirmAction"
+    />
   </div>
 </template>
 
 <script setup>
 import {onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
-import {Modal, message} from 'ant-design-vue'
+import {message} from 'ant-design-vue'
 import {gitAPI} from '../services/api'
+import ActionConfirmDialog from './ActionConfirmDialog.vue'
 import DiffViewer from './DiffViewer.vue'
 import FileExplorerNode from './FileExplorerNode.vue'
 
@@ -169,6 +164,12 @@ let treeReloadSeq = 0
 let searchRequestSeq = 0
 const contextMenu = reactive({ visible: false, x: 0, y: 0, node: null })
 const diffViewer = ref({ open: false, file: '', diff: '', content: '', mode: 'content', loading: false })
+// 删除确认对话框（系统统一 ActionConfirmDialog）
+const deleteConfirm = reactive({ visible: false, node: null })
+const deleteConfirmActions = [
+  { key: 'cancel', label: '取消' },
+  { key: 'confirm', label: '删除', variant: 'danger' }
+]
 
 let uidSeq = 0
 
@@ -304,54 +305,8 @@ function closeDiffViewer() {
   diffViewer.value = { open: false, file: '', diff: '', content: '', mode: 'content', loading: false }
 }
 
-// ── 新建 / 重命名（内联编辑） ──
-function startNewRoot(mode) {
-  if (!props.rootPath) {
-    message.warning('项目路径尚未加载完成，请稍后重试')
-    return
-  }
-  if (searchOpen.value) toggleSearch()
-  if (loading.value || rootNodes.value.length === 0 && !error.value) {
-    // 根目录尚未加载时先加载再插入占位
-    void loadRoot().then(() => insertPlaceholder(null, mode))
-    return
-  }
-  const virtualRoot = { path: props.rootPath, children: rootNodes.value, loaded: true }
-  insertPlaceholder(virtualRoot, mode)
-}
-
-function startNew(node, mode = 'file') {
-  node.expanded = true
-  if (!node.loaded) {
-    void loadDirectory(node).then(() => insertPlaceholder(node, mode))
-    return
-  }
-  insertPlaceholder(node, mode)
-}
-
-function insertPlaceholder(parent, mode) {
-  const placeholder = {
-    name: '',
-    path: '',
-    directory: mode === 'folder',
-    children: [],
-    loaded: true,
-    loading: false,
-    expanded: false,
-    editing: true,
-    editValue: '',
-    isPlaceholder: true,
-    parent,
-    uid: `p${++uidSeq}`
-  }
-  // parent 为 null 表示插入根目录
-  const children = parent ? parent.children : rootNodes.value
-  children.unshift(placeholder)
-  selectedPath.value = ''
-}
-
+// ── 重命名（内联编辑） ──
 function startRename(node) {
-  if (node.isPlaceholder) return
   node.editing = true
   node.editValue = node.name
   node.editCancelled = false
@@ -365,27 +320,6 @@ async function commitEdit(node) {
   const name = String(node.editValue ?? '').trim()
   if (!name || name === '.' || name === '..' || name.includes('/') || name.includes('\\')) {
     message.error('名称不能为空且不能包含路径分隔符')
-    return
-  }
-  if (node.isPlaceholder) {
-    // parent 为 null 表示在根目录新建
-    const parent = node.parent
-    const parentDir = parent ? parent.path : props.rootPath
-    if (!parentDir) return
-    try {
-      const response = await explorerAPI()?.create(parentDir, name, node.directory ? 'directory' : 'file')
-      if (!response?.success) throw new Error(response?.error || '创建失败')
-      if (parent) {
-        const index = parent.children.indexOf(node)
-        if (index >= 0) parent.children.splice(index, 1)
-        await loadDirectory(parent)
-      } else {
-        await loadRoot()
-      }
-      selectedPath.value = ''
-    } catch (e) {
-      message.error('创建失败：' + (e.message || '未知错误'))
-    }
     return
   }
   // 重命名
@@ -409,37 +343,36 @@ async function commitEdit(node) {
 
 function cancelEdit(node) {
   node.editCancelled = true
-  if (node.isPlaceholder) {
-    const parent = node.parent
-    const children = parent ? parent.children : rootNodes.value
-    const index = children.indexOf(node)
-    if (index >= 0) children.splice(index, 1)
-  } else {
-    node.editing = false
-  }
+  node.editing = false
 }
 
 // ── 删除 ──
 function removeNode(node) {
-  Modal.confirm({
-    title: `删除${node.directory ? '目录' : '文件'}？`,
-    content: `“${node.name}”将被永久删除，无法恢复。`,
-    okText: '删除',
-    okType: 'danger',
-    cancelText: '取消',
-    onOk: async () => {
-      try {
-        const response = await explorerAPI()?.remove(node.path)
-        if (!response?.success) throw new Error(response?.error || '删除失败')
-        removeFromTree(rootNodes.value, node)
-        if (selectedPath.value === node.path) selectedPath.value = ''
-        emit('fileDeleted', node.path)
-        message.success('已删除')
-      } catch (e) {
-        message.error('删除失败：' + (e.message || '未知错误'))
-      }
-    }
-  })
+  deleteConfirm.node = node
+  deleteConfirm.visible = true
+}
+
+function dismissDeleteConfirm() {
+  deleteConfirm.visible = false
+  deleteConfirm.node = null
+}
+
+async function handleDeleteConfirmAction(key) {
+  if (key !== 'confirm') return dismissDeleteConfirm()
+  const node = deleteConfirm.node
+  if (!node) return dismissDeleteConfirm()
+  try {
+    const response = await explorerAPI()?.remove(node.path)
+    if (!response?.success) throw new Error(response?.error || '删除失败')
+    removeFromTree(rootNodes.value, node)
+    if (selectedPath.value === node.path) selectedPath.value = ''
+    emit('fileDeleted', node.path)
+    message.success('已删除')
+  } catch (e) {
+    message.error('删除失败：' + (e.message || '未知错误'))
+  } finally {
+    dismissDeleteConfirm()
+  }
 }
 
 function removeFromTree(nodes, target) {
@@ -609,9 +542,7 @@ function contextAction(action) {
   const node = contextMenu.node
   closeContextMenu()
   if (!node) return
-  if (action === 'new-file') startNew(node, 'file')
-  else if (action === 'new-folder') startNew(node, 'folder')
-  else if (action === 'open') void openPreview(node)
+  if (action === 'open') void openPreview(node)
   else if (action === 'add-to-session' && !node.directory) emit('addToSession', { file: node.path })
   else if (action === 'reveal') revealInExplorer(node)
   else if (action === 'rename') startRename(node)

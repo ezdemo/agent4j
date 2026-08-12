@@ -2888,14 +2888,17 @@ ipcMain.handle('file-explorer-watch', (event, dirPath) => {
     const root = validateExplorerDir(dirPath)
     closeFileExplorerWatcher(webContentsId)
     const onDestroyed = () => closeFileExplorerWatcher(webContentsId)
-    const state = {watcher: null, timer: null, root, eventType: 'change', relativePath: '', sender: event.sender, onDestroyed}
+    const state = {watcher: null, timer: null, root, eventType: 'change', relativePath: '', relativePaths: new Set(), sender: event.sender, onDestroyed}
     const notify = () => {
       state.timer = null
+      const paths = [...state.relativePaths]
+      state.relativePaths.clear()
       if (!event.sender.isDestroyed()) {
         event.sender.send('file-explorer-changed', {
           rootPath: state.root,
           eventType: state.eventType,
-          path: state.relativePath
+          path: state.relativePath,
+          paths
         })
       }
     }
@@ -2903,6 +2906,7 @@ ipcMain.handle('file-explorer-watch', (event, dirPath) => {
       if (isIgnoredFileExplorerPath(filename)) return
       state.eventType = eventType
       state.relativePath = filename ? String(filename) : ''
+      state.relativePaths.add(state.relativePath)
       clearTimeout(state.timer)
       state.timer = setTimeout(notify, FILE_EXPLORER_WATCH_DELAY)
     }
@@ -2940,23 +2944,6 @@ ipcMain.handle('file-explorer-list', (event, dirPath) => {
       directory: entry.isDirectory()
     }))
     return { success: true, data: sortExplorerEntries(entries) }
-  } catch (e) {
-    return { success: false, error: e.message }
-  }
-})
-
-// 新建文件或目录
-ipcMain.handle('file-explorer-create', (event, payload = {}) => {
-  try {
-    const { dirPath, name, type } = payload
-    const parent = validateExplorerDir(dirPath)
-    const safeName = validateExplorerName(name)
-    const target = path.join(parent, safeName)
-    if (fs.existsSync(target)) throw new Error('同名文件或目录已存在')
-    const directory = type === 'directory'
-    if (directory) fs.mkdirSync(target)
-    else fs.writeFileSync(target, '', 'utf8')
-    return { success: true, data: { name: safeName, path: target, directory } }
   } catch (e) {
     return { success: false, error: e.message }
   }

@@ -188,12 +188,20 @@
       <SettingsView v-else-if="showSettings" class="desktop-settings" @open-sub-agents="openSubAgents" @open-dashboard="openDashboard" />
     </main>
   <ConfirmDialog />
+  <ActionConfirmDialog
+    :model-value="deleteConfirm.visible"
+    :title="deleteConfirm.title"
+    :message="deleteConfirm.message"
+    :actions="deleteConfirmActions"
+    @update:model-value="dismissDeleteConfirm"
+    @action="handleDeleteConfirmAction"
+  />
 </div>
 </template>
 
 <script setup>
 import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
-import {message, Modal} from 'ant-design-vue'
+import {message} from 'ant-design-vue'
 import {useAppStore} from './stores/app'
 import {configAPI, sessionsAPI, systemAPI} from './services/api'
 import {RELEASE_LATEST_URL} from './utils/constants'
@@ -206,6 +214,7 @@ import SubAgentsView from './views/SubAgents.vue'
 import ModelChannels from './ModelChannels.vue'
 import DashboardPanel from './components/Dashboard.vue'
 import ConfirmDialog from './components/ConfirmDialog.vue'
+import ActionConfirmDialog from './components/ActionConfirmDialog.vue'
 import {hasConfiguredModelChannel} from './utils/modelChannels'
 import {switchThemeWithReveal} from './utils/themeTransition'
 
@@ -928,73 +937,85 @@ async function closeWorkspaceTabs(workspaceHash) {
   await renderActiveTab()
 }
 
+// 删除/清空确认对话框（系统统一 ActionConfirmDialog）
+const deleteConfirm = ref({ visible: false, kind: '', title: '', message: '', payload: null })
+const deleteConfirmActions = computed(() => {
+  const okLabel = deleteConfirm.value.kind === 'deleteWorkspace' ? '删除项目'
+    : deleteConfirm.value.kind === 'clearWorkspace' ? '清空'
+    : '删除'
+  return [
+    { key: 'cancel', label: '取消' },
+    { key: 'confirm', label: okLabel, variant: 'danger' }
+  ]
+})
+const openDeleteConfirm = (kind, title, message, payload) => {
+  deleteConfirm.value = { visible: true, kind, title, message, payload }
+}
+const dismissDeleteConfirm = () => {
+  deleteConfirm.value.visible = false
+  deleteConfirm.value.payload = null
+}
+const handleDeleteConfirmAction = (action) => {
+  if (action !== 'confirm') return dismissDeleteConfirm()
+  const { kind, payload } = deleteConfirm.value
+  dismissDeleteConfirm()
+  if (kind === 'session') void performDeleteSession(payload)
+  else if (kind === 'clearWorkspace') void performClearWorkspace(payload)
+  else if (kind === 'workspace') void performDeleteWorkspace(payload)
+}
+
 function confirmDeleteSession(session) {
   const title = session?.title || session?.name || '此会话'
-  Modal.confirm({
-    title: '删除会话？',
-    content: `“${title}”将被永久删除，无法恢复。`,
-    okText: '删除',
-    okType: 'danger',
-    cancelText: '取消',
-    onOk: async () => {
-      try {
-        const response = await sessionsAPI.deleteSession(session.name, session.workspaceHash)
-        if (!response.success) throw new Error(response.message || '删除会话失败')
-        await closeTab(tabId(session.workspaceHash, session.name))
-        homeRefreshKey.value++
-        message.success('会话已删除')
-      } catch (error) {
-        message.error('删除会话失败：' + (error.message || '未知错误'))
-      }
-    }
-  })
+  openDeleteConfirm('session', '删除会话？', `“${title}”将被永久删除，无法恢复。`, session)
+}
+
+async function performDeleteSession(session) {
+  try {
+    const response = await sessionsAPI.deleteSession(session.name, session.workspaceHash)
+    if (!response.success) throw new Error(response.message || '删除会话失败')
+    await closeTab(tabId(session.workspaceHash, session.name))
+    homeRefreshKey.value++
+    message.success('会话已删除')
+  } catch (error) {
+    message.error('删除会话失败：' + (error.message || '未知错误'))
+  }
 }
 
 function confirmClearWorkspace(workspace) {
-  Modal.confirm({
-    title: '清空项目会话？',
-    content: `“${workspace.name}”中的全部会话将被永久删除，无法恢复。`,
-    okText: '清空',
-    okType: 'danger',
-    cancelText: '取消',
-    onOk: async () => {
-      try {
-        const response = await sessionsAPI.clearAll(workspace.hash)
-        if (!response.success) throw new Error(response.message || '清空会话失败')
-        await closeWorkspaceTabs(workspace.hash)
-        homeRefreshKey.value++
-        message.success('项目会话已清空')
-      } catch (error) {
-        message.error('清空会话失败：' + (error.message || '未知错误'))
-      }
-    }
-  })
+  openDeleteConfirm('clearWorkspace', '清空项目会话？', `“${workspace.name}”中的全部会话将被永久删除，无法恢复。`, workspace)
+}
+
+async function performClearWorkspace(workspace) {
+  try {
+    const response = await sessionsAPI.clearAll(workspace.hash)
+    if (!response.success) throw new Error(response.message || '清空会话失败')
+    await closeWorkspaceTabs(workspace.hash)
+    homeRefreshKey.value++
+    message.success('项目会话已清空')
+  } catch (error) {
+    message.error('清空会话失败：' + (error.message || '未知错误'))
+  }
 }
 
 function confirmDeleteWorkspace(workspace) {
-  Modal.confirm({
-    title: '删除项目？',
-    content: `“${workspace.name}”将从项目列表移除；项目文件不会被删除。`,
-    okText: '删除项目',
-    okType: 'danger',
-    cancelText: '取消',
-    onOk: async () => {
-      try {
-        const response = await configAPI.deleteWorkspace(workspace.hash)
-        if (!response.success) throw new Error(response.message || '删除项目失败')
-        await closeWorkspaceTabs(workspace.hash)
-        workspaces.value = workspaces.value.filter((item) => item.hash !== workspace.hash)
-        if (activeWorkspaceHash.value === workspace.hash) {
-          activeWorkspaceHash.value = ''
-          if (workspaces.value[0]) await selectWorkspace(workspaces.value[0].hash)
-        }
-        homeRefreshKey.value++
-        message.success('项目已删除')
-      } catch (error) {
-        message.error('删除项目失败：' + (error.message || '未知错误'))
-      }
+  openDeleteConfirm('deleteWorkspace', '删除项目？', `“${workspace.name}”将从项目列表移除；项目文件不会被删除。`, workspace)
+}
+
+async function performDeleteWorkspace(workspace) {
+  try {
+    const response = await configAPI.deleteWorkspace(workspace.hash)
+    if (!response.success) throw new Error(response.message || '删除项目失败')
+    await closeWorkspaceTabs(workspace.hash)
+    workspaces.value = workspaces.value.filter((item) => item.hash !== workspace.hash)
+    if (activeWorkspaceHash.value === workspace.hash) {
+      activeWorkspaceHash.value = ''
+      if (workspaces.value[0]) await selectWorkspace(workspaces.value[0].hash)
     }
-  })
+    homeRefreshKey.value++
+    message.success('项目已删除')
+  } catch (error) {
+    message.error('删除项目失败：' + (error.message || '未知错误'))
+  }
 }
 
 onMounted(() => {

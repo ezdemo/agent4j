@@ -177,7 +177,6 @@ contextBridge.exposeInMainWorld('electronAPI', {
   // 文件资源管理器（桌面端，主进程直接操作文件系统，不接后端）
   fileExplorer: {
     list: (dirPath) => ipcRenderer.invoke('file-explorer-list', dirPath),
-    create: (dirPath, name, type) => ipcRenderer.invoke('file-explorer-create', { dirPath, name, type }),
     rename: (filePath, newName) => ipcRenderer.invoke('file-explorer-rename', { filePath, newName }),
     remove: (filePath) => ipcRenderer.invoke('file-explorer-delete', filePath),
     read: (filePath) => ipcRenderer.invoke('file-explorer-read', filePath),
