@@ -92,12 +92,12 @@ afterEach(() => {
 
 describe('DesktopShell 更新按钮', () => {
   it('仅在检测到新版本时显示', async () => {
-    systemAPI.checkLatestVersion.mockResolvedValueOnce({success: true, data: {hasNewVersion: false, latestVersion: '26.8.91'}})
+    systemAPI.checkLatestVersion.mockResolvedValueOnce({success: true, data: {hasNewVersion: false, latestVersion: '26.8.121'}})
     const {wrapper} = await mountShell()
     expect(wrapper.find('.update-check-button').exists()).toBe(false)
     wrapper.unmount()
 
-    systemAPI.checkLatestVersion.mockResolvedValueOnce({success: true, data: {hasNewVersion: true, latestVersion: '26.8.92'}})
+    systemAPI.checkLatestVersion.mockResolvedValueOnce({success: true, data: {hasNewVersion: true, latestVersion: '26.8.122'}})
     const updated = await mountShell()
     expect(updated.wrapper.find('.update-check-button').exists()).toBe(true)
     updated.wrapper.unmount()

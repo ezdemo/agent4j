@@ -6,7 +6,7 @@
 
 set -euo pipefail
 
-VERSION="v26.8.91"
+VERSION="v26.8.121"
 PACKAGE_URL="https://gh-proxy.org/https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-web-dist.tar.gz"
 TEMP_DIR="/tmp/loopra-gui-install"
 
