@@ -461,6 +461,21 @@ public class AgentService {
         return SessionTerminalTalent.terminateBashSession(sessionId, workspacePath, "用户手动关闭");
     }
 
+    /**
+     * 读取指定 bash 后台会话的累积输出日志（前端“查看日志”按钮）。
+     *
+     * @param sessionId     命令会话 ID
+     * @param workspacePath 工作区绝对路径；为空时在所有工作区中查找
+     * @return 会话日志 DTO；未找到会话返回 null
+     */
+    public BashSessionLogDTO readBashSessionLog(String sessionId, String workspacePath) {
+        BashSessionInfo info = SessionTerminalTalent.findBashSession(sessionId, workspacePath);
+        if (info == null) return null;
+        return new BashSessionLogDTO(
+                info.getSessionId(), info.getWorkspace(), info.getCommand(),
+                info.getWorkdir(), info.getStatus(), info.getOutput());
+    }
+
     // ==================== 状态查询 ====================
 
     /**

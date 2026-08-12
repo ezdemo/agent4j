@@ -236,25 +236,23 @@ async function loadWorkspaces() {
   }
 }
 
-// 活动栏「文件」：在左侧切换文件面板（同时收起右侧栏）
+// 活动栏「文件」：在左侧切换文件面板（左右面板可并存，不干扰右侧栏）
 function toggleFilePanel() {
   if (leftPanelOpen.value && leftPanelView.value === 'files') {
     leftPanelOpen.value = false
     return
   }
-  rightPanelOpen.value = false
   leftPanelView.value = 'files'
   filePanelMounted.value = true
   leftPanelOpen.value = true
 }
 
-// 活动栏「版本管理」：在左侧切换 Git 面板（同时收起右侧栏）
+// 活动栏「版本管理」：在左侧切换 Git 面板（左右面板可并存，不干扰右侧栏）
 function toggleGitPanel() {
   if (leftPanelOpen.value && leftPanelView.value === 'git') {
     leftPanelOpen.value = false
     return
   }
-  rightPanelOpen.value = false
   leftPanelView.value = 'git'
   gitPanelMounted.value = true
   leftPanelOpen.value = true

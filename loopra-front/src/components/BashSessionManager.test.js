@@ -8,7 +8,8 @@ import {agentAPI} from '@/services/api'
 vi.mock('@/services/api', () => ({
   agentAPI: {
     getBashSessions: vi.fn(),
-    terminateBashSession: vi.fn()
+    terminateBashSession: vi.fn(),
+    getBashSessionLog: vi.fn()
   }
 }))
 
@@ -20,6 +21,11 @@ describe('BashSessionManager', () => {
     agentAPI.getBashSessions.mockResolvedValue({data: []})
     agentAPI.terminateBashSession.mockReset()
     agentAPI.terminateBashSession.mockResolvedValue({success: true})
+    agentAPI.getBashSessionLog.mockReset()
+    agentAPI.getBashSessionLog.mockResolvedValue({
+      success: true,
+      data: {sessionId: 'cmd_1', output: 'hello'}
+    })
     Object.defineProperty(navigator, 'clipboard', {
       value: {writeText: vi.fn().mockResolvedValue(undefined)},
       configurable: true
@@ -176,13 +182,14 @@ describe('BashSessionManager', () => {
     const wrapper = mount(BashSessionManager, {props: {embedded: true}})
     await flushPromises()
 
-    // 运行中会话有关闭按钮，已结束会话没有
-    expect(wrapper.findAll('.bash-actions .icon-btn')).toHaveLength(1)
+    // 运行中会话有日志+关闭按钮（2 个），已结束会话只有日志按钮（1 个）
+    expect(wrapper.findAll('.bash-actions .icon-btn')).toHaveLength(3)
+    expect(wrapper.findAll('.bash-actions .icon-btn.danger')).toHaveLength(1)
 
     const notifyListener = vi.fn()
     window.addEventListener('app-notify', notifyListener)
 
-    await wrapper.find('.bash-actions .icon-btn').trigger('click')
+    await wrapper.find('.bash-actions .icon-btn.danger').trigger('click')
     await flushPromises()
 
     expect(agentAPI.terminateBashSession).toHaveBeenCalledWith('cmd_1')
@@ -214,7 +221,7 @@ describe('BashSessionManager', () => {
     const notifyListener = vi.fn()
     window.addEventListener('app-notify', notifyListener)
 
-    await wrapper.find('.bash-actions .icon-btn').trigger('click')
+    await wrapper.find('.bash-actions .icon-btn.danger').trigger('click')
     await flushPromises()
 
     expect(notifyListener).not.toHaveBeenCalled()
@@ -270,5 +277,111 @@ describe('BashSessionManager', () => {
     expect(wrapper.find('.bash-workdir').classes()).not.toContain('copied')
 
     window.removeEventListener('copy-success', copySuccessListener)
+  })
+
+  it('点击日志按钮打开弹窗并展示累积输出', async () => {
+    agentAPI.getBashSessions.mockResolvedValue({
+      data: [
+        {
+          sessionId: 'cmd_1',
+          workspace: 'C:/work/proj-a',
+          command: 'npm run dev',
+          workdir: 'C:/work/proj-a',
+          startedAt: Date.now() - 10_000,
+          status: 'running'
+        }
+      ]
+    })
+    agentAPI.getBashSessionLog.mockResolvedValue({
+      success: true,
+      data: {
+        sessionId: 'cmd_1',
+        output: 'Compiled successfully\nwatch mode enabled'
+      }
+    })
+    const wrapper = mount(BashSessionManager, {props: {embedded: true}})
+    await flushPromises()
+
+    await wrapper.find('.bash-actions .icon-btn').trigger('click')
+    await flushPromises()
+
+    expect(agentAPI.getBashSessionLog).toHaveBeenCalledWith('cmd_1')
+    expect(wrapper.find('.bash-log-dialog').exists()).toBe(true)
+    expect(wrapper.find('.bash-log-dialog').text()).toContain('npm run dev')
+    expect(wrapper.find('.bash-log-dialog').text()).toContain('运行中')
+    expect(wrapper.find('.bash-log-body').text()).toContain('Compiled successfully')
+  })
+
+  it('日志弹窗刷新按钮重新拉取日志', async () => {
+    agentAPI.getBashSessions.mockResolvedValue({
+      data: [
+        {
+          sessionId: 'cmd_1',
+          workspace: 'C:/work/proj-a',
+          command: 'npm run dev',
+          workdir: 'C:/work/proj-a',
+          startedAt: Date.now() - 10_000,
+          status: 'running'
+        }
+      ]
+    })
+    const wrapper = mount(BashSessionManager, {props: {embedded: true}})
+    await flushPromises()
+
+    await wrapper.find('.bash-actions .icon-btn').trigger('click')
+    await flushPromises()
+    const callsAfterOpen = agentAPI.getBashSessionLog.mock.calls.length
+
+    await wrapper.find('.bash-log-dialog .icon-btn').trigger('click')
+    await flushPromises()
+    expect(agentAPI.getBashSessionLog.mock.calls.length).toBeGreaterThan(callsAfterOpen)
+  })
+
+  it('日志读取失败显示错误', async () => {
+    agentAPI.getBashSessions.mockResolvedValue({
+      data: [
+        {
+          sessionId: 'cmd_1',
+          workspace: 'C:/work/proj-a',
+          command: 'npm run dev',
+          workdir: 'C:/work/proj-a',
+          startedAt: Date.now() - 10_000,
+          status: 'running'
+        }
+      ]
+    })
+    agentAPI.getBashSessionLog.mockResolvedValue({success: false, message: '会话不存在或已结束'})
+    const wrapper = mount(BashSessionManager, {props: {embedded: true}})
+    await flushPromises()
+
+    await wrapper.find('.bash-actions .icon-btn').trigger('click')
+    await flushPromises()
+
+    expect(wrapper.find('.bash-log-dialog').text()).toContain('会话不存在或已结束')
+  })
+
+  it('关闭日志弹窗后恢复列表', async () => {
+    agentAPI.getBashSessions.mockResolvedValue({
+      data: [
+        {
+          sessionId: 'cmd_1',
+          workspace: 'C:/work/proj-a',
+          command: 'npm run dev',
+          workdir: 'C:/work/proj-a',
+          startedAt: Date.now() - 10_000,
+          status: 'running'
+        }
+      ]
+    })
+    const wrapper = mount(BashSessionManager, {props: {embedded: true}})
+    await flushPromises()
+
+    await wrapper.find('.bash-actions .icon-btn').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.bash-log-dialog').exists()).toBe(true)
+
+    await wrapper.find('.bash-log-dialog .bash-log-actions .icon-btn:last-child').trigger('click')
+    await flushPromises()
+    expect(wrapper.find('.bash-log-dialog').exists()).toBe(false)
   })
 })
