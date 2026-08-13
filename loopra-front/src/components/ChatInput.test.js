@@ -205,6 +205,20 @@ describe('ChatInput reasoning effort', () => {
   })
 })
 
+describe('ChatInput fast mode', () => {
+  it('emits fast mode toggle', async () => {
+    const wrapper = mountInput({fastMode: false})
+
+    await wrapper.find('.model-actions > .reasoning-effort-selector .effort-btn').trigger('click')
+    const fastModeToggle = wrapper.findAll('.chat-reasoning-end-toggle')[1]
+    expect(fastModeToggle.text()).toContain('快速模式')
+    await fastModeToggle.find('input').setValue(true)
+
+    expect(wrapper.emitted('switchFastMode')).toEqual([[true]])
+    wrapper.unmount()
+  })
+})
+
 describe('ChatInput default model actions', () => {
   it('renders queued messages behind a compact summary and preserves queue actions', async () => {
     const wrapper = mountInput({

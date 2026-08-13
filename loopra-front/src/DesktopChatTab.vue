@@ -26,7 +26,13 @@
         aria-label="版本管理"
         @click="toggleGitPanel"
       >
-        <span class="codicon codicon-source-control" aria-hidden="true"></span>
+        <svg class="activity-bar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <circle cx="7.5" cy="7" r="2.5"/>
+          <circle cx="7.5" cy="17" r="2.5"/>
+          <circle cx="17.5" cy="17" r="2.5"/>
+          <line x1="7.5" y1="9.5" x2="7.5" y2="14.5"/>
+          <path d="M10 7h4a3.5 3.5 0 0 1 3.5 3.5V14.5"/>
+        </svg>
       </button>
     </nav>
     <aside
@@ -570,15 +576,13 @@ watch(workspaceHash, (hash) => {
   background: color-mix(in srgb, var(--accent) 11%, transparent);
 }
 
-.activity-bar-item .codicon,
 .activity-bar-icon {
-  width: 22px;
-  height: 22px;
-  flex: 0 0 22px;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 20px;
   transition: transform var(--t);
 }
 
-.activity-bar-item:hover .codicon,
 .activity-bar-item:hover .activity-bar-icon {
   transform: scale(1.06);
 }

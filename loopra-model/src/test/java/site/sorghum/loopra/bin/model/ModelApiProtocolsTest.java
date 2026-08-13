@@ -15,6 +15,8 @@ class ModelApiProtocolsTest {
     void resolvesConfiguredProtocolAndFallsBackToChatCompletions() {
         assertInstanceOf(ResponsesApiProtocol.class, ModelApiProtocols.resolve("responses"));
         assertInstanceOf(ResponsesApiProtocol.class, ModelApiProtocols.resolve("RESPONSES"));
+        assertInstanceOf(AnthropicApiProtocol.class, ModelApiProtocols.resolve("anthropic"));
+        assertInstanceOf(AnthropicApiProtocol.class, ModelApiProtocols.resolve("ANTHROPIC"));
         assertInstanceOf(ChatCompletionsApiProtocol.class, ModelApiProtocols.resolve(null));
         assertInstanceOf(ChatCompletionsApiProtocol.class, ModelApiProtocols.resolve("future_protocol"));
     }

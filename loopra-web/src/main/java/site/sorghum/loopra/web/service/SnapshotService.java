@@ -5,12 +5,15 @@ import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import site.sorghum.loopra.web.common.ServiceException;
 
-import java.io.BufferedReader;
 import java.io.File;
-import java.io.InputStreamReader;
+import java.io.IOException;
+import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -47,6 +50,20 @@ public class SnapshotService {
 
     /** Git 命令超时秒数 */
     private static final int GIT_COMMAND_TIMEOUT_SEC = 15;
+    /** 单个 Git 输出流在内存中保留的最大字符数 */
+    private static final int MAX_GIT_OUTPUT_CHARS = 10 * 1024 * 1024;
+    /** 命令结束后等待输出流消费完成的最大秒数 */
+    private static final int GIT_OUTPUT_DRAIN_TIMEOUT_SEC = 1;
+    /**
+     * Git 子进程的标准输出与错误输出必须并发消费，避免管道缓冲区写满造成死锁。
+     * <p>此前先读 stdout 再读 stderr：git add -A 在修改文件多时向 stderr 输出大量
+     * CRLF 警告，写满管道后进程阻塞、stdout 永不 EOF，读流线程永久卡死。</p>
+     */
+    private static final ExecutorService SNAPSHOT_IO_EXECUTOR = Executors.newCachedThreadPool(runnable -> {
+        Thread thread = new Thread(runnable, "loopra-snapshot-git-io");
+        thread.setDaemon(true);
+        return thread;
+    });
     /** 快照引用前缀 */
     private static final String SNAPSHOT_REF_PREFIX = "refs/snapshots/msg/";
     /** 默认快照提交作者 */
@@ -417,6 +434,10 @@ public class SnapshotService {
 
     /**
      * 增强 Git 命令执行 —— 带超时保护和终端交互禁用。
+     * <p>
+     * 与 {@code GitService.runGit} 同一模式：两个输出流并发消费，先超时判断再取输出，
+     * 超时强杀进程并限长输出。超时判断若放在读流之后，流被阻塞时超时保护永远不生效。
+     * </p>
      */
     private ProcessResult runGit(File workDir, String... command) throws Exception {
         ProcessBuilder pb = new ProcessBuilder(command);
@@ -425,35 +446,54 @@ public class SnapshotService {
         pb.environment().put("GIT_TERMINAL_PROMPT", "0");
 
         Process proc = pb.start();
-        String stdout = readStream(proc.getInputStream());
-        String stderr = readStream(proc.getErrorStream());
-
-        boolean finished = proc.waitFor(GIT_COMMAND_TIMEOUT_SEC, TimeUnit.SECONDS);
-        if (!finished) {
-            proc.destroyForcibly();
-            ProcessResult result = new ProcessResult();
-            result.exitCode = -1;
-            result.stdout = "";
-            result.stderr = "Command timed out after " + GIT_COMMAND_TIMEOUT_SEC + " seconds";
-            return result;
+        Future<String> stdout = SNAPSHOT_IO_EXECUTOR.submit(() -> readStream(proc.getInputStream()));
+        Future<String> stderr = SNAPSHOT_IO_EXECUTOR.submit(() -> readStream(proc.getErrorStream()));
+        try {
+            boolean finished = proc.waitFor(GIT_COMMAND_TIMEOUT_SEC, TimeUnit.SECONDS);
+            if (!finished) {
+                proc.destroyForcibly();
+                proc.waitFor();
+                return processResult(-1, "", "Command timed out after " + GIT_COMMAND_TIMEOUT_SEC + " seconds");
+            }
+            return processResult(proc.exitValue(), awaitOutput(stdout), awaitOutput(stderr));
+        } finally {
+            if (proc.isAlive()) {
+                proc.destroyForcibly();
+            }
+            stdout.cancel(true);
+            stderr.cancel(true);
         }
+    }
 
+    private ProcessResult processResult(int exitCode, String stdout, String stderr) {
         ProcessResult result = new ProcessResult();
-        result.exitCode = proc.exitValue();
+        result.exitCode = exitCode;
         result.stdout = stdout;
         result.stderr = stderr;
         return result;
     }
 
-    private String readStream(java.io.InputStream is) throws Exception {
-        StringBuilder sb = new StringBuilder();
-        try (BufferedReader br = new BufferedReader(new InputStreamReader(is, StandardCharsets.UTF_8))) {
-            String line;
-            while ((line = br.readLine()) != null) {
-                sb.append(line).append("\n");
+    private String awaitOutput(Future<String> output) throws Exception {
+        return output.get(GIT_OUTPUT_DRAIN_TIMEOUT_SEC, TimeUnit.SECONDS);
+    }
+
+    private String readStream(InputStream is) throws IOException {
+        StringBuilder output = new StringBuilder();
+        try (is) {
+            byte[] buffer = new byte[8192];
+            int read;
+            while ((read = is.read(buffer)) != -1) {
+                String chunk = new String(buffer, 0, read, StandardCharsets.UTF_8);
+                int remaining = MAX_GIT_OUTPUT_CHARS - output.length();
+                if (remaining > 0) {
+                    output.append(chunk, 0, Math.min(remaining, chunk.length()));
+                }
             }
         }
-        return sb.toString();
+        if (output.length() >= MAX_GIT_OUTPUT_CHARS) {
+            output.append("\n... (Git output truncated)");
+        }
+        return output.toString();
     }
 
     // ==================== 内部数据结构 ====================

@@ -26,6 +26,11 @@ final class ChatCompletionsApiProtocol extends AbstractModelApiProtocol {
         ONode body = new ONode(ONode.ofJson("{}").options()).asObject();
         String model = ModelContextUtils.stripContextSizeSuffix(context.model());
         body.set(MODEL, model);
+        // 快速模式（service_tier=fast），仅 OpenAI 协议生效
+        String serviceTier = context.serviceTier();
+        if (serviceTier != null && !serviceTier.isBlank()) {
+            body.set("service_tier", serviceTier);
+        }
         String reasoningEffort = context.reasoningEffort();
         if (reasoningEffort != null && !reasoningEffort.isEmpty()
                 && !Objects.equals(reasoningEffort, "none")) {

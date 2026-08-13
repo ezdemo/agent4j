@@ -2,7 +2,9 @@ package site.sorghum.loopra.bin.model;
 
 import org.noear.snack4.ONode;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -21,6 +23,12 @@ final class ModelApiStreamState {
     boolean completed;
     String responseReasoning;
     ONode toolCalls;
+    /** Anthropic message_start 携带的输入侧用量，待 message_delta 与输出侧合并后上报。 */
+    ONode anthropicInputUsage;
+    /** Anthropic 流中已完成的 thinking/redacted_thinking 原始块 JSON，保序。 */
+    final List<String> anthropicThinkingBlocks = new ArrayList<>();
+    /** 正在累积的 thinking/redacted_thinking 块（流中同一时刻至多一个活跃块）。 */
+    ONode anthropicActiveThinkingBlock;
     final Map<String, int[]> lastUsage = new HashMap<>();
     boolean inThinkContent;
 }

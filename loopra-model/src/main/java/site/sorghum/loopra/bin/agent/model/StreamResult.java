@@ -2,6 +2,8 @@ package site.sorghum.loopra.bin.agent.model;
 
 import org.noear.snack4.ONode;
 
+import java.util.List;
+
 /**
  * 流式调用结果封装。
  * <p>
@@ -14,15 +16,17 @@ import org.noear.snack4.ONode;
  * @param error           是否发生流式错误
  * @param loopAborted     是否因推理断路器提前终止
  * @param errorMessage    流式错误原文（可能为 null）
+ * @param thinkingBlocks  原始 thinking/redacted_thinking 块 JSON 列表（Anthropic 协议，可能为 null）
  */
 public record StreamResult(String content, String reasoningContent, ONode toolCalls,
-                           boolean error, boolean loopAborted, String errorMessage) {
+                           boolean error, boolean loopAborted, String errorMessage,
+                           List<String> thinkingBlocks) {
 
     /**
      * 无推理断路器终止和错误详情的快捷构造。
      */
     public StreamResult(String content, String reasoningContent, ONode toolCalls, boolean error) {
-        this(content, reasoningContent, toolCalls, error, false, null);
+        this(content, reasoningContent, toolCalls, error, false, null, null);
     }
 
     /**
@@ -30,7 +34,7 @@ public record StreamResult(String content, String reasoningContent, ONode toolCa
      */
     public StreamResult(String content, String reasoningContent, ONode toolCalls,
                         boolean error, String errorMessage) {
-        this(content, reasoningContent, toolCalls, error, false, errorMessage);
+        this(content, reasoningContent, toolCalls, error, false, errorMessage, null);
     }
 
     /**
@@ -38,6 +42,6 @@ public record StreamResult(String content, String reasoningContent, ONode toolCa
      */
     public StreamResult(String content, String reasoningContent, ONode toolCalls,
                         boolean error, boolean loopAborted) {
-        this(content, reasoningContent, toolCalls, error, loopAborted, null);
+        this(content, reasoningContent, toolCalls, error, loopAborted, null, null);
     }
 }

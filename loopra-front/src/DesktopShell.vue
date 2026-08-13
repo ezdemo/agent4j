@@ -1078,7 +1078,7 @@ onBeforeUnmount(() => {
 <style scoped>
 .desktop-shell { width: 100vw; height: 100vh; display: flex; flex-direction: column; overflow: hidden; background: var(--bg, #fff); color: var(--fg, #202124); }
 .desktop-titlebar { position: relative; height: 44px; min-height: 44px; display: flex; align-items: center; background: var(--bg, #fff); -webkit-app-region: drag; user-select: none; }
-.desktop-titlebar::after { position: absolute; right: 0; bottom: 0; left: 50px; height: 1px; background: var(--border, #e8e8e8); content: ''; pointer-events: none; }
+.desktop-titlebar::after { position: absolute; right: 0; bottom: 0; left: 0; height: 1px; background: var(--border, #e8e8e8); content: ''; pointer-events: none; }
 .desktop-left-controls { display: flex; align-items: center; gap: 4px; padding: 0 8px 0 32px; flex: 0 0 auto; }
 .icon-button, .desktop-tab, .desktop-tab-add, .window-button { -webkit-app-region: no-drag; border: 0; background: transparent; color: var(--fg-2, #5f6368); }
 .icon-button { width: 28px; height: 28px; padding: 5px; border-radius: 5px; }

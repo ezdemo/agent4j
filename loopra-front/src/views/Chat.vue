@@ -75,11 +75,11 @@
             </div>
             <ChatInput ref="welcomeInput" welcome-mode v-model:input-text="welcomeText" :usage="usage" :current-model="currentModel" :default-model="defaultModel" :default-model-channel-id="defaultModelChannelId" :setting-default-model="settingDefaultModel" :available-models="availableModels"
                        :initially-empty="props.initiallyEmpty"
-                       :current-reasoning-effort="currentReasoningEffort" :terminate-on-no-tool-call="terminateOnNoToolCall" :current-permission="currentPermission"
+                       :current-reasoning-effort="currentReasoningEffort" :terminate-on-no-tool-call="terminateOnNoToolCall" :fast-mode="currentFastMode" :current-permission="currentPermission"
                        :workspace-hash="welcomeWorkspaceHash" :session-name="props.sessionName" :plan-mode="planMode"
                        :session-running="sessionTaskRunning" :session-busy="sessionBusy" :session-status-stopping="sessionStatusStopping"
                        :current-skill="currentSkill" @send="sendWelcomeMessage" @toggle-plan="togglePlan" @switch-model="handleSwitchModel" @set-default-model="handleSetDefaultModel"
-                       @switch-reasoning-effort="handleSwitchReasoningEffort" @switch-terminate-on-no-tool-call="handleSwitchTerminateOnNoToolCall"
+                       @switch-reasoning-effort="handleSwitchReasoningEffort" @switch-terminate-on-no-tool-call="handleSwitchTerminateOnNoToolCall" @switch-fast-mode="handleSwitchFastMode"
                        @switch-permission="handleSwitchPermission" @switch-skill="handleSwitchSkill" @picker-open="handleWelcomePickerOpen" @refresh-models="loadUsage" @manage-models="$emit('manageModels')" />
           </div>
         </section>
@@ -223,6 +223,7 @@
         :availableModels="availableModels"
         :currentReasoningEffort="currentReasoningEffort"
         :terminateOnNoToolCall="terminateOnNoToolCall"
+        :fast-mode="currentFastMode"
         :workspaceHash="props.workspaceHash"
         :sessionName="props.sessionName"
         :initially-empty="props.initiallyEmpty"
@@ -249,6 +250,7 @@
         @set-default-model="handleSetDefaultModel"
         @switchReasoningEffort="handleSwitchReasoningEffort"
         @switchTerminateOnNoToolCall="handleSwitchTerminateOnNoToolCall"
+        @switchFastMode="handleSwitchFastMode"
         @refreshModels="loadUsage"
         @continue="continueChat"
         @switchSkill="handleSwitchSkill"
@@ -383,6 +385,7 @@ const handleSetDefaultModel = async (modelName, channelId) => {
 // ============= 推理强度切换 =============
 const currentReasoningEffort = ref('max')
 const terminateOnNoToolCall = ref(true)
+const currentFastMode = ref(false)
 
 const handleSwitchReasoningEffort = async (value) => {
   const reasoningEffort = String(value || '').trim()
@@ -410,6 +413,23 @@ const handleSwitchTerminateOnNoToolCall = async (value) => {
     }
   } catch (e) {
     console.error('更新无工具调用结束策略失败:', e)
+  }
+}
+
+const handleSwitchFastMode = async (value) => {
+  const fastMode = !!value
+  if (fastMode === currentFastMode.value) return
+  sessionFastModes.value = {
+    ...sessionFastModes.value,
+    [conversationKey()]: fastMode
+  }
+  currentFastMode.value = fastMode
+  try {
+    // 输入框的选择既作为当前会话覆盖，也更新全局默认值，保证刷新和新会话仍能恢复。
+    await configAPI.updateConfig({fastMode})
+  } catch (e) {
+    // 请求失败时会话级 localStorage 缓存仍可继续使用。
+    console.error('持久化快速模式失败:', e)
   }
 }
 
@@ -665,6 +685,7 @@ const streaming = computed(() => store.getSessionStreaming(props.sessionName))
 const queuedMessagesBySession = ref({})
 const SESSION_MODEL_STORAGE_KEY = 'loopra.session-model-selections'
 const SESSION_REASONING_EFFORT_STORAGE_KEY = 'loopra.session-reasoning-efforts'
+const SESSION_FAST_MODE_STORAGE_KEY = 'loopra.session-fast-modes'
 const loadSessionModelSelections = () => {
   try {
     const stored = JSON.parse(localStorage.getItem(SESSION_MODEL_STORAGE_KEY) || '{}')
@@ -681,8 +702,17 @@ const loadSessionReasoningEfforts = () => {
     return {}
   }
 }
+const loadSessionFastModes = () => {
+  try {
+    const stored = JSON.parse(localStorage.getItem(SESSION_FAST_MODE_STORAGE_KEY) || '{}')
+    return stored && typeof stored === 'object' ? stored : {}
+  } catch {
+    return {}
+  }
+}
 const sessionModelSelections = ref(loadSessionModelSelections())
 const sessionReasoningEfforts = ref(loadSessionReasoningEfforts())
+const sessionFastModes = ref(loadSessionFastModes())
 const conversationKey = (workspaceHash = props.workspaceHash, sessionName = props.sessionName) => `${workspaceHash || ''}::${sessionName || ''}`
 const queuedMessages = computed(() => queuedMessagesBySession.value[conversationKey()] || [])
 const guidingQueuedMessage = ref(false)
@@ -693,6 +723,10 @@ watch(sessionModelSelections, selections => {
 
 watch(sessionReasoningEfforts, efforts => {
   localStorage.setItem(SESSION_REASONING_EFFORT_STORAGE_KEY, JSON.stringify(efforts))
+}, {deep: true})
+
+watch(sessionFastModes, modes => {
+  localStorage.setItem(SESSION_FAST_MODE_STORAGE_KEY, JSON.stringify(modes))
 }, {deep: true})
 
 const getSessionModelSelection = (sessionName = props.sessionName, workspaceHash = props.workspaceHash) => {
@@ -706,13 +740,17 @@ const getSessionReasoningEffort = (sessionName = props.sessionName, workspaceHas
   sessionReasoningEfforts.value[conversationKey(workspaceHash, sessionName)] || currentReasoningEffort.value
 )
 
-const addQueuedMessage = (sessionName, workspaceHash, images, text, modelSelection, reasoningEffort) => {
+const getSessionFastMode = (sessionName = props.sessionName, workspaceHash = props.workspaceHash) => (
+  sessionFastModes.value[conversationKey(workspaceHash, sessionName)] ?? currentFastMode.value
+)
+
+const addQueuedMessage = (sessionName, workspaceHash, images, text, modelSelection, reasoningEffort, fastMode) => {
   if (!sessionName) return
   const key = conversationKey(workspaceHash, sessionName)
   const queue = queuedMessagesBySession.value[key] || []
   queuedMessagesBySession.value = {
     ...queuedMessagesBySession.value,
-    [key]: [...queue, {id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, workspaceHash, images, text, modelSelection, reasoningEffort}]
+    [key]: [...queue, {id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, workspaceHash, images, text, modelSelection, reasoningEffort, fastMode}]
   }
 }
 
@@ -739,7 +777,7 @@ const sendNextQueuedMessage = async (sessionName, workspaceHash) => {
   const next = queue[0]
   if (!next) return
   takeQueuedMessage(sessionName, workspaceHash, next.id)
-  await sendMessage(next.images, next.text, next.modelSelection, sessionName, workspaceHash, next.reasoningEffort)
+  await sendMessage(next.images, next.text, next.modelSelection, sessionName, workspaceHash, next.reasoningEffort, null, next.fastMode)
 }
 
 const guideQueuedMessage = async (id) => {
@@ -752,7 +790,7 @@ const guideQueuedMessage = async (id) => {
     if (streaming.value || sessionTaskRunning.value) {
       await abortChat()
     }
-    await sendMessage(queued.images, queued.text, queued.modelSelection, props.sessionName, queued.workspaceHash, queued.reasoningEffort)
+    await sendMessage(queued.images, queued.text, queued.modelSelection, props.sessionName, queued.workspaceHash, queued.reasoningEffort, null, queued.fastMode)
   } finally {
     guidingQueuedMessage.value = false
   }
@@ -1063,6 +1101,8 @@ const loadUsage = async (override) => {
       currentReasoningEffort.value = sessionReasoningEfforts.value[conversationKey()]
         || configRes.value.data?.reasoningEffort || 'max'
       terminateOnNoToolCall.value = configRes.value.data?.terminateOnNoToolCall !== false
+      currentFastMode.value = sessionFastModes.value[conversationKey()]
+        ?? configRes.value.data?.fastMode ?? false
       currentPermission.value = configRes.value.data?.hitl || 'free'
     }
   } catch {
@@ -1532,16 +1572,18 @@ const moveFileChangesToEnd = (blocks) => {
 const sendMessage = async (images = [], overrideText = null, modelSelection = null,
                             targetSessionName = props.sessionName, targetWorkspaceHash = props.workspaceHash,
                             reasoningEffort = getSessionReasoningEffort(targetSessionName, targetWorkspaceHash),
-                            requestAction = null) => {
+                            requestAction = null,
+                            fastMode = getSessionFastMode(targetSessionName, targetWorkspaceHash)) => {
   const text = requestAction ? '' : (overrideText ?? inputText.value.trim())
   if (!text && images.length === 0 && !requestAction) return
   const sessionName = targetSessionName
   if (!sessionName) return
   const selectedModel = modelSelection || getSessionModelSelection(sessionName, targetWorkspaceHash)
   const selectedReasoningEffort = reasoningEffort || getSessionReasoningEffort(sessionName, targetWorkspaceHash)
+  const selectedFastMode = fastMode ?? getSessionFastMode(sessionName, targetWorkspaceHash)
   // 流式输出中发送 → 排队（原行为）；会话后台任务运行/状态检查中发送 → 也排队，避免静默丢弃
   if (store.getSessionStreaming(sessionName) || (!requestAction && sessionName === props.sessionName && sessionBusy.value)) {
-    addQueuedMessage(sessionName, targetWorkspaceHash, images, text, selectedModel, selectedReasoningEffort)
+    addQueuedMessage(sessionName, targetWorkspaceHash, images, text, selectedModel, selectedReasoningEffort, selectedFastMode)
     inputText.value = ''
     return
   }
@@ -1913,6 +1955,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
           model: selectedModel.model,
           modelChannelId: selectedModel.channelId,
           reasoningEffort: selectedReasoningEffort,
+          fastMode: selectedFastMode,
           action: requestAction
         }
     )

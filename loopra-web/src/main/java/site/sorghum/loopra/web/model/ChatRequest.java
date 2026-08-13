@@ -53,6 +53,12 @@ public class ChatRequest {
     private String reasoningEffort;
 
     /**
+     * 本次对话是否启用快速模式（OpenAI service_tier=fast）。
+     * 未指定时保留当前会话的设置。
+     */
+    private Boolean fastMode;
+
+    /**
      * 结构化 Web 操作（当前支持 execute_plan：批准并执行待审查计划）。
      */
     private String action;
