@@ -2495,8 +2495,11 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 }
 
 .plan-review-band {
+  width: 100%;
+  max-width: 1040px;
   max-height: min(42vh, 360px);
-  margin-bottom: 6px;
+  margin: 0 auto 6px;
+  box-sizing: border-box;
   overflow: hidden;
   background: var(--glass-bg-2);
   border: 1px solid var(--accent);
