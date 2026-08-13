@@ -107,25 +107,38 @@ abstract class AbstractModelApiProtocol implements ModelApiProtocol {
     }
 
     private int[] parseUsage(ONode usage) {
-        int prompt = usage.get("prompt_tokens").isNull()
-                ? usage.get("input_tokens").getInt() : usage.get("prompt_tokens").getInt();
-        int completion = usage.get("completion_tokens").isNull()
-                ? usage.get("output_tokens").getInt() : usage.get("completion_tokens").getInt();
-        int total = usage.get("total_tokens").isNull()
-                ? prompt + completion : usage.get("total_tokens").getInt();
-        int cacheHit = usage.get("prompt_cache_hit_tokens").isNull()
-                ? 0 : usage.get("prompt_cache_hit_tokens").getInt();
-        int cacheMiss = usage.get("prompt_cache_miss_tokens").isNull()
-                ? 0 : usage.get("prompt_cache_miss_tokens").getInt();
+        int prompt = usageInt(usage, "prompt_tokens");
+        if (prompt < 0) prompt = usageInt(usage, "input_tokens");
+        if (prompt < 0) prompt = 0;
+        int completion = usageInt(usage, "completion_tokens");
+        if (completion < 0) completion = usageInt(usage, "output_tokens");
+        if (completion < 0) completion = 0;
+        int total = usageInt(usage, "total_tokens");
+        if (total < 0) total = prompt + completion;
+        int cacheHit = Math.max(0, usageInt(usage, "prompt_cache_hit_tokens"));
+        int cacheMiss = Math.max(0, usageInt(usage, "prompt_cache_miss_tokens"));
         if (cacheHit == 0 && cacheMiss == 0) {
-            ONode details = usage.get("prompt_tokens_details");
-            if (details == null || details.isNull()) details = usage.get("input_tokens_details");
-            if (details != null && !details.isNull()) {
-                cacheHit = details.get("cached_tokens").isNull() ? 0 : details.get("cached_tokens").getInt();
-                cacheMiss = Math.max(0, prompt - cacheHit);
+            // Anthropic: 缓存读写量位于顶层 cache_read/cache_creation 字段
+            int anthropicHit = Math.max(0, usageInt(usage, "cache_read_input_tokens"));
+            int anthropicCreated = Math.max(0, usageInt(usage, "cache_creation_input_tokens"));
+            if (anthropicHit > 0 || anthropicCreated > 0) {
+                cacheHit = anthropicHit;
+                cacheMiss = anthropicCreated > 0 ? anthropicCreated : Math.max(0, prompt - cacheHit);
+            } else {
+                ONode details = usage.get("prompt_tokens_details");
+                if (details == null || details.isNull()) details = usage.get("input_tokens_details");
+                if (details != null && !details.isNull()) {
+                    cacheHit = details.get("cached_tokens").isNull() ? 0 : details.get("cached_tokens").getInt();
+                    cacheMiss = Math.max(0, prompt - cacheHit);
+                }
             }
         }
         return new int[]{prompt, completion, cacheHit, cacheMiss, total};
+    }
+
+    private static int usageInt(ONode usage, String key) {
+        ONode node = usage.get(key);
+        return node == null || node.isNull() ? -1 : node.getInt();
     }
 
     private void emitToolCalls(ONode accumulated, String responseReasoning,

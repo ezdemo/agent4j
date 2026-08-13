@@ -65,6 +65,7 @@
             <select v-model="channel.apiProtocol">
               <option value="chat_completions">Chat Completions</option>
               <option value="responses">Responses</option>
+              <option value="anthropic">Anthropic Messages</option>
             </select>
           </label>
           <label>
@@ -266,7 +267,7 @@ function normalizeChannel(channel, index) {
     expanded: false,
     name: channel.name || `渠道 ${index + 1}`,
     baseUrl: channel.baseUrl || '',
-    apiProtocol: channel.apiProtocol === 'responses' ? 'responses' : 'chat_completions',
+    apiProtocol: ['responses', 'anthropic'].includes(channel.apiProtocol) ? channel.apiProtocol : 'chat_completions',
     apiKey: '',
     secretConfigured: Boolean(channel.apiKey),
     models

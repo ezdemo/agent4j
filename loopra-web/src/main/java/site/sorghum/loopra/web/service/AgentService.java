@@ -553,6 +553,9 @@ public class AgentService {
         String apiKey = channel.apiKey();
         String reasoningEffort = cfg.reasoningEffort();
         String hitl = cfg.hitl();
+        HttpModelClient modelClient = new HttpModelClient(apiUrl, apiKey, target.model(), reasoningEffort,
+                target.channelId(), channel.apiProtocol());
+        modelClient.setFastMode(cfg.fastMode());
         LoopraAgent.Builder builder = LoopraAgent.builder()
                 .config(cfg)
                 .apiUrl(apiUrl)
@@ -564,8 +567,7 @@ public class AgentService {
                 .loopraConfig(cfg)
                 // 复用该工作区的共享工具系统，跳过 Agent 内部的重复初始化
                 .toolSystem(getOrCreateSharedToolSystem(Paths.get(workspacePath)))
-                .modelClient(new HttpModelClient(apiUrl, apiKey, target.model(), reasoningEffort,
-                        target.channelId(), channel.apiProtocol()));
+                .modelClient(modelClient);
         if (systemPrompt != null && !systemPrompt.isBlank()) {
             builder.systemPrompt(systemPrompt);
         }
@@ -899,7 +901,7 @@ public class AgentService {
      */
     public void chatStream(UserMessage userMessage, String workspacePath, String sessionName, SseEmitter emitter,
                            String requestedModel, String requestedChannelId, String requestedReasoningEffort,
-                           String action) {
+                           Boolean requestedFastMode, String action) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         ReentrantLock lock = getSessionLock(sessionKey);
         lock.lock();
@@ -914,6 +916,9 @@ public class AgentService {
             LoopraAgent agent = getOrCreateAgent(sessionKey, resolveModelTarget(requestedModel, requestedChannelId));
             if (requestedReasoningEffort != null && !requestedReasoningEffort.isBlank()) {
                 agent.setReasoningEffort(requestedReasoningEffort.trim());
+            }
+            if (requestedFastMode != null) {
+                agent.setFastMode(requestedFastMode);
             }
 
             // 设置 AgentOutput：将所有事件桥接到 SSE

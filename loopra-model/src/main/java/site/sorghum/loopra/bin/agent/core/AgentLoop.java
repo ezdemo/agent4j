@@ -290,6 +290,11 @@ public class AgentLoop implements AgentLoopController {
         client.setReasoningEffort(reasoningEffort);
     }
 
+    /** 运行时切换快速模式（热更新，OpenAI service_tier=fast，仅 OpenAI 协议生效） */
+    public void setFastMode(boolean fastMode) {
+        client.setFastMode(fastMode);
+    }
+
     @Override
     public boolean terminateOnNoToolCall() {
         return terminateOnNoToolCall;
@@ -897,7 +902,7 @@ public class AgentLoop implements AgentLoopController {
 
             // ---- 5. 无 tool calls → 根据配置结束或要求模型继续 ----
             if (!hasToolCalls) {
-                ctx.addAssistant(sr.content(), null, sr.reasoningContent());
+                ctx.addAssistant(sr.content(), null, sr.reasoningContent(), sr.thinkingBlocks(), List.of());
                 GoalGuard.GoalView openGoal;
                 try {
                     openGoal = (goalGuardEnabled && goalGuard != null) ? loadOpenGoal() : null;
@@ -980,7 +985,7 @@ public class AgentLoop implements AgentLoopController {
             }
 
             // ---- 7. 写入 assistant 消息 + 工具结果 ----
-            ctx.addAssistant(sr.content(), ter.tcList(), sr.reasoningContent(), ter.fileChanges());
+            ctx.addAssistant(sr.content(), ter.tcList(), sr.reasoningContent(), sr.thinkingBlocks(), ter.fileChanges());
             for (ChatMessage tr : ter.toolResults()) {
                 ctx.addToolResult(tr);
             }
@@ -1204,6 +1209,7 @@ public class AgentLoop implements AgentLoopController {
         final StringBuilder contentBuf = new StringBuilder();
         final StringBuilder reasoningBuf = new StringBuilder();
         final AtomicReference<ONode> streamedTcs = new AtomicReference<>();
+        final AtomicReference<List<String>> streamedThinkingBlocks = new AtomicReference<>();
         final CountDownLatch streamLatch = new CountDownLatch(1);
         final AtomicBoolean streamError = new AtomicBoolean(false);
         final AtomicBoolean loopAborted = new AtomicBoolean(false);
@@ -1263,6 +1269,11 @@ public class AgentLoop implements AgentLoopController {
             }
 
             @Override
+            public void onThinkingBlocks(List<String> blocks) {
+                streamedThinkingBlocks.set(blocks);
+            }
+
+            @Override
             public void onUsage(int promptTokens, int completionTokens, int totalTokens,
                                 int cacheHit, int cacheMiss) {
                 lastPromptTokens = promptTokens;
@@ -1304,11 +1315,11 @@ public class AgentLoop implements AgentLoopController {
             if (!finished) {
                 log.error("[stream] LLM 流式响应超时（{}s），主动终止", DEFAULT_STREAM_LATCH_TIMEOUT_SEC);
                 client.abortStream();
-                return new StreamResult(null, null, null, true);
+                return new StreamResult(null, null, null, true, false, null, null);
             }
         } catch (InterruptedException e) {
             Thread.currentThread().interrupt();
-            return new StreamResult(null, null, null, true);
+            return new StreamResult(null, null, null, true, false, null, null);
         }
 
         // 同步外部中断源（stream 期间父级可能已中断）
@@ -1317,19 +1328,22 @@ public class AgentLoop implements AgentLoopController {
         if (userAbortRequested) {
             String content = !contentBuf.isEmpty() ? contentBuf.toString() : null;
             String reasoningContent = !reasoningBuf.isEmpty() ? reasoningBuf.toString() : null;
-            return new StreamResult(content, reasoningContent, streamedTcs.get(), false);
+            return new StreamResult(content, reasoningContent, streamedTcs.get(), false, false, null,
+                    streamedThinkingBlocks.get());
         }
         if (streamError.get()) {
-            return new StreamResult(null, null, null, true, streamErrorMessage[0]);
+            return new StreamResult(null, null, null, true, false, streamErrorMessage[0], null);
         }
         if (loopAborted.get()) {
             String reasoning = loopSnapshot[0] != null ? loopSnapshot[0]
                     : (!reasoningBuf.isEmpty() ? reasoningBuf.toString() : null);
-            return new StreamResult(null, reasoning, streamedTcs.get(), false, true);
+            return new StreamResult(null, reasoning, streamedTcs.get(), false, true, null,
+                    streamedThinkingBlocks.get());
         }
         String content = !contentBuf.isEmpty() ? contentBuf.toString() : null;
         String reasoningContent = !reasoningBuf.isEmpty() ? reasoningBuf.toString() : null;
-        return new StreamResult(content, reasoningContent, streamedTcs.get(), false);
+        return new StreamResult(content, reasoningContent, streamedTcs.get(), false, false, null,
+                streamedThinkingBlocks.get());
     }
 
     // ==================== 步骤 4: Scavenger 回收 ====================
@@ -1789,7 +1803,7 @@ public class AgentLoop implements AgentLoopController {
         String abortMarker = "\n\n<<用户主动停止生成>>";
         if (sr.content() != null && !sr.content().isEmpty()) {
             String markedContent = sr.content() + abortMarker;
-            ctx.addAssistant(markedContent, null, sr.reasoningContent());
+            ctx.addAssistant(markedContent, null, sr.reasoningContent(), sr.thinkingBlocks(), List.of());
             return markedContent;
         }
         if (sr.reasoningContent() != null && !sr.reasoningContent().isEmpty()) {

@@ -59,6 +59,10 @@ public class HttpModelClient implements ModelClient {
      * reasoning_effort 取值: low / medium / high / max
      */
     private String reasoningEffort;
+    /**
+     * 快速模式（OpenAI service_tier=fast，仅 OpenAI 协议生效）
+     */
+    private boolean fastMode;
     private volatile String model;
     /** 显式请求会话亲和标识；子代理使用独立且固定的值，避免依赖线程局部上下文。 */
     private volatile String sessionAffinity;
@@ -318,6 +322,15 @@ public class HttpModelClient implements ModelClient {
     }
 
     /**
+     * 设置快速模式（运行时切换，OpenAI service_tier=fast）。
+     * 仅 OpenAI 协议（chat_completions / responses）发送该参数，其他协议忽略。
+     */
+    @Override
+    public void setFastMode(boolean fastMode) {
+        this.fastMode = fastMode;
+    }
+
+    /**
      * 中断当前流式请求（ReasonBreaker 触发时调用）
      */
     @Override
@@ -350,12 +363,14 @@ public class HttpModelClient implements ModelClient {
         HttpModelClient fork = new HttpModelClient(
                 apiUrl, apiKey, model, reasoningEffort, modelChannelId, apiProtocol.name());
         fork.setSessionAffinity(sessionAffinity);
+        fork.setFastMode(fastMode);
         return fork;
     }
 
     private ModelApiProtocol.RequestContext requestContext(List<ChatMessage> messages, ONode tools) {
         return new ModelApiProtocol.RequestContext(
-                model, reasoningEffort, messages, tools, UserIdProvider.getUserId(), resolveSessionAffinity(), apiUrl);
+                model, reasoningEffort, messages, tools, UserIdProvider.getUserId(), resolveSessionAffinity(), apiUrl,
+                fastMode ? "fast" : null);
     }
 
     /**
@@ -418,8 +433,8 @@ public class HttpModelClient implements ModelClient {
                     .url(apiUrl)
                     .post(RequestBody.create(jsonBody, MEDIA_TYPE_JSON))
                     .addHeader("Content-Type", "application/json")
-                    .addHeader("Authorization", "Bearer " + apiKey)
                     .addHeader("User-Agent", "opencode/1.14.21 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13");
+            apiProtocol.applyAuthHeaders(requestBuilder, apiKey);
             addSessionHeaders(requestBuilder, ModelContextUtils.stripContextSizeSuffix(model));
             Request request = requestBuilder.build();
 
@@ -485,8 +500,8 @@ public class HttpModelClient implements ModelClient {
                     .url(apiUrl)
                     .post(RequestBody.create(jsonBody, MEDIA_TYPE_JSON))
                     .addHeader("Content-Type", "application/json")
-                    .addHeader("Authorization", "Bearer " + apiKey)
                     .addHeader("User-Agent", "opencode/1.14.21 ai-sdk/provider-utils/4.0.23 runtime/bun/1.3.13");
+            apiProtocol.applyAuthHeaders(requestBuilder, apiKey);
             addSessionHeaders(requestBuilder, ModelContextUtils.stripContextSizeSuffix(model));
             Request request = requestBuilder.build();
 

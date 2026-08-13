@@ -71,6 +71,32 @@ class LoopraConfigTest {
     }
 
     @Test
+    void buildsAnthropicMessagesApiUrl() {
+        assertEquals("https://api.anthropic.com/v1/messages",
+                new LoopraConfig.ModelChannel("id", "name", "https://api.anthropic.com", "key", "anthropic", List.of()).apiUrl());
+        assertEquals("https://api.anthropic.com/v1/messages",
+                new LoopraConfig.ModelChannel("id", "name", "https://api.anthropic.com/v1", "key", "anthropic", List.of()).apiUrl());
+        assertEquals("https://api.anthropic.com/v1/messages",
+                new LoopraConfig.ModelChannel("id", "name", "https://api.anthropic.com/v1/", "key", "anthropic", List.of()).apiUrl());
+        assertEquals("https://api.anthropic.com/v1/messages",
+                new LoopraConfig.ModelChannel("id", "name", "https://api.anthropic.com/v1/messages", "key", "anthropic", List.of()).apiUrl());
+        assertEquals("https://api.anthropic.com/v1/messages",
+                new LoopraConfig.ModelChannel("id", "name", "https://api.anthropic.com/chat/completions", "key", "claude", List.of()).apiUrl());
+        assertEquals("https://api.anthropic.com/v1/messages?beta=true",
+                new LoopraConfig.ModelChannel("id", "name", "https://api.anthropic.com?beta=true", "key", "anthropic", List.of()).apiUrl());
+        // DeepSeek / 小米 MiMo 等兼容网关：baseUrl 已含 /anthropic 前缀
+        assertEquals("https://api.deepseek.com/anthropic/v1/messages",
+                new LoopraConfig.ModelChannel("id", "name", "https://api.deepseek.com/anthropic", "key", "anthropic", List.of()).apiUrl());
+        assertEquals("https://api.xiaomimimo.com/anthropic/v1/messages",
+                new LoopraConfig.ModelChannel("id", "name", "https://api.xiaomimimo.com/anthropic", "key", "anthropic", List.of()).apiUrl());
+        assertEquals("https://api.xiaomimimo.com/anthropic/v1/messages",
+                new LoopraConfig.ModelChannel("id", "name", "https://api.xiaomimimo.com/anthropic/v1/messages", "key", "anthropic", List.of()).apiUrl());
+        // 非 anthropic 协议不受影响
+        assertEquals("https://api.anthropic.com/v1/chat/completions",
+                new LoopraConfig.ModelChannel("id", "name", "https://api.anthropic.com/v1", "key", List.of()).apiUrl());
+    }
+
+    @Test
     void migratesLegacyAgent4jDataExceptJreAndBin() throws Exception {
         Path legacyDir = tempDir.resolve(".agent4j");
         Files.createDirectories(legacyDir.resolve("sessions"));

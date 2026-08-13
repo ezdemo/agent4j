@@ -12,6 +12,9 @@ final class ModelApiProtocols {
         if (ResponsesApiProtocol.PROTOCOL_NAME.equalsIgnoreCase(protocol)) {
             return new ResponsesApiProtocol();
         }
+        if (AnthropicApiProtocol.PROTOCOL_NAME.equalsIgnoreCase(protocol)) {
+            return new AnthropicApiProtocol();
+        }
         return new ChatCompletionsApiProtocol();
     }
 }
