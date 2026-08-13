@@ -4,6 +4,39 @@
 
 ---
 
+## [26.8.131] - 2026-08-13
+
+### Added
+
+#### 🤖 模型渠道与协议
+
+- ✨ 新增 Anthropic Messages API 协议支持，渠道 `apiProtocol` 可选 `anthropic`（`x-api-key` + `anthropic-version` 认证），支持流式输出、token 用量与缓存统计
+- ✨ 支持 Anthropic `thinking` / `redacted_thinking` 块的原样回传，保留扩展思考内容
+- ✨ 新增 OpenAI 快速模式开关（`service_tier=fast`），按会话启用，仅 OpenAI 协议（chat_completions / responses）生效
+
+#### 💬 聊天与输入
+
+- ✨ 支持带行号的代码片段引用并去重，提升上下文引用效率
+
+#### 🖥️ 桌面端
+
+- ✨ 新增 bash 会话日志查看功能，并修复 Windows 下会话日志编码问题
+- ✨ 支持将核心运行时嵌入安装包，实现无网络离线安装
+- ✨ 文件图标改用 codicon 替代 Seti 字体，文件按钮与版本管理图标改用内联 SVG
+
+### Changed
+
+- 🔄 macOS 构建支持代码签名与公证（配置 secrets 后自动生效）；未配置证书时改用 ad-hoc 签名并更新发布说明
+- 🔄 标题栏分隔线从左侧 50px 改为全宽
+
+### Fixed
+
+- 🐛 移除 codicon.css 中 URL 查询参数，修复 Electron 字体加载失败
+- 🐛 并发消费 Git 输出流，避免管道死锁
+- 🐛 electron-builder 打包步骤指定 `shell: bash`，修复 Windows runner 上 PowerShell 解析失败导致的打包失败
+
+---
+
 ## [26.8.122] - 2026-08-12
 
 ### Added

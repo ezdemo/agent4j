@@ -14,7 +14,7 @@
   <img src="https://img.shields.io/badge/Solon-4.0.4-important?logo=java" alt="Solon 4.0.4"/>
   <img src="https://img.shields.io/badge/Vue-3.4-4FC08D?logo=vue.js" alt="Vue 3"/>
   <img src="https://img.shields.io/badge/Electron-42.4-47848F?logo=electron" alt="Electron"/>
-  <img src="https://img.shields.io/badge/version-26.8.122-lightgrey" alt="Version 26.8.122"/>
+  <img src="https://img.shields.io/badge/version-26.8.131-lightgrey" alt="Version 26.8.131"/>
   <img src="https://img.shields.io/badge/license-MIT-green" alt="MIT License"/>
 </p>
 
@@ -26,7 +26,7 @@
   <a href="#从源码开发">从源码开发</a>
 </p>
 
-> 当前版本：`26.8.122`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
+> 当前版本：`26.8.131`。完整变更记录见 [CHANGELOG.md](CHANGELOG.md)。
 
 ## 技术交流群
 
@@ -59,7 +59,7 @@ Loopra 将用户任务、模型推理与受控工具调用组织成持续执行�
 
 桌面端下载地址：[Releases](https://github.com/ezdemo/loopra/releases/latest)。
 
-Desktop 首次启动会安装独立运行时到 `~/.loopra-gui`；CLI 仍安装在 `~/.loopra`，两者共用配置目录但不会复用或终止对方的服务进程。Desktop 启动时优先复用本机 `4567` 端口上的健康 Loopra Web 服务，并展示启动窗口；独立运行时版本不一致时，可在更新窗口选择下载源（GitHub 直连或镜像加速）更新核心服务与桌面端，也可以暂不更新继续使用。
+Desktop 首次启动会安装独立运行时到 `~/.loopra-gui`；CLI 仍安装在 `~/.loopra`，两者共用配置目录但不会复用或终止对方的服务进程。Desktop 启动时优先复用本机 `4567` 端口上的健康 Loopra Web 服务，并展示启动窗口；安装包内置核心运行时（`resources/loopra-core`），首次安装优先使用内置包本地安装（无网络也可完成，JRE 缺失时才在线下载），内置包缺失或本地安装失败时自动回退到在线下载源（GitHub 直连或镜像加速）；独立运行时版本不一致时，可在更新窗口选择下载源（GitHub 直连或镜像加速）更新核心服务与桌面端，也可以暂不更新继续使用。
 
 ### 1. 安装
 
@@ -112,7 +112,7 @@ loopra web 0
 
 ### 3. 配置模型渠道
 
-在 Web 设置页维护模型渠道，或直接编辑 `~/.loopra/config.json`。配置 API Key 后重启服务。每个渠道独立维护 API 地址、密钥、协议与模型能力；`apiProtocol` 支持 `chat_completions` 和 `responses`。首次使用且尚未配置模型渠道时，界面会显示引导提示，帮助完成 API 地址、密钥和模型配置。
+在 Web 设置页维护模型渠道，或直接编辑 `~/.loopra/config.json`。配置 API Key 后重启服务。每个渠道独立维护 API 地址、密钥、协议与模型能力；`apiProtocol` 支持 `chat_completions`、`responses` 和 `anthropic`。首次使用且尚未配置模型渠道时，界面会显示引导提示，帮助完成 API 地址、密钥和模型配置。
 
 ```json
 {
@@ -146,7 +146,7 @@ loopra web 0
 |---|---|
 | 自主推理循环 | 流式输出推理、工具调用和结果，持续处理多轮任务。 |
 | 上下文管理 | JSONL 会话持久化、自动摘要折叠、消息自愈和 token 用量统计。 |
-| 多模型渠道 | 支持多渠道、Chat Completions API、OpenAI Responses API、推理强度和模型能力配置。 |
+| 多模型渠道 | 支持多渠道、Chat Completions API、OpenAI Responses API、Anthropic Messages API、推理强度和模型能力配置。 |
 | 可扩展工具系统 | 通过 Solon `@ToolMapping` 声明式注册，支持内置工具、MCP、OpenAPI、技能和 REST API。 |
 | 代码库操作 | 在工作区边界内读取、搜索、编辑文件，运行一次性或交互式命令。 |
 | 子代理协作 | 内置 `explore`、`implement`、`test`、`review`、`plan` 五种角色，支持隔离上下文、权限约束和超时控制；配置可在桌面端编辑并持久化，支持选择渠道模型。 |
@@ -328,7 +328,7 @@ loopra-web     ← 聚合 loopra-harness + loopra-acp（传递引入 loopra-mode
 | Web | Solon Web、Jetty、SSE、Knife4j |
 | 前端 | Vue 3、Vite、Pinia、Ant Design Vue |
 | 桌面 | Electron、electron-builder |
-| 协议 | MCP、OpenAPI、ACP、Chat Completions API、Responses API |
+| 协议 | MCP、OpenAPI、ACP、Chat Completions API、Responses API、Anthropic Messages API |
 | 持久化 | JSONL 会话、工作区本地 JSON、项目 Markdown 记忆 |
 
 ## 许可证
