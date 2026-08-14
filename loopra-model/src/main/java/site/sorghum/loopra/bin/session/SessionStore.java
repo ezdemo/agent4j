@@ -141,6 +141,37 @@ public interface SessionStore {
     }
 
     /**
+     * 持久化会话的"工作树隔离模式"开关。
+     * <p>开启后该会话的 AI 文件操作落在 ~/.loopra/worktree/ 下的 git worktree 中，
+     * 会话历史/Goal/Checklist 等仍归属主工作区。默认空实现；支持会话元数据的实现
+     * （如 JSONL .meta 文件）应覆盖，保证 Agent 重建后工具根不会静默漂移回主工作区。</p>
+     */
+    default void setWorktreeMode(String name, boolean enabled) {
+        // 默认空实现，向后兼容
+    }
+
+    /**
+     * 读取会话持久化的工作树隔离模式（默认 false）。
+     */
+    default boolean isWorktreeMode(String name) {
+        return false;
+    }
+
+    /**
+     * 持久化会话的工作树合并模式：manual / ai-auto / ai-auto-approve。
+     */
+    default void setMergeMode(String name, String mode) {
+        // 默认空实现，向后兼容
+    }
+
+    /**
+     * 读取会话的工作树合并模式，未设置时返回 {@code "manual"}。
+     */
+    default String getMergeMode(String name) {
+        return "manual";
+    }
+
+    /**
      * 追加一条每日用量记录到全局日志文件 {@code ~/.loopra/usage_daily.jsonl}。
      * <p>
      * 记录格式为一行 JSON：
@@ -171,7 +202,13 @@ public interface SessionStore {
 
     /**
      * 会话元信息。
+     *
+     * @param worktreeMode 是否开启工作树隔离模式
      */
-    record SessionInfo(String name, long size, long messageCount, long mtime, String title) {
+    record SessionInfo(String name, long size, long messageCount, long mtime, String title, boolean worktreeMode) {
+        /** 兼容旧调用方的五参构造：默认非工作树模式。 */
+        public SessionInfo(String name, long size, long messageCount, long mtime, String title) {
+            this(name, size, messageCount, mtime, title, false);
+        }
     }
 }

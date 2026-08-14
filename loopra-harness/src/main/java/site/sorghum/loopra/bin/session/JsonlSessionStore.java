@@ -420,19 +420,21 @@ public class JsonlSessionStore implements SessionStore {
                 try (BufferedReader r = Files.newBufferedReader(p, StandardCharsets.UTF_8)) {
                     while (r.readLine() != null) lines++;
                 }
-                // 读取标题
+                // 读取标题与工作树模式
                 String title = null;
+                boolean worktreeMode = false;
                 Path metaFile = sessionsDir.resolve(sanitize(name) + ".meta");
                 if (Files.exists(metaFile)) {
                     try {
                         String metaJson = Files.readString(metaFile);
                         org.noear.snack4.ONode metaNode = org.noear.snack4.ONode.ofJson(metaJson);
                         title = metaNode.get("title").getString();
+                        worktreeMode = worktreeModeOf(metaNode);
                     } catch (Exception e) {
                         log.warn("[jsonl] 读取会话元数据失败: {}", e.getMessage());
                     }
                 }
-                list.add(new SessionInfo(name, size, lines, attr.lastModifiedTime().toMillis(), title));
+                list.add(new SessionInfo(name, size, lines, attr.lastModifiedTime().toMillis(), title, worktreeMode));
                 listedNames.add(name);
             }
         }
@@ -448,7 +450,7 @@ public class JsonlSessionStore implements SessionStore {
                     if (!planMode && (pendingPlan == null || pendingPlan.isBlank())) continue;
                     String title = meta.get("title").getString();
                     BasicFileAttributes attr = Files.readAttributes(p, BasicFileAttributes.class);
-                    list.add(new SessionInfo(name, 0, 0, attr.lastModifiedTime().toMillis(), title));
+                    list.add(new SessionInfo(name, 0, 0, attr.lastModifiedTime().toMillis(), title, worktreeModeOf(meta)));
                 } catch (Exception e) {
                     log.warn("[jsonl] 读取计划会话元数据失败 {}: {}", p.getFileName(), e.getMessage());
                 }
@@ -569,6 +571,51 @@ public class JsonlSessionStore implements SessionStore {
         if (meta == null) return null;
         String plan = meta.get("pendingPlan").getString();
         return plan == null || plan.isBlank() ? null : plan;
+    }
+
+    @Override
+    public void setWorktreeMode(String name, boolean enabled) {
+        try {
+            writeMeta(name, node -> node.set("worktreeMode", enabled));
+        } catch (IOException e) {
+            log.warn("[jsonl] 持久化工作树模式失败: {}", e.getMessage());
+        }
+    }
+
+    @Override
+    public boolean isWorktreeMode(String name) {
+        org.noear.snack4.ONode meta = readMeta(name);
+        if (meta == null) return false;
+        org.noear.snack4.ONode flag = meta.get("worktreeMode");
+        return flag != null && !flag.isNull() && flag.getBoolean();
+    }
+
+    @Override
+    public void setMergeMode(String name, String mode) {
+        try {
+            if (mode == null || mode.isBlank()) {
+                writeMeta(name, node -> node.remove("mergeMode"));
+            } else {
+                writeMeta(name, node -> node.set("mergeMode", mode.trim()));
+            }
+        } catch (IOException e) {
+            log.warn("[jsonl] 持久化工作树合并模式失败: {}", e.getMessage());
+        }
+    }
+
+    @Override
+    public String getMergeMode(String name) {
+        org.noear.snack4.ONode meta = readMeta(name);
+        if (meta == null) return "manual";
+        String mode = meta.get("mergeMode").getString();
+        return mode == null || mode.isBlank() ? "manual" : mode;
+    }
+
+    /** 从已解析的 .meta 节点读取工作树模式标记（兼容缺失/非布尔字段）。 */
+    private static boolean worktreeModeOf(org.noear.snack4.ONode meta) {
+        if (meta == null) return false;
+        org.noear.snack4.ONode flag = meta.get("worktreeMode");
+        return flag != null && !flag.isNull() && flag.getBoolean();
     }
 
     /**

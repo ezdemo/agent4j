@@ -38,7 +38,8 @@ public final class GoalRuntime {
         if (context == null || context.getSessionId() == null || context.getSessionId().isBlank()) {
             throw new IllegalStateException("Goal 只能在已初始化会话中使用");
         }
-        return forWorkspace(context.getRootDir(), context.getSessionId());
+        // 状态根：工作树隔离模式下 Goal 归属主工作区，文件根则指向工作树
+        return forWorkspace(context.getStateRootDir(), context.getSessionId());
     }
 
     public static Scope forWorkspace(Path workspace, String sessionId) {

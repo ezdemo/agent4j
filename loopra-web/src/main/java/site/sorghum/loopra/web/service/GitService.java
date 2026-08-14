@@ -718,21 +718,27 @@ public class GitService {
      */
     public GitGenerateMessageDTO generateCommitMessage(String workspaceHash, String body) throws Exception {
         File workspaceDir = new File(resolveWorkspace(workspaceHash));
-
-        // 安全校验：确认是 git 仓库
-        ProcessResult check = runGit(workspaceDir, "git", "rev-parse", "--is-inside-work-tree");
-        if (check.exitCode != 0) {
-            throw new ServiceException("Not a git repository");
-        }
-
-        // 解析请求体
         ONode bodyJson = parseJsonBody(body, "generateCommitMessage");
         List<String> files = readStringListField(bodyJson, "files");
         String requestModel = readStringField(bodyJson, "model");
         String requestChannelId = readStringField(bodyJson, "modelChannelId");
-
         if (files != null && !files.isEmpty()) {
             files = validatePaths(workspaceDir, files);
+        }
+        return generateCommitMessageAt(workspaceDir, workspaceHash, files, requestModel, requestChannelId);
+    }
+
+    /** 为内部 Git 工作目录生成提交标题，例如隔离工作树。 */
+    String generateCommitMessageAt(File workspaceDir, String workspaceHash) throws Exception {
+        return generateCommitMessageAt(workspaceDir, workspaceHash, null, null, null).message();
+    }
+
+    private GitGenerateMessageDTO generateCommitMessageAt(File workspaceDir, String workspaceHash,
+                                                            List<String> files, String requestModel,
+                                                            String requestChannelId) throws Exception {
+        ProcessResult check = runGit(workspaceDir, "git", "rev-parse", "--is-inside-work-tree");
+        if (check.exitCode != 0) {
+            throw new ServiceException("Not a git repository");
         }
 
         // 检查 AI 模型配置（默认走当前激活渠道，按请求/工作区配置的渠道覆盖）
@@ -749,7 +755,6 @@ public class GitService {
         if (requestModel != null && !requestModel.trim().isEmpty()) {
             model = requestModel.trim();
             channelId = requestChannelId;
-            // 持久化模型与渠道配置
             saveGitConfig(workspaceHash, ONode.ofJson("{}")
                     .set("authorName", workspaceConfig.get("authorName"))
                     .set("authorEmail", workspaceConfig.get("authorEmail"))
@@ -764,7 +769,6 @@ public class GitService {
             channelId = workspaceConfig.get("modelChannelId");
         }
 
-        // 按指定渠道覆盖 apiUrl/apiKey（实现多渠道真正按渠道调用）
         if (channelId != null && !channelId.trim().isEmpty()) {
             LoopraConfig cfg = ConfigService.getConfig();
             if (cfg != null) {
@@ -772,42 +776,30 @@ public class GitService {
                 if (channel != null && !channel.baseUrl().isBlank()) {
                     String base = channel.baseUrl();
                     apiUrl = base.endsWith("/") ? base + "chat/completions" : base + "/chat/completions";
-                    if (!channel.apiKey().isBlank()) {
-                        apiKey = channel.apiKey();
-                    }
+                    if (!channel.apiKey().isBlank()) apiKey = channel.apiKey();
                 }
             }
         }
 
-        // 构建 Solon ChatModel（轻量、无推理）
-        // 剥离模型名称中的上下文大小后缀，例如 "mimo-v2.5[512k]" → "mimo-v2.5"
         ChatModel chatModel = ChatModel.of(apiUrl)
                 .apiKey(apiKey)
                 .model(ModelContextUtils.stripContextSizeSuffix(model))
                 .modelOptions(o -> {
                     o.temperature(0.1);
                     o.optionSet("chat_template_kwargs", ONode.ofJson("{}").set("enable_thinking", false));
-                    o.optionSet("enable_thinking",false);
-                    o.optionSet("thinking",ONode.ofJson("{}").set("type","disabled"));
+                    o.optionSet("enable_thinking", false);
+                    o.optionSet("thinking", ONode.ofJson("{}").set("type", "disabled"));
                 })
                 .build();
 
-        // 1. 获取近 N 条提交日志（用于风格参考）
         String recentLog = runGitSimple(workspaceDir.getAbsolutePath(),
                 "log", "--oneline", "-" + RECENT_COMMIT_LOG_COUNT);
         if (recentLog == null) recentLog = "";
+        if (files == null || files.isEmpty()) files = getChangedFiles(workspaceDir);
+        if (files.isEmpty()) throw new ServiceException("没有待提交的变更");
 
-        // 2. 如果没有指定文件，则从 git status 获取所有变更文件
-        if (files == null || files.isEmpty()) {
-            files = getChangedFiles(workspaceDir);
-        }
-        if (files.isEmpty()) {
-            throw new ServiceException("没有待提交的变更");
-        }
         String changedFiles = String.join("\n", files);
         String changedDiff = getCommitDiff(workspaceDir, files);
-
-        // 3. 构建 AI 提示词：发送全部文件名，diff 最多发送 3 个文件
         String systemPrompt = """
                 你是一个 Git 提交消息生成助手。\
                 根据全部变更文件名和提供的部分 git diff 生成一条简洁、描述性的提交消息。\
@@ -816,14 +808,12 @@ public class GitService {
                 - 消息长度不超过 72 字符（中文不超过 50 字）
                 - 使用中文或英文取决于近期提交的语言
                 - 仅输出提交消息本身，不要任何解释、引号或 markdown 格式""";
-
         String userPrompt = "近 3 条提交（风格参考）：\n"
                 + (recentLog.isEmpty() ? "（无历史提交）" : recentLog) + "\n\n"
                 + "全部变更文件名：\n" + changedFiles + "\n\n"
                 + (changedDiff.isEmpty() ? "" : "部分变更内容（最多 3 个文件）：\n" + changedDiff + "\n\n")
                 + "请生成提交消息：";
 
-        // 4. 调用 AI 模型（使用 Solon ChatModel，简单直接）
         try {
             ChatResponse response = chatModel.prompt(userPrompt)
                     .options(o -> o.systemPrompt(systemPrompt))
@@ -832,7 +822,6 @@ public class GitService {
             if (content == null || content.trim().isEmpty()) {
                 throw new ServiceException("AI 未能生成提交消息");
             }
-            // 清理多余的引号和空白
             String message = content.trim()
                     .replaceAll("^[\"']+|[\"']+$", "")
                     .replaceAll("^```[a-z]*\\s*|```$", "")
@@ -1058,7 +1047,15 @@ public class GitService {
     /**
      * 增强 Git 命令执行 —— 带 10 秒超时保护、禁用终端交互提示。
      */
-    private ProcessResult runGit(File workDir, String... command) throws Exception {
+    public ProcessResult runGit(File workDir, String... command) throws Exception {
+        return runGit(workDir, GIT_COMMAND_TIMEOUT_SEC, command);
+    }
+
+    /**
+     * 增强 Git 命令执行（可指定超时秒数）—— 供 WorktreeService 等耗时操作
+     * （worktree add / merge）使用更长超时，同时禁用终端交互提示。
+     */
+    public ProcessResult runGit(File workDir, long timeoutSec, String... command) throws Exception {
         ProcessBuilder pb = new ProcessBuilder(command);
         pb.directory(workDir);
         pb.redirectErrorStream(false);
@@ -1068,11 +1065,11 @@ public class GitService {
         Future<String> stdout = GIT_IO_EXECUTOR.submit(() -> readStream(proc.getInputStream()));
         Future<String> stderr = GIT_IO_EXECUTOR.submit(() -> readStream(proc.getErrorStream()));
         try {
-            boolean finished = proc.waitFor(GIT_COMMAND_TIMEOUT_SEC, TimeUnit.SECONDS);
+            boolean finished = proc.waitFor(timeoutSec, TimeUnit.SECONDS);
             if (!finished) {
                 proc.destroyForcibly();
                 proc.waitFor();
-                return processResult(-1, "", "Command timed out after " + GIT_COMMAND_TIMEOUT_SEC + " seconds");
+                return processResult(-1, "", "Command timed out after " + timeoutSec + " seconds");
             }
 
             return processResult(proc.exitValue(), awaitOutput(stdout), awaitOutput(stderr));

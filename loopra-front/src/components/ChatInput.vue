@@ -254,6 +254,7 @@
         </div>
 
         <div class="input-actions">
+          <slot name="session-actions"></slot>
           <button type="button" class="upload-btn"
                   title="上传文件（图片/文本/PDF/Word/Excel）" aria-label="上传文件" @click="handleUploadClick">
             <PaperClipOutlined />

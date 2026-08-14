@@ -34,6 +34,12 @@ public class ToolContext {
      */
     private final String rootDir;
     /**
+     * 状态根目录（可选）——会话身份/Goal/Checklist/会话持久化归属的工作区。
+     * <p>工作树隔离模式下，{@code rootDir} 指向隔离工作树（AI 文件操作落点），
+     * {@code stateRootDir} 仍指向主工作区，保证会话级状态跨工作树生命周期延续。</p>
+     */
+    private final String stateRootDir;
+    /**
      * 当前会话ID（可选，用于按会话隔离数据）
      */
     private final String sessionId;
@@ -43,8 +49,18 @@ public class ToolContext {
      * <p>不使用的参数传 {@code null} 或合适的默认值。</p>
      */
     public ToolContext(Map<String, Object> params, String rootDir, String sessionId) {
+        this(params, rootDir, null, sessionId);
+    }
+
+    /**
+     * 全参数构造器（含状态根目录）。
+     *
+     * @param stateRootDir 状态根目录；为 null 时调用方按 rootDir 回退
+     */
+    public ToolContext(Map<String, Object> params, String rootDir, String stateRootDir, String sessionId) {
         this.params = params != null ? new HashMap<>(params) : Collections.emptyMap();
         this.rootDir = rootDir;
+        this.stateRootDir = stateRootDir;
         this.sessionId = sessionId;
     }
 
@@ -145,5 +161,17 @@ public class ToolContext {
     @ONodeAttr(ignore = true)
     public Path getRootDir() {
         return rootDir == null || rootDir.isBlank() ? null : Paths.get(rootDir);
+    }
+
+    /**
+     * 获取状态根目录；未设置时回退到 {@link #getRootDir()}。
+     * 用于 Goal/Checklist/会话持久化等按工作区归档的会话级状态。
+     */
+    @ONodeAttr(ignore = true)
+    public Path getStateRootDir() {
+        if (stateRootDir != null && !stateRootDir.isBlank()) {
+            return Paths.get(stateRootDir);
+        }
+        return getRootDir();
     }
 }

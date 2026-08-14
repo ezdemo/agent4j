@@ -63,6 +63,12 @@ public class ToolRegistry {
     // ==================== 动态刷新上下文 ====================
     @Getter
     private Path workspace;
+    /**
+     * 状态工作区（会话身份/Goal/Checklist/会话持久化归属），
+     * 工作树隔离模式下指向主工作区；未设置时等价于 {@link #workspace}。
+     */
+    @Getter
+    private Path stateWorkspace;
     private String apiUrl;
     private String apiKey;
     private List<String> blockedPaths = Collections.emptyList();
@@ -123,7 +129,17 @@ public class ToolRegistry {
      * 调用 {@link #refresh()} 时会使用这些参数重新扫描并注册工具。
      */
     public void setRefreshContext(Path workspace, String apiUrl, String apiKey, List<String> blockedPaths) {
+        setRefreshContext(workspace, null, apiUrl, apiKey, blockedPaths);
+    }
+
+    /**
+     * 设置动态刷新的上下文参数（含状态工作区）。
+     *
+     * @param stateWorkspace 状态工作区；null 时回退为 {@code workspace}
+     */
+    public void setRefreshContext(Path workspace, Path stateWorkspace, String apiUrl, String apiKey, List<String> blockedPaths) {
         this.workspace = workspace;
+        this.stateWorkspace = stateWorkspace != null ? stateWorkspace : workspace;
         this.apiUrl = apiUrl;
         this.apiKey = apiKey;
         this.blockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
@@ -212,6 +228,7 @@ public class ToolRegistry {
         copy.toolPolicyProvider = this.toolPolicyProvider;
         // 复制刷新上下文
         copy.workspace = this.workspace;
+        copy.stateWorkspace = this.stateWorkspace;
         copy.apiUrl = this.apiUrl;
         copy.apiKey = this.apiKey;
         copy.blockedPaths = this.blockedPaths.isEmpty()

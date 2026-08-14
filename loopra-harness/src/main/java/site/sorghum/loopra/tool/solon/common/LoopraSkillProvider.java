@@ -55,6 +55,15 @@ public class LoopraSkillProvider implements SolonToTools {
         return cliSkillProviderMap.computeIfAbsent(rootDir, k -> new LoopraSkillProvider(rootDir));
     }
 
+    /**
+     * 移除指定根目录的 skill provider（工作树删除后调用，避免 MountManager 缓存无限增长）。
+     * 底层 TerminalSessionManager 的生命周期由 solon-ai 管理，此处仅移除映射。
+     */
+    public static void removeFor(String rootDir) {
+        if (rootDir == null) return;
+        cliSkillProviderMap.remove(Paths.get(rootDir).toAbsolutePath().normalize().toString());
+    }
+
     /** Refresh every active skill pool after the installed skill directories change. */
     public static void refreshAllSkillPools() {
         cliSkillProviderMap.values().forEach(provider -> provider.poolManager.refresh());

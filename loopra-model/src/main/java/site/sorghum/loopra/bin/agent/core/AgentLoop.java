@@ -717,7 +717,9 @@ public class AgentLoop implements AgentLoopController {
         if (goalGuard == null || sessionId == null || sessionId.isBlank() || registry == null || registry.getWorkspace() == null) {
             return null;
         }
-        return goalGuard.openGoal(registry.getWorkspace(), sessionId);
+        // 工作树隔离模式下 Goal 归属状态工作区（主工作区），文件根则指向工作树
+        Path stateRoot = registry.getStateWorkspace() != null ? registry.getStateWorkspace() : registry.getWorkspace();
+        return goalGuard.openGoal(stateRoot, sessionId);
     }
 
     private String takeFinishContentIfAllowed() {
@@ -1568,11 +1570,15 @@ public class AgentLoop implements AgentLoopController {
                     // 收集工具调用上下文；终端工具通过 __cwd 获取实际执行目录。
                     ToolContext.setCurrentController(AgentLoop.this);
                     String workspacePath = registry.getWorkspace().toAbsolutePath().normalize().toString();
+                    String stateWorkspacePath = registry.getStateWorkspace() != null
+                            ? registry.getStateWorkspace().toAbsolutePath().normalize().toString()
+                            : null;
                     HashMap<String, Object> extraMap = new HashMap<>();
                     extraMap.put("__cwd", workspacePath);
                     extraMap.put("ctx", new ToolContext(
                             new HashMap<>(),
                             workspacePath,
+                            stateWorkspacePath,
                             this.getSessionId()
                     ));
 
