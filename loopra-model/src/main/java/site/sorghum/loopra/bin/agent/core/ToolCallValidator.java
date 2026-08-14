@@ -106,7 +106,7 @@ final class ToolCallValidator {
             }
             String reason = result.get("reason").getString();
             if (requiresHuman.getBoolean()) {
-                return Decision.requireHuman(reason == null || reason.isBlank() ? "工作区越界操作" : reason);
+                return Decision.requireHuman(reason == null || reason.isBlank() ? "项目越界操作" : reason);
             }
             ONode allow = result.get("allow");
             if (!allow.isBoolean()) return Decision.deny("校验模型结果的 allow 字段不是布尔值");

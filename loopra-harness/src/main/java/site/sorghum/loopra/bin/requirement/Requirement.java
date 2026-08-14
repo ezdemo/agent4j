@@ -35,7 +35,7 @@ public class Requirement implements Serializable {
     /** 优先级：high / medium / low */
     private volatile String priority;
 
-    /** 所属项目（工作区）hash */
+    /** 所属项目（项目）hash */
     private volatile String projectHash;
 
     /** 所属项目名称（展示用） */

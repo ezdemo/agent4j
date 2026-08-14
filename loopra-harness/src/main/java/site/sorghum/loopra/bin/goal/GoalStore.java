@@ -29,7 +29,7 @@ public interface GoalStore {
     /** 按会话 ID 加载目标 */
     Goal findBySession(String sessionId) throws IOException;
 
-    /** 加载工作区内所有未关闭目标（恢复与管理用） */
+    /** 加载项目内所有未关闭目标（恢复与管理用） */
     List<Goal> findActiveByWorkspace(String workspaceHash) throws IOException;
 
     /** 删除目标 */

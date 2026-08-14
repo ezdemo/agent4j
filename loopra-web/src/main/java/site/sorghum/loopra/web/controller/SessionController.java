@@ -9,7 +9,7 @@ import site.sorghum.loopra.bin.checklist.Checklist;
 import site.sorghum.loopra.bin.checklist.ChecklistStore;
 import site.sorghum.loopra.bin.goal.Goal;
 import site.sorghum.loopra.bin.goal.GoalStep;
-import site.sorghum.loopra.bin.workspace.WorkspaceManager;
+import site.sorghum.loopra.bin.project.ProjectRegistry;
 import site.sorghum.loopra.tool.interact.InteractionService;
 import site.sorghum.loopra.web.common.ServiceException;
 import site.sorghum.loopra.web.common.WebErrorMessages;
@@ -47,75 +47,75 @@ public class SessionController {
             @ApiParam(value = "文件变更撤销请求") @Body FileChangeRevertRequest request) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         if (request == null) throw new ServiceException("撤销请求不能为空");
-        String workspacePath = agentService.resolveWorkspaceHashOrThrow(request.workspaceHash);
+        String workspacePath = agentService.resolveProjectHashOrThrow(request.workspaceHash);
         int count = fileChangeRevertService.revert(java.nio.file.Paths.get(workspacePath), request.changes);
         return ApiResponse.ok(new FileChangeRevertDTO("已撤销本次 AI 的文件修改", count));
     }
     @Get
     @Mapping("")
     public ApiResponse<List<SessionInfoDTO>> list(
-            @ApiParam(value = "工作区 hash")
+            @ApiParam(value = "项目 hash")
             @Param(value = "workspaceHash", required = false) String workspaceHash) throws Exception {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
-        if (workspacePath == null) workspacePath = agentService.getWorkspace();
+        String workspacePath = agentService.resolveProjectPath(workspaceHash);
+        if (workspacePath == null) workspacePath = agentService.getCurrentProject();
         return ApiResponse.ok(agentService.listSessions(workspacePath));
     }
 
-    @ApiOperation(value = "获取当前会话", notes = "返回当前活跃的会话信息（工作区 hash + 会话名）")
+    @ApiOperation(value = "获取当前会话", notes = "返回当前活跃的会话信息（项目 hash + 会话名）")
     @Get
     @Mapping("/current")
     public ApiResponse<SessionCurrentDTO> current(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
+            @ApiParam(value = "项目 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
-        if (workspacePath == null) workspacePath = agentService.getWorkspace();
+        String workspacePath = agentService.resolveProjectPath(workspaceHash);
+        if (workspacePath == null) workspacePath = agentService.getCurrentProject();
         String currentName = agentService.getCurrentSessionName(workspacePath);
-        String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
+        String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeProjectHash(workspacePath);
         return ApiResponse.ok(new SessionCurrentDTO(resolvedHash, currentName));
     }
 
-    @ApiOperation(value = "新建空白会话", notes = "在指定工作区下创建一个新的空白会话，可指定初始工作树隔离模式")
+    @ApiOperation(value = "新建空白会话", notes = "在指定项目下创建一个新的空白会话，可指定初始隔离分支模式")
     @Post
     @Mapping("/new")
     public ApiResponse<SessionCreateDTO> createNew(
-            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
+            @ApiParam(value = "项目 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
             @ApiParam(value = "会话名称（可选，自动生成）")
             @Param(value = "sessionName", required = false) String sessionName,
-            @ApiParam(value = "工作树隔离模式（可选，默认 false）")
+            @ApiParam(value = "隔离分支模式（可选，默认 false）")
             @Param(value = "worktreeMode", required = false) Boolean worktreeMode) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+        String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
         String actualName = agentService.newSession(workspacePath, sessionName, worktreeMode);
         return ApiResponse.ok(new SessionCreateDTO("已创建新会话", workspaceHash, actualName));
     }
 
-    @ApiOperation(value = "查询会话工作树模式", notes = "返回指定会话的工作树隔离模式开关与合并模式")
+    @ApiOperation(value = "查询会话隔离分支模式", notes = "返回指定会话的隔离分支模式开关与合并模式")
     @Get
     @Mapping("/{name}/worktree")
     public ApiResponse<SessionWorktreeModeDTO> getWorktreeMode(
             @ApiParam(value = "会话名称") @Path("name") String name,
-            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash) {
+            @ApiParam(value = "项目 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+        String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
         boolean worktreeMode = agentService.isSessionWorktreeMode(workspacePath, name);
         String mergeMode = agentService.getSessionMergeMode(workspacePath, name);
         return ApiResponse.ok(new SessionWorktreeModeDTO(workspaceHash, name, worktreeMode, mergeMode));
     }
 
-    @ApiOperation(value = "切换会话工作树模式", notes = "开启后该会话的 AI 文件操作落在隔离 git worktree 中；正在运行的会话不允许切换")
+    @ApiOperation(value = "切换会话隔离分支模式", notes = "开启后该会话的 AI 文件操作落在隔离 git worktree 中；正在运行的会话不允许切换")
     @Put
     @Mapping("/{name}/worktree")
     public ApiResponse<SessionWorktreeModeDTO> setWorktreeMode(
             @ApiParam(value = "会话名称") @Path("name") String name,
-            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
+            @ApiParam(value = "项目 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
             @ApiParam(value = "请求体：{worktreeMode: boolean, mergeMode: 'manual'|'ai-auto'|'ai-auto-approve'}（两个字段均可选）")
             @Body SessionWorktreeModeRequest request) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         if (request == null || (request.getWorktreeMode() == null && request.getMergeMode() == null)) {
             throw new ServiceException("请求不能为空，需提供 worktreeMode 或 mergeMode");
         }
-        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+        String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
         if (request.getWorktreeMode() != null) {
             agentService.setSessionWorktreeMode(workspacePath, name, request.getWorktreeMode());
         }
@@ -127,15 +127,15 @@ public class SessionController {
         return ApiResponse.ok(new SessionWorktreeModeDTO(workspaceHash, name, worktreeMode, mergeMode));
     }
 
-    @ApiOperation(value = "切换会话", notes = "切换到指定工作区下的指定会话")
+    @ApiOperation(value = "切换会话", notes = "切换到指定项目下的指定会话")
     @SneakyThrows
     @Post
     @Mapping("/{name}")
     public ApiResponse<SessionSwitchDTO> switchSession(
             @ApiParam(value = "会话名称") @Path("name") String name,
-            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash) {
+            @ApiParam(value = "项目 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+        String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
         boolean ok = agentService.switchSession(workspacePath, name);
         if (ok) {
             String confirmedName = agentService.getCurrentSessionName(workspacePath);
@@ -145,45 +145,45 @@ public class SessionController {
         throw new ServiceException("会话不存在: " + name);
     }
 
-    @ApiOperation(value = "清空所有会话", notes = "清除指定工作区下的所有会话磁盘文件和缓存")
+    @ApiOperation(value = "清空所有会话", notes = "清除指定项目下的所有会话磁盘文件和缓存")
     @Delete
     @Mapping("")
     public ApiResponse<SessionDeleteDTO> clearAllSessions(
-            @ApiParam(value = "工作区 hash", required = true)
+            @ApiParam(value = "项目 hash", required = true)
             @Param(value = "workspaceHash", required = true) String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+        String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
         agentService.clearAllSessions(workspacePath);
-        String resolvedHash = AgentService.computeWorkspaceHash(workspacePath);
+        String resolvedHash = AgentService.computeProjectHash(workspacePath);
         return ApiResponse.ok(new SessionDeleteDTO("所有会话已清空", resolvedHash, null));
     }
 
-    @ApiOperation(value = "清理过期会话", notes = "删除指定工作区下最后活动时间早于 before（epoch 毫秒）的会话")
+    @ApiOperation(value = "清理过期会话", notes = "删除指定项目下最后活动时间早于 before（epoch 毫秒）的会话")
     @Delete
     @Mapping("/cleanup")
     public ApiResponse<SessionCleanupDTO> cleanupSessions(
-            @ApiParam(value = "工作区 hash", required = true)
+            @ApiParam(value = "项目 hash", required = true)
             @Param(value = "workspaceHash", required = true) String workspaceHash,
             @ApiParam(value = "最后活动时间阈值（epoch 毫秒）", required = true)
             @Param(value = "before", required = true) Long before) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         if (before == null) throw new ServiceException("before 参数不能为空");
-        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+        String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
         List<String> deleted = agentService.clearSessionsBefore(workspacePath, before);
-        String resolvedHash = AgentService.computeWorkspaceHash(workspacePath);
+        String resolvedHash = AgentService.computeProjectHash(workspacePath);
         return ApiResponse.ok(new SessionCleanupDTO("已清理 " + deleted.size() + " 个过期会话", resolvedHash, deleted));
     }
 
-    @ApiOperation(value = "删除会话", notes = "根据会话名称和工作区删除指定会话")
+    @ApiOperation(value = "删除会话", notes = "根据会话名称和项目删除指定会话")
     @Delete
     @Mapping("/{name}")
     public ApiResponse<SessionDeleteDTO> deleteSession(
             @ApiParam(value = "会话名称") @Path("name") String name,
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash") String workspaceHash) {
+            @ApiParam(value = "项目 hash") @Param(value = "workspaceHash") String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
+        String workspacePath = agentService.resolveProjectPath(workspaceHash);
         agentService.deleteSession(workspacePath, name);
-        String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeWorkspaceHash(workspacePath);
+        String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeProjectHash(workspacePath);
         return ApiResponse.ok(new SessionDeleteDTO("会话已删除", resolvedHash, name));
     }
 
@@ -201,11 +201,11 @@ public class SessionController {
     @Mapping("/{name}/branch")
     public ApiResponse<SessionCreateDTO> branchSession(
             @ApiParam(value = "源会话名称") @Path("name") String name,
-            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
+            @ApiParam(value = "项目 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
             @ApiParam(value = "原始历史的排他结束位置", required = true) @Param(value = "messageCount", required = true) Integer messageCount) throws Exception {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         if (messageCount == null || messageCount <= 0) throw new ServiceException("messageCount 必须大于 0");
-        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+        String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
         String newName = agentService.branchSession(workspacePath, name, messageCount);
         return ApiResponse.ok(new SessionCreateDTO("已分支到新会话", workspaceHash, newName));
     }
@@ -223,12 +223,12 @@ public class SessionController {
     @Mapping("/{name}/checklist")
     public ApiResponse<ChecklistStatusDTO> getChecklist(
             @ApiParam(value = "会话名称") @Path("name") String sessionName,
-            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash) {
+            @ApiParam(value = "项目 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+        String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
         
-        WorkspaceManager workspaceManager = WorkspaceManager.getOrCreate(workspacePath);
-        ChecklistStore store = workspaceManager.getChecklistStore();
+        ProjectRegistry projectRegistry = ProjectRegistry.getOrCreate(workspacePath);
+        ChecklistStore store = projectRegistry.getChecklistStore();
         
         try {
             Checklist cl = store.findBySession(sessionName);
@@ -260,13 +260,13 @@ public class SessionController {
     @Mapping("/{name}/goal")
     public ApiResponse<GoalStatusDTO> getGoal(
             @ApiParam(value = "会话名称") @Path("name") String sessionName,
-            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash) {
+            @ApiParam(value = "项目 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+        String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
 
-        WorkspaceManager workspaceManager = WorkspaceManager.getOrCreate(workspacePath);
+        ProjectRegistry projectRegistry = ProjectRegistry.getOrCreate(workspacePath);
         try {
-            Goal goal = workspaceManager.getGoalStore().findBySession(sessionName);
+            Goal goal = projectRegistry.getGoalStore().findBySession(sessionName);
             if (goal == null) {
                 return ApiResponse.ok(null);
             }

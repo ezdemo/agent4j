@@ -15,7 +15,7 @@ import java.util.List;
 /**
  * 定时任务管理 API 控制器。
  * <p>
- * 支持工作区级别的定时任务 CRUD、启用/禁用、手动触发执行。
+ * 支持项目级别的定时任务 CRUD、启用/禁用、手动触发执行。
  * </p>
  *
  * @author Sorghum
@@ -32,20 +32,20 @@ public class ScheduleController {
     @Inject
     private AgentService agentService;
 
-    @ApiOperation(value = "列出定时任务", notes = "返回指定工作区下的所有定时任务")
+    @ApiOperation(value = "列出定时任务", notes = "返回指定项目下的所有定时任务")
     @Get
     @Mapping("")
     public ApiResponse<List<ScheduledTask>> list(
-            @ApiParam(value = "工作区 hash", required = true)
+            @ApiParam(value = "项目 hash", required = true)
             @Param(value = "workspaceHash", required = true) String workspaceHash) {
         return ApiResponse.ok(scheduleManager.list(workspaceHash));
     }
 
-    @ApiOperation(value = "获取单个定时任务", notes = "根据工作区和任务 ID 获取定时任务详情")
+    @ApiOperation(value = "获取单个定时任务", notes = "根据项目和任务 ID 获取定时任务详情")
     @Get
     @Mapping("/{id}")
     public ApiResponse<ScheduledTask> get(
-            @ApiParam(value = "工作区 hash", required = true)
+            @ApiParam(value = "项目 hash", required = true)
             @Param(value = "workspaceHash", required = true) String workspaceHash,
             @ApiParam(value = "任务 ID") @Path("id") String id) {
         ScheduledTask task = scheduleManager.get(workspaceHash, id);
@@ -55,11 +55,11 @@ public class ScheduleController {
         return ApiResponse.ok(task);
     }
 
-    @ApiOperation(value = "创建定时任务", notes = "在工作区下创建一个新的定时任务")
+    @ApiOperation(value = "创建定时任务", notes = "在项目下创建一个新的定时任务")
     @Post
     @Mapping("")
     public ApiResponse<ScheduledTask> create(
-            @ApiParam(value = "工作区 hash", required = true)
+            @ApiParam(value = "项目 hash", required = true)
             @Param(value = "workspaceHash", required = true) String workspaceHash,
             @Body ScheduledTask task) {
         if (task == null) {
@@ -76,7 +76,7 @@ public class ScheduleController {
         }
 
         ScheduledTask created = scheduleManager.create(workspaceHash, task);
-        log.info("[schedule] 创建定时任务: {} (工作区={})", created.getName(), workspaceHash);
+        log.info("[schedule] 创建定时任务: {} (项目={})", created.getName(), workspaceHash);
         return ApiResponse.ok(created);
     }
 
@@ -84,7 +84,7 @@ public class ScheduleController {
     @Put
     @Mapping("/{id}")
     public ApiResponse<ScheduledTask> update(
-            @ApiParam(value = "工作区 hash", required = true)
+            @ApiParam(value = "项目 hash", required = true)
             @Param(value = "workspaceHash", required = true) String workspaceHash,
             @ApiParam(value = "任务 ID") @Path("id") String id,
             @Body ScheduledTask update) {
@@ -95,7 +95,7 @@ public class ScheduleController {
         if (updated == null) {
             return ApiResponse.fail("定时任务不存在: " + id);
         }
-        log.info("[schedule] 更新定时任务: {} (工作区={})", updated.getName(), workspaceHash);
+        log.info("[schedule] 更新定时任务: {} (项目={})", updated.getName(), workspaceHash);
         return ApiResponse.ok(updated);
     }
 
@@ -103,14 +103,14 @@ public class ScheduleController {
     @Post
     @Mapping("/{id}/toggle")
     public ApiResponse<ScheduledTask> toggle(
-            @ApiParam(value = "工作区 hash", required = true)
+            @ApiParam(value = "项目 hash", required = true)
             @Param(value = "workspaceHash", required = true) String workspaceHash,
             @ApiParam(value = "任务 ID") @Path("id") String id) {
         ScheduledTask toggled = scheduleManager.toggle(workspaceHash, id);
         if (toggled == null) {
             return ApiResponse.fail("定时任务不存在: " + id);
         }
-        log.info("[schedule] 切换定时任务状态: {} → enabled={} (工作区={})",
+        log.info("[schedule] 切换定时任务状态: {} → enabled={} (项目={})",
                 toggled.getName(), toggled.isEnabled(), workspaceHash);
         return ApiResponse.ok(toggled);
     }
@@ -119,7 +119,7 @@ public class ScheduleController {
     @Post
     @Mapping("/{id}/run")
     public ApiResponse<String> runNow(
-            @ApiParam(value = "工作区 hash", required = true)
+            @ApiParam(value = "项目 hash", required = true)
             @Param(value = "workspaceHash", required = true) String workspaceHash,
             @ApiParam(value = "任务 ID") @Path("id") String id) {
         String result = scheduleManager.runNow(workspaceHash, id);
@@ -127,9 +127,9 @@ public class ScheduleController {
             return ApiResponse.fail("定时任务不存在: " + id);
         }
         if (result.isEmpty()) {
-            return ApiResponse.fail("工作区不存在: " + workspaceHash);
+            return ApiResponse.fail("项目不存在: " + workspaceHash);
         }
-        log.info("[schedule] 手动触发执行定时任务: {} (工作区={})", id, workspaceHash);
+        log.info("[schedule] 手动触发执行定时任务: {} (项目={})", id, workspaceHash);
         return ApiResponse.ok(result);
     }
 
@@ -137,11 +137,11 @@ public class ScheduleController {
     @Delete
     @Mapping("/{id}")
     public ApiResponse<String> delete(
-            @ApiParam(value = "工作区 hash", required = true)
+            @ApiParam(value = "项目 hash", required = true)
             @Param(value = "workspaceHash", required = true) String workspaceHash,
             @ApiParam(value = "任务 ID") @Path("id") String id) {
         scheduleManager.delete(workspaceHash, id);
-        log.info("[schedule] 删除定时任务: {} (工作区={})", id, workspaceHash);
+        log.info("[schedule] 删除定时任务: {} (项目={})", id, workspaceHash);
         return ApiResponse.ok("已删除");
     }
 }

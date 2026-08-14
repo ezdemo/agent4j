@@ -93,7 +93,7 @@ class ImageReadToolTest {
         String result = tool.readImage("../outside.png", "auto",
                 new ToolContext(Map.of(), workspace.toString(), "session-1"));
 
-        assertEquals("PATH_DENIED: 工作区相对路径必须位于当前工作区内", result);
+        assertEquals("PATH_DENIED: 项目相对路径必须位于当前项目内", result);
     }
 
     @Test

@@ -25,7 +25,7 @@ import java.util.*;
 import java.util.concurrent.*;
 
 /**
- * Git 操作服务 —— 封装所有 Git 命令执行逻辑、工作区解析和数据处理。
+ * Git 操作服务 —— 封装所有 Git 命令执行逻辑、项目解析和数据处理。
  * <p>
  * 提供 Git 状态查看、仓库初始化、暂存/取消暂存、提交、
  * Diff 内容查看及历史版本文件内容获取等完整的 Git 管理能力。
@@ -385,7 +385,7 @@ public class GitService {
     }
 
     /**
-     * 读取工作区当前文件内容，用于前端代码预览，不依赖 Git 状态或提交历史。
+     * 读取项目当前文件内容，用于前端代码预览，不依赖 Git 状态或提交历史。
      */
     public WorkingFileContentDTO getWorkingFileContent(String workspaceHash, String path) throws Exception {
         if (path == null || path.isBlank()) {
@@ -400,7 +400,7 @@ public class GitService {
             throw new ServiceException("Invalid path");
         }
         if (!Files.isRegularFile(file)) {
-            return new WorkingFileContentDTO(null, false, "当前工作区中未找到此文件，可能已移动或删除。");
+            return new WorkingFileContentDTO(null, false, "当前项目中未找到此文件，可能已移动或删除。");
         }
         if (Files.size(file) > 1024 * 1024) {
             return new WorkingFileContentDTO(null, true, "文件过大，无法预览（最大 1 MB）。");
@@ -728,7 +728,7 @@ public class GitService {
         return generateCommitMessageAt(workspaceDir, workspaceHash, files, requestModel, requestChannelId);
     }
 
-    /** 为内部 Git 工作目录生成提交标题，例如隔离工作树。 */
+    /** 为内部 Git 工作目录生成提交标题，例如隔离分支。 */
     String generateCommitMessageAt(File workspaceDir, String workspaceHash) throws Exception {
         return generateCommitMessageAt(workspaceDir, workspaceHash, null, null, null).message();
     }
@@ -741,7 +741,7 @@ public class GitService {
             throw new ServiceException("Not a git repository");
         }
 
-        // 检查 AI 模型配置（默认走当前激活渠道，按请求/工作区配置的渠道覆盖）
+        // 检查 AI 模型配置（默认走当前激活渠道，按请求/项目配置的渠道覆盖）
         String apiUrl = agentService.getSharedApiUrl();
         String apiKey = agentService.getSharedApiKey();
         String model = agentService.getSharedModel();
@@ -750,7 +750,7 @@ public class GitService {
             throw new ServiceException("AI 模型未配置，请先设置 OPENAI_API_KEY 环境变量");
         }
 
-        // 读取工作区配置的模型与渠道（优先使用请求参数 > 工作区配置 > 全局配置）
+        // 读取项目配置的模型与渠道（优先使用请求参数 > 项目配置 > 全局配置）
         Map<String, String> workspaceConfig = getGitConfig(workspaceHash);
         if (requestModel != null && !requestModel.trim().isEmpty()) {
             model = requestModel.trim();
@@ -836,16 +836,16 @@ public class GitService {
     // ==================== 工具方法 ====================
 
     public String resolveWorkspace(String workspaceHash) {
-        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
-        if (workspacePath == null) workspacePath = agentService.getWorkspace();
-        if (workspacePath == null) throw new ServiceException("未设置工作区");
+        String workspacePath = agentService.resolveProjectPath(workspaceHash);
+        if (workspacePath == null) workspacePath = agentService.getCurrentProject();
+        if (workspacePath == null) throw new ServiceException("未设置项目");
         return workspacePath;
     }
 
     // ==================== 路径安全校验 ====================
 
     /**
-     * 将请求路径规范化为工作区内的 Git 路径，并拒绝绝对路径、路径穿越和符号链接逃逸。
+     * 将请求路径规范化为项目内的 Git 路径，并拒绝绝对路径、路径穿越和符号链接逃逸。
      * 空路径仅供查询整个仓库的接口使用。
      */
     private String validatePath(File workspaceDir, String path) {
@@ -882,7 +882,7 @@ public class GitService {
                 throw new ServiceException("Invalid path");
             }
 
-            // 对不存在的目标，验证最近的已有父目录，避免通过工作区内的链接目录逃逸。
+            // 对不存在的目标，验证最近的已有父目录，避免通过项目内的链接目录逃逸。
             Path existing = file;
             while (existing != null && !Files.exists(existing, LinkOption.NOFOLLOW_LINKS)) {
                 existing = existing.getParent();
@@ -900,14 +900,14 @@ public class GitService {
         try {
             return workspaceDir.toPath().toRealPath();
         } catch (IOException e) {
-            throw new ServiceException("工作区不可访问");
+            throw new ServiceException("项目不可访问");
         }
     }
 
     // ==================== AI 辅助工具方法 ====================
 
     /**
-     * 获取工作区中所有变更文件列表（含暂存、未暂存、未跟踪）。
+     * 获取项目中所有变更文件列表（含暂存、未暂存、未跟踪）。
      */
     private List<String> getChangedFiles(File workspaceDir) throws Exception {
         ProcessResult result = runGit(workspaceDir, "git", "status", "--porcelain");

@@ -60,7 +60,7 @@
         <!-- 步骤 1：迁移会话 -->
         <section v-else-if="currentStep === 1" class="ob-page">
           <h2 class="ob-page-title">迁移会话</h2>
-          <p class="ob-page-desc">从其他 Agent 工具（Claude Code / Codex / Cursor 等）的会话记录中选择要迁移的会话，复制到当前工作区。目标工作区：<b class="ob-path">{{ workspacePath || '未获取到' }}</b></p>
+          <p class="ob-page-desc">从其他 Agent 工具（Claude Code / Codex / Cursor 等）的会话记录中选择要迁移的会话，复制到当前项目。目标项目：<b class="ob-path">{{ workspacePath || '未获取到' }}</b></p>
 
           <div class="ob-field">
             <label class="ob-field-label">选择源目录</label>
@@ -111,7 +111,7 @@
             </div>
           </div>
 
-          <div v-if="!workspaceHash" class="ob-hint">未获取到工作区信息（核心服务可能尚未就绪），暂时无法迁移会话。</div>
+          <div v-if="!workspaceHash" class="ob-hint">未获取到项目信息（核心服务可能尚未就绪），暂时无法迁移会话。</div>
 
           <div class="ob-action-row">
             <button class="btn btn-primary" :disabled="busy || !sessionsSelected.length || !workspaceHash" @click="importSessions">
@@ -241,7 +241,7 @@
         <!-- 步骤 4：迁移规则文件（AGENTS.md / CLAUDE.md） -->
         <section v-else-if="currentStep === 4" class="ob-page">
           <h2 class="ob-page-title">迁移 AGENTS.md / CLAUDE.md</h2>
-          <p class="ob-page-desc">从其他 Agent 导入规则文件到当前 Loopra 工作区根目录：选择项目目录（曾用 Codex / Claude Code 等开发的目录）扫描，或直接选用下方的全局规则。</p>
+          <p class="ob-page-desc">从其他 Agent 导入规则文件到当前 Loopra 项目根目录：选择项目目录（曾用 Codex / Claude Code 等开发的目录）扫描，或直接选用下方的全局规则。</p>
 
           <div v-if="candidateRuleFiles.length" class="ob-field">
             <label class="ob-field-label">全局规则（自动检测）</label>
@@ -284,7 +284,7 @@
 
           <div class="ob-field">
             <label class="ob-field-label">目标位置</label>
-            <div class="ob-dir-current">将写入：<span class="ob-path">{{ workspacePath ? workspacePath + '\\' + (agentsMdSelected ? agentsMdFileName : 'AGENTS.md') : '未获取到工作区路径' }}</span></div>
+            <div class="ob-dir-current">将写入：<span class="ob-path">{{ workspacePath ? workspacePath + '\\' + (agentsMdSelected ? agentsMdFileName : 'AGENTS.md') : '未获取到项目路径' }}</span></div>
             <label class="ob-inline-check">
               <input v-model="overwriteAgentsMd" type="checkbox" />
               目标已存在同名文件时覆盖
@@ -299,7 +299,7 @@
           </div>
 
           <div class="ob-action-row">
-            <button class="btn btn-primary" :disabled="busy || !agentsMdSelected || !workspacePath" @click="importAgentsMd">迁移到工作区</button>
+            <button class="btn btn-primary" :disabled="busy || !agentsMdSelected || !workspacePath" @click="importAgentsMd">迁移到项目</button>
           </div>
         </section>
 
@@ -569,7 +569,7 @@ async function checkService() {
     serviceOk.value = false
   } finally {
     serviceChecking.value = false
-    // 服务已就绪后补拉工作区信息（首次运行时引导窗口可能早于服务启动完成）
+    // 服务已就绪后补拉项目信息（首次运行时引导窗口可能早于服务启动完成）
     if (serviceOk.value && (!workspacePath.value || !workspaceHash.value)) {
       void loadWorkspaceInfo()
     }
@@ -847,7 +847,7 @@ async function importAgentsMd() {
     return
   }
   if (!workspacePath.value) {
-    message.warning('未获取到目标工作区路径')
+    message.warning('未获取到目标项目路径')
     return
   }
   busy.value = true
@@ -1008,7 +1008,7 @@ function summaryText(done, detail) {
   return '已跳过'
 }
 
-// 进入需要工作区信息的步骤时，若信息缺失则重试加载（服务可能刚启动完成）
+// 进入需要项目信息的步骤时，若信息缺失则重试加载（服务可能刚启动完成）
 watch(currentStep, (step) => {
   if ((step === 1 || step === 4) && (!workspacePath.value || !workspaceHash.value)) {
     void loadWorkspaceInfo()

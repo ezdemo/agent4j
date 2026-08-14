@@ -8,6 +8,7 @@ import org.noear.solon.annotation.Inject;
 import site.sorghum.loopra.bin.agent.context.ContextTokenEstimate;
 import site.sorghum.loopra.bin.agent.context.ConversationContext;
 import site.sorghum.loopra.bin.agent.core.LoopraAgent;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.UserMessage;
 import site.sorghum.loopra.bin.command.ChatCommandRegistry;
@@ -15,12 +16,12 @@ import site.sorghum.loopra.bin.config.ConfigService;
 import site.sorghum.loopra.bin.config.LoopraConfig;
 import site.sorghum.loopra.bin.model.HttpModelClient;
 import site.sorghum.loopra.bin.model.ModelPriceProvider;
+import site.sorghum.loopra.bin.project.ProjectRegistry;
 import site.sorghum.loopra.bin.session.JsonlSessionStore;
 import site.sorghum.loopra.bin.session.SessionFileChangeTracker;
 import site.sorghum.loopra.bin.session.SessionStore;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.bin.tool.ToolSystemInitializer;
-import site.sorghum.loopra.bin.workspace.WorkspaceManager;
 import site.sorghum.loopra.tool.AgentOutput;
 import site.sorghum.loopra.tool.solon.common.SessionTerminalTalent;
 import site.sorghum.loopra.tool.solon.common.SessionTerminalTalent.BashSessionInfo;
@@ -116,14 +117,14 @@ public class AgentService {
                         } catch (Exception e) {
                             log.info("[web] 淘汰 Agent 失败: {}", e.getMessage());
                         }
-                        // 工作树隔离会话被淘汰：工作树保留在磁盘，提醒可通过会话合并按钮回收
+                        // 隔离分支会话被淘汰：隔离分支保留在磁盘，提醒可通过会话合并按钮回收
                         try {
                             String[] keyParts = oldest.split("::", 2);
                             if (keyParts.length == 2 && readWorktreeModeStatic(keyParts[0], keyParts[1])) {
-                                log.warn("[web] LRU 淘汰了工作树隔离会话 {}，未合并改动保留在 ~/.loopra/worktree，可打开该会话合并回主工作区", keyParts[1]);
+                                log.warn("[web] LRU 淘汰了隔离分支会话 {}，未合并改动保留在 ~/.loopra/worktree，可打开该会话合并回主项目", keyParts[1]);
                             }
                         } catch (Exception e) {
-                            log.debug("[web] 检查工作树状态失败: {}", e.getMessage());
+                            log.debug("[web] 检查隔离分支状态失败: {}", e.getMessage());
                         }
                         log.info("[web] LRU 淘汰 Agent: {}", oldest);
                     }
@@ -188,14 +189,14 @@ public class AgentService {
     private final ConcurrentHashMap<String, ModelTarget> sessionModelTargets = new ConcurrentHashMap<>();
 
     /**
-     * 默认工作区的共享 ToolRegistry（供 /api/tools 等接口与就绪检查使用）
+     * 默认项目的共享 ToolRegistry（供 /api/tools 等接口与就绪检查使用）
      */
     @Getter
     private volatile ToolRegistry sharedToolRegistry;
 
     /**
-     * 按工作区缓存的工具系统初始化结果（绝对路径 -> Result）。
-     * <p>同一工作区的所有会话 Agent 复用其 ToolRegistry 与 PromptPrefix，
+     * 按项目缓存的工具系统初始化结果（绝对路径 -> Result）。
+     * <p>同一项目的所有会话 Agent 复用其 ToolRegistry 与 PromptPrefix，
      * 避免每个 Agent 重复扫描工具/构建提示词；配置重建（{@link #reinitialize()}）时清空。</p>
      */
     private final ConcurrentHashMap<String, ToolSystemInitializer.Result> sharedToolSystems = new ConcurrentHashMap<>();
@@ -245,10 +246,10 @@ public class AgentService {
     }
 
     /**
-     * 计算工作区路径的 hash 值（与 WorkspaceManager 一致，MD5 前 12 位）。
+     * 计算项目路径的 hash 值（MD5 前 12 位）。
      */
-    public static String computeWorkspaceHash(String workspacePath) {
-        return WorkspaceManager.computeHash(workspacePath);
+    public static String computeProjectHash(String projectPath) {
+        return ProjectRegistry.computeProjectHash(projectPath);
     }
 
     /**
@@ -335,7 +336,7 @@ public class AgentService {
             log.info("[config] 已屏蔽目录: {}", String.join(", ", blockedPaths));
         }
 
-        // 预构建默认工作区的共享工具系统（其余工作区在创建 Agent 时按需构建）
+        // 预构建默认项目的共享工具系统（其余项目在创建 Agent 时按需构建）
         ToolSystemInitializer.Result initResult = buildSharedToolSystem(config.workspaceDir(), config);
         sharedToolSystems.put(workspaceKey(config.workspaceDir()), initResult);
         this.sharedToolRegistry = initResult.toolRegistry;
@@ -344,57 +345,72 @@ public class AgentService {
     }
 
     /**
-     * 构建指定工作区的共享工具系统（ToolRegistry + PromptPrefix + 系统提示词）。
+     * 构建指定项目的共享工具系统（ToolRegistry + PromptPrefix + 系统提示词）。
      * <p>纯构建，不操作缓存 Map —— 供 {@code computeIfAbsent} 的映射函数安全调用
      * （ConcurrentHashMap 禁止在 computeIfAbsent 内递归更新同一 Map）。</p>
      */
     private ToolSystemInitializer.Result buildSharedToolSystem(Path workspace, LoopraConfig config) {
-        return buildSharedToolSystem(workspace, null, config);
+        return buildSharedToolSystem(SessionEnvironment.of(workspace, null), config);
     }
 
     /**
-     * 构建指定工作区的共享工具系统（可指定状态工作区）。
+     * 构建指定会话环境的共享工具系统。
      */
     private ToolSystemInitializer.Result buildSharedToolSystem(Path workspace, Path stateWorkspace, LoopraConfig config) {
+        return buildSharedToolSystem(SessionEnvironment.of(workspace, stateWorkspace), config);
+    }
+
+    private ToolSystemInitializer.Result buildSharedToolSystem(SessionEnvironment environment, LoopraConfig config) {
         ToolSystemInitializer.Result result = ToolSystemInitializer.initialize(
-                workspace, stateWorkspace, config.apiUrl(), config.apiKey(),
+                environment, config.apiUrl(), config.apiKey(),
                 config.disabledTools(), config.blockedPaths(),
                 loadDefaultSystemPrompt());
-        log.info("[web] 已构建共享工具系统 — 工作区: {} (状态工作区: {})", workspace, stateWorkspace);
+        log.info("[web] 已构建共享工具系统 — 项目: {} (执行根: {})",
+                environment == null ? null : environment.projectRoot(),
+                environment == null ? null : environment.executionRoot());
         return result;
     }
 
     /**
-     * 获取（或首次构建）指定工作区的共享工具系统。
+     * 获取（或首次构建）指定项目的共享工具系统。
      */
     private ToolSystemInitializer.Result getOrCreateSharedToolSystem(Path workspace) {
         return getOrCreateSharedToolSystem(workspace, null);
     }
 
     /**
-     * 获取（或首次构建）指定工作区的共享工具系统（工作树隔离模式：文件根=工作树，状态根=主工作区）。
+     * 获取（或首次构建）指定项目的共享工具系统（隔离分支模式：文件根=隔离分支，状态根=主项目）。
      */
     private ToolSystemInitializer.Result getOrCreateSharedToolSystem(Path workspace, Path stateWorkspace) {
-        String key = workspaceKey(workspace)
-                + (stateWorkspace != null ? "#" + stateWorkspace.toAbsolutePath().normalize() : "");
+        return getOrCreateSharedToolSystem(SessionEnvironment.of(workspace, stateWorkspace));
+    }
+
+    private ToolSystemInitializer.Result getOrCreateSharedToolSystem(SessionEnvironment environment) {
+        String key = environment == null ? "" : environmentKey(environment);
         return sharedToolSystems.computeIfAbsent(key,
-                k -> buildSharedToolSystem(workspace, stateWorkspace, ConfigService.getConfig()));
+                k -> buildSharedToolSystem(environment, ConfigService.getConfig()));
+    }
+
+    private static String environmentKey(SessionEnvironment environment) {
+        return workspaceKey(environment.projectRoot())
+                + "#" + workspaceKey(environment.executionRoot())
+                + "#" + workspaceKey(environment.stateRoot());
     }
 
     private static String workspaceKey(Path workspace) {
-        // 未配置工作区时返回空键（initialize 本身容忍 null 工作区）
+        // 未配置项目时返回空键（initialize 本身容忍 null 项目）
         return workspace == null ? "" : workspace.toAbsolutePath().normalize().toString();
     }
 
     /**
      * 生成会话唯一标识。
      *
-     * @param workspacePath 工作区路径
+     * @param workspacePath 项目路径
      * @param sessionName   会话名称
      * @return 唯一标识
      */
     private String generateSessionKey(String workspacePath, String sessionName) {
-        // 使用默认工作区路径（如果未指定）
+        // 使用默认项目路径（如果未指定）
         if (workspacePath == null || workspacePath.isEmpty()) {
             LoopraConfig cfg = ConfigService.getConfig();
             if (cfg != null && cfg.workspaceDir() != null) {
@@ -422,7 +438,7 @@ public class AgentService {
     /**
      * 登记一个会话级后台任务。
      *
-     * @param workspacePath 工作区路径
+     * @param workspacePath 项目路径
      * @param sessionName   会话名称
      * @param requestId     请求/任务唯一 ID
      */
@@ -443,7 +459,7 @@ public class AgentService {
     }
 
     /**
-     * 获取指定工作区/会话的运行状态。
+     * 获取指定项目/会话的运行状态。
      * <p>状态只来自活动任务登记或缓存 Agent 的实际运行标志，不根据历史消息变化推断。</p>
      */
     public SessionStatusDTO getSessionStatus(String workspacePath, String sessionName) {
@@ -458,7 +474,7 @@ public class AgentService {
     /**
      * 列出 bash_start 启动的后台命令会话镜像。
      *
-     * @param workspacePath 工作区绝对路径；为空时返回全部工作区的会话
+     * @param workspacePath 项目绝对路径；为空时返回全部项目的会话
      */
     public List<BashSessionDTO> listBashSessions(String workspacePath) {
         Path target = workspacePath == null || workspacePath.isEmpty()
@@ -479,7 +495,7 @@ public class AgentService {
      * 手动关闭指定 bash 后台会话（前端“手动关闭”按钮）。
      *
      * @param sessionId     命令会话 ID
-     * @param workspacePath 工作区绝对路径；为空时在所有工作区中查找
+     * @param workspacePath 项目绝对路径；为空时在所有项目中查找
      * @return 终止后的状态日志文本；未找到会话返回 null
      */
     public String terminateBashSession(String sessionId, String workspacePath) {
@@ -490,7 +506,7 @@ public class AgentService {
      * 读取指定 bash 后台会话的累积输出日志（前端“查看日志”按钮）。
      *
      * @param sessionId     命令会话 ID
-     * @param workspacePath 工作区绝对路径；为空时在所有工作区中查找
+     * @param workspacePath 项目绝对路径；为空时在所有项目中查找
      * @return 会话日志 DTO；未找到会话返回 null
      */
     public BashSessionLogDTO readBashSessionLog(String sessionId, String workspacePath) {
@@ -582,24 +598,24 @@ public class AgentService {
                 target.channelId(), channel.apiProtocol());
         modelClient.setFastMode(cfg.fastMode());
 
-        // 会话级工作树隔离模式：文件根指向隔离工作树，会话身份/Goal/Checklist 仍归属主工作区。
+        // 会话级隔离分支模式：文件根指向隔离分支，会话身份/Goal/Checklist 仍归属主项目。
         // 懒创建：首个开启该模式的会话在 Agent 创建时创建 worktree；
-        // 非 Git 仓库时明确失败，避免静默退化为直接改主工作区。
+        // 非 Git 仓库时明确失败，避免静默退化为直接改主项目。
         Path fileRoot = Paths.get(workspacePath);
         Path stateRoot = Paths.get(workspacePath);
         if (isSessionWorktreeMode(workspacePath, sessionName)) {
             try {
                 WorktreeService worktreeService = org.noear.solon.Solon.context().getBean(WorktreeService.class);
-                WorktreeStatusDTO status = worktreeService.create(computeWorkspaceHash(workspacePath), sessionName);
+                WorktreeStatusDTO status = worktreeService.create(computeProjectHash(workspacePath), sessionName);
                 if (!status.exists() || status.worktreePath() == null) {
-                    throw new ServiceException("会话工作树创建失败: " + status.message());
+                    throw new ServiceException("会话隔离分支创建失败: " + status.message());
                 }
                 fileRoot = Paths.get(status.worktreePath());
-                log.info("[web] 会话 {} 启用工作树隔离模式，工具文件根: {}", sessionName, fileRoot);
+                log.info("[web] 会话 {} 启用隔离分支模式，工具文件根: {}", sessionName, fileRoot);
             } catch (ServiceException e) {
                 throw e;
             } catch (Exception e) {
-                throw new ServiceException("会话工作树创建失败（工作区需为 Git 仓库）: " + e.getMessage());
+                throw new ServiceException("会话隔离分支创建失败（项目需为 Git 仓库）: " + e.getMessage());
             }
         }
 
@@ -608,13 +624,12 @@ public class AgentService {
                 .apiUrl(apiUrl)
                 .apiKey(apiKey)
                 .model(target.model())
-                .workspace(fileRoot)
-                .stateWorkspace(stateRoot)
+                .environment(SessionEnvironment.of(fileRoot, stateRoot))
                 .commandRegistry(commandRegistry)
                 .hitl(hitl)
                 .loopraConfig(cfg)
-                // 复用该工作区的共享工具系统，跳过 Agent 内部的重复初始化
-                .toolSystem(getOrCreateSharedToolSystem(fileRoot, stateRoot))
+                // 复用该项目的共享工具系统，跳过 Agent 内部的重复初始化
+                .toolSystem(getOrCreateSharedToolSystem(SessionEnvironment.of(fileRoot, stateRoot)))
                 .modelClient(modelClient);
         if (systemPrompt != null && !systemPrompt.isBlank()) {
             builder.systemPrompt(systemPrompt);
@@ -690,7 +705,7 @@ public class AgentService {
     public AgentStatusDTO getStatus() {
         boolean ready = isReady();
         String model = getSharedModel();
-        String workspace = getWorkspace();
+        String workspace = getCurrentProject();
         int cacheSize = sessionCache.size();
 
         int historySize = 0;
@@ -725,7 +740,7 @@ public class AgentService {
      * 控制序列化字段名（snake_case）以及排除 boolean 辅助方法，避免 Map 转换。
      * </p>
      *
-     * @param workspacePath 工作区路径（可选）
+     * @param workspacePath 项目路径（可选）
      * @param sessionName   会话名称（可选，不传则使用当前活跃会话）
      * @return 历史消息列表
      */
@@ -760,7 +775,7 @@ public class AgentService {
      * 不会重新从 JSONL 加载，只写存储的消息 Agent 永远看不到。
      * </p>
      *
-     * @param workspacePath 工作区路径
+     * @param workspacePath 项目路径
      * @param sessionName   目标会话名称
      * @param text          消息文本
      */
@@ -796,9 +811,9 @@ public class AgentService {
                 pendingPlan = agent.getPendingPlan();
             } else {
                 try {
-                    String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+                    String resolvedPath = workspacePath != null ? workspacePath : getCurrentProject();
                     if (resolvedPath != null) {
-                        Path sessionsDir = new WorkspaceManager().getSessionsDir(resolvedPath);
+                        Path sessionsDir = new ProjectRegistry().getSessionsDir(resolvedPath);
                         if (sessionsDir != null && Files.exists(sessionsDir)) {
                             SessionStore store = new JsonlSessionStore(sessionsDir);
                             try {
@@ -854,7 +869,7 @@ public class AgentService {
         }
     }
 
-    /** 中断指定工作区和会话的当前生成，不影响其他并行会话。 */
+    /** 中断指定项目和会话的当前生成，不影响其他并行会话。 */
     public void abortChat(String workspacePath, String sessionName) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         LoopraAgent agent = sessionCache.get(sessionKey);
@@ -865,7 +880,7 @@ public class AgentService {
      * 截断会话历史：删除包含指定撤回定位 ID 的用户消息及之后的所有消息，
      * 同时重写 JSONL 文件使持久化数据同步。
      *
-     * @param workspacePath 工作区路径
+     * @param workspacePath 项目路径
      * @param sessionName   会话名称
      * @param rollbackId    要截断的消息撤回定位 ID
      * @return 截断后被删除的用户消息文本（用于回填输入框），null 表示未找到
@@ -1111,7 +1126,7 @@ public class AgentService {
     /**
      * 创建新会话（前端指定 sessionId，延迟持久化：文件在首次发消息时才创建）。
      *
-     * @param workspacePath 工作区路径（可选）
+     * @param workspacePath 项目路径（可选）
      * @param sessionName   会话名称（前端指定，为空则自动生成）
      * @return 实际使用的会话名
      */
@@ -1120,11 +1135,11 @@ public class AgentService {
     }
 
     /**
-     * 创建新会话（可指定初始工作树隔离模式）。
+     * 创建新会话（可指定初始隔离分支模式）。
      *
-     * @param workspacePath 工作区路径（可选）
+     * @param workspacePath 项目路径（可选）
      * @param sessionName   会话名称（前端指定，为空则自动生成）
-     * @param worktreeMode  工作树隔离模式；null 表示不改变默认值（false）
+     * @param worktreeMode  隔离分支模式；null 表示不改变默认值（false）
      * @return 实际使用的会话名
      */
     public String newSession(String workspacePath, String sessionName, Boolean worktreeMode) {
@@ -1137,7 +1152,7 @@ public class AgentService {
         // 直接以目标会话名创建/获取 Agent（switchTo 是惰性的，不创建文件）
         switchSession(workspacePath, sessionName);
 
-        // 新建会话时持久化工作树开关（仅在显式开启时写 .meta，避免无谓的元数据文件）
+        // 新建会话时持久化隔离分支开关（仅在显式开启时写 .meta，避免无谓的元数据文件）
         if (Boolean.TRUE.equals(worktreeMode)) {
             setSessionWorktreeMode(workspacePath, sessionName, true);
         }
@@ -1148,7 +1163,7 @@ public class AgentService {
     /**
      * 列出会话。
      *
-     * @param workspacePath 工作区路径（可选）
+     * @param workspacePath 项目路径（可选）
      * @return 会话列表
      */
     public List<SessionInfoDTO> listSessions(String workspacePath) throws IOException {
@@ -1156,7 +1171,7 @@ public class AgentService {
             return Collections.emptyList();
         }
 
-        // 获取一个 Agent 实例来访问 SessionStore；失败时退回独立会话存储（如工作树模式在非 Git 仓库不可用）
+        // 获取一个 Agent 实例来访问 SessionStore；失败时退回独立会话存储（如隔离分支模式在非 Git 仓库不可用）
         SessionStore store;
         try {
             String sessionKey = generateSessionKey(workspacePath, null);
@@ -1171,7 +1186,7 @@ public class AgentService {
         }
 
         // 确定当前会话名（优先用追踪记录，其次用 store.currentName）
-        String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+        String resolvedPath = workspacePath != null ? workspacePath : getCurrentProject();
         if (resolvedPath == null) {
             return Collections.emptyList();
         }
@@ -1207,7 +1222,7 @@ public class AgentService {
     /**
      * 切换会话。
      *
-     * @param workspacePath 工作区路径（可选）
+     * @param workspacePath 项目路径（可选）
      * @param sessionName   会话名称
      * @return 切换是否成功
      */
@@ -1217,15 +1232,15 @@ public class AgentService {
         }
 
         // 记录当前活跃会话
-        String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+        String resolvedPath = workspacePath != null ? workspacePath : getCurrentProject();
         sessionCache.setCurrentName(resolvedPath, sessionName);
         return true;
     }
 
     /**
-     * 后台触发一次 AI 自动解决工作树合并冲突的回合（普通 Loop turn，无需新工具）。
-     * <p>AI 的文件根即隔离工作树，冲突已在工作树内（反向合并产物），AI 用
-     * git/read/edit 解冲突并提交；完成后用户再次触发合并即可快进回主工作区。</p>
+     * 后台触发一次 AI 自动解决隔离分支合并冲突的回合（普通 Loop turn，无需新工具）。
+     * <p>AI 的文件根即隔离分支，冲突已在隔离分支内（反向合并产物），AI 用
+     * git/read/edit 解冲突并提交；完成后用户再次触发合并即可快进回主项目。</p>
      *
      * @param approval 为 true 时该回合临时切到 approval HITL（ai-auto-approve）
      * @return 是否成功启动（Agent 未初始化或正在运行时返回 false）
@@ -1244,14 +1259,14 @@ public class AgentService {
                 ? "（详见 git status 冲突列表）"
                 : String.join("\n", conflictFiles);
         String prompt = """
-                【系统任务】工作树合并冲突需要解决。
-                当前会话的隔离工作树在合并主工作区分支时产生了合并冲突，冲突文件如下：
+                【系统任务】隔离分支合并冲突需要解决。
+                当前会话的隔离分支在合并主项目分支时产生了合并冲突，冲突文件如下：
                 %s
-                请直接在当前文件根（隔离工作树）内解决这些冲突：
+                请直接在当前文件根（隔离分支）内解决这些冲突：
                 1. 用 git status / git diff 查看冲突标记与双方改动；
-                2. 编辑冲突文件，保留主工作区与工作树改动的合理结合；
+                2. 编辑冲突文件，保留主项目与隔离分支改动的合理结合；
                 3. git add 所有已解决文件并执行 git commit 完成合并提交。
-                完成后简要回复解决情况即可，用户随后会触发合并回主工作区。
+                完成后简要回复解决情况即可，用户随后会触发合并回主项目。
                 """.formatted(files);
         String effectiveSessionName = sessionName;
         Thread worker = new Thread(() -> {
@@ -1302,14 +1317,14 @@ public class AgentService {
         return sessionCache.peek(generateSessionKey(workspacePath, sessionName));
     }
 
-    // ==================== 会话级工作树隔离模式 ====================
+    // ==================== 会话级隔离分支模式 ====================
 
-    /** 独立会话存储：仅读写主工作区会话目录的元数据，不绑定任何 Agent。 */
+    /** 独立会话存储：仅读写主项目会话目录的元数据，不绑定任何 Agent。 */
     private SessionStore sessionStoreFor(String workspacePath) {
-        String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+        String resolvedPath = workspacePath != null ? workspacePath : getCurrentProject();
         if (resolvedPath == null) return null;
         try {
-            return new JsonlSessionStore(new WorkspaceManager().getSessionsDir(resolvedPath));
+            return new JsonlSessionStore(new ProjectRegistry().getSessionsDir(resolvedPath));
         } catch (Exception e) {
             log.warn("[web] 打开会话存储失败: {}", e.getMessage());
             return null;
@@ -1317,7 +1332,7 @@ public class AgentService {
     }
 
     /**
-     * 读取指定会话的工作树隔离模式开关（默认 false）。
+     * 读取指定会话的隔离分支模式开关（默认 false）。
      */
     public boolean isSessionWorktreeMode(String workspacePath, String sessionName) {
         if (sessionName == null || sessionName.isBlank()) return false;
@@ -1325,11 +1340,11 @@ public class AgentService {
         return store != null && store.isWorktreeMode(sessionName);
     }
 
-    /** 静态读取工作树开关（供静态内部类 LRU 淘汰检查使用）。 */
+    /** 静态读取隔离分支开关（供静态内部类 LRU 淘汰检查使用）。 */
     private static boolean readWorktreeModeStatic(String workspacePath, String sessionName) {
         if (workspacePath == null || sessionName == null || sessionName.isBlank()) return false;
         try {
-            Path sessionsDir = new WorkspaceManager().getSessionsDir(workspacePath);
+            Path sessionsDir = new ProjectRegistry().getSessionsDir(workspacePath);
             if (sessionsDir == null || !Files.isDirectory(sessionsDir)) return false;
             SessionStore store = new JsonlSessionStore(sessionsDir);
             try {
@@ -1343,26 +1358,26 @@ public class AgentService {
     }
 
     /**
-     * 设置指定会话的工作树隔离模式。
-     * <p>开关影响 Agent 构造时的工具根（工作树 vs 主工作区），因此会先淘汰缓存 Agent，
+     * 设置指定会话的隔离分支模式。
+     * <p>开关影响 Agent 构造时的工具根（隔离分支 vs 主项目），因此会先淘汰缓存 Agent，
      * 下一次聊天按新开关重建。会话正在运行时不允许切换。</p>
      */
     public void setSessionWorktreeMode(String workspacePath, String sessionName, boolean enabled) {
         if (sessionName == null || sessionName.isBlank()) throw new ServiceException("会话名称不能为空");
         LoopraAgent cached = sessionCache.peek(generateSessionKey(workspacePath, sessionName));
         if (cached != null && cached.isRunning()) {
-            throw new ServiceException("会话正在运行，无法切换工作树模式");
+            throw new ServiceException("会话正在运行，无法切换隔离分支模式");
         }
-        String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+        String resolvedPath = workspacePath != null ? workspacePath : getCurrentProject();
         SessionStore store = sessionStoreFor(resolvedPath);
         if (store == null) throw new ServiceException("会话存储不可用");
         store.setWorktreeMode(sessionName, enabled);
         if (cached != null) evictAgent(workspacePath, sessionName);
-        log.info("[web] 会话工作树模式已切换: {} -> {}", sessionName, enabled);
+        log.info("[web] 会话隔离分支模式已切换: {} -> {}", sessionName, enabled);
     }
 
     /**
-     * 读取指定会话的工作树合并模式（默认 manual）。
+     * 读取指定会话的隔离分支合并模式（默认 manual）。
      */
     public String getSessionMergeMode(String workspacePath, String sessionName) {
         if (sessionName == null || sessionName.isBlank()) return "manual";
@@ -1371,7 +1386,7 @@ public class AgentService {
     }
 
     /**
-     * 设置指定会话的工作树合并模式（manual / ai-auto / ai-auto-approve）。
+     * 设置指定会话的隔离分支合并模式（manual / ai-auto / ai-auto-approve）。
      */
     public void setSessionMergeMode(String workspacePath, String sessionName, String mode) {
         if (sessionName == null || sessionName.isBlank()) throw new ServiceException("会话名称不能为空");
@@ -1385,13 +1400,13 @@ public class AgentService {
         SessionStore store = sessionStoreFor(workspacePath);
         if (store == null) throw new ServiceException("会话存储不可用");
         store.setMergeMode(sessionName, normalized);
-        log.info("[web] 会话工作树合并模式已切换: {} -> {}", sessionName, normalized.isEmpty() ? "manual" : normalized);
+        log.info("[web] 会话隔离分支合并模式已切换: {} -> {}", sessionName, normalized.isEmpty() ? "manual" : normalized);
     }
 
     /**
      * 从指定会话分支：复制原始历史的完整前缀到新会话，并切换过去。
      *
-     * @param workspacePath 工作区路径
+     * @param workspacePath 项目路径
      * @param sourceSession  源会话名称
      * @param messageCount   原始历史的排他结束位置
      * @return 新会话名称
@@ -1410,8 +1425,8 @@ public class AgentService {
         String sourceTitle = store.getTitle(sourceSession);
 
         // Use an independent store so the source agent remains bound to its session.
-        WorkspaceManager workspaceManager = new WorkspaceManager();
-        Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
+        ProjectRegistry projectRegistry = new ProjectRegistry();
+        Path sessionsDir = projectRegistry.getSessionsDir(workspacePath);
         JsonlSessionStore branchStore = new JsonlSessionStore(sessionsDir);
         try {
             String newName = "loopra-" + System.currentTimeMillis();
@@ -1446,12 +1461,12 @@ public class AgentService {
     /**
      * 获取当前会话名称。
      *
-     * @param workspacePath 工作区路径（可选）
+     * @param workspacePath 项目路径（可选）
      * @return 当前会话名称
      */
     public String getCurrentSessionName(String workspacePath) {
         // 优先从追踪记录中获取
-        String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+        String resolvedPath = workspacePath != null ? workspacePath : getCurrentProject();
         String tracked = sessionCache.getCurrentName(resolvedPath);
         if (tracked != null) {
             return tracked;
@@ -1469,7 +1484,7 @@ public class AgentService {
     /**
      * 获取指定会话的 token 用量（返回 DTO）。
      *
-     * @param workspacePath 工作区路径（可选）
+     * @param workspacePath 项目路径（可选）
      * @param sessionName   会话名称（可选）
      * @return usage 数据
      */
@@ -1603,7 +1618,7 @@ public class AgentService {
     /**
      * 清除指定会话的 Agent 缓存。
      *
-     * @param workspacePath 工作区路径（可选）
+     * @param workspacePath 项目路径（可选）
      * @param sessionName   会话名称（可选）
      */
     public void evictAgent(String workspacePath, String sessionName) {
@@ -1623,7 +1638,7 @@ public class AgentService {
     /**
      * 删除指定会话：清除 Agent 缓存 + 删除磁盘文件（.jsonl / .usage / .meta）。
      *
-     * @param workspacePath 工作区路径（可选）
+     * @param workspacePath 项目路径（可选）
      * @param sessionName   会话名称
      */
     public void deleteSession(String workspacePath, String sessionName) {
@@ -1631,10 +1646,10 @@ public class AgentService {
         evictAgent(workspacePath, sessionName);
         // 2. 删除磁盘文件
         try {
-            String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+            String resolvedPath = workspacePath != null ? workspacePath : getCurrentProject();
             if (resolvedPath == null) return;
-            WorkspaceManager wm = new WorkspaceManager();
-            Path sessionsDir = wm.getSessionsDir(resolvedPath);
+            ProjectRegistry projects = new ProjectRegistry();
+            Path sessionsDir = projects.getSessionsDir(resolvedPath);
             if (sessionsDir == null || !Files.exists(sessionsDir)) return;
             SessionStore store = new JsonlSessionStore(sessionsDir);
             boolean ok = store.delete(sessionName);
@@ -1644,43 +1659,43 @@ public class AgentService {
         } catch (Exception e) {
             log.warn("[web] 删除会话文件失败: {}", e.getMessage());
         }
-        // 3. 联动删除会话工作树（丢弃未合并改动，与会话文件删除一致）
+        // 3. 联动删除会话隔离分支（丢弃未合并改动，与会话文件删除一致）
         try {
             WorktreeService worktreeService = org.noear.solon.Solon.context().getBean(WorktreeService.class);
-            worktreeService.remove(computeWorkspaceHash(workspacePath), sessionName, true);
+            worktreeService.remove(computeProjectHash(workspacePath), sessionName, true);
         } catch (Exception e) {
-            log.warn("[web] 联动删除会话工作树失败: {}", e.getMessage());
+            log.warn("[web] 联动删除会话隔离分支失败: {}", e.getMessage());
         }
     }
 
     /**
-     * 清空所有会话：清除所有 Agent 缓存、删除对应工作树与分支，再删除所有会话磁盘文件。
+     * 清空所有会话：清除所有 Agent 缓存、删除对应隔离分支与分支，再删除所有会话磁盘文件。
      *
-     * @param workspacePath 工作区路径（可选）
+     * @param workspacePath 项目路径（可选）
      */
     public void clearAllSessions(String workspacePath) {
         // 1. 清除所有 Agent 缓存
         evictAllAgents();
-        String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+        String resolvedPath = workspacePath != null ? workspacePath : getCurrentProject();
         if (resolvedPath == null) return;
-        WorkspaceManager wm = new WorkspaceManager();
-        Path sessionsDir = wm.getSessionsDir(resolvedPath);
+        ProjectRegistry projects = new ProjectRegistry();
+        Path sessionsDir = projects.getSessionsDir(resolvedPath);
         if (sessionsDir == null || !Files.exists(sessionsDir)) return;
         SessionStore store = new JsonlSessionStore(sessionsDir);
 
-        // 2. 清理各会话保留的工作树与分支
+        // 2. 清理各会话保留的隔离分支与分支
         try {
             WorktreeService worktreeService = org.noear.solon.Solon.context().getBean(WorktreeService.class);
-            String workspaceHash = computeWorkspaceHash(resolvedPath);
+            String workspaceHash = computeProjectHash(resolvedPath);
             for (SessionStore.SessionInfo session : store.list()) {
                 try {
                     worktreeService.remove(workspaceHash, session.name(), true);
                 } catch (Exception e) {
-                    log.warn("[web] 清空会话时删除工作树失败 ({}): {}", session.name(), e.getMessage());
+                    log.warn("[web] 清空会话时删除隔离分支失败 ({}): {}", session.name(), e.getMessage());
                 }
             }
         } catch (Exception e) {
-            log.warn("[web] 清空会话时获取工作树服务失败: {}", e.getMessage());
+            log.warn("[web] 清空会话时获取隔离分支服务失败: {}", e.getMessage());
         }
 
         // 3. 删除所有会话磁盘文件
@@ -1689,18 +1704,18 @@ public class AgentService {
     }
 
     /**
-     * 清理最后活动时间早于指定时间点的会话（含 Agent 缓存、工作树与磁盘文件）。
+     * 清理最后活动时间早于指定时间点的会话（含 Agent 缓存、隔离分支与磁盘文件）。
      *
-     * @param workspacePath 工作区路径（可选）
+     * @param workspacePath 项目路径（可选）
      * @param beforeMillis  最后活动时间阈值（epoch 毫秒），早于该值的会话将被删除
      * @return 被删除的会话名列表
      */
     public List<String> clearSessionsBefore(String workspacePath, long beforeMillis) {
         List<String> deleted = new ArrayList<>();
-        String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+        String resolvedPath = workspacePath != null ? workspacePath : getCurrentProject();
         if (resolvedPath == null) return deleted;
-        WorkspaceManager wm = new WorkspaceManager();
-        Path sessionsDir = wm.getSessionsDir(resolvedPath);
+        ProjectRegistry projects = new ProjectRegistry();
+        Path sessionsDir = projects.getSessionsDir(resolvedPath);
         if (sessionsDir == null || !Files.exists(sessionsDir)) return deleted;
         SessionStore store = new JsonlSessionStore(sessionsDir);
         try {
@@ -1741,44 +1756,36 @@ public class AgentService {
     }
 
     /**
-     * 通过 workspaceHash 反查工作区路径。
-     * <p>
-     * 优先使用 {@link WorkspaceManager#listWorkspaces()} 从磁盘读取 hash→path 映射，
-     * 不依赖 sessionCache，在缓存为空时也能正确解析。
-     * 兜底检查默认工作区和 sessionCache（兼容旧版）。
-     * </p>
-     *
-     * @param hash 工作区 hash（或路径本身）
-     * @return 解析后的工作区路径，找不到时返回 null
+     * 通过项目 hash（或路径本身）反查项目路径。
      */
-    public String resolveWorkspacePath(String hash) {
+    public String resolveProjectPath(String hash) {
         if (hash == null || hash.isEmpty()) {
             return null;
         }
-        // 1. 优先使用 WorkspaceManager 的磁盘索引（可靠，不依赖 sessionCache）
+        // 1. 优先使用 ProjectRegistry 的磁盘索引（可靠，不依赖 sessionCache）
         try {
-            WorkspaceManager wm = new WorkspaceManager();
-            List<WorkspaceManager.WorkspaceInfo> workspaces = wm.listWorkspaces();
-            for (WorkspaceManager.WorkspaceInfo ws : workspaces) {
+            ProjectRegistry projects = new ProjectRegistry();
+            List<ProjectRegistry.ProjectInfo> projectList = projects.listProjects();
+            for (ProjectRegistry.ProjectInfo ws : projectList) {
                 if (hash.equals(ws.hash())) {
                     return ws.path();
                 }
             }
         } catch (Exception e) {
-            log.warn("[web] 读取工作区列表失败: {}", e.getMessage());
+            log.warn("[web] 读取项目列表失败: {}", e.getMessage());
         }
 
-        // 2. 检查默认工作区
-        String defaultPath = getWorkspace();
-        if (defaultPath != null && hash.equals(WorkspaceManager.computeHash(defaultPath))) {
+        // 2. 检查默认项目
+        String defaultPath = getCurrentProject();
+        if (defaultPath != null && hash.equals(ProjectRegistry.computeProjectHash(defaultPath))) {
             return defaultPath;
         }
 
         // 3. 遍历缓存的 Agent key（兼容旧版）
         for (String key : sessionCache.keySet()) {
-            String workspacePath = key.split("::", 2)[0];
-            if (hash.equals(WorkspaceManager.computeHash(workspacePath))) {
-                return workspacePath;
+            String projectPath = key.split("::", 2)[0];
+            if (hash.equals(ProjectRegistry.computeProjectHash(projectPath))) {
+                return projectPath;
             }
         }
 
@@ -1791,163 +1798,130 @@ public class AgentService {
         return null;
     }
 
-    /**
-     * 校验并解析工作区 hash，解析失败时抛异常（不再静默 fallback）。
-     *
-     * @param workspaceHash 工作区 hash
-     * @return 工作区绝对路径
-     * @throws ServiceException hash 无效或找不到对应工作区
-     */
-    public String resolveWorkspaceHashOrThrow(String workspaceHash) {
-        if (workspaceHash == null || workspaceHash.isEmpty()) {
-            throw new ServiceException("workspaceHash 不能为空");
+    public String resolveProjectHashOrThrow(String projectHash) {
+        if (projectHash == null || projectHash.isEmpty()) {
+            throw new ServiceException("projectHash 不能为空");
         }
-        String path = resolveWorkspacePath(workspaceHash);
+        String path = resolveProjectPath(projectHash);
         if (path == null) {
-            throw new ServiceException("工作区不存在: " + workspaceHash);
+            throw new ServiceException("项目不存在: " + projectHash);
         }
         return path;
     }
 
-    /**
-     * 获取默认工作区路径。
-     *
-     * @return 工作区路径
-     */
-    public String getWorkspace() {
+    public String getCurrentProject() {
         LoopraConfig cfg = ConfigService.getConfig();
         if (cfg != null && cfg.workspaceDir() != null) {
             return cfg.workspaceDir().toAbsolutePath().toString();
         }
         return null;
     }
-    /**
-     * 切换工作区（兼容旧接口）。
-     * 更新当前工作区并持久化到 config.json，下次启动默认打开此工作区。
-     *
-     * @param path 新的工作区路径
-     * @return 切换成功返回 true
-     */
-    public boolean switchWorkspace(String path) {
+    public boolean switchProject(String path) {
         if (path == null || path.isEmpty()) {
             return false;
         }
-        // 持久化到 config.json，下次启动默认加载此工作区
+        // 持久化到 config.json，下次启动默认加载此项目
         String normalized = Paths.get(path).toAbsolutePath().normalize().toString();
         try {
             ConfigService.updateConfig(Collections.singletonMap("workspaceDir", normalized));
-            log.info("[web] 工作区已持久化到 config.json: {}", normalized);
+            log.info("[web] 项目已持久化到 config.json: {}", normalized);
         } catch (Exception e) {
-            log.warn("[web] 持久化工作区到 config.json 失败: {}", e.getMessage());
+            log.warn("[web] 持久化项目到 config.json 失败: {}", e.getMessage());
         }
-        // 确保工作区目录结构存在（~/.loopra/workspace/{hash}/）
-        // 否则新工作区不会出现在 listWorkspaces 中，resolveWorkspacePath 也无法反查
+        // 确保项目数据目录存在（历史目录名 ~/.loopra/workspace/{hash}/）
         try {
-            WorkspaceManager.getOrCreate(normalized);
-            log.info("[web] 工作区目录结构已创建: {}", normalized);
+            ProjectRegistry.getOrCreate(normalized);
+            log.info("[web] 项目数据目录已创建: {}", normalized);
         } catch (Exception e) {
-            log.warn("[web] 创建工作区目录结构失败: {}", e.getMessage());
+            log.warn("[web] 创建项目数据目录失败: {}", e.getMessage());
         }
         // 清除默认会话的缓存，让下次访问时使用新路径
         evictAgent(null, null);
-        log.info("[web] 工作区已切换: {}", normalized);
+        log.info("[web] 项目已切换: {}", normalized);
         return true;
     }
 
-    /**
-     * 列出工作区（兼容旧接口）。
-     *
-     * @return 工作区列表
-     */
-    public List<WorkspaceInfoDTO> listWorkspaces() {
-        List<WorkspaceInfoDTO> result = new ArrayList<>();
+    public List<ProjectInfoDTO> listProjects() {
+        List<ProjectInfoDTO> result = new ArrayList<>();
 
         try {
-            WorkspaceManager workspaceManager = new WorkspaceManager();
-            // 注意：此处不应调用 switchWorkspace，因为它有自动创建（initWorkspace）的副作用，
-            // 会导致刚刚被删除的工作区在 list 时被重建。
-            List<WorkspaceManager.WorkspaceInfo> workspaces = workspaceManager.listWorkspaces();
+            ProjectRegistry projectRegistry = new ProjectRegistry();
+            // 不要在这里调用 switchProject，否则 list 会产生自动创建副作用。
+            List<ProjectRegistry.ProjectInfo> projects = projectRegistry.listProjects();
 
-            for (WorkspaceManager.WorkspaceInfo info : workspaces) {
-                result.add(new WorkspaceInfoDTO(
+            for (ProjectRegistry.ProjectInfo info : projects) {
+                result.add(new ProjectInfoDTO(
                         info.hash(), info.name(), info.path(),
                         info.createdAt(), info.lastAccessedAt(),
                         info.sessionCount()
                 ));
             }
         } catch (IOException e) {
-            log.warn("[web] 获取工作区列表失败: {}", e.getMessage());
+            log.warn("[web] 获取项目列表失败: {}", e.getMessage());
             // 回退到旧逻辑：从缓存中收集
-            Set<String> workspacePaths = new HashSet<>();
+            Set<String> projectPaths = new HashSet<>();
             for (String key : sessionCache.keySet()) {
                 String[] parts = key.split("::", 2);
                 if (parts.length > 0) {
-                    workspacePaths.add(parts[0]);
+                    projectPaths.add(parts[0]);
                 }
             }
 
             LoopraConfig cfg = ConfigService.getConfig();
             if (cfg != null && cfg.workspaceDir() != null) {
-                workspacePaths.add(cfg.workspaceDir().toAbsolutePath().toString());
+                projectPaths.add(cfg.workspaceDir().toAbsolutePath().toString());
             }
 
-            for (String path : workspacePaths) {
-                result.add(new WorkspaceInfoDTO(
-                        WorkspaceManager.computeHash(path), null, path,
+            for (String path : projectPaths) {
+                result.add(new ProjectInfoDTO(
+                        ProjectRegistry.computeProjectHash(path), null, path,
                         0, 0, 0
                 ));
             }
         }
 
-        return applyWorkspaceOrder(result, ConfigService.getWorkspaceOrder());
+        return applyProjectOrder(result, ConfigService.getWorkspaceOrder());
     }
 
     /**
-     * 按用户保存的顺序合并工作区列表：
-     * order 中的 hash 按保存顺序排列在前，未保存过排序的工作区按原顺序追加到末尾，
+     * 按用户保存的顺序合并项目列表：
+     * order 中的 hash 按保存顺序排列在前，未保存过排序的项目按原顺序追加到末尾，
      * order 中已不存在（被删除）的 hash 自动忽略。
      */
-    public static List<WorkspaceInfoDTO> applyWorkspaceOrder(List<WorkspaceInfoDTO> workspaces, List<String> order) {
-        if (workspaces == null || workspaces.isEmpty() || order == null || order.isEmpty()) {
-            return workspaces;
+    public static List<ProjectInfoDTO> applyProjectOrder(List<ProjectInfoDTO> projects, List<String> order) {
+        if (projects == null || projects.isEmpty() || order == null || order.isEmpty()) {
+            return projects;
         }
-        Map<String, WorkspaceInfoDTO> byHash = new LinkedHashMap<>();
-        for (WorkspaceInfoDTO workspace : workspaces) {
-            byHash.put(workspace.hash(), workspace);
+        Map<String, ProjectInfoDTO> byHash = new LinkedHashMap<>();
+        for (ProjectInfoDTO project : projects) {
+            byHash.put(project.hash(), project);
         }
-        List<WorkspaceInfoDTO> result = new ArrayList<>(workspaces.size());
+        List<ProjectInfoDTO> result = new ArrayList<>(projects.size());
         Set<String> placed = new HashSet<>();
         for (String hash : order) {
-            WorkspaceInfoDTO workspace = byHash.get(hash);
-            if (workspace != null && placed.add(hash)) {
-                result.add(workspace);
+            ProjectInfoDTO project = byHash.get(hash);
+            if (project != null && placed.add(hash)) {
+                result.add(project);
             }
         }
-        for (WorkspaceInfoDTO workspace : workspaces) {
-            if (placed.add(workspace.hash())) {
-                result.add(workspace);
+        for (ProjectInfoDTO project : projects) {
+            if (placed.add(project.hash())) {
+                result.add(project);
             }
         }
         return result;
     }
 
-    /**
-     * 删除工作区（兼容旧接口）。
-     * 在新架构中，清除该工作区的所有 Agent 缓存。
-     *
-     * @param hash 工作区 hash
-     * @return 删除成功返回 true
-     */
-    public boolean deleteWorkspace(String hash) {
+    public boolean deleteProject(String hash) {
         if (hash == null || hash.isEmpty()) {
             return false;
         }
 
-        // 1. 查找并清除该工作区的所有 Agent 缓存
+        // 1. 查找并清除该项目的所有 Agent 缓存
         List<String> keysToRemove = new ArrayList<>();
         for (String key : sessionCache.keySet()) {
-            String workspacePath = key.split("::", 2)[0];
-            String keyHash = WorkspaceManager.computeHash(workspacePath);
+            String projectPath = key.split("::", 2)[0];
+            String keyHash = ProjectRegistry.computeProjectHash(projectPath);
             if (hash.equals(keyHash)) {
                 keysToRemove.add(key);
             }
@@ -1955,38 +1929,37 @@ public class AgentService {
 
         for (String key : keysToRemove) {
             String[] parts = key.split("::", 2);
-            String workspacePath = parts[0];
+            String projectPath = parts[0];
             String sessionName = parts.length > 1 ? parts[1] : "default";
-            evictAgent(workspacePath, sessionName);
+            evictAgent(projectPath, sessionName);
         }
 
-        // 2. 删除工作区数据目录（~/.loopra/workspace/{hash}/）
+        // 2. 删除项目数据目录（~/.loopra/workspace/{hash}/）
         boolean directoryDeleted = false;
         try {
-            WorkspaceManager wm = new WorkspaceManager();
-            directoryDeleted = wm.deleteWorkspace(hash);
+            ProjectRegistry projects = new ProjectRegistry();
+            directoryDeleted = projects.deleteProject(hash);
             if (directoryDeleted) {
-                log.info("[web] 已删除工作区数据目录: {}", hash);
+                log.info("[web] 已删除项目数据目录: {}", hash);
             }
         } catch (Exception e) {
-            log.warn("[web] 删除工作区数据目录失败: {}", e.getMessage());
+            log.warn("[web] 删除项目数据目录失败: {}", e.getMessage());
         }
 
-        // 3. 如果删除的是当前工作区，清除 config.json 中的 workspaceDir，
-        //    防止后续其他代码路径触发 switchWorkspace → initWorkspace 重建已删除的工作区
+        // 3. 如果删除的是当前项目，清除 config.json 中的 workspaceDir
         if (directoryDeleted) {
             try {
-                String currentPath = getWorkspace();
-                if (currentPath != null && hash.equals(WorkspaceManager.computeHash(currentPath))) {
+                String currentPath = getCurrentProject();
+                if (currentPath != null && hash.equals(ProjectRegistry.computeProjectHash(currentPath))) {
                     ConfigService.removeConfigKey("workspaceDir");
-                    log.info("[web] 已清除 config.json 中的当前工作区引用: {}", currentPath);
+                    log.info("[web] 已清除 config.json 中的当前项目引用: {}", currentPath);
                 }
             } catch (Exception e) {
-                log.warn("[web] 清除当前工作区引用失败: {}", e.getMessage());
+                log.warn("[web] 清除当前项目引用失败: {}", e.getMessage());
             }
         }
 
-        log.info("[web] 已删除工作区: {}，清除了 {} 个 Agent", hash, keysToRemove.size());
+        log.info("[web] 已删除项目: {}，清除了 {} 个 Agent", hash, keysToRemove.size());
         return directoryDeleted;
     }
 
@@ -2060,7 +2033,7 @@ public class AgentService {
      * 差异在于首次创建 Agent 时注入需求 SystemPrompt，且异常不吞掉（由执行器兜底流转 failed）。
      * </p>
      *
-     * @param workspacePath 工作区路径
+     * @param workspacePath 项目路径
      * @param sessionName   需求专属会话名
      * @param systemPrompt  需求 SystemPrompt（首次创建会话 Agent 时生效）
      * @param message       触发执行的消息
@@ -2079,7 +2052,7 @@ public class AgentService {
      * 用于执行完成后评论触发的回复回合（避免内部指令污染评论区）。
      * </p>
      *
-     * @param workspacePath 工作区路径
+     * @param workspacePath 项目路径
      * @param sessionName   需求专属会话名
      * @param systemPrompt  需求 SystemPrompt（首次创建会话 Agent 时生效）
      * @param message       触发执行的消息

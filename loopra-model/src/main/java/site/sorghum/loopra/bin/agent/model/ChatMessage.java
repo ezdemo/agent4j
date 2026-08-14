@@ -81,13 +81,13 @@ public class ChatMessage {
 
     /**
      * 快照检查点 ID（仅 user 消息有效）。
-     * 非空时表示该消息发送前工作区已保存快照，可用于撤回 AI 修改。
+     * 非空时表示该消息发送前项目已保存快照，可用于撤回 AI 修改。
      */
     @ONodeAttr(name = "snapshot_id")
     private String snapshotId;
 
     /**
-     * 消息撤回定位 ID（仅 user 消息有效）。没有工作区快照时，仍可据此撤回会话消息。
+     * 消息撤回定位 ID（仅 user 消息有效）。没有项目快照时，仍可据此撤回会话消息。
      */
     @ONodeAttr(name = "rollback_id")
     private String rollbackId;

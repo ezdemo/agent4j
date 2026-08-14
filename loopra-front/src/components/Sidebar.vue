@@ -123,7 +123,7 @@
             <div class="session-info">
               <div class="session-name">
                 {{ s.title || formatName(s.name) }}
-                <span v-if="s.worktreeMode" class="wt-badge" title="工作树隔离模式">🌲</span>
+                <span v-if="s.worktreeMode" class="wt-badge" title="隔离分支模式">🌲</span>
               </div>
             </div>
             <div class="session-item-actions">

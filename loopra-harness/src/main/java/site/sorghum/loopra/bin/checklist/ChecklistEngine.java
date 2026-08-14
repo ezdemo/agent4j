@@ -12,7 +12,7 @@ import java.util.UUID;
  * ChecklistEngine — 执行清单引擎。
  * <p>
  * 管理 Checklist 的创建、推进、标记完成/失败/跳过等操作。
- * 持久化通过 WorkspaceManager 的 KV store 完成（Checklist 本身是 POJO，直接 JSON 序列化）。
+ * 持久化通过 ProjectRegistry 的 Checklist store 完成（Checklist 本身是 POJO，直接 JSON 序列化）。
  * </p>
  *
  * @author Sorghum

@@ -40,7 +40,7 @@ public class UserMessage {
     private String snapshotId;
 
     /**
-     * 消息撤回定位 ID。每条用户消息都有该值；即使没有工作区快照，也可撤回会话消息。
+     * 消息撤回定位 ID。每条用户消息都有该值；即使没有项目快照，也可撤回会话消息。
      */
     @Getter
     @Setter

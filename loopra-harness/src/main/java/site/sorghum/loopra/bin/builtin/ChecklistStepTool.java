@@ -8,7 +8,7 @@ import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Param;
 import site.sorghum.loopra.bin.checklist.Checklist;
 import site.sorghum.loopra.bin.checklist.ChecklistEngine;
-import site.sorghum.loopra.bin.workspace.WorkspaceManager;
+import site.sorghum.loopra.bin.project.ProjectRegistry;
 import site.sorghum.loopra.tool.ToolContext;
 import site.sorghum.loopra.tool.SolonToTools;
 
@@ -51,10 +51,10 @@ public class ChecklistStepTool extends AbsToolProvider implements SolonToTools {
 
         try {
             String rootDir = ctx.getStateRootDir().toAbsolutePath().toString();
-            WorkspaceManager workspaceManager = WorkspaceManager.getOrCreate(rootDir);
+            ProjectRegistry projectRegistry = ProjectRegistry.getOrCreate(rootDir);
 
             // 加载清单
-            Checklist cl = workspaceManager.getChecklistStore().findBySession(sessionId);
+            Checklist cl = projectRegistry.getChecklistStore().findBySession(sessionId);
             if (cl == null) {
                 return "CHECKLIST_NOT_FOUND: 当前会话没有活跃清单。请先使用 checklist_start 创建清单。";
             }
@@ -80,7 +80,7 @@ public class ChecklistStepTool extends AbsToolProvider implements SolonToTools {
             }
 
             // 持久化
-            workspaceManager.getChecklistStore().save(cl);
+            projectRegistry.getChecklistStore().save(cl);
 
             log.info("[checklist] 步骤状态更新: action={}, result={}", action, markResult.getType());
 

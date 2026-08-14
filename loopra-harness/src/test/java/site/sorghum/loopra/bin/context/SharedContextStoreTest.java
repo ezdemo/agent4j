@@ -1,4 +1,4 @@
-package site.sorghum.loopra.bin.workspace;
+package site.sorghum.loopra.bin.context;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -14,20 +14,20 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
- * {@link SharedWorkspace} 的单元测试。
+ * {@link SharedContextStore} 的单元测试。
  *
  * @author Sorghum
  */
-class SharedWorkspaceTest {
+class SharedContextStoreTest {
 
-    private SharedWorkspace workspace;
+    private SharedContextStore workspace;
 
     @TempDir
     Path tempDir;
 
     @BeforeEach
     void setUp() {
-        workspace = new SharedWorkspace(100);
+        workspace = new SharedContextStore(100);
     }
 
     // ==================== testWriteAndReadKV ====================
@@ -147,8 +147,8 @@ class SharedWorkspaceTest {
 
     @Test
     void testMaxEntriesEviction() {
-        // 使用 maxEntries=5 的工作区
-        SharedWorkspace smallWorkspace = new SharedWorkspace(5);
+        // 使用 maxEntries=5 的项目
+        SharedContextStore smallWorkspace = new SharedContextStore(5);
 
         // 写入 10 个 KV 条目
         for (int i = 0; i < 10; i++) {
@@ -169,14 +169,14 @@ class SharedWorkspaceTest {
     @Test
     void persistsEntriesAcrossWorkspaceInstances() {
         Path project = tempDir.resolve("project");
-        SharedWorkspace first = new SharedWorkspace(100);
+        SharedContextStore first = new SharedContextStore(100);
         first.writeKV(project, "task/context", "parent-data", "parent-session");
         first.writeDoc(project, "task/result", "sub-agent-data", "text/markdown", "parent-session");
 
         Path storeFile = project.resolve(".loopra/workspace/workspace.json");
         assertTrue(Files.isRegularFile(storeFile));
 
-        SharedWorkspace restarted = new SharedWorkspace(100);
+        SharedContextStore restarted = new SharedContextStore(100);
         assertEquals("parent-data", restarted.readKV(project, "task/context").orElseThrow());
         DocumentBucket document = restarted.readDoc(project, "task/result").orElseThrow();
         assertEquals("sub-agent-data", document.getContent());
@@ -184,7 +184,7 @@ class SharedWorkspaceTest {
         assertEquals("parent-session", document.getCreator());
 
         restarted.delete(project, "task/context");
-        assertTrue(new SharedWorkspace(100).readKV(project, "task/context").isEmpty());
+        assertTrue(new SharedContextStore(100).readKV(project, "task/context").isEmpty());
     }
 
     @Test
@@ -194,7 +194,7 @@ class SharedWorkspaceTest {
         workspace.writeKV(firstProject, "shared-key", "first", "tester");
         workspace.writeKV(secondProject, "shared-key", "second", "tester");
 
-        SharedWorkspace restarted = new SharedWorkspace(100);
+        SharedContextStore restarted = new SharedContextStore(100);
         assertEquals("first", restarted.readKV(firstProject, "shared-key").orElseThrow());
         assertEquals("second", restarted.readKV(secondProject, "shared-key").orElseThrow());
     }
@@ -208,7 +208,7 @@ class SharedWorkspaceTest {
         Files.writeString(storeFile, corrupted);
 
         assertThrows(IllegalStateException.class,
-                () -> new SharedWorkspace(100).writeKV(project, "key", "value", "tester"));
+                () -> new SharedContextStore(100).writeKV(project, "key", "value", "tester"));
         assertEquals(corrupted, Files.readString(storeFile));
     }
 

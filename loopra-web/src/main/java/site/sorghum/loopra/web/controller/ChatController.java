@@ -65,7 +65,7 @@ public class ChatController {
             cancelStreamTask(request.getRequestId());
         }
         if (request != null && (request.getWorkspaceHash() != null || request.getSessionName() != null)) {
-            agentService.abortChat(agentService.resolveWorkspacePath(request.getWorkspaceHash()), request.getSessionName());
+            agentService.abortChat(agentService.resolveProjectPath(request.getWorkspaceHash()), request.getSessionName());
         } else {
             agentService.abortCurrentChat();
         }
@@ -97,7 +97,7 @@ public class ChatController {
     @ApiOperation(value = "SSE 流式聊天", notes = "通过 Server-Sent Events 流式返回聊天回复，支持实时推送内容片段")
     @ApiImplicitParams({
             @ApiImplicitParam(name = "message", value = "用户消息", required = true),
-            @ApiImplicitParam(name = "workspaceHash", value = "工作区 hash"),
+            @ApiImplicitParam(name = "workspaceHash", value = "项目 hash"),
             @ApiImplicitParam(name = "sessionName", value = "会话名称")
     })
     @Post
@@ -117,7 +117,7 @@ public class ChatController {
         SseEmitter emitter = new SseEmitter(ctx);
         final String message = request.getMessage() != null ? request.getMessage().trim() : "";
         final UserMessage userMsg = UserMessage.of(message, request.getImages());
-        final String resolvedPath = agentService.resolveWorkspacePath(request.getWorkspaceHash());
+        final String resolvedPath = agentService.resolveProjectPath(request.getWorkspaceHash());
         final String sessionName = request.getSessionName();
         final String requestId = ensureRequestId(request);
 
@@ -125,7 +125,7 @@ public class ChatController {
         Runnable streamTask = () -> {
             taskStarted.set(true);
             try {
-                // ★ 创建快照检查点：在 AI 执行修改前保存当前工作区状态
+                // ★ 创建快照检查点：在 AI 执行修改前保存当前项目状态
                 String msgId = UUID.randomUUID().toString().substring(0, 8);
                 boolean snapshotCreated = createCheckpointIfNeeded(request.getWorkspaceHash(), msgId, emitter);
                 if (Thread.currentThread().isInterrupted()) return;
@@ -137,7 +137,7 @@ public class ChatController {
                     userMsg.setSnapshotId(msgId);
                 }
 
-                // ★ 工作树开关透传：请求携带时先持久化到会话元数据，Agent 创建时读取
+                // ★ 隔离分支开关透传：请求携带时先持久化到会话元数据，Agent 创建时读取
                 if (request.getWorktreeMode() != null || request.getMergeMode() != null) {
                     try {
                         if (request.getWorktreeMode() != null) {
@@ -148,7 +148,7 @@ public class ChatController {
                         }
                     } catch (Exception e) {
                         // 开关持久化失败不应阻塞聊天：会话已存在且正在运行时只记录
-                        log.warn("[chat] 持久化工作树开关失败: {}", e.getMessage());
+                        log.warn("[chat] 持久化隔离分支开关失败: {}", e.getMessage());
                     }
                 }
 
@@ -244,7 +244,7 @@ public class ChatController {
     }
 
     /**
-     * 按需创建快照检查点：仅当工作区是 Git 仓库时才创建，非 Git 仓库静默跳过。
+     * 按需创建快照检查点：仅当项目是 Git 仓库时才创建，非 Git 仓库静默跳过。
      *
      * @return true 表示快照创建成功，false 表示跳过或失败
      */
@@ -255,7 +255,7 @@ public class ChatController {
                 log.info("[chat] 快照已创建: msgId={}, commitHash={}", msgId, info.getCommitHash());
                 return true;
             } else {
-                log.debug("[chat] 工作区非 Git 仓库，跳过快照创建");
+                log.debug("[chat] 项目非 Git 仓库，跳过快照创建");
             }
         } catch (Exception e) {
             // 快照失败不应阻塞聊天流程，仅记录日志

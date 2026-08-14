@@ -30,13 +30,13 @@ public class ToolContext {
      */
     private final Map<String, Object> params;
     /**
-     * 工作区根目录（可选）
+     * 项目根目录（可选）
      */
     private final String rootDir;
     /**
-     * 状态根目录（可选）——会话身份/Goal/Checklist/会话持久化归属的工作区。
-     * <p>工作树隔离模式下，{@code rootDir} 指向隔离工作树（AI 文件操作落点），
-     * {@code stateRootDir} 仍指向主工作区，保证会话级状态跨工作树生命周期延续。</p>
+     * 状态根目录（可选）——会话身份/Goal/Checklist/会话持久化归属的项目。
+     * <p>隔离分支模式下，{@code rootDir} 指向隔离分支（AI 文件操作落点），
+     * {@code stateRootDir} 仍指向主项目，保证会话级状态跨隔离分支生命周期延续。</p>
      */
     private final String stateRootDir;
     /**
@@ -165,7 +165,7 @@ public class ToolContext {
 
     /**
      * 获取状态根目录；未设置时回退到 {@link #getRootDir()}。
-     * 用于 Goal/Checklist/会话持久化等按工作区归档的会话级状态。
+     * 用于 Goal/Checklist/会话持久化等按项目归档的会话级状态。
      */
     @ONodeAttr(ignore = true)
     public Path getStateRootDir() {

@@ -11,7 +11,7 @@ import site.sorghum.loopra.bin.model.HttpModelClient;
 import site.sorghum.loopra.bin.model.ModelClient;
 import site.sorghum.loopra.bin.session.JsonlSessionStore;
 import site.sorghum.loopra.bin.session.SessionStore;
-import site.sorghum.loopra.bin.workspace.WorkspaceManager;
+import site.sorghum.loopra.bin.project.ProjectRegistry;
 
 import java.io.IOException;
 import java.nio.file.Files;
@@ -93,7 +93,7 @@ public class AcpSessionManager {
     }
 
     /**
-     * 创建工作区路径。
+     * 创建项目路径。
      */
     private Path resolveWorkspace(String cwd) {
         return (cwd != null && !cwd.isEmpty())
@@ -174,8 +174,8 @@ public class AcpSessionManager {
 
         // 2. 检查磁盘持久化文件
         try {
-            String hash = WorkspaceManager.computeHash(workspacePath.toAbsolutePath().toString());
-            Path sessionFile = WorkspaceManager.getOrCreate(workspacePath.toString())
+            String hash = ProjectRegistry.computeProjectHash(workspacePath.toAbsolutePath().toString());
+            Path sessionFile = ProjectRegistry.getOrCreate(workspacePath.toString())
                     .getSessionsDir(workspacePath.toString())
                     .resolve(sanitize(sessionId) + ".jsonl");
 

@@ -313,7 +313,7 @@ async function loadSessions() {
       const response = await sessionsAPI.list(props.activeWorkspaceHash)
       sessions.value = response.success ? (response.data || []).map((session) => ({ ...session, workspaceHash: props.activeWorkspaceHash })) : []
     } else {
-      // 未选中项目时加载所有工作区的会话
+      // 未选中项目时加载所有项目的会话
       const all = []
       await Promise.all(props.workspaces.map(async (ws) => {
         try {

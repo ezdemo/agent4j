@@ -250,7 +250,7 @@ class JsonlSessionStoreTest {
         assertTrue(store.isWorktreeMode(name));
         assertEquals("ai-auto", store.getMergeMode(name));
 
-        // 工作树开关出现在 list() 的 SessionInfo 中
+        // 隔离分支开关出现在 list() 的 SessionInfo 中
         SessionStore.SessionInfo info = store.list().stream()
                 .filter(session -> name.equals(session.name()))
                 .findFirst()

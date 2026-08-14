@@ -39,7 +39,7 @@ public class FileChangeRevertService {
 
             Path file = root.resolve(change.path()).normalize();
             if (!file.startsWith(root)) {
-                throw new ServiceException("文件路径超出工作区: " + change.path());
+                throw new ServiceException("文件路径超出项目: " + change.path());
             }
             if (!seenFiles.add(file)) {
                 throw new ServiceException("同一文件不能重复撤销: " + change.path());

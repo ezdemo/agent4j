@@ -168,7 +168,7 @@ public class RequirementManager {
         if (requirement == null) {
             return false;
         }
-        String workspacePath = agentService.resolveWorkspacePath(requirement.getProjectHash());
+        String workspacePath = agentService.resolveProjectPath(requirement.getProjectHash());
         if (workspacePath == null) {
             log.warn("[requirement] 评论失败：需求 {} 所属项目不存在: {}", id, requirement.getProjectHash());
             return false;
@@ -196,7 +196,7 @@ public class RequirementManager {
             if (requirement == null) {
                 return;
             }
-            String workspacePath = agentService.resolveWorkspacePath(requirement.getProjectHash());
+            String workspacePath = agentService.resolveProjectPath(requirement.getProjectHash());
             if (workspacePath == null) {
                 return;
             }
@@ -217,7 +217,7 @@ public class RequirementManager {
         if (requirement == null) {
             return false;
         }
-        String workspacePath = agentService.resolveWorkspacePath(requirement.getProjectHash());
+        String workspacePath = agentService.resolveProjectPath(requirement.getProjectHash());
         if (workspacePath == null) {
             return false;
         }
@@ -235,7 +235,7 @@ public class RequirementManager {
         if (requirement == null) {
             return null;
         }
-        String workspacePath = agentService.resolveWorkspacePath(requirement.getProjectHash());
+        String workspacePath = agentService.resolveProjectPath(requirement.getProjectHash());
         if (workspacePath == null) {
             return new ArrayList<>();
         }
@@ -258,7 +258,7 @@ public class RequirementManager {
                 .append("\n优先级: ").append(requirement.getPriority())
                 .append("\n项目: ").append(requirement.getProjectName())
                 .append("\n描述: ").append(requirement.getDescription());
-        String workspacePath = agentService.resolveWorkspacePath(requirement.getProjectHash());
+        String workspacePath = agentService.resolveProjectPath(requirement.getProjectHash());
         if (workspacePath != null) {
             List<String> comments = new ArrayList<>();
             for (ChatMessage message : agentService.getHistory(workspacePath, requirement.getSessionName())) {
@@ -332,7 +332,7 @@ public class RequirementManager {
             return false;
         }
         if ("doing".equals(requirement.getStatus())) {
-            String workspacePath = agentService.resolveWorkspacePath(requirement.getProjectHash());
+            String workspacePath = agentService.resolveProjectPath(requirement.getProjectHash());
             if (workspacePath != null) {
                 try {
                     agentService.abortChat(workspacePath, requirement.getSessionName());
@@ -398,7 +398,7 @@ public class RequirementManager {
             if (requirement == null) {
                 return;
             }
-            workspacePath = agentService.resolveWorkspacePath(requirement.getProjectHash());
+            workspacePath = agentService.resolveProjectPath(requirement.getProjectHash());
             if (workspacePath == null) {
                 throw new IllegalStateException("需求所属项目不存在: " + requirement.getProjectHash());
             }
@@ -452,7 +452,7 @@ public class RequirementManager {
             if (requirement == null) {
                 return;
             }
-            workspacePath = agentService.resolveWorkspacePath(requirement.getProjectHash());
+            workspacePath = agentService.resolveProjectPath(requirement.getProjectHash());
             if (workspacePath == null) {
                 throw new IllegalStateException("需求所属项目不存在: " + requirement.getProjectHash());
             }
@@ -515,7 +515,7 @@ public class RequirementManager {
      */
     private String buildSystemPrompt(Requirement requirement) {
         return """
-                你是需求执行 Agent。当前会话绑定一个需求，请在所属项目工作区中完成它。
+                你是需求执行 Agent。当前会话绑定一个需求，请在所属项目中完成它。
                 完成后必须调用 finish_requirement 工具声明结果（status 传 done 或 failed，summary 总结所做改动与结果）。
                 summary 必须使用简洁 Markdown：先写一句结论，后续多个改动、问题或验证结果使用 `- ` 分行列出，项目之间留空行；不要把多项内容压成一整段。
                 执行期间用户评论会作为消息进入本会话，可用 reply_requirement_comment 回复用户评论。

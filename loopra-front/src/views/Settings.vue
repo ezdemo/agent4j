@@ -532,7 +532,7 @@
           <ModelChannels :showBack="false" />
         </section>
 
-        <!-- 工作区设置 -->
+        <!-- 项目设置 -->
         <section v-if="activeTab === 'workspace'" class="settings-section">
           <div class="section-card">
             <div class="card-header">
@@ -542,7 +542,7 @@
             <div class="card-body">
               <div class="setting-row">
                 <div class="setting-info">
-                  <label class="setting-label">工作区路径</label>
+                  <label class="setting-label">项目路径</label>
                   <p class="setting-hint">默认工作目录</p>
                 </div>
                 <div class="setting-control">
@@ -2188,7 +2188,7 @@ const tabs = computed(() => [
   },
   {
     id: 'workspace',
-    label: '工作区',
+    label: '项目',
     description: '工作目录和编辑行为配置',
     icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
       <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>

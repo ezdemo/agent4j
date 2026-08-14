@@ -8,7 +8,7 @@ import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Param;
 import site.sorghum.loopra.bin.checklist.Checklist;
 import site.sorghum.loopra.bin.checklist.ChecklistEngine;
-import site.sorghum.loopra.bin.workspace.WorkspaceManager;
+import site.sorghum.loopra.bin.project.ProjectRegistry;
 import site.sorghum.loopra.tool.ToolContext;
 import site.sorghum.loopra.tool.SolonToTools;
 
@@ -47,9 +47,9 @@ public class ChecklistStatusTool extends AbsToolProvider implements SolonToTools
             }
 
             String rootDir = ctx.getStateRootDir().toAbsolutePath().toString();
-            WorkspaceManager workspaceManager = WorkspaceManager.getOrCreate(rootDir);
+            ProjectRegistry projectRegistry = ProjectRegistry.getOrCreate(rootDir);
 
-            Checklist cl = workspaceManager.getChecklistStore().findBySession(sessionId);
+            Checklist cl = projectRegistry.getChecklistStore().findBySession(sessionId);
             if (cl == null) {
                 return "CHECKLIST_NOT_FOUND: 当前会话没有活跃清单。";
             }

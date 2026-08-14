@@ -56,7 +56,7 @@ public class LoopraSkillProvider implements SolonToTools {
     }
 
     /**
-     * 移除指定根目录的 skill provider（工作树删除后调用，避免 MountManager 缓存无限增长）。
+     * 移除指定根目录的 skill provider（隔离分支删除后调用，避免 MountManager 缓存无限增长）。
      * 底层 TerminalSessionManager 的生命周期由 solon-ai 管理，此处仅移除映射。
      */
     public static void removeFor(String rootDir) {

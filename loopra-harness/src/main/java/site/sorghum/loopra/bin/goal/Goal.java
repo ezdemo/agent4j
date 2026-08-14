@@ -26,7 +26,7 @@ public class Goal {
     private String id;
     /** 关联的会话 ID */
     private String sessionId;
-    /** 工作区 hash（冗余，方便全局巡检） */
+    /** 项目 hash（冗余，方便全局巡检） */
     private String workspaceHash;
     /** 一句话目标标题 */
     private String title;

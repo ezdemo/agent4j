@@ -28,7 +28,7 @@ public class ChatRequest {
     private String requestId;
 
     /**
-     * 工作区 hash（用于多工作区隔离，由 /api/workspaces 返回）
+     * 项目 hash（用于多项目隔离，由 /api/workspaces 返回）
      */
     private String workspaceHash;
 
@@ -59,14 +59,14 @@ public class ChatRequest {
     private Boolean fastMode;
 
     /**
-     * 工作树隔离模式开关（可选）。
+     * 隔离分支模式开关（可选）。
      * 指定时在 Agent 创建前持久化到会话元数据：开启后该会话的 AI 文件操作
-     * 落在 ~/.loopra/worktree/ 下的 git worktree 中，合并回主工作区需显式触发。
+     * 落在 ~/.loopra/worktree/ 下的 git worktree 中，合并回主项目需显式触发。
      */
     private Boolean worktreeMode;
 
     /**
-     * 工作树合并模式（可选）：manual / ai-auto / ai-auto-approve。
+     * 隔离分支合并模式（可选）：manual / ai-auto / ai-auto-approve。
      * 指定时持久化到会话元数据。
      */
     private String mergeMode;

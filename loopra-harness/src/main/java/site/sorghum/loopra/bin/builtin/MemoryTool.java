@@ -17,7 +17,7 @@ import java.util.List;
 /**
  * Memory 工具 —— 跨会话项目记忆的主动读写。
  * <p>
- * 记忆存储在工作区内 {@code .loopra/loopra-memory.md}，记录值得跨会话长期保留的
+ * 记忆存储在项目内 {@code .loopra/loopra-memory.md}，记录值得跨会话长期保留的
  * 项目级事实（架构决策、约定、踩坑、用户偏好、高频复用事实等）。
  * </p>
  * <p>
@@ -33,7 +33,7 @@ import java.util.List;
 public class MemoryTool extends AbsToolProvider implements SolonToTools {
 
     @ToolMapping(name = "memory", description = """
-            读写跨会话的项目记忆（存储在工作区 .loopra/loopra-memory.md）。
+            读写跨会话的项目记忆（存储在项目 .loopra/loopra-memory.md）。
             记录值得长期保留的项目级事实：架构决策、约定、踩坑教训、用户偏好、高频复用事实。
 
             - action=search：检索已有记忆。可选 keyword 做关键词过滤，无关键词返回全部。
@@ -61,7 +61,7 @@ public class MemoryTool extends AbsToolProvider implements SolonToTools {
         }
         Path workspace = ctx.getRootDir();
         if (workspace == null) {
-            return "WORKSPACE_MISSING: 无法获取工作区路径，记忆工具不可用";
+            return "WORKSPACE_MISSING: 无法获取项目路径，记忆工具不可用";
         }
 
         return switch (action.trim().toLowerCase()) {

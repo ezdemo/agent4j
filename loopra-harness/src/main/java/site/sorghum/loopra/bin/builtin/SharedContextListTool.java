@@ -6,7 +6,7 @@ import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import org.noear.solon.annotation.Param;
-import site.sorghum.loopra.bin.workspace.SharedWorkspace;
+import site.sorghum.loopra.bin.context.SharedContextStore;
 import site.sorghum.loopra.tool.ToolContext;
 import site.sorghum.loopra.tool.SolonToTools;
 
@@ -17,7 +17,8 @@ import java.util.Set;
 import java.util.stream.Collectors;
 
 /**
- * Workspace List 工具 —— 列出共享工作区中的条目键。
+ * Shared-context list tool. The legacy {@code workspace_list} tool name is
+ * kept for protocol compatibility.
  * <p>
  * 支持按前缀过滤，返回匹配的所有 KV 和文档条目的 key 列表。
  * 结果按字母序排列，带序号和总数。
@@ -26,28 +27,28 @@ import java.util.stream.Collectors;
  * @author Sorghum
  */
 @Component
-public class WorkspaceListTool extends AbsToolProvider implements SolonToTools {
+public class SharedContextListTool extends AbsToolProvider implements SolonToTools {
 
     @Inject
-    private SharedWorkspace workspace;
+    private SharedContextStore contextStore;
 
     /**
      * 无参构造器 —— Solon DI 使用。
      */
-    public WorkspaceListTool() {
+    public SharedContextListTool() {
     }
 
     /**
      * 带参构造器 —— SubAgent 手动创建时使用。
      *
-     * @param workspace SharedWorkspace 实例
+     * @param contextStore shared project context
      */
-    public WorkspaceListTool(SharedWorkspace workspace) {
-        this.workspace = workspace;
+    public SharedContextListTool(SharedContextStore contextStore) {
+        this.contextStore = contextStore;
     }
 
     @ToolMapping(name = "workspace_list", description = """
-                列出当前项目持久化在 `.loopra/workspace/` 的共享工作区条目键。支持按前缀过滤，返回所有匹配的 KV 和文档条目的 key 列表。
+                列出当前项目持久化在 `.loopra/workspace/` 的共享上下文条目键。支持按前缀过滤，返回所有匹配的 KV 和文档条目的 key 列表。
                 参数: prefix(可选, key 前缀过滤), scope(可选, 作用域预留)。
                 prefix 为空时列出所有条目。
                 """)
@@ -59,19 +60,19 @@ public class WorkspaceListTool extends AbsToolProvider implements SolonToTools {
             prefix = "";
         }
 
-        // 2. 调用 workspace.listKeys(prefix)
-        Path workspaceRoot = ctx == null ? null : ctx.getRootDir();
+        // 2. 调用 contextStore.listKeys(prefix)
+        Path projectRoot = ctx == null ? null : ctx.getRootDir();
         Set<String> keys;
         try {
-            keys = workspace.listKeys(workspaceRoot, prefix);
+            keys = contextStore.listKeys(projectRoot, prefix);
         } catch (Exception e) {
-            return "LIST_FAILED: Failed to list workspace keys with prefix '" + prefix + "': " + e.getMessage();
+            return "LIST_FAILED: Failed to list shared context keys with prefix '" + prefix + "': " + e.getMessage();
         }
 
         // 3. 格式化输出
         if (keys == null || keys.isEmpty()) {
             if (prefix.isEmpty()) {
-                return "Workspace is empty. No entries found.";
+                return "Shared context is empty. No entries found.";
             } else {
                 return "No entries found with prefix: '" + prefix + "'.\n"
                         + "Tip: Use workspace_list without prefix to see all available keys.";
@@ -84,7 +85,7 @@ public class WorkspaceListTool extends AbsToolProvider implements SolonToTools {
         StringBuilder sb = new StringBuilder();
         sb.append("Found ").append(sortedKeys.size()).append(" entr")
                 .append(sortedKeys.size() == 1 ? "y" : "ies")
-                .append(" in workspace");
+                .append(" in shared context");
         if (!prefix.isEmpty()) {
             sb.append(" (prefix: '").append(prefix).append("')");
         }

@@ -17,7 +17,7 @@
 
     <div v-if="loading && !environment" class="environment-empty">正在读取环境…</div>
     <div v-else-if="!environment || environment.mode === 'unavailable'" class="environment-empty">
-      未找到可用的 Git 工作区
+      未找到可用的 Git 项目
     </div>
     <template v-else>
       <div class="environment-scroll">
@@ -27,27 +27,27 @@
           <svg v-else viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="14" rx="2"/><path d="M8 21h8M12 18v3"/></svg>
         </span>
         <div class="environment-summary-main">
-          <strong>{{ isWorktree ? '工作树' : '本地' }}</strong>
-          <span :title="currentPath">{{ currentPath || '工作树尚未创建' }}</span>
+          <strong>{{ isWorktree ? '隔离分支' : '本地' }}</strong>
+          <span :title="currentPath">{{ currentPath || '隔离分支尚未创建' }}</span>
         </div>
         <div class="environment-summary-actions">
           <span class="environment-state" :class="{ dirty: currentStatus?.dirty }">
             {{ statusError ? '读取失败' : currentStatus ? (currentStatus.dirty ? '有变更' : '干净') : '待创建' }}
           </span>
           <button class="environment-mode-button" type="button" :disabled="busy || environment.agentRunning" @click="toggleMode">
-            {{ isWorktree ? '切到本地' : '启用工作树' }}
+            {{ isWorktree ? '切到本地' : '启用隔离分支' }}
           </button>
         </div>
       </div>
 
       <div class="environment-section">
         <div class="environment-section-title">
-          <span>{{ isWorktree ? '工作树变更' : '变更' }}</span>
+          <span>{{ isWorktree ? '隔离分支变更' : '变更' }}</span>
           <span class="environment-count">{{ currentEntries.length }}</span>
         </div>
         <div v-if="statusError" class="environment-empty small error">{{ statusError }}</div>
         <div v-else-if="currentEntries.length === 0" class="environment-empty small">
-          {{ currentStatus ? '暂无未提交变更' : '工作树尚未创建' }}
+          {{ currentStatus ? '暂无未提交变更' : '隔离分支尚未创建' }}
         </div>
         <div v-else class="environment-files">
           <div v-for="entry in currentEntries.slice(0, 12)" :key="entry.path" class="environment-file" :title="entry.path">
@@ -64,14 +64,14 @@
           <span class="environment-count" :class="{ warning: mainEntries.length > 0 }">{{ mainEntries.length }}</span>
         </div>
         <div v-if="statusError" class="environment-empty small error">Git 状态不可用</div>
-        <div v-else-if="mainEntries.length === 0" class="environment-empty small">主工作区干净</div>
+        <div v-else-if="mainEntries.length === 0" class="environment-empty small">主项目干净</div>
         <div v-else class="environment-files">
           <div v-for="entry in mainEntries.slice(0, 12)" :key="`main:${entry.path}`" class="environment-file" :title="entry.path">
             <span class="environment-file-status" :class="statusTone(entry)">{{ statusLabel(entry) }}</span>
             <span class="environment-file-name">{{ entry.path }}</span>
           </div>
           <div v-if="mainEntries.length > 12" class="environment-more">还有 {{ mainEntries.length - 12 }} 个文件…</div>
-          <p class="environment-local-warning">主工作区有未提交变更，暂不能合并。</p>
+          <p class="environment-local-warning">主项目有未提交变更，暂不能合并。</p>
         </div>
       </div>
 
@@ -82,15 +82,15 @@
             <span class="environment-row-label">本地</span>
             <strong :title="environment.mainPath">{{ environment.mainBranch || '未命名分支' }}</strong>
           </div>
-          <span v-if="mainStatus?.dirty" class="environment-dot dirty" title="主工作区有变更" />
-          <span v-else class="environment-dot" title="主工作区干净" />
+          <span v-if="mainStatus?.dirty" class="environment-dot dirty" title="主项目有变更" />
+          <span v-else class="environment-dot" title="主项目干净" />
           <button class="environment-history-button" type="button" :disabled="historyLoading && historyScope === 'main'" @click="showHistory('main')">提交记录</button>
         </div>
         <div v-if="isWorktree" class="environment-row current-row">
           <span class="environment-row-icon">⑂</span>
           <div class="environment-row-main">
             <span class="environment-row-label">当前</span>
-            <strong :title="environment.currentPath">{{ environment.currentBranch || '工作树尚未创建' }}</strong>
+            <strong :title="environment.currentPath">{{ environment.currentBranch || '隔离分支尚未创建' }}</strong>
           </div>
           <span v-if="currentStatus?.dirty" class="environment-dot dirty" title="当前环境有变更" />
           <span v-else class="environment-dot" title="当前环境干净" />
@@ -219,14 +219,14 @@ async function refresh() {
     environment.value = response.data || null
     const git = desktopGit()
     if (!git) throw new Error('Git 功能未加载，请重启桌面端')
-    if (!environment.value?.mainPath) throw new Error('无法读取主工作区')
+    if (!environment.value?.mainPath) throw new Error('无法读取主项目')
 
-    const nextMainStatus = await readGitStatus(git, environment.value.mainPath, '主工作区')
+    const nextMainStatus = await readGitStatus(git, environment.value.mainPath, '主项目')
     const nextCurrentStatus = !environment.value.currentPath
       ? null
       : environment.value.currentPath === environment.value.mainPath
         ? nextMainStatus
-        : await readGitStatus(git, environment.value.currentPath, '工作树')
+        : await readGitStatus(git, environment.value.currentPath, '隔离分支')
     mainStatus.value = nextMainStatus
     currentStatus.value = nextCurrentStatus
     statusError.value = ''
@@ -288,7 +288,7 @@ async function showHistory(scope) {
   historyOpen.value = true
   historyLoading.value = true
   historyScope.value = scope
-  historyTitle.value = `${isMain ? '本地' : '工作树'} · ${branch || 'HEAD'}`
+  historyTitle.value = `${isMain ? '本地' : '隔离分支'} · ${branch || 'HEAD'}`
   historyItems.value = []
   historyError.value = ''
   try {
@@ -371,7 +371,7 @@ async function toggleMode() {
   if (!props.workspaceHash || !props.sessionName || busy.value) return
   if (isWorktree.value && currentStatus.value?.dirty) {
     noticeTone.value = 'error'
-    notice.value = '请先提交工作树变更'
+    notice.value = '请先提交隔离分支变更'
     return
   }
   const enabled = !isWorktree.value
@@ -382,14 +382,14 @@ async function toggleMode() {
     if (enabled) {
       try {
         const created = await gitAPI.worktreeCreate(props.workspaceHash, props.sessionName, {silent: true})
-        if (!created?.success) throw new Error(created?.message || '工作树创建失败')
+        if (!created?.success) throw new Error(created?.message || '隔离分支创建失败')
       } catch (error) {
         await sessionsAPI.setWorktreeMode(props.sessionName, props.workspaceHash, {worktreeMode: false}, {silent: true}).catch(() => {})
         throw error
       }
     }
     noticeTone.value = 'success'
-    notice.value = enabled ? '已启用工作树' : '已切换到本地'
+    notice.value = enabled ? '已启用隔离分支' : '已切换到本地'
     emit('modeChange', enabled)
     notifyChanged()
     await refresh()
