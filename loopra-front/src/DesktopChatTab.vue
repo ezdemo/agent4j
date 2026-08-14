@@ -741,7 +741,8 @@ watch(workspaceHash, (hash) => {
 }
 
 .desktop-files-left :deep(.file-explorer),
-.desktop-files-left :deep(.git-panel) {
+.desktop-files-left :deep(.git-panel),
+.desktop-files-left :deep(.environment-panel) {
   width: 100%;
   min-height: 0;
   flex: 1;

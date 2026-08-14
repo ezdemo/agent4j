@@ -20,6 +20,7 @@
       未找到可用的 Git 工作区
     </div>
     <template v-else>
+      <div class="environment-scroll">
       <div class="environment-summary" :class="environment.mode">
         <span class="environment-icon">
           <svg v-if="isWorktree" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="6" cy="5" r="2"/><circle cx="6" cy="19" r="2"/><circle cx="18" cy="12" r="2"/><path d="M6 7v10M8 7c5 0 3 5 8 5"/></svg>
@@ -95,6 +96,8 @@
           <span v-else class="environment-dot" title="当前环境干净" />
           <button class="environment-history-button" type="button" :disabled="!environment.currentPath || (historyLoading && historyScope === 'current')" @click="showHistory('current')">提交记录</button>
         </div>
+      </div>
+
       </div>
 
       <div class="environment-actions">
@@ -410,7 +413,7 @@ defineExpose({refresh})
 </script>
 
 <style scoped>
-.environment-panel { display: flex; flex-direction: column; height: 100%; min-width: 0; color: var(--fg-2); background: var(--bg-1); font-size: 13px; }
+.environment-panel { display: flex; flex-direction: column; height: 100%; min-width: 0; overflow: hidden; color: var(--fg-2); background: var(--bg-1); font-size: 13px; }
 .environment-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 14px 14px 10px; border-bottom: 1px solid var(--border); }
 .environment-header h2 { margin: 0; font-size: 15px; font-weight: 650; color: var(--fg-1); }
 .environment-message { margin: 4px 0 0; color: var(--fg-4); font-size: 11px; line-height: 1.35; }
@@ -423,6 +426,7 @@ defineExpose({refresh})
 .icon-button.loading svg { opacity: 0; }
 .icon-button.loading::after { position: absolute; width: 13px; height: 13px; box-sizing: border-box; border: 1.5px solid color-mix(in srgb, currentColor 24%, transparent); border-top-color: currentColor; border-radius: 50%; content: ''; animation: environment-refresh-spin .7s linear infinite; }
 @keyframes environment-refresh-spin { to { transform: rotate(360deg); } }
+.environment-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
 .environment-summary { display: flex; align-items: center; gap: 9px; margin: 10px 10px 4px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-2); }
 .environment-summary.worktree { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
 .environment-icon { display: inline-flex; color: var(--accent); }
@@ -462,7 +466,7 @@ defineExpose({refresh})
 .environment-history-button { flex: 0 0 auto; padding: 3px 6px; border: 1px solid var(--border); border-radius: 4px; color: var(--fg-3); background: transparent; cursor: pointer; font-size: 10px; }
 .environment-history-button:hover:not(:disabled) { border-color: var(--accent); color: var(--accent); }
 .environment-history-button:disabled { opacity: .45; cursor: default; }
-.environment-actions { margin-top: auto; padding: 10px 12px 12px; border-top: 1px solid var(--border); }
+.environment-actions { padding: 10px 12px 12px; border-top: 1px solid var(--border); }
 .environment-commit-input { width: 100%; box-sizing: border-box; margin: 8px 0; padding: 7px 8px; border: 1px solid var(--border); border-radius: 5px; outline: none; color: var(--fg-1); background: var(--bg-2); font-size: 12px; }
 .environment-commit-input:focus { border-color: var(--accent); }
 .environment-commit-input:disabled { opacity: .55; }
