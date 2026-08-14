@@ -455,6 +455,18 @@ export const sessionsAPI = {
     return api.get(`/sessions/${sessionPathName(name)}/goal`, { params })
   },
 
+  // 查询会话工作树隔离模式 - GET /api/sessions/{name}/worktree?workspaceHash=xxx
+  getWorktreeMode: (name, workspaceHash) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.get(`/sessions/${sessionPathName(name)}/worktree`, { params })
+  },
+
+  // 切换会话工作树隔离模式 - PUT /api/sessions/{name}/worktree?workspaceHash=xxx  body: { worktreeMode, mergeMode }
+  setWorktreeMode: (name, workspaceHash, body, options = {}) => {
+    const params = workspaceHash ? { workspaceHash } : {}
+    return api.put(`/sessions/${sessionPathName(name)}/worktree`, body || {}, { params, silent: options.silent })
+  },
+
 }
 
 // 工具 API
@@ -862,6 +874,16 @@ export const gitAPI = {
     const params = workspaceHash ? { workspaceHash } : {}
     if (limit) params.limit = limit
     return api.get('/git/log', { params })
+  },
+
+  // 获取当前会话实际使用的环境 - GET /api/git/environment?workspaceHash=xxx&sessionName=xxx
+  environment: (workspaceHash, sessionName, options = {}) => {
+    return api.get('/git/environment', { params: { workspaceHash, sessionName }, silent: options.silent })
+  },
+
+  // 创建会话工作树 - POST /api/git/worktree/create  body: { workspaceHash, sessionName }
+  worktreeCreate: (workspaceHash, sessionName, options = {}) => {
+    return api.post('/git/worktree/create', { workspaceHash, sessionName }, {silent: options.silent})
   },
 
   // 获取可用模型列表 - GET /api/models

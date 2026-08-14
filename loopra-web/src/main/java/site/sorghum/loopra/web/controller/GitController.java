@@ -6,6 +6,7 @@ import io.swagger.annotations.ApiParam;
 import org.noear.solon.annotation.*;
 import site.sorghum.loopra.web.model.*;
 import site.sorghum.loopra.web.service.GitService;
+import site.sorghum.loopra.web.service.WorktreeService;
 
 import java.util.Map;
 
@@ -26,6 +27,9 @@ public class GitController {
 
     @Inject
     private GitService gitService;
+
+    @Inject
+    private WorktreeService worktreeService;
 
     // ==================== 查询端点 ====================
 
@@ -160,4 +164,26 @@ public class GitController {
             @Body String body) throws Exception {
         return ApiResponse.ok(gitService.generateCommitMessage(workspaceHash, body));
     }
+
+    @ApiOperation(value = "获取当前会话环境", notes = "返回 Agent 当前使用的本地工作区或隔离工作树；Git 操作由 Desktop 端执行")
+    @Get
+    @Mapping("/environment")
+    public ApiResponse<EnvironmentStatusDTO> environment(
+            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
+            @ApiParam(value = "会话名称", required = true) @Param(value = "sessionName", required = true) String sessionName) {
+        return ApiResponse.ok(worktreeService.environment(workspaceHash, sessionName));
+    }
+
+    // ==================== 会话工作树隔离 ====================
+
+    @ApiOperation(value = "创建会话工作树", notes = "在 ~/.loopra/worktree/ 下基于主工作区 HEAD 创建独立分支工作树（幂等）")
+    @Post
+    @Mapping("/worktree/create")
+    public ApiResponse<WorktreeStatusDTO> worktreeCreate(@Body WorktreeRequest request) {
+        if (request == null || request.getWorkspaceHash() == null || request.getSessionName() == null) {
+            throw new site.sorghum.loopra.web.common.ServiceException("workspaceHash 与 sessionName 必填");
+        }
+        return ApiResponse.ok(worktreeService.create(request.getWorkspaceHash(), request.getSessionName()));
+    }
+
 }

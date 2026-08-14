@@ -46,7 +46,7 @@ public class ChecklistStatusTool extends AbsToolProvider implements SolonToTools
                 return "SESSION_MISSING: 无法获取会话 ID";
             }
 
-            String rootDir = ctx.getRootDir().toAbsolutePath().toString();
+            String rootDir = ctx.getStateRootDir().toAbsolutePath().toString();
             WorkspaceManager workspaceManager = WorkspaceManager.getOrCreate(rootDir);
 
             Checklist cl = workspaceManager.getChecklistStore().findBySession(sessionId);

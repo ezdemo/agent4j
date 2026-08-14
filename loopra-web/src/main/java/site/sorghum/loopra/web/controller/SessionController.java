@@ -75,17 +75,56 @@ public class SessionController {
         return ApiResponse.ok(new SessionCurrentDTO(resolvedHash, currentName));
     }
 
-    @ApiOperation(value = "新建空白会话", notes = "在指定工作区下创建一个新的空白会话")
+    @ApiOperation(value = "新建空白会话", notes = "在指定工作区下创建一个新的空白会话，可指定初始工作树隔离模式")
     @Post
     @Mapping("/new")
     public ApiResponse<SessionCreateDTO> createNew(
             @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
             @ApiParam(value = "会话名称（可选，自动生成）")
-            @Param(value = "sessionName", required = false) String sessionName) {
+            @Param(value = "sessionName", required = false) String sessionName,
+            @ApiParam(value = "工作树隔离模式（可选，默认 false）")
+            @Param(value = "worktreeMode", required = false) Boolean worktreeMode) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
-        String actualName = agentService.newSession(workspacePath, sessionName);
+        String actualName = agentService.newSession(workspacePath, sessionName, worktreeMode);
         return ApiResponse.ok(new SessionCreateDTO("已创建新会话", workspaceHash, actualName));
+    }
+
+    @ApiOperation(value = "查询会话工作树模式", notes = "返回指定会话的工作树隔离模式开关与合并模式")
+    @Get
+    @Mapping("/{name}/worktree")
+    public ApiResponse<SessionWorktreeModeDTO> getWorktreeMode(
+            @ApiParam(value = "会话名称") @Path("name") String name,
+            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash) {
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+        boolean worktreeMode = agentService.isSessionWorktreeMode(workspacePath, name);
+        String mergeMode = agentService.getSessionMergeMode(workspacePath, name);
+        return ApiResponse.ok(new SessionWorktreeModeDTO(workspaceHash, name, worktreeMode, mergeMode));
+    }
+
+    @ApiOperation(value = "切换会话工作树模式", notes = "开启后该会话的 AI 文件操作落在隔离 git worktree 中；正在运行的会话不允许切换")
+    @Put
+    @Mapping("/{name}/worktree")
+    public ApiResponse<SessionWorktreeModeDTO> setWorktreeMode(
+            @ApiParam(value = "会话名称") @Path("name") String name,
+            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
+            @ApiParam(value = "请求体：{worktreeMode: boolean, mergeMode: 'manual'|'ai-auto'|'ai-auto-approve'}（两个字段均可选）")
+            @Body SessionWorktreeModeRequest request) {
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        if (request == null || (request.getWorktreeMode() == null && request.getMergeMode() == null)) {
+            throw new ServiceException("请求不能为空，需提供 worktreeMode 或 mergeMode");
+        }
+        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+        if (request.getWorktreeMode() != null) {
+            agentService.setSessionWorktreeMode(workspacePath, name, request.getWorktreeMode());
+        }
+        if (request.getMergeMode() != null) {
+            agentService.setSessionMergeMode(workspacePath, name, request.getMergeMode());
+        }
+        boolean worktreeMode = agentService.isSessionWorktreeMode(workspacePath, name);
+        String mergeMode = agentService.getSessionMergeMode(workspacePath, name);
+        return ApiResponse.ok(new SessionWorktreeModeDTO(workspaceHash, name, worktreeMode, mergeMode));
     }
 
     @ApiOperation(value = "切换会话", notes = "切换到指定工作区下的指定会话")

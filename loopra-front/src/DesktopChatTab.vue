@@ -21,10 +21,11 @@
       <button
         type="button"
         class="activity-bar-item"
-        :class="{ active: leftPanelOpen && leftPanelView === 'git' }"
-        title="版本管理"
-        aria-label="版本管理"
-        @click="toggleGitPanel"
+        :class="{ active: leftPanelOpen && leftPanelView === 'environment', 'environment-attention': environmentAttention }"
+        title="环境信息"
+        aria-label="环境信息"
+        @click="toggleEnvironmentPanel"
+        @animationend="environmentAttention = false"
       >
         <svg class="activity-bar-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
           <circle cx="7.5" cy="7" r="2.5"/>
@@ -39,7 +40,7 @@
       class="desktop-files-left"
       :class="{ collapsed: !leftPanelOpen }"
       :style="leftPanelOpen ? { width: `${leftPanelWidth}px`, transition: leftPanelDragging ? 'none' : undefined } : null"
-      :aria-label="leftPanelView === 'git' ? '版本管理' : '项目文件'"
+      :aria-label="leftPanelView === 'environment' ? '环境信息' : '项目文件'"
     >
       <FileExplorer
         v-if="filePanelMounted"
@@ -52,10 +53,13 @@
         @file-deleted="onFileDeleted"
         @file-renamed="onFileRenamed"
       />
-      <GitPanel
-        v-if="gitPanelMounted"
-        v-show="leftPanelView === 'git'"
-        :workspace-hash="workspaceHash"
+      <EnvironmentPanel
+        v-if="environmentPanelMounted"
+        v-show="leftPanelView === 'environment'"
+        ref="environmentPanelRef"
+        :workspace-hash="workspaceHash || ''"
+        :session-name="sessionName"
+        @mode-change="welcomeWorktreeMode = $event"
         @close="leftPanelOpen = false"
       />
       <div
@@ -80,11 +84,15 @@
           :session-name="sessionName"
           :initially-empty="newSession"
           :right-panel-open="rightPanelOpen"
+          :welcome-worktree-mode="welcomeWorktreeMode"
+          :environment-switching="environmentSwitching"
+          :environment-switch-target="environmentSwitchTarget"
           :workspaces="workspaces"
           @switch-workspace="switchWorkspace"
           @session-updated="refreshTabTitle"
           @session-active-change="sessionActive = $event"
           @welcome-change="onWelcomeChange"
+          @environment-mode-change="setWelcomeEnvironmentMode"
           @manage-workspaces="requestHome"
           @manage-models="requestModelSettings"
         />
@@ -132,14 +140,14 @@
 import {message} from 'ant-design-vue'
 import {computed, defineAsyncComponent, nextTick, onBeforeUnmount, onMounted, ref, watch} from 'vue'
 import {useAppStore} from './stores/app'
-import {configAPI, sessionsAPI} from './services/api'
+import {configAPI, gitAPI, sessionsAPI} from './services/api'
 import ChatView from './views/Chat.vue'
 import EditorTabs from './components/EditorTabs.vue'
 import FileEditor from './components/FileEditor.vue'
 import ActionConfirmDialog from './components/ActionConfirmDialog.vue'
 import {fileIconFor} from './utils/fileIcons'
 
-const GitPanel = defineAsyncComponent(() => import('./components/GitPanel.vue'))
+const EnvironmentPanel = defineAsyncComponent(() => import('./components/EnvironmentPanel.vue'))
 const RightPanel = defineAsyncComponent(() => import('./components/RightPanel.vue'))
 const TerminalView = defineAsyncComponent(() => import('./components/TerminalView.vue'))
 const FileExplorer = defineAsyncComponent(() => import('./components/FileExplorer.vue'))
@@ -168,7 +176,12 @@ const leftPanelWidth = ref(Number.isFinite(savedLeftPanelWidth) && savedLeftPane
   : LEFT_PANEL_DEFAULT_WIDTH)
 const leftPanelDragging = ref(false)
 const filePanelMounted = ref(false)
-const gitPanelMounted = ref(false)
+const environmentPanelMounted = ref(false)
+const environmentPanelRef = ref(null)
+const welcomeWorktreeMode = ref(false)
+const environmentSwitching = ref(false)
+const environmentSwitchTarget = ref('')
+const environmentAttention = ref(false)
 const showTerminal = ref(false)
 const terminalMounted = ref(false)
 const sessionActive = ref(false)
@@ -233,6 +246,7 @@ async function initializeTabContext() {
     }))
   }
   await Promise.all(tasks)
+  await refreshWelcomeEnvironmentMode()
 }
 
 async function loadWorkspaces() {
@@ -255,15 +269,82 @@ function toggleFilePanel() {
   leftPanelOpen.value = true
 }
 
-// 活动栏「版本管理」：在左侧切换 Git 面板（左右面板可并存，不干扰右侧栏）
-function toggleGitPanel() {
-  if (leftPanelOpen.value && leftPanelView.value === 'git') {
+// 活动栏「环境信息」：显示当前本地工作区或会话隔离工作树
+function toggleEnvironmentPanel() {
+  if (leftPanelOpen.value && leftPanelView.value === 'environment') {
     leftPanelOpen.value = false
     return
   }
-  leftPanelView.value = 'git'
-  gitPanelMounted.value = true
+  leftPanelView.value = 'environment'
+  environmentPanelMounted.value = true
   leftPanelOpen.value = true
+}
+
+async function refreshWelcomeEnvironmentMode() {
+  if (!workspaceHash.value || !sessionName) return
+  try {
+    const response = await gitAPI.environment(workspaceHash.value, sessionName, {silent: true})
+    if (response?.success) welcomeWorktreeMode.value = response.data?.mode === 'worktree'
+  } catch (error) {
+    console.warn('[desktop-chat-tab] failed to read environment mode:', error)
+  }
+}
+
+async function refreshEnvironmentPanel() {
+  await nextTick()
+  await environmentPanelRef.value?.refresh?.()
+}
+
+function signalEnvironmentAttention() {
+  if (leftPanelOpen.value && leftPanelView.value === 'environment') return
+  environmentAttention.value = false
+  requestAnimationFrame(() => {
+    environmentAttention.value = true
+  })
+}
+
+async function setWelcomeEnvironmentMode(enabled) {
+  if (environmentSwitching.value) return
+  environmentSwitching.value = true
+  environmentSwitchTarget.value = enabled ? 'worktree' : 'local'
+  signalEnvironmentAttention()
+  try {
+    if (!workspaceHash.value || !sessionName) return
+    const environmentResponse = await gitAPI.environment(workspaceHash.value, sessionName, {silent: true})
+    if (!environmentResponse?.success) throw new Error(environmentResponse?.message || '环境读取失败')
+    const environment = environmentResponse.data
+    if (environment?.agentRunning) throw new Error('Agent 正在运行，暂不可切换')
+    if ((environment?.mode === 'worktree') === enabled) {
+      welcomeWorktreeMode.value = enabled
+      await refreshEnvironmentPanel()
+      return
+    }
+    if (!enabled && environment?.currentPath) {
+      const status = await window.electronAPI?.gitEnvironment?.status?.(environment.currentPath)
+      if (status?.dirty) throw new Error('请先提交工作树变更')
+    }
+
+    const response = await sessionsAPI.setWorktreeMode(sessionName, workspaceHash.value, {worktreeMode: enabled}, {silent: true})
+    if (!response?.success) throw new Error(response?.message || '切换失败')
+    if (enabled) {
+      try {
+        const created = await gitAPI.worktreeCreate(workspaceHash.value, sessionName, {silent: true})
+        if (!created?.success) throw new Error(created?.message || '工作树创建失败')
+      } catch (error) {
+        await sessionsAPI.setWorktreeMode(sessionName, workspaceHash.value, {worktreeMode: false}, {silent: true}).catch(() => {})
+        throw error
+      }
+    }
+    welcomeWorktreeMode.value = enabled
+    await refreshEnvironmentPanel()
+  } catch (error) {
+    message.error(error?.message || '环境切换失败')
+    await refreshWelcomeEnvironmentMode()
+    await refreshEnvironmentPanel()
+  } finally {
+    environmentSwitching.value = false
+    environmentSwitchTarget.value = ''
+  }
 }
 
 function toggleRightPanel() {
@@ -314,6 +395,7 @@ async function switchWorkspace(nextWorkspaceHash) {
     workspaceHash.value = nextWorkspaceHash
     await loadSessions()
     await refreshTabTitle()
+    await refreshWelcomeEnvironmentMode()
   } catch (error) {
     console.error('[desktop-chat-tab] failed to switch workspace:', error)
     message.error('切换工作区失败：' + (error.message || '未知错误'))
@@ -574,6 +656,24 @@ watch(workspaceHash, (hash) => {
 .activity-bar-item.active {
   color: var(--accent);
   background: color-mix(in srgb, var(--accent) 11%, transparent);
+}
+
+.activity-bar-item.environment-attention {
+  animation: environment-attention-pulse 1s ease-in-out 2;
+}
+
+.activity-bar-item.environment-attention .activity-bar-icon {
+  animation: environment-attention-icon 1s ease-in-out 2;
+}
+
+@keyframes environment-attention-pulse {
+  0%, 100% { color: var(--fg-2); background: transparent; box-shadow: none; }
+  50% { color: var(--accent); background: color-mix(in srgb, var(--accent) 9%, transparent); box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 6%, transparent), 0 0 7px color-mix(in srgb, var(--accent) 12%, transparent); }
+}
+
+@keyframes environment-attention-icon {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
 }
 
 .activity-bar-icon {

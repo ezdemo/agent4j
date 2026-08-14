@@ -8,6 +8,7 @@ public record SessionInfoDTO(
         String title,
         long messageCount,
         boolean current,
-        long mtime
+        long mtime,
+        boolean worktreeMode
 ) {
 }

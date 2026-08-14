@@ -36,6 +36,18 @@ public class ToolSystemInitializer {
     public static Result initialize(Path workspace, String apiUrl, String apiKey,
                                     Set<String> disabledTools, List<String> blockedPaths,
                                     String defaultSystemPrompt) {
+        return initialize(workspace, null, apiUrl, apiKey, disabledTools, blockedPaths, defaultSystemPrompt);
+    }
+
+    /**
+     * 执行完整的工具系统初始化（可指定状态工作区）。
+     *
+     * @param stateWorkspace 状态工作区（Goal/Checklist/会话持久化归属）；
+     *                       null 时回退为 {@code workspace}。工作树隔离模式下传入主工作区。
+     */
+    public static Result initialize(Path workspace, Path stateWorkspace, String apiUrl, String apiKey,
+                                    Set<String> disabledTools, List<String> blockedPaths,
+                                    String defaultSystemPrompt) {
         final Set<String> effectiveDisabledTools = disabledTools != null ? disabledTools : Collections.emptySet();
         final List<String> effectiveBlockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
 
@@ -43,7 +55,7 @@ public class ToolSystemInitializer {
         final ToolRegistry registry = new ToolRegistry();
         registry.setDisabledTools(effectiveDisabledTools);
         // 保存刷新上下文，供后续动态刷新工具列表使用
-        registry.setRefreshContext(workspace, apiUrl, apiKey, effectiveBlockedPaths);
+        registry.setRefreshContext(workspace, stateWorkspace, apiUrl, apiKey, effectiveBlockedPaths);
         if (!effectiveDisabledTools.isEmpty()) {
             log.info("[config] 已禁用工具: {}", String.join(", ", effectiveDisabledTools));
         }
