@@ -96,6 +96,7 @@
         @start-task="startTaskFromWelcome"
         @switch-workspace="switchWelcomeWorkspace"
         @manage-workspaces="showWorkspacePicker = true"
+        @refresh-sessions="refreshSessionList"
       />
     </main>
 
@@ -1260,10 +1261,11 @@ const onSidebarDeleteSession = ({ workspaceHash, sessionName }) => {
   deleteProjectSession(workspaceHash, sessionName)
 }
 
-const newChat = async (skipReload = false) => {
+const newChat = async (skipReload = false, worktreeMode = null) => {
   try {
     const params = {}
     if (currentSessionWorkspace.value) params.workspaceHash = currentSessionWorkspace.value
+    if (worktreeMode != null) params.worktreeMode = worktreeMode
     const r = await sessionsAPI.createNew(params)
     if (r.success && r.data?.sessionName) {
       currentSession.value = r.data.sessionName
@@ -1296,7 +1298,7 @@ const startTaskFromWelcome = async (request) => {
   try {
     await switchWorkspaceContext(workspaceHash)
     currentSessionWorkspace.value = workspaceHash
-    await newChat(true)
+    await newChat(true, request?.worktreeMode == null ? null : !!request.worktreeMode)
     await nextTick()
     if (request?.planMode) {
       await chatRef.value?.enablePlanMode()

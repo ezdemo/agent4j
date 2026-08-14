@@ -72,3 +72,4 @@ venv/
 
 /.codegraph/
 /.loopra
+/.codex/config.toml

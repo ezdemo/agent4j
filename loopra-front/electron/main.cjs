@@ -5,6 +5,7 @@ const { spawn, execFile, execSync } = require('child_process')
 const { promisify } = require('util')
 const { compareVersions } = require('./version.cjs')
 const { registerTerminalIpc, killAllTerminals } = require('./terminal.cjs')
+const { registerGitEnvironmentIpc } = require('./git-environment.cjs')
 const fs = require('fs')
 const net = require('net')
 
@@ -699,6 +700,7 @@ app.on('before-quit', () => {
 // ==================== IPC ====================
 
 registerTerminalIpc()
+registerGitEnvironmentIpc(ipcMain)
 
 ipcMain.handle('get_loopra_web_port', async () => currentPort)
 

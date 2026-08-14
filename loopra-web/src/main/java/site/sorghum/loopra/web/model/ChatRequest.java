@@ -59,6 +59,19 @@ public class ChatRequest {
     private Boolean fastMode;
 
     /**
+     * 工作树隔离模式开关（可选）。
+     * 指定时在 Agent 创建前持久化到会话元数据：开启后该会话的 AI 文件操作
+     * 落在 ~/.loopra/worktree/ 下的 git worktree 中，合并回主工作区需显式触发。
+     */
+    private Boolean worktreeMode;
+
+    /**
+     * 工作树合并模式（可选）：manual / ai-auto / ai-auto-approve。
+     * 指定时持久化到会话元数据。
+     */
+    private String mergeMode;
+
+    /**
      * 结构化 Web 操作（当前支持 execute_plan：批准并执行待审查计划）。
      */
     private String action;

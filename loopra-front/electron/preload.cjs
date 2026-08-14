@@ -191,6 +191,15 @@ contextBridge.exposeInMainWorld('electronAPI', {
     }
   },
 
+  // 当前环境 Git 操作（只在 Electron 主进程执行）
+  gitEnvironment: {
+    status: (cwd) => ipcRenderer.invoke('git-environment-status', cwd),
+    history: (payload) => ipcRenderer.invoke('git-environment-history', payload),
+    commit: (payload) => ipcRenderer.invoke('git-environment-commit', payload),
+    push: (payload) => ipcRenderer.invoke('git-environment-push', payload),
+    merge: (payload) => ipcRenderer.invoke('git-environment-merge', payload)
+  },
+
   // Electron 版本
   getElectronVersion: () => ipcRenderer.invoke('get_electron_version'),
 

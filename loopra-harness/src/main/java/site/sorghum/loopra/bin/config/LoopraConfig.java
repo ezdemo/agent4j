@@ -528,6 +528,18 @@ public class LoopraConfig implements AgentConfig {
     }
 
     /**
+     * 获取工作树隔离模式的根目录。
+     * 未配置时默认 {@code ~/.loopra/worktree}。
+     */
+    public String worktreeBaseDir() {
+        String dir = root.select("$.worktreeBaseDir").getString();
+        if (dir == null || dir.isBlank()) {
+            return Paths.get(System.getProperty("user.home"), ".loopra", "worktree").toString();
+        }
+        return Paths.get(dir).toAbsolutePath().toString();
+    }
+
+    /**
      * 获取编辑模式。
      * auto = 需要用户确认，yolo = 直接执行。默认为 auto。
      */

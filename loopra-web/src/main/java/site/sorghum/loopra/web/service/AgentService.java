@@ -116,6 +116,15 @@ public class AgentService {
                         } catch (Exception e) {
                             log.info("[web] 淘汰 Agent 失败: {}", e.getMessage());
                         }
+                        // 工作树隔离会话被淘汰：工作树保留在磁盘，提醒可通过会话合并按钮回收
+                        try {
+                            String[] keyParts = oldest.split("::", 2);
+                            if (keyParts.length == 2 && readWorktreeModeStatic(keyParts[0], keyParts[1])) {
+                                log.warn("[web] LRU 淘汰了工作树隔离会话 {}，未合并改动保留在 ~/.loopra/worktree，可打开该会话合并回主工作区", keyParts[1]);
+                            }
+                        } catch (Exception e) {
+                            log.debug("[web] 检查工作树状态失败: {}", e.getMessage());
+                        }
                         log.info("[web] LRU 淘汰 Agent: {}", oldest);
                     }
                 }
@@ -340,11 +349,18 @@ public class AgentService {
      * （ConcurrentHashMap 禁止在 computeIfAbsent 内递归更新同一 Map）。</p>
      */
     private ToolSystemInitializer.Result buildSharedToolSystem(Path workspace, LoopraConfig config) {
+        return buildSharedToolSystem(workspace, null, config);
+    }
+
+    /**
+     * 构建指定工作区的共享工具系统（可指定状态工作区）。
+     */
+    private ToolSystemInitializer.Result buildSharedToolSystem(Path workspace, Path stateWorkspace, LoopraConfig config) {
         ToolSystemInitializer.Result result = ToolSystemInitializer.initialize(
-                workspace, config.apiUrl(), config.apiKey(),
+                workspace, stateWorkspace, config.apiUrl(), config.apiKey(),
                 config.disabledTools(), config.blockedPaths(),
                 loadDefaultSystemPrompt());
-        log.info("[web] 已构建共享工具系统 — 工作区: {}", workspace);
+        log.info("[web] 已构建共享工具系统 — 工作区: {} (状态工作区: {})", workspace, stateWorkspace);
         return result;
     }
 
@@ -352,8 +368,17 @@ public class AgentService {
      * 获取（或首次构建）指定工作区的共享工具系统。
      */
     private ToolSystemInitializer.Result getOrCreateSharedToolSystem(Path workspace) {
-        return sharedToolSystems.computeIfAbsent(workspaceKey(workspace),
-                k -> buildSharedToolSystem(workspace, ConfigService.getConfig()));
+        return getOrCreateSharedToolSystem(workspace, null);
+    }
+
+    /**
+     * 获取（或首次构建）指定工作区的共享工具系统（工作树隔离模式：文件根=工作树，状态根=主工作区）。
+     */
+    private ToolSystemInitializer.Result getOrCreateSharedToolSystem(Path workspace, Path stateWorkspace) {
+        String key = workspaceKey(workspace)
+                + (stateWorkspace != null ? "#" + stateWorkspace.toAbsolutePath().normalize() : "");
+        return sharedToolSystems.computeIfAbsent(key,
+                k -> buildSharedToolSystem(workspace, stateWorkspace, ConfigService.getConfig()));
     }
 
     private static String workspaceKey(Path workspace) {
@@ -556,17 +581,40 @@ public class AgentService {
         HttpModelClient modelClient = new HttpModelClient(apiUrl, apiKey, target.model(), reasoningEffort,
                 target.channelId(), channel.apiProtocol());
         modelClient.setFastMode(cfg.fastMode());
+
+        // 会话级工作树隔离模式：文件根指向隔离工作树，会话身份/Goal/Checklist 仍归属主工作区。
+        // 懒创建：首个开启该模式的会话在 Agent 创建时创建 worktree；
+        // 非 Git 仓库时明确失败，避免静默退化为直接改主工作区。
+        Path fileRoot = Paths.get(workspacePath);
+        Path stateRoot = Paths.get(workspacePath);
+        if (isSessionWorktreeMode(workspacePath, sessionName)) {
+            try {
+                WorktreeService worktreeService = org.noear.solon.Solon.context().getBean(WorktreeService.class);
+                WorktreeStatusDTO status = worktreeService.create(computeWorkspaceHash(workspacePath), sessionName);
+                if (!status.exists() || status.worktreePath() == null) {
+                    throw new ServiceException("会话工作树创建失败: " + status.message());
+                }
+                fileRoot = Paths.get(status.worktreePath());
+                log.info("[web] 会话 {} 启用工作树隔离模式，工具文件根: {}", sessionName, fileRoot);
+            } catch (ServiceException e) {
+                throw e;
+            } catch (Exception e) {
+                throw new ServiceException("会话工作树创建失败（工作区需为 Git 仓库）: " + e.getMessage());
+            }
+        }
+
         LoopraAgent.Builder builder = LoopraAgent.builder()
                 .config(cfg)
                 .apiUrl(apiUrl)
                 .apiKey(apiKey)
                 .model(target.model())
-                .workspace(Paths.get(workspacePath))
+                .workspace(fileRoot)
+                .stateWorkspace(stateRoot)
                 .commandRegistry(commandRegistry)
                 .hitl(hitl)
                 .loopraConfig(cfg)
                 // 复用该工作区的共享工具系统，跳过 Agent 内部的重复初始化
-                .toolSystem(getOrCreateSharedToolSystem(Paths.get(workspacePath)))
+                .toolSystem(getOrCreateSharedToolSystem(fileRoot, stateRoot))
                 .modelClient(modelClient);
         if (systemPrompt != null && !systemPrompt.isBlank()) {
             builder.systemPrompt(systemPrompt);
@@ -1068,6 +1116,18 @@ public class AgentService {
      * @return 实际使用的会话名
      */
     public String newSession(String workspacePath, String sessionName) {
+        return newSession(workspacePath, sessionName, null);
+    }
+
+    /**
+     * 创建新会话（可指定初始工作树隔离模式）。
+     *
+     * @param workspacePath 工作区路径（可选）
+     * @param sessionName   会话名称（前端指定，为空则自动生成）
+     * @param worktreeMode  工作树隔离模式；null 表示不改变默认值（false）
+     * @return 实际使用的会话名
+     */
+    public String newSession(String workspacePath, String sessionName, Boolean worktreeMode) {
 
         // 未指定会话名时自动生成
         if (sessionName == null || sessionName.isEmpty()) {
@@ -1076,6 +1136,11 @@ public class AgentService {
 
         // 直接以目标会话名创建/获取 Agent（switchTo 是惰性的，不创建文件）
         switchSession(workspacePath, sessionName);
+
+        // 新建会话时持久化工作树开关（仅在显式开启时写 .meta，避免无谓的元数据文件）
+        if (Boolean.TRUE.equals(worktreeMode)) {
+            setSessionWorktreeMode(workspacePath, sessionName, true);
+        }
 
         return sessionName;
     }
@@ -1091,11 +1156,16 @@ public class AgentService {
             return Collections.emptyList();
         }
 
-        // 获取一个 Agent 实例来访问 SessionStore
-        String sessionKey = generateSessionKey(workspacePath, null);
-        LoopraAgent agent = getOrCreateAgent(sessionKey);
-
-        SessionStore store = agent.getSessionStore();
+        // 获取一个 Agent 实例来访问 SessionStore；失败时退回独立会话存储（如工作树模式在非 Git 仓库不可用）
+        SessionStore store;
+        try {
+            String sessionKey = generateSessionKey(workspacePath, null);
+            LoopraAgent agent = getOrCreateAgent(sessionKey);
+            store = agent.getSessionStore();
+        } catch (Exception e) {
+            log.warn("[web] 通过 Agent 获取会话存储失败，改用独立存储: {}", e.getMessage());
+            store = sessionStoreFor(workspacePath);
+        }
         if (store == null) {
             return Collections.emptyList();
         }
@@ -1127,7 +1197,8 @@ public class AgentService {
                     title,
                     sessionInfo.messageCount(),
                     sessionInfo.name().equals(activeSession),
-                    sessionInfo.mtime()
+                    sessionInfo.mtime(),
+                    sessionInfo.worktreeMode()
             ));
         }
         return sessions;
@@ -1149,6 +1220,172 @@ public class AgentService {
         String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
         sessionCache.setCurrentName(resolvedPath, sessionName);
         return true;
+    }
+
+    /**
+     * 后台触发一次 AI 自动解决工作树合并冲突的回合（普通 Loop turn，无需新工具）。
+     * <p>AI 的文件根即隔离工作树，冲突已在工作树内（反向合并产物），AI 用
+     * git/read/edit 解冲突并提交；完成后用户再次触发合并即可快进回主工作区。</p>
+     *
+     * @param approval 为 true 时该回合临时切到 approval HITL（ai-auto-approve）
+     * @return 是否成功启动（Agent 未初始化或正在运行时返回 false）
+     */
+    public boolean triggerWorktreeConflictResolution(String workspacePath, String sessionName,
+                                                     List<String> conflictFiles, boolean approval) {
+        if (sessionName == null || sessionName.isBlank()) return false;
+        String sessionKey = generateSessionKey(workspacePath, sessionName);
+        LoopraAgent agent = sessionCache.peek(sessionKey);
+        if (agent == null || agent.isRunning()) {
+            log.warn("[worktree] 无法启动冲突解决回合: agent={}, running={}",
+                    agent == null ? "null" : "cached", agent != null && agent.isRunning());
+            return false;
+        }
+        String files = conflictFiles == null || conflictFiles.isEmpty()
+                ? "（详见 git status 冲突列表）"
+                : String.join("\n", conflictFiles);
+        String prompt = """
+                【系统任务】工作树合并冲突需要解决。
+                当前会话的隔离工作树在合并主工作区分支时产生了合并冲突，冲突文件如下：
+                %s
+                请直接在当前文件根（隔离工作树）内解决这些冲突：
+                1. 用 git status / git diff 查看冲突标记与双方改动；
+                2. 编辑冲突文件，保留主工作区与工作树改动的合理结合；
+                3. git add 所有已解决文件并执行 git commit 完成合并提交。
+                完成后简要回复解决情况即可，用户随后会触发合并回主工作区。
+                """.formatted(files);
+        String effectiveSessionName = sessionName;
+        Thread worker = new Thread(() -> {
+            ReentrantLock lock = getSessionLock(sessionKey);
+            lock.lock();
+            try {
+                LoopraAgent a = sessionCache.peek(sessionKey);
+                if (a == null || a.isRunning()) return;
+                a.setOutput(AgentOutput.NOOP);
+                String previousHitl = null;
+                if (approval) {
+                    previousHitl = a.getHitlMode();
+                    a.setHitlMode("approval");
+                }
+                try {
+                    a.chat(UserMessage.of(prompt));
+                } finally {
+                    if (previousHitl != null) {
+                        a.setHitlMode(previousHitl);
+                    }
+                }
+            } catch (Exception e) {
+                log.error("[worktree] AI 自动解决合并冲突失败: {}", e.getMessage(), e);
+            } finally {
+                lock.unlock();
+                LoopraAgent a = sessionCache.peek(sessionKey);
+                if (a != null) {
+                    a.setOutput(AgentOutput.NOOP);
+                    try {
+                        a.flushSession();
+                        a.saveUsage();
+                    } catch (Exception ex) {
+                        log.warn("[worktree] 冲突解决回合后刷新会话失败: {}", ex.getMessage());
+                    }
+                }
+            }
+        }, "loopra-worktree-merge-" + effectiveSessionName);
+        worker.setDaemon(true);
+        worker.start();
+        log.info("[worktree] 已启动 AI 自动解决合并冲突回合: session={}, approval={}", sessionName, approval);
+        return true;
+    }
+
+    /**
+     * 获取指定会话的 Agent 缓存实例（不存在返回 null）。
+     */
+    public LoopraAgent peekAgent(String workspacePath, String sessionName) {
+        return sessionCache.peek(generateSessionKey(workspacePath, sessionName));
+    }
+
+    // ==================== 会话级工作树隔离模式 ====================
+
+    /** 独立会话存储：仅读写主工作区会话目录的元数据，不绑定任何 Agent。 */
+    private SessionStore sessionStoreFor(String workspacePath) {
+        String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+        if (resolvedPath == null) return null;
+        try {
+            return new JsonlSessionStore(new WorkspaceManager().getSessionsDir(resolvedPath));
+        } catch (Exception e) {
+            log.warn("[web] 打开会话存储失败: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * 读取指定会话的工作树隔离模式开关（默认 false）。
+     */
+    public boolean isSessionWorktreeMode(String workspacePath, String sessionName) {
+        if (sessionName == null || sessionName.isBlank()) return false;
+        SessionStore store = sessionStoreFor(workspacePath);
+        return store != null && store.isWorktreeMode(sessionName);
+    }
+
+    /** 静态读取工作树开关（供静态内部类 LRU 淘汰检查使用）。 */
+    private static boolean readWorktreeModeStatic(String workspacePath, String sessionName) {
+        if (workspacePath == null || sessionName == null || sessionName.isBlank()) return false;
+        try {
+            Path sessionsDir = new WorkspaceManager().getSessionsDir(workspacePath);
+            if (sessionsDir == null || !Files.isDirectory(sessionsDir)) return false;
+            SessionStore store = new JsonlSessionStore(sessionsDir);
+            try {
+                return store.isWorktreeMode(sessionName);
+            } finally {
+                store.shutdown();
+            }
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * 设置指定会话的工作树隔离模式。
+     * <p>开关影响 Agent 构造时的工具根（工作树 vs 主工作区），因此会先淘汰缓存 Agent，
+     * 下一次聊天按新开关重建。会话正在运行时不允许切换。</p>
+     */
+    public void setSessionWorktreeMode(String workspacePath, String sessionName, boolean enabled) {
+        if (sessionName == null || sessionName.isBlank()) throw new ServiceException("会话名称不能为空");
+        LoopraAgent cached = sessionCache.peek(generateSessionKey(workspacePath, sessionName));
+        if (cached != null && cached.isRunning()) {
+            throw new ServiceException("会话正在运行，无法切换工作树模式");
+        }
+        String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+        SessionStore store = sessionStoreFor(resolvedPath);
+        if (store == null) throw new ServiceException("会话存储不可用");
+        store.setWorktreeMode(sessionName, enabled);
+        if (cached != null) evictAgent(workspacePath, sessionName);
+        log.info("[web] 会话工作树模式已切换: {} -> {}", sessionName, enabled);
+    }
+
+    /**
+     * 读取指定会话的工作树合并模式（默认 manual）。
+     */
+    public String getSessionMergeMode(String workspacePath, String sessionName) {
+        if (sessionName == null || sessionName.isBlank()) return "manual";
+        SessionStore store = sessionStoreFor(workspacePath);
+        return store != null ? store.getMergeMode(sessionName) : "manual";
+    }
+
+    /**
+     * 设置指定会话的工作树合并模式（manual / ai-auto / ai-auto-approve）。
+     */
+    public void setSessionMergeMode(String workspacePath, String sessionName, String mode) {
+        if (sessionName == null || sessionName.isBlank()) throw new ServiceException("会话名称不能为空");
+        String normalized = mode == null ? "" : mode.trim();
+        if (!normalized.isEmpty()
+                && !"manual".equals(normalized)
+                && !"ai-auto".equals(normalized)
+                && !"ai-auto-approve".equals(normalized)) {
+            throw new ServiceException("无效的合并模式: " + mode + "（可选 manual / ai-auto / ai-auto-approve）");
+        }
+        SessionStore store = sessionStoreFor(workspacePath);
+        if (store == null) throw new ServiceException("会话存储不可用");
+        store.setMergeMode(sessionName, normalized);
+        log.info("[web] 会话工作树合并模式已切换: {} -> {}", sessionName, normalized.isEmpty() ? "manual" : normalized);
     }
 
     /**
@@ -1407,23 +1644,46 @@ public class AgentService {
         } catch (Exception e) {
             log.warn("[web] 删除会话文件失败: {}", e.getMessage());
         }
+        // 3. 联动删除会话工作树（丢弃未合并改动，与会话文件删除一致）
+        try {
+            WorktreeService worktreeService = org.noear.solon.Solon.context().getBean(WorktreeService.class);
+            worktreeService.remove(computeWorkspaceHash(workspacePath), sessionName, true);
+        } catch (Exception e) {
+            log.warn("[web] 联动删除会话工作树失败: {}", e.getMessage());
+        }
     }
 
     /**
-     * 清空所有会话：清除所有 Agent 缓存 + 删除所有会话磁盘文件。
+     * 清空所有会话：清除所有 Agent 缓存、删除对应工作树与分支，再删除所有会话磁盘文件。
      *
      * @param workspacePath 工作区路径（可选）
      */
     public void clearAllSessions(String workspacePath) {
         // 1. 清除所有 Agent 缓存
         evictAllAgents();
-        // 2. 删除所有会话磁盘文件
         String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
         if (resolvedPath == null) return;
         WorkspaceManager wm = new WorkspaceManager();
         Path sessionsDir = wm.getSessionsDir(resolvedPath);
         if (sessionsDir == null || !Files.exists(sessionsDir)) return;
         SessionStore store = new JsonlSessionStore(sessionsDir);
+
+        // 2. 清理各会话保留的工作树与分支
+        try {
+            WorktreeService worktreeService = org.noear.solon.Solon.context().getBean(WorktreeService.class);
+            String workspaceHash = computeWorkspaceHash(resolvedPath);
+            for (SessionStore.SessionInfo session : store.list()) {
+                try {
+                    worktreeService.remove(workspaceHash, session.name(), true);
+                } catch (Exception e) {
+                    log.warn("[web] 清空会话时删除工作树失败 ({}): {}", session.name(), e.getMessage());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[web] 清空会话时获取工作树服务失败: {}", e.getMessage());
+        }
+
+        // 3. 删除所有会话磁盘文件
         store.clearAll();
         log.info("[web] 已清空所有会话");
     }

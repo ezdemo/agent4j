@@ -162,8 +162,12 @@ public class LoopraAgent {
             final String workspacePath = this.workspace != null
                     ? this.workspace.toAbsolutePath().toString()
                     : Paths.get(System.getProperty("user.home"), ".loopra").toString();
-            this.workspaceManager = WorkspaceManager.getOrCreate(workspacePath);
-            final Path sessionsDir = workspaceManager.getSessionsDir(workspacePath);
+            // 状态工作区：会话持久化/Goal/Checklist 归属（工作树隔离模式下为主工作区）
+            final String stateWorkspacePath = b.stateWorkspace != null
+                    ? b.stateWorkspace.toAbsolutePath().toString()
+                    : workspacePath;
+            this.workspaceManager = WorkspaceManager.getOrCreate(stateWorkspacePath);
+            final Path sessionsDir = workspaceManager.getSessionsDir(stateWorkspacePath);
             this.ownsSessionStore = b.sessionStore == null;
             this.sessionService = (b.sessionStore != null)
                     ? new SessionService(ctx, b.sessionStore)
@@ -737,6 +741,12 @@ public class LoopraAgent {
          */
         String systemPrompt = DEFAULT_SYSTEM_PROMPT;
         Path workspace = null;
+        /**
+         * 状态工作区（可选）——会话身份/Goal/Checklist/会话持久化归属。
+         * <p>工作树隔离模式下，{@code workspace} 指向隔离工作树（工具文件根），
+         * {@code stateWorkspace} 指向主工作区。未设置时回退为 {@code workspace}。</p>
+         */
+        Path stateWorkspace = null;
         Set<String> disabledTools;
         List<String> blockedPaths;
         String hitl = "free";
@@ -801,6 +811,14 @@ public class LoopraAgent {
 
         public Builder workspace(Path v) {
             this.workspace = v;
+            return this;
+        }
+
+        /**
+         * 设置状态工作区（会话身份/Goal/Checklist 归属）；默认回退为 {@link #workspace(Path)}。
+         */
+        public Builder stateWorkspace(Path v) {
+            this.stateWorkspace = v;
             return this;
         }
 

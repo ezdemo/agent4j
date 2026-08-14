@@ -231,6 +231,42 @@ class JsonlSessionStoreTest {
     }
 
     @Test
+    void worktreeModeAndMergeModePersistIndependently() throws IOException {
+        String name = store.currentName();
+
+        assertFalse(store.isWorktreeMode(name));
+        assertEquals("manual", store.getMergeMode(name));
+
+        store.setWorktreeMode(name, true);
+        store.setMergeMode(name, "ai-auto");
+        assertTrue(store.isWorktreeMode(name));
+        assertEquals("ai-auto", store.getMergeMode(name));
+
+        // 与其他元数据字段共存（title / planMode）
+        store.updateTitle(name, "隔离会话");
+        store.setPlanMode(name, true);
+        assertEquals("隔离会话", store.getTitle(name));
+        assertTrue(store.isPlanMode(name));
+        assertTrue(store.isWorktreeMode(name));
+        assertEquals("ai-auto", store.getMergeMode(name));
+
+        // 工作树开关出现在 list() 的 SessionInfo 中
+        SessionStore.SessionInfo info = store.list().stream()
+                .filter(session -> name.equals(session.name()))
+                .findFirst()
+                .orElseThrow();
+        assertTrue(info.worktreeMode());
+
+        store.setWorktreeMode(name, false);
+        assertFalse(store.isWorktreeMode(name));
+        assertEquals("ai-auto", store.getMergeMode(name));
+
+        // mergeMode 置空回退 manual
+        store.setMergeMode(name, null);
+        assertEquals("manual", store.getMergeMode(name));
+    }
+
+    @Test
     void concurrentMetadataUpdatesPreserveAllFields() throws Exception {
         Path sessionsDir = java.nio.file.Files.createTempDirectory("loopra-meta-lock");
         JsonlSessionStore first = new JsonlSessionStore(sessionsDir);
