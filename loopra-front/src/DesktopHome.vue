@@ -121,6 +121,10 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
             清空会话
           </button>
+          <button type="button" @click="chooseContextAction('clear-old-sessions')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg>
+            清空三天前的会话
+          </button>
           <div class="desktop-context-menu-divider"></div>
           <button class="danger" type="button" @click="chooseContextAction('delete-workspace')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
@@ -145,7 +149,7 @@ const props = defineProps({
   refreshKey: { type: Number, default: 0 },
   refreshing: { type: Boolean, default: false }
 })
-const emit = defineEmits(['select-workspace', 'new-session', 'open-session', 'open-skills', 'open-requirement-board', 'open-tools', 'open-sub-agents', 'open-settings', 'toggle-theme', 'add-workspace', 'refresh', 'delete-session', 'clear-workspace', 'delete-workspace', 'reorder-workspaces'])
+const emit = defineEmits(['select-workspace', 'new-session', 'open-session', 'open-skills', 'open-requirement-board', 'open-tools', 'open-sub-agents', 'open-settings', 'toggle-theme', 'add-workspace', 'refresh', 'delete-session', 'clear-workspace', 'clear-old-sessions', 'delete-workspace', 'reorder-workspaces'])
 
 const query = ref('')
 const sessions = ref([])
@@ -278,7 +282,7 @@ function clearDragState() {
 
 function openContextMenu(event, type, item) {
   const menuWidth = 156
-  const menuHeight = type === 'session' ? 38 : 82
+  const menuHeight = type === 'session' ? 38 : 116
   contextMenu.type = type
   contextMenu.item = item
   contextMenu.x = Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8))
@@ -298,6 +302,7 @@ function chooseContextAction(action) {
   if (!item) return
   if (action === 'delete-session') emit('delete-session', item)
   else if (action === 'clear-workspace') emit('clear-workspace', item)
+  else if (action === 'clear-old-sessions') emit('clear-old-sessions', item)
   else if (action === 'delete-workspace') emit('delete-workspace', item)
 }
 

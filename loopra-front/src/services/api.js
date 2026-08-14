@@ -418,6 +418,11 @@ export const sessionsAPI = {
     const params = workspaceHash ? { workspaceHash } : {}
     return api.delete('/sessions', { params })
   },
+
+  // 清理早于指定时间（epoch 毫秒）的过期会话 - DELETE /api/sessions/cleanup?workspaceHash=xxx&before=xxx
+  clearBefore: (workspaceHash, before) => {
+    return api.delete('/sessions/cleanup', { params: { workspaceHash, before } })
+  },
   
   // 获取会话详情 - GET /api/sessions/{name}
   getDetails: (name) => {
