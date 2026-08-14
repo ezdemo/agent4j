@@ -488,7 +488,7 @@ describe('DesktopShell 清空三天前的会话', () => {
 })
 
 describe('DesktopShell 删除项目', () => {
-  it('确认后调用删除接口并刷新工作区列表', async () => {
+  it('确认后调用删除接口并刷新项目列表', async () => {
     configAPI.deleteWorkspace.mockResolvedValue({success: true})
     const {wrapper} = await mountShell()
 

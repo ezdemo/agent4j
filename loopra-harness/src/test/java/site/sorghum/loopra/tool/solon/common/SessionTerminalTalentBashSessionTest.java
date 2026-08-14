@@ -23,12 +23,12 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * SessionTerminalTalent bash 后台会话镜像测试 —— 覆盖 bash_start 记录 / bash_wait 完成标记 /
- * bash_stop 移除 / completed 过期清理 / 跨工作区聚合入口。
+ * bash_stop 移除 / completed 过期清理 / 跨项目聚合入口。
  * <p>
  * 通过真实系统 ping 模拟长会话（持续运行）与短会话（自然结束）。
  * </p>
  * <p>
- * 工作区不用 @TempDir：bash 会话进程以工作目录为 cwd，Windows 下进程存活期间目录被占用，
+ * 项目不用 @TempDir：bash 会话进程以工作目录为 cwd，Windows 下进程存活期间目录被占用，
  * 测试结束 @TempDir 清理会失败；改为手动创建、不强制删除（与 LoopraAgentInjectionTest 同策略）。
  * </p>
  *

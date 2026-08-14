@@ -4,6 +4,7 @@ import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.tool.FunctionTool;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.agent.spi.ToolPolicyProvider;
 
 import java.nio.file.Path;
@@ -62,13 +63,8 @@ public class ToolRegistry {
 
     // ==================== 动态刷新上下文 ====================
     @Getter
-    private Path workspace;
-    /**
-     * 状态工作区（会话身份/Goal/Checklist/会话持久化归属），
-     * 工作树隔离模式下指向主工作区；未设置时等价于 {@link #workspace}。
-     */
-    @Getter
-    private Path stateWorkspace;
+    private SessionEnvironment environment;
+
     private String apiUrl;
     private String apiKey;
     private List<String> blockedPaths = Collections.emptyList();
@@ -133,16 +129,37 @@ public class ToolRegistry {
     }
 
     /**
-     * 设置动态刷新的上下文参数（含状态工作区）。
+     * 设置动态刷新的上下文参数（含状态项目）。
      *
-     * @param stateWorkspace 状态工作区；null 时回退为 {@code workspace}
+     * @param stateWorkspace 状态项目；null 时回退为 {@code workspace}
      */
     public void setRefreshContext(Path workspace, Path stateWorkspace, String apiUrl, String apiKey, List<String> blockedPaths) {
-        this.workspace = workspace;
-        this.stateWorkspace = stateWorkspace != null ? stateWorkspace : workspace;
+        this.environment = SessionEnvironment.of(workspace, stateWorkspace);
         this.apiUrl = apiUrl;
         this.apiKey = apiKey;
         this.blockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
+    }
+
+    public Path getWorkspace() {
+        return environment == null ? null : environment.executionRoot();
+    }
+
+    public Path getStateWorkspace() {
+        return environment == null ? null : environment.stateRoot();
+    }
+
+    /**
+     * Sets the session environment used for dynamic tool refreshes.
+     */
+    public void setRefreshContext(SessionEnvironment environment, String apiUrl, String apiKey,
+                                  List<String> blockedPaths) {
+        setRefreshContext(
+                environment == null ? null : environment.executionRoot(),
+                environment == null ? null : environment.stateRoot(),
+                apiUrl,
+                apiKey,
+                blockedPaths
+        );
     }
 
     /**
@@ -163,7 +180,7 @@ public class ToolRegistry {
         cachedOpenAiTools = null; // 失效缓存
 
         // 使用 ToolScanUtil 统一扫描（Solon IoC + Skill 文件系统）
-        List<FunctionTool> functionToolsList = ToolScanUtil.scanTools(workspace);
+        List<FunctionTool> functionToolsList = ToolScanUtil.scanTools(getWorkspace());
 
         for (FunctionTool tool : functionToolsList) {
             ToolMetadata.applyReadOnlyOverride(tool, readOnlyOverrides.get(tool.name()));
@@ -227,8 +244,7 @@ public class ToolRegistry {
         // 复制工具策略提供者（实时禁用/只读来源）
         copy.toolPolicyProvider = this.toolPolicyProvider;
         // 复制刷新上下文
-        copy.workspace = this.workspace;
-        copy.stateWorkspace = this.stateWorkspace;
+        copy.environment = this.environment;
         copy.apiUrl = this.apiUrl;
         copy.apiKey = this.apiKey;
         copy.blockedPaths = this.blockedPaths.isEmpty()

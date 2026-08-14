@@ -111,7 +111,7 @@ class ContextFoldingTest {
                 <摘要>用户在给 Loopra 加记忆系统，已改 AgentLoop 和 ContextFolding，尚未写测试。</摘要>
                 <<<MEMORY>>>
                 <记忆>
-                - 架构约定：AgentLoop 通过 workspace 字段传递工作区给 ContextFolding
+                - 架构约定：AgentLoop 通过 workspace 字段传递项目给 ContextFolding
                 - 改动 ContextFolding 后必须跑 ContextFoldingTest
                 </记忆>""";
         ModelClient client = mockClientReturning(llmOutput);

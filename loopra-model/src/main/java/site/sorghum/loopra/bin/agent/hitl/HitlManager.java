@@ -342,7 +342,7 @@ public class HitlManager {
                 ? this.pendingSandboxHITDetails : "未知路径越界";
 
         String message = "⏸️  **沙箱越界 — 需要审批**\n\n" +
-                "检测到工具试图访问工作区之外的路径：\n\n" +
+                "检测到工具试图访问项目之外的路径：\n\n" +
                 "> " + details + "\n\n" +
                 "请选择：";
         try {

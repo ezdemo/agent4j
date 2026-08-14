@@ -1,4 +1,4 @@
-package site.sorghum.loopra.bin.workspace;
+package site.sorghum.loopra.bin.project;
 
 import lombok.Getter;
 import lombok.SneakyThrows;
@@ -23,11 +23,11 @@ import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * 工作区管理器 —— 管理多个工作区的生命周期。
+ * Project registry for the user-visible list of project roots.
  * <p>
- * 工作区存储结构：
+ * Historical storage layout:
  * ~/.loopra/workspace/{hash}/
- * ├── workspace.json    (工作区配置)
+ * ├── workspace.json    (project metadata)
  * └── sessions/         (会话目录)
  * ├── session1.jsonl
  * └── session2.jsonl
@@ -38,37 +38,37 @@ import java.util.concurrent.ConcurrentHashMap;
  *
  * @author Sorghum
  */
-@Getter
 @Slf4j
-public class WorkspaceManager {
+public class ProjectRegistry {
 
     private static final Path WORKSPACES_DIR = Paths.get(
             System.getProperty("user.home"), ".loopra", "workspace");
 
 
-    private static final Map<String, WorkspaceManager> WORKSPACE_MANAGERS = new ConcurrentHashMap<>();
+    private static final Map<String, ProjectRegistry> PROJECT_REGISTRIES = new ConcurrentHashMap<>();
 
     /**
-     * 当前工作区路径（工作目录的实际路径）
+     * Current project path.
      */
-    private String currentWorkspacePath;
+    @Getter
+    private String currentProjectPath;
 
 
-    public WorkspaceManager() {
+    public ProjectRegistry() {
         try {
             Files.createDirectories(WORKSPACES_DIR);
         } catch (IOException e) {
-            log.error("[workspace] 创建工作区目录失败: {}", e.getMessage());
+            log.error("[project] 创建项目目录失败: {}", e.getMessage());
         }
     }
 
     /**
-     * 计算工作目录的 hash 值（MD5 前12位）
+     * 计算项目目录的 hash 值（MD5 前12位）
      */
-    public static String computeHash(String workspacePath) {
+    public static String computeProjectHash(String projectPath) {
         try {
             MessageDigest md = MessageDigest.getInstance("MD5");
-            byte[] digest = md.digest(workspacePath.getBytes(StandardCharsets.UTF_8));
+            byte[] digest = md.digest(projectPath.getBytes(StandardCharsets.UTF_8));
             StringBuilder sb = new StringBuilder();
             for (int i = 0; i < 6; i++) {
                 sb.append(String.format("%02x", digest[i]));
@@ -76,109 +76,109 @@ public class WorkspaceManager {
             return sb.toString();
         } catch (NoSuchAlgorithmException e) {
             // Fallback: 使用简单的 hash
-            return String.format("%012x", workspacePath.hashCode() & 0xFFFFFFFFFFL);
+            return String.format("%012x", projectPath.hashCode() & 0xFFFFFFFFFFL);
         }
     }
 
     /**
-     * 获取工作区目录路径
+     * 获取项目数据目录路径
      */
-    public Path getWorkspaceDir(String workspacePath) {
-        String hash = computeHash(workspacePath);
+    public Path getProjectDir(String projectPath) {
+        String hash = computeProjectHash(projectPath);
         return WORKSPACES_DIR.resolve(hash);
     }
 
     /**
-     * 获取工作区配置文件路径
+     * 获取项目配置文件路径
      */
-    public Path getWorkspaceConfigPath(String workspacePath) {
-        return getWorkspaceDir(workspacePath).resolve("workspace.json");
+    public Path getProjectConfigPath(String projectPath) {
+        return getProjectDir(projectPath).resolve("workspace.json");
     }
 
     /**
-     * 获取工作区会话目录路径
+     * 获取项目会话目录路径
      */
-    public Path getSessionsDir(String workspacePath) {
-        return getWorkspaceDir(workspacePath).resolve("sessions");
+    public Path getSessionsDir(String projectPath) {
+        return getProjectDir(projectPath).resolve("sessions");
     }
 
     /**
-     * 获取工作区的目标存储。
+     * 获取项目的目标存储。
      *
-     * @throws IllegalStateException 如果工作区未初始化
+     * @throws IllegalStateException 如果项目未初始化
      */
     public GoalStore getGoalStore() {
-        if (currentWorkspacePath == null) {
-            throw new IllegalStateException("工作区未初始化，请先初始化工作区");
+        if (currentProjectPath == null) {
+            throw new IllegalStateException("项目未初始化，请先初始化项目");
         }
-        Path workspaceDir = getWorkspaceDir(currentWorkspacePath);
-        return new JsonlGoalStore(workspaceDir);
+        Path projectDir = getProjectDir(currentProjectPath);
+        return new JsonlGoalStore(projectDir);
     }
 
     /**
-     * 获取工作区的清单存储（Checklist 线性步骤模式）。
+     * 获取项目的清单存储（Checklist 线性步骤模式）。
      *
-     * @throws IllegalStateException 如果工作区未初始化
+     * @throws IllegalStateException 如果项目未初始化
      */
     public ChecklistStore getChecklistStore() {
-        if (currentWorkspacePath == null) {
-            throw new IllegalStateException("工作区未初始化，请先初始化工作区");
+        if (currentProjectPath == null) {
+            throw new IllegalStateException("项目未初始化，请先初始化项目");
         }
-        Path workspaceDir = getWorkspaceDir(currentWorkspacePath);
-        return new JsonChecklistStore(workspaceDir);
+        Path projectDir = getProjectDir(currentProjectPath);
+        return new JsonChecklistStore(projectDir);
     }
 
     /**
-     * 获取或创建工作区管理器
+     * 获取或创建项目注册表
      */
-    public static WorkspaceManager getOrCreate(String workspacePath){
-        if (WORKSPACE_MANAGERS.containsKey(workspacePath)){
-            return WORKSPACE_MANAGERS.get(workspacePath);
+    public static ProjectRegistry getOrCreate(String projectPath){
+        if (PROJECT_REGISTRIES.containsKey(projectPath)){
+            return PROJECT_REGISTRIES.get(projectPath);
         }
-        WorkspaceManager manager = new WorkspaceManager();
-        manager.initWorkspace(workspacePath);
-        WORKSPACE_MANAGERS.put(workspacePath, manager);
+        ProjectRegistry manager = new ProjectRegistry();
+        manager.initProject(projectPath);
+        PROJECT_REGISTRIES.put(projectPath, manager);
         return manager;
     }
     /**
-     * 初始化或加载工作区
+     * 初始化或加载项目
      */
     @SneakyThrows
-    public void initWorkspace(String workspacePath){
-        this.currentWorkspacePath = workspacePath;
+    public void initProject(String projectPath){
+        this.currentProjectPath = projectPath;
 
-        Path workspaceDir = getWorkspaceDir(workspacePath);
-        Path sessionsDir = getSessionsDir(workspacePath);
-        Path configPath = getWorkspaceConfigPath(workspacePath);
+        Path projectDir = getProjectDir(projectPath);
+        Path sessionsDir = getSessionsDir(projectPath);
+        Path configPath = getProjectConfigPath(projectPath);
 
         // 创建目录结构
-        Files.createDirectories(workspaceDir);
+        Files.createDirectories(projectDir);
         Files.createDirectories(sessionsDir);
 
         // 如果配置文件不存在，创建默认配置
         if (!Files.exists(configPath)) {
-            createDefaultConfig(workspacePath, configPath);
+            createDefaultConfig(projectPath, configPath);
         }
     }
 
     /**
-     * 创建默认的工作区配置
+     * 创建默认的项目配置
      */
-    private void createDefaultConfig(String workspacePath, Path configPath) throws IOException {
+    private void createDefaultConfig(String projectPath, Path configPath) throws IOException {
         org.noear.snack4.ONode config = org.noear.snack4.ONode.ofJson("{}");
-        config.set("path", workspacePath);
-        config.set("name", extractWorkspaceName(workspacePath));
+        config.set("path", projectPath);
+        config.set("name", extractProjectName(projectPath));
         config.set("createdAt", System.currentTimeMillis());
         config.set("lastAccessedAt", System.currentTimeMillis());
         Files.writeString(configPath, config.toJson());
     }
 
     /**
-     * 从路径中提取工作区名称（最后一级目录名）。
+     * 从路径中提取项目名称（最后一级目录名）。
      * 当最后一级是 "." 或 ".." 时，取规范化路径的倒数第二级目录名。
      */
-    private String extractWorkspaceName(String workspacePath) {
-        Path path = Paths.get(workspacePath).normalize();
+    private String extractProjectName(String projectPath) {
+        Path path = Paths.get(projectPath).normalize();
         String fileName = path.getFileName() != null ? path.getFileName().toString() : "";
         // "." 或 ".." 或空（根路径）时，取父目录名
         if (fileName.isEmpty() || ".".equals(fileName) || "..".equals(fileName)) {
@@ -188,17 +188,17 @@ public class WorkspaceManager {
             }
             // 仍然为空则回退到绝对路径的末级
             Path abs = path.toAbsolutePath().normalize();
-            return abs.getFileName() != null ? abs.getFileName().toString() : workspacePath;
+            return abs.getFileName() != null ? abs.getFileName().toString() : projectPath;
         }
         return fileName;
     }
 
     /**
-     * 获取所有已注册的工作区
+     * 获取所有已注册的项目
      */
-    public List<WorkspaceInfo> listWorkspaces() throws IOException {
-        List<WorkspaceInfo> workspaces = new ArrayList<>();
-        if (!Files.isDirectory(WORKSPACES_DIR)) return workspaces;
+    public List<ProjectInfo> listProjects() throws IOException {
+        List<ProjectInfo> projects = new ArrayList<>();
+        if (!Files.isDirectory(WORKSPACES_DIR)) return projects;
 
         try (DirectoryStream<Path> ds = Files.newDirectoryStream(WORKSPACES_DIR)) {
             for (Path dir : ds) {
@@ -211,7 +211,7 @@ public class WorkspaceManager {
                     org.noear.snack4.ONode config = org.noear.snack4.ONode.ofJson(json);
 
                     String path = config.get("path").getString();
-                    String name = extractWorkspaceName(path);
+                    String name = extractProjectName(path);
                     long createdAt = config.get("createdAt").getLong();
                     long lastAccessedAt = config.get("lastAccessedAt").getLong();
 
@@ -228,44 +228,44 @@ public class WorkspaceManager {
 
                     String hash = dir.getFileName().toString();
 
-                    workspaces.add(new WorkspaceInfo(hash, name, path,
+                    projects.add(new ProjectInfo(hash, name, path,
                             createdAt, lastAccessedAt, sessionCount));
                 } catch (Exception e) {
-                    log.error("[workspace] 读取工作区配置失败: {} - {}", dir, e.getMessage());
+                    log.error("[project] 读取项目配置失败: {} - {}", dir, e.getMessage());
                 }
             }
         }
 
         // 按创建时间排序（固定顺序，不随切换跳动）
-        workspaces.sort(Comparator.comparingLong(a -> a.createdAt));
-        return workspaces;
+        projects.sort(Comparator.comparingLong(a -> a.createdAt));
+        return projects;
     }
 
     /**
-     * 切换到指定工作区
+     * 切换到指定项目
      */
-    public void switchWorkspace(String workspacePath) throws IOException {
-        String hash = computeHash(workspacePath);
-        Path workspaceDir = WORKSPACES_DIR.resolve(hash);
-        Path configPath = workspaceDir.resolve("workspace.json");
+    public void switchProject(String projectPath) throws IOException {
+        String hash = computeProjectHash(projectPath);
+        Path projectDir = WORKSPACES_DIR.resolve(hash);
+        Path configPath = projectDir.resolve("workspace.json");
 
         if (!Files.exists(configPath)) {
-            // 工作区不存在，自动创建
-            initWorkspace(workspacePath);
+            // 项目不存在，自动创建
+            initProject(projectPath);
         }
 
-        this.currentWorkspacePath = workspacePath;
+        this.currentProjectPath = projectPath;
 
         // 更新最后访问时间
-        updateLastAccessed(workspacePath);
+        updateLastAccessed(projectPath);
 
     }
 
     /**
-     * 更新工作区最后访问时间
+     * 更新项目最后访问时间
      */
-    public void updateLastAccessed(String workspacePath) throws IOException {
-        Path configPath = getWorkspaceConfigPath(workspacePath);
+    public void updateLastAccessed(String projectPath) throws IOException {
+        Path configPath = getProjectConfigPath(projectPath);
         if (!Files.exists(configPath)) return;
 
         String json = Files.readString(configPath);
@@ -275,20 +275,20 @@ public class WorkspaceManager {
     }
 
     /**
-     * 删除工作区
+     * 删除项目
      */
-    public boolean deleteWorkspace(String hash) throws IOException {
-        Path workspaceDir = WORKSPACES_DIR.resolve(hash);
-        if (!Files.exists(workspaceDir)) return false;
+    public boolean deleteProject(String hash) throws IOException {
+        Path projectDir = WORKSPACES_DIR.resolve(hash);
+        if (!Files.exists(projectDir)) return false;
 
-        // 1. 从 WORKSPACE_MANAGERS 静态缓存中移除
-        Path configPath = workspaceDir.resolve("workspace.json");
+        // 1. 从 PROJECT_REGISTRIES 静态缓存中移除
+        Path configPath = projectDir.resolve("workspace.json");
         if (Files.exists(configPath)) {
             try {
                 String json = Files.readString(configPath);
                 org.noear.snack4.ONode config = org.noear.snack4.ONode.ofJson(json);
                 String path = config.get("path").getString();
-                if (path != null && WORKSPACE_MANAGERS.remove(path) != null) {
+                if (path != null && PROJECT_REGISTRIES.remove(path) != null) {
                     log.info("[workspace] 已从缓存中移除: {}", path);
                 }
             } catch (Exception e) {
@@ -297,7 +297,7 @@ public class WorkspaceManager {
         }
 
         // 2. 递归删除目录
-        deleteDirectory(workspaceDir);
+        deleteDirectory(projectDir);
         return true;
     }
 
@@ -315,14 +315,14 @@ public class WorkspaceManager {
         Files.delete(dir);
     }
 
-    public String getCurrentWorkspaceHash() {
-        return computeHash(currentWorkspacePath);
+    public String getCurrentProjectHash() {
+        return computeProjectHash(currentProjectPath);
     }
 
     /**
-     * 工作区信息
+     * 项目信息
      */
-    public record WorkspaceInfo(String hash, String name, String path, long createdAt, long lastAccessedAt,
-                                int sessionCount) {
+    public record ProjectInfo(String hash, String name, String path, long createdAt, long lastAccessedAt,
+                              int sessionCount) {
     }
 }

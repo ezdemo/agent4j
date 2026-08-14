@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.noear.solon.ai.chat.tool.FunctionTool;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
-import site.sorghum.loopra.bin.workspace.SharedWorkspace;
+import site.sorghum.loopra.bin.context.SharedContextStore;
 import site.sorghum.loopra.tool.ToolContext;
 
 import java.nio.file.Files;
@@ -15,19 +15,19 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-class WorkspaceToolSharingTest {
+class SharedContextToolSharingTest {
 
     @TempDir
     Path tempDir;
 
     @Test
     void parentAndSubAgentToolsShareEntriesInBothDirections() {
-        SharedWorkspace parentWorkspace = new SharedWorkspace();
-        SharedWorkspace subAgentWorkspace = new SharedWorkspace();
-        WorkspaceWriteTool parentWriter = new WorkspaceWriteTool(parentWorkspace);
-        WorkspaceReadTool parentReader = new WorkspaceReadTool(parentWorkspace);
-        WorkspaceWriteTool subWriter = new WorkspaceWriteTool(subAgentWorkspace);
-        WorkspaceReadTool subReader = new WorkspaceReadTool(subAgentWorkspace);
+        SharedContextStore parentWorkspace = new SharedContextStore();
+        SharedContextStore subAgentWorkspace = new SharedContextStore();
+        SharedContextWriteTool parentWriter = new SharedContextWriteTool(parentWorkspace);
+        SharedContextReadTool parentReader = new SharedContextReadTool(parentWorkspace);
+        SharedContextWriteTool subWriter = new SharedContextWriteTool(subAgentWorkspace);
+        SharedContextReadTool subReader = new SharedContextReadTool(subAgentWorkspace);
         ToolContext parentContext = new ToolContext(Map.of(), tempDir.toString(), "parent-session");
         ToolContext subContext = new ToolContext(Map.of(), tempDir.toString(), "parent-session");
 
@@ -45,9 +45,9 @@ class WorkspaceToolSharingTest {
 
     @Test
     void copiedSubAgentRegistryRetainsParentWorkspaceToolInstances() {
-        SharedWorkspace workspace = new SharedWorkspace();
-        FunctionTool writeTool = new WorkspaceWriteTool(workspace).getSolonTools().iterator().next();
-        FunctionTool readTool = new WorkspaceReadTool(workspace).getSolonTools().iterator().next();
+        SharedContextStore workspace = new SharedContextStore();
+        FunctionTool writeTool = new SharedContextWriteTool(workspace).getSolonTools().iterator().next();
+        FunctionTool readTool = new SharedContextReadTool(workspace).getSolonTools().iterator().next();
         ToolRegistry parentRegistry = new ToolRegistry().setDisabledTools(java.util.Set.of());
         parentRegistry.register(writeTool);
         parentRegistry.register(readTool);
@@ -60,8 +60,8 @@ class WorkspaceToolSharingTest {
 
     @Test
     void emptyOptionalPlaceholdersDoNotOverrideDocumentContent() {
-        SharedWorkspace workspace = new SharedWorkspace();
-        WorkspaceWriteTool writer = new WorkspaceWriteTool(workspace);
+        SharedContextStore workspace = new SharedContextStore();
+        SharedContextWriteTool writer = new SharedContextWriteTool(workspace);
         ToolContext context = new ToolContext(Map.of(), tempDir.toString(), "session");
 
         assertEquals("Successfully wrote document entry: tasks/share/report (type: text/plain)",

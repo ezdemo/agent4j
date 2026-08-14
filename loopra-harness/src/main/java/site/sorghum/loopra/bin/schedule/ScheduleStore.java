@@ -15,7 +15,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 /**
  * 定时任务持久化存储。
  * <p>
- * 按工作区隔离存储，每个工作区一个 JSON 文件：
+ * 按项目隔离存储，每个项目一个 JSON 文件：
  * {@code ~/.loopra/workspace/{hash}/schedules/schedules.json}
  * </p>
  *
@@ -31,16 +31,16 @@ public class ScheduleStore {
     private final ReentrantReadWriteLock lock = new ReentrantReadWriteLock();
 
     /**
-     * 获取指定工作区的调度文件路径。
+     * 获取指定项目的调度文件路径。
      */
     private Path getScheduleFile(String workspaceHash) {
         return BASE_DIR.resolve(workspaceHash).resolve("schedules").resolve("schedules.json");
     }
 
     /**
-     * 加载指定工作区的所有定时任务。
+     * 加载指定项目的所有定时任务。
      *
-     * @param workspaceHash 工作区 hash
+     * @param workspaceHash 项目 hash
      * @return 任务列表（按 id 索引的 Map）
      */
     public Map<String, ScheduledTask> load(String workspaceHash) {
@@ -91,7 +91,7 @@ public class ScheduleStore {
     }
 
     /**
-     * 持久化指定工作区的所有定时任务。
+     * 持久化指定项目的所有定时任务。
      */
     public void save(String workspaceHash, Map<String, ScheduledTask> tasks) {
         lock.writeLock().lock();
@@ -140,7 +140,7 @@ public class ScheduleStore {
     }
 
     /**
-     * 获取所有工作区 hash 列表（有定时任务的）。
+     * 获取所有项目 hash 列表（有定时任务的）。
      */
     public Set<String> getActiveWorkspaces() {
         lock.readLock().lock();
@@ -152,7 +152,7 @@ public class ScheduleStore {
     }
 
     /**
-     * 从磁盘重新扫描所有工作区的定时任务。
+     * 从磁盘重新扫描所有项目的定时任务。
      */
     public void reloadAll() {
         lock.writeLock().lock();
@@ -170,7 +170,7 @@ public class ScheduleStore {
                         }
                     }
                 } catch (IOException e) {
-                    log.warn("[schedule] 扫描工作区目录失败: {}", e.getMessage());
+                    log.warn("[schedule] 扫描项目目录失败: {}", e.getMessage());
                 }
             }
         } finally {

@@ -45,8 +45,8 @@ class AgentServiceBashSessionTest {
     void emptyMirrorReturnsEmptyListForAllWorkspaces() {
         AgentService service = new AgentService();
 
-        assertTrue(service.listBashSessions(null).isEmpty(), "全工作区查询在空镜像时应返回空列表");
-        assertTrue(service.listBashSessions("").isEmpty(), "空路径查询应等同全工作区");
+        assertTrue(service.listBashSessions(null).isEmpty(), "全项目查询在空镜像时应返回空列表");
+        assertTrue(service.listBashSessions("").isEmpty(), "空路径查询应等同全项目");
     }
 
     @Test
@@ -54,7 +54,7 @@ class AgentServiceBashSessionTest {
         AgentService service = new AgentService();
 
         List<?> sessions = service.listBashSessions(home.toString());
-        assertTrue(sessions.isEmpty(), "指定工作区查询在空镜像时应返回空列表");
+        assertTrue(sessions.isEmpty(), "指定项目查询在空镜像时应返回空列表");
     }
 
     @Test
@@ -62,7 +62,7 @@ class AgentServiceBashSessionTest {
         AgentService service = new AgentService();
 
         assertNull(service.terminateBashSession("cmd_unknown", null), "空镜像下终止未知会话应返回 null");
-        assertNull(service.terminateBashSession("cmd_unknown", home.toString()), "指定工作区下终止未知会话也应返回 null");
+        assertNull(service.terminateBashSession("cmd_unknown", home.toString()), "指定项目下终止未知会话也应返回 null");
         assertNull(service.terminateBashSession("", null), "空 sessionId 应返回 null");
     }
 
@@ -71,7 +71,7 @@ class AgentServiceBashSessionTest {
         AgentService service = new AgentService();
 
         assertNull(service.readBashSessionLog("cmd_unknown", null), "空镜像下读取未知会话日志应返回 null");
-        assertNull(service.readBashSessionLog("cmd_unknown", home.toString()), "指定工作区下读取未知会话日志也应返回 null");
+        assertNull(service.readBashSessionLog("cmd_unknown", home.toString()), "指定项目下读取未知会话日志也应返回 null");
         assertNull(service.readBashSessionLog("", null), "空 sessionId 应返回 null");
     }
 }

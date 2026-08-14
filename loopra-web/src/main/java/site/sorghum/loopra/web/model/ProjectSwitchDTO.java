@@ -1,9 +1,9 @@
 package site.sorghum.loopra.web.model;
 
 /**
- * 切换工作区结果。
+ * Project switch result.
  */
-public record WorkspaceSwitchDTO(
+public record ProjectSwitchDTO(
         String message,
         String workspace,
         SessionCurrentDTO currentSession

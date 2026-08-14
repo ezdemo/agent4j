@@ -259,7 +259,7 @@ describe('BashSessionManager', () => {
     expect(copySuccessListener).toHaveBeenCalledTimes(1)
     expect(copySuccessListener.mock.calls[0][0].detail).toBe('复制成功')
 
-    // 工作区（复制完整路径而非短名）
+    // 项目（复制完整路径而非短名）
     await wrapper.find('.bash-workspace').trigger('click')
     await flushPromises()
     expect(writeText).toHaveBeenCalledWith('C:/work/proj-a')

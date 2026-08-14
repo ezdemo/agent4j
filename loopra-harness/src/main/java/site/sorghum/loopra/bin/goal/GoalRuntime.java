@@ -1,12 +1,12 @@
 package site.sorghum.loopra.bin.goal;
 
-import site.sorghum.loopra.bin.workspace.WorkspaceManager;
+import site.sorghum.loopra.bin.project.ProjectRegistry;
 import site.sorghum.loopra.tool.ToolContext;
 
 import java.io.IOException;
 import java.nio.file.Path;
 
-/** Goal 与当前工作区、会话的绑定，供命令、工具和循环共用。 */
+/** Goal 与当前项目、会话的绑定，供命令、工具和循环共用。 */
 public final class GoalRuntime {
     private GoalRuntime() {
     }
@@ -38,15 +38,15 @@ public final class GoalRuntime {
         if (context == null || context.getSessionId() == null || context.getSessionId().isBlank()) {
             throw new IllegalStateException("Goal 只能在已初始化会话中使用");
         }
-        // 状态根：工作树隔离模式下 Goal 归属主工作区，文件根则指向工作树
+        // 状态根：隔离分支模式下 Goal 归属主项目，文件根则指向执行根
         return forWorkspace(context.getStateRootDir(), context.getSessionId());
     }
 
     public static Scope forWorkspace(Path workspace, String sessionId) {
         if (workspace == null || sessionId == null || sessionId.isBlank()) {
-            throw new IllegalStateException("工作区或会话未初始化");
+            throw new IllegalStateException("项目或会话未初始化");
         }
-        WorkspaceManager manager = WorkspaceManager.getOrCreate(workspace.toAbsolutePath().normalize().toString());
-        return new Scope(manager.getGoalStore(), sessionId, manager.getCurrentWorkspaceHash());
+        ProjectRegistry manager = ProjectRegistry.getOrCreate(workspace.toAbsolutePath().normalize().toString());
+        return new Scope(manager.getGoalStore(), sessionId, manager.getCurrentProjectHash());
     }
 }

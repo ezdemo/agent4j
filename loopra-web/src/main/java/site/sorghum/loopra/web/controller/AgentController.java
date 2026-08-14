@@ -31,7 +31,7 @@ public class AgentController {
     @Inject
     private AgentService agentService;
 
-    @ApiOperation(value = "获取 Agent 状态", notes = "返回当前 Agent 的运行状态，包括模型、工作区、会话等信息")
+    @ApiOperation(value = "获取 Agent 状态", notes = "返回当前 Agent 的运行状态，包括模型、项目、会话等信息")
     @Get
     @Mapping("/status")
     public ApiResponse<AgentStatusDTO> status() {
@@ -41,11 +41,11 @@ public class AgentController {
         return ApiResponse.ok(agentService.getStatus());
     }
 
-    @ApiOperation(value = "查询会话运行状态", notes = "按工作区和会话精确返回当前后台 Agent 任务是否仍在执行")
+    @ApiOperation(value = "查询会话运行状态", notes = "按项目和会话精确返回当前后台 Agent 任务是否仍在执行")
     @Get
     @Mapping("/session-status")
     public ApiResponse<SessionStatusDTO> sessionStatus(
-            @ApiParam(value = "工作区 hash", required = true)
+            @ApiParam(value = "项目 hash", required = true)
             @Param(value = "workspaceHash", required = true)
             String workspaceHash,
             @ApiParam(value = "会话名称", required = true)
@@ -57,22 +57,22 @@ public class AgentController {
         if (sessionName == null || sessionName.isBlank()) {
             throw new ServiceException("sessionName 不能为空");
         }
-        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+        String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
         return ApiResponse.ok(agentService.getSessionStatus(workspacePath, sessionName));
     }
 
-    @ApiOperation(value = "查询 bash 后台命令会话", notes = "返回 bash_start 启动且仍在镜像窗口内的后台命令会话（含 60 秒内刚结束的）；workspaceHash 为空时返回全部工作区")
+    @ApiOperation(value = "查询 bash 后台命令会话", notes = "返回 bash_start 启动且仍在镜像窗口内的后台命令会话（含 60 秒内刚结束的）；workspaceHash 为空时返回全部项目")
     @Get
     @Mapping("/bash-sessions")
     public ApiResponse<List<BashSessionDTO>> bashSessions(
-            @ApiParam(value = "工作区 hash（可选，空则返回全部工作区）", required = false)
+            @ApiParam(value = "项目 hash（可选，空则返回全部项目）", required = false)
             @Param(value = "workspaceHash", required = false)
             String workspaceHash) {
         if (!agentService.isReady()) {
             throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         }
         String workspacePath = workspaceHash == null || workspaceHash.isBlank()
-                ? null : agentService.resolveWorkspacePath(workspaceHash);
+                ? null : agentService.resolveProjectPath(workspaceHash);
         return ApiResponse.ok(agentService.listBashSessions(workspacePath));
     }
 
@@ -87,7 +87,7 @@ public class AgentController {
             throw new ServiceException("sessionId 不能为空");
         }
         String workspacePath = request.getWorkspaceHash() == null || request.getWorkspaceHash().isBlank()
-                ? null : agentService.resolveWorkspacePath(request.getWorkspaceHash());
+                ? null : agentService.resolveProjectPath(request.getWorkspaceHash());
         String message = agentService.terminateBashSession(request.getSessionId(), workspacePath);
         if (message == null) {
             return ApiResponse.fail("会话不存在或已结束: " + request.getSessionId());
@@ -95,14 +95,14 @@ public class AgentController {
         return ApiResponse.ok(message);
     }
 
-    @ApiOperation(value = "查询 bash 后台会话输出日志", notes = "返回指定 session_id 后台命令会话自启动以来累积的输出日志（bash_start 初始输出 + bash_wait/stdin 增量输出）；workspaceHash 为空时在全部工作区查找")
+    @ApiOperation(value = "查询 bash 后台会话输出日志", notes = "返回指定 session_id 后台命令会话自启动以来累积的输出日志（bash_start 初始输出 + bash_wait/stdin 增量输出）；workspaceHash 为空时在全部项目查找")
     @Get
     @Mapping("/bash-sessions/log")
     public ApiResponse<BashSessionLogDTO> bashSessionLog(
             @ApiParam(value = "会话 ID", required = true)
             @Param(value = "sessionId", required = true)
             String sessionId,
-            @ApiParam(value = "工作区 hash（可选，空则全部工作区查找）", required = false)
+            @ApiParam(value = "项目 hash（可选，空则全部项目查找）", required = false)
             @Param(value = "workspaceHash", required = false)
             String workspaceHash) {
         if (!agentService.isReady()) {
@@ -112,7 +112,7 @@ public class AgentController {
             throw new ServiceException("sessionId 不能为空");
         }
         String workspacePath = workspaceHash == null || workspaceHash.isBlank()
-                ? null : agentService.resolveWorkspacePath(workspaceHash);
+                ? null : agentService.resolveProjectPath(workspaceHash);
         BashSessionLogDTO dto = agentService.readBashSessionLog(sessionId, workspacePath);
         if (dto == null) {
             return ApiResponse.fail("会话不存在或已结束: " + sessionId);
@@ -120,11 +120,11 @@ public class AgentController {
         return ApiResponse.ok(dto);
     }
 
-    @ApiOperation(value = "获取历史消息", notes = "根据工作区 hash 和会话名称获取历史消息列表")
+    @ApiOperation(value = "获取历史消息", notes = "根据项目 hash 和会话名称获取历史消息列表")
     @Get
     @Mapping("/history")
     public ApiResponse<List<?>> history(
-            @ApiParam(value = "工作区 hash", required = true)
+            @ApiParam(value = "项目 hash", required = true)
             @Param(value = "workspaceHash", required = true)
             String workspaceHash,
             @ApiParam(value = "会话名称", required = true)
@@ -133,7 +133,7 @@ public class AgentController {
         if (!agentService.isReady()) {
             throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         }
-        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
+        String workspacePath = agentService.resolveProjectPath(workspaceHash);
         return ApiResponse.ok(agentService.getHistory(workspacePath, sessionName));
     }
 
@@ -141,7 +141,7 @@ public class AgentController {
     @Get
     @Mapping("/mode")
     public ApiResponse<java.util.Map<String, Object>> mode(
-            @ApiParam(value = "工作区 hash", required = true)
+            @ApiParam(value = "项目 hash", required = true)
             @Param(value = "workspaceHash", required = true)
             String workspaceHash,
             @ApiParam(value = "会话名称", required = true)
@@ -150,7 +150,7 @@ public class AgentController {
         if (!agentService.isReady()) {
             throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         }
-        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
+        String workspacePath = agentService.resolveProjectPath(workspaceHash);
         return ApiResponse.ok(agentService.getPlanState(workspacePath, sessionName));
     }
 
@@ -164,7 +164,7 @@ public class AgentController {
         if (request == null || request.getSessionName() == null || request.getSessionName().isBlank()) {
             throw new ServiceException("请先选择会话");
         }
-        String workspacePath = agentService.resolveWorkspacePath(request.getWorkspaceHash());
+        String workspacePath = agentService.resolveProjectPath(request.getWorkspaceHash());
         return ApiResponse.ok(agentService.setPlanMode(
                 workspacePath, request.getSessionName(), request.isEnabled()));
     }

@@ -488,7 +488,7 @@ async function createTab() {
   if (creating.value) return
   const targetHash = activeWorkspaceHash.value || (workspaces.value[0] && workspaces.value[0].hash)
   if (!targetHash) {
-    startupError.value = '未找到可用工作区，请先在网页版添加工作区。'
+    startupError.value = '未找到可用项目，请先在网页版添加项目。'
     return
   }
   creating.value = true
@@ -517,7 +517,7 @@ async function runChatUpdate(source) {
   if (creating.value) return
   const targetHash = activeWorkspaceHash.value || (workspaces.value[0] && workspaces.value[0].hash)
   if (!targetHash) {
-    message.warning('未找到可用工作区，请先添加项目')
+    message.warning('未找到可用项目，请先添加项目')
     return
   }
   creating.value = true
@@ -570,12 +570,12 @@ async function initializeWorkspaceContext() {
     configAPI.getWorkspace()
   ])
   if (!workspacesResult.success) {
-    throw new Error(workspacesResult.message || '加载工作区失败')
+    throw new Error(workspacesResult.message || '加载项目失败')
   }
 
   workspaces.value = workspacesResult.data || []
   if (workspaces.value.length === 0) {
-    throw new Error('未找到可用工作区，请先在网页版添加工作区。')
+    throw new Error('未找到可用项目，请先在网页版添加项目。')
   }
 
   const currentPath = currentWorkspaceResult.success
@@ -584,7 +584,7 @@ async function initializeWorkspaceContext() {
   const selectedWorkspace = workspaces.value.find((item) => item.path === currentPath) || workspaces.value[0]
   const switchResult = await configAPI.switchWorkspace(selectedWorkspace.path)
   if (!switchResult.success) {
-    throw new Error(switchResult.message || '切换默认工作区失败')
+    throw new Error(switchResult.message || '切换默认项目失败')
   }
   activeWorkspaceHash.value = selectedWorkspace.hash
 }
@@ -596,7 +596,7 @@ async function initializeWorkspace() {
     await initializeWorkspaceContext()
   } catch (error) {
     console.error('[desktop-shell] failed to initialize workspace:', error)
-    startupError.value = error.message || '初始化默认工作区失败'
+    startupError.value = error.message || '初始化默认项目失败'
   }
 }
 
@@ -641,10 +641,10 @@ async function selectWorkspace(workspaceHash) {
     return
   }
   const workspace = workspaces.value.find((item) => item.hash === workspaceHash)
-  if (!workspace) throw new Error('工作区不存在')
+  if (!workspace) throw new Error('项目不存在')
   if (workspaceHash === activeWorkspaceHash.value) return
   const response = await configAPI.switchWorkspace(workspace.path)
-  if (!response.success) throw new Error(response.message || '切换工作区失败')
+  if (!response.success) throw new Error(response.message || '切换项目失败')
   activeWorkspaceHash.value = workspaceHash
 }
 

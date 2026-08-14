@@ -125,7 +125,7 @@ import ActionConfirmDialog from './ActionConfirmDialog.vue'
 import FileExplorerNode from './FileExplorerNode.vue'
 
 const props = defineProps({
-  // 工作区绝对路径（桌面端由宿主传入，直接走 Electron 文件系统）
+  // 项目绝对路径（桌面端由宿主传入，直接走 Electron 文件系统）
   rootPath: { type: String, default: '' },
   workspaceHash: { type: String, default: null }
 })

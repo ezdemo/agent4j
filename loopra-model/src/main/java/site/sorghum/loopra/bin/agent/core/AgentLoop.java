@@ -123,7 +123,7 @@ public class AgentLoop implements AgentLoopController {
     private volatile String frozenToolInstructions;
     /**
      * 计划模式 —— 会话级状态：仅允许只读工具（工具列表过滤 + 执行拒绝 + 指令感知）。
-     * 由 /plan、/execute 命令切换；不修改共享的 ToolRegistry，因此不影响同工作区的其他会话。
+     * 由 /plan、/execute 命令切换；不修改共享的 ToolRegistry，因此不影响同项目的其他会话。
      */
     private volatile boolean planMode = false;
     /**
@@ -162,7 +162,7 @@ public class AgentLoop implements AgentLoopController {
     /** 外部中断条件（父代理中断或子代理显式取消）。 */
     private volatile BooleanSupplier externalAbortCheck = null;
 
-    /** 工作区根目录 —— compact 折叠时用于沉淀长期记忆到 .loopra/loopra-memory.md。 null 则跳过沉淀。 */
+    /** 项目根目录 —— compact 折叠时用于沉淀长期记忆到 .loopra/loopra-memory.md。 null 则跳过沉淀。 */
     @Setter
     @Getter
     private volatile Path workspace;
@@ -230,8 +230,11 @@ public class AgentLoop implements AgentLoopController {
         this.hitlManager = new HitlManager(hitlMode);
         this.hitlManager.setConfig(config);
         this.stormBreaker = StormBreaker.fromConfig(config);
+        Path executionRoot = registry == null || registry.getEnvironment() == null
+                ? null
+                : registry.getEnvironment().executionRoot();
         this.toolCallValidator = toolCallValidator != null ? toolCallValidator
-                : ToolCallValidator.fromConfig(config, registry == null ? null : registry.getWorkspace());
+                : ToolCallValidator.fromConfig(config, executionRoot);
     }
 
     // ==================== 公共控制 API ====================
@@ -714,11 +717,11 @@ public class AgentLoop implements AgentLoopController {
     }
 
     private GoalGuard.GoalView loadOpenGoal() throws IOException {
-        if (goalGuard == null || sessionId == null || sessionId.isBlank() || registry == null || registry.getWorkspace() == null) {
+        if (goalGuard == null || sessionId == null || sessionId.isBlank() || registry == null
+                || registry.getEnvironment() == null || registry.getEnvironment().stateRoot() == null) {
             return null;
         }
-        // 工作树隔离模式下 Goal 归属状态工作区（主工作区），文件根则指向工作树
-        Path stateRoot = registry.getStateWorkspace() != null ? registry.getStateWorkspace() : registry.getWorkspace();
+        Path stateRoot = registry.getEnvironment().stateRoot();
         return goalGuard.openGoal(stateRoot, sessionId);
     }
 
@@ -1401,8 +1404,10 @@ public class AgentLoop implements AgentLoopController {
                     "[hitl] 沙箱越界触发强制审批: " + hitlEx.getDetails()));
         }
 
+        Path executionRoot = registry == null || registry.getEnvironment() == null
+                ? null : registry.getEnvironment().executionRoot();
         List<FileChange> fileChanges = drainFileChanges
-                ? SessionFileChangeTracker.drain(registry.getWorkspace(), getSessionId())
+                ? SessionFileChangeTracker.drain(executionRoot, getSessionId())
                 : List.of();
         return new ToolExecutionResult(parsed.tcList(), toolResults, fileChanges,
                 dispatch.anySuppressed().get());
@@ -1530,7 +1535,9 @@ public class AgentLoop implements AgentLoopController {
                     ParentOutputHolder.set(capturedOutput);
                 }
                 currentToolControl.set(control);
-                SessionFileChangeTracker.bind(registry.getWorkspace(), getSessionId());
+                Path executionRoot = registry == null || registry.getEnvironment() == null
+                        ? null : registry.getEnvironment().executionRoot();
+                SessionFileChangeTracker.bind(executionRoot, getSessionId());
                 try {
                     ONode tc = tcArray.get(idx);
                     ToolCall toolCall = getToolCall(tc);
@@ -1569,16 +1576,17 @@ public class AgentLoop implements AgentLoopController {
 
                     // 收集工具调用上下文；终端工具通过 __cwd 获取实际执行目录。
                     ToolContext.setCurrentController(AgentLoop.this);
-                    String workspacePath = registry.getWorkspace().toAbsolutePath().normalize().toString();
-                    String stateWorkspacePath = registry.getStateWorkspace() != null
-                            ? registry.getStateWorkspace().toAbsolutePath().normalize().toString()
+                    String executionPath = registry.getEnvironment().executionRoot()
+                            .toAbsolutePath().normalize().toString();
+                    String statePath = registry.getEnvironment().stateRoot() != null
+                            ? registry.getEnvironment().stateRoot().toAbsolutePath().normalize().toString()
                             : null;
                     HashMap<String, Object> extraMap = new HashMap<>();
-                    extraMap.put("__cwd", workspacePath);
+                    extraMap.put("__cwd", executionPath);
                     extraMap.put("ctx", new ToolContext(
                             new HashMap<>(),
-                            workspacePath,
-                            stateWorkspacePath,
+                            executionPath,
+                            statePath,
                             this.getSessionId()
                     ));
 

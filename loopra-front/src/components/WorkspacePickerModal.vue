@@ -153,12 +153,12 @@ function onFolderPicked(e) {
   e.target.value = ''
 }
 
-// 切换工作区
+// 切换项目
 function handleSwitchWorkspace(hash) {
   emit('switchWorkspace', hash)
 }
 
-// 添加新工作区
+// 添加新项目
 function handleAddWorkspace() {
   const path = newWorkspacePath.value.trim()
   if (!path) return
@@ -253,7 +253,7 @@ function formatWorkspacePath(path) {
   font-size: 13px;
 }
 
-/* 工作区列表 */
+/* 项目列表 */
 .workspace-list {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -353,7 +353,7 @@ function formatWorkspacePath(path) {
 .workspace-item.active .workspace-item-count {
   color: var(--fg-3);
 }
-/* 添加工作区输入区 */
+/* 添加项目输入区 */
 .workspace-add {
   padding: 8px;
   border-top: 1px solid var(--border);

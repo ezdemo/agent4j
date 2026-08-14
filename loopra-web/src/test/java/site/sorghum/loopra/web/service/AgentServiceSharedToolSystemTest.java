@@ -59,7 +59,7 @@ class AgentServiceSharedToolSystemTest {
         ToolSystemInitializer.Result second = getOrCreate(service, workspaceA);
 
         assertNotNull(first);
-        assertSame(first, second, "同一工作区第二次访问应复用缓存");
+        assertSame(first, second, "同一项目第二次访问应复用缓存");
     }
 
     @Test
@@ -69,7 +69,7 @@ class AgentServiceSharedToolSystemTest {
         ToolSystemInitializer.Result a = getOrCreate(service, workspaceA);
         ToolSystemInitializer.Result b = getOrCreate(service, workspaceB);
 
-        assertNotSame(a, b, "不同工作区应各自构建独立的工具系统");
+        assertNotSame(a, b, "不同项目应各自构建独立的工具系统");
     }
 
     @Test
@@ -83,7 +83,7 @@ class AgentServiceSharedToolSystemTest {
         assertTrue(service.getSessionStatus(workspaceA.toString(), sessionName).running());
         assertEquals(taskA, service.getSessionStatus(workspaceA.toString(), sessionName).requestId());
         assertFalse(service.getSessionStatus(workspaceB.toString(), sessionName).running(),
-                "不同工作区的同名会话不能共享运行状态");
+                "不同项目的同名会话不能共享运行状态");
 
         service.registerSessionTask(workspaceA.toString(), sessionName, taskB);
         service.unregisterSessionTask(workspaceA.toString(), sessionName, taskA);

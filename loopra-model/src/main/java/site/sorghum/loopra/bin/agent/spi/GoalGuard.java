@@ -17,7 +17,7 @@ public interface GoalGuard {
     /**
      * 读取指定会话当前开放的 Goal 只读视图。
      *
-     * @param workspace 工作区根目录（Goal 快照按工作区隔离）
+     * @param workspace 项目根目录（Goal 快照按项目隔离）
      * @param sessionId 会话 ID
      * @return 开放中的 Goal 视图；无开放 Goal 返回 {@code null}
      * @throws IOException 读取持久化 Goal 失败时抛出，由 AgentLoop 降级为提示文案

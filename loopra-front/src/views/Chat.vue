@@ -79,7 +79,7 @@
                 </button>
                 <button type="button" :class="{ active: props.welcomeWorktreeMode }" :disabled="sessionTaskRunning || props.environmentSwitching" @click="selectWelcomeEnvironment(true)">
                   <span v-if="props.environmentSwitching && props.environmentSwitchTarget === 'worktree'" class="welcome-environment-spinner" />
-                  工作树
+                  隔离分支
                 </button>
               </div>
             </div>
@@ -306,7 +306,7 @@
     <ActionConfirmDialog
         :model-value="rollbackDialog.visible"
         title="撤回消息"
-        message="将删除当前消息及其后的会话内容。撤回代码会将工作区恢复到发送此消息前的状态。"
+        message="将删除当前消息及其后的会话内容。撤回代码会将项目恢复到发送此消息前的状态。"
         :actions="rollbackActions"
         @update:model-value="value => { if (!value) closeRollbackDialog() }"
         @action="handleRollbackAction"
@@ -1543,7 +1543,7 @@ const sendChoice = async (value, block) => {
   sendMessage()
 }
 
-// 打开文件（显示当前工作区代码预览）
+// 打开文件（显示当前项目代码预览）
 const openFile = async (filePath) => {
   await openDiff(filePath)
 }
@@ -1965,7 +1965,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
           emit('sessionUpdated')
           nextTick(() => sendNextQueuedMessage(sessionName, targetWorkspaceHash))
         },
-        // 传递工作区、会话和图片信息
+        // 传递项目、会话和图片信息
         {
           workspaceHash: targetWorkspaceHash,
           sessionName,
@@ -2074,7 +2074,7 @@ const rollbackSnapshot = async (msgId, rollbackCode, rollbackTimestamp) => {
   try {
     const res = await snapshotAPI.rollback(props.workspaceHash, msgId, props.sessionName, rollbackCode, rollbackTimestamp)
     if (res.success) {
-      addLog({level: 'INFO', text: `✅ ${res.data?.message || '工作区已恢复'}`, time: Date.now()})
+      addLog({level: 'INFO', text: `✅ ${res.data?.message || '项目已恢复'}`, time: Date.now()})
       // 截断该消息之后的所有快照记录
       store.truncateSnapshotsAfter(props.sessionName, msgId)
       // 从 snapshotMap 中移除

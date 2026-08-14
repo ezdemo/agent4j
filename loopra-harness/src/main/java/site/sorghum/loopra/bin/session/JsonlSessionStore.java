@@ -46,7 +46,7 @@ public class JsonlSessionStore implements SessionStore {
         Arrays.setAll(FILE_LOCKS, ignored -> new ReentrantLock());
     }
     /**
-     * 当前会话目录（支持工作区隔离）
+     * 当前会话目录（支持项目隔离）
      */
     private final Path sessionsDir;
     /**
@@ -74,7 +74,7 @@ public class JsonlSessionStore implements SessionStore {
     }
 
     /**
-     * 指定会话目录的构造函数（支持工作区隔离）
+     * 指定会话目录的构造函数（支持项目隔离）
      *
      * @param sessionsDir 会话目录路径
      */
@@ -420,7 +420,7 @@ public class JsonlSessionStore implements SessionStore {
                 try (BufferedReader r = Files.newBufferedReader(p, StandardCharsets.UTF_8)) {
                     while (r.readLine() != null) lines++;
                 }
-                // 读取标题与工作树模式
+                // 读取标题与隔离分支模式
                 String title = null;
                 boolean worktreeMode = false;
                 Path metaFile = sessionsDir.resolve(sanitize(name) + ".meta");
@@ -578,7 +578,7 @@ public class JsonlSessionStore implements SessionStore {
         try {
             writeMeta(name, node -> node.set("worktreeMode", enabled));
         } catch (IOException e) {
-            log.warn("[jsonl] 持久化工作树模式失败: {}", e.getMessage());
+            log.warn("[jsonl] 持久化隔离分支模式失败: {}", e.getMessage());
         }
     }
 
@@ -599,7 +599,7 @@ public class JsonlSessionStore implements SessionStore {
                 writeMeta(name, node -> node.set("mergeMode", mode.trim()));
             }
         } catch (IOException e) {
-            log.warn("[jsonl] 持久化工作树合并模式失败: {}", e.getMessage());
+            log.warn("[jsonl] 持久化隔离分支合并模式失败: {}", e.getMessage());
         }
     }
 
@@ -611,7 +611,7 @@ public class JsonlSessionStore implements SessionStore {
         return mode == null || mode.isBlank() ? "manual" : mode;
     }
 
-    /** 从已解析的 .meta 节点读取工作树模式标记（兼容缺失/非布尔字段）。 */
+    /** 从已解析的 .meta 节点读取隔离分支模式标记（兼容缺失/非布尔字段）。 */
     private static boolean worktreeModeOf(org.noear.snack4.ONode meta) {
         if (meta == null) return false;
         org.noear.snack4.ONode flag = meta.get("worktreeMode");

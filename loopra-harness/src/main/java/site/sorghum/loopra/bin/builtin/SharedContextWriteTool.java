@@ -6,7 +6,7 @@ import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import org.noear.solon.annotation.Param;
-import site.sorghum.loopra.bin.workspace.SharedWorkspace;
+import site.sorghum.loopra.bin.context.SharedContextStore;
 import site.sorghum.loopra.tool.ToolContext;
 import site.sorghum.loopra.tool.SolonToTools;
 
@@ -14,7 +14,8 @@ import java.nio.file.Path;
 import java.util.Collection;
 
 /**
- * Workspace Write 工具 —— 向共享工作区写入 KV 或文档条目。
+ * Shared-context write tool. The legacy {@code workspace_write} tool name is
+ * kept for protocol compatibility.
  * <p>
  * 支持两种写入模式：
  * <ul>
@@ -27,28 +28,28 @@ import java.util.Collection;
  * @author Sorghum
  */
 @Component
-public class WorkspaceWriteTool extends AbsToolProvider implements SolonToTools {
+public class SharedContextWriteTool extends AbsToolProvider implements SolonToTools {
 
     @Inject
-    private SharedWorkspace workspace;
+    private SharedContextStore contextStore;
 
     /**
      * 无参构造器 —— Solon DI 使用。
      */
-    public WorkspaceWriteTool() {
+    public SharedContextWriteTool() {
     }
 
     /**
      * 带参构造器 —— SubAgent 手动创建时使用。
      *
-     * @param workspace SharedWorkspace 实例
+     * @param contextStore shared project context
      */
-    public WorkspaceWriteTool(SharedWorkspace workspace) {
-        this.workspace = workspace;
+    public SharedContextWriteTool(SharedContextStore contextStore) {
+        this.contextStore = contextStore;
     }
 
     @ToolMapping(name = "workspace_write", description = """
-                向当前项目的共享工作区写入 KV 或文档条目，数据持久化到 `.loopra/workspace/`。KV 模式存储键值对，文档模式存储富文本内容。
+                向当前项目的共享上下文写入 KV 或文档条目，数据持久化到 `.loopra/workspace/`。KV 模式存储键值对，文档模式存储富文本内容。
                 参数: key(必填, 条目路径), value(可选, KV 模式值), content(可选, 文档模式内容),
                       type(可选, 文档 MIME 类型, 默认 text/plain), scope(可选, 作用域预留)。
                 key 为空时返回错误；value 和 content 都为空时返回错误。
@@ -69,7 +70,7 @@ public class WorkspaceWriteTool extends AbsToolProvider implements SolonToTools 
         if (creator == null || creator.isBlank()) {
             creator = "agent";
         }
-        Path workspaceRoot = ctx == null ? null : ctx.getRootDir();
+        Path projectRoot = ctx == null ? null : ctx.getRootDir();
 
         // 3. 确定模式并写入。部分工具桥接层会把未提供的可选字符串转换为空串，
         // 因此只有另一种载荷缺失时，空字符串才表示显式的空内容。
@@ -78,7 +79,7 @@ public class WorkspaceWriteTool extends AbsToolProvider implements SolonToTools 
         if (hasValue) {
             // KV 模式
             try {
-                workspace.writeKV(workspaceRoot, key, value, creator);
+                contextStore.writeKV(projectRoot, key, value, creator);
                 return "Successfully wrote KV entry: " + key;
             } catch (Exception e) {
                 return "WRITE_FAILED: Failed to write KV entry '" + key + "': " + e.getMessage();
@@ -87,7 +88,7 @@ public class WorkspaceWriteTool extends AbsToolProvider implements SolonToTools 
             // 文档模式
             String mimeType = (type == null || type.isBlank()) ? "text/plain" : type;
             try {
-                workspace.writeDoc(workspaceRoot, key, content, mimeType, creator);
+                contextStore.writeDoc(projectRoot, key, content, mimeType, creator);
                 return "Successfully wrote document entry: " + key + " (type: " + mimeType + ")";
             } catch (Exception e) {
                 return "WRITE_FAILED: Failed to write document entry '" + key

@@ -9,7 +9,7 @@ import java.util.Locale;
 /**
  * 环境信息工具 —— 为 system prompt 拼装一段「环境信息」。
  * <p>
- * 内容随工作区而变（主要是工作目录不同），用于让 LLM 感知当前运行环境。
+ * 内容随项目而变（主要是工作目录不同），用于让 LLM 感知当前运行环境。
  * 不含 git 信息；日期精度只到天，对齐 ZCode 行为，一天内保持稳定以命中前缀缓存。
  * </p>
  *
@@ -26,7 +26,7 @@ public final class EnvInfoUtil {
     /**
      * 构建环境信息 Markdown 段。
      *
-     * @param workspace 当前工作区路径，为 null 时回退到 user.dir
+     * @param workspace 当前项目路径，为 null 时回退到 user.dir
      * @return 以 "## 环境信息" 开头的 Markdown 文本
      */
     public static String buildEnvInfo(Path workspace) {

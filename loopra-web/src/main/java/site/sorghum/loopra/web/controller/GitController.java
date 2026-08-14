@@ -33,11 +33,11 @@ public class GitController {
 
     // ==================== 查询端点 ====================
 
-    @ApiOperation(value = "获取当前 Git 分支", notes = "返回工作区所在 Git 仓库的当前分支名称")
+    @ApiOperation(value = "获取当前 Git 分支", notes = "返回项目所在 Git 仓库的当前分支名称")
     @Get
     @Mapping("/branch")
     public ApiResponse<GitBranchDTO> branch(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
+            @ApiParam(value = "项目 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
         String branch = gitService.getBranch(workspaceHash);
         return ApiResponse.ok(new GitBranchDTO(branch));
     }
@@ -46,16 +46,16 @@ public class GitController {
     @Get
     @Mapping("/diff")
     public ApiResponse<GitDiffDTO> diff(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
+            @ApiParam(value = "项目 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
         return ApiResponse.ok(gitService.getDiff(workspaceHash));
     }
 
     @ApiOperation(value = "Git 综合状态检测",
-            notes = "依次检测 Git 是否安装、工作区是否初始化为 Git 仓库、获取当前分支名及变更文件列表")
+            notes = "依次检测 Git 是否安装、项目是否初始化为 Git 仓库、获取当前分支名及变更文件列表")
     @Get
     @Mapping("/status")
     public ApiResponse<GitStatusDTO> status(
-            @ApiParam(value = "工作区 hash")
+            @ApiParam(value = "项目 hash")
             @Param(value = "workspaceHash", required = false) String workspaceHash) throws Exception {
         return ApiResponse.ok(gitService.getStatus(workspaceHash));
     }
@@ -65,7 +65,7 @@ public class GitController {
     @Get
     @Mapping("/diff-content")
     public ApiResponse<GitDiffContentDTO> diffContent(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @ApiParam(value = "项目 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
             @ApiParam(value = "可选的文件路径，用于查看指定文件的 diff")
             @Param(value = "path", required = false) String path) throws Exception {
         return ApiResponse.ok(gitService.getDiffContent(workspaceHash, path));
@@ -76,19 +76,19 @@ public class GitController {
     @Get
     @Mapping("/file-content")
     public ApiResponse<GitFileContentDTO> fileContent(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @ApiParam(value = "项目 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
             @ApiParam(value = "文件路径（相对于仓库根目录）") @Param("path") String path,
             @ApiParam(value = "Git 引用（分支名、标签、提交哈希等），默认为 HEAD")
             @Param(value = "ref", required = false) String ref) throws Exception {
         return ApiResponse.ok(gitService.getFileContent(workspaceHash, path, ref));
     }
 
-    @ApiOperation(value = "获取工作区当前文件内容", notes = "用于前端代码预览，读取当前工作区文件而非 Git 提交版本")
+    @ApiOperation(value = "获取项目当前文件内容", notes = "用于前端代码预览，读取当前项目文件而非 Git 提交版本")
     @Get
     @Mapping("/working-file-content")
     public ApiResponse<WorkingFileContentDTO> workingFileContent(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
-            @ApiParam(value = "文件路径（工作区相对路径或工作区内绝对路径）") @Param("path") String path) throws Exception {
+            @ApiParam(value = "项目 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @ApiParam(value = "文件路径（项目相对路径或项目内绝对路径）") @Param("path") String path) throws Exception {
         return ApiResponse.ok(gitService.getWorkingFileContent(workspaceHash, path));
     }
 
@@ -97,7 +97,7 @@ public class GitController {
     @Get
     @Mapping("/log")
     public ApiResponse<GitCommitDTO.ListWrapper> log(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @ApiParam(value = "项目 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
             @ApiParam(value = "返回条数，默认 50") @Param(value = "limit", required = false) Integer limit) {
         return ApiResponse.ok(gitService.getCommitHistory(workspaceHash, limit));
     }
@@ -105,11 +105,11 @@ public class GitController {
     // ==================== 操作端点 ====================
 
     @ApiOperation(value = "初始化 Git 仓库",
-            notes = "在工作区执行 git init，自动生成 .gitignore 文件（仅当文件不存在时），可选执行初始提交")
+            notes = "在项目执行 git init，自动生成 .gitignore 文件（仅当文件不存在时），可选执行初始提交")
     @Post
     @Mapping("/init")
     public ApiResponse<Map<String, Object>> init(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @ApiParam(value = "项目 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
             @ApiParam(value = "是否执行初始提交，默认为 false")
             @Param(value = "initialCommit", required = false) Boolean initialCommit) throws Exception {
         return ApiResponse.ok(gitService.initRepo(workspaceHash, initialCommit));
@@ -120,7 +120,7 @@ public class GitController {
     @Post
     @Mapping("/commit")
     public ApiResponse<GitCommitResultDTO> commit(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @ApiParam(value = "项目 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
             @Body String body) throws Exception {
         return ApiResponse.ok(gitService.commit(workspaceHash, body));
     }
@@ -129,7 +129,7 @@ public class GitController {
     @Post
     @Mapping("/toggle")
     public ApiResponse<Map<String, Object>> toggle(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @ApiParam(value = "项目 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
             @Body String body) throws Exception {
         return ApiResponse.ok(gitService.toggleFile(workspaceHash, body));
     }
@@ -139,16 +139,16 @@ public class GitController {
     @Get
     @Mapping("/config")
     public ApiResponse<Map<String, String>> config(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
+            @ApiParam(value = "项目 hash") @Param(value = "workspaceHash", required = false) String workspaceHash) {
         return ApiResponse.ok(gitService.getGitConfig(workspaceHash));
     }
 
     @ApiOperation(value = "保存提交作者配置",
-            notes = "将 authorName/authorEmail 保存到工作区 .loopra/git-author.json")
+            notes = "将 authorName/authorEmail 保存到项目 .loopra/git-author.json")
     @Post
     @Mapping("/config")
     public ApiResponse<Map<String, String>> saveConfig(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @ApiParam(value = "项目 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
             @Body String body) throws Exception {
         return ApiResponse.ok(gitService.saveGitConfig(workspaceHash, body));
     }
@@ -160,23 +160,23 @@ public class GitController {
     @Post
     @Mapping("/generate-commit-message")
     public ApiResponse<GitGenerateMessageDTO> generateCommitMessage(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @ApiParam(value = "项目 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
             @Body String body) throws Exception {
         return ApiResponse.ok(gitService.generateCommitMessage(workspaceHash, body));
     }
 
-    @ApiOperation(value = "获取当前会话环境", notes = "返回 Agent 当前使用的本地工作区或隔离工作树；Git 操作由 Desktop 端执行")
+    @ApiOperation(value = "获取当前会话环境", notes = "返回 Agent 当前使用的本地项目或隔离分支；Git 操作由 Desktop 端执行")
     @Get
     @Mapping("/environment")
     public ApiResponse<EnvironmentStatusDTO> environment(
-            @ApiParam(value = "工作区 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
+            @ApiParam(value = "项目 hash", required = true) @Param(value = "workspaceHash", required = true) String workspaceHash,
             @ApiParam(value = "会话名称", required = true) @Param(value = "sessionName", required = true) String sessionName) {
         return ApiResponse.ok(worktreeService.environment(workspaceHash, sessionName));
     }
 
-    // ==================== 会话工作树隔离 ====================
+    // ==================== 会话隔离分支 ====================
 
-    @ApiOperation(value = "创建会话工作树", notes = "在 ~/.loopra/worktree/ 下基于主工作区 HEAD 创建独立分支工作树（幂等）")
+    @ApiOperation(value = "创建会话隔离分支", notes = "在 ~/.loopra/worktree/ 下基于主项目 HEAD 创建独立分支隔离分支（幂等）")
     @Post
     @Mapping("/worktree/create")
     public ApiResponse<WorktreeStatusDTO> worktreeCreate(@Body WorktreeRequest request) {

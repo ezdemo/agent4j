@@ -44,9 +44,9 @@ public class ContextFolding {
     }
 
     /**
-     * 对消息列表执行折叠，并将提炼出的长期记忆沉淀到工作区记忆文件。
+     * 对消息列表执行折叠，并将提炼出的长期记忆沉淀到项目记忆文件。
      *
-     * @param workspace 工作区根目录（可为 null，null 时跳过记忆沉淀）
+     * @param workspace 项目根目录（可为 null，null 时跳过记忆沉淀）
      */
     public static List<ChatMessage> fold(
             List<ChatMessage> messages,
@@ -372,9 +372,9 @@ public class ContextFolding {
     }
 
     /**
-     * 基于条数的折叠，并沉淀长期记忆到工作区记忆文件。
+     * 基于条数的折叠，并沉淀长期记忆到项目记忆文件。
      *
-     * @param workspace 工作区根目录（可为 null，null 时跳过记忆沉淀）
+     * @param workspace 项目根目录（可为 null，null 时跳过记忆沉淀）
      */
     public static List<ChatMessage> foldKeepLast(
             List<ChatMessage> messages,

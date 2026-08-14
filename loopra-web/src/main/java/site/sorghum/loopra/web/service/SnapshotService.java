@@ -17,18 +17,18 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 /**
- * 快照检查点服务 —— 基于 Git 底层命令实现工作区快照与撤回。
+ * 快照检查点服务 —— 基于 Git 底层命令实现项目快照与撤回。
  * <p>
  * 核心流程：
  * <pre>
- * 1. createCheckpoint(): AI 执行修改前，保存当前工作区快照
+ * 1. createCheckpoint(): AI 执行修改前，保存当前项目快照
  *    ├── git add -A
  *    ├── git write-tree → tree hash
  *    ├── git commit-tree → commit hash（在 bare repo 中）
  *    ├── git update-ref refs/snapshots/msg/{msgId} → commit hash
  *    └── 返回 commit hash
  *
- * 2. rollbackToSnapshot(): 用户撤回时，从快照恢复工作区
+ * 2. rollbackToSnapshot(): 用户撤回时，从快照恢复项目
  *    ├── git cat-file {commitHash} → tree hash
  *    ├── git read-tree {treeHash}
  *    ├── git checkout-index -a -f（工作目录恢复）
@@ -89,7 +89,7 @@ public class SnapshotService {
      * 4. git update-ref（将 commit 存储到 refs/snapshots/msg/{msgId}）
      * </p>
      *
-     * @param workspaceHash 工作区 hash
+     * @param workspaceHash 项目 hash
      * @param msgId         消息 ID（用于标识快照）
      * @return 快照信息
      */
@@ -201,7 +201,7 @@ public class SnapshotService {
     }
 
     /**
-     * 撤回到指定快照 —— 恢复工作区到快照时的状态。
+     * 撤回到指定快照 —— 恢复项目到快照时的状态。
      * <p>
      * 执行流程：
      * 1. 从 ref 中读取 commit hash
@@ -210,7 +210,7 @@ public class SnapshotService {
      * 4. git checkout-index -a -f 将暂存区内容检出到工作目录
      * </p>
      *
-     * @param workspaceHash 工作区 hash
+     * @param workspaceHash 项目 hash
      * @param msgId         要撤回的消息 ID
      * @return 恢复结果
      */
@@ -271,13 +271,13 @@ public class SnapshotService {
         discardSnapshotsAfter(workspaceHash, msgId);
 
         log.info("[snapshot] 撤回成功: msgId={}, 恢复到 treeHash={}", msgId, treeHash);
-        return new SnapshotRollbackResult(msgId, commitHash, treeHash, true, "工作区已恢复到消息 " + msgId + " 之前的状态");
+        return new SnapshotRollbackResult(msgId, commitHash, treeHash, true, "项目已恢复到消息 " + msgId + " 之前的状态");
     }
 
     /**
      * 列出当前会话的所有快照。
      *
-     * @param workspaceHash 工作区 hash
+     * @param workspaceHash 项目 hash
      * @param sessionName   会话名称（可选，不传则列出所有）
      * @return 快照列表
      */
@@ -293,7 +293,7 @@ public class SnapshotService {
     /**
      * 获取指定消息的快照信息。
      *
-     * @param workspaceHash 工作区 hash
+     * @param workspaceHash 项目 hash
      * @param sessionName   会话名称
      * @param msgId         消息 ID
      * @return 快照信息，不存在返回 null
@@ -308,7 +308,7 @@ public class SnapshotService {
     /**
      * 删除指定快照的 ref 引用。
      *
-     * @param workspaceHash 工作区 hash
+     * @param workspaceHash 项目 hash
      * @param msgId         消息 ID
      */
     public void deleteSnapshot(String workspaceHash, String msgId) {
@@ -325,9 +325,9 @@ public class SnapshotService {
     }
 
     /**
-     * 检查工作区是否为 Git 仓库。
+     * 检查项目是否为 Git 仓库。
      *
-     * @param workspaceHash 工作区 hash
+     * @param workspaceHash 项目 hash
      * @return 是否为 Git 仓库
      */
     public boolean isGitRepo(String workspaceHash) {
@@ -350,7 +350,7 @@ public class SnapshotService {
         try {
             ProcessResult check = runGit(workspaceDir, "git", "rev-parse", "--is-inside-work-tree");
             if (check.exitCode != 0) {
-                throw new ServiceException("当前工作区不是 Git 仓库，无法创建快照");
+                throw new ServiceException("当前项目不是 Git 仓库，无法创建快照");
             }
         } catch (ServiceException e) {
             throw e;
@@ -410,9 +410,9 @@ public class SnapshotService {
     }
 
     private String resolveWorkspace(String workspaceHash) {
-        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
-        if (workspacePath == null) workspacePath = agentService.getWorkspace();
-        if (workspacePath == null) throw new ServiceException("未设置工作区");
+        String workspacePath = agentService.resolveProjectPath(workspaceHash);
+        if (workspacePath == null) workspacePath = agentService.getCurrentProject();
+        if (workspacePath == null) throw new ServiceException("未设置项目");
         return workspacePath;
     }
 

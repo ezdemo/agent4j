@@ -169,7 +169,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
           </div>
           <h3 data-i18n="overview.c1t">处理代码库任务</h3>
-          <p data-i18n="overview.c1d">工作区内文件读写、代码检索、命令执行与 API 调用。</p>
+          <p data-i18n="overview.c1d">项目内文件读写、代码检索、命令执行与 API 调用。</p>
         </div>
         <div class="card">
           <div class="card-icon">
@@ -378,7 +378,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>
           </div>
           <h3 data-i18n="features.f5t">代码库操作</h3>
-          <p data-i18n="features.f5d">在工作区边界内读取、搜索、编辑文件，运行一次性或交互式命令。</p>
+          <p data-i18n="features.f5d">在项目边界内读取、搜索、编辑文件，运行一次性或交互式命令。</p>
         </div>
         <div class="card reveal">
           <div class="card-icon">
@@ -399,7 +399,7 @@
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M21 12c0 1.66-4 3-9 3s-9-1.34-9-3"/><path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/></svg>
           </div>
           <h3 data-i18n="features.f8t">持久协作状态</h3>
-          <p data-i18n="features.f8d">Checklist、会话级 Goal、项目记忆和共享工作区支持长任务及父子代理协作。</p>
+          <p data-i18n="features.f8d">Checklist、会话级 Goal、项目记忆和共享上下文支持长任务及父子代理协作。</p>
         </div>
         <div class="card reveal">
           <div class="card-icon">
@@ -448,7 +448,7 @@
             </tr>
             <tr>
               <td data-i18n="tools.r4">项目状态</td>
-              <td data-i18n="tools.r4d"><code>memory</code> 将跨会话事实保存到 <code>.loopra/loopra-memory.md</code>；共享工作区保存到 <code>.loopra/workspace/</code></td>
+              <td data-i18n="tools.r4d"><code>memory</code> 将跨会话事实保存到 <code>.loopra/loopra-memory.md</code>；共享上下文保存到 <code>.loopra/workspace/</code></td>
             </tr>
             <tr>
               <td data-i18n="tools.r5">多模态与浏览器</td>
@@ -461,7 +461,7 @@
       <div class="qs-note reveal" style="margin-top:24px">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
         <span data-i18n="tools.note">
-          MCP、OpenAPI 和技能可为 Agent 注入额外工具。<code>read_image</code> 支持工作区路径、绝对路径、Base64/data URI 和 HTTP(S) URL，单张图片最大 5 MiB。
+          MCP、OpenAPI 和技能可为 Agent 注入额外工具。<code>read_image</code> 支持项目路径、绝对路径、Base64/data URI 和 HTTP(S) URL，单张图片最大 5 MiB。
           浏览器工具只操作可见的 Desktop 浏览器；遇到登录、验证码或安全验证时，Agent 会请求用户接管，不会代填或读取敏感凭据。
         </span>
       </div>
@@ -486,7 +486,7 @@
         <div class="card arch-card reveal">
           <span class="card-badge" data-i18n="arch.b2">工具装备 + 编排</span>
           <h3>loopra-harness</h3>
-          <p data-i18n="arch.p2">LoopraAgent 门面、内置工具、Goal/Checklist/工作区/命令/会话持久化/配置、MCP/LSP/OpenAPI/Skill 技能桥接、定时任务。</p>
+          <p data-i18n="arch.p2">LoopraAgent 门面、内置工具、Goal/Checklist/项目/命令/会话持久化/配置、MCP/LSP/OpenAPI/Skill 技能桥接、定时任务。</p>
         </div>
         <div class="card arch-card reveal">
           <span class="card-badge" data-i18n="arch.b3">协议支持</span>
@@ -511,7 +511,7 @@
       </div>
 
       <div class="arch-dep reveal">
-<pre data-i18n="arch.dep">loopra-model   ← loopra-harness（LoopraAgent / 内置工具 / Goal / 工作区 / MCP / Skill）
+<pre data-i18n="arch.dep">loopra-model   ← loopra-harness（LoopraAgent / 内置工具 / Goal / 项目 / MCP / Skill）
      ↑
      └────────← loopra-acp（ACP 注册，经 loopra-harness）
 
@@ -525,7 +525,7 @@ loopra-web     ← 聚合 loopra-harness + loopra-acp（传递引入 loopra-mode
         </li>
         <li>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          <span data-i18n="arch.pt2">需要开箱即用的 LoopraAgent、内置工具与 Goal / 工作区 / MCP / Skill → 追加依赖 <b>loopra-harness</b>。</span>
+          <span data-i18n="arch.pt2">需要开箱即用的 LoopraAgent、内置工具与 Goal / 项目 / MCP / Skill → 追加依赖 <b>loopra-harness</b>。</span>
         </li>
         <li>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
@@ -553,7 +553,7 @@ loopra-web     ← 聚合 loopra-harness + loopra-acp（传递引入 loopra-mode
             <tr><td data-i18n="stack.l3">前端</td><td>Vue 3、Vite、Pinia、Ant Design Vue</td></tr>
             <tr><td data-i18n="stack.l4">桌面</td><td>Electron、electron-builder</td></tr>
             <tr><td data-i18n="stack.l5">协议</td><td>MCP、OpenAPI、ACP、Chat Completions API、Responses API</td></tr>
-            <tr><td data-i18n="stack.l6">持久化</td><td data-i18n="stack.l6d">JSONL 会话、工作区本地 JSON、项目 Markdown 记忆</td></tr>
+            <tr><td data-i18n="stack.l6">持久化</td><td data-i18n="stack.l6d">JSONL 会话、项目本地 JSON、项目 Markdown 记忆</td></tr>
           </tbody>
         </table>
       </div>

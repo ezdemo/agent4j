@@ -1,10 +1,10 @@
 package site.sorghum.loopra.web.model;
 
 /**
- * 会话工作树隔离模式状态。
+ * 会话隔离分支模式状态。
  *
- * @param worktreeMode 是否开启工作树隔离模式
- * @param mergeMode    工作树合并模式：manual / ai-auto / ai-auto-approve
+ * @param worktreeMode 是否开启隔离分支模式
+ * @param mergeMode    隔离分支合并模式：manual / ai-auto / ai-auto-approve
  */
 public record SessionWorktreeModeDTO(
         String workspaceHash,

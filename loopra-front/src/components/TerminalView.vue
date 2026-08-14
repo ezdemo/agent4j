@@ -84,7 +84,7 @@ import '@xterm/xterm/css/xterm.css'
 import { useAppStore } from '../stores/app'
 
 const props = defineProps({
-  // 终端初始工作目录（当前工作区路径）；留空则使用主进程默认（用户主目录）
+  // 终端初始工作目录（当前项目路径）；留空则使用主进程默认（用户主目录）
   cwd: { type: String, default: '' },
   // 面板展开状态：首次展开时创建首个终端，收起仅隐藏（所有终端持久保留）
   open: { type: Boolean, default: false },
@@ -357,7 +357,7 @@ function pickShell(shellId) {
   void addTerminal(shellId)
 }
 
-// 新建一个终端标签：创建 xterm + PTY（工作目录 = 当前工作区路径，shell 由调用方指定）
+// 新建一个终端标签：创建 xterm + PTY（工作目录 = 当前项目路径，shell 由调用方指定）
 async function addTerminal(shellId = '') {
   const terminalAPI = window.electronAPI?.terminal
   if (!terminalAPI || unsupported.value) return
@@ -469,7 +469,7 @@ onMounted(() => {
   syncTheme()
 })
 
-// 面板首次展开时自动创建首个终端（此时工作区已加载，cwd 有效）；收起/再展开不销毁
+// 面板首次展开时自动创建首个终端（此时项目已加载，cwd 有效）；收起/再展开不销毁
 watch(
   () => props.open,
   (open) => {

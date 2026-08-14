@@ -1,9 +1,9 @@
 package site.sorghum.loopra.web.model;
 
 /**
- * 工作区信息。
+ * Project registry entry.
  */
-public record WorkspaceInfoDTO(
+public record ProjectInfoDTO(
         String hash,
         String name,
         String path,

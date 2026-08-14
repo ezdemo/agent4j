@@ -13,6 +13,6 @@ public class SnapshotCreateRequest {
     /** 消息 ID（用于标识快照，建议使用前端生成的唯一 ID） */
     private String msgId;
 
-    /** 工作区 hash */
+    /** 项目 hash */
     private String workspaceHash;
 }

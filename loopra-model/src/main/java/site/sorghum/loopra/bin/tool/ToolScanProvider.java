@@ -19,14 +19,14 @@ public interface ToolScanProvider {
     /**
      * 扫描并返回所有可用工具（建议按稳定顺序排序）。
      *
-     * @param workspace 工作区根目录，可为 null
+     * @param workspace 项目根目录，可为 null
      */
     List<FunctionTool> scanTools(Path workspace);
 
     /**
      * 返回 Skill 类工具的系统提示词描述（追加到 system prompt），可为空字符串。
      *
-     * @param workspace 工作区根目录，可为 null
+     * @param workspace 项目根目录，可为 null
      */
     String getSkillToolDescription(Path workspace);
 }
