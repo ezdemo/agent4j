@@ -50,7 +50,7 @@ public class ChecklistStepTool extends AbsToolProvider implements SolonToTools {
         }
 
         try {
-            String rootDir = ctx.getRootDir().toAbsolutePath().toString();
+            String rootDir = ctx.getStateRootDir().toAbsolutePath().toString();
             WorkspaceManager workspaceManager = WorkspaceManager.getOrCreate(rootDir);
 
             // 加载清单

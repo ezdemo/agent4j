@@ -137,6 +137,21 @@ public class ChatController {
                     userMsg.setSnapshotId(msgId);
                 }
 
+                // ★ 工作树开关透传：请求携带时先持久化到会话元数据，Agent 创建时读取
+                if (request.getWorktreeMode() != null || request.getMergeMode() != null) {
+                    try {
+                        if (request.getWorktreeMode() != null) {
+                            agentService.setSessionWorktreeMode(resolvedPath, sessionName, request.getWorktreeMode());
+                        }
+                        if (request.getMergeMode() != null && !request.getMergeMode().isBlank()) {
+                            agentService.setSessionMergeMode(resolvedPath, sessionName, request.getMergeMode());
+                        }
+                    } catch (Exception e) {
+                        // 开关持久化失败不应阻塞聊天：会话已存在且正在运行时只记录
+                        log.warn("[chat] 持久化工作树开关失败: {}", e.getMessage());
+                    }
+                }
+
                 agentService.chatStream(userMsg, resolvedPath, sessionName, emitter,
                         request.getModel(), request.getModelChannelId(), request.getReasoningEffort(),
                         request.getFastMode(), request.getAction());

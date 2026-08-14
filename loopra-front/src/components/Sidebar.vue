@@ -121,7 +121,10 @@
             @click="$emit('select-session', { workspaceHash: p.workspace.hash, sessionName: s.name })"
           >
             <div class="session-info">
-              <div class="session-name">{{ s.title || formatName(s.name) }}</div>
+              <div class="session-name">
+                {{ s.title || formatName(s.name) }}
+                <span v-if="s.worktreeMode" class="wt-badge" title="工作树隔离模式">🌲</span>
+              </div>
             </div>
             <div class="session-item-actions">
               <button class="btn-icon-sm session-refresh" title="刷新" @click.stop="$emit('refresh-session-chat', s.name)">
@@ -650,6 +653,11 @@ const formatName = (n) => {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+.wt-badge {
+  margin-left: 4px;
+  font-size: 11px;
+  opacity: 0.85;
 }
 .session-meta { font-size: 11px; color: var(--fg-4); margin-top: 1px; }
 

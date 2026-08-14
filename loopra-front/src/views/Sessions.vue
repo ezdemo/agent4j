@@ -131,6 +131,7 @@
             <div class="session-title">
               <h3>{{ session.title }}</h3>
               <span class="session-id">#{{ session.id }}</span>
+              <span v-if="session.worktreeMode" class="session-wt-badge" title="工作树隔离模式">🌲 隔离</span>
             </div>
             <div class="session-status" :class="session.status">
               {{ session.status === 'active' ? '活跃' : '已结束' }}
@@ -308,7 +309,8 @@ const loadSessions = async () => {
         messageCount: session.messageCount || 0,
         tokenUsage: formatTokenUsage(session.tokenUsage || 0),
         lastMessage: session.lastMessage || `${session.messageCount || 0} 条消息`,
-        tags: session.tags || []
+        tags: session.tags || [],
+        worktreeMode: !!session.worktreeMode
       }))
       console.log('解析后的会话列表:', sessions.value) // 调试日志
     } else {
@@ -729,6 +731,14 @@ onMounted(() => {
   font-size: var(--text-xs);
   color: var(--fg-muted);
   font-family: var(--font-mono);
+}
+
+.session-wt-badge {
+  font-size: var(--text-xs);
+  padding: 0.1rem 0.4rem;
+  border-radius: var(--radius-full);
+  background: var(--success-bg);
+  color: var(--success);
 }
 
 .session-status {

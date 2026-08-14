@@ -64,8 +64,8 @@ public class ChecklistStartTool extends AbsToolProvider implements SolonToTools 
                 return "PARSE_ERROR: 步骤列表为空，请提供至少一个步骤";
             }
 
-            // 获取工作区信息
-            String rootDir = ctx.getRootDir().toAbsolutePath().toString();
+            // 获取工作区信息（状态根：工作树隔离模式下仍归属主工作区）
+            String rootDir = ctx.getStateRootDir().toAbsolutePath().toString();
             WorkspaceManager workspaceManager = WorkspaceManager.getOrCreate(rootDir);
 
             // 创建清单

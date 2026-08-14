@@ -72,6 +72,16 @@
                   <span v-if="workspaces.length === 0" class="welcome-workspace-empty">暂无可用项目</span>
                 </div>
               </div>
+              <div v-if="store.isDesktopEnv && props.sessionName" class="welcome-environment-switch" aria-label="任务环境">
+                <button type="button" :class="{ active: !props.welcomeWorktreeMode }" :disabled="sessionTaskRunning || props.environmentSwitching" @click="selectWelcomeEnvironment(false)">
+                  <span v-if="props.environmentSwitching && props.environmentSwitchTarget === 'local'" class="welcome-environment-spinner" />
+                  本地
+                </button>
+                <button type="button" :class="{ active: props.welcomeWorktreeMode }" :disabled="sessionTaskRunning || props.environmentSwitching" @click="selectWelcomeEnvironment(true)">
+                  <span v-if="props.environmentSwitching && props.environmentSwitchTarget === 'worktree'" class="welcome-environment-spinner" />
+                  工作树
+                </button>
+              </div>
             </div>
             <ChatInput ref="welcomeInput" welcome-mode v-model:input-text="welcomeText" :usage="usage" :current-model="currentModel" :default-model="defaultModel" :default-model-channel-id="defaultModelChannelId" :setting-default-model="settingDefaultModel" :available-models="availableModels"
                        :initially-empty="props.initiallyEmpty"
@@ -460,11 +470,14 @@ const props = defineProps({
   sessionName: {type: String, default: null},
   initiallyEmpty: {type: Boolean, default: false},
   rightPanelOpen: {type: Boolean, default: false},
+  welcomeWorktreeMode: {type: Boolean, default: false},
+  environmentSwitching: {type: Boolean, default: false},
+  environmentSwitchTarget: {type: String, default: ''},
   workspaces: {type: Array, default: () => []},
   version: {type: String, default: ''}
 })
 
-const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask', 'switchWorkspace', 'manageWorkspaces', 'manageModels', 'sessionActiveChange', 'welcomeChange'])
+const emit = defineEmits(['sessionUpdated', 'sessionBranched', 'startTask', 'switchWorkspace', 'manageWorkspaces', 'manageModels', 'sessionActiveChange', 'welcomeChange', 'refresh-sessions', 'environmentModeChange'])
 const store = useAppStore()
 
 const messagesContainer = ref(null)
@@ -525,6 +538,11 @@ const toggleWelcomeWorkspace = () => {
 
 const handleWelcomePickerOpen = () => {
   closeWelcomeMenus()
+}
+
+const selectWelcomeEnvironment = (worktreeMode) => {
+  closeWelcomeMenus()
+  emit('environmentModeChange', !!worktreeMode)
 }
 
 const toggleWelcomeModel = () => {
@@ -3696,6 +3714,37 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 
 .welcome-workspace-button > svg:first-child { color: var(--fg-3); }
 .welcome-workspace-button > svg:last-child { color: var(--fg-4); }
+
+.welcome-environment-switch {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: auto;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-2);
+}
+
+.welcome-environment-switch button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  min-width: 52px;
+  padding: 5px 9px;
+  border: 0;
+  border-radius: 4px;
+  color: var(--fg-3);
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.welcome-environment-switch button:hover:not(:disabled) { color: var(--fg); }
+.welcome-environment-switch button.active { color: var(--fg); background: var(--bg); box-shadow: var(--shadow-sm); }
+.welcome-environment-switch button:disabled { opacity: .55; cursor: default; }
+.welcome-environment-spinner { width: 11px; height: 11px; border: 1.5px solid color-mix(in srgb, currentColor 28%, transparent); border-top-color: currentColor; border-radius: 50%; animation: welcome-environment-spin .65s linear infinite; }
+@keyframes welcome-environment-spin { to { transform: rotate(360deg); } }
 
 .welcome-workspace-menu,
 .welcome-model-menu {
