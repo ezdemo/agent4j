@@ -30,6 +30,21 @@ contextBridge.exposeInMainWorld('electronAPI', {
     close: () => ipcRenderer.invoke('update-window-close'),
     requestChatUpdate: (source) => ipcRenderer.invoke('chat-update-request', { source })
   },
+
+  // 引导页窗口：独立窗口承载首次使用引导流程（迁移会话/设置模型/导入 Skills/迁移 AGENTS.md/MCP）
+  onboarding: {
+    open: () => ipcRenderer.invoke('onboarding-window-open'),
+    close: () => ipcRenderer.invoke('onboarding-window-close'),
+    getDirs: () => ipcRenderer.invoke('onboarding-get-dirs'),
+    pickDir: (title) => ipcRenderer.invoke('onboarding-pick-dir', title),
+    pickFile: (options) => ipcRenderer.invoke('onboarding-pick-file', options),
+    scanDir: (rootDir) => ipcRenderer.invoke('onboarding-scan-dir', rootDir),
+    importSkills: (payload) => ipcRenderer.invoke('onboarding-import-skills', payload),
+    importSessions: (payload) => ipcRenderer.invoke('onboarding-import-sessions', payload),
+    importAgentsMd: (payload) => ipcRenderer.invoke('onboarding-import-agents-md', payload),
+    readTextFile: (payload) => ipcRenderer.invoke('onboarding-read-text-file', payload),
+    parseMcpConfig: (filePath) => ipcRenderer.invoke('onboarding-parse-mcp-config', filePath)
+  },
   
   // 窗口控制
   window: {

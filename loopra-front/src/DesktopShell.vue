@@ -83,6 +83,9 @@
         <button v-if="activeTabId" class="window-button" type="button" title="终端" aria-label="终端" @click="toggleTerminal">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="m7 9 3 3-3 3M13 15h4"/></svg>
         </button>
+        <button class="window-button" type="button" title="引导" aria-label="引导" @click="openOnboarding">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2M15 10V8M11.5 5.5H9.5M20.5 5.5H18.5M17.99 8.5 19.5 10M12.01 8.5 10.5 10"/><path d="m3 21 8-8"/></svg>
+        </button>
         <button class="window-button" type="button" title="最小化" @click="minimize"><span class="minimize-mark" /></button>
         <button class="window-button" type="button" title="最大化" @click="maximize"><span class="maximize-mark" /></button>
         <button class="window-button close" type="button" title="关闭" @click="closeWindow"><span class="close-mark" /></button>
@@ -101,6 +104,10 @@
         <button type="button" role="menuitem" @click="chooseHomeContextAction('open-requirement-board')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M3 9h18M9 21V9"/></svg>
           打开需求池
+        </button>
+        <button type="button" role="menuitem" @click="chooseHomeContextAction('open-onboarding')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M15 4V2M15 10V8M11.5 5.5H9.5M20.5 5.5H18.5M17.99 8.5 19.5 10M12.01 8.5 10.5 10"/><path d="m3 21 8-8"/></svg>
+          打开引导
         </button>
         <button type="button" role="menuitem" @click="chooseHomeContextAction('open-update')">
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -169,6 +176,7 @@
         @refresh="refreshHome"
         @delete-session="confirmDeleteSession"
         @clear-workspace="confirmClearWorkspace"
+        @clear-old-sessions="confirmClearOldSessions"
         @delete-workspace="confirmDeleteWorkspace"
         @reorder-workspaces="reorderWorkspaces"
       />
@@ -245,7 +253,7 @@ const homeButton = ref(null)
 const homeContextMenu = reactive({visible: false, x: 0, y: 0})
 const tabContextMenu = reactive({visible: false, tabId: '', x: 0, y: 0})
 const HOME_CONTEXT_MENU_WIDTH = 176
-const HOME_CONTEXT_MENU_HEIGHT = 112
+const HOME_CONTEXT_MENU_HEIGHT = 148
 const TAB_CONTEXT_MENU_WIDTH = 188
 const TAB_CONTEXT_MENU_HEIGHT = 146
 let resizeObserver = null
@@ -740,6 +748,7 @@ function closeContextMenus() {
 function chooseHomeContextAction(action) {
   closeContextMenus()
   if (action === 'open-requirement-board') openRequirementBoard()
+  else if (action === 'open-onboarding') void openOnboarding()
   else if (action === 'open-update') void openUpdateWindow()
   else if (action === 'toggle-theme') toggleTheme()
 }
@@ -860,6 +869,14 @@ async function openElementInspector() {
   }
 }
 
+async function openOnboarding() {
+  try {
+    await window.electronAPI?.onboarding?.open()
+  } catch (error) {
+    message.error('打开引导失败：' + (error.message || '未知错误'))
+  }
+}
+
 async function toggleRightPanel() {
   if (!activeTabId.value) return
   try {
@@ -941,7 +958,7 @@ async function closeWorkspaceTabs(workspaceHash) {
 const deleteConfirm = ref({ visible: false, kind: '', title: '', message: '', payload: null })
 const deleteConfirmActions = computed(() => {
   const okLabel = deleteConfirm.value.kind === 'deleteWorkspace' ? '删除项目'
-    : deleteConfirm.value.kind === 'clearWorkspace' ? '清空'
+    : deleteConfirm.value.kind === 'clearWorkspace' || deleteConfirm.value.kind === 'clearOldSessions' ? '清空'
     : '删除'
   return [
     { key: 'cancel', label: '取消' },
@@ -961,7 +978,8 @@ const handleDeleteConfirmAction = (action) => {
   dismissDeleteConfirm()
   if (kind === 'session') void performDeleteSession(payload)
   else if (kind === 'clearWorkspace') void performClearWorkspace(payload)
-  else if (kind === 'workspace') void performDeleteWorkspace(payload)
+  else if (kind === 'clearOldSessions') void performClearOldSessions(payload)
+  else if (kind === 'deleteWorkspace') void performDeleteWorkspace(payload)
 }
 
 function confirmDeleteSession(session) {
@@ -994,6 +1012,34 @@ async function performClearWorkspace(workspace) {
     message.success('项目会话已清空')
   } catch (error) {
     message.error('清空会话失败：' + (error.message || '未知错误'))
+  }
+}
+
+function confirmClearOldSessions(workspace) {
+  openDeleteConfirm('clearOldSessions', '清空三天前的会话？', `“${workspace.name}”中超过 3 天未活动的会话将被永久删除，无法恢复。`, workspace)
+}
+
+async function performClearOldSessions(workspace) {
+  try {
+    const before = Date.now() - 3 * 24 * 60 * 60 * 1000
+    const response = await sessionsAPI.clearBefore(workspace.hash, before)
+    if (!response.success) throw new Error(response.message || '清理会话失败')
+    const deletedNames = new Set(response.data?.sessionNames || [])
+    // 关闭仍打开着但已被删除的会话标签
+    if (deletedNames.size) {
+      const removedTabs = tabs.value.filter((tab) => tab.workspaceHash === workspace.hash && deletedNames.has(tab.sessionName))
+      await Promise.all(removedTabs.map(async (tab) => {
+        try { await nativeTabs()?.close(tab.id) } catch (error) { console.warn('[desktop-shell] failed to close tab:', error) }
+      }))
+      const removedIds = new Set(removedTabs.map((tab) => tab.id))
+      tabs.value = tabs.value.filter((tab) => !removedIds.has(tab.id))
+      if (removedIds.has(activeTabId.value)) activeTabId.value = tabs.value[0]?.id || ''
+      await renderActiveTab()
+    }
+    homeRefreshKey.value++
+    message.success(deletedNames.size ? `已清理 ${deletedNames.size} 个三天前的会话` : '没有需要清理的会话')
+  } catch (error) {
+    message.error('清理会话失败：' + (error.message || '未知错误'))
   }
 }
 
@@ -1031,6 +1077,10 @@ onMounted(() => {
     if (await redirectToModelChannelsWhenUnconfigured()) return
     await initializeWorkspace()
   })()
+  // 首次运行（未完成过引导）自动打开引导窗口；失败静默，不阻塞主界面
+  if (platform.isElectron && !localStorage.getItem('loopra-onboarding-done')) {
+    setTimeout(() => { void openOnboarding() }, 1200)
+  }
 })
 
 async function redirectToModelChannelsWhenUnconfigured() {

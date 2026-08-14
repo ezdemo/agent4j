@@ -26,7 +26,7 @@ function mountHome(props) {
       refreshing: false,
       ...props
     },
-    global: {stubs: {ServiceProcessManager: true}}
+    global: {stubs: {ServiceProcessManager: true, Teleport: false}}
   })
 }
 
@@ -151,5 +151,33 @@ describe('DesktopHome 项目拖拽排序', () => {
     await flushPromises()
     await wrapper.find('.desktop-project-list').trigger('drop')
     expect(wrapper.emitted('reorder-workspaces')).toBeUndefined()
+  })
+})
+
+describe('DesktopHome 项目右键菜单', () => {
+  let wrapper
+
+  beforeEach(() => {
+    wrapper = mountHome()
+  })
+
+  afterEach(() => {
+    wrapper.unmount()
+  })
+
+  it('项目右键提供清空会话/清空三天前的会话/删除项目，点击发出 clear-old-sessions', async () => {
+    await flushPromises()
+    await wrapper.find('.desktop-project').trigger('contextmenu', {clientX: 200, clientY: 200})
+
+    const menu = document.body.querySelector('.desktop-context-menu')
+    expect(menu).not.toBeNull()
+    expect(menu.textContent).toContain('清空会话')
+    expect(menu.textContent).toContain('清空三天前的会话')
+    expect(menu.textContent).toContain('删除项目')
+
+    menu.querySelectorAll('button')[1].click()
+    await flushPromises()
+    expect(wrapper.emitted('clear-old-sessions')).toBeTruthy()
+    expect(wrapper.emitted('clear-old-sessions')[0][0]).toEqual({hash: 'h1', name: 'A', path: '/p/a'})
   })
 })

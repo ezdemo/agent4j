@@ -1688,6 +1688,37 @@ public class AgentService {
         log.info("[web] 已清空所有会话");
     }
 
+    /**
+     * 清理最后活动时间早于指定时间点的会话（含 Agent 缓存、工作树与磁盘文件）。
+     *
+     * @param workspacePath 工作区路径（可选）
+     * @param beforeMillis  最后活动时间阈值（epoch 毫秒），早于该值的会话将被删除
+     * @return 被删除的会话名列表
+     */
+    public List<String> clearSessionsBefore(String workspacePath, long beforeMillis) {
+        List<String> deleted = new ArrayList<>();
+        String resolvedPath = workspacePath != null ? workspacePath : getWorkspace();
+        if (resolvedPath == null) return deleted;
+        WorkspaceManager wm = new WorkspaceManager();
+        Path sessionsDir = wm.getSessionsDir(resolvedPath);
+        if (sessionsDir == null || !Files.exists(sessionsDir)) return deleted;
+        SessionStore store = new JsonlSessionStore(sessionsDir);
+        try {
+            for (SessionStore.SessionInfo session : store.list()) {
+                if (session.mtime() < beforeMillis) {
+                    deleteSession(resolvedPath, session.name());
+                    deleted.add(session.name());
+                }
+            }
+        } catch (Exception e) {
+            log.warn("[web] 清理过期会话失败: {}", e.getMessage());
+        }
+        if (!deleted.isEmpty()) {
+            log.info("[web] 已清理 {} 个过期会话: {}", deleted.size(), deleted);
+        }
+        return deleted;
+    }
+
     // ==================== 兼容旧接口 ====================
 
     /**

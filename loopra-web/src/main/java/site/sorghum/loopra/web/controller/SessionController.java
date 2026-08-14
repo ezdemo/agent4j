@@ -158,6 +158,22 @@ public class SessionController {
         return ApiResponse.ok(new SessionDeleteDTO("所有会话已清空", resolvedHash, null));
     }
 
+    @ApiOperation(value = "清理过期会话", notes = "删除指定工作区下最后活动时间早于 before（epoch 毫秒）的会话")
+    @Delete
+    @Mapping("/cleanup")
+    public ApiResponse<SessionCleanupDTO> cleanupSessions(
+            @ApiParam(value = "工作区 hash", required = true)
+            @Param(value = "workspaceHash", required = true) String workspaceHash,
+            @ApiParam(value = "最后活动时间阈值（epoch 毫秒）", required = true)
+            @Param(value = "before", required = true) Long before) {
+        if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
+        if (before == null) throw new ServiceException("before 参数不能为空");
+        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+        List<String> deleted = agentService.clearSessionsBefore(workspacePath, before);
+        String resolvedHash = AgentService.computeWorkspaceHash(workspacePath);
+        return ApiResponse.ok(new SessionCleanupDTO("已清理 " + deleted.size() + " 个过期会话", resolvedHash, deleted));
+    }
+
     @ApiOperation(value = "删除会话", notes = "根据会话名称和工作区删除指定会话")
     @Delete
     @Mapping("/{name}")
