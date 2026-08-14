@@ -19,7 +19,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
- * WorktreeService 集成测试 —— 使用临时 git 仓库验证工作树隔离模式的完整生命周期：
+ * WorktreeService 集成测试 —— 使用临时 git 仓库验证隔离分支模式的完整生命周期：
  * 创建 / 状态 / 干净合并 / 冲突合并（反向合并 + 冲突解决后再次合并）/ 元数据保护 / 删除。
  */
 class WorktreeServiceIntegrationTest {
@@ -72,31 +72,31 @@ class WorktreeServiceIntegrationTest {
     @Test
     void createsWorktreeAndMergesCleanChangesBack() throws Exception {
         WorktreeStatusDTO created = service.createAt(mainRepo.toString(), "sess1");
-        assertTrue(created.exists(), "工作树应已创建");
+        assertTrue(created.exists(), "隔离分支应已创建");
         assertNotNull(created.branch());
         assertTrue(created.branch().startsWith(WorktreeService.BRANCH_PREFIX));
 
         Path wt = Path.of(created.worktreePath());
         assertTrue(Files.isDirectory(wt));
-        // AI 在工作树内留下未提交改动
+        // AI 在隔离分支内留下未提交改动
         Files.writeString(wt.resolve("f.txt"), "line1\nworktree-change\n");
 
         WorktreeStatusDTO dirty = service.statusAt(mainRepo.toString(), "sess1");
-        assertTrue(dirty.exists() && dirty.dirty(), "工作树应报告未提交改动");
+        assertTrue(dirty.exists() && dirty.dirty(), "隔离分支应报告未提交改动");
 
         WorktreeMergeResultDTO merged = service.mergeBackAt(mainRepo.toString(), "sess1");
         assertTrue(merged.merged(), "干净合并应成功: " + merged.message());
         assertFalse(merged.worktreeRemoved());
-        assertTrue(Files.exists(wt), "合并后工作树目录应保留");
+        assertTrue(Files.exists(wt), "合并后隔离分支目录应保留");
         assertEquals(created.branch(), runOutput(mainRepo.toFile(), "git", "-C", wt.toString(), "branch", "--show-current").trim());
         assertEquals("line1\nworktree-change\n", readNormalized(mainRepo.resolve("f.txt")));
         assertEquals(WorktreeService.AUTO_COMMIT_MESSAGE,
                 runOutput(mainRepo.toFile(), "git", "log", "-1", "--pretty=%s").trim());
 
-        // 同一会话继续在保留的工作树修改，并可再次合并。
+        // 同一会话继续在保留的隔离分支修改，并可再次合并。
         Files.writeString(wt.resolve("f.txt"), "line1\nworktree-change\nsecond-change\n");
         WorktreeMergeResultDTO mergedAgain = service.mergeBackAt(mainRepo.toString(), "sess1");
-        assertTrue(mergedAgain.merged(), "保留工作树后应支持再次合并: " + mergedAgain.message());
+        assertTrue(mergedAgain.merged(), "保留隔离分支后应支持再次合并: " + mergedAgain.message());
         assertFalse(mergedAgain.worktreeRemoved());
         assertTrue(Files.exists(wt));
         assertEquals("line1\nworktree-change\nsecond-change\n", readNormalized(mainRepo.resolve("f.txt")));
@@ -128,10 +128,10 @@ class WorktreeServiceIntegrationTest {
         service.createAt(mainRepo.toString(), "sess-conflict");
         Path wt = service.pathFor(WorktreeService.hashOf(mainRepo.toString()), "sess-conflict");
 
-        // 主工作区前移
+        // 主项目前移
         Files.writeString(mainRepo.resolve("f.txt"), "line1\nmain-change\n");
         runOk(mainRepo.toFile(), "git", "commit", "-qam", "main moved");
-        // 工作树分叉
+        // 隔离分支分叉
         Files.writeString(wt.resolve("f.txt"), "line1\nwt-change\n");
         runOk(mainRepo.toFile(), "git", "-C", wt.toString(), "commit", "-qam", "wt moved");
 
@@ -139,9 +139,9 @@ class WorktreeServiceIntegrationTest {
         assertFalse(conflicted.merged());
         assertTrue(conflicted.conflicted());
         assertEquals(List.of("f.txt"), conflicted.conflictFiles());
-        assertTrue(Files.exists(wt), "冲突时工作树必须保留，供 AI 解决");
+        assertTrue(Files.exists(wt), "冲突时隔离分支必须保留，供 AI 解决");
 
-        // AI 解决冲突：写入合并后内容并完成合并提交（工作树内，不触碰主工作区）
+        // AI 解决冲突：写入合并后内容并完成合并提交（隔离分支内，不触碰主项目）
         Files.writeString(wt.resolve("f.txt"), "line1\nmain-change\nwt-change\n");
         runOk(mainRepo.toFile(), "git", "-C", wt.toString(), "add", "-A");
         runOk(mainRepo.toFile(), "git", "-C", wt.toString(), "-c", "user.name=t",
@@ -150,12 +150,12 @@ class WorktreeServiceIntegrationTest {
         WorktreeMergeResultDTO merged = service.mergeBackAt(mainRepo.toString(), "sess-conflict");
         assertTrue(merged.merged(), "解决冲突后应合并成功: " + merged.message());
         assertEquals("line1\nmain-change\nwt-change\n", readNormalized(mainRepo.resolve("f.txt")));
-        assertTrue(Files.exists(wt), "解决冲突并合并后工作树仍应保留");
+        assertTrue(Files.exists(wt), "解决冲突并合并后隔离分支仍应保留");
     }
 
     @Test
     void metadataDirectoryKeepsMainWorkspaceVersion() throws Exception {
-        // 主工作区已有项目记忆（.loopra/loopra-memory.md）
+        // 主项目已有项目记忆（.loopra/loopra-memory.md）
         Files.createDirectories(mainRepo.resolve(".loopra"));
         Files.writeString(mainRepo.resolve(".loopra/loopra-memory.md"), "main-memory\n");
         runOk(mainRepo.toFile(), "git", "add", "-A");
@@ -164,13 +164,13 @@ class WorktreeServiceIntegrationTest {
         service.createAt(mainRepo.toString(), "sess-meta");
         Path wt = service.pathFor(WorktreeService.hashOf(mainRepo.toString()), "sess-meta");
 
-        // 工作树内 AI 改动记忆文件与代码文件
+        // 隔离分支内 AI 改动记忆文件与代码文件
         Files.writeString(wt.resolve(".loopra/loopra-memory.md"), "worktree-memory\n");
         Files.writeString(wt.resolve("f.txt"), "line1\ncode-change\n");
 
         WorktreeMergeResultDTO merged = service.mergeBackAt(mainRepo.toString(), "sess-meta");
         assertTrue(merged.merged());
-        // 元数据以主工作区版本为准；代码改动正常合并
+        // 元数据以主项目版本为准；代码改动正常合并
         assertEquals("main-memory\n", readNormalized(mainRepo.resolve(".loopra/loopra-memory.md")));
         assertEquals("line1\ncode-change\n", readNormalized(mainRepo.resolve("f.txt")));
     }
@@ -183,8 +183,8 @@ class WorktreeServiceIntegrationTest {
 
         WorktreeStatusDTO removed = service.removeAt(mainRepo.toString(), "sess-remove", true);
         assertFalse(removed.exists());
-        assertFalse(Files.exists(wt), "工作树目录应被删除");
-        // 主工作区不受影响
+        assertFalse(Files.exists(wt), "隔离分支目录应被删除");
+        // 主项目不受影响
         assertEquals("line1\n", readNormalized(mainRepo.resolve("f.txt")));
     }
 
@@ -208,7 +208,7 @@ class WorktreeServiceIntegrationTest {
 
     // ==================== 工具 ====================
 
-    /** Windows 下 git autocrlf 会把工作区文件写成 CRLF，断言前统一归一化。 */
+    /** Windows 下 git autocrlf 会把项目文件写成 CRLF，断言前统一归一化。 */
     private static String readNormalized(Path file) throws Exception {
         return Files.readString(file).replace("\r\n", "\n");
     }

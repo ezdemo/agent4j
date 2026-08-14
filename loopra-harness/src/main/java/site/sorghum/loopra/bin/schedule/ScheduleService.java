@@ -35,7 +35,7 @@ public class ScheduleService {
     private final ScheduleStore store;
     private final TaskExecutor taskExecutor;
 
-    /** 按工作区索引的任务 Map：workspaceHash → (taskId → ScheduledTask) */
+    /** 按项目索引的任务 Map：workspaceHash → (taskId → ScheduledTask) */
     private volatile Map<String, Map<String, ScheduledTask>> tasksIndex = new ConcurrentHashMap<>();
 
     /** 正在执行中的任务 ID 集合，用于防止重复提交 */
@@ -118,7 +118,7 @@ public class ScheduleService {
     // ==================== CRUD ====================
 
     /**
-     * 列出指定工作区的所有定时任务。
+     * 列出指定项目的所有定时任务。
      */
     public List<ScheduledTask> list(String workspaceHash) {
         Map<String, ScheduledTask> tasks = tasksIndex.get(workspaceHash);
@@ -129,7 +129,7 @@ public class ScheduleService {
     }
 
     /**
-     * 获取指定工作区的单个定时任务。
+     * 获取指定项目的单个定时任务。
      */
     public ScheduledTask get(String workspaceHash, String taskId) {
         Map<String, ScheduledTask> tasks = tasksIndex.get(workspaceHash);
@@ -230,12 +230,12 @@ public class ScheduleService {
         if (task == null) return null;
 
         String result = executeTask(workspaceHash, task);
-        // 区分工作区不存在和正常返回：executeTask 内部已处理
+        // 区分项目不存在和正常返回：executeTask 内部已处理
         return result != null ? result : "";
     }
 
     /**
-     * 获取所有工作区的 hash 列表（有定时任务的）。
+     * 获取所有项目的 hash 列表（有定时任务的）。
      */
     public Set<String> getActiveWorkspaceHashes() {
         return tasksIndex.keySet();
@@ -295,17 +295,17 @@ public class ScheduleService {
     /**
      * 执行单个定时任务。
      *
-     * @return 执行结果，空字符串表示工作区不存在
+     * @return 执行结果，空字符串表示项目不存在
      */
     private String executeTask(String workspaceHash, ScheduledTask task) {
-        // 获取工作区实际路径
-        String workspacePath = resolveWorkspacePath(workspaceHash);
+        // 获取项目实际路径
+        String workspacePath = resolveProjectPath(workspaceHash);
         if (workspacePath == null) {
-            log.warn("[schedule] 找不到工作区: {}", workspaceHash);
+            log.warn("[schedule] 找不到项目: {}", workspaceHash);
             return "";
         }
 
-        log.info("[schedule] 执行定时任务: {} → 工作区={}, 会话={}, 消息={}",
+        log.info("[schedule] 执行定时任务: {} → 项目={}, 会话={}, 消息={}",
                 task.getName(), workspaceHash, task.getSessionName(),
                 task.getMessage() != null ? task.getMessage().substring(0, Math.min(50, task.getMessage().length())) : "");
 
@@ -342,10 +342,10 @@ public class ScheduleService {
     }
 
     /**
-     * 通过工作区 hash 解析实际路径。
+     * 通过项目 hash 解析实际路径。
      * 从 ~/.loopra/workspace/{hash}/workspace.json 中读取 path 字段。
      */
-    private String resolveWorkspacePath(String workspaceHash) {
+    private String resolveProjectPath(String workspaceHash) {
         try {
             java.nio.file.Path configPath = java.nio.file.Paths.get(
                     System.getProperty("user.home"), ".loopra", "workspace",
@@ -355,7 +355,7 @@ public class ScheduleService {
                 return org.noear.snack4.ONode.ofJson(json).get("path").getString();
             }
         } catch (Exception e) {
-            log.warn("[schedule] 解析工作区路径失败: {}", e.getMessage());
+            log.warn("[schedule] 解析项目路径失败: {}", e.getMessage());
         }
         return null;
     }

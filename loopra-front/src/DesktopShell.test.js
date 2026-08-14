@@ -22,7 +22,8 @@ const {configAPI, sessionsAPI, systemAPI, switchThemeWithReveal} = vi.hoisted(()
     createNew: vi.fn(),
     list: vi.fn(),
     deleteSession: vi.fn(),
-    clearAll: vi.fn()
+    clearAll: vi.fn(),
+    clearBefore: vi.fn()
   },
   systemAPI: {
     checkLatestVersion: vi.fn()
@@ -125,12 +126,13 @@ describe('DesktopShell 首页右键菜单', () => {
     expect(document.body.querySelector('.desktop-shell-context-menu')).toBeNull()
 
     await homeButton.trigger('contextmenu', {clientX: 40, clientY: 30})
-    document.body.querySelectorAll('[role="menuitem"]')[1].click()
+    // 菜单顺序：打开需求池 / 打开引导 / 更新 / 切换主题（引导项为新增）
+    document.body.querySelectorAll('[role="menuitem"]')[2].click()
     await nextTick()
     expect(window.open).toHaveBeenLastCalledWith(expect.stringContaining('/releases'), '_blank')
 
     await homeButton.trigger('contextmenu', {clientX: 40, clientY: 30})
-    document.body.querySelectorAll('[role="menuitem"]')[2].click()
+    document.body.querySelectorAll('[role="menuitem"]')[3].click()
     await nextTick()
     expect(switchThemeWithReveal).toHaveBeenCalledWith('dark', expect.any(Function))
     expect(store.settings.theme).toBe('dark')
@@ -415,5 +417,104 @@ describe('DesktopShell 会话标签右键菜单', () => {
 
     wrapper.unmount()
     window.history.replaceState({}, '', originalUrl)
+  })
+})
+
+describe('DesktopShell 清空三天前的会话', () => {
+  function chatTabsBridge() {
+    return {
+      create: vi.fn().mockResolvedValue({success: true}),
+      show: vi.fn().mockResolvedValue({success: true}),
+      hide: vi.fn().mockResolvedValue({success: true}),
+      close: vi.fn().mockResolvedValue({success: true}),
+      reload: vi.fn().mockResolvedValue({success: true}),
+      sendCommand: vi.fn().mockResolvedValue(true)
+    }
+  }
+
+  it('确认后按三天前阈值调用清理接口，仅关闭被删除会话的标签', async () => {
+    sessionsAPI.clearBefore.mockResolvedValue({success: true, data: {sessionNames: ['old-1']}})
+    const desktopChatTabs = chatTabsBridge()
+    window.electronAPI = {desktopChatTabs}
+    const {wrapper} = await mountShell()
+    await openTab(wrapper, 'old-1')
+    await openTab(wrapper, 'recent')
+
+    wrapper.vm.confirmClearOldSessions({hash: 'h1', name: 'A'})
+    expect(wrapper.vm.deleteConfirm.visible).toBe(true)
+    expect(wrapper.vm.deleteConfirm.title).toBe('清空三天前的会话？')
+    wrapper.vm.handleDeleteConfirmAction('confirm')
+    await flushPromises()
+
+    const [workspaceHash, before] = sessionsAPI.clearBefore.mock.calls[0]
+    expect(workspaceHash).toBe('h1')
+    expect(before).toBeLessThanOrEqual(Date.now())
+    expect(before).toBeGreaterThan(Date.now() - 4 * 24 * 60 * 60 * 1000)
+    expect(desktopChatTabs.close).toHaveBeenCalledWith('h1:old-1')
+    expect(wrapper.findAll('.desktop-tab').map((item) => item.attributes('title'))).toEqual(['recent'])
+
+    wrapper.unmount()
+  })
+
+  it('没有过期会话时不关闭任何标签', async () => {
+    sessionsAPI.clearBefore.mockResolvedValue({success: true, data: {sessionNames: []}})
+    const desktopChatTabs = chatTabsBridge()
+    window.electronAPI = {desktopChatTabs}
+    const {wrapper} = await mountShell()
+    await openTab(wrapper, 'recent')
+
+    wrapper.vm.confirmClearOldSessions({hash: 'h1', name: 'A'})
+    wrapper.vm.handleDeleteConfirmAction('confirm')
+    await flushPromises()
+
+    expect(desktopChatTabs.close).not.toHaveBeenCalled()
+    expect(wrapper.findAll('.desktop-tab')).toHaveLength(1)
+
+    wrapper.unmount()
+  })
+
+  it('接口失败时提示错误', async () => {
+    sessionsAPI.clearBefore.mockResolvedValue({success: false, message: '服务不可用'})
+    const {wrapper} = await mountShell()
+
+    wrapper.vm.confirmClearOldSessions({hash: 'h1', name: 'A'})
+    wrapper.vm.handleDeleteConfirmAction('confirm')
+    await flushPromises()
+
+    expect(sessionsAPI.clearBefore).toHaveBeenCalledWith('h1', expect.any(Number))
+
+    wrapper.unmount()
+  })
+})
+
+describe('DesktopShell 删除项目', () => {
+  it('确认后调用删除接口并刷新项目列表', async () => {
+    configAPI.deleteWorkspace.mockResolvedValue({success: true})
+    const {wrapper} = await mountShell()
+
+    wrapper.vm.confirmDeleteWorkspace({hash: 'h1', name: 'A'})
+    expect(wrapper.vm.deleteConfirm.visible).toBe(true)
+    expect(wrapper.vm.deleteConfirm.title).toBe('删除项目？')
+    wrapper.vm.handleDeleteConfirmAction('confirm')
+    await flushPromises()
+
+    expect(configAPI.deleteWorkspace).toHaveBeenCalledWith('h1')
+    expect(wrapper.vm.workspaces.some((workspace) => workspace.hash === 'h1')).toBe(false)
+
+    wrapper.unmount()
+  })
+
+  it('删除接口失败时提示错误且不刷新列表', async () => {
+    configAPI.deleteWorkspace.mockResolvedValue({success: false, message: '服务不可用'})
+    const {wrapper} = await mountShell()
+
+    wrapper.vm.confirmDeleteWorkspace({hash: 'h1', name: 'A'})
+    wrapper.vm.handleDeleteConfirmAction('confirm')
+    await flushPromises()
+
+    expect(configAPI.deleteWorkspace).toHaveBeenCalledWith('h1')
+    expect(wrapper.vm.workspaces.some((workspace) => workspace.hash === 'h1')).toBe(true)
+
+    wrapper.unmount()
   })
 })

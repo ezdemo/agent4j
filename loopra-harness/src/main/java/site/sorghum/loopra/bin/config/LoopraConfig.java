@@ -15,7 +15,7 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 /**
- * 从 {@code ~/.loopra/config.json} 读取 LLM 和工作区配置。
+ * 从 {@code ~/.loopra/config.json} 读取 LLM 和项目配置。
  * 提供静态单例 {@link #getInstance()} 供各处访问。
  *
  * @author Sorghum
@@ -181,10 +181,10 @@ public class LoopraConfig implements AgentConfig {
     }
 
     /**
-     * 为未配置工作区的用户初始化默认工作区。
-     * 默认工作区与配置文件同级，避免使用应用启动目录或用户主目录作为工作区。
+     * 为未配置项目的用户初始化默认项目。
+     * 默认项目与配置文件同级，避免使用应用启动目录或用户主目录作为项目。
      *
-     * @return 是否已写入默认工作区配置
+     * @return 是否已写入默认项目配置
      */
     private static boolean initializeDefaultWorkspace(ONode root, Path configDir) throws IOException {
         String workspaceDir = root.select("$.workspaceDir").getString();
@@ -195,7 +195,7 @@ public class LoopraConfig implements AgentConfig {
         Path defaultWorkspace = configDir.resolve("defaultWorkSpace").toAbsolutePath().normalize();
         Files.createDirectories(defaultWorkspace);
         root.set("workspaceDir", defaultWorkspace.toString());
-        log.info("[config] 未配置工作区，已使用默认工作区: {}", defaultWorkspace);
+        log.info("[config] 未配置项目，已使用默认项目: {}", defaultWorkspace);
         return true;
     }
 
@@ -512,8 +512,8 @@ public class LoopraConfig implements AgentConfig {
     }
 
     /**
-     * 获取工作区目录路径。
-     * 未配置时返回 null（工作区为空）。
+     * 获取项目目录路径。
+     * 未配置时返回 null（项目为空）。
      */
     public Path workspaceDir() {
         String dir = root.select("$.workspaceDir").getString();
@@ -528,7 +528,7 @@ public class LoopraConfig implements AgentConfig {
     }
 
     /**
-     * 获取工作树隔离模式的根目录。
+     * 获取隔离分支模式的根目录。
      * 未配置时默认 {@code ~/.loopra/worktree}。
      */
     public String worktreeBaseDir() {
@@ -665,7 +665,7 @@ public class LoopraConfig implements AgentConfig {
      * 获取屏蔽目录列表。
      * 从 config.json 的 blockedPaths 数组读取，同时支持 LOOPRA_BLOCKED_PATHS 环境变量（逗号分隔）。
      * 所有文件操作工具（读/写/编辑/搜索）都会跳过这些目录。
-     * 路径为相对路径，相对于工作区根目录。
+     * 路径为相对路径，相对于项目根目录。
      */
     public List<String> blockedPaths() {
         // 环境变量优先级最高

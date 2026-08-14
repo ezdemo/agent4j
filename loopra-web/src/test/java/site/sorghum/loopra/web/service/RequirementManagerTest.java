@@ -43,7 +43,7 @@ class RequirementManagerTest {
         Runnable onExecute = null;
 
         @Override
-        public String resolveWorkspacePath(String hash) {
+        public String resolveProjectPath(String hash) {
             return workspaceExists ? "/tmp/" + hash : null;
         }
 

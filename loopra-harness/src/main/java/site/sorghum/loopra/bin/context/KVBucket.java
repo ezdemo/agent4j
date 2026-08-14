@@ -1,4 +1,4 @@
-package site.sorghum.loopra.bin.workspace;
+package site.sorghum.loopra.bin.context;
 
 import lombok.Builder;
 import lombok.Data;

@@ -14,8 +14,8 @@ public final class WebErrorMessages {
     /** Agent 未就绪时的通用错误消息 */
     public static final String AGENT_NOT_READY = "Agent 未初始化";
 
-    /** 工作区 hash 不能为空 */
-    public static final String WORKSPACE_HASH_REQUIRED = "工作区 hash 不能为空";
+    /** 项目 hash 不能为空 */
+    public static final String WORKSPACE_HASH_REQUIRED = "项目 hash 不能为空";
 
     /** message 不能为空 */
     public static final String MESSAGE_REQUIRED = "message 不能为空";

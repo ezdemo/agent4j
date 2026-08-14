@@ -178,7 +178,7 @@ export const chatAPI = {
     ;(async () => {
       try {
         const requestBody = { message, requestId }
-        // 添加工作区和会话信息
+        // 添加项目和会话信息
         if (options.workspaceHash) requestBody.workspaceHash = options.workspaceHash
         if (options.sessionName) requestBody.sessionName = options.sessionName
         if (options.model) requestBody.model = options.model
@@ -284,7 +284,7 @@ export const agentAPI = {
     })
   },
 
-  // 获取 bash 后台命令会话 - GET /api/agent/bash-sessions?workspaceHash=xxx（可选，空则全部工作区）
+  // 获取 bash 后台命令会话 - GET /api/agent/bash-sessions?workspaceHash=xxx（可选，空则全部项目）
   getBashSessions: (workspaceHash) => {
     const params = {}
     if (workspaceHash) params.workspaceHash = workspaceHash
@@ -418,6 +418,11 @@ export const sessionsAPI = {
     const params = workspaceHash ? { workspaceHash } : {}
     return api.delete('/sessions', { params })
   },
+
+  // 清理早于指定时间（epoch 毫秒）的过期会话 - DELETE /api/sessions/cleanup?workspaceHash=xxx&before=xxx
+  clearBefore: (workspaceHash, before) => {
+    return api.delete('/sessions/cleanup', { params: { workspaceHash, before } })
+  },
   
   // 获取会话详情 - GET /api/sessions/{name}
   getDetails: (name) => {
@@ -455,13 +460,13 @@ export const sessionsAPI = {
     return api.get(`/sessions/${sessionPathName(name)}/goal`, { params })
   },
 
-  // 查询会话工作树隔离模式 - GET /api/sessions/{name}/worktree?workspaceHash=xxx
+  // 查询会话隔离分支模式 - GET /api/sessions/{name}/worktree?workspaceHash=xxx
   getWorktreeMode: (name, workspaceHash) => {
     const params = workspaceHash ? { workspaceHash } : {}
     return api.get(`/sessions/${sessionPathName(name)}/worktree`, { params })
   },
 
-  // 切换会话工作树隔离模式 - PUT /api/sessions/{name}/worktree?workspaceHash=xxx  body: { worktreeMode, mergeMode }
+  // 切换会话隔离分支模式 - PUT /api/sessions/{name}/worktree?workspaceHash=xxx  body: { worktreeMode, mergeMode }
   setWorktreeMode: (name, workspaceHash, body, options = {}) => {
     const params = workspaceHash ? { workspaceHash } : {}
     return api.put(`/sessions/${sessionPathName(name)}/worktree`, body || {}, { params, silent: options.silent })
@@ -586,22 +591,22 @@ export const configAPI = {
     return api.post('/workspace', { path })
   },
   
-  // 获取所有工作区列表 - GET /api/workspaces
+  // 获取所有项目列表 - GET /api/workspaces
   listWorkspaces: () => {
     return api.get('/workspaces')
   },
   
-  // 删除工作区 - DELETE /api/workspaces/{hash}
+  // 删除项目 - DELETE /api/workspaces/{hash}
   deleteWorkspace: (hash) => {
     return api.delete(`/workspaces/${hash}`)
   },
 
-  // 保存工作区排序 - PUT /api/workspaces/order
+  // 保存项目排序 - PUT /api/workspaces/order
   saveWorkspaceOrder: (order) => {
     return api.put('/workspaces/order', order)
   },
 
-  // 获取工作区排序 - GET /api/workspaces/order
+  // 获取项目排序 - GET /api/workspaces/order
   getWorkspaceOrder: () => {
     return api.get('/workspaces/order')
   },
@@ -822,7 +827,7 @@ export const gitAPI = {
     return api.get('/git/file-content', { params, silent: options.silent })
   },
 
-  // 获取工作区当前文件原文，用于代码预览 - GET /api/git/working-file-content
+  // 获取项目当前文件原文，用于代码预览 - GET /api/git/working-file-content
   workingFileContent: (workspaceHash, path) => {
     const params = { workspaceHash, path }
     return api.get('/git/working-file-content', { params })
@@ -844,7 +849,7 @@ export const gitAPI = {
     return api.get('/git/config', { params })
   },
 
-  // 保存提交作者配置到工作区 - POST /api/git/config?workspaceHash=xxx  body: { authorName, authorEmail, model, modelChannelId }
+  // 保存提交作者配置到项目 - POST /api/git/config?workspaceHash=xxx  body: { authorName, authorEmail, model, modelChannelId }
   saveConfig: (workspaceHash, authorName, authorEmail, model, modelChannelId) => {
     const params = workspaceHash ? { workspaceHash } : {}
     const body = { authorName, authorEmail }
@@ -881,7 +886,7 @@ export const gitAPI = {
     return api.get('/git/environment', { params: { workspaceHash, sessionName }, silent: options.silent })
   },
 
-  // 创建会话工作树 - POST /api/git/worktree/create  body: { workspaceHash, sessionName }
+  // 创建会话隔离分支 - POST /api/git/worktree/create  body: { workspaceHash, sessionName }
   worktreeCreate: (workspaceHash, sessionName, options = {}) => {
     return api.post('/git/worktree/create', { workspaceHash, sessionName }, {silent: options.silent})
   },
@@ -902,7 +907,7 @@ export const snapshotAPI = {
     return api.post('/snapshots/checkpoint', null, { params })
   },
 
-    // 撤回消息，可选恢复工作区代码 - POST /api/snapshots/rollback?workspaceHash=xxx&msgId=xxx&sessionName=xxx&rollbackCode=true
+    // 撤回消息，可选恢复项目代码 - POST /api/snapshots/rollback?workspaceHash=xxx&msgId=xxx&sessionName=xxx&rollbackCode=true
     rollback: (workspaceHash, msgId, sessionName, rollbackCode = true, rollbackTimestamp = null) => {
       const params = {}
       if (workspaceHash) params.workspaceHash = workspaceHash
@@ -1023,17 +1028,17 @@ export const lspAPI = {
     toggleServer: (name, enabled) => api.post('/lsp/servers/toggle', { name, enabled }),
 }
 
-// 工作区文件 API
+// 项目文件 API
 export const filesAPI = {
   // 获取指定目录的直接子项 - GET /api/files/tree?workspaceHash=xxx&path=src
   list: (workspaceHash, path = '') => {
     return api.get('/files/tree', { params: { workspaceHash, path } })
   },
-  // 搜索工作区内文件 - GET /api/files/search?workspaceHash=xxx&query=foo
+  // 搜索项目内文件 - GET /api/files/search?workspaceHash=xxx&query=foo
   search: (workspaceHash, query = '') => {
     return api.get('/files/search', { params: { workspaceHash, query } })
   },
-  // 删除工作区内文件或目录 - DELETE /api/files/delete?workspaceHash=xxx&path=src/a.js
+  // 删除项目内文件或目录 - DELETE /api/files/delete?workspaceHash=xxx&path=src/a.js
   remove: (workspaceHash, path) => {
     return api.delete('/files/delete', { params: { workspaceHash, path } })
   }
@@ -1041,7 +1046,7 @@ export const filesAPI = {
 
 // 定时任务 API
 export const scheduleAPI = {
-  // 列出指定工作区的所有定时任务 - GET /api/schedules?workspaceHash=xxx
+  // 列出指定项目的所有定时任务 - GET /api/schedules?workspaceHash=xxx
   list: (workspaceHash) => {
     const params = workspaceHash ? { workspaceHash } : {}
     return api.get('/schedules', { params })

@@ -56,7 +56,7 @@ class LoopraAgentInjectionTest {
      * 被 JVM 加载后 Windows 无法删除，@TempDir 清理会直接报错；改为手动创建、不强制删除。
      */
     private static Path home;
-    /** Agent 工作区（会话文件写入此处的 .loopra 下） */
+    /** Agent 项目（会话文件写入此处的 .loopra 下） */
     @TempDir
     Path workspace;
 

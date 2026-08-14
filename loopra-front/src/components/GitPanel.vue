@@ -179,7 +179,7 @@
           <!-- 空状态 -->
           <div v-else class="git-empty">
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
-            <span>工作区干净，没有待提交的更改</span>
+            <span>项目干净，没有待提交的更改</span>
           </div>
         </div>
 

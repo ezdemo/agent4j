@@ -42,7 +42,7 @@ function localEnvironment() {
       currentDirty: true,
       worktreeExists: false,
       agentRunning: false,
-      message: '当前 Agent 使用本地工作区'
+      message: '当前 Agent 使用本地项目'
     }
   }
 }
@@ -64,7 +64,7 @@ beforeEach(() => {
     {hash: 'abc123456789', shortHash: 'abc1234', author: 'Loopra', date: '2026-08-14T10:00:00+08:00', subject: '更新环境面板'}
   ])
   commitMock.mockReset().mockResolvedValue({message: 'committed'})
-  mergeMock.mockReset().mockResolvedValue({merged: true, conflictFiles: [], message: '已合并到主工作区'})
+  mergeMock.mockReset().mockResolvedValue({merged: true, conflictFiles: [], message: '已合并到主项目'})
   pushMock.mockReset().mockResolvedValue({message: 'pushed'})
   window.electronAPI = {
     gitEnvironment: {
@@ -95,7 +95,7 @@ describe('EnvironmentPanel', () => {
     wrapper.unmount()
   })
 
-  it('从环境面板启用并创建工作树', async () => {
+  it('从环境面板启用并创建隔离分支', async () => {
     const wrapper = mount(EnvironmentPanel, {props: {workspaceHash: 'h1', sessionName: 's1'}})
     await flushPromises()
 
@@ -108,7 +108,7 @@ describe('EnvironmentPanel', () => {
     wrapper.unmount()
   })
 
-  it('工作树干净时仍展示主工作区的真实变更', async () => {
+  it('隔离分支干净时仍展示主项目的真实变更', async () => {
     environmentMock.mockResolvedValue({
       success: true,
       data: {
@@ -121,7 +121,7 @@ describe('EnvironmentPanel', () => {
         currentDirty: false,
         worktreeExists: true,
         agentRunning: false,
-        message: '隔离工作树干净'
+        message: '隔离分支干净'
       }
     })
     statusMock
@@ -143,14 +143,14 @@ describe('EnvironmentPanel', () => {
     const wrapper = mount(EnvironmentPanel, {props: {workspaceHash: 'h1', sessionName: 's1'}})
     await flushPromises()
 
-    expect(wrapper.text()).toContain('工作树变更')
+    expect(wrapper.text()).toContain('隔离分支变更')
     expect(wrapper.text()).toContain('本地变更')
     expect(wrapper.text()).toContain('README.md')
-    expect(wrapper.text()).toContain('主工作区有未提交变更')
+    expect(wrapper.text()).toContain('主项目有未提交变更')
     wrapper.unmount()
   })
 
-  it('可分别查看本地分支和工作树分支的提交记录', async () => {
+  it('可分别查看本地分支和隔离分支分支的提交记录', async () => {
     environmentMock.mockResolvedValue({
       success: true,
       data: {
@@ -163,7 +163,7 @@ describe('EnvironmentPanel', () => {
         currentDirty: false,
         worktreeExists: true,
         agentRunning: false,
-        message: '隔离工作树干净'
+        message: '隔离分支干净'
       }
     })
     statusMock.mockResolvedValue({initialized: true, dirty: false, changed: [], untracked: []})
@@ -183,11 +183,11 @@ describe('EnvironmentPanel', () => {
     await buttons[1].trigger('click')
     await flushPromises()
     expect(historyMock).toHaveBeenLastCalledWith({cwd: 'C:/worktree/s1', branch: 'loopra/sandbox-s1', limit: 30})
-    expect(document.body.textContent).toContain('工作树 · loopra/sandbox-s1')
+    expect(document.body.textContent).toContain('隔离分支 · loopra/sandbox-s1')
     wrapper.unmount()
   })
 
-  it('Desktop Git 模块缺失时不把读取失败显示成工作区干净', async () => {
+  it('Desktop Git 模块缺失时不把读取失败显示成项目干净', async () => {
     delete window.electronAPI
 
     const wrapper = mount(EnvironmentPanel, {props: {workspaceHash: 'h1', sessionName: 's1'}})
@@ -195,7 +195,7 @@ describe('EnvironmentPanel', () => {
 
     expect(wrapper.text()).toContain('Git 功能未加载')
     expect(wrapper.text()).not.toContain('暂无未提交变更')
-    expect(wrapper.text()).not.toContain('主工作区干净')
+    expect(wrapper.text()).not.toContain('主项目干净')
     wrapper.unmount()
   })
 })

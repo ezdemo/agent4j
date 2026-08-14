@@ -8,7 +8,7 @@ import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Param;
 import site.sorghum.loopra.bin.checklist.Checklist;
 import site.sorghum.loopra.bin.checklist.ChecklistEngine;
-import site.sorghum.loopra.bin.workspace.WorkspaceManager;
+import site.sorghum.loopra.bin.project.ProjectRegistry;
 import site.sorghum.loopra.tool.ToolContext;
 import site.sorghum.loopra.tool.SolonToTools;
 
@@ -64,21 +64,21 @@ public class ChecklistStartTool extends AbsToolProvider implements SolonToTools 
                 return "PARSE_ERROR: 步骤列表为空，请提供至少一个步骤";
             }
 
-            // 获取工作区信息（状态根：工作树隔离模式下仍归属主工作区）
+            // 获取项目信息（状态根：隔离分支模式下仍归属主项目）
             String rootDir = ctx.getStateRootDir().toAbsolutePath().toString();
-            WorkspaceManager workspaceManager = WorkspaceManager.getOrCreate(rootDir);
+            ProjectRegistry projectRegistry = ProjectRegistry.getOrCreate(rootDir);
 
             // 创建清单
             ChecklistEngine engine = new ChecklistEngine();
             Checklist cl = engine.createChecklist(
                     sessionId,
-                    workspaceManager.getCurrentWorkspaceHash(),
+                    projectRegistry.getCurrentProjectHash(),
                     title,
                     description != null ? description : title,
                     stepDefs);
 
             // 持久化（使用 KV store）
-            workspaceManager.getChecklistStore().save(cl);
+            projectRegistry.getChecklistStore().save(cl);
 
             log.info("[checklist] 创建清单成功: title={}, steps={}", title, stepDefs.size());
 

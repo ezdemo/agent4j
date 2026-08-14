@@ -267,7 +267,7 @@
                   </div>
                   <div class="option-item">
                     <div class="option-name">workspaceDir</div>
-                    <div class="option-desc">工作区目录路径</div>
+                    <div class="option-desc">项目目录路径</div>
                   </div>
                   <div class="option-item">
                     <div class="option-name">editMode</div>
@@ -462,7 +462,7 @@ const troubleshooting = [
   {
     title: '工具调用失败',
     symptom: 'AI 尝试使用工具但返回错误',
-    solution: '检查工作区路径是否正确，确保有足够的文件操作权限。'
+    solution: '检查项目路径是否正确，确保有足够的文件操作权限。'
   },
   {
     title: '界面显示异常',

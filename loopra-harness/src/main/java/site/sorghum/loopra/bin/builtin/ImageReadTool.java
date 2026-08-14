@@ -46,11 +46,11 @@ public class ImageReadTool extends AbsToolProvider implements SolonToTools {
 
     @ToolMapping(name = "read_image", description = """
             读取 PNG、JPEG、GIF 或 WebP 图片，并将图片作为视觉上下文传给 AI 分析。
-            每次必须提供且仅提供一个来源：file_path（工作区相对路径或绝对路径）、base64（原始 Base64 或 data URI）、url（HTTP/HTTPS 图片地址）。
+            每次必须提供且仅提供一个来源：file_path（项目相对路径或绝对路径）、base64（原始 Base64 或 data URI）、url（HTTP/HTTPS 图片地址）。
             detail 可选，取值 auto、low 或 high。图片最大 5 MiB。此工具只读，不支持 SVG 或其他非图片文件。
             """)
     public String readImage(
-            @Param(name = "file_path", description = "图片路径。相对路径相对于工作区，绝对路径可直接使用", required = false) String filePath,
+            @Param(name = "file_path", description = "图片路径。相对路径相对于项目，绝对路径可直接使用", required = false) String filePath,
             @Param(name = "base64", description = "图片的原始 Base64 字符串或 data:image/...;base64,...", required = false) String base64,
             @Param(name = "url", description = "HTTP 或 HTTPS 图片地址", required = false) String url,
             @Param(name = "detail", description = "图片分析精度：auto、low 或 high，默认 auto", required = false, defaultValue = "auto") String detail,
@@ -85,7 +85,7 @@ public class ImageReadTool extends AbsToolProvider implements SolonToTools {
                     + " 字节），图片已作为视觉上下文传给 AI。";
             return imageResult(summary, dataUri, normalizedDetail);
         } catch (SecurityException e) {
-            return "PATH_DENIED: 工作区相对路径必须位于当前工作区内";
+            return "PATH_DENIED: 项目相对路径必须位于当前项目内";
         } catch (IllegalArgumentException e) {
             return "PARAM_INVALID: " + e.getMessage();
         } catch (IOException e) {
@@ -145,7 +145,7 @@ public class ImageReadTool extends AbsToolProvider implements SolonToTools {
             source = image.toString();
         } else {
             if (ctx == null || ctx.getRootDir() == null) {
-                throw new IOException("当前工具没有可用的工作区上下文");
+                throw new IOException("当前工具没有可用的项目上下文");
             }
             Path root = ctx.getRootDir().toRealPath();
             Path candidate = root.resolve(requested).normalize();

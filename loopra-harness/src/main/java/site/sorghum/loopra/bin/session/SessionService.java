@@ -56,7 +56,7 @@ public class SessionService implements SessionUsageSink {
     private boolean titleGenerated = false;
 
     /**
-     * 创建支持工作区隔离的 SessionService（默认 JSONL 文件存储）
+     * 创建支持项目隔离的 SessionService（默认 JSONL 文件存储）
      *
      * @param ctx         会话上下文
      * @param sessionsDir 会话目录路径

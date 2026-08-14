@@ -10,7 +10,7 @@ import lombok.Data;
 @Data
 public class SnapshotStatusDTO {
 
-    /** 工作区是否为 Git 仓库 */
+    /** 项目是否为 Git 仓库 */
     private boolean gitRepo;
 
     public SnapshotStatusDTO() {}

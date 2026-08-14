@@ -52,7 +52,7 @@ public class ToolScanUtil {
     /**
      * 扫描并返回所有可用工具。
      *
-     * @param workspace 工作区根目录，用于加载 Skill 工具。传 null 则跳过 Skill 扫描。
+     * @param workspace 项目根目录，用于加载 Skill 工具。传 null 则跳过 Skill 扫描。
      * @return AgentTool 列表（未安装提供者时为空列表）
      */
     public static List<FunctionTool> scanTools(Path workspace) {

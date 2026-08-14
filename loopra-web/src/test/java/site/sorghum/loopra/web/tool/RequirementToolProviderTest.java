@@ -31,7 +31,7 @@ class RequirementToolProviderTest {
         final List<String> comments = new ArrayList<>();
 
         @Override
-        public String resolveWorkspacePath(String hash) {
+        public String resolveProjectPath(String hash) {
             return "/tmp/" + hash;
         }
 

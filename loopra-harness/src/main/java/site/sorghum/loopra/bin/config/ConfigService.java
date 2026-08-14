@@ -6,7 +6,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Init;
-import site.sorghum.loopra.bin.workspace.WorkspaceManager;
+import site.sorghum.loopra.bin.project.ProjectRegistry;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -33,13 +33,13 @@ public class ConfigService {
 
     @Init
     public void init() {
-        ConfigService.config = loadAndInitializeWorkspace();
+        ConfigService.config = loadAndInitializeProject();
     }
 
     /**
-     * 加载配置并注册当前工作区，使工作区可被项目列表发现。
+     * 加载配置并注册当前项目，使项目可被项目列表发现。
      */
-    private static LoopraConfig loadAndInitializeWorkspace() {
+    private static LoopraConfig loadAndInitializeProject() {
         LoopraConfig loadedConfig = LoopraConfig.load();
         if (loadedConfig.workspaceDir() == null) {
             return loadedConfig;
@@ -47,9 +47,9 @@ public class ConfigService {
 
         String workspacePath = loadedConfig.workspaceDir().toAbsolutePath().normalize().toString();
         try {
-            WorkspaceManager.getOrCreate(workspacePath);
+            ProjectRegistry.getOrCreate(workspacePath);
         } catch (Exception e) {
-            log.warn("[workspace] 注册当前工作区失败: {}", e.getMessage());
+            log.warn("[project] 注册当前项目失败: {}", e.getMessage());
         }
         return loadedConfig;
     }
@@ -68,7 +68,7 @@ public class ConfigService {
      * 重新从磁盘加载配置。
      */
     public static synchronized void reload() {
-        ConfigService.config = loadAndInitializeWorkspace();
+        ConfigService.config = loadAndInitializeProject();
         log.debug("[config] 已重新加载配置");
     }
 
@@ -81,7 +81,7 @@ public class ConfigService {
         try {
             config.updateAndSave(Map.of("disabledTools",
                     toolNames != null ? new ArrayList<>(toolNames) : Collections.emptyList()));
-            ConfigService.config = loadAndInitializeWorkspace();
+        ConfigService.config = loadAndInitializeProject();
             log.info("[config] 已更新禁用工具列表，共 {} 个工具", toolNames != null ? toolNames.size() : 0);
         } catch (IOException e) {
             log.error("[config] 更新禁用工具列表失败", e);
@@ -127,7 +127,7 @@ public class ConfigService {
         }
         try {
             config.updateAndSave(Map.of("toolReadOnlyOverrides", current));
-            ConfigService.config = loadAndInitializeWorkspace();
+        ConfigService.config = loadAndInitializeProject();
             log.info("[config] 已更新工具只读分类: tool={}, readOnly={}", toolName, readOnly);
         } catch (IOException e) {
             log.error("[config] 更新工具只读分类失败: tool={}", toolName, e);
@@ -150,7 +150,7 @@ public class ConfigService {
         try {
             config.updateAndSave(Map.of("autoWhitelist",
                     toolNames != null ? new ArrayList<>(toolNames) : Collections.emptyList()));
-            ConfigService.config = loadAndInitializeWorkspace();
+        ConfigService.config = loadAndInitializeProject();
             log.info("[config] 已更新自动放行白名单，共 {} 个工具", toolNames != null ? toolNames.size() : 0);
         } catch (IOException e) {
             log.error("[config] 更新自动放行白名单失败", e);
@@ -177,10 +177,10 @@ public class ConfigService {
         setAutoWhitelist(current);
     }
 
-    // ==================== 工作区排序 ====================
+    // ==================== 项目排序 ====================
 
     /**
-     * 获取用户保存的工作区排序（hash 有序列表）。
+     * 获取用户保存的项目排序（hash 有序列表）。
      * 未保存过排序或读取失败时返回空列表，调用方应回退到默认顺序。
      */
     public static List<String> getWorkspaceOrder() {
@@ -200,7 +200,7 @@ public class ConfigService {
                 }
             }
         } catch (Exception e) {
-            log.warn("[config] 读取工作区排序失败，返回空排序: {}", e.getMessage());
+            log.warn("[config] 读取项目排序失败，返回空排序: {}", e.getMessage());
         }
         return Collections.emptyList();
     }
@@ -213,7 +213,7 @@ public class ConfigService {
     public static synchronized void updateConfig(Map<String, Object> updates) {
         try {
             config.updateAndSave(updates);
-            ConfigService.config = loadAndInitializeWorkspace();
+        ConfigService.config = loadAndInitializeProject();
             log.debug("[config] 已更新配置项: {}", updates.keySet());
         } catch (IOException e) {
             log.error("[config] 更新配置失败", e);
@@ -228,7 +228,7 @@ public class ConfigService {
     public static synchronized void removeConfigKey(String key) {
         try {
             config.removeAndSave(key);
-            ConfigService.config = loadAndInitializeWorkspace();
+        ConfigService.config = loadAndInitializeProject();
             log.debug("[config] 已移除配置项: {}", key);
         } catch (IOException e) {
             log.error("[config] 移除配置项失败: {}", key, e);

@@ -2,6 +2,7 @@ package site.sorghum.loopra.bin.tool;
 
 import lombok.extern.slf4j.Slf4j;
 import org.noear.solon.ai.chat.tool.FunctionTool;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.agent.prompt.EnvInfoUtil;
 import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
 
@@ -25,7 +26,7 @@ public class ToolSystemInitializer {
     /**
      * 执行完整的工具系统初始化。
      *
-     * @param workspace           工作区根目录
+     * @param workspace           项目根目录
      * @param apiUrl              LLM API URL
      * @param apiKey              LLM API Key
      * @param disabledTools       禁用的工具名称集合（可为 null）
@@ -40,14 +41,31 @@ public class ToolSystemInitializer {
     }
 
     /**
-     * 执行完整的工具系统初始化（可指定状态工作区）。
+     * 执行完整的工具系统初始化（可指定状态项目）。
      *
-     * @param stateWorkspace 状态工作区（Goal/Checklist/会话持久化归属）；
-     *                       null 时回退为 {@code workspace}。工作树隔离模式下传入主工作区。
+     * @param stateWorkspace 状态项目（Goal/Checklist/会话持久化归属）；
+     *                       null 时回退为 {@code workspace}。隔离分支模式下传入主项目。
      */
     public static Result initialize(Path workspace, Path stateWorkspace, String apiUrl, String apiKey,
                                     Set<String> disabledTools, List<String> blockedPaths,
                                     String defaultSystemPrompt) {
+        return initialize(
+                SessionEnvironment.of(workspace, stateWorkspace),
+                apiUrl,
+                apiKey,
+                disabledTools,
+                blockedPaths,
+                defaultSystemPrompt
+        );
+    }
+
+    /**
+     * Executes full tool-system initialization using one session environment.
+     */
+    public static Result initialize(SessionEnvironment environment, String apiUrl, String apiKey,
+                                    Set<String> disabledTools, List<String> blockedPaths,
+                                    String defaultSystemPrompt) {
+        Path workspace = environment == null ? null : environment.executionRoot();
         final Set<String> effectiveDisabledTools = disabledTools != null ? disabledTools : Collections.emptySet();
         final List<String> effectiveBlockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
 
@@ -55,7 +73,7 @@ public class ToolSystemInitializer {
         final ToolRegistry registry = new ToolRegistry();
         registry.setDisabledTools(effectiveDisabledTools);
         // 保存刷新上下文，供后续动态刷新工具列表使用
-        registry.setRefreshContext(workspace, stateWorkspace, apiUrl, apiKey, effectiveBlockedPaths);
+        registry.setRefreshContext(environment, apiUrl, apiKey, effectiveBlockedPaths);
         if (!effectiveDisabledTools.isEmpty()) {
             log.info("[config] 已禁用工具: {}", String.join(", ", effectiveDisabledTools));
         }
@@ -84,7 +102,7 @@ public class ToolSystemInitializer {
         // 5. 追加工具规范到 system prompt
         systemPrompt = systemPrompt + "\n\n";
 
-        // 6. 注入环境信息（工作目录、平台、Shell、OS 版本、当前日期）——随工作区而变
+        // 6. 注入环境信息（工作目录、平台、Shell、OS 版本、当前日期）——随项目而变
         systemPrompt = systemPrompt + "\n\n---\n\n" + EnvInfoUtil.buildEnvInfo(workspace);
 
         // 7. 项目文档后置到最底部 —— 最大化前缀缓存命中。
@@ -115,7 +133,7 @@ public class ToolSystemInitializer {
     }
 
     /**
-     * 加载工作区根目录下的 loopra.md 和 CLAUDE.md。
+     * 加载项目根目录下的 loopra.md 和 CLAUDE.md。
      */
     public static String loadProjectMd(Path workspace) {
         if (workspace == null) return "";
@@ -139,7 +157,7 @@ public class ToolSystemInitializer {
          */
         public final String systemPrompt;
         /**
-         * 后缀部分（工具定义 + Skill 索引），不依赖于具体工作区的项目文档
+         * 后缀部分（工具定义 + Skill 索引），不依赖于具体项目的项目文档
          */
         public final String suffix;
 
