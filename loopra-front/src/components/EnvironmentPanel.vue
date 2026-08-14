@@ -5,8 +5,8 @@
         <h2>环境信息</h2>
         <p v-if="environment?.message" class="environment-message">{{ environment.message }}</p>
       </div>
-      <button class="icon-button" type="button" title="刷新" :disabled="loading" @click="refresh">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"><path d="M20 11a8 8 0 0 0-14.9-3.9L3 10"/><path d="M3 4v6h6"/><path d="M4 13a8 8 0 0 0 14.9 3.9L21 14"/><path d="M21 20v-6h-6"/></svg>
+      <button class="icon-button" :class="{ loading: manualRefreshing }" type="button" title="刷新环境信息" aria-label="刷新环境信息" :disabled="manualRefreshing" @click="refreshManually">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 12a8 8 0 1 1-2.34-5.66L20 8"/><path d="M20 4v4h-4"/></svg>
       </button>
     </header>
 
@@ -162,6 +162,7 @@ const environment = ref(null)
 const currentStatus = ref(null)
 const mainStatus = ref(null)
 const loading = ref(false)
+const manualRefreshing = ref(false)
 const busy = ref(false)
 const commitMessage = ref('')
 const notice = ref('')
@@ -234,6 +235,16 @@ async function refresh() {
     notice.value = statusError.value
   } finally {
     loading.value = false
+  }
+}
+
+async function refreshManually() {
+  if (manualRefreshing.value) return
+  manualRefreshing.value = true
+  try {
+    await refresh()
+  } finally {
+    manualRefreshing.value = false
   }
 }
 
@@ -403,10 +414,15 @@ defineExpose({refresh})
 .environment-header { display: flex; align-items: flex-start; justify-content: space-between; padding: 14px 14px 10px; border-bottom: 1px solid var(--border); }
 .environment-header h2 { margin: 0; font-size: 15px; font-weight: 650; color: var(--fg-1); }
 .environment-message { margin: 4px 0 0; color: var(--fg-4); font-size: 11px; line-height: 1.35; }
-.icon-button { display: inline-flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: 0; border-radius: 5px; color: var(--fg-3); background: transparent; cursor: pointer; }
-.icon-button:hover { background: var(--bg-hover); color: var(--fg-1); }
-.icon-button:disabled { opacity: .45; cursor: default; }
-.icon-button svg { width: 16px; height: 16px; }
+.icon-button { display: inline-flex; align-items: center; justify-content: center; width: 28px; height: 28px; padding: 0; border: 1px solid transparent; border-radius: 50%; color: var(--fg-4); background: transparent; cursor: pointer; transition: color var(--t), background-color var(--t), border-color var(--t), transform .12s ease; }
+.icon-button:hover:not(:disabled) { border-color: color-mix(in srgb, var(--accent) 16%, var(--border)); color: var(--accent); background: color-mix(in srgb, var(--accent) 7%, transparent); }
+.icon-button:active:not(:disabled) { transform: scale(.94); }
+.icon-button:focus-visible { border-color: color-mix(in srgb, var(--accent) 48%, transparent); outline: none; box-shadow: 0 0 0 2px color-mix(in srgb, var(--accent) 10%, transparent); }
+.icon-button:disabled { cursor: default; }
+.icon-button svg { width: 15px; height: 15px; transition: opacity var(--t); }
+.icon-button.loading svg { opacity: 0; }
+.icon-button.loading::after { position: absolute; width: 13px; height: 13px; box-sizing: border-box; border: 1.5px solid color-mix(in srgb, currentColor 24%, transparent); border-top-color: currentColor; border-radius: 50%; content: ''; animation: environment-refresh-spin .7s linear infinite; }
+@keyframes environment-refresh-spin { to { transform: rotate(360deg); } }
 .environment-summary { display: flex; align-items: center; gap: 9px; margin: 10px 10px 4px; padding: 9px 10px; border: 1px solid var(--border); border-radius: 7px; background: var(--bg-2); }
 .environment-summary.worktree { border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); }
 .environment-icon { display: inline-flex; color: var(--accent); }
