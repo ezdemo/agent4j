@@ -30,11 +30,12 @@ function candidateHomeMcpConfigs(homeDir) {
 }
 
 // 常见 Agent 的全局规则文件候选（AGENTS.md / CLAUDE.md，位于 agent 配置目录内）
+// label 带文件名后缀，避免 AGENTS.md 与 agents.md 同时存在时出现两个同名 chip
 function candidateAgentRuleFiles(homeDir) {
   return [
-    { label: 'Codex 全局规则', path: path.join(homeDir, '.codex', 'AGENTS.md') },
+    { label: 'Codex 全局规则 (AGENTS.md)', path: path.join(homeDir, '.codex', 'AGENTS.md') },
     { label: 'Codex 全局规则 (agents.md)', path: path.join(homeDir, '.codex', 'agents.md') },
-    { label: 'Claude Code 全局规则', path: path.join(homeDir, '.claude', 'CLAUDE.md') },
+    { label: 'Claude Code 全局规则 (CLAUDE.md)', path: path.join(homeDir, '.claude', 'CLAUDE.md') },
     { label: 'Claude Code 全局规则 (claude.md)', path: path.join(homeDir, '.claude', 'claude.md') }
   ]
 }
@@ -238,6 +239,17 @@ function importSkill(sourceDir, name, mode, skillsDir) {
 const MAX_SESSION_LINES = 50000 // 单会话转换行数上限，超出拒绝导入
 const FORMAT_SAMPLE_LINES = 20 // 格式检测采样行数
 
+// 统一时间戳为毫秒数字（Loopra 消息格式）：数字原样保留，ISO 字符串转 epoch ms，无效丢弃。
+// 服务端 ChatMessage 仅解析数字时间戳，ISO 字符串会被静默忽略。
+function normalizeTimestamp(value) {
+  if (typeof value === 'number' && Number.isFinite(value)) return value
+  if (typeof value === 'string' && value.trim()) {
+    const ms = Date.parse(value)
+    if (Number.isFinite(ms)) return ms
+  }
+  return null
+}
+
 function detectSessionFormat(lines) {
   const counts = { loopra: 0, claude: 0, codex: 0, unknown: 0 }
   const samples = lines.slice(0, FORMAT_SAMPLE_LINES)
@@ -302,7 +314,8 @@ function convertClaudeLine(obj) {
   if (parts.length === 0) return null
 
   const out = { role: ['user', 'assistant', 'system'].includes(role) ? role : 'user' }
-  if (typeof obj.timestamp === 'string') out.timestamp = obj.timestamp
+  const ts = normalizeTimestamp(obj.timestamp)
+  if (ts != null) out.timestamp = ts
 
   if (out.role === 'assistant') {
     const text = extractTextContent(parts)
@@ -361,7 +374,10 @@ function convertClaudeLine(obj) {
 function convertCodexLine(obj) {
   // 文本行：{ timestamp(ISO), role, content }
   if (typeof obj.role === 'string' && typeof obj.content === 'string' && obj.content.trim()) {
-    return { role: obj.role === 'assistant' || obj.role === 'system' ? obj.role : 'user', content: obj.content, timestamp: obj.timestamp }
+    const out = { role: obj.role === 'assistant' || obj.role === 'system' ? obj.role : 'user', content: obj.content }
+    const ts = normalizeTimestamp(obj.timestamp)
+    if (ts != null) out.timestamp = ts
+    return out
   }
   if (obj.type !== 'response_item' || !obj.payload || typeof obj.payload !== 'object') return null
   const p = obj.payload
@@ -369,7 +385,8 @@ function convertCodexLine(obj) {
     const text = extractTextContent(p.content)
     if (!text) return null
     const out = { role: p.role === 'user' ? 'user' : 'assistant', content: text }
-    if (typeof obj.timestamp === 'string') out.timestamp = obj.timestamp
+    const ts = normalizeTimestamp(obj.timestamp)
+    if (ts != null) out.timestamp = ts
     return out
   }
   if (p.type === 'function_call') {
@@ -385,7 +402,8 @@ function convertCodexLine(obj) {
         }
       }]
     }
-    if (typeof obj.timestamp === 'string') out.timestamp = obj.timestamp
+    const ts = normalizeTimestamp(obj.timestamp)
+    if (ts != null) out.timestamp = ts
     return out
   }
   if (p.type === 'function_call_output') {
@@ -393,7 +411,8 @@ function convertCodexLine(obj) {
     if (!text) return null
     const out = { role: 'user', content: text }
     if (p.call_id) out.tool_call_id = p.call_id
-    if (typeof obj.timestamp === 'string') out.timestamp = obj.timestamp
+    const ts = normalizeTimestamp(obj.timestamp)
+    if (ts != null) out.timestamp = ts
     return out
   }
   return null // reasoning / local_shell_call 等事件跳过
@@ -434,8 +453,8 @@ function sanitizeName(name) {
   return String(name || '').replace(/[<>:"/\\|?*\u0000-\u001f]/g, '_').trim().slice(0, 120)
 }
 
-// 导入外部会话 JSONL 到 ~/.loopra/sessions/<workspaceHash>/，同名自动加后缀。
-// 自动识别格式：Loopra 原生原样复制；Claude Code / Codex 转换为 Loopra 消息格式。
+// 导入外部会话 JSONL 到 ~/.loopra/workspace/<workspaceHash>/sessions/（与服务端 WorkspaceManager.getSessionsDir 一致），
+// 同名自动加后缀。自动识别格式：Loopra 原生原样复制；Claude Code / Codex 转换为 Loopra 消息格式。
 function importSessionFile(srcPath, workspaceHash, sessionName) {
   const hash = sanitizeName(workspaceHash)
   if (!hash) return { ok: false, name: sessionName, error: '工作区标识无效' }
@@ -473,7 +492,9 @@ function importSessionFile(srcPath, workspaceHash, sessionName) {
   } else {
     return { ok: false, name: sessionName, error: '无法识别的会话格式（支持 Loopra / Claude Code / Codex）' }
   }
-  const dir = path.join(loopraDirs().sessionsDir, hash)
+  // 目标目录必须与服务端会话存储一致：~/.loopra/workspace/<hash>/sessions/
+  // （GET /api/sessions 只读取该目录；此前写到 ~/.loopra/sessions/<hash>/ 导致导入后不可见）
+  const dir = path.join(loopraDirs().configDir, 'workspace', hash, 'sessions')
   fs.mkdirSync(dir, { recursive: true })
   let targetName = sanitizeName(sessionName) || 'imported-session'
   let targetPath = path.join(dir, `${targetName}.jsonl`)
@@ -631,11 +652,22 @@ function parseTomlSimple(content) {
 // 解析 TOML 形式的 MCP 配置（Codex CLI config.toml：mcp_servers.xxx 段）
 function parseTomlMcpConfig(content) {
   const parsed = parseTomlSimple(content)
+  // [mcp_servers.xxx.env] 嵌套表合并为对应服务器的 env，避免被当成名为 xxx.env 的虚假服务器
+  const envByServer = new Map()
+  for (const [section, values] of Object.entries(parsed)) {
+    const nested = section.match(/^mcp_servers\.(.+)\.env$/)
+    if (nested) envByServer.set(nested[1], values)
+  }
   const servers = []
   for (const [section, values] of Object.entries(parsed)) {
     const match = section.match(/^mcp_servers\.(.+)$/)
     if (!match) continue
-    const server = normalizeMcpServer(match[1], values)
+    const serverName = match[1]
+    if (serverName.includes('.')) continue // 其他嵌套子表（如 x.env 已单独合并），跳过
+    if (envByServer.has(serverName)) {
+      values.env = { ...(values.env || {}), ...envByServer.get(serverName) }
+    }
+    const server = normalizeMcpServer(serverName, values)
     if (server) servers.push(server)
   }
   return servers
@@ -657,9 +689,19 @@ function parseMcpConfig(filePath) {
 
 // ==================== IPC 注册 ====================
 
-function registerOnboardingIpc(ipcMainRef) {
+function registerOnboardingIpc(ipcMainRef, options = {}) {
+  // 文件级操作仅允许引导页窗口的渲染进程调用：preload 被所有本地窗口共享，
+  // 其他窗口（主窗口/聊天标签等）一旦被注入即可借此任意读写用户文件。
+  const assertOnboardingSender = (event) => {
+    const target = options.getOnboardingWindow ? options.getOnboardingWindow() : null
+    if (!target || target.isDestroyed() || event.sender !== target.webContents) {
+      throw new Error('Unauthorized onboarding IPC request')
+    }
+  }
+
   // 引导页所需本地目录信息 + 外部 Agent 候选目录
-  ipcMainRef.handle('onboarding-get-dirs', () => {
+  ipcMainRef.handle('onboarding-get-dirs', (event) => {
+    assertOnboardingSender(event)
     const { configDir, skillsDir, sessionsDir, homeDir } = loopraDirs()
     return {
       configDir,
@@ -686,19 +728,23 @@ function registerOnboardingIpc(ipcMainRef) {
   })
 
   ipcMainRef.handle('onboarding-pick-dir', async (event, title) => {
+    assertOnboardingSender(event)
     return pickDirectory(title)
   })
 
   ipcMainRef.handle('onboarding-pick-file', async (event, options = {}) => {
+    assertOnboardingSender(event)
     return pickFile(options.title, options.filters)
   })
 
   ipcMainRef.handle('onboarding-scan-dir', (event, rootDir) => {
+    assertOnboardingSender(event)
     return scanAgentDir(String(rootDir || ''))
   })
 
   // 导入 Skills：{ items: [{sourceDir, name}], mode: 'hardlink'|'copy' }
   ipcMainRef.handle('onboarding-import-skills', (event, payload = {}) => {
+    assertOnboardingSender(event)
     const items = Array.isArray(payload.items) ? payload.items : []
     const mode = payload.mode === 'copy' ? 'copy' : 'hardlink'
     const { skillsDir } = loopraDirs()
@@ -713,6 +759,7 @@ function registerOnboardingIpc(ipcMainRef) {
 
   // 迁移会话：{ files: [{path, name}], workspaceHash }
   ipcMainRef.handle('onboarding-import-sessions', (event, payload = {}) => {
+    assertOnboardingSender(event)
     const files = Array.isArray(payload.files) ? payload.files : []
     const workspaceHash = String(payload.workspaceHash || '')
     return files.map((file) => importSessionFile(
@@ -724,6 +771,7 @@ function registerOnboardingIpc(ipcMainRef) {
 
   // 迁移 AGENTS.md：{ sourcePath, targetDir, overwrite }
   ipcMainRef.handle('onboarding-import-agents-md', (event, payload = {}) => {
+    assertOnboardingSender(event)
     return importAgentsMd(
       String(payload.sourcePath || ''),
       String(payload.targetDir || ''),
@@ -732,11 +780,13 @@ function registerOnboardingIpc(ipcMainRef) {
   })
 
   ipcMainRef.handle('onboarding-read-text-file', (event, payload = {}) => {
+    assertOnboardingSender(event)
     return readTextFile(String(payload.path || ''), payload.maxBytes)
   })
 
   // 解析外部 MCP 配置文件 → 规范化服务器列表
   ipcMainRef.handle('onboarding-parse-mcp-config', (event, filePath) => {
+    assertOnboardingSender(event)
     return parseMcpConfig(String(filePath || ''))
   })
 }
