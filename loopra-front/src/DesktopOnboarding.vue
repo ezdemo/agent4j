@@ -111,8 +111,10 @@
             </div>
           </div>
 
+          <div v-if="!workspaceHash" class="ob-hint">未获取到工作区信息（核心服务可能尚未就绪），暂时无法迁移会话。</div>
+
           <div class="ob-action-row">
-            <button class="btn btn-primary" :disabled="busy || !sessionsSelected.length" @click="importSessions">
+            <button class="btn btn-primary" :disabled="busy || !sessionsSelected.length || !workspaceHash" @click="importSessions">
               {{ sessionsSelected.length ? `迁移 ${sessionsSelected.length} 个会话` : '迁移会话' }}
             </button>
           </div>
@@ -276,7 +278,7 @@
           </div>
 
           <div v-if="agentsMdSelected" class="ob-field">
-            <label class="ob-field-label">预览（前 200 行）</label>
+            <label class="ob-field-label">预览（前 256KB）</label>
             <pre class="ob-preview">{{ agentsMdPreview || '（无法读取或内容为空）' }}</pre>
           </div>
 
@@ -297,7 +299,7 @@
           </div>
 
           <div class="ob-action-row">
-            <button class="btn btn-primary" :disabled="busy || !agentsMdSelected" @click="importAgentsMd">迁移到工作区</button>
+            <button class="btn btn-primary" :disabled="busy || !agentsMdSelected || !workspacePath" @click="importAgentsMd">迁移到工作区</button>
           </div>
         </section>
 
@@ -567,6 +569,10 @@ async function checkService() {
     serviceOk.value = false
   } finally {
     serviceChecking.value = false
+    // 服务已就绪后补拉工作区信息（首次运行时引导窗口可能早于服务启动完成）
+    if (serviceOk.value && (!workspacePath.value || !workspaceHash.value)) {
+      void loadWorkspaceInfo()
+    }
   }
 }
 
@@ -591,6 +597,11 @@ async function chooseDir(dirPath) {
   scanning.value = true
   try {
     scanResult.value = await onboarding()?.scanDir(target)
+    // 目录变更后旧选中项/旧结果指向已不存在的文件，清空避免误导入上一目录的文件
+    sessionsSelected.value = []
+    skillsSelected.value = []
+    sessionsResult.value = null
+    skillsResult.value = null
   } catch (e) {
     message.error('扫描失败：' + (e.message || '未知错误'))
     scanResult.value = null
@@ -666,7 +677,9 @@ async function loadCurrentModel() {
     if (active) {
       modelForm.channelName = active.name || '默认渠道'
       modelForm.baseUrl = active.baseUrl || ''
-      existingChannelSecret.value = Boolean(active.apiKey && active.apiKey !== '****')
+      // 后端返回掩码密钥：未配置为空串，已配置为 '****'（短密钥）或 sk-1****a2bc（长密钥）。
+      // 非空即已配置，不能用 !== '****' 判断（短密钥会被误判为未配置）。
+      existingChannelSecret.value = Boolean(active.apiKey)
       existingChannelId.value = active.id || ''
       selectedModel.value = data.model || ''
     }
@@ -714,6 +727,26 @@ async function saveModel() {
   }
   busy.value = true
   try {
+    // 读取现有渠道并只合并更新当前渠道。后端 modelChannels 是整体替换语义
+    // （LoopraConfig.mergeModelChannelUpdates 只保留提交的渠道），
+    // 只提交单个渠道会把用户已配置的其他渠道全部删掉。
+    let existingChannels = []
+    try {
+      const current = await configAPI.getConfig()
+      existingChannels = (current.data?.modelChannels || []).map((c) => ({
+        id: c.id || '',
+        name: c.name || '',
+        baseUrl: c.baseUrl || '',
+        apiProtocol: c.apiProtocol || 'chat_completions',
+        apiKey: c.apiKey || '', // 掩码值原样回传，后端合并时会回退到已保存的密钥
+        models: (c.models || []).map((m) => ({
+          name: m.name,
+          contextTokens: m.contextTokens ?? null,
+          imageInput: m.imageInput ?? false,
+          price: m.price ?? null
+        }))
+      }))
+    } catch {}
     const channel = {
       id: existingChannelId.value || `channel-${Date.now()}`,
       name: modelForm.channelName.trim() || '默认渠道',
@@ -722,8 +755,11 @@ async function saveModel() {
       apiKey: modelForm.apiKey.trim(),
       models: remoteModels.value.map((name) => ({name, contextTokens: null, imageInput: false}))
     }
+    const channelIndex = existingChannels.findIndex((c) => c.id === channel.id)
+    if (channelIndex >= 0) existingChannels[channelIndex] = channel
+    else existingChannels.push(channel)
     const res = await configAPI.updateConfig({
-      modelChannels: [channel],
+      modelChannels: existingChannels,
       modelChannelId: channel.id,
       model: selectedModel.value
     })
@@ -862,6 +898,11 @@ function toggleMcpAll() {
   for (const server of parsedServers.value) server.selected = mcpAllChecked.value
 }
 
+// 单个勾选变化时反向同步“全选”状态（与会话/Skills 步骤保持一致）
+watch(() => parsedServers.value.map((s) => s.selected), (selected) => {
+  mcpAllChecked.value = selected.length > 0 && selected.every(Boolean)
+})
+
 async function loadExistingMcp() {
   try {
     const res = await mcpAPI.listServers()
@@ -966,6 +1007,13 @@ function summaryText(done, detail) {
   if (done) return detail || '已完成'
   return '已跳过'
 }
+
+// 进入需要工作区信息的步骤时，若信息缺失则重试加载（服务可能刚启动完成）
+watch(currentStep, (step) => {
+  if ((step === 1 || step === 4) && (!workspacePath.value || !workspaceHash.value)) {
+    void loadWorkspaceInfo()
+  }
+})
 
 // ==================== 初始化 ====================
 

@@ -572,6 +572,7 @@ function createWindow() {
     if (elementInspectorWindow && !elementInspectorWindow.isDestroyed()) elementInspectorWindow.close()
     if (aiBrowserWindow && !aiBrowserWindow.isDestroyed()) aiBrowserWindow.close()
     if (desktopPetWindow && !desktopPetWindow.isDestroyed()) desktopPetWindow.close()
+    if (onboardingWindow && !onboardingWindow.isDestroyed()) onboardingWindow.close()
     if (elementWebView && !elementWebView.webContents.isDestroyed()) elementWebView.webContents.close()
     destroyDesktopChatTabs()
     elementWebView = null
@@ -736,7 +737,7 @@ app.on('before-quit', () => {
 
 registerTerminalIpc()
 registerGitEnvironmentIpc(ipcMain)
-registerOnboardingIpc(ipcMain)
+registerOnboardingIpc(ipcMain, { getOnboardingWindow: () => onboardingWindow })
 
 ipcMain.handle('get_loopra_web_port', async () => currentPort)
 
