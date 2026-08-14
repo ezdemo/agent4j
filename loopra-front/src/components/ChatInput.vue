@@ -1155,14 +1155,14 @@ const handleFileDragLeave = (event) => {
 
 const handleFileDrop = (event) => {
   fileDropActive.value = false
-  // 工作区文件引用（应用内拖拽）优先
+  // 项目文件引用（应用内拖拽）优先
   const path = event.dataTransfer?.getData('application/x-loopra-file-path')
   if (path) {
     addFileContext({ file: path })
     nextTick(() => inputField.value?.focus())
     return
   }
-  // 本地文件拖拽：走上传解析逻辑（与工作区文件引用并存）
+  // 本地文件拖拽：走上传解析逻辑（与项目文件引用并存）
   const files = Array.from(event.dataTransfer?.files || [])
   if (files.length > 0) {
     handleFiles(files)

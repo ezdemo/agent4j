@@ -10,6 +10,7 @@ const resolveRootComponent = (page) => {
   if (page.get('desktopShell') === '1') return () => import('./DesktopShell.vue')
   if (page.get('desktopSplash') === '1') return () => import('./DesktopSplash.vue')
   if (page.get('desktopUpdate') === '1') return () => import('./DesktopUpdate.vue')
+  if (page.get('desktopOnboarding') === '1') return () => import('./DesktopOnboarding.vue')
   if (page.get('desktopChatTab') === '1') return () => import('./DesktopChatTab.vue')
   if (page.get('desktopPet') === '1') return () => import('./DesktopPet.vue')
   if (page.get('requirementBoard') === '1') return () => import('./views/RequirementBoard.vue')
@@ -21,7 +22,7 @@ const initApp = async () => {
   const page = new URLSearchParams(window.location.search)
   const desktopChatTab = page.get('desktopChatTab') === '1'
   const webApp = ![...page.keys()].some((key) => [
-    'desktopShell', 'desktopSplash', 'desktopUpdate', 'desktopChatTab', 'desktopPet', 'requirementBoard'
+    'desktopShell', 'desktopSplash', 'desktopUpdate', 'desktopOnboarding', 'desktopChatTab', 'desktopPet', 'requirementBoard'
   ].includes(key) && page.get(key) === '1')
 
   // 根页面代码与运行时配置并行加载，避免每个桌面子窗口加载无关页面。

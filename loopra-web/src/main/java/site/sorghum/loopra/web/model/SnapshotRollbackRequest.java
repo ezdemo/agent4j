@@ -13,6 +13,6 @@ public class SnapshotRollbackRequest {
     /** 要撤回的消息 ID */
     private String msgId;
 
-    /** 工作区 hash */
+    /** 项目 hash */
     private String workspaceHash;
 }

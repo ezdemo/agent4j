@@ -199,7 +199,7 @@ const closeConfirmActions = [
 ]
 const activeFileTab = computed(() => fileTabs.value.find((tab) => tab.id === activeTabId.value) || null)
 let fileTabSeq = 0
-// 终端初始工作目录 = 当前工作区路径（终端面板与当前会话绑定）
+// 终端初始工作目录 = 当前项目路径（终端面板与当前会话绑定）
 const activeWorkspacePath = computed(() => {
   const workspace = workspaces.value.find((item) => item.hash === workspaceHash.value)
   return workspace?.path || ''
@@ -269,7 +269,7 @@ function toggleFilePanel() {
   leftPanelOpen.value = true
 }
 
-// 活动栏「环境信息」：显示当前本地工作区或会话隔离工作树
+// 活动栏「环境信息」：显示当前本地项目或会话隔离分支
 function toggleEnvironmentPanel() {
   if (leftPanelOpen.value && leftPanelView.value === 'environment') {
     leftPanelOpen.value = false
@@ -321,7 +321,7 @@ async function setWelcomeEnvironmentMode(enabled) {
     }
     if (!enabled && environment?.currentPath) {
       const status = await window.electronAPI?.gitEnvironment?.status?.(environment.currentPath)
-      if (status?.dirty) throw new Error('请先提交工作树变更')
+      if (status?.dirty) throw new Error('请先提交隔离分支变更')
     }
 
     const response = await sessionsAPI.setWorktreeMode(sessionName, workspaceHash.value, {worktreeMode: enabled}, {silent: true})
@@ -329,7 +329,7 @@ async function setWelcomeEnvironmentMode(enabled) {
     if (enabled) {
       try {
         const created = await gitAPI.worktreeCreate(workspaceHash.value, sessionName, {silent: true})
-        if (!created?.success) throw new Error(created?.message || '工作树创建失败')
+        if (!created?.success) throw new Error(created?.message || '隔离分支创建失败')
       } catch (error) {
         await sessionsAPI.setWorktreeMode(sessionName, workspaceHash.value, {worktreeMode: false}, {silent: true}).catch(() => {})
         throw error
@@ -386,19 +386,19 @@ async function switchWorkspace(nextWorkspaceHash) {
   if (!nextWorkspaceHash || nextWorkspaceHash === workspaceHash.value) return
   const workspace = workspaces.value.find((item) => item.hash === nextWorkspaceHash)
   if (!workspace) {
-    message.error('工作区不存在')
+    message.error('项目不存在')
     return
   }
   try {
     const response = await configAPI.switchWorkspace(workspace.path)
-    if (!response.success) throw new Error(response.message || '切换工作区失败')
+    if (!response.success) throw new Error(response.message || '切换项目失败')
     workspaceHash.value = nextWorkspaceHash
     await loadSessions()
     await refreshTabTitle()
     await refreshWelcomeEnvironmentMode()
   } catch (error) {
     console.error('[desktop-chat-tab] failed to switch workspace:', error)
-    message.error('切换工作区失败：' + (error.message || '未知错误'))
+    message.error('切换项目失败：' + (error.message || '未知错误'))
   }
 }
 
@@ -584,7 +584,7 @@ onBeforeUnmount(() => {
   leftPanelDragging.value = false
 })
 
-// 工作区变化时自动上报，确保标签栏图标实时更新；同时清空已打开的文件标签
+// 项目变化时自动上报，确保标签栏图标实时更新；同时清空已打开的文件标签
 watch(workspaceHash, (hash) => {
   if (hash) window.electronAPI?.desktopChatTabs?.reportWorkspace({ tabId, workspaceHash: hash })
   fileEditorRef.value?.closeAll?.()
@@ -741,7 +741,8 @@ watch(workspaceHash, (hash) => {
 }
 
 .desktop-files-left :deep(.file-explorer),
-.desktop-files-left :deep(.git-panel) {
+.desktop-files-left :deep(.git-panel),
+.desktop-files-left :deep(.environment-panel) {
   width: 100%;
   min-height: 0;
   flex: 1;

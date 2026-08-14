@@ -130,7 +130,7 @@ public class SessionTerminalTalent extends TerminalTalent {
     @Override
     @ToolMapping(name = "bash_start", description = "启动 shell 命令会话。命令超过 yield-time_ms 仍未结束时不会失败，而是返回 session_id，后续可用 bash_wait 继续等待、bash_stdin 输入或 bash_stop 终止。")
     public String bashStart(@Param(value = "command", description = "要执行的 shell 命令。") String command,
-                            @Param(value = "workdir", required = false, description = "工作目录。默认使用当前工作区。") String workdir,
+                            @Param(value = "workdir", required = false, description = "工作目录。默认使用当前项目。") String workdir,
                             @Param(value = "yield_time_ms", required = false, defaultValue = "1000") Integer yieldTimeMs,
                             @Param(value = "max_output_chars", required = false, defaultValue = "64000") Integer maxOutputChars,
                             @Param(value = "hard_timeout_ms", required = false, defaultValue = "120000") Integer hardTimeoutMs,
@@ -252,7 +252,7 @@ public class SessionTerminalTalent extends TerminalTalent {
     }
 
     /**
-     * 返回本工作区的会话镜像快照（先清理过期 completed 项）。
+     * 返回本项目的会话镜像快照（先清理过期 completed 项）。
      */
     public List<BashSessionInfo> snapshotBashSessions() {
         long now = System.currentTimeMillis();
@@ -261,7 +261,7 @@ public class SessionTerminalTalent extends TerminalTalent {
     }
 
     /**
-     * 跨工作区聚合所有 bash 后台会话镜像，按启动时间倒序（新 → 旧）。
+     * 跨项目聚合所有 bash 后台会话镜像，按启动时间倒序（新 → 旧）。
      */
     public static List<BashSessionInfo> aggregateBashSessions() {
         List<BashSessionInfo> all = new ArrayList<>();
@@ -299,7 +299,7 @@ public class SessionTerminalTalent extends TerminalTalent {
      * 手动终止指定 bash 后台会话（前端“手动关闭”入口）。
      *
      * @param sessionId   命令会话 ID
-     * @param workspace   工作区绝对路径；为空时在所有工作区中查找
+     * @param workspace   项目绝对路径；为空时在所有项目中查找
      * @param reason      终止原因（仅日志诊断）
      * @return 终止后的状态日志文本；未找到会话返回 null
      */
@@ -319,10 +319,10 @@ public class SessionTerminalTalent extends TerminalTalent {
     }
 
     /**
-     * 按 sessionId（可限定工作区）查找后台会话镜像，供前端查询累积输出日志。
+     * 按 sessionId（可限定项目）查找后台会话镜像，供前端查询累积输出日志。
      *
      * @param sessionId 命令会话 ID
-     * @param workspace 工作区绝对路径；为空时在所有工作区中查找
+     * @param workspace 项目绝对路径；为空时在所有项目中查找
      * @return 会话镜像；未找到返回 null
      */
     public static BashSessionInfo findBashSession(String sessionId, String workspace) {

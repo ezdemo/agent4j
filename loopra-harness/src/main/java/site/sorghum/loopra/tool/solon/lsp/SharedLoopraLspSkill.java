@@ -30,14 +30,14 @@ import java.nio.file.Paths;
 public class SharedLoopraLspSkill extends LspTalent {
 
     /**
-     * 无参构造（供 Solon IoC 使用），默认工作区为用户目录。
+     * 无参构造（供 Solon IoC 使用），默认项目为用户目录。
      */
     public SharedLoopraLspSkill() {
         this(Paths.get(System.getProperty("user.home"), ".loopra").toAbsolutePath().toString());
     }
 
     /**
-     * @param workDir 工作区根目录，用于 Language Server 的 rootUri
+     * @param workDir 项目根目录，用于 Language Server 的 rootUri
      */
     private SharedLoopraLspSkill(String workDir) {
         super(new LspManager(workDir), workDir);

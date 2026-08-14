@@ -1,4 +1,4 @@
-﻿<template>
+<template>
   <div v-if="isElementInspectorWindow" class="element-inspector-window" :data-theme="theme">
     <ElementPanel ref="elemPanelRef" :visible="true" @send="forwardElementInspection" />
   </div>
@@ -173,7 +173,7 @@
       </div>
     </Teleport>
 
-    <!-- 工作区选择弹窗 -->
+    <!-- 项目选择弹窗 -->
     <WorkspacePickerModal
       v-model:show="showWorkspacePicker"
       :workspaces="workspaces"
@@ -662,12 +662,12 @@ const copyPrompt = () => {
   })
 }
 
-// 工作区相关
+// 项目相关
 const showWorkspacePicker = ref(false)
 const pendingStarterPrompt = ref('')
 const workspaces = ref([])
 
-// 按工作区 hash 分组的会话
+// 按项目 hash 分组的会话
 const workspaceSessions = ref({})
 const showGlobalSearch = ref(false)
 const globalSearchQuery = ref('')
@@ -700,22 +700,22 @@ const currentSessionTitle = computed(() => {
 })
 
 const workspaceName = computed(() => {
-  if (!workspace.value) return '选择工作区'
+  if (!workspace.value) return '选择项目'
   const parts = workspace.value.split(/[\\/]/)
   return parts[parts.length - 1] || workspace.value
 })
 
-// 当前会话所属工作区的名称（用于顶栏项目图标）
+// 当前会话所属项目的名称（用于顶栏项目图标）
 const currentSessionWorkspaceName = computed(() => {
   if (!currentSessionWorkspace.value) return ''
   const ws = workspaces.value.find(w => w.hash === currentSessionWorkspace.value)
   return ws ? ws.name : ''
 })
 
-// 当前会话所属的工作区 hash
+// 当前会话所属的项目 hash
 const currentSessionWorkspace = ref(null)
 
-// 当前工作区下的会话列表
+// 当前项目下的会话列表
 const currentWorkspaceSessions = computed(() => {
   if (!currentSessionWorkspace.value) return []
   return workspaceSessions.value[currentSessionWorkspace.value] || []
@@ -930,14 +930,14 @@ const toggleAutoTool = async (tool) => {
 
 const loadSessions = async () => {
   try {
-    // 获取所有工作区
+    // 获取所有项目
     const wsList = workspaces.value
     if (wsList.length === 0) {
       workspaceSessions.value = {}
       return
     }
     
-    // 并行加载每个工作区的会话
+    // 并行加载每个项目的会话
     const results = await Promise.all(
       wsList.map(w =>
         sessionsAPI.list(w.hash)
@@ -994,17 +994,17 @@ const onSessionBranched = async (newSessionName) => {
   message.success("已分支到新会话")
 }
 
-// 加载工作区列表
+// 加载项目列表
 const loadWorkspaces = async () => {
   try {
     const r = await configAPI.listWorkspaces()
     if (r.success) workspaces.value = await applyWorkspaceOrder(r.data || [])
   } catch (e) {
-    console.error('加载工作区列表失败:', e)
+    console.error('加载项目列表失败:', e)
   }
 }
 
-// 从服务端恢复工作区排序
+// 从服务端恢复项目排序
 async function applyWorkspaceOrder(list) {
   if (!list || list.length === 0) return list
   try {
@@ -1025,11 +1025,11 @@ async function handleReorderWorkspaces(newList) {
   try {
     await configAPI.saveWorkspaceOrder(newList.map(w => w.hash))
   } catch (e) {
-    console.error('保存工作区排序失败:', e)
+    console.error('保存项目排序失败:', e)
   }
 }
 
-// 切换工作区（仅持久化上下文，不新建会话）
+// 切换项目（仅持久化上下文，不新建会话）
 const switchWorkspaceContext = async (hash) => {
   const ws = workspaces.value.find(w => w.hash === hash)
   if (!ws) return
@@ -1045,11 +1045,11 @@ const initializeWorkspaceContext = async () => {
   currentSessionWorkspace.value = targetWorkspace.hash
 }
 
-// 切换工作区（用户主动操作，切换后新建会话）
+// 切换项目（用户主动操作，切换后新建会话）
 const handleSwitchWorkspace = async (hash) => {
   try {
     const ws = workspaces.value.find(w => w.hash === hash)
-    if (!ws) { message.error('工作区不存在'); return }
+    if (!ws) { message.error('项目不存在'); return }
     const r = await configAPI.switchWorkspace(ws.path)
     if (r.success) {
       workspace.value = r.data.workspace
@@ -1059,16 +1059,16 @@ const handleSwitchWorkspace = async (hash) => {
       currentSessionWorkspace.value = hash
       await newChat(true)
       await applyPendingStarterPrompt()
-      message.success('已切换工作区')
+      message.success('已切换项目')
     } else {
-      message.error(r.message || '切换工作区失败')
+      message.error(r.message || '切换项目失败')
     }
   } catch (e) {
-    message.error('切换工作区失败: ' + e.message)
+    message.error('切换项目失败: ' + e.message)
   }
 }
 
-// 添加新工作区
+// 添加新项目
 const handleAddWorkspace = async (path) => {
   if (!path) return
   
@@ -1079,21 +1079,21 @@ const handleAddWorkspace = async (path) => {
       showWorkspacePicker.value = false
       await loadWorkspaces()
       await loadSessions()
-      // 通过路径匹配新工作区的 hash 并切换上下文
+      // 通过路径匹配新项目的 hash 并切换上下文
       const newWs = workspaces.value.find(w => w.path === r.data.workspace)
       if (newWs) currentSessionWorkspace.value = newWs.hash
       await newChat(true)
       await applyPendingStarterPrompt()
-      message.success('已添加工作区')
+      message.success('已添加项目')
     } else {
-      message.error(r.message || '添加工作区失败')
+      message.error(r.message || '添加项目失败')
     }
   } catch (e) {
-    message.error('添加工作区失败: ' + e.message)
+    message.error('添加项目失败: ' + e.message)
   }
 }
 
-// 删除工作区
+// 删除项目
 const deleteWorkspace = async (hash) => {
   try {
     const r = await configAPI.deleteWorkspace(hash)
@@ -1105,14 +1105,14 @@ const deleteWorkspace = async (hash) => {
       }
       await loadWorkspaces()
       await loadSessions()
-      message.success('工作区已删除')
+      message.success('项目已删除')
       return true
     } else {
-      message.error(r.message || '删除工作区失败')
+      message.error(r.message || '删除项目失败')
       return false
     }
   } catch (e) {
-    message.error('删除工作区失败: ' + e.message)
+    message.error('删除项目失败: ' + e.message)
     return false
   }
 }
@@ -1317,8 +1317,8 @@ const switchWelcomeWorkspace = async (workspaceHash) => {
     await switchWorkspaceContext(workspaceHash)
     currentSessionWorkspace.value = workspaceHash
   } catch (e) {
-    console.error('从欢迎页切换工作区失败:', e)
-    message.error('切换工作区失败: ' + (e.message || '未知错误'))
+    console.error('从欢迎页切换项目失败:', e)
+    message.error('切换项目失败: ' + (e.message || '未知错误'))
   }
 }
 
@@ -1354,7 +1354,7 @@ const deleteSession = async name => {
   const ok = await confirm({ message: `确定要删除此会话吗？` })
   if (!ok) return
   try {
-    // 从 workspaceSessions 中找到该会话所属的工作区
+    // 从 workspaceSessions 中找到该会话所属的项目
     let workspaceHash = null
     for (const [hash, sessions] of Object.entries(workspaceSessions.value)) {
       if (sessions.some(s => s.name === name)) {
@@ -1602,7 +1602,7 @@ function copyText(text) {
   }
 }
 
-// 公共流程：选择工作区 → 创建新会话 → 关闭弹窗 → 等待一帧 → 发送命令
+// 公共流程：选择项目 → 创建新会话 → 关闭弹窗 → 等待一帧 → 发送命令
 // 用于"自动更新"、"初始化宠物"等需要跳到聊天界面跑命令的场景
 const runInFreshSession = async (cmd, opts = {}) => {
   const {
@@ -1610,11 +1610,11 @@ const runInFreshSession = async (cmd, opts = {}) => {
     closeSettings = true
   } = opts
 
-  // 1. 获取工作区列表
+  // 1. 获取项目列表
   const wsRes = await configAPI.listWorkspaces()
   let wsHash = null
   if (wsRes.success && wsRes.data && wsRes.data.length > 0) {
-    // 优先使用当前工作区，否则选择第一个
+    // 优先使用当前项目，否则选择第一个
     const currentWs = wsRes.data.find(w => w.hash === currentSessionWorkspace.value)
     if (currentWs) {
       wsHash = currentWs.hash
@@ -1622,11 +1622,11 @@ const runInFreshSession = async (cmd, opts = {}) => {
       wsHash = wsRes.data[0].hash
     }
   } else {
-    message.error('没有可用的工作区，请先打开一个项目')
+    message.error('没有可用的项目，请先打开一个项目')
     return false
   }
 
-  // 2. 切换工作区上下文
+  // 2. 切换项目上下文
   const ws = wsRes.data.find(w => w.hash === wsHash)
   if (ws) {
     await configAPI.switchWorkspace(ws.path)
@@ -1691,7 +1691,7 @@ const handleInitPet = async () => {
   }
 }
 
-// 设置弹窗关闭时刷新工作区和会话（用户可能在设置中切换了工作目录）
+// 设置弹窗关闭时刷新项目和会话（用户可能在设置中切换了工作目录）
 watch(showSettings, (newVal) => {
   if (!newVal) {
     loadWorkspaces()
@@ -1989,7 +1989,7 @@ watch(showSettings, (newVal) => {
   color: var(--fg-4);
 }
 
-/* 当前工作区 CSS 已迁移到 .modal .workspace-* 下 */
+/* 当前项目 CSS 已迁移到 .modal .workspace-* 下 */
 
 /* 工作目录切换 */
 .config-section {

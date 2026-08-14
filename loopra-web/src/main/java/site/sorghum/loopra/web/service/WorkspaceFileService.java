@@ -12,7 +12,7 @@ import java.util.*;
 import java.util.stream.Stream;
 
 /**
- * 工作区文件浏览服务。仅暴露工作区内的单层目录项，供前端按需展开。
+ * 项目文件浏览服务。仅暴露项目内的单层目录项，供前端按需展开。
  */
 @Component
 public class WorkspaceFileService {
@@ -92,13 +92,13 @@ public class WorkspaceFileService {
     }
 
     /**
-     * 删除工作区内的文件或目录（递归）。禁止删除工作区根目录；symlink 目标必须仍位于工作区内。
+     * 删除项目内的文件或目录（递归）。禁止删除项目根目录；symlink 目标必须仍位于项目内。
      */
     public void delete(String workspaceHash, String relativePath) {
         Path workspace = resolveWorkspace(workspaceHash);
         Path target = resolveTarget(workspace, relativePath);
         if (target.equals(workspace)) {
-            throw new ServiceException("不能删除工作区根目录");
+            throw new ServiceException("不能删除项目根目录");
         }
         if (Files.isDirectory(target, LinkOption.NOFOLLOW_LINKS)) {
             try (Stream<Path> paths = Files.walk(target)) {
@@ -145,15 +145,15 @@ public class WorkspaceFileService {
     }
 
     private Path resolveWorkspace(String workspaceHash) {
-        String workspacePath = agentService.resolveWorkspaceHashOrThrow(workspaceHash);
+        String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
         try {
             Path workspace = Path.of(workspacePath).toRealPath();
             if (!Files.isDirectory(workspace)) {
-                throw new ServiceException("工作区不是目录");
+                throw new ServiceException("项目不是目录");
             }
             return workspace;
         } catch (IOException e) {
-            throw new ServiceException("工作区不可访问");
+            throw new ServiceException("项目不可访问");
         }
     }
 

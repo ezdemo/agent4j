@@ -11,7 +11,7 @@ public interface TaskExecutor {
     /**
      * 执行定时任务。
      *
-     * @param workspacePath 工作区路径
+     * @param workspacePath 项目路径
      * @param sessionName   目标会话名称
      * @param message       要发送的消息
      * @return 执行结果（Agent 回复内容）

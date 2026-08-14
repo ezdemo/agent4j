@@ -48,7 +48,7 @@ Loopra 将用户任务、模型推理与受控工具调用组织成持续执行�
 
 | 面向的工作 | Loopra 提供的能力 |
 |---|---|
-| 处理代码库任务 | 工作区内文件读写、代码检索、命令执行与 API 调用 |
+| 处理代码库任务 | 项目内文件读写、代码检索、命令执行与 API 调用 |
 | 保持任务连续性 | JSONL 会话、上下文折叠、Goal、Checklist 与项目记忆 |
 | 安全地协作 | 工具权限分类、HITL 审批、路径边界与独立校验模型 |
 | 使用合适的界面 | Web 管理界面与包含本地进程、文件、Git、浏览器的 Desktop 工作台 |
@@ -148,12 +148,12 @@ loopra web 0
 | 上下文管理 | JSONL 会话持久化、自动摘要折叠、消息自愈和 token 用量统计。 |
 | 多模型渠道 | 支持多渠道、Chat Completions API、OpenAI Responses API、Anthropic Messages API、推理强度和模型能力配置。 |
 | 可扩展工具系统 | 通过 Solon `@ToolMapping` 声明式注册，支持内置工具、MCP、OpenAPI、技能和 REST API。 |
-| 代码库操作 | 在工作区边界内读取、搜索、编辑文件，运行一次性或交互式命令。 |
+| 代码库操作 | 在项目边界内读取、搜索、编辑文件，运行一次性或交互式命令。 |
 | 子代理协作 | 内置 `explore`、`implement`、`test`、`review`、`plan` 五种角色，支持隔离上下文、权限约束和超时控制；配置可在桌面端编辑并持久化，支持选择渠道模型。 |
 | 计划模式 | 输入框一键进入只读探索，探索完成后提交计划供用户审查，批准后按计划执行。 |
-| 工作树隔离 | 后端按会话维护 Agent 的本地/工作树执行根；Electron Desktop 的“环境信息”面板展示真实路径、分支和变更，并负责提交、合并与推送。 |
+| 隔离分支 | 后端按会话维护 Agent 的本地/隔离分支执行根；Electron Desktop 的“环境信息”面板展示真实路径、分支和变更，并负责提交、合并与推送。 |
 | 需求池 | 以看板管理需求，支持 AI 自动执行、评论与执行日志、立即/定时执行，以及按需求配置模型和审批模式。 |
-| 持久协作状态 | Checklist、会话级 Goal、项目记忆和共享工作区支持长任务及父子代理协作。 |
+| 持久协作状态 | Checklist、会话级 Goal、项目记忆和共享上下文支持长任务及父子代理协作。 |
 | 审批与边界 | 三态 HITL、工具白名单、路径边界保护，以及可选的独立校验模型。 |
 | 桌面工作台 | Electron Desktop 提供多聊天标签、文件资源管理器（实时监听磁盘变化）、Monaco 文件编辑器（含 Git 脏文件差异对比）、终端面板（node-pty，支持垂直/水平模式）、环境信息与 Git 操作面板、活动栏、元素检查、服务进程管理、AI 浏览器、需求池窗口和右键上下文操作。 |
 
@@ -166,14 +166,14 @@ loopra web 0
 | 文件与代码检索 | `read`、`write`、`edit`、`glob`、`grep`、`ls`、`java_source`、`codesearch` |
 | 命令与网络 | `bash`、交互式命令会话、`webfetch`、`call_api` |
 | 任务协作 | `sub_agent`、`checklist_*`、`goal_*`、`workspace_*` |
-| 项目状态 | `memory` 将跨会话事实保存到 `.loopra/loopra-memory.md`；共享工作区保存到 `.loopra/workspace/` |
+| 项目状态 | `memory` 将跨会话事实保存到 `.loopra/loopra-memory.md`；共享上下文保存到 `.loopra/workspace/` |
 | 多模态与浏览器 | `read_image`，以及桌面端可见 AI 浏览器的 `browser_*` 工具 |
 
-MCP、OpenAPI 和技能可为 Agent 注入额外工具。`read_image` 支持工作区路径、绝对路径、Base64/data URI 和 HTTP(S) URL，单张图片最大 5 MiB；当前模型未声明 `imageInput` 能力时，工具会明确提示不可用。`browser_screenshot` 会返回可见视口截图和结构化页面快照，交互操作必须使用对应的 `snapshotId`。浏览器工具只操作可见的 Desktop 浏览器；遇到登录、验证码或安全验证时，Agent 会请求用户接管，不会代填或读取敏感凭据。
+MCP、OpenAPI 和技能可为 Agent 注入额外工具。`read_image` 支持项目路径、绝对路径、Base64/data URI 和 HTTP(S) URL，单张图片最大 5 MiB；当前模型未声明 `imageInput` 能力时，工具会明确提示不可用。`browser_screenshot` 会返回可见视口截图和结构化页面快照，交互操作必须使用对应的 `snapshotId`。浏览器工具只操作可见的 Desktop 浏览器；遇到登录、验证码或安全验证时，Agent 会请求用户接管，不会代填或读取敏感凭据。
 
 ### 子代理与长期协作
 
-子代理通过 `sub_agent` 派生。`explore`、`review` 和 `plan` 为只读角色；`implement` 与 `test` 可执行经过授权的写操作。每个子代理拥有独立推理上下文，并可经由共享工作区传递结构化结果。
+子代理通过 `sub_agent` 派生。`explore`、`review` 和 `plan` 为只读角色；`implement` 与 `test` 可执行经过授权的写操作。每个子代理拥有独立推理上下文，并可经由共享上下文传递结构化结果。
 
 项目记忆只保存稳定、可复用的项目事实，例如架构约定、已知限制和用户偏好。复杂任务可使用会话级 Goal 记录步骤、证据、阻塞原因与验证结果；Checklist 用于展示有序执行进度。
 
@@ -187,7 +187,7 @@ MCP、OpenAPI 和技能可为 Agent 注入额外工具。`read_image` 支持工�
 | `approval` | 非只读工具执行前等待用户批准。 |
 | `auto` | 白名单工具自动放行，其余调用等待批准。 |
 
-可配置 `validationModel` 与 `validationModelChannelId`，让独立模型在人工审批前评估高风险工具调用。无论当前模式或校验结果如何，访问工作区边界外的路径仍需要人工确认。
+可配置 `validationModel` 与 `validationModelChannelId`，让独立模型在人工审批前评估高风险工具调用。无论当前模式或校验结果如何，访问项目边界外的路径仍需要人工确认。
 
 ## 配置参考
 
@@ -200,7 +200,7 @@ MCP、OpenAPI 和技能可为 Agent 注入额外工具。`read_image` 支持工�
 | `model` | string | `deepseek-v4-flash` | 当前模型名称。 |
 | `validationModel` | string | `""` | 可选的工具调用校验模型。 |
 | `validationModelChannelId` | string | `""` | 校验模型所在渠道 ID。 |
-| `workspaceDir` | string | 自动创建默认工作区 | 当前工作区目录。 |
+| `workspaceDir` | string | 自动创建默认项目 | 当前项目目录。 |
 | `reasoningEffort` | string | `high` | `low`、`medium`、`high` 或 `max`。 |
 | `hitl` | string | `free` | `free`、`approval` 或 `auto`。 |
 | `editMode` | string | `auto` | 编辑模式。 |
@@ -210,15 +210,15 @@ MCP、OpenAPI 和技能可为 Agent 注入额外工具。`read_image` 支持工�
 | `subAgentTimeoutSec` | int | `3600` | 子代理完整任务超时秒数。 |
 | `disabledTools` | string[] | `[]` | 禁用的工具名称。 |
 | `blockedPaths` | string[] | `[]` | 受限路径列表。 |
-| `worktreeBaseDir` | string | `~/.loopra/worktree` | 工作树隔离模式的根目录（可用系统属性 `loopra.worktree.baseDir` 覆盖，供测试/嵌入方使用）。 |
+| `worktreeBaseDir` | string | `~/.loopra/worktree` | 隔离分支模式的根目录（可用系统属性 `loopra.worktree.baseDir` 覆盖，供测试/嵌入方使用）。 |
 
-首次启动未指定 `workspaceDir` 时，Loopra 会在配置目录旁创建默认工作区，避免将启动目录意外作为项目根目录。
+首次启动未指定 `workspaceDir` 时，Loopra 会在配置目录旁创建默认项目，避免将启动目录意外作为项目根目录。
 
 ## 使用方式
 
 ### Web 与 Desktop
 
-`loopra web [port]` 启动 Web 服务，控制台会输出本地访问地址。Web 界面支持会话、工作区、工具、模型渠道、Git 和配置管理，并提供需求池 API；Electron Desktop 在此基础上增加本地进程、文件资源管理器与文件编辑器、终端、浏览器、需求池窗口和桌面上下文菜单能力。
+`loopra web [port]` 启动 Web 服务，控制台会输出本地访问地址。Web 界面支持会话、项目、工具、模型渠道、Git 和配置管理，并提供需求池 API；Electron Desktop 在此基础上增加本地进程、文件资源管理器与文件编辑器、终端、浏览器、需求池窗口和桌面上下文菜单能力。
 
 ### 聊天命令
 
@@ -295,7 +295,7 @@ pnpm dev:electron
 ```text
 loopra/
 ├── loopra-model/    # 纯内核（可独立发包）：ChatModel 客户端/协议、AgentLoop/SubAgent 推理循环、工具抽象与 SPI（AgentConfig/GoalGuard 等），不含任何编排设施
-├── loopra-harness/  # 工具装备 + 编排设施（可独立发包，依赖 loopra-model）：LoopraAgent 门面、内置工具、Goal/Checklist/工作区/命令/会话持久化/配置、MCP/LSP/OpenAPI/Skill 技能桥接、定时任务
+├── loopra-harness/  # 工具装备 + 编排设施（可独立发包，依赖 loopra-model）：LoopraAgent 门面、内置工具、Goal/Checklist/项目/命令/会话持久化/配置、MCP/LSP/OpenAPI/Skill 技能桥接、定时任务
 ├── loopra-acp/      # ACP 支持（可独立发包，依赖 loopra-harness）：将 Agent 注册为 ACP Agent（stdio/WebSocket）
 ├── loopra-web/      # Solon Web 服务、REST/SSE 接口和打包配置（聚合上述模块）
 ├── loopra-front/    # Vue 前端与 Electron Desktop
@@ -309,7 +309,7 @@ loopra/
 ### 模块依赖关系
 
 ```text
-loopra-model   ← loopra-harness（LoopraAgent/内置工具/Goal/工作区/MCP/Skill）
+loopra-model   ← loopra-harness（LoopraAgent/内置工具/Goal/项目/MCP/Skill）
      ↑
      └────────← loopra-acp（ACP 注册，经 loopra-harness）
 
@@ -318,8 +318,8 @@ loopra-web     ← 聚合 loopra-harness + loopra-acp（传递引入 loopra-mode
 
 `loopra-model`、`loopra-harness`、`loopra-acp` 均为独立 Maven 模块，可单独发布供外部服务/工具复用：
 
-- 只需基础 ChatModel / AgentLoop 推理内核 → 依赖 `loopra-model`（不含 Goal/工作区/会话持久化等编排设施，通过 SPI 自行装配）
-- 需要开箱即用的 LoopraAgent、内置工具与 Goal/工作区/MCP/Skill → 追加依赖 `loopra-harness`
+- 只需基础 ChatModel / AgentLoop 推理内核 → 依赖 `loopra-model`（不含 Goal/项目/会话持久化等编排设施，通过 SPI 自行装配）
+- 需要开箱即用的 LoopraAgent、内置工具与 Goal/项目/MCP/Skill → 追加依赖 `loopra-harness`
 - 需要把 Agent 暴露为 ACP Agent → 追加依赖 `loopra-acp`
 
 ## 技术栈
@@ -331,7 +331,7 @@ loopra-web     ← 聚合 loopra-harness + loopra-acp（传递引入 loopra-mode
 | 前端 | Vue 3、Vite、Pinia、Ant Design Vue |
 | 桌面 | Electron、electron-builder |
 | 协议 | MCP、OpenAPI、ACP、Chat Completions API、Responses API、Anthropic Messages API |
-| 持久化 | JSONL 会话、工作区本地 JSON、项目 Markdown 记忆 |
+| 持久化 | JSONL 会话、项目本地 JSON、项目 Markdown 记忆 |
 
 ## 许可证
 

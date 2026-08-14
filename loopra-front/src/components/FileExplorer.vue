@@ -37,7 +37,7 @@
             :title="result.path"
             :draggable="!result.directory"
             @click="selectResult(result)"
-            @dblclick="openPreview(result)"
+            @dblclick="openSearchResult(result)"
             @contextmenu.prevent.stop="openContextMenu($event, result)"
             @dragstart="startFileDrag($event, result)"
           >
@@ -105,18 +105,6 @@
       </div>
     </Teleport>
 
-    <!-- 文件预览 -->
-    <DiffViewer
-      :open="diffViewer.open"
-      :file="diffViewer.file"
-      :diff="diffViewer.diff"
-      :content="diffViewer.content"
-      :mode="diffViewer.mode"
-      :loading="diffViewer.loading"
-      @close="closeDiffViewer"
-      @add-to-session="$emit('addToSession', $event)"
-    />
-
     <!-- 删除确认 -->
     <ActionConfirmDialog
       :model-value="deleteConfirm.visible"
@@ -134,11 +122,10 @@ import {onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
 import {message} from 'ant-design-vue'
 import {gitAPI} from '../services/api'
 import ActionConfirmDialog from './ActionConfirmDialog.vue'
-import DiffViewer from './DiffViewer.vue'
 import FileExplorerNode from './FileExplorerNode.vue'
 
 const props = defineProps({
-  // 工作区绝对路径（桌面端由宿主传入，直接走 Electron 文件系统）
+  // 项目绝对路径（桌面端由宿主传入，直接走 Electron 文件系统）
   rootPath: { type: String, default: '' },
   workspaceHash: { type: String, default: null }
 })
@@ -159,7 +146,6 @@ let watchRequestSeq = 0
 let treeReloadSeq = 0
 let searchRequestSeq = 0
 const contextMenu = reactive({ visible: false, x: 0, y: 0, node: null })
-const diffViewer = ref({ open: false, file: '', diff: '', content: '', mode: 'content', loading: false })
 // 删除确认对话框（系统统一 ActionConfirmDialog）
 const deleteConfirm = reactive({ visible: false, node: null })
 const deleteConfirmActions = [
@@ -257,9 +243,8 @@ async function loadDirectory(node) {
 
 function toggleNode(node) {
   if (!node.directory) {
+    // 单击文件仅选中（VS Code 风格），双击打开编辑器标签
     selectedPath.value = node.path
-    // 单击文件 → 在中间编辑器区域打开标签页（VS Code 风格）
-    emit('openFile', node.path)
     return
   }
   selectedPath.value = node.path
@@ -278,27 +263,12 @@ async function expandCompactDirectoryChain(node) {
   }
 }
 
-// 单击选中文件、双击打开预览
+// 双击文件在中间编辑器区域打开标签页（VS Code 风格）
 function onDblclick(node) {
-  if (!node.directory) void openPreview(node)
-}
-
-async function openPreview(node) {
-  if (!node || node.directory) return
-  diffViewer.value = { open: true, file: node.path, diff: '', content: '', mode: 'content', loading: true }
-  try {
-    const response = await explorerAPI()?.read(node.path)
-    if (!response?.success) throw new Error(response?.error || '读取失败')
-    diffViewer.value.content = response.data
-  } catch (e) {
-    diffViewer.value.content = '读取文件失败：' + (e.message || '未知错误')
-  } finally {
-    diffViewer.value.loading = false
+  if (!node.directory) {
+    selectedPath.value = node.path
+    emit('openFile', node.path)
   }
-}
-
-function closeDiffViewer() {
-  diffViewer.value = { open: false, file: '', diff: '', content: '', mode: 'content', loading: false }
 }
 
 // ── 重命名（内联编辑） ──
@@ -497,8 +467,13 @@ async function runSearch(keyword) {
 
 function selectResult(result) {
   selectedPath.value = result.path
-  // 搜索结果单击同样打开编辑器标签
-  if (!result.directory) emit('openFile', result.path)
+}
+
+// 搜索结果双击打开编辑器标签
+function openSearchResult(result) {
+  if (result.directory) return
+  selectedPath.value = result.path
+  emit('openFile', result.path)
 }
 
 function startFileDrag(event, node) {
@@ -526,7 +501,10 @@ function contextAction(action) {
   const node = contextMenu.node
   closeContextMenu()
   if (!node) return
-  if (action === 'open') void openPreview(node)
+  if (action === 'open') {
+    selectedPath.value = node.path
+    if (!node.directory) emit('openFile', node.path)
+  }
   else if (action === 'add-to-session' && !node.directory) emit('addToSession', { file: node.path })
   else if (action === 'reveal') revealInExplorer(node)
   else if (action === 'rename') startRename(node)
@@ -569,7 +547,6 @@ onBeforeUnmount(() => {
 
 watch([() => props.rootPath, () => props.workspaceHash], () => {
   treeReloadSeq++
-  closeDiffViewer()
   searchResults.value = null
   query.value = ''
   void loadRoot()

@@ -13,7 +13,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * 项目级记忆存储 —— 工作区内 {@code .loopra/loopra-memory.md}。
+ * 项目级记忆存储 —— 项目内 {@code .loopra/loopra-memory.md}。
  * <p>
  * 跨会话沉淀的关键事实（架构决策、约定、踩坑、用户偏好等）。
  * 会话启动时由 {@code ToolSystemInitializer} 注入 system prompt，
@@ -40,7 +40,7 @@ import java.util.List;
 @Slf4j
 public final class ProjectMemoryStore {
 
-    /** 工作区内记忆目录名 */
+    /** 项目内记忆目录名 */
     public static final String MEMORY_DIR = ".loopra";
     /** 记忆文件名 */
     public static final String MEMORY_FILE = "loopra-memory.md";
@@ -63,7 +63,7 @@ public final class ProjectMemoryStore {
     /**
      * 记忆文件路径。
      *
-     * @param workspace 工作区根目录（可为 null，返回 null）
+     * @param workspace 项目根目录（可为 null，返回 null）
      */
     public static Path memoryFilePath(Path workspace) {
         if (workspace == null) return null;
@@ -91,7 +91,7 @@ public final class ProjectMemoryStore {
     /**
      * 追加一条带时间戳的记忆条目。facts 为空或"无"时跳过。
      * 自动创建 {@code .loopra} 目录；首次写入时附带文件头说明。
-     * 线程安全：同一工作区的追加串行化，避免子代理并发写损坏。
+     * 线程安全：同一项目的追加串行化，避免子代理并发写损坏。
      */
     public static synchronized void append(Path workspace, String facts) {
         if (workspace == null) return;

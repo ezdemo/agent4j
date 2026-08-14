@@ -32,7 +32,7 @@ import java.util.stream.Collectors;
  *
  * @author Sorghum
  */
-@Api(tags = "配置与工作区")
+@Api(tags = "配置与项目")
 @Controller
 @Mapping("/api")
 public class ConfigController {
@@ -56,7 +56,7 @@ public class ConfigController {
         LoopraConfig cfg = configService.getConfig();
         String workspace = null;
         if (agentService.isReady()) {
-            workspace = agentService.getWorkspace();
+            workspace = agentService.getCurrentProject();
         }
 
         String apiKey = cfg.apiKey();
@@ -242,18 +242,18 @@ public class ConfigController {
         return apiKey == null || apiKey.isBlank() ? "" : "****";
     }
 
-    @ApiOperation(value = "获取 Token 用量统计", notes = "根据工作区和会话查询 Token 用量")
+    @ApiOperation(value = "获取 Token 用量统计", notes = "根据项目和会话查询 Token 用量")
     @Get
     @Mapping("/usage")
     public ApiResponse<UsageDTO> getUsage(
-            @ApiParam(value = "工作区 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
+            @ApiParam(value = "项目 hash") @Param(value = "workspaceHash", required = false) String workspaceHash,
             @ApiParam(value = "会话名称") @Param(value = "sessionName", required = false) String sessionName) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         if (workspaceHash == null){
             return ApiResponse.fail("workspaceHash 不能为空");
         }
-        String workspacePath = agentService.resolveWorkspacePath(workspaceHash);
-        if (workspacePath == null) workspacePath = agentService.getWorkspace();
+        String workspacePath = agentService.resolveProjectPath(workspaceHash);
+        if (workspacePath == null) workspacePath = agentService.getCurrentProject();
         return ApiResponse.ok(agentService.getSessionUsageMap(workspacePath, sessionName));
     }
 
@@ -262,62 +262,62 @@ public class ConfigController {
     @Mapping("/workspace")
     public ApiResponse<String> getWorkspace() {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        return ApiResponse.ok(agentService.getWorkspace());
+        return ApiResponse.ok(agentService.getCurrentProject());
     }
 
     @ApiOperation(value = "切换工作目录", notes = "切换到指定路径的工作目录")
     @Post
     @Mapping("/workspace")
-    public ApiResponse<WorkspaceSwitchDTO> switchWorkspace(
+    public ApiResponse<ProjectSwitchDTO> switchProject(
             @ApiParam @Body Map<String, String> body) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         String path = body.get("path");
         if (path == null || path.isEmpty()) {
             throw new ServiceException("路径不能为空");
         }
-        boolean ok = agentService.switchWorkspace(path);
+        boolean ok = agentService.switchProject(path);
         if (ok) {
-            WorkspaceSwitchDTO data = new WorkspaceSwitchDTO(
-                    "工作目录已切换", agentService.getWorkspace(), null);
+            ProjectSwitchDTO data = new ProjectSwitchDTO(
+                    "工作目录已切换", agentService.getCurrentProject(), null);
             return ApiResponse.ok(data);
         }
         throw new ServiceException("无效的工作目录路径: " + path);
     }
 
-    @ApiOperation(value = "获取工作区列表", notes = "返回所有历史工作区记录")
+    @ApiOperation(value = "获取项目列表", notes = "返回所有历史项目记录")
     @Get
     @Mapping("/workspaces")
-    public ApiResponse<List<WorkspaceInfoDTO>> listWorkspaces() {
+    public ApiResponse<List<ProjectInfoDTO>> listProjects() {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
-        return ApiResponse.ok(agentService.listWorkspaces());
+        return ApiResponse.ok(agentService.listProjects());
     }
 
-    @ApiOperation(value = "删除工作区", notes = "根据 hash 删除指定工作区记录")
+    @ApiOperation(value = "删除项目", notes = "根据 hash 删除指定项目记录")
     @Delete
     @Mapping("/workspaces/{hash}")
-    public ApiResponse<String> deleteWorkspace(@ApiParam(value = "工作区 hash") @Param("hash") String hash) {
+    public ApiResponse<String> deleteProject(@ApiParam(value = "项目 hash") @Param("hash") String hash) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         if (hash == null || hash.isEmpty()) {
             throw new ServiceException(WebErrorMessages.WORKSPACE_HASH_REQUIRED);
         }
-        boolean ok = agentService.deleteWorkspace(hash);
+        boolean ok = agentService.deleteProject(hash);
         if (ok) {
-            return ApiResponse.ok("工作区已删除");
+            return ApiResponse.ok("项目已删除");
         }
-        throw new ServiceException("删除工作区失败");
+        throw new ServiceException("删除项目失败");
     }
 
-    @ApiOperation(value = "保存工作区排序", notes = "将工作区 hash 数组按顺序保存到配置中")
+    @ApiOperation(value = "保存项目排序", notes = "将项目 hash 数组按顺序保存到配置中")
     @Put
     @Mapping("/workspaces/order")
-    public ApiResponse<String> saveWorkspaceOrder(@ApiParam(value = "工作区 hash 有序列表") @Body List<String> order) {
+    public ApiResponse<String> saveWorkspaceOrder(@ApiParam(value = "项目 hash 有序列表") @Body List<String> order) {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         if (order == null) throw new ServiceException("排序数据不能为空");
         configService.updateConfig(Collections.singletonMap("workspaceOrder", order));
         return ApiResponse.ok("排序已保存");
     }
 
-    @ApiOperation(value = "获取工作区排序", notes = "返回保存的工作区 hash 排序数组")
+    @ApiOperation(value = "获取项目排序", notes = "返回保存的项目 hash 排序数组")
     @Get
     @Mapping("/workspaces/order")
     public ApiResponse<List<String>> getWorkspaceOrder() {

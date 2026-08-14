@@ -64,7 +64,7 @@ public class RequirementController {
         if ("scheduled".equals(scheduleMode) && draft.getScheduledAt() <= System.currentTimeMillis()) {
             return ApiResponse.fail("定时执行时间必须晚于当前时间");
         }
-        if (agentService.resolveWorkspacePath(draft.getProjectHash()) == null) {
+        if (agentService.resolveProjectPath(draft.getProjectHash()) == null) {
             return ApiResponse.fail("项目不存在: " + draft.getProjectHash());
         }
         Requirement created = requirementManager.create(draft);

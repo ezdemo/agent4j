@@ -6,9 +6,9 @@ import org.noear.solon.ai.chat.tool.FunctionTool;
 import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import org.noear.solon.annotation.Param;
-import site.sorghum.loopra.bin.workspace.DocumentBucket;
-import site.sorghum.loopra.bin.workspace.KVBucket;
-import site.sorghum.loopra.bin.workspace.SharedWorkspace;
+import site.sorghum.loopra.bin.context.DocumentBucket;
+import site.sorghum.loopra.bin.context.KVBucket;
+import site.sorghum.loopra.bin.context.SharedContextStore;
 import site.sorghum.loopra.tool.ToolContext;
 import site.sorghum.loopra.tool.SolonToTools;
 
@@ -16,7 +16,8 @@ import java.nio.file.Path;
 import java.util.*;
 
 /**
- * Workspace Read 工具 —— 从共享工作区读取 KV 或文档条目。
+ * Shared-context read tool. The legacy {@code workspace_read} tool name is kept
+ * for protocol compatibility.
  * <p>
  * 支持两种读取模式：
  * <ul>
@@ -29,28 +30,28 @@ import java.util.*;
  * @author Sorghum
  */
 @Component
-public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
+public class SharedContextReadTool extends AbsToolProvider implements SolonToTools {
 
     @Inject
-    private SharedWorkspace workspace;
+    private SharedContextStore contextStore;
 
     /**
      * 无参构造器 —— Solon DI 使用。
      */
-    public WorkspaceReadTool() {
+    public SharedContextReadTool() {
     }
 
     /**
      * 带参构造器 —— SubAgent 手动创建时使用。
      *
-     * @param workspace SharedWorkspace 实例
+     * @param contextStore shared project context
      */
-    public WorkspaceReadTool(SharedWorkspace workspace) {
-        this.workspace = workspace;
+    public SharedContextReadTool(SharedContextStore contextStore) {
+        this.contextStore = contextStore;
     }
 
     @ToolMapping(name = "workspace_read", description = """
-                从当前项目持久化在 `.loopra/workspace/` 的共享工作区读取 KV 或文档条目。优先尝试 KV 读取，其次尝试文档读取，
+                从当前项目持久化在 `.loopra/workspace/` 的共享上下文读取 KV 或文档条目。优先尝试 KV 读取，其次尝试文档读取，
                 均未命中时返回 NOT_FOUND 错误并附带相似 key 提示。
                 参数: key(必填, 条目路径), scope(可选, 作用域过滤)。
                 key 为空时返回错误。
@@ -65,10 +66,10 @@ public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
         }
 
         // 2. 根据当前 Agent 工作目录选择持久化分区
-        Path workspaceRoot = ctx == null ? null : ctx.getRootDir();
+        Path projectRoot = ctx == null ? null : ctx.getRootDir();
 
         // 3. 优先尝试 KV 读取
-        Optional<KVBucket> kvBucket = workspace.getKVBucket(workspaceRoot, key);
+        Optional<KVBucket> kvBucket = contextStore.getKVBucket(projectRoot, key);
         if (kvBucket.isPresent()) {
             KVBucket bucket = kvBucket.get();
             Map<String, Object> data = new LinkedHashMap<>();
@@ -89,7 +90,7 @@ public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
         }
 
         // 4. 再尝试文档读取
-        Optional<DocumentBucket> docBucket = workspace.readDoc(workspaceRoot, key);
+        Optional<DocumentBucket> docBucket = contextStore.readDoc(projectRoot, key);
         if (docBucket.isPresent()) {
             DocumentBucket bucket = docBucket.get();
             Map<String, Object> data = new LinkedHashMap<>();
@@ -113,26 +114,26 @@ public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
         }
 
         // 5. 都找不到，返回 NOT_FOUND 并附带相似 key 提示
-        String suggestion = buildNotFoundSuggestion(key, workspaceRoot);
+        String suggestion = buildNotFoundSuggestion(key, projectRoot);
         return "NOT_FOUND: No entry found for key: '" + key + "'.\n" + suggestion;
     }
 
     /**
      * 构建 NOT_FOUND 时的相似 key 提示。
      * <p>
-     * 通过逐步缩短前缀的方式从工作区中查找相似 key，
+     * 通过逐步缩短前缀的方式从项目中查找相似 key，
      * 最多返回 10 个匹配结果供用户参考。
      * </p>
      *
      * @param key 用户查询的 key
      * @return 提示文本，包含相似 key 列表（如有）
      */
-    private String buildNotFoundSuggestion(String key, Path workspaceRoot) {
+    private String buildNotFoundSuggestion(String key, Path projectRoot) {
         // 收集所有相似 key
-        Set<String> similarKeys = findSimilarKeys(key, workspaceRoot);
+        Set<String> similarKeys = findSimilarKeys(key, projectRoot);
         if (similarKeys.isEmpty()) {
             return """
-                    No similar keys found in workspace. Use workspace_write to create entries, 
+                    No similar keys found in shared context. Use workspace_write to create entries,
                     or check available keys via workspace administration tools.
                     """;
         }
@@ -148,7 +149,7 @@ public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
                 .toList();
 
         StringBuilder sb = new StringBuilder();
-        sb.append("Similar keys found in workspace (").append(sorted.size()).append("):\n");
+        sb.append("Similar keys found in shared context (").append(sorted.size()).append("):\n");
         for (String sk : sorted) {
             sb.append("  - ").append(sk).append("\n");
         }
@@ -157,7 +158,7 @@ public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
     }
 
     /**
-     * 查找与目标 key 相似的现有工作区 key。
+     * 查找与目标 key 相似的现有项目 key。
      * <p>
      * 策略：从完整 key 开始，逐步去掉最后一段路径分隔符后的部分，
      * 用前缀匹配方式收集所有可能的 key。同时尝试常用的分隔符 '/'、'.'、'-'、'_'。
@@ -166,8 +167,8 @@ public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
      * @param key 目标 key
      * @return 匹配的 key 集合（不包含目标 key 本身）
      */
-    private Set<String> findSimilarKeys(String key, Path workspaceRoot) {
-        Set<String> allKeys = workspace.listKeys(workspaceRoot, "");
+    private Set<String> findSimilarKeys(String key, Path projectRoot) {
+        Set<String> allKeys = contextStore.listKeys(projectRoot, "");
 
         if (allKeys.isEmpty()) {
             return Collections.emptySet();
@@ -188,7 +189,7 @@ public class WorkspaceReadTool extends AbsToolProvider implements SolonToTools {
         // 尝试用完整 key 的不同长度前缀来匹配
         for (int len = Math.min(key.length(), 10); len >= 2; len--) {
             String prefix = key.substring(0, len);
-            Set<String> matched = workspace.listKeys(workspaceRoot, prefix);
+            Set<String> matched = contextStore.listKeys(projectRoot, prefix);
             matched.remove(key);
             prefixed.addAll(matched);
             if (prefixed.size() >= 10) {

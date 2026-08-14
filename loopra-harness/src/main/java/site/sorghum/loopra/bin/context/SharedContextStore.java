@@ -1,4 +1,4 @@
-package site.sorghum.loopra.bin.workspace;
+package site.sorghum.loopra.bin.context;
 
 import lombok.extern.slf4j.Slf4j;
 import org.noear.snack4.ONode;
@@ -21,12 +21,13 @@ import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
 /**
- * 共享工作区核心存储。运行时按项目工作目录隔离，并持久化到
+ * Shared context storage for parent/child agent collaboration.
+ * <p>Keeps the historical on-disk layout
  * {@code <workspace>/.loopra/workspace/workspace.json}。
  */
 @Slf4j
 @Component
-public class SharedWorkspace {
+public class SharedContextStore {
     private static final String LOOPRA_DIR = ".loopra";
     private static final String STORE_DIR = "workspace";
     private static final String STORE_FILE = "workspace.json";
@@ -35,14 +36,14 @@ public class SharedWorkspace {
     private final int maxEntries;
     /** 没有项目根目录的兼容性内存存储。 */
     private final Store transientStore;
-    /** 已加载的项目工作区存储，按规范化根目录索引，并由所有工具实例共享。 */
+    /** 已加载的项目存储，按规范化根目录索引，并由所有工具实例共享。 */
     private static final ConcurrentHashMap<Path, Store> PERSISTENT_STORES = new ConcurrentHashMap<>();
 
-    public SharedWorkspace() {
+    public SharedContextStore() {
         this(1000);
     }
 
-    public SharedWorkspace(int maxEntries) {
+    public SharedContextStore(int maxEntries) {
         this.maxEntries = maxEntries;
         this.transientStore = new Store();
     }
@@ -51,12 +52,12 @@ public class SharedWorkspace {
         writeKV(null, key, value, creator);
     }
 
-    public void writeKV(Path workspaceRoot, String key, String value, String creator) {
+    public void writeKV(Path projectRoot, String key, String value, String creator) {
         Objects.requireNonNull(key, "key must not be null");
         Objects.requireNonNull(value, "value must not be null");
         Objects.requireNonNull(creator, "creator must not be null");
 
-        Path root = normalizeRoot(workspaceRoot);
+        Path root = normalizeRoot(projectRoot);
         Store store = storeFor(root);
         store.lock.writeLock().lock();
         StoreSnapshot snapshot = snapshot(store);
@@ -84,7 +85,7 @@ public class SharedWorkspace {
             }
             if (!persist(root, store)) {
                 restore(store, snapshot);
-                throw new IllegalStateException("Failed to persist shared workspace: " + storeFile(root));
+                throw new IllegalStateException("Failed to persist shared context: " + storeFile(root));
             }
         } finally {
             store.lock.writeLock().unlock();
@@ -95,17 +96,17 @@ public class SharedWorkspace {
         return readKV(null, key);
     }
 
-    public Optional<String> readKV(Path workspaceRoot, String key) {
-        return getKVBucket(workspaceRoot, key).map(KVBucket::getValue);
+    public Optional<String> readKV(Path projectRoot, String key) {
+        return getKVBucket(projectRoot, key).map(KVBucket::getValue);
     }
 
     public Optional<KVBucket> getKVBucket(String key) {
         return getKVBucket(null, key);
     }
 
-    public Optional<KVBucket> getKVBucket(Path workspaceRoot, String key) {
+    public Optional<KVBucket> getKVBucket(Path projectRoot, String key) {
         Objects.requireNonNull(key, "key must not be null");
-        Path root = normalizeRoot(workspaceRoot);
+        Path root = normalizeRoot(projectRoot);
         Store store = storeFor(root);
         store.lock.writeLock().lock();
         try {
@@ -129,13 +130,13 @@ public class SharedWorkspace {
         writeDoc(null, key, content, mimeType, creator);
     }
 
-    public void writeDoc(Path workspaceRoot, String key, String content, String mimeType, String creator) {
+    public void writeDoc(Path projectRoot, String key, String content, String mimeType, String creator) {
         Objects.requireNonNull(key, "key must not be null");
         Objects.requireNonNull(content, "content must not be null");
         Objects.requireNonNull(mimeType, "mimeType must not be null");
         Objects.requireNonNull(creator, "creator must not be null");
 
-        Path root = normalizeRoot(workspaceRoot);
+        Path root = normalizeRoot(projectRoot);
         Store store = storeFor(root);
         store.lock.writeLock().lock();
         StoreSnapshot snapshot = snapshot(store);
@@ -165,7 +166,7 @@ public class SharedWorkspace {
             }
             if (!persist(root, store)) {
                 restore(store, snapshot);
-                throw new IllegalStateException("Failed to persist shared workspace: " + storeFile(root));
+                throw new IllegalStateException("Failed to persist shared context: " + storeFile(root));
             }
         } finally {
             store.lock.writeLock().unlock();
@@ -176,9 +177,9 @@ public class SharedWorkspace {
         return readDoc(null, key);
     }
 
-    public Optional<DocumentBucket> readDoc(Path workspaceRoot, String key) {
+    public Optional<DocumentBucket> readDoc(Path projectRoot, String key) {
         Objects.requireNonNull(key, "key must not be null");
-        Path root = normalizeRoot(workspaceRoot);
+        Path root = normalizeRoot(projectRoot);
         Store store = storeFor(root);
         store.lock.writeLock().lock();
         try {
@@ -202,9 +203,9 @@ public class SharedWorkspace {
         delete(null, key);
     }
 
-    public void delete(Path workspaceRoot, String key) {
+    public void delete(Path projectRoot, String key) {
         Objects.requireNonNull(key, "key must not be null");
-        Path root = normalizeRoot(workspaceRoot);
+        Path root = normalizeRoot(projectRoot);
         Store store = storeFor(root);
         store.lock.writeLock().lock();
         StoreSnapshot snapshot = snapshot(store);
@@ -214,7 +215,7 @@ public class SharedWorkspace {
             if (removed) {
                 if (!persist(root, store)) {
                     restore(store, snapshot);
-                    throw new IllegalStateException("Failed to persist shared workspace: " + storeFile(root));
+                    throw new IllegalStateException("Failed to persist shared context: " + storeFile(root));
                 }
                 log.debug("Deleted entry: key={}", key);
             }
@@ -227,9 +228,9 @@ public class SharedWorkspace {
         return listKeys(null, prefix);
     }
 
-    public Set<String> listKeys(Path workspaceRoot, String prefix) {
+    public Set<String> listKeys(Path projectRoot, String prefix) {
         Objects.requireNonNull(prefix, "prefix must not be null");
-        Path root = normalizeRoot(workspaceRoot);
+        Path root = normalizeRoot(projectRoot);
         Store store = storeFor(root);
         store.lock.writeLock().lock();
         try {
@@ -258,8 +259,8 @@ public class SharedWorkspace {
         clear(null);
     }
 
-    public void clear(Path workspaceRoot) {
-        Path root = normalizeRoot(workspaceRoot);
+    public void clear(Path projectRoot) {
+        Path root = normalizeRoot(projectRoot);
         Store store = storeFor(root);
         store.lock.writeLock().lock();
         StoreSnapshot snapshot = snapshot(store);
@@ -268,9 +269,9 @@ public class SharedWorkspace {
             store.docStore.clear();
             if (!persist(root, store)) {
                 restore(store, snapshot);
-                throw new IllegalStateException("Failed to persist shared workspace: " + storeFile(root));
+                throw new IllegalStateException("Failed to persist shared context: " + storeFile(root));
             }
-            log.debug("Cleared all workspace data");
+            log.debug("Cleared all shared context data");
         } finally {
             store.lock.writeLock().unlock();
         }
@@ -280,8 +281,8 @@ public class SharedWorkspace {
         return size(null);
     }
 
-    public int size(Path workspaceRoot) {
-        return listKeys(workspaceRoot, "").size();
+    public int size(Path projectRoot) {
+        return listKeys(projectRoot, "").size();
     }
 
     private Store storeFor(Path root) {
@@ -291,13 +292,13 @@ public class SharedWorkspace {
         return PERSISTENT_STORES.computeIfAbsent(root, this::load);
     }
 
-    private Path normalizeRoot(Path workspaceRoot) {
-        return workspaceRoot == null ? null : workspaceRoot.toAbsolutePath().normalize();
+    private Path normalizeRoot(Path projectRoot) {
+        return projectRoot == null ? null : projectRoot.toAbsolutePath().normalize();
     }
 
-    private Store load(Path workspaceRoot) {
+    private Store load(Path projectRoot) {
         Store store = new Store();
-        Path file = storeFile(workspaceRoot);
+        Path file = storeFile(projectRoot);
         if (!Files.exists(file)) {
             return store;
         }
@@ -306,23 +307,23 @@ public class SharedWorkspace {
             readKvEntries(root.get("kv"), store);
             readDocumentEntries(root.get("documents"), store);
             if (purgeExpired(store)) {
-                persist(workspaceRoot, store);
+                persist(projectRoot, store);
             }
-            log.debug("Loaded shared workspace: {}", file);
+            log.debug("Loaded shared context: {}", file);
         } catch (Exception e) {
             store.loadError = e.getMessage();
-            log.warn("[workspace] Failed to load shared workspace {}: {}", file, e.getMessage());
+            log.warn("[context] Failed to load shared workspace {}: {}", file, e.getMessage());
         }
         return store;
     }
 
-    private boolean persist(Path workspaceRoot, Store store) {
-        if (workspaceRoot == null) {
+    private boolean persist(Path projectRoot, Store store) {
+        if (projectRoot == null) {
             return true;
         }
-        Path file = storeFile(workspaceRoot);
+        Path file = storeFile(projectRoot);
         if (store.loadError != null) {
-            log.warn("[workspace] Refusing to overwrite unreadable shared workspace {}: {}", file, store.loadError);
+            log.warn("[context] Refusing to overwrite unreadable shared context {}: {}", file, store.loadError);
             return false;
         }
         try {
@@ -340,14 +341,14 @@ public class SharedWorkspace {
                 Files.deleteIfExists(temporary);
             }
         } catch (IOException e) {
-            log.warn("[workspace] Failed to persist shared workspace {}: {}", file, e.getMessage());
+            log.warn("[context] Failed to persist shared context {}: {}", file, e.getMessage());
             return false;
         }
         return true;
     }
 
-    private Path storeFile(Path workspaceRoot) {
-        return workspaceRoot.resolve(LOOPRA_DIR).resolve(STORE_DIR).resolve(STORE_FILE);
+    private Path storeFile(Path projectRoot) {
+        return projectRoot.resolve(LOOPRA_DIR).resolve(STORE_DIR).resolve(STORE_FILE);
     }
 
     private ONode serialize(Store store) {

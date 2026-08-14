@@ -7,6 +7,7 @@ import org.noear.dami2.Dami;
 import org.noear.dami2.bus.EventListener;
 import site.sorghum.loopra.bin.agent.context.ContextTokenEstimate;
 import site.sorghum.loopra.bin.agent.context.ConversationContext;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.agent.listener.AgentLoopListener;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.FileChange;
@@ -23,11 +24,11 @@ import site.sorghum.loopra.bin.config.ConfigServiceToolPolicyProvider;
 import site.sorghum.loopra.bin.config.LoopraConfig;
 import site.sorghum.loopra.bin.goal.GoalGuardImpl;
 import site.sorghum.loopra.bin.model.ModelClient;
+import site.sorghum.loopra.bin.project.ProjectRegistry;
 import site.sorghum.loopra.bin.session.SessionService;
 import site.sorghum.loopra.bin.session.SessionStore;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.bin.tool.ToolSystemInitializer;
-import site.sorghum.loopra.bin.workspace.WorkspaceManager;
 import site.sorghum.loopra.tool.AgentOutput;
 
 import java.io.IOException;
@@ -75,15 +76,23 @@ public class LoopraAgent {
      */
     private boolean ownsSessionStore;
     /**
-     * 获取当前工作目录
+     * The project, execution, and state roots for this session.
      */
     @Getter
-    private final Path workspace;
+    private final SessionEnvironment environment;
+
     /**
-     * 获取工作区管理器
+     * Deprecated alias for the execution root.
+     */
+    public Path getWorkspace() {
+        return environment.executionRoot();
+    }
+
+    /**
+     * Project registry owning this session's state root.
      */
     @Getter
-    private WorkspaceManager workspaceManager;
+    private ProjectRegistry projectRegistry;
 
     /**
      * 退出信号（命令返回 EXIT 时设置，主循环据此终止）
@@ -100,7 +109,9 @@ public class LoopraAgent {
 
     private LoopraAgent(Builder b) {
         this.commandRegistry = b.commandRegistry;
-        this.workspace = b.workspace;
+        this.environment = b.environment != null
+                ? b.environment
+                : SessionEnvironment.of(b.workspace, b.stateWorkspace);
 
         final ModelClient client = b.modelClient;
         final String prompt = resolvePrompt(b);
@@ -108,7 +119,7 @@ public class LoopraAgent {
         final ToolSystemInitializer.Result initResult = b.toolSystem != null
                 ? b.toolSystem
                 : ToolSystemInitializer.initialize(
-                        b.workspace, b.apiUrl, b.apiKey,
+                        this.environment, b.apiUrl, b.apiKey,
                         b.disabledTools, b.blockedPaths, prompt);
         this.ctx = new ConversationContext(initResult.promptPrefix);
         LoopraConfig loopConfig = b.loopraConfig != null ? b.loopraConfig : LoopraConfig.getInstance();
@@ -147,7 +158,7 @@ public class LoopraAgent {
     /**
      * 初始化会话持久化和 Agent 推理循环（两个构造函数共享的逻辑）。
      * <p>
-     * 完成 WorkspaceManager 初始化、SessionService 创建、
+     * 完成 ProjectRegistry 初始化、SessionService 创建、
      * 历史会话加载以及 AgentLoop 的构造与 SessionService 绑定。
      * </p>
      *
@@ -159,15 +170,15 @@ public class LoopraAgent {
     private AgentLoop initSessionAndLoop(Builder b, ModelClient client, ToolRegistry registry,
                                           LoopraConfig config) {
         try {
-            final String workspacePath = this.workspace != null
-                    ? this.workspace.toAbsolutePath().toString()
+            final String workspacePath = environment.executionRoot() != null
+                    ? environment.executionRoot().toAbsolutePath().toString()
                     : Paths.get(System.getProperty("user.home"), ".loopra").toString();
-            // 状态工作区：会话持久化/Goal/Checklist 归属（工作树隔离模式下为主工作区）
-            final String stateWorkspacePath = b.stateWorkspace != null
-                    ? b.stateWorkspace.toAbsolutePath().toString()
+            // 状态根：会话持久化/Goal/Checklist 归属（隔离分支模式下为主项目）
+            final String stateWorkspacePath = environment.stateRoot() != null
+                    ? environment.stateRoot().toAbsolutePath().toString()
                     : workspacePath;
-            this.workspaceManager = WorkspaceManager.getOrCreate(stateWorkspacePath);
-            final Path sessionsDir = workspaceManager.getSessionsDir(stateWorkspacePath);
+            this.projectRegistry = ProjectRegistry.getOrCreate(stateWorkspacePath);
+            final Path sessionsDir = projectRegistry.getSessionsDir(stateWorkspacePath);
             this.ownsSessionStore = b.sessionStore == null;
             this.sessionService = (b.sessionStore != null)
                     ? new SessionService(ctx, b.sessionStore)
@@ -179,7 +190,7 @@ public class LoopraAgent {
         }
 
         final AgentLoop agentLoop = new AgentLoop(client, registry, ctx, b.hitl, config);
-        agentLoop.setWorkspace(this.workspace);
+        agentLoop.setWorkspace(environment.executionRoot());
         agentLoop.setSessionUsageSink(this.sessionService);
         agentLoop.setPendingPlanSink(plan -> {
             String name = getSessionStore().currentName();
@@ -740,11 +751,13 @@ public class LoopraAgent {
          * 系统提示词，默认使用硬编码的 DEFAULT_SYSTEM_PROMPT。
          */
         String systemPrompt = DEFAULT_SYSTEM_PROMPT;
+        /**
+         * Explicit session environment; falls back to the legacy path fields.
+         */
+        SessionEnvironment environment;
         Path workspace = null;
         /**
-         * 状态工作区（可选）——会话身份/Goal/Checklist/会话持久化归属。
-         * <p>工作树隔离模式下，{@code workspace} 指向隔离工作树（工具文件根），
-         * {@code stateWorkspace} 指向主工作区。未设置时回退为 {@code workspace}。</p>
+         * Deprecated state-root field; prefer {@link #environment(SessionEnvironment)}.
          */
         Path stateWorkspace = null;
         Set<String> disabledTools;
@@ -773,15 +786,15 @@ public class LoopraAgent {
          */
         ToolPolicyProvider toolPolicyProvider;
         /**
-         * 会话存储（可选，默认基于工作区会话目录的 {@code JsonlSessionStore}）。
+         * 会话存储（可选，默认基于项目会话目录的 {@code JsonlSessionStore}）。
          * <p>上层可注入自定义 {@link SessionStore} 以定制会话持久化。</p>
          */
         SessionStore sessionStore;
         /**
          * 共享工具系统初始化结果（可选，含 ToolRegistry + PromptPrefix + 系统提示词）。
          * <p>注入后跳过 {@link ToolSystemInitializer#initialize}，复用共享的工具注册表
-         * 与预构建的提示词前缀，避免每个 Agent 重复扫描工具。注意：Result 内的工作区
-         * 相关内容（Skill 工具、环境信息、项目文档）应与 Builder 配置的工作区一致。</p>
+         * 与预构建的提示词前缀，避免每个 Agent 重复扫描工具。Result 内的环境必须
+         * 与 Builder 配置的 {@link SessionEnvironment} 一致。</p>
          */
         ToolSystemInitializer.Result toolSystem;
 
@@ -809,13 +822,18 @@ public class LoopraAgent {
             return this;
         }
 
+        public Builder environment(SessionEnvironment v) {
+            this.environment = v;
+            return this;
+        }
+
         public Builder workspace(Path v) {
             this.workspace = v;
             return this;
         }
 
         /**
-         * 设置状态工作区（会话身份/Goal/Checklist 归属）；默认回退为 {@link #workspace(Path)}。
+         * Deprecated path-based state root.
          */
         public Builder stateWorkspace(Path v) {
             this.stateWorkspace = v;
@@ -878,7 +896,7 @@ public class LoopraAgent {
 
         /**
          * 注入共享的工具系统初始化结果；设置后跳过内部工具系统初始化，直接复用。
-         * <p>用于多 Agent 共享同一工作区的工具注册表与提示词前缀，避免重复初始化。</p>
+         * <p>用于多 Agent 共享同一项目的工具注册表与提示词前缀，避免重复初始化。</p>
          */
         public Builder toolSystem(ToolSystemInitializer.Result v) {
             this.toolSystem = v;

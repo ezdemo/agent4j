@@ -131,7 +131,7 @@
             <div class="session-title">
               <h3>{{ session.title }}</h3>
               <span class="session-id">#{{ session.id }}</span>
-              <span v-if="session.worktreeMode" class="session-wt-badge" title="工作树隔离模式">🌲 隔离</span>
+              <span v-if="session.worktreeMode" class="session-wt-badge" title="隔离分支模式">🌲 隔离</span>
             </div>
             <div class="session-status" :class="session.status">
               {{ session.status === 'active' ? '活跃' : '已结束' }}
@@ -280,18 +280,18 @@ const loadSessions = async () => {
   error.value = ''
   
   try {
-    // 获取当前工作区 hash
+    // 获取当前项目 hash
     let workspaceHash = null
     try {
       const workspacesResponse = await configAPI.listWorkspaces()
-      console.log('工作区响应:', workspacesResponse) // 调试日志
+      console.log('项目响应:', workspacesResponse) // 调试日志
       if (workspacesResponse && workspacesResponse.data && workspacesResponse.data.length > 0) {
-        // 使用第一个工作区（isActive 已废弃）
+        // 使用第一个项目（isActive 已废弃）
         workspaceHash = workspacesResponse.data[0].hash
-        console.log('使用工作区 hash:', workspaceHash) // 调试日志
+        console.log('使用项目 hash:', workspaceHash) // 调试日志
       }
     } catch (err) {
-      console.warn('获取工作区信息失败:', err)
+      console.warn('获取项目信息失败:', err)
     }
     
     currentWorkspaceHash.value = workspaceHash

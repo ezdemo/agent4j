@@ -26,8 +26,7 @@ const initialElectronAPI = window.electronAPI
 
 function mountExplorer(props) {
   return mount(FileExplorer, {
-    props: {rootPath: 'C:/workspace', ...props},
-    global: {stubs: {DiffViewer: true}}
+    props: {rootPath: 'C:/workspace', ...props}
   })
 }
 
@@ -263,7 +262,7 @@ describe('FileExplorer 文件树', () => {
     wrapper.unmount()
   })
 
-  it('单击文件仅选中，双击打开预览', async () => {
+  it('单击文件仅选中，双击打开编辑器标签', async () => {
     const wrapper = mountTree()
     await flushPromises()
     const rows = wrapper.findAll('.fen-row')
@@ -271,10 +270,10 @@ describe('FileExplorer 文件树', () => {
 
     await fileRow.trigger('click')
     expect(wrapper.find('.fen-row.active').text()).toContain('readme.md')
+    expect(wrapper.emitted('openFile')).toBeUndefined()
 
     await fileRow.trigger('dblclick')
-    await flushPromises()
-    expect(readMock).toHaveBeenCalledWith('C:/workspace/readme.md')
+    expect(wrapper.emitted('openFile')).toEqual([['C:/workspace/readme.md']])
     wrapper.unmount()
   })
 })
@@ -361,7 +360,6 @@ describe('FileExplorer 搜索', () => {
       data: [{name: 'api.js', path: 'C:/workspace/src/api.js', directory: false}]
     })
 
-    await wrapper.find('button[aria-label="搜索文件"]').trigger('click')
     const input = wrapper.find('input[aria-label="搜索文件"]')
     await input.setValue('api')
     await sleep(250)
@@ -380,7 +378,6 @@ describe('FileExplorer 搜索', () => {
       data: [{name: 'api.js', path: 'C:/workspace/src/api.js', directory: false}]
     })
 
-    await wrapper.find('button[aria-label="搜索文件"]').trigger('click')
     const input = wrapper.find('input[aria-label="搜索文件"]')
     await input.setValue('api')
     await sleep(250)

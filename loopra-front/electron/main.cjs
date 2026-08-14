@@ -6,6 +6,7 @@ const { promisify } = require('util')
 const { compareVersions } = require('./version.cjs')
 const { registerTerminalIpc, killAllTerminals } = require('./terminal.cjs')
 const { registerGitEnvironmentIpc } = require('./git-environment.cjs')
+const { registerOnboardingIpc } = require('./onboarding.cjs')
 const fs = require('fs')
 const net = require('net')
 
@@ -60,6 +61,7 @@ const DESKTOP_CHAT_LOAD_TIMEOUT_MS = 10000
 let mainWindow = null
 let splashWindow = null
 let updateWindow = null
+let onboardingWindow = null
 let loopraWebProcess = null
 let currentPort = 0
 const loopraWebWindows = new Map()
@@ -485,6 +487,39 @@ function openUpdateWindow() {
   return updateWindow
 }
 
+// 引导页窗口：独立窗口承载首次使用引导流程（迁移会话/设置模型/导入 Skills/迁移 AGENTS.md/MCP）
+function openOnboardingWindow() {
+  if (onboardingWindow && !onboardingWindow.isDestroyed()) {
+    onboardingWindow.show()
+    onboardingWindow.focus()
+    return onboardingWindow
+  }
+
+  onboardingWindow = new BrowserWindow({
+    width: 820,
+    height: 680,
+    minWidth: 720,
+    minHeight: 600,
+    title: 'Loopra 引导',
+    icon: appIconPath,
+    webPreferences: {
+      preload: path.join(__dirname, 'preload.cjs'),
+      contextIsolation: true,
+      nodeIntegration: false,
+      sandbox: false,
+      backgroundThrottling: false
+    }
+  })
+  onboardingWindow.on('closed', () => { onboardingWindow = null })
+
+  if (isDev) {
+    onboardingWindow.loadURL('http://localhost:3000/?desktopOnboarding=1')
+  } else {
+    onboardingWindow.loadFile(path.join(__dirname, '../renderer/index.html'), { query: { desktopOnboarding: '1' } })
+  }
+  return onboardingWindow
+}
+
 function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1200, height: 800,
@@ -537,6 +572,7 @@ function createWindow() {
     if (elementInspectorWindow && !elementInspectorWindow.isDestroyed()) elementInspectorWindow.close()
     if (aiBrowserWindow && !aiBrowserWindow.isDestroyed()) aiBrowserWindow.close()
     if (desktopPetWindow && !desktopPetWindow.isDestroyed()) desktopPetWindow.close()
+    if (onboardingWindow && !onboardingWindow.isDestroyed()) onboardingWindow.close()
     if (elementWebView && !elementWebView.webContents.isDestroyed()) elementWebView.webContents.close()
     destroyDesktopChatTabs()
     elementWebView = null
@@ -701,6 +737,7 @@ app.on('before-quit', () => {
 
 registerTerminalIpc()
 registerGitEnvironmentIpc(ipcMain)
+registerOnboardingIpc(ipcMain, { getOnboardingWindow: () => onboardingWindow })
 
 ipcMain.handle('get_loopra_web_port', async () => currentPort)
 
@@ -1038,6 +1075,7 @@ ipcMain.handle('desktop-home-context-menu', (event, rawTheme) => {
     }
     const menu = Menu.buildFromTemplate([
       { label: '打开需求池', click: () => finish('open-requirement-board') },
+      { label: '打开引导', click: () => finish('open-onboarding') },
       { label: '更新', click: () => finish('open-update') },
       { label: '切换主题', click: () => finish('toggle-theme') }
     ])
@@ -1114,6 +1152,18 @@ ipcMain.handle('chat-update-request', (event, payload = {}) => {
   if (mainWindow.isMinimized()) mainWindow.restore()
   mainWindow.show()
   mainWindow.focus()
+  return true
+})
+
+// 引导页窗口管理：主窗口打开；引导页自身关闭
+ipcMain.handle('onboarding-window-open', (event) => {
+  if (event.sender !== mainWindow?.webContents) throw new Error('Unauthorized onboarding window request')
+  openOnboardingWindow()
+  return { success: true }
+})
+ipcMain.handle('onboarding-window-close', (event) => {
+  if (event.sender !== onboardingWindow?.webContents) throw new Error('Unauthorized onboarding window close')
+  if (onboardingWindow && !onboardingWindow.isDestroyed()) onboardingWindow.close()
   return true
 })
 

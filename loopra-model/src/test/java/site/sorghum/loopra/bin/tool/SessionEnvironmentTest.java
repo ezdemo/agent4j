@@ -9,39 +9,39 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
- * 状态工作区（stateWorkspace）链路测试 —— 工作树隔离模式的核心解耦：
- * 工具文件根（worktree）与会话身份根（主工作区）分离，且默认行为与旧版完全一致。
+ * 状态项目（stateWorkspace）链路测试 —— 隔离分支模式的核心解耦：
+ * 工具文件根（worktree）与会话身份根（主项目）分离，且默认行为与旧版完全一致。
  */
-class StateWorkspaceTest {
+class SessionEnvironmentTest {
 
     @Test
-    void registryDefaultsStateWorkspaceToWorkspace() {
+    void registryDefaultsStateRootToProjectRoot() {
         ToolRegistry registry = new ToolRegistry();
         Path workspace = Path.of("/tmp/main-repo");
         registry.setRefreshContext(workspace, "url", "key", null);
-        assertEquals(workspace, registry.getWorkspace());
-        assertEquals(workspace, registry.getStateWorkspace(), "未指定状态工作区时应回退为工作区本身");
+        assertEquals(workspace, registry.getEnvironment().executionRoot());
+        assertEquals(workspace, registry.getEnvironment().stateRoot());
     }
 
     @Test
-    void registrySupportsSeparateStateWorkspace() {
+    void registrySupportsSeparateStateRoot() {
         ToolRegistry registry = new ToolRegistry();
         Path worktree = Path.of("/home/u/.loopra/worktree/abc-sess1");
         Path main = Path.of("/tmp/main-repo");
         registry.setRefreshContext(worktree, main, "url", "key", null);
-        assertEquals(worktree, registry.getWorkspace());
-        assertEquals(main, registry.getStateWorkspace());
+        assertEquals(worktree, registry.getEnvironment().executionRoot());
+        assertEquals(main, registry.getEnvironment().stateRoot());
     }
 
     @Test
-    void copyPreservesStateWorkspace() {
+    void copyPreservesStateRoot() {
         ToolRegistry registry = new ToolRegistry();
         Path worktree = Path.of("/home/u/.loopra/worktree/abc-sess1");
         Path main = Path.of("/tmp/main-repo");
         registry.setRefreshContext(worktree, main, "url", "key", null);
         ToolRegistry copy = registry.copy();
-        assertEquals(worktree, copy.getWorkspace());
-        assertEquals(main, copy.getStateWorkspace());
+        assertEquals(worktree, copy.getEnvironment().executionRoot());
+        assertEquals(main, copy.getEnvironment().stateRoot());
     }
 
     @Test
@@ -60,10 +60,10 @@ class StateWorkspaceTest {
     }
 
     @Test
-    void initializerWiresStateWorkspaceIntoRegistry() {
+    void initializerWiresStateRootIntoRegistry() {
         ToolSystemInitializer.Result result = ToolSystemInitializer.initialize(
                 Path.of("/tmp/worktree"), Path.of("/tmp/main"), "url", "key", null, null, "prompt");
-        assertEquals(Path.of("/tmp/worktree"), result.toolRegistry.getWorkspace());
-        assertEquals(Path.of("/tmp/main"), result.toolRegistry.getStateWorkspace());
+        assertEquals(Path.of("/tmp/worktree"), result.toolRegistry.getEnvironment().executionRoot());
+        assertEquals(Path.of("/tmp/main"), result.toolRegistry.getEnvironment().stateRoot());
     }
 }
