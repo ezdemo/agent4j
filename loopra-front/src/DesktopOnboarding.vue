@@ -241,7 +241,7 @@
         <!-- 步骤 4：迁移规则文件（AGENTS.md / CLAUDE.md） -->
         <section v-else-if="currentStep === 4" class="ob-page">
           <h2 class="ob-page-title">迁移 AGENTS.md / CLAUDE.md</h2>
-          <p class="ob-page-desc">从其他 Agent 导入规则文件到当前 Loopra 项目根目录：选择项目目录（曾用 Codex / Claude Code 等开发的目录）扫描，或直接选用下方的全局规则。</p>
+          <p class="ob-page-desc">从其他 Agent 导入规则文件。推荐写入 Loopra 全局规则 <b class="ob-path">~/.loopra/loopra.md</b>，也可写入当前项目根目录作为项目规则。</p>
 
           <div v-if="candidateRuleFiles.length" class="ob-field">
             <label class="ob-field-label">全局规则（自动检测）</label>
@@ -252,7 +252,7 @@
                 type="button"
                 class="ob-chip"
                 :class="{ active: agentsMdSelected?.path === file.path }"
-                @click="selectAgentsMd({path: file.path, name: pathBasename(file.path)})"
+                @click="selectAgentsMd({path: file.path, name: pathBasename(file.path)}, 'global')"
               >
                 {{ file.label }}
               </button>
@@ -283,11 +283,27 @@
           </div>
 
           <div class="ob-field">
+            <label class="ob-field-label">导入到</label>
+            <div class="ob-mode-row">
+              <label class="ob-mode-option" :class="{ active: agentsMdTargetMode === 'global' }">
+                <input v-model="agentsMdTargetMode" type="radio" value="global" />
+                <span class="ob-mode-name">Loopra 全局规则（推荐）</span>
+                <span class="ob-mode-desc">写入 ~/.loopra/loopra.md，所有项目生效</span>
+              </label>
+              <label class="ob-mode-option" :class="{ active: agentsMdTargetMode === 'project' }">
+                <input v-model="agentsMdTargetMode" type="radio" value="project" />
+                <span class="ob-mode-name">当前项目根目录</span>
+                <span class="ob-mode-desc">保留原文件名，作为当前项目规则</span>
+              </label>
+            </div>
+          </div>
+
+          <div class="ob-field">
             <label class="ob-field-label">目标位置</label>
-            <div class="ob-dir-current">将写入：<span class="ob-path">{{ workspacePath ? workspacePath + '\\' + (agentsMdSelected ? agentsMdFileName : 'AGENTS.md') : '未获取到项目路径' }}</span></div>
+            <div class="ob-dir-current">将写入：<span class="ob-path">{{ agentsMdTargetPath }}</span></div>
             <label class="ob-inline-check">
               <input v-model="overwriteAgentsMd" type="checkbox" />
-              目标已存在同名文件时覆盖
+              {{ agentsMdTargetMode === 'global' ? '覆盖现有 loopra.md（默认追加）' : '目标已存在同名文件时覆盖' }}
             </label>
           </div>
 
@@ -299,7 +315,13 @@
           </div>
 
           <div class="ob-action-row">
-            <button class="btn btn-primary" :disabled="busy || !agentsMdSelected || !workspacePath" @click="importAgentsMd">迁移到项目</button>
+            <button
+              class="btn btn-primary"
+              :disabled="busy || !agentsMdSelected || (agentsMdTargetMode === 'project' && !workspacePath) || (agentsMdTargetMode === 'global' && !serviceOk)"
+              @click="importAgentsMd"
+            >
+              {{ agentsMdTargetMode === 'global' ? '迁移到全局规则' : '迁移到项目' }}
+            </button>
           </div>
         </section>
 
@@ -472,11 +494,21 @@ const agentsMdSelected = ref(null)
 const agentsMdPreview = ref('')
 const overwriteAgentsMd = ref(false)
 const agentsMdResult = ref(null)
+const agentsMdTargetMode = ref('global')
 
 // 选中规则文件的文件名（AGENTS.md / CLAUDE.md 等），用于目标路径展示
 const agentsMdFileName = computed(() => {
   if (!agentsMdSelected.value?.path) return 'AGENTS.md'
   return pathBasename(agentsMdSelected.value.path)
+})
+
+// 根据目标模式计算实际写入路径；全局规则始终写到 ~/.loopra/loopra.md
+const agentsMdTargetPath = computed(() => {
+  if (agentsMdTargetMode.value === 'global') {
+    const configDir = dirs.value?.configDir
+    return configDir ? `${configDir}\\loopra.md` : '~/.loopra/loopra.md'
+  }
+  return workspacePath.value ? `${workspacePath.value}\\${agentsMdFileName.value}` : '未获取到项目路径'
 })
 
 // MCP
@@ -823,9 +855,10 @@ async function importSkills() {
 
 // ==================== 步骤 4：迁移 AGENTS.md ====================
 
-async function selectAgentsMd(file) {
+async function selectAgentsMd(file, targetMode) {
   agentsMdSelected.value = file
   agentsMdResult.value = null
+  if (targetMode) agentsMdTargetMode.value = targetMode
   try {
     agentsMdPreview.value = await onboarding()?.readTextFile({path: file.path}) || ''
   } catch (e) {
@@ -846,21 +879,46 @@ async function importAgentsMd() {
     message.warning('请先选择规则文件')
     return
   }
-  if (!workspacePath.value) {
+  if (agentsMdTargetMode.value === 'project' && !workspacePath.value) {
     message.warning('未获取到目标项目路径')
+    return
+  }
+  if (agentsMdTargetMode.value === 'global' && !serviceOk.value) {
+    message.warning('核心服务未就绪，暂时无法写入全局规则')
     return
   }
   busy.value = true
   try {
-    const result = await onboarding()?.importAgentsMd({
-      sourcePath: agentsMdSelected.value.path,
-      targetDir: workspacePath.value,
-      overwrite: overwriteAgentsMd.value
+    const content = await onboarding()?.readTextFile({
+      path: agentsMdSelected.value.path,
+      maxBytes: 1024 * 1024
     })
+    if (!content || !content.trim()) {
+      message.warning('所选规则文件为空，无法迁移')
+      return
+    }
+
+    let result
+    if (agentsMdTargetMode.value === 'global') {
+      const existing = await configAPI.getLoopraMd()
+      const current = (existing?.data || '').trim()
+      const section = `\n\n---\n\n## ${agentsMdFileName.value}\n\n${content.trim()}\n`
+      const merged = current ? `${current}\n${section}` : content.trim()
+      const res = await configAPI.updateLoopraMd(overwriteAgentsMd.value ? content.trim() : merged)
+      if (res.success === false) throw new Error(res.error || res.message || '保存失败')
+      result = {ok: true, path: agentsMdTargetPath.value}
+    } else {
+      result = await onboarding()?.importAgentsMd({
+        sourcePath: agentsMdSelected.value.path,
+        targetDir: workspacePath.value,
+        overwrite: overwriteAgentsMd.value
+      })
+    }
+
     agentsMdResult.value = result
     if (result?.ok) {
       stepDone[4] = true
-      message.success(`${agentsMdFileName} 已迁移`)
+      message.success(`${agentsMdFileName.value} 已迁移到 ${agentsMdTargetMode.value === 'global' ? '全局规则' : '当前项目'}`)
     } else {
       message.warning(result?.error || '迁移失败')
     }
