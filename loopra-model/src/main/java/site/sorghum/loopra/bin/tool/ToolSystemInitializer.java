@@ -6,10 +6,15 @@ import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.agent.prompt.EnvInfoUtil;
 import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
+import java.util.stream.Stream;
 
 /**
  * 工具系统初始化器 —— 抽取 LoopraAgent 与 AgentService 中的重复代码。
@@ -22,6 +27,15 @@ import java.util.Set;
  */
 @Slf4j
 public class ToolSystemInitializer {
+
+    private static final int MAX_PROJECT_DOC_BYTES = 256 * 1024;
+
+    private static final List<String> PROJECT_RULE_NAMES = List.of(
+            "loopra.md",
+            "claude.md",
+            "agents.md",
+            "agent.md"
+    );
 
     /**
      * 执行完整的工具系统初始化。
@@ -133,15 +147,49 @@ public class ToolSystemInitializer {
     }
 
     /**
-     * 加载项目根目录下的 loopra.md 和 CLAUDE.md。
+     * Loads project rule files from the execution root.
+     * <p>The file names are matched case-insensitively, so migration can preserve
+     * the source name such as {@code AGENTS.md} or {@code CLAUDE.md}.</p>
      */
     public static String loadProjectMd(Path workspace) {
-        if (workspace == null) return "";
+        if (workspace == null || !Files.isDirectory(workspace)) {
+            return "";
+        }
+
+        Map<String, Path> matched = new LinkedHashMap<>();
+        try (Stream<Path> entries = Files.list(workspace)) {
+            for (Path file : entries.toList()) {
+                if (!Files.isRegularFile(file)) continue;
+                Path fileName = file.getFileName();
+                if (fileName == null) continue;
+                String canonicalName = fileName.toString().toLowerCase();
+                if (PROJECT_RULE_NAMES.contains(canonicalName)) {
+                    matched.putIfAbsent(canonicalName, file);
+                }
+            }
+        } catch (IOException e) {
+            log.warn("[init] 读取项目根目录失败: {}", e.getMessage());
+            return "";
+        }
+
         StringBuilder sb = new StringBuilder();
-        for (String name : new String[]{"loopra.md", "CLAUDE.md"}) {
-            sb.append("""
-                    按需加载: 项目文档（%s）
-                    """.formatted(name));
+        for (String name : PROJECT_RULE_NAMES) {
+            Path file = matched.get(name);
+            if (file == null) continue;
+            try {
+                if (Files.size(file) > MAX_PROJECT_DOC_BYTES) {
+                    log.warn("[init] 跳过过大的项目规则文件: {} ({} bytes)", file, Files.size(file));
+                    continue;
+                }
+                String content = Files.readString(file).trim();
+                if (content.isEmpty()) continue;
+                if (sb.length() > 0) {
+                    sb.append("\n\n");
+                }
+                sb.append("## ").append(file.getFileName()).append("\n\n").append(content);
+            } catch (IOException e) {
+                log.warn("[init] 读取项目规则文件失败: {} - {}", file, e.getMessage());
+            }
         }
         return sb.toString();
     }
