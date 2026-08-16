@@ -1,6 +1,9 @@
 package site.sorghum.cutin.core.loop;
 
-import site.sorghum.cutin.core.context.*;
+import site.sorghum.cutin.core.context.Budget;
+import site.sorghum.cutin.core.context.DefaultLoopContext;
+import site.sorghum.cutin.core.context.LoopContext;
+import site.sorghum.cutin.core.context.Message;
 import site.sorghum.cutin.core.event.EventBus;
 import site.sorghum.cutin.core.event.EventHandler;
 import site.sorghum.cutin.core.event.Hook;

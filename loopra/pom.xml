@@ -28,7 +28,7 @@
     <dependencies>
         <dependency>
             <groupId>site.sorghum</groupId>
-            <artifactId>cutin-core</artifactId>
+            <artifactId>cutin</artifactId>
             <version>${cutin.version}</version>
         </dependency>
 
