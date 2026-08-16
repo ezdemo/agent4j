@@ -321,6 +321,14 @@ export const agentAPI = {
     return api.get('/agent/history', { params })
   },
 
+  // 获取原始事件日志（压缩前消息与 tool result） - GET /api/agent/history/events?workspaceHash=xxx&sessionName=xxx
+  getRawEvents: (workspaceHash, sessionName) => {
+    const params = {}
+    if (workspaceHash) params.workspaceHash = workspaceHash
+    if (sessionName) params.sessionName = sessionName
+    return api.get('/agent/history/events', { params })
+  },
+
   // 获取会话计划模式 - GET /api/agent/mode?workspaceHash=xxx&sessionName=xxx
   getMode: (workspaceHash, sessionName) => {
     const params = {}

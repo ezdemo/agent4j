@@ -28,14 +28,15 @@ $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
 $re = [regex]'(?<=<artifactId>loopra</artifactId>\s*\r?\n\s*<version>)\d[\d.]*-?[A-Z]*(?=</version>)'
 $c = $re.Replace($c, $Version)
+$c = [regex]::Replace($c, '(?<=<loopra\.version>)\d[\d.]*-?[A-Z]*(?=</loopra\.version>)', $Version)
 if ($c -ne $old) {
     $c = $c.TrimStart([char]0xFEFF)
     [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
     Write-Host "  [OK] pom.xml"
 } else { Write-Host "  [--] pom.xml (unchanged)" }
 
-# 2. loopra-model/pom.xml, loopra-harness/pom.xml, loopra-acp/pom.xml
-foreach ($module in @("loopra-model", "loopra-harness", "loopra-acp")) {
+# 2. cutin-core/pom.xml, loopra/pom.xml
+foreach ($module in @("cutin-core", "loopra")) {
     $path = Join-Path $root "$module/pom.xml"
     $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
     $old = $c
@@ -49,19 +50,19 @@ foreach ($module in @("loopra-model", "loopra-harness", "loopra-acp")) {
 }
 
 
-# 4. loopra-web/pom.xml
-$path = Join-Path $root "loopra-web/pom.xml"
+# 4. loopra/pom.xml
+$path = Join-Path $root "loopra/pom.xml"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
 $c = $re.Replace($c, $Version)
 if ($c -ne $old) {
     $c = $c.TrimStart([char]0xFEFF)
     [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
-    Write-Host "  [OK] loopra-web/pom.xml"
-} else { Write-Host "  [--] loopra-web/pom.xml (unchanged)" }
+    Write-Host "  [OK] loopra/pom.xml"
+} else { Write-Host "  [--] loopra/pom.xml (unchanged)" }
 
-# 4.1 loopra-web/dependency-reduced-pom.xml
-$path = Join-Path $root "loopra-web/dependency-reduced-pom.xml"
+# 4.1 loopra/dependency-reduced-pom.xml
+$path = Join-Path $root "loopra/dependency-reduced-pom.xml"
 if (Test-Path $path) {
     $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
     $old = $c
@@ -71,9 +72,9 @@ if (Test-Path $path) {
     if ($c -ne $old) {
         $c = $c.TrimStart([char]0xFEFF)
         [System.IO.File]::WriteAllText($path, $c, $utf8NoBom)
-        Write-Host "  [OK] loopra-web/dependency-reduced-pom.xml"
-    } else { Write-Host "  [--] loopra-web/dependency-reduced-pom.xml (unchanged)" }
-} else { Write-Host "  [--] loopra-web/dependency-reduced-pom.xml (not found)" }
+        Write-Host "  [OK] loopra/dependency-reduced-pom.xml"
+    } else { Write-Host "  [--] loopra/dependency-reduced-pom.xml (unchanged)" }
+} else { Write-Host "  [--] loopra/dependency-reduced-pom.xml (not found)" }
 
 # 5. .release/setup.sh
 $path = Join-Path $root ".release/setup.sh"
@@ -166,16 +167,16 @@ if ($c -ne $old) {
     Write-Host "  [OK] loopra-front/package.json"
 } else { Write-Host "  [--] loopra-front/package.json (unchanged)" }
 
-# 10. loopra-web/src/installDist/bin/version.txt
-$path = Join-Path $root "loopra-web/src/installDist/bin/version.txt"
+# 10. loopra/src/installDist/bin/version.txt
+$path = Join-Path $root "loopra/src/installDist/bin/version.txt"
 $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
 $old = $c
 $c = [regex]::Replace($c.Trim(), '^[\d.]+', $Version)
 if ($c -ne $old.Trim()) {
     $c = $c.TrimStart([char]0xFEFF)
     [System.IO.File]::WriteAllText($path, $c + [Environment]::NewLine, $utf8NoBom)
-    Write-Host "  [OK] loopra-web/src/installDist/bin/version.txt"
-} else { Write-Host "  [--] loopra-web/src/installDist/bin/version.txt (unchanged)" }
+    Write-Host "  [OK] loopra/src/installDist/bin/version.txt"
+} else { Write-Host "  [--] loopra/src/installDist/bin/version.txt (unchanged)" }
 
 Write-Host ""
 Write-Host "Done! Version unified to $Version"

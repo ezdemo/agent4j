@@ -4,7 +4,7 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 FRONT_DIR="$ROOT_DIR/loopra-front"
 DIST_DIR="$FRONT_DIR/dist/renderer"
-STATIC_DIR="$ROOT_DIR/loopra-web/src/main/resources/static"
+STATIC_DIR="$ROOT_DIR/loopra/src/main/resources/static"
 NODE_VERSION="22.14.0"
 NODE_DIR="$ROOT_DIR/.ci/node-v${NODE_VERSION}-linux-x64"
 NODE_ARCHIVE="$ROOT_DIR/.ci/node-v${NODE_VERSION}-linux-x64.tar.xz"

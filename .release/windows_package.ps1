@@ -18,7 +18,7 @@ if (Test-Path (Join-Path $ScriptDir "..\pom.xml")) {
 }
 $FrontDir   = Join-Path $RootDir "loopra-front"
 $DistDir    = Join-Path $FrontDir "dist\renderer"
-$StaticDir  = Join-Path $RootDir "loopra-web\src\main\resources\static"
+$StaticDir  = Join-Path $RootDir "loopra\src\main\resources\static"
 
 Write-Host "Root: $RootDir" -ForegroundColor DarkGray
 

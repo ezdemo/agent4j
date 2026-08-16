@@ -103,7 +103,7 @@
                   <h4>启动系统</h4>
                   <p>运行 Loopra 应用，系统会自动加载配置和工具。</p>
                   <div class="step-command">
-                    <code>mvn exec:java -pl loopra-web</code>
+                    <code>mvn exec:java -pl loopra</code>
                   </div>
                 </div>
               </div>

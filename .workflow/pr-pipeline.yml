@@ -22,4 +22,4 @@ stages:
         commands:
           - bash .release/ci-sync-web-assets.sh
           - mvn -B -ntp -DskipTests -gs .workflow/maven-central-settings.xml -s .workflow/maven-central-settings.xml clean verify
-          - test -f ./loopra-web/target/loopra-web-dist.tar.gz
+          - test -f ./loopra/target/loopra-dist.tar.gz

@@ -133,7 +133,7 @@
           <div class="t-line"><span class="t-you">You</span> <span class="t-tool" data-i18n="hero.termUser">修复 SessionStoreTest 的失败用例并跑一遍回归</span></div>
           <div class="t-line"><span class="t-ai">AI</span> <span class="t-tool" data-i18n="hero.termAi1">grep "SessionStoreTest" → 定位测试与被测类</span></div>
           <div class="t-line"><span class="t-ai">AI</span> <span class="t-tool" data-i18n="hero.termAi2">edit SessionStore.java · 唯一匹配校验通过，已写入</span></div>
-          <div class="t-line"><span class="t-ai">AI</span> <span class="t-tool">bash mvn -pl loopra-web -am test</span></div>
+          <div class="t-line"><span class="t-ai">AI</span> <span class="t-tool">bash mvn -pl loopra -am test</span></div>
           <div class="t-line"><span class="t-ok">✔</span> <span class="t-tool" data-i18n="hero.termDone">任务完成：2 个文件变更，128 个测试全部通过</span> <span class="t-cursor"></span></div>
         </div>
       </div>
@@ -618,7 +618,7 @@ mvn clean package
 mvn test
 
 <span class="c-com" data-i18n="dev.cWeb"># 仅验证 Web 模块及其依赖模块</span>
-mvn -pl loopra-web -am test</pre>
+mvn -pl loopra -am test</pre>
           </div>
 
           <span class="cmd-label" data-i18n="dev.front">前端与 Desktop</span>
