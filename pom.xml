@@ -13,7 +13,7 @@
     <description>Cutin agent framework and the cutin-based Loopra replica</description>
 
     <modules>
-        <module>cutin-core</module>
+        <module>cutin</module>
         <module>loopra</module>
     </modules>
 
@@ -30,7 +30,7 @@
         <dependencies>
             <dependency>
                 <groupId>site.sorghum</groupId>
-                <artifactId>cutin-core</artifactId>
+                <artifactId>cutin</artifactId>
                 <version>${cutin.version}</version>
             </dependency>
             <dependency>

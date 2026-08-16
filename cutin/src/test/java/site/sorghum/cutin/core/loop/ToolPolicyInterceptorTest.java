@@ -10,9 +10,7 @@ import site.sorghum.cutin.core.tool.ToolResult;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 工具策略拦截测试：BEFORE_TOOL 可以拒绝工具或把循环挂起等待审批。
