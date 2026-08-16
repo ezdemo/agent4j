@@ -38,7 +38,7 @@ stages:
         displayName: Upload Web Distribution
         dependArtifact: LOOPRA_WEB_DIST
         artifactRepository: default
-        artifactName: loopra-web-dist
+        artifactName: loopra-dist
   - stage:
     name: release
     displayName: Release
@@ -48,7 +48,7 @@ stages:
       - step: publish@release_artifacts
         name: release_web_distribution
         displayName: Release Web Distribution
-        dependArtifact: loopra-web-dist
+        dependArtifact: loopra-dist
         artifactRepository: release
         version: '1.0.0.0'
         autoIncrement: true

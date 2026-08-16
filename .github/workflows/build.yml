@@ -88,15 +88,15 @@ jobs:
         working-directory: loopra-front
         run: pnpm run build:vite
 
-      # 核心运行时（web-dist 产物）嵌入前端安装包：用户安装桌面端后无需再下载核心包
-      - name: Download web dist artifact
+      # 核心运行时（loopra-dist 产物）嵌入前端安装包：用户安装桌面端后无需再下载核心包
+      - name: Download loopra dist artifact
         uses: actions/download-artifact@v8
         with:
-          name: loopra-web-dist
+          name: loopra-dist
           path: web-dist-artifact
 
       - name: Embed core runtime into installer
-        run: bash .release/ci-embed-core.sh web-dist-artifact/loopra-web-dist.tar.gz
+        run: bash .release/ci-embed-core.sh web-dist-artifact/loopra-dist.tar.gz
 
       # macOS 代码签名 + 公证：
       # - 配置了 MAC_CERTIFICATE_P12（Developer ID 证书 base64）时，将其写入
@@ -201,7 +201,7 @@ jobs:
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
-          name: loopra-web-dist
+          name: loopra-dist
           path: ./loopra/target/loopra-dist.tar.gz
           retention-days: 7
 
@@ -238,7 +238,7 @@ jobs:
             - **macOS**（Apple Silicon）→ `Loopra-*.zip`（ad-hoc 签名，首次打开请右键 → 打开）
             - **Windows** → `Loopra Setup *.exe`
             - **Linux** → `loopra-front_*.deb`
-            - **Web** → `loopra-web-dist.tar.gz`
+            - **Web** → `loopra-dist.tar.gz`
           draft: true
           prerelease: false
           files: |

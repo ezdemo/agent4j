@@ -7,7 +7,7 @@
 set -euo pipefail
 
 VERSION="v26.8.131"
-PACKAGE_URL="https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-web-dist.tar.gz"
+PACKAGE_URL="https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-dist.tar.gz"
 TEMP_DIR="/tmp/loopra-gui-install"
 
 RED='\033[0;31m'
