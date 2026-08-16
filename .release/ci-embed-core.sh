@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 将核心分发包（loopra-web-dist.tar.gz）解压到 loopra-front/resources/loopra-core，
+# 将核心分发包（loopra-dist.tar.gz）解压到 loopra-front/resources/loopra-core，
 # 供 electron-builder 的 extraResources 嵌入前端安装包（CI 与本地 bash 环境通用）。
 # 用法：
 #   bash .release/ci-embed-core.sh [tarball]

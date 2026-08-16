@@ -1,4 +1,4 @@
-# 将核心分发包（loopra-web-dist.tar.gz）解压到 loopra-front/resources/loopra-core，
+# 将核心分发包（loopra-dist.tar.gz）解压到 loopra-front/resources/loopra-core，
 # 供 electron-builder 的 extraResources 嵌入前端安装包（Windows 本地打包用）。
 # 用法：powershell -ExecutionPolicy Bypass -File .release/embed-core.ps1 [-Tarball <path>]
 param(

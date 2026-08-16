@@ -473,63 +473,51 @@
     <div class="container">
       <div class="section-head reveal">
         <span class="section-tag" data-i18n="arch.tag">架构</span>
-        <h2 data-i18n="arch.title">模块化设计，按需取用</h2>
-        <p data-i18n="arch.desc"><code>loopra-model</code>、<code>loopra-harness</code>、<code>loopra-acp</code> 均为独立 Maven 模块，可单独发布供外部服务复用。</p>
+        <h2 data-i18n="arch.title">插件化外挂，按需取用</h2>
+        <p data-i18n="arch.desc"><code>cutin-core</code> 提供插件化 Agent 运行时；<code>loopra</code> 基于它实现完整的 Loopra 业务层。</p>
       </div>
 
       <div class="arch-grid">
         <div class="card arch-card reveal">
-          <span class="card-badge" data-i18n="arch.b1">纯内核</span>
-          <h3>loopra-model</h3>
-          <p data-i18n="arch.p1">ChatModel 客户端/协议、AgentLoop/SubAgent 推理循环、工具抽象与 SPI（AgentConfig/GoalGuard 等），不含任何编排设施。</p>
+          <span class="card-badge" data-i18n="arch.b1">核心引擎</span>
+          <h3>cutin-core</h3>
+          <p data-i18n="arch.p1">默认循环引擎、模型网关/Provider、拦截器、Hook、工具注册表、插件打包与生命周期，是 Loopra 全量能力的外挂宿主。</p>
         </div>
         <div class="card arch-card reveal">
-          <span class="card-badge" data-i18n="arch.b2">工具装备 + 编排</span>
-          <h3>loopra-harness</h3>
-          <p data-i18n="arch.p2">LoopraAgent 门面、内置工具、Goal/Checklist/项目/命令/会话持久化/配置、MCP/LSP/OpenAPI/Skill 技能桥接、定时任务。</p>
+          <span class="card-badge" data-i18n="arch.b2">业务层</span>
+          <h3>loopra</h3>
+          <p data-i18n="arch.p2">LoopraAgent 门面、内置工具、Goal/Checklist/项目/命令/会话/配置、MCP/LSP/OpenAPI/Skill 桥接、定时任务、ACP 与 Solon Web 接口。</p>
         </div>
         <div class="card arch-card reveal">
-          <span class="card-badge" data-i18n="arch.b3">协议支持</span>
-          <h3>loopra-acp</h3>
-          <p data-i18n="arch.p3">ACP 支持：将 Agent 注册为 ACP Agent（stdio / WebSocket）。</p>
-        </div>
-        <div class="card arch-card reveal">
-          <span class="card-badge" data-i18n="arch.b4">Web 服务</span>
-          <h3>loopra-web</h3>
-          <p data-i18n="arch.p4">Solon Web 服务、REST/SSE 接口和打包配置（聚合上述模块）。</p>
-        </div>
-        <div class="card arch-card reveal">
-          <span class="card-badge" data-i18n="arch.b5">前端 &amp; 桌面</span>
+          <span class="card-badge" data-i18n="arch.b3">前端 &amp; 桌面</span>
           <h3>loopra-front</h3>
-          <p data-i18n="arch.p5">Vue 前端与 Electron Desktop。</p>
+          <p data-i18n="arch.p3">Vue 前端与 Electron Desktop。</p>
         </div>
         <div class="card arch-card reveal">
-          <span class="card-badge" data-i18n="arch.b6">文档</span>
+          <span class="card-badge" data-i18n="arch.b4">文档</span>
           <h3>intro / docs</h3>
-          <p data-i18n="arch.p6">官网内容与项目文档，随仓库一同维护。</p>
+          <p data-i18n="arch.p4">官网内容与项目文档，随仓库一同维护。</p>
         </div>
       </div>
 
       <div class="arch-dep reveal">
-<pre data-i18n="arch.dep">loopra-model   ← loopra-harness（LoopraAgent / 内置工具 / Goal / 项目 / MCP / Skill）
+<pre data-i18n="arch.dep">cutin-core
      ↑
-     └────────← loopra-acp（ACP 注册，经 loopra-harness）
-
-loopra-web     ← 聚合 loopra-harness + loopra-acp（传递引入 loopra-model）</pre>
+loopra   （LoopraAgent / 内置工具 / Goal / 项目 / MCP / Skill / ACP / Web）</pre>
       </div>
 
       <ul class="arch-points reveal">
         <li>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          <span data-i18n="arch.pt1">只需基础 ChatModel / AgentLoop 推理内核 → 依赖 <b>loopra-model</b>，通过 SPI 自行装配编排设施。</span>
+          <span data-i18n="arch.pt1">需要定制 Agent 运行时 → 实现 <b>cutin-core</b> 插件，注册生命周期拦截器。</span>
         </li>
         <li>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          <span data-i18n="arch.pt2">需要开箱即用的 LoopraAgent、内置工具与 Goal / 项目 / MCP / Skill → 追加依赖 <b>loopra-harness</b>。</span>
+          <span data-i18n="arch.pt2">需要开箱即用的完整 Loopra → 运行 <b>loopra</b>，通过 cutin 插件扩展。</span>
         </li>
         <li>
           <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-          <span data-i18n="arch.pt3">需要把 Agent 暴露为 ACP Agent → 追加依赖 <b>loopra-acp</b>。</span>
+          <span data-i18n="arch.pt3">需要把 Agent 暴露为 ACP Agent → <b>loopra</b> 已内置。</span>
         </li>
       </ul>
     </div>

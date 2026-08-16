@@ -7,7 +7,7 @@
 set -e
 
 VERSION="v26.8.131"
-PACKAGE_URL="https://gh-proxy.org/https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-web-dist.tar.gz"
+PACKAGE_URL="https://gh-proxy.org/https://github.com/ezdemo/loopra/releases/download/${VERSION}/loopra-dist.tar.gz"
 TEMP_DIR="/tmp/loopra-install"
 
 # Colors

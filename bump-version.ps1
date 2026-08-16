@@ -178,6 +178,19 @@ if ($c -ne $old.Trim()) {
     Write-Host "  [OK] loopra/src/installDist/bin/version.txt"
 } else { Write-Host "  [--] loopra/src/installDist/bin/version.txt (unchanged)" }
 
+# 10.1 .release/version
+$path = Join-Path $root ".release/version"
+if (Test-Path $path) {
+    $c = [System.IO.File]::ReadAllText($path, [System.Text.Encoding]::UTF8)
+    $old = $c
+    $c = [regex]::Replace($c.Trim(), '^[\d.]+', $Version)
+    if ($c -ne $old.Trim()) {
+        $c = $c.TrimStart([char]0xFEFF)
+        [System.IO.File]::WriteAllText($path, $c + [Environment]::NewLine, $utf8NoBom)
+        Write-Host "  [OK] .release/version"
+    } else { Write-Host "  [--] .release/version (unchanged)" }
+} else { Write-Host "  [--] .release/version (not found)" }
+
 Write-Host ""
 Write-Host "Done! Version unified to $Version"
 Write-Host "Run: git diff to review, then commit."
