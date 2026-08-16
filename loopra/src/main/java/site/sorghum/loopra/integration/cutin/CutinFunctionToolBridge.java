@@ -1,0 +1,144 @@
+package site.sorghum.loopra.integration.cutin;
+
+import org.noear.snack4.ONode;
+import org.noear.solon.ai.chat.tool.FunctionTool;
+import site.sorghum.cutin.core.context.LoopContext;
+import site.sorghum.cutin.core.tool.*;
+import site.sorghum.loopra.tool.HitlRequiredException;
+
+import java.util.*;
+
+/**
+  * 把 Loopra/Solon 的 {@link FunctionTool} 桥接为 cutin 的 {@link Tool} 契约。
+ * <p>
+  * 注册与执行仍留在 Loopra，但工具会镜像到 cutin 中，使
+  * {@code DefaultLoopEngine} 可以通过 cutin 工具链派发它。
+ * </p>
+ */
+public final class CutinFunctionToolBridge implements Tool {
+
+    /** Loopra 工具执行上下文（__cwd / ctx），由 AgentLoop 在执行线程内注入。 */
+    private static final ThreadLocal<Map<String, Object>> CALL_CONTEXT = new ThreadLocal<>();
+
+    private final FunctionTool delegate;
+    private final ToolDefinition definition;
+
+    public CutinFunctionToolBridge(FunctionTool delegate) {
+        this.delegate = Objects.requireNonNull(delegate, "delegate");
+        this.definition = buildDefinition(delegate);
+    }
+
+    @Override
+    public String id() {
+        return delegate.name();
+    }
+
+    @Override
+    public ToolDefinition definition() {
+        return definition;
+    }
+
+    @Override
+    public ToolResult call(ToolCall call, LoopContext context) {
+        try {
+            Map<String, Object> args = new LinkedHashMap<>(call.arguments());
+            Map<String, Object> callContext = CALL_CONTEXT.get();
+            if (callContext != null) {
+                args.putAll(callContext);
+            }
+            org.noear.solon.ai.chat.tool.ToolResult result = delegate.call(args);
+            String content = result == null ? "" : result.getContent();
+            return ToolResult.success(call.id(), content == null ? "" : content);
+        } catch (HitlRequiredException exception) {
+            throw exception;
+        } catch (Throwable throwable) {
+            String message = throwable.getMessage();
+            return ToolResult.failure(
+                call.id(),
+                message == null ? throwable.getClass().getName() : message
+            );
+        }
+    }
+
+    /**
+     * 注入当前工具线程的 Loopra 执行上下文。
+     * <p>
+     * cutin 的 {@link ToolCall#arguments()} 只携带模型参数；Loopra 原有
+     * {@code __cwd}/{@code ctx} 等运行期上下文通过该 ThreadLocal 透传给 Solon 工具。
+     * </p>
+     */
+    public static void setCallContext(Map<String, Object> callContext) {
+        CALL_CONTEXT.set(callContext == null ? null : new HashMap<>(callContext));
+    }
+
+    public static void clearCallContext() {
+        CALL_CONTEXT.remove();
+    }
+
+    private static ToolDefinition buildDefinition(FunctionTool tool) {
+        Map<String, Object> schema = new LinkedHashMap<>();
+        String inputSchema = tool.inputSchema();
+        if (inputSchema != null && !inputSchema.isBlank()) {
+            try {
+                Object bean = ONode.ofJson(inputSchema).toBean(Map.class);
+                if (bean instanceof Map<?, ?> map) {
+                    for (Map.Entry<?, ?> entry : map.entrySet()) {
+                        schema.put(String.valueOf(entry.getKey()), entry.getValue());
+                    }
+                }
+            } catch (RuntimeException ignored) {
+                schema.put("type", "object");
+            }
+        }
+        if (schema.isEmpty()) {
+            schema.put("type", "object");
+        }
+        Map<String, Object> meta = tool.meta() == null ? Map.of() : tool.meta();
+        boolean readOnly = site.sorghum.loopra.bin.tool.ToolMetadata.isReadOnly(tool);
+        boolean stormExempt = site.sorghum.loopra.bin.tool.ToolMetadata.isStormExempt(tool);
+        long timeoutMillis = metaLong(meta.get("timeoutMillis"));
+        Set<String> roles = rolesFrom(meta.get("roles"));
+        Map<String, Object> attributes = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> entry : meta.entrySet()) {
+            if (entry.getValue() != null) {
+                attributes.put(entry.getKey(), entry.getValue());
+            }
+        }
+        return new ToolDefinition(
+            tool.name(),
+            tool.description(),
+            schema,
+            new ToolMetadata(readOnly, stormExempt, timeoutMillis, roles, attributes)
+        );
+    }
+
+    private static long metaLong(Object value) {
+        if (value instanceof Number number) {
+            return number.longValue();
+        }
+        if (value != null) {
+            try {
+                return Long.parseLong(String.valueOf(value));
+            } catch (NumberFormatException ignored) {
+                return 0L;
+            }
+        }
+        return 0L;
+    }
+
+    private static Set<String> rolesFrom(Object value) {
+        if (value instanceof List<?> list) {
+            Set<String> roles = new HashSet<>();
+            for (Object item : list) {
+                if (item != null) {
+                    roles.add(String.valueOf(item));
+                }
+            }
+            return Set.copyOf(roles);
+        }
+        if (value != null && !String.valueOf(value).isBlank()) {
+            return Set.of(String.valueOf(value).split(","));
+        }
+        return Set.of();
+    }
+}

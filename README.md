@@ -269,8 +269,8 @@ mvn clean package
 # 运行全部后端测试
 mvn test
 
-# 仅验证 Web 模块及其依赖模块
-mvn -pl loopra-web -am test
+# 仅验证 Loopra 模块及其依赖模块
+mvn -pl loopra -am test
 ```
 
 ### 前端与 Desktop
@@ -294,10 +294,8 @@ pnpm dev:electron
 
 ```text
 loopra/
-├── loopra-model/    # 纯内核（可独立发包）：ChatModel 客户端/协议、AgentLoop/SubAgent 推理循环、工具抽象与 SPI（AgentConfig/GoalGuard 等），不含任何编排设施
-├── loopra-harness/  # 工具装备 + 编排设施（可独立发包，依赖 loopra-model）：LoopraAgent 门面、内置工具、Goal/Checklist/项目/命令/会话持久化/配置、MCP/LSP/OpenAPI/Skill 技能桥接、定时任务
-├── loopra-acp/      # ACP 支持（可独立发包，依赖 loopra-harness）：将 Agent 注册为 ACP Agent（stdio/WebSocket）
-├── loopra-web/      # Solon Web 服务、REST/SSE 接口和打包配置（聚合上述模块）
+├── cutin-core/      # Cutin 核心框架：插件化生命周期、ModelProvider、工具注册表、循环引擎
+├── loopra/          # 基于 cutin 的单模块 Loopra：Agent 内核、内置工具、ACP、Solon Web、发布打包
 ├── loopra-front/    # Vue 前端与 Electron Desktop
 ├── intro/           # 官网内容
 ├── docs/            # 项目文档
@@ -309,18 +307,13 @@ loopra/
 ### 模块依赖关系
 
 ```text
-loopra-model   ← loopra-harness（LoopraAgent/内置工具/Goal/项目/MCP/Skill）
-     ↑
-     └────────← loopra-acp（ACP 注册，经 loopra-harness）
-
-loopra-web     ← 聚合 loopra-harness + loopra-acp（传递引入 loopra-model）
+loopra      →  cutin-core
 ```
 
-`loopra-model`、`loopra-harness`、`loopra-acp` 均为独立 Maven 模块，可单独发布供外部服务/工具复用：
+`cutin-core` 是插件化核心框架，`loopra` 是基于它组装出来的完整 Loopra 应用：
 
-- 只需基础 ChatModel / AgentLoop 推理内核 → 依赖 `loopra-model`（不含 Goal/项目/会话持久化等编排设施，通过 SPI 自行装配）
-- 需要开箱即用的 LoopraAgent、内置工具与 Goal/项目/MCP/Skill → 追加依赖 `loopra-harness`
-- 需要把 Agent 暴露为 ACP Agent → 追加依赖 `loopra-acp`
+- 需要通用 Agent 编排、生命周期拦截、工具注册和模型 Provider 能力 → 依赖 `cutin-core`
+- 需要开箱即用的 LoopraAgent、内置工具、ACP、Web 服务与桌面端 → 依赖 `loopra`
 
 ## 技术栈
 

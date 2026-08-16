@@ -39,3 +39,37 @@ describe('ChatMessage branching', () => {
     expect(enabled.emitted('branchSession')).toEqual([[message, 1]])
   })
 })
+
+describe('ChatMessage compacted summary', () => {
+  const compactedMessage = {
+    id: 10,
+    role: 'user',
+    time: '10:00',
+    content: '[历史上下文折叠]\n<compacted-summary>\n主要意图：实现登录页\n当前进度：已完成\n</compacted-summary>'
+  }
+
+  it('renders a compacted notice instead of a normal user bubble', () => {
+    const wrapper = mountMessage(compactedMessage)
+
+    expect(wrapper.find('.user-body').exists()).toBe(false)
+    expect(wrapper.find('.compacted-summary').exists()).toBe(true)
+    expect(wrapper.find('.compacted-summary-title').text()).toBe('较早对话已压缩')
+    expect(wrapper.find('.compacted-summary-content').exists()).toBe(false)
+  })
+
+  it('expands the checkpoint content on demand', async () => {
+    const wrapper = mountMessage(compactedMessage)
+
+    expect(wrapper.find('.compacted-summary-content').exists()).toBe(false)
+    await wrapper.find('.compacted-summary-btn').trigger('click')
+    expect(wrapper.find('.compacted-summary-content').exists()).toBe(true)
+    expect(wrapper.find('.compacted-summary-content').text()).toContain('实现登录页')
+  })
+
+  it('emits viewRawEvents when the raw record button is clicked', async () => {
+    const wrapper = mountMessage(compactedMessage)
+
+    await wrapper.find('.compacted-summary-btn.primary').trigger('click')
+    expect(wrapper.emitted('viewRawEvents')).toEqual([[compactedMessage]])
+  })
+})

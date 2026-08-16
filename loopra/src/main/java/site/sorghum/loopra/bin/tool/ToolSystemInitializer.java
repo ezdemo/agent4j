@@ -1,0 +1,219 @@
+package site.sorghum.loopra.bin.tool;
+
+import lombok.extern.slf4j.Slf4j;
+import org.noear.solon.ai.chat.tool.FunctionTool;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
+import site.sorghum.loopra.bin.agent.prompt.EnvInfoUtil;
+import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
+
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.*;
+import java.util.stream.Stream;
+
+/**
+ * 工具系统初始化器 —— 抽取 LoopraAgent 与 AgentService 中的重复代码。
+ * <p>
+ * 负责：注册 AgentTool → ToolRegistry、收集 toolSpecs、加载项目文档、
+ * 初始化 SkillStoreV2、构建 system prompt、创建 PromptPrefix。
+ * </p>
+ *
+ * @author Sorghum
+ */
+@Slf4j
+public class ToolSystemInitializer {
+
+    private static final int MAX_PROJECT_DOC_BYTES = 256 * 1024;
+
+    private static final List<String> PROJECT_RULE_NAMES = List.of(
+            "loopra.md",
+            "claude.md",
+            "agents.md",
+            "agent.md"
+    );
+
+    /**
+     * 执行完整的工具系统初始化。
+     *
+     * @param workspace           项目根目录
+     * @param apiUrl              LLM API 地址
+     * @param apiKey              LLM API 密钥
+     * @param disabledTools       禁用的工具名称集合（可为 null）
+     * @param blockedPaths        屏蔽的目录列表（可为 null）
+     * @param defaultSystemPrompt 默认系统提示词（当 ~/.loopra/loopra.md 不存在时使用）
+     * @return 初始化后的 Result，包含 ToolRegistry / PromptPrefix / SkillStoreV2 / systemPrompt
+     */
+    public static Result initialize(Path workspace, String apiUrl, String apiKey,
+                                    Set<String> disabledTools, List<String> blockedPaths,
+                                    String defaultSystemPrompt) {
+        return initialize(workspace, null, apiUrl, apiKey, disabledTools, blockedPaths, defaultSystemPrompt);
+    }
+
+    /**
+     * 执行完整的工具系统初始化（可指定状态项目）。
+     *
+     * @param stateWorkspace 状态项目（Goal/Checklist/会话持久化归属）；
+     *                       null 时回退为 {@code workspace}。隔离分支模式下传入主项目。
+     */
+    public static Result initialize(Path workspace, Path stateWorkspace, String apiUrl, String apiKey,
+                                    Set<String> disabledTools, List<String> blockedPaths,
+                                    String defaultSystemPrompt) {
+        return initialize(
+                SessionEnvironment.of(workspace, stateWorkspace),
+                apiUrl,
+                apiKey,
+                disabledTools,
+                blockedPaths,
+                defaultSystemPrompt
+        );
+    }
+
+    /**
+      * 使用单个会话环境执行完整的工具系统初始化。
+     */
+    public static Result initialize(SessionEnvironment environment, String apiUrl, String apiKey,
+                                    Set<String> disabledTools, List<String> blockedPaths,
+                                    String defaultSystemPrompt) {
+        Path workspace = environment == null ? null : environment.executionRoot();
+        final Set<String> effectiveDisabledTools = disabledTools != null ? disabledTools : Collections.emptySet();
+        final List<String> effectiveBlockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
+
+        // 1. 创建 ToolRegistry 并设置禁用工具
+        final ToolRegistry registry = new ToolRegistry();
+        registry.setDisabledTools(effectiveDisabledTools);
+        // 保存刷新上下文，供后续动态刷新工具列表使用
+        registry.setRefreshContext(environment, apiUrl, apiKey, effectiveBlockedPaths);
+        if (!effectiveDisabledTools.isEmpty()) {
+            log.info("[config] 已禁用工具: {}", String.join(", ", effectiveDisabledTools));
+        }
+        if (!effectiveBlockedPaths.isEmpty()) {
+            log.info("[config] 已屏蔽目录: {}", String.join(", ", effectiveBlockedPaths));
+        }
+
+        // 2. 使用 ToolScanUtil 统一扫描工具（Solon IoC + Skill 文件系统）
+        List<FunctionTool> agentTools = ToolScanUtil.scanTools(workspace);
+
+        // 3. 收集工具规范文本 & 注册工具
+        StringBuilder toolSpecsBuilder = new StringBuilder();
+        toolSpecsBuilder.append("\n\n## 可用工具规范\n\n");
+
+        for (FunctionTool tool : agentTools) {
+            String toolSpec = tool.descriptionAndMeta();
+            if (toolSpec != null && !toolSpec.isEmpty()) {
+                toolSpecsBuilder.append(toolSpec).append("\n\n---\n\n");
+            }
+        }
+
+        // 4. 加载基准系统提示词（编码代理身份规则）
+        String systemPrompt = loadDefaultSystemPrompt(defaultSystemPrompt);
+        // 4.1 加载solon skill 基准提示词
+        systemPrompt  = systemPrompt + "\n\n" + ToolScanUtil.getSkillToolDescription(workspace);
+        // 5. 追加工具规范到 system prompt
+        systemPrompt = systemPrompt + "\n\n";
+
+        // 6. 注入环境信息（工作目录、平台、Shell、OS 版本、当前日期）——随项目而变
+        systemPrompt = systemPrompt + "\n\n---\n\n" + EnvInfoUtil.buildEnvInfo(workspace);
+
+        // 7. 项目文档后置到最底部 —— 最大化前缀缓存命中。
+        //    稳定的 system prompt（身份/规则/工具定义/Skill 索引）保持在头部，
+        //    项目特定的 loopra.md/CLAUDE.md 放在末尾，换项目时只需 discard 尾部缓存。
+        //    计划模式等动态状态不进 system prompt，由 AgentLoop 按需注入工具约定尾部。
+        String projectMd = loadProjectMd(workspace);
+        if (!projectMd.isEmpty()) {
+            systemPrompt = systemPrompt + "\n\n---\n\n" + projectMd;
+        }
+
+        // 8. 项目记忆不在此注入 —— 由 memory 工具按需检索，避免每轮占用上下文。
+        //    DEFAULT_SYSTEM_PROMPT 中引导 AI 首次接入项目时主动调用 memory 工具检索已有记忆。
+
+        // 9. 构建 PromptPrefix（缓存优先）
+        PromptPrefix prefix = new PromptPrefix(systemPrompt, registry.toOpenAiTools());
+
+        log.info("[init] 工具系统初始化完成 — 工具数: {}", agentTools.size());
+        return new Result(registry, prefix, systemPrompt);
+    }
+
+    /**
+     * 加载默认系统提示词。固定返回传入的 fallback（即硬编码 DEFAULT_SYSTEM_PROMPT），
+     * 不再从 ~/.loopra/loopra.md 读取。
+     */
+    private static String loadDefaultSystemPrompt(String fallback) {
+        return fallback;
+    }
+
+    /**
+      * 从执行根加载项目规则文件。
+      * <p>文件名大小写不敏感匹配，迁移时能保留诸如 {@code AGENTS.md}
+      * 或 {@code CLAUDE.md} 的原始文件名。</p>
+     */
+    public static String loadProjectMd(Path workspace) {
+        if (workspace == null || !Files.isDirectory(workspace)) {
+            return "";
+        }
+
+        Map<String, Path> matched = new LinkedHashMap<>();
+        try (Stream<Path> entries = Files.list(workspace)) {
+            for (Path file : entries.toList()) {
+                if (!Files.isRegularFile(file)) continue;
+                Path fileName = file.getFileName();
+                if (fileName == null) continue;
+                String canonicalName = fileName.toString().toLowerCase();
+                if (PROJECT_RULE_NAMES.contains(canonicalName)) {
+                    matched.putIfAbsent(canonicalName, file);
+                }
+            }
+        } catch (IOException e) {
+            log.warn("[init] 读取项目根目录失败: {}", e.getMessage());
+            return "";
+        }
+
+        StringBuilder sb = new StringBuilder();
+        for (String name : PROJECT_RULE_NAMES) {
+            Path file = matched.get(name);
+            if (file == null) continue;
+            try {
+                if (Files.size(file) > MAX_PROJECT_DOC_BYTES) {
+                    log.warn("[init] 跳过过大的项目规则文件: {} ({} bytes)", file, Files.size(file));
+                    continue;
+                }
+                String content = Files.readString(file).trim();
+                if (content.isEmpty()) continue;
+                if (sb.length() > 0) {
+                    sb.append("\n\n");
+                }
+                sb.append("## ").append(file.getFileName()).append("\n\n").append(content);
+            } catch (IOException e) {
+                log.warn("[init] 读取项目规则文件失败: {} - {}", file, e.getMessage());
+            }
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 初始化结果，包含所有已初始化的组件。
+     */
+    public static class Result {
+        public final ToolRegistry toolRegistry;
+        public final PromptPrefix promptPrefix;
+        /**
+         * 完整系统提示词（含项目文档 + base + 工具定义 + Skill 索引）
+         */
+        public final String systemPrompt;
+        /**
+         * 后缀部分（工具定义 + Skill 索引），不依赖于具体项目的项目文档
+         */
+        public final String suffix;
+
+        Result(ToolRegistry toolRegistry, PromptPrefix promptPrefix,
+               String systemPrompt) {
+            this.toolRegistry = toolRegistry;
+            this.promptPrefix = promptPrefix;
+            this.systemPrompt = systemPrompt;
+            // 从完整提示词中提取后缀：去掉项目文档和 base prompt 部分
+            // 工具定义以 "\n\n## 可用工具规范" 开头
+            int suffixStart = systemPrompt.indexOf("\n\n## 可用工具规范");
+            this.suffix = suffixStart >= 0 ? systemPrompt.substring(suffixStart) : "";
+        }
+    }
+}

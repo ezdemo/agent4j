@@ -129,6 +129,7 @@
             @open-file="openFile"
             @open-diff="openStoredDiff"
             @revert-file-changes="openFileRevertDialog"
+            @view-raw-events="openRawEvents"
         />
       </div>
       <div v-if="virtualWindow.bottomHeight" class="virtual-spacer" :style="{ height: virtualWindow.bottomHeight + 'px' }"></div>
@@ -218,6 +219,52 @@
         @close="closeDiffViewer"
         @change-mode="changeDiffViewerMode"
     />
+
+    <!-- 原始事件日志弹窗：上下文压缩前的消息与 tool result -->
+    <Teleport to="body">
+      <div v-if="rawEventsOpen" class="raw-events-overlay" @click.self="closeRawEvents">
+        <div class="raw-events-modal">
+          <div class="raw-events-head">
+            <h3>原始记录</h3>
+            <span class="raw-events-count">{{ rawEventItems.length }} 条</span>
+            <div style="flex:1"></div>
+            <button class="raw-events-close" type="button" aria-label="关闭" @click="closeRawEvents">&times;</button>
+          </div>
+          <div class="raw-events-body">
+            <div v-if="rawEventsLoading" class="raw-events-empty">加载中...</div>
+            <div v-else-if="rawEventsError" class="raw-events-empty">{{ rawEventsError }}</div>
+            <div v-else-if="rawEventItems.length === 0" class="raw-events-empty">暂无原始记录</div>
+            <div v-else class="raw-events-list">
+              <div v-for="(item, i) in rawEventItems" :key="item.id" class="raw-event" :class="'raw-event-' + item.role">
+                <div class="raw-event-head">
+                  <span class="raw-event-role">{{ rawEventRoleLabel(item.role) }}</span>
+                  <span v-if="item.webHidden" class="raw-event-tag">隐藏消息</span>
+                  <span class="raw-event-time">{{ item.time }}</span>
+                  <span class="raw-event-spacer"></span>
+                  <span v-if="item.role === 'assistant' && item.blocks.length" class="raw-event-count">{{ item.blocks.length }} 块</span>
+                </div>
+                <div v-if="item.role === 'user'" class="raw-event-user">
+                  <template v-if="item.content">{{ item.content }}</template>
+                  <template v-else-if="item.images?.length">
+                    <span v-for="(img, ii) in item.images" :key="ii" class="raw-event-image" :title="img">{{ img }}</span>
+                  </template>
+                  <span v-else class="raw-event-empty">（空消息）</span>
+                </div>
+                <BlockRenderer v-else :blocks="item.blocks" />
+              </div>
+              <div v-if="rawEventExtras.length" class="raw-event-extra-title">未归属到消息的工具结果</div>
+              <div v-for="(event, i) in rawEventExtras" :key="'extra-' + i" class="raw-event raw-event-tool">
+                <div class="raw-event-head">
+                  <span class="raw-event-role">工具结果</span>
+                  <span v-if="event.tool_call_id" class="raw-event-tool">tool_call_id: {{ event.tool_call_id }}</span>
+                </div>
+                <pre class="raw-event-content">{{ rawEventText(event) }}</pre>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </Teleport>
 
     <!-- 输入区（独立组件） -->
     <Transition name="welcome-input-drop">
@@ -330,12 +377,14 @@ import {CheckOutlined, CloseOutlined, FileTextOutlined} from '@ant-design/icons-
 import {agentAPI, chatAPI, configAPI, gitAPI, sessionsAPI, snapshotAPI} from '../services/api'
 import {basicMarkdown} from '../utils/basicMarkdown'
 import {sanitize} from '../utils/sanitize'
+import {buildHistoryItems, mergeFileChanges, moveFileChangesToEnd} from '../utils/chatHistory'
 import {getAssistantTurnBoundaries} from '../utils/sessionBranch'
 import ChatInput from '../components/ChatInput.vue'
 import ActionConfirmDialog from '../components/ActionConfirmDialog.vue'
 
 const ChatMessage = defineAsyncComponent(() => import('../components/ChatMessage.vue'))
 const DiffViewer = defineAsyncComponent(() => import('../components/DiffViewer.vue'))
+const BlockRenderer = defineAsyncComponent(() => import('../components/BlockRenderer.vue'))
 
 import {useAppStore} from '../stores/app'
 
@@ -698,6 +747,73 @@ const closeDiffViewer = () => {
   diffViewer.value = { open: false, file: '', diff: '', content: '', mode: 'content', loading: false, stat: '', diffStat: '', contentLoaded: false, contentExists: false, diffLoaded: false }
 }
 
+// 原始事件日志（上下文压缩前的消息与 tool result）
+const rawEventsOpen = ref(false)
+const rawEventsLoading = ref(false)
+const rawEventsError = ref('')
+const rawEvents = ref([])
+const rawEventItems = ref([])
+const rawEventExtras = ref([])
+
+const openRawEvents = async () => {
+  const workspaceHash = props.workspaceHash
+  const sessionName = props.sessionName
+  if (!workspaceHash || !sessionName) return
+  rawEventsOpen.value = true
+  rawEventsLoading.value = true
+  rawEventsError.value = ''
+  rawEvents.value = []
+  try {
+    const res = await agentAPI.getRawEvents(workspaceHash, sessionName)
+    if (res?.success) {
+      rawEvents.value = Array.isArray(res.data) ? res.data : []
+      const built = buildHistoryItems(rawEvents.value, true)
+      rawEventItems.value = built.items
+      rawEventExtras.value = built.unmergedToolResults
+    } else {
+      rawEventsError.value = res?.message || '加载原始记录失败'
+    }
+  } catch (e) {
+    rawEventsError.value = '加载原始记录失败: ' + (e?.message || '')
+  } finally {
+    rawEventsLoading.value = false
+  }
+}
+
+const closeRawEvents = () => {
+  rawEventsOpen.value = false
+  rawEventsLoading.value = false
+  rawEventsError.value = ''
+  rawEvents.value = []
+  rawEventItems.value = []
+  rawEventExtras.value = []
+}
+
+const rawEventRoleLabel = (role) => {
+  if (role === 'user') return '用户'
+  if (role === 'assistant') return '助手'
+  if (role === 'tool') return '工具结果'
+  return role || '未知'
+}
+
+const rawEventText = (event) => {
+  if (!event) return ''
+  if (typeof event.content === 'string' && event.content) return event.content
+  if (typeof event.contentParts === 'string' && event.contentParts) return event.contentParts
+  if (Array.isArray(event.contentParts)) {
+    const text = event.contentParts
+      .map(part => (part && typeof part.text === 'string' ? part.text : part?.type || ''))
+      .filter(Boolean)
+      .join('\n')
+    if (text) return text
+  }
+  if (Array.isArray(event.tool_calls) && event.tool_calls.length > 0) {
+    return JSON.stringify(event.tool_calls, null, 2)
+  }
+  if (event.content != null) return String(event.content)
+  return JSON.stringify(event, null, 2)
+}
+
 const messages = computed(() => store.getSessionMessages(props.sessionName))
 const streaming = computed(() => store.getSessionStreaming(props.sessionName))
 const queuedMessagesBySession = ref({})
@@ -906,6 +1022,12 @@ watch(() => messages.value.map(messageKey), ids => {
 watch(() => props.sessionName, () => {
   messageHeights.clear()
   virtualScrollTop.value = 0
+  rawEventsOpen.value = false
+  rawEventsLoading.value = false
+  rawEventsError.value = ''
+  rawEvents.value = []
+  rawEventItems.value = []
+  rawEventExtras.value = []
   void focusComposer()
 })
 
@@ -1343,13 +1465,6 @@ const notifyAssistantReply = (msg) => {
   window.electronAPI?.desktopPet?.showReply(preview).catch?.(() => {})
 }
 
-// 格式化时间戳（Unix 毫秒）为本地时间字符串
-const formatTimestamp = (timestamp) => {
-  if (!timestamp) return now()
-  const d = new Date(timestamp)
-  return d.toLocaleTimeString('zh-CN', {hour12: false, hour: '2-digit', minute: '2-digit'})
-}
-
 // 全局函数：代码复制（被 onclick 引用）
 window.copyCode = (btn) => {
   const wrap = btn.closest('.code-block-wrap')
@@ -1557,36 +1672,6 @@ const openFile = async (filePath) => {
  *   收到有内容的 SSE 事件时才创建助手气泡
  * - /skill: 命令：显示用户气泡 + 助手气泡（正常流程）
  */
-const mergeFileChanges = (blocks, changes) => {
-  if (!Array.isArray(changes) || changes.length === 0) return
-  let summary = blocks.find(block => block.type === 'file_changes')
-  if (!summary) {
-    summary = {type: 'file_changes', changes: []}
-    blocks.push(summary)
-  }
-  const byPath = new Map(summary.changes.map(change => [change.path, {...change}]))
-  for (const change of changes) {
-    if (!change?.path) continue
-    const existing = byPath.get(change.path)
-    byPath.set(change.path, existing ? {
-      ...existing,
-      additions: Number(existing.additions || 0) + Number(change.additions || 0),
-      deletions: Number(existing.deletions || 0) + Number(change.deletions || 0),
-      created: Boolean(existing.created || change.created),
-      diff: [existing.diff, change.diff].filter(Boolean).join('\n')
-    } : {...change})
-  }
-  summary.changes = [...byPath.values()]
-}
-
-const moveFileChangesToEnd = (blocks) => {
-  const changes = blocks.filter(block => block.type === 'file_changes')
-  if (changes.length === 0) return
-  const summary = changes[0]
-  const rest = blocks.filter(block => block.type !== 'file_changes')
-  blocks.splice(0, blocks.length, ...rest, summary)
-}
-
 const sendMessage = async (images = [], overrideText = null, modelSelection = null,
                             targetSessionName = props.sessionName, targetWorkspaceHash = props.workspaceHash,
                             reasoningEffort = getSessionReasoningEffort(targetSessionName, targetWorkspaceHash),
@@ -2291,99 +2376,13 @@ const loadHistory = async (sessionName, force = false, workspaceHash = props.wor
   try {
     const r = await agentAPI.getHistory(targetWorkspace, targetSession)
     if (r.success && r.data) {
-      const raw = r.data, tr = {}
-      const assistantBoundaries = getAssistantTurnBoundaries(raw)
+      const raw = r.data
+      const visibleRaw = raw.filter(m => !(m.web_hidden || m.webHidden))
+      const assistantBoundaries = getAssistantTurnBoundaries(visibleRaw)
+      const {items: merged} = buildHistoryItems(visibleRaw)
       let assistantTurn = 0
-      for (const m of raw) if (m.role === 'tool' && m.tool_call_id) {
-        tr[m.tool_call_id] = {
-          content: m.content || '',
-          durationMs: m.tool_duration_ms ?? m.toolDurationMs ?? null,
-          startedAt: m.tool_started_at ?? m.toolStartedAt ?? null,
-          finishedAt: m.tool_finished_at ?? m.toolFinishedAt ?? null
-        }
-      }
-      const merged = []
-      let lastAssistantItem = null
-      let idCounter = 0
-      for (const m of raw) {
-        if (m.role === 'tool') continue
-        if (m.role === 'user') {
-          if (m.web_hidden || m.webHidden) {
-            lastAssistantItem = null
-            continue
-          }
-          // 用户消息：创建新item
-          const item = {id: Date.now() + idCounter++, role: 'user', time: formatTimestamp(m.timestamp), blocks: []}
-          // 多模态消息：contentParts 为 [{type:'text',...},{type:'image_url',...}] 数组
-          const parts = m.contentParts || (Array.isArray(m.content) ? m.content : null)
-          if (parts && parts.length > 0) {
-            const texts = []
-            const imgs = []
-            for (const part of parts) {
-              if (part.type === 'text' && part.text) texts.push(part.text)
-              if (part.type === 'image_url') {
-                const url = part.image_url?.url || part.imageUrl?.url
-                if (url) imgs.push(url)
-              }
-            }
-            item.content = texts.join('\n')
-            if (imgs.length > 0) item.images = imgs
-          } else {
-            item.content = m.content || ''
-          }
-          // 恢复快照检查点 ID（JSONL 持久化的 snapshot_id 字段）
-          if (m.snapshot_id) {
-            item.snapshotId = m.snapshot_id
-          }
-          // rollback_id 独立于代码快照；旧会话则以 snapshot_id 兼容。
-          item.rollbackId = m.rollback_id || m.snapshot_id || null
-          item.rollbackTimestamp = m.timestamp || null
-          merged.push(item)
-          lastAssistantItem = null // 重置
-        } else {
-          // assistant消息：合并连续的assistant消息
-          if (!lastAssistantItem) {
-            // 创建新的assistant item
-            lastAssistantItem = {id: Date.now() + idCounter++, role: 'assistant', time: formatTimestamp(m.timestamp), blocks: [], sourceMessageCount: assistantBoundaries[assistantTurn++]}
-            merged.push(lastAssistantItem)
-          } else {
-            // 更新时间戳为最新的
-            lastAssistantItem.time = formatTimestamp(m.timestamp)
-          }
-          if (m.reasoning_content) lastAssistantItem.blocks.push({
-            type: 'reasoning',
-            content: m.reasoning_content,
-            showContent: false
-          })
-          if (m.tool_calls) for (const tc of m.tool_calls) {
-            let name = tc.function?.name || tc.name || '', args = tc.function?.arguments || tc.arguments || ''
-            if (typeof args === 'string') try {
-              args = JSON.parse(args)
-            } catch {
-            }
-            const toolResult = tr[tc.id]
-            const hasResult = Object.hasOwn(tr, tc.id)
-            lastAssistantItem.blocks.push({
-              type: 'tool_call',
-              name,
-              status: hasResult ? '成功' : '执行中',
-              args,
-              result: toolResult?.content || '',
-              toolDurationMs: toolResult?.durationMs,
-              toolStartedAt: toolResult?.startedAt || m.timestamp,
-              toolFinishedAt: toolResult?.finishedAt,
-              expanded: !hasResult
-            })
-          }
-          if (m.content) lastAssistantItem.blocks.push({type: 'content', content: m.content})
-          const fileChanges = m.file_changes || m.fileChanges
-          if (Array.isArray(fileChanges) && fileChanges.length > 0) {
-            mergeFileChanges(lastAssistantItem.blocks, fileChanges)
-          }
-        }
-      }
       for (const item of merged) {
-        if (item.role === 'assistant') moveFileChangesToEnd(item.blocks)
+        if (item.role === 'assistant') item.sourceMessageCount = assistantBoundaries[assistantTurn++]
       }
       if (statusToken !== null && !isCurrentSessionStatus(statusToken, targetWorkspace, targetSession)) return
       // 本地 SSE 流正在活跃输出时禁止用持久化历史整体替换消息数组：
@@ -3397,6 +3396,176 @@ defineExpose({clearMessages, resetLocalMessages, loadSession, sendCommand, start
 .image-preview-close:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 2px;
+}
+
+/* 原始事件日志弹窗 */
+.raw-events-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+  padding: 24px;
+}
+
+.raw-events-modal {
+  background: var(--glass-bg);
+  backdrop-filter: blur(var(--blur));
+  -webkit-backdrop-filter: blur(var(--blur));
+  border: 1px solid var(--glass-border);
+  border-radius: var(--r-lg);
+  width: min(900px, 94vw);
+  height: min(78vh, 720px);
+  display: flex;
+  flex-direction: column;
+  box-shadow: var(--glass-shadow);
+  overflow: hidden;
+}
+
+.raw-events-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.raw-events-head h3 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.raw-events-count {
+  font-size: 11px;
+  color: var(--fg-4);
+  background: var(--bg-3);
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+}
+
+.raw-events-close {
+  background: none;
+  border: none;
+  font-size: 20px;
+  color: var(--fg-3);
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.raw-events-close:hover {
+  color: var(--fg);
+}
+
+.raw-events-body {
+  flex: 1;
+  overflow: auto;
+  padding: 14px 16px;
+}
+
+.raw-events-empty {
+  padding: 40px 0;
+  text-align: center;
+  color: var(--fg-4);
+  font-size: 13px;
+}
+
+.raw-events-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.raw-event {
+  border: 1px solid var(--border);
+  border-radius: var(--r);
+  background: var(--bg);
+  overflow: hidden;
+}
+
+.raw-event-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-3);
+}
+
+.raw-event-role {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-2);
+}
+
+.raw-event-tag {
+  font-size: 11px;
+  color: var(--fg-4);
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  padding: 1px 6px;
+}
+
+.raw-event-time {
+  font-size: 11px;
+  color: var(--fg-4);
+}
+
+.raw-event-spacer {
+  flex: 1;
+}
+
+.raw-event-count {
+  font-size: 11px;
+  color: var(--fg-4);
+}
+
+.raw-event-tool {
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--fg-4);
+}
+
+.raw-event-user {
+  padding: 10px 12px;
+  color: var(--fg-2);
+  font-size: 13px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.raw-event-image {
+  display: block;
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--accent);
+  word-break: break-all;
+  margin-top: 4px;
+}
+
+.raw-event-extra-title {
+  margin-top: 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--fg-3);
+}
+
+.raw-event-content {
+  margin: 0;
+  padding: 10px 12px;
+  font-family: var(--mono);
+  font-size: 12px;
+  line-height: 1.6;
+  color: var(--fg-2);
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-x: auto;
 }
 
 /* ===== 无会话时禁用输入条 ===== */

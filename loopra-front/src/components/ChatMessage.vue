@@ -2,7 +2,27 @@
   <div ref="msgRef" class="msg" :class="msg.role" :data-msg-idx="idx">
     <!-- 用户消息 -->
     <template v-if="msg.role === 'user'">
-      <div class="msg-body user-body">
+      <div v-if="isCompactedSummary" class="msg-body compacted-body">
+        <div class="compacted-summary">
+          <div class="compacted-summary-head">
+            <svg class="compacted-summary-icon" width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true">
+              <path d="M4 6h16M4 12h16M4 18h10"/>
+            </svg>
+            <span class="compacted-summary-title">较早对话已压缩</span>
+            <button class="compacted-summary-btn" type="button" @click="compactedExpanded = !compactedExpanded">
+              {{ compactedExpanded ? '收起摘要' : '查看摘要' }}
+            </button>
+            <button class="compacted-summary-btn primary" type="button" @click="$emit('viewRawEvents', msg)">
+              查看原始记录
+            </button>
+          </div>
+          <div v-if="compactedExpanded" class="compacted-summary-content">{{ compactedCheckpoint }}</div>
+        </div>
+        <div class="msg-footer">
+          <span class="msg-time">{{ msg.time }}</span>
+        </div>
+      </div>
+      <div v-if="!isCompactedSummary" class="msg-body user-body">
         <div v-if="userCollapsedBlock" class="user-auto-message">
           <button class="user-auto-message-trigger" type="button" :aria-expanded="userAutoMessageExpanded"
                   @click="userAutoMessageExpanded = !userAutoMessageExpanded">
@@ -113,7 +133,7 @@ const props = defineProps({
   streaming: {type: Boolean, default: false}
 })
 
-const emit = defineEmits(['previewImage', 'rollbackSnapshot', 'copyMessage', 'branchSession', 'sendChoice', 'openFile', 'openDiff', 'revertFileChanges'])
+const emit = defineEmits(['previewImage', 'rollbackSnapshot', 'copyMessage', 'branchSession', 'sendChoice', 'openFile', 'openDiff', 'revertFileChanges', 'viewRawEvents'])
 
 const isElectron = platform.isElectron
 
@@ -135,6 +155,18 @@ const userDisplayText = computed(() => {
   return c.slice(0, USER_MAX_LEN) + '...'
 })
 const userAutoMessageExpanded = ref(false)
+const COMPACTED_SUMMARY_PREFIX = '[历史上下文折叠'
+const compactedExpanded = ref(false)
+const isCompactedSummary = computed(() =>
+  props.msg.role === 'user' && (props.msg.content || '').startsWith(COMPACTED_SUMMARY_PREFIX)
+)
+const compactedCheckpoint = computed(() => {
+  const content = props.msg.content || ''
+  const start = content.indexOf('<compacted-summary>')
+  if (start < 0) return content
+  const end = content.indexOf('</compacted-summary>', start)
+  return end > start ? content.slice(start + '<compacted-summary>'.length, end).trim() : content
+})
 const rollbackId = computed(() => props.msg.rollbackId || props.msg.snapshotId)
 const rollbackKey = computed(() => rollbackId.value || props.msg.rollbackTimestamp)
 
@@ -384,6 +416,74 @@ onBeforeUnmount(() => {
   padding: 8px 12px;
   border-radius: var(--r-lg);
   box-shadow: var(--glass-shadow);
+}
+
+.compacted-body {
+  width: min(720px, 100%);
+}
+
+.compacted-summary {
+  overflow: hidden;
+  border: 1px dashed var(--border-2);
+  border-radius: var(--r);
+  background: var(--bg-2);
+}
+
+.compacted-summary-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.compacted-summary-icon {
+  flex-shrink: 0;
+  color: var(--fg-4);
+}
+
+.compacted-summary-title {
+  flex: 1;
+  color: var(--fg-2);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.compacted-summary-btn {
+  flex-shrink: 0;
+  padding: 4px 9px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--fg-3);
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.compacted-summary-btn.primary {
+  color: var(--accent);
+  border-color: color-mix(in srgb, var(--accent) 35%, transparent);
+}
+
+.compacted-summary-btn:hover {
+  background: var(--bg-3);
+  color: var(--fg);
+}
+
+.compacted-summary-content {
+  max-height: 340px;
+  overflow: auto;
+  margin: 0 8px 8px;
+  padding: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  background: var(--bg);
+  color: var(--fg-2);
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .user-body ::selection {

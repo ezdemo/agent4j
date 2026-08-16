@@ -2,7 +2,7 @@
 # 供 electron-builder 的 extraResources 嵌入前端安装包（Windows 本地打包用）。
 # 用法：powershell -ExecutionPolicy Bypass -File .release/embed-core.ps1 [-Tarball <path>]
 param(
-    [string]$Tarball = (Join-Path $PSScriptRoot "..\loopra-web\target\loopra-web-dist.tar.gz")
+    [string]$Tarball = (Join-Path $PSScriptRoot "..\loopra\target\loopra-dist.tar.gz")
 )
 
 $ErrorActionPreference = "Stop"
@@ -12,7 +12,7 @@ $dest = Join-Path $root "loopra-front\resources\loopra-core"
 
 if (-not (Test-Path $Tarball)) {
     Write-Host "[ERROR] 未找到核心分发包: $Tarball" -ForegroundColor Red
-    Write-Host "        请先构建 loopra-web：mvn -B -ntp -DskipTests -pl loopra-web package" -ForegroundColor Yellow
+    Write-Host "        请先构建 loopra：mvn -B -ntp -DskipTests -pl loopra package" -ForegroundColor Yellow
     exit 1
 }
 

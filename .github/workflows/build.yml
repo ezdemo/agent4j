@@ -196,13 +196,13 @@ jobs:
         run: mvn -B -ntp -DskipTests -gs .workflow/maven-central-settings.xml -s .workflow/maven-central-settings.xml clean verify
 
       - name: Verify artifact
-        run: test -f ./loopra-web/target/loopra-web-dist.tar.gz
+        run: test -f ./loopra/target/loopra-dist.tar.gz
 
       - name: Upload artifact
         uses: actions/upload-artifact@v7
         with:
           name: loopra-web-dist
-          path: ./loopra-web/target/loopra-web-dist.tar.gz
+          path: ./loopra/target/loopra-dist.tar.gz
           retention-days: 7
 
   # ──────────────────────────────────────────────

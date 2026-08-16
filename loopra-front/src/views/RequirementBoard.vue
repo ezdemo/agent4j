@@ -340,9 +340,8 @@ const COLUMNS = [
 // 项目列表：优先从后端拉取；后端不可用时（纯前端演示）回退到演示项目
 const MOCK_PROJECTS = [
   { hash: 'p_agent4j', name: 'agent4j' },
-  { hash: 'p_loopra-web', name: 'loopra-web' },
-  { hash: 'p_loopra-harness', name: 'loopra-harness' },
-  { hash: 'p_loopra-model', name: 'loopra-model' },
+  { hash: 'p_cutin-core', name: 'cutin-core' },
+  { hash: 'p_loopra', name: 'loopra' },
   { hash: 'p_loopra-front', name: 'loopra-front' }
 ]
 const STATUS_LABELS = { todo: '待执行', doing: '执行中', done: '已完成', failed: '已失败' }
