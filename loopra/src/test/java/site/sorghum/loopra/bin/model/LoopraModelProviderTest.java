@@ -1,9 +1,14 @@
 package site.sorghum.loopra.bin.model;
 
 import org.junit.jupiter.api.Test;
+import site.sorghum.cutin.core.context.Message;
+import site.sorghum.cutin.core.model.ModelCallRequest;
 import site.sorghum.cutin.integrations.model.AnthropicMessagesProvider;
 import site.sorghum.cutin.integrations.model.OpenAiChatCompletionsProvider;
 import site.sorghum.cutin.integrations.model.OpenAiResponsesProvider;
+
+import java.util.List;
+import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -48,6 +53,19 @@ class LoopraModelProviderTest {
         assertEquals("mimo-v2.5[512k]", fork.getModel());
         assertEquals("mimo-v2.5", fork.effectiveModel());
         assertInstanceOf(OpenAiResponsesProvider.class, fork.provider());
+    }
+
+    @Test
+    void preparesReasoningEffortForResponsesRequests() {
+        LoopraModelProvider provider = provider("openai", "responses", "gpt-5");
+        ModelCallRequest prepared = provider.prepareRequest(new ModelCallRequest(
+            "gpt-5",
+            List.of(new Message("user", "hi")),
+            List.of(),
+            Map.of()
+        ));
+
+        assertEquals("high", prepared.options().get("reasoningEffort"));
     }
 
     private static LoopraModelProvider provider(String channelId, String protocol, String model) {

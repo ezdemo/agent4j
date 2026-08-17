@@ -48,6 +48,7 @@ import site.sorghum.loopra.integration.cutin.plugin.compaction.LoopraCompactionH
 import site.sorghum.loopra.integration.cutin.plugin.compaction.LoopraCompactionPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitHost;
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.httplog.LoopraHttpLogPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.lifecycle.LoopraLifecycleHost;
 import site.sorghum.loopra.integration.cutin.plugin.lifecycle.LoopraLifecyclePlugin;
 import site.sorghum.loopra.integration.cutin.plugin.plan.LoopraPlanHost;
@@ -308,6 +309,7 @@ public class AgentLoop implements
                 modelProvider,
                 registry,
                 new LoopraLifecyclePlugin(this),
+                new LoopraHttpLogPlugin(modelProvider),
                 new LoopraUsagePlugin(this),
                 new LoopraCompactionPlugin(this),
                 new LoopraModelPolicyPlugin(this),

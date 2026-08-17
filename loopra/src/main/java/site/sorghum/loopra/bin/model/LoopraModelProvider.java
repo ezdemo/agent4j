@@ -79,6 +79,11 @@ public class LoopraModelProvider implements ModelProvider {
         return new LoopraModelProvider(apiUrl, apiKey, model, "none", modelChannelId, apiProtocol);
     }
 
+    /** 当前模型服务的请求地址。 */
+    public String apiUrl() {
+        return apiUrl;
+    }
+
     /** 当前 Provider 使用的 cutin 协议 Provider。 */
     public ModelProvider provider() {
         ModelProvider current = provider;
@@ -102,12 +107,12 @@ public class LoopraModelProvider implements ModelProvider {
 
     @Override
     public ModelResponse call(ModelCallRequest request) {
-        return provider().call(runtimeRequest(request));
+        return provider().call(prepareRequest(request));
     }
 
     @Override
     public Stream<StreamChunk> stream(ModelCallRequest request) {
-        Stream<StreamChunk> raw = provider().stream(runtimeRequest(request));
+        Stream<StreamChunk> raw = provider().stream(prepareRequest(request));
         AtomicReference<Stream<StreamChunk>> trackedRef = new AtomicReference<>();
         Stream<StreamChunk> tracked = raw.onClose(() -> {
             if (trackedRef.get() == activeStream) {
@@ -233,7 +238,7 @@ public class LoopraModelProvider implements ModelProvider {
     }
 
     /** 把 Loopra 运行期参数合并进请求，请求中已有的值优先。 */
-    private ModelCallRequest runtimeRequest(ModelCallRequest request) {
+    public ModelCallRequest prepareRequest(ModelCallRequest request) {
         Map<String, Object> options = new HashMap<>(request.options());
         options.putIfAbsent("reasoningEffort", reasoningEffort);
         if (fastMode) {

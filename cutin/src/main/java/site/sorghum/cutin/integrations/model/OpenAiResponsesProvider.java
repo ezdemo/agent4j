@@ -82,9 +82,9 @@ public final class OpenAiResponsesProvider implements ModelProvider {
             reasoning.set("effort", reasoningEffort);
             reasoning.set("summary", "auto");
             body.set("reasoning", reasoning);
-            ONode include = JsonSupport.array();
-            include.add("reasoning.encrypted_content");
-            body.set("include", include);
+//            ONode include = JsonSupport.array();
+//            include.add("reasoning.encrypted_content");
+//            body.set("include", include);
         }
 
         StringBuilder instructions = new StringBuilder();
