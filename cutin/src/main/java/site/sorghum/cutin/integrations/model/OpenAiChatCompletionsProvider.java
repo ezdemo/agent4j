@@ -107,6 +107,23 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
         if ("tool".equals(message.role())
             && (message.content() == null || message.content().isEmpty())) {
             node.set("content", "ERROR tool execution failed or returned empty");
+        } else if (message.metadata("images") instanceof List<?> images && !images.isEmpty()) {
+            ONode content = JsonSupport.array();
+            if (message.content() != null && !message.content().isEmpty()) {
+                ONode text = JsonSupport.object();
+                text.set("type", "text");
+                text.set("text", message.content());
+                content.add(text);
+            }
+            for (Object image : images) {
+                ONode part = JsonSupport.object();
+                part.set("type", "image_url");
+                ONode imageUrl = JsonSupport.object();
+                imageUrl.set("url", String.valueOf(image));
+                part.set("image_url", imageUrl);
+                content.add(part);
+            }
+            node.set("content", content);
         } else if (message.content() != null) {
             node.set("content", message.content());
         }

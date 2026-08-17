@@ -169,6 +169,11 @@ public final class AnthropicMessagesProvider implements ModelProvider {
                 block.set("text", message.content());
                 content.add(block);
             }
+            if (message.metadata("images") instanceof List<?> images) {
+                for (Object image : images) {
+                    appendImageBlock(content, image);
+                }
+            }
             if (content.isEmpty()) {
                 return null;
             }
@@ -213,6 +218,34 @@ public final class AnthropicMessagesProvider implements ModelProvider {
             return node;
         }
         return null;
+    }
+
+    private static void appendImageBlock(ONode content, Object image) {
+        if (image == null) {
+            return;
+        }
+        String value = String.valueOf(image).trim();
+        if (value.isEmpty()) {
+            return;
+        }
+        ONode block = JsonSupport.object();
+        block.set("type", "image");
+        ONode source = JsonSupport.object();
+        block.set("source", source);
+        if (value.startsWith("data:") && value.contains(";base64,")) {
+            int separator = value.indexOf(",");
+            String mediaType = value.substring("data:".length(), value.indexOf(";base64,"));
+            if (mediaType.isBlank()) {
+                mediaType = "image/png";
+            }
+            source.set("type", "base64");
+            source.set("media_type", mediaType);
+            source.set("data", value.substring(separator + 1));
+        } else {
+            source.set("type", "url");
+            source.set("url", value);
+        }
+        content.add(block);
     }
 
     /** 把工具定义转换为 Anthropic tool 声明。 */

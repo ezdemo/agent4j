@@ -56,7 +56,7 @@ class RealModelProvidersTest {
             OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config);
             ModelCallRequest request = new ModelCallRequest(
                 "gpt-5",
-                List.of(new Message("user", "hi")),
+                List.of(new Message("user", "hi").withMetadata("images", List.of("https://example.com/cat.png"))),
                 List.of(new ToolDefinition("read", "Read a file", Map.of("type", "object"))),
                 Map.of()
             );
@@ -66,7 +66,10 @@ class RealModelProvidersTest {
             ONode body = JsonSupport.read(requestBody.get());
             assertEquals("gpt-5", JsonSupport.text(body, "", "model"));
             assertFalse(JsonSupport.boolValue(body, false, "stream"));
-            assertEquals("hi", JsonSupport.text(body, "", "messages", 0, "content"));
+            assertEquals("text", JsonSupport.text(body, "", "messages", 0, "content", 0, "type"));
+            assertEquals("hi", JsonSupport.text(body, "", "messages", 0, "content", 0, "text"));
+            assertEquals("image_url", JsonSupport.text(body, "", "messages", 0, "content", 1, "type"));
+            assertEquals("https://example.com/cat.png", JsonSupport.text(body, "", "messages", 0, "content", 1, "image_url", "url"));
             assertEquals("read", JsonSupport.text(body, "", "tools", 0, "function", "name"));
             assertEquals("hello", response.message().content());
             assertEquals(1, response.message().toolCalls().size());
@@ -106,7 +109,10 @@ class RealModelProvidersTest {
             OpenAiResponsesProvider provider = new OpenAiResponsesProvider(config);
             ModelCallRequest request = new ModelCallRequest(
                 "gpt-5",
-                List.of(new Message("system", "be concise"), new Message("user", "hi")),
+                List.of(
+                    new Message("system", "be concise"),
+                    new Message("user", "hi").withMetadata("images", List.of("https://example.com/cat.png"))
+                ),
                 List.of(),
                 Map.of()
             );
@@ -115,7 +121,10 @@ class RealModelProvidersTest {
 
             ONode body = JsonSupport.read(requestBody.get());
             assertEquals("be concise", JsonSupport.text(body, "", "instructions"));
-            assertEquals("hi", JsonSupport.text(body, "", "input", 0, "content"));
+            assertEquals("input_text", JsonSupport.text(body, "", "input", 0, "content", 0, "type"));
+            assertEquals("hi", JsonSupport.text(body, "", "input", 0, "content", 0, "text"));
+            assertEquals("input_image", JsonSupport.text(body, "", "input", 0, "content", 1, "type"));
+            assertEquals("https://example.com/cat.png", JsonSupport.text(body, "", "input", 0, "content", 1, "image_url"));
             assertEquals("hello", response.message().content());
             assertEquals(1, response.message().toolCalls().size());
             assertEquals("b.txt", response.message().toolCalls().get(0).arguments().get("path"));
@@ -154,7 +163,10 @@ class RealModelProvidersTest {
             AnthropicMessagesProvider provider = new AnthropicMessagesProvider(config);
             ModelCallRequest request = new ModelCallRequest(
                 "claude-4",
-                List.of(new Message("system", "be concise"), new Message("user", "hi")),
+                List.of(
+                    new Message("system", "be concise"),
+                    new Message("user", "hi").withMetadata("images", List.of("data:image/png;base64,aGVsbG8="))
+                ),
                 List.of(new ToolDefinition("read", "Read a file", Map.of("type", "object"))),
                 Map.of()
             );
@@ -164,7 +176,12 @@ class RealModelProvidersTest {
             ONode body = JsonSupport.read(requestBody.get());
             assertEquals("claude-4", JsonSupport.text(body, "", "model"));
             assertEquals("be concise", JsonSupport.text(body, "", "system"));
-            assertEquals("hi", JsonSupport.text(body, "", "messages", 0, "content"));
+            assertEquals("text", JsonSupport.text(body, "", "messages", 0, "content", 0, "type"));
+            assertEquals("hi", JsonSupport.text(body, "", "messages", 0, "content", 0, "text"));
+            assertEquals("image", JsonSupport.text(body, "", "messages", 0, "content", 1, "type"));
+            assertEquals("base64", JsonSupport.text(body, "", "messages", 0, "content", 1, "source", "type"));
+            assertEquals("image/png", JsonSupport.text(body, "", "messages", 0, "content", 1, "source", "media_type"));
+            assertEquals("aGVsbG8=", JsonSupport.text(body, "", "messages", 0, "content", 1, "source", "data"));
             assertEquals("read", JsonSupport.text(body, "", "tools", 0, "name"));
             assertFalse(JsonSupport.boolValue(body, false, "stream"));
             assertEquals("hello", response.message().content());

@@ -51,6 +51,11 @@ import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.httplog.LoopraHttpLogPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.lifecycle.LoopraLifecycleHost;
 import site.sorghum.loopra.integration.cutin.plugin.lifecycle.LoopraLifecyclePlugin;
+import site.sorghum.loopra.integration.cutin.plugin.preflight.LoopraHitlPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.preflight.LoopraMessageSanitizerPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.preflight.LoopraPreflight;
+import site.sorghum.loopra.integration.cutin.plugin.preflight.LoopraPreflightHost;
+import site.sorghum.loopra.integration.cutin.plugin.preflight.LoopraUserMessagePlugin;
 import site.sorghum.loopra.integration.cutin.plugin.plan.LoopraPlanHost;
 import site.sorghum.loopra.integration.cutin.plugin.plan.LoopraPlanPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraModelPolicyPlugin;
@@ -104,7 +109,8 @@ public class AgentLoop implements
         LoopraSessionHost,
         LoopraPlanHost,
         LoopraToolBatchHost,
-        LoopraCancelHost {
+        LoopraCancelHost,
+        LoopraPreflightHost {
 
     // ==================== 配置读取（带 null-safe 默认值） ====================
 
@@ -310,6 +316,9 @@ public class AgentLoop implements
                 registry,
                 new LoopraLifecyclePlugin(this),
                 new LoopraHttpLogPlugin(modelProvider),
+                new LoopraMessageSanitizerPlugin(this),
+                new LoopraHitlPlugin(this),
+                new LoopraUserMessagePlugin(this),
                 new LoopraUsagePlugin(this),
                 new LoopraCompactionPlugin(this),
                 new LoopraModelPolicyPlugin(this),
@@ -926,6 +935,57 @@ public class AgentLoop implements
     }
 
     @Override
+    public UserMessage sanitizePreflightMessage(UserMessage message) {
+        return UserMessageSanitizer.sanitize(message, modelProvider);
+    }
+
+    @Override
+    public void setCurrentTurnUserText(String text) {
+        currentTurnUserText = text == null ? "" : text;
+    }
+
+    @Override
+    public void appendPreflightUserMessage(UserMessage message) {
+        ctx.addUser(message);
+    }
+
+    @Override
+    public void clearSuspendedCutinState() {
+        suspendedCutinHandle = null;
+        suspendedCutinContext = null;
+        suspendedCutinState = null;
+    }
+
+    @Override
+    public HitlState hitlState() {
+        return hitlManager.getState();
+    }
+
+    @Override
+    public boolean hasSuspendedCutin() {
+        return suspendedCutinHandle != null && suspendedCutinContext != null;
+    }
+
+    @Override
+    public boolean hasSandboxPending() {
+        return hitlManager.hasSandboxPending();
+    }
+
+    @Override
+    public String resumeApprovedTurn() throws IOException {
+        return hitlManager.hasSandboxPending()
+            ? resumeCutinSandboxHITL()
+            : resumeCutinHITL();
+    }
+
+    @Override
+    public String rejectTurn() {
+        return hitlManager.hasSandboxPending()
+            ? denyCutinSandboxHITL()
+            : denyCutinHITL();
+    }
+
+    @Override
     public String suspendSandboxHITLIfPending(DefaultLoopContext context) {
         if (hitlManager.getState() != HitlState.PENDING || !hitlManager.hasSandboxPending()) {
             return null;
@@ -1156,46 +1216,12 @@ public class AgentLoop implements
     }
 
     private String doRun(UserMessage userMessage) throws IOException {
-        // ---- 根据模型多模态支持清洗用户消息 ----
-        userMessage = UserMessageSanitizer.sanitize(userMessage, modelProvider);
-        currentTurnUserText = userMessage != null && userMessage.hasContent()
-                ? userMessage.getText()
-                : "";
-        
-        // ---- HITL 恢复：用户已审批 / 拒绝 ----
-        if (hitlManager.getState() == HitlState.APPROVED) {
-            if (suspendedCutinHandle != null && suspendedCutinContext != null) {
-                return hitlManager.hasSandboxPending()
-                        ? resumeCutinSandboxHITL()
-                        : resumeCutinHITL();
-            }
-            throw new IOException("[loop] cutin HITL 恢复状态丢失");
-        }
-        if (hitlManager.getState() == HitlState.DENIED) {
-            if (suspendedCutinHandle != null && suspendedCutinContext != null) {
-                return hitlManager.hasSandboxPending()
-                        ? denyCutinSandboxHITL()
-                        : denyCutinHITL();
-            }
-            throw new IOException("[loop] cutin HITL 拒绝状态丢失");
-        }
-
-        // ---- 追加用户消息 ----
-        if (userMessage != null && userMessage.hasContent()) {
-            ctx.addUser(userMessage);
-            suspendedCutinHandle = null;
-            suspendedCutinContext = null;
-            suspendedCutinState = null;
-        }
-
-        // ---- 每回合初始化：由 LoopraLifecyclePlugin 的 PRE_LOOP 钩子完成 ----
-
         // ---- 进入统一的主推理循环（含自动重试闭环） ----
-        return runWithAutoRetry();
+        return runWithAutoRetry(userMessage);
     }
 
-    private String runWithAutoRetry() throws IOException {
-        return mainLoop();
+    private String runWithAutoRetry(UserMessage userMessage) throws IOException {
+        return mainLoop(userMessage);
     }
 
     // ==================== 统一主推理循环 ====================
@@ -1203,8 +1229,8 @@ public class AgentLoop implements
     /**
      * 主推理循环入口：全部由 cutin {@link DefaultLoopEngine} 编排。
      */
-    private String mainLoop() throws IOException {
-        return runCutinMainLoop();
+    private String mainLoop(UserMessage userMessage) throws IOException {
+        return runCutinMainLoop(userMessage);
     }
 
     /**
@@ -1213,7 +1239,7 @@ public class AgentLoop implements
      * {@link LoopraModelPolicyPlugin} / {@link LoopraToolPolicyPlugin} 注册的
      * cutin 拦截点驱动。
      */
-    private String runCutinMainLoop() throws IOException {
+    private String runCutinMainLoop(UserMessage userMessage) throws IOException {
         if (ctx == null) {
             throw new IOException("[loop] cutin 主循环需要 ConversationContext");
         }
@@ -1228,20 +1254,35 @@ public class AgentLoop implements
             Budget.unlimited(),
             workingDirectory()
         );
+        if (userMessage != null) {
+            cutinContext.putArtifact(LoopraPreflight.INPUT_ARTIFACT, userMessage);
+        }
         LoopProgram program = LoopProgram.builder("loopra-agent-loop")
+            .node(LoopraPreflight.SANITIZE_NODE, NodeType.CODE,
+                context -> cutinRuntime.plugins().getBean(LoopraMessageSanitizerPlugin.class).execute(context))
+            .node(LoopraPreflight.HITL_NODE, NodeType.CODE,
+                context -> cutinRuntime.plugins().getBean(LoopraHitlPlugin.class).execute(context))
+            .node(LoopraPreflight.USER_MESSAGE_NODE, NodeType.CODE,
+                context -> cutinRuntime.plugins().getBean(LoopraUserMessagePlugin.class).execute(context))
             .node("model", NodeType.MODEL, context -> modelStep((DefaultLoopContext) context, state))
             .node("tool", NodeType.TOOL, context -> toolStep((DefaultLoopContext) context, state))
-            .node("output", NodeType.OUTPUT, ignored -> StepResult.Exit.INSTANCE)
+            .node(LoopraPreflight.OUTPUT_NODE, NodeType.OUTPUT, ignored -> StepResult.Exit.INSTANCE)
+            .next(LoopraPreflight.SANITIZE_NODE, LoopraPreflight.HITL_NODE)
+            .next(LoopraPreflight.HITL_NODE, LoopraPreflight.USER_MESSAGE_NODE)
+            .next(LoopraPreflight.USER_MESSAGE_NODE, "model")
             .next("model", "tool")
             .next("tool", "model")
-            .start("model")
+            .start(LoopraPreflight.SANITIZE_NODE)
             .build();
 
         return runCutinLoop(program, cutinContext, state);
     }
 
-    private String runCutinLoop(LoopProgram program, DefaultLoopContext cutinContext, LoopState state)
-            throws IOException {
+    private String runCutinLoop(
+            LoopProgram program,
+            DefaultLoopContext cutinContext,
+            LoopState state
+    ) throws IOException {
         LoopHandle handle = cutinEngine.run(program, cutinContext);
         activeCutinHandle = handle;
         runningCutinState = state;
@@ -1259,13 +1300,17 @@ public class AgentLoop implements
         if (state.ioError != null) {
             throw state.ioError;
         }
+        Object turnError = cutinContext.artifacts().get(LoopraPreflight.ERROR_ARTIFACT);
+        if (turnError instanceof IOException exception) {
+            throw exception;
+        }
         if (state.result != null) {
             return state.result;
         }
         Map<String, Object> finalVariables = result.finalSnapshot() == null
                 ? cutinContext.variables()
                 : result.finalSnapshot().variables();
-        Object turnResult = finalVariables.get("loopraTurnResult");
+        Object turnResult = finalVariables.get(LoopraPreflight.RESULT_VARIABLE);
         String turnContent = turnResult == null ? "" : String.valueOf(turnResult);
         if (!turnContent.isBlank()) {
             return turnContent;
