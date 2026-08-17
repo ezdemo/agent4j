@@ -1209,28 +1209,10 @@ public class AgentLoop implements
         // ---- 标记运行中，防止巡检线程并发冲突 ----
         running.set(true);
         try {
-            return doRun(userMessage);
+            return runCutinMainLoop(userMessage);
         } finally {
             running.set(false);
         }
-    }
-
-    private String doRun(UserMessage userMessage) throws IOException {
-        // ---- 进入统一的主推理循环（含自动重试闭环） ----
-        return runWithAutoRetry(userMessage);
-    }
-
-    private String runWithAutoRetry(UserMessage userMessage) throws IOException {
-        return mainLoop(userMessage);
-    }
-
-    // ==================== 统一主推理循环 ====================
-
-    /**
-     * 主推理循环入口：全部由 cutin {@link DefaultLoopEngine} 编排。
-     */
-    private String mainLoop(UserMessage userMessage) throws IOException {
-        return runCutinMainLoop(userMessage);
     }
 
     /**
@@ -1258,23 +1240,27 @@ public class AgentLoop implements
             cutinContext.putArtifact(LoopraPreflight.INPUT_ARTIFACT, userMessage);
         }
         LoopProgram program = LoopProgram.builder("loopra-agent-loop")
-            .node(LoopraPreflight.SANITIZE_NODE, NodeType.CODE,
+            .node(LoopraPreflight.SANITIZE_NODE, NodeType.CODE, "按模型能力清洗用户消息",
                 context -> cutinRuntime.plugins().getBean(LoopraMessageSanitizerPlugin.class).execute(context))
-            .node(LoopraPreflight.HITL_NODE, NodeType.CODE,
+            .node(LoopraPreflight.HITL_NODE, NodeType.CODE, "处理上一轮 HITL 审批或拒绝",
                 context -> cutinRuntime.plugins().getBean(LoopraHitlPlugin.class).execute(context))
-            .node(LoopraPreflight.USER_MESSAGE_NODE, NodeType.CODE,
+            .node(LoopraPreflight.USER_MESSAGE_NODE, NodeType.CODE, "追加清洗后的用户消息",
                 context -> cutinRuntime.plugins().getBean(LoopraUserMessagePlugin.class).execute(context))
-            .node("model", NodeType.MODEL, context -> modelStep((DefaultLoopContext) context, state))
-            .node("tool", NodeType.TOOL, context -> toolStep((DefaultLoopContext) context, state))
-            .node(LoopraPreflight.OUTPUT_NODE, NodeType.OUTPUT, ignored -> StepResult.Exit.INSTANCE)
-            .next(LoopraPreflight.SANITIZE_NODE, LoopraPreflight.HITL_NODE)
-            .next(LoopraPreflight.HITL_NODE, LoopraPreflight.USER_MESSAGE_NODE)
-            .next(LoopraPreflight.USER_MESSAGE_NODE, "model")
-            .next("model", "tool")
-            .next("tool", "model")
+            .node("model", NodeType.MODEL, "调用模型并处理流式响应",
+                context -> modelStep((DefaultLoopContext) context, state))
+            .node("tool", NodeType.TOOL, "执行模型请求的工具",
+                context -> toolStep((DefaultLoopContext) context, state))
+            .node(LoopraPreflight.OUTPUT_NODE, NodeType.OUTPUT, "输出本轮最终结果",
+                ignored -> StepResult.Exit.INSTANCE)
+            .next(LoopraPreflight.SANITIZE_NODE, LoopraPreflight.HITL_NODE, "清洗完成后检查 HITL")
+            .next(LoopraPreflight.HITL_NODE, LoopraPreflight.USER_MESSAGE_NODE, "无审批短路时继续")
+            .next(LoopraPreflight.USER_MESSAGE_NODE, "model", "消息写入上下文后请求模型")
+            .next("model", "tool", "模型产生工具调用")
+            .next("tool", "model", "工具结果返回模型继续推理")
             .start(LoopraPreflight.SANITIZE_NODE)
             .build();
 
+        log.info("[loop] 开始 cutin 主循环\n{}",program.prettyPrint());
         return runCutinLoop(program, cutinContext, state);
     }
 
