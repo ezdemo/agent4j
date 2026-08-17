@@ -219,7 +219,7 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
         );
     }
 
-    /** 把单个 SSE 增量块转换为若干 StreamChunk，并累计工具调用与用量。 */
+    /** 把单个 SSE 增量块转换为若干 StreamChunk，并累计工具调用、记录最新用量。 */
     private Stream<StreamChunk> parseChunk(ONode chunk, Accumulator state) {
         Stream.Builder<StreamChunk> builder = Stream.builder();
         ONode error = JsonSupport.child(chunk, "error");
@@ -231,10 +231,10 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
 
         ONode usage = JsonSupport.child(chunk, "usage");
         if (usage != null && !usage.isNull()) {
-            Usage delta = parseUsage(usage);
-            state.usage = state.usage.add(delta);
-            state.usageDelivered = true;
-            builder.add(new StreamChunk("", delta));
+            // OpenAI 兼容流中的 usage 是截至当前块的累计值（规范只在末块出现一次，
+            // OpenRouter 等网关会逐块携带同一累计值）。这里只取最新值并在流尾统一
+            // 交付一次，不能逐块累加，否则 prompt_tokens 会随流块数量成倍放大。
+            state.usage = parseUsage(usage);
         }
 
         ONode delta = JsonSupport.child(chunk, "choices", 0, "delta");
@@ -303,10 +303,8 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
 
         /** 流中出现的错误原文。 */
         private String error;
-        /** 已累计的用量。 */
+        /** 最近一次上报的累计用量，流尾统一交付。 */
         private Usage usage = Usage.ZERO;
-        /** 用量是否已通过增量块交付过。 */
-        private boolean usageDelivered;
         /** 工具调用 index 到构建器的映射。 */
         private final Map<Integer, ToolCallBuilder> toolCalls = new LinkedHashMap<>();
 
@@ -334,7 +332,7 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
             }
         }
 
-        /** 流结束时输出聚合出的工具调用与未交付的用量。 */
+        /** 流结束时输出聚合出的工具调用与用量。 */
         private Stream<StreamChunk> finalStream() {
             if (error != null) {
                 return Stream.empty();
@@ -348,7 +346,7 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
                 null,
                 calls,
                 List.of(),
-                usageDelivered ? Usage.ZERO : usage,
+                usage,
                 Map.of(),
                 true
             ));

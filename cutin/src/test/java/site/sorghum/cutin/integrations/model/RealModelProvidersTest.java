@@ -292,6 +292,62 @@ class RealModelProvidersTest {
         }
     }
 
+    /** Chat Completions 流若逐块携带累计 usage（OpenRouter 等网关行为），应取末值而非反复累加。 */
+    @Test
+    void chatCompletionsProviderTakesLastUsageWhenRepeated() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = streamingServer("/chat/completions", requestBody, """
+            data: {"choices":[{"delta":{"content":"hel"}}],"usage":{"prompt_tokens":10,"completion_tokens":1}}
+
+            data: {"choices":[{"delta":{"content":"lo"}}],"usage":{"prompt_tokens":11,"completion_tokens":2}}
+
+            data: {"choices":[{"delta":{"content":" world"}}],"usage":{"prompt_tokens":12,"completion_tokens":3}}
+
+            data: [DONE]
+
+            """);
+        server.start();
+        try {
+            ModelProviderConfig config = new ModelProviderConfig(
+                "chat",
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                "key",
+                "gpt-5",
+                Map.of()
+            );
+            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config);
+            ModelCallRequest request = new ModelCallRequest(
+                "gpt-5",
+                List.of(new Message("user", "hi")),
+                List.of(),
+                Map.of()
+            );
+
+            StringBuilder content = new StringBuilder();
+            AtomicInteger usageChunks = new AtomicInteger();
+            Usage[] totalUsage = {Usage.ZERO};
+            try (Stream<StreamChunk> chunks = provider.stream(request)) {
+                chunks.forEach(chunk -> {
+                    if (chunk.content() != null) {
+                        content.append(chunk.content());
+                    }
+                    if (chunk.usage().totalTokens() > 0) {
+                        usageChunks.incrementAndGet();
+                    }
+                    totalUsage[0] = totalUsage[0].add(chunk.usage());
+                });
+            }
+
+            assertEquals("hello world", content.toString());
+            assertEquals(1, usageChunks.get());
+            assertEquals(12, totalUsage[0].promptTokens());
+            assertEquals(3, totalUsage[0].completionTokens());
+            assertEquals(15, totalUsage[0].totalTokens());
+        } finally {
+            server.stop(0);
+        }
+    }
+
     /** Responses 流式调用应只交付一次用量并聚合完整函数调用。 */
     @Test
     void responsesProviderStreamsFunctionCallAndUsageOnce() throws Exception {
