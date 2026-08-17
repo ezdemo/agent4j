@@ -1,12 +1,9 @@
 package site.sorghum.cutin.integrations.model;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.noear.snack4.ONode;
 import site.sorghum.cutin.core.context.Message;
 import site.sorghum.cutin.core.context.Usage;
+import site.sorghum.cutin.core.json.JsonSupport;
 import site.sorghum.cutin.core.model.*;
 import site.sorghum.cutin.core.tool.ToolCall;
 import site.sorghum.cutin.core.tool.ToolDefinition;
@@ -24,8 +21,6 @@ public final class OpenAiResponsesProvider implements ModelProvider {
 
     /** Provider 配置。 */
     private final ModelProviderConfig config;
-    /** JSON 映射器。 */
-    private final ObjectMapper mapper = new ObjectMapper();
     /** HTTP 传输层。 */
     private final HttpModelTransport transport;
 
@@ -34,7 +29,6 @@ public final class OpenAiResponsesProvider implements ModelProvider {
         this.config = config;
         this.transport = new HttpModelTransport(
             config.endpoint("/responses"),
-            mapper,
             Map.of("Authorization", "Bearer " + config.apiKey())
         );
     }
@@ -48,10 +42,10 @@ public final class OpenAiResponsesProvider implements ModelProvider {
     /** 同步调用：解析输出条目（消息、推理、函数调用）与用量。 */
     @Override
     public ModelResponse call(ModelCallRequest request) {
-        JsonNode response = transport.post(buildBody(request, false));
+        ONode response = transport.post(buildBody(request, false));
         return new ModelResponse(
-            parseMessage(response.path("output")),
-            parseUsage(response.path("usage")),
+            parseMessage(JsonSupport.child(response, "output")),
+            parseUsage(JsonSupport.child(response, "usage")),
             true
         );
     }
@@ -73,25 +67,29 @@ public final class OpenAiResponsesProvider implements ModelProvider {
     }
 
     /** 构建 Responses 请求体：模型、指令、输入条目、工具与推理选项。 */
-    private ObjectNode buildBody(ModelCallRequest request, boolean stream) {
-        ObjectNode body = mapper.createObjectNode();
-        body.put("model", model(request));
-        body.put("stream", stream);
+    private ONode buildBody(ModelCallRequest request, boolean stream) {
+        ONode body = JsonSupport.object();
+        body.set("model", model(request));
+        body.set("stream", stream);
 
         String serviceTier = option(request, "serviceTier");
         if (serviceTier != null && !serviceTier.isBlank()) {
-            body.put("service_tier", serviceTier);
+            body.set("service_tier", serviceTier);
         }
         String reasoningEffort = reasoningEffort(request);
         if (reasoningEffort != null && !reasoningEffort.isBlank() && !"none".equals(reasoningEffort)) {
-            ObjectNode reasoning = body.putObject("reasoning");
-            reasoning.put("effort", reasoningEffort);
-            reasoning.put("summary", "auto");
-            body.putArray("include").add("reasoning.encrypted_content");
+            ONode reasoning = JsonSupport.object();
+            reasoning.set("effort", reasoningEffort);
+            reasoning.set("summary", "auto");
+            body.set("reasoning", reasoning);
+            ONode include = JsonSupport.array();
+            include.add("reasoning.encrypted_content");
+            body.set("include", include);
         }
 
         StringBuilder instructions = new StringBuilder();
-        ArrayNode input = body.putArray("input");
+        ONode input = JsonSupport.array();
+        body.set("input", input);
         for (Message message : request.messages()) {
             if ("system".equals(message.role())) {
                 if (message.content() != null && !message.content().isEmpty()) {
@@ -105,105 +103,117 @@ public final class OpenAiResponsesProvider implements ModelProvider {
             toResponsesInput(message, input);
         }
         if (instructions.length() > 0) {
-            body.put("instructions", instructions.toString());
+            body.set("instructions", instructions.toString());
         }
         addTools(body, request.tools());
 
         String userId = option(request, "userId");
         if (userId != null && !userId.isBlank()) {
-            body.put("user", userId);
+            body.set("user", userId);
         }
         String sessionAffinity = option(request, "sessionAffinity");
         if (sessionAffinity != null && !sessionAffinity.isBlank()) {
-            body.put("prompt_cache_key", sessionAffinity);
+            body.set("prompt_cache_key", sessionAffinity);
         }
         return body;
     }
 
     /** 把通用 Message 转换为 Responses input 条目，特殊处理 tool 结果与历史推理。 */
-    private void toResponsesInput(Message message, ArrayNode input) {
+    private void toResponsesInput(Message message, ONode input) {
         if ("tool".equals(message.role())) {
-            ObjectNode item = input.addObject();
-            item.put("type", "function_call_output");
-            item.put("call_id", message.toolCallId() == null ? "" : message.toolCallId());
-            item.put("output", message.content() == null || message.content().isEmpty()
+            ONode item = JsonSupport.object();
+            item.set("type", "function_call_output");
+            item.set("call_id", message.toolCallId() == null ? "" : message.toolCallId());
+            item.set("output", message.content() == null || message.content().isEmpty()
                 ? "ERROR tool execution failed or returned empty"
                 : message.content());
+            input.add(item);
             return;
         }
 
         Object responseReasoning = message.metadata("response_reasoning");
         if (responseReasoning != null) {
             try {
-                JsonNode reasoningItem = mapper.readTree(String.valueOf(responseReasoning));
-                if (reasoningItem instanceof ObjectNode reasoningObject) {
-                    reasoningObject.remove("status");
-                    input.add(reasoningObject);
+                ONode reasoningItem = JsonSupport.read(String.valueOf(responseReasoning));
+                if (reasoningItem.isObject()) {
+                    reasoningItem.remove("status");
+                    input.add(reasoningItem);
                 }
-            } catch (Exception ignored) {
+            } catch (RuntimeException ignored) {
                 // 无效的历史推理条目直接丢弃
             }
         }
 
         if (message.content() != null && !message.content().isEmpty()) {
-            ObjectNode item = input.addObject();
-            item.put("role", message.role());
-            item.put("content", message.content());
+            ONode item = JsonSupport.object();
+            item.set("role", message.role());
+            item.set("content", message.content());
+            input.add(item);
         }
         if (message.hasToolCalls()) {
             for (ToolCall toolCall : message.toolCalls()) {
-                ObjectNode item = input.addObject();
-                item.put("type", "function_call");
-                item.put("id", toolCall.id());
-                item.put("call_id", toolCall.id());
-                item.put("name", toolCall.toolId());
-                item.put("arguments", writeArguments(toolCall.arguments()));
+                ONode item = JsonSupport.object();
+                item.set("type", "function_call");
+                item.set("id", toolCall.id());
+                item.set("call_id", toolCall.id());
+                item.set("name", toolCall.toolId());
+                item.set("arguments", writeArguments(toolCall.arguments()));
+                input.add(item);
             }
         }
     }
 
     /** 把工具定义转换为 Responses 工具声明。 */
-    private void addTools(ObjectNode body, List<ToolDefinition> tools) {
+    private void addTools(ONode body, List<ToolDefinition> tools) {
         if (tools == null || tools.isEmpty()) {
             return;
         }
-        ArrayNode node = body.putArray("tools");
+        ONode node = JsonSupport.array();
+        body.set("tools", node);
         for (ToolDefinition tool : tools) {
-            ObjectNode entry = node.addObject();
-            entry.put("type", "function");
-            entry.put("name", tool.id());
-            entry.put("description", tool.description());
-            entry.set("parameters", mapper.valueToTree(tool.inputSchema()));
+            ONode entry = JsonSupport.object();
+            entry.set("type", "function");
+            entry.set("name", tool.id());
+            entry.set("description", tool.description());
+            entry.set("parameters", JsonSupport.bean(tool.inputSchema()));
+            node.add(entry);
         }
     }
 
     /** 解析 output 数组为最终 assistant 消息，合并正文、推理与函数调用。 */
-    private Message parseMessage(JsonNode output) {
+    private Message parseMessage(ONode output) {
         StringBuilder content = new StringBuilder();
         StringBuilder reasoning = new StringBuilder();
         List<ToolCall> calls = new ArrayList<>();
-        JsonNode reasoningItem = null;
-        for (JsonNode item : output) {
-            String type = item.path("type").asText("");
+        ONode reasoningItem = null;
+        ONode outputItems = output == null || !output.isArray() ? JsonSupport.array() : output;
+        for (ONode item : outputItems.getArray()) {
+            String type = JsonSupport.text(item, "", "type");
             if ("reasoning".equals(type)) {
                 reasoningItem = item;
-                for (JsonNode part : item.path("summary")) {
-                    reasoning.append(part.path("text").asText(""));
+                ONode summary = JsonSupport.child(item, "summary");
+                if (summary != null && summary.isArray()) {
+                    for (ONode part : summary.getArray()) {
+                        reasoning.append(JsonSupport.text(part, "", "text"));
+                    }
                 }
             } else if ("message".equals(type)) {
-                for (JsonNode part : item.path("content")) {
-                    String partType = part.path("type").asText("");
-                    if ("output_text".equals(partType) || "refusal".equals(partType)) {
-                        content.append(part.path("text").asText(""));
+                ONode contentParts = JsonSupport.child(item, "content");
+                if (contentParts != null && contentParts.isArray()) {
+                    for (ONode part : contentParts.getArray()) {
+                        String partType = JsonSupport.text(part, "", "type");
+                        if ("output_text".equals(partType) || "refusal".equals(partType)) {
+                            content.append(JsonSupport.text(part, "", "text"));
+                        }
                     }
                 }
             } else if ("function_call".equals(type)) {
-                String callId = item.path("call_id").asText("");
+                String callId = JsonSupport.text(item, "", "call_id");
                 if (callId.isEmpty()) {
-                    callId = item.path("id").asText("");
+                    callId = JsonSupport.text(item, "", "id");
                 }
-                String name = item.path("name").asText("");
-                String arguments = item.path("arguments").asText("{}");
+                String name = JsonSupport.text(item, "", "name");
+                String arguments = JsonSupport.text(item, "{}", "arguments");
                 calls.add(new ToolCall(callId, name, parseArguments(arguments), callId));
             }
         }
@@ -212,68 +222,68 @@ public final class OpenAiResponsesProvider implements ModelProvider {
             metadata.put("reasoning_content", reasoning.toString());
         }
         if (reasoningItem != null) {
-            metadata.put("response_reasoning", reasoningItem.toString());
+            metadata.put("response_reasoning", reasoningItem.toJson());
         }
         return new Message("assistant", content.toString(), null, calls, metadata);
     }
 
     /** 解析 Responses 用量节点；缺失时返回零用量。 */
-    private Usage parseUsage(JsonNode usage) {
+    private Usage parseUsage(ONode usage) {
         if (usage == null || usage.isNull()) {
             return Usage.ZERO;
         }
-        long cacheRead = usage.path("input_tokens_details").path("cached_tokens").asLong(0);
+        long cacheRead = JsonSupport.longValue(usage, 0, "input_tokens_details", "cached_tokens");
         if (cacheRead == 0) {
             // 兼容旧版 Responses 用量中的顶层字段
-            cacheRead = usage.path("cached_input_tokens").asLong(0);
+            cacheRead = JsonSupport.longValue(usage, 0, "cached_input_tokens");
         }
         return new Usage(
-            usage.path("input_tokens").asLong(0),
-            usage.path("output_tokens").asLong(0),
-            usage.path("cost_micros").asLong(0),
+            JsonSupport.longValue(usage, 0, "input_tokens"),
+            JsonSupport.longValue(usage, 0, "output_tokens"),
+            JsonSupport.longValue(usage, 0, "cost_micros"),
             cacheRead,
             0
         );
     }
 
     /** 把单个 SSE 事件转换为 StreamChunk，并按事件类型累加状态。 */
-    private Stream<StreamChunk> parseChunk(JsonNode chunk, Accumulator state) {
+    private Stream<StreamChunk> parseChunk(ONode chunk, Accumulator state) {
         Stream.Builder<StreamChunk> builder = Stream.builder();
-        String type = chunk.path("type").asText("");
+        String type = JsonSupport.text(chunk, "", "type");
         switch (type) {
             case "response.output_text.delta", "response.refusal.delta" -> {
-                String delta = chunk.path("delta").asText("");
+                String delta = JsonSupport.text(chunk, "", "delta");
                 if (!delta.isEmpty()) {
                     builder.add(new StreamChunk(delta, Usage.ZERO));
                 }
             }
             case "response.reasoning_summary_text.delta", "response.reasoning_text.delta" -> {
-                String delta = chunk.path("delta").asText("");
+                String delta = JsonSupport.text(chunk, "", "delta");
                 if (!delta.isEmpty()) {
                     builder.add(new StreamChunk("", delta, List.of(), List.of(), Usage.ZERO, Map.of(), false));
                 }
             }
             case "response.output_item.added", "response.output_item.done" -> {
-                JsonNode item = chunk.path("item");
+                ONode item = JsonSupport.child(chunk, "item");
                 if (item != null && item.isObject()) {
                     state.setOutputItem(
-                        chunk.path("output_index").asInt(0),
+                        JsonSupport.intValue(chunk, 0, "output_index"),
                         item,
                         "response.output_item.done".equals(type)
                     );
                 }
             }
             case "response.function_call_arguments.delta" -> state.appendArguments(
-                chunk.path("output_index").asInt(0),
-                chunk.path("delta").asText("")
+                JsonSupport.intValue(chunk, 0, "output_index"),
+                JsonSupport.text(chunk, "", "delta")
             );
             case "response.function_call_arguments.done" -> state.replaceArguments(
-                chunk.path("output_index").asInt(0),
-                chunk.path("arguments").asText("")
+                JsonSupport.intValue(chunk, 0, "output_index"),
+                JsonSupport.text(chunk, "", "arguments")
             );
             case "response.completed" -> {
                 state.completed = true;
-                JsonNode usage = chunk.path("response").path("usage");
+                ONode usage = JsonSupport.child(chunk, "response", "usage");
                 if (usage != null && !usage.isNull()) {
                     Usage delta = parseUsage(usage);
                     state.usage = state.usage.add(delta);
@@ -282,7 +292,7 @@ public final class OpenAiResponsesProvider implements ModelProvider {
                 }
             }
             case "response.failed", "response.incomplete", "error" -> {
-                state.error = chunk.toString();
+                state.error = chunk.toJson();
                 builder.add(state.errorChunk());
             }
             default -> {
@@ -314,9 +324,8 @@ public final class OpenAiResponsesProvider implements ModelProvider {
     /** 解析 JSON 参数串；解析失败时返回空 Map。 */
     private Map<String, Object> parseArguments(String json) {
         try {
-            return mapper.readValue(json, new TypeReference<>() {
-            });
-        } catch (Exception exception) {
+            return JsonSupport.parseObject(json);
+        } catch (RuntimeException exception) {
             return Map.of();
         }
     }
@@ -324,8 +333,8 @@ public final class OpenAiResponsesProvider implements ModelProvider {
     /** 序列化参数为 JSON 字符串；失败时返回空对象串。 */
     private String writeArguments(Map<String, Object> arguments) {
         try {
-            return mapper.writeValueAsString(arguments);
-        } catch (Exception exception) {
+            return JsonSupport.write(arguments);
+        } catch (RuntimeException exception) {
             return "{}";
         }
     }
@@ -347,21 +356,21 @@ public final class OpenAiResponsesProvider implements ModelProvider {
         private final Map<Integer, ToolCallBuilder> toolCalls = new LinkedHashMap<>();
 
         /** 从输出条目事件中登记或更新函数调用。 */
-        private void setOutputItem(int index, JsonNode item, boolean replaceArguments) {
-            if ("function_call".equals(item.path("type").asText(""))) {
+        private void setOutputItem(int index, ONode item, boolean replaceArguments) {
+            if ("function_call".equals(JsonSupport.text(item, "", "type"))) {
                 ToolCallBuilder builder = toolCalls.computeIfAbsent(index, ignored -> new ToolCallBuilder());
-                String callId = item.path("call_id").asText("");
+                String callId = JsonSupport.text(item, "", "call_id");
                 if (callId.isEmpty()) {
-                    callId = item.path("id").asText("");
+                    callId = JsonSupport.text(item, "", "id");
                 }
                 if (!callId.isEmpty()) {
                     builder.id = callId;
                 }
-                String name = item.path("name").asText("");
+                String name = JsonSupport.text(item, "", "name");
                 if (!name.isEmpty()) {
                     builder.name = name;
                 }
-                String arguments = item.path("arguments").asText(null);
+                String arguments = JsonSupport.text(item, null, "arguments");
                 if (arguments != null) {
                     if (replaceArguments) {
                         builder.arguments = new StringBuilder(arguments);

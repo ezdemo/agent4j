@@ -1,12 +1,12 @@
 package site.sorghum.cutin.integrations.model;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
+import org.noear.snack4.ONode;
 import site.sorghum.cutin.core.context.Message;
 import site.sorghum.cutin.core.context.Usage;
+import site.sorghum.cutin.core.json.JsonSupport;
 import site.sorghum.cutin.core.model.ModelCallRequest;
 import site.sorghum.cutin.core.model.ModelResponse;
 import site.sorghum.cutin.core.model.StreamChunk;
@@ -27,9 +27,6 @@ import static org.junit.jupiter.api.Assertions.*;
  * 请求映射、响应解析、流式增量、工具调用与用量统计。
  */
 class RealModelProvidersTest {
-
-    /** JSON 映射器。 */
-    private final ObjectMapper mapper = new ObjectMapper();
 
     /** Chat Completions Provider 应正确映射请求、工具调用与用量。 */
     @Test
@@ -66,11 +63,11 @@ class RealModelProvidersTest {
 
             ModelResponse response = provider.call(request);
 
-            JsonNode body = mapper.readTree(requestBody.get());
-            assertEquals("gpt-5", body.path("model").asText());
-            assertFalse(body.path("stream").asBoolean());
-            assertEquals("hi", body.path("messages").path(0).path("content").asText());
-            assertEquals("read", body.path("tools").path(0).path("function").path("name").asText());
+            ONode body = JsonSupport.read(requestBody.get());
+            assertEquals("gpt-5", JsonSupport.text(body, "", "model"));
+            assertFalse(JsonSupport.boolValue(body, false, "stream"));
+            assertEquals("hi", JsonSupport.text(body, "", "messages", 0, "content"));
+            assertEquals("read", JsonSupport.text(body, "", "tools", 0, "function", "name"));
             assertEquals("hello", response.message().content());
             assertEquals(1, response.message().toolCalls().size());
             assertEquals("a.txt", response.message().toolCalls().get(0).arguments().get("path"));
@@ -116,9 +113,9 @@ class RealModelProvidersTest {
 
             ModelResponse response = provider.call(request);
 
-            JsonNode body = mapper.readTree(requestBody.get());
-            assertEquals("be concise", body.path("instructions").asText());
-            assertEquals("hi", body.path("input").path(0).path("content").asText());
+            ONode body = JsonSupport.read(requestBody.get());
+            assertEquals("be concise", JsonSupport.text(body, "", "instructions"));
+            assertEquals("hi", JsonSupport.text(body, "", "input", 0, "content"));
             assertEquals("hello", response.message().content());
             assertEquals(1, response.message().toolCalls().size());
             assertEquals("b.txt", response.message().toolCalls().get(0).arguments().get("path"));
@@ -164,12 +161,12 @@ class RealModelProvidersTest {
 
             ModelResponse response = provider.call(request);
 
-            JsonNode body = mapper.readTree(requestBody.get());
-            assertEquals("claude-4", body.path("model").asText());
-            assertEquals("be concise", body.path("system").asText());
-            assertEquals("hi", body.path("messages").path(0).path("content").asText());
-            assertEquals("read", body.path("tools").path(0).path("name").asText());
-            assertFalse(body.path("stream").asBoolean());
+            ONode body = JsonSupport.read(requestBody.get());
+            assertEquals("claude-4", JsonSupport.text(body, "", "model"));
+            assertEquals("be concise", JsonSupport.text(body, "", "system"));
+            assertEquals("hi", JsonSupport.text(body, "", "messages", 0, "content"));
+            assertEquals("read", JsonSupport.text(body, "", "tools", 0, "name"));
+            assertFalse(JsonSupport.boolValue(body, false, "stream"));
             assertEquals("hello", response.message().content());
             assertEquals(1, response.message().toolCalls().size());
             assertEquals("c.txt", response.message().toolCalls().get(0).arguments().get("path"));
@@ -211,7 +208,7 @@ class RealModelProvidersTest {
             }
 
             assertEquals("hello", content);
-            assertTrue(mapper.readTree(requestBody.get()).path("stream").asBoolean());
+            assertTrue(JsonSupport.boolValue(JsonSupport.read(requestBody.get()), false, "stream"));
         } finally {
             server.stop(0);
         }

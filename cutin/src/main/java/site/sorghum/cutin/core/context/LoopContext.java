@@ -4,6 +4,7 @@ import site.sorghum.cutin.core.model.ModelGateway;
 import site.sorghum.cutin.core.state.LoopSnapshot;
 import site.sorghum.cutin.core.tool.ToolRegistry;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -42,6 +43,16 @@ public interface LoopContext {
 
     /** 工具注册表，负责查找并执行工具。 */
     ToolRegistry tools();
+
+    /**
+     * 当前循环的工作目录。
+     *
+     * <p>工具中的相对文件操作应以该目录为基准。返回 {@code null} 表示调用方
+     * 未提供工作目录，工具应自行决定是否降级处理。</p>
+     */
+    default Path workingDirectory() {
+        return null;
+    }
 
     /** 生成当前状态的可持久化快照。 */
     LoopSnapshot snapshot();

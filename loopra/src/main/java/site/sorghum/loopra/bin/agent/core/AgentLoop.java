@@ -33,13 +33,15 @@ import site.sorghum.loopra.bin.agent.resilient.StormBreaker;
 import site.sorghum.loopra.bin.agent.spi.AgentConfig;
 import site.sorghum.loopra.bin.agent.spi.GoalGuard;
 import site.sorghum.loopra.bin.agent.spi.SessionUsageSink;
-import site.sorghum.loopra.bin.model.ModelApiError;
 import site.sorghum.loopra.bin.model.LoopraModelProvider;
+import site.sorghum.loopra.bin.model.ModelApiError;
 import site.sorghum.loopra.bin.model.UserMessageSanitizer;
 import site.sorghum.loopra.bin.session.SessionFileChangeTracker;
 import site.sorghum.loopra.bin.tool.ToolMetadata;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
-import site.sorghum.loopra.integration.cutin.*;
+import site.sorghum.loopra.integration.cutin.CutinFunctionToolBridge;
+import site.sorghum.loopra.integration.cutin.CutinMessageBridge;
+import site.sorghum.loopra.integration.cutin.LoopraCutinRuntime;
 import site.sorghum.loopra.integration.cutin.plugin.cancel.LoopraCancelHost;
 import site.sorghum.loopra.integration.cutin.plugin.cancel.LoopraCancelPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.compaction.LoopraCompactionHost;
@@ -276,6 +278,14 @@ public class AgentLoop implements
 
     LoopraCutinRuntime cutinRuntime() {
         return cutinRuntime;
+    }
+
+    private Path workingDirectory() {
+        Path environmentRoot = registry.getEnvironment() == null
+            ? null
+            : registry.getEnvironment().executionRoot();
+        Path root = environmentRoot != null ? environmentRoot : workspace;
+        return root == null ? null : root.toAbsolutePath().normalize();
     }
 
     // ==================== 构造器 ====================
@@ -1213,7 +1223,8 @@ public class AgentLoop implements
                 "sessionId", sessionId == null ? "" : sessionId,
                 "loopraUserMessage", currentTurnUserText
             ),
-            Budget.unlimited()
+            Budget.unlimited(),
+            workingDirectory()
         );
         LoopProgram program = LoopProgram.builder("loopra-agent-loop")
             .node("model", NodeType.MODEL, context -> modelStep((DefaultLoopContext) context, state))
@@ -2024,8 +2035,11 @@ public class AgentLoop implements
                     ParentOutputHolder.set(capturedOutput);
                 }
                 currentToolControl.set(control);
-                Path executionRoot = registry.getEnvironment() == null
-                        ? null : registry.getEnvironment().executionRoot();
+                Path executionRoot = cutinContext == null
+                        ? workingDirectory()
+                        : cutinContext.workingDirectory() != null
+                            ? cutinContext.workingDirectory()
+                            : workingDirectory();
                 SessionFileChangeTracker.bind(executionRoot, getSessionId());
                 try {
                     ONode tc = tcArray.get(idx);
@@ -2065,11 +2079,15 @@ public class AgentLoop implements
 
                     // 收集工具调用上下文；终端工具通过 __cwd 获取实际执行目录。
                     ToolContext.setCurrentController(AgentLoop.this);
-                    String executionPath = registry.getEnvironment().executionRoot()
-                            .toAbsolutePath().normalize().toString();
-                    String statePath = registry.getEnvironment().stateRoot() != null
-                            ? registry.getEnvironment().stateRoot().toAbsolutePath().normalize().toString()
-                            : null;
+                    String executionPath = executionRoot == null
+                            ? null
+                            : executionRoot.toAbsolutePath().normalize().toString();
+                    Path environmentStateRoot = registry.getEnvironment() == null
+                            ? null
+                            : registry.getEnvironment().stateRoot();
+                    String statePath = environmentStateRoot != null
+                            ? environmentStateRoot.toAbsolutePath().normalize().toString()
+                            : executionPath;
                     HashMap<String, Object> extraMap = new HashMap<>();
                     extraMap.put("__cwd", executionPath);
                     extraMap.put("ctx", new ToolContext(

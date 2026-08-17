@@ -4,6 +4,7 @@ import site.sorghum.cutin.core.context.Budget;
 import site.sorghum.cutin.core.context.Message;
 import site.sorghum.cutin.core.context.Usage;
 
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -21,7 +22,8 @@ public record LoopSnapshot(
     Map<String, Object> variables,
     Map<String, Object> artifacts,
     Usage usage,
-    Budget budget
+    Budget budget,
+    Path workingDirectory
 ) {
 
     /** 记录构造校验：对消息、变量、产物与预算做防御性拷贝。 */
@@ -30,5 +32,8 @@ public record LoopSnapshot(
         variables = Map.copyOf(variables);
         artifacts = Map.copyOf(artifacts);
         budget = budget == null ? null : budget.copy();
+        workingDirectory = workingDirectory == null
+            ? null
+            : workingDirectory.toAbsolutePath().normalize();
     }
 }

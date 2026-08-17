@@ -5,7 +5,9 @@ import org.noear.solon.ai.chat.tool.FunctionTool;
 import site.sorghum.cutin.core.context.LoopContext;
 import site.sorghum.cutin.core.tool.*;
 import site.sorghum.loopra.tool.HitlRequiredException;
+import site.sorghum.loopra.tool.ToolContext;
 
+import java.nio.file.Path;
 import java.util.*;
 
 /**
@@ -42,10 +44,7 @@ public final class CutinFunctionToolBridge implements Tool {
     public ToolResult call(ToolCall call, LoopContext context) {
         try {
             Map<String, Object> args = new LinkedHashMap<>(call.arguments());
-            Map<String, Object> callContext = CALL_CONTEXT.get();
-            if (callContext != null) {
-                args.putAll(callContext);
-            }
+            args.putAll(effectiveCallContext(context));
             org.noear.solon.ai.chat.tool.ToolResult result = delegate.call(args);
             String content = result == null ? "" : result.getContent();
             return ToolResult.success(call.id(), content == null ? "" : content);
@@ -58,6 +57,54 @@ public final class CutinFunctionToolBridge implements Tool {
                 message == null ? throwable.getClass().getName() : message
             );
         }
+    }
+
+    private static Map<String, Object> effectiveCallContext(LoopContext context) {
+        Map<String, Object> callContext = new LinkedHashMap<>();
+        Map<String, Object> threadContext = CALL_CONTEXT.get();
+        if (threadContext != null) {
+            callContext.putAll(threadContext);
+        }
+
+        String workingDirectory = workingDirectory(context);
+        if (workingDirectory == null) {
+            return callContext;
+        }
+
+        ToolContext existing = callContext.get("ctx") instanceof ToolContext toolContext
+            ? toolContext
+            : null;
+        String sessionId = existing == null
+            ? sessionId(context)
+            : existing.getSessionId();
+        String stateRoot = existing == null
+            ? workingDirectory
+            : pathString(existing.getStateRootDir(), workingDirectory);
+        callContext.put("__cwd", workingDirectory);
+        callContext.put("ctx", new ToolContext(
+            existing == null ? Map.of() : existing.getParams(),
+            workingDirectory,
+            stateRoot,
+            sessionId
+        ));
+        return callContext;
+    }
+
+    private static String workingDirectory(LoopContext context) {
+        Path path = context == null ? null : context.workingDirectory();
+        return path == null ? null : path.toAbsolutePath().normalize().toString();
+    }
+
+    private static String sessionId(LoopContext context) {
+        if (context == null) {
+            return null;
+        }
+        Object value = context.variables().get("sessionId");
+        return value == null || String.valueOf(value).isBlank() ? null : String.valueOf(value);
+    }
+
+    private static String pathString(Path path, String fallback) {
+        return path == null ? fallback : path.toAbsolutePath().normalize().toString();
     }
 
     /**

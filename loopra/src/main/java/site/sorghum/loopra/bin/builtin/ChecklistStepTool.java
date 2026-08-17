@@ -39,7 +39,7 @@ public class ChecklistStepTool extends AbsToolProvider implements SolonToTools {
     public String checklistStep(
             @Param(name = "action", description = "操作类型：done（完成）| fail（失败）| skip（跳过）") String action,
             @Param(name = "result", description = "执行结果摘要（支持 Markdown）", required = false) String result,
-            ToolContext ctx) {
+            @Param(name = "ctx", required = false) ToolContext ctx) {
         if (action == null || action.isBlank()) {
             return "PARAM_MISSING: 缺少必填参数 'action'";
         }

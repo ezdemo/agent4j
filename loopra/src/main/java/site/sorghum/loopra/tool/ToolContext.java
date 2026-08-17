@@ -1,6 +1,7 @@
 package site.sorghum.loopra.tool;
 
 import lombok.Getter;
+import lombok.Setter;
 import org.noear.snack4.annotation.ONodeAttr;
 
 import java.nio.file.Path;
@@ -19,6 +20,7 @@ import java.util.Map;
  * @author Sorghum
  */
 @Getter
+@Setter
 public class ToolContext {
 
     /**
@@ -28,21 +30,30 @@ public class ToolContext {
     /**
      * 调用参数
      */
-    private final Map<String, Object> params;
+    private Map<String, Object> params;
     /**
      * 项目根目录（可选）
      */
-    private final String rootDir;
+    private String rootDir;
     /**
      * 状态根目录（可选）——会话身份/Goal/Checklist/会话持久化归属的项目。
      * <p>隔离分支模式下，{@code rootDir} 指向隔离分支（AI 文件操作落点），
      * {@code stateRootDir} 仍指向主项目，保证会话级状态跨隔离分支生命周期延续。</p>
      */
-    private final String stateRootDir;
+    private String stateRootDir;
     /**
      * 当前会话ID（可选，用于按会话隔离数据）
      */
-    private final String sessionId;
+    private String sessionId;
+
+    /**
+     * 无参构造器。
+     *
+     * <p>供 Snack4 等 Bean 解码器还原参数使用；业务代码应优先使用带参构造器。</p>
+     */
+    public ToolContext() {
+        this.params = Collections.emptyMap();
+    }
 
     /**
      * 全参数构造器。
@@ -62,6 +73,13 @@ public class ToolContext {
         this.rootDir = rootDir;
         this.stateRootDir = stateRootDir;
         this.sessionId = sessionId;
+    }
+
+    /**
+     * 设置调用参数，并做防御性拷贝。
+     */
+    public void setParams(Map<String, Object> params) {
+        this.params = params != null ? new HashMap<>(params) : Collections.emptyMap();
     }
 
     // ==================== 参数访问 ====================

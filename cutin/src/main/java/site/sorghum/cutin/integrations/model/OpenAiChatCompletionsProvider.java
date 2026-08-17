@@ -1,12 +1,9 @@
 package site.sorghum.cutin.integrations.model;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ArrayNode;
-import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.noear.snack4.ONode;
 import site.sorghum.cutin.core.context.Message;
 import site.sorghum.cutin.core.context.Usage;
+import site.sorghum.cutin.core.json.JsonSupport;
 import site.sorghum.cutin.core.model.*;
 import site.sorghum.cutin.core.tool.ToolCall;
 import site.sorghum.cutin.core.tool.ToolDefinition;
@@ -24,8 +21,6 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
 
     /** Provider 配置。 */
     private final ModelProviderConfig config;
-    /** JSON 映射器。 */
-    private final ObjectMapper mapper = new ObjectMapper();
     /** HTTP 传输层。 */
     private final HttpModelTransport transport;
 
@@ -34,7 +29,6 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
         this.config = config;
         this.transport = new HttpModelTransport(
             config.endpoint("/chat/completions"),
-            mapper,
             Map.of("Authorization", "Bearer " + config.apiKey())
         );
     }
@@ -48,9 +42,9 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
     /** 同步调用：POST 请求后解析消息、工具调用与用量。 */
     @Override
     public ModelResponse call(ModelCallRequest request) {
-        JsonNode response = transport.post(buildBody(request, false));
-        Message message = parseMessage(response.path("choices").path(0).path("message"));
-        Usage usage = parseUsage(response.path("usage"));
+        ONode response = transport.post(buildBody(request, false));
+        Message message = parseMessage(JsonSupport.child(response, "choices", 0, "message"));
+        Usage usage = parseUsage(JsonSupport.child(response, "usage"));
         return new ModelResponse(message, usage, true);
     }
 
@@ -71,21 +65,22 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
     }
 
     /** 构建 Chat Completions 请求体：模型、流标记、消息、工具与扩展选项。 */
-    private ObjectNode buildBody(ModelCallRequest request, boolean stream) {
-        ObjectNode body = mapper.createObjectNode();
-        body.put("model", model(request));
-        body.put("stream", stream);
+    private ONode buildBody(ModelCallRequest request, boolean stream) {
+        ONode body = JsonSupport.object();
+        body.set("model", model(request));
+        body.set("stream", stream);
 
         String serviceTier = option(request, "serviceTier");
         if (serviceTier != null && !serviceTier.isBlank()) {
-            body.put("service_tier", serviceTier);
+            body.set("service_tier", serviceTier);
         }
         String reasoningEffort = reasoningEffort(request);
         if (reasoningEffort != null && !reasoningEffort.isBlank() && !"none".equals(reasoningEffort)) {
-            body.put("reasoning_effort", reasoningEffort);
+            body.set("reasoning_effort", reasoningEffort);
         }
 
-        ArrayNode messages = body.putArray("messages");
+        ONode messages = JsonSupport.array();
+        body.set("messages", messages);
         for (Message message : request.messages()) {
             messages.add(toOpenAiMessage(message));
         }
@@ -93,66 +88,72 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
         addTools(body, request.tools());
         String userId = option(request, "userId");
         if (userId != null && !userId.isBlank()) {
-            body.put("user", userId);
+            body.set("user", userId);
         }
         String sessionAffinity = option(request, "sessionAffinity");
         if (sessionAffinity != null && !sessionAffinity.isBlank()) {
-            body.put("prompt_cache_key", sessionAffinity);
+            body.set("prompt_cache_key", sessionAffinity);
         }
         return body;
     }
 
     /** 把通用 Message 转换为 OpenAI 消息格式（含 tool_calls 与 reasoning_content）。 */
-    private ObjectNode toOpenAiMessage(Message message) {
-        ObjectNode node = mapper.createObjectNode();
-        node.put("role", message.role());
+    private ONode toOpenAiMessage(Message message) {
+        ONode node = JsonSupport.object();
+        node.set("role", message.role());
         if (message.toolCallId() != null) {
-            node.put("tool_call_id", message.toolCallId());
+            node.set("tool_call_id", message.toolCallId());
         }
         if ("tool".equals(message.role())
             && (message.content() == null || message.content().isEmpty())) {
-            node.put("content", "ERROR tool execution failed or returned empty");
+            node.set("content", "ERROR tool execution failed or returned empty");
         } else if (message.content() != null) {
-            node.put("content", message.content());
+            node.set("content", message.content());
         }
         Object reasoning = message.metadata("reasoning_content");
         if (reasoning != null) {
-            node.put("reasoning_content", String.valueOf(reasoning));
+            node.set("reasoning_content", String.valueOf(reasoning));
         }
         if (message.hasToolCalls()) {
-            ArrayNode toolCalls = node.putArray("tool_calls");
+            ONode toolCalls = JsonSupport.array();
+            node.set("tool_calls", toolCalls);
             for (ToolCall toolCall : message.toolCalls()) {
-                ObjectNode call = toolCalls.addObject();
-                call.put("id", toolCall.id());
-                call.put("type", "function");
-                ObjectNode function = call.putObject("function");
-                function.put("name", toolCall.toolId());
-                function.put("arguments", writeArguments(toolCall.arguments()));
+                ONode call = JsonSupport.object();
+                toolCalls.add(call);
+                call.set("id", toolCall.id());
+                call.set("type", "function");
+                ONode function = JsonSupport.object();
+                call.set("function", function);
+                function.set("name", toolCall.toolId());
+                function.set("arguments", writeArguments(toolCall.arguments()));
             }
         }
         return node;
     }
 
     /** 把工具定义转换为 OpenAI function 声明。 */
-    private void addTools(ObjectNode body, List<ToolDefinition> tools) {
+    private void addTools(ONode body, List<ToolDefinition> tools) {
         if (tools == null || tools.isEmpty()) {
             return;
         }
-        ArrayNode node = body.putArray("tools");
+        ONode node = JsonSupport.array();
+        body.set("tools", node);
         for (ToolDefinition tool : tools) {
-            ObjectNode entry = node.addObject();
-            entry.put("type", "function");
-            ObjectNode function = entry.putObject("function");
-            function.put("name", tool.id());
-            function.put("description", tool.description());
-            function.set("parameters", mapper.valueToTree(tool.inputSchema()));
+            ONode entry = JsonSupport.object();
+            node.add(entry);
+            entry.set("type", "function");
+            ONode function = JsonSupport.object();
+            entry.set("function", function);
+            function.set("name", tool.id());
+            function.set("description", tool.description());
+            function.set("parameters", JsonSupport.bean(tool.inputSchema()));
         }
     }
 
     /** 解析响应的 assistant 消息，包括正文、推理与工具调用。 */
-    private Message parseMessage(JsonNode message) {
-        String content = message.path("content").asText("");
-        String reasoning = text(message, "reasoning_content");
+    private Message parseMessage(ONode message) {
+        String content = JsonSupport.text(message, "", "content");
+        String reasoning = JsonSupport.text(message, null, "reasoning_content");
         Map<String, Object> metadata = new HashMap<>();
         if (reasoning != null && !reasoning.isEmpty()) {
             metadata.put("reasoning_content", reasoning);
@@ -161,57 +162,57 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
             "assistant",
             content,
             null,
-            parseToolCalls(message.path("tool_calls")),
+            parseToolCalls(JsonSupport.child(message, "tool_calls")),
             metadata
         );
     }
 
     /** 解析工具调用数组为 ToolCall 列表。 */
-    private List<ToolCall> parseToolCalls(JsonNode toolCalls) {
+    private List<ToolCall> parseToolCalls(ONode toolCalls) {
         if (toolCalls == null || toolCalls.isNull() || !toolCalls.isArray()) {
             return List.of();
         }
         List<ToolCall> calls = new ArrayList<>();
-        for (JsonNode call : toolCalls) {
-            String callId = call.path("id").asText("");
-            String name = call.path("function").path("name").asText("");
-            String argumentsJson = call.path("function").path("arguments").asText("{}");
+        for (ONode call : toolCalls.getArray()) {
+            String callId = JsonSupport.text(call, "", "id");
+            String name = JsonSupport.text(call, "", "function", "name");
+            String argumentsJson = JsonSupport.text(call, "{}", "function", "arguments");
             calls.add(new ToolCall(callId, name, parseArguments(argumentsJson), callId));
         }
         return calls;
     }
 
     /** 解析用量节点；缺失时返回零用量。 */
-    private Usage parseUsage(JsonNode usage) {
+    private Usage parseUsage(ONode usage) {
         if (usage == null || usage.isNull()) {
             return Usage.ZERO;
         }
-        long promptTokens = usage.path("prompt_tokens").asLong(0);
-        long cacheRead = usage.path("prompt_tokens_details").path("cached_tokens").asLong(0);
+        long promptTokens = JsonSupport.longValue(usage, 0, "prompt_tokens");
+        long cacheRead = JsonSupport.longValue(usage, 0, "prompt_tokens_details", "cached_tokens");
         if (cacheRead == 0) {
             // DeepSeek 等兼容协议使用顶层字段上报缓存命中
-            cacheRead = usage.path("prompt_cache_hit_tokens").asLong(0);
+            cacheRead = JsonSupport.longValue(usage, 0, "prompt_cache_hit_tokens");
         }
         return new Usage(
             promptTokens,
-            usage.path("completion_tokens").asLong(0),
-            usage.path("cost_micros").asLong(0),
+            JsonSupport.longValue(usage, 0, "completion_tokens"),
+            JsonSupport.longValue(usage, 0, "cost_micros"),
             cacheRead,
             0
         );
     }
 
     /** 把单个 SSE 增量块转换为若干 StreamChunk，并累计工具调用与用量。 */
-    private Stream<StreamChunk> parseChunk(JsonNode chunk, Accumulator state) {
+    private Stream<StreamChunk> parseChunk(ONode chunk, Accumulator state) {
         Stream.Builder<StreamChunk> builder = Stream.builder();
-        JsonNode error = chunk.get("error");
-        if (error != null && !error.isMissingNode() && !error.isNull()) {
-            state.error = chunk.toString();
+        ONode error = JsonSupport.child(chunk, "error");
+        if (error != null && !error.isNull()) {
+            state.error = chunk.toJson();
             builder.add(state.errorChunk());
             return builder.build();
         }
 
-        JsonNode usage = chunk.path("usage");
+        ONode usage = JsonSupport.child(chunk, "usage");
         if (usage != null && !usage.isNull()) {
             Usage delta = parseUsage(usage);
             state.usage = state.usage.add(delta);
@@ -219,22 +220,22 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
             builder.add(new StreamChunk("", delta));
         }
 
-        JsonNode delta = chunk.path("choices").path(0).path("delta");
+        ONode delta = JsonSupport.child(chunk, "choices", 0, "delta");
         if (delta == null || delta.isNull()) {
             return builder.build();
         }
-        String reasoning = text(delta, "reasoning_content");
+        String reasoning = JsonSupport.text(delta, null, "reasoning_content");
         if (reasoning == null || reasoning.isEmpty()) {
-            reasoning = text(delta, "reasoning");
+            reasoning = JsonSupport.text(delta, null, "reasoning");
         }
         if (reasoning != null && !reasoning.isEmpty()) {
             builder.add(new StreamChunk("", reasoning, List.of(), List.of(), Usage.ZERO, Map.of(), false));
         }
-        String content = text(delta, "content");
+        String content = JsonSupport.text(delta, null, "content");
         if (content != null && !content.isEmpty()) {
             builder.add(new StreamChunk(content, Usage.ZERO));
         }
-        JsonNode toolCalls = delta.path("tool_calls");
+        ONode toolCalls = JsonSupport.child(delta, "tool_calls");
         if (toolCalls != null && toolCalls.isArray()) {
             state.accumulateToolCalls(toolCalls);
         }
@@ -260,18 +261,11 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
         return value == null ? null : String.valueOf(value);
     }
 
-    /** 从节点中取字符串字段，缺失或 null 时返回 null。 */
-    private static String text(JsonNode node, String key) {
-        JsonNode value = node.get(key);
-        return value == null || value.isNull() ? null : value.asText();
-    }
-
     /** 解析 JSON 参数串；解析失败时返回空 Map。 */
     private Map<String, Object> parseArguments(String json) {
         try {
-            return mapper.readValue(json, new TypeReference<>() {
-            });
-        } catch (Exception exception) {
+            return JsonSupport.parseObject(json);
+        } catch (RuntimeException exception) {
             return Map.of();
         }
     }
@@ -279,8 +273,8 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
     /** 序列化参数为 JSON 字符串；失败时返回空对象串。 */
     private String writeArguments(Map<String, Object> arguments) {
         try {
-            return mapper.writeValueAsString(arguments);
-        } catch (Exception exception) {
+            return JsonSupport.write(arguments);
+        } catch (RuntimeException exception) {
             return "{}";
         }
     }
@@ -300,23 +294,23 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
         private final Map<Integer, ToolCallBuilder> toolCalls = new LinkedHashMap<>();
 
         /** 按 index 累加流式工具调用增量片段。 */
-        private void accumulateToolCalls(JsonNode deltas) {
-            for (JsonNode delta : deltas) {
-                int index = delta.path("index").asInt(0);
+        private void accumulateToolCalls(ONode deltas) {
+            for (ONode delta : deltas.getArray()) {
+                int index = JsonSupport.intValue(delta, 0, "index");
                 ToolCallBuilder builder = toolCalls.computeIfAbsent(index, ignored -> new ToolCallBuilder());
-                JsonNode function = delta.path("function");
-                if (function.isNull()) {
+                ONode function = JsonSupport.child(delta, "function");
+                if (function == null || function.isNull()) {
                     continue;
                 }
-                String id = text(delta, "id");
+                String id = JsonSupport.text(delta, null, "id");
                 if (id != null && !id.isEmpty()) {
                     builder.id = id;
                 }
-                String name = text(function, "name");
+                String name = JsonSupport.text(function, null, "name");
                 if (name != null && !name.isEmpty()) {
                     builder.name = name;
                 }
-                String arguments = text(function, "arguments");
+                String arguments = JsonSupport.text(function, null, "arguments");
                 if (arguments != null) {
                     builder.arguments.append(arguments);
                 }

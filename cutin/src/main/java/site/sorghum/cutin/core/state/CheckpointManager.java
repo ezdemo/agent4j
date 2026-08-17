@@ -38,7 +38,8 @@ public final class CheckpointManager {
             base.variables(),
             base.artifacts(),
             base.usage(),
-            base.budget()
+            base.budget(),
+            base.workingDirectory()
         );
         stateStore.save(snapshot);
         eventBus.emit(new LoopEvent(

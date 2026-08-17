@@ -54,7 +54,7 @@ public class ImageReadTool extends AbsToolProvider implements SolonToTools {
             @Param(name = "base64", description = "图片的原始 Base64 字符串或 data:image/...;base64,...", required = false) String base64,
             @Param(name = "url", description = "HTTP 或 HTTPS 图片地址", required = false) String url,
             @Param(name = "detail", description = "图片分析精度：auto、low 或 high，默认 auto", required = false, defaultValue = "auto") String detail,
-            ToolContext ctx) {
+            @Param(name = "ctx", required = false) ToolContext ctx) {
         String normalizedDetail = normalizeDetail(detail);
         if (normalizedDetail == null) {
             return "PARAM_INVALID: detail must be one of auto, low, or high";

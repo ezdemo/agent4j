@@ -39,19 +39,19 @@ public class AiBrowserTool extends AbsToolProvider implements SolonToTools {
             能在当前标签页完成的导航应使用 browser_navigate，不要无意义创建新标签。后续操作请先调用 browser_screenshot 获取页面的清洗结构和元素 ID。
             """)
     public String newTab(@Param(name = "url", description = "要打开的 HTTP(S) 地址；为空时创建空白标签页", required = false) String url,
-                         ToolContext ctx) {
+                         @Param(name = "ctx", required = false) ToolContext ctx) {
         return call("new-tab", new ONode().set("url", safe(url)));
     }
 
     @ToolMapping(name = "browser_tabs", description = "返回 AI 浏览器当前所有标签页、激活标签页 ID、地址、标题及前进后退状态。")
-    public String tabs(ToolContext ctx) {
+    public String tabs(@Param(name = "ctx", required = false) ToolContext ctx) {
         return call("tabs", new ONode());
     }
 
     @ToolMapping(name = "browser_navigate", description = "让指定标签页跳转到新的 HTTP(S) 地址。tabId 从 browser_tabs 或 browser_new_tab 的结果中取得。")
     public String navigate(@Param(name = "tabId", description = "目标浏览器标签页 ID") String tabId,
                            @Param(name = "url", description = "要打开的 HTTP(S) 地址") String url,
-                           ToolContext ctx) {
+                           @Param(name = "ctx", required = false) ToolContext ctx) {
         return call("navigate", new ONode().set("tabId", safe(tabId)).set("url", safe(url)));
     }
 
@@ -63,7 +63,7 @@ public class AiBrowserTool extends AbsToolProvider implements SolonToTools {
             每次快照返回 snapshotId。调用 browser_act 时应同时传入该 snapshotId；页面变化后必须重新调用本工具。
             """)
     public String screenshot(@Param(name = "tabId", description = "目标标签页 ID；为空时使用当前激活标签页", required = false) String tabId,
-                             ToolContext ctx) {
+                             @Param(name = "ctx", required = false) ToolContext ctx) {
         return postProcessScreenshot(call("screenshot", new ONode().set("tabId", safe(tabId))), ctx);
     }
 
@@ -100,7 +100,7 @@ public class AiBrowserTool extends AbsToolProvider implements SolonToTools {
                       @Param(name = "action", description = "click、fill、select、press 或 scroll") String action,
                       @Param(name = "value", description = "fill/select/press 使用的值；click 和 scroll 可为空", required = false) String value,
                       @Param(name = "snapshotId", description = "browser_screenshot 返回的 snapshotId；建议始终传入以防止操作过期页面", required = false) String snapshotId,
-                      ToolContext ctx) {
+                      @Param(name = "ctx", required = false) ToolContext ctx) {
         return call("act", new ONode()
                 .set("tabId", safe(tabId))
                 .set("targetId", safe(targetId))
@@ -117,7 +117,7 @@ public class AiBrowserTool extends AbsToolProvider implements SolonToTools {
     public String requestUserAction(
             @Param(name = "tabId", description = "需要用户操作的标签页 ID；为空时使用当前激活标签页", required = false) String tabId,
             @Param(name = "message", description = "说明用户需要在网页中完成什么操作，例如“请登录后点击我已完成”") String message,
-            ToolContext ctx) {
+            @Param(name = "ctx", required = false) ToolContext ctx) {
         String focused = call("request-user-action", new ONode()
                 .set("tabId", safe(tabId))
                 .set("message", safe(message)));
@@ -138,7 +138,7 @@ public class AiBrowserTool extends AbsToolProvider implements SolonToTools {
 
     @ToolMapping(name = "browser_close_tab", description = "关闭指定 AI 浏览器标签页；tabId 为空时关闭当前激活标签页。")
     public String closeTab(@Param(name = "tabId", description = "要关闭的标签页 ID；为空时关闭当前标签页", required = false) String tabId,
-                           ToolContext ctx) {
+                           @Param(name = "ctx", required = false) ToolContext ctx) {
         return call("close-tab", new ONode().set("tabId", safe(tabId)));
     }
 

@@ -30,7 +30,7 @@ public class GoalTool extends AbsToolProvider implements SolonToTools {
     public String create(@Param(name = "objective", description = "目标及可验证的完成条件") String objective,
                          @Param(name = "steps", description = "可选 JSON 数组，每项是一条步骤描述", required = false) String steps,
                          @Param(name = "verifyCommand", description = "可选验证命令", required = false) String verifyCommand,
-                         ToolContext ctx) {
+                         @Param(name = "ctx", required = false) ToolContext ctx) {
         try {
             GoalRuntime.Scope scope = GoalRuntime.forTool(ctx);
             Goal goal = goals.create(scope.sessionId(), scope.workspaceHash(), objective,
@@ -46,7 +46,7 @@ public class GoalTool extends AbsToolProvider implements SolonToTools {
     }
 
     @ToolMapping(name = "goal_status", description = "读取当前会话 Goal 的状态、步骤和阻塞原因。只读。")
-    public String status(ToolContext ctx) {
+    public String status(@Param(name = "ctx", required = false) ToolContext ctx) {
         try {
             return goals.describe(GoalRuntime.forTool(ctx).load());
         } catch (Exception e) {
@@ -61,7 +61,7 @@ public class GoalTool extends AbsToolProvider implements SolonToTools {
     public String updateStep(@Param(name = "stepIndex", description = "步骤编号，从 1 开始") int stepIndex,
                              @Param(name = "status", description = "in_progress / done / blocked / skipped") String status,
                              @Param(name = "evidence", description = "执行证据或阻塞原因", required = false) String evidence,
-                             ToolContext ctx) {
+                             @Param(name = "ctx", required = false) ToolContext ctx) {
         try {
             GoalRuntime.Scope scope = GoalRuntime.forTool(ctx);
             Goal goal = scope.update(current -> {
@@ -79,7 +79,7 @@ public class GoalTool extends AbsToolProvider implements SolonToTools {
             summary 必须说明验证命令或其他完成证据；未完成步骤时调用会被拒绝。
             """)
     public String complete(@Param(name = "summary", description = "验证和完成摘要") String summary,
-                           ToolContext ctx) {
+                           @Param(name = "ctx", required = false) ToolContext ctx) {
         try {
             if (summary == null || summary.isBlank()) return "GOAL_COMPLETE_ERROR: summary 不能为空";
             GoalRuntime.Scope scope = GoalRuntime.forTool(ctx);
@@ -92,7 +92,7 @@ public class GoalTool extends AbsToolProvider implements SolonToTools {
 
     @ToolMapping(name = "goal_block", description = "将当前 Goal 标为阻塞，记录需要用户或外部系统解决的具体原因。")
     public String block(@Param(name = "reason", description = "具体阻塞原因和需要的输入") String reason,
-                        ToolContext ctx) {
+                        @Param(name = "ctx", required = false) ToolContext ctx) {
         try {
             GoalRuntime.Scope scope = GoalRuntime.forTool(ctx);
             Goal goal = scope.update(current -> goals.block(current, reason));
@@ -103,7 +103,7 @@ public class GoalTool extends AbsToolProvider implements SolonToTools {
     }
 
     @ToolMapping(name = "goal_resume", description = "用户提供了阻塞所需的信息后，恢复当前被暂停或阻塞的 Goal。")
-    public String resume(ToolContext ctx) {
+    public String resume(@Param(name = "ctx", required = false) ToolContext ctx) {
         try {
             GoalRuntime.Scope scope = GoalRuntime.forTool(ctx);
             Goal goal = scope.update(goals::resume);

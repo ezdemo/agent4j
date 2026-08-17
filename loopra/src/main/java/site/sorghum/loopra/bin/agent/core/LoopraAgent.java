@@ -256,7 +256,10 @@ public class LoopraAgent {
             java.util.UUID.randomUUID().toString(),
             CutinMessageBridge.toCutin(ctx.buildMessages()),
             Map.of("sessionId", String.valueOf(loop.getSessionId())),
-            Budget.unlimited()
+            Budget.unlimited(),
+            environment.executionRoot() == null
+                ? null
+                : environment.executionRoot().toAbsolutePath().normalize()
         );
         LoopResult result = cutinEngine.run(program, cutinContext).result().join();
         if (result.finalSnapshot() != null) {

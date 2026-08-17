@@ -1,9 +1,9 @@
 package site.sorghum.cutin.core.plugin;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import com.sun.net.httpserver.HttpServer;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import site.sorghum.cutin.core.json.JsonSupport;
 import site.sorghum.cutin.core.loop.*;
 import site.sorghum.cutin.plugins.PackageSamplePlugin;
 
@@ -35,16 +35,15 @@ class PluginMarketplaceInstallerTest {
     @Test
     void listsDownloadsAndLoadsRemotePluginPackage() throws Exception {
         byte[] jarBytes = buildPluginJar();
-        ObjectMapper mapper = new ObjectMapper();
         HttpServer server = HttpServer.create(new InetSocketAddress(0), 0);
         String baseUrl = "http://127.0.0.1:" + server.getAddress().getPort();
 
         server.createContext("/marketplace", exchange -> {
-            byte[] body = mapper.writeValueAsBytes(Map.of("packages", List.of(Map.of(
+            byte[] body = JsonSupport.write(Map.of("packages", List.of(Map.of(
                 "id", "sample",
                 "version", "1.0",
                 "downloadUrl", baseUrl + "/plugin.jar"
-            ))));
+            )))).getBytes(StandardCharsets.UTF_8);
             exchange.getResponseHeaders().add("Content-Type", "application/json");
             exchange.sendResponseHeaders(200, body.length);
             exchange.getResponseBody().write(body);

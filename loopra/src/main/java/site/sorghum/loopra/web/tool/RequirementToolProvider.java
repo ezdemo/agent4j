@@ -47,7 +47,7 @@ public class RequirementToolProvider extends AbsToolProvider implements SolonToT
     public String finishRequirement(
             @Param(name = "status", description = "执行结果：done(已完成) / failed(已失败)", required = true) String status,
             @Param(name = "summary", description = "执行总结。使用 Markdown 分段，多个项目使用列表分行", required = true) String summary,
-            ToolContext ctx) {
+            @Param(name = "ctx", required = false) ToolContext ctx) {
         String sessionId = resolveRequirementSession(ctx);
         if (sessionId == null) {
             return "SCOPE_ONLY: finish_requirement 仅需求执行会话可用";
@@ -65,7 +65,7 @@ public class RequirementToolProvider extends AbsToolProvider implements SolonToT
             """)
     public String replyComment(
             @Param(name = "reply", description = "回复内容", required = true) String reply,
-            ToolContext ctx) {
+            @Param(name = "ctx", required = false) ToolContext ctx) {
         String sessionId = resolveRequirementSession(ctx);
         if (sessionId == null) {
             return "SCOPE_ONLY: reply_requirement_comment 仅需求执行会话可用";
@@ -83,7 +83,7 @@ public class RequirementToolProvider extends AbsToolProvider implements SolonToT
             查看当前需求详情与最近评论（仅需求执行会话可用）。
             返回需求标题、状态、优先级、描述及最近 20 条用户评论。
             """)
-    public String showRequirements(ToolContext ctx) {
+    public String showRequirements(@Param(name = "ctx", required = false) ToolContext ctx) {
         String sessionId = resolveRequirementSession(ctx);
         if (sessionId == null) {
             return "SCOPE_ONLY: show_requirements 仅需求执行会话可用";
