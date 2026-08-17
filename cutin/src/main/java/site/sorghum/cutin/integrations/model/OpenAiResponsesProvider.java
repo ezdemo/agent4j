@@ -39,14 +39,16 @@ public final class OpenAiResponsesProvider implements ModelProvider {
         return config.id();
     }
 
-    /** 同步调用：解析输出条目（消息、推理、函数调用）与用量。 */
+    /** 同步调用：解析输出条目（消息、推理、函数调用）与用量，并附带原始响应体。 */
     @Override
     public ModelResponse call(ModelCallRequest request) {
-        ONode response = transport.post(buildBody(request, false));
+        String raw = transport.postRaw(buildBody(request, false));
+        ONode response = JsonSupport.read(raw);
         return new ModelResponse(
             parseMessage(JsonSupport.child(response, "output")),
             parseUsage(JsonSupport.child(response, "usage")),
-            true
+            true,
+            raw
         );
     }
 
@@ -55,6 +57,11 @@ public final class OpenAiResponsesProvider implements ModelProvider {
     public Stream<StreamChunk> stream(ModelCallRequest request) {
         Accumulator accumulator = new Accumulator();
         Stream<StreamChunk> chunks = transport.postSse(buildBody(request, true))
+            .map(chunk -> {
+                String raw = chunk.toJson();
+                accumulator.raw.append(raw).append('\n');
+                return chunk;
+            })
             .flatMap(chunk -> parseChunk(chunk, accumulator));
         return Stream.concat(chunks, Stream.of(accumulator).flatMap(Accumulator::finalStream))
             .onClose(chunks::close);
@@ -370,6 +377,8 @@ public final class OpenAiResponsesProvider implements ModelProvider {
         private boolean completed;
         /** 用量是否已通过增量块交付过。 */
         private boolean usageDelivered;
+        /** 全部原始 SSE 数据行。 */
+        private final StringBuilder raw = new StringBuilder();
         /** 函数调用 output_index 到构建器的映射。 */
         private final Map<Integer, ToolCallBuilder> toolCalls = new LinkedHashMap<>();
 
@@ -431,7 +440,7 @@ public final class OpenAiResponsesProvider implements ModelProvider {
                 calls,
                 List.of(),
                 usageDelivered ? Usage.ZERO : usage,
-                Map.of(),
+                Map.of("raw", raw.toString()),
                 true
             ));
         }

@@ -49,14 +49,16 @@ public final class AnthropicMessagesProvider implements ModelProvider {
         return config.id();
     }
 
-    /** 同步调用：解析内容块（text、thinking、tool_use）与用量。 */
+    /** 同步调用：解析内容块（text、thinking、tool_use）与用量，并附带原始响应体。 */
     @Override
     public ModelResponse call(ModelCallRequest request) {
-        ONode response = transport.post(buildBody(request, false));
+        String raw = transport.postRaw(buildBody(request, false));
+        ONode response = JsonSupport.read(raw);
         return new ModelResponse(
             parseMessage(JsonSupport.child(response, "content")),
             parseUsage(JsonSupport.child(response, "usage")),
-            true
+            true,
+            raw
         );
     }
 
@@ -65,6 +67,11 @@ public final class AnthropicMessagesProvider implements ModelProvider {
     public Stream<StreamChunk> stream(ModelCallRequest request) {
         Accumulator accumulator = new Accumulator();
         Stream<StreamChunk> chunks = transport.postSse(buildBody(request, true))
+            .map(chunk -> {
+                String raw = chunk.toJson();
+                accumulator.raw.append(raw).append('\n');
+                return chunk;
+            })
             .flatMap(chunk -> parseChunk(chunk, accumulator));
         return Stream.concat(chunks, Stream.of(accumulator).flatMap(Accumulator::finalStream))
             .onClose(chunks::close);
@@ -433,6 +440,8 @@ public final class AnthropicMessagesProvider implements ModelProvider {
         private boolean usageDelivered;
         /** message_start 中的输入用量。 */
         private ONode inputUsage;
+        /** 全部原始 SSE 数据行。 */
+        private final StringBuilder raw = new StringBuilder();
         /** 正在累积的 thinking 块。 */
         private ONode activeThinkingBlock;
         /** 已完成的 thinking 块列表。 */
@@ -552,7 +561,7 @@ public final class AnthropicMessagesProvider implements ModelProvider {
                 calls,
                 List.copyOf(thinkingBlocks),
                 usageDelivered ? Usage.ZERO : usage,
-                Map.of(),
+                Map.of("raw", raw.toString()),
                 true
             ));
         }
