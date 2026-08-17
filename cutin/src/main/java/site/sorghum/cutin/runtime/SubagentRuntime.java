@@ -6,7 +6,6 @@ import site.sorghum.cutin.core.loop.LoopResult;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 
 /**
  * 子代理运行时：在同一个引擎上启动独立的循环作为子任务。
@@ -28,8 +27,4 @@ public final class SubagentRuntime {
         return engine.run(request.program(), variables);
     }
 
-    /** 等待子代理完成并返回结果。 */
-    public CompletableFuture<LoopResult> await(LoopHandle handle) {
-        return handle.result();
-    }
 }

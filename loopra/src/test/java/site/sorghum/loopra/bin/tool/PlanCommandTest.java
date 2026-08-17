@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.noear.snack4.ONode;
 import site.sorghum.loopra.bin.agent.core.AgentLoop;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.agent.core.LoopraAgent;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.prompt.PromptPrefix;
@@ -39,7 +40,7 @@ class PlanCommandTest {
     private String originalUserHome;
     private JsonlSessionStore store;
     private LoopraAgent agent;
-    private ToolSystemInitializer.Result toolSystem;
+    private ToolSystemInitializer.ToolSystem toolSystem;
 
     @BeforeAll
     static void createIsolatedHome() throws IOException {
@@ -52,9 +53,9 @@ class PlanCommandTest {
         System.setProperty("user.home", home.toString());
 
         ToolRegistry registry = new ToolRegistry().setDisabledTools(Set.of());
-        registry.setRefreshContext(workspace, null, null, List.of());
+        registry.setEnvironment(SessionEnvironment.local(workspace));
         PromptPrefix prefix = new PromptPrefix("test", registry.toOpenAiTools());
-        toolSystem = new ToolSystemInitializer.Result(registry, prefix, "test");
+        toolSystem = new ToolSystemInitializer.ToolSystem(registry, prefix);
         store = new JsonlSessionStore(workspace.resolve("sessions"));
         agent = createAgent();
     }
@@ -104,7 +105,7 @@ class PlanCommandTest {
         assertEquals("1. inspect\n2. implement", agent.getPendingPlan());
 
         agent.preparePendingPlanExecution();
-        agent.completePendingPlanExecution();
+        agent.clearPendingPlan();
         assertNull(agent.getPendingPlan());
     }
 
@@ -129,9 +130,9 @@ class PlanCommandTest {
 
     private LoopraAgent createAgent() {
         return LoopraAgent.builder()
-                .loopraConfig(LoopraConfig.load())
+                .config(LoopraConfig.load())
                 .modelProvider(TestLoopraProvider.returning("done"))
-                .workspace(workspace)
+                .environment(SessionEnvironment.local(workspace))
                 .sessionStore(store)
                 .toolSystem(toolSystem)
                 .buildLightweight();

@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.tool.FunctionToolDesc;
 import site.sorghum.loopra.bin.agent.context.ConversationContext;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.agent.hitl.HitlManager;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.HitlState;
@@ -212,7 +213,7 @@ class AgentLoopToolSignalTest {
 
     private static ToolRegistry registryWith(FunctionToolDesc... tools) {
         ToolRegistry registry = new ToolRegistry().setDisabledTools(Set.of());
-        registry.setRefreshContext(Paths.get(".").toAbsolutePath(), null, null, java.util.List.of());
+        registry.setEnvironment(SessionEnvironment.local(Paths.get(".").toAbsolutePath()));
         for (FunctionToolDesc tool : tools) {
             registry.register(tool);
         }

@@ -3,6 +3,7 @@ package site.sorghum.loopra.bin.acp;
 import lombok.extern.slf4j.Slf4j;
 import site.sorghum.loopra.bin.agent.context.MessageHealer;
 import site.sorghum.loopra.bin.agent.core.LoopraAgent;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.agent.model.UserMessage;
 import site.sorghum.loopra.bin.config.ConfigService;
@@ -111,7 +112,7 @@ public class AcpSessionManager {
         if (config != null) {
             builder.config(config);
         }
-        builder.workspace(workspacePath);
+        builder.environment(SessionEnvironment.local(workspacePath));
         return builder.buildLightweight();
     }
 
@@ -142,7 +143,7 @@ public class AcpSessionManager {
 
         // ★ 关键：将 ACP sessionId 绑定为 Loopra 会话名
         // 这样所有聊天消息都会以 {sessionId}.jsonl 持久化到磁盘
-        agent.getSessionStore().bindTo(sessionId);
+        agent.getCtx().getSessionStore().bindTo(sessionId);
         agent.setSessionId(sessionId);
 
         sessions.put(sessionId, new SessionEntry(sessionId, agent, workspacePath));
@@ -189,22 +190,22 @@ public class AcpSessionManager {
             LoopraAgent agent = buildAgent(workspacePath);
 
             // 4. 绑定会话名并加载历史
-            agent.getSessionStore().bindTo(sessionId);
+            agent.getCtx().getSessionStore().bindTo(sessionId);
             agent.setSessionId(sessionId);
 
             // 5. 从 JSONL 加载历史消息并注入上下文
-            List<ChatMessage> history = agent.getSessionStore().load(sessionId);
+            List<ChatMessage> history = agent.getCtx().getSessionStore().load(sessionId);
             if (history != null && !history.isEmpty()) {
                 // Healing：修复可能截断的消息
                 var healResult = MessageHealer.heal(history);
                 for (ChatMessage msg : healResult.messages()) {
-                    agent.injectHistory(msg);
+                    agent.getCtx().injectHistory(msg);
                 }
                 log.info("[acp] 已恢复 {} 条历史消息", healResult.messages().size());
             }
 
             // 6. 恢复 token 用量
-            long[] usage = agent.getSessionStore().loadUsage(sessionId);
+            long[] usage = agent.getCtx().getSessionStore().loadUsage(sessionId);
             if (usage != null && usage.length >= 4) {
                 agent.addUsage((int) usage[0], (int) usage[1], (int) usage[2], (int) usage[3]);
             }

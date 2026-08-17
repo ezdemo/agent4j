@@ -1,6 +1,5 @@
 package site.sorghum.loopra.bin.agent.core;
 
-import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import site.sorghum.loopra.bin.agent.context.ConversationContext;
 import site.sorghum.loopra.bin.agent.hitl.SubAgentHITLBroker;
@@ -70,10 +69,7 @@ public class SubAgent {
     private final AgentLoopController parentController;
     /** 每个子代理实例独有，用于构造不与其他子代理冲突的缓存会话标识。 */
     private final String cacheSessionNonce = UUID.randomUUID().toString();
-    /**
-     * 父代理的 AgentOutput 引用 —— 用于将子代理的流式输出实时推送给用户。
-     * 通过 {@link #setOutput(AgentOutput)} 由 SubAgentTool 注入。
-     */
+    /** 父代理输出通道，子代理用它把流式结果实时推送给用户。 */
     private AgentOutput parentOutput = null;
     /** 父会话 ID（用于子代理 tools 中的 sessionId 传递） */
     private String sessionId = null;
@@ -89,32 +85,6 @@ public class SubAgent {
     private final AtomicBoolean abortRequested = new AtomicBoolean(false);
     /** 子代理唯一标识（由 SubAgentAgentOutput 分配，用于 HITL Broker 注册） */
     private int subAgentId = 0;
-    /**
-     * 获取按模型分别累计的 token 用量: model -> [prompt, completion, cacheHit, cacheMiss]
-     */
-    @Getter
-    private final Map<String, long[]> modelUsage = new LinkedHashMap<>();
-    /**
-     * 获取累计 prompt token 数
-     */
-    // ==================== 子代理用量追踪 ====================
-    @Getter
-    private long totalPromptTokens;
-    /**
-     * 获取累计 completion token 数
-     */
-    @Getter
-    private long totalCompletionTokens;
-    /**
-     * 获取累计 cache hit token 数
-     */
-    @Getter
-    private long totalCacheHit;
-    /**
-     * 获取累计 cache miss token 数
-     */
-    @Getter
-    private long totalCacheMiss;
 
     /**
      * 构造函数（接受 LoopraModelProvider，便于 DI）
@@ -133,6 +103,12 @@ public class SubAgent {
         this.registry.setForceDenyTools(SUB_AGENT_DENY);
         this.systemPrompt = systemPrompt;
         this.parentController = parentController;
+        if (parentController != null) {
+            this.parentOutput = parentController.getOutput();
+            this.sessionUsageSink = parentController.getSessionUsageSink();
+            this.config = parentController.getAgentConfig();
+            this.hitlMode = parentController.getHitlMode();
+        }
     }
 
     /**
@@ -140,15 +116,6 @@ public class SubAgent {
      */
     public SubAgent(LoopraModelProvider modelProvider, ToolRegistry parentRegistry, String systemPrompt) {
         this(modelProvider, parentRegistry, systemPrompt, null);
-    }
-
-    /**
-     * 设置父代理的 AgentOutput，使子代理的流式输出能通过父代理的通道实时推送给用户。
-     *
-     * @param output 父代理的输出接口（ConsoleAgentOutput / SseAgentOutput 等）
-     */
-    public void setOutput(AgentOutput output) {
-        this.parentOutput = output;
     }
 
     /**
@@ -162,13 +129,6 @@ public class SubAgent {
     }
 
     /**
-     * 设置父会话用量上报通道，用于子代理 token 用量直接上报。
-     */
-    public void setSessionUsageSink(SessionUsageSink sessionUsageSink) {
-        this.sessionUsageSink = sessionUsageSink;
-    }
-
-    /**
      * 设置代理配置，继承父级以确保上下文折叠/工具超时等行为一致。
      */
     public void setConfig(AgentConfig config) {
@@ -178,23 +138,6 @@ public class SubAgent {
     /** 设置角色级工具白名单；传 null 表示继承父代理的全部可用工具。 */
     public void setAllowedTools(Set<String> allowedTools) {
         this.registry.setForceAllowTools(allowedTools);
-    }
-
-    /**
-     * 是否有用量数据
-     */
-    public boolean hasUsage() {
-        return totalPromptTokens > 0 || totalCompletionTokens > 0;
-    }
-
-    /**
-     * 设置子代理 HITL 模式。
-     * <p>默认 "free"，保持向后兼容；SubAgentTool 会传入父代理当前的完整模式。</p>
-     *
-     * @param mode "free" / "approval" / "auto"，向后兼容 "true"/"false"
-     */
-    public void setHitlMode(String mode) {
-        this.hitlMode = mode;
     }
 
     /**
@@ -239,6 +182,9 @@ public class SubAgent {
                 new PromptPrefix(systemPrompt, registry.toOpenAiTools()));
         // 继承父级配置（config、sessionId、sessionUsageSink）和父代理的完整 HITL 模式。
         AgentConfig effectiveConfig = this.config;
+        if (abortRequested.get()) {
+            return "⏹️ 子代理已取消";
+        }
         this.subLoop = new AgentLoop(modelProvider, registry, ctx, effectiveConfig);
         this.subLoop.setHitlMode(this.hitlMode);
         AgentLoop subLoop = this.subLoop;
@@ -255,15 +201,11 @@ public class SubAgent {
         subLoop.setExternalAbortCheck(() -> abortRequested.get()
                 || (parentController != null && parentController.isAbortRequested()));
 
-        // 将父代理的 AgentOutput 传递给子代理的推理循环，
-        // 使用 SubAgentAgentOutput 包装器将所有事件以 sub_xxx 前缀独立通道发送，
-        // 前端在独立 Modal 中渲染子代理输出，不占用主消息流。
         if (parentOutput != null) {
             SubAgentAgentOutput wrapped = new SubAgentAgentOutput(parentOutput, task);
             this.subAgentId = wrapped.getSubId();
             subLoop.setOutput(wrapped);
         }
-
         // 继承父级 sessionId 和 sessionUsageSink（用于 tools 中正确的会话上下文和用量上报）。
         // 文件变更必须由父循环统一 drain 并持久化；否则子循环会提前消费同一会话范围的记录，
         // 使主消息无法展示“已编辑 X 个文件”。
@@ -302,19 +244,9 @@ public class SubAgent {
             @Override
             public void onUsage(String model, int prompt, int completion, int total,
                                 int cacheHit, int cacheMiss) {
-                // 累计总量
-                totalPromptTokens += prompt;
-                totalCompletionTokens += completion;
-                totalCacheHit += cacheHit;
-                totalCacheMiss += cacheMiss;
-                // 按模型累计
-                modelUsage.computeIfAbsent(model != null ? model : "unknown",
-                        k -> new long[4]);
-                long[] mu = modelUsage.get(model != null ? model : "unknown");
-                mu[0] += prompt;
-                mu[1] += completion;
-                mu[2] += cacheHit;
-                mu[3] += cacheMiss;
+                if (sessionUsageSink != null) {
+                    sessionUsageSink.addUsage(model, prompt, completion, cacheHit, cacheMiss);
+                }
                 // 委托给外部 listener
                 if (listener != null) {
                     listener.onUsage(model, prompt, completion, total, cacheHit, cacheMiss);

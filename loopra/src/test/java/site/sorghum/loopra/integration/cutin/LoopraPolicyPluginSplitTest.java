@@ -14,7 +14,8 @@ import site.sorghum.loopra.bin.agent.resilient.StormBreaker;
 import site.sorghum.loopra.bin.model.LoopraModelProvider;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraPolicyHost;
-import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraPolicyPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraModelPolicyPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraToolPolicyPlugin;
 import site.sorghum.loopra.tool.AgentOutput;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -22,11 +23,13 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 class LoopraPolicyPluginSplitTest {
 
     @Test
-    void facadeRegistersModelAndToolPolicyInterceptors() {
+    void splitPluginsRegisterModelAndToolPolicyInterceptors() {
         DefaultLoopEngine engine = new DefaultLoopEngine();
         DefaultLoopRegistrar registrar = (DefaultLoopRegistrar) engine.registrar();
 
-        new LoopraPolicyPlugin(new StubHost()).register(registrar);
+        StubHost host = new StubHost();
+        new LoopraModelPolicyPlugin(host).register(registrar);
+        new LoopraToolPolicyPlugin(host).register(registrar);
 
         assertEquals(1, registrar.interceptors().size(InterceptPoint.BEFORE_MODEL));
         assertEquals(1, registrar.interceptors().size(InterceptPoint.ON_MODEL_STREAM));
@@ -62,7 +65,7 @@ class LoopraPolicyPluginSplitTest {
         }
 
         @Override
-        public ToolRegistry getToolRegistryInstance() {
+        public ToolRegistry getToolRegistry() {
             return null;
         }
 

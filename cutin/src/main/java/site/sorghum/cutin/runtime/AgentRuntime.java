@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Agent 运行时：在循环引擎之上提供会话级的高层入口。
@@ -24,8 +23,6 @@ public final class AgentRuntime {
     private final DefaultLoopEngine engine;
     /** 根据会话生成程序的工厂。 */
     private final AgentProgramFactory programFactory;
-    /** 会话 id 到会话的映射。 */
-    private final Map<String, AgentSession> sessions = new ConcurrentHashMap<>();
 
     /** 使用默认的最简 Agent 程序创建运行时。 */
     public AgentRuntime(DefaultLoopEngine engine) {
@@ -41,12 +38,10 @@ public final class AgentRuntime {
         this.programFactory = programFactory;
     }
 
-    /** 创建一个新会话并登记到运行时。 */
+    /** 创建一个新会话。 */
     public AgentSession newSession() {
         String id = UUID.randomUUID().toString();
-        AgentSession session = new AgentSession(id, this);
-        sessions.put(id, session);
-        return session;
+        return new AgentSession(id, this);
     }
 
     /**

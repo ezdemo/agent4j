@@ -1,6 +1,7 @@
 package site.sorghum.loopra.bin.tool;
 
 import org.junit.jupiter.api.Test;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.tool.ToolContext;
 
 import java.nio.file.Path;
@@ -18,7 +19,7 @@ class SessionEnvironmentTest {
     void registryDefaultsStateRootToProjectRoot() {
         ToolRegistry registry = new ToolRegistry();
         Path workspace = Path.of("/tmp/main-repo");
-        registry.setRefreshContext(workspace, "url", "key", null);
+        registry.setEnvironment(SessionEnvironment.local(workspace));
         assertEquals(workspace, registry.getEnvironment().executionRoot());
         assertEquals(workspace, registry.getEnvironment().stateRoot());
     }
@@ -28,7 +29,7 @@ class SessionEnvironmentTest {
         ToolRegistry registry = new ToolRegistry();
         Path worktree = Path.of("/home/u/.loopra/worktree/abc-sess1");
         Path main = Path.of("/tmp/main-repo");
-        registry.setRefreshContext(worktree, main, "url", "key", null);
+        registry.setEnvironment(SessionEnvironment.of(worktree, main));
         assertEquals(worktree, registry.getEnvironment().executionRoot());
         assertEquals(main, registry.getEnvironment().stateRoot());
     }
@@ -38,7 +39,7 @@ class SessionEnvironmentTest {
         ToolRegistry registry = new ToolRegistry();
         Path worktree = Path.of("/home/u/.loopra/worktree/abc-sess1");
         Path main = Path.of("/tmp/main-repo");
-        registry.setRefreshContext(worktree, main, "url", "key", null);
+        registry.setEnvironment(SessionEnvironment.of(worktree, main));
         ToolRegistry copy = registry.copy();
         assertEquals(worktree, copy.getEnvironment().executionRoot());
         assertEquals(main, copy.getEnvironment().stateRoot());
@@ -61,9 +62,9 @@ class SessionEnvironmentTest {
 
     @Test
     void initializerWiresStateRootIntoRegistry() {
-        ToolSystemInitializer.Result result = ToolSystemInitializer.initialize(
-                Path.of("/tmp/worktree"), Path.of("/tmp/main"), "url", "key", null, null, "prompt");
-        assertEquals(Path.of("/tmp/worktree"), result.toolRegistry.getEnvironment().executionRoot());
-        assertEquals(Path.of("/tmp/main"), result.toolRegistry.getEnvironment().stateRoot());
+        ToolSystemInitializer.ToolSystem result = ToolSystemInitializer.initialize(
+                SessionEnvironment.of(Path.of("/tmp/worktree"), Path.of("/tmp/main")), null, "prompt");
+        assertEquals(Path.of("/tmp/worktree"), result.toolRegistry().getEnvironment().executionRoot());
+        assertEquals(Path.of("/tmp/main"), result.toolRegistry().getEnvironment().stateRoot());
     }
 }

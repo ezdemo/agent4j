@@ -2,6 +2,7 @@ package site.sorghum.loopra.bin.agent.core;
 
 import org.junit.jupiter.api.Test;
 import org.noear.snack4.ONode;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.agent.model.ChatMessage;
 import site.sorghum.loopra.bin.model.TestLoopraProvider;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
@@ -37,7 +38,7 @@ class SubAgentSessionAffinityTest {
     @Test
     void inheritsPlanModeFromParentController() throws Exception {
         ToolRegistry registry = new ToolRegistry().setDisabledTools(Set.of());
-        registry.setRefreshContext(Paths.get(".").toAbsolutePath(), null, null, List.of());
+        registry.setEnvironment(SessionEnvironment.local(Paths.get(".").toAbsolutePath()));
         AgentLoop parent = new AgentLoop(recordingProvider(), registry, null, null);
         parent.setPlanMode(true);
         SubAgent child = new SubAgent(recordingProvider(), registry, "system", parent);
