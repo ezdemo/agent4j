@@ -8,6 +8,8 @@ import site.sorghum.cutin.core.model.*;
 import site.sorghum.cutin.core.tool.ToolCall;
 import site.sorghum.cutin.core.tool.ToolDefinition;
 
+import java.io.IOException;
+import java.io.UncheckedIOException;
 import java.util.*;
 import java.util.stream.Stream;
 
@@ -39,13 +41,14 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
         return config.id();
     }
 
-    /** 同步调用：POST 请求后解析消息、工具调用与用量。 */
+    /** 同步调用：POST 请求后解析消息、工具调用与用量，并附带原始响应体。 */
     @Override
     public ModelResponse call(ModelCallRequest request) {
-        ONode response = transport.post(buildBody(request, false));
+        String raw = transport.postRaw(buildBody(request, false));
+        ONode response = JsonSupport.read(raw);
         Message message = parseMessage(JsonSupport.child(response, "choices", 0, "message"));
         Usage usage = parseUsage(JsonSupport.child(response, "usage"));
-        return new ModelResponse(message, usage, true);
+        return new ModelResponse(message, usage, true, raw);
     }
 
     /** 流式调用：解析 SSE 增量块，并在流尾追加聚合出的工具调用与用量。 */
@@ -53,6 +56,11 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
     public Stream<StreamChunk> stream(ModelCallRequest request) {
         Accumulator accumulator = new Accumulator();
         Stream<StreamChunk> chunks = transport.postSse(buildBody(request, true))
+            .map(chunk -> {
+                String raw = chunk.toJson();
+                accumulator.raw.append(raw).append('\n');
+                return chunk;
+            })
             .flatMap(chunk -> parseChunk(chunk, accumulator));
         return Stream.concat(chunks, Stream.of(accumulator).flatMap(Accumulator::finalStream))
             .onClose(chunks::close);
@@ -305,6 +313,8 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
         private String error;
         /** 最近一次上报的累计用量，流尾统一交付。 */
         private Usage usage = Usage.ZERO;
+        /** 全部原始 SSE 数据行。 */
+        private final StringBuilder raw = new StringBuilder();
         /** 工具调用 index 到构建器的映射。 */
         private final Map<Integer, ToolCallBuilder> toolCalls = new LinkedHashMap<>();
 
@@ -347,7 +357,7 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
                 calls,
                 List.of(),
                 usage,
-                Map.of(),
+                Map.of("raw", raw.toString()),
                 true
             ));
         }

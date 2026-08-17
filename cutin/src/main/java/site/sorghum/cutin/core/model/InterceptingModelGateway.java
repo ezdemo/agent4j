@@ -191,7 +191,8 @@ public final class InterceptingModelGateway implements ModelGateway {
                         reasoning.toString(),
                         toolCalls,
                         thinkingBlocks,
-                        usage[0]
+                        usage[0],
+                        rawOf(effective)
                     );
                     InterceptionResult after = interceptors.run(
                         InterceptPoint.AFTER_MODEL,
@@ -220,7 +221,8 @@ public final class InterceptingModelGateway implements ModelGateway {
                         reasoning.toString(),
                         toolCalls,
                         thinkingBlocks,
-                        usage[0]
+                        usage[0],
+                        rawOf(effective)
                     );
                     InterceptionResult after = interceptors.run(
                         InterceptPoint.AFTER_MODEL,
@@ -296,13 +298,14 @@ public final class InterceptingModelGateway implements ModelGateway {
         );
     }
 
-    /** 把累计结果组装成 assistant 消息与元数据。 */
+    /** 把累计结果组装成 assistant 消息与元数据，并附带原始响应体。 */
     private static ModelResponse response(
         String content,
         String reasoning,
         List<site.sorghum.cutin.core.tool.ToolCall> toolCalls,
         List<String> thinkingBlocks,
-        Usage usage
+        Usage usage,
+        String raw
     ) {
         Map<String, Object> metadata = new java.util.HashMap<>();
         if (reasoning != null && !reasoning.isEmpty()) {
@@ -314,8 +317,15 @@ public final class InterceptingModelGateway implements ModelGateway {
         return new ModelResponse(
             new Message("assistant", content, null, toolCalls, metadata),
             usage,
-            true
+            true,
+            raw
         );
+    }
+
+    /** 从终止块元数据中取出 provider 附带的原始响应体。 */
+    private static String rawOf(StreamChunk terminal) {
+        Object raw = terminal.metadata().get("raw");
+        return raw == null ? "" : String.valueOf(raw);
     }
 
     /** 用 AFTER_MODEL 替换后的响应生成新的终止块，并把响应放入元数据。 */

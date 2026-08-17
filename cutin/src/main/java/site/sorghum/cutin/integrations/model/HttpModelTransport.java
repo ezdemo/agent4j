@@ -53,6 +53,11 @@ public final class HttpModelTransport {
 
     /** 发送 JSON POST 并解析响应体为 ONode。 */
     public ONode post(ONode body) {
+        return JsonSupport.read(postRaw(body));
+    }
+
+    /** 发送 JSON POST 并返回原始响应体字符串。 */
+    public String postRaw(ONode body) {
         try {
             HttpRequest request = buildRequest(body.toString());
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -60,7 +65,7 @@ public final class HttpModelTransport {
                 throw new ModelProviderException("provider returned HTTP " + response.statusCode()
                     + ": " + response.body());
             }
-            return JsonSupport.read(response.body());
+            return response.body();
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         } catch (InterruptedException exception) {
