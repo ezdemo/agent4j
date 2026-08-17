@@ -992,7 +992,13 @@ public class AgentLoop implements
             return prepared;
         } catch (IOException exception) {
             log.warn("[cutin] BEFORE_MODEL 折叠失败，按当前上下文继续: {}", exception.getMessage());
-            return new PreparedMessages(ctx.buildMessages(), false);
+            List<ChatMessage> fallback = ctx.buildMessages();
+            try {
+                ONode tools = refreshTools();
+                lastContextEstimate = ContextTokenEstimator.estimate(fallback, tools, currentToolInstructions());
+            } catch (Exception ignored) {
+            }
+            return new PreparedMessages(fallback, false);
         }
     }
 
