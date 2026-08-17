@@ -70,9 +70,6 @@ public class ToolRegistry {
     @Getter
     private SessionEnvironment environment;
 
-    private String apiUrl;
-    private String apiKey;
-    private List<String> blockedPaths = Collections.emptyList();
 
     /**
      * 设置被禁用的工具名称集合（静态快照，用于 CLI 模式 / 测试）。
@@ -126,46 +123,9 @@ public class ToolRegistry {
     }
 
 
-    /**
-     * 设置动态刷新的上下文参数。
-     * 调用 {@link #refresh()} 时会使用这些参数重新扫描并注册工具。
-     */
-    public void setRefreshContext(Path workspace, String apiUrl, String apiKey, List<String> blockedPaths) {
-        setRefreshContext(workspace, null, apiUrl, apiKey, blockedPaths);
-    }
-
-    /**
-     * 设置动态刷新的上下文参数（含状态项目）。
-     *
-     * @param stateWorkspace 状态项目；null 时回退为 {@code workspace}
-     */
-    public void setRefreshContext(Path workspace, Path stateWorkspace, String apiUrl, String apiKey, List<String> blockedPaths) {
-        this.environment = SessionEnvironment.of(workspace, stateWorkspace);
-        this.apiUrl = apiUrl;
-        this.apiKey = apiKey;
-        this.blockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
-    }
-
-    public Path getWorkspace() {
-        return environment == null ? null : environment.executionRoot();
-    }
-
-    public Path getStateWorkspace() {
-        return environment == null ? null : environment.stateRoot();
-    }
-
-    /**
-      * 设置动态工具刷新使用的会话环境。
-     */
-    public void setRefreshContext(SessionEnvironment environment, String apiUrl, String apiKey,
-                                  List<String> blockedPaths) {
-        setRefreshContext(
-                environment == null ? null : environment.executionRoot(),
-                environment == null ? null : environment.stateRoot(),
-                apiUrl,
-                apiKey,
-                blockedPaths
-        );
+    /** 设置工具扫描与执行使用的会话环境。 */
+    public void setEnvironment(SessionEnvironment environment) {
+        this.environment = environment;
     }
 
     /**
@@ -186,7 +146,8 @@ public class ToolRegistry {
         cachedOpenAiTools = null; // 失效缓存
 
         // 使用 ToolScanUtil 统一扫描（Solon IoC + Skill 文件系统）
-        List<FunctionTool> functionToolsList = ToolScanUtil.scanTools(getWorkspace());
+        List<FunctionTool> functionToolsList = ToolScanUtil.scanTools(
+                environment == null ? null : environment.executionRoot());
 
         for (FunctionTool tool : functionToolsList) {
             ToolMetadata.applyReadOnlyOverride(tool, readOnlyOverrides.get(tool.name()));
@@ -200,6 +161,7 @@ public class ToolRegistry {
      */
     public void register(FunctionTool tool) {
         register(tool, getCurrentDisabledTools());
+        syncCutinRegistry();
     }
 
     private void register(FunctionTool tool, Set<String> disabled) {
@@ -215,7 +177,6 @@ public class ToolRegistry {
             functionToolMap.putIfAbsent(tool.name(), tool);
         }
         cachedOpenAiTools = null;
-        syncCutinRegistry();
     }
 
 
@@ -232,7 +193,7 @@ public class ToolRegistry {
      * 复制当前注册表的全部配置及工具列表到新实例。
      * <p>
      * 继承父级的所有设置：configService、disabledTools、
-     * refreshContext、blockedPaths 以及全部已注册的工具。
+     * 会话环境以及全部已注册的工具。
      * 调用方可在返回后自行调用 {@link #setForceDenyTools} 设置强制禁止名单。
      * </p>
      *
@@ -251,13 +212,8 @@ public class ToolRegistry {
         copy.forceAllowTools = this.forceAllowTools == null ? null : new HashSet<>(this.forceAllowTools);
         // 复制工具策略提供者（实时禁用/只读来源）
         copy.toolPolicyProvider = this.toolPolicyProvider;
-        // 复制刷新上下文
+        // 复制会话环境
         copy.environment = this.environment;
-        copy.apiUrl = this.apiUrl;
-        copy.apiKey = this.apiKey;
-        copy.blockedPaths = this.blockedPaths.isEmpty()
-                ? Collections.emptyList()
-                : new ArrayList<>(this.blockedPaths);
         // 注册所有工具
         for (FunctionTool def : this.functionToolMap.values()) {
             copy.functionToolMap.put(def.name(), def);

@@ -33,7 +33,7 @@ class SubagentRuntimeTest {
             Map.of("task", "ignored"),
             null
         ));
-        LoopResult result = subagents.await(handle).get(5, TimeUnit.SECONDS);
+        LoopResult result = handle.result().get(5, TimeUnit.SECONDS);
 
         assertEquals(LoopResult.Status.COMPLETED, result.status());
         assertTrue((boolean) result.finalSnapshot().variables().get("subagentRan"));

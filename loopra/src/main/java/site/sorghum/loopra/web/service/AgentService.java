@@ -199,7 +199,7 @@ public class AgentService {
      * <p>同一项目的所有会话 Agent 复用其 ToolRegistry 与 PromptPrefix，
      * 避免每个 Agent 重复扫描工具/构建提示词；配置重建（{@link #reinitialize()}）时清空。</p>
      */
-    private final ConcurrentHashMap<String, ToolSystemInitializer.Result> sharedToolSystems = new ConcurrentHashMap<>();
+    private final ConcurrentHashMap<String, ToolSystemInitializer.ToolSystem> sharedToolSystems = new ConcurrentHashMap<>();
 
     /**
      * 加载默认系统提示词。
@@ -248,10 +248,6 @@ public class AgentService {
     /**
      * 计算项目路径的 hash 值（MD5 前 12 位）。
      */
-    public static String computeProjectHash(String projectPath) {
-        return ProjectRegistry.computeProjectHash(projectPath);
-    }
-
     /**
      * 初始化共享组件（Solon 启动后自动调用）
      */
@@ -337,58 +333,22 @@ public class AgentService {
         }
 
         // 预构建默认项目的共享工具系统（其余项目在创建 Agent 时按需构建）
-        ToolSystemInitializer.Result initResult = buildSharedToolSystem(config.workspaceDir(), config);
+        SessionEnvironment environment = SessionEnvironment.of(config.workspaceDir(), null);
+        ToolSystemInitializer.ToolSystem initResult = ToolSystemInitializer.initialize(
+                environment, config.disabledTools(), loadDefaultSystemPrompt());
         sharedToolSystems.put(workspaceKey(config.workspaceDir()), initResult);
-        this.sharedToolRegistry = initResult.toolRegistry;
+        this.sharedToolRegistry = initResult.toolRegistry();
 
         return true;
     }
 
-    /**
-     * 构建指定项目的共享工具系统（ToolRegistry + PromptPrefix + 系统提示词）。
-     * <p>纯构建，不操作缓存 Map —— 供 {@code computeIfAbsent} 的映射函数安全调用
-     * （ConcurrentHashMap 禁止在 computeIfAbsent 内递归更新同一 Map）。</p>
-     */
-    private ToolSystemInitializer.Result buildSharedToolSystem(Path workspace, LoopraConfig config) {
-        return buildSharedToolSystem(SessionEnvironment.of(workspace, null), config);
-    }
-
-    /**
-     * 构建指定会话环境的共享工具系统。
-     */
-    private ToolSystemInitializer.Result buildSharedToolSystem(Path workspace, Path stateWorkspace, LoopraConfig config) {
-        return buildSharedToolSystem(SessionEnvironment.of(workspace, stateWorkspace), config);
-    }
-
-    private ToolSystemInitializer.Result buildSharedToolSystem(SessionEnvironment environment, LoopraConfig config) {
-        ToolSystemInitializer.Result result = ToolSystemInitializer.initialize(
-                environment, config.apiUrl(), config.apiKey(),
-                config.disabledTools(), config.blockedPaths(),
-                loadDefaultSystemPrompt());
-        log.info("[web] 已构建共享工具系统 — 项目: {} (执行根: {})",
-                environment == null ? null : environment.projectRoot(),
-                environment == null ? null : environment.executionRoot());
-        return result;
-    }
-
-    /**
-     * 获取（或首次构建）指定项目的共享工具系统。
-     */
-    private ToolSystemInitializer.Result getOrCreateSharedToolSystem(Path workspace) {
-        return getOrCreateSharedToolSystem(workspace, null);
-    }
-
-    /**
-     * 获取（或首次构建）指定项目的共享工具系统（隔离分支模式：文件根=隔离分支，状态根=主项目）。
-     */
-    private ToolSystemInitializer.Result getOrCreateSharedToolSystem(Path workspace, Path stateWorkspace) {
-        return getOrCreateSharedToolSystem(SessionEnvironment.of(workspace, stateWorkspace));
-    }
-
-    private ToolSystemInitializer.Result getOrCreateSharedToolSystem(SessionEnvironment environment) {
+    private ToolSystemInitializer.ToolSystem getOrCreateSharedToolSystem(SessionEnvironment environment) {
         String key = environment == null ? "" : environmentKey(environment);
         return sharedToolSystems.computeIfAbsent(key,
-                k -> buildSharedToolSystem(environment, ConfigService.getConfig()));
+                k -> ToolSystemInitializer.initialize(
+                        environment,
+                        ConfigService.getConfig().disabledTools(),
+                        loadDefaultSystemPrompt()));
     }
 
     private static String environmentKey(SessionEnvironment environment) {
@@ -550,7 +510,7 @@ public class AgentService {
             // 渠道切换需要替换 LoopraModelProvider；先落盘，再从同一会话历史恢复新 Agent。
             agent.flushSession();
             agent.dispose();
-            agent = createAgent(sessionKey, target);
+            agent = createAgent(sessionKey, target, null);
             sessionCache.put(sessionKey, agent);
             sessionModelTargets.put(sessionKey, target);
             log.info("[web] 会话模型渠道已切换: {}, {}/{}", sessionKey, target.channelId(), target.model());
@@ -567,7 +527,7 @@ public class AgentService {
 
             // LRU 淘汰
             sessionCache.evictIfNeeded();
-            agent = createAgent(sessionKey, target);
+            agent = createAgent(sessionKey, target, null);
 
             // 缓存 Agent
             sessionCache.put(sessionKey, agent);
@@ -576,10 +536,6 @@ public class AgentService {
             log.info("[web] 创建新 Agent: {}", sessionKey);
             return agent;
         }
-    }
-
-    private LoopraAgent createAgent(String sessionKey, ModelTarget target) {
-        return createAgent(sessionKey, target, null);
     }
 
     private LoopraAgent createAgent(String sessionKey, ModelTarget target, String systemPrompt) {
@@ -606,7 +562,7 @@ public class AgentService {
         if (isSessionWorktreeMode(workspacePath, sessionName)) {
             try {
                 WorktreeService worktreeService = org.noear.solon.Solon.context().getBean(WorktreeService.class);
-                WorktreeStatusDTO status = worktreeService.create(computeProjectHash(workspacePath), sessionName);
+                WorktreeStatusDTO status = worktreeService.create(ProjectRegistry.computeProjectHash(workspacePath), sessionName);
                 if (!status.exists() || status.worktreePath() == null) {
                     throw new ServiceException("会话隔离分支创建失败: " + status.message());
                 }
@@ -621,13 +577,9 @@ public class AgentService {
 
         LoopraAgent.Builder builder = LoopraAgent.builder()
                 .config(cfg)
-                .apiUrl(apiUrl)
-                .apiKey(apiKey)
-                .model(target.model())
                 .environment(SessionEnvironment.of(fileRoot, stateRoot))
                 .commandRegistry(commandRegistry)
                 .hitl(hitl)
-                .loopraConfig(cfg)
                 // 复用该项目的共享工具系统，跳过 Agent 内部的重复初始化
                 .toolSystem(getOrCreateSharedToolSystem(SessionEnvironment.of(fileRoot, stateRoot)))
                 .modelProvider(modelProvider);
@@ -680,16 +632,6 @@ public class AgentService {
     private record ModelTarget(String model, String channelId) {}
 
     /**
-     * 获取会话级锁。
-     *
-     * @param sessionKey 会话唯一标识
-     * @return 锁
-     */
-    private ReentrantLock getSessionLock(String sessionKey) {
-        return sessionCache.getLock(sessionKey);
-    }
-
-    /**
      * 共享组件是否已初始化
      */
     public boolean isReady() {
@@ -720,7 +662,7 @@ public class AgentService {
         if (agent != null) {
             historySize = agent.historySize();
             hitlMode = agent.getHitlMode();
-            SessionStore store = agent.getSessionStore();
+            SessionStore store = agent.getCtx().getSessionStore();
             if (store != null) {
                 sessionName = store.currentName();
             }
@@ -754,7 +696,7 @@ public class AgentService {
         }
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         LoopraAgent agent = getOrCreateAgent(sessionKey);
-        SessionStore store = agent.getSessionStore();
+        SessionStore store = agent.getCtx().getSessionStore();
         if (store != null) {
             try {
                 store.flush();
@@ -823,7 +765,7 @@ public class AgentService {
             return;
         }
         agent.getCtx().addUser(UserMessage.of(text)); // 进上下文 + 落盘（persist）
-        SessionStore store = agent.getSessionStore();
+        SessionStore store = agent.getCtx().getSessionStore();
         if (store != null) {
             store.flush();
         }
@@ -879,7 +821,7 @@ public class AgentService {
             throw new ServiceException("请先选择会话");
         }
         String sessionKey = generateSessionKey(workspacePath, sessionName);
-        ReentrantLock sessionLock = getSessionLock(sessionKey);
+        ReentrantLock sessionLock = sessionCache.getLock(sessionKey);
         sessionLock.lock();
         try {
             LoopraAgent agent = getOrCreateAgent(sessionKey);
@@ -925,7 +867,7 @@ public class AgentService {
         }
         if (sessionName == null || (rollbackId == null && rollbackTimestamp == null)) return null;
         String sessionKey = generateSessionKey(workspacePath, sessionName);
-        ReentrantLock lock = getSessionLock(sessionKey);
+        ReentrantLock lock = sessionCache.getLock(sessionKey);
         lock.lock();
         try {
             LoopraAgent agent = getOrCreateAgent(sessionKey);
@@ -962,7 +904,7 @@ public class AgentService {
      */
     public String chat(UserMessage userMessage, String workspacePath, String sessionName) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
-        ReentrantLock lock = getSessionLock(sessionKey);
+        ReentrantLock lock = sessionCache.getLock(sessionKey);
         lock.lock();
 
         // 设置当前会话名称到 ThreadLocal，供工具执行时获取
@@ -1000,7 +942,7 @@ public class AgentService {
                            String requestedModel, String requestedChannelId, String requestedReasoningEffort,
                            Boolean requestedFastMode, String action) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
-        ReentrantLock lock = getSessionLock(sessionKey);
+        ReentrantLock lock = sessionCache.getLock(sessionKey);
         lock.lock();
 
         // 设置当前会话名称到 ThreadLocal，供工具执行时获取
@@ -1050,7 +992,7 @@ public class AgentService {
                         agent.getCtx().truncate(historySizeBeforeExecution);
                         agent.restorePendingPlanExecution();
                     } else {
-                        agent.completePendingPlanExecution();
+                        agent.clearPendingPlan();
                     }
                 }
                 throw executionError;
@@ -1061,7 +1003,7 @@ public class AgentService {
                         agent.getCtx().truncate(historySizeBeforeExecution);
                         agent.restorePendingPlanExecution();
                     } else {
-                        agent.completePendingPlanExecution();
+                        agent.clearPendingPlan();
                     }
                     throw new ServiceException("计划执行已停止");
                 }
@@ -1070,7 +1012,7 @@ public class AgentService {
                     agent.restorePendingPlanExecution();
                     throw new ServiceException("计划执行未能启动，请重试");
                 }
-                agent.completePendingPlanExecution();
+                agent.clearPendingPlan();
             }
 
             // 发送最终完整回复（使用 complete 事件，与增量 content 事件区分）
@@ -1158,17 +1100,6 @@ public class AgentService {
     }
 
     /**
-     * 创建新会话（前端指定 sessionId，延迟持久化：文件在首次发消息时才创建）。
-     *
-     * @param workspacePath 项目路径（可选）
-     * @param sessionName   会话名称（前端指定，为空则自动生成）
-     * @return 实际使用的会话名
-     */
-    public String newSession(String workspacePath, String sessionName) {
-        return newSession(workspacePath, sessionName, null);
-    }
-
-    /**
      * 创建新会话（可指定初始隔离分支模式）。
      *
      * @param workspacePath 项目路径（可选）
@@ -1210,7 +1141,7 @@ public class AgentService {
         try {
             String sessionKey = generateSessionKey(workspacePath, null);
             LoopraAgent agent = getOrCreateAgent(sessionKey);
-            store = agent.getSessionStore();
+            store = agent.getCtx().getSessionStore();
         } catch (Exception e) {
             log.warn("[web] 通过 Agent 获取会话存储失败，改用独立存储: {}", e.getMessage());
             store = sessionStoreFor(workspacePath);
@@ -1304,7 +1235,7 @@ public class AgentService {
                 """.formatted(files);
         String effectiveSessionName = sessionName;
         Thread worker = new Thread(() -> {
-            ReentrantLock lock = getSessionLock(sessionKey);
+            ReentrantLock lock = sessionCache.getLock(sessionKey);
             lock.lock();
             try {
                 LoopraAgent a = sessionCache.peek(sessionKey);
@@ -1449,7 +1380,7 @@ public class AgentService {
         if (!isReady()) throw new ServiceException("Agent 未初始化");
         String sessionKey = generateSessionKey(workspacePath, sourceSession);
         LoopraAgent agent = getOrCreateAgent(sessionKey);
-        SessionStore store = agent.getSessionStore();
+        SessionStore store = agent.getCtx().getSessionStore();
         if (store == null) throw new ServiceException("会话存储不可用");
 
         // 加载源会话消息
@@ -1509,7 +1440,7 @@ public class AgentService {
         String sessionKey = generateSessionKey(workspacePath, null);
         LoopraAgent agent = sessionCache.get(sessionKey);
         if (agent != null) {
-            SessionStore store = agent.getSessionStore();
+            SessionStore store = agent.getCtx().getSessionStore();
             return store != null ? store.currentName() : null;
         }
         return null;
@@ -1696,7 +1627,7 @@ public class AgentService {
         // 3. 联动删除会话隔离分支（丢弃未合并改动，与会话文件删除一致）
         try {
             WorktreeService worktreeService = org.noear.solon.Solon.context().getBean(WorktreeService.class);
-            worktreeService.remove(computeProjectHash(workspacePath), sessionName, true);
+            worktreeService.remove(ProjectRegistry.computeProjectHash(workspacePath), sessionName, true);
         } catch (Exception e) {
             log.warn("[web] 联动删除会话隔离分支失败: {}", e.getMessage());
         }
@@ -1720,7 +1651,7 @@ public class AgentService {
         // 2. 清理各会话保留的隔离分支与分支
         try {
             WorktreeService worktreeService = org.noear.solon.Solon.context().getBean(WorktreeService.class);
-            String workspaceHash = computeProjectHash(resolvedPath);
+            String workspaceHash = ProjectRegistry.computeProjectHash(resolvedPath);
             for (SessionStore.SessionInfo session : store.list()) {
                 try {
                     worktreeService.remove(workspaceHash, session.name(), true);
@@ -2006,7 +1937,7 @@ public class AgentService {
      */
     public String executeScheduledTask(String workspacePath, String sessionName, String message) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
-        ReentrantLock lock = getSessionLock(sessionKey);
+        ReentrantLock lock = sessionCache.getLock(sessionKey);
         lock.lock();
 
         String effectiveSessionName = sessionName != null ? sessionName : "default";
@@ -2045,7 +1976,7 @@ public class AgentService {
         }
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         LoopraAgent agent = getOrCreateAgent(sessionKey);
-        SessionStore store = agent.getSessionStore();
+        SessionStore store = agent.getCtx().getSessionStore();
         if (store == null) {
             return;
         }
@@ -2061,50 +1992,13 @@ public class AgentService {
     }
 
     /**
-     * 执行需求：以指定系统提示词驱动需求专属会话（req_&lt;id&gt;）执行一次任务。
-     * <p>
-     * 与 {@link #executeScheduledTask} 同构：会话锁 + ThreadLocal 上下文 + 无头执行；
-     * 差异在于首次创建 Agent 时注入需求 SystemPrompt，且异常不吞掉（由执行器兜底流转 failed）。
-     * </p>
-     *
-     * @param workspacePath 项目路径
-     * @param sessionName   需求专属会话名
-     * @param systemPrompt  需求 SystemPrompt（首次创建会话 Agent 时生效）
-     * @param message       触发执行的消息
-     * @return Agent 回复内容
-     */
-    public String executeRequirement(String workspacePath, String sessionName, String systemPrompt, String message) {
-        return executeRequirement(workspacePath, sessionName, systemPrompt, message, false);
-    }
-
-    /**
-     * 执行需求：以指定系统提示词驱动需求专属会话（req_&lt;id&gt;）执行一次任务。
-     * <p>
-     * 与 {@link #executeScheduledTask} 同构：会话锁 + ThreadLocal 上下文 + 无头执行；
-     * 差异在于首次创建 Agent 时注入需求 SystemPrompt，且异常不吞掉（由执行器兜底流转 failed）。
-     * webHidden 为 true 时触发消息仅模型可见（Web 历史与需求评论不展示），
-     * 用于执行完成后评论触发的回复回合（避免内部指令污染评论区）。
-     * </p>
-     *
-     * @param workspacePath 项目路径
-     * @param sessionName   需求专属会话名
-     * @param systemPrompt  需求 SystemPrompt（首次创建会话 Agent 时生效）
-     * @param message       触发执行的消息
-     * @param webHidden     触发消息是否对 Web 历史隐藏
-     * @return Agent 回复内容
-     */
-    public String executeRequirement(String workspacePath, String sessionName, String systemPrompt, String message, boolean webHidden) {
-        return executeRequirement(workspacePath, sessionName, systemPrompt, message, webHidden, null, null, null, null);
-    }
-
-    /**
      * 执行需求并使用需求创建时保存的模型、推理强度和审批模式。
      */
     public String executeRequirement(String workspacePath, String sessionName, String systemPrompt, String message,
                                      boolean webHidden, String requestedModel, String requestedChannelId,
                                      String requestedReasoningEffort, String requestedHitl) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
-        ReentrantLock lock = getSessionLock(sessionKey);
+        ReentrantLock lock = sessionCache.getLock(sessionKey);
         lock.lock();
 
         String effectiveSessionName = sessionName != null ? sessionName : "default";
@@ -2143,7 +2037,7 @@ public class AgentService {
      */
     public boolean hasPendingRequirementApproval(String workspacePath, String sessionName) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
-        ReentrantLock lock = getSessionLock(sessionKey);
+        ReentrantLock lock = sessionCache.getLock(sessionKey);
         lock.lock();
         try {
             LoopraAgent agent = sessionCache.get(sessionKey);
@@ -2158,7 +2052,7 @@ public class AgentService {
      */
     public String resolveRequirementApproval(String workspacePath, String sessionName, boolean approved) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
-        ReentrantLock lock = getSessionLock(sessionKey);
+        ReentrantLock lock = sessionCache.getLock(sessionKey);
         lock.lock();
 
         String effectiveSessionName = sessionName != null ? sessionName : "default";

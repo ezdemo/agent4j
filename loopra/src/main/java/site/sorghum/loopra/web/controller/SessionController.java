@@ -71,7 +71,7 @@ public class SessionController {
         String workspacePath = agentService.resolveProjectPath(workspaceHash);
         if (workspacePath == null) workspacePath = agentService.getCurrentProject();
         String currentName = agentService.getCurrentSessionName(workspacePath);
-        String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeProjectHash(workspacePath);
+        String resolvedHash = workspaceHash != null ? workspaceHash : ProjectRegistry.computeProjectHash(workspacePath);
         return ApiResponse.ok(new SessionCurrentDTO(resolvedHash, currentName));
     }
 
@@ -154,7 +154,7 @@ public class SessionController {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
         agentService.clearAllSessions(workspacePath);
-        String resolvedHash = AgentService.computeProjectHash(workspacePath);
+        String resolvedHash = ProjectRegistry.computeProjectHash(workspacePath);
         return ApiResponse.ok(new SessionDeleteDTO("所有会话已清空", resolvedHash, null));
     }
 
@@ -170,7 +170,7 @@ public class SessionController {
         if (before == null) throw new ServiceException("before 参数不能为空");
         String workspacePath = agentService.resolveProjectHashOrThrow(workspaceHash);
         List<String> deleted = agentService.clearSessionsBefore(workspacePath, before);
-        String resolvedHash = AgentService.computeProjectHash(workspacePath);
+        String resolvedHash = ProjectRegistry.computeProjectHash(workspacePath);
         return ApiResponse.ok(new SessionCleanupDTO("已清理 " + deleted.size() + " 个过期会话", resolvedHash, deleted));
     }
 
@@ -183,7 +183,7 @@ public class SessionController {
         if (!agentService.isReady()) throw new ServiceException(WebErrorMessages.AGENT_NOT_READY);
         String workspacePath = agentService.resolveProjectPath(workspaceHash);
         agentService.deleteSession(workspacePath, name);
-        String resolvedHash = workspaceHash != null ? workspaceHash : AgentService.computeProjectHash(workspacePath);
+        String resolvedHash = workspaceHash != null ? workspaceHash : ProjectRegistry.computeProjectHash(workspacePath);
         return ApiResponse.ok(new SessionDeleteDTO("会话已删除", resolvedHash, name));
     }
 

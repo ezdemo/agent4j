@@ -29,4 +29,20 @@ public interface SessionUsageSink {
      */
     default void addUsage(String model, int promptTokens, int completionTokens, int cacheHit, int cacheMiss) {
     }
+
+    /**
+     * 在新的用户回合开始时更新会话标题，并返回当前会话 ID。
+     * 子代理和测试用 sink 默认不参与会话生命周期。
+     */
+    default String beforeTurn(String userMessage) {
+        return null;
+    }
+
+    /** 在回合结束后刷入会话消息和用量。 */
+    default void afterTurn() {
+    }
+
+    /** 持久化待审查计划；不支持会话持久化的 sink 默认忽略。 */
+    default void persistPendingPlan(String planMarkdown) {
+    }
 }

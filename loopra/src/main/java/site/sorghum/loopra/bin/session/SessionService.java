@@ -230,13 +230,6 @@ public class SessionService implements SessionUsageSink {
     }
 
     /**
-     * 注入单条历史消息
-     */
-    public void injectHistory(ChatMessage msg) {
-        ctx.injectHistory(msg);
-    }
-
-    /**
      * 生成会话标题。
      * 根据用户第一条消息内容生成简短标题。
      *
@@ -289,6 +282,30 @@ public class SessionService implements SessionUsageSink {
             store.updateTitle(name, title);
         } catch (IOException e) {
             log.error("[session] 更新会话标题失败: {}", e.getMessage());
+        }
+    }
+
+    @Override
+    public String beforeTurn(String userMessage) {
+        if (!titleGenerated) {
+            ensureSessionName();
+            updateCurrentSessionTitle(generateSessionTitle(userMessage));
+            titleGenerated = true;
+        }
+        return store.currentName();
+    }
+
+    @Override
+    public void afterTurn() {
+        flush();
+        saveUsage();
+    }
+
+    @Override
+    public void persistPendingPlan(String planMarkdown) {
+        String name = store.currentName();
+        if (name != null) {
+            store.setPendingPlan(name, planMarkdown);
         }
     }
 }

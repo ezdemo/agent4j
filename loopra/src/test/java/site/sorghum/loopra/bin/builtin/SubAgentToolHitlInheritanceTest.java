@@ -5,6 +5,8 @@ import site.sorghum.loopra.bin.agent.core.AgentLoop;
 import site.sorghum.loopra.bin.model.TestLoopraProvider;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 
+import site.sorghum.loopra.bin.agent.core.SubAgent;
+
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class SubAgentToolHitlInheritanceTest {
@@ -17,7 +19,8 @@ class SubAgentToolHitlInheritanceTest {
             AgentLoop parent = new AgentLoop(TestLoopraProvider.builder().build(), registry, null, null);
             parent.setHitlMode(mode);
 
-            assertEquals(mode, SubAgentTool.resolveInheritedHitlMode(parent));
+            SubAgent child = new SubAgent(TestLoopraProvider.builder().build(), registry, "system", parent);
+            assertEquals(mode, child.getHitlMode());
         }
     }
 }

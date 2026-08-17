@@ -38,7 +38,7 @@ public final class LoopraToolPolicyPlugin implements LoopPlugin {
         if (!(context.payload() instanceof ToolCall call)) {
             return InterceptDecision.pass();
         }
-        FunctionTool tool = host.getToolRegistryInstance().get(call.toolId());
+        FunctionTool tool = host.getToolRegistry().get(call.toolId());
         if (host.isPlanMode() && tool != null && !ToolMetadata.isReadOnly(tool)) {
             return InterceptDecision.replace(host.rejectCutinTool(
                     call,

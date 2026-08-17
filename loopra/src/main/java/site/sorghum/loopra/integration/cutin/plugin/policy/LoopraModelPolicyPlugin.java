@@ -144,7 +144,7 @@ public final class LoopraModelPolicyPlugin implements LoopPlugin {
     }
 
     private boolean isReadOnly(String toolId) {
-        FunctionTool tool = host.getToolRegistryInstance().get(toolId);
+        FunctionTool tool = host.getToolRegistry().get(toolId);
         return tool != null && ToolMetadata.isReadOnly(tool);
     }
 

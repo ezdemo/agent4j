@@ -3,6 +3,7 @@ package site.sorghum.loopra.bin.builtin;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import site.sorghum.loopra.bin.agent.core.AgentLoop;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.model.TestLoopraProvider;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.tool.ToolContext;
@@ -62,7 +63,7 @@ class SubmitPlanToolTest {
 
     private static AgentLoop loop() {
         ToolRegistry registry = new ToolRegistry().setDisabledTools(Set.of());
-        registry.setRefreshContext(Paths.get(".").toAbsolutePath(), null, null, List.of());
+        registry.setEnvironment(SessionEnvironment.local(Paths.get(".").toAbsolutePath()));
         return new AgentLoop(TestLoopraProvider.builder().build(), registry, null, null);
     }
 

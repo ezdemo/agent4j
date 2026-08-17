@@ -3,6 +3,7 @@ package site.sorghum.loopra.tool;
 import site.sorghum.loopra.bin.agent.spi.AgentConfig;
 import site.sorghum.loopra.bin.agent.spi.SessionUsageSink;
 import site.sorghum.loopra.bin.model.LoopraModelProvider;
+import site.sorghum.loopra.bin.tool.ToolRegistry;
 
 /**
  * AgentLoop 控制接口 —— 工具通过此接口影响推理循环的控制流。
@@ -82,7 +83,7 @@ public interface AgentLoopController {
     /**
      * 获取工具注册类
      */
-    <T>T getToolRegistry();
+    ToolRegistry getToolRegistry();
 
     /**
      * 获取会话用量上报通道（可为 null，表示无会话持久化）。

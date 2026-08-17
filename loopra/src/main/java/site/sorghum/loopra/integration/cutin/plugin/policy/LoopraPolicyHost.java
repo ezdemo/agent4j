@@ -30,7 +30,7 @@ public interface LoopraPolicyHost {
 
     String interceptHITLFromCutin(ModelResponse response);
 
-    ToolRegistry getToolRegistryInstance();
+    ToolRegistry getToolRegistry();
 
     boolean isPlanMode();
 

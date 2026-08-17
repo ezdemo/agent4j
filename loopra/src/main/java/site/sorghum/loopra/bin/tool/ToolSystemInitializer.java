@@ -22,7 +22,10 @@ import java.util.stream.Stream;
  * @author Sorghum
  */
 @Slf4j
-public class ToolSystemInitializer {
+public final class ToolSystemInitializer {
+
+    private ToolSystemInitializer() {
+    }
 
     private static final int MAX_PROJECT_DOC_BYTES = 256 * 1024;
 
@@ -34,61 +37,19 @@ public class ToolSystemInitializer {
     );
 
     /**
-     * 执行完整的工具系统初始化。
-     *
-     * @param workspace           项目根目录
-     * @param apiUrl              LLM API 地址
-     * @param apiKey              LLM API 密钥
-     * @param disabledTools       禁用的工具名称集合（可为 null）
-     * @param blockedPaths        屏蔽的目录列表（可为 null）
-     * @param defaultSystemPrompt 默认系统提示词（当 ~/.loopra/loopra.md 不存在时使用）
-     * @return 初始化后的 Result，包含 ToolRegistry / PromptPrefix / SkillStoreV2 / systemPrompt
-     */
-    public static Result initialize(Path workspace, String apiUrl, String apiKey,
-                                    Set<String> disabledTools, List<String> blockedPaths,
-                                    String defaultSystemPrompt) {
-        return initialize(workspace, null, apiUrl, apiKey, disabledTools, blockedPaths, defaultSystemPrompt);
-    }
-
-    /**
-     * 执行完整的工具系统初始化（可指定状态项目）。
-     *
-     * @param stateWorkspace 状态项目（Goal/Checklist/会话持久化归属）；
-     *                       null 时回退为 {@code workspace}。隔离分支模式下传入主项目。
-     */
-    public static Result initialize(Path workspace, Path stateWorkspace, String apiUrl, String apiKey,
-                                    Set<String> disabledTools, List<String> blockedPaths,
-                                    String defaultSystemPrompt) {
-        return initialize(
-                SessionEnvironment.of(workspace, stateWorkspace),
-                apiUrl,
-                apiKey,
-                disabledTools,
-                blockedPaths,
-                defaultSystemPrompt
-        );
-    }
-
-    /**
       * 使用单个会话环境执行完整的工具系统初始化。
      */
-    public static Result initialize(SessionEnvironment environment, String apiUrl, String apiKey,
-                                    Set<String> disabledTools, List<String> blockedPaths,
+    public static ToolSystem initialize(SessionEnvironment environment, Set<String> disabledTools,
                                     String defaultSystemPrompt) {
         Path workspace = environment == null ? null : environment.executionRoot();
         final Set<String> effectiveDisabledTools = disabledTools != null ? disabledTools : Collections.emptySet();
-        final List<String> effectiveBlockedPaths = blockedPaths != null ? blockedPaths : Collections.emptyList();
 
         // 1. 创建 ToolRegistry 并设置禁用工具
         final ToolRegistry registry = new ToolRegistry();
         registry.setDisabledTools(effectiveDisabledTools);
-        // 保存刷新上下文，供后续动态刷新工具列表使用
-        registry.setRefreshContext(environment, apiUrl, apiKey, effectiveBlockedPaths);
+        registry.setEnvironment(environment);
         if (!effectiveDisabledTools.isEmpty()) {
             log.info("[config] 已禁用工具: {}", String.join(", ", effectiveDisabledTools));
-        }
-        if (!effectiveBlockedPaths.isEmpty()) {
-            log.info("[config] 已屏蔽目录: {}", String.join(", ", effectiveBlockedPaths));
         }
 
         // 2. 使用 ToolScanUtil 统一扫描工具（Solon IoC + Skill 文件系统）
@@ -106,7 +67,7 @@ public class ToolSystemInitializer {
         }
 
         // 4. 加载基准系统提示词（编码代理身份规则）
-        String systemPrompt = loadDefaultSystemPrompt(defaultSystemPrompt);
+        String systemPrompt = defaultSystemPrompt;
         // 4.1 加载solon skill 基准提示词
         systemPrompt  = systemPrompt + "\n\n" + ToolScanUtil.getSkillToolDescription(workspace);
         // 5. 追加工具规范到 system prompt
@@ -131,15 +92,7 @@ public class ToolSystemInitializer {
         PromptPrefix prefix = new PromptPrefix(systemPrompt, registry.toOpenAiTools());
 
         log.info("[init] 工具系统初始化完成 — 工具数: {}", agentTools.size());
-        return new Result(registry, prefix, systemPrompt);
-    }
-
-    /**
-     * 加载默认系统提示词。固定返回传入的 fallback（即硬编码 DEFAULT_SYSTEM_PROMPT），
-     * 不再从 ~/.loopra/loopra.md 读取。
-     */
-    private static String loadDefaultSystemPrompt(String fallback) {
-        return fallback;
+        return new ToolSystem(registry, prefix);
     }
 
     /**
@@ -193,27 +146,6 @@ public class ToolSystemInitializer {
     /**
      * 初始化结果，包含所有已初始化的组件。
      */
-    public static class Result {
-        public final ToolRegistry toolRegistry;
-        public final PromptPrefix promptPrefix;
-        /**
-         * 完整系统提示词（含项目文档 + base + 工具定义 + Skill 索引）
-         */
-        public final String systemPrompt;
-        /**
-         * 后缀部分（工具定义 + Skill 索引），不依赖于具体项目的项目文档
-         */
-        public final String suffix;
-
-        Result(ToolRegistry toolRegistry, PromptPrefix promptPrefix,
-               String systemPrompt) {
-            this.toolRegistry = toolRegistry;
-            this.promptPrefix = promptPrefix;
-            this.systemPrompt = systemPrompt;
-            // 从完整提示词中提取后缀：去掉项目文档和 base prompt 部分
-            // 工具定义以 "\n\n## 可用工具规范" 开头
-            int suffixStart = systemPrompt.indexOf("\n\n## 可用工具规范");
-            this.suffix = suffixStart >= 0 ? systemPrompt.substring(suffixStart) : "";
-        }
+    public record ToolSystem(ToolRegistry toolRegistry, PromptPrefix promptPrefix) {
     }
 }

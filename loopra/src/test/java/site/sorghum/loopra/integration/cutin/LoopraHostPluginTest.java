@@ -10,8 +10,8 @@ import site.sorghum.cutin.core.plugin.PluginBeanManager;
 import site.sorghum.loopra.bin.agent.model.PreparedMessages;
 import site.sorghum.loopra.integration.cutin.plugin.compaction.LoopraCompactionHost;
 import site.sorghum.loopra.integration.cutin.plugin.compaction.LoopraCompactionPlugin;
-import site.sorghum.loopra.integration.cutin.plugin.lifecycle.LoopraLifecycleHost;
-import site.sorghum.loopra.integration.cutin.plugin.lifecycle.LoopraLifecyclePlugin;
+import site.sorghum.loopra.integration.cutin.plugin.session.LoopraSessionHost;
+import site.sorghum.loopra.integration.cutin.plugin.session.LoopraSessionPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.usage.LoopraUsageHost;
 import site.sorghum.loopra.integration.cutin.plugin.usage.LoopraUsagePlugin;
 
@@ -31,7 +31,7 @@ class LoopraHostPluginTest {
         DefaultLoopEngine engine = new DefaultLoopEngine();
         LifecycleStub host = new LifecycleStub();
         PluginBeanManager manager = new PluginBeanManager(engine.registrar());
-        manager.registerPlugin(new LoopraLifecyclePlugin(host));
+        manager.registerPlugin(new LoopraSessionPlugin(host));
         manager.startAll();
 
         LoopProgram program = LoopProgram.builder("lifecycle")
@@ -88,7 +88,7 @@ class LoopraHostPluginTest {
         assertEquals(List.of(new Message("system", "compacted")), provider.lastMessages);
     }
 
-    private static final class LifecycleStub implements LoopraLifecycleHost {
+    private static final class LifecycleStub implements LoopraSessionHost {
         private final AtomicInteger begins = new AtomicInteger();
         private final AtomicInteger ends = new AtomicInteger();
 
@@ -100,6 +100,14 @@ class LoopraHostPluginTest {
         @Override
         public void endCutinLoop() {
             ends.incrementAndGet();
+        }
+
+        @Override
+        public void beforeTurn(String userMessage) {
+        }
+
+        @Override
+        public void afterTurn() {
         }
     }
 

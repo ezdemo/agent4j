@@ -8,14 +8,11 @@ import org.noear.solon.annotation.Component;
 import org.noear.solon.annotation.Inject;
 import org.noear.solon.annotation.Param;
 import site.sorghum.loopra.bin.agent.core.SubAgent;
-import site.sorghum.loopra.bin.agent.output.ParentOutputHolder;
-import site.sorghum.loopra.bin.agent.spi.SessionUsageSink;
 import site.sorghum.loopra.bin.config.LoopraConfig;
 import site.sorghum.loopra.bin.model.LoopraModelProvider;
 import site.sorghum.loopra.bin.tool.ToolMetadata;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
 import site.sorghum.loopra.tool.AgentLoopController;
-import site.sorghum.loopra.tool.AgentOutput;
 import site.sorghum.loopra.tool.SolonToTools;
 import site.sorghum.loopra.tool.ToolContext;
 
@@ -35,30 +32,6 @@ import java.util.Set;
 @Slf4j
 @Component
 public class SubAgentTool extends AbsToolProvider implements SolonToTools {
-
-    // ==================== 父 AgentOutput 传播 ====================
-
-    /**
-     * 在当前工作线程上设置父 AgentOutput（异步 Future 内部调用）。
-     * 实际存储在 {@link ParentOutputHolder}（loopra-model 内核），AgentLoop 分发工具时设置。
-     */
-    public static void setCurrentOutput(AgentOutput output) {
-        ParentOutputHolder.set(output);
-    }
-
-    /**
-     * 获取当前线程的父 AgentOutput
-     */
-    public static AgentOutput getCurrentOutput() {
-        return ParentOutputHolder.get();
-    }
-
-    /**
-     * 清除当前线程的父 AgentOutput（finally 中调用）
-     */
-    public static void clearCurrentOutput() {
-        ParentOutputHolder.clear();
-    }
 
     @Inject
     private LoopraModelProvider modelProvider;
@@ -116,9 +89,10 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
 
             StringBuilder systemPromptBuilder = new StringBuilder(
                     selectedProfile.buildSystemPrompt(task, instructions));
-            if (registry.getWorkspace() != null) {
+            if (registry.getEnvironment() != null
+                    && registry.getEnvironment().executionRoot() != null) {
                 systemPromptBuilder.append("\n\n## 运行环境\n\n工作目录: `")
-                        .append(registry.getWorkspace().toAbsolutePath().normalize())
+                        .append(registry.getEnvironment().executionRoot().toAbsolutePath().normalize())
                         .append('`');
             }
             systemPromptBuilder.append("\n\n## 可用工具规范\n\n");
@@ -146,47 +120,14 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
 
             if (parentController != null) {
                 parentController.registerToolCancellation(sub::abort);
-                if (parentController.getAgentConfig() != null) {
-                    sub.setConfig(parentController.getAgentConfig());
-                }
             }
 
             try {
-
-                // 精确继承父代理的 HITL 三态设置，避免 auto 被降级成 approval。
-                if (parentController != null) {
-                    sub.setHitlMode(resolveInheritedHitlMode(parentController));
-                }
-
-                // 将父 Agent 的 AgentOutput 传递给子代理，使其流式输出能实时推送给用户
-                AgentOutput parentOutput = getCurrentOutput();
-                if (parentOutput != null) {
-                    sub.setOutput(parentOutput);
-                }
-
-                // 继承父级 sessionId 和 sessionService，使子代理的 tools 有正确的会话上下文
-                // 且子代理的 token 用量可直接上报，无需经过 static collector
                 String parentSessionId = ctx.getSessionId();
                 if (parentSessionId != null) {
                     sub.setSessionId(parentSessionId);
                 }
-                SessionUsageSink parentSink = (parentController != null) ? parentController.getSessionUsageSink() : null;
-                if (parentSink != null) {
-                    sub.setSessionUsageSink(parentSink);
-                }
-
                 String result = sub.run(task, new SubAgentListener());
-
-                // 子代理的 token 用量通过 SubAgent 的 capturingListener 累积到 SubAgent 字段中，
-                // 此处将其上报到父会话的用量通道（累加到会话总用量）。
-                if (sub.hasUsage() && parentSink != null) {
-                    var usage = sub.getModelUsage();
-                    for (var e : usage.entrySet()) {
-                        long[] u = e.getValue();
-                        parentSink.addUsage(e.getKey(), (int) u[0], (int) u[1], (int) u[2], (int) u[3]);
-                    }
-                }
-
                 return result;
             } finally {
                 if (parentController != null) {
@@ -218,12 +159,6 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
         return new LoopraModelProvider(channel.apiUrl(), channel.apiKey(), model,
                 loopraConfig.reasoningEffort(), channel.id(), channel.apiProtocol());
     }
-
-
-    static String resolveInheritedHitlMode(AgentLoopController parentController) {
-        return parentController != null ? parentController.getHitlMode() : "free";
-    }
-
     @Override
     public Collection<FunctionTool> getSolonTools() {
         return this.getTools();
