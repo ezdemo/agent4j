@@ -144,7 +144,25 @@ public final class OpenAiResponsesProvider implements ModelProvider {
             }
         }
 
-        if (message.content() != null && !message.content().isEmpty()) {
+        if (message.metadata("images") instanceof List<?> images && !images.isEmpty()) {
+            ONode item = JsonSupport.object();
+            item.set("role", message.role());
+            ONode content = JsonSupport.array();
+            if (message.content() != null && !message.content().isEmpty()) {
+                ONode text = JsonSupport.object();
+                text.set("type", "input_text");
+                text.set("text", message.content());
+                content.add(text);
+            }
+            for (Object image : images) {
+                ONode imagePart = JsonSupport.object();
+                imagePart.set("type", "input_image");
+                imagePart.set("image_url", String.valueOf(image));
+                content.add(imagePart);
+            }
+            item.set("content", content);
+            input.add(item);
+        } else if (message.content() != null && !message.content().isEmpty()) {
             ONode item = JsonSupport.object();
             item.set("role", message.role());
             item.set("content", message.content());
