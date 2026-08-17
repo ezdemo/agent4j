@@ -1,10 +1,10 @@
 package site.sorghum.cutin.core.state;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import site.sorghum.cutin.core.context.Artifact;
 import site.sorghum.cutin.core.context.Budget;
 import site.sorghum.cutin.core.context.Message;
 import site.sorghum.cutin.core.context.Usage;
+import site.sorghum.cutin.core.json.JsonSupport;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -24,8 +24,6 @@ public final class FileStateStore implements StateStore {
 
     /** 存储根目录。 */
     private final Path root;
-    /** JSON 映射器。 */
-    private final ObjectMapper mapper = new ObjectMapper();
     /** 读写锁。 */
     private final ReentrantLock lock = new ReentrantLock();
 
@@ -42,8 +40,7 @@ public final class FileStateStore implements StateStore {
             Files.createDirectories(loopDirectory(snapshot.loopId()));
             Path file = loopDirectory(snapshot.loopId())
                 .resolve(snapshot.stateVersion() + ".json");
-            mapper.writerWithDefaultPrettyPrinter()
-                .writeValue(file.toFile(), toDto(snapshot));
+            Files.writeString(file, JsonSupport.writePretty(toDto(snapshot)), StandardCharsets.UTF_8);
         } catch (IOException exception) {
             throw new IllegalStateException("failed to persist snapshot", exception);
         } finally {
@@ -84,9 +81,9 @@ public final class FileStateStore implements StateStore {
                 return Optional.empty();
             }
             String json = Files.readString(file, StandardCharsets.UTF_8);
-            SnapshotDto dto = mapper.readValue(json, SnapshotDto.class);
+            SnapshotDto dto = JsonSupport.read(json).toBean(SnapshotDto.class);
             return Optional.of(toSnapshot(dto));
-        } catch (IOException exception) {
+        } catch (IOException | RuntimeException exception) {
             throw new IllegalStateException("failed to read snapshot", exception);
         } finally {
             lock.unlock();
@@ -143,7 +140,10 @@ public final class FileStateStore implements StateStore {
                 snapshot.usage().cacheReadTokens(),
                 snapshot.usage().cacheCreationTokens()
             ),
-            snapshot.budget().snapshot()
+            snapshot.budget().snapshot(),
+            snapshot.workingDirectory() == null
+                ? null
+                : snapshot.workingDirectory().toString()
         );
     }
 
@@ -171,7 +171,10 @@ public final class FileStateStore implements StateStore {
                 dto.usage().cacheReadTokens(),
                 dto.usage().cacheCreationTokens()
             ),
-            Budget.fromSnapshot(dto.budget())
+            Budget.fromSnapshot(dto.budget()),
+            dto.workingDirectory() == null || dto.workingDirectory().isBlank()
+                ? null
+                : Path.of(dto.workingDirectory())
         );
     }
 
@@ -184,7 +187,8 @@ public final class FileStateStore implements StateStore {
         Map<String, Object> variables,
         Map<String, ArtifactDto> artifacts,
         UsageDto usage,
-        Budget.BudgetSnapshot budget
+        Budget.BudgetSnapshot budget,
+        String workingDirectory
     ) {
     }
 

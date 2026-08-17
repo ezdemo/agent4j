@@ -47,7 +47,7 @@ public class SubmitPlanTool extends AbsToolProvider implements SolonToTools {
             @Param(name = "steps", description = "有序执行步骤（JSON 字符串数组，或每行一步的文本），每步应具体可执行") String steps,
             @Param(name = "summary", description = "计划目标与思路的一句话概述", required = false) String summary,
             @Param(name = "risks", description = "风险与注意事项", required = false) String risks,
-            ToolContext ctx) {
+            @Param(name = "ctx", required = false) ToolContext ctx) {
 
         AgentLoopController controller = ctx.getLoopController();
         if (controller == null) {

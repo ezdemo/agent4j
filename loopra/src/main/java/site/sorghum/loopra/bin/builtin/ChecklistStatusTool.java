@@ -37,7 +37,7 @@ public class ChecklistStatusTool extends AbsToolProvider implements SolonToTools
             """)
     public String checklistStatus(
             @Param(name = "sessionId", description = "会话 ID。留空自动从上下文获取当前会话", required = false) String sessionId,
-            ToolContext ctx) {
+            @Param(name = "ctx", required = false) ToolContext ctx) {
         try {
             if (sessionId == null || sessionId.isBlank()) {
                 sessionId = ctx.getSessionId();

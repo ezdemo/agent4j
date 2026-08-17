@@ -17,6 +17,7 @@ import site.sorghum.cutin.core.state.LoopSnapshot;
 import site.sorghum.cutin.core.state.StateStore;
 import site.sorghum.cutin.core.tool.*;
 
+import java.nio.file.Path;
 import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -131,6 +132,11 @@ public final class DefaultLoopEngine implements LoopEngine, LoopRegistrar {
 
     /** 从输入变量创建上下文：提取 message 与 budget 特殊键，其余作为普通变量。 */
     public DefaultLoopContext newContext(String loopId, Map<String, Object> input) {
+        return newContext(loopId, input, null);
+    }
+
+    /** 从输入变量创建上下文，并显式指定工具相对路径的基准目录。 */
+    public DefaultLoopContext newContext(String loopId, Map<String, Object> input, Path workingDirectory) {
         Map<String, Object> variables = new HashMap<>(input == null ? Map.of() : input);
         Object messageValue = variables.remove("message");
         Object budgetValue = variables.remove("budget");
@@ -140,7 +146,7 @@ public final class DefaultLoopEngine implements LoopEngine, LoopRegistrar {
             messages.add(new Message("user", String.valueOf(messageValue)));
         }
         Budget budget = budgetValue instanceof Budget candidate ? candidate : Budget.unlimited();
-        return new DefaultLoopContext(loopId, messages, variables, budget, modelGateway, toolGateway);
+        return new DefaultLoopContext(loopId, messages, variables, budget, modelGateway, toolGateway, workingDirectory);
     }
 
     /** 用完整初始数据创建上下文。 */
@@ -150,13 +156,25 @@ public final class DefaultLoopEngine implements LoopEngine, LoopRegistrar {
         Map<String, Object> variables,
         Budget budget
     ) {
+        return newContext(loopId, initialMessages, variables, budget, null);
+    }
+
+    /** 用完整初始数据创建上下文，并显式指定工作目录。 */
+    public DefaultLoopContext newContext(
+        String loopId,
+        List<Message> initialMessages,
+        Map<String, Object> variables,
+        Budget budget,
+        Path workingDirectory
+    ) {
         return new DefaultLoopContext(
             loopId,
             initialMessages,
             variables,
             budget,
             modelGateway,
-            toolGateway
+            toolGateway,
+            workingDirectory
         );
     }
 

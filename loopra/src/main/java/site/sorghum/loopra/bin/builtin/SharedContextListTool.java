@@ -53,7 +53,7 @@ public class SharedContextListTool extends AbsToolProvider implements SolonToToo
                 """)
     public String workspaceList(@Param(name = "prefix", description = "Optional prefix to filter keys. Only keys starting with this prefix will be returned.", required = false) String prefix,
                                 @Param(name = "scope", description = "Scope / namespace filter (reserved for future use)", required = false) String scope,
-                                ToolContext ctx) {
+                                @Param(name = "ctx", required = false) ToolContext ctx) {
         // 1. 获取 prefix，可选，默认为空字符串（列出所有）
         if (prefix == null) {
             prefix = "";

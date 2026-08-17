@@ -4,6 +4,7 @@ import site.sorghum.cutin.core.model.ModelGateway;
 import site.sorghum.cutin.core.state.LoopSnapshot;
 import site.sorghum.cutin.core.tool.ToolRegistry;
 
+import java.nio.file.Path;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -40,6 +41,8 @@ public final class DefaultLoopContext implements LoopContext {
     private final ModelGateway models;
     /** 工具注册表。 */
     private final ToolRegistry tools;
+    /** 当前循环的工作目录，工具相对路径的基准。 */
+    private final Path workingDirectory;
 
     /**
      * 创建上下文并填充初始数据。
@@ -55,6 +58,23 @@ public final class DefaultLoopContext implements LoopContext {
         ModelGateway models,
         ToolRegistry tools
     ) {
+        this(id, initialMessages, initialVariables, budget, models, tools, null);
+    }
+
+    /**
+     * 创建上下文并填充初始数据。
+     *
+     * @param workingDirectory 工作目录，可为 null
+     */
+    public DefaultLoopContext(
+        String id,
+        List<Message> initialMessages,
+        Map<String, Object> initialVariables,
+        Budget budget,
+        ModelGateway models,
+        ToolRegistry tools,
+        Path workingDirectory
+    ) {
         this.id = Objects.requireNonNull(id, "id");
         this.messages.addAll(initialMessages == null ? List.of() : initialMessages);
         if (initialVariables != null) {
@@ -63,6 +83,9 @@ public final class DefaultLoopContext implements LoopContext {
         this.budget = Objects.requireNonNull(budget, "budget");
         this.models = Objects.requireNonNull(models, "models");
         this.tools = Objects.requireNonNull(tools, "tools");
+        this.workingDirectory = workingDirectory == null
+            ? null
+            : workingDirectory.toAbsolutePath().normalize();
     }
 
     /** 从快照恢复上下文，并还原状态版本号。 */
@@ -73,7 +96,8 @@ public final class DefaultLoopContext implements LoopContext {
             snapshot.variables(),
             snapshot.budget(),
             models,
-            tools
+            tools,
+            snapshot.workingDirectory()
         );
         this.stateVersion.set(snapshot.stateVersion());
     }
@@ -132,6 +156,12 @@ public final class DefaultLoopContext implements LoopContext {
         return tools;
     }
 
+    /** {@inheritDoc} */
+    @Override
+    public Path workingDirectory() {
+        return workingDirectory;
+    }
+
     /** 生成包含全部可变状态与预算副本的不可变快照。 */
     @Override
     public LoopSnapshot snapshot() {
@@ -143,7 +173,8 @@ public final class DefaultLoopContext implements LoopContext {
             Map.copyOf(variables),
             Map.copyOf(artifacts),
             usage.get(),
-            budget.copy()
+            budget.copy(),
+            workingDirectory
         );
     }
 

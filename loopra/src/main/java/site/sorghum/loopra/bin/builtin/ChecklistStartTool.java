@@ -43,7 +43,7 @@ public class ChecklistStartTool extends AbsToolProvider implements SolonToTools 
             @Param(name = "title", description = "清单标题") String title,
             @Param(name = "description", description = "清单详细描述") String description,
             @Param(name = "steps", description = "步骤数组 JSON，如 [{\"description\":\"分析需求\",\"kind\":\"step\"},{\"description\":\"人工确认\",\"kind\":\"hitl\"}]") String stepsJson,
-            ToolContext ctx) {
+            @Param(name = "ctx", required = false) ToolContext ctx) {
         // 参数校验
         if (title == null || title.isBlank()) {
             return "PARAM_MISSING: 缺少必填参数 'title'";

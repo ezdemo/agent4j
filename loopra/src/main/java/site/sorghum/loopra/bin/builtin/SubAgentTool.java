@@ -78,7 +78,7 @@ public class SubAgentTool extends AbsToolProvider implements SolonToTools {
     public String subAgent(@Param(name = "profile", description = "子代理角色: explore / implement / test / review / plan") String profile,
                            @Param(name = "task", description = "需要子代理完成的具体任务") String task,
                            @Param(name = "instructions", description = "可选的补充要求，不会覆盖角色约束", required = false) String instructions,
-                           ToolContext ctx) {
+                           @Param(name = "ctx", required = false) ToolContext ctx) {
         if (task == null || task.isBlank()) {
             return "INVALID_SUB_AGENT_TASK: task 不能为空";
         }

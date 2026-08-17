@@ -1,8 +1,8 @@
 package site.sorghum.cutin.core.plugin;
 
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.noear.snack4.ONode;
+import org.noear.snack4.codec.TypeRef;
+import site.sorghum.cutin.core.json.JsonSupport;
 
 import java.io.IOException;
 import java.net.URI;
@@ -25,9 +25,6 @@ public final class HttpPluginMarketplace implements PluginMarketplace {
     private final URI endpoint;
     /** HTTP 客户端。 */
     private final HttpClient httpClient;
-    /** JSON 映射器。 */
-    private final ObjectMapper mapper = new ObjectMapper();
-
     /** 使用默认 10 秒连接超时的 HTTP 客户端创建市场。 */
     public HttpPluginMarketplace(URI endpoint) {
         this(endpoint, HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(10)).build());
@@ -49,11 +46,11 @@ public final class HttpPluginMarketplace implements PluginMarketplace {
                 .GET()
                 .build();
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
-            JsonNode root = mapper.readTree(response.body());
-            JsonNode packages = root.has("packages") ? root.get("packages") : root;
-            return mapper.convertValue(packages, new TypeReference<>() {
+            ONode root = JsonSupport.read(response.body());
+            ONode packages = root.hasKey("packages") ? root.get("packages") : root;
+            return packages.toBean(new TypeRef<List<PluginPackageInfo>>() {
             });
-        } catch (IOException | InterruptedException exception) {
+        } catch (IOException | InterruptedException | RuntimeException exception) {
             Thread.currentThread().interrupt();
             throw new IllegalStateException("failed to list plugins from marketplace", exception);
         }

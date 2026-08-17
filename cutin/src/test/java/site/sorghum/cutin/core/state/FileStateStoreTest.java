@@ -1,13 +1,12 @@
 package site.sorghum.cutin.core.state;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.databind.node.ObjectNode;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import org.noear.snack4.ONode;
 import site.sorghum.cutin.core.context.Budget;
 import site.sorghum.cutin.core.context.Message;
 import site.sorghum.cutin.core.context.Usage;
+import site.sorghum.cutin.core.json.JsonSupport;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -37,7 +36,8 @@ class FileStateStoreTest {
             Map.of("count", 2),
             Map.of(),
             new Usage(10, 5, 1, 3, 2),
-            Budget.unlimited()
+            Budget.unlimited(),
+            null
         );
 
         store.save(snapshot);
@@ -67,21 +67,46 @@ class FileStateStoreTest {
             Map.of(),
             Map.of(),
             new Usage(10, 5, 1, 3, 2),
-            Budget.unlimited()
+            Budget.unlimited(),
+            null
         ));
 
         Path file;
         try (var files = Files.list(tempDir.resolve("loop-1"))) {
             file = files.findFirst().orElseThrow();
         }
-        ObjectMapper mapper = new ObjectMapper();
-        JsonNode json = mapper.readTree(file.toFile());
-        ObjectNode usage = (ObjectNode) json.path("usage");
+        ONode json = JsonSupport.read(Files.readString(file));
+        ONode usage = json.get("usage");
         usage.remove("cacheReadTokens");
         usage.remove("cacheCreationTokens");
-        mapper.writerWithDefaultPrettyPrinter().writeValue(file.toFile(), json);
+        Files.writeString(file, JsonSupport.writePretty(json));
 
         LoopSnapshot restored = new FileStateStore(tempDir).version("loop-1", 3).orElseThrow();
         assertEquals(new Usage(10, 5, 1), restored.usage());
+    }
+
+    /** 工作目录应随快照持久化，并在恢复时保留。 */
+    @Test
+    void persistsWorkingDirectory() {
+        Path workingDirectory = tempDir.resolve("project").toAbsolutePath().normalize();
+        FileStateStore store = new FileStateStore(tempDir);
+        LoopSnapshot snapshot = new LoopSnapshot(
+            "loop-1",
+            3,
+            "tool",
+            List.of(new Message("user", "hello")),
+            Map.of(),
+            Map.of(),
+            new Usage(10, 5, 1, 3, 2),
+            Budget.unlimited(),
+            workingDirectory
+        );
+
+        store.save(snapshot);
+
+        assertEquals(
+            workingDirectory,
+            new FileStateStore(tempDir).version("loop-1", 3).orElseThrow().workingDirectory()
+        );
     }
 }

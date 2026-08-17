@@ -1,7 +1,7 @@
 package site.sorghum.cutin.integrations.model;
 
-import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.ObjectMapper;
+import org.noear.snack4.ONode;
+import site.sorghum.cutin.core.json.JsonSupport;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -25,8 +25,6 @@ public final class HttpModelTransport {
 
     /** 请求 endpoint。 */
     private final URI endpoint;
-    /** JSON 映射器。 */
-    private final ObjectMapper mapper;
     /** HTTP 客户端。 */
     private final HttpClient httpClient;
     /** 固定请求头（例如 Authorization、x-api-key）。 */
@@ -35,10 +33,9 @@ public final class HttpModelTransport {
     /** 使用默认 15 秒连接超时的 HTTP 客户端创建传输层。 */
     public HttpModelTransport(
         String endpoint,
-        ObjectMapper mapper,
         Map<String, String> headers
     ) {
-        this(endpoint, mapper, headers, HttpClient.newBuilder()
+        this(endpoint, headers, HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(15))
             .build());
     }
@@ -46,18 +43,16 @@ public final class HttpModelTransport {
     /** 使用自定义 HTTP 客户端创建传输层。 */
     public HttpModelTransport(
         String endpoint,
-        ObjectMapper mapper,
         Map<String, String> headers,
         HttpClient httpClient
     ) {
         this.endpoint = URI.create(endpoint);
-        this.mapper = mapper;
         this.headers = Map.copyOf(headers);
         this.httpClient = httpClient;
     }
 
-    /** 发送 JSON POST 并解析响应体为 JsonNode。 */
-    public JsonNode post(JsonNode body) {
+    /** 发送 JSON POST 并解析响应体为 ONode。 */
+    public ONode post(ONode body) {
         try {
             HttpRequest request = buildRequest(body.toString());
             HttpResponse<String> response = httpClient.send(request, HttpResponse.BodyHandlers.ofString());
@@ -65,7 +60,7 @@ public final class HttpModelTransport {
                 throw new ModelProviderException("provider returned HTTP " + response.statusCode()
                     + ": " + response.body());
             }
-            return mapper.readTree(response.body());
+            return JsonSupport.read(response.body());
         } catch (IOException exception) {
             throw new UncheckedIOException(exception);
         } catch (InterruptedException exception) {
@@ -74,8 +69,8 @@ public final class HttpModelTransport {
         }
     }
 
-    /** 发送 SSE 流式 POST，返回解析后的 JsonNode 行流。 */
-    public Stream<JsonNode> postSse(JsonNode body) {
+    /** 发送 SSE 流式 POST，返回解析后的 ONode 行流。 */
+    public Stream<ONode> postSse(ONode body) {
         try {
             HttpRequest request = buildRequest(body.toString());
             HttpResponse<Stream<String>> response = httpClient.send(
@@ -95,9 +90,9 @@ public final class HttpModelTransport {
                 .filter(line -> !line.isEmpty() && !line.equals("[DONE]"))
                 .map(json -> {
                     try {
-                        return mapper.readTree(json);
-                    } catch (IOException exception) {
-                        throw new UncheckedIOException(exception);
+                        return JsonSupport.read(json);
+                    } catch (RuntimeException exception) {
+                        throw new UncheckedIOException(new IOException(exception));
                     }
                 })
                 .onClose(response.body()::close);
