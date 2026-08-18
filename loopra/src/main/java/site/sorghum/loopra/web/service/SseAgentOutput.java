@@ -66,6 +66,10 @@ public class SseAgentOutput implements AgentOutput {
         emitter.sendUsage(promptTokens, completionTokens, totalTokens, cacheHit, cacheMiss);
     }
 
+    public void onTokenSpeed(long completionTokens, double tokensPerSecond, boolean done) {
+        emitter.sendTokenSpeed(completionTokens, tokensPerSecond, done);
+    }
+
     @Override
     public void onError(String error) {
         emitter.sendError(error);

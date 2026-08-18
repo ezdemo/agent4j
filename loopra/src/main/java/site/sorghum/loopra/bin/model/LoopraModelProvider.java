@@ -244,11 +244,28 @@ public class LoopraModelProvider implements ModelProvider {
         if (fastMode) {
             options.putIfAbsent("serviceTier", "fast");
         }
-        if (sessionAffinity != null) {
-            options.putIfAbsent("sessionAffinity", sessionAffinity);
+        String affinity = resolveSessionAffinity(request);
+        if (affinity != null && !affinity.isBlank()) {
+            // 用 put 而非 putIfAbsent：子代理显式亲和必须覆盖 AgentLoop 注入的会话级值
+            options.put("sessionAffinity", affinity);
         }
         options.putIfAbsent("userId", site.sorghum.loopra.bin.util.UserIdProvider.getUserId());
         return new ModelCallRequest(request.modelId(), request.messages(), request.tools(), options);
+    }
+    
+    /**
+     * 解析会话亲和标识，优先级：显式设置（子代理）> 请求携带值（AgentLoop 注入的会话 ID）>
+     * 当前日志会话名（旧版 ThreadLocal 回退，仅部分入口设置）。
+     */
+    private String resolveSessionAffinity(ModelCallRequest request) {
+        if (sessionAffinity != null && !sessionAffinity.isBlank()) {
+            return sessionAffinity;
+        }
+        Object fromRequest = request.options().get("sessionAffinity");
+        if (fromRequest != null && !String.valueOf(fromRequest).isBlank()) {
+            return String.valueOf(fromRequest);
+        }
+        return CURRENT_LOG_SESSION.get();
     }
 
     private ModelProvider createProvider() {

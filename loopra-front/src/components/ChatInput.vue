@@ -340,12 +340,19 @@
         <div class="usage-context-control"
              @mouseenter="refreshContextComposition"
              @mouseleave="showContextComposition = false">
-          <!-- 会话总 token -->
+           <!-- 会话总 token -->
           <span class="usage-item usage-total">
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
               <path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/>
             </svg>
             {{ fmt(usage.totalTokens || 0) }}
+          </span>
+          <span v-if="displayTps" class="usage-sep">·</span>
+          <span v-if="displayTps" class="usage-item usage-tps" :title="`生成速度 ${displayTps} · ${usage.completionTokens||0} tokens`">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+            </svg>
+            {{ displayTps }}
           </span>
           <span class="usage-sep">|</span>
             <span class="usage-context-circle"
@@ -1738,6 +1745,13 @@ const ctxPct = computed(() => {
 const contextEstimate = computed(() => props.usage.contextEstimate || null)
 const contextTotalTokens = computed(() => Number(props.usage.lastPromptTokens) || 0)
 const maxContextTokens = computed(() => Number(props.usage.maxContextTokens) || 128000)
+const displayTps = computed(() => {
+  const v = props.usage.tokensPerSecond
+  if (v == null || Number.isNaN(Number(v))) return ''
+  const n = Number(v)
+  if (n <= 0) return ''
+  return n >= 100 ? `${n.toFixed(0)} t/s` : `${n.toFixed(1)} t/s`
+})
 const showContextComposition = ref(false)
 const refreshContextComposition = () => {
   showContextComposition.value = true
