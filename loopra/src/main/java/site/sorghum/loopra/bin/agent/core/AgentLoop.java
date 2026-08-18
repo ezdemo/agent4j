@@ -47,6 +47,7 @@ import site.sorghum.loopra.integration.cutin.plugin.compaction.LoopraCompactionP
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitHost;
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.httplog.LoopraHttpLogPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.rawlog.LoopraRawLogPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.preflight.LoopraHitlPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.preflight.LoopraMessageSanitizerPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.preflight.LoopraPreflight;
@@ -299,6 +300,7 @@ public class AgentLoop implements
     private PluginBeanManager createCutinPlugins() {
         PluginBeanManager plugins = new PluginBeanManager(cutinEngine.registrar());
         plugins.registerPlugin(new LoopraHttpLogPlugin(modelProvider));
+        plugins.registerPlugin(new LoopraRawLogPlugin());
         plugins.registerPlugin(new LoopraMessageSanitizerPlugin(this));
         plugins.registerPlugin(new LoopraHitlPlugin(this));
         plugins.registerPlugin(new LoopraUserMessagePlugin(this));
