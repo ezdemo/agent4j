@@ -348,9 +348,9 @@
             {{ fmt(usage.totalTokens || 0) }}
           </span>
           <span v-if="displayTps" class="usage-sep">·</span>
-          <span v-if="displayTps" class="usage-item usage-tps" :title="`生成速度 ${displayTps} · ${usage.completionTokens||0} tokens`">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
+          <span v-if="displayTps" class="usage-item usage-tps" :title="tpsTitle">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M13 3 7 13h5l-1.2 8 7.2-11h-5L13 3Z"/>
             </svg>
             {{ displayTps }}
           </span>
@@ -1745,12 +1745,30 @@ const ctxPct = computed(() => {
 const contextEstimate = computed(() => props.usage.contextEstimate || null)
 const contextTotalTokens = computed(() => Number(props.usage.lastPromptTokens) || 0)
 const maxContextTokens = computed(() => Number(props.usage.maxContextTokens) || 128000)
-const displayTps = computed(() => {
+const streamingTps = computed(() => {
   const v = props.usage.tokensPerSecond
-  if (v == null || Number.isNaN(Number(v))) return ''
+  if (v == null || Number.isNaN(Number(v))) return null
   const n = Number(v)
-  if (n <= 0) return ''
+  return n > 0 ? n : null
+})
+const avgTps = computed(() => {
+  const v = props.usage.avgTokensPerSecond
+  if (v == null || Number.isNaN(Number(v))) return null
+  const n = Number(v)
+  return n > 0 ? n : null
+})
+const displayTps = computed(() => {
+  const done = props.usage.tokenSpeedDone
+  const n = done ? (avgTps.value ?? streamingTps.value) : streamingTps.value
+  if (n == null) return ''
   return n >= 100 ? `${n.toFixed(0)} t/s` : `${n.toFixed(1)} t/s`
+})
+const tpsTitle = computed(() => {
+  const s = streamingTps.value
+  const a = avgTps.value
+  if (a != null && s != null && props.usage.tokenSpeedDone) return `平均 ${a >= 100 ? a.toFixed(0) : a.toFixed(1)} t/s · 实时 ${s >= 100 ? s.toFixed(0) : s.toFixed(1)} t/s · ${props.usage.completionTokens||0} tokens`
+  if (displayTps.value) return `生成速度 ${displayTps.value} · ${props.usage.completionTokens||0} tokens`
+  return ''
 })
 const showContextComposition = ref(false)
 const refreshContextComposition = () => {
@@ -2899,6 +2917,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 10px;
   padding: 4px 4px 4px 12px;
   font-size: 11px;
   color: var(--fg-3);
@@ -2910,7 +2929,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 .usage-stats {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 4px;
 }
 
 .usage-item {
@@ -2935,7 +2954,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 12px;
+  gap: 3px;
   flex-shrink: 0;
 }
 
