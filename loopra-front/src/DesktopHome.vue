@@ -117,6 +117,11 @@
           </button>
         </template>
         <template v-else>
+          <button type="button" @click="chooseContextAction('copy-workspace-path')">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v3"/></svg>
+            复制项目路径
+          </button>
+          <div class="desktop-context-menu-divider"></div>
           <button type="button" @click="chooseContextAction('clear-workspace')">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
             清空会话
@@ -139,7 +144,9 @@
 <script setup>
 import {computed, onBeforeUnmount, onMounted, reactive, ref, watch} from 'vue'
 import {ReloadOutlined} from '@ant-design/icons-vue'
+import {message} from 'ant-design-vue'
 import {sessionsAPI} from './services/api'
+import {copyToClipboard} from './utils/helpers'
 import ServiceProcessManager from './components/ServiceProcessManager.vue'
 
 const props = defineProps({
@@ -282,7 +289,7 @@ function clearDragState() {
 
 function openContextMenu(event, type, item) {
   const menuWidth = 156
-  const menuHeight = type === 'session' ? 38 : 116
+  const menuHeight = type === 'session' ? 38 : 157
   contextMenu.type = type
   contextMenu.item = item
   contextMenu.x = Math.max(8, Math.min(event.clientX, window.innerWidth - menuWidth - 8))
@@ -296,10 +303,25 @@ function closeContextMenu() {
   contextMenu.item = null
 }
 
+async function copyWorkspacePath(workspace) {
+  const text = String(workspace?.path || '').trim()
+  if (!text) {
+    message.warning('项目路径为空')
+    return
+  }
+  const ok = await copyToClipboard(text)
+  if (ok) message.success('已复制项目路径')
+  else message.error('复制失败')
+}
+
 function chooseContextAction(action) {
   const item = contextMenu.item
   closeContextMenu()
   if (!item) return
+  if (action === 'copy-workspace-path') {
+    void copyWorkspacePath(item)
+    return
+  }
   if (action === 'delete-session') emit('delete-session', item)
   else if (action === 'clear-workspace') emit('clear-workspace', item)
   else if (action === 'clear-old-sessions') emit('clear-old-sessions', item)
