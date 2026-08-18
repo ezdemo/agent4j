@@ -89,15 +89,13 @@ public final class LoopraTokenSpeedPlugin implements LoopPlugin {
         Object charRaw = context.context().variables().getOrDefault(CHAR_COUNT_KEY, 0L);
         long charCount = charRaw instanceof Number n ? n.longValue() : 0L;
         double elapsedSec = Math.max(0.001, (System.nanoTime() - startNanos) / 1_000_000_000.0);
-        double tps;
-        if (deltaCompletion > 0) {
-            tps = deltaCompletion / elapsedSec;
-        } else if (charCount > 0) {
-            tps = (charCount / 2.0) / elapsedSec;
-        } else {
-            tps = 0;
+        double tokensForRate = deltaCompletion > 0 ? deltaCompletion : charCount / 2.0;
+        double tps = tokensForRate / elapsedSec;
+        double avgTps = tps;
+        if (done && elapsedSec > 0.05) {
+            avgTps = tokensForRate / elapsedSec;
         }
         if (!done && tps == 0) return;
-        host.emitTokenSpeed(deltaCompletion, tps, done);
+        host.emitTokenSpeed(deltaCompletion, tps, avgTps, done);
     }
 }

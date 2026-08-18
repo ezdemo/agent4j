@@ -816,14 +816,19 @@ public class AgentLoop implements
     }
 
     @Override
-    public void emitTokenSpeed(long completionTokens, double tokensPerSecond, boolean done) {
+    public void emitTokenSpeed(long completionTokens, double tokensPerSecond, double avgTokensPerSecond, boolean done) {
         safeOutputDebug("tokenSpeed", () -> {
             if (output instanceof site.sorghum.loopra.web.service.SseAgentOutput sse) {
-                sse.onTokenSpeed(completionTokens, tokensPerSecond, done);
+                sse.onTokenSpeed(completionTokens, tokensPerSecond, avgTokensPerSecond, done);
             } else {
-                output.sendEvent("token_speed", "{\"completionTokens\":" + completionTokens + ",\"tokensPerSecond\":" + tokensPerSecond + ",\"done\":" + done + "}");
+                output.sendEvent("token_speed", "{\"completionTokens\":" + completionTokens + ",\"tokensPerSecond\":" + tokensPerSecond + ",\"avgTokensPerSecond\":" + avgTokensPerSecond + ",\"done\":" + done + "}");
             }
         });
+    }
+
+    @Override
+    public void emitTokenSpeed(long completionTokens, double tokensPerSecond, boolean done) {
+        emitTokenSpeed(completionTokens, tokensPerSecond, tokensPerSecond, done);
     }
 
     @Override

@@ -188,12 +188,17 @@ public class SseEmitter {
         send("usage", node.toJson());
     }
 
-    public void sendTokenSpeed(long completionTokens, double tokensPerSecond, boolean done) {
+    public void sendTokenSpeed(long completionTokens, double tokensPerSecond, double avgTokensPerSecond, boolean done) {
         ONode node = ONode.ofJson("{}").asObject();
         node.set("completionTokens", completionTokens);
         node.set("tokensPerSecond", tokensPerSecond);
+        node.set("avgTokensPerSecond", avgTokensPerSecond);
         node.set("done", done);
         send("token_speed", node.toJson());
+    }
+
+    public void sendTokenSpeed(long completionTokens, double tokensPerSecond, boolean done) {
+        sendTokenSpeed(completionTokens, tokensPerSecond, tokensPerSecond, done);
     }
 
     /**
