@@ -67,6 +67,8 @@ import site.sorghum.loopra.integration.cutin.plugin.session.LoopraSessionPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.toolbatch.LoopraToolBatchEvent;
 import site.sorghum.loopra.integration.cutin.plugin.toolbatch.LoopraToolBatchHost;
 import site.sorghum.loopra.integration.cutin.plugin.toolbatch.LoopraToolBatchPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.usage.LoopraTokenSpeedHost;
+import site.sorghum.loopra.integration.cutin.plugin.usage.LoopraTokenSpeedPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.usage.LoopraUsageHost;
 import site.sorghum.loopra.integration.cutin.plugin.usage.LoopraUsagePlugin;
 import site.sorghum.loopra.tool.*;
@@ -98,6 +100,7 @@ public class AgentLoop implements
         LoopraPolicyHost,
         LoopraCompactionHost,
         LoopraUsageHost,
+        LoopraTokenSpeedHost,
         LoopraExitHost,
         LoopraErrorRecoveryHost,
         LoopraRetryHost,
@@ -305,6 +308,7 @@ public class AgentLoop implements
         plugins.registerPlugin(new LoopraHitlPlugin(this));
         plugins.registerPlugin(new LoopraUserMessagePlugin(this));
         plugins.registerPlugin(new LoopraUsagePlugin(this));
+        plugins.registerPlugin(new LoopraTokenSpeedPlugin(this));
         plugins.registerPlugin(new LoopraCompactionPlugin(this));
         plugins.registerPlugin(new LoopraModelPolicyPlugin(this));
         plugins.registerPlugin(new LoopraToolPolicyPlugin(this));
@@ -809,6 +813,17 @@ public class AgentLoop implements
     @Override
     public void reportCutinUsage(Usage usage) {
         propagateUsage(usage);
+    }
+
+    @Override
+    public void emitTokenSpeed(long completionTokens, double tokensPerSecond, boolean done) {
+        safeOutputDebug("tokenSpeed", () -> {
+            if (output instanceof site.sorghum.loopra.web.service.SseAgentOutput sse) {
+                sse.onTokenSpeed(completionTokens, tokensPerSecond, done);
+            } else {
+                output.sendEvent("token_speed", "{\"completionTokens\":" + completionTokens + ",\"tokensPerSecond\":" + tokensPerSecond + ",\"done\":" + done + "}");
+            }
+        });
     }
 
     @Override
@@ -1420,11 +1435,17 @@ public class AgentLoop implements
         state.step = step + 1;
         context.putVariable("loopraStep", step);
 
+        Map<String, Object> requestOptions = new HashMap<>();
+        // 会话级亲和标识：同一会话的所有模型调用共用固定 prompt_cache_key，
+        // 由 prepareRequest 中的显式 sessionAffinity（子代理）优先覆盖。
+        if (sessionId != null && !sessionId.isBlank()) {
+            requestOptions.put("sessionAffinity", sessionId);
+        }
         ModelCallRequest request = new ModelCallRequest(
             modelProvider.effectiveModel(),
             context.messages(),
             context.tools().definitions(),
-            Map.of()
+            requestOptions
         );
         CutinStreamSnapshot snapshot;
         try (Stream<StreamChunk> chunks = context.models().stream(request, context)) {

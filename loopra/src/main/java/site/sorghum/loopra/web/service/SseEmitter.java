@@ -188,6 +188,14 @@ public class SseEmitter {
         send("usage", node.toJson());
     }
 
+    public void sendTokenSpeed(long completionTokens, double tokensPerSecond, boolean done) {
+        ONode node = ONode.ofJson("{}").asObject();
+        node.set("completionTokens", completionTokens);
+        node.set("tokensPerSecond", tokensPerSecond);
+        node.set("done", done);
+        send("token_speed", node.toJson());
+    }
+
     /**
      * 发送消息撤回点事件，并标记是否同时创建了代码快照。
      */

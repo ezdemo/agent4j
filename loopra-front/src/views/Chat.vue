@@ -1920,6 +1920,8 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
             moveFileChangesToEnd(msg.blocks)
           } else if (data.type === 'error') {
             msg.blocks.push({type: 'content', content: '错误: ' + (data.error || data.content || '未知')})
+          } else if (data.type === 'token_speed') {
+            usage.value = {...usage.value, tokensPerSecond: data.tokensPerSecond, completionTokens: data.completionTokens ?? usage.value.completionTokens}
           } else if (data.type === 'usage') {
             // 更新 usage 数据
             if (data.promptTokens !== undefined) {
