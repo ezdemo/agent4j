@@ -186,14 +186,25 @@ public final class InterceptingModelGateway implements ModelGateway {
                         );
                         throwIfTerminal(error.decision());
                     }
+                    Map<String, Object> effectiveMetadata = effective.metadata();
+                    String effectiveReasoning = reasoning.toString();
+                    Object chunkReasoning = effectiveMetadata.get("reasoning_content");
+                    if ((effectiveReasoning == null || effectiveReasoning.isEmpty()) && chunkReasoning != null) {
+                        effectiveReasoning = String.valueOf(chunkReasoning);
+                    }
+                    if (!effectiveReasoning.isEmpty()) {
+                        reasoning.setLength(0);
+                        reasoning.append(effectiveReasoning);
+                    }
                     ModelResponse response = response(
                         content.toString(),
-                        reasoning.toString(),
+                        effectiveReasoning,
                         toolCalls,
                         thinkingBlocks,
                         usage[0],
                         rawOf(effective),
-                        exchangeOf(effective)
+                        exchangeOf(effective),
+                        effectiveMetadata
                     );
                     InterceptionResult after = interceptors.run(
                         InterceptPoint.AFTER_MODEL,
@@ -217,14 +228,20 @@ public final class InterceptingModelGateway implements ModelGateway {
                         Map.of(),
                         true
                     );
+                    String fallbackReasoning = reasoning.toString();
+                    Object fallbackChunkReasoning = effective.metadata().get("reasoning_content");
+                    if ((fallbackReasoning == null || fallbackReasoning.isEmpty()) && fallbackChunkReasoning != null) {
+                        fallbackReasoning = String.valueOf(fallbackChunkReasoning);
+                    }
                     ModelResponse response = response(
                         content.toString(),
-                        reasoning.toString(),
+                        fallbackReasoning,
                         toolCalls,
                         thinkingBlocks,
                         usage[0],
                         rawOf(effective),
-                        exchangeOf(effective)
+                        exchangeOf(effective),
+                        effective.metadata()
                     );
                     InterceptionResult after = interceptors.run(
                         InterceptPoint.AFTER_MODEL,
@@ -310,12 +327,31 @@ public final class InterceptingModelGateway implements ModelGateway {
         String raw,
         ModelHttpExchange exchange
     ) {
+        return response(content, reasoning, toolCalls, thinkingBlocks, usage, raw, exchange, Map.of());
+    }
+
+    private static ModelResponse response(
+        String content,
+        String reasoning,
+        List<site.sorghum.cutin.core.tool.ToolCall> toolCalls,
+        List<String> thinkingBlocks,
+        Usage usage,
+        String raw,
+        ModelHttpExchange exchange,
+        Map<String, Object> extraMetadata
+    ) {
         Map<String, Object> metadata = new java.util.HashMap<>();
         if (reasoning != null && !reasoning.isEmpty()) {
             metadata.put("reasoning_content", reasoning);
         }
         if (thinkingBlocks != null && !thinkingBlocks.isEmpty()) {
             metadata.put("thinking_blocks", List.copyOf(thinkingBlocks));
+        }
+        if (extraMetadata != null) {
+            Object responseReasoning = extraMetadata.get("response_reasoning");
+            if (responseReasoning != null) {
+                metadata.put("response_reasoning", String.valueOf(responseReasoning));
+            }
         }
         return new ModelResponse(
             new Message("assistant", content, null, toolCalls, metadata),

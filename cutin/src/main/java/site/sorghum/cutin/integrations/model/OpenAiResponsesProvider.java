@@ -93,9 +93,9 @@ public final class OpenAiResponsesProvider implements ModelProvider {
             reasoning.set("effort", reasoningEffort);
             reasoning.set("summary", "auto");
             body.set("reasoning", reasoning);
-//            ONode include = JsonSupport.array();
-//            include.add("reasoning.encrypted_content");
-//            body.set("include", include);
+            ONode include = JsonSupport.array();
+            include.add("reasoning.encrypted_content");
+            body.set("include", include);
         }
 
         StringBuilder instructions = new StringBuilder();
@@ -295,6 +295,9 @@ public final class OpenAiResponsesProvider implements ModelProvider {
             case "response.output_item.added", "response.output_item.done" -> {
                 ONode item = JsonSupport.child(chunk, "item");
                 if (item != null && item.isObject()) {
+                    if ("reasoning".equals(JsonSupport.text(item, "", "type"))) {
+                        state.captureReasoning(item);
+                    }
                     state.setOutputItem(
                         JsonSupport.intValue(chunk, 0, "output_index"),
                         item,
@@ -384,11 +387,42 @@ public final class OpenAiResponsesProvider implements ModelProvider {
         /** 全部原始 SSE 数据行。 */
         private final StringBuilder raw = new StringBuilder();
         private final site.sorghum.cutin.core.model.ModelHttpExchange exchange;
+        private final Map<Integer, ONode> reasoningItems = new LinkedHashMap<>();
+        private ONode latestReasoning;
         /** 函数调用 output_index 到构建器的映射。 */
         private final Map<Integer, ToolCallBuilder> toolCalls = new LinkedHashMap<>();
 
         private Accumulator(site.sorghum.cutin.core.model.ModelHttpExchange exchange) {
             this.exchange = exchange;
+        }
+
+        private void captureReasoning(ONode item) {
+            try {
+                ONode copy = JsonSupport.read(item.toJson());
+                copy.remove("status");
+                int index = -1;
+                String id = JsonSupport.text(copy, "", "id");
+                if (id.isEmpty()) {
+                    for (Map.Entry<Integer, ONode> entry : reasoningItems.entrySet()) {
+                        if (JsonSupport.text(entry.getValue(), "", "id").equals(JsonSupport.text(item, "", "id"))) {
+                            index = entry.getKey();
+                            break;
+                        }
+                    }
+                }
+                if (index >= 0) {
+                    reasoningItems.put(index, copy);
+                } else if (!reasoningItems.isEmpty()) {
+                    int max = reasoningItems.keySet().stream().mapToInt(Integer::intValue).max().orElse(-1);
+                    reasoningItems.put(max, copy);
+                    latestReasoning = copy;
+                } else {
+                    reasoningItems.put(0, copy);
+                    latestReasoning = copy;
+                }
+                latestReasoning = copy;
+            } catch (RuntimeException ignored) {
+            }
         }
 
         /** 从输出条目事件中登记或更新函数调用。 */
@@ -443,14 +477,35 @@ public final class OpenAiResponsesProvider implements ModelProvider {
             for (ToolCallBuilder builder : toolCalls.values()) {
                 calls.add(builder.toToolCall());
             }
+            List<String> thinkingBlocks = List.of();
+            String reasoningContent = null;
+            ONode item = latestReasoning != null ? latestReasoning : reasoningItems.values().stream().findFirst().orElse(null);
+            if (item != null) {
+                ONode summary = JsonSupport.child(item, "summary");
+                if (summary != null && summary.isArray()) {
+                    StringBuilder sb = new StringBuilder();
+                    for (ONode part : summary.getArray()) {
+                        sb.append(JsonSupport.text(part, "", "text"));
+                    }
+                    if (sb.length() > 0) {
+                        reasoningContent = sb.toString();
+                    }
+                }
+            }
             Map<String, Object> metadata = new HashMap<>();
             metadata.put("raw", raw.toString());
             metadata.put("request", exchange);
+            if (latestReasoning != null) {
+                metadata.put("response_reasoning", latestReasoning.toJson());
+            }
+            if (reasoningContent != null) {
+                metadata.put("reasoning_content", reasoningContent);
+            }
             return Stream.of(new StreamChunk(
                 "",
-                null,
+                reasoningContent,
                 calls,
-                List.of(),
+                thinkingBlocks,
                 usageDelivered ? Usage.ZERO : usage,
                 metadata,
                 true
