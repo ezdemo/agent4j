@@ -49,24 +49,28 @@ public final class AnthropicMessagesProvider implements ModelProvider {
         return config.id();
     }
 
-    /** 同步调用：解析内容块（text、thinking、tool_use）与用量，并附带原始响应体。 */
+    /** 同步调用：解析内容块（text、thinking、tool_use）与用量，并附带原始请求与响应体。 */
     @Override
     public ModelResponse call(ModelCallRequest request) {
-        String raw = transport.postRaw(buildBody(request, false));
+        ONode body = buildBody(request, false);
+        String raw = transport.postRaw(body);
         ONode response = JsonSupport.read(raw);
         return new ModelResponse(
             parseMessage(JsonSupport.child(response, "content")),
             parseUsage(JsonSupport.child(response, "usage")),
             true,
-            raw
+            raw,
+            transport.exchangeFor(body)
         );
     }
 
     /** 流式调用：按 Anthropic SSE 事件转换为 StreamChunk，并在流尾聚合工具与 thinking。 */
     @Override
     public Stream<StreamChunk> stream(ModelCallRequest request) {
-        Accumulator accumulator = new Accumulator();
-        Stream<StreamChunk> chunks = transport.postSse(buildBody(request, true))
+        ONode body = buildBody(request, true);
+        site.sorghum.cutin.core.model.ModelHttpExchange exchange = transport.exchangeFor(body);
+        Accumulator accumulator = new Accumulator(exchange);
+        Stream<StreamChunk> chunks = transport.postSse(body)
             .map(chunk -> {
                 String raw = chunk.toJson();
                 accumulator.raw.append(raw).append('\n');
@@ -442,8 +446,13 @@ public final class AnthropicMessagesProvider implements ModelProvider {
         private ONode inputUsage;
         /** 全部原始 SSE 数据行。 */
         private final StringBuilder raw = new StringBuilder();
+        private final site.sorghum.cutin.core.model.ModelHttpExchange exchange;
         /** 正在累积的 thinking 块。 */
         private ONode activeThinkingBlock;
+
+        private Accumulator(site.sorghum.cutin.core.model.ModelHttpExchange exchange) {
+            this.exchange = exchange;
+        }
         /** 已完成的 thinking 块列表。 */
         private final List<String> thinkingBlocks = new ArrayList<>();
         /** 内容块 index 到工具调用构建器的映射。 */
@@ -555,13 +564,16 @@ public final class AnthropicMessagesProvider implements ModelProvider {
             for (ToolCallBuilder builder : toolCalls.values()) {
                 calls.add(builder.toToolCall());
             }
+            Map<String, Object> metadata = new HashMap<>();
+            metadata.put("raw", raw.toString());
+            metadata.put("request", exchange);
             return Stream.of(new StreamChunk(
                 "",
                 null,
                 calls,
                 List.copyOf(thinkingBlocks),
                 usageDelivered ? Usage.ZERO : usage,
-                Map.of("raw", raw.toString()),
+                metadata,
                 true
             ));
         }

@@ -39,24 +39,28 @@ public final class OpenAiResponsesProvider implements ModelProvider {
         return config.id();
     }
 
-    /** 同步调用：解析输出条目（消息、推理、函数调用）与用量，并附带原始响应体。 */
+    /** 同步调用：解析输出条目（消息、推理、函数调用）与用量，并附带原始请求与响应体。 */
     @Override
     public ModelResponse call(ModelCallRequest request) {
-        String raw = transport.postRaw(buildBody(request, false));
+        ONode body = buildBody(request, false);
+        String raw = transport.postRaw(body);
         ONode response = JsonSupport.read(raw);
         return new ModelResponse(
             parseMessage(JsonSupport.child(response, "output")),
             parseUsage(JsonSupport.child(response, "usage")),
             true,
-            raw
+            raw,
+            transport.exchangeFor(body)
         );
     }
 
     /** 流式调用：按 Responses SSE 事件转换为 StreamChunk，并在流尾聚合工具调用。 */
     @Override
     public Stream<StreamChunk> stream(ModelCallRequest request) {
-        Accumulator accumulator = new Accumulator();
-        Stream<StreamChunk> chunks = transport.postSse(buildBody(request, true))
+        ONode body = buildBody(request, true);
+        site.sorghum.cutin.core.model.ModelHttpExchange exchange = transport.exchangeFor(body);
+        Accumulator accumulator = new Accumulator(exchange);
+        Stream<StreamChunk> chunks = transport.postSse(body)
             .map(chunk -> {
                 String raw = chunk.toJson();
                 accumulator.raw.append(raw).append('\n');
@@ -379,8 +383,13 @@ public final class OpenAiResponsesProvider implements ModelProvider {
         private boolean usageDelivered;
         /** 全部原始 SSE 数据行。 */
         private final StringBuilder raw = new StringBuilder();
+        private final site.sorghum.cutin.core.model.ModelHttpExchange exchange;
         /** 函数调用 output_index 到构建器的映射。 */
         private final Map<Integer, ToolCallBuilder> toolCalls = new LinkedHashMap<>();
+
+        private Accumulator(site.sorghum.cutin.core.model.ModelHttpExchange exchange) {
+            this.exchange = exchange;
+        }
 
         /** 从输出条目事件中登记或更新函数调用。 */
         private void setOutputItem(int index, ONode item, boolean replaceArguments) {
@@ -434,13 +443,16 @@ public final class OpenAiResponsesProvider implements ModelProvider {
             for (ToolCallBuilder builder : toolCalls.values()) {
                 calls.add(builder.toToolCall());
             }
+            Map<String, Object> metadata = new HashMap<>();
+            metadata.put("raw", raw.toString());
+            metadata.put("request", exchange);
             return Stream.of(new StreamChunk(
                 "",
                 null,
                 calls,
                 List.of(),
                 usageDelivered ? Usage.ZERO : usage,
-                Map.of("raw", raw.toString()),
+                metadata,
                 true
             ));
         }

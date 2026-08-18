@@ -2,6 +2,7 @@ package site.sorghum.cutin.integrations.model;
 
 import org.noear.snack4.ONode;
 import site.sorghum.cutin.core.json.JsonSupport;
+import site.sorghum.cutin.core.model.ModelHttpExchange;
 
 import java.io.IOException;
 import java.io.UncheckedIOException;
@@ -107,6 +108,15 @@ public final class HttpModelTransport {
             Thread.currentThread().interrupt();
             throw new ModelProviderException("provider stream interrupted");
         }
+    }
+
+    public ModelHttpExchange exchangeFor(ONode body) {
+        String json = body.toString();
+        Map<String, String> requestHeaders = new java.util.LinkedHashMap<>();
+        requestHeaders.put("Content-Type", "application/json");
+        requestHeaders.put("Accept", "application/json, text/event-stream");
+        requestHeaders.putAll(headers);
+        return new ModelHttpExchange(endpoint.toString(), requestHeaders, json);
     }
 
     /** 构造 POST 请求：设置 JSON 头、Accept 头、固定请求头与 120 秒超时。 */

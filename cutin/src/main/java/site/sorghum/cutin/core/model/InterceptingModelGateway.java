@@ -192,7 +192,8 @@ public final class InterceptingModelGateway implements ModelGateway {
                         toolCalls,
                         thinkingBlocks,
                         usage[0],
-                        rawOf(effective)
+                        rawOf(effective),
+                        exchangeOf(effective)
                     );
                     InterceptionResult after = interceptors.run(
                         InterceptPoint.AFTER_MODEL,
@@ -222,7 +223,8 @@ public final class InterceptingModelGateway implements ModelGateway {
                         toolCalls,
                         thinkingBlocks,
                         usage[0],
-                        rawOf(effective)
+                        rawOf(effective),
+                        exchangeOf(effective)
                     );
                     InterceptionResult after = interceptors.run(
                         InterceptPoint.AFTER_MODEL,
@@ -298,14 +300,15 @@ public final class InterceptingModelGateway implements ModelGateway {
         );
     }
 
-    /** 把累计结果组装成 assistant 消息与元数据，并附带原始响应体。 */
+    /** 把累计结果组装成 assistant 消息与元数据，并附带原始请求与响应体。 */
     private static ModelResponse response(
         String content,
         String reasoning,
         List<site.sorghum.cutin.core.tool.ToolCall> toolCalls,
         List<String> thinkingBlocks,
         Usage usage,
-        String raw
+        String raw,
+        ModelHttpExchange exchange
     ) {
         Map<String, Object> metadata = new java.util.HashMap<>();
         if (reasoning != null && !reasoning.isEmpty()) {
@@ -318,7 +321,8 @@ public final class InterceptingModelGateway implements ModelGateway {
             new Message("assistant", content, null, toolCalls, metadata),
             usage,
             true,
-            raw
+            raw,
+            exchange
         );
     }
 
@@ -326,6 +330,11 @@ public final class InterceptingModelGateway implements ModelGateway {
     private static String rawOf(StreamChunk terminal) {
         Object raw = terminal.metadata().get("raw");
         return raw == null ? "" : String.valueOf(raw);
+    }
+
+    private static ModelHttpExchange exchangeOf(StreamChunk terminal) {
+        Object value = terminal.metadata().get("request");
+        return value instanceof ModelHttpExchange exchange ? exchange : null;
     }
 
     /** 用 AFTER_MODEL 替换后的响应生成新的终止块，并把响应放入元数据。 */
