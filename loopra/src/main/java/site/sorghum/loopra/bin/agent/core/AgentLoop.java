@@ -1386,7 +1386,8 @@ public class AgentLoop implements
                 response.message().toolCalls(),
                 thinking instanceof List<?> list ? list.stream().map(String::valueOf).toList() : List.of(),
                 response.usage() == null ? Usage.ZERO : response.usage(),
-                null);
+                null,
+                metadataString(response.message(), "response_reasoning"));
     }
 
     private StepResult modelStep(DefaultLoopContext context, LoopState state) {
@@ -1454,8 +1455,25 @@ public class AgentLoop implements
         ONode toolCalls = scavengeToolCalls(snapshot.toolCalls(), snapshot.reasoningContent(), snapshot.content());
         boolean hasToolCalls = toolCalls != null && toolCalls.isArray() && !toolCalls.getArray().isEmpty();
         if (!hasToolCalls) {
-            ctx.addAssistant(snapshot.content(), null, snapshot.reasoningContent(),
-                    snapshot.thinkingBlocks(), List.of());
+            ChatMessage noTool = ChatMessage.assistant(snapshot.content(), null, snapshot.reasoningContent());
+            if (snapshot.responseReasoning() != null) {
+                noTool.setResponseReasoning(snapshot.responseReasoning());
+            }
+            if (snapshot.thinkingBlocks() != null && !snapshot.thinkingBlocks().isEmpty()) {
+                noTool.setThinkingBlocks(new ArrayList<>(snapshot.thinkingBlocks()));
+            }
+            ctx.addAssistant(noTool.getContent(), noTool.getToolCalls(), noTool.getReasoningContent(),
+                    noTool.getThinkingBlocks(), List.of());
+            if (noTool.getResponseReasoning() != null) {
+                // 兼容 ConversationContext 内部用特定签名持久化
+                for (int i = ctx.getHistory().size() - 1; i >= 0; i--) {
+                    ChatMessage m = ctx.getHistory().get(i);
+                    if (m.isAssistant() && m.getResponseReasoning() == null) {
+                        m.setResponseReasoning(noTool.getResponseReasoning());
+                        break;
+                    }
+                }
+            }
             try {
                 if (goalGuardEnabled && goalGuard != null) {
                     loadOpenGoal();
@@ -1506,8 +1524,24 @@ public class AgentLoop implements
                             : afterBatch.decision().reason());
         }
 
-        ctx.addAssistant(snapshot.content(), ter.tcList(), snapshot.reasoningContent(),
-                snapshot.thinkingBlocks(), ter.fileChanges());
+        ChatMessage toolMsg = ChatMessage.assistant(snapshot.content(), ter.tcList(), snapshot.reasoningContent());
+        if (snapshot.responseReasoning() != null) {
+            toolMsg.setResponseReasoning(snapshot.responseReasoning());
+        }
+        if (snapshot.thinkingBlocks() != null && !snapshot.thinkingBlocks().isEmpty()) {
+            toolMsg.setThinkingBlocks(new ArrayList<>(snapshot.thinkingBlocks()));
+        }
+        ctx.addAssistant(toolMsg.getContent(), toolMsg.getToolCalls(), toolMsg.getReasoningContent(),
+                toolMsg.getThinkingBlocks(), ter.fileChanges());
+        if (toolMsg.getResponseReasoning() != null) {
+            for (int i = ctx.getHistory().size() - 1; i >= 0; i--) {
+                ChatMessage m = ctx.getHistory().get(i);
+                if (m.isAssistant() && m.getResponseReasoning() == null) {
+                    m.setResponseReasoning(toolMsg.getResponseReasoning());
+                    break;
+                }
+            }
+        }
         for (ChatMessage tr : ter.toolResults()) {
             ctx.addToolResult(tr);
         }
@@ -1566,6 +1600,7 @@ public class AgentLoop implements
         site.sorghum.cutin.core.context.Usage[] usage =
                 {site.sorghum.cutin.core.context.Usage.ZERO};
         String[] error = {null};
+        String[] responseReasoning = {null};
         chunks.forEach(chunk -> {
             if (chunk.content() != null) {
                 content.append(chunk.content());
@@ -1580,14 +1615,41 @@ public class AgentLoop implements
             if (terminalError != null && chunk.terminal()) {
                 error[0] = String.valueOf(terminalError);
             }
+            Object reasoningMeta = chunk.metadata().get("response_reasoning");
+            if (reasoningMeta != null) {
+                responseReasoning[0] = String.valueOf(reasoningMeta);
+            }
+            Object reasoningContent = chunk.metadata().get("reasoning_content");
+            if (reasoningContent != null && reasoning.length() == 0) {
+                reasoning.append(String.valueOf(reasoningContent));
+            }
         });
+        String reasoningStr = reasoning.length() == 0 ? null : reasoning.toString();
+        if (responseReasoning[0] != null) {
+            try {
+                org.noear.snack4.ONode item = org.noear.snack4.ONode.ofJson(responseReasoning[0]);
+                org.noear.snack4.ONode summary = item.get("summary");
+                if (summary != null && summary.isArray()) {
+                    StringBuilder sb = new StringBuilder();
+                    for (org.noear.snack4.ONode part : summary.getArray()) {
+                        String text = part.get("text").getString();
+                        if (text != null) sb.append(text);
+                    }
+                    if (sb.length() > 0) {
+                        reasoningStr = sb.toString();
+                    }
+                }
+            } catch (RuntimeException ignored) {
+            }
+        }
         return new CutinStreamSnapshot(
             content.length() == 0 ? null : content.toString(),
-            reasoning.length() == 0 ? null : reasoning.toString(),
+            reasoningStr,
             toolCalls,
             thinkingBlocks,
             usage[0],
-            error[0]
+            error[0],
+            responseReasoning[0]
         );
     }
 
@@ -1618,7 +1680,8 @@ public class AgentLoop implements
         java.util.List<site.sorghum.cutin.core.tool.ToolCall> cutinToolCalls,
         java.util.List<String> thinkingBlocks,
         site.sorghum.cutin.core.context.Usage usage,
-        String errorMessage
+        String errorMessage,
+        String responseReasoning
     ) {
         boolean error() {
             return errorMessage != null;
@@ -1668,7 +1731,7 @@ public class AgentLoop implements
                     calls.add(new site.sorghum.cutin.core.tool.ToolCall(id, name, args, id));
                 }
             }
-            return new CutinStreamSnapshot(content, reasoningContent, calls, thinkingBlocks, usage, errorMessage);
+            return new CutinStreamSnapshot(content, reasoningContent, calls, thinkingBlocks, usage, errorMessage, responseReasoning);
         }
 
         StreamResult toStreamResult() {
