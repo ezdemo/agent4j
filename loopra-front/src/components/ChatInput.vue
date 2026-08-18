@@ -354,7 +354,7 @@
             </svg>
             {{ displayTps }}
           </span>
-          <span class="usage-sep">|</span>
+          <span class="usage-divider" aria-hidden="true"></span>
             <span class="usage-context-circle"
                   :title="'上下文: '+fmt(usage.lastPromptTokens||usage.promptTokens)+' / '+fmt(usage.maxContextTokens)">
               <svg viewBox="0 0 32 32" class="context-ring">
@@ -401,12 +401,6 @@
               </div>
             </div>
         </div>
-        <button class="usage-refresh" @click="$emit('refreshUsage')" title="刷新用量">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <path d="M23 4v6h-6"/>
-              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
-            </svg>
-          </button>
         </div>
         <div class="model-actions">
         <!-- 技能指定 -->
@@ -2133,9 +2127,9 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 
 .input-area:not(.welcome-mode) .usage-bar {
-  min-height: 30px;
-  margin-top: 6px;
-  padding: 5px 0 0;
+  min-height: 24px;
+  margin-top: 4px;
+  padding: 0;
   border-top-color: var(--border);
   flex-direction: row;
   justify-content: space-between;
@@ -2950,6 +2944,14 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   font-size: 14px;
 }
 
+.usage-divider {
+  width: 1px;
+  height: 14px;
+  margin: 0 5px;
+  flex-shrink: 0;
+  background: var(--border);
+}
+
 .usage-context-control {
   position: relative;
   display: inline-flex;
@@ -2987,23 +2989,6 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   color: var(--yellow);
 }
 
-.usage-refresh {
-  width: 20px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: var(--r-sm);
-  color: var(--fg-4);
-  font-size: 14px;
-  transition: all var(--t);
-  cursor: pointer;
-}
-
-.usage-refresh:hover {
-  background: var(--bg-3);
-  color: var(--fg-2);
-}
 
 .usage-composition-popover {
   position: absolute;
@@ -3901,9 +3886,9 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 
 .input-area.welcome-mode .usage-bar {
-  min-height: 30px;
-  margin-top: 6px;
-  padding: 5px 0 0;
+  min-height: 24px;
+  margin-top: 4px;
+  padding: 0;
   border-top-color: var(--border);
   flex-direction: row;
   justify-content: space-between;
