@@ -230,23 +230,37 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
         );
     }
 
-    /** 兼容 llama.cpp 等网关在顶层 timings 中上报的 token 用量。 */
+    /** 兼容标准 OpenAI、llama.cpp timings 与 Ollama 原生计数字段。 */
     private Usage parseResponseUsage(ONode response) {
         ONode usage = JsonSupport.child(response, "usage");
         if (usage != null && !usage.isNull()) {
-            return parseUsage(usage);
+            Usage standard = parseUsage(usage);
+            if (standard.totalTokens() > 0 || standard.costMicros() > 0) {
+                return standard;
+            }
         }
         ONode timings = JsonSupport.child(response, "timings");
-        if (timings == null || timings.isNull()) {
-            return Usage.ZERO;
+        if (timings != null && !timings.isNull()) {
+            long cacheRead = JsonSupport.longValue(timings, 0, "cache_n");
+            long promptProcessed = JsonSupport.longValue(timings, 0, "prompt_n");
+            Usage llamaCpp = new Usage(
+                cacheRead + promptProcessed,
+                JsonSupport.longValue(timings, 0, "predicted_n"),
+                0,
+                cacheRead,
+                0
+            );
+            if (llamaCpp.totalTokens() > 0) {
+                return llamaCpp;
+            }
         }
-        long cacheRead = JsonSupport.longValue(timings, 0, "cache_n");
-        long promptProcessed = JsonSupport.longValue(timings, 0, "prompt_n");
+
+        // Ollama /api/chat 与 /api/generate 在最终响应顶层上报这两个字段。
         return new Usage(
-            cacheRead + promptProcessed,
-            JsonSupport.longValue(timings, 0, "predicted_n"),
+            JsonSupport.longValue(response, 0, "prompt_eval_count"),
+            JsonSupport.longValue(response, 0, "eval_count"),
             0,
-            cacheRead,
+            0,
             0
         );
     }
@@ -268,9 +282,9 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
             // 交付一次，不能逐块累加，否则 prompt_tokens 会随流块数量成倍放大。
             state.usage = parseUsage(usage);
         } else {
-            Usage timingsUsage = parseResponseUsage(chunk);
-            if (timingsUsage.totalTokens() > 0) {
-                state.usage = timingsUsage;
+            Usage compatibleUsage = parseResponseUsage(chunk);
+            if (compatibleUsage.totalTokens() > 0) {
+                state.usage = compatibleUsage;
             }
         }
 

@@ -206,6 +206,25 @@
         </div>
       </div>
 
+      <div v-if="selectedProjects.length > 0" class="skill-chips-bar project-chips-bar">
+        <div class="skill-chips-heading">
+          <span class="skill-chips-title">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h7l2 2h9v10H3z"/><path d="M3 7V5h7l2 2"/></svg>
+            关联 {{ selectedProjects.length }} 个项目
+          </span>
+          <button class="skill-clear-all" type="button" @click="clearSelectedProjects">清除</button>
+        </div>
+        <div class="skill-chips-list">
+          <span v-for="project in selectedProjects" :key="project.hash" class="skill-chip project-chip" :title="project.path">
+            <span class="skill-chip-icon"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 7h7l2 2h9v10H3z"/></svg></span>
+            <span class="skill-chip-name">{{ project.name || project.path }}</span>
+            <button class="skill-chip-remove" type="button" :aria-label="`移除项目 ${project.name || project.path}`" title="移除关联项目" @click.stop="removeProject(project)">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+            </button>
+          </span>
+        </div>
+      </div>
+
       <!-- 上传文件列表（解析中/成功/失败） -->
       <div v-if="uploadedFiles.length > 0" class="upload-chips-bar">
         <div class="file-chips-heading">
@@ -255,16 +274,80 @@
 
         <div class="input-actions">
           <slot name="session-actions"></slot>
-          <button type="button" class="upload-btn"
-                  title="上传文件（图片/文本/PDF/Word/Excel）" aria-label="上传文件" @click="handleUploadClick">
-            <PaperClipOutlined />
-          </button>
-          <input ref="fileInput" type="file" multiple class="upload-file-input" @change="handleFileSelected" />
-          <button type="button" class="plan-mode-btn" :class="{ active: planMode }"
-                  :disabled="streaming || sessionBusy || (!sessionName && !workspaceHash)" :aria-pressed="planMode"
-                  :title="planMode ? '退出计划模式' : '进入计划模式'" @click="$emit('togglePlan')">
-            <FileTextOutlined />
-          </button>
+          <div class="composer-tools-menu">
+            <button type="button" class="upload-btn composer-tools-trigger"
+                    title="更多输入工具" aria-label="更多输入工具" aria-haspopup="menu">
+              <PaperClipOutlined />
+            </button>
+            <div class="composer-tools-submenu" role="menu" aria-label="输入工具">
+              <button type="button" class="composer-tools-primary composer-upload-action" role="menuitem" @click="handleUploadClick">
+                <PaperClipOutlined />
+                <span><strong>上传文件</strong><small>图片、文本、PDF、Word、Excel</small></span>
+              </button>
+              <button type="button" class="composer-tools-primary composer-plan-action" role="menuitem" :class="{ active: planMode }"
+                      :disabled="streaming || sessionBusy || (!sessionName && !workspaceHash)"
+                      :aria-pressed="planMode" @click="$emit('togglePlan')">
+                <FileTextOutlined />
+                <span><strong>{{ planMode ? '退出计划模式' : '计划模式' }}</strong><small>先生成计划，确认后执行</small></span>
+              </button>
+              <div class="composer-tools-branch project-tools-branch" @mouseenter="openProjectPicker">
+                <button type="button" class="composer-tools-primary" role="menuitem" aria-haspopup="menu">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 7h7l2 2h9v10H3z"/><path d="M3 7V5h7l2 2"/></svg>
+                  <span><strong>关联项目</strong><small>{{ selectedProjects.length ? `已选 ${selectedProjects.length} 个` : '添加本轮联动项目' }}</small></span>
+                  <svg class="composer-tools-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+                <div class="composer-tools-nested project-tools-nested" role="menu" aria-label="关联项目">
+                  <div class="skill-panel-search">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input ref="projectSearchInput" v-model="projectSearchQuery" type="text" placeholder="搜索项目..." class="skill-search-input"/>
+                  </div>
+                  <div class="skill-panel-list">
+                    <div v-if="projectLoading" class="skill-panel-empty"><span class="loading-dot"></span> 加载中...</div>
+                    <div v-else-if="filteredProjects.length === 0" class="skill-panel-empty">没有可关联的项目</div>
+                    <button v-for="project in filteredProjects" :key="project.hash" type="button" class="skill-panel-item" :class="{ active: isProjectSelected(project) }" @click="toggleProject(project)">
+                      <span class="skill-item-info"><strong class="skill-item-name">{{ project.name || project.path }}</strong><small class="skill-item-desc">{{ project.path }}</small></span>
+                      <svg v-if="isProjectSelected(project)" class="skill-item-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="composer-tools-branch skill-tools-branch" @mouseenter="openSkillPicker">
+                <button type="button" class="composer-tools-primary" role="menuitem" aria-haspopup="menu">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+                  <span><strong>技能</strong><small>{{ selectedSkills.length ? `已选 ${selectedSkills.length} 个` : '为本轮选择技能' }}</small></span>
+                  <svg class="composer-tools-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+                <div class="composer-tools-nested skill-tools-nested" role="menu" aria-label="技能">
+                  <div class="skill-panel-search">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
+                    <input ref="skillSearchInput" v-model="skillSearchQuery" type="text" placeholder="搜索技能..." class="skill-search-input"/>
+                  </div>
+                  <div class="skill-panel-list">
+                    <div v-if="skillLoading" class="skill-panel-empty"><span class="loading-dot"></span> 加载中...</div>
+                    <div v-else-if="filteredSkills.length === 0" class="skill-panel-empty">无匹配技能</div>
+                    <button v-for="skill in filteredSkills" :key="skill.name" type="button" class="skill-panel-item" :class="{ active: isSkillSelected(skill) }" @click="toggleSkill(skill)">
+                      <span class="skill-item-info"><strong class="skill-item-name">{{ skill.name }}</strong><small v-if="skill.description" class="skill-item-desc">{{ skill.description }}</small></span>
+                      <svg v-if="isSkillSelected(skill)" class="skill-item-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                    </button>
+                  </div>
+                </div>
+              </div>
+              <div class="composer-tools-branch permission-tools-branch">
+                <button type="button" class="composer-tools-primary" role="menuitem" aria-haspopup="menu">
+                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+                  <span><strong>权限模式</strong><small>{{ permissionLabel }}</small></span>
+                  <svg class="composer-tools-chevron" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+                <div class="composer-tools-nested permission-tools-nested" role="menu" aria-label="权限模式">
+                  <button v-for="option in permissionOptions" :key="option.value" type="button" class="permission-tools-option" :class="{ active: option.value === currentPermission }" role="menuitemradio" :aria-checked="option.value === currentPermission" @click="pickPermission(option.value)">
+                    <span>{{ option.label }}</span>
+                    <svg v-if="option.value === currentPermission" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+            <input ref="fileInput" type="file" multiple class="upload-file-input" @change="handleFileSelected" />
+          </div>
           <button v-if="streaming || sessionRunning" class="stop-btn" @click="$emit('abort')"
                   :disabled="sessionStatusStopping" :title="sessionStatusStopping ? '正在停止当前任务' : '停止生成 (Esc)'">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
@@ -281,7 +364,7 @@
             </button>
           </template>
           <button :class="{ active: localText.trim() }"
-                  :disabled="parsingCount > 0 || (!localText.trim() && images.length === 0 && uploadedFiles.length === 0)"
+                  :disabled="parsingCount > 0 || (!localText.trim() && images.length === 0 && uploadedFiles.length === 0 && selectedProjects.length === 0)"
                   class="send-btn" :title="sessionRunning ? '该会话正在后台执行' : streaming ? '加入队列' : '发送消息'" @click="handleSend">
             <svg fill="none" height="16" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="16">
               <line x1="22" x2="11" y1="2" y2="13"/>
@@ -403,63 +486,6 @@
         </div>
         </div>
         <div class="model-actions">
-        <!-- 技能指定 -->
-        <div class="skill-selector hover-reveal">
-          <button class="effort-btn" @click="toggleSkillPicker" title="选择技能">
-            技能
-            <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-              <polyline points="6 9 12 15 18 9"/>
-            </svg>
-          </button>
-          <div class="skill-panel" v-if="showSkillPicker">
-            <div class="skill-panel-search">
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/>
-              </svg>
-              <input ref="skillSearchInput" v-model="skillSearchQuery" type="text" placeholder="搜索技能..." class="skill-search-input" @keydown.esc="showSkillPicker = false"/>
-              <span v-if="selectedSkills.length" class="skill-selection-count">{{ selectedSkills.length }}</span>
-            </div>
-            <div class="skill-panel-list">
-              <div v-if="skillLoading" class="skill-panel-empty">
-                <span class="loading-dot"></span> 加载中...
-              </div>
-              <div v-else-if="filteredSkills.length === 0" class="skill-panel-empty">无匹配技能</div>
-              <div v-for="s in filteredSkills" :key="s.name" class="skill-panel-item"
-                   :class="{ active: isSkillSelected(s) }" @click="toggleSkill(s)">
-                <div class="skill-item-info">
-                  <div class="skill-item-name">{{ s.name }}</div>
-                  <div v-if="s.description" class="skill-item-desc">{{ s.description }}</div>
-                </div>
-                <svg v-if="isSkillSelected(s)" class="skill-item-check" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                  <polyline points="20 6 9 17 4 12"/>
-                </svg>
-              </div>
-            </div>
-          </div>
-        </div>
-        <!-- 权限切换 -->
-        <div class="permission-hitl-selector hover-reveal">
-          <div class="reasoning-effort-selector">
-            <button class="effort-btn" @click="togglePermissionPicker" :title="'当前权限模式: '+currentPermission">
-              {{ permissionLabel }}
-              <svg width="8" height="8" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <polyline points="6 9 12 15 18 9"/>
-              </svg>
-            </button>
-            <div class="effort-dropdown" v-if="showPermissionPicker">
-              <div class="effort-dropdown-title">权限模式</div>
-              <div class="effort-dropdown-list">
-                <div v-for="opt in permissionOptions" :key="String(opt.value)" class="effort-option"
-                     :class="{ active: opt.value === currentPermission }" @click="pickPermission(opt.value)">
-                  <span class="effort-option-name">{{ opt.label }}</span>
-                  <svg v-if="opt.value === currentPermission" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <polyline points="20 6 9 17 4 12"/>
-                  </svg>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
         <div class="reasoning-effort-selector hover-reveal">
           <button class="effort-btn" @click="toggleEffortPicker" :title="`当前推理强度: ${selectedReasoningEffort.label}`">
             <span class="effort-current-label">{{ selectedReasoningEffort.label }}</span>
@@ -590,7 +616,7 @@ import {computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch} fr
 import {FileTextOutlined, PaperClipOutlined, StarFilled, StarOutlined} from '@ant-design/icons-vue'
 import {message} from 'ant-design-vue'
 import {useAppStore} from '../stores/app'
-import {agentAPI, filesAPI, petAPI, promptPresetsAPI} from '../services/api'
+import {agentAPI, configAPI, filesAPI, petAPI, promptPresetsAPI} from '../services/api'
 import PetSprite from './PetSprite.vue'
 import ChecklistSteps from './ChecklistSteps.vue'
 import GoalSteps from './GoalSteps.vue'
@@ -968,7 +994,7 @@ const handleSend = () => {
     message.info('文件解析中，请稍候…')
     return
   }
-  if (!localText.value.trim() && images.value.length === 0 && uploadedFiles.value.length === 0) return
+  if (!localText.value.trim() && images.value.length === 0 && uploadedFiles.value.length === 0 && selectedProjects.value.length === 0) return
   let text = localText.value.trim()
   const collapsedParts = []
   if (selectedFileContexts.value.length > 0) {
@@ -988,6 +1014,10 @@ const handleSend = () => {
   if (selectedSkills.value.length > 0) {
     const skillLines = selectedSkills.value.map(s => `/skill:${s.name}`).join('\n')
     collapsedParts.push(`调用技能：\n${skillLines}`)
+  }
+  if (selectedProjects.value.length > 0) {
+    const projectLines = selectedProjects.value.map(project => `- ${project.name || project.path}`).join('\n')
+    collapsedParts.push(`关联项目：\n${projectLines}`)
   }
   if (selectedElementContexts.value.length > 0) {
     const elementLines = selectedElementContexts.value.map((context) => {
@@ -1013,13 +1043,14 @@ const handleSend = () => {
   if (collapsedParts.length > 0) {
     text = `\`\`\`折叠块\n${collapsedParts.join('\n\n')}\n\`\`\`\n\n${text}`
   }
-  emit('send', images.value, text)
+  emit('send', images.value, text, selectedProjects.value.map(project => project.hash))
   // 发送后清空图片、文件引用、技能标签和上传文件
   images.value = []
   uploadedFiles.value = []
   selectedFileContexts.value = []
   selectedElementContexts.value = []
   selectedSkills.value = []
+  selectedProjects.value = []
   // 等待父组件清空文本后，重置 textarea 高度
   nextTick(() => autoResize())
 }
@@ -1524,6 +1555,70 @@ const clearSelectedSkills = () => {
   emit('switchSkill', [])
 }
 
+const openSkillPicker = async () => {
+  if (showSkillPicker.value && availableSkills.value.length > 0) return
+  showSkillPicker.value = true
+  if (availableSkills.value.length > 0 || skillLoading.value) return
+  skillLoading.value = true
+  try {
+    const response = await agentAPI.getSkills()
+    if (response.success && response.data) availableSkills.value = response.data
+  } finally {
+    skillLoading.value = false
+  }
+}
+
+// ============= 项目联动（本轮多选） =============
+const showProjectPicker = ref(false)
+const availableProjects = ref([])
+const selectedProjects = ref([])
+const projectLoading = ref(false)
+const projectSearchQuery = ref('')
+const projectSearchInput = ref(null)
+const filteredProjects = computed(() => {
+  const projects = availableProjects.value.filter(project => project.hash !== props.workspaceHash)
+  const query = projectSearchQuery.value.trim().toLowerCase()
+  if (!query) return projects
+  return projects.filter(project => (project.name || '').toLowerCase().includes(query) || (project.path || '').toLowerCase().includes(query))
+})
+const isProjectSelected = project => selectedProjects.value.some(item => item.hash === project.hash)
+const toggleProjectPicker = async () => {
+  const nextOpen = !showProjectPicker.value
+  if (nextOpen) closePickers('project')
+  showProjectPicker.value = nextOpen
+  if (!nextOpen) return
+  emit('pickerOpen', 'project')
+  projectSearchQuery.value = ''
+  projectLoading.value = true
+  try {
+    const response = await configAPI.listWorkspaces()
+    if (response?.success) availableProjects.value = response.data || []
+  } finally {
+    projectLoading.value = false
+  }
+  nextTick(() => projectSearchInput.value?.focus())
+}
+const openProjectPicker = async () => {
+  showProjectPicker.value = true
+  if (availableProjects.value.length > 0 || projectLoading.value) return
+  projectLoading.value = true
+  try {
+    const response = await configAPI.listWorkspaces()
+    if (response?.success) availableProjects.value = response.data || []
+  } finally {
+    projectLoading.value = false
+  }
+}
+const toggleProject = project => {
+  selectedProjects.value = isProjectSelected(project)
+    ? selectedProjects.value.filter(item => item.hash !== project.hash)
+    : [...selectedProjects.value, project]
+}
+const removeProject = project => {
+  selectedProjects.value = selectedProjects.value.filter(item => item.hash !== project.hash)
+}
+const clearSelectedProjects = () => { selectedProjects.value = [] }
+
 // ============= 清单 TODO =============
 const clData = ref(null)
 const workflowHover = ref(false)
@@ -1647,6 +1742,7 @@ const handleOutside = (e) => {
   if (!e.target.closest('.model-selector')) showModelPicker.value = false;
   if (!e.target.closest('.reasoning-effort-selector')) showEffortPicker.value = false
   if (!e.target.closest('.skill-selector')) showSkillPicker.value = false
+  if (!e.target.closest('.project-selector')) showProjectPicker.value = false
   if (!e.target.closest('.permission-hitl-selector')) showPermissionPicker.value = false
   if (!e.target.closest('.quick-command-selector')) {
     showQuickCommandPicker.value = false
@@ -1659,6 +1755,7 @@ const showEffortPicker = ref(false)
 const closePickers = (except = '') => {
   if (except !== 'model') showModelPicker.value = false
   if (except !== 'skill') showSkillPicker.value = false
+  if (except !== 'project') showProjectPicker.value = false
   if (except !== 'permission') showPermissionPicker.value = false
   if (except !== 'effort') showEffortPicker.value = false
   if (except !== 'quick') showQuickCommandPicker.value = false
@@ -2144,6 +2241,8 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 .input-area:not(.welcome-mode) .model-actions {
   flex-direction: row;
   gap: 8px;
+  padding-top: 6px;
+  padding-bottom: 2px;
 }
 
 .input-area:not(.welcome-mode) .effort-btn,
@@ -2307,6 +2406,236 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 
 .upload-file-input {
   display: none;
+}
+
+.composer-tools-menu {
+  position: relative;
+  display: inline-flex;
+}
+
+.composer-tools-submenu {
+  position: absolute;
+  right: 0;
+  bottom: calc(100% + 8px);
+  z-index: 220;
+  display: grid;
+  width: 270px;
+  padding: 5px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity var(--t), transform var(--t), visibility var(--t);
+}
+
+.composer-tools-submenu::after {
+  position: absolute;
+  right: 0;
+  bottom: -9px;
+  width: 44px;
+  height: 9px;
+  content: '';
+}
+
+.composer-tools-menu:hover .composer-tools-submenu {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateY(0);
+}
+
+.composer-tools-primary {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-height: 48px;
+  padding: 6px 8px;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--fg-2);
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-tools-primary:hover,
+.composer-tools-primary:focus-visible,
+.composer-tools-primary.active,
+.composer-tools-branch:hover > .composer-tools-primary {
+  background: var(--bg-3);
+  color: var(--accent);
+  outline: none;
+}
+
+.composer-tools-primary:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+.composer-tools-primary > :deep(svg) {
+  width: 17px;
+  height: 17px;
+  justify-self: center;
+}
+
+.composer-tools-primary span,
+.composer-tools-primary strong,
+.composer-tools-primary small {
+  display: block;
+  min-width: 0;
+}
+
+.composer-tools-primary strong {
+  overflow: hidden;
+  color: inherit;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-tools-primary small {
+  margin-top: 2px;
+  overflow: hidden;
+  color: var(--fg-4);
+  font-size: 10px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-tools-branch {
+  position: relative;
+}
+
+.composer-tools-branch > .composer-tools-primary {
+  grid-template-columns: 28px minmax(0, 1fr) 16px;
+}
+
+.composer-tools-chevron {
+  color: var(--fg-4);
+}
+
+.composer-tools-nested {
+  position: absolute;
+  right: calc(100% + 6px);
+  bottom: 0;
+  z-index: 230;
+  display: flex;
+  width: 330px;
+  max-height: 360px;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg);
+  box-shadow: var(--shadow-lg);
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateX(4px);
+  transition: opacity var(--t), transform var(--t), visibility var(--t);
+}
+
+.composer-tools-nested::after {
+  position: absolute;
+  top: 0;
+  right: -7px;
+  width: 7px;
+  height: 100%;
+  content: '';
+}
+
+.composer-tools-branch:hover > .composer-tools-nested {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
+  transform: translateX(0);
+}
+
+.composer-tools-nested .skill-panel-list {
+  display: grid;
+  align-content: start;
+  gap: 4px;
+  min-height: 46px;
+  max-height: 300px;
+  padding: 5px;
+}
+
+.composer-tools-nested .skill-panel-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  width: 100%;
+  min-height: 56px;
+  padding: 9px 10px;
+  box-sizing: border-box;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-2);
+  text-align: left;
+  cursor: pointer;
+}
+
+.composer-tools-nested .skill-panel-item:hover,
+.composer-tools-nested .skill-panel-item.active {
+  color: var(--accent);
+  transform: none;
+}
+
+.composer-tools-nested .skill-panel-item:hover {
+  background: var(--bg-2);
+}
+
+.composer-tools-nested .skill-panel-item.active {
+  border: 1px solid color-mix(in srgb, var(--accent) 24%, var(--border));
+  background: color-mix(in srgb, var(--accent) 9%, var(--bg));
+  box-shadow: none;
+}
+
+.composer-tools-nested .skill-item-info,
+.composer-tools-nested .skill-item-name,
+.composer-tools-nested .skill-item-desc {
+  display: block;
+  min-width: 0;
+}
+
+.composer-tools-nested .skill-item-name,
+.composer-tools-nested .skill-item-desc {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.permission-tools-nested {
+  width: 180px;
+  padding: 5px;
+}
+
+.permission-tools-option {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  height: 36px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--fg-2);
+  cursor: pointer;
+}
+
+.permission-tools-option:hover,
+.permission-tools-option.active {
+  background: var(--bg-3);
+  color: var(--accent);
 }
 
 .plan-mode-btn,
@@ -3903,6 +4232,8 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 .input-area.welcome-mode .model-actions {
   flex-direction: row;
   gap: 8px;
+  padding-top: 6px;
+  padding-bottom: 2px;
 }
 
 .input-area.welcome-mode .effort-btn,
