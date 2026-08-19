@@ -136,7 +136,12 @@ public final class InterceptingModelGateway implements ModelGateway {
                 if (delivered) {
                     return false;
                 }
-                return pendingSynthetic != null || source.hasNext();
+                try {
+                    return pendingSynthetic != null || source.hasNext();
+                } catch (RuntimeException exception) {
+                    interceptModelError(context, exception);
+                    throw exception;
+                }
             }
 
             /** 返回下一个被拦截的增量块；底层流结束时合成终止块并执行 AFTER_MODEL。 */
@@ -156,17 +161,7 @@ public final class InterceptingModelGateway implements ModelGateway {
                 try {
                     chunk = source.next();
                 } catch (RuntimeException exception) {
-                    InterceptionResult error = interceptors.run(
-                        InterceptPoint.ON_MODEL_ERROR,
-                        new InterceptContext(
-                            InterceptPoint.ON_MODEL_ERROR,
-                            null,
-                            null,
-                            context,
-                            new ModelCallError(exception.getMessage(), exception)
-                        )
-                    );
-                    throwIfTerminal(error.decision());
+                    interceptModelError(context, exception);
                     throw exception;
                 }
                 accumulate(chunk, content, reasoning, toolCalls, thinkingBlocks, usage);
@@ -259,6 +254,21 @@ public final class InterceptingModelGateway implements ModelGateway {
             Spliterators.spliteratorUnknownSize(intercepted, Spliterator.ORDERED),
             false
         );
+    }
+
+    /** 将流创建、探测和读取阶段的异常统一交给模型错误拦截链。 */
+    private void interceptModelError(LoopContext context, RuntimeException exception) {
+        InterceptionResult error = interceptors.run(
+            InterceptPoint.ON_MODEL_ERROR,
+            new InterceptContext(
+                InterceptPoint.ON_MODEL_ERROR,
+                null,
+                null,
+                context,
+                new ModelCallError(exception.getMessage(), exception)
+            )
+        );
+        throwIfTerminal(error.decision());
     }
 
     /** 对单个增量块发布事件并执行 ON_MODEL_STREAM 拦截。 */

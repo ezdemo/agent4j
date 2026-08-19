@@ -46,7 +46,7 @@ public final class LoopraRetryPolicyPlugin implements LoopPlugin {
 
     private InterceptDecision onModelError(InterceptContext context) {
         if (!(context.payload() instanceof ModelCallError error)
-                || !ModelApiError.isTransientModelError(error.message())) {
+                || !ModelApiError.isTransientModelError(error.message(), error.cause())) {
             return InterceptDecision.pass();
         }
         int attempts = intVariable(context, RETRY_COUNT_KEY) + 1;
