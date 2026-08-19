@@ -348,6 +348,48 @@ class RealModelProvidersTest {
         }
     }
 
+    /** llama.cpp 风格的 timings 应转换为统一 Usage，并保留缓存命中明细。 */
+    @Test
+    void chatCompletionsProviderMapsLlamaCppTimingsUsage() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = streamingServer("/chat/completions", requestBody, """
+            data: {"choices":[{"finish_reason":"tool_calls","index":0,"delta":{}}],"created":1787109007,"id":"chatcmpl-1","model":"Qwen3.8","object":"chat.completion.chunk","timings":{"cache_n":23058,"prompt_n":4,"prompt_ms":110.645,"predicted_n":482,"predicted_ms":30127.483}}
+
+            data: [DONE]
+
+            """);
+        server.start();
+        try {
+            ModelProviderConfig config = new ModelProviderConfig(
+                "chat",
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                "key",
+                "Qwen3.8",
+                Map.of()
+            );
+            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config);
+            ModelCallRequest request = new ModelCallRequest(
+                "Qwen3.8",
+                List.of(new Message("user", "hi")),
+                List.of(),
+                Map.of()
+            );
+
+            Usage total = Usage.ZERO;
+            try (Stream<StreamChunk> chunks = provider.stream(request)) {
+                total = chunks.map(StreamChunk::usage).reduce(Usage.ZERO, Usage::add);
+            }
+
+            assertEquals(23062, total.promptTokens());
+            assertEquals(482, total.completionTokens());
+            assertEquals(23058, total.cacheReadTokens());
+            assertEquals(4, total.cacheMissTokens());
+            assertEquals(23544, total.totalTokens());
+        } finally {
+            server.stop(0);
+        }
+    }
+
     /** Responses 流式调用应只交付一次用量并聚合完整函数调用。 */
     @Test
     void responsesProviderStreamsFunctionCallAndUsageOnce() throws Exception {
