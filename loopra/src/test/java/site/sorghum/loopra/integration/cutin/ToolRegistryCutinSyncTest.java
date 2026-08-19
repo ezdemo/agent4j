@@ -1,6 +1,7 @@
 package site.sorghum.loopra.integration.cutin;
 
 import org.junit.jupiter.api.Test;
+import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.tool.FunctionTool;
 import site.sorghum.cutin.core.tool.ToolDefinition;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
@@ -49,7 +50,38 @@ class ToolRegistryCutinSyncTest {
         assertTrue(definition.metadata().roles().contains("implement"));
     }
 
+    @Test
+    void modelVisibleSchemasExcludeRuntimeInjectedArguments() {
+        ToolRegistry registry = new ToolRegistry();
+        registry.register(simpleTool("runtime_context_tool", """
+            {
+              "type": "object",
+              "properties": {
+                "path": {"type": "string"},
+                "ctx": {"type": "object", "properties": {"large": {"type": "object"}}},
+                "__cwd": {"type": "string"}
+              },
+              "required": ["path", "ctx", "__cwd"]
+            }
+            """));
+
+        ONode openAiSchema = registry.toOpenAiTools()
+            .get(0).get("function").get("parameters");
+        Map<?, ?> openAiProperties = openAiSchema.get("properties").toBean(Map.class);
+        assertEquals(Set.of("path"), openAiProperties.keySet());
+        assertEquals(List.of("path"), openAiSchema.get("required").toBean(List.class));
+
+        Map<String, Object> cutinSchema = registry.cutinRegistry()
+            .find("runtime_context_tool").orElseThrow().definition().inputSchema();
+        assertEquals(Set.of("path"), ((Map<?, ?>) cutinSchema.get("properties")).keySet());
+        assertEquals(List.of("path"), cutinSchema.get("required"));
+    }
+
     private static FunctionTool simpleTool(String name) {
+        return simpleTool(name, "{\"type\":\"object\",\"properties\":{}}");
+    }
+
+    private static FunctionTool simpleTool(String name, String inputSchema) {
         Map<String, Object> meta = new LinkedHashMap<>();
         return new FunctionTool() {
             @Override
@@ -74,7 +106,7 @@ class ToolRegistryCutinSyncTest {
 
             @Override
             public String inputSchema() {
-                return "{\"type\":\"object\",\"properties\":{}}";
+                return inputSchema;
             }
 
             @Override
