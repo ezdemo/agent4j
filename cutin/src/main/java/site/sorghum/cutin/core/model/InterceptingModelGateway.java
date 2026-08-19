@@ -213,7 +213,7 @@ public final class InterceptingModelGateway implements ModelGateway {
                     return effective;
                 }
 
-                if (!source.hasNext()) {
+                if (!hasNext()) {
                     StreamChunk terminal = new StreamChunk(
                         "",
                         null,

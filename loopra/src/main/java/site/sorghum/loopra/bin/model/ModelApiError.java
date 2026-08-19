@@ -1,5 +1,7 @@
 package site.sorghum.loopra.bin.model;
 
+import org.noear.snack4.ONode;
+
 import java.io.IOException;
 import java.util.Locale;
 
@@ -50,7 +52,8 @@ public final class ModelApiError {
             return false;
         }
         String value = error.toLowerCase(Locale.ROOT);
-        return value.contains("http 429")
+        return isTransientStatusCode(error)
+            || value.contains("http 429")
             || value.contains("http 500")
             || value.contains("http 501")
             || value.contains("http 502")
@@ -78,6 +81,21 @@ public final class ModelApiError {
             || value.contains("socket")
             || value.contains("stream error")
             || value.contains("sse");
+    }
+
+    private static boolean isTransientStatusCode(String error) {
+        try {
+            ONode root = ONode.ofJson(error);
+            ONode errorNode = root.get("error");
+            ONode codeNode = errorNode == null ? root.get("code") : errorNode.get("code");
+            if (codeNode == null || codeNode.isNull()) {
+                return false;
+            }
+            int code = codeNode.getInt();
+            return code == 429 || code >= 500 && code < 600;
+        } catch (RuntimeException ignored) {
+            return false;
+        }
     }
 
     /** 同时检查异常因果链，避免传输层只暴露简短的 closed 消息。 */
