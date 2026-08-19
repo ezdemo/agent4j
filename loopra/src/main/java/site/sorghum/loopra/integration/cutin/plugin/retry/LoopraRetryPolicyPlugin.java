@@ -41,7 +41,16 @@ public final class LoopraRetryPolicyPlugin implements LoopPlugin {
     @Override
     public void register(LoopRegistrar registrar) {
         registrar.registerInterceptor(InterceptPoint.ON_MODEL_ERROR, -50, this::onModelError);
+        registrar.registerInterceptor(InterceptPoint.AFTER_MODEL, 50, this::afterModel);
         registrar.registerInterceptor(InterceptPoint.BEFORE_RETRY, 0, this::beforeRetry);
+    }
+
+    /** 成功拿到模型响应后，下一次独立模型调用应重新计算重试预算。 */
+    private InterceptDecision afterModel(InterceptContext context) {
+        context.context().putVariable(RETRY_COUNT_KEY, 0);
+        context.context().putVariable(RETRY_DELAY_KEY, 0);
+        context.context().putVariable(RETRY_REASON_KEY, "");
+        return InterceptDecision.pass();
     }
 
     private InterceptDecision onModelError(InterceptContext context) {
