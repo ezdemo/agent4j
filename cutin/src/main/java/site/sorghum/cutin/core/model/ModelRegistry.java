@@ -1,10 +1,10 @@
 package site.sorghum.cutin.core.model;
 
-import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.CopyOnWriteArrayList;
 
 /**
  * 模型 Provider 注册表。
@@ -20,8 +20,16 @@ public final class ModelRegistry {
     /** 注册一个 Provider，将其能力声明中的所有模型 id 都挂到索引下。 */
     public void register(ModelProvider provider) {
         for (String modelId : provider.capabilities().models()) {
-            providers.computeIfAbsent(modelId, ignored -> new ArrayList<>()).add(provider);
+            providers.computeIfAbsent(modelId, ignored -> new CopyOnWriteArrayList<>()).add(provider);
         }
+    }
+
+    /** 注销 Provider 的全部模型索引。 */
+    public void unregister(ModelProvider provider) {
+        providers.values().removeIf(candidates -> {
+            candidates.removeIf(candidate -> candidate == provider);
+            return candidates.isEmpty();
+        });
     }
 
     /** 查找某个模型的首个候选 Provider。 */

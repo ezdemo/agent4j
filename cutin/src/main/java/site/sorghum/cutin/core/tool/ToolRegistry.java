@@ -13,6 +13,11 @@ public interface ToolRegistry {
     /** 注册一个工具；相同 id 的旧工具会被覆盖。 */
     void register(Tool tool);
 
+    /** 注销指定实例，避免移除后来覆盖的同 id 工具。 */
+    default boolean unregister(String toolId, Tool tool) {
+        return false;
+    }
+
     /** 按工具 id 查找工具。 */
     Optional<Tool> find(String toolId);
 

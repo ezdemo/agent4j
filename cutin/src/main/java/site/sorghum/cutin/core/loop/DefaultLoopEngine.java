@@ -11,6 +11,7 @@ import site.sorghum.cutin.core.event.LoopEvent;
 import site.sorghum.cutin.core.model.*;
 import site.sorghum.cutin.core.plugin.DefaultLoopRegistrar;
 import site.sorghum.cutin.core.plugin.LoopRegistrar;
+import site.sorghum.cutin.core.plugin.Registration;
 import site.sorghum.cutin.core.state.CheckpointManager;
 import site.sorghum.cutin.core.state.InMemoryStateStore;
 import site.sorghum.cutin.core.state.LoopSnapshot;
@@ -529,38 +530,44 @@ public final class DefaultLoopEngine implements LoopEngine, LoopRegistrar {
 
     /** 注册拦截器。 */
     @Override
-    public void addInterceptor(InterceptPoint point, int order, LoopInterceptor interceptor) {
-        registrar.addInterceptor(point, order, interceptor);
-    }
+    public void addInterceptor(InterceptPoint point, int order, LoopInterceptor interceptor) { registrar.addInterceptor(point, order, interceptor); }
+
+    @Override
+    public Registration registerInterceptor(InterceptPoint point, int order, LoopInterceptor interceptor) { return registrar.registerInterceptor(point, order, interceptor); }
 
     /** 注册工具。 */
     @Override
-    public void addTool(Tool tool) {
-        registrar.addTool(tool);
-    }
+    public void addTool(Tool tool) { registrar.addTool(tool); }
+
+    @Override
+    public Registration registerTool(Tool tool) { return registrar.registerTool(tool); }
 
     /** 注册工具提供方。 */
     @Override
-    public void addToolProvider(ToolProvider provider) {
-        registrar.addToolProvider(provider);
-    }
+    public void addToolProvider(ToolProvider provider) { registrar.addToolProvider(provider); }
+
+    @Override
+    public Registration registerToolProvider(ToolProvider provider) { return registrar.registerToolProvider(provider); }
 
     /** 注册模型 Provider。 */
     @Override
-    public void addModelProvider(ModelProvider provider) {
-        registrar.addModelProvider(provider);
-    }
+    public void addModelProvider(ModelProvider provider) { registrar.addModelProvider(provider); }
+
+    @Override
+    public Registration registerModelProvider(ModelProvider provider) { return registrar.registerModelProvider(provider); }
 
     /** 注册事件处理器。 */
     @Override
-    public void addEventHandler(EventHandler handler) {
-        registrar.addEventHandler(handler);
-    }
+    public void addEventHandler(EventHandler handler) { registrar.addEventHandler(handler); }
+
+    @Override
+    public Registration registerEventHandler(EventHandler handler) { return registrar.registerEventHandler(handler); }
 
     /** 注册 Hook。 */
     @Override
-    public void addHook(Hook hook) {
-        registrar.addHook(hook);
-    }
+    public void addHook(Hook hook) { registrar.addHook(hook); }
+
+    @Override
+    public Registration registerHook(Hook hook) { return registrar.registerHook(hook); }
 
 }

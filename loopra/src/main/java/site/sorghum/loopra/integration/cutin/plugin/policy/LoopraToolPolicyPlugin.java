@@ -31,7 +31,7 @@ public final class LoopraToolPolicyPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addInterceptor(InterceptPoint.BEFORE_TOOL, -100, this::guardToolCall);
+        registrar.registerInterceptor(InterceptPoint.BEFORE_TOOL, -100, this::guardToolCall);
     }
 
     private InterceptDecision guardToolCall(InterceptContext context) {

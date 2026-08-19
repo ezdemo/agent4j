@@ -40,8 +40,8 @@ public final class LoopraRetryPolicyPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addInterceptor(InterceptPoint.ON_MODEL_ERROR, -50, this::onModelError);
-        registrar.addInterceptor(InterceptPoint.BEFORE_RETRY, 0, this::beforeRetry);
+        registrar.registerInterceptor(InterceptPoint.ON_MODEL_ERROR, -50, this::onModelError);
+        registrar.registerInterceptor(InterceptPoint.BEFORE_RETRY, 0, this::beforeRetry);
     }
 
     private InterceptDecision onModelError(InterceptContext context) {

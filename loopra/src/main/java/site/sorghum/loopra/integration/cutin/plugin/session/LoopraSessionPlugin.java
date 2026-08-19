@@ -29,7 +29,7 @@ public final class LoopraSessionPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addHook(new Hook() {
+        registrar.registerHook(new Hook() {
             @Override
             public String id() {
                 return "loopra-session-before";
@@ -50,7 +50,7 @@ public final class LoopraSessionPlugin implements LoopPlugin {
                 host.beforeTurn(userMessage);
             }
         });
-        registrar.addHook(new Hook() {
+        registrar.registerHook(new Hook() {
             @Override
             public String id() {
                 return "loopra-session-post";
@@ -66,7 +66,7 @@ public final class LoopraSessionPlugin implements LoopPlugin {
                 host.endCutinLoop();
             }
         });
-        registrar.addInterceptor(InterceptPoint.AFTER_TURN, 1000, this::onAfterTurn);
+        registrar.registerInterceptor(InterceptPoint.AFTER_TURN, 1000, this::onAfterTurn);
     }
 
     private InterceptDecision onAfterTurn(InterceptContext context) {

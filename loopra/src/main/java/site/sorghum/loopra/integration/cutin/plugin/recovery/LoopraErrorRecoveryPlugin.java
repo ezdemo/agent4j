@@ -30,7 +30,7 @@ public final class LoopraErrorRecoveryPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addInterceptor(InterceptPoint.ON_MODEL_ERROR, -100, this::onModelError);
+        registrar.registerInterceptor(InterceptPoint.ON_MODEL_ERROR, -100, this::onModelError);
     }
 
     private InterceptDecision onModelError(InterceptContext context) {

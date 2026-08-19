@@ -43,7 +43,7 @@ public final class LoopraRawLogPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addInterceptor(InterceptPoint.AFTER_MODEL, -1000, this::printRaw);
+        registrar.registerInterceptor(InterceptPoint.AFTER_MODEL, -1000, this::printRaw);
     }
 
     private InterceptDecision printRaw(InterceptContext context) {

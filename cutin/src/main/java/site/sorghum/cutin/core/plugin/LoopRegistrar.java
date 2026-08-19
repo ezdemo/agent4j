@@ -10,24 +10,22 @@ import site.sorghum.cutin.core.tool.ToolProvider;
 
 /**
  * 插件注册中心 SPI：插件在此登记自己的全部扩展点。
+ *
+ * <p>保留 {@code void addXxx} 作为兼容入口；需要可热卸载的插件使用
+ * {@code registerXxx} 并持有返回的注册句柄。</p>
  */
 public interface LoopRegistrar {
-
-    /** 注册生命周期拦截器。 */
     void addInterceptor(InterceptPoint point, int order, LoopInterceptor interceptor);
-
-    /** 注册单个工具。 */
     void addTool(Tool tool);
-
-    /** 注册工具提供方，提供方内的全部工具会被批量注册。 */
     void addToolProvider(ToolProvider provider);
-
-    /** 注册模型 Provider。 */
     void addModelProvider(ModelProvider provider);
-
-    /** 注册事件处理器。 */
     void addEventHandler(EventHandler handler);
-
-    /** 注册 Hook。 */
     void addHook(Hook hook);
+
+    Registration registerInterceptor(InterceptPoint point, int order, LoopInterceptor interceptor);
+    Registration registerTool(Tool tool);
+    Registration registerToolProvider(ToolProvider provider);
+    Registration registerModelProvider(ModelProvider provider);
+    Registration registerEventHandler(EventHandler handler);
+    Registration registerHook(Hook hook);
 }

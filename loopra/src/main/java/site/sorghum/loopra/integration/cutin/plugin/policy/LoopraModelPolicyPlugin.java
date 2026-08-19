@@ -39,9 +39,9 @@ public final class LoopraModelPolicyPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addInterceptor(InterceptPoint.BEFORE_MODEL, -100, this::prepareModelRequest);
-        registrar.addInterceptor(InterceptPoint.ON_MODEL_STREAM, 0, this::onModelStream);
-        registrar.addInterceptor(InterceptPoint.AFTER_MODEL, 0, this::onAfterModel);
+        registrar.registerInterceptor(InterceptPoint.BEFORE_MODEL, -100, this::prepareModelRequest);
+        registrar.registerInterceptor(InterceptPoint.ON_MODEL_STREAM, 0, this::onModelStream);
+        registrar.registerInterceptor(InterceptPoint.AFTER_MODEL, 0, this::onAfterModel);
     }
 
     private InterceptDecision prepareModelRequest(InterceptContext context) {
