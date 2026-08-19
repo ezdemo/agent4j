@@ -390,6 +390,48 @@ class RealModelProvidersTest {
         }
     }
 
+    /** Ollama 原生最终响应的计数字段应转换为统一 Usage。 */
+    @Test
+    void chatCompletionsProviderMapsOllamaUsage() throws Exception {
+        AtomicReference<String> requestBody = new AtomicReference<>();
+        HttpServer server = streamingServer("/chat/completions", requestBody, """
+            data: {"model":"qwen3","message":{"role":"assistant","content":""},"done":true,"prompt_eval_count":23062,"eval_count":482,"prompt_eval_duration":110645000,"eval_duration":30127483000}
+
+            data: [DONE]
+
+            """);
+        server.start();
+        try {
+            ModelProviderConfig config = new ModelProviderConfig(
+                "chat",
+                "http://127.0.0.1:" + server.getAddress().getPort(),
+                "key",
+                "qwen3",
+                Map.of()
+            );
+            OpenAiChatCompletionsProvider provider = new OpenAiChatCompletionsProvider(config);
+            ModelCallRequest request = new ModelCallRequest(
+                "qwen3",
+                List.of(new Message("user", "hi")),
+                List.of(),
+                Map.of()
+            );
+
+            Usage total;
+            try (Stream<StreamChunk> chunks = provider.stream(request)) {
+                total = chunks.map(StreamChunk::usage).reduce(Usage.ZERO, Usage::add);
+            }
+
+            assertEquals(23062, total.promptTokens());
+            assertEquals(482, total.completionTokens());
+            assertEquals(0, total.cacheReadTokens());
+            assertEquals(23062, total.cacheMissTokens());
+            assertEquals(23544, total.totalTokens());
+        } finally {
+            server.stop(0);
+        }
+    }
+
     /** Responses 流式调用应只交付一次用量并聚合完整函数调用。 */
     @Test
     void responsesProviderStreamsFunctionCallAndUsageOnce() throws Exception {

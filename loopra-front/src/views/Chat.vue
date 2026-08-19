@@ -295,7 +295,7 @@
         :session-busy="sessionBusy"
         :session-status-stopping="sessionStatusStopping"
         :plan-mode="planMode"
-        @send="(imgs, text) => sendMessage(imgs, text)"
+        @send="(imgs, text, linkedProjectHashes) => sendMessage(imgs, text, null, props.sessionName, props.workspaceHash, undefined, null, undefined, linkedProjectHashes)"
         @toggle-plan="togglePlan"
         @remove-queued="removeQueuedMessage"
         @guide-queued="guideQueuedMessage"
@@ -878,13 +878,13 @@ const getSessionFastMode = (sessionName = props.sessionName, workspaceHash = pro
   sessionFastModes.value[conversationKey(workspaceHash, sessionName)] ?? currentFastMode.value
 )
 
-const addQueuedMessage = (sessionName, workspaceHash, images, text, modelSelection, reasoningEffort, fastMode) => {
+const addQueuedMessage = (sessionName, workspaceHash, images, text, modelSelection, reasoningEffort, fastMode, linkedProjectHashes = []) => {
   if (!sessionName) return
   const key = conversationKey(workspaceHash, sessionName)
   const queue = queuedMessagesBySession.value[key] || []
   queuedMessagesBySession.value = {
     ...queuedMessagesBySession.value,
-    [key]: [...queue, {id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, workspaceHash, images, text, modelSelection, reasoningEffort, fastMode}]
+    [key]: [...queue, {id: `${Date.now()}-${Math.random().toString(36).slice(2)}`, workspaceHash, images, text, modelSelection, reasoningEffort, fastMode, linkedProjectHashes}]
   }
 }
 
@@ -911,7 +911,7 @@ const sendNextQueuedMessage = async (sessionName, workspaceHash) => {
   const next = queue[0]
   if (!next) return
   takeQueuedMessage(sessionName, workspaceHash, next.id)
-  await sendMessage(next.images, next.text, next.modelSelection, sessionName, workspaceHash, next.reasoningEffort, null, next.fastMode)
+  await sendMessage(next.images, next.text, next.modelSelection, sessionName, workspaceHash, next.reasoningEffort, null, next.fastMode, next.linkedProjectHashes)
 }
 
 const guideQueuedMessage = async (id) => {
@@ -924,7 +924,7 @@ const guideQueuedMessage = async (id) => {
     if (streaming.value || sessionTaskRunning.value) {
       await abortChat()
     }
-    await sendMessage(queued.images, queued.text, queued.modelSelection, props.sessionName, queued.workspaceHash, queued.reasoningEffort, null, queued.fastMode)
+    await sendMessage(queued.images, queued.text, queued.modelSelection, props.sessionName, queued.workspaceHash, queued.reasoningEffort, null, queued.fastMode, queued.linkedProjectHashes)
   } finally {
     guidingQueuedMessage.value = false
   }
@@ -1676,7 +1676,8 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
                             targetSessionName = props.sessionName, targetWorkspaceHash = props.workspaceHash,
                             reasoningEffort = getSessionReasoningEffort(targetSessionName, targetWorkspaceHash),
                             requestAction = null,
-                            fastMode = getSessionFastMode(targetSessionName, targetWorkspaceHash)) => {
+                            fastMode = getSessionFastMode(targetSessionName, targetWorkspaceHash),
+                            linkedProjectHashes = []) => {
   const text = requestAction ? '' : (overrideText ?? inputText.value.trim())
   if (!text && images.length === 0 && !requestAction) return
   const sessionName = targetSessionName
@@ -1686,7 +1687,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
   const selectedFastMode = fastMode ?? getSessionFastMode(sessionName, targetWorkspaceHash)
   // 流式输出中发送 → 排队（原行为）；会话后台任务运行/状态检查中发送 → 也排队，避免静默丢弃
   if (store.getSessionStreaming(sessionName) || (!requestAction && sessionName === props.sessionName && sessionBusy.value)) {
-    addQueuedMessage(sessionName, targetWorkspaceHash, images, text, selectedModel, selectedReasoningEffort, selectedFastMode)
+    addQueuedMessage(sessionName, targetWorkspaceHash, images, text, selectedModel, selectedReasoningEffort, selectedFastMode, linkedProjectHashes)
     inputText.value = ''
     return
   }
@@ -2061,7 +2062,8 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
           modelChannelId: selectedModel.channelId,
           reasoningEffort: selectedReasoningEffort,
           fastMode: selectedFastMode,
-          action: requestAction
+          action: requestAction,
+          linkedProjectHashes
         }
     )
     store.setSessionController(sessionName, streamResult)

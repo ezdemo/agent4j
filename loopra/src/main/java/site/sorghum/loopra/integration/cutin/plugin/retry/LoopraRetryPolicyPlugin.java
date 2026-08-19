@@ -1,5 +1,6 @@
 package site.sorghum.loopra.integration.cutin.plugin.retry;
 
+import lombok.extern.slf4j.Slf4j;
 import site.sorghum.cutin.core.loop.InterceptContext;
 import site.sorghum.cutin.core.loop.InterceptDecision;
 import site.sorghum.cutin.core.loop.InterceptPoint;
@@ -21,6 +22,7 @@ import java.util.Objects;
  * </p>
  */
 @AgentPlugin(id = "loopra-retry-policy")
+@Slf4j
 public final class LoopraRetryPolicyPlugin implements LoopPlugin {
 
     private static final String RETRY_COUNT_KEY = "loopraModelRetryAttempts";
@@ -54,6 +56,7 @@ public final class LoopraRetryPolicyPlugin implements LoopPlugin {
     }
 
     private InterceptDecision onModelError(InterceptContext context) {
+        log.info("onModelError: {}", context.payload());
         if (!(context.payload() instanceof ModelCallError error)
                 || !ModelApiError.isTransientModelError(error.message(), error.cause())) {
             return InterceptDecision.pass();

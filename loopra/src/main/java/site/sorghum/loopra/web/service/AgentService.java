@@ -940,7 +940,7 @@ public class AgentService {
      */
     public void chatStream(UserMessage userMessage, String workspacePath, String sessionName, SseEmitter emitter,
                            String requestedModel, String requestedChannelId, String requestedReasoningEffort,
-                           Boolean requestedFastMode, String action) {
+                           Boolean requestedFastMode, String action, String linkedProjectContext) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         ReentrantLock lock = sessionCache.getLock(sessionKey);
         lock.lock();
@@ -985,6 +985,11 @@ public class AgentService {
 
             String reply;
             try {
+                if (linkedProjectContext != null && !linkedProjectContext.isBlank()) {
+                    UserMessage contextMessage = UserMessage.of(linkedProjectContext);
+                    contextMessage.setWebHidden(true);
+                    agent.getCtx().addUser(contextMessage);
+                }
                 reply = agent.chat(effectiveMessage);
             } catch (Exception executionError) {
                 if (planExecutionPrepared) {
@@ -1772,6 +1777,47 @@ public class AgentService {
             throw new ServiceException("项目不存在: " + projectHash);
         }
         return path;
+    }
+
+    /**
+     * 将前端选择的已注册项目解析为本轮模型上下文。这里仅注入可信路径信息；
+     * 文件工具仍按原有项目边界和 HITL 策略处理跨项目访问。
+     */
+    public String buildLinkedProjectContext(List<String> hashes, String primaryHash) {
+        if (hashes == null || hashes.isEmpty()) return null;
+        LinkedHashSet<String> requested = hashes.stream()
+                .filter(Objects::nonNull)
+                .map(String::trim)
+                .filter(hash -> !hash.isEmpty() && !hash.equals(primaryHash))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+        if (requested.isEmpty()) return null;
+        if (requested.size() > 8) {
+            throw new ServiceException("单次最多关联 8 个项目");
+        }
+
+        Map<String, ProjectInfoDTO> registered = listProjects().stream()
+                .collect(Collectors.toMap(ProjectInfoDTO::hash, project -> project, (left, right) -> left));
+        List<ProjectInfoDTO> linked = new ArrayList<>(requested.size());
+        for (String hash : requested) {
+            ProjectInfoDTO project = registered.get(hash);
+            if (project == null) {
+                throw new ServiceException("关联项目不存在或未注册: " + hash);
+            }
+            linked.add(project);
+        }
+        return formatLinkedProjectContext(linked);
+    }
+
+    static String formatLinkedProjectContext(List<ProjectInfoDTO> projects) {
+        StringBuilder context = new StringBuilder("[系统注入：本轮关联项目]\n")
+                .append("以下项目由用户显式选择用于本轮联动。它们不是当前主项目；读取或修改时必须遵守现有工具权限与审批边界。\n");
+        for (ProjectInfoDTO project : projects) {
+            String name = project.name() == null || project.name().isBlank() ? project.hash() : project.name();
+            context.append("- 名称: ").append(name)
+                    .append("\n  hash: ").append(project.hash())
+                    .append("\n  根目录: ").append(project.path()).append('\n');
+        }
+        return context.toString().trim();
     }
 
     public String getCurrentProject() {

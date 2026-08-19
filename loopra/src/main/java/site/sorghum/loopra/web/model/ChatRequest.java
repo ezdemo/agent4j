@@ -33,6 +33,12 @@ public class ChatRequest {
     private String workspaceHash;
 
     /**
+     * 本轮关联项目 hash 列表。关联项目只扩展模型可见的项目上下文，
+     * 不改变当前会话所属项目，也不自动放宽文件工具权限。
+     */
+    private List<String> linkedProjectHashes;
+
+    /**
      * 会话名称（用于多会话隔离）
      */
     private String sessionName;

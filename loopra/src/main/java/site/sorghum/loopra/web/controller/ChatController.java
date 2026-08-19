@@ -118,6 +118,8 @@ public class ChatController {
         final String message = request.getMessage() != null ? request.getMessage().trim() : "";
         final UserMessage userMsg = UserMessage.of(message, request.getImages());
         final String resolvedPath = agentService.resolveProjectPath(request.getWorkspaceHash());
+        final String linkedProjectContext = agentService.buildLinkedProjectContext(
+                request.getLinkedProjectHashes(), request.getWorkspaceHash());
         final String sessionName = request.getSessionName();
         final String requestId = ensureRequestId(request);
 
@@ -154,7 +156,7 @@ public class ChatController {
 
                 agentService.chatStream(userMsg, resolvedPath, sessionName, emitter,
                         request.getModel(), request.getModelChannelId(), request.getReasoningEffort(),
-                        request.getFastMode(), request.getAction());
+                        request.getFastMode(), request.getAction(), linkedProjectContext);
             } catch (Exception e) {
                 log.error("[chat] 流任务执行异常: session={}, requestId={}, 原因: {}",
                         sessionName, requestId, e.getMessage(), e);
