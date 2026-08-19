@@ -1,5 +1,6 @@
 package site.sorghum.loopra.bin.model;
 
+import java.io.IOException;
 import java.util.Locale;
 
 /**
@@ -68,11 +69,30 @@ public final class ModelApiError {
             || value.contains("timeout")
             || value.contains("timed out")
             || value.contains("connection")
+            || value.contains("stream closed")
+            || value.contains("connection closed")
+            || value.contains("channel closed")
+            || value.contains("java.io.ioexception: closed")
             || value.contains("broken pipe")
             || value.contains("no route")
             || value.contains("socket")
             || value.contains("stream error")
             || value.contains("sse");
+    }
+
+    /** 同时检查异常因果链，避免传输层只暴露简短的 closed 消息。 */
+    public static boolean isTransientModelError(String error, Throwable cause) {
+        if (isTransientModelError(error)) {
+            return true;
+        }
+        for (Throwable current = cause; current != null; current = current.getCause()) {
+            if (current instanceof IOException
+                    && current.getMessage() != null
+                    && current.getMessage().toLowerCase(Locale.ROOT).contains("closed")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
