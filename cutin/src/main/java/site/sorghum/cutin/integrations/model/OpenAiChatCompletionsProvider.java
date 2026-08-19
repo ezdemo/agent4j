@@ -48,7 +48,7 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
         String raw = transport.postRaw(body);
         ONode response = JsonSupport.read(raw);
         Message message = parseMessage(JsonSupport.child(response, "choices", 0, "message"));
-        Usage usage = parseUsage(JsonSupport.child(response, "usage"));
+        Usage usage = parseResponseUsage(response);
         return new ModelResponse(message, usage, true, raw, transport.exchangeFor(body));
     }
 
@@ -230,6 +230,27 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
         );
     }
 
+    /** 兼容 llama.cpp 等网关在顶层 timings 中上报的 token 用量。 */
+    private Usage parseResponseUsage(ONode response) {
+        ONode usage = JsonSupport.child(response, "usage");
+        if (usage != null && !usage.isNull()) {
+            return parseUsage(usage);
+        }
+        ONode timings = JsonSupport.child(response, "timings");
+        if (timings == null || timings.isNull()) {
+            return Usage.ZERO;
+        }
+        long cacheRead = JsonSupport.longValue(timings, 0, "cache_n");
+        long promptProcessed = JsonSupport.longValue(timings, 0, "prompt_n");
+        return new Usage(
+            cacheRead + promptProcessed,
+            JsonSupport.longValue(timings, 0, "predicted_n"),
+            0,
+            cacheRead,
+            0
+        );
+    }
+
     /** 把单个 SSE 增量块转换为若干 StreamChunk，并累计工具调用、记录最新用量。 */
     private Stream<StreamChunk> parseChunk(ONode chunk, Accumulator state) {
         Stream.Builder<StreamChunk> builder = Stream.builder();
@@ -246,6 +267,11 @@ public final class OpenAiChatCompletionsProvider implements ModelProvider {
             // OpenRouter 等网关会逐块携带同一累计值）。这里只取最新值并在流尾统一
             // 交付一次，不能逐块累加，否则 prompt_tokens 会随流块数量成倍放大。
             state.usage = parseUsage(usage);
+        } else {
+            Usage timingsUsage = parseResponseUsage(chunk);
+            if (timingsUsage.totalTokens() > 0) {
+                state.usage = timingsUsage;
+            }
         }
 
         ONode delta = JsonSupport.child(chunk, "choices", 0, "delta");
