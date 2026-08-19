@@ -2247,7 +2247,7 @@ const clearMessages = () => {
   }
 }
 
-/** 继续生成：发送 /continue 命令让 AI 继续推理，复用以有的 SSE 流式逻辑 */
+/** 继续生成：触发 /continue，后端不追加用户消息，直接复用现有上下文继续推理 */
 const continueChat = async () => {
   if (!props.sessionName || streaming.value || sessionBusy.value) return
   inputText.value = '/continue'
