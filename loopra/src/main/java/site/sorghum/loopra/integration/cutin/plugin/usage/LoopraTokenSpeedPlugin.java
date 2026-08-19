@@ -1,25 +1,32 @@
 package site.sorghum.loopra.integration.cutin.plugin.usage;
 
-import site.sorghum.cutin.core.context.Usage;
-import site.sorghum.cutin.core.loop.*;
+import site.sorghum.cutin.core.loop.InterceptContext;
+import site.sorghum.cutin.core.loop.InterceptDecision;
+import site.sorghum.cutin.core.loop.InterceptPoint;
+import site.sorghum.cutin.core.model.StreamChunk;
 import site.sorghum.cutin.core.plugin.AgentPlugin;
 import site.sorghum.cutin.core.plugin.LoopPlugin;
 import site.sorghum.cutin.core.plugin.LoopRegistrar;
 
+import java.util.Map;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.function.LongSupplier;
+
+/** 计算模型流的实时速度与本轮平均速度。 */
 @AgentPlugin(id = "loopra-token-speed")
 public final class LoopraTokenSpeedPlugin implements LoopPlugin {
-
-    private static final String START_NANOS_KEY = "loopraTokenSpeedStartNanos";
-    private static final String BASE_COMPLETION_KEY = "loopraTokenSpeedBaseCompletion";
-    private static final String LAST_EMIT_NANOS_KEY = "loopraTokenSpeedLastEmitNanos";
-    private static final String CHAR_COUNT_KEY = "loopraTokenSpeedCharCount";
-
     private static final long EMIT_INTERVAL_NANOS = 200_000_000L;
-
     private final LoopraTokenSpeedHost host;
+    private final LongSupplier nanoTime;
+    private final Map<String, SpeedState> states = new ConcurrentHashMap<>();
 
     public LoopraTokenSpeedPlugin(LoopraTokenSpeedHost host) {
+        this(host, System::nanoTime);
+    }
+
+    LoopraTokenSpeedPlugin(LoopraTokenSpeedHost host, LongSupplier nanoTime) {
         this.host = host;
+        this.nanoTime = nanoTime;
     }
 
     @Override
@@ -29,73 +36,122 @@ public final class LoopraTokenSpeedPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addInterceptor(InterceptPoint.BEFORE_MODEL, -900, this::onBeforeModel);
-        registrar.addInterceptor(InterceptPoint.ON_MODEL_STREAM, 900, this::onStream);
-        registrar.addInterceptor(InterceptPoint.AFTER_MODEL, 900, this::onAfterModel);
+        registrar.registerInterceptor(InterceptPoint.BEFORE_MODEL, -900, this::onBeforeModel);
+        registrar.registerInterceptor(InterceptPoint.ON_MODEL_STREAM, 900, this::onStream);
+        registrar.registerInterceptor(InterceptPoint.AFTER_MODEL, 900, this::onAfterModel);
+        registrar.registerInterceptor(InterceptPoint.ON_MODEL_ERROR, 900, this::onError);
+    }
+
+    @Override
+    public void stop() {
+        states.clear();
     }
 
     private InterceptDecision onBeforeModel(InterceptContext context) {
-        context.context().putVariable(START_NANOS_KEY, System.nanoTime());
-        context.context().putVariable(BASE_COMPLETION_KEY, context.context().usage().completionTokens());
-        context.context().putVariable(LAST_EMIT_NANOS_KEY, 0L);
-        context.context().putVariable(CHAR_COUNT_KEY, 0L);
+        states.put(context.context().id(), new SpeedState(nanoTime.getAsLong()));
         return InterceptDecision.pass();
     }
 
     private InterceptDecision onStream(InterceptContext context) {
-        Object payload = context.payload();
-        if (!(payload instanceof site.sorghum.cutin.core.model.StreamChunk chunk)) {
+        if (!(context.payload() instanceof StreamChunk chunk)) {
             return InterceptDecision.pass();
         }
-        int deltaChars = 0;
-        if (chunk.content() != null) deltaChars += chunk.content().length();
-        if (chunk.reasoning() != null) deltaChars += chunk.reasoning().length();
-        if (deltaChars > 0) {
-            Object cur = context.context().variables().getOrDefault(CHAR_COUNT_KEY, 0L);
-            long count = cur instanceof Number n ? n.longValue() : 0L;
-            context.context().putVariable(CHAR_COUNT_KEY, count + deltaChars);
-        }
-        if (!chunk.terminal() && (chunk.content() == null || chunk.content().isEmpty())
-            && (chunk.reasoning() == null || chunk.reasoning().isEmpty())
-            && chunk.toolCalls().isEmpty()) {
+        SpeedState state = states.get(context.context().id());
+        if (state == null) {
             return InterceptDecision.pass();
         }
-        long now = System.nanoTime();
-        Object lastRaw = context.context().variables().getOrDefault(LAST_EMIT_NANOS_KEY, 0L);
-        long lastEmit = lastRaw instanceof Number n ? n.longValue() : 0L;
-        if (lastEmit != 0 && now - lastEmit < EMIT_INTERVAL_NANOS && !chunk.terminal()) {
+        state.observe(chunk);
+        long now = nanoTime.getAsLong();
+        if (!chunk.terminal() && state.lastEmitNanos != 0
+            && now - state.lastEmitNanos < EMIT_INTERVAL_NANOS) {
             return InterceptDecision.pass();
         }
-        context.context().putVariable(LAST_EMIT_NANOS_KEY, now);
-        emit(context, chunk.terminal());
+        if (state.hasOutput() && (chunk.terminal() || state.lastEmitNanos == 0
+            || now - state.lastEmitNanos >= EMIT_INTERVAL_NANOS)) {
+            emit(state, now, chunk.terminal());
+        }
         return InterceptDecision.pass();
     }
 
     private InterceptDecision onAfterModel(InterceptContext context) {
-        emit(context, true);
+        SpeedState state = states.get(context.context().id());
+        if (state != null) {
+            if (!state.done) {
+                emit(state, nanoTime.getAsLong(), true);
+            }
+            states.remove(context.context().id(), state);
+        }
         return InterceptDecision.pass();
     }
 
-    private void emit(InterceptContext context, boolean done) {
-        Object startRaw = context.context().variables().get(START_NANOS_KEY);
-        Object baseRaw = context.context().variables().get(BASE_COMPLETION_KEY);
-        if (!(startRaw instanceof Number) || !(baseRaw instanceof Number)) {
+    private InterceptDecision onError(InterceptContext context) {
+        states.remove(context.context().id());
+        return InterceptDecision.pass();
+    }
+
+    private void emit(SpeedState state, long now, boolean done) {
+        if (state.lastEmitNanos != 0 && !done && now - state.lastEmitNanos < EMIT_INTERVAL_NANOS) {
             return;
         }
-        long startNanos = ((Number) startRaw).longValue();
-        long baseCompletion = ((Number) baseRaw).longValue();
-        Usage total = context.context().usage();
-        long deltaCompletion = Math.max(0, total.completionTokens() - baseCompletion);
-        Object charRaw = context.context().variables().getOrDefault(CHAR_COUNT_KEY, 0L);
-        long charCount = charRaw instanceof Number n ? n.longValue() : 0L;
-        double elapsedSec = Math.max(0.001, (System.nanoTime() - startNanos) / 1_000_000_000.0);
-        double tokensForRate = deltaCompletion > 0 ? deltaCompletion : charCount / 2.0;
-        double tps = tokensForRate / elapsedSec;
-        double avgTps = tps;
-        if (done && elapsedSec > 0.05) {
-            avgTps = tokensForRate / elapsedSec;
+        double elapsedSeconds = Math.max(0.001, (now - state.startNanos) / 1_000_000_000.0);
+        double realtimeElapsed = state.lastEmitNanos == 0
+            ? elapsedSeconds
+            : Math.max(0.001, (now - state.lastEmitNanos) / 1_000_000_000.0);
+        long totalUnits = state.generatedUnits();
+        long deltaUnits = Math.max(0, totalUnits - state.lastUnits);
+        double realtimeTps = deltaUnits / 2.0 / realtimeElapsed;
+        double averageTps = totalUnits / 2.0 / elapsedSeconds;
+        if (state.hasProviderTokens()) {
+            realtimeTps = deltaUnits / realtimeElapsed;
+            averageTps = totalUnits / elapsedSeconds;
         }
-        if (!done && tps == 0) return;
-        host.emitTokenSpeed(deltaCompletion, tps, avgTps, done);
+        host.emitTokenSpeed(state.generatedTokenCount(), realtimeTps, averageTps, done);
+        state.lastEmitNanos = now;
+        state.lastUnits = totalUnits;
+        state.done = done;
+    }
+
+    private static final class SpeedState {
+        private final long startNanos;
+        private long generatedTokens;
+        private long generatedChars;
+        private long lastUnits;
+        private long lastEmitNanos;
+        private boolean providerTokens;
+        private boolean done;
+
+        private SpeedState(long startNanos) {
+            this.startNanos = startNanos;
+        }
+
+        private void observe(StreamChunk chunk) {
+            if (chunk.content() != null) {
+                generatedChars += chunk.content().length();
+            }
+            if (chunk.reasoning() != null) {
+                generatedChars += chunk.reasoning().length();
+            }
+            long completionTokens = chunk.usage().completionTokens();
+            if (completionTokens > 0) {
+                generatedTokens += completionTokens;
+                providerTokens = true;
+            }
+        }
+
+        private boolean hasOutput() {
+            return generatedChars > 0 || generatedTokens > 0;
+        }
+
+        private boolean hasProviderTokens() {
+            return providerTokens;
+        }
+
+        private long generatedUnits() {
+            return providerTokens ? generatedTokens : generatedChars;
+        }
+
+        private long generatedTokenCount() {
+            return providerTokens ? generatedTokens : generatedChars / 2;
+        }
     }
 }

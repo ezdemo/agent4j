@@ -31,10 +31,10 @@ public final class LoopraToolBatchPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addInterceptor(InterceptPoint.BEFORE_TOOL_BATCH, -50, this::onBatchStart);
-        registrar.addInterceptor(InterceptPoint.AFTER_TOOL_BATCH, 50, this::onBatchEnd);
-        registrar.addInterceptor(InterceptPoint.ON_TOOL_TIMEOUT, 0, this::onTimeout);
-        registrar.addInterceptor(InterceptPoint.ON_TOOL_CANCEL, 0, this::onCancel);
+        registrar.registerInterceptor(InterceptPoint.BEFORE_TOOL_BATCH, -50, this::onBatchStart);
+        registrar.registerInterceptor(InterceptPoint.AFTER_TOOL_BATCH, 50, this::onBatchEnd);
+        registrar.registerInterceptor(InterceptPoint.ON_TOOL_TIMEOUT, 0, this::onTimeout);
+        registrar.registerInterceptor(InterceptPoint.ON_TOOL_CANCEL, 0, this::onCancel);
     }
 
     private InterceptDecision onBatchStart(InterceptContext context) {

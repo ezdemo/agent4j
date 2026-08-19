@@ -28,7 +28,7 @@ public final class LoopraExitPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addInterceptor(InterceptPoint.BEFORE_EXIT, -50, this::onExit);
+        registrar.registerInterceptor(InterceptPoint.BEFORE_EXIT, -50, this::onExit);
     }
 
     private InterceptDecision onExit(InterceptContext context) {

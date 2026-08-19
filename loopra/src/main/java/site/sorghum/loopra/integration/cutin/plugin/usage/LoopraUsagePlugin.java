@@ -30,7 +30,7 @@ public final class LoopraUsagePlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addInterceptor(InterceptPoint.AFTER_STEP, 1000, this::reportModelUsage);
+        registrar.registerInterceptor(InterceptPoint.AFTER_STEP, 1000, this::reportModelUsage);
     }
 
     private InterceptDecision reportModelUsage(InterceptContext context) {

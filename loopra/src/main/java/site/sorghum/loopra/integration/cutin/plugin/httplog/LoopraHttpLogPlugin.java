@@ -84,7 +84,7 @@ public final class LoopraHttpLogPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addInterceptor(InterceptPoint.BEFORE_MODEL, 2000, this::writeRequestLog);
+        registrar.registerInterceptor(InterceptPoint.BEFORE_MODEL, 2000, this::writeRequestLog);
     }
 
     private InterceptDecision writeRequestLog(InterceptContext context) {

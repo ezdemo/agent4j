@@ -14,36 +14,19 @@ import site.sorghum.cutin.core.tool.Tool;
 import site.sorghum.cutin.core.tool.ToolProvider;
 import site.sorghum.cutin.core.tool.ToolRegistry;
 
-/**
- * {@link LoopRegistrar} 的默认实现，持有全部注册表与扩展集合。
- *
- * <p>插件注册的拦截器、工具、模型、事件处理器与 Hook
- * 都存放在这里，并由引擎或插件系统读取。</p>
- */
+/** {@link LoopRegistrar} 的默认实现。 */
 public final class DefaultLoopRegistrar implements LoopRegistrar {
-
-    /** 拦截器注册表。 */
     private final InterceptorRegistry interceptors;
-    /** 工具注册表。 */
     private final ToolRegistry tools;
-    /** 模型注册表。 */
     private final ModelRegistry models;
-    /** 事件总线。 */
     private final EventBus events;
-    /** Hook 注册表，已挂到事件总线上。 */
     private final HookRegistry hooks = new HookRegistry();
-    /** 使用全新的注册表、工具表、模型表与事件总线创建注册中心。 */
+
     public DefaultLoopRegistrar() {
         this(new InterceptorRegistry(), new DefaultToolRegistry(), new ModelRegistry(), new EventBus());
     }
 
-    /** 使用外部组件装配注册中心，并把 HookRegistry 接入事件总线。 */
-    public DefaultLoopRegistrar(
-        InterceptorRegistry interceptors,
-        ToolRegistry tools,
-        ModelRegistry models,
-        EventBus events
-    ) {
+    public DefaultLoopRegistrar(InterceptorRegistry interceptors, ToolRegistry tools, ModelRegistry models, EventBus events) {
         this.interceptors = interceptors;
         this.tools = tools;
         this.models = models;
@@ -51,64 +34,65 @@ public final class DefaultLoopRegistrar implements LoopRegistrar {
         events.addHandler(hooks);
     }
 
-    /** {@inheritDoc} */
     @Override
-    public void addInterceptor(InterceptPoint point, int order, LoopInterceptor interceptor) {
-        interceptors.add(point, order, interceptor);
+    public void addInterceptor(InterceptPoint point, int order, LoopInterceptor interceptor) { registerInterceptor(point, order, interceptor); }
+
+    @Override
+    public Registration registerInterceptor(InterceptPoint point, int order, LoopInterceptor interceptor) {
+        return interceptors.register(point, order, interceptor);
     }
 
-    /** {@inheritDoc} */
     @Override
-    public void addTool(Tool tool) {
+    public void addTool(Tool tool) { registerTool(tool); }
+
+    @Override
+    public Registration registerTool(Tool tool) {
+        Tool previous = tools.find(tool.id()).orElse(null);
         tools.register(tool);
+        return () -> {
+            if (tools.unregister(tool.id(), tool) && previous != null) {
+                tools.register(previous);
+            }
+        };
     }
 
-    /** {@inheritDoc} */
     @Override
-    public void addToolProvider(ToolProvider provider) {
-        provider.tools().forEach(tools::register);
+    public void addToolProvider(ToolProvider provider) { registerToolProvider(provider); }
+
+    @Override
+    public Registration registerToolProvider(ToolProvider provider) {
+        java.util.List<Registration> registrations = provider.tools().stream().map(this::registerTool).toList();
+        return Registration.composite(registrations);
     }
 
-    /** {@inheritDoc} */
     @Override
-    public void addModelProvider(ModelProvider provider) {
+    public void addModelProvider(ModelProvider provider) { registerModelProvider(provider); }
+
+    @Override
+    public Registration registerModelProvider(ModelProvider provider) {
         models.register(provider);
+        return () -> models.unregister(provider);
     }
 
-    /** {@inheritDoc} */
     @Override
-    public void addEventHandler(EventHandler handler) {
-        events.addHandler(handler);
+    public void addEventHandler(EventHandler handler) { registerEventHandler(handler); }
+
+    @Override
+    public Registration registerEventHandler(EventHandler handler) {
+        return events.registerHandler(handler);
     }
 
-    /** {@inheritDoc} */
-    public void addHook(Hook hook) {
-        hooks.add(hook);
+    @Override
+    public void addHook(Hook hook) { registerHook(hook); }
+
+    @Override
+    public Registration registerHook(Hook hook) {
+        return hooks.register(hook);
     }
 
-    /** 拦截器注册表。 */
-    public InterceptorRegistry interceptors() {
-        return interceptors;
-    }
-
-    /** 工具注册表。 */
-    public ToolRegistry tools() {
-        return tools;
-    }
-
-    /** 模型注册表。 */
-    public ModelRegistry models() {
-        return models;
-    }
-
-    /** 事件总线。 */
-    public EventBus events() {
-        return events;
-    }
-
-    /** Hook 注册表。 */
-    public HookRegistry hooks() {
-        return hooks;
-    }
-
+    public InterceptorRegistry interceptors() { return interceptors; }
+    public ToolRegistry tools() { return tools; }
+    public ModelRegistry models() { return models; }
+    public EventBus events() { return events; }
+    public HookRegistry hooks() { return hooks; }
 }

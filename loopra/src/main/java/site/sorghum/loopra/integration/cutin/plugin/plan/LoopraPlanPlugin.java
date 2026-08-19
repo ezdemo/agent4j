@@ -25,7 +25,7 @@ public final class LoopraPlanPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addHook(new Hook() {
+        registrar.registerHook(new Hook() {
             @Override
             public String id() {
                 return "loopra-plan-persist";

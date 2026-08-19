@@ -17,8 +17,8 @@ import site.sorghum.cutin.core.context.Usage;
 import site.sorghum.cutin.core.event.LoopEvent;
 import site.sorghum.cutin.core.loop.*;
 import site.sorghum.cutin.core.model.ModelCallRequest;
-import site.sorghum.cutin.core.model.ModelResponse;
 import site.sorghum.cutin.core.model.ModelRegistry;
+import site.sorghum.cutin.core.model.ModelResponse;
 import site.sorghum.cutin.core.model.StreamChunk;
 import site.sorghum.cutin.core.plugin.PluginBeanManager;
 import site.sorghum.cutin.core.state.LoopSnapshot;
@@ -47,21 +47,19 @@ import site.sorghum.loopra.integration.cutin.plugin.compaction.LoopraCompactionP
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitHost;
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.httplog.LoopraHttpLogPlugin;
-import site.sorghum.loopra.integration.cutin.plugin.rawlog.LoopraRawLogPlugin;
-import site.sorghum.loopra.integration.cutin.plugin.preflight.LoopraHitlPlugin;
-import site.sorghum.loopra.integration.cutin.plugin.preflight.LoopraMessageSanitizerPlugin;
-import site.sorghum.loopra.integration.cutin.plugin.preflight.LoopraPreflight;
-import site.sorghum.loopra.integration.cutin.plugin.preflight.LoopraPreflightHost;
-import site.sorghum.loopra.integration.cutin.plugin.preflight.LoopraUserMessagePlugin;
 import site.sorghum.loopra.integration.cutin.plugin.plan.LoopraPlanHost;
 import site.sorghum.loopra.integration.cutin.plugin.plan.LoopraPlanPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraModelPolicyPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraPolicyHost;
 import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraToolPolicyPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.preflight.*;
+import site.sorghum.loopra.integration.cutin.plugin.rawlog.LoopraRawLogPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.recovery.LoopraErrorRecoveryHost;
 import site.sorghum.loopra.integration.cutin.plugin.recovery.LoopraErrorRecoveryPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.retry.LoopraRetryHost;
 import site.sorghum.loopra.integration.cutin.plugin.retry.LoopraRetryPolicyPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.session.LoopraSessionAffinityHost;
+import site.sorghum.loopra.integration.cutin.plugin.session.LoopraSessionAffinityPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.session.LoopraSessionHost;
 import site.sorghum.loopra.integration.cutin.plugin.session.LoopraSessionPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.toolbatch.LoopraToolBatchEvent;
@@ -101,6 +99,7 @@ public class AgentLoop implements
         LoopraCompactionHost,
         LoopraUsageHost,
         LoopraTokenSpeedHost,
+        LoopraSessionAffinityHost,
         LoopraExitHost,
         LoopraErrorRecoveryHost,
         LoopraRetryHost,
@@ -309,6 +308,7 @@ public class AgentLoop implements
         plugins.registerPlugin(new LoopraUserMessagePlugin(this));
         plugins.registerPlugin(new LoopraUsagePlugin(this));
         plugins.registerPlugin(new LoopraTokenSpeedPlugin(this));
+        plugins.registerPlugin(new LoopraSessionAffinityPlugin(this));
         plugins.registerPlugin(new LoopraCompactionPlugin(this));
         plugins.registerPlugin(new LoopraModelPolicyPlugin(this));
         plugins.registerPlugin(new LoopraToolPolicyPlugin(this));
@@ -813,6 +813,11 @@ public class AgentLoop implements
     @Override
     public void reportCutinUsage(Usage usage) {
         propagateUsage(usage);
+    }
+
+    @Override
+    public String sessionAffinity() {
+        return sessionId;
     }
 
     @Override
@@ -1441,11 +1446,6 @@ public class AgentLoop implements
         context.putVariable("loopraStep", step);
 
         Map<String, Object> requestOptions = new HashMap<>();
-        // 会话级亲和标识：同一会话的所有模型调用共用固定 prompt_cache_key，
-        // 由 prepareRequest 中的显式 sessionAffinity（子代理）优先覆盖。
-        if (sessionId != null && !sessionId.isBlank()) {
-            requestOptions.put("sessionAffinity", sessionId);
-        }
         ModelCallRequest request = new ModelCallRequest(
             modelProvider.effectiveModel(),
             context.messages(),

@@ -5,9 +5,9 @@ import site.sorghum.cutin.core.loop.*;
 
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 
-import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.junit.jupiter.api.Assertions.*;
 
 /**
  * 插件 Bean 管理器测试：验证插件注册、Bean 注入与启动流程。
@@ -36,7 +36,49 @@ class PluginBeanManagerTest {
         assertEquals("hello", manager.getBean("greeting"));
     }
 
+    @Test
+    void pluginCanBeStoppedAndRestartedWithoutDuplicateInterceptors() throws Exception {
+        DefaultLoopEngine engine = new DefaultLoopEngine();
+        PluginBeanManager manager = new PluginBeanManager(engine.registrar());
+        CountingPlugin plugin = new CountingPlugin();
+        manager.registerPlugin(plugin);
+        manager.startAll();
+
+        LoopProgram program = LoopProgram.builder("lifecycle")
+            .node("finish", NodeType.CODE, Steps.finish())
+            .build();
+        run(engine, program, "first");
+        assertEquals(1, plugin.invocations.get());
+
+        manager.stopPlugin(plugin.id());
+        LoopResult stopped = run(engine, program, "stopped");
+        assertFalse(stopped.finalSnapshot().variables().containsKey("counted"));
+        assertEquals(1, plugin.invocations.get());
+
+        manager.startPlugin(plugin.id());
+        run(engine, program, "restarted");
+        assertEquals(2, plugin.invocations.get());
+    }
+
+    private static LoopResult run(DefaultLoopEngine engine, LoopProgram program, String id) throws Exception {
+        return engine.run(program, Map.of("id", id)).result().get(5, TimeUnit.SECONDS);
+    }
     /** 测试用状态插件：在 BEFORE_STEP 中写入变量。 */
+    static class CountingPlugin implements LoopPlugin {
+        private final AtomicInteger invocations = new AtomicInteger();
+
+        @Override
+        public String id() { return "counting-plugin"; }
+
+        @Override
+        public void register(LoopRegistrar registrar) {
+            registrar.registerInterceptor(InterceptPoint.BEFORE_STEP, 300, context -> {
+                invocations.incrementAndGet();
+                context.context().putVariable("counted", true);
+                return InterceptDecision.pass();
+            });
+        }
+    }
     static class StatePlugin implements LoopPlugin {
 
         @Override

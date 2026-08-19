@@ -1,47 +1,55 @@
 package site.sorghum.cutin.core.event;
 
+import site.sorghum.cutin.core.plugin.Registration;
+
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.atomic.AtomicLong;
 
-/**
- * Hook 注册表：按顺序执行匹配的 Hook，并作为 {@link EventHandler} 接入事件总线。
- */
+/** Hook 注册表：按顺序执行匹配的 Hook，并作为 EventHandler 接入事件总线。 */
 public final class HookRegistry implements EventHandler {
-
-    /** 已注册的 Hook 列表。 */
-    private final List<Registration> hooks = new ArrayList<>();
-    /** 注册序号，保证同 order 下稳定顺序。 */
+    private final List<HookRegistration> hooks = new ArrayList<>();
     private final AtomicLong sequence = new AtomicLong();
 
-    /** 注册一个 Hook，并按 order 与注册顺序排序。 */
     public synchronized void add(Hook hook) {
-        hooks.add(new Registration(hook.order(), sequence.incrementAndGet(), hook));
-        hooks.sort(Registration::compareTo);
+        register(hook);
     }
 
-    /** 依次执行所有匹配该事件的 Hook。 */
+    public synchronized Registration register(Hook hook) {
+        HookRegistration registration = new HookRegistration(hook.order(), sequence.incrementAndGet(), hook);
+        hooks.add(registration);
+        hooks.sort(HookRegistration::compareTo);
+        return new Registration() {
+            private boolean closed;
+            @Override
+            public synchronized void close() {
+                if (!closed) {
+                    closed = true;
+                    synchronized (HookRegistry.this) {
+                        hooks.remove(registration);
+                    }
+                }
+            }
+        };
+    }
+
     @Override
     public void onEvent(LoopEvent event) {
-        for (Registration registration : List.copyOf(hooks)) {
+        for (HookRegistration registration : List.copyOf(hooks)) {
             if (registration.hook().matches(event)) {
                 registration.hook().run(event);
             }
         }
     }
 
-    /** 返回当前全部 Hook。 */
     public synchronized List<Hook> hooks() {
-        return hooks.stream().map(Registration::hook).toList();
+        return hooks.stream().map(HookRegistration::hook).toList();
     }
 
-    /** Hook 注册记录。 */
-    private record Registration(int order, long sequence, Hook hook)
-        implements Comparable<Registration> {
-
-        /** 按 order 排序，order 相同时按注册序号排序。 */
+    private record HookRegistration(int order, long sequence, Hook hook)
+        implements Comparable<HookRegistration> {
         @Override
-        public int compareTo(Registration other) {
+        public int compareTo(HookRegistration other) {
             int orderCompare = Integer.compare(order, other.order);
             return orderCompare != 0 ? orderCompare : Long.compare(sequence, other.sequence);
         }

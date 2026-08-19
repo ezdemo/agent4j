@@ -27,7 +27,7 @@ public final class LoopraCompactionPlugin implements LoopPlugin {
 
     @Override
     public void register(LoopRegistrar registrar) {
-        registrar.addInterceptor(InterceptPoint.BEFORE_MODEL, -200, this::prepareContext);
+        registrar.registerInterceptor(InterceptPoint.BEFORE_MODEL, -200, this::prepareContext);
     }
 
     private InterceptDecision prepareContext(InterceptContext context) {
