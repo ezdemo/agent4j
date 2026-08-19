@@ -49,6 +49,7 @@ import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.httplog.LoopraHttpLogPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.plan.LoopraPlanHost;
 import site.sorghum.loopra.integration.cutin.plugin.plan.LoopraPlanPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraMessageHealingPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraModelPolicyPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraPolicyHost;
 import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraToolPolicyPlugin;
@@ -311,6 +312,7 @@ public class AgentLoop implements
         plugins.registerPlugin(new LoopraSessionAffinityPlugin(this));
         plugins.registerPlugin(new LoopraCompactionPlugin(this));
         plugins.registerPlugin(new LoopraModelPolicyPlugin(this));
+        plugins.registerPlugin(new LoopraMessageHealingPlugin());
         plugins.registerPlugin(new LoopraToolPolicyPlugin(this));
         plugins.registerPlugin(new LoopraExitPlugin(this));
         plugins.registerPlugin(new LoopraErrorRecoveryPlugin(this));
