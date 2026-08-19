@@ -46,6 +46,7 @@ class LoopraRetryPolicyPluginTest {
         assertEquals(LoopResult.Status.COMPLETED, result.status(), result.message());
         assertEquals(2, calls.get());
         assertEquals(1, host.logs.get());
+        assertEquals(0, result.finalSnapshot().variables().get("loopraModelRetryAttempts"));
     }
 
     @Test
@@ -70,6 +71,7 @@ class LoopraRetryPolicyPluginTest {
         assertEquals(LoopResult.Status.COMPLETED, result.status(), result.message());
         assertEquals(2, calls.get());
         assertEquals(1, host.logs.get());
+        assertEquals(0, result.finalSnapshot().variables().get("loopraModelRetryAttempts"));
     }
 
     private static final class RetryStub implements LoopraRetryHost {
