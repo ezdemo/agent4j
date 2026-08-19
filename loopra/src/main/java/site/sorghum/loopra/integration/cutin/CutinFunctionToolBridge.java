@@ -1,9 +1,9 @@
 package site.sorghum.loopra.integration.cutin;
 
-import org.noear.snack4.ONode;
 import org.noear.solon.ai.chat.tool.FunctionTool;
 import site.sorghum.cutin.core.context.LoopContext;
 import site.sorghum.cutin.core.tool.*;
+import site.sorghum.loopra.bin.tool.ToolSchemaSanitizer;
 import site.sorghum.loopra.tool.HitlRequiredException;
 import site.sorghum.loopra.tool.ToolContext;
 
@@ -123,23 +123,7 @@ public final class CutinFunctionToolBridge implements Tool {
     }
 
     private static ToolDefinition buildDefinition(FunctionTool tool) {
-        Map<String, Object> schema = new LinkedHashMap<>();
-        String inputSchema = tool.inputSchema();
-        if (inputSchema != null && !inputSchema.isBlank()) {
-            try {
-                Object bean = ONode.ofJson(inputSchema).toBean(Map.class);
-                if (bean instanceof Map<?, ?> map) {
-                    for (Map.Entry<?, ?> entry : map.entrySet()) {
-                        schema.put(String.valueOf(entry.getKey()), entry.getValue());
-                    }
-                }
-            } catch (RuntimeException ignored) {
-                schema.put("type", "object");
-            }
-        }
-        if (schema.isEmpty()) {
-            schema.put("type", "object");
-        }
+        Map<String, Object> schema = ToolSchemaSanitizer.sanitize(tool.inputSchema());
         Map<String, Object> meta = tool.meta() == null ? Map.of() : tool.meta();
         boolean readOnly = site.sorghum.loopra.bin.tool.ToolMetadata.isReadOnly(tool);
         boolean stormExempt = site.sorghum.loopra.bin.tool.ToolMetadata.isStormExempt(tool);

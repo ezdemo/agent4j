@@ -266,7 +266,8 @@ public class ToolRegistry {
                 n2.getOrNew("function").then(toolNode -> {
                     toolNode.set("name", func.name());
                     toolNode.set("description", func.descriptionAndMeta());
-                    toolNode.set("parameters", ONode.ofJson(func.inputSchema()));
+                    toolNode.set("parameters", ONode.ofJson(
+                            ONode.serialize(ToolSchemaSanitizer.sanitize(func.inputSchema()))));
                 });
             });
         }
