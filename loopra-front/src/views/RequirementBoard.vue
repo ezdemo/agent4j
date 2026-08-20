@@ -419,6 +419,7 @@ const reasoningEffortOptions = [
   { value: 'low', label: '低' },
   { value: 'medium', label: '中' },
   { value: 'high', label: '高' },
+  { value: 'xhigh', label: '超高' },
   { value: 'max', label: '最大' }
 ]
 const hitlOptions = [

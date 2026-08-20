@@ -504,7 +504,7 @@
                   :value="reasoningEffortIndex"
                   aria-label="推理强度"
                   class="chat-reasoning-input"
-                  max="4"
+  max="5"
                   min="0"
                   step="1"
                   type="range"
@@ -1766,9 +1766,10 @@ const effortOptions = [
   {value: 'low', label: '低', en: 'low', description: '快速响应'},
   {value: 'medium', label: '中', en: 'medium', description: '速度与深度兼顾'},
   {value: 'high', label: '高', en: 'high', description: '更充分地思考'},
+  {value: 'xhigh', label: '超高', en: 'xhigh', description: '接近极限的深度推理'},
   {value: 'max', label: '最大', en: 'max', description: '优先获得最完整的推理'}
 ]
-const reasoningEffortIndex = ref(4)
+const reasoningEffortIndex = ref(5)
 const customReasoningEffort = ref('')
 const selectedReasoningEffort = computed(() => {
   const option = effortOptions[reasoningEffortIndex.value]
@@ -3970,7 +3971,7 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
   right: 0;
   bottom: 100%;
   z-index: 100;
-  width: min(290px, calc(100vw - 28px));
+  width: min(340px, calc(100vw - 28px));
   margin-bottom: 8px;
   padding: 12px;
   border: 1px solid color-mix(in srgb, var(--accent) 38%, var(--border));
@@ -4083,13 +4084,19 @@ defineExpose({focus: () => inputField.value?.focus(), addFileContext, addElement
 }
 
 .chat-reasoning-levels {
-  display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  display: flex;
+  justify-content: space-between;
+  padding: 0 7px;
   margin-top: 6px;
 }
 
 .chat-reasoning-levels button {
-  min-width: 0;
+  flex: none;
+  width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  white-space: nowrap;
   padding: 3px 0;
   border: 0;
   background: transparent;

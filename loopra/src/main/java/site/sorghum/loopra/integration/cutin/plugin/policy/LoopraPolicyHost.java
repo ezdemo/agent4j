@@ -32,6 +32,8 @@ public interface LoopraPolicyHost {
 
     ToolRegistry getToolRegistry();
 
+    default site.sorghum.cutin.core.tool.ToolRegistry getCutinTools() { return null; }
+
     boolean isPlanMode();
 
     ToolResult rejectCutinTool(ToolCall call, String message, String reason);

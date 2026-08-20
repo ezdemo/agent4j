@@ -422,7 +422,7 @@
                           :value="reasoningEffortIndex"
                           aria-label="推理强度"
                           class="reasoning-slider-input"
-                          max="4"
+                          max="5"
                           min="0"
                           step="1"
                           type="range"
@@ -1777,6 +1777,7 @@ const reasoningEffortLevels = [
   {value: 'low', label: '低强度', shortLabel: '低', description: '快速响应'},
   {value: 'medium', label: '平衡', shortLabel: '中', description: '速度与深度兼顾'},
   {value: 'high', label: '高强度', shortLabel: '高', description: '更充分地思考'},
+  {value: 'xhigh', label: '超高推理', shortLabel: '超高', description: '接近极限的深度推理'},
   {value: 'max', label: '极致推理', shortLabel: '最大', description: '优先获得最完整的推理'}
 ]
 
@@ -4560,7 +4561,7 @@ const saveLoopraMd = async () => {
 
 .reasoning-slider-levels {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(6, 1fr);
   margin-top: 5px;
 }
 

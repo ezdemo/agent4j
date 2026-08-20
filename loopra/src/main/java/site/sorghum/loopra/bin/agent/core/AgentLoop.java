@@ -37,6 +37,7 @@ import site.sorghum.loopra.bin.agent.spi.SessionUsageSink;
 import site.sorghum.loopra.bin.model.LoopraModelProvider;
 import site.sorghum.loopra.bin.model.ModelApiError;
 import site.sorghum.loopra.bin.model.UserMessageSanitizer;
+import site.sorghum.loopra.bin.agent.environment.SessionEnvironment;
 import site.sorghum.loopra.bin.session.SessionFileChangeTracker;
 import site.sorghum.loopra.bin.tool.ToolMetadata;
 import site.sorghum.loopra.bin.tool.ToolRegistry;
@@ -69,6 +70,11 @@ import site.sorghum.loopra.integration.cutin.plugin.session.LoopraSessionPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.toolbatch.LoopraToolBatchEvent;
 import site.sorghum.loopra.integration.cutin.plugin.toolbatch.LoopraToolBatchHost;
 import site.sorghum.loopra.integration.cutin.plugin.toolbatch.LoopraToolBatchPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.prompt.LoopraPromptHost;
+import site.sorghum.loopra.integration.cutin.plugin.prompt.LoopraPromptPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.prompt.PromptRegistry;
+import site.sorghum.loopra.integration.cutin.plugin.prompt.ToolContract;
+import site.sorghum.loopra.integration.cutin.plugin.tool.LoopraToolGatewayPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.usage.LoopraTokenSpeedHost;
 import site.sorghum.loopra.integration.cutin.plugin.usage.LoopraTokenSpeedPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.usage.LoopraUsageHost;
@@ -111,7 +117,9 @@ public class AgentLoop implements
         LoopraPlanHost,
         LoopraToolBatchHost,
         LoopraReasoningStartedHost,
-        LoopraPreflightHost {
+        LoopraPreflightHost,
+        LoopraPromptHost,
+        LoopraToolGatewayPlugin.LoopraToolHost {
 
     // ==================== 配置读取（带 null-safe 默认值） ====================
 
@@ -240,6 +248,16 @@ public class AgentLoop implements
     @Getter
     private volatile String sessionId;
 
+    /** 上次触发 tool-gateway 重启时的禁用集合快照；用于跳过每轮无效重启。 */
+    private volatile Set<String> lastGatewayDisabled = Collections.emptySet();
+
+    /** gateway 是否已按最新禁用列表重启过；首次调用 refreshTools 时会重启一次。 */
+    private volatile boolean gatewayEverStarted = false;
+
+    /** Prompt 插件化：切片注册表（供外部插件热插拔） */
+    @Getter
+    private final PromptRegistry promptRegistry = new PromptRegistry();
+
     /**
      * 是否在工具批次结束时提取文件变更。
      * 子代理与父代理共用同一会话范围时关闭此开关，防止子循环提前取走父轮次的变更记录。
@@ -304,8 +322,62 @@ public class AgentLoop implements
         this.cutinPlugins = createCutinPlugins();
     }
 
+    // ========== LoopraPromptHost / LoopraToolHost / LoopraPolicyHost 实现 ==========
+    @Override
+    public SessionEnvironment environment() {
+        return registry.getEnvironment();
+    }
+
+    @Override
+    public ToolRegistry toolRegistry() {
+        return registry;
+    }
+
+    @Override
+    public site.sorghum.cutin.core.tool.ToolRegistry getCutinTools() {
+        if (cutinEngine == null) return null;
+        if (cutinEngine.registrar() instanceof site.sorghum.cutin.core.plugin.DefaultLoopRegistrar d) return d.tools();
+        return null;
+    }
+
+    @Override
+    public PromptRegistry promptRegistry() {
+        return promptRegistry;
+    }
+
+    @Override
+    public Path workspace() {
+        SessionEnvironment env = registry.getEnvironment();
+        return env == null ? null : env.executionRoot();
+    }
+
+    @Override
+    public String dynamicToolContractTail() {
+        // Goal 指令 + Plan Mode 指令：随会话状态实时变化，由 tool-contract 切片注入 system
+        StringBuilder tail = new StringBuilder();
+        String goal = currentGoalInstruction();
+        if (!goal.isBlank()) {
+            tail.append(goal);
+        }
+        if (planMode) {
+            if (!tail.isEmpty()) {
+                tail.append("\n\n");
+            }
+            tail.append(PLAN_MODE_INSTRUCTIONS);
+        }
+        return tail.toString();
+    }
+
     private PluginBeanManager createCutinPlugins() {
         PluginBeanManager plugins = new PluginBeanManager(cutinEngine.registrar());
+        // 暴露宿主与 PromptRegistry 供插件热插拔
+        plugins.registerBean("loopraPromptHost", (LoopraPromptHost) this);
+        plugins.registerBean("promptRegistry", promptRegistry);
+        plugins.registerBean("loopraToolHost", (LoopraToolGatewayPlugin.LoopraToolHost) this);
+        plugins.registerBean("promptRegistryTyped", promptRegistry);
+        // Prompt / Tool 插件化（优先级最高，最先拦截）
+        plugins.registerPlugin(new LoopraPromptPlugin(this, promptRegistry));
+        plugins.registerPlugin(new LoopraToolGatewayPlugin(this));
         plugins.registerPlugin(new LoopraHttpLogPlugin(modelProvider));
         plugins.registerPlugin(new LoopraRawLogPlugin());
         plugins.registerPlugin(new LoopraMessageSanitizerPlugin(this));
@@ -649,7 +721,33 @@ public class AgentLoop implements
         if (fixed != null) {
             return fixed;
         }
+        boolean gatewayActive = cutinPlugins != null && cutinPlugins.pluginStates().stream()
+                .anyMatch(s -> "loopra-tool-gateway".equals(s.id()) && s.active());
+        if (!gatewayActive) {
+            // 网关禁用 = 下线全部工具：清空 legacy 与 cutin 视图，模型请求的 tools 为空数组。
+            // 不能只靠 gateway stop 时的 unregister——syncCutinRegistry 的 setTools 会把视图里的
+            // bridge 换成新实例，导致注销闭包（持有旧实例）移除失败，工具残留仍会上传。
+            registry.clearTools();
+            ONode empty = registry.toOpenAiTools();
+            return planMode ? filterReadOnlyTools(empty) : empty;
+        }
         registry.refresh();
+        // 同步 cutin 工具网关：仅当禁用列表变化（或首次）时重启以按最新禁用列表重新注册 cutin Tool，
+        // 避免每轮模型调用都 stop/start 网关 + 全量扫描；禁用列表不变时 registry.refresh 已同步视图。
+        try {
+            if (cutinPlugins != null) {
+                Set<String> disabled = registry.currentDisabledTools();
+                boolean disabledChanged = !disabled.equals(lastGatewayDisabled);
+                if (!gatewayEverStarted || disabledChanged) {
+                    cutinPlugins.stopPlugin("loopra-tool-gateway");
+                    cutinPlugins.startPlugin("loopra-tool-gateway");
+                    lastGatewayDisabled = disabled;
+                    gatewayEverStarted = true;
+                }
+            }
+        } catch (Exception e) {
+            log.debug("[tool-gateway] refresh restart failed: {}", e.getMessage());
+        }
         ONode tools = registry.toOpenAiTools();
         return planMode ? filterReadOnlyTools(tools) : tools;
     }
@@ -1113,36 +1211,8 @@ public class AgentLoop implements
     }
 
     private String buildToolInstructions() {
-        return """
-                ## 工具协作约定
-
-                工具的名称、参数和返回格式以本轮工具上下文为准，无需重复记忆工具清单。
-
-                - `sub_agent` 用于可独立推进的子任务。子代理有独立上下文，不能再派生子代理。收到结果后由主代理负责整合、复核并向用户交付。
-
-                | 角色 | 只读 | 适用场景 | 汇报格式 |
-                |------|------|----------|----------|
-                | `explore` | ✅ | 只调查不修改——定位代码、追溯调用链、理解实现、排查问题原因 | 发现 / 证据（文件与位置）/ 建议 |
-                | `implement` | ❌ | 按指定范围实现功能或修复——最小化改动，完成后运行相关检查 | 修改 / 验证 / 剩余风险 |
-                | `test` | ❌ | 添加或调整测试——先确认覆盖缺口，不修改生产代码（除非任务要求） | 覆盖场景 / 测试结果 / 发现的问题 |
-                | `review` | ✅ | 代码审查——寻找真实缺陷、回归、并发/安全问题、测试缺口 | 按严重性排序列出问题，附位置、影响和修复方向 |
-                | `plan` | ✅ | 方案设计——先理解现状，再给出可执行的分步方案，说明架构影响和取舍 | 分步方案，含涉及模块、兼容性、验证方法 |
-
-                选择角色的通用建议：需要探索或分析用 `explore`；需要方案设计用 `plan`；需要审查已有代码用 `review`；需要写代码或修 bug 用 `implement`；需要补充测试用 `test`。
-                派发时务必通过 workspace_write 共享必要上下文，并要求子代理将结果写回约定 key，避免结果散落在对话中。
-
-                - `workspace_*` 是主代理和子代理之间的共享通信通道，不是项目文件系统。用它传递任务背景、调查证据、中间结论和可复用交付物；不要用它替代对代码文件的读写。
-                - 派发子任务前，主代理应将需要共享的背景写入 `workspace_write`，并在任务中告知子代理准确的 key。子代理先用 `workspace_read` 获取所需上下文，完成后将重要发现、修改摘要和验证结果写回约定 key；主代理用 `workspace_read` 汇总。仅在不知道 key 时使用 `workspace_list` 按前缀查找。
-                - 使用稳定、可归属的 key，例如 `tasks/<task-id>/context`、`tasks/<task-id>/findings`、`tasks/<task-id>/result`。写入结果应包含结论、证据位置和未解决事项，避免只写“已完成”之类不可复用的信息。
-                - 只有需要用户在互斥方案之间作出选择，且该选择会实质改变实现或外部影响时，才使用 `ask_choice`；能通过现有上下文或合理工程判断解决的问题不要打断用户。
-                - 浏览器遇到登录、验证码、人机验证、二维码、短信/邮箱确认或安全风控时，严禁尝试绕过、猜测验证答案或索取敏感凭据。必须调用 `browser_request_user_action` 请求用户在可见浏览器中手动完成；用户确认后重新截图再继续。
-                - 浏览器超过 16 个标签页时仍可新建，但会返回清理提醒；应在当前步骤完成后用 `browser_tabs` 查看并关闭不再需要的非活动标签。达到 20 个硬上限时，必须清理后才能创建新标签。优先用 `browser_navigate` 复用当前标签，避免反复重试。
-                - 工作流和目标工具只用于需要跨回合追踪、人工审批或失败恢复的任务；普通的短任务无需创建工作流。
-                %s
-                """.formatted(terminateOnNoToolCall()
-                ? "- 无工具调用时，模型的纯文本回复会结束对话"
-                : "- 结束对话**必须**调用 `finish`，纯文本回复不会退出循环")
-                + "\n\n" + currentGoalInstruction();
+        // 静态文案与 LoopraPromptPlugin 的 tool-contract 切片共用 ToolContract 单一来源
+        return ToolContract.build(terminateOnNoToolCall(), currentGoalInstruction());
     }
 
     private String currentGoalInstruction() {
@@ -1918,17 +1988,8 @@ public class AgentLoop implements
             log.warn("[prepare] output.onLog异常: {}", e.getMessage());
         }
 
-        // 注入动态工具使用指引到系统提示词
-        if (!instr.isEmpty()) {
-            ChatMessage sysMsg = messages.get(0);
-            String enhancedContent = sysMsg.getContent() + "\n\n" + instr;
-            ChatMessage enhancedSys = ChatMessage.ofSystem(enhancedContent);
-            List<ChatMessage> withInstr = new ArrayList<>(messages.size());
-            withInstr.add(enhancedSys);
-            withInstr.addAll(messages.subList(1, messages.size()));
-            messages = withInstr;
-        }
-
+        // 工具协作约定已由 LoopraPromptPlugin 的 tool-contract(600) 切片注入，此处不再重复拼接；
+        // 保留 instr 仅用于 token 估算的压缩阈值判断（与原语义一致）
         lastContextEstimate = ContextTokenEstimator.estimate(messages, tools, null);
 
         return new PreparedMessages(messages, foldedThisStep);

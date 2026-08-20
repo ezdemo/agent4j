@@ -92,6 +92,13 @@ public class ToolRegistry {
     }
 
     /**
+     * 当前生效禁用工具集合的副本（供 {@code AgentLoop} 判断 tool-gateway 是否需要重启）。
+     */
+    public Set<String> currentDisabledTools() {
+        return new HashSet<>(getCurrentDisabledTools());
+    }
+
+    /**
      * 设置强制禁止的工具名称集合。
      * 与 {@link #setDisabledTools} 不同，此集合不由用户配置控制，
      * 而是由代码逻辑（如子代理）硬性指定，独立于用户配置始终生效。
@@ -129,26 +136,50 @@ public class ToolRegistry {
     }
 
     /**
-     * 动态刷新工具列表 —— 使用 {@link ToolScanUtil} 统一重新扫描，
-     * 将最新发现的工具重新注册到注册表中。
+     * 清空全部工具（含 cutin 视图）——Tool 网关插件禁用时调用，实现“下线全部工具”。
      * <p>
-     * 此方法不改变系统提示词，只影响后续 API 请求中的工具挂载列表。
-     * synchronized 防止共享注册表（多 Agent 复用同一实例）时并发清空/注册造成结构损坏。
+     * 注意：网关插件自身注册的工具在 stop 时因注销闭包持有旧实例（已被
+     * {@link #syncCutinRegistry()} 的 setTools 替换）无法通过 unregister 移除，
+     * 因此网关禁用时必须以 clearTools 整体清空 legacy 与 cutin 视图。
      * </p>
      */
+    public synchronized void clearTools() {
+        functionToolMap.clear();
+        allScannedTools.clear();
+        cachedOpenAiTools = null;
+        syncCutinRegistry();
+    }
+
+    /**
+      * 动态刷新工具列表 —— 插件化后仅在 gateway 禁用时保留旧扫描路径，
+      * 正常路径由 {@code LoopraToolGatewayPlugin} 通过 cutin 注入，
+      * 此处仅同步只读覆盖与禁用过滤，避免旧拼接重新渗入 prompt。
+      */
     public synchronized void refresh() {
         Set<String> disabled = getCurrentDisabledTools();
         Map<String, Boolean> readOnlyOverrides = toolPolicyProvider != null
                 ? toolPolicyProvider.toolReadOnlyOverrides()
                 : Collections.emptyMap();
+        // 若已通过 cutin 注入（由 gateway 持有），refresh 仍需刷新 legacy 的只读覆盖与禁用过滤，
+        // 但不重新扫描避免与 gateway 竞争；仅对已存在工具重新应用过滤
+        if (!allScannedTools.isEmpty() || !functionToolMap.isEmpty()) {
+            // 重新应用只读覆盖与禁用过滤到现有集合
+            Map<String, FunctionTool> snapshot = new LinkedHashMap<>(allScannedTools);
+            functionToolMap.clear();
+            allScannedTools.clear();
+            cachedOpenAiTools = null;
+            for (FunctionTool tool : snapshot.values()) {
+                ToolMetadata.applyReadOnlyOverride(tool, readOnlyOverrides.get(tool.name()));
+                register(tool, disabled);
+            }
+            syncCutinRegistry();
+            return;
+        }
         functionToolMap.clear();
         allScannedTools.clear();
-        cachedOpenAiTools = null; // 失效缓存
-
-        // 使用 ToolScanUtil 统一扫描（Solon IoC + Skill 文件系统）
+        cachedOpenAiTools = null;
         List<FunctionTool> functionToolsList = ToolScanUtil.scanTools(
                 environment == null ? null : environment.executionRoot());
-
         for (FunctionTool tool : functionToolsList) {
             ToolMetadata.applyReadOnlyOverride(tool, readOnlyOverrides.get(tool.name()));
             register(tool, disabled);

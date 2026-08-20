@@ -41,6 +41,15 @@ public final class CutinToolRegistryView implements ToolRegistry {
     }
 
     @Override
+    public boolean unregister(String toolId, Tool tool) {
+        boolean removed = tools.remove(toolId, tool);
+        if (removed) {
+            ordered.remove(tool);
+        }
+        return removed;
+    }
+
+    @Override
     public Optional<Tool> find(String toolId) {
         return Optional.ofNullable(tools.get(toolId));
     }
