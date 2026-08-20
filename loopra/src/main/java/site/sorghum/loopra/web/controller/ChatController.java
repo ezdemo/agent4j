@@ -69,6 +69,9 @@ public class ChatController {
         } else {
             agentService.abortCurrentChat();
         }
+        log.info("[chat] 收到停止请求: session={}, requestId={}",
+                request == null ? null : request.getSessionName(),
+                request == null ? null : request.getRequestId());
         return ApiResponse.ok("已发送中断请求");
     }
 
@@ -215,7 +218,12 @@ public class ChatController {
         Future<?> task = activeChatTasks.remove(requestId);
         AtomicBoolean taskStarted = activeChatStarted.remove(requestId);
         unregisterSessionTask(requestId);
-        if (task != null) task.cancel(true);
+        if (task != null) {
+            task.cancel(true);
+            log.info("[chat] 已取消流任务: requestId={}", requestId);
+        } else {
+            log.warn("[chat] 流任务未命中（可能请求已结束或 requestId 不匹配）: requestId={}", requestId);
+        }
         SseEmitter emitter = activeChatEmitters.remove(requestId);
         // 已启动任务必须自行完成 finally，让计划恢复事件在 SSE 关闭前送达。
         if (emitter != null && (taskStarted == null || !taskStarted.get())) emitter.complete();

@@ -2110,6 +2110,25 @@ const abortChat = async (targetSessionName = props.sessionName, targetWorkspaceH
   } catch {
     if (stoppingRemoteTask) sessionStatusStopping.value = false
   }
+  // 停止超时兜底：10 秒后主动查询后端实时状态确认停止是否生效。
+  // 不直接依赖本地 streaming/sessionTaskRunning（可能残留停止前的陈旧值，
+  // 或停止后队列自动续发新任务导致误报）；用 requestId 区分“旧任务没停”和“新任务已开始”。
+  if (targetSessionName === props.sessionName) {
+    const stoppedRequestId = ctrl?.requestId || (stoppingRemoteTask ? sessionStatusRequestId.value : null)
+    setTimeout(async () => {
+      try {
+        const res = await agentAPI.getSessionStatus(targetWorkspaceHash, targetSessionName)
+        const stillRunning = Boolean(res?.success && res.data?.running)
+        if (!stillRunning) return
+        // 仍在运行，但 requestId 已变化（停止后新开始的任务）→ 不是停止失败，不提示
+        if (stoppedRequestId && res.data?.requestId && res.data.requestId !== stoppedRequestId) return
+        if (stoppingRemoteTask) sessionStatusStopping.value = false
+        message.warning('停止请求已发出，但生成仍在进行，可能未能中断')
+      } catch {
+        // 状态查询失败时不打扰用户，按钮由轮询/SSE 状态自然恢复
+      }
+    }, 10000)
+  }
 }
 
 const openRollbackDialog = (msgId, canRollbackCode, rollbackTimestamp) => {

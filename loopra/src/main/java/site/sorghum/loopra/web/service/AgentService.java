@@ -107,7 +107,19 @@ public class AgentService {
                 String oldest;
                 synchronized (accessOrder) {
                     if (accessOrder.isEmpty()) break;
-                    oldest = accessOrder.remove(accessOrder.size() - 1);
+                    // 从最久未访问开始淘汰，跳过仍在运行的 Agent（运行中无法安全中断，
+                    // 一旦淘汰，前端停止请求将永远无法命中它 → 表现为“停止无效”）
+                    oldest = null;
+                    for (int i = accessOrder.size() - 1; i >= 0; i--) {
+                        String candidate = accessOrder.get(i);
+                        LoopraAgent candidateAgent = agents.get(candidate);
+                        if (candidateAgent == null || !candidateAgent.isRunning()) {
+                            oldest = candidate;
+                            accessOrder.remove(i);
+                            break;
+                        }
+                    }
+                    if (oldest == null) break; // 全部正在运行，暂不淘汰（允许短暂超出容量上限）
                 }
                 if (oldest != null) {
                     LoopraAgent removed = agents.remove(oldest);
@@ -508,6 +520,12 @@ public class AgentService {
             }
 
             // 渠道切换需要替换 LoopraModelProvider；先落盘，再从同一会话历史恢复新 Agent。
+            // 若主循环仍在运行（如需求池后台任务），先请求中断，
+            // 避免旧循环继续执行工具且停止请求打到重建后的新实例上。
+            if (agent.isRunning()) {
+                log.info("[web] 会话模型渠道切换时主循环正在运行，先请求中断: {}", sessionKey);
+                agent.abort();
+            }
             agent.flushSession();
             agent.dispose();
             agent = createAgent(sessionKey, target, null);
@@ -849,7 +867,23 @@ public class AgentService {
     public void abortChat(String workspacePath, String sessionName) {
         String sessionKey = generateSessionKey(workspacePath, sessionName);
         LoopraAgent agent = sessionCache.get(sessionKey);
-        if (agent != null) agent.abort();
+        if (agent != null) {
+            agent.abort();
+            log.info("[web] 已向 Agent 发送中断请求: {}", sessionKey);
+            return;
+        }
+        // Agent 不在缓存：可能刚被 LRU 淘汰或渠道切换重建。此时若仍有任务在跑，
+        // 兜底中断所有正在运行的 Agent（宁可多停，不可“停止无效”）。
+        boolean anyRunning = false;
+        for (String key : sessionCache.keySet()) {
+            LoopraAgent cached = sessionCache.peek(key);
+            if (cached != null && cached.isRunning()) {
+                cached.abort();
+                anyRunning = true;
+            }
+        }
+        log.warn("[web] 停止请求未命中 Agent {}，{}", sessionKey,
+                anyRunning ? "已兜底中断所有正在运行的 Agent" : "且无正在运行的 Agent（可能已结束）");
     }
 
     /**
