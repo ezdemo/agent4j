@@ -175,9 +175,11 @@
         @add-workspace="addWorkspaceFromFolder"
         @refresh="refreshHome"
         @delete-session="confirmDeleteSession"
+        @delete-sessions="confirmDeleteSessions"
         @clear-workspace="confirmClearWorkspace"
         @clear-old-sessions="confirmClearOldSessions"
         @delete-workspace="confirmDeleteWorkspace"
+        @delete-workspaces="confirmDeleteWorkspaces"
         @reorder-workspaces="reorderWorkspaces"
       />
       <SettingsView v-else-if="showSkills" class="desktop-settings" market-only />
@@ -957,7 +959,7 @@ async function closeWorkspaceTabs(workspaceHash) {
 // 删除/清空确认对话框（系统统一 ActionConfirmDialog）
 const deleteConfirm = ref({ visible: false, kind: '', title: '', message: '', payload: null })
 const deleteConfirmActions = computed(() => {
-  const okLabel = deleteConfirm.value.kind === 'deleteWorkspace' ? '删除项目'
+  const okLabel = deleteConfirm.value.kind === 'deleteWorkspace' || deleteConfirm.value.kind === 'deleteWorkspaces' ? '删除项目'
     : deleteConfirm.value.kind === 'clearWorkspace' || deleteConfirm.value.kind === 'clearOldSessions' ? '清空'
     : '删除'
   return [
@@ -977,9 +979,11 @@ const handleDeleteConfirmAction = (action) => {
   const { kind, payload } = deleteConfirm.value
   dismissDeleteConfirm()
   if (kind === 'session') void performDeleteSession(payload)
+  else if (kind === 'sessions') void performDeleteSessions(payload)
   else if (kind === 'clearWorkspace') void performClearWorkspace(payload)
   else if (kind === 'clearOldSessions') void performClearOldSessions(payload)
   else if (kind === 'deleteWorkspace') void performDeleteWorkspace(payload)
+  else if (kind === 'deleteWorkspaces') void performDeleteWorkspaces(payload)
 }
 
 function confirmDeleteSession(session) {
@@ -996,6 +1000,42 @@ async function performDeleteSession(session) {
     message.success('会话已删除')
   } catch (error) {
     message.error('删除会话失败：' + (error.message || '未知错误'))
+  }
+}
+
+function confirmDeleteSessions(sessions) {
+  const list = sessions || []
+  const names = list.map((session) => `“${session.title || session.name}”`)
+  const brief = names.length > 3 ? `选中的 ${names.length} 个会话（${names.slice(0, 3).join('、')} 等）` : names.join('、')
+  openDeleteConfirm('sessions', '删除会话？', `${brief}将被永久删除，无法恢复。`, list)
+}
+
+async function performDeleteSessions(sessions) {
+  const deleted = []
+  const failed = []
+  for (const session of sessions || []) {
+    try {
+      const response = await sessionsAPI.deleteSession(session.name, session.workspaceHash)
+      if (response.success) deleted.push(session)
+      else failed.push(session.title || session.name)
+    } catch (error) {
+      console.warn('[desktop-shell] failed to delete session:', session.name, error)
+      failed.push(session.title || session.name)
+    }
+  }
+  if (deleted.length) {
+    // 关闭仍打开着但已被删除的会话标签
+    await Promise.all(deleted.map(async (session) => {
+      try { await closeTab(tabId(session.workspaceHash, session.name)) } catch (error) { console.warn('[desktop-shell] failed to close deleted session tab:', error) }
+    }))
+    homeRefreshKey.value++
+  }
+  if (deleted.length && !failed.length) {
+    message.success(`已删除 ${deleted.length} 个会话`)
+  } else if (deleted.length) {
+    message.warning(`已删除 ${deleted.length} 个会话，${failed.length} 个失败：${failed.join('、')}`)
+  } else {
+    message.error(`删除失败：${failed.join('、')}`)
   }
 }
 
@@ -1061,6 +1101,45 @@ async function performDeleteWorkspace(workspace) {
     message.success('项目已删除')
   } catch (error) {
     message.error('删除项目失败：' + (error.message || '未知错误'))
+  }
+}
+
+function confirmDeleteWorkspaces(workspaces) {
+  const list = workspaces || []
+  const names = list.map((workspace) => `“${workspace.name}”`)
+  const brief = names.length > 3 ? `选中的 ${names.length} 个项目（${names.slice(0, 3).join('、')} 等）` : names.join('、')
+  openDeleteConfirm('deleteWorkspaces', '删除项目？', `${brief}将从项目列表移除；项目文件不会被删除。`, list)
+}
+
+async function performDeleteWorkspaces(workspaceList) {
+  const deleted = []
+  const failed = []
+  for (const workspace of workspaceList || []) {
+    try {
+      const response = await configAPI.deleteWorkspace(workspace.hash)
+      if (response.success) deleted.push(workspace)
+      else failed.push(workspace.name)
+    } catch (error) {
+      console.warn('[desktop-shell] failed to delete workspace:', workspace.hash, error)
+      failed.push(workspace.name)
+    }
+  }
+  if (deleted.length) {
+    await Promise.all(deleted.map((workspace) => closeWorkspaceTabs(workspace.hash)))
+    const removed = new Set(deleted.map((workspace) => workspace.hash))
+    workspaces.value = workspaces.value.filter((workspace) => !removed.has(workspace.hash))
+    if (deleted.some((workspace) => workspace.hash === activeWorkspaceHash.value)) {
+      activeWorkspaceHash.value = ''
+      if (workspaces.value[0]) await selectWorkspace(workspaces.value[0].hash)
+    }
+    homeRefreshKey.value++
+  }
+  if (deleted.length && !failed.length) {
+    message.success(`已删除 ${deleted.length} 个项目`)
+  } else if (deleted.length) {
+    message.warning(`已删除 ${deleted.length} 个项目，${failed.length} 个失败：${failed.join('、')}`)
+  } else {
+    message.error(`删除失败：${failed.join('、')}`)
   }
 }
 
