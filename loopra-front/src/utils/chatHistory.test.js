@@ -49,6 +49,20 @@ describe('buildHistoryItems', () => {
     expect(unmergedToolResults[0].content).toBe('孤立结果')
   })
 
+  it('restores encrypted reasoning as a fixed placeholder without exposing ciphertext', () => {
+    const raw = [{
+      role: 'assistant',
+      response_reasoning: JSON.stringify({type: 'reasoning', encrypted_content: 'secret-ciphertext'}),
+      content: '完成',
+      timestamp: 1
+    }]
+
+    const {items} = buildHistoryItems(raw)
+
+    expect(items[0].blocks[0]).toEqual({type: 'reasoning_started', showContent: false})
+    expect(JSON.stringify(items[0].blocks)).not.toContain('secret-ciphertext')
+  })
+
   it('excludes web-hidden user messages by default but can include them for audit', () => {
     const raw = [
       {role: 'user', content: '普通消息', timestamp: 1},

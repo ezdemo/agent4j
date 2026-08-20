@@ -1754,6 +1754,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
             if (!data.type || data.type === 'done') return
             const hasContent = (data.type === 'content' && data.content?.trim()) ||
                 (data.type === 'reasoning' && data.content?.trim()) ||
+                data.type === 'reasoning_started' ||
                 data.type === 'tool_call' || data.type === 'tool_result' || data.type === 'file_changes' || data.type === 'error'
             if (!hasContent) return
             // 有实际内容了，插入助手气泡
@@ -1778,7 +1779,7 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
           }
 
           // ===== 子代理事件：注入 sub_agent 容器块，内部渲染 =====
-          if (data.type === 'sub_content' || data.type === 'sub_reasoning' ||
+          if (data.type === 'sub_content' || data.type === 'sub_reasoning' || data.type === 'sub_reasoning_started' ||
               data.type === 'sub_tool_call' || data.type === 'sub_error') {
             const container = findSubAgentBlock(data.subId)
             // 向容器内添加内容
@@ -1791,7 +1792,15 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
               const lb = container.blocks[container.blocks.length - 1]
               const reasoningContent = data.token || data.content || ''
               if (lb?.type === 'reasoning') lb.content += reasoningContent
+              else if (lb?.type === 'reasoning_started') {
+                Object.assign(lb, {type: 'reasoning', content: reasoningContent, showContent: false})
+              }
               else container.blocks.push({type: 'reasoning', content: reasoningContent, showContent: false})
+            } else if (data.type === 'sub_reasoning_started') {
+              const lb = container.blocks[container.blocks.length - 1]
+              if (lb?.type !== 'reasoning_started') {
+                container.blocks.push({type: 'reasoning_started', showContent: false})
+              }
             } else if (data.type === 'sub_tool_call') {
               let name = data.name || '', args = data.args || data.arguments || ''
               if (typeof args === 'string') try {
@@ -1864,7 +1873,15 @@ const sendMessage = async (images = [], overrideText = null, modelSelection = nu
           } else if (data.type === 'reasoning') {
             const lb = msg.blocks[msg.blocks.length - 1]
             if (lb?.type === 'reasoning') lb.content += (data.content || '')
+            else if (lb?.type === 'reasoning_started') {
+              Object.assign(lb, {type: 'reasoning', content: data.content || '', showContent: false})
+            }
             else msg.blocks.push({type: 'reasoning', content: data.content || '', showContent: false})
+          } else if (data.type === 'reasoning_started') {
+            const lb = msg.blocks[msg.blocks.length - 1]
+            if (lb?.type !== 'reasoning_started') {
+              msg.blocks.push({type: 'reasoning_started', showContent: false})
+            }
           } else if (data.type === 'content') {
             const lb = msg.blocks[msg.blocks.length - 1]
             if (lb?.type === 'content') lb.content += (data.content || '')

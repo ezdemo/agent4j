@@ -45,6 +45,11 @@ public class SseAgentOutput implements AgentOutput {
     }
 
     @Override
+    public void onReasoningStarted() {
+        emitter.sendReasoningStarted();
+    }
+
+    @Override
     public void onToolCall(String name, String args) {
         emitter.sendToolCall(name, args);
     }

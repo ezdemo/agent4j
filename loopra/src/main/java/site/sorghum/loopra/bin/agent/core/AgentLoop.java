@@ -55,6 +55,8 @@ import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraPolicyHost;
 import site.sorghum.loopra.integration.cutin.plugin.policy.LoopraToolPolicyPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.preflight.*;
 import site.sorghum.loopra.integration.cutin.plugin.rawlog.LoopraRawLogPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.reasoning.LoopraReasoningStartedHost;
+import site.sorghum.loopra.integration.cutin.plugin.reasoning.LoopraReasoningStartedPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.recovery.LoopraErrorRecoveryHost;
 import site.sorghum.loopra.integration.cutin.plugin.recovery.LoopraErrorRecoveryPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.retry.LoopraRetryHost;
@@ -107,6 +109,7 @@ public class AgentLoop implements
         LoopraSessionHost,
         LoopraPlanHost,
         LoopraToolBatchHost,
+        LoopraReasoningStartedHost,
         LoopraPreflightHost {
 
     // ==================== 配置读取（带 null-safe 默认值） ====================
@@ -311,6 +314,7 @@ public class AgentLoop implements
         plugins.registerPlugin(new LoopraTokenSpeedPlugin(this));
         plugins.registerPlugin(new LoopraSessionAffinityPlugin(this));
         plugins.registerPlugin(new LoopraCompactionPlugin(this));
+        plugins.registerPlugin(new LoopraReasoningStartedPlugin(this));
         plugins.registerPlugin(new LoopraModelPolicyPlugin(this));
         plugins.registerPlugin(new LoopraMessageHealingPlugin());
         plugins.registerPlugin(new LoopraToolPolicyPlugin(this));

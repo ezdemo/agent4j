@@ -393,6 +393,7 @@ public final class InterceptingModelGateway implements ModelGateway {
             replacement.message().toolCalls(),
             terminal.thinkingBlocks(),
             replacement.usage(),
+            terminal.phases(),
             metadata,
             true
         );
