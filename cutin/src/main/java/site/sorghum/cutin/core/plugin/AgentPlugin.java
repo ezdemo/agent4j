@@ -19,4 +19,7 @@ public @interface AgentPlugin {
 
     /** 启动顺序，数值越小越先启动。 */
     int order() default 0;
+
+    /** 面向使用者的插件说明；留空时由宿主提供降级描述。 */
+    String remark() default "";
 }

@@ -21,7 +21,7 @@ import java.util.Objects;
   * 替换该插件即可替换 Loopra 的重试策略。
  * </p>
  */
-@AgentPlugin(id = "loopra-retry-policy")
+@AgentPlugin(id = "loopra-retry-policy", remark = "统一控制模型和工具失败后的重试策略。")
 @Slf4j
 public final class LoopraRetryPolicyPlugin implements LoopPlugin {
 

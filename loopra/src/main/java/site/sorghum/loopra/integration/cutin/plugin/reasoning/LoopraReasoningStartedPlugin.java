@@ -10,7 +10,7 @@ import site.sorghum.cutin.core.plugin.LoopPlugin;
 import site.sorghum.cutin.core.plugin.LoopRegistrar;
 
 /** 把 Cutin 归一化的思考开始阶段转换为用户可见状态，不泄露不可展示内容。 */
-@AgentPlugin(id = "loopra-reasoning-started")
+@AgentPlugin(id = "loopra-reasoning-started", remark = "在模型开始思考时通知前端，显示思考状态。")
 public final class LoopraReasoningStartedPlugin implements LoopPlugin {
 
     private static final String EMITTED_VARIABLE = "loopraReasoningStartedEmitted";

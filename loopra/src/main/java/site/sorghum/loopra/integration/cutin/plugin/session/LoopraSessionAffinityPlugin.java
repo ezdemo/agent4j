@@ -11,7 +11,7 @@ import site.sorghum.cutin.core.plugin.LoopRegistrar;
 import java.util.HashMap;
 
 /** 将宿主会话亲和键作为请求级选项注入，不污染 AgentLoop 的模型请求构造。 */
-@AgentPlugin(id = "loopra-session-affinity", order = -950)
+@AgentPlugin(id = "loopra-session-affinity", order = -950, remark = "为请求注入会话亲和信息，保持多轮调用路由一致。")
 public final class LoopraSessionAffinityPlugin implements LoopPlugin {
     private final LoopraSessionAffinityHost host;
 

@@ -671,6 +671,22 @@ public class LoopraConfig implements AgentConfig {
         return result;
     }
 
+    /** 获取被全局禁用的 Cutin/Loopra 插件 ID。 */
+    @Override
+    public Set<String> disabledPlugins() {
+        ONode arr = root.select("$.disabledPlugins");
+        Set<String> result = new LinkedHashSet<>();
+        if (arr != null && arr.isArray()) {
+            for (ONode item : arr.getArray()) {
+                String id = item.getString();
+                if (id != null && !id.isBlank()) {
+                    result.add(id);
+                }
+            }
+        }
+        return result;
+    }
+
     /**
      * 获取屏蔽目录列表。
      * 从 config.json 的 blockedPaths 数组读取，同时支持 LOOPRA_BLOCKED_PATHS 环境变量（逗号分隔）。

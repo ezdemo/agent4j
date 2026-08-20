@@ -13,7 +13,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.LongSupplier;
 
 /** 计算模型流的实时速度与本轮平均速度。 */
-@AgentPlugin(id = "loopra-token-speed")
+@AgentPlugin(id = "loopra-token-speed", remark = "计算流式输出速度，提供实时 Token 速率。")
 public final class LoopraTokenSpeedPlugin implements LoopPlugin {
     private static final long EMIT_INTERVAL_NANOS = 200_000_000L;
     private final LoopraTokenSpeedHost host;

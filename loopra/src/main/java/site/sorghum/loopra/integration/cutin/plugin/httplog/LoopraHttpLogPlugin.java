@@ -32,7 +32,7 @@ import java.util.function.UnaryOperator;
  * 与 Cutin 重构前的 HTTP 请求日志策略一致。</p>
  */
 @Slf4j
-@AgentPlugin(id = "loopra-http-log")
+@AgentPlugin(id = "loopra-http-log", remark = "记录模型请求与响应的 HTTP 日志，便于排查接口问题。")
 public final class LoopraHttpLogPlugin implements LoopPlugin {
 
     private static final String SESSION_ID_KEY = "sessionId";

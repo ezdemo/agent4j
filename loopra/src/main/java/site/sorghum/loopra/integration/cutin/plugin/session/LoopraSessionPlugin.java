@@ -13,7 +13,7 @@ import site.sorghum.cutin.core.plugin.LoopRegistrar;
 /**
  * 将 Loopra 生命周期与会话提交统一接入 cutin。
  */
-@AgentPlugin(id = "loopra-session")
+@AgentPlugin(id = "loopra-session", remark = "管理会话级状态与生命周期事件。")
 public final class LoopraSessionPlugin implements LoopPlugin {
 
     private final LoopraSessionHost host;
@@ -28,7 +28,7 @@ public final class LoopraSessionPlugin implements LoopPlugin {
     }
 
     @Override
-    public void register(LoopRegistrar registrar) {
+    public void  register(LoopRegistrar registrar) {
         registrar.registerHook(new Hook() {
             @Override
             public String id() {

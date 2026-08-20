@@ -44,6 +44,7 @@ import site.sorghum.loopra.integration.cutin.CutinFunctionToolBridge;
 import site.sorghum.loopra.integration.cutin.CutinMessageBridge;
 import site.sorghum.loopra.integration.cutin.plugin.compaction.LoopraCompactionHost;
 import site.sorghum.loopra.integration.cutin.plugin.compaction.LoopraCompactionPlugin;
+import site.sorghum.loopra.integration.cutin.plugin.LoopraPluginRuntime;
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitHost;
 import site.sorghum.loopra.integration.cutin.plugin.exit.LoopraExitPlugin;
 import site.sorghum.loopra.integration.cutin.plugin.httplog.LoopraHttpLogPlugin;
@@ -325,6 +326,7 @@ public class AgentLoop implements
         plugins.registerPlugin(new LoopraPlanPlugin(this));
         plugins.registerPlugin(new LoopraToolBatchPlugin(this));
         plugins.startAll();
+        LoopraPluginRuntime.attach(plugins, config == null ? Set.of() : config.disabledPlugins());
         return plugins;
     }
 
@@ -334,6 +336,7 @@ public class AgentLoop implements
     }
 
     void disposeCutinPlugins() {
+        LoopraPluginRuntime.detach(cutinPlugins);
         cutinPlugins.stopAll();
     }
 

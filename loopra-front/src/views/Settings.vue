@@ -47,7 +47,7 @@
           <h2>{{ currentTab?.label || '设置' }}</h2>
           <p class="header-desc">{{ currentTab?.description }}</p>
         </div>
-        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'about' && activeTab !== 'pet' && activeTab !== 'prompt' && activeTab !== 'model-channels'" class="header-actions">
+        <div v-if="activeTab !== 'openapi' && activeTab !== 'mcp' && activeTab !== 'lsp' && activeTab !== 'skill-market' && activeTab !== 'plugins' && activeTab !== 'about' && activeTab !== 'pet' && activeTab !== 'prompt' && activeTab !== 'model-channels'" class="header-actions">
           <button v-if="activeTab === 'ai'" class="btn btn-secondary" style="padding:6px 12px;" @click="openAutoFillDialog" title="自动填入配置">
             <svg fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
               <polyline points="1 4 1 10 7 10"/>
@@ -100,6 +100,55 @@
                       <span class="theme-name">{{ theme.label }}</span>
                     </button>
                   </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- 插件运行时 -->
+        <section v-if="activeTab === 'plugins'" class="settings-section">
+          <div class="section-card plugin-card">
+            <div class="card-header plugin-header">
+              <div>
+                <h3>运行时插件</h3>
+                <p>管理当前进程中的 Cutin 插件</p>
+              </div>
+              <button class="btn-icon-xs" title="刷新" :disabled="pluginsLoading" @click="loadPlugins">
+                <svg :class="{'animate-spin': pluginsLoading}" fill="none" height="14" stroke="currentColor" stroke-width="2" viewBox="0 0 24 24" width="14">
+                  <path d="M1 4v6h6M23 20v-6h-6"/>
+                  <path d="M20.49 9A9 9 0 0 0 5.64 5.64L1 10m22 4-4.64 4.36A9 9 0 0 1 3.51 15"/>
+                </svg>
+              </button>
+            </div>
+            <div class="card-body plugin-list">
+              <div v-if="pluginsLoading && plugins.length === 0" class="plugin-empty">正在加载插件...</div>
+              <div v-else-if="plugins.length === 0" class="plugin-empty">暂无已注册插件</div>
+              <div v-for="plugin in plugins" v-else :key="plugin.id" class="plugin-row">
+                <div class="plugin-info">
+                  <div class="plugin-title">
+                    <span>{{ plugin.displayName }}</span>
+                    <code>{{ plugin.id }}</code>
+                  </div>
+                  <p v-if="plugin.remark" class="plugin-remark">{{ plugin.remark }}</p>
+                  <div class="plugin-meta" :title="plugin.className">
+                    <span>{{ plugin.className }}</span>
+                    <span>顺序 {{ plugin.order }}</span>
+                  </div>
+                </div>
+                <div class="plugin-runtime">
+                  <span class="plugin-instances" :class="{active: plugin.enabled}">
+                    {{ plugin.activeInstances }}/{{ plugin.totalInstances }} 实例
+                  </span>
+                  <label class="toggle-switch" :class="{disabled: pluginToggling === plugin.id}">
+                    <input
+                        type="checkbox"
+                        :checked="plugin.enabled"
+                        :disabled="pluginToggling === plugin.id"
+                        @change="togglePlugin(plugin, $event.target.checked)"
+                    />
+                    <span class="toggle-slider"></span>
+                  </label>
                 </div>
               </div>
             </div>
@@ -1651,6 +1700,7 @@ import {
   mcpAPI,
   openApiAPI,
   petAPI,
+  pluginAPI,
   skillMarketAPI,
   systemAPI
 } from '../services/api'
@@ -1667,6 +1717,40 @@ const props = defineProps({
   initialTab: {type: String, default: 'general'},
   marketOnly: {type: Boolean, default: false}
 })
+
+const plugins = ref([])
+const pluginsLoading = ref(false)
+const pluginToggling = ref(null)
+
+const loadPlugins = async () => {
+  pluginsLoading.value = true
+  try {
+    const response = await pluginAPI.list()
+    plugins.value = response.success && Array.isArray(response.data) ? response.data : []
+  } catch (error) {
+    message.error('加载插件失败: ' + (error.message || error))
+  } finally {
+    pluginsLoading.value = false
+  }
+}
+
+const togglePlugin = async (plugin, enabled) => {
+  pluginToggling.value = plugin.id
+  try {
+    const response = await pluginAPI.setEnabled(plugin.id, enabled)
+    if (response.success && response.data) {
+      const index = plugins.value.findIndex(item => item.id === plugin.id)
+      if (index >= 0) plugins.value[index] = response.data
+      message.success(`${plugin.displayName} 已${enabled ? '启用' : '停用'}`)
+    }
+    await loadPlugins()
+  } catch (error) {
+    message.error('切换插件失败: ' + (error.message || error))
+    await loadPlugins()
+  } finally {
+    pluginToggling.value = null
+  }
+}
 
 // 主题直接绑定 store
 const settings = reactive({
@@ -2195,6 +2279,15 @@ const tabs = computed(() => [
     </svg>`
   },
   {
+    id: 'plugins',
+    label: '插件',
+    description: '查看并在线切换 Cutin 运行时插件',
+    icon: `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <path d="M12 2v6m0 8v6M4.93 4.93l4.24 4.24m5.66 5.66 4.24 4.24M2 12h6m8 0h6M4.93 19.07l4.24-4.24m5.66-5.66 4.24-4.24"/>
+      <circle cx="12" cy="12" r="4"/>
+    </svg>`
+  },
+  {
     id: 'prompt',
     label: '系统提示词',
     description: '编辑 ~/.loopra/loopra.md 系统提示词文件',
@@ -2307,6 +2400,9 @@ watch(activeTab, async (tab) => {
   }
   if (tab === 'prompt') {
     loadLoopraMd()
+  }
+  if (tab === 'plugins') {
+    loadPlugins()
   }
 }, {immediate: true})
 
@@ -4076,6 +4172,118 @@ const saveLoopraMd = async () => {
 
 .section-card.danger-zone {
   border-color: var(--red);
+}
+
+.plugin-card {
+  overflow: hidden;
+}
+
+.plugin-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.plugin-list {
+  padding: 0;
+}
+
+.plugin-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  min-height: 66px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+}
+
+.plugin-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.plugin-title,
+.plugin-runtime {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.plugin-title > span {
+  color: var(--fg);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.plugin-title code {
+  padding: 1px 5px;
+  border-radius: 3px;
+  background: var(--bg-3);
+  color: var(--fg-3);
+  font-size: 10px;
+}
+
+.plugin-meta {
+  display: flex;
+  gap: 10px;
+  margin-top: 4px;
+  color: var(--fg-4);
+  font-family: var(--mono);
+  font-size: 10px;
+}
+
+.plugin-remark {
+  margin: 4px 0 0;
+  color: var(--fg-3);
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.plugin-meta span:first-child {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.plugin-meta span:last-child {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.plugin-runtime {
+  flex-shrink: 0;
+}
+
+.plugin-instances {
+  color: var(--fg-4);
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.plugin-instances.active {
+  color: var(--green);
+}
+
+.plugin-empty {
+  padding: 32px 16px;
+  color: var(--fg-4);
+  font-size: 12px;
+  text-align: center;
+}
+
+@media (max-width: 720px) {
+  .plugin-row {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .plugin-runtime {
+    justify-content: space-between;
+    width: 100%;
+  }
 }
 
 .card-header {

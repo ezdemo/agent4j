@@ -23,7 +23,7 @@ import java.util.Map;
  * 包含 {@code prompt_cache_key} 等 wire 级字段。</p>
  */
 @Slf4j
-@AgentPlugin(id = "loopra-raw-log")
+@AgentPlugin(id = "loopra-raw-log", remark = "记录未经处理的模型流数据，便于调试 Provider 行为。")
 public final class LoopraRawLogPlugin implements LoopPlugin {
 
     private final boolean logRequest;

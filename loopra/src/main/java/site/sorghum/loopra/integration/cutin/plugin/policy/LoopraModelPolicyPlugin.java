@@ -23,7 +23,7 @@ import java.util.Map;
   * Loopra 面向模型的规则：计划模式工具过滤、实时流式输出、
   * 推理循环检测，以及模型响应后的人工审批挂起。
  */
-@AgentPlugin(id = "loopra-model-policy")
+@AgentPlugin(id = "loopra-model-policy", remark = "根据模型策略调整请求参数与调用行为。")
 public final class LoopraModelPolicyPlugin implements LoopPlugin {
 
     private final LoopraPolicyHost host;

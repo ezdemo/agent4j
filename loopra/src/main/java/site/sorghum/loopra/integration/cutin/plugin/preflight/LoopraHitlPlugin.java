@@ -10,7 +10,7 @@ import site.sorghum.loopra.bin.agent.model.HitlState;
 import java.io.IOException;
 
 /** 在主图内处理上一轮 Cutin HITL 的审批或拒绝结果。 */
-@AgentPlugin(id = "loopra-preflight-hitl")
+@AgentPlugin(id = "loopra-preflight-hitl", remark = "处理需要人工确认的工具调用与审批结果。")
 public final class LoopraHitlPlugin implements LoopPlugin {
 
     private final LoopraPreflightHost host;
