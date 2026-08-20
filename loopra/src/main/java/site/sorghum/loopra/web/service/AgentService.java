@@ -1640,6 +1640,51 @@ public class AgentService {
     }
 
     /**
+     * 重命名会话（修改显示标题）。
+     * <p>会话名（文件标识）不变，仅更新 .meta 中的显示标题 title；
+     * 重命名后前端会话列表展示新名称。同步置位缓存 Agent 的标题状态，
+     * 避免下一轮回合开始自动生成标题覆盖用户自定义名称。</p>
+     *
+     * @param workspacePath 项目路径（可选）
+     * @param sessionName   会话名称（文件标识，保持不变）
+     * @param title         新的显示名称
+     * @return 更新后的显示名称
+     */
+    public String renameSession(String workspacePath, String sessionName, String title) {
+        if (sessionName == null || sessionName.isBlank()) {
+            throw new ServiceException("会话名称不能为空");
+        }
+        if (title == null || title.isBlank()) {
+            throw new ServiceException("新会话名称不能为空");
+        }
+        String normalized = title.trim();
+        if (normalized.length() > 100) {
+            throw new ServiceException("会话名称过长（最多 100 字符）");
+        }
+        String resolvedPath = workspacePath != null ? workspacePath : getCurrentProject();
+        if (resolvedPath == null) {
+            throw new ServiceException("未找到项目");
+        }
+        SessionStore store = sessionStoreFor(resolvedPath);
+        if (store == null) {
+            throw new ServiceException("会话存储不可用");
+        }
+        try {
+            store.updateTitle(sessionName, normalized);
+        } catch (IOException e) {
+            log.warn("[web] 更新会话标题失败: {}", e.getMessage());
+            throw new ServiceException("更新会话名称失败: " + e.getMessage());
+        }
+        // 缓存中的 Agent 同步置位标题已生成，防止自动标题覆盖自定义名称
+        LoopraAgent cached = sessionCache.peek(generateSessionKey(workspacePath, sessionName));
+        if (cached != null) {
+            cached.markSessionTitleGenerated();
+        }
+        log.info("[web] 会话已重命名: {} -> {}", sessionName, normalized);
+        return normalized;
+    }
+
+    /**
      * 删除指定会话：清除 Agent 缓存 + 删除磁盘文件（.jsonl / .usage / .meta）。
      *
      * @param workspacePath 项目路径（可选）
